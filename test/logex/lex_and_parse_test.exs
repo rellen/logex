@@ -5,9 +5,9 @@ defmodule Logex.LexAndParseTest do
     source =
       "bst mov aa bb nxb mov cc dd nxb mov ee ff bst mov 123 hh bnd bnd bst ote xx nxb ote yy bnd"
 
-    {:ok, tokens, _} = source |> String.to_charlist() |> :ladder_lexer.string()
+    {:ok, tokens, _} = Logex.Compiler.tokenize(source)
 
-    {:ok, ast} = :ladder_parser.parse(tokens)
+    {:ok, ast} = Logex.Compiler.parse(tokens)
 
     assert ast ==
              {:rung,

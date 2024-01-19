@@ -14,6 +14,9 @@
 %% User code. This is placed here to allow extra attributes.
 -file("src/ladder_lexer.xrl", 20).
 
+list_to_string(list) ->
+  unicode:characters_to_binary(list).
+
 -file("/nix/store/zxa7pa1y25hzkz2gjirzl0j9blv399al-erlang-26.2.1/lib/erlang/lib/parsetools-2.5/include/leexinc.hrl", 14).
 
 format_error({illegal,S}) -> ["illegal characters ",io_lib:write_string(S)];
@@ -371,7 +374,7 @@ tab_size() -> 8.
 %% return signal either an unrecognised character or end of current
 %% input.
 
--file("src/ladder_lexer.erl", 339).
+-file("src/ladder_lexer.erl", 342).
 yystate() -> 11.
 
 yystate(12, [32|Ics], Line, Col, Tlen, _, _) ->
@@ -546,7 +549,7 @@ yyaction_3(TokenChars, TokenLine) ->
 -compile({inline,yyaction_4/2}).
 -file("src/ladder_lexer.xrl", 15).
 yyaction_4(TokenChars, TokenLine) ->
-     { token, { name, TokenLine, TokenChars } } .
+     { token, { name, TokenLine, list_to_string (TokenChars) } } .
 
 -compile({inline,yyaction_5/0}).
 -file("src/ladder_lexer.xrl", 16).
