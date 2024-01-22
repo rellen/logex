@@ -1,6 +1,12 @@
-Nonterminals rung branches branch elems elem.
-Terminals bst nxb bnd name int_lit.
-Rootsymbol rung.
+Nonterminals routine rungs rung branches branch elems elem.
+Terminals rnd bst nxb bnd name int_lit.
+Rootsymbol routine.
+
+routine -> rungs : {routine, {rungs, '$1'}}.
+
+rungs -> rung : ['$1'].
+
+rungs -> rung rnd rungs : ['$1' | '$3'].
 
 rung -> branch : {rung, '$1'}.
 

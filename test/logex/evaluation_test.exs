@@ -3,17 +3,21 @@ defmodule Logex.EvaluationTest do
 
   test "evaluates an AST with OTEs" do
     ast =
-      {:rung,
-       [
-         branches: [
-           [{:xio, [name: "bit0"]}, {:mov, [name: "aa", name: "bb"]}],
-           [{:xic, [name: "bit0"]}, {:mov, [lit_int: 123, name: "dd"]}]
-         ],
-         branches: [
-           [{:xic, [name: "bit1"]}, {:ote, name: "xx"}],
-           [{:xio, [name: "bit1"]}, {:ote, name: "yy"}]
-         ]
-       ]}
+      {:routine,
+       {:rungs,
+        [
+          {:rung,
+           [
+             branches: [
+               [{:xio, [name: "bit0"]}, {:mov, [name: "aa", name: "bb"]}],
+               [{:xic, [name: "bit0"]}, {:mov, [lit_int: 123, name: "dd"]}]
+             ],
+             branches: [
+               [{:xic, [name: "bit1"]}, {:ote, name: "xx"}],
+               [{:xio, [name: "bit1"]}, {:ote, name: "yy"}]
+             ]
+           ]}
+        ]}}
 
     env = %{
       "bit0" => 1,
@@ -42,17 +46,21 @@ defmodule Logex.EvaluationTest do
 
   test "evaluates an AST with OTLs and OTUs" do
     ast =
-      {:rung,
-       [
-         branches: [
-           [{:xio, [name: "bit0"]}, {:mov, [name: "aa", name: "bb"]}],
-           [{:xic, [name: "bit0"]}, {:mov, [lit_int: 123, name: "dd"]}]
-         ],
-         branches: [
-           [{:xic, [name: "bit1"]}, {:otu, name: "xx"}],
-           [{:xio, [name: "bit1"]}, {:otl, name: "yy"}]
-         ]
-       ]}
+      {:routine,
+       {:rungs,
+        [
+          {:rung,
+           [
+             branches: [
+               [{:xio, [name: "bit0"]}, {:mov, [name: "aa", name: "bb"]}],
+               [{:xic, [name: "bit0"]}, {:mov, [lit_int: 123, name: "dd"]}]
+             ],
+             branches: [
+               [{:xic, [name: "bit1"]}, {:otu, name: "xx"}],
+               [{:xio, [name: "bit1"]}, {:otl, name: "yy"}]
+             ]
+           ]}
+        ]}}
 
     env = %{
       "bit0" => 1,

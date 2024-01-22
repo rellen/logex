@@ -16,6 +16,9 @@ defmodule Logex.Compiler do
     "mov" => {:mov, 2}
   }
 
+  def instructionize({:routine, {:rungs, rungs}}),
+    do: {:routine, {:rungs, Enum.map(rungs, &instructionize(&1))}}
+
   def instructionize({:rung, branch}), do: {:rung, instructionize(branch)}
 
   def instructionize({:branches, branches}),
@@ -35,6 +38,16 @@ defmodule Logex.Compiler do
   end
 
   def instructionize([]), do: []
+
+  def evaluate({:routine, {:rungs, rungs}}, {_, env}) do
+    new_env =
+      Enum.reduce(rungs, env, fn rung, env ->
+        {_, new_env} = evaluate(rung, {true, env})
+        new_env
+      end)
+
+    {true, new_env}
+  end
 
   def evaluate({:rung, branch}, env), do: evaluate(branch, env)
 
