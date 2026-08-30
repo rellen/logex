@@ -33,6 +33,8 @@ defmodule Logex.EndToEndTest do
     match?({:error, _}, Logex.Compiler.parse(tokens))
   end
 
+  defp lex_error?(src), do: match?({:error, _, _}, Logex.Compiler.tokenize(src))
+
   describe "integer literals" do
     test "mov of a literal writes the literal" do
       assert %{"dd" => 123} = run("mov 123 dd", %{"dd" => 0})
@@ -111,6 +113,31 @@ defmodule Logex.EndToEndTest do
       assert parse_error?("xic aa bnd")
       assert parse_error?("bst xic aa")
       assert parse_error?("xic aa nxb ote bb")
+    end
+  end
+
+  describe "tag names" do
+    # These two guard `NAME = [a-zA-Z_][a-zA-Z0-9_]*` in src/ladder_lexer.xrl, which
+    # had two independent bugs on one line. Each test fails if its own half of the
+    # regex regresses, and passes if only the other half does.
+
+    test "a single-character tag is a legal name" do
+      # Guards the `*` quantifier. With `+`, NAME needs two characters and this is
+      # {:error, {1, :ladder_lexer, {:illegal, 'a'}}, 1}.
+      assert %{"b" => 1} = run("xic a ote b", %{"a" => 1})
+      assert %{"z" => 1} = run("ote z", %{})
+      refute lex_error?("xic a ote b")
+    end
+
+    test "brackets are illegal in a tag name, not swallowed into one" do
+      # Guards the character class. The original `a-zA-z` is a lowercase-z typo
+      # spanning ASCII 91-96, so [ \ ] ^ ` were legal inside identifiers and
+      # "ote a[3]" lexed as a single tag literally named "a[3]" — array indexing
+      # that looks like it works and does not.
+      assert lex_error?("ote a[3]")
+      assert lex_error?("ote a]b")
+      assert lex_error?("ote a^b")
+      assert lex_error?("ote a\\b")
     end
   end
 
