@@ -116,6 +116,6 @@ defmodule Logex.Compiler do
     {false, env}
   end
 
-  defp get_arg(_env, {:lit_int, val}), do: val
+  defp get_arg(_env, {:int_lit, val}), do: val
   defp get_arg(env, {:name, name}), do: Map.get(env, name)
 end

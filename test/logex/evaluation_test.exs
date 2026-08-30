@@ -10,7 +10,7 @@ defmodule Logex.EvaluationTest do
            [
              branches: [
                [{:xio, [name: "bit0"]}, {:mov, [name: "aa", name: "bb"]}],
-               [{:xic, [name: "bit0"]}, {:mov, [lit_int: 123, name: "dd"]}]
+               [{:xic, [name: "bit0"]}, {:mov, [int_lit: 123, name: "dd"]}]
              ],
              branches: [
                [{:xic, [name: "bit1"]}, {:ote, name: "xx"}],
@@ -53,7 +53,7 @@ defmodule Logex.EvaluationTest do
            [
              branches: [
                [{:xio, [name: "bit0"]}, {:mov, [name: "aa", name: "bb"]}],
-               [{:xic, [name: "bit0"]}, {:mov, [lit_int: 123, name: "dd"]}]
+               [{:xic, [name: "bit0"]}, {:mov, [int_lit: 123, name: "dd"]}]
              ],
              branches: [
                [{:xic, [name: "bit1"]}, {:otu, name: "xx"}],
