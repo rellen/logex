@@ -22,6 +22,17 @@ defmodule Logex.EndToEndTest do
     new_env
   end
 
+  defp rung_count(src) do
+    {:ok, tokens, _} = Logex.Compiler.tokenize(src)
+    {:ok, {:routine, {:rungs, rungs}}} = Logex.Compiler.parse(tokens)
+    length(rungs)
+  end
+
+  defp parse_error?(src) do
+    {:ok, tokens, _} = Logex.Compiler.tokenize(src)
+    match?({:error, _}, Logex.Compiler.parse(tokens))
+  end
+
   describe "integer literals" do
     test "mov of a literal writes the literal" do
       assert %{"dd" => 123} = run("mov 123 dd", %{"dd" => 0})
@@ -55,11 +66,27 @@ defmodule Logex.EndToEndTest do
       assert %{"r1" => 0, "r2" => 1} = run("xic gg ote r1\note r2", %{"gg" => 0, "r1" => 1})
     end
 
-    @tag :skip
     test "a trailing newline is not a syntax error" do
-      # Fails until PLAN.md M0-5 makes the newline a terminator rather than a
-      # strict infix separator. Drop this tag in that commit.
       assert %{"xx" => 1} = run("ote xx\n", %{})
+    end
+
+    test "leading, repeated and CRLF newlines are all one delimiter" do
+      assert %{"xx" => 1} = run("\note xx", %{})
+      assert %{"xx" => 1, "yy" => 1} = run("ote xx\n\n\note yy\n", %{})
+      assert %{"xx" => 1, "yy" => 1} = run("ote xx\r\note yy\r\n", %{})
+      assert %{"xx" => 1, "yy" => 1} = run("  ote xx  \n\n  ote yy\n", %{})
+    end
+
+    test "blank lines do not become empty rungs" do
+      assert 1 = rung_count("ote xx\n")
+      assert 1 = rung_count("\note xx")
+      assert 2 = rung_count("ote xx\n\n\note yy\n")
+      assert 0 = rung_count("")
+      assert 0 = rung_count("\n\n\n")
+    end
+
+    test "an empty program is a legal no-op, not a parse error" do
+      assert %{"aa" => 1} = run("", %{"aa" => 1})
     end
   end
 
@@ -73,6 +100,17 @@ defmodule Logex.EndToEndTest do
       src = "xic aa bst xic bb nxb xic cc bnd ote res"
       assert %{"res" => 1} = run(src, %{"aa" => 1, "bb" => 0, "cc" => 1})
       assert %{"res" => 0} = run(src, %{"aa" => 1, "bb" => 0, "cc" => 0})
+    end
+
+    test "an empty branch leg is a jumper and passes power unconditionally" do
+      assert %{"xx" => 1} = run("bst xic aa nxb bnd ote xx", %{"aa" => 0})
+      assert %{"xx" => 1} = run("bst bnd ote xx", %{})
+    end
+
+    test "unbalanced branch tokens are still rejected" do
+      assert parse_error?("xic aa bnd")
+      assert parse_error?("bst xic aa")
+      assert parse_error?("xic aa nxb ote bb")
     end
   end
 
