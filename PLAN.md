@@ -346,13 +346,17 @@ the Style bullet.)
 below is what line 5 used to say, not what it says now. Verified on current `main`:
 `tokenize("ote a")` → `{:ok, [{:name, 1, "ote"}, {:name, 1, "a"}], 1}`.
 
-**This is the one M0 item with no regression test behind it.** `3f3b104` touched
-`src/ladder_lexer.xrl` and nothing else, and no test anywhere uses a single-character tag
-or a bracketed name — the shortest tag in the suite is two characters. Reverting the regex
-to `[a-zA-Z_][a-zA-z0-9_]+` leaves `mix test` fully green while `tokenize("ote a")` is a
-hard lex error again; the same treatment on M0-5's rung filter fails loudly. Close it with
-one test per bug in `end_to_end_test.exs`: `run("xic a ote b", %{"a" => 1})` for the `+`,
-and a lex-error assertion on `"ote a[3]"` for the `a-zA-z` typo. Tracked in §7.
+`3f3b104` shipped with no regression coverage — it touched `src/ladder_lexer.xrl` and
+nothing else, and no test used a single-character tag or a bracketed name, so reverting the
+regex in full left `mix test` green. Closed by `b8fc743`, which adds one test per bug in
+`end_to_end_test.exs`, each failing only for its own half of the regex:
+
+```
+NAME = [a-zA-Z_][a-zA-Z0-9_]*   (as shipped)   0 failures
+NAME = [a-zA-Z_][a-zA-Z0-9_]+   quantifier     1) single-character tag
+NAME = [a-zA-Z_][a-zA-z0-9_]*   char class     1) brackets
+NAME = [a-zA-Z_][a-zA-z0-9_]+   both           1) and 2)
+```
 
 **Severity: low** — the failure is loud and total, never a wrong answer; it is in M0
 only because it is one character. `src/ladder_lexer.xrl:5` reads
@@ -476,10 +480,9 @@ so read the failure count, not the total.
 
 **With M0-1 … M0-5 landed, a green `mix test` means something:** every stage boundary is
 exercised from source, and the three things §1 listed as broken — integer literals, sources
-read from a file, single-character tags — all work. Two of the three are also *guarded*:
-reverting M0-1, or M0-5's empty-rung filter, turns the suite red. Single-character tags are
-not — M0-4's `NAME` regex can be reverted in full with `mix test` still green (see M0-4's
-Status line). That was the *testability* gate, not the correctness gate. Three med-severity defects that produce silently wrong answers
+read from a file, single-character tags — all work, and all three are *guarded*: reverting
+M0-1, M0-4's `NAME` regex, or M0-5's empty-rung filter each turns the suite red. That was
+the *testability* gate, not the correctness gate. Three med-severity defects that produce silently wrong answers
 survive all of M0 (§7): `xic`/`xio` non-complementarity (M1-4), `nxb` fusion turning OR
 into AND on a missing space (§4·B1), and the absence of any validation (M1-2). M1-2 and
 M1-4 are the correctness gate.
@@ -890,7 +893,7 @@ otherwise.
 | M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | `compiler.ex:71-85` | open |
 | B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `ladder_lexer.xrl:6,10` | open |
 | M0-4 | low | lexer | `NAME` regex: `+` rejects single-char tags; `a-zA-z` typo admits ``[ \ ] ^ ` `` | `ladder_lexer.xrl:5` | **closed** `3f3b104` |
-| — | low | tests | M0-4's fix is unguarded: no test uses a single-character tag or a bracketed name, so reverting `ladder_lexer.xrl:5` leaves `mix test` fully green | `end_to_end_test.exs` | open |
+| — | low | tests | M0-4's fix was unguarded: no test used a single-character tag or a bracketed name, so reverting `ladder_lexer.xrl:5` left `mix test` fully green | `end_to_end_test.exs` | **closed** `b8fc743` |
 | M1-5 | low | API | No public entry point; `Logex` is untouched `mix new` boilerplate; no scan loop | `lib/logex.ex:15` | open |
 | M1-5 | low | errors | Three error conventions across four stages; `format_error/1` never called; empty program reports line `999999` | `compiler.ex:2-8` | **partly closed** — `999999` by `b65e756`; the other two clauses open |
 | M0-3 | low | tooling | Generated `src/*.erl` tracked, embedding absolute `/nix/store` paths → ~700-line cross-OTP churn | `src/ladder_lexer.erl:1` (at `c9c7f51`; untracked since) | **closed** `dde8c1d` |
