@@ -2,9 +2,17 @@
 
 Status of this document: written 2026-08-30 against commit `c9c7f51`, revised after an
 adversarial review of the plan itself, and brought current after Milestone 0 was
-implemented and merged (PRs #3 and #4). §3 onward anchors on function and clause names
-rather than line numbers, deliberately: line numbers in this file have gone stale twice. It records the findings of a full
+implemented and merged (PRs #3 and #4). §3 onward, and every reference to
+`CLAUDE.md`, anchors on function, clause and bullet names rather than line numbers —
+deliberately: line numbers in this file have gone stale three times, most recently because
+the commit that fixed the `compiler.ex` ones then edited `CLAUDE.md` and shifted those.
+§1 and §2 keep their numbers; §2 is explicitly historical. It records the findings of a full
 review of the codebase and turns them into an ordered plan.
+
+**Keeping this document true.** Landing work stales it: §1's counts, §7's Status column and
+any "Settled, not yet landed" bullet in the README all go out of date. The repo's practice
+is a separate audit pass rather than editing this file in the same commit — but the pass
+has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
@@ -237,7 +245,7 @@ scan 3  stop=1  (drops out)      -> %{"motor" => 0, "start" => 0, "stop" => 1}
 ```
 
 **The trailing-newline case could not pass until M0-5, three items later.** It was tagged
-`@tag :skip` so M0-3 and M0-4 landed against a green suite — `CLAUDE.md:11` says tests must
+`@tag :skip` so M0-3 and M0-4 landed against a green suite — CLAUDE.md's `mix test` bullet says tests must
 pass before committing, and M0-3's whole subject is a build trap that a trustworthy
 `mix test` is what catches. That happened as planned: `b65e756` dropped the tag, no
 `@tag :skip` remains anywhere in `test/`, and the case is green and unskipped.
@@ -253,15 +261,15 @@ rather than "may be", and names the tell ("`mix compile` prints nothing and `mix
 stays green"). The Key Files bullet was rewritten too, and gained rows for
 `end_to_end_test.exs` and `PLAN.md`.
 
-**Severity: medium.** `CLAUDE.md:7` says `mix compile` "regenerates `.erl` from
+**Severity: medium.** CLAUDE.md's `mix compile` bullet said it "regenerates `.erl` from
 `.xrl`/`.yrl`". It does not. Mix's leex/yecc compilers are mtime-gated at whole-second
 granularity, and `git clone` writes the `.xrl` and the tracked `.erl` inside the same
 second. On a fresh clone `mix compile` prints `Compiling 2 files (.erl)` — leex never
 runs, `git status` stays clean, and the **committed** scanners are the build input.
 
-Combined with the then-current `CLAUDE.md:14` ("edit these, not the generated `.erl`
+Combined with the then-current Key Files bullet ("edit these, not the generated `.erl`
 files"), the doc instructed a workflow that produced silently-dead commits. That bullet is
-now `CLAUDE.md:17-18` and reads "The generated `src/*.erl` are build artifacts, not
+now reads "The generated `src/*.erl` are build artifacts, not
 tracked; never edit them." The full loop, as reproduced before the fix:
 
 ```
@@ -325,7 +333,7 @@ Nix's `pkgs.erlang` bundles parsetools, so the dev shell is unaffected; the cons
 lands on whatever CI image M0/§4 introduces, which must install `erlang-parsetools` or
 use a full Erlang image.
 
-`CLAUDE.md:7-10` was then corrected to read (the landed wording is slightly stronger than
+CLAUDE.md's `mix compile` bullet was then corrected to read (the landed wording is slightly stronger than
 this draft):
 
 > - `mix compile` — compile. leex/yecc regenerate `src/*.erl` from `.xrl`/`.yrl` only
@@ -333,8 +341,7 @@ this draft):
 >   `.xrl`/`.yrl`, run `rm -f src/*.erl && rm -rf _build` first, or your edit may be
 >   silently ignored.
 
-Done, and now at `CLAUDE.md:27-30`. The new-instruction recipe — the bullet that was
-`CLAUDE.md:20` — omitted that the de-energised `{false, env}` clause is **mandatory**;
+Done. The new-instruction recipe — CLAUDE.md's "New instructions, step 2" bullet — omitted that the de-energised `{false, env}` clause is **mandatory**;
 following it literally yielded code that worked on an energised rung and raised
 `FunctionClauseError` the moment a contact opened. It now states the mandate and names that
 consequence. (§4's guard-clause collapse does not retire the underlying *code* trap: see
@@ -382,7 +389,7 @@ numbers are blank lines today.
 
 This item originally opened by ordering M0-3 first and requiring
 `rm -f src/*.erl && rm -rf _build` before every compile in M0-4 and M0-5. The sequencing is
-spent, but **the `rm -f` half is permanent** and now lives in `CLAUDE.md:7-10`: M0-3 removed
+spent, but **the `rm -f` half is permanent** and now lives in CLAUDE.md's `mix compile` bullet: M0-3 removed
 the fresh-clone case, not the mtime gate, so a grammar edit landing in the same wall-clock
 second as the last build is still silently ignored, with no output and a green suite.
 
@@ -496,7 +503,7 @@ The ordering here matters: each item is cheaper now than after the one below it 
 
 ### M1-1 · Keep the token line in the AST
 
-`extract_token/1` (`src/ladder_parser.yrl:40`) discards the line. The lexer produces
+`extract_token/1` (the `Erlang code.` block of `src/ladder_parser.yrl`) discards the line. The lexer produces
 correct `TokenLine` on every token; the parser throws it away, so the AST is
 position-free and **no stage after parsing can cite a location**. Every error the
 compiler will want to report — unknown mnemonic, bad arity, undefined tag, duplicate
@@ -548,7 +555,7 @@ mnemonics case-insensitive, and the `bst` → `( … | … )` migration hint. Se
 The last two cases above never reach `@instructions` at all, so **a table-driven
 validator alone does not cover them**. `instructionize/1` has list clauses for a
 `{:branches, _}` head (`:27`), a `{:name, _}` head (`:31`) and `[]` (`:40`), and nothing
-else — while `elem -> int_lit` (`ladder_parser.yrl:27`) makes a literal in opcode position
+else — while the `elem -> int_lit` production makes a literal in opcode position
 perfectly legal AST, so it falls off the end of the function before the table is
 consulted. The pass also needs a catch-all clause over the element list reporting
 `expected an instruction mnemonic, found <token>` for any head that is neither a name nor
@@ -625,7 +632,7 @@ ever disagree, §5 is the decision of record.)
 
 ### M1-5 · A real public API
 
-`Logex.__info__(:functions)` is `[hello: 0]` — `lib/logex.ex:15` is still the `mix new`
+`Logex.__info__(:functions)` is `[hello: 0]` — `Logex.hello/0` is still the `mix new`
 stub. Every consumer must know the stage order and unwrap two different `:ok` tuple
 shapes. There is no `compile/1`, no scan loop, and nothing representing "a compiled
 routine".
@@ -668,8 +675,8 @@ Deleting `hello/0` also drops the repository's only doctest and leaves
 Both need per-instance cross-scan state, so they are the proof that M1-5's architecture
 is right. TON is what turns this from an expression evaluator into something
 recognisable as a PLC: it needs a per-instance struct (`.PRE/.ACC/.DN/.TT/.EN`)
-persisting across scans plus an elapsed-time source. Comparisons (EQU/NEQ/LES/GRT/
-LEQ/GEQ) ride along in the same pass for nearly free — they are pure input instructions
+persisting across scans plus an elapsed-time source. Comparisons (`eq ne lt gt le ge`,
+per `docs/naming.md`) ride along in the same pass for nearly free — they are pure input instructions
 with exactly the existing rung-condition contract.
 
 **§5 has settled the addressing question:** member access is `.`, added as one lexer rule
@@ -823,7 +830,7 @@ right rather than merely plausible.
   writes 0, so it stays. The guard keeps it from shadowing `{:routine, …}`, `{:rung, …}`
   or `{:branches, …}`, so it is safe anywhere in the clause list. It does **not** remove
   the new-instruction trap, it *moves* it. M0-3 landed the mandatory-`{false, env}` warning
-  at `CLAUDE.md:27-30` (the bullet this document elsewhere calls `CLAUDE.md:20`), which
+  in CLAUDE.md's "New instructions, step 2" bullet, which
   already closes it: an opcode added per the current recipe — both clauses — evaluates a
   de-energised rung fine, while one added with only the `{true, env}` clause still raises
   `FunctionClauseError`, because the new atom was never added to the whitelist. So if B7 is
@@ -982,7 +989,7 @@ otherwise.
 | ID | Sev | Area | Finding | Location | Status |
 |---|---|---|---|---|---|
 | M0-1 | high | evaluate | `get_arg/2` matches `:lit_int`; every other stage emits `:int_lit` | `get_arg/2` | **closed** `690fc2d` |
-| M0-3 | med | docs/build | `CLAUDE.md` promises regeneration that does not happen; a grammar edit is silently ignored on a fresh clone | `CLAUDE.md:7-10,17-18,27-30` | **closed** `dde8c1d` — fresh-clone case; the same-second mtime gate survives by design, documented at `CLAUDE.md:7-10` |
+| M0-3 | med | docs/build | `CLAUDE.md` promises regeneration that does not happen; a grammar edit is silently ignored on a fresh clone | `CLAUDE.md` compile + Key Files + step-2 bullets | **closed** `dde8c1d` — fresh-clone case; the same-second mtime gate survives by design, documented at `CLAUDE.md:7-10` |
 | M0-2 | med | tests | No test crosses a stage seam; per-stage fixtures are hand-typed and contradict each other | `end_to_end_test.exs` | **closed** `03c10e0` |
 | M0-5 | med | grammar | `rnd` is a strict infix separator, and a branch leg cannot be empty | `ladder_parser.yrl:8,12,16,21` | **closed** `b65e756` |
 | B1 | med | lexer | Missing space before `nxb` fuses into an identifier — parallel silently becomes series | `ladder_lexer.xrl:8` | open |
@@ -1014,7 +1021,8 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    routine exists without them, and they are why the scan model matters. See M1-6.
 2. **A scan loop and I/O image.** See M1-6.
 3. **A tag table with types.** See M1-3.
-4. **Comparisons (EQU/NEQ/LES/GRT/LEQ/GEQ)** — high value, low cost. See M1-6.
+4. **Comparisons (`eq ne lt gt le ge` — IEC names, see `docs/naming.md`)** — high value,
+   low cost. See M1-6.
 5. **Math (ADD/SUB/MUL/DIV), one-shots (ONS/OSR/OSF), then control flow (JMP/LBL/MCR).**
    ONS is the canonical instruction that cannot exist without cross-scan state. JMP/LBL
    do *not* require abandoning the `Enum.reduce` over rungs — widening the accumulator

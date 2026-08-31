@@ -92,6 +92,8 @@ change the source language:
 
 ## An example
 
+Neither file below is in the repository — create them to follow along.
+
 `motor.ld` — a seal-in motor starter with a latched fault:
 
 ```

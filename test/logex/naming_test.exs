@@ -46,11 +46,19 @@ defmodule Logex.NamingTest do
     """
   end
 
-  test "a surveyed but unimplemented mnemonic is allowed" do
-    # The survey is append-only and runs ahead of the code, so this direction
-    # must never fail. Asserting it keeps a future tightening from breaking the
-    # habit the survey exists to encourage.
+  test "the check is one-way: a surveyed but unimplemented mnemonic is allowed" do
+    # Surveying an instruction long before building it is the point, so this
+    # direction must never fail. Asserted against a synthetic survey rather than
+    # the real one: `assert MapSet.subset?(implemented, surveyed)` would restate
+    # the test above, and an unsurveyed instruction would then fail twice — the
+    # second time under a name pointing at the opposite mistake.
     implemented = Logex.Compiler.instructions() |> Map.keys() |> MapSet.new()
-    assert MapSet.subset?(implemented, surveyed_mnemonics())
+    surveyed_ahead = MapSet.put(implemented, "ton_surveyed_but_not_built")
+
+    assert MapSet.equal?(
+             MapSet.difference(implemented, surveyed_ahead),
+             MapSet.new()
+           ),
+           "the guard must ignore stanzas that have no implementation yet"
   end
 end
