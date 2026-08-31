@@ -20,11 +20,21 @@ Logex is a Ladder Logic compiler/interpreter in Elixir (~> 1.15, Erlang R26). No
 - `test/logex/end_to_end_test.exs` drives source to an environment and names no IR tag —
   the only test that can catch a mismatch between stages
 - `PLAN.md` — reviewed findings and the ordered plan of work
+- `docs/naming.md` — the IEC and vendor name survey, one stanza per mnemonic; append-only
 
 ## Conventions
 
 - `evaluate/2` clauses take `(instruction, {power_flow_bool, env_map})` and return `{new_power_flow_bool, new_env_map}`
-- New instructions: add to the `@instructions` map in `compiler.ex` **and** two
+- New instructions, step 1 — **survey the name before writing any code**: add a
+  ``### `mnemonic` `` stanza to `docs/naming.md` (IEC 61131-3 element, function or
+  function block with clause and table number, then the major vendor toolchains, then the
+  logex name and why, then `Checked:` with sources). The rule, in
+  order: **(1)** if IEC names the operation, take the IEC name lowercased; **(2)** if IEC
+  supplies only a graphical element, take the clearest vendor mnemonic and say which;
+  **(3)** never invent a readable word for a thing that already has a standard name. Mark
+  what you could not verify `unverified`; never guess. `test/logex/naming_test.exs` fails
+  if a mnemonic reaches `@instructions` unsurveyed.
+- New instructions, step 2: add to the `@instructions` map in `compiler.ex` **and** two
   `evaluate/2` clauses — one for `{true, env}` and one for `{false, env}`. The
   de-energised clause is mandatory: without it the instruction works on an energised
   rung and raises `FunctionClauseError` the moment a contact opens.

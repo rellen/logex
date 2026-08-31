@@ -16,6 +16,14 @@ defmodule Logex.Compiler do
     "mov" => {:mov, 2}
   }
 
+  @doc """
+  The mnemonic table.
+
+  Every key must have a `### \\`mnemonic\\`` stanza in `docs/naming.md`;
+  `Logex.NamingTest` enforces it.
+  """
+  def instructions, do: @instructions
+
   def instructionize({:routine, {:rungs, rungs}}),
     do: {:routine, {:rungs, Enum.map(rungs, &instructionize(&1))}}
 
