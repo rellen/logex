@@ -85,8 +85,10 @@ change the source language:
 - **`//` starts a comment**; `.` gives member access (`t1.dn`, `word.3`); negative integer
   literals lex; mnemonics become case-insensitive while tags stay case-sensitive.
 - **Timers, counters, comparisons and math** arrive as `ton tof tp rto res`, `ctu ctd`,
-  `eq ne lt gt le ge`, `add sub mul div mod abs sqrt neg` — IEC names, because IEC names
-  them.
+  `eq ne lt gt le ge`, `add sub mul div mod abs sqrt neg` — IEC names wherever IEC names
+  the operation. `rto`, `res` and `neg` are the exceptions: the standard has no retentive
+  timer, no standalone counter reset and no negate function, so those follow rule 2 and
+  come from a vendor. `docs/naming.md` says which, per mnemonic.
 
 ## An example
 

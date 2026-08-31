@@ -7,7 +7,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir (~> 1.15, Erlang R26). No
 - `mix compile` — compile. leex/yecc regenerate `src/*.erl` from `.xrl`/`.yrl` only when
   the `.erl` is absent or at least one whole second older. **After editing a `.xrl` or
   `.yrl`, run `rm -f src/*.erl && rm -rf _build` first**, or your edit is silently
-  ignored: `mix compile` prints nothing and `mix test` stays green.
+  ignored: `mix compile` prints nothing and `mix test` stays green. To prove an edit is
+  live, tokenize something only the new rule accepts — `PLAN.md` M0-3 has a worked
+  before/after. `mix test` alone will not tell you.
 - `mix test` — run tests (must pass before committing)
 - `mix format` — format code before committing
 
@@ -19,6 +21,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir (~> 1.15, Erlang R26). No
 - Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`
 - `test/logex/end_to_end_test.exs` drives source to an environment and names no IR tag —
   the only test that can catch a mismatch between stages
+- `README.md` — what logex is, the dialect stance, the instruction table and a worked
+  example. **Any change to the language stales it:** a new instruction adds a row and may
+  clear a "Settled, not yet landed" bullet; a syntax change touches the syntax list, the
+  instruction table and the example (whose output is real — re-run it). Nothing tests this.
 - `PLAN.md` — reviewed findings and the ordered plan of work
 - `docs/naming.md` — the IEC and vendor name survey, one stanza per mnemonic; append-only
 

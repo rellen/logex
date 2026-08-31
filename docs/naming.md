@@ -50,7 +50,10 @@ because IEC gives those only a picture.
 ## Adding a stanza
 
 Copy the template, fill every dialect row, and mark anything you could not check
-`unverified` rather than guessing. Read across instructions with
+`unverified` rather than guessing. New stanzas go at the **end of the file**, under
+`## Stanzas` — the file is append-only and the reference tables above stay where they are.
+A stanza is owed by anything that becomes a key of `@instructions`; syntax tokens like the
+branch delimiters are not instructions and need none. Read across instructions with
 `grep -A9 '^### ' docs/naming.md`.
 
 ````markdown
