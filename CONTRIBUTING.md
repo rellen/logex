@@ -78,17 +78,28 @@ test fail for exactly one reason.
 
 `690fc2d` fixed an atom that no stage in the pipeline could produce — `get_arg/2` matched
 `:lit_int` while everything upstream emitted `:int_lit`, so the entire integer-literal
-feature was dead end to end. The suite was green for eight commits because the evaluation
-fixtures hand-wrote the same misspelling, cancelling it out.
+feature was dead end to end. The suite stayed green from `0f7d77f` until that fix, because
+the evaluation fixtures hand-wrote the same misspelling, cancelling it out.
 
 `test/logex/end_to_end_test.exs` exists because of that: it drives source to an environment
-and names no IR tag, so it can only pass if the stages genuinely agree. **Add to it when
-you change behaviour** — the per-stage tests hand-type their inputs and cannot catch a
-seam.
+and its assertions name no IR tag, so it can only pass if the stages genuinely agree. (One
+helper matches the `{:routine, {:rungs, _}}` wrapper to count rungs — that is the only AST
+shape in the file.) **Add to it when you change behaviour.** `instructionize_test.exs` and
+`evaluation_test.exs` hand-type the input to one stage and cannot catch a seam at all;
+`lex_and_parse_test.exs` starts from a source string, so it crosses the tokenize→parse seam
+and no further.
 
-Also beware assertions that cannot see the bug. `b65e756`'s acceptance block printed only
-the environment, which is provably identical with and without the phantom-rung defect it
-was meant to verify. Assert on the thing that changed.
+Also beware assertions that cannot see the bug. The empty-rung fix was first drafted with
+an acceptance block that printed only the environment — provably identical with and without
+the phantom-rung defect it was meant to verify. `b65e756` shipped with rung-count
+assertions instead. Assert on the thing that changed, not on a projection of it.
+
+The same trap has a live instance. `PLAN.md` §6 keeps the sequential `env` threading in the
+`{:branches, _}` reducer deliberately, and B7 invites rewriting that reducer. Until
+`end_to_end_test.exs` grew "a later leg sees what an earlier leg wrote", making the legs
+independent left that whole file green and failed only a hand-typed fixture called
+"evaluates an AST with OTEs" — a name giving no hint an invariant was at stake. If you
+declare something load-bearing, name a test after it.
 
 ### New instructions
 

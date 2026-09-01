@@ -93,6 +93,16 @@ defmodule Logex.EndToEndTest do
   end
 
   describe "branches" do
+    test "a later leg sees what an earlier leg wrote" do
+      # PLAN.md §6 keeps the sequential `env` threading in the {:branches, _}
+      # reducer deliberately: it looks like an accident of using Enum.reduce and
+      # is faithful controller behaviour. The natural "parallel legs are
+      # independent" refactor — evaluating each leg against the incoming env and
+      # merging — flips this case to mm=1, zz=1 and is otherwise invisible.
+      assert %{"mm" => 0, "zz" => 0} =
+               run("bst xic gg ote mm nxb xic mm ote zz bnd", %{"gg" => 0, "mm" => 1})
+    end
+
     test "parallel branches OR, and every branch still runs for its side effects" do
       env = run("bst xic aa ote p1 nxb xic bb ote p2 bnd ote res", %{"aa" => 1, "p2" => 1})
       assert %{"p1" => 1, "p2" => 0, "res" => 1} = env

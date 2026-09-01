@@ -518,7 +518,7 @@ AST match is the `{:routine, {:rungs, _}}` wrapper, which the elem change does n
 `compiler.ex` edits are mechanical one-liners but unavoidable: a 3-tuple elem stops being
 a keyword pair. Do not reach for the pair-preserving alternative (`{name, {Line, Value}}`)
 to dodge them — it compiles clean under `--warnings-as-errors` and then feeds a tuple to
-`Map.get(@instructions, name)` at `:32`.
+`Map.get(@instructions, name)`.
 
 After a validator, a formatter and a language server exist this touches all of them.
 **Do this before M1-2, not after.**
@@ -554,7 +554,7 @@ mnemonics case-insensitive, and the `bst` → `( … | … )` migration hint. Se
 
 The last two cases above never reach `@instructions` at all, so **a table-driven
 validator alone does not cover them**. `instructionize/1` has list clauses for a
-`{:branches, _}` head (`:27`), a `{:name, _}` head (`:31`) and `[]` (`:40`), and nothing
+`{:branches, _}` head, a `{:name, _}` head and `[]`, and nothing
 else — while the `elem -> int_lit` production makes a literal in opcode position
 perfectly legal AST, so it falls off the end of the function before the table is
 consulted. The pass also needs a catch-all clause over the element list reporting
@@ -826,7 +826,7 @@ right rather than merely plausible.
 
 - **B7 · Style.** Five `{false, env}` clauses with identical *bodies*
   (`xic`, `xio`, `otl`, `otu`, `mov` — the heads differ) collapse to one guard clause
-  `when op in [:xic, :xio, :otl, :otu, :mov]`; `:ote`'s `{false, env}` clause at `:91`
+  `when op in [:xic, :xio, :otl, :otu, :mov]`; `ote`'s own `{false, env}` clause
   writes 0, so it stays. The guard keeps it from shadowing `{:routine, …}`, `{:rung, …}`
   or `{:branches, …}`, so it is safe anywhere in the clause list. It does **not** remove
   the new-instruction trap, it *moves* it. M0-3 landed the mandatory-`{false, env}` warning
@@ -839,16 +839,17 @@ right rather than merely plausible.
   `{_op, _args}` catch-all: it closes this hole but reopens the one M1-2 flags, and above
   `{:routine, …}` it swallows `{:branches, …}` on a de-energised rung and leaves the coils
   latched. `&instructionize(&1)` → `&instructionize/1`
-  (`:20,:25`). `Enum.any?(outputs, fn o -> o == true end)` → accumulate the boolean
-  directly and drop the reversed intermediate list (`:56-61`) — but keep the fold
+  (both `instructionize/1` captures). `Enum.any?(outputs, fn o -> o == true end)` →
+  accumulate the boolean directly and drop the reversed intermediate list in the
+  `{:branches, _}` reducer — but keep the fold
   non-short-circuiting: any form that puts `evaluate` on the right of `or`/`||`, or that
   bails once the accumulator is true, skips a later branch's OTE/MOV side effects and
   still passes all four CI gates. §6 explains why that matters. The `{:rung, branch}`
-  clause at `:52` names the `{power_flow, env}` pair `env`.
+  clause `{:rung, branch}` names the `{power_flow, env}` pair `env`.
 
 - **B8 · A lone `\r` never delimits a rung, so a CR-only file is silently one rung.**
   `WHITESPACE = [\s\t\r]` (`ladder_lexer.xrl:6`) claims `\r` before `RND = (\r?\n)`
-  (`:10`) can, so a classic-Mac line ending is skipped as whitespace rather than ending the
+  can, so a classic-Mac line ending is skipped as whitespace rather than ending the
   rung. The same text then means different things in CR and LF:
 
   ```
@@ -973,7 +974,7 @@ plus two `evaluate/2` clauses and never the front end. That is the right dividin
 
 **Keep the sequential `env` threading through parallel branches** (the `{:branches, _}`
 clause of `evaluate/2`)
-and the non-short-circuiting reduce (`:65-69`). Both look like accidents of using
+and the non-short-circuiting reduce (the `is_list(branch)` clause). Both look like accidents of using
 `Enum.reduce` and are in fact faithful controller behaviour.
 
 ---
