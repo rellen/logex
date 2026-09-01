@@ -82,7 +82,10 @@ Legend for the logex column: **bold** = the name to use; *(deferred)* = surveyed
 
 The **Conventional** column is the mainstream mnemonic ladder vocabulary that logex's own
 names were borrowed from; it is left unattributed deliberately, while the other three
-vendors are named. It gives the **current** mnemonic, with the former spelling in
+vendors are named. **That is a project policy, not an accident of this table** — keep it
+out of prose too, here and in the other documents, and do not "helpfully" restore it. Rule
+2 below says to name which vendor a mnemonic came from; for this one column, "the
+conventional set" is that name. It gives the **current** mnemonic, with the former spelling in
 parentheses where the 2024 conformance sweep renamed it. Siemens splits into classic STEP 7
 (S7-300/400) and TIA Portal (S7-1200/1500) wherever they differ — that split is real and is
 the single most common source of wrong "Siemens says X" claims.

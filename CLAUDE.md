@@ -44,4 +44,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir (~> 1.15, Erlang R26). No
   `evaluate/2` clauses — one for `{true, env}` and one for `{false, env}`. The
   de-energised clause is mandatory: without it the instruction works on an energised
   rung and raises `FunctionClauseError` the moment a contact opens.
+- A fix needs a test that **fails when the fix is reverted**. Check it by reverting, not by
+  reasoning: `mix test` stayed fully green after the `NAME` regex was corrected, because
+  no test used a single-character tag. `PLAN.md` §2·M0-4 has the worked mutation table.
 - Use pattern matching with multiple function clauses, not conditionals

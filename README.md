@@ -155,6 +155,12 @@ Requires Elixir ~> 1.15 and Erlang 26, with leex and yecc available — `src/*.e
 generated at build time and are not tracked, so on Debian/Ubuntu you need
 `erlang-parsetools` as well as `erlang-base`. There are no dependencies to fetch.
 
+On an older toolchain `mix compile` aborts with *"you're trying to run :logex on Elixir
+v1.14 … it supports only Elixir ~> 1.15"*. **Install a newer Elixir rather than relaxing
+`mix.exs`** — the requirement is deliberate, and a loosened version constraint is the kind
+of edit that gets committed by accident. (`shell.nix` will not help yet: it pins an alias
+removed from nixpkgs in 2024 — `PLAN.md` §4·B4.)
+
 ```
 mix compile
 mix test
