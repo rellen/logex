@@ -16,9 +16,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir (~> 1.15, Erlang R26). No
   **`mix compile --warnings-as-errors` does not fail on a shift/reduce conflict** — yecc
   silently disambiguates and emits a working parser, and mix reports a warning the flag
   does not upgrade. No default check will tell you.
-- Requires Elixir ~> 1.15; on anything older `mix` aborts before it runs. **Install a
-  newer Elixir rather than relaxing `mix.exs`** — the constraint is deliberate, and a
-  loosened version bound is the kind of edit that lands by accident.
+- Requires Elixir ~> 1.15; on anything older `mix` aborts before it runs. **Never relax
+  `mix.exs`** — the constraint is deliberate, and a loosened version bound is the kind of
+  edit that lands by accident. If you cannot install a newer Elixir, run the suite in the
+  throwaway sandbox in `CONTRIBUTING.md` ("Running the suite on an older toolchain"), which
+  patches a *copy*. That is how every executed receipt in these documents was produced.
 
 ## Key Files
 
@@ -26,8 +28,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir (~> 1.15, Erlang R26). No
 - `src/ladder_lexer.xrl` / `src/ladder_parser.yrl` — lexer and parser definitions. The
   generated `src/*.erl` are build artifacts, not tracked; never edit them.
 - Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`
-- `test/logex/end_to_end_test.exs` drives source to an environment and names no IR tag —
-  the only test that can catch a mismatch between stages
+- `test/logex/end_to_end_test.exs` drives source to an environment; its *assertions* name
+  no IR tag (one helper matches the `{:routine, {:rungs, _}}` wrapper to count rungs), so it
+  is the only test that crosses every stage boundary. `lex_and_parse_test.exs` starts from a
+  source string and so crosses the tokenize→parse seam, but no further; the other two
+  hand-type one stage's input and cannot see a seam at all.
 - `README.md` — what logex is, the dialect stance, the instruction table and a worked
   example. **Any change to the language stales it:** a new instruction adds a row and may
   clear a "Settled, not yet landed" bullet; a syntax change touches the syntax list, the

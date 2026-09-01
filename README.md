@@ -159,7 +159,8 @@ On an older toolchain `mix compile` aborts with *"you're trying to run :logex on
 v1.14 … it supports only Elixir ~> 1.15"*. **Install a newer Elixir rather than relaxing
 `mix.exs`** — the requirement is deliberate, and a loosened version constraint is the kind
 of edit that gets committed by accident. (`shell.nix` will not help yet: it pins an alias
-removed from nixpkgs in 2024 — `PLAN.md` §4·B4.)
+removed from nixpkgs in 2024 — `PLAN.md` §4·B4.) If you cannot install one, run the suite in
+the throwaway sandbox in `CONTRIBUTING.md`, which relaxes the bound in a *copy*.
 
 ```
 mix compile

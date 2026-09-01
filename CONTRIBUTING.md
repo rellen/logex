@@ -23,8 +23,9 @@ requirement; recent history is direct-to-main. Do not invent process here.
 
 `PLAN.md` is long and half-archive. Its §2 is a completed milestone kept for the
 *diagnoses* — it explains why the grammar carries an empty-rung filter and why `CLAUDE.md`
-documents an `rm -f` loop. Read §1 for current state, §3 for the next work, §5 for
-decisions you must not relitigate, §6 for code that looks wrong and is not.
+documents an `rm -f` loop. Read §1 for current state, §3 for the next work, §4 for the
+backlog and the CI gates, §5 for decisions you must not relitigate, §6 for code that looks
+wrong and is not.
 
 ---
 
@@ -56,7 +57,31 @@ older. An edit to `src/*.xrl` or `src/*.yrl` in the same second as the last buil
 Do that before every grammar compile. `mix test` alone will never tell you your change did
 not take effect — prove it by tokenizing something only the new rule accepts. `PLAN.md`
 §2·M0-3 has a worked before/after. This is the single most expensive trap in the project;
-it caught the author of `747d630` mid-session, with the warning already written.
+it caught the author of this file mid-session, with the warning already written — `_build`
+cleared but `src/*.erl` left in place, so a fix that had already been applied still lexed as
+`{:illegal, 't '}`.
+
+### Running the suite on an older toolchain
+
+`mix.exs` requires Elixir `~> 1.15`, and that bound is deliberate — but the machine in front
+of you may not have it, and then `mix` aborts before running anything at all. Every executed
+receipt in these documents was produced in a throwaway copy instead:
+
+    SB=$(mktemp -d)
+    cp -r . "$SB"/ && rm -rf "$SB/.git"
+    sed -i 's/elixir: "~> 1.15"/elixir: "~> 1.14"/' "$SB/mix.exs"
+    cd "$SB" && rm -f src/*.erl && rm -rf _build
+    mix compile --warnings-as-errors && mix format --check-formatted && mix test
+
+Patch the **copy**, never the tracked file. That distinction is the entire point: relaxing
+the bound is a legitimate way to observe this code on the toolchain you happen to have, and
+an illegitimate thing to commit. It is not a hypothetical confusion — seven of seven fresh
+agents handed this repo on a 1.14 box edited the tracked `mix.exs` and none of them said so.
+Three files warn against the edit; this is the sanctioned alternative, and without it the
+warning has no exit.
+
+`cp -r` copies mtimes, so it reintroduces the same-second collision described above — the
+`rm -f src/*.erl` is not optional.
 
 ### A fix needs a test that fails when the fix is reverted
 
@@ -149,7 +174,8 @@ choice, not an oversight to fix.
 ## Things that will bite you
 
 - **Do not relax `mix.exs`.** On an older toolchain `mix compile` aborts and the obvious
-  fix is to loosen `elixir: "~> 1.15"`. Install a newer Elixir instead. An automated audit
+  fix is to loosen `elixir: "~> 1.15"`. Install a newer Elixir, or use the throwaway sandbox
+  in "Running the suite on an older toolchain" above — patch a copy. An automated audit
   of this repo recommended relaxing it, having mistaken a test rig's patched copy for the
   repository's own — a wrong conclusion from real evidence.
 - **`mix compile --warnings-as-errors` does not fail on a grammar conflict.** yecc emits a
@@ -170,4 +196,13 @@ choice, not an oversight to fix.
     mix format --check-formatted
     mix test
 
-All three must pass. After a `.yrl` change, also run the conflict gate in `PLAN.md` §4·B3.
+All three must pass. After a `.yrl` change, run the grammar-conflict gate as well — none of
+the three above fails on a shift/reduce conflict:
+
+    erl -noshell -eval 'case yecc:file("src/ladder_parser.yrl",
+          [{parserfile,"/tmp/conflictcheck.erl"},{report,false},{return,true}]) of
+        {ok,_,[]} -> halt(0); _ -> halt(1) end.'
+
+Exit 0 is the only pass. `{parserfile, …}` keeps the check from dropping a stray
+`src/ladder_parser.erl` into the checkout. `PLAN.md` §4·B3 has the derivation and the
+experiment behind it.
