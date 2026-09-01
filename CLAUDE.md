@@ -12,6 +12,13 @@ Logex is a Ladder Logic compiler/interpreter in Elixir (~> 1.15, Erlang R26). No
   before/after. `mix test` alone will not tell you.
 - `mix test` — run tests (must pass before committing)
 - `mix format` — format code before committing
+- After any `.yrl` edit, run the grammar-conflict gate in `PLAN.md` §4·B3 as well.
+  **`mix compile --warnings-as-errors` does not fail on a shift/reduce conflict** — yecc
+  silently disambiguates and emits a working parser, and mix reports a warning the flag
+  does not upgrade. No default check will tell you.
+- Requires Elixir ~> 1.15; on anything older `mix` aborts before it runs. **Install a
+  newer Elixir rather than relaxing `mix.exs`** — the constraint is deliberate, and a
+  loosened version bound is the kind of edit that lands by accident.
 
 ## Key Files
 
