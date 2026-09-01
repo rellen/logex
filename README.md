@@ -177,6 +177,7 @@ run `rm -f src/*.erl && rm -rf _build` first. See `CLAUDE.md`.
 
 - `PLAN.md` — the codebase review and the ordered plan of work
 - [`docs/naming.md`](docs/naming.md) — the IEC and vendor naming survey, one stanza per mnemonic
+- `CONTRIBUTING.md` — how to work on it: the build trap, what a fix owes, what not to "fix"
 - `CLAUDE.md` — build traps and conventions for anyone (or anything) editing the code
 
 ## License

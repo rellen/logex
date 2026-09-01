@@ -25,6 +25,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir (~> 1.15, Erlang R26). No
   example. **Any change to the language stales it:** a new instruction adds a row and may
   clear a "Settled, not yet landed" bullet; a syntax change touches the syntax list, the
   instruction table and the example (whose output is real — re-run it). Nothing tests this.
+- `CONTRIBUTING.md` — working practices, each one traced to something that broke
 - `PLAN.md` — reviewed findings and the ordered plan of work
 - `docs/naming.md` — the IEC and vendor name survey, one stanza per mnemonic; append-only
 
