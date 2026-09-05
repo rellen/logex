@@ -24,9 +24,12 @@ elems -> elem : ['$1'].
 
 elems -> elem elems : ['$1' | '$2'].
 
-elem -> int_lit : {int_lit, extract_token('$1')}.
+%% An elem is the token itself, {Kind, Line, Value}. The line is kept so that
+%% every stage after this one can cite a location; nothing downstream reads it
+%% yet, and nothing downstream may drop it.
+elem -> int_lit : '$1'.
 
-elem -> name : {name, extract_token('$1')}.
+elem -> name : '$1'.
 
 elem ->  bst branches bnd : {branches, '$2'}.
 
@@ -34,7 +37,3 @@ branches -> branch : ['$1'].
 
 branches -> branch nxb branches : ['$1' | '$3'].
 
-
-Erlang code.
-
-extract_token({_Token, _Line, Value}) -> Value.

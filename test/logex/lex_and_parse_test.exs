@@ -15,17 +15,22 @@ defmodule Logex.LexAndParseTest do
                [
                  {:rung,
                   [
-                    branches: [
-                      [name: "mov", name: "aa", name: "bb"],
-                      [name: "mov", name: "cc", name: "dd"],
-                      [
-                        name: "mov",
-                        name: "ee",
-                        name: "ff",
-                        branches: [[name: "mov", int_lit: 123, name: "hh"]]
-                      ]
-                    ],
-                    branches: [[name: "ote", name: "xx"], [name: "ote", name: "yy"]]
+                    {:branches,
+                     [
+                       [{:name, 1, "mov"}, {:name, 1, "aa"}, {:name, 1, "bb"}],
+                       [{:name, 1, "mov"}, {:name, 1, "cc"}, {:name, 1, "dd"}],
+                       [
+                         {:name, 1, "mov"},
+                         {:name, 1, "ee"},
+                         {:name, 1, "ff"},
+                         {:branches, [[{:name, 1, "mov"}, {:int_lit, 1, 123}, {:name, 1, "hh"}]]}
+                       ]
+                     ]},
+                    {:branches,
+                     [
+                       [{:name, 1, "ote"}, {:name, 1, "xx"}],
+                       [{:name, 1, "ote"}, {:name, 1, "yy"}]
+                     ]}
                   ]}
                ]}}
   end
@@ -39,6 +44,29 @@ defmodule Logex.LexAndParseTest do
 
     assert ast ==
              {:routine,
-              {:rungs, [{:rung, [name: "ote", name: "yy"]}, {:rung, [name: "ote", name: "xx"]}]}}
+              {:rungs,
+               [
+                 {:rung, [{:name, 1, "ote"}, {:name, 1, "yy"}]},
+                 {:rung, [{:name, 2, "ote"}, {:name, 2, "xx"}]}
+               ]}}
+  end
+
+  test "every elem carries the line it was read from" do
+    # Blank lines, indentation and a CRLF all sit between these rungs. The
+    # coalescing rnd rule swallows them as one delimiter, and this asserts that
+    # doing so does not lose the count: the rungs are on lines 1, 3 and 6.
+    source = "ote aa\n\n  xic bb ote cc\r\n\n\nmov 7 dd"
+
+    {:ok, tokens, _} = Logex.Compiler.tokenize(source)
+    {:ok, ast} = Logex.Compiler.parse(tokens)
+
+    assert {:routine,
+            {:rungs,
+             [
+               {:rung, [{:name, 1, "ote"}, {:name, 1, "aa"}]},
+               {:rung,
+                [{:name, 3, "xic"}, {:name, 3, "bb"}, {:name, 3, "ote"}, {:name, 3, "cc"}]},
+               {:rung, [{:name, 6, "mov"}, {:int_lit, 6, 7}, {:name, 6, "dd"}]}
+             ]}} = ast
   end
 end

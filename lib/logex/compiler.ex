@@ -36,7 +36,7 @@ defmodule Logex.Compiler do
     [instructionize(head) | instructionize(tail)]
   end
 
-  def instructionize([{:name, name} | tail]) do
+  def instructionize([{:name, _line, name} | tail]) do
     {symbol, args} = Map.get(@instructions, name)
 
     [
@@ -76,7 +76,7 @@ defmodule Logex.Compiler do
     end)
   end
 
-  def evaluate({:xic, [name: arg]}, {true, env}) do
+  def evaluate({:xic, [{:name, _, arg}]}, {true, env}) do
     {Map.get(env, arg) == 1, env}
   end
 
@@ -84,7 +84,7 @@ defmodule Logex.Compiler do
     {false, env}
   end
 
-  def evaluate({:xio, [name: arg]}, {true, env}) do
+  def evaluate({:xio, [{:name, _, arg}]}, {true, env}) do
     {Map.get(env, arg) == 0, env}
   end
 
@@ -92,15 +92,15 @@ defmodule Logex.Compiler do
     {false, env}
   end
 
-  def evaluate({:ote, [name: arg]}, {true, env}) do
+  def evaluate({:ote, [{:name, _, arg}]}, {true, env}) do
     {true, Map.put(env, arg, 1)}
   end
 
-  def evaluate({:ote, [name: arg]}, {false, env}) do
+  def evaluate({:ote, [{:name, _, arg}]}, {false, env}) do
     {false, Map.put(env, arg, 0)}
   end
 
-  def evaluate({:otl, [name: arg]}, {true, env}) do
+  def evaluate({:otl, [{:name, _, arg}]}, {true, env}) do
     {true, Map.put(env, arg, 1)}
   end
 
@@ -108,7 +108,7 @@ defmodule Logex.Compiler do
     {false, env}
   end
 
-  def evaluate({:otu, [name: arg]}, {true, env}) do
+  def evaluate({:otu, [{:name, _, arg}]}, {true, env}) do
     {true, Map.put(env, arg, 0)}
   end
 
@@ -116,7 +116,7 @@ defmodule Logex.Compiler do
     {false, env}
   end
 
-  def evaluate({:mov, [arg1, {:name, arg2}]}, {true, env}) do
+  def evaluate({:mov, [arg1, {:name, _, arg2}]}, {true, env}) do
     {true, Map.put(env, arg2, get_arg(env, arg1))}
   end
 
@@ -124,6 +124,6 @@ defmodule Logex.Compiler do
     {false, env}
   end
 
-  defp get_arg(_env, {:int_lit, val}), do: val
-  defp get_arg(env, {:name, name}), do: Map.get(env, name)
+  defp get_arg(_env, {:int_lit, _, val}), do: val
+  defp get_arg(env, {:name, _, name}), do: Map.get(env, name)
 end
