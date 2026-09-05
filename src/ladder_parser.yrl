@@ -24,9 +24,11 @@ elems -> elem : ['$1'].
 
 elems -> elem elems : ['$1' | '$2'].
 
-%% An elem is the token itself, {Kind, Line, Value}. The line is kept so that
-%% every stage after this one can cite a location; nothing downstream reads it
-%% yet, and nothing downstream may drop it.
+%% A name or int_lit elem is the lexer token itself, {Kind, Line, Value}: the
+%% line is kept so that later stages can cite a location. Nothing downstream
+%% reads it yet, and nothing downstream may drop it. A branches elem is
+%% {branches, Legs} and carries no line of its own -- the bst token's line is
+%% dropped here. Widening that node is a separate decision (PLAN.md M1-2).
 elem -> int_lit : '$1'.
 
 elem -> name : '$1'.

@@ -8,14 +8,16 @@ defmodule Logex.EvaluationTest do
         [
           {:rung,
            [
-             branches: [
-               [{:xio, [{:name, 1, "bit0"}]}, {:mov, [{:name, 1, "aa"}, {:name, 1, "bb"}]}],
-               [{:xic, [{:name, 1, "bit0"}]}, {:mov, [{:int_lit, 1, 123}, {:name, 1, "dd"}]}]
-             ],
-             branches: [
-               [{:xic, [{:name, 1, "bit1"}]}, {:ote, [{:name, 1, "xx"}]}],
-               [{:xio, [{:name, 1, "bit1"}]}, {:ote, [{:name, 1, "yy"}]}]
-             ]
+             {:branches,
+              [
+                [{:xio, [{:name, 2, "bit0"}]}, {:mov, [{:name, 2, "aa"}, {:name, 2, "bb"}]}],
+                [{:xic, [{:name, 2, "bit0"}]}, {:mov, [{:int_lit, 2, 123}, {:name, 2, "dd"}]}]
+              ]},
+             {:branches,
+              [
+                [{:xic, [{:name, 2, "bit1"}]}, {:ote, [{:name, 2, "xx"}]}],
+                [{:xio, [{:name, 2, "bit1"}]}, {:ote, [{:name, 2, "yy"}]}]
+              ]}
            ]}
         ]}}
 
@@ -51,14 +53,16 @@ defmodule Logex.EvaluationTest do
         [
           {:rung,
            [
-             branches: [
-               [{:xio, [{:name, 1, "bit0"}]}, {:mov, [{:name, 1, "aa"}, {:name, 1, "bb"}]}],
-               [{:xic, [{:name, 1, "bit0"}]}, {:mov, [{:int_lit, 1, 123}, {:name, 1, "dd"}]}]
-             ],
-             branches: [
-               [{:xic, [{:name, 1, "bit1"}]}, {:otu, [{:name, 1, "xx"}]}],
-               [{:xio, [{:name, 1, "bit1"}]}, {:otl, [{:name, 1, "yy"}]}]
-             ]
+             {:branches,
+              [
+                [{:xio, [{:name, 2, "bit0"}]}, {:mov, [{:name, 2, "aa"}, {:name, 2, "bb"}]}],
+                [{:xic, [{:name, 2, "bit0"}]}, {:mov, [{:int_lit, 2, 123}, {:name, 2, "dd"}]}]
+              ]},
+             {:branches,
+              [
+                [{:xic, [{:name, 2, "bit1"}]}, {:otu, [{:name, 2, "xx"}]}],
+                [{:xio, [{:name, 2, "bit1"}]}, {:otl, [{:name, 2, "yy"}]}]
+              ]}
            ]}
         ]}}
 

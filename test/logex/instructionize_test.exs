@@ -2,6 +2,8 @@ defmodule Logex.InstructionizeTest do
   use ExUnit.Case
 
   test "instructionizes an AST" do
+    # Lines are 4 and 9, not 1, so a lowering that rewrote every operand's line
+    # to a constant could not satisfy the assertion whatever constant it chose.
     ast =
       {:routine,
        {:rungs,
@@ -10,21 +12,22 @@ defmodule Logex.InstructionizeTest do
            [
              {:branches,
               [
-                [{:name, 1, "mov"}, {:name, 1, "aa"}, {:name, 1, "bb"}],
-                [{:name, 1, "mov"}, {:name, 1, "cc"}, {:name, 1, "dd"}],
+                [{:name, 4, "mov"}, {:name, 4, "aa"}, {:name, 4, "bb"}],
+                [{:name, 4, "mov"}, {:name, 4, "cc"}, {:name, 4, "dd"}],
                 [
-                  {:name, 1, "mov"},
-                  {:name, 1, "ee"},
-                  {:name, 1, "ff"},
-                  {:branches, [[{:name, 1, "mov"}, {:int_lit, 1, 123}, {:name, 1, "hh"}]]}
+                  {:name, 4, "mov"},
+                  {:name, 4, "ee"},
+                  {:name, 4, "ff"},
+                  {:branches, [[{:name, 4, "mov"}, {:int_lit, 4, 123}, {:name, 4, "hh"}]]}
                 ]
               ]},
              {:branches,
               [
-                [{:name, 1, "ote"}, {:name, 1, "xx"}],
-                [{:name, 1, "ote"}, {:name, 1, "yy"}]
+                [{:name, 4, "ote"}, {:name, 4, "xx"}],
+                [{:name, 4, "ote"}, {:name, 4, "yy"}]
               ]}
-           ]}
+           ]},
+          {:rung, [{:name, 9, "ote"}, {:name, 9, "zz"}]}
         ]}}
 
     result = Logex.Compiler.instructionize(ast)
@@ -37,19 +40,20 @@ defmodule Logex.InstructionizeTest do
                   [
                     {:branches,
                      [
-                       [{:mov, [{:name, 1, "aa"}, {:name, 1, "bb"}]}],
-                       [{:mov, [{:name, 1, "cc"}, {:name, 1, "dd"}]}],
+                       [{:mov, [{:name, 4, "aa"}, {:name, 4, "bb"}]}],
+                       [{:mov, [{:name, 4, "cc"}, {:name, 4, "dd"}]}],
                        [
-                         {:mov, [{:name, 1, "ee"}, {:name, 1, "ff"}]},
-                         {:branches, [[{:mov, [{:int_lit, 1, 123}, {:name, 1, "hh"}]}]]}
+                         {:mov, [{:name, 4, "ee"}, {:name, 4, "ff"}]},
+                         {:branches, [[{:mov, [{:int_lit, 4, 123}, {:name, 4, "hh"}]}]]}
                        ]
                      ]},
                     {:branches,
                      [
-                       [{:ote, [{:name, 1, "xx"}]}],
-                       [{:ote, [{:name, 1, "yy"}]}]
+                       [{:ote, [{:name, 4, "xx"}]}],
+                       [{:ote, [{:name, 4, "yy"}]}]
                      ]}
-                  ]}
+                  ]},
+                 {:rung, [{:ote, [{:name, 9, "zz"}]}]}
                ]}}
   end
 end

@@ -36,7 +36,7 @@ defmodule Logex.Compiler do
     [instructionize(head) | instructionize(tail)]
   end
 
-  def instructionize([{:name, _line, name} | tail]) do
+  def instructionize([{:name, _, name} | tail]) do
     {symbol, args} = Map.get(@instructions, name)
 
     [

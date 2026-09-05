@@ -153,6 +153,25 @@ defmodule Logex.EndToEndTest do
     end
   end
 
+  describe "line numbers" do
+    test "no stage depends on an instruction sitting on line 1" do
+      # Every operand now carries its line, and the ten pattern sites in
+      # compiler.ex destructure it as `_`. That is only a wildcard if nothing
+      # breaks when every instruction sits below line 1 -- so: every
+      # instruction, both power states, a literal and a tag operand, from
+      # line 3 down. Asserting values rather than survival is what makes a
+      # literal 1 in any of those ten slots a FunctionClauseError here.
+      src =
+        "\n\nbst xic aa ote p1 nxb xic bb ote p2 bnd\n" <>
+          "bst xio bb otl q1 nxb xio aa otl q2 bnd\n" <>
+          "xic aa otu r1 mov 5 s1 mov s1 s2"
+
+      env = run(src, %{"aa" => 1, "bb" => 0, "p2" => 1, "r1" => 1})
+      assert %{"p1" => 1, "p2" => 0, "q1" => 1, "r1" => 0, "s1" => 5, "s2" => 5} = env
+      refute Map.has_key?(env, "q2")
+    end
+  end
+
   describe "output instructions" do
     test "ote de-energises on a false rung, otl does not" do
       assert %{"xx" => 0} = run("xic gg ote xx", %{"gg" => 0, "xx" => 1})
