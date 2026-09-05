@@ -147,7 +147,7 @@ Two steps, in `CLAUDE.md`, and step 1 has a test behind it.
 edited `CLAUDE.md`, shifting every `CLAUDE.md` line reference in `PLAN.md`. `747d630`
 cleaned that up.
 
-Cite `the {:xic, [name: arg]} clause of evaluate/2`, not `compiler.ex:79`. Clause heads,
+Cite `the {:xic, [{:name, _, arg}]} clause of evaluate/2`, not `compiler.ex:79`. Clause heads,
 function names, grammar productions and bullet titles survive edits above them. §1 and §2
 keep their numbers deliberately; §2 is explicitly historical.
 
