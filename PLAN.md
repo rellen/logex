@@ -503,22 +503,42 @@ The ordering here matters: each item is cheaper now than after the one below it 
 
 ### M1-1 · Keep the token line in the AST
 
-**Status: DONE — `a22bf39`.** An elem is now the token itself, `{kind, line, value}`: the
-`elem -> name` and `elem -> int_lit` productions pass `'$1'` through and the `Erlang code.`
-block is gone. All ten `compiler.ex` sites named below destructure the 3-tuple; instruction
-tuples stay `{symbol, args}`. Guarded by two tests in `lex_and_parse_test.exs` that assert
-lines other than 1 — "lexes and parses two rungs" (line 2) and "every elem carries the
-line it was read from" (lines 1, 3, 6 across blank lines, indentation and a CRLF). Checked
-by mutating, not by reasoning:
+**Status: DONE — `a22bf39`, coverage completed in `1b1b1df`.** An elem is now the token
+itself, `{kind, line, value}`: the `elem -> name` and `elem -> int_lit` productions pass
+`'$1'` through and the `Erlang code.` block is gone. All ten `compiler.ex` sites named
+below destructure the 3-tuple as `{kind, _, value}`; instruction tuples stay
+`{symbol, args}`, and the `{branches, legs}` node carries no line of its own — the `bst`
+token's line is dropped in the parser. Widening either is an open call, recorded in M1-2.
+
+Two sides to guard. The *producer* side — the parser keeping the right line — is held by
+two tests in `lex_and_parse_test.exs` that assert lines other than 1: "lexes and parses
+two rungs" (line 2, names and a literal) and "every elem carries the line it was read
+from" (lines 1, 3, 6 across blank lines, indentation and a CRLF, with a branch group and a
+bare elem sharing line 6). The *consumer* side — the ten `_` slots really being wildcards —
+is held by "no stage depends on an instruction sitting on line 1" in `end_to_end_test.exs`
+(every instruction, both power states, literal and tag operands, from line 3 down,
+asserting values), with the per-stage fixtures on lines 4/9 and 2 so no constant satisfies
+them. `a22bf39` landed with only the producer side; an adversarial review found eight of the
+ten slots could be a literal `1` with the suite green, and `1b1b1df` closed that. Checked by
+mutating, not by reasoning — fresh copy per row:
 
 ```
-elem -> name : '$1'.                       (as shipped)          26 tests, 0 failures
-elem -> name : setelement(2, '$1', 1).     (shape kept, line 1)  26 tests, 2 failures  — exactly those two
-elem -> name : {name, element(3, '$1')}.   (line dropped)        26 tests, 16 failures
+as shipped                                                    27 tests, 0 failures
+elem -> name : setelement(2, '$1', 1).     shape kept, line 1  27 tests, 2 failures   the two producer tests
+elem -> int_lit : setelement(2, '$1', 1).  shape kept, line 1  27 tests, 2 failures   the same two
+elem -> name : {name, element(3, '$1')}.   line dropped        27 tests, 17 failures
+branches legs rebuilt with every line 1    group only          27 tests, 1 failure    "every elem …" alone
+instructionize/1 rewriting operand lines   lowering            27 tests, 1 failure    "instructionizes an AST" alone
+instructionize/1 head: `_` -> 1            one slot            27 tests, 4 failures
+evaluate/2 ote-false head: `_` -> 1        one slot            27 tests, 2 failures   "no stage depends …" + fixture
+evaluate/2 otl-true head: `_` -> 1         one slot            27 tests, 2 failures
+get_arg/2 int_lit clause: `_` -> 1         one slot            27 tests, 3 failures
+get_arg/2 name clause: `_` -> 1            one slot            27 tests, 1 failure    "no stage depends …" alone
 ```
 
-The middle row is the one that matters: with the shape right and every line wrong, only
-the two line-asserting tests fail. Without them the suite would have been green.
+The "shape kept, line 1" rows are the ones that matter: with the shape right and every
+line wrong, only the line-asserting tests fail. Without those tests every row but "line
+dropped" would be green.
 
 The diagnosis, as written before it landed:
 
@@ -1002,9 +1022,9 @@ and the non-short-circuiting reduce (the `is_list(branch)` clause). Both look li
 ## 7. Findings register
 
 Every defect the review turned up, with the milestone item or backlog bullet that closes
-it, and its status as of `863af6f`. `B1`–`B8` are the §4 backlog bullets. Items that are
+it, and its status as of `1b1b1df`. `B1`–`B8` are the §4 backlog bullets. Items that are
 pure forward work rather than defects (M1-3, M1-6, B5) have no row. An ID of `—` means the
-finding has no plan item yet. Locations are current as of `863af6f` unless a cell says
+finding has no plan item yet. Locations are current as of `1b1b1df` unless a cell says
 otherwise.
 
 | ID | Sev | Area | Finding | Location | Status |
