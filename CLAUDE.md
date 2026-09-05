@@ -44,7 +44,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir (~> 1.15, Erlang R26). No
 ## Conventions
 
 - `evaluate/2` clauses take `(instruction, {power_flow_bool, env_map})` and return `{new_power_flow_bool, new_env_map}`
-- An operand is the lexer token, `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite
+- An operand is the lexer token, `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. A `{:branches, legs}` node and an instruction tuple `{symbol, args}` carry no line of their own
 - New instructions, step 1 — **survey the name before writing any code**: add a
   ``### `mnemonic` `` stanza to `docs/naming.md` (IEC 61131-3 element, function or
   function block with clause and table number, then the major vendor toolchains, then the
