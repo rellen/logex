@@ -70,7 +70,7 @@ The study ran in three phases. In phase one, five research agents worked at the 
 
 In phase two, three agents each made a design from a different position. The positions were a full Nx equivalent, the minimum macro that helps the author, and codegen first. Three judges then gave scores to the three designs with the same criteria. One more agent made one recommendation from the winner and from the parts of the other designs that it kept.
 
-In phase three, two agents, the refuters, tried to refute that recommendation. One tried to show that logex must not add a second front end at this time. The other tried to find a program that the DSL and the text front end run differently. The author of this report then read all of the documents and made the last decisions in sections 9 and 15.
+In phase three, two agents, the refuters, tried to refute that recommendation. One tried to show that logex must not add a second front end at this time. The other tried to find a program that the DSL and the text front end run differently. The author of this report then read all of the documents and made the last decisions in sections 9 and 15. The panel had executed `|` and the spike had executed `|||`, but no one had executed `branch(...)`. Thus, the author then made the recommended syntax in the sandbox and ran it. Section 9 gives the result.
 
 All runs in this study used the sandbox that `CONTRIBUTING.md` gives. The sandbox is a copy of the repository. Only the copy has a different Elixir version limit. No file in the repository changed. The spike code is in the scratch area, not in the repository.
 
@@ -184,6 +184,8 @@ The rules are these. The head parameters are the declared tags. `|>` is a series
 
 `branch(...)` is a parallel group. `[]` is a jumper leg. An integer is a literal. A tag that is not a correct Elixir variable name is a string, in the head and in the body. After M1-6, the author can write `t1.dn` with no change. The author writes `word.3` as `xic("word.3")`.
 
+The author executed this syntax after the panel. The macro with `branch(...)`, and without the M1-6 clause, is 57 lines of code plus the moduledoc. Its README output was the same as the output of the text front end in each byte. Its AST was equal to the text AST after the removal of the line numbers. For a tag with an incorrect letter it gave `bad.ex:5: undeclared tag okk`. All gates gave no error.
+
 More examples. Each has a text twin, the same rung in the text dialect:
 
 ```elixir
@@ -194,9 +196,11 @@ rung xic(run) |> ton(t1, 5000)                          # xic run ton t1 5000   
 rung xic(t1.dn) |> ote(heater)                          # xic t1.dn ote heater  (after M1-6)
 ```
 
-**The method.** The macro emits a `__define__` call and `def name(), do: <escaped AST>`. `Macro.escape` is necessary, because a logex operand has the structure of an Elixir AST node but is not one.
+**The method.** The macro emits a `__define__` call and `def name(), do: <escaped AST>`. `Macro.escape` is necessary, because a logex operand has the structure of an Elixir AST node but is not one. For the same cause, `Macro.prewalk` and `Macro.to_string` give a `FunctionClauseError` on the logex AST. Each tool and each test that walks the logex AST must have its own walker. The author found this two times in this study.
 
 The macro reads `instructions/0` and `tokenize/1` at compile time. Thus, a change to `compiler.ex` or to the lexer compiles each `defladder` module again. That is usual for a macro, and the maintainer must record it in `PLAN.md`.
+
+The macro must have two guards. Without them, `rung []` emits `{:rung, []}`, and `branch()` with no legs emits `{:branches, []}`. The text grammar cannot make these two nodes. The second node is dangerous. It gives power `false`, and thus `branch() |> ote(xx)` writes 0 with no error. The macro must refuse an empty rung and a `branch` with no legs, and `branch([])` stays correct, because it is the jumper of the text `bst bnd`.
 
 The line position contains the caller's integer line and no other data. The file and the module are facts of the routine, not of the operand. They are in M1-5's `%Logex.Program{source:}`. A literal gets the line of its instruction. If a rung continues on more than one line, each operand gets the line number of that operand.
 
@@ -270,7 +274,7 @@ Error tests use `Code.compile_string` and `assert_raise CompileError` on the des
 
 A sentinel test asserts that `xic(t1.dn)` is an error until the lexer lexes it. When the maintainer merges the lexer rule, change the sentinel test to an equivalence test.
 
-One more test asserts that `{:branches, []}` stays unreachable from the DSL. That node evaluates to `false`, and no text can make it.
+One more test asserts that `{:branches, []}` stays unreachable from the DSL. That node evaluates to `false`, and no text can make it. The test writes `branch()` and `rung []` and asserts a `CompileError` for each. The author found by execution that a macro without the two guards emits these nodes.
 
 The mutation table must have these rows, each mutation on a new copy of the code. Remove the `when` clause: one error. Remove the `__define__` call: one error. Put the caller's line on each operand in the walker: one error. Revert the lexer tag check: two errors. Remove the jumper clause: the test file does not compile.
 
@@ -293,6 +297,8 @@ Two more rows. Remove `rung: 1` from `.formatter.exs`: the format gate gives an 
 7. **The head declarations are not in the output.** `name/0` gives the AST and no other data. Thus, `defladder r(a, a, x)` compiles, and the tag table of M1-3 cannot read the declared tags. The mitigation is the M1-3 sentence in section 11.
 
 8. **Nested group structure.** With `branch(...)`, the DSL AST nests as the text AST does. With an infix operator, a sequence of three legs flattens to one group. This is one more argument for the call.
+
+9. **Nodes that the text grammar cannot make.** The smallest macro emits `{:rung, []}` for `rung []` and `{:branches, []}` for `branch()`. The second gives power `false` with no error. The mitigation is the two guard clauses in section 9 and the test in section 13. The author found this by execution, after the panel.
 
 ## 15. Decisions for the maintainer
 
