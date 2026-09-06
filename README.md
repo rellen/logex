@@ -180,6 +180,7 @@ run `rm -f src/*.erl && rm -rf _build` first. See `CLAUDE.md`.
 - [`docs/naming.md`](docs/naming.md) — the IEC and vendor naming survey, one stanza per mnemonic
 - `CONTRIBUTING.md` — how to work on it: the build trap, what a fix owes, what not to "fix"
 - `CLAUDE.md` — build traps and conventions for anyone (or anything) editing the code
+- [`docs/defladder.md`](docs/defladder.md) — a study of an Elixir-embedded `defladder` DSL: what Nx's `defn` does, an executed spike, and a recommendation (proposed, not adopted)
 
 ## License
 

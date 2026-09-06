@@ -917,6 +917,21 @@ right rather than merely plausible.
   rungs. Predates M0; M0-5's `\r?` in `RND` makes it *look* handled, which is why it is
   worth recording.
 
+- **B9 · An Elixir-embedded `defladder` DSL — proposed, not adopted.** `docs/defladder.md`
+  is the study: what Nx's `defn` actually does (call-time tracing, which a static ladder
+  routine has no use for), an executed spike (a 71-line macro producing this parser's AST,
+  byte-identical scan output, located compile errors), a judged design panel and two
+  adversarial refutations. Its recommendation: one macro that emits the parse-stage AST and
+  owns no vocabulary — mnemonics from `instructions/0`, tags via `tokenize/1` — with a
+  parallel group spelled `branch(leg, leg)` rather than an infix operator, because `|||`
+  and `|` both bind looser than `|>` and an unparenthesised seal-in silently becomes
+  OR-of-AND (B1's defect class on a surface no gate sees). Preconditions if adopted: M1-2
+  (one validator) and M1-5 (a `%Program{}` and a runtime for `name/1` to sit on), and a
+  re-run of the whole study on Elixir ≥ 1.15 — every receipt in it is from the 1.14
+  sandbox. The report's §15 lists the decisions this item is waiting on; nothing in §3 or
+  §5 changes until they are made. No codegen backend: the second backend the spike built
+  disagreed with `evaluate/2` on 5,708 of 20,000 seeded envs and on 0 text-reachable ones.
+
 ---
 
 ## 5. Settled decisions
@@ -1059,6 +1074,7 @@ otherwise.
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `&f(&1)`; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `evaluate/2` | open |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
 | §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `ladder_lexer.xrl:3` | open |
+| B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed |
 
 ---
 
