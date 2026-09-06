@@ -186,7 +186,7 @@ The rules are these. The head parameters are the declared tags. `|>` is a series
 
 `branch(...)` is a parallel group. `[]` is a jumper leg. An integer is a literal. A tag that is not a correct Elixir variable name is a string, in the head and in the body. After M1-6, the author can write `t1.dn` with no change. The author writes `word.3` as `xic("word.3")`.
 
-The author executed this syntax after the panel. The macro with `branch(...)`, and without the M1-6 clause, is 57 lines of code plus the module documentation. Its README output was the same as the output of the text front end in each byte. Its AST was equal to the text AST after the removal of the line numbers. For a tag with an incorrect letter it gave `bad.ex:5: undeclared tag okk`. All gates gave no error.
+The author executed this syntax after the panel. The macro with `branch(...)`, and without the M1-6 clause, is 57 lines of code, without the text of the `@moduledoc`. Its README output was the same as the output of the text front end in each byte. Its AST was equal to the text AST after the removal of the line numbers. For a tag with an incorrect letter it gave `bad.ex:5: undeclared tag okk`. All gates gave no error.
 
 More examples. Each has a text twin, the same rung in the text dialect:
 
