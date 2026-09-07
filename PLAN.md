@@ -853,12 +853,19 @@ right rather than merely plausible.
   have a clean baseline. Only the two root commits (`b8e8f8a`, `d319fb3`) predate the mix
   project; every commit after them is bisectable.
 
-- **B4 · nix dev shell has bit-rotted.** `shell.nix:4-5` uses
-  `pkgs.beam.interpreters.erlangR26`, an alias nixpkgs deleted on 2024-05-24;
-  `flake.nix:5` points at `master`; `flake.lock` is pinned at 2024-01-19. The shell
-  works *only* because the lock is stale — a `nix flake update` breaks it. Rename to
-  `erlang_26` and pin nixpkgs to a release channel. The unused `zig` binding in
-  `shell.nix` can go too.
+- **B4 · nix dev shell has bit-rotted.** **Landed `9c1a7bd`**, with the lock refresh still
+  owed. `shell.nix` now pins `beam.packages.erlang_28` with `elixir_1_20`, and `flake.nix`
+  tracks `nixos-26.05` instead of `master`. The original diagnosis — `erlangR26` deleted
+  from nixpkgs on 2024-05-24 — was overtaken before it was acted on: nixpkgs now `throw`s
+  on `erlang_26`, `elixir_1_15` and `elixir_1_16` as EOL, so the rename to `erlang_26` this
+  item proposed would also have failed. What decided the versions was the 2026-09-07 CVE
+  check: OTP 26 left support on 2026-05-26 and every 2026 OTP advisory was fixed only on
+  27/28/29; Elixir 1.15 left the last-five-minors window on 2026-06-03 and is
+  affected-and-unpatched by CVE-2026-75758. Nothing in logex's own code paths is reachable
+  by any of them (no deps; runtime is `kernel`/`stdlib` only), so this is toolchain
+  hygiene, not a fix. Still open: `flake.lock` is the 2024-01-19 lock and does not match
+  the new input — the first `nix develop` re-locks it; run `nix flake update` and commit.
+  Not evaluated in the session that landed it (no `nix` on that machine).
 
 - **B5 · Split `Logex.Compiler` along the pipeline** once M1-2 and M1-5 exist and the module
   is doing five jobs instead of four: `Logex.Lexer`, `Parser`, `Ast`, `Instruction`,
@@ -1067,7 +1074,7 @@ otherwise.
 | M1-5 | low | API | No public entry point and no `Logex` module; no scan loop | — | open |
 | M1-5 | low | errors | Three error conventions across four stages; `format_error/1` never called; empty program reports line `999999` | `tokenize/1`, `parse/1` | **partly closed** — `999999` by `b65e756`; the other two clauses open |
 | M0-3 | low | tooling | Generated `src/*.erl` tracked, embedding absolute `/nix/store` paths → ~700-line cross-OTP churn | `src/ladder_lexer.erl:1` (at `c9c7f51`; untracked since) | **closed** `dde8c1d` |
-| B4 | low | tooling | nix dev shell bit-rotted: `erlangR26` alias removed from nixpkgs master 2024-05-24 (still in `nixos-24.05`, gone in `24.11`); flake tracks `master`; lock is 31 months old | `shell.nix:4-5` | open |
+| B4 | low | tooling | nix dev shell bit-rotted: `erlangR26` alias removed from nixpkgs master 2024-05-24; flake tracked `master`; lock from 2024-01-19 | `shell.nix`, `flake.nix` | **landed** `9c1a7bd` — OTP 28 / Elixir 1.20 on `nixos-26.05`; lock refresh owed |
 | B2 | low | lexer | Digit-led lexeme splits rather than erroring: `1bst` → `int_lit(1)` + a real `bst` | `ladder_lexer.xrl:20` | open |
 | B3 | low | history | 2 commits ship a red suite (`ec0534a`, `35fe1b9`) — an interior island; `d47eb21` is a clean bisect baseline | — | open |
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | open |
