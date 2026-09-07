@@ -151,16 +151,21 @@ after the overtemperature input clears.
 
 ## Running it
 
-Requires Elixir ~> 1.15 and Erlang 26, with leex and yecc available — `src/*.erl` are
-generated at build time and are not tracked, so on Debian/Ubuntu you need
-`erlang-parsetools` as well as `erlang-base`. There are no dependencies to fetch.
+The toolchain this repository documents and pins is **Elixir 1.20 on Erlang/OTP 28**
+(`shell.nix`, `flake.nix`). `mix.exs` accepts anything from Elixir 1.15 up, but that is
+the floor the code compiles on, not a recommendation: Elixir 1.15 and OTP 26 left their
+security windows in June and May 2026, and the oldest pair still receiving security fixes
+is Elixir 1.16 on OTP 27. leex and yecc must be available — `src/*.erl` are generated at
+build time and are not tracked, so on Debian/Ubuntu you need `erlang-parsetools` as well
+as `erlang-base`. There are no dependencies to fetch.
 
 On an older toolchain `mix compile` aborts with *"you're trying to run :logex on Elixir
 v1.14 … it supports only Elixir ~> 1.15"*. **Install a newer Elixir rather than relaxing
 `mix.exs`** — the requirement is deliberate, and a loosened version constraint is the kind
-of edit that gets committed by accident. (`shell.nix` will not help yet: it pins an alias
-removed from nixpkgs in 2024 — `PLAN.md` §4·B4.) If you cannot install one, run the suite in
-the throwaway sandbox in `CONTRIBUTING.md`, which relaxes the bound in a *copy*.
+of edit that gets committed by accident. `nix develop` gives you the pinned toolchain; the
+committed `flake.lock` predates the current pin, so the first run re-locks it — commit the
+result. If you cannot install one, run the suite in the throwaway sandbox in
+`CONTRIBUTING.md`, which relaxes the bound in a *copy*.
 
 ```
 mix compile

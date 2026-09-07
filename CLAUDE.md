@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Logex is a Ladder Logic compiler/interpreter in Elixir (~> 1.15, Erlang R26). No external dependencies.
+Logex is a Ladder Logic compiler/interpreter in Elixir. `mix.exs` floor is Elixir ~> 1.15; the documented toolchain is Elixir 1.20 on OTP 28 (`nix develop`). No external dependencies.
 
 ## Commands
 
