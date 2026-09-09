@@ -152,16 +152,18 @@ after the overtemperature input clears.
 ## Running it
 
 The toolchain this repository documents and pins is **Elixir 1.20 on Erlang/OTP 28**
-(`shell.nix`, `flake.nix`). `mix.exs` accepts anything from Elixir 1.15 up, but that is
-the floor the code compiles on, not a recommendation: Elixir 1.15 and OTP 26 left their
-security windows in June and May 2026, and the oldest pair still receiving security fixes
+(`mix.exs`, `.tool-versions`, `shell.nix`, `flake.nix`) — one version to think about, and it
+is inside both projects' security windows. `.tool-versions` pins the exact patch releases
+(`28.5.0.6`, `1.20.4-otp-28`) and is read by both mise and asdf; `nix develop` uses
+`shell.nix`; `mix.exs` is the bound the compiler itself enforces. The floor was `~> 1.15` until September 2026; Elixir 1.15 and OTP 26
+left their windows in June and May 2026, and the oldest pair still receiving security fixes
 is Elixir 1.16 on OTP 27. leex and yecc must be available — `src/*.erl` are generated at
 build time and are not tracked, so on Debian/Ubuntu you need `erlang-parsetools` as well
 as `erlang-base`. There are no dependencies to fetch.
 
 On an older toolchain `mix compile` aborts with *"you're trying to run :logex on Elixir
-v1.14 … it supports only Elixir ~> 1.15"*. **Install a newer Elixir rather than relaxing
-`mix.exs`** — the requirement is deliberate, and a loosened version constraint is the kind
+v1.14.0 but it has declared in its mix.exs file it supports only Elixir ~> 1.20"*.
+**Install a newer Elixir rather than relaxing `mix.exs`** — the requirement is deliberate, and a loosened version constraint is the kind
 of edit that gets committed by accident. `nix develop` gives you the pinned toolchain; the
 committed `flake.lock` predates the current pin, so the first run re-locks it — commit the
 result. If you cannot install one, run the suite in the throwaway sandbox in

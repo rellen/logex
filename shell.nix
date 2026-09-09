@@ -4,8 +4,8 @@
 # OTP 26 and Elixir 1.15, which this file pinned before, left their windows in
 # May and June 2026, and nixpkgs has since removed both -- `erlang_26` and
 # `elixir_1_15` now `throw` -- so the old pins cannot evaluate at all.
-# `mix.exs` keeps `~> 1.15` as the floor the *code* accepts; this is what a
-# developer should actually run. See PLAN.md §4·B4.
+# `mix.exs` requires the same pair, so there is one version to think about.
+# See PLAN.md §4·B4.
 { pkgs ? import <nixpkgs> { } }:
 let
   beam = pkgs.beam.packages.erlang_28;

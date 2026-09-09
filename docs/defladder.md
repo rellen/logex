@@ -28,7 +28,7 @@ The report gives two recommendations that are different from the recommendations
 
 The infix operators `|||` and `|` each have a lower precedence than `|>`. Thus, an unparenthesized seal-in rung compiles with no warning to OR-of-AND, and the motor in the README example does not start. That is the defect type that `PLAN.md` §1 identifies as the most important, and that B1 must remove.
 
-Two steps must occur before the DSL is in the repository. All receipts in this study come from Elixir 1.14 in the sandbox. Thus, the maintainer must do the runs of this study again on Elixir 1.15 or a subsequent version. And the maintainer must make the decisions that section 15 lists.
+Two steps must occur before the DSL is in the repository. All receipts in this study come from Elixir 1.14 in the sandbox. Thus, the maintainer must do the runs of this study again on Elixir 1.20. And the maintainer must make the decisions that section 15 lists.
 
 ## 2. The task
 
@@ -138,7 +138,7 @@ The public functions that a DSL uses at this time are `instructions/0` and `toke
 
 **Design 1, the full Nx equivalent.** The designer made it and ran it: 249 lines in five modules. A `Logex.Ladder.Kernel` replaces `Kernel` in the body. Thus, each tag is an Elixir variable, and `|>` is a function that the DSL defines. A `@before_compile` step gets the definition again, rewrites it and defines it again. A compiler behavior lets the user select `evaluate/2` or the codegen backend. The judges gave it 13, 13 and 12 points of 30.
 
-The judges rejected Design 1 for four facts. Elixir 1.15 gives an error on an undefined variable before a hook runs. Thus, the "undeclared tag" message with the user's line is not possible on the repository's toolchain. A declared tag that the body does not use is a warning, and the gate `--warnings-as-errors` rejects it. `|` is an Elixir special form, and thus the kernel cannot import it. And the body that `Module.get_definition/2` gives is post-expansion, with the pipes gone.
+The judges rejected Design 1 for four facts. Elixir 1.15 and subsequent versions give an error on an undefined variable before a hook runs. Thus, the "undeclared tag" message with the user's line is not possible on the repository's toolchain. A declared tag that the body does not use is a warning, and the gate `--warnings-as-errors` rejects it. `|` is an Elixir special form, and thus the kernel cannot import it. And the body that `Module.get_definition/2` gives is post-expansion, with the pipes gone.
 
 **Design 2, the macro as a second parser.** One macro reads the body as data and emits the parse-stage AST. It defines no vocabulary. Mnemonics come from `instructions/0` and tags from `tokenize/1`, at compile time. It emits a `__define__` call and `def name(), do: <escaped AST>`, and no other code. It is 79 lines, plus 4 lines in `.formatter.exs`. All three judges selected it, with 25, 25 and 27 points.
 
@@ -219,7 +219,7 @@ Errors use `raise CompileError, file: __CALLER__.file, line: line, description: 
 | Nx method | `defladder` equivalent |
 |---|---|
 | `defn` macro: registration, a `def` with a replaced kernel, `Process.delete` | `defladder` reads the block as data and emits `__define__` plus `def name(), do: <AST>`. The body is not the body of a `def`. |
-| Kernel replacement (`import Kernel, only: []`) | None. It is not necessary that a function or variable in the body is defined when the macro reads it as data. On Elixir 1.15, a bound-variable design gives an error on an undefined variable before a hook runs. |
+| Kernel replacement (`import Kernel, only: []`) | None. It is not necessary that a function or variable in the body is defined when the macro reads it as data. On Elixir 1.15 and subsequent versions, a bound-variable design gives an error on an undefined variable before a hook runs. |
 | Tracing at call time | None. Nothing in the IR is unknown at compile time. The walk runs at compile time and does not run user code. |
 | `Nx.Defn.Expr` graph | The logex AST and IR. They are rungs in sequence with side effects, not a graph. |
 | `Nx.Defn.Compiler` behavior | None. logex has one backend. A behavior for one implementation is an unnecessary abstraction. The second backend gave different results on 5,708 of 20,000 maps. |
@@ -286,7 +286,7 @@ Two more rows. Remove `rung: 1` from `.formatter.exs`: the format gate gives an 
 
 ## 14. Risks
 
-1. **Toolchain difference.** All receipts are from Elixir 1.14 in the sandbox. The `CompileError` fields, `Code.compile_string`, and the AST metadata can be different on Elixir 1.15 and subsequent versions. The maintainer must do the runs of this study again on the repository's toolchain before B9 starts. Until then, each number in this report is a 1.14 number.
+1. **Toolchain difference.** All receipts are from Elixir 1.14 in the sandbox. The `CompileError` fields, `Code.compile_string`, and the AST metadata can be different on Elixir 1.20. The maintainer must do the runs of this study again on the repository's toolchain before B9 starts. Until then, each number in this report is a 1.14 number.
 
 2. **A second producer of the AST.** The repository's history shows the problems that two producers cause. M0-1, the first item of Milestone 0, was two fixtures that gave different results, and the two gave no error. The mitigation is the vocabulary test, the lexer-derived tag check, and the source-to-map oracle on the two spellings.
 
@@ -312,7 +312,7 @@ Two more rows. Remove `rung: 1` from `.formatter.exs`: the format gate gives an 
 
 3. Make the decision: are the head declarations in the output at B9 or at M1-3? The study recommends B9. A `name/0` that discards the tags is a contract that M1-3 and M1-5 must then change.
 
-4. Make the decision on the runs on Elixir 1.15 or a subsequent version. The study cannot do them on this computer. The rule of the repository is applicable. Install a new Elixir, or use a copy. Do not change the version limit in the `mix.exs` of the repository.
+4. Make the decision on the runs on Elixir 1.20, the version in `mix.exs`. The study cannot do them on this computer. The rule of the repository is applicable. Install a new Elixir, or use a copy. Do not change the version limit in the `mix.exs` of the repository to a previous version.
 
 5. Make the decision on the name. The study recommends that the repository does not use "Nx-style" in its documents, because no Nx method stays in the design. `defladder` is a good name. It is not necessary to add "Nx-style" to it.
 

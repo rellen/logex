@@ -934,7 +934,7 @@ right rather than merely plausible.
   and `|` both bind looser than `|>` and an unparenthesised seal-in silently becomes
   OR-of-AND (B1's defect class on a surface no gate sees). Preconditions if adopted: M1-2
   (one validator) and M1-5 (a `%Program{}` and a runtime for `name/1` to sit on), and a
-  re-run of the whole study on Elixir ≥ 1.15 — every receipt in it is from the 1.14
+  re-run of the whole study on Elixir 1.20, the floor in `mix.exs` — every receipt is from the 1.14
   sandbox. The report's §15 lists the decisions this item is waiting on; nothing in §3 or
   §5 changes until they are made. No codegen backend: the second backend the spike built
   disagreed with `evaluate/2` on 5,708 of 20,000 seeded envs and on 0 text-reachable ones.

@@ -63,15 +63,19 @@ cleared but `src/*.erl` left in place, so a fix that had already been applied st
 
 ### Running the suite on an older toolchain
 
-`mix.exs` requires Elixir `~> 1.15`, and that bound is deliberate — but the machine in front
+`mix.exs` requires Elixir `~> 1.20`, and that bound is deliberate — but the machine in front
 of you may not have it, and then `mix` aborts before running anything at all. Every executed
 receipt in these documents was produced in a throwaway copy instead:
 
     SB=$(mktemp -d)
     cp -r . "$SB"/ && rm -rf "$SB/.git"
-    sed -i 's/elixir: "~> 1.15"/elixir: "~> 1.14"/' "$SB/mix.exs"
+    sed -i 's/elixir: "~> [0-9.]\+"/elixir: "~> 1.14"/' "$SB/mix.exs"   # 1.14 = your version
     cd "$SB" && rm -f src/*.erl && rm -rf _build
     mix compile --warnings-as-errors && mix format --check-formatted && mix test
+
+The bound is matched by a pattern, not spelled out, on purpose: the floor has moved once
+(`~> 1.15` → `~> 1.20`) and a recipe naming the old number fails *silently* —
+`sed` matches nothing, `mix` aborts, and the copy looks broken rather than unpatched.
 
 Patch the **copy**, never the tracked file. That distinction is the entire point: relaxing
 the bound is a legitimate way to observe this code on the toolchain you happen to have, and
@@ -174,7 +178,7 @@ choice, not an oversight to fix.
 ## Things that will bite you
 
 - **Do not relax `mix.exs`.** On an older toolchain `mix compile` aborts and the obvious
-  fix is to loosen `elixir: "~> 1.15"`. Install a newer Elixir, or use the throwaway sandbox
+  fix is to loosen `elixir: "~> 1.20"`. Install a newer Elixir, or use the throwaway sandbox
   in "Running the suite on an older toolchain" above — patch a copy. An automated audit
   of this repo recommended relaxing it, having mistaken a test rig's patched copy for the
   repository's own — a wrong conclusion from real evidence.

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Logex is a Ladder Logic compiler/interpreter in Elixir. `mix.exs` floor is Elixir ~> 1.15; the documented toolchain is Elixir 1.20 on OTP 28 (`nix develop`). No external dependencies.
+Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir ~> 1.20 on OTP 28, pinned in `mix.exs` and `shell.nix` (`nix develop`). No external dependencies.
 
 ## Commands
 
@@ -16,7 +16,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. `mix.exs` floor is Elixi
   **`mix compile --warnings-as-errors` does not fail on a shift/reduce conflict** — yecc
   silently disambiguates and emits a working parser, and mix reports a warning the flag
   does not upgrade. No default check will tell you.
-- Requires Elixir ~> 1.15; on anything older `mix` aborts before it runs. **Never relax
+- Requires Elixir ~> 1.20; on anything older `mix` aborts before it runs. **Never relax
   `mix.exs`** — the constraint is deliberate, and a loosened version bound is the kind of
   edit that lands by accident. If you cannot install a newer Elixir, run the suite in the
   throwaway sandbox in `CONTRIBUTING.md` ("Running the suite on an older toolchain"), which
