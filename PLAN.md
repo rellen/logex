@@ -803,8 +803,11 @@ right rather than merely plausible.
   int_lit, bnd`). Real neutral text avoids the clash only because operands are
   parenthesised — `XIC(aa[3])`. `( … | … )` leaves `[`, `]`, `,` and `.` unspent, and reads
   as "a AND (b OR c)" to anyone who has seen a regex. Note also that `BST`/`NXB`/`BND` are
-  **not** neutral-text spellings — they occur zero times in the instruction-set reference or the import/export reference; the
-  destination this bullet argued for was right, its stated origin was not.
+  **not** neutral-text spellings — they occur zero times in the instruction-set reference or
+  the import/export reference. They *are* vendor mnemonics, from the same vendor's **earlier**
+  controller family, whose ASCII rung format spells a branch `SOR BST … NXB … BND … EOR`.
+  The destination this bullet argued for was right; its stated origin was the wrong
+  generation, not the wrong vendor.
 
 - **B2 · Digit-led lexemes split instead of erroring.** `mov 1bst aa bnd` lexes as
   `int_lit(1)` + a genuine `bst` — a branch-start materialising from the middle of a
@@ -979,7 +982,12 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   unspent. Three lexer rules, **zero grammar edits** — the yecc terminals are already the
   atoms `bst nxb bnd`. Ship it with the M1-2 migration hint.
   *(Correction to B1's wording when it lands: `BST`/`NXB`/`BND` are **not** vendor
-  neutral-text spellings — they occur in no vendor reference surveyed.)*
+  neutral-text spellings — but they are vendor mnemonics, from the earlier controller
+  family's ASCII rung format. The "no vendor reference surveyed" phrasing this note once
+  carried was a negative scoped to one generation and worded as though it covered the vendor;
+  see the survey-scope note in `docs/naming.md`. Landing B1 therefore trades a real vendor
+  spelling for a coined one — still the right call on the fusion hazard, but say so in the
+  migration hint rather than implying the words were logex's own.)*
 - **M1-4 nonzero-is-true — keep as a totality guarantee, reject as a language rule.** Land
   `bit/2` so `xic`/`xio` are complementary by construction, then once M1-3's tag table
   exists make a non-BOOL operand a located diagnostic rather than a coercion. The survey

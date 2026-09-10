@@ -90,6 +90,15 @@ parentheses where the 2024 conformance sweep renamed it. Siemens splits into cla
 (S7-300/400) and TIA Portal (S7-1200/1500) wherever they differ — that split is real and is
 the single most common source of wrong "Siemens says X" claims.
 
+**Survey scope for the Conventional column.** Unless a row says otherwise, it was checked
+against that vendor's **current** controller family: the Sept 2025 instruction-set reference
+(927 pp), the import/export reference (385 pp) and the two ladder programming manuals. The
+vendor also has **earlier** families with their own mnemonics, and the Branch structure row
+below is where that bit — a negative established only against the current family was written
+as though it covered the vendor, and stood until someone who had used the earlier software
+said otherwise. Name the generation in any row whose answer depends on it, and scope a
+negative to what was actually read.
+
 ### Contacts and coils
 
 | Concept | IEC 61131-3 | Conventional | Siemens | CODESYS | Mitsubishi | logex | Notes |
@@ -232,7 +241,7 @@ the single most common source of wrong "Siemens says X" claims.
 
 | Concept | IEC 61131-3 | Conventional | Siemens | CODESYS | Mitsubishi | logex | Notes |
 |---|---|---|---|---|---|---|---|
-| Parallel branch group | **graphical** — parallel horizontal links between vertical links (Ed2 §4.1.2, T60). PLCopen TC6 XML models a rung as a connection graph with no textual delimiters | current L5K neutral text uses **brackets and commas**: `N: XIC(conveyor_a)[,XIC(input_1) XIO(input_2) ]OTE(light_1);` | graphical (TIA Openness XML: `<Part Name="Contact"/>`) | graphical | **no delimiters at all** — stack instructions ORB (OR Block), ANB (AND Block), MPS / MRD / MPP | **`( … \| … )`** | **`BST`, `NXB`, `BND` appear zero times in 927 pages of the instruction-set reference and are not the conventional set neutral-text spelling** (see §3). The one textual precedent, `[ , ]`, is unavailable to logex because it works only alongside parenthesised operands |
+| Parallel branch group | **graphical** — parallel horizontal links between vertical links (Ed2 §4.1.2, T60). PLCopen TC6 XML models a rung as a connection graph with no textual delimiters | **two spellings, one per controller generation.** *Current* family, L5K neutral text: brackets and commas, `N: XIC(conveyor_a)[,XIC(input_1) XIO(input_2) ]OTE(light_1);`. *Earlier* family, ASCII rung editor and library export: **`BST` / `NXB` / `BND`**, as `SOR BST XIC I:003/4 NXB XIO T4:5/DN BND XIC B3/10 TON T4:5 1.0 450 315 EOR` | graphical (TIA Openness XML: `<Part Name="Contact"/>`) | graphical | **no delimiters at all** — stack instructions ORB (OR Block), ANB (AND Block), MPS / MRD / MPP | **`( … \| … )`** | **`BST`, `NXB`, `BND` are that vendor's mnemonics after all — from the earlier generation.** They occur zero times in the current family's references (927-page instruction set, 385-page import/export, both Sept 2025), which is the check an earlier version of this row over-read into "no vendor reference". The earlier family's software guide (Dec 2019) glosses them `BST=branch start / NXB=next branch / BND=branch end`, and its controller reference lists branch start / next branch / branch end in the instruction timing table as costing one word of memory and 0.16–0.8 µs each, depending on processor. So logex's delimiters were **borrowed, not coined**; `( … \| … )` is the coinage, taken over the precedent because `nxb` fuses into an adjacent tag name (PLAN M1-2). The other textual precedent, `[ , ]`, is unavailable to logex because it works only alongside parenthesised operands |
 
 ---
 

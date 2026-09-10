@@ -26,12 +26,22 @@ Source syntax today:
 - a newline ends a rung
 - `bst` … `nxb` … `bnd` open, separate and close a parallel branch group
 
-The *vocabulary* is a conventional ladder mnemonic set; the *syntax* is not. Vendor
-export formats are uppercase and parenthesised, semicolon-terminated, and spell a branch
-with brackets and commas — nothing like the above. Borrowing a vocabulary is not the same
-as accepting a format, and logex borrows only the vocabulary. (Worth noting that `bst`,
-`nxb` and `bnd` are not themselves vendor mnemonics: they appear in no vendor reference
-surveyed.)
+The *vocabulary* is a conventional ladder mnemonic set — and so, it turns out, is more of
+the *syntax* than this section used to claim. That vendor's **current** controller family
+exports uppercase, parenthesised, semicolon-terminated text and spells a branch with
+brackets and commas, which is nothing like the above. Its **earlier** family's ASCII rung
+format is uppercase, space-separated and unparenthesised, and spells a branch
+`BST … NXB … BND`: the list above with the case flipped and the rung delimiters dropped.
+`bst`, `nxb` and `bnd` are that vendor's own mnemonics, glossed in its programming-software
+guide as branch start, next branch and branch end, and its controller reference bills all
+three as instructions with an execution time and a word of memory each.
+
+Borrowing a vocabulary is still not the same as accepting a format, and logex is a dialect
+by choice rather than by distance: it will not grow an importer, and it takes none of that
+family's operand syntax (`I:003/4`, `T4:5/DN`). But the distance is smaller than claimed,
+which is worth knowing before changing the syntax — `PLAN.md` M1-2 replaces the three words
+with `( … | … )` for a lexical reason that still holds, and that change now gives up a real
+precedent rather than a coinage.
 
 Being a dialect is a licence to choose names, not a licence to choose them carelessly. So
 every new instruction is surveyed before it is written: what does IEC 61131-3 call this,
@@ -79,7 +89,8 @@ change the source language:
 
 - **Branch delimiters become `( … | … )`.** `bst`/`nxb`/`bnd` are alphanumeric words drawn
   from the same character set as tag names, so a missing space fuses `nxb` into an
-  identifier and silently turns OR into AND.
+  identifier and silently turns OR into AND. This is the one settled change that trades a
+  vendor spelling for a coined one; the hazard is judged to outweigh the precedent.
 - **`mov` becomes `move`,** following its own source's 2024 rename to the IEC standard
   function name.
 - **`//` starts a comment**; `.` gives member access (`t1.dn`, `word.3`); negative integer
