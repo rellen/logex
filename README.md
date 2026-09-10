@@ -29,12 +29,13 @@ Source syntax today:
 The *vocabulary* is a conventional ladder mnemonic set — and so, it turns out, is more of
 the *syntax* than this section used to claim. That vendor's **current** controller family
 exports uppercase, parenthesised, semicolon-terminated text and spells a branch with
-brackets and commas, which is nothing like the above. Its **earlier** family's ASCII rung
+brackets and commas, which is nothing like the above. An **earlier** family's ASCII rung
 format is uppercase, space-separated and unparenthesised, and spells a branch
 `BST … NXB … BND`: the list above with the case flipped and the rung delimiters dropped.
-`bst`, `nxb` and `bnd` are that vendor's own mnemonics, glossed in its programming-software
-guide as branch start, next branch and branch end, and its controller reference bills all
-three as instructions with an execution time and a word of memory each.
+`bst`, `nxb` and `bnd` are that vendor's own mnemonics, glossed in that family's
+programming-software guide as branch start, next branch and branch end; its controller
+reference bills the same three, under those spelled-out names, as instructions with an
+execution time and a word of memory each.
 
 Borrowing a vocabulary is still not the same as accepting a format, and logex is a dialect
 by choice rather than by distance: it will not grow an importer, and it takes none of that
