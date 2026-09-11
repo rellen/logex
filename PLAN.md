@@ -581,11 +581,25 @@ unrecognised name, and the `Enum.take(tail, args)` beside it truncates silently 
 "xic aa 7 ote bb" -> FunctionClauseError in instructionize/1   (extra *literal* operand)
 "123 aa"          -> FunctionClauseError in instructionize/1   (literal in opcode position)
 "ote"             -> {:ote, []} accepted, then FunctionClauseError in evaluate/2
+"mov src ote"     -> no error at all: %{"ote" => 9}       (mnemonic eaten as an operand)
 ```
 
-The truncation case is the worse one: because several `evaluate/2` clauses use a
+Every case but the last one raises. **The last is the worst, and it is not the
+truncation case:** nothing was truncated — `Enum.take(tail, 2)` found exactly two tokens,
+the second being the *next instruction's mnemonic*, so `mov` completed with `ote` as its
+destination tag. A coil became a tag name, on an energised rung, with no exception and no
+diagnostic. It needs neither a short operand list nor a de-energised rung, so it bites
+where the reader is least likely to look.
+
+The truncation case is the next worst: because several `evaluate/2` clauses use a
 wildcard for `{false, env}`, a truncated instruction is *silently accepted* when power
 flow is already false, and crashes only when a tag flips.
+
+Both are the same root cause and the same fix — arity is a number in a map, consulted
+after parsing, so the grammar cannot tell an operand from a mnemonic. Note that §4·B1
+does **not** help here: it made the *delimiters* unfusable, and this is the same failure
+shape one level down, on the operand list. The operand-signature table below is what
+closes it.
 
 Widen `@instructions` from an arity to an operand signature — `"mov" => {:mov, [:value, :tag]}`,
 `"ote" => {:ote, [:tag]}` — and drive validation from the table rather than from
@@ -1102,7 +1116,7 @@ otherwise.
 | M0-2 | med | tests | No test crosses a stage seam; per-stage fixtures are hand-typed and contradict each other | `end_to_end_test.exs` | **closed** `03c10e0` |
 | M0-5 | med | grammar | `rnd` is a strict infix separator, and a branch leg cannot be empty | `ladder_parser.yrl:8,12,16,21` | **closed** `b65e756` |
 | B1 | med | lexer | Missing space before `nxb` fuses into an identifier — parallel silently becomes series | `ladder_lexer.xrl:8` | **closed** — delimiters are `(` `\|` `)`; guarded by "deleting a space around a delimiter is a no-op" in `end_to_end_test.exs` |
-| M1-2 | med | lowering | No validation pass: unknown mnemonic → bare `MatchError`; short arity → truncated IR | `instructionize/1`, name clause | open |
+| M1-2 | med | lowering | No validation pass: unknown mnemonic → bare `MatchError`; short arity → truncated IR; and `mov src ote` silently eats the next mnemonic as a tag, no error, energised rung | `instructionize/1`, name clause | open |
 | M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | `evaluate/2`, xic+xio clauses | open |
 | B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `ladder_lexer.xrl:6,10` | open |
 | M0-4 | low | lexer | `NAME` regex: `+` rejects single-char tags; `a-zA-z` typo admits ``[ \ ] ^ ` `` | `ladder_lexer.xrl:5` | **closed** `3f3b104` |
