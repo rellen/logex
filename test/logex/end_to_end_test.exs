@@ -48,8 +48,8 @@ defmodule Logex.EndToEndTest do
 
     test "the showcase routine from lex_and_parse_test.exs" do
       src =
-        "bst mov aa bb nxb mov cc dd nxb mov ee ff bst mov 123 hh bnd bnd " <>
-          "bst ote xx nxb ote yy bnd"
+        "( mov aa bb | mov cc dd | mov ee ff ( mov 123 hh ) ) " <>
+          "( ote xx | ote yy )"
 
       assert %{
                "aa" => 1,
@@ -102,29 +102,60 @@ defmodule Logex.EndToEndTest do
       # independent" refactor — evaluating each leg against the incoming env and
       # merging — flips this case to mm=1, zz=1 and is otherwise invisible.
       assert %{"mm" => 0, "zz" => 0} =
-               run("bst xic gg ote mm nxb xic mm ote zz bnd", %{"gg" => 0, "mm" => 1})
+               run("( xic gg ote mm | xic mm ote zz )", %{"gg" => 0, "mm" => 1})
     end
 
     test "parallel branches OR, and every branch still runs for its side effects" do
-      env = run("bst xic aa ote p1 nxb xic bb ote p2 bnd ote res", %{"aa" => 1, "p2" => 1})
+      env = run("( xic aa ote p1 | xic bb ote p2 ) ote res", %{"aa" => 1, "p2" => 1})
       assert %{"p1" => 1, "p2" => 0, "res" => 1} = env
     end
 
     test "a nested branch group is an AND of an OR" do
-      src = "xic aa bst xic bb nxb xic cc bnd ote res"
+      src = "xic aa ( xic bb | xic cc ) ote res"
       assert %{"res" => 1} = run(src, %{"aa" => 1, "bb" => 0, "cc" => 1})
       assert %{"res" => 0} = run(src, %{"aa" => 1, "bb" => 0, "cc" => 0})
     end
 
     test "an empty branch leg is a jumper and passes power unconditionally" do
-      assert %{"xx" => 1} = run("bst xic aa nxb bnd ote xx", %{"aa" => 0})
-      assert %{"xx" => 1} = run("bst bnd ote xx", %{})
+      assert %{"xx" => 1} = run("( xic aa | ) ote xx", %{"aa" => 0})
+      assert %{"xx" => 1} = run("( ) ote xx", %{})
     end
 
     test "unbalanced branch tokens are still rejected" do
-      assert parse_error?("xic aa bnd")
-      assert parse_error?("bst xic aa")
-      assert parse_error?("xic aa nxb ote bb")
+      assert parse_error?("xic aa )")
+      assert parse_error?("( xic aa")
+      assert parse_error?("xic aa | ote bb")
+    end
+
+    test "deleting a space around a delimiter is a no-op, not a silent AND" do
+      # This is the whole of B1. While the delimiters were the words `bst`/`nxb`/
+      # `bnd` they came from the same character set as NAME, so leex's maximal
+      # munch fused them into a neighbouring tag: `xic aa nxb` with the space
+      # gone became a tag called `aanxb`, the group lost a leg, and an OR turned
+      # silently into an AND with no error at any stage. `(`, `|` and `)` are
+      # outside NAME, so the same deletion cannot change the token stream.
+      spaced = "( xic aa | xic bb ) ote dd"
+      fused = "( xic aa|xic bb ) ote dd"
+
+      assert run(spaced, %{"aa" => 0, "bb" => 1}) == run(fused, %{"aa" => 0, "bb" => 1})
+      assert %{"dd" => 1} = run(fused, %{"aa" => 0, "bb" => 1})
+
+      # The same deletion against an operand rather than a contact: this one used
+      # to write to a tag named `dstnxb` and leave `dst` alone.
+      assert run("( mov src dst | xic bb ) ote ee", %{"src" => 9}) ==
+               run("( mov src dst|xic bb ) ote ee", %{"src" => 9})
+
+      assert %{"dst" => 9} = run("( mov src dst|xic bb ) ote ee", %{"src" => 9})
+    end
+
+    test "an old bst program names the word and its line rather than dying in Map.get" do
+      # B1's migration is otherwise silent: `bst` is an ordinary tag name now, so
+      # an old program is no longer a syntax error and reaches instructionize/1,
+      # where `Map.get(@instructions, "bst")` returns nil and the bare MatchError
+      # names neither the word nor the line.
+      assert_raise ArgumentError, ~r/line 2: `bst` is no longer a keyword/, fn ->
+        run("xic aa ote bb\nbst xic cc nxb xic dd bnd ote ee", %{})
+      end
     end
   end
 
@@ -162,8 +193,8 @@ defmodule Logex.EndToEndTest do
       # line 3 down. Asserting values rather than survival is what makes a
       # literal 1 in any of those ten slots a FunctionClauseError here.
       src =
-        "\n\nbst xic aa ote p1 nxb xic bb ote p2 bnd\n" <>
-          "bst xio bb otl q1 nxb xio aa otl q2 bnd\n" <>
+        "\n\n( xic aa ote p1 | xic bb ote p2 )\n" <>
+          "( xio bb otl q1 | xio aa otl q2 )\n" <>
           "xic aa otu r1 mov 5 s1 mov s1 s2"
 
       env = run(src, %{"aa" => 1, "bb" => 0, "p2" => 1, "r1" => 1})
@@ -180,7 +211,7 @@ defmodule Logex.EndToEndTest do
   end
 
   describe "a seal-in motor circuit, one scan per evaluate/2 call" do
-    @seal "bst xic start nxb xic motor bnd xio stop ote motor"
+    @seal "( xic start | xic motor ) xio stop ote motor"
 
     test "starts, seals in when the button is released, and drops out on stop" do
       scan1 = run(@seal, %{"start" => 1, "stop" => 0, "motor" => 0})

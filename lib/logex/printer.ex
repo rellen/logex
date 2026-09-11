@@ -20,8 +20,6 @@ defmodule Logex.Printer do
   The output is canonical rather than faithful — see `print/1`.
   """
 
-  @reserved ~w(bst nxb bnd)
-
   @doc """
   Renders a parse AST as source text.
 
@@ -37,8 +35,6 @@ defmodule Logex.Printer do
   Raises on two AST shapes that `parse/1` cannot produce, rather than emitting text
   that would read back as something else:
 
-    * a tag named `bst`, `nxb` or `bnd` — the lexer makes those keywords, so the text
-      would re-parse as branch structure;
     * `{:branches, []}` — a group with no legs at all, which differs in meaning from
       `{:branches, [[]]}`, a group with one empty leg. The first is false
       (`Enum.any?` over zero legs), the second passes power.
@@ -58,25 +54,19 @@ defmodule Logex.Printer do
 
   defp tokens(elements) when is_list(elements), do: Enum.flat_map(elements, &tokens/1)
 
-  defp tokens({:name, _, name}) when name in @reserved do
-    raise ArgumentError,
-          "cannot print a tag named #{inspect(name)}: it is a branch keyword, so the " <>
-            "printed text would parse back as branch structure"
-  end
-
   defp tokens({:name, _, name}), do: [name]
 
   defp tokens({:int_lit, _, value}), do: [Integer.to_string(value)]
 
   defp tokens({:branches, []}) do
     raise ArgumentError,
-          "cannot print a branch group with no legs: it would print as `bst bnd`, " <>
+          "cannot print a branch group with no legs: it would print as `( )`, " <>
             "which parses back as one empty leg and passes power"
   end
 
   defp tokens({:branches, legs}) do
-    ["bst"] ++
-      (legs |> Enum.map(&tokens/1) |> Enum.intersperse(["nxb"]) |> Enum.concat()) ++
-      ["bnd"]
+    ["("] ++
+      (legs |> Enum.map(&tokens/1) |> Enum.intersperse(["|"]) |> Enum.concat()) ++
+      [")"]
   end
 end

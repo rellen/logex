@@ -61,11 +61,11 @@ These were each verified directly:
 ```
 OTE de-energises on a false rung      xic gg ote xx  gg=0,xx=1  ->  %{"xx" => 0}
 OTL is retentive on a false rung      xic gg otl xx  gg=0,xx=1  ->  %{"xx" => 1}
-branches OR, env threads in order     bst xic gg ote mm nxb xic mm ote zz bnd
+branches OR, env threads in order     ( xic gg ote mm | xic mm ote zz )
                                                      gg=0,mm=1  ->  mm=0, zz=0
-no short-circuit — every branch runs  bst xic aa ote p1 nxb xic bb ote p2 bnd ote res
+no short-circuit — every branch runs  ( xic aa ote p1 | xic bb ote p2 ) ote res
                                        aa=1,bb=0,p2=1 -> p1=1, p2=0, res=1
-nested branch = a AND (b OR c)        xic aa bst xic bb nxb xic cc bnd ote res
+nested branch = a AND (b OR c)        xic aa ( xic bb | xic cc ) ote res
                                        aa=1,bb=0,cc=1 -> res=1
 rung independence (flow resets)       xic gg ote r1\note r2   gg=0  ->  r1=0, r2=1
 ```
@@ -86,9 +86,10 @@ silently, and one that gives an unusable error.
   holding anything outside `{0,1}` — or no value at all — reads false for both. Reachable
   from source: `mov 250 sp xic sp ote hi` → `hi=0`, and `mov 250 sp xio sp ote lo` →
   `lo=0`. See M1-4.
-- **A missing space before `nxb` silently turns OR into AND.**
-  `bst xic aa nxb xic bb bnd ote dd` with `aa=0,bb=1` gives `dd=1`; delete the one space
-  before `nxb` and the same program gives `dd=0`, with no error anywhere. See §4·B1.
+- **A missing space before `nxb` silently turned OR into AND.** ***Closed — §4·B1.***
+  `bst xic aa nxb xic bb bnd ote dd` with `aa=0,bb=1` gave `dd=1`; deleting the one space
+  before `nxb` gave `dd=0`, with no error anywhere. The delimiters are `(` `|` `)` now,
+  which are outside `NAME` and cannot fuse.
 - **There is no validation of any kind.** An unknown mnemonic, a wrong-case mnemonic or a
   wrong operand count is never diagnosed — it survives to `instructionize/1` or
   `evaluate/2` and raises a bare `MatchError` or `FunctionClauseError` naming neither the
@@ -155,7 +156,7 @@ run = fn src, env ->
   end
 end
 
-show = "bst mov aa bb nxb mov cc dd nxb mov ee ff bst mov 123 hh bnd bnd bst ote xx nxb ote yy bnd"
+show = "( mov aa bb | mov cc dd | mov ee ff ( mov 123 hh ) ) ( ote xx | ote yy )"
 IO.inspect(run.(show, %{"aa" => 1, "cc" => 2, "ee" => 3}), label: "showcase")
 IO.inspect(run.("mov 123 dd", %{"dd" => 0}), label: "mov literal")
 IO.inspect(run.("mov aa dd", %{"aa" => 7}), label: "mov tag->tag")
@@ -239,7 +240,7 @@ multi-rung routine from §1, `"xic gg ote r1\note r2"` with `gg=0` → `%{"gg" =
 call is one scan and retention is only visible across scans:
 
 ```
-seal = "bst xic start nxb xic motor bnd xio stop ote motor"
+seal = "( xic start | xic motor ) xio stop ote motor"
 scan 1  start=1                  -> %{"motor" => 1, "start" => 1, "stop" => 0}
 scan 2  start=0 (seal holds)     -> %{"motor" => 1, "start" => 0, "stop" => 0}
 scan 3  stop=1  (drops out)      -> %{"motor" => 0, "start" => 0, "stop" => 1}
@@ -377,8 +378,10 @@ only because it is one character. `src/ladder_lexer.xrl:5` reads
   inside identifiers. `ote a[3]` lexes as one name `"a[3]"` — it looks like array
   indexing works, but it is a weirdly-spelled scalar.
 
-**Fix:** `NAME = [a-zA-Z_][a-zA-Z0-9_]*`. Keyword precedence is preserved — verified
-that `bst` still lexes as `{:bst,1}` while `bstx` lexes as a name.
+**Fix:** `NAME = [a-zA-Z_][a-zA-Z0-9_]*`. Keyword precedence was preserved — verified at
+the time that `bst` still lexed as `{:bst,1}` while `bstx` lexed as a name. §4·B1 has since
+made the delimiters punctuation, so there is no word keyword left to lose to `NAME`:
+`tokenize("bst")` is now `{:name, 1, "bst"}` and the precedence question is moot.
 
 ### M0-5 · Grammar: make newlines and empty branches derivable
 
@@ -447,10 +450,10 @@ It is inert in today's `evaluate/2` (`{:rung, []}` folds to `{true, env}` unchan
 which is exactly why it would go unnoticed — until M1-2's rung-scoped diagnostics and
 M1-5's `%Logex.Program{rungs:}` start numbering rungs and every count is off by one. The
 comprehension drops only top-level empty rungs; empty *branch legs* — the
-`bst xic aa nxb bnd` jumper — are untouched and still pass power. Equivalently the filter
+`( xic aa | )` jumper — are untouched and still pass power. Equivalently the filter
 can live in `instructionize/1`, which is more in keeping with §6's preference for a
 newline-naive grammar; pick one. **Settled: the grammar.** The filter's boundary is
-`E =/= []` on the *element* list, so `"bst bnd"` survives as `{rung, [branches: [[]]]}` —
+`E =/= []` on the *element* list, so `"( )"` survives as `{rung, [branches: [[]]]}` —
 after this filter "empty rung" means *no tokens*, not *no effect*. Such a rung still
 occupies a rung number, which is what M1-2's rung-scoped diagnostics and M1-5's
 `%Logex.Program{rungs:}` will see.
@@ -459,7 +462,9 @@ The `RND = (\r?\n)` hunk is belt-and-braces: `\r` is already in `WHITESPACE`, so
 lexed correctly before this change too. Keep it for explicitness, but the CRLF line in the
 acceptance block below is earned by `branch -> '$empty'`, not by this hunk.
 
-**Acceptance** — verified on a scratch copy:
+**Acceptance** — verified on a scratch copy. These transcripts predate §4·B1 and are left
+verbatim, so their branches read `bst … nxb … bnd` where the language now writes
+`( … | … )`; the same applies to the error block above.
 
 ```
 $ erl -noshell -eval 'io:format("~p~n",[yecc:file("src/ladder_parser.yrl",[{report,true},{return,true}])]),halt().'
@@ -491,10 +496,10 @@ so read the failure count, not the total.
 exercised from source, and the three things §1 listed as broken — integer literals, sources
 read from a file, single-character tags — all work, and all three are *guarded*: reverting
 M0-1, M0-4's `NAME` regex, or M0-5's empty-rung filter each turns the suite red. That was
-the *testability* gate, not the correctness gate. Three med-severity defects that produce silently wrong answers
-survive all of M0 (§7): `xic`/`xio` non-complementarity (M1-4), `nxb` fusion turning OR
-into AND on a missing space (§4·B1), and the absence of any validation (M1-2). M1-2 and
-M1-4 are the correctness gate.
+the *testability* gate, not the correctness gate. Three med-severity defects that produce
+silently wrong answers survived all of M0 (§7): `xic`/`xio` non-complementarity (M1-4),
+`nxb` fusion turning OR into AND on a missing space (§4·B1, **closed**), and the absence of
+any validation (M1-2). M1-2 and M1-4 are the correctness gate.
 
 ---
 
@@ -508,8 +513,8 @@ The ordering here matters: each item is cheaper now than after the one below it 
 itself, `{kind, line, value}`: the `elem -> name` and `elem -> int_lit` productions pass
 `'$1'` through and the `Erlang code.` block is gone. All ten `compiler.ex` sites named
 below destructure the 3-tuple as `{kind, _, value}`; instruction tuples stay
-`{symbol, args}`, and the `{branches, legs}` node carries no line of its own — the `bst`
-token's line is dropped in the parser. Widening either is an open call, recorded in M1-2.
+`{symbol, args}`, and the `{branches, legs}` node carries no line of its own — the opening
+`(` token's line is dropped in the parser. Widening either is an open call, recorded in M1-2.
 
 Two sides to guard. The *producer* side — the parser keeping the right line — is held by
 two tests in `lex_and_parse_test.exs` that assert lines other than 1: "lexes and parses
@@ -587,10 +592,14 @@ Widen `@instructions` from an arity to an operand signature — `"mov" => {:mov,
 `evaluate/2`'s clause heads. Produce `{:ok, %Program{}} | {:error, [%Diagnostic{}]}`
 rather than raising. Duplicate-coil and undefined-tag warnings belong here later.
 
-**Three §5 decisions are scheduled into this item**, and they are cheaper together than
+**Two §5 decisions are scheduled into this item**, and they are cheaper together than
 separately: the `mov` → `move` rename (so the unknown-mnemonic diagnostic can carry *"did
-you mean `move`?"* rather than needing an alias), the `String.downcase/1` that makes
-mnemonics case-insensitive, and the `bst` → `( … | … )` migration hint. See §5.
+you mean `move`?"* rather than needing an alias) and the `String.downcase/1` that makes
+mnemonics case-insensitive. See §5. The third, the `bst` → `( … | … )` migration hint,
+shipped with B1 rather than waiting for this item: it is a guard clause on
+`instructionize/1`'s name head that raises before `Map.get/2` can return `nil`, so it
+names the word and its line. It should become a `%Diagnostic{}` like the rest when this
+item lands.
 
 The last two cases above never reach `@instructions` at all, so **a table-driven
 validator alone does not cover them**. `instructionize/1` has list clauses for a
@@ -602,7 +611,7 @@ consulted. The pass also needs a catch-all clause over the element list reportin
 a branch group.
 
 **Open — decide it here, when a diagnostic first needs it.** Only operands carry a line.
-The `{branches, legs}` node drops the `bst` token's line in the parser, and
+The `{branches, legs}` node drops the opening `(` token's line in the parser, and
 `instructionize/1` drops the mnemonic's own line when it builds `{symbol, args}`. So an
 "unknown mnemonic" or "bad arity" diagnostic must take its line from the mnemonic's
 `{:name, line, _}` *before* lowering, or the instruction tuple must grow a line. Widening
@@ -753,8 +762,13 @@ right rather than merely plausible.
 
 ## 4. Backlog
 
-- **B1 · Punctuation branch delimiters.** A missing space before `nxb` silently turns OR into
-  AND. `bst`/`nxb`/`bnd` are bare alphanumeric words (`ladder_lexer.xrl:7-9`) drawn from
+- **B1 · Punctuation branch delimiters. LANDED.** The three lexer rules are
+  `BST = (\()`, `NXB = (\|)`, `BND = (\))`, the grammar is untouched, and the migration
+  diagnostic shipped with them. What follows is the finding as written, in the past tense
+  where it describes what was fixed.
+
+  A missing space before `nxb` silently turned OR into
+  AND. `bst`/`nxb`/`bnd` were bare alphanumeric words (`ladder_lexer.xrl:7-9`) drawn from
   the same character set as `NAME`, and leex's maximal munch swallows them into an
   adjacent identifier. `nxb` is the only structural token that does not affect
   `bst`/`bnd` balance, so removing it always leaves a *grammatically legal* rung:
@@ -785,16 +799,22 @@ right rather than merely plausible.
   no-op or a loud error, which is the point. M0-4 was the prerequisite and has landed;
   before it, `a-zA-z` in `NAME` swallowed `]` into identifiers.
 
-  **Settled by §5: take this, with `(` `|` `)` rather than `[` `,` `]`.** It remains a
+  **Settled by §5, and taken: `(` `|` `)` rather than `[` `,` `]`.** It was a
   source-language break, not a contained lexer tweak.
-  `bst`/`nxb`/`bnd` stop being keywords and become ordinary tag names, so every branching
-  program has to be rewritten: `lex_and_parse_test.exs:6`, every branching source in
-  `end_to_end_test.exs` (including the three unbalanced-token cases that must
-  stay parse errors), and the branching examples in this document. The migration is *silent*, not loud — an
-  old `bst …` program is no longer a syntax error; it reaches `instructionize/1` and dies
-  as `MatchError: no match of right hand side value: nil` with no mnemonic and no line,
-  the exact failure M1-2 exists to remove — so ship it *with* that diagnostic, special-cased
-  to say "`bst` is no longer a keyword — branches are written `( … | … )`".
+  `bst`/`nxb`/`bnd` stopped being keywords and became ordinary tag names, so every branching
+  program was rewritten: `lex_and_parse_test.exs:6`, every branching source in
+  `end_to_end_test.exs` (including the three unbalanced-token cases, which still stay parse
+  errors), README's syntax list, instruction table and worked example, and the branching
+  examples in this document. The migration is *silent*, not loud — an old `bst …` program is
+  no longer a syntax error; it would reach `instructionize/1` and die as
+  `MatchError: no match of right hand side value: nil` with no mnemonic and no line, the
+  exact failure M1-2 exists to remove — so it shipped *with* that diagnostic, a guard clause
+  on the name head saying "line N: `bst` is no longer a keyword — branches are written
+  `( … | … )`". Only mnemonic position is claimed: `bst` is a perfectly good tag name now,
+  which `printer_test.exs` pins.
+
+  Two consequences recorded elsewhere in this document: M0-4's keyword-precedence check is
+  moot (§2·M0-4), and §5's case-folding is unblocked (§5).
 
   **Why not `[ , ]`.** Borrowing neutral text's brackets without its parentheses forecloses
   array subscripts: with `[`/`]` freed from `NAME` by M0-4 they would belong to branch
@@ -809,9 +829,15 @@ right rather than merely plausible.
   The destination this bullet argued for was right; its stated origin was the wrong
   generation, not the wrong vendor.
 
-- **B2 · Digit-led lexemes split instead of erroring.** `mov 1bst aa bnd` lexes as
-  `int_lit(1)` + a genuine `bst` — a branch-start materialising from the middle of a
-  word — then dies much later with an unlocated `FunctionClauseError`. One leex rule fixes
+- **B2 · Digit-led lexemes split instead of erroring.** A digit-led lexeme splits silently
+  rather than erroring, then dies much later with an unlocated `FunctionClauseError`:
+  `tokenize("mov 1bst aa bnd")` is `int_lit(1)` + `name("bst")` + … , where the user
+  plainly meant one tag. *B1 blunted the original framing without closing the finding:* the
+  example used to read `int_lit(1)` + **a genuine `bst` token** — a branch-start
+  materialising from the middle of a word — which is no longer possible, because the
+  delimiters are punctuation. The nearest survivor is `tokenize("1(")` → `int_lit(1), bst`,
+  which is a split but arguably the right reading. The finding stands on the silent split
+  itself; the fix is unchanged. One leex rule fixes
   it; leex is longest-match, so a digit-led lexeme running on into letters beats the
   digit-only `{INT}` match wherever the rule sits in the file:
 
@@ -979,8 +1005,9 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   bracket form is unavailable to logex — it works only because there the operands are
   parenthesised, so a subscript `[` is always inside parens. `( | )` reads as
   "a AND (b OR c)" to anyone who has seen a regex, and leaves `[`, `]`, `,` and `.`
-  unspent. Three lexer rules, **zero grammar edits** — the yecc terminals are already the
-  atoms `bst nxb bnd`. Ship it with the M1-2 migration hint.
+  unspent. Three lexer rules, **zero grammar edits** — the yecc terminals are still the
+  atoms `bst nxb bnd`, now produced by `(`, `|` and `)`. **LANDED**, with the migration
+  diagnostic, per §4·B1.
   *(Correction to B1's wording when it lands: `BST`/`NXB`/`BND` are **not** vendor
   neutral-text spellings — but they are vendor mnemonics, from the earlier controller
   family's ASCII rung format. The "no vendor reference surveyed" phrasing this note once
@@ -1013,8 +1040,9 @@ Each of these was blocked on the dialect question. Full rationale and sources in
 - **Case — mnemonics case-insensitive, tags case-sensitive.** One `String.downcase/1` at
   `instructionize/1`'s mnemonic lookup. IEC and every vendor are case-*insensitive*, so a user arriving from
   any of them has a correct prior. M1-3 adds a diagnostic for two tags differing only in
-  case. **Land with or after B1** — while `bst`/`nxb`/`bnd` are keywords, case-folding
-  makes `BST` a name and `bst` a keyword.
+  case. **Unblocked — B1 has landed.** The blocker was that while `bst`/`nxb`/`bnd` were
+  keywords, case-folding made `BST` a name and `bst` a keyword. The delimiters are
+  punctuation now, so there is no keyword left to fold.
 - **`mov` → `move`.** The one existing name the survey changed. The conventional
   toolchain renamed MOV→MOVE in its 2024 conformance sweep *"to conform to IEC
   61131-3 and PLCopen standards"*, and `MOVE` is a genuine IEC standard function; keeping
@@ -1073,7 +1101,7 @@ otherwise.
 | M0-3 | med | docs/build | `CLAUDE.md` promises regeneration that does not happen; a grammar edit is silently ignored on a fresh clone | `CLAUDE.md` compile + Key Files + step-2 bullets | **closed** `dde8c1d` — fresh-clone case; the same-second mtime gate survives by design, documented at `CLAUDE.md:7-10` |
 | M0-2 | med | tests | No test crosses a stage seam; per-stage fixtures are hand-typed and contradict each other | `end_to_end_test.exs` | **closed** `03c10e0` |
 | M0-5 | med | grammar | `rnd` is a strict infix separator, and a branch leg cannot be empty | `ladder_parser.yrl:8,12,16,21` | **closed** `b65e756` |
-| B1 | med | lexer | Missing space before `nxb` fuses into an identifier — parallel silently becomes series | `ladder_lexer.xrl:8` | open |
+| B1 | med | lexer | Missing space before `nxb` fuses into an identifier — parallel silently becomes series | `ladder_lexer.xrl:8` | **closed** — delimiters are `(` `\|` `)`; guarded by "deleting a space around a delimiter is a no-op" in `end_to_end_test.exs` |
 | M1-2 | med | lowering | No validation pass: unknown mnemonic → bare `MatchError`; short arity → truncated IR | `instructionize/1`, name clause | open |
 | M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | `evaluate/2`, xic+xio clauses | open |
 | B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `ladder_lexer.xrl:6,10` | open |
@@ -1083,7 +1111,7 @@ otherwise.
 | M1-5 | low | errors | Three error conventions across four stages; `format_error/1` never called; empty program reports line `999999` | `tokenize/1`, `parse/1` | **partly closed** — `999999` by `b65e756`; the other two clauses open |
 | M0-3 | low | tooling | Generated `src/*.erl` tracked, embedding absolute `/nix/store` paths → ~700-line cross-OTP churn | `src/ladder_lexer.erl:1` (at `c9c7f51`; untracked since) | **closed** `dde8c1d` |
 | B4 | low | tooling | nix dev shell bit-rotted: `erlangR26` alias removed from nixpkgs master 2024-05-24; flake tracked `master`; lock from 2024-01-19 | `shell.nix`, `flake.nix` | **landed** `9c1a7bd` — OTP 28 / Elixir 1.20 on `nixos-26.05`; lock refresh owed |
-| B2 | low | lexer | Digit-led lexeme splits rather than erroring: `1bst` → `int_lit(1)` + a real `bst` | `ladder_lexer.xrl:20` | open |
+| B2 | low | lexer | Digit-led lexeme splits rather than erroring: `1bst` → `int_lit(1)` + `name("bst")` | `ladder_lexer.xrl:20` | open — B1 blunted it: the split no longer manufactures a branch token |
 | B3 | low | history | 2 commits ship a red suite (`ec0534a`, `35fe1b9`) — an interior island; `d47eb21` is a clean bisect baseline | — | open |
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | open |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `&f(&1)`; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `evaluate/2` | open |

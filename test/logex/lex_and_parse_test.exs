@@ -2,8 +2,7 @@ defmodule Logex.LexAndParseTest do
   use ExUnit.Case
 
   test "lexes and parses a rung" do
-    source =
-      "bst mov aa bb nxb mov cc dd nxb mov ee ff bst mov 123 hh bnd bnd bst ote xx nxb ote yy bnd"
+    source = "( mov aa bb | mov cc dd | mov ee ff ( mov 123 hh ) ) ( ote xx | ote yy )"
 
     {:ok, tokens, _} = Logex.Compiler.tokenize(source)
 
@@ -58,7 +57,7 @@ defmodule Logex.LexAndParseTest do
     # last rung puts a branch group and an elem outside it on the same line, so
     # a parser that rebuilt the group's legs without their lines would fail here
     # while the bare elems beside it still passed.
-    source = "ote aa\n\n  xic bb ote cc\r\n\n\nbst mov 7 dd nxb xic ee bnd ote ff"
+    source = "ote aa\n\n  xic bb ote cc\r\n\n\n( mov 7 dd | xic ee ) ote ff"
 
     {:ok, tokens, _} = Logex.Compiler.tokenize(source)
     {:ok, ast} = Logex.Compiler.parse(tokens)

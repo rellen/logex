@@ -38,7 +38,7 @@ The study had four tasks. Is a DSL correct for a ladder language? Which design m
 
 ## 3. What logex is at this time
 
-logex is a ladder logic compiler and interpreter in Elixir, with no dependencies. It reads a routine as text, for example `bst xic start nxb xic motor bnd xio stop ote motor`. The lexer (leex, `src/ladder_lexer.xrl`) makes tokens. The parser (yecc, `src/ladder_parser.yrl`) makes an AST.
+logex is a ladder logic compiler and interpreter in Elixir, with no dependencies. It reads a routine as text, for example `( xic start | xic motor ) xio stop ote motor`. The lexer (leex, `src/ladder_lexer.xrl`) makes tokens. The parser (yecc, `src/ladder_parser.yrl`) makes an AST.
 
 `Logex.Compiler.instructionize/1` lowers the AST to an IR. `Logex.Compiler.evaluate/2` runs the IR with a tag map, one call for one scan. The language has six instructions: `xic`, `xio`, `ote`, `otl`, `otu` and `mov`. It has parallel branches to all depths.
 
@@ -191,9 +191,9 @@ The author executed this syntax after the panel. The macro with `branch(...)`, a
 More examples. Each has a text twin, the same rung in the text dialect:
 
 ```elixir
-rung xic(aa) |> branch(xic(bb), xic(cc)) |> ote(res)   # xic aa bst xic bb nxb xic cc bnd ote res
-rung branch(xic(aa), []) |> ote(xx)                     # bst xic aa nxb bnd ote xx
-rung branch(xic(gg) |> ote(mm), xic(mm) |> ote(zz))    # bst xic gg ote mm nxb xic mm ote zz bnd
+rung xic(aa) |> branch(xic(bb), xic(cc)) |> ote(res)   # xic aa ( xic bb | xic cc ) ote res
+rung branch(xic(aa), []) |> ote(xx)                     # ( xic aa | ) ote xx
+rung branch(xic(gg) |> ote(mm), xic(mm) |> ote(zz))    # ( xic gg ote mm | xic mm ote zz )
 rung xic(run) |> ton(t1, 5000)                          # xic run ton t1 5000   (after M1-6)
 rung xic(t1.dn) |> ote(heater)                          # xic t1.dn ote heater  (after M1-6)
 ```
@@ -204,11 +204,11 @@ The macro reads `instructions/0` and `tokenize/1` at compile time. Thus, a chang
 
 The macro must have two clauses that reject nodes. Without them, `rung []` emits `{:rung, []}`, and `branch()` with no legs emits `{:branches, []}`. The text grammar cannot make these two nodes. The second node is dangerous. It gives power `false`, and thus `branch() |> ote(xx)` writes 0 with no error.
 
-Thus, the macro must reject an empty rung and a `branch` with no legs. `branch([])` stays correct, because it is the jumper of the text `bst bnd`.
+Thus, the macro must reject an empty rung and a `branch` with no legs. `branch([])` stays correct, because it is the jumper of the text `( )`.
 
 The line position contains the caller's integer line and no other data. The file and the module are facts of the routine, not of the operand. They are in M1-5's `%Logex.Program{source:}`. A literal gets the line of its instruction. If a rung continues on more than one line, each operand gets the line number of that operand.
 
-The `branch` call has a line. It is the equivalent of the `bst` token line that the parser discards. That is the only DSL clause that the decision of M1-2 on the branches node changes.
+The `branch` call has a line. It is the equivalent of the opening `(` token line that the parser discards. That is the only DSL clause that the decision of M1-2 on the branches node changes.
 
 Errors use `raise CompileError, file: __CALLER__.file, line: line, description: text`, with the line of the node, and not the line of the macro. A `when` head is an error with a line. A `__define__` call that runs before the `def` finds a second `defladder` with the same name and gives an error with a line. A declared tag that the body does not use is not a warning, because the `--warnings-as-errors` gate rejects an `IO.warn` from a macro. The panel executed that.
 
@@ -245,7 +245,7 @@ Errors use `raise CompileError, file: __CALLER__.file, line: line, description: 
 | M1-4 | No effect. The correction is in the evaluator only. If the maintainer accepts a backend subsequently, `bit/2` must be public and `evaluate/2` must call it. |
 | M1-5 | Precondition of B9. Add one sentence: `Logex.compile/1` must also operate on an AST, and `source:` must have a module variant. The doctest can contain the seal-in in the two spellings. |
 | M1-6 | B9 has no dependency on M1-6. The `t1.dn` clause is six lines, and the maintainer merges it together with the lexer rule for `t1.dn`. When the maintainer merges the rule, change the sentinel test. |
-| B1 | The fusion defect cannot occur in the DSL. After B1, `bst`, `nxb` and `bnd` become permitted tags in the two front ends with no DSL edit. The three lexer rules of B1 cause six errors in the DSL twin tests, and the mutation table of B1 must include them. |
+| B1 | **Landed.** The fusion defect cannot occur in the DSL. `bst`, `nxb` and `bnd` are permitted tags in both front ends now, with no DSL edit. This study predates the change, so its twin tests are written against the old spelling and will need the same rewrite the rest of the repository took. |
 | B3 | The yecc conflict check cannot examine Elixir precedence. With `branch(...)`, there is no precedence to examine. |
 | B5 | No effect on the DSL code. Add `Logex.Ladder` to the module list, adjacent to `Parser`. |
 | New B9 | The DSL, with the spike as its receipt and the preconditions above. |
@@ -258,7 +258,7 @@ Errors use `raise CompileError, file: __CALLER__.file, line: line, description: 
 
 `PLAN.md`. At this time, add B9 to §4 with the preconditions, and add one sentence each to M1-3 and M1-5. Add one item to §6: logex does not compile to BEAM. This is a decision, and the 5,708 of 20,000 count is the cause. Do not change the §5 sentence on the dialect at this time. `CONTRIBUTING.md` tells you that a contributor must not examine §5 decisions again, and the DSL is not in the repository.
 
-`docs/naming.md`. No change. The DSL mnemonics are the keys of `@instructions`, and thus the survey includes the two front ends. `rung`, `branch` and `[]` are syntax, as `bst` is, and no stanza is necessary for them.
+`docs/naming.md`. No change. The DSL mnemonics are the keys of `@instructions`, and thus the survey includes the two front ends. `rung`, `branch` and `[]` are syntax, as `(` is, and no stanza is necessary for them.
 
 `CONTRIBUTING.md`. When the DSL is in the repository, the format gate also examines `.formatter.exs`. When behavior changes, the twin test file is the second file that gets a new test.
 

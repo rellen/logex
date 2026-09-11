@@ -36,6 +36,18 @@ defmodule Logex.Compiler do
     [instructionize(head) | instructionize(tail)]
   end
 
+  @migrated ~w(bst nxb bnd)
+
+  # B1 made the branch delimiters punctuation, and the migration is otherwise silent:
+  # an old `bst …` program is no longer a syntax error, so it arrives here and dies in
+  # `Map.get/2` below with a bare MatchError naming neither the word nor the line.
+  # Only mnemonic position is claimed -- `bst` remains a perfectly good tag name.
+  def instructionize([{:name, line, name} | _tail]) when name in @migrated do
+    raise ArgumentError,
+          "line #{line}: `#{name}` is no longer a keyword — " <>
+            "branches are written `( … | … )`"
+  end
+
   def instructionize([{:name, _, name} | tail]) do
     {symbol, args} = Map.get(@instructions, name)
 

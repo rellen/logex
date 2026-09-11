@@ -4,9 +4,14 @@ INT = [0-9]+
 
 NAME = [a-zA-Z_][a-zA-Z0-9_]*
 WHITESPACE = [\s\t\r]
-BST = (bst)
-NXB = (nxb)
-BND = (bnd)
+%% Punctuation, not words: `bst`/`nxb`/`bnd` were drawn from the same character set
+%% as NAME, so leex's maximal munch swallowed them into an adjacent identifier and a
+%% missing space silently turned OR into AND (PLAN.md §4·B1). Every metacharacter is
+%% escaped -- an unescaped `BST = (()` is `bad regexp 'unterminated ('`, and a
+%% half-escaped variant is the dangerous one.
+BST = (\()
+NXB = (\|)
+BND = (\))
 RND = (\r?\n)
 
 Rules.

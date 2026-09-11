@@ -23,29 +23,35 @@ become an importer.**
 Source syntax today:
 
 - lowercase mnemonics, operands separated by spaces
-- no parentheses, no terminator
+- no operand parentheses, no terminator
 - a newline ends a rung
-- `bst` … `nxb` … `bnd` open, separate and close a parallel branch group
+- `(` … `|` … `)` open, separate and close a parallel branch group
 
-The *vocabulary* is a conventional ladder mnemonic set — and so, it turns out, is more of
-the *syntax* than this section used to claim. That vendor's **current** controller family
-exports uppercase, parenthesised, semicolon-terminated text and spells a branch with
-brackets and commas, which is nothing like the above. An **earlier** family's ASCII rung
-format is uppercase, space-separated and unparenthesised, and spells a branch
-`BST … NXB … BND`: the list above with the case flipped and the rung delimiters dropped.
-`bst`, `nxb` and `bnd` are that vendor's own mnemonics, glossed in that family's
-programming-software guide as branch start, next branch and branch end; its controller
-reference bills the same three, under those spelled-out names, as instructions with an
-execution time and a word of memory each. They are not a museum piece either: the current
-family's software has the same per-rung text area, and these are still what you type into
-it.
+The *vocabulary* is a conventional ladder mnemonic set. The *branch delimiters used to be
+too*, and are no longer — which is worth stating plainly, because the survey that found the
+precedent is the same one that records giving it up.
 
-Borrowing a vocabulary is still not the same as accepting a format, and logex is a dialect
-by choice rather than by distance: it will not grow an importer, and it takes none of that
-family's operand syntax (`I:003/4`, `T4:5/DN`). But the distance is smaller than claimed,
-which is worth knowing before changing the syntax — `PLAN.md` M1-2 replaces the three words
-with `( … | … )` for a lexical reason that still holds, and that change now gives up a real
-precedent rather than a coinage.
+That vendor's **current** controller family exports uppercase, parenthesised,
+semicolon-terminated text and spells a branch with brackets and commas. An **earlier**
+family's ASCII rung format is uppercase, space-separated and unparenthesised, and spells a
+branch `BST … NXB … BND` — which, until §4·B1 landed, was logex's own line with the case
+flipped and the rung delimiters dropped. Those three are that vendor's own mnemonics,
+glossed in the earlier family's programming-software guide as branch start, next branch and
+branch end; its controller reference bills the same three, under those spelled-out names, as
+instructions with an execution time and a word of memory each. They are not a museum piece
+either: the current family's software has the same per-rung text area, and these are still
+what you type into it.
+
+logex took `(` `|` `)` instead, and the reason is lexical rather than aesthetic: the three
+words are drawn from the same character set as tag names, so one missing space fused `nxb`
+into a neighbouring identifier and turned a parallel group into a series one with no error
+anywhere. Punctuation cannot fuse. That is a deliberate divergence from a real precedent
+rather than a coinage filling a gap, which is the more expensive kind — `PLAN.md` §4·B1 has
+the measurements and `docs/naming.md` the survey.
+
+Borrowing a vocabulary is still not the same as accepting a format, and logex remains a
+dialect by choice: it will not grow an importer, and it takes none of that family's operand
+syntax (`I:003/4`, `T4:5/DN`).
 
 Being a dialect is a licence to choose names, not a licence to choose them carelessly. So
 every new instruction is surveyed before it is written: what does IEC 61131-3 call this,
@@ -75,7 +81,7 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `otl xx` | tag | output latch — writes 1 on a true rung, leaves the tag alone otherwise |
 | `otu xx` | tag | output unlatch — writes 0 on a true rung, leaves the tag alone otherwise |
 | `mov 123 hh` | source, destination | copies a literal or a tag into a tag |
-| `bst` `nxb` `bnd` | — | parallel branch group: the legs OR together, and every leg runs |
+| `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
 
 Two behaviours that are deliberate rather than accidental: branches do **not**
 short-circuit, so a later leg's `ote` and `mov` still take effect after an earlier leg is
@@ -91,10 +97,6 @@ never written — reads false for *both*. See `PLAN.md` M1-4.
 These are decided (see [`docs/naming.md`](docs/naming.md) and `PLAN.md` §5) and will
 change the source language:
 
-- **Branch delimiters become `( … | … )`.** `bst`/`nxb`/`bnd` are alphanumeric words drawn
-  from the same character set as tag names, so a missing space fuses `nxb` into an
-  identifier and silently turns OR into AND. This is the one settled change that trades a
-  vendor spelling for a coined one; the hazard is judged to outweigh the precedent.
 - **`mov` becomes `move`,** following its own source's 2024 rename to the IEC standard
   function name.
 - **`//` starts a comment**; `.` gives member access (`t1.dn`, `word.3`); negative integer
@@ -112,7 +114,7 @@ Neither file below is in the repository — create them to follow along.
 `motor.ld` — a seal-in motor starter with a latched fault:
 
 ```
-bst xic start nxb xic motor bnd xio stop ote motor
+( xic start | xic motor ) xio stop ote motor
 xic motor ote run_lamp
 xic overtemp otl fault
 xic reset otu fault

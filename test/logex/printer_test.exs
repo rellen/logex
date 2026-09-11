@@ -51,7 +51,7 @@ defmodule Logex.PrinterTest do
 
     test "a real program survives the trip and evaluates identically" do
       source = """
-      bst xic start nxb xic motor bnd xio stop ote motor
+      ( xic start | xic motor ) xio stop ote motor
       xic motor ote run_lamp
       xic overtemp otl fault
       xic fault mov 0 speed_sp
@@ -77,15 +77,17 @@ defmodule Logex.PrinterTest do
     end
 
     test "a branch group prints with single spaces around every delimiter" do
-      assert Printer.print(parse!("bst  xic aa  nxb  bnd ote xx")) == "bst xic aa nxb bnd ote xx"
+      assert Printer.print(parse!("(  xic aa  |  ) ote xx")) == "( xic aa | ) ote xx"
     end
   end
 
   describe "shapes parse/1 cannot produce are refused, not mangled" do
-    test "a tag named after a branch keyword would read back as structure" do
-      assert_raise ArgumentError, ~r/tag named "nxb"/, fn ->
-        Printer.print({:rung, [{:name, 1, "xic"}, {:name, 1, "nxb"}]})
-      end
+    test "a tag may now be named after an old branch keyword" do
+      # B1 turned the delimiters into punctuation, so `bst`, `nxb` and `bnd` are
+      # ordinary names again and the printer is total over them. While they were
+      # keywords this had to raise, or the printed text read back as structure.
+      assert Printer.print(parse!("xic bst ote nxb")) == "xic bst ote nxb"
+      assert %{"nxb" => 1} = run("xic bst ote nxb", %{"bst" => 1})
     end
 
     test "a group with no legs differs in meaning from a group with one empty leg" do
@@ -94,7 +96,7 @@ defmodule Logex.PrinterTest do
       # jumper and passes power. Evaluated as rungs rather than as routines, because
       # the `{:routine, _}` clause reports {true, env} whatever the last rung did.
       no_legs = {:rung, [{:branches, []}, {:name, 1, "ote"}, {:name, 1, "xx"}]}
-      {:routine, {:rungs, [one_empty]}} = parse!("bst bnd ote xx")
+      {:routine, {:rungs, [one_empty]}} = parse!("( ) ote xx")
 
       assert {false, %{"xx" => 0}} =
                Compiler.evaluate(Compiler.instructionize(no_legs), {true, %{}})
@@ -103,7 +105,7 @@ defmodule Logex.PrinterTest do
                Compiler.evaluate(Compiler.instructionize(one_empty), {true, %{}})
 
       assert_raise ArgumentError, ~r/no legs/, fn -> Printer.print(no_legs) end
-      assert Printer.print(one_empty) == "bst bnd ote xx"
+      assert Printer.print(one_empty) == "( ) ote xx"
     end
 
     test "an empty rung is refused: the grammar filters it out" do
