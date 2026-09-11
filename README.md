@@ -35,7 +35,9 @@ format is uppercase, space-separated and unparenthesised, and spells a branch
 `bst`, `nxb` and `bnd` are that vendor's own mnemonics, glossed in that family's
 programming-software guide as branch start, next branch and branch end; its controller
 reference bills the same three, under those spelled-out names, as instructions with an
-execution time and a word of memory each.
+execution time and a word of memory each. They are not a museum piece either: the current
+family's software has the same per-rung text area, and these are still what you type into
+it.
 
 Borrowing a vocabulary is still not the same as accepting a format, and logex is a dialect
 by choice rather than by distance: it will not grow an importer, and it takes none of that
