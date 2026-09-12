@@ -252,6 +252,26 @@ Cite the document that had something to say.
 |---|---|---|---|---|---|---|---|
 | Parallel branch group | **graphical** — parallel horizontal links between vertical links (Ed2 §4.1.2, T60). PLCopen TC6 XML models a rung as a connection graph with no textual delimiters | **two spellings, one per controller generation.** *Current* family, L5K neutral text: brackets and commas, `N: XIC(conveyor_a)[,XIC(input_1) XIO(input_2) ]OTE(light_1);`. *Earlier* family, ASCII rung editor and library export: **`BST` / `NXB` / `BND`**, as `SOR BST XIC I:003/4 NXB XIO T4:5/DN BND XIC B3/10 TON T4:5 1.0 450 315 EOR` | graphical (TIA Openness XML: `<Part Name="Contact"/>`) | graphical | **no delimiters at all** — stack instructions ORB (OR Block), ANB (AND Block), MPS / MRD / MPP | **`( … \| … )`** | **`BST`, `NXB`, `BND` are that vendor's mnemonics after all — from the earlier generation.** They occur zero times in the current family's import/export reference (385 pp) and ladder-diagram programming manual, both of which discuss branching at length, and zero times in its 927-page instruction-set reference, which is the weakest of the three witnesses because branch structure is not an instruction there and its text never uses the word "branch" at all. An earlier version of this row led on that 927-page check and over-read it into "no vendor reference". Two documents of the *earlier* family carry the answer, and it takes both: its programming-software guide (Dec 2019) glosses the tokens `BST=branch start / NXB=next branch / BND=branch end` for the per-rung ASCII editor and prints library exports built from them, while its controller reference lists *branch start / next branch / branch end* in the instruction timing table at one word of memory and 0.16–0.8 µs each, depending on processor. No single document does both — that the timing table's three elements are the three tokens is an inference, and a safe one, but say that it is. The tokens are also live in the **current** family: its software has the same per-rung ASCII text area, and these are what you type into it. That is recorded here as first-hand testimony from this repository's owner, not as a citation — no vendor document reachable from here states the grammar that text area accepts, and the current family's *export* format remains the bracket-and-comma form. So logex's delimiters *were* **borrowed, not coined** — and are not any more: §4·B1 landed `( … \| … )` in their place, because the three words came from the same character set as tag names and one missing space fused `nxb` into a neighbouring identifier, turning a parallel group into a series one with no error anywhere. That is a deliberate divergence from a live vendor spelling rather than a coinage filling a gap, which is the more expensive kind and is why this row records both. The other textual precedent, `[ , ]`, is unavailable to logex because it works only alongside parenthesised operands |
 
+**Topology, and the one place logex is more permissive.** The conventional set's ladder
+programming manual (July 2022 revision, ch.1) defines a branch as *"two or more
+instructions in parallel"*, says *"there is no limit to the number of parallel branch
+levels that you can enter"*, and then: *"you can nest branches to as many as 6 levels."*
+Parallel legs that **nest** — so a rung there is a tree, and the editor cannot draw a
+non-series-parallel rung: no bridge, no two paths sharing an interior element, nothing
+that would need a delimiter to close out of order. logex's `elem -> bst branches bnd` is
+strictly nested too, so it is **topologically adequate** for every rung that dialect can
+express. That is worth writing down because it is the one way a textual rung language can
+fail that no amount of printer or syntax work repairs.
+
+The divergence is the depth: that vendor stops at 6 levels, logex has no limit at all —
+`( ( … ( xic aa ) … ) ) ote xx` parses and evaluates at nesting depth 1000, and the bound
+is the machine's, not the language's. logex being *more* permissive is not a defect, but
+it is an undocumented difference from the dialect it borrows from, and it is the kind that
+only shows up when something tries to move a routine the other way. Pinned by "branch
+nesting has no depth limit" in `end_to_end_test.exs`, which nests 50 deep in both power
+states — so a future validator that quietly adds a limit goes red rather than silently
+narrowing the language.
+
 ---
 
 

@@ -127,6 +127,18 @@ defmodule Logex.EndToEndTest do
       assert parse_error?("xic aa | ote bb")
     end
 
+    test "branch nesting has no depth limit" do
+      # The dialect logex borrows its mnemonics from stops at 6 levels; logex has
+      # none, and docs/naming.md records that as a deliberate divergence. This is
+      # what keeps the claim true: 50 is well past 6, and the only bound left is
+      # the machine's. Both power states, so a nesting bug cannot pass by being
+      # uniformly false.
+      src = String.duplicate("( ", 50) <> "xic aa" <> String.duplicate(" )", 50) <> " ote xx"
+
+      assert %{"xx" => 1} = run(src, %{"aa" => 1})
+      assert %{"xx" => 0} = run(src, %{"aa" => 0})
+    end
+
     test "deleting a space around a delimiter is a no-op, not a silent AND" do
       # This is the whole of B1. While the delimiters were the words `bst`/`nxb`/
       # `bnd` they came from the same character set as NAME, so leex's maximal
