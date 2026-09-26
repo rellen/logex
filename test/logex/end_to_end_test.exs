@@ -172,13 +172,16 @@ defmodule Logex.EndToEndTest do
   end
 
   describe "tag names" do
-    # These two guard `NAME = [a-zA-Z_][a-zA-Z0-9_]*` in src/ladder_lexer.xrl, which
-    # had two independent bugs on one line. Each test fails if its own half of the
-    # regex regresses, and passes if only the other half does.
+    # These two guard the name rule: a letter or `_`, then any run of letters, digits
+    # and `_` — now Logex.Lexer's name clause and word/2. As the leex regex
+    # `NAME = [a-zA-Z_][a-zA-Z0-9_]*` it once had two independent bugs on one line
+    # (PLAN.md §2·M0-4). Each test fails if its own half regresses, and passes if only
+    # the other half does.
 
     test "a single-character tag is a legal name" do
-      # Guards the `*` quantifier. With `+`, NAME needs two characters and this is
-      # {:error, {1, :ladder_lexer, {:illegal, 'a'}}, 1}.
+      # Guards "any run", which includes an empty one. When the leex regex said `+`,
+      # NAME needed two characters and this was {:error, {1, :ladder_lexer,
+      # {:illegal, 'a'}}, 1}.
       assert %{"b" => 1} = run("xic a ote b", %{"a" => 1})
       assert %{"z" => 1} = run("ote z", %{})
       refute lex_error?("xic a ote b")

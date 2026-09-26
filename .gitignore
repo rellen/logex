@@ -12,6 +12,3 @@ erl_crash.dump
 .direnv
 .nix-hex
 .nix-mix
-
-# leex/yecc generate these from src/*.xrl and src/*.yrl at build time.
-/src/*.erl

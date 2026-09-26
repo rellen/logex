@@ -4,18 +4,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 
 ## Commands
 
-- `mix compile` — compile. leex/yecc regenerate `src/*.erl` from `.xrl`/`.yrl` only when
-  the `.erl` is absent or at least one whole second older. **After editing a `.xrl` or
-  `.yrl`, run `rm -f src/*.erl && rm -rf _build` first**, or your edit is silently
-  ignored: `mix compile` prints nothing and `mix test` stays green. To prove an edit is
-  live, tokenize something only the new rule accepts — `PLAN.md` M0-3 has a worked
-  before/after. `mix test` alone will not tell you.
-- `mix test` — run tests (must pass before committing)
+- `mix compile` — compile.
+- `mix test` — run tests (must pass before committing). Judge a run by its exit code, not by
+  grepping its output: Elixir 1.20 prints `Result: 39/40 passed`, which a grep for
+  `[0-9]+ passed` reads as a pass.
 - `mix format` — format code before committing
-- After any `.yrl` edit, run the grammar-conflict gate in `PLAN.md` §4·B3 as well.
-  **`mix compile --warnings-as-errors` does not fail on a shift/reduce conflict** — yecc
-  silently disambiguates and emits a working parser, and mix reports a warning the flag
-  does not upgrade. No default check will tell you.
 - Requires Elixir ~> 1.20; on anything older `mix` aborts before it runs. **Never relax
   `mix.exs`** — the constraint is deliberate, and a loosened version bound is the kind of
   edit that lands by accident. If you cannot install a newer Elixir, run the suite in the
@@ -24,9 +17,14 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 
 ## Key Files
 
-- `lib/logex/compiler.ex` — all compiler stages: tokenize, parse, instructionize, evaluate
-- `src/ladder_lexer.xrl` / `src/ladder_parser.yrl` — lexer and parser definitions. The
-  generated `src/*.erl` are build artifacts, not tracked; never edit them.
+- `lib/logex/compiler.ex` — the pipeline: `tokenize/1` and `parse/1` delegate to the two
+  modules below; `instructionize/1` and `evaluate/2` live here
+- `lib/logex/lexer.ex` / `lib/logex/parser.ex` — the front end, written by hand: binary
+  pattern matching, and recursive descent with one function per grammar production (the
+  grammar is in the parser's moduledoc). There is no generator, so nothing reports a
+  grammar conflict: **a new syntax form goes into `printer_test.exs`'s generator and
+  `@required_shapes` before it lands**, and the golden record below must stay green.
+- `lib/logex/printer.ex` — the parse AST back to canonical source text
 - Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
@@ -52,7 +50,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 ## Conventions
 
 - `evaluate/2` clauses take `(instruction, {power_flow_bool, env_map})` and return `{new_power_flow_bool, new_env_map}`
-- An operand is the lexer token, `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. A `{:branches, legs}` node and an instruction tuple `{symbol, args}` carry no line of their own
+- An operand in the AST is `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. The lexer's tokens carry `{line, column}`; the parser keeps only the line, because the suite pins that shape. A `{:branches, legs}` node and an instruction tuple `{symbol, args}` carry no line of their own
 - New instructions, step 1 — **survey the name before writing any code**: add a
   ``### `mnemonic` `` stanza to `docs/naming.md` (IEC 61131-3 element, function or
   function block with clause and table number, then the major vendor toolchains, then the

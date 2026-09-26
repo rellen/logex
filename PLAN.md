@@ -254,8 +254,9 @@ pass before committing, and M0-3's whole subject is a build trap that a trustwor
 
 ### M0-3 · Untrack the generated scanners, and correct `CLAUDE.md`
 
-**Status: DONE — `dde8c1d` (PR #3).** `git ls-files src/` lists only the `.xrl` and the
-`.yrl`; `.gitignore` carries `/src/*.erl`; a fresh clone now runs leex and yecc.
+**Status: DONE — `dde8c1d` (PR #3), and since moot: the front end is hand-written (§6), so
+there are no generated scanners to track or untrack.** At the time, `git ls-files src/`
+listed only the `.xrl` and the `.yrl`; `.gitignore` carries `/src/*.erl`; a fresh clone now runs leex and yecc.
 `CLAUDE.md` was rewritten in the same commit (31 lines then, 64 now), so every `CLAUDE.md:`
 number below — and in §7's row — is a pre-M0 one. What shipped is slightly *stronger* than
 the wording proposed here: it bolds the `rm -f` step, says the edit **is** silently ignored
@@ -864,7 +865,10 @@ right rather than merely plausible.
   first letter is consumed and the message names `1b` instead of `1bst`. `mov 123 hh`,
   bare `1`, and identifiers ending in digits (`bst1`, `tag1`) are unaffected.
 
-- **B3 · CI.** Four lines: `mix compile --warnings-as-errors`,
+- **B3 · CI.** *Since the hand-written front end (§6), three lines:
+  `mix compile --force --warnings-as-errors`, `mix format --check-formatted`, `mix test`,
+  each judged by exit code. The grammar-conflict gate below went with yecc; there is no
+  grammar left to check.* As first written, four lines: `mix compile --warnings-as-errors`,
   `mix format --check-formatted`, `mix test`, and a grammar-conflict gate:
 
   ```
@@ -986,6 +990,10 @@ right rather than merely plausible.
 
 ## 5. Settled decisions
 
+*Several decisions below are written as leex rules (`//` comments, `QUALIFIED` names,
+negative literals, line continuations). The lexer is hand-written now (§6); each rule
+becomes a clause in `Logex.Lexer`, and the behaviour it specifies still stands.*
+
 **Does logex aim to ingest a vendor export format, or to be its own dialect?**
 
 **Decided: its own dialect.** logex does not aim to import neutral text and will not
@@ -1073,6 +1081,24 @@ from that same source.
 
 ## 6. Deliberately not changing
 
+**~~Keep leex/yecc.~~ Reversed, September 2026: the lexer and parser are hand-written**
+(`lib/logex/lexer.ex`, `lib/logex/parser.ex`; `src/` is gone). The argument below rested on
+yecc's conflict check being wired in as a gate, and two measured studies on the pinned
+Elixir 1.20.4 / OTP 28 showed that gate could not be made to hold at a sensible price.
+Five front ends were prototyped against the suite (leex+yecc as-is and fixed, hand lexer +
+yecc, NimbleParsec, Pegasus, hand-written); then the best yecc option — hand lexer + yecc +
+a Mix guard compiler — was hardened over three adversarial rounds. Holding "a conflicted
+grammar never builds green" took a 221-line guard coupled to about eight Mix behaviours and
+an 87-second test suite, and a final review still built a conflicted parser green: two
+`mix compile` runs with different `TMPDIR`s share no build lock, because Mix 1.20.4 keys it
+under `System.tmp_dir!()` (`mix/sync/lock.ex:132-134`). NimbleParsec and Pegasus were
+6.9-8.3x slower, silent on grammar mistakes, and dependencies. What replaces the alarm:
+`test/fixtures/frontend_golden.txt`, a record of what the yecc grammar accepted and produced
+on ~1,400 sources, which the hand-written front end matched exactly when it landed; the
+printer's round-trip generator, which must reach every production; and the suite — every
+meaning-changing overlap planted in the prototype parser failed it. The cost accepted: an
+ambiguity no test exercises is now caught by nothing. The original reasoning follows.
+
 **Keep leex/yecc.** The `rnd = \n` terminal looks like the classic argument for a
 hand-written or combinator parser, but the entire fix is one grammar production and one
 lexer rule (M0-5), and the grammar's conflict-freedom is the one tool that will say when
@@ -1081,8 +1107,8 @@ the language becomes ambiguous — **provided that check is wired into CI as its
 so the check M0-5 runs by hand has to become a gate, or this guarantee lapses the first
 time a production is added for comments, negative literals or structured addressing (§5).
 
-Keep every whitespace and newline subtlety inside leex and keep the yecc grammar
-newline-naive. Line continuations, when wanted, are `\\[\s\t\r]*\n : skip_token.` in the
+Keep every whitespace and newline subtlety inside the lexer (now `Logex.Lexer`) and keep
+the grammar newline-naive — that part of the reasoning survives the reversal. Line continuations, when wanted, are `\\[\s\t\r]*\n : skip_token.` in the
 lexer and zero grammar changes.
 
 One known limit to accept alongside this: the grammar declares no `error` productions, so
@@ -1118,14 +1144,14 @@ otherwise.
 | B1 | med | lexer | Missing space before `nxb` fuses into an identifier — parallel silently becomes series | `ladder_lexer.xrl:8` | **closed** — delimiters are `(` `\|` `)`; guarded by "deleting a space around a delimiter is a no-op" in `end_to_end_test.exs` |
 | M1-2 | med | lowering | No validation pass: unknown mnemonic → bare `MatchError`; short arity → truncated IR; and `mov src ote` silently eats the next mnemonic as a tag, no error, energised rung | `instructionize/1`, name clause | open |
 | M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | `evaluate/2`, xic+xio clauses | open |
-| B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `ladder_lexer.xrl:6,10` | open |
+| B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `Logex.Lexer`, the whitespace clause (was `ladder_lexer.xrl:6,10`) | open |
 | M0-4 | low | lexer | `NAME` regex: `+` rejects single-char tags; `a-zA-z` typo admits ``[ \ ] ^ ` `` | `ladder_lexer.xrl:5` | **closed** `3f3b104` |
 | — | low | tests | M0-4's fix was unguarded: no test used a single-character tag or a bracketed name, so reverting `ladder_lexer.xrl:5` left `mix test` fully green | `end_to_end_test.exs` | **closed** `b8fc743` |
 | M1-5 | low | API | No public entry point and no `Logex` module; no scan loop | — | open |
 | M1-5 | low | errors | Three error conventions across four stages; `format_error/1` never called; empty program reports line `999999` | `tokenize/1`, `parse/1` | **partly closed** — `999999` by `b65e756`; the other two clauses open |
 | M0-3 | low | tooling | Generated `src/*.erl` tracked, embedding absolute `/nix/store` paths → ~700-line cross-OTP churn | `src/ladder_lexer.erl:1` (at `c9c7f51`; untracked since) | **closed** `dde8c1d` |
 | B4 | low | tooling | nix dev shell bit-rotted: `erlangR26` alias removed from nixpkgs master 2024-05-24; flake tracked `master`; lock from 2024-01-19 | `shell.nix`, `flake.nix` | **landed** `9c1a7bd` — OTP 28 / Elixir 1.20 on `nixos-26.05`; lock refresh owed |
-| B2 | low | lexer | Digit-led lexeme splits rather than erroring: `1bst` → `int_lit(1)` + `name("bst")` | `ladder_lexer.xrl:20` | open — B1 blunted it: the split no longer manufactures a branch token |
+| B2 | low | lexer | Digit-led lexeme splits rather than erroring: `1bst` → `int_lit(1)` + `name("bst")` | `Logex.Lexer`, the integer clause (was `ladder_lexer.xrl:20`) | open — B1 blunted it: the split no longer manufactures a branch token |
 | B3 | low | history | 2 commits ship a red suite (`ec0534a`, `35fe1b9`) — an interior island; `d47eb21` is a clean bisect baseline | — | open |
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | open |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `&f(&1)`; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `evaluate/2` | open |

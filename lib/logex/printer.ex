@@ -46,8 +46,8 @@ defmodule Logex.Printer do
 
   def print({:rung, []}) do
     raise ArgumentError,
-          "cannot print an empty rung: the `routine` rule in src/ladder_parser.yrl " <>
-            "filters these out, so one here was built by hand"
+          "cannot print an empty rung: Logex.Parser drops these, " <>
+            "so one here was built by hand"
   end
 
   def print({:rung, elements}), do: elements |> tokens() |> Enum.join(" ")

@@ -7,7 +7,7 @@ defmodule Logex.PrinterTest do
   @corpus_size 200
   @seed {1, 2, 3}
 
-  # Every production in src/ladder_parser.yrl that a printed AST can exercise. The
+  # Every production in Logex.Parser's grammar that a printed AST can exercise. The
   # round-trip properties below are only worth as much as the corpus they run on: a
   # generator that emits only what the printer already handles proves nothing but its
   # own consistency. `generates every shape the grammar can hold` fails if the

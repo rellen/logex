@@ -38,7 +38,7 @@ The study had four tasks. Is a DSL correct for a ladder language? Which design m
 
 ## 3. What logex is at this time
 
-logex is a ladder logic compiler and interpreter in Elixir, with no dependencies. It reads a routine as text, for example `( xic start | xic motor ) xio stop ote motor`. The lexer (leex, `src/ladder_lexer.xrl`) makes tokens. The parser (yecc, `src/ladder_parser.yrl`) makes an AST.
+logex is a ladder logic compiler and interpreter in Elixir, with no dependencies. It reads a routine as text, for example `( xic start | xic motor ) xio stop ote motor`. The lexer (leex, `src/ladder_lexer.xrl`) makes tokens. The parser (yecc, `src/ladder_parser.yrl`) makes an AST. (That was the front end when this study was written. It is now hand-written, as `Logex.Lexer` and `Logex.Parser`: see `PLAN.md` §6.)
 
 `Logex.Compiler.instructionize/1` lowers the AST to an IR. `Logex.Compiler.evaluate/2` runs the IR with a tag map, one call for one scan. The language has six instructions: `xic`, `xio`, `ote`, `otl`, `otu` and `mov`. It has parallel branches to all depths.
 

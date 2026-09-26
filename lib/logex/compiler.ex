@@ -1,11 +1,6 @@
 defmodule Logex.Compiler do
-  def tokenize(source) do
-    source |> String.to_charlist() |> :ladder_lexer.string()
-  end
-
-  def parse(tokens) do
-    :ladder_parser.parse(tokens)
-  end
+  defdelegate tokenize(source), to: Logex.Lexer
+  defdelegate parse(tokens), to: Logex.Parser
 
   @instructions %{
     "xic" => {:xic, 1},
