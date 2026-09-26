@@ -1,7 +1,7 @@
 defmodule Logex.Parser do
   @moduledoc """
-  Tokens to the parse AST, by recursive descent: one function per production of the
-  grammar yecc used to generate from, which this replaced.
+  Tokens to the parse AST, by recursive descent over the grammar yecc used to generate
+  from, which this replaced.
 
       routine  -> rungs                       (empty rungs filtered out)
       rungs    -> rung | rung rnd rungs
@@ -11,13 +11,19 @@ defmodule Logex.Parser do
       elem     -> int_lit | name | bst branches bnd
       branches -> branch | branch nxb branches
 
-  The grammar is LL(1): every decision is made on the next token alone, and `branch` is
-  the only nullable production, ending at whatever cannot start an `elem`. yecc used to
-  report a conflict if that stopped being true; nothing does now. What stands in for it
-  is `test/fixtures/frontend_golden.txt`, which records what the yecc grammar accepted
-  and produced, `printer_test.exs`'s round-trip properties over every production, and the
-  jumper and unbalanced-delimiter tests in `end_to_end_test.exs`. A new production goes
-  into the printer test's generator and its `@required_shapes` before it lands.
+  `rungs/2` and `line_end/3` parse `routine`, `rungs` and `rung`; `branch/2` parses
+  `branch`, `elems` and `elem`, and hands a group's legs to `legs/3`, which parses
+  `branches` and the `bnd` that closes the group.
+
+  As written the grammar is not left-factored; the parser implements its left-factored
+  form, which is LL(1): every decision is made on the next token alone. `branch` is the
+  only production with an empty alternative, and it ends at whatever cannot start an
+  `elem`. yecc used to report a conflict if that stopped being true; nothing does now.
+  What stands in for it is `test/fixtures/frontend_golden.txt`, first written by the yecc
+  front end and matched exactly by this one; `printer_test.exs`'s round-trip properties
+  over every production; and the jumper and unbalanced-delimiter tests in
+  `end_to_end_test.exs`. A new production goes into the printer test's generator and its
+  `@required_shapes` before it lands.
   """
 
   @doc """

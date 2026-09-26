@@ -11,11 +11,12 @@ defmodule Logex.Lexer do
   `Logex.Parser` keeps only the line in the AST, whose shape the suite pins; the column
   is there for diagnostics.
 
-  This replaced `src/ladder_lexer.xrl`, and `test/fixtures/frontend_golden.txt` is the
-  record that one wrote. Three things differ on purpose: locations carry a column; a
-  source that is not valid UTF-8 is a located error rather than the
-  `UnicodeConversionError` that `String.to_charlist/1` raised before leex ever ran; and
-  a number running straight into a tag, `1bst`, is an error rather than two tokens (B2).
+  This replaced `src/ladder_lexer.xrl`. `test/fixtures/frontend_golden.txt` is the record
+  that one first wrote, which this matched before B2 changed it on purpose. Three things
+  differ on purpose: locations carry a column; a source that is not valid UTF-8 is a
+  located error rather than the `UnicodeConversionError` that `String.to_charlist/1`
+  raised before leex ever ran; and a number running straight into a tag, `1bst`, is an
+  error rather than two tokens (B2).
   """
 
   defguardp is_name_start(ch) when ch in ?a..?z or ch in ?A..?Z or ch == ?_

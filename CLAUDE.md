@@ -13,24 +13,28 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `mix.exs`** — the constraint is deliberate, and a loosened version bound is the kind of
   edit that lands by accident. If you cannot install a newer Elixir, run the suite in the
   throwaway sandbox in `CONTRIBUTING.md` ("Running the suite on an older toolchain"), which
-  patches a *copy*. That is how every executed receipt in these documents was produced.
+  patches a *copy*. That is how most receipts in these documents were produced, on Elixir
+  1.14; those that ran on the pinned 1.20.4 say so.
 
 ## Key Files
 
 - `lib/logex/compiler.ex` — the pipeline: `tokenize/1` and `parse/1` delegate to the two
   modules below; `instructionize/1` and `evaluate/2` live here
 - `lib/logex/lexer.ex` / `lib/logex/parser.ex` — the front end, written by hand: binary
-  pattern matching, and recursive descent with one function per grammar production (the
-  grammar is in the parser's moduledoc). There is no generator, so nothing reports a
+  pattern matching, and recursive descent (the parser's moduledoc gives the grammar and
+  which function parses each production). There is no generator, so nothing reports a
   grammar conflict: **a new syntax form goes into `printer_test.exs`'s generator and
   `@required_shapes` before it lands**, and the golden record below must stay green.
 - `lib/logex/printer.ex` — the parse AST back to canonical source text
 - Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
-  catches front-end changes the rest of the suite cannot see — a lone-CR or leading-`_`
-  change to the lexer leaves all 40 other tests green. Regenerate it only in a commit that
-  changes the language or the generator on purpose, and read the diff: `test/fixtures/generate_frontend_golden.exs`.
+  catches front-end changes the rest of the suite cannot see — making a lone CR end a rung
+  leaves every other test green. It keeps the AST and error lines, not the tokens or
+  columns, so newline coalescing, columns and messages are pinned in
+  `test/logex/frontend_test.exs` instead. Regenerate it only in a commit that changes the
+  language or the generator on purpose, and read the diff:
+  `test/fixtures/generate_frontend_golden.exs`.
 - `test/logex/end_to_end_test.exs` drives source to an environment; its *assertions* name
   no IR tag (one helper matches the `{:routine, {:rungs, _}}` wrapper to count rungs), so it
   is the only test that crosses every stage boundary. `lex_and_parse_test.exs` starts from a

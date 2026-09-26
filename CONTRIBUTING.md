@@ -16,14 +16,14 @@ requirement; recent history is direct-to-main. Do not invent process here.
 | Question | File |
 |---|---|
 | What is logex, what works, how do I run it? | `README.md` |
-| How do I build it without falling into the trap? | `CLAUDE.md` |
+| How do I build and test it? | `CLAUDE.md` |
 | What is broken, what is next, in what order, and why? | `PLAN.md` |
 | What should this instruction be called? | `docs/naming.md` |
 | How do I work on it? | this file |
 
 `PLAN.md` is long and half-archive. Its §2 is a completed milestone kept for the
-*diagnoses* — it explains why the grammar carries an empty-rung filter and why `CLAUDE.md`
-documents an `rm -f` loop. Read §1 for current state, §3 for the next work, §4 for the
+*diagnoses* — it explains why the parser drops empty rungs and why the generated front end
+once needed an `rm -f` loop. Read §1 for current state, §3 for the next work, §4 for the
 backlog and the CI gates, §5 for decisions you must not relitigate, §6 for code that looks
 wrong and is not.
 
@@ -73,8 +73,9 @@ that command, until you do.
 ### Running the suite on an older toolchain
 
 `mix.exs` requires Elixir `~> 1.20`, and that bound is deliberate — but the machine in front
-of you may not have it, and then `mix` aborts before running anything at all. Every executed
-receipt in these documents was produced in a throwaway copy instead:
+of you may not have it, and then `mix` aborts before running anything at all. Most
+receipts in these documents were produced in a throwaway copy instead, on Elixir 1.14;
+those that ran on the pinned 1.20.4 say so:
 
     SB=$(mktemp -d)
     cp -r . "$SB"/ && rm -rf "$SB/.git"
@@ -188,13 +189,14 @@ choice, not an oversight to fix.
   in "Running the suite on an older toolchain" above — patch a copy. An automated audit
   of this repo recommended relaxing it, having mistaken a test rig's patched copy for the
   repository's own — a wrong conclusion from real evidence.
-- **Nothing checks the grammar for ambiguity.** The parser is written by hand, one
-  function per production, so there is no generator to report a conflict. What stands in
+- **Nothing checks the grammar for ambiguity.** The parser is written by hand (its
+  moduledoc gives the grammar and which function parses each production), so there is no
+  generator to report a conflict. What stands in
   for it: `printer_test.exs`'s round-trip properties, whose generator must reach every
   production (`@required_shapes`), and the golden record, which pins what the language
   accepts. A new syntax form goes into that generator before it lands. When yecc was in
   use its conflict warning did not fail `--warnings-as-errors` either; the replacement for
-  that gate was measured, not assumed (see the commit that removed it).
+  that gate was measured, not assumed (`PLAN.md` §6).
 - **Never skip, disable or quarantine a test to get to green.**
 - **Some code that looks wrong is not.** The non-short-circuiting `Enum.reduce` and the
   sequential `env` threading through parallel branches both look like accidents and are

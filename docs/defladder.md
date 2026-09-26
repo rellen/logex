@@ -42,7 +42,7 @@ logex is a ladder logic compiler and interpreter in Elixir, with no dependencies
 
 `Logex.Compiler.instructionize/1` lowers the AST to an IR. `Logex.Compiler.evaluate/2` runs the IR with a tag map, one call for one scan. The language has six instructions: `xic`, `xio`, `ote`, `otl`, `otu` and `mov`. It has parallel branches to all depths.
 
-Each operand in the AST is the lexer token, `{:name, line, "start"}` or `{:int_lit, line, 123}`. Milestone 1 item M1-1 (commit `a22bf39`) put the line in that position. Ten locations in `compiler.ex` read that position as `_`.
+Each operand in the AST is the lexer token, `{:name, line, "start"}` or `{:int_lit, line, 123}`. Milestone 1 item M1-1 (commit `a22bf39`) put the line in that position. (The AST shape is unchanged since, but the hand-written lexer's tokens carry `{line, column}` and the parser keeps only the line, so an operand is no longer the token itself.) Ten locations in `compiler.ex` read that position as `_`.
 
 The suite has 27 tests. All of them give the correct result in the sandbox on Elixir 1.14.
 
