@@ -30,7 +30,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see — a lone-CR or leading-`_`
   change to the lexer leaves all 40 other tests green. Regenerate it only in a commit that
-  changes the language on purpose, and read the diff: `test/fixtures/generate_frontend_golden.exs`.
+  changes the language or the generator on purpose, and read the diff: `test/fixtures/generate_frontend_golden.exs`.
 - `test/logex/end_to_end_test.exs` drives source to an environment; its *assertions* name
   no IR tag (one helper matches the `{:routine, {:rungs, _}}` wrapper to count rungs), so it
   is the only test that crosses every stage boundary. `lex_and_parse_test.exs` starts from a

@@ -204,9 +204,11 @@ choice, not an oversight to fix.
 
 All three must pass, judged by exit code. `--force` recompiles every module, so a warning
 in a file you did not touch still fails the build. If you changed what the language
-accepts on purpose, regenerate the golden record in the same commit and read its diff:
+accepts, or the golden record's generator, on purpose, regenerate the record in the same
+commit and read its diff:
 
     mix run test/fixtures/generate_frontend_golden.exs && git diff test/fixtures/
 
-The diff is the exact list of inputs whose meaning changed. If it lists anything you did
-not intend, the change is wrong, not the record.
+Apart from the header line, which names the commit the tree was on top of, the diff is the
+exact list of inputs whose meaning changed. If it lists anything you did not intend, the
+change is wrong, not the record.

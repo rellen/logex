@@ -1,9 +1,10 @@
 defmodule Logex.FrontendTest do
   @moduledoc """
-  What the hand-written front end does differently from the leex/yecc one it replaced,
-  on purpose: positions with columns, invalid UTF-8, and the B2 fix. Everything else it
-  does the same, which `frontend_golden_test.exs` checks against the record the old front
-  end wrote; these are the exceptions, and each test here fails against that front end.
+  What `frontend_golden_test.exs` cannot check. That record reduces every location to its
+  line and keeps the AST rather than the tokens, so it cannot see columns, messages, or
+  the token stream itself. The deliberate departures from the leex/yecc front end are
+  pinned here too: columns, invalid UTF-8 and B2. All but one of these tests fail against
+  that front end; "the AST keeps only the line" is a parity pin and passes on both.
   """
   use ExUnit.Case, async: true
 
@@ -41,8 +42,25 @@ defmodule Logex.FrontendTest do
     end
   end
 
+  describe "a run of newlines is one rung delimiter" do
+    # The golden record cannot see the first: it keeps the AST, and the parser drops empty
+    # rungs, so one `rnd` or three parse alike. It could see the second, since it keeps
+    # error lines, but none of its sources puts an error at a run of newlines.
+    test "blank and whitespace-only lines between rungs are one rnd, at the first newline" do
+      assert {:ok, [{:name, {1, 1}, "a"}, {:rnd, {1, 2}}, {:name, {4, 1}, "b"}], 4} =
+               Compiler.tokenize("a\n \n\t\nb")
+    end
+
+    test "an error at a run of newlines is reported where the run starts" do
+      assert {:error, {{1, 9}, Logex.Parser, _}} = parse("( xic aa\n\n)")
+      assert {:error, {{1, 10}, Logex.Parser, _}} = parse("( xic aa\r\n\r\n)")
+    end
+  end
+
   describe "input that is not ASCII" do
-    test "a non-ASCII character is one illegal character, not the bytes of one" do
+    # leex reported one character here too. This guards against a lexer that works byte
+    # by byte and would report `<<0xC3>>`, the first byte of the character.
+    test "a non-ASCII character is reported whole, not by its first byte" do
       assert {:error, {{1, 5}, Logex.Lexer, {:illegal, "é"}}, 1} = Compiler.tokenize("xic é")
     end
 
@@ -62,6 +80,7 @@ defmodule Logex.FrontendTest do
                Compiler.tokenize("xic aa\n  12ab_3 ote bb")
 
       assert {:error, {_, _, {:missing_separator, "7_"}}, _} = Compiler.tokenize("mov 7_ aa")
+      assert {:error, {_, _, {:missing_separator, "9Z"}}, _} = Compiler.tokenize("mov 9Z aa")
     end
 
     test "the message says what is wrong" do
