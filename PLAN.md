@@ -728,8 +728,13 @@ Target surface: `Logex.compile/1`, `Logex.Runtime.scan(program, env) :: env`,
 `{power_flow, env} -> {power_flow, env}`, and make the seal-in circuit the README
 example.
 
-Normalise errors while here: `tokenize/1` returns leex's 3-tuple, `parse/1` yecc's
-2-tuple, `instructionize/1` a bare value that raises. Raw Erlang charlists leak, and
+*Since the hand-written front end (§6): `Logex.Lexer` and `Logex.Parser` return the same
+two shapes, now with `{line, column}` locations and Elixir binaries rather than charlists,
+and each has a tested `format_error/1` — an unclosed group is reported at the innermost
+`(` still open, and an unexpected token names what was expected. Nothing outside the tests
+calls them yet; the single `%Logex.Error{}` below is still this item's to design, and can
+now carry a column.* As first written: normalise errors while here: `tokenize/1` returns
+leex's 3-tuple, `parse/1` yecc's 2-tuple, `instructionize/1` a bare value that raises. Raw Erlang charlists leak, and
 `format_error/1` is exported by both generated modules and called by neither — the
 lexer's is genuinely useful (`{:illegal, ~c"@"}` → `illegal characters "@"`). Empty input
 reported yecc's internal sentinel as a line number (`{:error, {999999, …}}`) *until M0-5*:

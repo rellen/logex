@@ -32,8 +32,8 @@ defmodule Logex.Parser do
   def format_error({:unexpected, text, expected}),
     do: "expected #{Enum.join(expected, " or ")}, found #{text}"
 
-  def format_error({:unclosed, {line, col}}),
-    do: "end of input inside the `(` opened at line #{line}, column #{col}"
+  # Located at the innermost `(` still open when the input ends — the one to close.
+  def format_error(:unclosed), do: "this `(` is never closed: the input ends before its `)`"
 
   defp rungs(tokens, acc) do
     case branch(tokens, []) do
@@ -71,7 +71,7 @@ defmodule Logex.Parser do
     case branch(tokens, []) do
       {:ok, leg, [{:nxb, _} | rest]} -> legs(rest, open, [leg | acc])
       {:ok, leg, [{:bnd, _} | rest]} -> {:ok, Enum.reverse([leg | acc]), rest}
-      {:ok, _, []} -> {:error, {open, __MODULE__, {:unclosed, open}}}
+      {:ok, _, []} -> {:error, {open, __MODULE__, :unclosed}}
       {:ok, _, [token | _]} -> unexpected(token, ["`|`", "`)`"])
       error -> error
     end

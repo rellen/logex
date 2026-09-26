@@ -78,6 +78,29 @@ defmodule Logex.FrontendTest do
     end
   end
 
+  describe "error messages say what is wrong and point at where to fix it" do
+    test "an unclosed group is reported at the innermost ( still open" do
+      assert {:error, {{1, 1}, Logex.Parser, :unclosed}} = parse("( ( xic aa ) ote bb")
+      assert {:error, {{1, 12}, Logex.Parser, :unclosed}} = parse("( xic aa | ( xic bb")
+
+      assert Logex.Parser.format_error(:unclosed) ==
+               "this `(` is never closed: the input ends before its `)`"
+    end
+
+    test "an unexpected token names what was expected" do
+      assert {:error, {{1, 8}, Logex.Parser, reason}} = parse("xic aa )")
+      assert Logex.Parser.format_error(reason) == "expected a newline or end of input, found `)`"
+
+      assert {:error, {{1, 9}, Logex.Parser, reason}} = parse("( xic aa\n)")
+      assert Logex.Parser.format_error(reason) == "expected `|` or `)`, found a newline"
+    end
+
+    test "an illegal character is quoted" do
+      assert {:error, {_, Logex.Lexer, reason}, _} = Compiler.tokenize("xic @")
+      assert Logex.Lexer.format_error(reason) == ~s(illegal character "@")
+    end
+  end
+
   defp parse(source) do
     {:ok, tokens, _} = Compiler.tokenize(source)
     Compiler.parse(tokens)
