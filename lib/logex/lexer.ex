@@ -18,8 +18,6 @@ defmodule Logex.Lexer do
   a number running straight into a tag, `1bst`, is an error rather than two tokens (B2).
   """
 
-  @type loc :: {pos_integer, pos_integer}
-
   defguardp is_name_start(ch) when ch in ?a..?z or ch in ?A..?Z or ch == ?_
   defguardp is_name_char(ch) when is_name_start(ch) or ch in ?0..?9
 

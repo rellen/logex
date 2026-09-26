@@ -114,6 +114,16 @@ defmodule Logex.FrontendTest do
       assert Logex.Parser.format_error(reason) == "expected `|` or `)`, found a newline"
     end
 
+    test "a token the lexer never makes is an error, not a crash" do
+      assert {:error, {{1, 1}, Logex.Parser, reason}} = Compiler.parse([{:foo, {1, 1}}])
+
+      assert Logex.Parser.format_error(reason) ==
+               "expected a newline or end of input, found {:foo, {1, 1}}"
+
+      # A token list in the old leex shape, whose location is a bare line.
+      assert {:error, {1, Logex.Parser, _}} = Compiler.parse([{:name, 1, "xic"}])
+    end
+
     test "an illegal character is quoted" do
       assert {:error, {_, Logex.Lexer, reason}, _} = Compiler.tokenize("xic @")
       assert Logex.Lexer.format_error(reason) == ~s(illegal character "@")

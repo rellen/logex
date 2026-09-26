@@ -83,4 +83,8 @@ defmodule Logex.Parser do
   defp describe({:rnd, _}), do: "a newline"
   defp describe({:nxb, _}), do: "`|`"
   defp describe({:bnd, _}), do: "`)`"
+
+  # Logex.Lexer never makes any other token here, but parse/1 is public and yecc answered
+  # a token it did not know with an error, not a crash.
+  defp describe(token), do: inspect(token)
 end
