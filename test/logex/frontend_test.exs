@@ -4,7 +4,8 @@ defmodule Logex.FrontendTest do
   line and keeps the AST rather than the tokens, so it cannot see columns, messages, or
   the token stream itself. The deliberate departures from the leex/yecc front end are
   pinned here too: columns, invalid UTF-8 and B2. All but one of these tests fail against
-  that front end; "the AST keeps only the line" is a parity pin and passes on both.
+  that front end; "the AST keeps only the line" is a parity pin and passes on both. The
+  last test checks that a checkout upgraded from it has been cleaned.
   """
   use ExUnit.Case, async: true
 
@@ -127,6 +128,20 @@ defmodule Logex.FrontendTest do
     test "an illegal character is quoted" do
       assert {:error, {_, Logex.Lexer, reason}, _} = Compiler.tokenize("xic @")
       assert Logex.Lexer.format_error(reason) == ~s(illegal character "@")
+    end
+  end
+
+  describe "a checkout built before the hand-written front end" do
+    # Pulling the rewrite leaves the old front end's modules in _build. The first build of
+    # an environment built before the pull deletes the generated src/*.erl but keeps their
+    # modules; a build of any other environment compiles them afresh. Nothing calls them,
+    # but `mix test --cover` crashes on them.
+    test "has none of the leex/yecc front end's modules left" do
+      for module <- [:ladder_lexer, :ladder_parser] do
+        refute Code.ensure_loaded?(module),
+               "#{inspect(module)} is left over from the leex/yecc front end: " <>
+                 "run `rm -rf src/*.erl _build` once"
+      end
     end
   end
 

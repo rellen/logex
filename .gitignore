@@ -12,3 +12,8 @@ erl_crash.dump
 .direnv
 .nix-hex
 .nix-mix
+
+# The leex/yecc front end generated these until it was replaced (PLAN.md §6). A checkout
+# built before then can still have them after pulling; this keeps them out of commits.
+# frontend_test.exs fails until `rm -rf src/*.erl _build` has been run.
+/src/*.erl

@@ -64,6 +64,12 @@ picked up, and only a *second* same-size edit landing in that same second was lo
 in five attempts. If an edit to the lexer or parser seems to do nothing, `mix compile
 --force` settles it.
 
+A checkout built before the rewrite keeps the old front end's modules in `_build` after
+pulling. The first build of an environment that was built before the pull deletes the
+generated `src/*.erl` but leaves their modules behind; building any other environment
+compiles them afresh. Run `rm -rf src/*.erl _build` once. `frontend_test.exs` fails, naming
+that command, until you do.
+
 ### Running the suite on an older toolchain
 
 `mix.exs` requires Elixir `~> 1.20`, and that bound is deliberate — but the machine in front
