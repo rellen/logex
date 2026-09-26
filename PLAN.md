@@ -844,7 +844,14 @@ right rather than merely plausible.
   The destination this bullet argued for was right; its stated origin was the wrong
   generation, not the wrong vendor.
 
-- **B2 · Digit-led lexemes split instead of erroring.** A digit-led lexeme splits silently
+- **B2 · Digit-led lexemes split instead of erroring. FIXED** in the hand-written lexer:
+  `tokenize("mov 1bst aa")` is `{:error, {{1, 5}, Logex.Lexer, {:missing_separator,
+  "1bst"}}, 1}`, naming the whole run; `mov 123 hh`, a bare `1`, tags ending in digits and
+  `1(` still lex. The leex-rule prescription below is history — the fix is an explicit
+  clause after the digits, so the longest-match subtlety it relied on no longer arises.
+  Guarded in `frontend_test.exs`; the golden record's regenerated diff was exactly the 139
+  inputs with a digit running into a letter or `_`. The finding as written: a digit-led
+  lexeme splits silently
   rather than erroring, then dies much later with an unlocated `FunctionClauseError`:
   `tokenize("mov 1bst aa bnd")` is `int_lit(1)` + `name("bst")` + … , where the user
   plainly meant one tag. *B1 blunted the original framing without closing the finding:* the
@@ -1151,7 +1158,7 @@ otherwise.
 | M1-5 | low | errors | Three error conventions across four stages; `format_error/1` never called; empty program reports line `999999` | `tokenize/1`, `parse/1` | **partly closed** — `999999` by `b65e756`; the other two clauses open |
 | M0-3 | low | tooling | Generated `src/*.erl` tracked, embedding absolute `/nix/store` paths → ~700-line cross-OTP churn | `src/ladder_lexer.erl:1` (at `c9c7f51`; untracked since) | **closed** `dde8c1d` |
 | B4 | low | tooling | nix dev shell bit-rotted: `erlangR26` alias removed from nixpkgs master 2024-05-24; flake tracked `master`; lock from 2024-01-19 | `shell.nix`, `flake.nix` | **landed** `9c1a7bd` — OTP 28 / Elixir 1.20 on `nixos-26.05`; lock refresh owed |
-| B2 | low | lexer | Digit-led lexeme splits rather than erroring: `1bst` → `int_lit(1)` + `name("bst")` | `Logex.Lexer`, the integer clause (was `ladder_lexer.xrl:20`) | open — B1 blunted it: the split no longer manufactures a branch token |
+| B2 | low | lexer | Digit-led lexeme splits rather than erroring: `1bst` → `int_lit(1)` + `name("bst")` | `Logex.Lexer`, the integer clause (was `ladder_lexer.xrl:20`) | **closed** — a located `:missing_separator` lex error naming the whole run |
 | B3 | low | history | 2 commits ship a red suite (`ec0534a`, `35fe1b9`) — an interior island; `d47eb21` is a clean bisect baseline | — | open |
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | open |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `&f(&1)`; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `evaluate/2` | open |

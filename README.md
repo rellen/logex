@@ -22,7 +22,8 @@ become an importer.**
 
 Source syntax today:
 
-- lowercase mnemonics, operands separated by spaces
+- lowercase mnemonics, operands separated by spaces — and a number must be followed by one:
+  `mov 1bst aa` is an error naming `1bst`, not the number `1` and a tag `bst`
 - no operand parentheses, no terminator
 - a newline ends a rung
 - `(` … `|` … `)` open, separate and close a parallel branch group

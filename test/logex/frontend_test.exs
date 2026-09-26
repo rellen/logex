@@ -1,9 +1,9 @@
 defmodule Logex.FrontendTest do
   @moduledoc """
   What the hand-written front end does differently from the leex/yecc one it replaced,
-  on purpose. Everything else it does the same, which `frontend_golden_test.exs` checks
-  against the record the old front end wrote; these are the exceptions, and each test
-  here fails against that front end.
+  on purpose: positions with columns, invalid UTF-8, and the B2 fix. Everything else it
+  does the same, which `frontend_golden_test.exs` checks against the record the old front
+  end wrote; these are the exceptions, and each test here fails against that front end.
   """
   use ExUnit.Case, async: true
 
@@ -50,6 +50,31 @@ defmodule Logex.FrontendTest do
     test "a source that is not valid UTF-8 is a located error, not an exception" do
       assert {:error, {{1, 5}, Logex.Lexer, {:illegal, <<0xFF>>}}, 1} =
                Compiler.tokenize(<<"xic ", 0xFF>>)
+    end
+  end
+
+  describe "B2: a number must be followed by a separator" do
+    test "digits running into a letter or _ are one located error naming the whole run" do
+      assert {:error, {{1, 5}, Logex.Lexer, {:missing_separator, "1bst"}}, 1} =
+               Compiler.tokenize("mov 1bst aa")
+
+      assert {:error, {{2, 3}, Logex.Lexer, {:missing_separator, "12ab_3"}}, 2} =
+               Compiler.tokenize("xic aa\n  12ab_3 ote bb")
+
+      assert {:error, {_, _, {:missing_separator, "7_"}}, _} = Compiler.tokenize("mov 7_ aa")
+    end
+
+    test "the message says what is wrong" do
+      assert Logex.Lexer.format_error({:missing_separator, "1bst"}) ==
+               ~s(missing separator after integer: "1bst" is neither a number nor a tag)
+    end
+
+    test "numbers, tags ending in digits, and a number before punctuation are unaffected" do
+      for source <- ["mov 123 hh", "1", "ote tag1", "ote bst1", "mov 1 aa", "1(", "( mov 7 aa|)"] do
+        assert {:ok, _, _} = Compiler.tokenize(source), "#{inspect(source)} should lex"
+      end
+
+      assert {:ok, [{:int_lit, {1, 1}, 1}, {:bst, {1, 2}}], 1} = Compiler.tokenize("1(")
     end
   end
 
