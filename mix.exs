@@ -7,6 +7,9 @@ defmodule Logex.MixProject do
       version: "0.1.0",
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
+      # The golden record's generator lives beside its fixture; it is run by hand, not
+      # loaded by `mix test`, which would otherwise warn that it looks like a misnamed test.
+      test_ignore_filters: [&String.starts_with?(&1, "test/fixtures/")],
       deps: deps()
     ]
   end
