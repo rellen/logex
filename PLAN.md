@@ -1134,7 +1134,19 @@ on ~1,400 sources, which the hand-written front end matched exactly when it land
 since rewritten 139 entries, on purpose); the
 printer's round-trip generator, which must reach every production; and the suite — every
 meaning-changing overlap planted in the prototype parser failed it. The cost accepted: an
-ambiguity no test exercises is now caught by nothing. The original reasoning follows.
+ambiguity no test exercises is now caught by nothing.
+
+Keeping leex beside it as an alternative lexer was considered and declined (September 2026).
+Once its lexemes stopped being grown a byte at a time (`2b00370`), the hand-written lexer
+took 0.78-1.12x leex's time on the densest artificial inputs and was 2.5x or more faster on
+real programs and the README example (on 1.20.4; leex's scanner alone, handed a ready
+charlist, still wins on 200k lines of short names).
+A second lexer would need every lexer change, which covers B8 and all of §5, made twice,
+and a token adapter. It would also bring back parsetools, Mix's leex warning and generated
+`src/*.erl`. What it would offer is already held elsewhere: the golden record is its
+behaviour, and `bf59167` has its source for anyone benchmarking against it.
+
+The original reasoning follows.
 
 **Keep leex/yecc.** The `rnd = \n` terminal looks like the classic argument for a
 hand-written or combinator parser, but the entire fix is one grammar production and one
