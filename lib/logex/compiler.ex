@@ -27,8 +27,11 @@ defmodule Logex.Compiler do
 
   Returns `{:ok, ir}`, where an instruction is `{symbol, line, operands}`, or
   `{:error, diagnostics}`: every `%Logex.Diagnostic{}` in the routine, in source order.
-  After a word that is not an instruction, the words that follow it are skipped up to the
-  next instruction or branch group, so one mistake is reported once.
+
+  After a word that cannot start an instruction (an unknown word, an old branch keyword, or
+  a number), the words after it are skipped up to the next instruction or branch group, so
+  its would-be operands are not each reported as unknown instructions too. An instruction's
+  operands stop early at an instruction or a branch group, which is then lowered as usual.
   """
   def instructionize({:routine, {:rungs, rungs}}) do
     {rungs, diagnostics} = Enum.map_reduce(rungs, [], &lower_rung/2)
@@ -66,7 +69,7 @@ defmodule Logex.Compiler do
   defp lower_word({:ok, {symbol, signature}}, _key, {line, word}, rest, ir, diagnostics) do
     {operands, rest} = take_operands(rest, length(signature), [])
     diagnostics = check_count(signature, operands, rest, {line, word}, diagnostics)
-    diagnostics = check_kinds(signature, operands, word, diagnostics)
+    diagnostics = check_kinds(signature, operands, {line, word}, diagnostics)
     lower(rest, [{symbol, line, operands} | ir], diagnostics)
   end
 
@@ -119,31 +122,40 @@ defmodule Logex.Compiler do
   end
 
   defp describe(signature),
-    do: "#{operands(length(signature))} (#{Enum.map_join(signature, ", then ", &kind/1)})"
+    do: "#{operand_count(length(signature))} (#{Enum.map_join(signature, ", then ", &kind/1)})"
 
-  defp operands(1), do: "1 operand"
-  defp operands(count), do: "#{count} operands"
+  defp operand_count(1), do: "1 operand"
+  defp operand_count(count), do: "#{count} operands"
 
+  # A new operand kind needs a clause here and in check_kind/4; without them, the first
+  # program that uses it raises FunctionClauseError rather than passing unchecked.
   defp kind(:tag), do: "a tag"
   defp kind(:value), do: "a value"
 
   defp found(0), do: "none"
   defp found(count), do: "#{count}"
 
-  # Operands stop early only at a mnemonic, a branch group or the end of the leg. Only a
-  # mnemonic needs saying: the person meant it as a tag.
-  defp stopped_at([{:name, _, word} | _]), do: " — `#{word}` is an instruction, not a tag"
-  defp stopped_at(_rest), do: ""
+  # Operands stop early only at an instruction, a branch group or the end of the leg. Which
+  # of the two the writer got wrong -- a forgotten operand, or an instruction's name used as
+  # a tag -- cannot be told from here, so the message says where the operands stopped.
+  defp stopped_at([{:name, _, word} | _]), do: " before the instruction `#{word}`"
+  defp stopped_at([{:branches, _} | _]), do: " before a branch group"
+  defp stopped_at([]), do: ""
 
-  defp check_kinds([:tag | kinds], [{:int_lit, line, value} | operands], word, diagnostics) do
-    wrong = diagnostic(line, "`#{word}` expects a tag, found `#{value}`")
-    check_kinds(kinds, operands, word, [wrong | diagnostics])
-  end
+  defp check_kinds([kind | kinds], [operand | operands], at, diagnostics),
+    do: check_kinds(kinds, operands, at, check_kind(kind, operand, at, diagnostics))
 
-  defp check_kinds([_kind | kinds], [_operand | operands], word, diagnostics),
-    do: check_kinds(kinds, operands, word, diagnostics)
+  defp check_kinds(_kinds, [], _at, diagnostics), do: diagnostics
 
-  defp check_kinds(_kinds, [], _word, diagnostics), do: diagnostics
+  # What each kind accepts, as an allowlist. take_operands/3 only ever takes names and
+  # literals, so a literal where a tag must go is the one thing left to report; any other
+  # pairing raises here rather than reaching evaluate/2 unchecked.
+  defp check_kind(:tag, {:name, _, _}, _at, diagnostics), do: diagnostics
+  defp check_kind(:value, {:name, _, _}, _at, diagnostics), do: diagnostics
+  defp check_kind(:value, {:int_lit, _, _}, _at, diagnostics), do: diagnostics
+
+  defp check_kind(kind, {:int_lit, _, value}, {line, word}, diagnostics),
+    do: [diagnostic(line, "`#{word}` expects #{kind(kind)}, found `#{value}`") | diagnostics]
 
   # After a word that is not an instruction there is no signature to go by, so everything
   # up to the next instruction or branch group is taken to belong to it.

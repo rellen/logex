@@ -204,20 +204,25 @@ defmodule Logex.EndToEndTest do
 
   describe "line numbers" do
     test "no stage depends on an instruction sitting on line 1" do
-      # Every operand now carries its line, and the ten pattern sites in
-      # compiler.ex destructure it as `_`. That is only a wildcard if nothing
-      # breaks when every instruction sits below line 1 -- so: every
-      # instruction, both power states, a literal and a tag operand, from
-      # line 3 down. Asserting values rather than survival is what makes a
-      # literal 1 in any of those ten slots a FunctionClauseError here.
+      # Every operand carries its line, and so does every instruction since M1-2;
+      # each evaluate/2 and get_arg/2 pattern destructures them as `_`. That is only
+      # a wildcard if nothing breaks when every instruction sits below line 1 -- so:
+      # every instruction, both power states, a literal and a tag operand, from line
+      # 3 down. The last rung opens its first contact, so every instruction after it
+      # runs de-energised. Asserting values rather than survival is what makes a
+      # literal 1 in any of those slots a FunctionClauseError here.
       src =
         "\n\n( xic aa ote p1 | xic bb ote p2 )\n" <>
           "( xio bb otl q1 | xio aa otl q2 )\n" <>
-          "xic aa otu r1 move 5 s1 move s1 s2"
+          "xic aa otu r1 move 5 s1 move s1 s2\n" <>
+          "xio aa xic bb xio bb otu u1 move 7 t2 ote t1"
 
-      env = run(src, %{"aa" => 1, "bb" => 0, "p2" => 1, "r1" => 1})
+      env = run(src, %{"aa" => 1, "bb" => 0, "p2" => 1, "r1" => 1, "u1" => 1})
+
       assert %{"p1" => 1, "p2" => 0, "q1" => 1, "r1" => 0, "s1" => 5, "s2" => 5} = env
+      assert %{"u1" => 1, "t1" => 0} = env
       refute Map.has_key?(env, "q2")
+      refute Map.has_key?(env, "t2")
     end
   end
 

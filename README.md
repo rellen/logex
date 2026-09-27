@@ -86,11 +86,12 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
 
 Each instruction's operands are checked against this table, and every mistake in a
-routine is reported with its line, in source order. `move src ote` is two mistakes, since
-`ote` cannot be a tag:
+routine's instructions is reported with its line, in source order. A lex or parse error
+still stops at the first, before any instruction is checked. `move src ote` gives two,
+because `move` runs out of operands at an instruction and `ote` then has none of its own:
 
 ```
-line 1: `move` expects 2 operands (a value, then a tag), found 1 — `ote` is an instruction, not a tag
+line 1: `move` expects 2 operands (a value, then a tag), found 1 before the instruction `ote`
 line 1: `ote` expects 1 operand (a tag), found none
 ```
 
