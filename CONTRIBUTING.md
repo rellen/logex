@@ -197,6 +197,11 @@ choice, not an oversight to fix.
   accepts. A new syntax form goes into that generator before it lands. When yecc was in
   use its conflict warning did not fail `--warnings-as-errors` either; the replacement for
   that gate was measured, not assumed (`PLAN.md` §6).
+- **Do not grow a binary one byte at a time.** `<<acc::binary, ch>>` from `""` looks like
+  an accumulator and is a fresh off-heap, 256-byte buffer per lexeme. It made the lexer up
+  to 2.2x slower than leex with every token right; `bin_opt_info` flagged only the lesser
+  cost beside it, returning `{acc, rest}`. Measure the run and cut it from the source once;
+  `lexer_binaries_test.exs` fails otherwise.
 - **Never skip, disable or quarantine a test to get to green.**
 - **Some code that looks wrong is not.** The non-short-circuiting `Enum.reduce` and the
   sequential `env` threading through parallel branches both look like accidents and are
