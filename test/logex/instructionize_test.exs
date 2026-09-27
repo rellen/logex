@@ -30,9 +30,9 @@ defmodule Logex.InstructionizeTest do
           {:rung, [{:name, 9, "ote"}, {:name, 9, "zz"}]}
         ]}}
 
-    result = Logex.Compiler.instructionize(ast)
+    assert {:ok, ir} = Logex.Compiler.instructionize(ast)
 
-    assert result ==
+    assert ir ==
              {:routine,
               {:rungs,
                [
@@ -40,20 +40,20 @@ defmodule Logex.InstructionizeTest do
                   [
                     {:branches,
                      [
-                       [{:mov, [{:name, 4, "aa"}, {:name, 4, "bb"}]}],
-                       [{:mov, [{:name, 4, "cc"}, {:name, 4, "dd"}]}],
+                       [{:mov, 4, [{:name, 4, "aa"}, {:name, 4, "bb"}]}],
+                       [{:mov, 4, [{:name, 4, "cc"}, {:name, 4, "dd"}]}],
                        [
-                         {:mov, [{:name, 4, "ee"}, {:name, 4, "ff"}]},
-                         {:branches, [[{:mov, [{:int_lit, 4, 123}, {:name, 4, "hh"}]}]]}
+                         {:mov, 4, [{:name, 4, "ee"}, {:name, 4, "ff"}]},
+                         {:branches, [[{:mov, 4, [{:int_lit, 4, 123}, {:name, 4, "hh"}]}]]}
                        ]
                      ]},
                     {:branches,
                      [
-                       [{:ote, [{:name, 4, "xx"}]}],
-                       [{:ote, [{:name, 4, "yy"}]}]
+                       [{:ote, 4, [{:name, 4, "xx"}]}],
+                       [{:ote, 4, [{:name, 4, "yy"}]}]
                      ]}
                   ]},
-                 {:rung, [{:ote, [{:name, 9, "zz"}]}]}
+                 {:rung, [{:ote, 9, [{:name, 9, "zz"}]}]}
                ]}}
   end
 end

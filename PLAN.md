@@ -44,9 +44,9 @@ them and holds everything downstream; `Logex.Printer` turns a parse AST back int
    │  Logex.Compiler.parse/1           Logex.Parser             recursive descent
    ▼  {:ok, ast}
  {:routine, {:rungs, [{:rung, [{:name, 1, "xic"}, {:name, 1, "aa"}, {:branches, [[…]]}]}]}}
-   │  Logex.Compiler.instructionize/1  the instructionize/1 clauses   arity-driven lowering
-   ▼  bare value (no :ok wrapper)
- {:routine, {:rungs, [{:rung, [{:xic, [{:name, 1, "aa"}]}, {:ote, [{:name, 1, "bb"}]}]}]}}
+   │  Logex.Compiler.instructionize/1  lowering, checked against each operand signature
+   ▼  {:ok, ir} | {:error, [%Logex.Diagnostic{line:, message:}]}
+ {:routine, {:rungs, [{:rung, [{:xic, 1, [{:name, 1, "aa"}]}, {:ote, 1, [{:name, 1, "bb"}]}]}]}}
    │  Logex.Compiler.evaluate/2        the evaluate/2 clauses         {power_flow, env} fold
    ▼  {true, %{"aa" => 1, "bb" => 1}}
 ```
@@ -93,11 +93,12 @@ silently, and one that gives an unusable error.
   `bst xic aa nxb xic bb bnd ote dd` with `aa=0,bb=1` gave `dd=1`; deleting the one space
   before `nxb` gave `dd=0`, with no error anywhere. The delimiters are `(` `|` `)` now,
   which are outside `NAME` and cannot fuse.
-- **There is no validation of any kind.** An unknown mnemonic, a wrong-case mnemonic or a
-  wrong operand count is never diagnosed — it survives to `instructionize/1` or
-  `evaluate/2` and raises a bare `MatchError` or `FunctionClauseError` naming neither the
-  mnemonic nor the line: `"zzz aa"`, `"XIC aa"` and `"xic aa bb"` all raise
-  `no match of right hand side value: nil`. See M1-2.
+- **There was no validation of any kind.** ***Closed — M1-2.*** An unknown mnemonic, a
+  wrong-case mnemonic or a wrong operand count survived to `instructionize/1` or
+  `evaluate/2` and raised a bare `MatchError` or `FunctionClauseError` naming neither the
+  mnemonic nor the line, and `mov src ote` wrote a tag called `ote` with no error at all.
+  Each is now a located diagnostic, `XIC aa` is simply `xic aa`, and every mistake in a
+  routine is reported, not just the first.
 
 ### The gap that let this happen — now closed
 
@@ -529,9 +530,9 @@ The ordering here matters: each item is cheaper now than after the one below it 
 `elem -> int_lit` productions passed `'$1'` through and the `Erlang code.` block went.
 Since §6 tokens carry `{line, column}`, and `Logex.Parser`'s `branch/2` builds the elem
 with the line alone. All ten `compiler.ex` sites named
-below destructure the 3-tuple as `{kind, _, value}`; instruction tuples stay
-`{symbol, args}`, and the `{branches, legs}` node carries no line of its own — the opening
-`(` token's line is dropped in the parser. Widening either is an open call, recorded in M1-2.
+below destructure the 3-tuple as `{kind, _, value}`. The `{branches, legs}` node carries
+no line of its own — the opening `(` token's line is dropped in the parser. Instruction
+tuples were `{symbol, args}` until M1-2 widened them to `{symbol, line, operands}`.
 
 Two sides to guard. The *producer* side — the parser keeping the right line — is held by
 two tests in `lex_and_parse_test.exs` that assert lines other than 1: "lexes and parses
@@ -586,6 +587,17 @@ After a validator, a formatter and a language server exist this touches all of t
 **Do this before M1-2, not after.**
 
 ### M1-2 · A validation pass
+
+**Status: the validation pass has landed; the `mov` → `move` rename is next.**
+`instructionize/1` returns `{:ok, ir}` or `{:error, diagnostics}`: every
+`%Logex.Diagnostic{line:, message:}` in the routine, in source order. `@instructions` maps
+each mnemonic to an operand signature (`"mov" => {:mov, [:value, :tag]}`), and every case
+in the table below is a located diagnostic, each pinned in `validation_test.exs`. The open
+call at the end of this item was decided for the instruction tuple: it is
+`{symbol, line, operands}` now, so a later pass can cite a line too. One decision was
+added: **mnemonics are reserved words**, in any case (§5), which is what closes
+`mov src ote`. Mnemonics are matched case-insensitively (§5). `%Program{}` stayed with
+M1-5: `ir` is the same routine tuple as before. What follows is the item as written.
 
 `instructionize/1` validates nothing. `{symbol, args} = Map.get(@instructions, name)`
 in the `[{:name, _, name} | tail]` clause of `instructionize/1` destructures `nil` for any
@@ -657,7 +669,7 @@ and what makes a typo'd tag name a silent dead rung rather than a compile error.
 
 ### M1-4 · Make `xic` and `xio` complementary by construction
 
-the `{:xic, [{:name, _, arg}]}` clause tests `== 1` and `{:xio, …}` tests `== 0` — two independent *positive*
+the `{:xic, _, [{:name, _, arg}]}` clause tests `== 1` and `{:xio, …}` tests `== 0` — two independent *positive*
 tests, so any value outside `{0,1}` reads false for both:
 
 ```
@@ -677,8 +689,8 @@ reachable from source **today** via an undefined tag, and becomes reachable via
 # Replaces the two {true, env} clauses of {:xic, …} and {:xio, …} ONLY. Keep their
 # {false, env} clauses; deleting them makes any de-energised xic/xio raise
 # FunctionClauseError while `mix test` stays green.
-def evaluate({:xic, [{:name, _, a}]}, {true, env}), do: {bit(env, a), env}
-def evaluate({:xio, [{:name, _, a}]}, {true, env}), do: {not bit(env, a), env}
+def evaluate({:xic, _, [{:name, _, a}]}, {true, env}), do: {bit(env, a), env}
+def evaluate({:xio, _, [{:name, _, a}]}, {true, env}), do: {not bit(env, a), env}
 
 # ...and these at the BOTTOM of the module, beside get_arg/2. A defp placed between the
 # evaluate/2 clauses splits the clause group: Elixir warns "clauses with the same name
@@ -749,7 +761,10 @@ two shapes, now with `{line, column}` locations and Elixir binaries rather than 
 and each has a tested `format_error/1` — an unclosed group is reported at the innermost
 `(` still open, and an unexpected token names what was expected. Nothing outside the tests
 calls them yet; the single `%Logex.Error{}` below is still this item's to design, and can
-now carry a column.* As first written: normalise errors while here: `tokenize/1` returns
+now carry a column. M1-2 added `%Logex.Diagnostic{line:, message:}` for lowering: make that
+the one error type, widened with a stage and a column, rather than add a second. The
+`%Logex.Program{}` below is also still this item's: `instructionize/1` returns the routine
+tuple wrapped in `{:ok, _}`.* As first written: normalise errors while here: `tokenize/1` returns
 leex's 3-tuple, `parse/1` yecc's 2-tuple, `instructionize/1` a bare value that raises. Raw Erlang charlists leak, and
 `format_error/1` is exported by both generated modules and called by neither — the
 lexer's is genuinely useful (`{:illegal, ~c"@"}` → `illegal characters "@"`). Empty input
@@ -945,9 +960,9 @@ right rather than merely plausible.
 - **B5 · Split `Logex.Compiler` along the pipeline** once M1-2 and M1-5 exist and the module
   is doing five jobs instead of four. The front end is already out, as `Logex.Lexer` and
   `Logex.Parser` (§6); what remains is `Ast`, `Instruction`, `Analyzer`, `Program`,
-  `Runtime`, `Diagnostic`. Note the recursion of
-  `instructionize/1` and `evaluate/2` is currently written as extra **public** clauses
-  of the same function, so `Logex.Compiler.evaluate([{:xic, …}], {true, env})` on a
+  `Runtime` (`Logex.Diagnostic` exists since M1-2). Note the recursion of `evaluate/2`
+  is currently written as extra **public** clauses of the same function (M1-2 made
+  `instructionize/1`'s private), so `Logex.Compiler.evaluate([{:xic, …}], {true, env})` on a
   half-formed IR is a supported entry point. Make every recursive clause a `defp` with a
   distinct name.
 
@@ -1095,12 +1110,20 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   `+`. Widen §4·B2's digit-led rule to `-?[0-9]+…` in the same change. logex has no infix
   operators, so `-` can only be a sign; record that this must move to the grammar when
   infix arithmetic arrives.
-- **Case — mnemonics case-insensitive, tags case-sensitive.** One `String.downcase/1` at
-  `instructionize/1`'s mnemonic lookup. IEC and every vendor are case-*insensitive*, so a user arriving from
+- **Case — mnemonics case-insensitive, tags case-sensitive.** **Landed with M1-2.** One
+  `String.downcase/1` at `instructionize/1`'s mnemonic lookup. IEC and every vendor are case-*insensitive*, so a user arriving from
   any of them has a correct prior. M1-3 adds a diagnostic for two tags differing only in
   case. **Unblocked — B1 has landed.** The blocker was that while `bst`/`nxb`/`bnd` were
   keywords, case-folding made `BST` a name and `bst` a keyword. The delimiters are
   punctuation now, so there is no keyword left to fold.
+- **Mnemonics are reserved words, in any case.** Decided with M1-2 (September 2026): no
+  tag may be spelled like a mnemonic, so `ote`, `OTE` and `Ote` are never tags. It is
+  what closes `mov src ote`, where the operand list ran on into the next instruction and
+  wrote a tag called `ote`; an operand-signature table alone cannot tell that tag from
+  the instruction. The alternative, leaving every name legal until M1-3's declarations
+  catch an undeclared `ote`, left the worst case open for a milestone. The cost, accepted:
+  each new instruction reserves its name when it lands, and breaks any program with a
+  tag of that name. IEC reserves its keywords case-insensitively too.
 - **`mov` → `move`.** The one existing name the survey changed. The conventional
   toolchain renamed MOV→MOVE in its 2024 conformance sweep *"to conform to IEC
   61131-3 and PLCopen standards"*, and `MOVE` is a genuine IEC standard function; keeping
@@ -1192,7 +1215,7 @@ otherwise.
 | M0-2 | med | tests | No test crosses a stage seam; per-stage fixtures are hand-typed and contradict each other | `end_to_end_test.exs` | **closed** `03c10e0` |
 | M0-5 | med | grammar | `rnd` is a strict infix separator, and a branch leg cannot be empty | `ladder_parser.yrl:8,12,16,21` | **closed** `b65e756` |
 | B1 | med | lexer | Missing space before `nxb` fuses into an identifier — parallel silently becomes series | `ladder_lexer.xrl:8` | **closed** — delimiters are `(` `\|` `)`; guarded by "deleting a space around a delimiter is a no-op" in `end_to_end_test.exs` |
-| M1-2 | med | lowering | No validation pass: unknown mnemonic → bare `MatchError`; short arity → truncated IR; and `mov src ote` silently eats the next mnemonic as a tag, no error, energised rung | `instructionize/1`, name clause | open |
+| M1-2 | med | lowering | No validation pass: unknown mnemonic → bare `MatchError`; short arity → truncated IR; and `mov src ote` silently eats the next mnemonic as a tag, no error, energised rung | `instructionize/1`, name clause | **closed** — a located diagnostic for each case, every mistake in a routine reported (`validation_test.exs`) |
 | M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | `evaluate/2`, xic+xio clauses | open |
 | B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `Logex.Lexer`, the whitespace clause (was `ladder_lexer.xrl:6,10`) | open |
 | M0-4 | low | lexer | `NAME` regex: `+` rejects single-char tags; `a-zA-z` typo admits ``[ \ ] ^ ` `` | `ladder_lexer.xrl:5` | **closed** `3f3b104` |

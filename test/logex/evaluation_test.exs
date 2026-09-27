@@ -10,13 +10,19 @@ defmodule Logex.EvaluationTest do
            [
              {:branches,
               [
-                [{:xio, [{:name, 2, "bit0"}]}, {:mov, [{:name, 2, "aa"}, {:name, 2, "bb"}]}],
-                [{:xic, [{:name, 2, "bit0"}]}, {:mov, [{:int_lit, 2, 123}, {:name, 2, "dd"}]}]
+                [
+                  {:xio, 2, [{:name, 2, "bit0"}]},
+                  {:mov, 2, [{:name, 2, "aa"}, {:name, 2, "bb"}]}
+                ],
+                [
+                  {:xic, 2, [{:name, 2, "bit0"}]},
+                  {:mov, 2, [{:int_lit, 2, 123}, {:name, 2, "dd"}]}
+                ]
               ]},
              {:branches,
               [
-                [{:xic, [{:name, 2, "bit1"}]}, {:ote, [{:name, 2, "xx"}]}],
-                [{:xio, [{:name, 2, "bit1"}]}, {:ote, [{:name, 2, "yy"}]}]
+                [{:xic, 2, [{:name, 2, "bit1"}]}, {:ote, 2, [{:name, 2, "xx"}]}],
+                [{:xio, 2, [{:name, 2, "bit1"}]}, {:ote, 2, [{:name, 2, "yy"}]}]
               ]}
            ]}
         ]}}
@@ -55,13 +61,19 @@ defmodule Logex.EvaluationTest do
            [
              {:branches,
               [
-                [{:xio, [{:name, 2, "bit0"}]}, {:mov, [{:name, 2, "aa"}, {:name, 2, "bb"}]}],
-                [{:xic, [{:name, 2, "bit0"}]}, {:mov, [{:int_lit, 2, 123}, {:name, 2, "dd"}]}]
+                [
+                  {:xio, 2, [{:name, 2, "bit0"}]},
+                  {:mov, 2, [{:name, 2, "aa"}, {:name, 2, "bb"}]}
+                ],
+                [
+                  {:xic, 2, [{:name, 2, "bit0"}]},
+                  {:mov, 2, [{:int_lit, 2, 123}, {:name, 2, "dd"}]}
+                ]
               ]},
              {:branches,
               [
-                [{:xic, [{:name, 2, "bit1"}]}, {:otu, [{:name, 2, "xx"}]}],
-                [{:xio, [{:name, 2, "bit1"}]}, {:otl, [{:name, 2, "yy"}]}]
+                [{:xic, 2, [{:name, 2, "bit1"}]}, {:otu, 2, [{:name, 2, "xx"}]}],
+                [{:xio, 2, [{:name, 2, "bit1"}]}, {:otl, 2, [{:name, 2, "yy"}]}]
               ]}
            ]}
         ]}}

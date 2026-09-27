@@ -19,14 +19,16 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 ## Key Files
 
 - `lib/logex/compiler.ex` — the pipeline: `tokenize/1` and `parse/1` delegate to the two
-  modules below; `instructionize/1` and `evaluate/2` live here
+  modules below; `instructionize/1` (which checks every instruction against its operand
+  signature and returns `{:ok, ir}` or `{:error, [%Logex.Diagnostic{}]}`) and
+  `evaluate/2` live here
 - `lib/logex/lexer.ex` / `lib/logex/parser.ex` — the front end, written by hand: binary
   pattern matching, and recursive descent (the parser's moduledoc gives the grammar and
   which function parses each production). There is no generator, so nothing reports a
   grammar conflict: **a new syntax form goes into `printer_test.exs`'s generator and
   `@required_shapes` before it lands**, and the golden record below must stay green.
 - `lib/logex/printer.ex` — the parse AST back to canonical source text
-- Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`
+- Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`; `validation_test.exs` holds every diagnostic `instructionize/1` gives, driven from source
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see — making a lone CR end a rung
@@ -54,7 +56,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 ## Conventions
 
 - `evaluate/2` clauses take `(instruction, {power_flow_bool, env_map})` and return `{new_power_flow_bool, new_env_map}`
-- An operand in the AST is `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. The lexer's tokens carry `{line, column}`; the parser keeps only the line, because the suite pins that shape. A `{:branches, legs}` node and an instruction tuple `{symbol, args}` carry no line of their own
+- An operand in the AST is `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. The lexer's tokens carry `{line, column}`; the parser keeps only the line, because the suite pins that shape. An instruction in the IR is `{symbol, line, operands}`, carrying its mnemonic's line; a `{:branches, legs}` node carries no line of its own
 - New instructions, step 1 — **survey the name before writing any code**: add a
   ``### `mnemonic` `` stanza to `docs/naming.md` (IEC 61131-3 element, function or
   function block with clause and table number, then the major vendor toolchains, then the
@@ -64,8 +66,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   **(3)** never invent a readable word for a thing that already has a standard name. Mark
   what you could not verify `unverified`; never guess. `test/logex/naming_test.exs` fails
   if a mnemonic reaches `@instructions` unsurveyed.
-- New instructions, step 2: add to the `@instructions` map in `compiler.ex` **and** two
-  `evaluate/2` clauses — one for `{true, env}` and one for `{false, env}`. The
+- New instructions, step 2: add the mnemonic and its operand signature (`:tag` or
+  `:value` per operand) to the `@instructions` map in `compiler.ex` **and** two
+  `evaluate/2` clauses — one for `{true, env}` and one for `{false, env}`. The map also
+  reserves the name: no tag may be spelled like a mnemonic, in any case, so a new
+  instruction breaks any program with a tag of that name — say so in the commit. The
   de-energised clause is mandatory: without it the instruction works on an energised
   rung and raises `FunctionClauseError` the moment a contact opens.
 - A fix needs a test that **fails when the fix is reverted**. Check it by reverting, not by

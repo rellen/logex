@@ -8,10 +8,9 @@ compiler is four small modules.
 **Stage: early, and honest about it.** Six instructions, parallel branches to arbitrary
 nesting depth, correct latch/unlatch retention, power flow that resets per rung, and a
 printer that turns an AST back into source so a routine round-trips — all of that works and
-is tested end to end. What does not exist yet: a public API (you call
-the compiler stages yourself), any validation at all (an unknown mnemonic raises
-`MatchError`, not a diagnostic, and names neither the mnemonic nor the line), a tag table
-with types, timers and counters, and a scan loop — one `evaluate/2` call is exactly one
+is tested end to end, and a routine with mistakes in it gets every one reported with its
+line rather than an exception. What does not exist yet: a public API (you call the
+compiler stages yourself), a tag table with types, timers and counters, and a scan loop — one `evaluate/2` call is exactly one
 scan. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
 what order it gets fixed, and why.
 
@@ -22,8 +21,10 @@ become an importer.**
 
 Source syntax today:
 
-- lowercase mnemonics, operands separated by spaces — and a number must be followed by one:
-  `mov 1bst aa` is an error naming `1bst`, not the number `1` and a tag `bst`
+- mnemonics in any case (`xic`, `XIC`), and reserved: no tag may be named after one, in
+  any case, so `ote` and `Ote` are never tags
+- operands separated by spaces — and a number must be followed by one: `mov 1bst aa` is an
+  error naming `1bst`, not the number `1` and a tag `bst`
 - no operand parentheses, no terminator
 - a newline ends a rung
 - `(` … `|` … `)` open, separate and close a parallel branch group
@@ -84,6 +85,15 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `mov 123 hh` | source, destination | copies a literal or a tag into a tag |
 | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
 
+Each instruction's operands are checked against this table, and every mistake in a
+routine is reported with its line, in source order. `mov src ote` is two mistakes, since
+`ote` cannot be a tag:
+
+```
+line 1: `mov` expects 2 operands (a value, then a tag), found 1 — `ote` is an instruction, not a tag
+line 1: `ote` expects 1 operand (a tag), found none
+```
+
 Two behaviours that are deliberate rather than accidental: branches do **not**
 short-circuit, so a later leg's `ote` and `mov` still take effect after an earlier leg is
 already true; and the environment threads through the legs in order, so a leg can see what
@@ -101,7 +111,7 @@ change the source language:
 - **`mov` becomes `move`,** following its own source's 2024 rename to the IEC standard
   function name.
 - **`//` starts a comment**; `.` gives member access (`t1.dn`, `word.3`); negative integer
-  literals lex; mnemonics become case-insensitive while tags stay case-sensitive.
+  literals lex.
 - **Timers, counters, comparisons and math** arrive as `ton tof tp rto res`, `ctu ctd`,
   `eq ne lt gt le ge`, `add sub mul div mod abs sqrt neg` — IEC names wherever IEC names
   the operation. `rto`, `res` and `neg` are the exceptions: the standard has no retentive
@@ -135,8 +145,8 @@ scan = fn env ->
   {:ok, tokens, _} = Logex.Compiler.tokenize(source)
   {:ok, ast} = Logex.Compiler.parse(tokens)
 
-  {_power_flow, env} =
-    ast |> Logex.Compiler.instructionize() |> Logex.Compiler.evaluate({true, env})
+  {:ok, ir} = Logex.Compiler.instructionize(ast)
+  {_power_flow, env} = Logex.Compiler.evaluate(ir, {true, env})
 
   env
 end

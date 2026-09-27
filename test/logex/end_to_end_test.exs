@@ -16,12 +16,16 @@ defmodule Logex.EndToEndTest do
     {:ok, tokens, _} = Logex.Compiler.tokenize(src)
     {:ok, ast} = Logex.Compiler.parse(tokens)
 
-    {_power_flow, new_env} =
-      ast
-      |> Logex.Compiler.instructionize()
-      |> Logex.Compiler.evaluate({true, env})
+    {:ok, ir} = Logex.Compiler.instructionize(ast)
+    {_power_flow, new_env} = Logex.Compiler.evaluate(ir, {true, env})
 
     new_env
+  end
+
+  defp compile(src) do
+    {:ok, tokens, _} = Logex.Compiler.tokenize(src)
+    {:ok, ast} = Logex.Compiler.parse(tokens)
+    Logex.Compiler.instructionize(ast)
   end
 
   defp rung_count(src) do
@@ -163,11 +167,10 @@ defmodule Logex.EndToEndTest do
     test "an old bst program names the word and its line rather than dying in Map.get" do
       # B1's migration is otherwise silent: `bst` is an ordinary tag name now, so
       # an old program is no longer a syntax error and reaches instructionize/1,
-      # where `Map.get(@instructions, "bst")` returns nil and the bare MatchError
-      # names neither the word nor the line.
-      assert_raise ArgumentError, ~r/line 2: `bst` is no longer a keyword/, fn ->
-        run("xic aa ote bb\nbst xic cc nxb xic dd bnd ote ee", %{})
-      end
+      # where `Map.get(@instructions, "bst")` returned nil and the bare MatchError
+      # named neither the word nor the line.
+      assert {:error, [first | _]} = compile("xic aa ote bb\nbst xic cc nxb xic dd bnd ote ee")
+      assert Logex.Diagnostic.format(first) =~ ~r/^line 2: `bst` is no longer a keyword/
     end
   end
 

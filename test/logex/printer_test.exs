@@ -98,11 +98,8 @@ defmodule Logex.PrinterTest do
       no_legs = {:rung, [{:branches, []}, {:name, 1, "ote"}, {:name, 1, "xx"}]}
       {:routine, {:rungs, [one_empty]}} = parse!("( ) ote xx")
 
-      assert {false, %{"xx" => 0}} =
-               Compiler.evaluate(Compiler.instructionize(no_legs), {true, %{}})
-
-      assert {true, %{"xx" => 1}} =
-               Compiler.evaluate(Compiler.instructionize(one_empty), {true, %{}})
+      assert {false, %{"xx" => 0}} = Compiler.evaluate(lower!(no_legs), {true, %{}})
+      assert {true, %{"xx" => 1}} = Compiler.evaluate(lower!(one_empty), {true, %{}})
 
       assert_raise ArgumentError, ~r/no legs/, fn -> Printer.print(no_legs) end
       assert Printer.print(one_empty) == "( ) ote xx"
@@ -122,8 +119,14 @@ defmodule Logex.PrinterTest do
   end
 
   defp run(source, env) do
-    {_, new_env} = Compiler.evaluate(Compiler.instructionize(parse!(source)), {true, env})
+    {:ok, ir} = Compiler.instructionize(parse!(source))
+    {_, new_env} = Compiler.evaluate(ir, {true, env})
     new_env
+  end
+
+  defp lower!(rung) do
+    {:ok, {:routine, {:rungs, [ir]}}} = Compiler.instructionize({:routine, {:rungs, [rung]}})
+    ir
   end
 
   # Printing drops line numbers and re-parsing assigns fresh ones from the printed
