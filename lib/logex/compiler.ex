@@ -11,7 +11,7 @@ defmodule Logex.Compiler do
     "ote" => {:ote, [:tag]},
     "otl" => {:otl, [:tag]},
     "otu" => {:otu, [:tag]},
-    "mov" => {:mov, [:value, :tag]}
+    "move" => {:move, [:value, :tag]}
   }
 
   @doc """
@@ -83,10 +83,14 @@ defmodule Logex.Compiler do
   defp unknown(key, word) when key in @migrated,
     do: "`#{word}` is no longer a keyword — branches are written `( … | … )`"
 
+  # PLAN.md §5: renamed to its IEC 61131-3 name, with no alias.
+  defp unknown("mov", word),
+    do: "unknown instruction `#{word}` — did you mean `move`? (renamed to its IEC name)"
+
   defp unknown(_key, word), do: "unknown instruction `#{word}`"
 
   # Takes up to `n` operands, stopping early at a branch group, at the end of the leg, or
-  # at a mnemonic: that is the next instruction, so `mov src ote bb` leaves `ote bb` intact.
+  # at a mnemonic: that is the next instruction, so `move src ote bb` leaves `ote bb` intact.
   defp take_operands(rest, 0, taken), do: {Enum.reverse(taken), rest}
 
   defp take_operands([{:int_lit, _, _} = literal | rest], n, taken),
@@ -226,11 +230,11 @@ defmodule Logex.Compiler do
     {false, env}
   end
 
-  def evaluate({:mov, _, [arg1, {:name, _, arg2}]}, {true, env}) do
+  def evaluate({:move, _, [arg1, {:name, _, arg2}]}, {true, env}) do
     {true, Map.put(env, arg2, get_arg(env, arg1))}
   end
 
-  def evaluate({:mov, _, _}, {false, env}) do
+  def evaluate({:move, _, _}, {false, env}) do
     {false, env}
   end
 

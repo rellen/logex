@@ -12,13 +12,13 @@ defmodule Logex.InstructionizeTest do
            [
              {:branches,
               [
-                [{:name, 4, "mov"}, {:name, 4, "aa"}, {:name, 4, "bb"}],
-                [{:name, 4, "mov"}, {:name, 4, "cc"}, {:name, 4, "dd"}],
+                [{:name, 4, "move"}, {:name, 4, "aa"}, {:name, 4, "bb"}],
+                [{:name, 4, "move"}, {:name, 4, "cc"}, {:name, 4, "dd"}],
                 [
-                  {:name, 4, "mov"},
+                  {:name, 4, "move"},
                   {:name, 4, "ee"},
                   {:name, 4, "ff"},
-                  {:branches, [[{:name, 4, "mov"}, {:int_lit, 4, 123}, {:name, 4, "hh"}]]}
+                  {:branches, [[{:name, 4, "move"}, {:int_lit, 4, 123}, {:name, 4, "hh"}]]}
                 ]
               ]},
              {:branches,
@@ -40,11 +40,11 @@ defmodule Logex.InstructionizeTest do
                   [
                     {:branches,
                      [
-                       [{:mov, 4, [{:name, 4, "aa"}, {:name, 4, "bb"}]}],
-                       [{:mov, 4, [{:name, 4, "cc"}, {:name, 4, "dd"}]}],
+                       [{:move, 4, [{:name, 4, "aa"}, {:name, 4, "bb"}]}],
+                       [{:move, 4, [{:name, 4, "cc"}, {:name, 4, "dd"}]}],
                        [
-                         {:mov, 4, [{:name, 4, "ee"}, {:name, 4, "ff"}]},
-                         {:branches, [[{:mov, 4, [{:int_lit, 4, 123}, {:name, 4, "hh"}]}]]}
+                         {:move, 4, [{:name, 4, "ee"}, {:name, 4, "ff"}]},
+                         {:branches, [[{:move, 4, [{:int_lit, 4, 123}, {:name, 4, "hh"}]}]]}
                        ]
                      ]},
                     {:branches,

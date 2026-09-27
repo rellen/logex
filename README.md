@@ -23,7 +23,7 @@ Source syntax today:
 
 - mnemonics in any case (`xic`, `XIC`), and reserved: no tag may be named after one, in
   any case, so `ote` and `Ote` are never tags
-- operands separated by spaces — and a number must be followed by one: `mov 1bst aa` is an
+- operands separated by spaces — and a number must be followed by one: `move 1bst aa` is an
   error naming `1bst`, not the number `1` and a tag `bst`
 - no operand parentheses, no terminator
 - a newline ends a rung
@@ -82,20 +82,20 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `ote xx` | tag | output energize — writes 1 on a true rung and **0 on a false rung** |
 | `otl xx` | tag | output latch — writes 1 on a true rung, leaves the tag alone otherwise |
 | `otu xx` | tag | output unlatch — writes 0 on a true rung, leaves the tag alone otherwise |
-| `mov 123 hh` | source, destination | copies a literal or a tag into a tag |
+| `move 123 hh` | source, destination | copies a literal or a tag into a tag (`mov` until M1-2; it now gets a diagnostic pointing here) |
 | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
 
 Each instruction's operands are checked against this table, and every mistake in a
-routine is reported with its line, in source order. `mov src ote` is two mistakes, since
+routine is reported with its line, in source order. `move src ote` is two mistakes, since
 `ote` cannot be a tag:
 
 ```
-line 1: `mov` expects 2 operands (a value, then a tag), found 1 — `ote` is an instruction, not a tag
+line 1: `move` expects 2 operands (a value, then a tag), found 1 — `ote` is an instruction, not a tag
 line 1: `ote` expects 1 operand (a tag), found none
 ```
 
 Two behaviours that are deliberate rather than accidental: branches do **not**
-short-circuit, so a later leg's `ote` and `mov` still take effect after an earlier leg is
+short-circuit, so a later leg's `ote` and `move` still take effect after an earlier leg is
 already true; and the environment threads through the legs in order, so a leg can see what
 an earlier leg wrote. Both match how a real controller scans a rung.
 
@@ -108,8 +108,6 @@ never written — reads false for *both*. See `PLAN.md` M1-4.
 These are decided (see [`docs/naming.md`](docs/naming.md) and `PLAN.md` §5) and will
 change the source language:
 
-- **`mov` becomes `move`,** following its own source's 2024 rename to the IEC standard
-  function name.
 - **`//` starts a comment**; `.` gives member access (`t1.dn`, `word.3`); negative integer
   literals lex.
 - **Timers, counters, comparisons and math** arrive as `ton tof tp rto res`, `ctu ctd`,
@@ -129,7 +127,7 @@ Neither file below is in the repository — create them to follow along.
 xic motor ote run_lamp
 xic overtemp otl fault
 xic reset otu fault
-xic fault mov 0 speed_sp
+xic fault move 0 speed_sp
 ```
 
 Rung 1 is the seal-in: `start` OR `motor` itself, AND not `stop`. Because `ote` is

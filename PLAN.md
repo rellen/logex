@@ -54,7 +54,7 @@ them and holds everything downstream; `Logex.Printer` turns a parse AST back int
 ### What works
 
 - Series contacts, parallel branches to arbitrary nesting depth.
-- `xic`, `xio`, `ote`, `otl`, `otu`, `mov` with **correct** latch/unlatch retention semantics.
+- `xic`, `xio`, `ote`, `otl`, `otu`, `move` with **correct** latch/unlatch retention semantics.
 - Multi-rung routines, with power flow correctly reset per rung.
 - Driven one `evaluate/2` call per scan, a correct seal-in motor circuit.
 
@@ -87,7 +87,7 @@ silently, and one that gives an unusable error.
 
 - **`xic` and `xio` are not complementary.** Two independent *positive* tests, so a tag
   holding anything outside `{0,1}` — or no value at all — reads false for both. Reachable
-  from source: `mov 250 sp xic sp ote hi` → `hi=0`, and `mov 250 sp xio sp ote lo` →
+  from source: `move 250 sp xic sp ote hi` → `hi=0`, and `move 250 sp xio sp ote lo` →
   `lo=0`. See M1-4.
 - **A missing space before `nxb` silently turned OR into AND.** ***Closed — §4·B1.***
   `bst xic aa nxb xic bb bnd ote dd` with `aa=0,bb=1` gave `dd=1`; deleting the one space
@@ -588,10 +588,10 @@ After a validator, a formatter and a language server exist this touches all of t
 
 ### M1-2 · A validation pass
 
-**Status: the validation pass has landed; the `mov` → `move` rename is next.**
+**Status: DONE — `e569113` (the validation pass) and the `mov` → `move` rename after it.**
 `instructionize/1` returns `{:ok, ir}` or `{:error, diagnostics}`: every
 `%Logex.Diagnostic{line:, message:}` in the routine, in source order. `@instructions` maps
-each mnemonic to an operand signature (`"mov" => {:mov, [:value, :tag]}`), and every case
+each mnemonic to an operand signature (`"move" => {:move, [:value, :tag]}`), and every case
 in the table below is a located diagnostic, each pinned in `validation_test.exs`. The open
 call at the end of this item was decided for the instruction tuple: it is
 `{symbol, line, operands}` now, so a later pass can cite a line too. One decision was
@@ -682,7 +682,7 @@ undefined -> hi=0 lo=0     wrong: (Map.get default nil)
 A bit that answers false to both "is it set?" and "is it clear?" is unrepresentable on
 real hardware — an interlock guarded by `xio` simply never fires, silently. This is
 reachable from source **today** via an undefined tag, and becomes reachable via
-`mov 250 setpoint` since M0-1 landed in `690fc2d`: it stores `250`, and then both
+`move 250 setpoint` (then `mov`) since M0-1 landed in `690fc2d`: it stores `250`, and then both
 `xic setpoint` and `xio setpoint` read false.
 
 ```elixir
@@ -699,7 +699,7 @@ defp bit(env, name), do: Map.get(env, name, 0) not in [0, nil]
 
 # REPLACES the existing `defp get_arg(env, {:name, _, name})` clause — not an addition.
 # Pasted as a second clause it compiles with warnings, leaves the old clause first,
-# and `mix test` stays green because nothing covers `mov` from an undefined tag.
+# and `mix test` stays green because nothing covers `move` from an undefined tag.
 defp get_arg(env, {:name, _, name}), do: Map.get(env, name, 0)
 ```
 
@@ -713,7 +713,7 @@ t=5       xic=1  xio=0   ok        mov nosuch dst -> %{"dst" => 0}
 
 Two things this block decides, neither obvious. **(a)** `Map.get/3`'s default only covers
 an *absent* key, and absent is not the only way a non-bit reaches `env`: `get_arg/2`
-(its `{:name, _, name}` clause) is a bare `Map.get/2`, so `mov undefined_tag dst` stores `nil` today.
+(its `{:name, _, name}` clause) is a bare `Map.get/2`, so `move undefined_tag dst` stores `nil` today.
 With a plain `!= 0` the sketch reads such a tag as a **closed** `xic` contact — trading a
 contact that never closes for one that closes on a typo — so harden both sites together,
 as above. **(b)** `not in [0, nil]` is nonzero-is-true, which is a *dialect choice*, not a
@@ -974,8 +974,8 @@ right rather than merely plausible.
   94.59%, and `Logex.Lexer`, `Logex.Parser` and `Logex.Printer` 100%.
 
 - **B7 · Style.** Five `{false, env}` clauses with identical *bodies*
-  (`xic`, `xio`, `otl`, `otu`, `mov` — the heads differ) collapse to one guard clause
-  `when op in [:xic, :xio, :otl, :otu, :mov]`; `ote`'s own `{false, env}` clause
+  (`xic`, `xio`, `otl`, `otu`, `move` — the heads differ) collapse to one guard clause
+  `when op in [:xic, :xio, :otl, :otu, :move]`; `ote`'s own `{false, env}` clause
   writes 0, so it stays. The guard keeps it from shadowing `{:routine, …}`, `{:rung, …}`
   or `{:branches, …}`, so it is safe anywhere in the clause list. It does **not** remove
   the new-instruction trap, it *moves* it. M0-3 landed the mandatory-`{false, env}` warning
@@ -1124,7 +1124,8 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   catch an undeclared `ote`, left the worst case open for a milestone. The cost, accepted:
   each new instruction reserves its name when it lands, and breaks any program with a
   tag of that name. IEC reserves its keywords case-insensitively too.
-- **`mov` → `move`.** The one existing name the survey changed. The conventional
+- **`mov` → `move`.** **Landed with M1-2**, with no alias: `mov` is an unknown
+  instruction whose diagnostic says *"did you mean `move`?"*. The one existing name the survey changed. The conventional
   toolchain renamed MOV→MOVE in its 2024 conformance sweep *"to conform to IEC
   61131-3 and PLCopen standards"*, and `MOVE` is a genuine IEC standard function; keeping
   `mov` pins logex to a spelling that convention has itself retired.

@@ -54,7 +54,7 @@ defmodule Logex.PrinterTest do
       ( xic start | xic motor ) xio stop ote motor
       xic motor ote run_lamp
       xic overtemp otl fault
-      xic fault mov 0 speed_sp
+      xic fault move 0 speed_sp
       """
 
       env = %{"start" => 1, "stop" => 0, "overtemp" => 1}

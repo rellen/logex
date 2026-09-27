@@ -26,29 +26,29 @@ defmodule Logex.ValidationTest do
     test "a missing operand is counted" do
       assert errors("ote") == ["line 1: `ote` expects 1 operand (a tag), found none"]
 
-      assert errors("mov src") == [
-               "line 1: `mov` expects 2 operands (a value, then a tag), found 1"
+      assert errors("move src") == [
+               "line 1: `move` expects 2 operands (a value, then a tag), found 1"
              ]
     end
 
     test "a mnemonic is never taken as an operand" do
       # The worst case: no exception, and a coil became a tag called `ote`.
-      assert errors("mov src ote") == [
-               "line 1: `mov` expects 2 operands (a value, then a tag), found 1 — " <>
+      assert errors("move src ote") == [
+               "line 1: `move` expects 2 operands (a value, then a tag), found 1 — " <>
                  "`ote` is an instruction, not a tag",
                "line 1: `ote` expects 1 operand (a tag), found none"
              ]
 
       # Stopping at the mnemonic keeps the instruction after it intact.
-      assert errors("mov src ote bb") == [
-               "line 1: `mov` expects 2 operands (a value, then a tag), found 1 — " <>
+      assert errors("move src ote bb") == [
+               "line 1: `move` expects 2 operands (a value, then a tag), found 1 — " <>
                  "`ote` is an instruction, not a tag"
              ]
     end
 
     test "a literal where a tag must go is named" do
       assert errors("ote 7") == ["line 1: `ote` expects a tag, found `7`"]
-      assert errors("mov 1 2") == ["line 1: `mov` expects a tag, found `2`"]
+      assert errors("move 1 2") == ["line 1: `move` expects a tag, found `2`"]
     end
   end
 
@@ -62,6 +62,15 @@ defmodule Logex.ValidationTest do
                "line 1: `xic` expects 1 operand (a tag), found none — " <>
                  "`OTE` is an instruction, not a tag",
                "line 1: `OTE` expects 1 operand (a tag), found none"
+             ]
+    end
+
+    test "the old `mov` is not an alias: it is named, and pointed at `move`" do
+      message = "unknown instruction `mov` — did you mean `move`? (renamed to its IEC name)"
+      assert errors("mov 1 aa") == ["line 1: " <> message]
+
+      assert errors("xic bb\nMOV aa cc") == [
+               "line 2: " <> String.replace(message, "`mov`", "`MOV`")
              ]
     end
 
@@ -97,8 +106,8 @@ defmodule Logex.ValidationTest do
 
   describe "the IR" do
     test "every instruction carries its mnemonic's line" do
-      assert {:ok, {:routine, {:rungs, [{:rung, [{:xic, 3, _}, {:mov, 3, _}]}]}}} =
-               compile("\n\nxic aa mov 1 bb")
+      assert {:ok, {:routine, {:rungs, [{:rung, [{:xic, 3, _}, {:move, 3, _}]}]}}} =
+               compile("\n\nxic aa move 1 bb")
     end
   end
 

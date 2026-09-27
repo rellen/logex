@@ -12,11 +12,11 @@ defmodule Logex.EvaluationTest do
               [
                 [
                   {:xio, 2, [{:name, 2, "bit0"}]},
-                  {:mov, 2, [{:name, 2, "aa"}, {:name, 2, "bb"}]}
+                  {:move, 2, [{:name, 2, "aa"}, {:name, 2, "bb"}]}
                 ],
                 [
                   {:xic, 2, [{:name, 2, "bit0"}]},
-                  {:mov, 2, [{:int_lit, 2, 123}, {:name, 2, "dd"}]}
+                  {:move, 2, [{:int_lit, 2, 123}, {:name, 2, "dd"}]}
                 ]
               ]},
              {:branches,
@@ -63,11 +63,11 @@ defmodule Logex.EvaluationTest do
               [
                 [
                   {:xio, 2, [{:name, 2, "bit0"}]},
-                  {:mov, 2, [{:name, 2, "aa"}, {:name, 2, "bb"}]}
+                  {:move, 2, [{:name, 2, "aa"}, {:name, 2, "bb"}]}
                 ],
                 [
                   {:xic, 2, [{:name, 2, "bit0"}]},
-                  {:mov, 2, [{:int_lit, 2, 123}, {:name, 2, "dd"}]}
+                  {:move, 2, [{:int_lit, 2, 123}, {:name, 2, "dd"}]}
                 ]
               ]},
              {:branches,

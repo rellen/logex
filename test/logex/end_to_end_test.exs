@@ -42,17 +42,17 @@ defmodule Logex.EndToEndTest do
   defp lex_error?(src), do: match?({:error, _, _}, Logex.Compiler.tokenize(src))
 
   describe "integer literals" do
-    test "mov of a literal writes the literal" do
-      assert %{"dd" => 123} = run("mov 123 dd", %{"dd" => 0})
+    test "move of a literal writes the literal" do
+      assert %{"dd" => 123} = run("move 123 dd", %{"dd" => 0})
     end
 
-    test "mov of a tag copies the tag" do
-      assert %{"dd" => 7} = run("mov aa dd", %{"aa" => 7})
+    test "move of a tag copies the tag" do
+      assert %{"dd" => 7} = run("move aa dd", %{"aa" => 7})
     end
 
     test "the showcase routine from lex_and_parse_test.exs" do
       src =
-        "( mov aa bb | mov cc dd | mov ee ff ( mov 123 hh ) ) " <>
+        "( move aa bb | move cc dd | move ee ff ( move 123 hh ) ) " <>
           "( ote xx | ote yy )"
 
       assert %{
@@ -158,10 +158,10 @@ defmodule Logex.EndToEndTest do
 
       # The same deletion against an operand rather than a contact: this one used
       # to write to a tag named `dstnxb` and leave `dst` alone.
-      assert run("( mov src dst | xic bb ) ote ee", %{"src" => 9}) ==
-               run("( mov src dst|xic bb ) ote ee", %{"src" => 9})
+      assert run("( move src dst | xic bb ) ote ee", %{"src" => 9}) ==
+               run("( move src dst|xic bb ) ote ee", %{"src" => 9})
 
-      assert %{"dst" => 9} = run("( mov src dst|xic bb ) ote ee", %{"src" => 9})
+      assert %{"dst" => 9} = run("( move src dst|xic bb ) ote ee", %{"src" => 9})
     end
 
     test "an old bst program names the word and its line rather than dying in Map.get" do
@@ -213,7 +213,7 @@ defmodule Logex.EndToEndTest do
       src =
         "\n\n( xic aa ote p1 | xic bb ote p2 )\n" <>
           "( xio bb otl q1 | xio aa otl q2 )\n" <>
-          "xic aa otu r1 mov 5 s1 mov s1 s2"
+          "xic aa otu r1 move 5 s1 move s1 s2"
 
       env = run(src, %{"aa" => 1, "bb" => 0, "p2" => 1, "r1" => 1})
       assert %{"p1" => 1, "p2" => 0, "q1" => 1, "r1" => 0, "s1" => 5, "s2" => 5} = env

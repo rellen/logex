@@ -279,8 +279,9 @@ narrowing the language.
 
 ## Stanzas
 
-One per mnemonic. The six below are the instructions logex ships today; all were
-surveyed retrospectively, in the commit that introduced this file.
+One per mnemonic. The first six below are the instructions logex shipped when this file
+was written; all were surveyed retrospectively, in the commit that introduced it. `move`,
+at the end, has since replaced `mov`.
 
 ### `xic` — examine if closed (normally-open contact)
 
@@ -375,3 +376,18 @@ surveyed retrospectively, in the commit that introduced this file.
 
 **Status: recommended, not applied.** Renaming is a source-language break and is deliberately not bundled with this survey. `PLAN.md` schedules it alongside the M1-2 validator, so the unknown-mnemonic diagnostic can carry *"did you mean `move`?"* — cheaper than an alias, and it exercises the validator.
 **Checked:** 2026-08-30 — the vendor instruction-set reference (Sept 2025 revision), rename list and MOVE operand table; IEC 61131-3 standard function library; Siemens A5E02486680; Mitsubishi SH(NA)-081266ENG.
+
+### `move` — move a value into a tag
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `move 123 hh`, `move aa hh` | Source then destination. Copies an integer literal or a tag into a tag. Replaces `mov`, which is now an unknown instruction whose diagnostic points here; there is no alias. |
+| IEC 61131-3 | **MOVE** | A standard function, not a graphical element. ST assignment `:=` is the idiomatic form. |
+| Conventional | **MOVE** (formerly **MOV**) | Renamed in the 2024 conformance sweep *"to conform to IEC 61131-3 and PLCopen standards"*. Operand order `MOVE(Source, Dest)`. |
+| Siemens STEP 7 / TIA Portal LAD | **MOVE** | `IN` → `OUT`, i.e. source then destination. |
+| CODESYS | **MOVE** | IEC standard function. |
+| Mitsubishi GX Works | **MOV** | `MOV s d` — source then destination. |
+
+**Chosen:** `move`
+**Why:** Rule 1: IEC names this operation MOVE, so logex takes the IEC name lowercased. This is the rename the `mov` stanza above recommended and `PLAN.md` §5 settled; it landed with the M1-2 validator, so `mov` gets *"did you mean `move`?"* rather than an alias. The operand order was already source-then-destination and did not change. The rows above are the `mov` survey's findings, carried over unchanged.
+**Checked:** 2026-08-30, by the `mov` stanza above (same sources); not re-checked for this stanza.
