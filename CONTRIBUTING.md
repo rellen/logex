@@ -143,9 +143,11 @@ Two steps, in `CLAUDE.md`, and step 1 has a test behind it.
 
 1. **Survey the name first** — add a stanza to `docs/naming.md`. `test/logex/naming_test.exs`
    fails if a mnemonic reaches `@instructions` without one.
-2. **Then the code** — `@instructions` plus **two** `evaluate/2` clauses. The de-energised
-   `{false, env}` clause is mandatory; without it the instruction works on an energised rung
-   and raises `FunctionClauseError` the moment a contact opens.
+2. **Then the code** — the mnemonic and its operand signature in `@instructions`, plus
+   **two** `evaluate/2` clauses. The de-energised `{false, env}` clause is mandatory;
+   without it the instruction works on an energised rung and raises `FunctionClauseError`
+   the moment a contact opens. The new mnemonic becomes a reserved word, in any case, so it
+   breaks any program with a tag of that name: say so in the commit.
 
 ---
 

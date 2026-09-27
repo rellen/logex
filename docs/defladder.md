@@ -40,7 +40,7 @@ The study had four tasks. Is a DSL correct for a ladder language? Which design m
 
 logex is a ladder logic compiler and interpreter in Elixir, with no dependencies. It reads a routine as text, for example `( xic start | xic motor ) xio stop ote motor`. The lexer (leex, `src/ladder_lexer.xrl`) makes tokens. The parser (yecc, `src/ladder_parser.yrl`) makes an AST. (That was the front end when this study was written. It is now hand-written, as `Logex.Lexer` and `Logex.Parser`: see `PLAN.md` §6.)
 
-`Logex.Compiler.instructionize/1` lowers the AST to an IR. `Logex.Compiler.evaluate/2` runs the IR with a tag map, one call for one scan. The language has six instructions: `xic`, `xio`, `ote`, `otl`, `otu` and `mov`. It has parallel branches to all depths.
+`Logex.Compiler.instructionize/1` lowers the AST to an IR. `Logex.Compiler.evaluate/2` runs the IR with a tag map, one call for one scan. The language has six instructions: `xic`, `xio`, `ote`, `otl`, `otu` and `mov`. It has parallel branches to all depths. (`mov` is `move` since M1-2, and mnemonics are now reserved words, so the DSL examples below that write `mov` need the same rename.)
 
 Each operand in the AST is the lexer token, `{:name, line, "start"}` or `{:int_lit, line, 123}`. Milestone 1 item M1-1 (commit `a22bf39`) put the line in that position. (The AST shape is unchanged since, but the hand-written lexer's tokens carry `{line, column}` and the parser keeps only the line, so an operand is no longer the token itself.) Ten locations in `compiler.ex` read that position as `_`.
 
@@ -100,7 +100,7 @@ The four scans of the README example gave the same output through the text front
 
 The DSL errors are clear. An unknown mnemonic gives `lib/logex/examples/bad_mnemonic.ex:5: unknown instruction xxc`. An incorrect operand count gives `ote takes 1 operand(s), got 0`. A tag that the head does not declare gives `undeclared tag strat`. Each error gives the user's file name and the line of the rung.
 
-The text front end errors are not clear. The text front end gives `MatchError: no match of right hand side value: nil` for the first two errors, with no name and no line. The text front end gives no error for the third.
+The text front end errors are not clear. The text front end gives `MatchError: no match of right hand side value: nil` for the first two errors, with no name and no line. The text front end gives no error for the third. (That was before M1-2. `instructionize/1` now returns a list of `%Logex.Diagnostic{}`, each with its line, and an unknown mnemonic is "unknown instruction" followed by the word; undeclared tags wait for M1-3.)
 
 The spike also made a second variant of 79 lines. It emits one Elixir function for each rung, with no interpreter. Design 2, in section 8, is also 79 lines. The two counts are not related.
 
@@ -132,7 +132,7 @@ The test conventions are also applicable to the DSL. A correction must have a te
 
 An oracle that compares the two ASTs is not sufficient. Two front ends that make the same incorrect IR are equal for that oracle. Only a test from source to tag map can find that error. That is the rule of `test/logex/end_to_end_test.exs`.
 
-The public functions that a DSL uses at this time are `instructions/0` and `tokenize/1`. Backlog item B5 will change the recursive clauses of `instructionize/1` and `evaluate/2` to `defp`. Those two functions are not on the list of functions that the DSL uses. Thus, B5 has no effect on the DSL code.
+The public functions that a DSL uses at this time are `instructions/0` and `tokenize/1`. Backlog item B5 will change the recursive clauses of `instructionize/1` and `evaluate/2` to `defp`. (M1-2 has done so for `instructionize/1`, which now returns `{:ok, ir}` or `{:error, diagnostics}`.) Those two functions are not on the list of functions that the DSL uses. Thus, B5 has no effect on the DSL code.
 
 ## 8. The three designs
 
@@ -208,7 +208,7 @@ Thus, the macro must reject an empty rung and a `branch` with no legs. `branch([
 
 The line position contains the caller's integer line and no other data. The file and the module are facts of the routine, not of the operand. They are in M1-5's `%Logex.Program{source:}`. A literal gets the line of its instruction. If a rung continues on more than one line, each operand gets the line number of that operand.
 
-The `branch` call has a line. It is the equivalent of the opening `(` token line that the parser discards. That is the only DSL clause that the decision of M1-2 on the branches node changes.
+The `branch` call has a line. It is the equivalent of the opening `(` token line that the parser discards. That is the only DSL clause that the decision of M1-2 on the branches node changes. (M1-2 left the branches node alone and gave the instruction tuple a line instead, `{symbol, line, operands}`, so this clause does not change.)
 
 Errors use `raise CompileError, file: __CALLER__.file, line: line, description: text`, with the line of the node, and not the line of the macro. A `when` head is an error with a line. A `__define__` call that runs before the `def` finds a second `defladder` with the same name and gives an error with a line. A declared tag that the body does not use is not a warning, because the `--warnings-as-errors` gate rejects an `IO.warn` from a macro. The panel executed that.
 
@@ -240,7 +240,7 @@ Errors use `raise CompileError, file: __CALLER__.file, line: line, description: 
 | Item | Effect |
 |---|---|
 | M1-1 (done) | The necessary prerequisite: a line in each operand. It is complete in commits `a22bf39` and `1b1b1df`. |
-| M1-2 | Precondition of B9. After M1-2, remove the eight-line arity check of the macro and call the one validator. The decision of M1-2 on the branches node changes one DSL clause. |
+| M1-2 | Precondition of B9. After M1-2, remove the eight-line arity check of the macro and call the one validator. The decision of M1-2 on the branches node changes one DSL clause. (M1-2 has landed: `instructions/0` now returns operand signatures, not arities, and the branches node is unchanged.) |
 | M1-3 | Add one sentence: a second declarer of tags will exist, and the DSL head can contain `start :: bool` as data. The head declarations must also be in the output by then, because `name/0` discards them at this time. |
 | M1-4 | No effect. The correction is in the evaluator only. If the maintainer accepts a backend subsequently, `bit/2` must be public and `evaluate/2` must call it. |
 | M1-5 | Precondition of B9. Add one sentence: `Logex.compile/1` must also operate on an AST, and `source:` must have a module variant. The doctest can contain the seal-in in the two spellings. |

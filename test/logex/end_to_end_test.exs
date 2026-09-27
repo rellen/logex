@@ -2,10 +2,10 @@ defmodule Logex.EndToEndTest do
   @moduledoc """
   Drives ladder source all the way to an environment.
 
-  Every other test in this suite hand-types the input to a single stage, so a
-  mismatch at a stage boundary is invisible to all of them — which is how the
-  `:lit_int` / `:int_lit` transposition survived six commits (`0f7d77f`
-  through `6dbbdd7`) with a green suite. The *assertions* here name no IR tag:
+  When it was written, every other test in this suite hand-typed the input to a
+  single stage, so a mismatch at a stage boundary was invisible to all of them —
+  which is how the `:lit_int` / `:int_lit` transposition survived six commits
+  (`0f7d77f` through `6dbbdd7`) with a green suite. The *assertions* here name no IR tag:
   they can only be satisfied by the stages actually agreeing with each other.
   One helper, `rung_count/1`, matches the `{:routine, {:rungs, _}}` wrapper —
   that is the only AST shape in the file.

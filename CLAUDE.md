@@ -28,6 +28,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   grammar conflict: **a new syntax form goes into `printer_test.exs`'s generator and
   `@required_shapes` before it lands**, and the golden record below must stay green.
 - `lib/logex/printer.ex` — the parse AST back to canonical source text
+- `lib/logex/diagnostic.ex` — `%Logex.Diagnostic{line:, message:}`, what `instructionize/1`
+  returns a list of, and `format/1` for the `line N: …` form
 - Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`; `validation_test.exs` holds every diagnostic `instructionize/1` gives, driven from source
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
@@ -38,8 +40,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   language or the generator on purpose, and read the diff:
   `test/fixtures/generate_frontend_golden.exs`.
 - `test/logex/end_to_end_test.exs` drives source to an environment; its *assertions* name
-  no IR tag (one helper matches the `{:routine, {:rungs, _}}` wrapper to count rungs), so it
-  is the only test that crosses every stage boundary. `lex_and_parse_test.exs` starts from a
+  no IR tag (one helper matches the `{:routine, {:rungs, _}}` wrapper to count rungs). It
+  was the first test to cross every stage boundary, and is where a behaviour change is
+  pinned; `validation_test.exs` and `printer_test.exs` also run source to an environment
+  in places. `lex_and_parse_test.exs` starts from a
   source string and so crosses the tokenize→parse seam, but no further; the other two
   hand-type one stage's input and cannot see a seam at all.
 - `README.md` — what logex is, the dialect stance, the instruction table and a worked

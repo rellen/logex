@@ -16,7 +16,7 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
-§1 and §3·M1-1 have been brought current. M1-2 onward is still forward work.
+§1, §3·M1-1 and §3·M1-2 have been brought current. M1-3 onward is still forward work.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -82,8 +82,8 @@ generator stand in. On 1.20.4, `mix format --check-formatted` and
 
 The three things this section listed before Milestone 0 — `mov` with an integer literal,
 any source read from a file, and single-character tag names — all work now; M0-1, M0-5 and
-M0-4 closed them. What is left divides in two: two defects that give *wrong answers*
-silently, and one that gives an unusable error.
+M0-4 closed them. Of the three listed below, two gave *wrong answers* silently and one an
+unusable error; only the first is still open.
 
 - **`xic` and `xio` are not complementary.** Two independent *positive* tests, so a tag
   holding anything outside `{0,1}` — or no value at all — reads false for both. Reachable
@@ -121,7 +121,7 @@ stage-boundary mismatch. M0-1 (`690fc2d`) reconciled the fixtures on `:int_lit` 
 **All five items are landed and merged; nothing in this section is waiting to be done.**
 M0-1 `690fc2d`, M0-2 `03c10e0`, M0-3 `dde8c1d`, M0-4 `3f3b104` (PR #3, merge `22bc81a`);
 M0-5 `b65e756` (PR #4, merge `863af6f`). Re-verified on `main` after M1-1: `mix test` →
-`27 tests, 0 failures`. M1-1 has landed; the next unstarted work is §3·M1-2.
+`27 tests, 0 failures`. M1-1 and M1-2 have landed since; the next unstarted work is §3·M1-3.
 
 The items are kept in full because their diagnoses are the record of *why* the code looks
 the way it does — why the parser drops empty rungs, why `CLAUDE.md` once documented an
@@ -529,8 +529,9 @@ The ordering here matters: each item is cheaper now than after the one below it 
 `{kind, line, value}`. At `a22bf39` it was the token itself — the yecc `elem -> name` and
 `elem -> int_lit` productions passed `'$1'` through and the `Erlang code.` block went.
 Since §6 tokens carry `{line, column}`, and `Logex.Parser`'s `branch/2` builds the elem
-with the line alone. All ten `compiler.ex` sites named
-below destructure the 3-tuple as `{kind, _, value}`. The `{branches, legs}` node carries
+with the line alone. The operand sites named below destructure the 3-tuple as
+`{kind, _, value}`; since M1-2 they are the `evaluate/2` and `get_arg/2` heads, and the
+lowering binds the line to cite it. The `{branches, legs}` node carries
 no line of its own — the opening `(` token's line is dropped in the parser. Instruction
 tuples were `{symbol, args}` until M1-2 widened them to `{symbol, line, operands}`.
 
@@ -985,10 +986,12 @@ right rather than merely plausible.
   `FunctionClauseError`, because the new atom was never added to the whitelist. So if B7 is
   taken, the only doc change left is an addendum to that bullet: "or add the opcode to the
   `{false, env}` guard list instead, when de-energising does nothing". Do not widen the guard to a bare
-  `{_op, _args}` catch-all: it closes this hole but reopens the one M1-2 flags, and above
-  `{:routine, …}` it swallows `{:branches, …}` on a de-energised rung and leaves the coils
-  latched. `&instructionize(&1)` → `&instructionize/1`
-  (both `instructionize/1` captures). `Enum.any?(outputs, fn o -> o == true end)` →
+  catch-all. Since M1-2 an instruction is `{op, line, operands}`, so `{_op, _, _}` can no
+  longer swallow `{:branches, …}`, and validation rejects the truncated instructions it
+  used to let through; but it would still turn a forgotten de-energised clause, loud
+  today, into a silent do-nothing — wrong for any coil that must write on a false rung,
+  as `ote` does.
+  `Enum.any?(outputs, fn o -> o == true end)` →
   accumulate the boolean directly and drop the reversed intermediate list in the
   `{:branches, _}` reducer — but keep the fold
   non-short-circuiting: any form that puts `evaluate` on the right of `or`/`||`, or that
@@ -1216,7 +1219,7 @@ otherwise.
 | M0-2 | med | tests | No test crosses a stage seam; per-stage fixtures are hand-typed and contradict each other | `end_to_end_test.exs` | **closed** `03c10e0` |
 | M0-5 | med | grammar | `rnd` is a strict infix separator, and a branch leg cannot be empty | `ladder_parser.yrl:8,12,16,21` | **closed** `b65e756` |
 | B1 | med | lexer | Missing space before `nxb` fuses into an identifier — parallel silently becomes series | `ladder_lexer.xrl:8` | **closed** — delimiters are `(` `\|` `)`; guarded by "deleting a space around a delimiter is a no-op" in `end_to_end_test.exs` |
-| M1-2 | med | lowering | No validation pass: unknown mnemonic → bare `MatchError`; short arity → truncated IR; and `mov src ote` silently eats the next mnemonic as a tag, no error, energised rung | `instructionize/1`, name clause | **closed** — a located diagnostic for each case, every mistake in a routine reported (`validation_test.exs`) |
+| M1-2 | med | lowering | No validation pass: unknown mnemonic → bare `MatchError`; short arity → truncated IR; and `mov src ote` silently eats the next mnemonic as a tag, no error, energised rung | `instructionize/1`, name clause | **closed** `e569113` — a located diagnostic for each case, every mistake in a routine reported (`validation_test.exs`) |
 | M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | `evaluate/2`, xic+xio clauses | open |
 | B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `Logex.Lexer`, the whitespace clause (was `ladder_lexer.xrl:6,10`) | open |
 | M0-4 | low | lexer | `NAME` regex: `+` rejects single-char tags; `a-zA-z` typo admits ``[ \ ] ^ ` `` | `ladder_lexer.xrl:5` | **closed** `3f3b104` |
@@ -1228,7 +1231,7 @@ otherwise.
 | B2 | low | lexer | Digit-led lexeme splits rather than erroring: `1bst` → `int_lit(1)` + `name("bst")` | `Logex.Lexer`, the integer clause (was `ladder_lexer.xrl:20`) | **closed** — a located `:missing_separator` lex error naming the whole run |
 | B3 | low | history | 2 commits ship a red suite (`ec0534a`, `35fe1b9`) — an interior island; `d47eb21` is a clean bisect baseline | — | open |
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | open |
-| B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `&f(&1)`; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `evaluate/2` | open |
+| B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `evaluate/2` | open |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
 | §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | open |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed |

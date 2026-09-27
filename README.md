@@ -3,7 +3,7 @@
 A Ladder Logic compiler and interpreter in Elixir. It reads a ladder routine written as
 text, lowers it to instructions, and evaluates it against a tag environment. No
 dependencies and no generated code: the lexer and parser are written by hand, and the whole
-compiler is four small modules.
+compiler is five small modules.
 
 **Stage: early, and honest about it.** Six instructions, parallel branches to arbitrary
 nesting depth, correct latch/unlatch retention, power flow that resets per rung, and a
@@ -22,7 +22,8 @@ become an importer.**
 Source syntax today:
 
 - mnemonics in any case (`xic`, `XIC`), and reserved: no tag may be named after one, in
-  any case, so `ote` and `Ote` are never tags
+  any case, so `ote` and `Ote` are never tags; tags are case-sensitive (`aa` and `AA` are
+  two tags)
 - operands separated by spaces — and a number must be followed by one: `move 1bst aa` is an
   error naming `1bst`, not the number `1` and a tag `bst`
 - no operand parentheses, no terminator

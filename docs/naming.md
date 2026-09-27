@@ -382,7 +382,7 @@ at the end, has since replaced `mov`.
 | Dialect | Name there | Notes |
 |---|---|---|
 | logex | `move 123 hh`, `move aa hh` | Source then destination. Copies an integer literal or a tag into a tag. Replaces `mov`, which is now an unknown instruction whose diagnostic points here; there is no alias. |
-| IEC 61131-3 | **MOVE** | A standard function, not a graphical element. ST assignment `:=` is the idiomatic form. |
+| IEC 61131-3 | **MOVE** | A standard function, not a graphical element: Ed 2:2003 Table 24 feature 18 (arithmetic functions); Ed 3:2013 Table 29 feature 7 and Table 32 feature 1 (selection functions), reclassified between editions, per `docs/instruction-sets.md`. Ed 4 location `unverified`. ST assignment `:=` is the idiomatic form. |
 | Conventional | **MOVE** (formerly **MOV**) | Renamed in the 2024 conformance sweep *"to conform to IEC 61131-3 and PLCopen standards"*. Operand order `MOVE(Source, Dest)`. |
 | Siemens STEP 7 / TIA Portal LAD | **MOVE** | `IN` → `OUT`, i.e. source then destination. |
 | CODESYS | **MOVE** | IEC standard function. |
