@@ -2,7 +2,7 @@
 
 Every logex instruction is named after surveying what IEC 61131-3 and the major vendors
 call the same operation. This file is that survey: the reference tables first, then one
-stanza per mnemonic. It is **append-only** — a stanza with no implementation is fine and
+stanza per mnemonic or declaration word. It is **append-only** — a stanza with no implementation is fine and
 encouraged, so an instruction can be surveyed long before it is built.
 
 `test/logex/naming_test.exs` fails if a mnemonic reaches `@instructions` without a stanza
@@ -52,8 +52,9 @@ because IEC gives those only a picture.
 Copy the template, fill every dialect row, and mark anything you could not check
 `unverified` rather than guessing. New stanzas go at the **end of the file**, under
 `## Stanzas` — the file is append-only and the reference tables above stay where they are.
-A stanza is owed by anything that becomes a key of `@instructions`; syntax tokens like the
-branch delimiters are not instructions and need none. Read across stanzas with
+A stanza is owed by anything that becomes a key of `@instructions`, and by each section or
+type word of a declaration line; syntax tokens like the branch delimiters are not words and
+need none. Read across stanzas with
 `sed -n '/^## Stanzas/,$p' docs/naming.md | grep '^### '` — the reference tables above also
 use `###` headings, so a bare grep matches those too.
 
@@ -279,9 +280,10 @@ narrowing the language.
 
 ## Stanzas
 
-One per mnemonic. The first six below are the instructions logex shipped when this file
-was written; all were surveyed retrospectively, in the commit that introduced it. `move`,
-at the end, has since replaced `mov`.
+One per mnemonic or declaration word. The first six below are the instructions logex
+shipped when this file was written; all were surveyed retrospectively, in the commit that
+introduced it. `move` has since replaced `mov`. The five after it, `var` to `dint`, are the
+words of `PLAN.md` M1-3's declaration lines, surveyed before their code.
 
 ### `xic` — examine if closed (normally-open contact)
 
@@ -391,3 +393,78 @@ at the end, has since replaced `mov`.
 **Chosen:** `move`
 **Why:** Rule 1: IEC names this operation MOVE, so logex takes the IEC name lowercased. This is the rename the `mov` stanza above recommended and `PLAN.md` §5 settled; it landed with the M1-2 validator, so `mov` gets *"did you mean `move`?"* rather than an alias. The operand order was already source-then-destination and did not change. The rows above are the `mov` survey's findings, carried over unchanged.
 **Checked:** 2026-08-30, by the `mov` stanza above (same sources); not re-checked for this stanza.
+
+### `var` — declare an internal tag
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var fault bool`, `var count dint 5` | A declaration line before the first rung: `<section> <name> <type> [<initial>]`. The tag is the program's own, neither supplied from outside nor produced for anyone. With no initial value it starts at 0. |
+| IEC 61131-3 | **VAR** … END_VAR | Ed 2:2003 §2.4.3 Table 16a: *"Internal to organization unit"*; Ed 3:2013 §6.5.2.1 Figure 7: *"Internal to entity (function, function block, etc.)"*. Each declaration inside the block is `name : TYPE := init;`. Keywords match in any case and *"shall not be used for any other purpose, for example, variable names"* (Ed 2 §2.1.3; Ed 3 §6.1.3). |
+| Conventional | **Local** usage — a *local tag* | No sections: one tag list per program, each tag with a Usage of Local, Input, Output, InOut or Public, Local the default (current online help, *Tag Editor columns*). The vendor's own spelling of the internal usage varies: "Local", "Local Tag" (tag-data manual, Nov 2023, p.65), "Local Parameter". An add-on instruction keeps its internal tags on a separate Local Tags tab, a `LOCAL_TAGS` block in the text export (import/export reference, Sept 2025, p.97). |
+| Siemens STEP 7 / TIA Portal LAD | TIA **Static** (FBs, kept in the instance DB) and **Temp** (one cycle); in TIA's SCL textual view, `VAR` … `END_VAR` for static data; classic **stat** and **temp** | TIA Portal Information System, STEP 7 V21 (11/2025), *Overview of the block interface* and *Declaration sections*; classic: *Programming with STEP 7*, A5E41552389-AA (04/2017), §10.2.3 p.225. The tabular view is TIA's default; the textual view exists for SCL blocks. |
+| CODESYS | **VAR** … END_VAR | *"Local variables are declared between the keywords VAR and END_VAR in the declaration part of programming objects."* (Development System help V3.5.22.0, *Variable: VAR*). |
+| Mitsubishi GX Works | **VAR** label class | *"A label that can be used within the range of a declared POU. This label cannot be used in other POUs."* Picked from a pull-down in a tabular label editor, not written as text (MELSEC iQ-R Application SH(NA)-081264ENG-AR §23.3 p.421; GX Works3 SH(NA)-081215ENG-AN §5.2 p.235). iQ-F uses the same class names (JY997D55701M §4.2). |
+
+**Chosen:** `var`
+**Why:** Rule 1: IEC names the section, so logex takes `VAR` lowercased, as CODESYS, Mitsubishi's class names and TIA's textual view already spell it. What logex drops is the block. A section keyword starts every declaration line, so there is no `end_var` to close and no unclosed-block diagnostic. The `:`, `:=` and `;` go as they went for operands. Blocks would reserve `end_var`, so the choice is recorded in `PLAN.md` M1-3.
+**Checked:** 2026-09-28. Sources: IEC 61131-3:2003 §2.1.3 and §2.4.3 Table 16a (p.39), and IEC 61131-3:2013 §6.1.3 and §6.5.2.1 Figure 7 (p.50), both read directly; the conventional family's tag-data manual (Nov 2023), import/export reference (Sept 2025) and current online help; TIA Portal Information System STEP 7 V21 (11/2025); Siemens A5E41552389-AA; CODESYS Development System help V3.5.22.0; Mitsubishi SH(NA)-081264ENG-AR, SH(NA)-081215ENG-AN and JY997D55701M.
+
+### `var_input` — declare a tag supplied from outside
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var_input start bool` | Supplied from outside the program before each scan: in Milestone 1 by the host, later by a configuration's connection (`docs/organisation.md` §4.4). Logic may read it but not write it: `ote`, `otl`, `otu` or `move` naming it is a diagnostic. It takes no initial value. It says nothing about hardware: binding a tag to an I/O point is the configuration's `at` (`docs/organisation.md` §4.5). |
+| IEC 61131-3 | **VAR_INPUT** … END_VAR | Ed 2:2003 §2.4.3 Table 16a: *"Externally supplied, not modifiable within organization unit"*; Ed 3:2013 §6.5.2.1 Figure 7: *"Externally supplied, not modifiable within entity"*. Location is separate: the `AT` keyword (Table 16a) and direct representation such as `%IX0.0` (§2.4.1.1). |
+| Conventional | **Input** program parameter; **Input** add-on-instruction parameter | *"There are four types of program parameters. • Input • Output • InOut • Public"* (program-parameters manual, Mar 2022, p.11). Input values *"are refreshed before each scan of a program"*, and, against IEC's rule, *"A program can write to its own Input parameters"* (same, p.15). Whether an add-on instruction's logic may write its own Input parameter: `unverified`. A table in the online help's parameter-dialog topic bears on it, but can be read either way. |
+| Siemens STEP 7 / TIA Portal LAD | TIA **Input**; SCL `VAR_INPUT`; classic **in** | *"Input parameters may only be read."* (TIA V21, *Rules for supplying block parameters*). For an FC, a write *"does not affect the actual parameter. Only the formal parameter is written."* (*Parameter assignment to functions*). Whether the compiler rejects such a write: `unverified`. |
+| CODESYS | **VAR_INPUT** … END_VAR | Passed by value (*Variable: VAR_INPUT*). Declared `VAR_INPUT CONSTANT`, an input is read-only: *"You have read-only access to constant variables in an implementation."* (*Variable: CONSTANT*). For a plain input, no help page says the compiler rejects a write from inside; the optional Static Analysis rule SA0037 flags one: *"According to the IEC 61131-3 standard, an input variable must not be changed within a POU."* (Static Analysis help V5.2.0.0). |
+| Mitsubishi GX Works | **VAR_INPUT** label class | *"This label receives a value, and the received value cannot be changed in a POU."* (SH(NA)-081264ENG-AR §23.3 p.421; iQ-F JY997D55701M §4.2 p.32 alike). Functions and function blocks only: a program block cannot declare one and shares data through global labels. How the tool enforces the rule: `unverified`. |
+
+**Chosen:** `var_input`
+**Why:** Rule 1, IEC's word lowercased. The no-write rule is IEC's own (*"not modifiable within organization unit"*), and Siemens and Mitsubishi state it too; the conventional family is the exception, and says so. logex rejects the write at compile time. An input is overwritten at the next copy-in, so a write to one is almost always a mistake, such as a seal-in coil pointed at its own button. That no initial value is allowed is logex's choice: allowing one later breaks nothing, and forbidding one later would. The section is not a hardware binding. IEC keeps `AT` separate, and so does logex, in the configuration.
+**Checked:** 2026-09-28. Sources: IEC 61131-3:2003 §2.4.3 Table 16a, and IEC 61131-3:2013 §6.5.2.1 Figure 7, both read directly; the conventional family's program-parameters manual (Mar 2022) and add-on-instructions manual (Sept 2025); TIA V21 (11/2025); CODESYS Development System help V3.5.22.0 and Static Analysis help V5.2.0.0; Mitsubishi SH(NA)-081264ENG-AR and JY997D55701M.
+
+### `var_output` — declare a tag produced for outside
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var_output motor bool`, `var_output speed_sp dint 1200` | Produced by the program for the caller: in Milestone 1 the host reads it after each scan, later a configuration's connection copies it out. Logic reads and writes it freely; the seal-in rung reads `motor` to hold `ote motor`. |
+| IEC 61131-3 | **VAR_OUTPUT** … END_VAR | Ed 2:2003 §2.4.3 Table 16a: *"Supplied by organization unit to external entities"*; Ed 3:2013 §6.5.2.1 Figure 7: *"Supplied by entity to external entities"*. Table 16a puts no restriction on reading one inside the unit. |
+| Conventional | **Output** program parameter; **Output** add-on-instruction parameter | Program-parameters manual (Mar 2022), p.11; add-on-instructions manual (Sept 2025), p.34: *"In the Usage box, select Input, Output, or InOut."* |
+| Siemens STEP 7 / TIA Portal LAD | TIA **Output**; SCL `VAR_OUTPUT`; classic **out** | *"Output parameters may only be written."* (TIA V21, *Rules for supplying block parameters*). Whether a read of one is rejected: `unverified`. |
+| CODESYS | **VAR_OUTPUT** … END_VAR | *"The values of this variable are returned to the calling POU."* (*Variable: VAR_OUTPUT*). |
+| Mitsubishi GX Works | **VAR_OUTPUT** label class | *"A label that outputs a value from a function or function block"* (SH(NA)-081264ENG-AR §23.3 p.421). Functions and function blocks only, as `var_input`. |
+
+**Chosen:** `var_output`
+**Why:** Rule 1, IEC's word lowercased. Reading an output inside the program is allowed, because ladder's commonest idiom, the seal-in, reads its own coil. IEC's table does not forbid the read. TIA's "may only be written" is the one rule that points the other way, and whether it is enforced is `unverified`.
+**Checked:** 2026-09-28. Sources: IEC 61131-3:2003 §2.4.3 Table 16a, and IEC 61131-3:2013 §6.5.2.1 Figure 7, both read directly; the conventional family's program-parameters and add-on-instructions manuals; TIA V21 (11/2025); CODESYS Development System help V3.5.22.0; Mitsubishi SH(NA)-081264ENG-AR.
+
+### `bool` — the Boolean type
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var fault bool`, `var lamp bool 1` | Holds 0 or 1; there are no TRUE/FALSE literals. Starts at 0 unless given 0 or 1. `xic`, `xio`, `ote`, `otl` and `otu` take only a bool. |
+| IEC 61131-3 | **BOOL** | Ed 2:2003 §2.3.1 Table 10 feature 1, "Boolean", 1 bit, footnote h: *"The possible values of variables of this data type shall be 0 and 1, corresponding to the keywords FALSE and TRUE, respectively."* Default initial value 0 (Ed 2 Table 13; Ed 3:2013 Table 10, "0, FALSE"). |
+| Conventional | **BOOL** | *"BOOL 1-bit boolean 0 = cleared 1 = set"*, among *"the elementary data types defined in IEC 1131-3"* (general instruction reference, Sept 2025, p.873). The tag-data manual says to choose BOOL for a bit or a digital I/O point (Nov 2023, p.23). Default initial value not stated in the documents read: `unverified`. |
+| Siemens STEP 7 / TIA Portal LAD | **BOOL** in TIA's reference, **Bool** in the S7-1200 manual; classic **BOOL** | TRUE or FALSE, typed literals `BOOL#0`/`BOOL#1` (TIA V21, *BOOL (bit)*). A tag with no default takes *"the predefined value for the indicated data type ... "false" is predefined for BOOL"* (*Layout of the block interface*). S7-1200 manual A5E02486680-AP §5.4.1. |
+| CODESYS | **BOOL** | *"TRUE (1), FALSE (0)"*, 8 bits of memory (*Data Type: BOOL*). *"The standard initialization value for all declarations is 0."* (*Variable Initialization*). |
+| Mitsubishi GX Works | display name **Bit**, keyword **BOOL** | *"0 (FALSE), 1 (TRUE)"* (SH(NA)-081264ENG-AR §23.4 p.422). GX Works3 lists its default initial value as FALSE (SH(NA)-081215ENG-AN §6.7 p.379). |
+
+**Chosen:** `bool`
+**Why:** Rule 1, and every dialect surveyed spells the keyword BOOL. logex writes its values 0 and 1, as IEC's own footnote does, and adds no TRUE/FALSE literals: `ote` already writes 1 and 0. It is reserved in any case, as IEC reserves keywords and as GX Works3 reserves type words, *"Characters are not case-sensitive"* (SH(NA)-081215ENG-AN Appendix 4).
+**Checked:** 2026-09-28. Sources: IEC 61131-3:2003 Tables 10 and 13, and IEC 61131-3:2013 Table 10, both read directly; the conventional family's general instruction reference (Sept 2025) and tag-data manual (Nov 2023); TIA V21 (11/2025); Siemens A5E02486680-AP and A5E41552389-AA; CODESYS Development System help V3.5.22.0; Mitsubishi SH(NA)-081264ENG-AR and SH(NA)-081215ENG-AN.
+
+### `dint` — the 32-bit signed integer type
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var_output speed_sp dint 1200` | -2147483648 to 2147483647, starting at 0 unless given a value. `move` checks that a literal fits, and that its two operands have one type. It is logex's only integer type so far. |
+| IEC 61131-3 | **DINT** | Ed 2:2003 Table 10 feature 4, "Double integer", N = 32, footnote c: the range is −2^(N−1) to 2^(N−1) − 1. Ed 3:2013 Table 10 feature 4, default initial value 0 (and Ed 2 Table 13). |
+| Conventional | **DINT** | *"DINT 4-byte integer -2,147,483,648 to 2,147,483,647"* (general instruction reference, Sept 2025, p.873). The tag-data manual says to choose DINT for *"Integer (whole number)"* (Nov 2023, p.23), and the timer preset `.PRE` is DINT milliseconds (Timers, above). Default initial value: `unverified`. |
+| Siemens STEP 7 / TIA Portal LAD | **DINT** in TIA's reference, **DInt** in the S7-1200 manual; classic **DINT**, literals `L#…` | *"32 bits ... a sign and a numerical value in the two's complement"*, -2_147_483_648 to +2_147_483_647 (TIA V21, *DINT (32-bit integers)*). TIA's predefined-value table lists Int 0 but no DInt row: its default is `unverified`. |
+| CODESYS | **DINT** | -2147483648 to 2147483647, 32-bit (*Integer data types*); default 0, as `bool`. |
+| Mitsubishi GX Works | display name **Double Word [Signed]**, keyword **DINT** | -2147483648 to 2147483647 (SH(NA)-081264ENG-AR §23.4 p.422); GX Works3 default initial value 0 (§6.7 p.379). "Word [Signed]" is the 16-bit INT. |
+
+**Chosen:** `dint`
+**Why:** Rule 1: DINT is IEC's name for a 32-bit signed integer, and all five dialects spell the keyword the same. logex has one integer type, and it has 32 bits rather than INT's 16. Two reasons settle it. The conventional family's native integer, and its timer preset, is DINT. And a 16-bit millisecond preset tops out at under 33 seconds. Before M1-3, logex integers had no bound at all, so a literal outside DINT's range, which used to be accepted, is now a diagnostic. Each further integer type gets its own stanza.
+**Checked:** 2026-09-28. Sources: IEC 61131-3:2003 Tables 10 and 13, and IEC 61131-3:2013 Table 10, both read directly; the conventional family's general instruction reference (Sept 2025) and tag-data manual (Nov 2023); TIA V21 (11/2025); Siemens A5E02486680-AP and A5E41552389-AA; CODESYS Development System help V3.5.22.0; Mitsubishi SH(NA)-081264ENG-AR and SH(NA)-081215ENG-AN.
