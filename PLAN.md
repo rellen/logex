@@ -665,11 +665,87 @@ they were on purpose rather than guess which M1-2 wants.
 
 ### M1-3 · A tag table with types
 
-*`docs/organisation.md` §6.1 proposes four additions so this item is not redone by the
-organisation work (§5); they are not yet accepted.*
+**Status: designed and decided 2026-09-28; not yet landed.** Every recommendation of the
+design panel was adopted, together with `docs/organisation.md` §6.1's four additions. A
+spike of this design on a copy of `37b7932` passed 90 tests with the README output
+byte-identical; it is a receipt, not code in the repository.
 
-No declarations, no BOOL/DINT distinction, no scope. This is what makes M1-4 possible
-and what makes a typo'd tag name a silent dead rung rather than a compile error.
+The problem: no declarations, no BOOL/DINT distinction, no scope. That is what makes M1-4
+possible and what makes a typo'd tag name a silent dead rung rather than a compile error.
+
+**Where and how.** Declarations live in the `.ld` file, before the first rung, one per
+line: `<section> <name> <type> [<initial>]`, with section `var`, `var_input` or
+`var_output` and type `bool` or `dint`. They are IEC's `VAR_INPUT start : BOOL;` with the
+punctuation dropped, as logex drops it everywhere (naming rule 1; each word gets its
+`docs/naming.md` stanza before its code). The README program becomes:
+
+```
+var_input start bool
+var_input stop bool
+var_input overtemp bool
+var_input reset bool
+var_output motor bool
+var_output run_lamp bool
+var_output speed_sp dint 1200
+var fault bool
+
+( xic start | xic motor ) xio stop ote motor
+…
+```
+
+- **No grammar edit.** A declaration line parses as a rung of names. A `Logex.Declarations`
+  pass at the top of `instructionize/2` takes the leading lines whose first word is a
+  section keyword; the lexer, parser, printer and golden record do not change. A
+  declaration after the first rung is a diagnostic, but still declares its tag.
+- **Section and type words are data tables,** so M2-4's `var_external`, M1-6's `var t1 ton`
+  and M2-5's `var s1 seal` are rows, not a second declaration parser.
+- **Reserved in any case, in `.ld` files:** `var var_input var_output bool dint`. The commit
+  that reserves them says so.
+- **Strict.** Every tag a rung uses must be declared. An undeclared tag is a located
+  diagnostic at its first use, with a did-you-mean; a program that declares nothing says
+  once how to declare. Strict-only-when-declared was rejected: deleting the last
+  declaration would silently bring the dead-rung defect back.
+- **Types.** `bool` holds 0 or 1; `dint` is 32-bit (Ed 2 Table 10). The default initial
+  value is 0 (Ed 2 Table 13). Other types, arrays and STRUCT wait, each an `unknown type`
+  diagnostic. `var retain r bool` is a diagnostic until M1-5's `restart` gives a tag
+  something to survive; `retain` itself stays unreserved.
+- **Roles.** `var_input` is supplied from outside: logic may read it but not write it —
+  IEC's own rule, *"Externally supplied, not modifiable within organization unit"* (Ed 2
+  Table 16a) — and it takes no initial value. `var_output` is produced for the caller.
+  `var` is internal. Binding any of them to physical I/O is the configuration's job, never
+  the program's (`docs/organisation.md` §4.5).
+- **Scope.** The file is the program's scope. There is no controller scope; sharing comes
+  later through `var_global`/`var_external` (M2-4).
+- **Typed operand signatures.** Each operand is `{access, type}`: `xic`/`xio`
+  `{:read, :bool}`; `ote`/`otl`/`otu` `{:write, :bool}`; `move`
+  `[{:value, :any}, {:write, :any}]`, whose two `:any` operands must agree, as IEC's MOVE is
+  `IN : ANY` → `OUT : ANY` (`docs/naming.md`, Scalar move). M1-2's messages stay
+  byte-identical.
+- **Data.** `%Logex.Tag{name:, type:, section:, initial:, line:}`;
+  `%Logex.Program{rungs:, tags:}` (M1-5 adds `name:`, `source:`, `warnings:`);
+  `Logex.Program.initial_env/1` builds the first env from the declared initial values. The
+  env stays `%{name => integer}` — a Milestone-1 fact, not an invariant: M1-6 nests timer
+  instances in it, and no M1-3 check may depend on it being flat.
+- **The Elixir-side declarer.** `instructionize(ast, declared)` takes `%Logex.Tag{}` values
+  built with `Logex.Tag.new!/4`, validated by the same checks as a declaration line. It is
+  the seam `docs/defladder.md` asks for, and M1-5's `compile/1` does not expose it.
+- **Deferred:** warnings (declared but unused, a `var_output` never written, duplicate
+  coil) go to M1-5's `warnings:`; a declaration-inferring migration aid is not built.
+
+**Diagnostics** (the spike's wording): `` `strat` is not declared — did you mean
+`start`? `` · `` `xic` reads a bool, but `speed_sp` is a dint (declared on line 7) `` ·
+`` `ote` writes `start`, a var_input (declared on line 1): logic must not write an
+input `` · `` `move` takes operands of one type: … `` · a literal that does not fit its
+destination · a keyword or type where a tag must go · on declaration lines: declared twice,
+two names differing only in case (§5), a missing or unknown type, an initial value that
+does not fit, an initial value on a `var_input`, a reserved word as a name, a declaration
+after the first rung.
+
+**Landing, in commits, each green and each with its revert-checked test:** (1) the
+`docs/naming.md` stanzas for the five words; (2) typed operand signatures, no behaviour
+change; (3) declaration lines and `%Logex.Program{}`, not yet enforced; (4) strictness —
+undeclared tags are errors — with the suite and README migrated (35 of today's tests go
+red without it); (5) type and role checks on operands; (6) documents.
 
 ### M1-4 · Make `xic` and `xio` complementary by construction
 
@@ -737,8 +813,20 @@ ever disagree, §5 is the decision of record.)
 
 ### M1-5 · A real public API
 
-*`docs/organisation.md` §6.1 proposes six changes, among them a named, stateless
-`%Logex.Program{}` and an instance call; they are not yet accepted.*
+**Decided 2026-09-28, from `docs/organisation.md` §6.1** (its rationale is there):
+1. `%Logex.Program{name:, tags:, rungs:, source:, warnings:}`, named and stateless. The name
+   is the file's basename (`Logex.compile_file("motor.ld")`) or `compile(source, name:)`;
+   a configuration refers to program types by it.
+2. The core is the instance call, `Logex.Runtime.call(program, state, inputs, scan)`;
+   `scan/2` and `scan/3` are sugar for one task-less instance. `scan/3` takes elapsed
+   milliseconds, **not** "n scans" as written below. Unknown or non-input keys in
+   `inputs` are errors.
+3. `%Logex.Diagnostic{}` is widened once, with `file:`, `stage:` and `column:` together.
+4. `Logex.Runtime.restart(program, state, :cold | :warm)` is the RETAIN hook.
+5. The Milestone-1 done sentence below is amended accordingly.
+6. B5 lands straight after: every recursive `evaluate` clause becomes a `defp`.
+
+The item as written follows.
 
 There is no `Logex` module at all: the `mix new` stub and its doctest were deleted
 rather than left standing in for an API. So every consumer must know the stage order and
@@ -789,8 +877,24 @@ can silently outlive.
 
 ### M1-6 · TON and ONS
 
-*`docs/organisation.md` §6.1 proposes seven changes, among them `evaluate/3` with a
-read-only scan context and declared, nested timer instances; they are not yet accepted.*
+**Decided 2026-09-28, from `docs/organisation.md` §6.1 and §4.6:**
+1. `evaluate/3` threads a read-only `%Logex.Scan{now:, first:}`; the accumulator stays
+   `{power_flow, env}`. CLAUDE.md's `evaluate/2` convention changes with it.
+2. Timers are declared instances, `var t1 ton`; an undeclared one gets M1-3's diagnostic.
+3. Instance state nests: a per-instance record with a schema per FB type
+   (`%Logex.FbType{}`), which M2-5's user function blocks reuse. `ons` reads
+   `scan.first`.
+4. Members are readable anywhere; logic may write only `.pre` and `.acc`. A dotted name
+   that is not a declared member is a diagnostic.
+5. A timer adds `now − last_scanned` to `.acc`, keeping its last-scanned time as an
+   internal member (the delta formula `docs/naming.md` Timers settles), not a per-instance
+   `dt`, so a timer in a frozen function block catches up.
+6. Before calling the model settled, spike a real `ton`: one program type, two instances
+   on 10 ms and 50 ms tasks, and an assertion that `.acc` reaches the preset at the same
+   logical time in both.
+7. The settled `.` and `//` lexer rules land exactly as written: `a.1b` is a lex error,
+   `ote a // note⏎ote b` is two rungs, and the golden record changes in exactly two
+   entries. B8 is fixed before any configuration file exists.
 
 Both need per-instance cross-scan state, so they are the proof that M1-5's architecture
 is right. TON is what turns this from an expression evaluator into something
@@ -801,7 +905,7 @@ with exactly the existing rung-condition contract.
 
 **§5 has settled the addressing question:** member access is `.`, added as one lexer rule
 producing a single `name` token, with no grammar edit — so `t1.dn` and `t1.acc` lex, and
-`env` holds a struct per timer instance rather than flat `"t1.dn"` keys, because `.acc`
+`env` holds a per-instance record rather than flat `"t1.dn"` keys, because `.acc`
 and `.dn` must update together in one scan. That work is a prerequisite for this item, not
 a follow-up. Take the elapsed time as an *injected scan input* rather than an internal
 clock read, or the runtime stops being deterministic and testable. **ONS** is the smaller
@@ -814,10 +918,67 @@ image — so nothing marks which tags are physical inputs that logic must not wr
 semantics are correct; only the driver is missing, and it is roughly an `Enum.reduce`.
 
 **Milestone 1 is done when a seal-in circuit written in a `.ld` file on disk can be
-compiled once into a value you can hold, run for N scans against a typed tag table, and
-report a located diagnostic — `line 3: unknown instruction "xyz"` — instead of raising.**
-That single sentence exercises M1-1 through M1-5; M1-6 is what proves the design was
-right rather than merely plausible.
+compiled once into a named, stateless value you can hold, run for N scans as an instance
+against a typed tag table, and report a located diagnostic — `line 3: unknown instruction
+"xyz"` — instead of raising.** (Amended 2026-09-28 per M1-5.) That single sentence
+exercises M1-1 through M1-5; M1-6 is what proves the design was right rather than merely
+plausible.
+
+### Milestone 2 — program organisation
+
+**Decided 2026-09-28** (§5; design and rationale in `docs/organisation.md`, whose §7
+decisions were all taken as recommended). Each item surveys its new words in
+`docs/naming.md` first, lands green, and pins every rule with a test that fails when the
+rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
+
+- **M2-1 · The scheduler, from Elixir data, no syntax.** `%Logex.Configuration{}`,
+  `Logex.Runtime.start/cycle/next_due_in/get`, periodic and task-less instances,
+  copy-in/copy-out, overlap events. *Done when* a configuration built in Elixir with a 10
+  ms task, a 30 ms task and a task-less instance, cycled for one simulated second by an
+  injected clock, runs each instance exactly as often as its task dictates, in priority
+  order; a late cycle yields one `{:overlap, …}` and no lost phase; the README program
+  gives identical outputs through `scan/2` and through a one-instance configuration.
+- **M2-2 · The configuration file, task-less.** A separate `.lcf` file (the extension is
+  still a placeholder; choose it before this item lands): `var_global`, plain and located
+  (`at panel.q.0`), `program <inst> <type>`, arrow-free connections (`m1.start
+  pb_start_1`), every `var_input` connected, one driver per sink. *Done when* two instances
+  of one `.ld` program type, wired in a configuration file to different input and output
+  points, run for N cycles from one input image and keep independent state; a mis-wired,
+  unknown, undriven-input or mistyped connection is a located diagnostic naming its file
+  and line.
+- **M2-3 · Periodic tasks in text.** `task <n> interval <ms> priority <p>` and `with`.
+  *Done when* the plant of `docs/organisation.md` §4.4, without its event task, driven for
+  one simulated second, runs `m1` 100 times and `m2` 20 times, and a `ton` in each times
+  against the one clock.
+- **M2-4 · Shared globals.** `var_external` in `.ld`; type agreement (Ed 2 §2.4.3); no
+  writes to an input point; a two-writer warning. *Done when* an e-stop declared once as
+  a `var_global` and read by two instances through `var_external` stops both in the same
+  cycle; a `var_external` with no matching global, or of another type, is a located
+  diagnostic.
+- **M2-5 · User function blocks.** `function_block <name>` as a file's first line;
+  instances (`var s1 seal`); `cal` with positional operands, rung power as EN, and nothing
+  copied on a false EN; nesting; recursion is a diagnostic. *Done when* a seal-in written
+  once as a function block and instantiated three times in one program behaves as three
+  independent seal-ins, `m1.s2.run` reads one of them, a false EN freezes only its own
+  instance, and a recursive type, an unknown FB type or a `cal` of a non-instance is a
+  located diagnostic.
+- **M2-6 · Event tasks.** `task <n> single <g> priority <p>`, fired by a rising edge, and
+  in the first cycle if the trigger is already true. *Done when* an event task triggered
+  from an input point runs once per rising edge, before lower-priority tasks due in the
+  same cycle, and runs in cycle 1 if its trigger is already true.
+
+The scheduling rules are decided too: PRIORITY on every task, 0 the highest; ties go to
+the earlier due time, then declaration order; no preemption; missed periods coalesced,
+counted and reported; time injected in milliseconds, never read from a clock; reserved
+words scoped by file kind; and, once a wall-clock runner exists, a watchdog fault zeroes
+the output image once and requires an explicit restart.
+
+**Milestone 2 is done when** a configuration file on disk instantiates one `.ld` program
+type twice, with a function block inside it; wires the instances to declared I/O points
+and to a shared global; schedules them under a periodic task, an event task and no task;
+runs deterministically for N cycles from an injected clock and input image, with the same
+outputs on every run; and reports every wiring, typing or scheduling mistake as a located
+diagnostic naming its file and line.
 
 ---
 
@@ -1108,7 +1269,7 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   is bit addressing — `xic setpoint.3`.
 - **Structured addressing — adopt `.`, resolved in the lexer.** One rule,
   `QUALIFIED = {NAME}(\.({NAME}|{INT}))*`, so `t1.dn` and `word.3` lex as one `name`
-  token; **no grammar edit**. `env` holds a struct per instance, since `.acc` and `.dn`
+  token; **no grammar edit**. `env` holds a per-instance record, since `.acc` and `.dn`
   must update together in one scan. Array subscripts defer cleanly, because `[`/`]` stayed
   free. Two traps: the token no longer round-trips to a flat `env` key, and `.` in the
   lexer is safe only while there are no float literals.
@@ -1141,9 +1302,11 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   instances, function-block instances, globals), its task-style execution (continuous,
   periodic, event) and I/O mapping in the configuration, not in program bodies.
   `docs/organisation.md` sets out the model, the conventional family's hierarchy mapped
-  onto it, a proposed logex form and a proposed Milestone 2. Only the direction is
-  settled: its syntax, its Milestone-1 changes (§6.1 there) and its fourteen open
-  decisions are not. **Routines are deferred by decision** — subroutines that share their
+  onto it, the logex form and Milestone 2. Its fourteen open decisions were taken as
+  recommended on 2026-09-28, with its Milestone-1 changes (M1-3, M1-5 and M1-6 record
+  them) and Milestone 2 (§3). In one line: a file is a POU type, state is an instance, a
+  configuration instantiates, wires and schedules; no routines, no controller scope, no
+  preemption. **Routines are deferred by decision** — subroutines that share their
   program's scope, called with JSR, have no IEC counterpart, and a program's logic is
   factored with function blocks instead; revisit only if that proves too heavy.
 - **`mov` → `move`.** **Landed with M1-2**, with no alias: `mov` is an unknown
@@ -1276,5 +1439,4 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    indexed loop.
 6. **Surface syntax: comments, negative literals, structured addressing.** See §5.
 7. **Program organisation: configurations, tasks, program instances, I/O mapping.**
-   Direction settled in §5; the model and a proposed Milestone 2 are in
-   `docs/organisation.md`.
+   Decided in §5; Milestone 2 (§3); the model in `docs/organisation.md`.

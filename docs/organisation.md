@@ -1,12 +1,13 @@
 # Program organisation: the IEC software model, in logex's dialect
 
-**Status: proposed, with the direction adopted.** Nothing in this document is implemented.
-On 2026-09-28 the maintainer adopted the direction in §1 (IEC's software model, in logex's
-dialect: the hierarchy, task-style execution and I/O mapping) and deferred routines;
-`PLAN.md` §5 records both. Everything else is a proposal: every line of logex syntax, the
-§6 changes and Milestone 2, and the decisions §7 lists. It was written against `37b7932`.
-Where it recommends a change to a `PLAN.md` item, the plan is not changed until that
-recommendation is accepted.
+**Status: decided, not yet implemented.** On 2026-09-28 the maintainer adopted the
+direction in §1 (IEC's software model, in logex's dialect: the hierarchy, task-style
+execution and I/O mapping), deferred routines, and took every decision in §7 as
+recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1
+changes, and §3's Milestone 2 the §6.2 items. The syntax below is decided, but each new
+word still gets its `docs/naming.md` stanza before its code lands, and a stanza may still
+change a spelling. It was written against `37b7932`; the rationale stays here, and the
+plan of record is `PLAN.md`.
 
 ## 1. Why this document, and the direction
 
@@ -172,7 +173,7 @@ CONTROLLER                                   CONFIGURATION (+ one implicit RESOU
 
 ---
 
-## 4. The logex target (all syntax proposed)
+## 4. The logex target
 
 ### 4.1 The hierarchy
 
@@ -285,7 +286,7 @@ the power out. IEC's rules for a false EN (Ed 2 §2.5.2.1a), p.68):
 - input assignment on a false EN *"may or may not be made in an implementation-dependent
   fashion"*.
 
-logex's proposed choice (open decision 12): on a false EN, `cal` copies nothing in and
+logex's choice (decision 12): on a false EN, `cal` copies nothing in and
 writes nothing out. The instance is frozen, and so is every tag its output operands name.
 That is why the example routes `estop` into `halt`, not in front of `cal`:
 `xio estop cal s1 …` would freeze the motor running, not stop it.
@@ -305,7 +306,7 @@ The de-energised `evaluate` clause is mandatory for both (CLAUDE.md).
 - `@instructions` and `naming_test.exs` stay the table of built-in mnemonics. The
   signatures of user FB types are built per compile.
 - Reads of outputs such as `s1.run` work anywhere. Writes to an instance's members from
-  outside it are decided in M1-6 (open decision 9).
+  outside it: reads anywhere, writes only to `.pre` and `.acc` (decision 9; M1-6).
 
 **Why the word `cal`.** IEC has three spellings of the call, and `cal` is the only word
 among them. ST calls an instance by its name (`CMD_TMR(IN:=%IX5, PT:=T#300ms) ;`, Ed 2
@@ -400,9 +401,9 @@ IEC permits `:=` only on an input and `=>` only on an output. The point's `i` or
 it too. A wrong direction is a diagnostic that names the member's section. Each connection
 is a self-contained line with a qualified name, like VAR_CONFIG's full-path form, so there
 is no block to close. (M1-3 rejected `end_var` blocks for the same reason.) IEC's `:=` and
-`=>` are the fallback (open decision 5).
+`=>` were the fallback (decision 5).
 
-**Checks.** All are proposed. Each is marked as IEC's or logex's.
+**Checks.** All are decided. Each is marked as IEC's or logex's.
 
 - **Input points.** An input point takes no initial value. Nothing may drive it: no output
   connection, and no write through a `var_external`. *(logex)*
@@ -483,7 +484,7 @@ IEC has three ways to bind a program to physical I/O. logex adopts one:
 
 The device root `panel` is a logex coinage where IEC has a standard form, `%`. That
 strains naming rule 3, and the `at` stanza must argue it plainly. The fallback is `at
-%ix0.0`, accepted only after `at` in a configuration (open decision 6). It needs a `%`
+%ix0.0`, accepted only after `at` in a configuration (decision 6). It needs a `%`
 lexeme, because today's lexer rejects `%` as an illegal character.
 
 **What a device means is the host's job, as IEC leaves it to the manufacturer** (§2.4.1.1,
@@ -733,7 +734,7 @@ names they break (CLAUDE.md step 2).
 
 Each is a field or a sentence now and a migration later.
 
-**M1-3 (tag table).** Keep the recommended design, and add four points.
+**M1-3 (tag table).** Keep the design `PLAN.md` M1-3 now records, and add four points.
 1. **Write the section and type words as data tables.** Then `var_external` is one more
    row, and M1-6's `var t1 ton` and M2-5's `var s1 seal` resolve through the same type
    lookup. No second declaration parser is needed.
@@ -797,7 +798,7 @@ Each is a field or a sentence now and a migration later.
 7. **Fix B8 (a lone CR) before any `.lcf` exists.** It would bite configuration files
    exactly as it bites programs.
 
-### 6.2 Milestone 2: organisation (proposed as a new PLAN §3 section)
+### 6.2 Milestone 2: organisation (now `PLAN.md` §3, Milestone 2)
 
 Each item surveys its own new words in `docs/naming.md` before its code lands, appending
 the stanzas. Each lands green on its own. Every diagnostic is pinned by a test that
@@ -881,11 +882,13 @@ checked by reverting it (CLAUDE.md; PLAN §2·M0-4). For example:
 
 ---
 
-## 7. Open decisions for the maintainer
+## 7. Decisions
+
+All fourteen were taken as recommended on 2026-09-28. They are kept with their options so
+the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
-   earlier). *Recommend yes.* The direction was adopted on 2026-09-28; Milestone 2's order
-   is still open.
+   earlier). *Recommend yes.* Adopted.
 2. **Take the §6.1 Milestone-1 changes:**
    - a named `%Program{}`;
    - `call/4`;

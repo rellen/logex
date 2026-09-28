@@ -54,8 +54,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `PLAN.md` — reviewed findings and the ordered plan of work
 - `docs/naming.md` — the IEC and vendor name survey, one stanza per mnemonic; append-only
 - `docs/organisation.md` — where logex is heading above one program: IEC's configuration,
-  tasks, program instances and I/O mapping, in logex's dialect. The direction is settled
-  (PLAN §5); its syntax and Milestone 2 are proposals. Read it before designing anything
+  tasks, program instances and I/O mapping, in logex's dialect. Decided (PLAN §5; the
+  work is PLAN's M1-3, M1-5, M1-6 and Milestone 2). Read it before designing anything
   that names a program, schedules one, or binds I/O.
 - `docs/instruction-sets.md` — reference: IEC's LD elements and standard library by table number,
   Instruction List (withdrawn in Ed 4), and the free-software instruction sets. Read it before
