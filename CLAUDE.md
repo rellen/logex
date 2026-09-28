@@ -19,18 +19,24 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 ## Key Files
 
 - `lib/logex/compiler.ex` — the pipeline: `tokenize/1` and `parse/1` delegate to the two
-  modules below; `instructionize/1` (which checks every instruction against its operand
-  signature and returns `{:ok, ir}` or `{:error, [%Logex.Diagnostic{}]}`) and
-  `evaluate/2` live here
+  modules below; `instructionize/2` (which takes the declaration lines off into a tag
+  table, checks every instruction against its operand signature and every operand against
+  the table, and returns `{:ok, %Logex.Program{}}` or `{:error, [%Logex.Diagnostic{}]}`)
+  and `evaluate/2` live here
+- `lib/logex/declarations.ex` — declaration lines to a tag table, after parsing: the
+  section and type words as data (`@sections`, `@types`), `reserved/1`, `fits?/2`, and
+  `check/1`, the one validator for a declaration line and for `Logex.Tag.new!/4`
+- `lib/logex/tag.ex` — `%Logex.Tag{}` (and `new!/4`, which declares a tag from Elixir) and
+  `%Logex.Program{rungs:, tags:}`, with `initial_env/1` for the first env
 - `lib/logex/lexer.ex` / `lib/logex/parser.ex` — the front end, written by hand: binary
   pattern matching, and recursive descent (the parser's moduledoc gives the grammar and
   which function parses each production). There is no generator, so nothing reports a
   grammar conflict: **a new syntax form goes into `printer_test.exs`'s generator and
   `@required_shapes` before it lands**, and the golden record below must stay green.
 - `lib/logex/printer.ex` — the parse AST back to canonical source text
-- `lib/logex/diagnostic.ex` — `%Logex.Diagnostic{line:, message:}`, what `instructionize/1`
+- `lib/logex/diagnostic.ex` — `%Logex.Diagnostic{line:, message:}`, what `instructionize/2`
   returns a list of, and `format/1` for the `line N: …` form
-- Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`; `validation_test.exs` holds every diagnostic `instructionize/1` gives, driven from source
+- Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`; `validation_test.exs` holds every diagnostic `instructionize/2` gives, driven from source
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see — making a lone CR end a rung
@@ -84,6 +90,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   instruction breaks any program with a tag of that name — say so in the commit. The
   de-energised clause is mandatory: without it the instruction works on an energised
   rung and raises `FunctionClauseError` the moment a contact opens.
+- Every tag a program uses is declared (M1-3): in the source, `var aa bool` before the first
+  rung, or from Elixir, `Logex.Tag.new!/4` passed to `instructionize/2`. A test that only
+  needs tags to exist declares them either way; `validation_test.exs`'s `@declared` is the
+  Elixir form. A new section or type word is a row in `Logex.Declarations`, is reserved in
+  any case, and owes a `docs/naming.md` stanza, which `naming_test.exs` checks.
 - A fix needs a test that **fails when the fix is reverted**. Check it by reverting, not by
   reasoning: `mix test` stayed fully green after the `NAME` regex was corrected, because
   no test used a single-character tag. `PLAN.md` §2·M0-4 has the worked mutation table.

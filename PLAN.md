@@ -16,7 +16,7 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
-§1, §3·M1-1 and §3·M1-2 have been brought current. M1-3 onward is still forward work.
+§1 and §3·M1-1 to M1-3 have been brought current. M1-4 onward is still forward work.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -121,7 +121,8 @@ stage-boundary mismatch. M0-1 (`690fc2d`) reconciled the fixtures on `:int_lit` 
 **All five items are landed and merged; nothing in this section is waiting to be done.**
 M0-1 `690fc2d`, M0-2 `03c10e0`, M0-3 `dde8c1d`, M0-4 `3f3b104` (PR #3, merge `22bc81a`);
 M0-5 `b65e756` (PR #4, merge `863af6f`). Re-verified on `main` after M1-1: `mix test` →
-`27 tests, 0 failures`. M1-1 and M1-2 have landed since; the next unstarted work is §3·M1-3.
+`27 tests, 0 failures`. M1-1, M1-2 and M1-3 have landed since; the next unstarted work is
+§3·M1-4.
 
 The items are kept in full because their diagnoses are the record of *why* the code looks
 the way it does — why the parser drops empty rungs, why `CLAUDE.md` once documented an
@@ -665,7 +666,12 @@ they were on purpose rather than guess which M1-2 wants.
 
 ### M1-3 · A tag table with types
 
-**Status: designed and decided 2026-09-28; not yet landed.** Every recommendation of the
+**Status: DONE — landed 2026-09-28**, in the six commits listed at the end of this item;
+107 tests pass on Elixir 1.20.4, and each code commit's message records its mutation
+table. Where the landing departs from the text below: the note for a program with no
+declaration line reads "each is now declared before the first rung", naming no plan item;
+it is given only when there is no declaration line at all, not when every declaration was
+wrong; and an undeclared tag cites its operand's own line. Every recommendation of the
 design panel was adopted, together with `docs/organisation.md` §6.1's four additions. A
 spike of this design on a copy of `37b7932`, on Elixir 1.20.4 / OTP 28, passed 90 tests
 (76 migrated, 14 new) with the README output byte-identical; it is a receipt, not code in
@@ -750,13 +756,14 @@ two names differing only in case (§5), a missing or unknown type, an initial va
 does not fit, an initial value on a `var_input`, a reserved word as a name, a declaration
 after the first rung.
 
-**Landing, in commits, each green; (3) to (5) each with a test that fails when its change
-is reverted:** (1) the `docs/naming.md` stanzas for the five words; (2) typed operand
-signatures, no behaviour change — a refactor: the M1-2 messages stay byte-identical and
-reverting it leaves the suite green, which its commit says rather than inventing a failing
-test (landed, `2a65aef`); (3) declaration lines and `%Logex.Program{}`, not yet enforced; (4) strictness —
-undeclared tags are errors — with the suite and README migrated (35 of today's tests go
-red without it); (5) type and role checks on operands; (6) documents.
+**Landed in commits, each green; (3) to (5) each with a test that fails when its change is
+reverted:** (1) the `docs/naming.md` stanzas for the five words, `d818cd8`; (2) typed
+operand signatures, no behaviour change — a refactor: the M1-2 messages stay
+byte-identical and reverting it leaves the suite green, which its commit says rather than
+inventing a failing test — `2a65aef`; (3) declaration lines and `%Logex.Program{}`, not
+yet enforced, `5b63a9f`; (4) strictness — undeclared tags are errors — with the suite and
+README migrated (35 of the 76 earlier tests went red without it), `efa1d13`; (5) type and
+role checks on operands, `2b093de`; (6) documents, the commit after.
 
 ### M1-4 · Make `xic` and `xio` complementary by construction
 
@@ -822,12 +829,19 @@ default is only safe once an undeclared tag is a compile error rather than a sil
 So: `bit/2` now, strictness after M1-3. (§5's M1-4 bullet says the same thing; if the two
 ever disagree, §5 is the decision of record.)
 
+**The strict half landed with M1-3** (`2b093de`): a `dint` on `xic`, `xio` or a coil is a
+located diagnostic, and an undeclared tag, `move undefined_tag dst` included, can no longer
+reach `env`. What is left of M1-4 is `bit/2`, for values the host supplies — an env built
+by hand rather than by `Logex.Program.initial_env/1` can still hold a 5 or leave a tag out
+— until M1-5's `scan/2` checks them.
+
 ### M1-5 · A real public API
 
 **Decided 2026-09-28, from `docs/organisation.md` §6.1** (its rationale is there):
 1. `%Logex.Program{name:, tags:, rungs:, source:, warnings:}`, named and stateless. The name
    is the file's basename (`Logex.compile_file("motor.ld")`) or `compile(source, name:)`;
-   a configuration refers to program types by it.
+   a configuration refers to program types by it. `%Logex.Program{rungs:, tags:}` came
+   forward with M1-3; M1-5 adds `name:`, `source:` and `warnings:`.
 2. The core is the instance call, `Logex.Runtime.call(program, state, inputs, scan)`;
    `scan/2` and `scan/3` are sugar for one task-less instance. `scan/3` takes elapsed
    milliseconds, **not** "n scans" as written below. Unknown or non-input keys in
@@ -1147,8 +1161,9 @@ diagnostic naming its file and line.
 
 - **B5 · Split `Logex.Compiler` along the pipeline** once M1-2 and M1-5 exist and the module
   is doing five jobs instead of four. The front end is already out, as `Logex.Lexer` and
-  `Logex.Parser` (§6); what remains is `Ast`, `Instruction`, `Analyzer`, `Program`,
-  `Runtime` (`Logex.Diagnostic` exists since M1-2). Note the recursion of `evaluate/2`
+  `Logex.Parser` (§6); what remains is `Ast`, `Instruction`, `Analyzer` and `Runtime`
+  (`Logex.Diagnostic` exists since M1-2; `Logex.Program`, `Logex.Tag` and
+  `Logex.Declarations` since M1-3). Note the recursion of `evaluate/2`
   is currently written as extra **public** clauses of the same function (M1-2 made
   `instructionize/1`'s private), so `Logex.Compiler.evaluate([{:xic, …}], {true, env})` on a
   half-formed IR is a supported entry point. Make every recursive clause a `defp` with a
@@ -1283,7 +1298,8 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   migration hint rather than implying the words were logex's own.)*
 - **M1-4 nonzero-is-true — keep as a totality guarantee, reject as a language rule.** Land
   `bit/2` so `xic`/`xio` are complementary by construction, then once M1-3's tag table
-  exists make a non-BOOL operand a located diagnostic rather than a coercion. The survey
+  exists make a non-BOOL operand a located diagnostic rather than a coercion (that half
+  **landed with M1-3**). The survey
   is unanimous against nonzero-is-true, with no vendor precedent: even Mitsubishi's
   untyped devices require a *bit* (`D.b`), not a word. The escape hatch every vendor gives
   is bit addressing — `xic setpoint.3`.
@@ -1305,8 +1321,9 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   infix arithmetic arrives.
 - **Case — mnemonics case-insensitive, tags case-sensitive.** **Landed with M1-2.** One
   `String.downcase/1` at `instructionize/1`'s mnemonic lookup. IEC and every vendor are case-*insensitive*, so a user arriving from
-  any of them has a correct prior. M1-3 adds a diagnostic for two tags differing only in
-  case. **Unblocked — B1 has landed.** The blocker was that while `bst`/`nxb`/`bnd` were
+  any of them has a correct prior. M1-3 added the rest (**landed**): two declared tags
+  differing only in case are an error, and a tag used in the wrong case gets `did you mean
+  `motor`? (tags are case-sensitive)`. **Unblocked — B1 has landed.** The blocker was that while `bst`/`nxb`/`bnd` were
   keywords, case-folding made `BST` a name and `bst` a keyword. The delimiters are
   punctuation now, so there is no keyword left to fold.
 - **Mnemonics are reserved words, in any case.** Decided with M1-2 (September 2026): no
@@ -1316,7 +1333,9 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   the instruction. The alternative, leaving every name legal until M1-3's declarations
   catch an undeclared `ote`, left the worst case open for a milestone. The cost, accepted:
   each new instruction reserves its name when it lands, and breaks any program with a
-  tag of that name. IEC reserves its keywords case-insensitively too.
+  tag of that name. IEC reserves its keywords case-insensitively too. M1-3 reserved five
+  more words the same way, the section and type words `var var_input var_output bool
+  dint`.
 - **Program organisation follows IEC's software model, in logex's dialect.** Decided
   2026-09-28: logex is heading for IEC's hierarchy (configuration, tasks, program
   instances, function-block instances, globals), its task-style execution (continuous,
@@ -1449,7 +1468,7 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
 1. **Timers and counters (TON/TOF/RTO, CTU/CTD/RES)** — decisive. Essentially no real
    routine exists without them, and they are why the scan model matters. See M1-6.
 2. **A scan loop and I/O image.** See M1-6.
-3. **A tag table with types.** See M1-3.
+3. **A tag table with types.** Landed with M1-3.
 4. **Comparisons (`eq ne lt gt le ge` — IEC names, see `docs/naming.md`)** — high value,
    low cost. See M1-6.
 5. **Math (ADD/SUB/MUL/DIV), one-shots (ONS/OSR/OSF), then control flow (JMP/LBL/MCR).**

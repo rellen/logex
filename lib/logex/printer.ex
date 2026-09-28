@@ -2,7 +2,7 @@ defmodule Logex.Printer do
   @moduledoc """
   The other direction: a parse AST back to source text.
 
-  Without this the pipeline is one-way — `tokenize/1`, `parse/1`, `instructionize/1`
+  Without this the pipeline is one-way — `tokenize/1`, `parse/1`, `instructionize/2`
   and `evaluate/2` all consume toward an environment — so logex could read a rung
   written as text but never write one. That makes it a textual *input format* rather
   than a textual *representation*, which is the thing a per-rung editing box needs:
@@ -12,7 +12,7 @@ defmodule Logex.Printer do
   appear in the box so you can edit them."*
 
   Prints the **parse** AST, not the instruction IR. The parse AST is one lossless
-  step from the source, while `instructionize/1` has already resolved mnemonics
+  step from the source, while `instructionize/2` has already resolved mnemonics
   through `@instructions` and would need the reverse map; and a text area has to
   render text that is mid-edit and not yet a valid instruction stream, which the IR
   cannot represent at all.

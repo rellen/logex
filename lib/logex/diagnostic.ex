@@ -2,7 +2,7 @@ defmodule Logex.Diagnostic do
   @moduledoc """
   One problem found in a routine, and the line it is on.
 
-  `Logex.Compiler.instructionize/1` returns a list of these, in source order, rather than
+  `Logex.Compiler.instructionize/2` returns a list of these, in line order, rather than
   raising at the first. A rung never spans lines, so the line alone names the rung.
   """
 

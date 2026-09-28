@@ -3,15 +3,16 @@
 A Ladder Logic compiler and interpreter in Elixir. It reads a ladder routine written as
 text, lowers it to instructions, and evaluates it against a tag environment. No
 dependencies and no generated code: the lexer and parser are written by hand, and the whole
-compiler is five small modules.
+compiler is eight small modules.
 
 **Stage: early, and honest about it.** Six instructions, parallel branches to arbitrary
-nesting depth, correct latch/unlatch retention, power flow that resets per rung, and a
-printer that turns an AST back into source so a routine round-trips — all of that works and
-is tested end to end, and a routine with mistakes in it gets every one reported with its
-line rather than an exception. What does not exist yet: a public API (you call the
-compiler stages yourself), a tag table with types, timers and counters, and a scan loop — one `evaluate/2` call is exactly one
-scan. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
+nesting depth, latch/unlatch that holds across scans, power flow that resets per rung, a
+typed tag table that every tag is declared in, and a printer that turns an AST back into
+source so a routine round-trips — all of that works and is tested end to end, and a
+routine with mistakes in it gets every one reported with its line rather than an
+exception, a misspelt tag included. What does not exist yet: a public API (you call the
+compiler stages yourself), timers and counters, and a scan loop — one `evaluate/2` call is
+exactly one scan. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
 what order it gets fixed, and why.
 
 ## The dialect
@@ -21,9 +22,14 @@ become an importer.**
 
 Source syntax today:
 
-- mnemonics in any case (`xic`, `XIC`), and reserved: no tag may be named after one, in
-  any case, so `ote` and `Ote` are never tags; tags are case-sensitive (`aa` and `AA` are
-  two tags)
+- declaration lines before the first rung, one tag each: `<section> <name> <type>
+  [<initial>]`, the section `var`, `var_input` or `var_output`, the type `bool` or `dint`,
+  as in `var_output speed_sp dint 1200`. Every tag a rung uses must be declared. A
+  `var_input` is supplied from outside and no instruction may write it; a tag with no
+  initial value starts at 0
+- mnemonics, sections and types in any case (`xic`, `XIC`, `VAR_INPUT`), and reserved: no
+  tag may be named after one, in any case, so `ote`, `Ote` and `bool` are never tags; tags
+  are case-sensitive (`aa` and `AA` are two tags)
 - operands separated by spaces — and a number must be followed by one: `move 1bst aa` is an
   error naming `1bst`, not the number `1` and a tag `bst`
 - no operand parentheses, no terminator
@@ -59,9 +65,9 @@ syntax (`I:003/4`, `T4:5/DN`).
 Being a dialect is a licence to choose names, not a licence to choose them carelessly. So
 every new instruction is surveyed before it is written: what does IEC 61131-3 call this,
 what do the major vendor toolchains call it, and what should logex call it in that light?
-The survey lives in [`docs/naming.md`](docs/naming.md), one stanza per mnemonic, and
-`test/logex/naming_test.exs` fails if an instruction reaches the mnemonic table without
-one. The rule it applies, in order: if IEC names the operation, take the IEC
+The survey lives in [`docs/naming.md`](docs/naming.md), one stanza per mnemonic or
+declaration word, and `test/logex/naming_test.exs` fails if an instruction or a
+declaration word reaches the compiler without one. The rule it applies, in order: if IEC names the operation, take the IEC
 name; if IEC supplies only a graphical element, take the clearest vendor mnemonic and say
 which; never invent a readable word for a thing that already has a standard name.
 
@@ -78,16 +84,17 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 
 | Written as | Operands | Does |
 |---|---|---|
-| `xic aa` | tag | examine if closed — passes power when `aa` is 1 |
-| `xio aa` | tag | examine if open — passes power when `aa` is 0 |
-| `ote xx` | tag | output energize — writes 1 on a true rung and **0 on a false rung** |
-| `otl xx` | tag | output latch — writes 1 on a true rung, leaves the tag alone otherwise |
-| `otu xx` | tag | output unlatch — writes 0 on a true rung, leaves the tag alone otherwise |
-| `move 123 hh` | source, destination | copies a literal or a tag into a tag (`mov` until M1-2; it now gets a diagnostic pointing here) |
+| `xic aa` | bool tag | examine if closed — passes power when `aa` is 1 |
+| `xio aa` | bool tag | examine if open — passes power when `aa` is 0 |
+| `ote xx` | bool tag, not a `var_input` | output energize — writes 1 on a true rung and **0 on a false rung** |
+| `otl xx` | bool tag, not a `var_input` | output latch — writes 1 on a true rung, leaves the tag alone otherwise |
+| `otu xx` | bool tag, not a `var_input` | output unlatch — writes 0 on a true rung, leaves the tag alone otherwise |
+| `move 123 hh` | source, then a destination of the same type, not a `var_input` | copies a literal or a tag into a tag; a literal must fit the destination (`mov` until M1-2; it now gets a diagnostic pointing here) |
 | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
 
-Each instruction's operands are checked against this table, and every mistake in a
-routine's instructions is reported with its line, in source order. A lex or parse error
+Each instruction's operands are checked against this table and against their tags'
+declarations, and every mistake in a routine's declarations and instructions is reported
+with its line, in line order. A lex or parse error
 still stops at the first, before any instruction is checked. With `src` declared, `move
 src ote` gives two, because `move` runs out of operands at an instruction and `ote` then
 has none of its own:
@@ -103,19 +110,15 @@ already true; and the environment threads through the legs in order, so a leg ca
 an earlier leg wrote. Both match how a real controller scans a rung.
 
 One behaviour that is a known defect, not a choice: `xic` and `xio` are independent
-positive tests, so a tag holding anything other than 0 or 1 — including a tag that was
-never written — reads false for *both*. See `PLAN.md` M1-4.
+positive tests, so a tag holding anything other than 0 or 1 reads false for *both*. The
+compiler now rejects a `dint` on either, so the defect is left to values the host
+supplies: an env built by hand, not from `Logex.Program.initial_env/1`, can still hold a 5
+or leave a tag out. See `PLAN.md` M1-4.
 
 ### Settled, not yet landed
 
-These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5 and §3's M1-3
-and Milestone 2) and will change the source language:
-
-- **Declarations and a strict tag table** (`PLAN.md` M1-3). Before the first rung, one
-  declaration per line: `<section> <name> <type> [<initial>]`, where the section is `var`,
-  `var_input` or `var_output` and the type is `bool` or `dint`. Those five words become
-  reserved, in any case. Every tag a rung uses must be declared, so every program written
-  today, the example below included, will need declarations added.
+These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5 and §3's
+Milestone 2) and will change the source language:
 - **Program organisation** ([`docs/organisation.md`](docs/organisation.md)): a
   configuration file that instantiates `.ld` programs, wires them to I/O points and
   globals, and schedules them on tasks; `var_external` for shared globals; function blocks
@@ -189,7 +192,7 @@ env = scan.(%{env | "stop" => 1});     show.("stop pressed  ", env)
 ```
 
 The first env is every declared tag at its initial value: 0, except `speed_sp` at 1200.
-Four scans, because retention is only visible across scans:
+Four scans, because a seal-in and a latch only show across scans:
 
 ```
 $ mix run scan.exs
@@ -230,7 +233,7 @@ mix format
 ## Documents
 
 - `PLAN.md` — the codebase review and the ordered plan of work
-- [`docs/naming.md`](docs/naming.md) — the IEC and vendor naming survey, one stanza per mnemonic
+- [`docs/naming.md`](docs/naming.md) — the IEC and vendor naming survey, one stanza per mnemonic or declaration word
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
 - `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
 - `CLAUDE.md` — commands and conventions for anyone (or anything) editing the code

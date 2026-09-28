@@ -1,9 +1,10 @@
 defmodule Logex.ValidationTest do
   @moduledoc """
-  M1-2: `instructionize/1` checks every instruction against its operand signature and
-  returns located diagnostics instead of raising. Each case in PLAN.md's M1-2 table is
-  here, driven from source text, and each asserts the whole diagnostic list, so a
-  missing, extra or cascading diagnostic fails as surely as a wrong one.
+  M1-2: `instructionize/2` checks every instruction against its operand signature and
+  returns located diagnostics instead of raising. M1-3: it reads the declaration lines
+  into a tag table and checks every operand against it. Each case is here, driven from
+  source text, and each asserts the whole diagnostic list, so a missing, extra or
+  cascading diagnostic fails as surely as a wrong one.
   """
   use ExUnit.Case, async: true
 
