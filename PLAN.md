@@ -667,17 +667,21 @@ they were on purpose rather than guess which M1-2 wants.
 
 **Status: designed and decided 2026-09-28; not yet landed.** Every recommendation of the
 design panel was adopted, together with `docs/organisation.md` §6.1's four additions. A
-spike of this design on a copy of `37b7932` passed 90 tests with the README output
-byte-identical; it is a receipt, not code in the repository.
+spike of this design on a copy of `37b7932`, on Elixir 1.20.4 / OTP 28, passed 90 tests
+(76 migrated, 14 new) with the README output byte-identical; it is a receipt, not code in
+the repository.
 
 The problem: no declarations, no BOOL/DINT distinction, no scope. That is what makes M1-4
 possible and what makes a typo'd tag name a silent dead rung rather than a compile error.
 
 **Where and how.** Declarations live in the `.ld` file, before the first rung, one per
 line: `<section> <name> <type> [<initial>]`, with section `var`, `var_input` or
-`var_output` and type `bool` or `dint`. They are IEC's `VAR_INPUT start : BOOL;` with the
-punctuation dropped, as logex drops it everywhere (naming rule 1; each word gets its
-`docs/naming.md` stanza before its code). The README program becomes:
+`var_output` and type `bool` or `dint`. They take IEC's words lowercased (naming rule 1;
+each word gets its `docs/naming.md` stanza before its code). IEC's `VAR_INPUT start :
+BOOL; END_VAR` loses its punctuation, as logex drops it elsewhere, and a keyword on every
+line replaces the block, so there is no `end_var`. Blocks were rejected: they need
+unclosed, nested and stray-block diagnostics and a recovery heuristic, and adding them
+later would reserve `end_var`. The README program becomes:
 
 ```
 var_input start bool
@@ -693,12 +697,15 @@ var fault bool
 …
 ```
 
-- **No grammar edit.** A declaration line parses as a rung of names. A `Logex.Declarations`
-  pass at the top of `instructionize/2` takes the leading lines whose first word is a
-  section keyword; the lexer, parser, printer and golden record do not change. A
-  declaration after the first rung is a diagnostic, but still declares its tag.
-- **Section and type words are data tables,** so M2-4's `var_external`, M1-6's `var t1 ton`
-  and M2-5's `var s1 seal` are rows, not a second declaration parser.
+- **No grammar edit.** A declaration line parses as an ordinary rung: names, with an
+  `int_lit` last when it has an initial value. A `Logex.Declarations` pass at the top of
+  `instructionize/2` takes the leading lines whose first word is a section keyword; the
+  lexer, parser, printer and golden record do not change. A declaration after the first
+  rung is a diagnostic, but still declares its tag.
+- **Section and type words are data tables,** so M2-4's `var_external` is one more row,
+  and M1-6's `var t1 ton` and M2-5's `var s1 seal` resolve through the same type lookup:
+  no second declaration parser. (A user function block's name is built per compile, not a
+  row, so it is not reserved.)
 - **Reserved in any case, in `.ld` files:** `var var_input var_output bool dint`. The commit
   that reserves them says so.
 - **Strict.** Every tag a rung uses must be declared. An undeclared tag is a located
@@ -728,7 +735,9 @@ var fault bool
   instances in it, and no M1-3 check may depend on it being flat.
 - **The Elixir-side declarer.** `instructionize(ast, declared)` takes `%Logex.Tag{}` values
   built with `Logex.Tag.new!/4`, validated by the same checks as a declaration line. It is
-  the seam `docs/defladder.md` asks for, and M1-5's `compile/1` does not expose it.
+  the seam `docs/defladder.md` §11's M1-3 row asks for, and M1-5's `compile/1` does not
+  expose it. defladder.md §15's decisions stay open; its decision 3 (head declarations in
+  the DSL's output) stays B9's.
 - **Deferred:** warnings (declared but unused, a `var_output` never written, duplicate
   coil) go to M1-5's `warnings:`; a declaration-inferring migration aid is not built.
 
@@ -741,9 +750,11 @@ two names differing only in case (§5), a missing or unknown type, an initial va
 does not fit, an initial value on a `var_input`, a reserved word as a name, a declaration
 after the first rung.
 
-**Landing, in commits, each green and each with its revert-checked test:** (1) the
-`docs/naming.md` stanzas for the five words; (2) typed operand signatures, no behaviour
-change; (3) declaration lines and `%Logex.Program{}`, not yet enforced; (4) strictness —
+**Landing, in commits, each green; (3) to (5) each with a test that fails when its change
+is reverted:** (1) the `docs/naming.md` stanzas for the five words; (2) typed operand
+signatures, no behaviour change — a refactor: the M1-2 messages stay byte-identical and
+reverting it leaves the suite green, which its commit says rather than inventing a failing
+test (landed, `2a65aef`); (3) declaration lines and `%Logex.Program{}`, not yet enforced; (4) strictness —
 undeclared tags are errors — with the suite and README migrated (35 of today's tests go
 red without it); (5) type and role checks on operands; (6) documents.
 
@@ -947,31 +958,37 @@ rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
   unknown, undriven-input or mistyped connection is a located diagnostic naming its file
   and line.
 - **M2-3 · Periodic tasks in text.** `task <n> interval <ms> priority <p>` and `with`.
-  *Done when* the plant of `docs/organisation.md` §4.4, without its event task, driven for
-  one simulated second, runs `m1` 100 times and `m2` 20 times, and a `ton` in each times
-  against the one clock.
+  *Done when* the plant of `docs/organisation.md` §4.4 without its event task, its `motor`
+  the §4.2 one plus `var t1 ton` and a rung `xic motor ton t1 5000` (so no `estop`,
+  `var_external` or `cal`, which arrive with M2-4 and M2-5), driven for one simulated
+  second, runs `m1` 100 times and `m2` 20 times, and each instance's `t1` times against
+  the one clock.
 - **M2-4 · Shared globals.** `var_external` in `.ld`; type agreement (Ed 2 §2.4.3); no
   writes to an input point; a two-writer warning. *Done when* an e-stop declared once as
   a `var_global` and read by two instances through `var_external` stops both in the same
   cycle; a `var_external` with no matching global, or of another type, is a located
   diagnostic.
-- **M2-5 · User function blocks.** `function_block <name>` as a file's first line;
+- **M2-5 · User function blocks.** `function_block <name>` as a file's first line,
+  matching the file name;
   instances (`var s1 seal`); `cal` with positional operands, rung power as EN, and nothing
   copied on a false EN; nesting; recursion is a diagnostic. *Done when* a seal-in written
   once as a function block and instantiated three times in one program behaves as three
   independent seal-ins, `m1.s2.run` reads one of them, a false EN freezes only its own
   instance, and a recursive type, an unknown FB type or a `cal` of a non-instance is a
   located diagnostic.
-- **M2-6 · Event tasks.** `task <n> single <g> priority <p>`, fired by a rising edge, and
-  in the first cycle if the trigger is already true. *Done when* an event task triggered
+- **M2-6 · Event tasks.** `task <n> single <g> [interval <ms>] priority <p>`, fired by a
+  rising edge, and in the first cycle if the trigger is already true; with `interval` too,
+  it runs periodically only while the trigger is 0, plus a run on each edge (IEC rule 2). *Done when* an event task triggered
   from an input point runs once per rising edge, before lower-priority tasks due in the
   same cycle, and runs in cycle 1 if its trigger is already true.
 
 The scheduling rules are decided too: PRIORITY on every task, 0 the highest; ties go to
 the earlier due time, then declaration order; no preemption; missed periods coalesced,
 counted and reported; time injected in milliseconds, never read from a clock; reserved
-words scoped by file kind; and, once a wall-clock runner exists, a watchdog fault zeroes
-the output image once and requires an explicit restart.
+words scoped by file kind. Once a wall-clock runner exists, a watchdog fault is to stop
+scheduling, zero the output image once, report, and require an explicit restart: the
+recommended choice, confirmed when the runner is designed (`docs/organisation.md` §7,
+decision 14).
 
 **Milestone 2 is done when** a configuration file on disk instantiates one `.ld` program
 type twice, with a function block inside it; wires the instances to declared I/O points
@@ -1206,8 +1223,11 @@ diagnostic naming its file and line.
   OR-of-AND (B1's defect class on a surface no gate sees). Preconditions if adopted: M1-2
   (one validator) and M1-5 (a `%Program{}` and a runtime for `name/1` to sit on), and a
   re-run of the whole study on Elixir 1.20, the floor in `mix.exs` — every receipt is from the 1.14
-  sandbox. The report's §15 lists the decisions this item is waiting on; nothing in §3 or
-  §5 changes until they are made. No codegen backend: the second backend the spike built
+  sandbox. The report's §15 lists the decisions this item is waiting on, and they are still
+  open. One seam came forward on its own: M1-3, decided 2026-09-28, provides the
+  Elixir-side declarer (`instructionize(ast, declared)` and `Logex.Tag.new!/4`) that §11's
+  M1-3 row asks for; §15's decision 3 (head declarations in the DSL's output) stays B9's.
+  Nothing else in §3 or §5 changes until they are made. No codegen backend: the second backend the spike built
   disagreed with `evaluate/2` on 5,708 of 20,000 seeded envs and on 0 text-reachable ones.
 
 ---

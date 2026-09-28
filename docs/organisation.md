@@ -734,7 +734,8 @@ names they break (CLAUDE.md step 2).
 
 Each is a field or a sentence now and a migration later.
 
-**M1-3 (tag table).** Keep the design `PLAN.md` M1-3 now records, and add four points.
+**M1-3 (tag table).** Keep the design panel's recommended design, and add four points.
+`PLAN.md` M1-3 records the design with all four.
 1. **Write the section and type words as data tables.** Then `var_external` is one more
    row, and M1-6's `var t1 ton` and M2-5's `var s1 seal` resolve through the same type
    lookup. No second declaration parser is needed.
@@ -761,8 +762,9 @@ Each is a field or a sentence now and a migration later.
    configuration's errors span several files, and a second widening would touch every
    diagnostic test again.
 4. **`Runtime.restart(program, state, :cold | :warm)`** is the RETAIN hook that M1-3
-   already assigns here. M1-3's design names it `restart(program, env)`; the third
-   argument is this document's addition.
+   already assigns here. The M1-3 design panel sketched `restart(program, env)`; the
+   `:cold | :warm` argument is this document's addition, and `PLAN.md` M1-5 records the
+   three-argument form.
 5. **Amend the Milestone-1 done sentence:** "…compiled once into a *named, stateless* value
    you can hold, run for N scans *as an instance* against a typed tag table…".
 6. **Land B5 immediately after.** Every recursive `evaluate` clause becomes a `defp`. An FB
@@ -780,11 +782,12 @@ Each is a field or a sentence now and a migration later.
    per timer instance" and §5's "a struct per instance" as "a per-instance record".
    `ton` keeps its internal last-scanned time
    there (§4.6), and `ons` reads `scan.first`.
-4. **Decide member writes.** IEC forbids passing an FB output as a VAR_IN_OUT, *"to
-   prevent the inadvertent modifications of such outputs"* (Ed 2 §2.5.2.2, p.70); no
-   general read-only rule was found. That the conventional family lets logic `move` into
-   `.pre` and `.acc` is **from memory**. Either way, a dotted
-   name that is not a declared member is a diagnostic.
+4. **Member writes (decision 9).** Members are readable anywhere; logic may write only
+   `.pre` and `.acc`. IEC forbids passing an FB output as a VAR_IN_OUT, *"to prevent the
+   inadvertent modifications of such outputs"* (Ed 2 §2.5.2.2, p.70); no general
+   read-only rule was found. That the conventional family lets logic `move` into `.pre`
+   and `.acc` is **from memory**. A dotted name that is not a declared member is a
+   diagnostic.
 5. **Spike a real `ton` before calling this model settled:** one program type, two
    instances on 10 ms and 50 ms tasks, with an assertion that `.acc` reaches the preset at
    the same logical time in both.
@@ -832,8 +835,10 @@ checked by reverting it (CLAUDE.md; PLAN §2·M0-4). For example:
 **M2-3 · Periodic tasks in text.**
 - `task … interval … priority`, and `with`.
 - Reserves `task interval priority with` in `.lcf`.
-- *Acceptance: the §4.4 plant without its event task, driven for one simulated second,
-  runs `m1` 100 times and `m2` 20 times, and a `ton` in each times against the one clock.*
+- *Acceptance: the §4.4 plant without its event task, its `motor` the §4.2 one plus `var
+  t1 ton` and a rung `xic motor ton t1 5000` (so no `estop`, `var_external` or `cal`, which
+  arrive with M2-4 and M2-5), driven for one simulated second, runs `m1` 100 times and
+  `m2` 20 times, and each instance's `t1` times against the one clock.*
 
 **M2-4 · Shared globals.**
 - `var_external` in `.ld`, reserved there.
@@ -872,13 +877,13 @@ checked by reverting it (CLAUDE.md; PLAN §2·M0-4). For example:
 
 **Documents each stage stales.**
 - `README.md` gets a syntax-list entry and an example that is re-run.
-- `PLAN.md` gets the Milestone 2 section, a §8 entry ("program organisation"), and
-  updates to B5's module list and B9's preconditions.
+- `PLAN.md` has the Milestone 2 section and a §8 entry ("program organisation"); each
+  stage still updates B5's module list and B9's preconditions.
 - CLAUDE.md's Key Files gets `configuration.ex` and `runtime.ex`, and its `evaluate`
   convention changes at M1-6.
-- Once decisions 1–3 are approved, PLAN §5 gains one settled bullet: "Organisation follows
-  IEC's software model: a file is a POU type, state is an instance, a configuration
-  instantiates, wires and schedules; no routines, no controller scope, no preemption."
+- PLAN §5's organisation bullet carries the one-line summary: "a file is a POU type,
+  state is an instance, a configuration instantiates, wires and schedules; no routines,
+  no controller scope, no preemption."
 
 ---
 

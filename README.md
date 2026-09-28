@@ -107,8 +107,19 @@ never written — reads false for *both*. See `PLAN.md` M1-4.
 
 ### Settled, not yet landed
 
-These are decided (see [`docs/naming.md`](docs/naming.md) and `PLAN.md` §5) and will
-change the source language:
+These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5 and §3's M1-3
+and Milestone 2) and will change the source language:
+
+- **Declarations and a strict tag table** (`PLAN.md` M1-3). Before the first rung, one
+  declaration per line: `<section> <name> <type> [<initial>]`, where the section is `var`,
+  `var_input` or `var_output` and the type is `bool` or `dint`. Those five words become
+  reserved, in any case. Every tag a rung uses must be declared, so every program written
+  today, the example below included, will need declarations added.
+- **Program organisation** ([`docs/organisation.md`](docs/organisation.md)): a
+  configuration file that instantiates `.ld` programs, wires them to I/O points and
+  globals, and schedules them on tasks; `var_external` for shared globals; function blocks
+  called with `cal`. Each new word still gets its `docs/naming.md` stanza, which may change
+  a spelling.
 
 - **`//` starts a comment**; `.` gives member access (`t1.dn`, `word.3`); negative integer
   literals lex.
