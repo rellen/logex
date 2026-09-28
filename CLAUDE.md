@@ -74,8 +74,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   **(3)** never invent a readable word for a thing that already has a standard name. Mark
   what you could not verify `unverified`; never guess. `test/logex/naming_test.exs` fails
   if a mnemonic reaches `@instructions` unsurveyed.
-- New instructions, step 2: add the mnemonic and its operand signature (`:tag` or
-  `:value` per operand) to the `@instructions` map in `compiler.ex` **and** two
+- New instructions, step 2: add the mnemonic and its operand signature (one
+  `{access, type}` per operand: access `:read` or `:write` for a tag, `:value` for a tag
+  or a literal; type `:bool`, `:dint` or `:any`) to the `@instructions` map in
+  `compiler.ex` **and** two
   `evaluate/2` clauses — one for `{true, env}` and one for `{false, env}`. The map also
   reserves the name: no tag may be spelled like a mnemonic, in any case, so a new
   instruction breaks any program with a tag of that name — say so in the commit. The

@@ -2,16 +2,18 @@ defmodule Logex.Compiler do
   defdelegate tokenize(source), to: Logex.Lexer
   defdelegate parse(tokens), to: Logex.Parser
 
-  # Each mnemonic's operand signature, in order: `:tag` must be a tag name, and `:value`
-  # may be a tag or an integer literal. Mnemonics are matched case-insensitively and are
-  # reserved: no tag may be named after one, in any case.
+  # Each mnemonic's operand signature, in order, one `{access, type}` per operand. Access:
+  # `:read` and `:write` must be a tag, and `:value` may be a tag or an integer literal.
+  # Type: `:bool`, `:dint`, or `:any`, which IEC's MOVE takes (`IN : ANY` -> `OUT : ANY`,
+  # docs/naming.md). Mnemonics are matched case-insensitively and are reserved: no tag may
+  # be named after one, in any case.
   @instructions %{
-    "xic" => {:xic, [:tag]},
-    "xio" => {:xio, [:tag]},
-    "ote" => {:ote, [:tag]},
-    "otl" => {:otl, [:tag]},
-    "otu" => {:otu, [:tag]},
-    "move" => {:move, [:value, :tag]}
+    "xic" => {:xic, [{:read, :bool}]},
+    "xio" => {:xio, [{:read, :bool}]},
+    "ote" => {:ote, [{:write, :bool}]},
+    "otl" => {:otl, [{:write, :bool}]},
+    "otu" => {:otu, [{:write, :bool}]},
+    "move" => {:move, [{:value, :any}, {:write, :any}]}
   }
 
   @doc """
@@ -127,10 +129,11 @@ defmodule Logex.Compiler do
   defp operand_count(1), do: "1 operand"
   defp operand_count(count), do: "#{count} operands"
 
-  # A new operand kind needs a clause here and in check_kind/4; without them, the first
-  # program that uses it raises FunctionClauseError rather than passing unchecked.
-  defp kind(:tag), do: "a tag"
-  defp kind(:value), do: "a value"
+  # A new access needs a clause here and in check_kind/4; without them, the first program
+  # that uses it raises FunctionClauseError rather than passing unchecked.
+  defp kind({:read, _type}), do: "a tag"
+  defp kind({:write, _type}), do: "a tag"
+  defp kind({:value, _type}), do: "a value"
 
   defp found(0), do: "none"
   defp found(count), do: "#{count}"
@@ -150,9 +153,10 @@ defmodule Logex.Compiler do
   # What each kind accepts, as an allowlist. take_operands/3 only ever takes names and
   # literals, so a literal where a tag must go is the one thing left to report; any other
   # pairing raises here rather than reaching evaluate/2 unchecked.
-  defp check_kind(:tag, {:name, _, _}, _at, diagnostics), do: diagnostics
-  defp check_kind(:value, {:name, _, _}, _at, diagnostics), do: diagnostics
-  defp check_kind(:value, {:int_lit, _, _}, _at, diagnostics), do: diagnostics
+  defp check_kind({:read, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
+  defp check_kind({:write, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
+  defp check_kind({:value, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
+  defp check_kind({:value, _type}, {:int_lit, _, _}, _at, diagnostics), do: diagnostics
 
   defp check_kind(kind, {:int_lit, _, value}, {line, word}, diagnostics),
     do: [diagnostic(line, "`#{word}` expects #{kind(kind)}, found `#{value}`") | diagnostics]
