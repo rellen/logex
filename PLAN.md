@@ -665,6 +665,9 @@ they were on purpose rather than guess which M1-2 wants.
 
 ### M1-3 · A tag table with types
 
+*`docs/organisation.md` §6.1 proposes four additions so this item is not redone by the
+organisation work (§5); they are not yet accepted.*
+
 No declarations, no BOOL/DINT distinction, no scope. This is what makes M1-4 possible
 and what makes a typo'd tag name a silent dead rung rather than a compile error.
 
@@ -734,6 +737,9 @@ ever disagree, §5 is the decision of record.)
 
 ### M1-5 · A real public API
 
+*`docs/organisation.md` §6.1 proposes six changes, among them a named, stateless
+`%Logex.Program{}` and an instance call; they are not yet accepted.*
+
 There is no `Logex` module at all: the `mix new` stub and its doctest were deleted
 rather than left standing in for an API. So every consumer must know the stage order and
 unwrap two different `:ok` tuple shapes. There is no `compile/1`, no scan loop, and nothing
@@ -782,6 +788,9 @@ Put the seal-in example in an `@doc` on `Logex.compile/1` and restore that file 
 can silently outlive.
 
 ### M1-6 · TON and ONS
+
+*`docs/organisation.md` §6.1 proposes seven changes, among them `evaluate/3` with a
+read-only scan context and declared, nested timer instances; they are not yet accepted.*
 
 Both need per-instance cross-scan state, so they are the proof that M1-5's architecture
 is right. TON is what turns this from an expression evaluator into something
@@ -1127,6 +1136,16 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   catch an undeclared `ote`, left the worst case open for a milestone. The cost, accepted:
   each new instruction reserves its name when it lands, and breaks any program with a
   tag of that name. IEC reserves its keywords case-insensitively too.
+- **Program organisation follows IEC's software model, in logex's dialect.** Decided
+  2026-09-28: logex is heading for IEC's hierarchy (configuration, tasks, program
+  instances, function-block instances, globals), its task-style execution (continuous,
+  periodic, event) and I/O mapping in the configuration, not in program bodies.
+  `docs/organisation.md` sets out the model, the conventional family's hierarchy mapped
+  onto it, a proposed logex form and a proposed Milestone 2. Only the direction is
+  settled: its syntax, its Milestone-1 changes (§6.1 there) and its fourteen open
+  decisions are not. **Routines are deferred by decision** — subroutines that share their
+  program's scope, called with JSR, have no IEC counterpart, and a program's logic is
+  factored with function blocks instead; revisit only if that proves too heavy.
 - **`mov` → `move`.** **Landed with M1-2**, with no alias: `mov` is an unknown
   instruction whose diagnostic says *"did you mean `move`?"*. The one existing name the survey changed. The conventional
   toolchain renamed MOV→MOVE in its 2024 conformance sweep *"to conform to IEC
@@ -1256,3 +1275,6 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    from `env` to `{skip, env}` is enough for forward jumps; only backward jumps need an
    indexed loop.
 6. **Surface syntax: comments, negative literals, structured addressing.** See §5.
+7. **Program organisation: configurations, tasks, program instances, I/O mapping.**
+   Direction settled in §5; the model and a proposed Milestone 2 are in
+   `docs/organisation.md`.
