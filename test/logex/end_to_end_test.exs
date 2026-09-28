@@ -16,8 +16,8 @@ defmodule Logex.EndToEndTest do
     {:ok, tokens, _} = Logex.Compiler.tokenize(src)
     {:ok, ast} = Logex.Compiler.parse(tokens)
 
-    {:ok, ir} = Logex.Compiler.instructionize(ast)
-    {_power_flow, new_env} = Logex.Compiler.evaluate(ir, {true, env})
+    {:ok, program} = Logex.Compiler.instructionize(ast)
+    {_power_flow, new_env} = Logex.Compiler.evaluate(program, {true, env})
 
     new_env
   end
@@ -39,20 +39,26 @@ defmodule Logex.EndToEndTest do
     match?({:error, _}, Logex.Compiler.parse(tokens))
   end
 
+  # Declaration lines for a test's tags: `var <name> bool` for each bool, then
+  # `var <name> dint` for each dint. Real source, so every test still crosses every stage.
+  defp decl(bools, dints \\ []),
+    do: Enum.map_join(bools, &"var #{&1} bool\n") <> Enum.map_join(dints, &"var #{&1} dint\n")
+
   defp lex_error?(src), do: match?({:error, _, _}, Logex.Compiler.tokenize(src))
 
   describe "integer literals" do
     test "move of a literal writes the literal" do
-      assert %{"dd" => 123} = run("move 123 dd", %{"dd" => 0})
+      assert %{"dd" => 123} = run(decl([], ~w(dd)) <> "move 123 dd", %{"dd" => 0})
     end
 
     test "move of a tag copies the tag" do
-      assert %{"dd" => 7} = run("move aa dd", %{"aa" => 7})
+      assert %{"dd" => 7} = run(decl([], ~w(aa dd)) <> "move aa dd", %{"aa" => 7})
     end
 
     test "the showcase routine from lex_and_parse_test.exs" do
       src =
-        "( move aa bb | move cc dd | move ee ff ( move 123 hh ) ) " <>
+        decl(~w(xx yy), ~w(aa bb cc dd ee ff hh)) <>
+          "( move aa bb | move cc dd | move ee ff ( move 123 hh ) ) " <>
           "( ote xx | ote yy )"
 
       assert %{
@@ -71,18 +77,19 @@ defmodule Logex.EndToEndTest do
 
   describe "rungs" do
     test "each rung starts with its own power flow" do
-      assert %{"r1" => 0, "r2" => 1} = run("xic gg ote r1\note r2", %{"gg" => 0, "r1" => 1})
+      assert %{"r1" => 0, "r2" => 1} =
+               run(decl(~w(gg r1 r2)) <> "xic gg ote r1\note r2", %{"gg" => 0, "r1" => 1})
     end
 
     test "a trailing newline is not a syntax error" do
-      assert %{"xx" => 1} = run("ote xx\n", %{})
+      assert %{"xx" => 1} = run(decl(~w(xx)) <> "ote xx\n", %{})
     end
 
     test "leading, repeated and CRLF newlines are all one delimiter" do
-      assert %{"xx" => 1} = run("\note xx", %{})
-      assert %{"xx" => 1, "yy" => 1} = run("ote xx\n\n\note yy\n", %{})
-      assert %{"xx" => 1, "yy" => 1} = run("ote xx\r\note yy\r\n", %{})
-      assert %{"xx" => 1, "yy" => 1} = run("  ote xx  \n\n  ote yy\n", %{})
+      assert %{"xx" => 1} = run(decl(~w(xx)) <> "\note xx", %{})
+      assert %{"xx" => 1, "yy" => 1} = run(decl(~w(xx yy)) <> "ote xx\n\n\note yy\n", %{})
+      assert %{"xx" => 1, "yy" => 1} = run(decl(~w(xx yy)) <> "ote xx\r\note yy\r\n", %{})
+      assert %{"xx" => 1, "yy" => 1} = run(decl(~w(xx yy)) <> "  ote xx  \n\n  ote yy\n", %{})
     end
 
     test "blank lines do not become empty rungs" do
@@ -106,23 +113,31 @@ defmodule Logex.EndToEndTest do
       # independent" refactor — evaluating each leg against the incoming env and
       # merging — flips this case to mm=1, zz=1 and is otherwise invisible.
       assert %{"mm" => 0, "zz" => 0} =
-               run("( xic gg ote mm | xic mm ote zz )", %{"gg" => 0, "mm" => 1})
+               run(decl(~w(gg mm zz)) <> "( xic gg ote mm | xic mm ote zz )", %{
+                 "gg" => 0,
+                 "mm" => 1
+               })
     end
 
     test "parallel branches OR, and every branch still runs for its side effects" do
-      env = run("( xic aa ote p1 | xic bb ote p2 ) ote res", %{"aa" => 1, "p2" => 1})
+      env =
+        run(decl(~w(aa bb p1 p2 res)) <> "( xic aa ote p1 | xic bb ote p2 ) ote res", %{
+          "aa" => 1,
+          "p2" => 1
+        })
+
       assert %{"p1" => 1, "p2" => 0, "res" => 1} = env
     end
 
     test "a nested branch group is an AND of an OR" do
-      src = "xic aa ( xic bb | xic cc ) ote res"
+      src = decl(~w(aa bb cc res)) <> "xic aa ( xic bb | xic cc ) ote res"
       assert %{"res" => 1} = run(src, %{"aa" => 1, "bb" => 0, "cc" => 1})
       assert %{"res" => 0} = run(src, %{"aa" => 1, "bb" => 0, "cc" => 0})
     end
 
     test "an empty branch leg is a jumper and passes power unconditionally" do
-      assert %{"xx" => 1} = run("( xic aa | ) ote xx", %{"aa" => 0})
-      assert %{"xx" => 1} = run("( ) ote xx", %{})
+      assert %{"xx" => 1} = run(decl(~w(aa xx)) <> "( xic aa | ) ote xx", %{"aa" => 0})
+      assert %{"xx" => 1} = run(decl(~w(xx)) <> "( ) ote xx", %{})
     end
 
     test "unbalanced branch tokens are still rejected" do
@@ -137,7 +152,9 @@ defmodule Logex.EndToEndTest do
       # what keeps the claim true: 50 is well past 6, and the only bound left is
       # the machine's. Both power states, so a nesting bug cannot pass by being
       # uniformly false.
-      src = String.duplicate("( ", 50) <> "xic aa" <> String.duplicate(" )", 50) <> " ote xx"
+      src =
+        decl(~w(aa xx)) <>
+          String.duplicate("( ", 50) <> "xic aa" <> String.duplicate(" )", 50) <> " ote xx"
 
       assert %{"xx" => 1} = run(src, %{"aa" => 1})
       assert %{"xx" => 0} = run(src, %{"aa" => 0})
@@ -150,18 +167,20 @@ defmodule Logex.EndToEndTest do
       # gone became a tag called `aanxb`, the group lost a leg, and an OR turned
       # silently into an AND with no error at any stage. `(`, `|` and `)` are
       # outside NAME, so the same deletion cannot change the token stream.
-      spaced = "( xic aa | xic bb ) ote dd"
-      fused = "( xic aa|xic bb ) ote dd"
+      spaced = decl(~w(aa bb dd)) <> "( xic aa | xic bb ) ote dd"
+      fused = decl(~w(aa bb dd)) <> "( xic aa|xic bb ) ote dd"
 
       assert run(spaced, %{"aa" => 0, "bb" => 1}) == run(fused, %{"aa" => 0, "bb" => 1})
       assert %{"dd" => 1} = run(fused, %{"aa" => 0, "bb" => 1})
 
       # The same deletion against an operand rather than a contact: this one used
       # to write to a tag named `dstnxb` and leave `dst` alone.
-      assert run("( move src dst | xic bb ) ote ee", %{"src" => 9}) ==
-               run("( move src dst|xic bb ) ote ee", %{"src" => 9})
+      tags = decl(~w(bb ee), ~w(src dst))
 
-      assert %{"dst" => 9} = run("( move src dst|xic bb ) ote ee", %{"src" => 9})
+      assert run(tags <> "( move src dst | xic bb ) ote ee", %{"src" => 9}) ==
+               run(tags <> "( move src dst|xic bb ) ote ee", %{"src" => 9})
+
+      assert %{"dst" => 9} = run(tags <> "( move src dst|xic bb ) ote ee", %{"src" => 9})
     end
 
     test "an old bst program names the word and its line rather than dying in Map.get" do
@@ -169,8 +188,12 @@ defmodule Logex.EndToEndTest do
       # an old program is no longer a syntax error and reaches instructionize/1,
       # where `Map.get(@instructions, "bst")` returned nil and the bare MatchError
       # named neither the word nor the line.
-      assert {:error, [first | _]} = compile("xic aa ote bb\nbst xic cc nxb xic dd bnd ote ee")
-      assert Logex.Diagnostic.format(first) =~ ~r/^line 2: `bst` is no longer a keyword/
+      assert {:error, [first | _]} =
+               compile(
+                 decl(~w(aa bb cc dd ee)) <> "xic aa ote bb\nbst xic cc nxb xic dd bnd ote ee"
+               )
+
+      assert Logex.Diagnostic.format(first) =~ ~r/^line 7: `bst` is no longer a keyword/
     end
   end
 
@@ -185,8 +208,8 @@ defmodule Logex.EndToEndTest do
       # Guards "any run", which includes an empty one. When the leex regex said `+`,
       # NAME needed two characters and this was {:error, {1, :ladder_lexer,
       # {:illegal, 'a'}}, 1}.
-      assert %{"b" => 1} = run("xic a ote b", %{"a" => 1})
-      assert %{"z" => 1} = run("ote z", %{})
+      assert %{"b" => 1} = run(decl(~w(a b)) <> "xic a ote b", %{"a" => 1})
+      assert %{"z" => 1} = run(decl(~w(z)) <> "ote z", %{})
       refute lex_error?("xic a ote b")
     end
 
@@ -212,7 +235,8 @@ defmodule Logex.EndToEndTest do
       # runs de-energised. Asserting values rather than survival is what makes a
       # literal 1 in any of those slots a FunctionClauseError here.
       src =
-        "\n\n( xic aa ote p1 | xic bb ote p2 )\n" <>
+        decl(~w(aa bb p1 p2 q1 q2 r1 u1 t1), ~w(s1 s2 t2)) <>
+          "\n\n( xic aa ote p1 | xic bb ote p2 )\n" <>
           "( xio bb otl q1 | xio aa otl q2 )\n" <>
           "xic aa otu r1 move 5 s1 move s1 s2\n" <>
           "xio aa xic bb xio bb otu u1 move 7 t2 ote t1"
@@ -228,13 +252,14 @@ defmodule Logex.EndToEndTest do
 
   describe "output instructions" do
     test "ote de-energises on a false rung, otl does not" do
-      assert %{"xx" => 0} = run("xic gg ote xx", %{"gg" => 0, "xx" => 1})
-      assert %{"xx" => 1} = run("xic gg otl xx", %{"gg" => 0, "xx" => 1})
+      assert %{"xx" => 0} = run(decl(~w(gg xx)) <> "xic gg ote xx", %{"gg" => 0, "xx" => 1})
+      assert %{"xx" => 1} = run(decl(~w(gg xx)) <> "xic gg otl xx", %{"gg" => 0, "xx" => 1})
     end
   end
 
   describe "a seal-in motor circuit, one scan per evaluate/2 call" do
-    @seal "( xic start | xic motor ) xio stop ote motor"
+    @seal "var_input start bool\nvar_input stop bool\nvar_output motor bool\n" <>
+            "( xic start | xic motor ) xio stop ote motor"
 
     test "starts, seals in when the button is released, and drops out on stop" do
       scan1 = run(@seal, %{"start" => 1, "stop" => 0, "motor" => 0})
@@ -249,6 +274,15 @@ defmodule Logex.EndToEndTest do
   end
 
   describe "the tag table (M1-3)" do
+    test "a misspelt tag is a compile error, not a dead rung" do
+      src = "var_input start bool\nvar_output motor bool\nxic strat ote motor"
+
+      assert {:error, [diagnostic]} = compile(src)
+
+      assert Logex.Diagnostic.format(diagnostic) ==
+               "line 3: `strat` is not declared — did you mean `start`?"
+    end
+
     test "every declared tag starts at its initial value" do
       {:ok, program} =
         compile("var_input go bool\nvar_output sp dint 1200\nvar lamp bool 1\nxic go move 0 sp")

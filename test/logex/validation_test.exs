@@ -9,6 +9,10 @@ defmodule Logex.ValidationTest do
 
   alias Logex.Compiler
 
+  # The operand-shape cases below are about instructions, not tags, so their tags are
+  # declared from Elixir and every line they assert stays where M1-2 put it.
+  @declared Enum.map(~w(aa bb cc dd src x a b mov bst nxb), &Logex.Tag.new!(&1, :bool))
+
   describe "the cases that used to raise or pass silently" do
     test "an unknown mnemonic is named, with its line" do
       assert errors("zzz aa") == ["line 1: unknown instruction `zzz`"]
@@ -197,7 +201,7 @@ defmodule Logex.ValidationTest do
              ]
     end
 
-    test "a declaration after the first rung is named" do
+    test "a declaration after the first rung is named, and still declares its tag" do
       assert source_errors("var a bool\nxic a ote b\nvar b bool") == [
                "line 3: `var` after the first rung (line 2): declarations come first"
              ]
@@ -212,8 +216,8 @@ defmodule Logex.ValidationTest do
     end
 
     test "a section word where an instruction starts is named as a declaration" do
-      assert source_errors("xic aa var bb") == [
-               "line 1: `var` starts a declaration, which is a line of its own before the first rung"
+      assert source_errors("var aa bool\nxic aa var bb") == [
+               "line 2: `var` starts a declaration, which is a line of its own before the first rung"
              ]
     end
 
@@ -250,6 +254,49 @@ defmodule Logex.ValidationTest do
 
       assert Map.new(tags, fn {name, tag} -> {name, tag.initial} end) ==
                %{"lo" => 0, "hi" => 2_147_483_647, "t" => 1, "f" => 0}
+    end
+  end
+
+  describe "strictness (M1-3): every tag a rung uses is declared" do
+    test "an undeclared tag is named once, at its first use, with the nearest declared name" do
+      assert source_errors("var_input start bool\nvar m bool\nxic strat ote m\nxic strat ote m") ==
+               ["line 3: `strat` is not declared — did you mean `start`?"]
+    end
+
+    test "a tag far from every declared name gets no suggestion" do
+      assert source_errors("var_input start bool\nxic start ote horn") ==
+               ["line 2: `horn` is not declared"]
+    end
+
+    test "a tag differing from a declared one only in case is named as such" do
+      assert source_errors("var motor bool\nxic Motor ote motor") == [
+               "line 2: `Motor` is not declared — did you mean `motor`? (tags are case-sensitive)"
+             ]
+    end
+
+    test "is checked in every leg of a branch group" do
+      assert source_errors("var a bool\n( xic a | xic zz ) ote a") == [
+               "line 2: `zz` is not declared"
+             ]
+    end
+
+    test "a program that declares nothing is told how, once" do
+      assert source_errors("xic a ote b") == [
+               "line 1: `a` is not declared (this program declares no tags: each is now " <>
+                 "declared before the first rung, as `var a bool`)",
+               "line 1: `b` is not declared"
+             ]
+    end
+
+    test "a program whose declarations were all wrong is not told it declares nothing" do
+      assert source_errors("var a int\nxic a ote a") == [
+               "line 1: unknown type `int`: logex has `bool` and `dint`",
+               "line 2: `a` is not declared"
+             ]
+    end
+
+    test "a reserved word used as a tag is never declared" do
+      assert source_errors("var b bool\nxic dint ote b") == ["line 2: `dint` is not declared"]
     end
   end
 
@@ -300,7 +347,7 @@ defmodule Logex.ValidationTest do
   defp compile(source) do
     {:ok, tokens, _} = Compiler.tokenize(source)
     {:ok, ast} = Compiler.parse(tokens)
-    Compiler.instructionize(ast)
+    Compiler.instructionize(ast, @declared)
   end
 
   # From source alone, or with a table declared from Elixir: the M1-3 cases.

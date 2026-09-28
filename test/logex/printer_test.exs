@@ -51,6 +51,13 @@ defmodule Logex.PrinterTest do
 
     test "a real program survives the trip and evaluates identically" do
       source = """
+      var_input start bool
+      var_input stop bool
+      var_input overtemp bool
+      var_output motor bool
+      var_output run_lamp bool
+      var fault bool
+      var speed_sp dint 1200
       ( xic start | xic motor ) xio stop ote motor
       xic motor ote run_lamp
       xic overtemp otl fault
@@ -87,7 +94,7 @@ defmodule Logex.PrinterTest do
       # ordinary names again and the printer is total over them. While they were
       # keywords this had to raise, or the printed text read back as structure.
       assert Printer.print(parse!("xic bst ote nxb")) == "xic bst ote nxb"
-      assert %{"nxb" => 1} = run("xic bst ote nxb", %{"bst" => 1})
+      assert %{"nxb" => 1} = run("var bst bool\nvar nxb bool\nxic bst ote nxb", %{"bst" => 1})
     end
 
     test "a group with no legs differs in meaning from a group with one empty leg" do
@@ -125,7 +132,11 @@ defmodule Logex.PrinterTest do
   end
 
   defp lower!(rung) do
-    {:ok, %Logex.Program{rungs: [ir]}} = Compiler.instructionize({:routine, {:rungs, [rung]}})
+    declared = [Logex.Tag.new!("xx", :bool)]
+
+    {:ok, %Logex.Program{rungs: [ir]}} =
+      Compiler.instructionize({:routine, {:rungs, [rung]}}, declared)
+
     ir
   end
 

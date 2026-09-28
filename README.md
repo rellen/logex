@@ -88,12 +88,13 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 
 Each instruction's operands are checked against this table, and every mistake in a
 routine's instructions is reported with its line, in source order. A lex or parse error
-still stops at the first, before any instruction is checked. `move src ote` gives two,
-because `move` runs out of operands at an instruction and `ote` then has none of its own:
+still stops at the first, before any instruction is checked. With `src` declared, `move
+src ote` gives two, because `move` runs out of operands at an instruction and `ote` then
+has none of its own:
 
 ```
-line 1: `move` expects 2 operands (a value, then a tag), found 1 before the instruction `ote`
-line 1: `ote` expects 1 operand (a tag), found none
+line 2: `move` expects 2 operands (a value, then a tag), found 1 before the instruction `ote`
+line 2: `ote` expects 1 operand (a tag), found none
 ```
 
 Two behaviours that are deliberate rather than accidental: branches do **not**
@@ -133,9 +134,20 @@ and Milestone 2) and will change the source language:
 
 Neither file below is in the repository — create them to follow along.
 
-`motor.ld` — a seal-in motor starter with a latched fault:
+`motor.ld` — a seal-in motor starter with a latched fault. Every tag is declared before the
+first rung: what it holds (`bool` or `dint`), and whether it is supplied from outside
+(`var_input`), produced for outside (`var_output`) or the program's own (`var`):
 
 ```
+var_input start bool
+var_input stop bool
+var_input overtemp bool
+var_input reset bool
+var_output motor bool
+var_output run_lamp bool
+var_output speed_sp dint 1200
+var fault bool
+
 ( xic start | xic motor ) xio stop ote motor
 xic motor ote run_lamp
 xic overtemp otl fault
@@ -145,20 +157,22 @@ xic fault move 0 speed_sp
 
 Rung 1 is the seal-in: `start` OR `motor` itself, AND not `stop`. Because `ote` is
 non-retentive, `motor` drops out the moment `stop` closes. Rung 3 latches `fault`, which
-only rung 4 can clear — that is what makes `otl`/`otu` different from `ote`.
+only rung 4 can clear — that is what makes `otl`/`otu` different from `ote`. A misspelt
+tag is a compile error, not a rung that silently never fires: `xic motor ote run_lmap`
+gives `` line 11: `run_lmap` is not declared — did you mean `run_lamp`? ``.
 
-`scan.exs` — there is no public API yet, so a scan is the four compiler stages by hand:
+`scan.exs` — there is no public API yet, so the program is compiled by hand, once, and each
+scan evaluates it:
 
 ```elixir
 source = File.read!("motor.ld")
 
+{:ok, tokens, _} = Logex.Compiler.tokenize(source)
+{:ok, ast} = Logex.Compiler.parse(tokens)
+{:ok, program} = Logex.Compiler.instructionize(ast)
+
 scan = fn env ->
-  {:ok, tokens, _} = Logex.Compiler.tokenize(source)
-  {:ok, ast} = Logex.Compiler.parse(tokens)
-
-  {:ok, ir} = Logex.Compiler.instructionize(ast)
-  {_power_flow, env} = Logex.Compiler.evaluate(ir, {true, env})
-
+  {_power_flow, env} = Logex.Compiler.evaluate(program, {true, env})
   env
 end
 
@@ -166,8 +180,7 @@ show = fn label, env ->
   IO.puts("#{label}  #{inspect(Map.take(env, ["motor", "run_lamp", "fault", "speed_sp"]))}")
 end
 
-env = %{"start" => 0, "stop" => 0, "motor" => 0, "run_lamp" => 0,
-        "overtemp" => 0, "reset" => 0, "fault" => 0, "speed_sp" => 1200}
+env = Logex.Program.initial_env(program)
 
 env = scan.(%{env | "start" => 1});    show.("start pressed ", env)
 env = scan.(%{env | "start" => 0});    show.("start released", env)
@@ -175,6 +188,7 @@ env = scan.(%{env | "overtemp" => 1}); show.("overtemp      ", env)
 env = scan.(%{env | "stop" => 1});     show.("stop pressed  ", env)
 ```
 
+The first env is every declared tag at its initial value: 0, except `speed_sp` at 1200.
 Four scans, because retention is only visible across scans:
 
 ```

@@ -30,7 +30,11 @@ defmodule Logex.InstructionizeTest do
           {:rung, [{:name, 9, "ote"}, {:name, 9, "zz"}]}
         ]}}
 
-    assert {:ok, %Logex.Program{rungs: rungs}} = Logex.Compiler.instructionize(ast)
+    declared =
+      Enum.map(~w(aa bb cc dd ee ff hh), &Logex.Tag.new!(&1, :dint)) ++
+        Enum.map(~w(xx yy zz), &Logex.Tag.new!(&1, :bool))
+
+    assert {:ok, %Logex.Program{rungs: rungs}} = Logex.Compiler.instructionize(ast, declared)
 
     assert rungs ==
              [

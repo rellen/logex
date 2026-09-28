@@ -41,11 +41,15 @@ defmodule Logex.Compiler do
   its would-be operands are not each reported as unknown instructions too. An instruction's
   operands stop early at an instruction or a branch group, which is then lowered as usual.
   """
-  def instructionize({:routine, {:rungs, rungs}}, declared \\ []) do
+  def instructionize({:routine, {:rungs, rungs}} = routine, declared \\ []) do
     {tags, logic, declaring} = Declarations.split(rungs, declared)
-    {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung/2)
-    lowered(rungs, tags, declaring ++ Enum.reverse(lowering))
+    {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, tags))
+    note? = map_size(tags) == 0 and declares_nothing?(routine, logic)
+    lowered(rungs, tags, declaring ++ undeclared(Enum.reverse(lowering), tags, note?))
   end
+
+  # No declaration line at all, as opposed to declarations that were all wrong.
+  defp declares_nothing?({:routine, {:rungs, rungs}}, logic), do: length(rungs) == length(logic)
 
   defp lowered(rungs, tags, []), do: {:ok, %Program{rungs: rungs, tags: tags}}
 
@@ -53,41 +57,44 @@ defmodule Logex.Compiler do
   # merged by line. The sort is stable: within a line, the order each list gave is kept.
   defp lowered(_rungs, _tags, diagnostics), do: {:error, Enum.sort_by(diagnostics, & &1.line)}
 
-  defp lower_rung({:rung, elements}, diagnostics) do
-    {ir, diagnostics} = lower(elements, [], diagnostics)
+  defp lower_rung({:rung, elements}, diagnostics, tags) do
+    {ir, diagnostics} = lower(elements, [], diagnostics, tags)
     {{:rung, ir}, diagnostics}
   end
 
-  # Diagnostics are accumulated newest first and reversed once, in instructionize/2.
-  defp lower([], ir, diagnostics), do: {Enum.reverse(ir), diagnostics}
+  # Diagnostics are accumulated newest first and reversed once, in instructionize/2. An
+  # undeclared tag is accumulated as `{:undeclared, line, name}` and reported by
+  # undeclared/3, at its first use only.
+  defp lower([], ir, diagnostics, _tags), do: {Enum.reverse(ir), diagnostics}
 
-  defp lower([{:branches, legs} | rest], ir, diagnostics) do
-    {legs, diagnostics} = Enum.map_reduce(legs, diagnostics, &lower(&1, [], &2))
-    lower(rest, [{:branches, legs} | ir], diagnostics)
+  defp lower([{:branches, legs} | rest], ir, diagnostics, tags) do
+    {legs, diagnostics} = Enum.map_reduce(legs, diagnostics, &lower(&1, [], &2, tags))
+    lower(rest, [{:branches, legs} | ir], diagnostics, tags)
   end
 
-  defp lower([{:name, line, word} | rest], ir, diagnostics) do
+  defp lower([{:name, line, word} | rest], ir, diagnostics, tags) do
     key = String.downcase(word)
-    lower_word(Map.fetch(@instructions, key), key, {line, word}, rest, ir, diagnostics)
+    lower_word(Map.fetch(@instructions, key), key, {line, word}, {rest, ir, diagnostics, tags})
   end
 
   # The grammar allows a literal anywhere an element can go, including where an
   # instruction must start: `123 aa`, or an extra operand as in `xic aa 7 ote bb`.
-  defp lower([{:int_lit, line, value} | rest], ir, diagnostics) do
+  defp lower([{:int_lit, line, value} | rest], ir, diagnostics, tags) do
     found = diagnostic(line, "expected an instruction, found `#{value}`")
-    lower(skip_operands(rest), ir, [found | diagnostics])
+    lower(skip_operands(rest), ir, [found | diagnostics], tags)
   end
 
-  defp lower_word({:ok, {symbol, signature}}, _key, {line, word}, rest, ir, diagnostics) do
+  defp lower_word({:ok, {symbol, signature}}, _key, {line, _} = at, {rest, ir, diagnostics, tags}) do
     {operands, rest} = take_operands(rest, length(signature), [])
-    diagnostics = check_count(signature, operands, rest, {line, word}, diagnostics)
-    diagnostics = check_kinds(signature, operands, {line, word}, diagnostics)
-    lower(rest, [{symbol, line, operands} | ir], diagnostics)
+    diagnostics = check_count(signature, operands, rest, at, diagnostics)
+    diagnostics = check_kinds(signature, operands, at, diagnostics)
+    diagnostics = check_tags(operands, tags, diagnostics)
+    lower(rest, [{symbol, line, operands} | ir], diagnostics, tags)
   end
 
-  defp lower_word(:error, key, {line, word}, rest, ir, diagnostics) do
+  defp lower_word(:error, key, {line, word}, {rest, ir, diagnostics, tags}) do
     unknown = diagnostic(line, unknown(key, word))
-    lower(skip_operands(rest), ir, [unknown | diagnostics])
+    lower(skip_operands(rest), ir, [unknown | diagnostics], tags)
   end
 
   @migrated ~w(bst nxb bnd)
@@ -176,6 +183,65 @@ defmodule Logex.Compiler do
 
   defp check_kind(kind, {:int_lit, _, value}, {line, word}, diagnostics),
     do: [diagnostic(line, "`#{word}` expects #{kind(kind)}, found `#{value}`") | diagnostics]
+
+  # M1-3: every tag an instruction names must be declared. A literal where a tag must go was
+  # reported by check_kind/4 and is not looked at again.
+  defp check_tags(operands, tags, diagnostics),
+    do: Enum.reduce(operands, diagnostics, &check_tag(&1, tags, &2))
+
+  defp check_tag({:int_lit, _, _}, _tags, diagnostics), do: diagnostics
+
+  defp check_tag({:name, line, name}, tags, diagnostics),
+    do: declared(Map.has_key?(tags, name), line, name, diagnostics)
+
+  defp declared(true, _line, _name, diagnostics), do: diagnostics
+  defp declared(false, line, name, diagnostics), do: [{:undeclared, line, name} | diagnostics]
+
+  # An undeclared tag is reported once, at its first use, with the nearest declared name. A
+  # program with no declaration line -- one written before M1-3 -- is told how to declare,
+  # in its first report only.
+  defp undeclared(found, tags, note?) do
+    {diagnostics, _} = Enum.flat_map_reduce(found, {MapSet.new(), note?}, &report(&1, &2, tags))
+    diagnostics
+  end
+
+  defp report({:undeclared, line, name}, {seen, _} = acc, tags),
+    do: first_use(MapSet.member?(seen, name), line, name, tags, acc)
+
+  defp report(%Diagnostic{} = diagnostic, acc, _tags), do: {[diagnostic], acc}
+
+  defp first_use(true, _line, _name, _tags, acc), do: {[], acc}
+
+  defp first_use(false, line, name, tags, {seen, note?}) do
+    message = "`#{name}` is not declared" <> suggest(name, Map.keys(tags)) <> how(note?, name)
+    {[diagnostic(line, message)], {MapSet.put(seen, name), false}}
+  end
+
+  defp how(false, _name), do: ""
+
+  defp how(true, name),
+    do:
+      " (this program declares no tags: each is now declared before the first rung, " <>
+        "as `var #{name} bool`)"
+
+  # A declared name differing only in case is always the suggestion; otherwise the nearest
+  # by Jaro distance, if it is near enough.
+  defp suggest(name, names) do
+    folded = String.downcase(name)
+    same_but_case(Enum.find(names, &(String.downcase(&1) == folded)), name, names)
+  end
+
+  defp same_but_case(nil, name, names),
+    do: nearest(Enum.max_by(names, &String.jaro_distance(&1, name), fn -> nil end), name)
+
+  defp same_but_case(same, _name, _names),
+    do: " — did you mean `#{same}`? (tags are case-sensitive)"
+
+  defp nearest(nil, _name), do: ""
+  defp nearest(best, name), do: near(String.jaro_distance(best, name) >= 0.8, best)
+
+  defp near(true, best), do: " — did you mean `#{best}`?"
+  defp near(false, _best), do: ""
 
   # After a word that is not an instruction there is no signature to go by, so everything
   # up to the next instruction or branch group is taken to belong to it.
