@@ -26,8 +26,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `lib/logex/declarations.ex` — declaration lines to a tag table, after parsing: the
   section and type words as data (`@sections`, `@types`), `reserved/1`, `fits?/2`, and
   `check/1`, the one validator for a declaration line and for `Logex.Tag.new!/4`
-- `lib/logex/tag.ex` — `%Logex.Tag{}` (and `new!/4`, which declares a tag from Elixir) and
-  `%Logex.Program{rungs:, tags:}`, with `initial_env/1` for the first env
+- `lib/logex/tag.ex` — `%Logex.Tag{}`, and `new!/4`, which declares a tag from Elixir
+- `lib/logex/program.ex` — `%Logex.Program{rungs:, tags:}`, what `instructionize/2`
+  returns, with `initial_env/1` for the first env
 - `lib/logex/lexer.ex` / `lib/logex/parser.ex` — the front end, written by hand: binary
   pattern matching, and recursive descent (the parser's moduledoc gives the grammar and
   which function parses each production). There is no generator, so nothing reports a
