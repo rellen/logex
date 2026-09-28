@@ -16,7 +16,7 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
-§1 and §3·M1-1 to M1-3 have been brought current. M1-4 onward is still forward work.
+§1 and §3·M1-1 to M1-4 have been brought current. M1-5 onward is still forward work.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -86,13 +86,13 @@ generator stand in. On 1.20.4, `mix format --check-formatted` and
 The three things this section listed before Milestone 0 — `mov` with an integer literal,
 any source read from a file, and single-character tag names — all work now; M0-1, M0-5 and
 M0-4 closed them. Of the three listed below, two gave *wrong answers* silently and one an
-unusable error; only the first is still open.
+unusable error; all three are closed now.
 
-- **`xic` and `xio` are not complementary.** Two independent *positive* tests, so a tag
-  holding anything outside `{0,1}` — or no value at all — reads false for both. *No
-  longer reachable from source since M1-3*: `move 250 sp xic sp ote hi`, which gave
-  `hi=0`, is now a compile error however `sp` is declared (a dint on `xic`, or 250 into a
-  bool). What remains is an env the host builds by hand. See M1-4.
+- **`xic` and `xio` were not complementary.** ***Closed — M1-3 and M1-4.*** Two
+  independent *positive* tests, so a tag holding anything outside `{0,1}` — or no value at
+  all — read false for both. M1-3 made it unreachable from source: `move 250 sp xic sp ote
+  hi`, which gave `hi=0`, is a compile error however `sp` is declared. M1-4 closed it for an
+  env the host builds by hand: `xio` is now the negation of `xic`, whatever the value.
 - **A missing space before `nxb` silently turned OR into AND.** ***Closed — §4·B1.***
   `bst xic aa nxb xic bb bnd ote dd` with `aa=0,bb=1` gave `dd=1`; deleting the one space
   before `nxb` gave `dd=0`, with no error anywhere. The delimiters are `(` `|` `)` now,
@@ -125,8 +125,8 @@ stage-boundary mismatch. M0-1 (`690fc2d`) reconciled the fixtures on `:int_lit` 
 **All five items are landed and merged; nothing in this section is waiting to be done.**
 M0-1 `690fc2d`, M0-2 `03c10e0`, M0-3 `dde8c1d`, M0-4 `3f3b104` (PR #3, merge `22bc81a`);
 M0-5 `b65e756` (PR #4, merge `863af6f`). Re-verified on `main` after M1-1: `mix test` →
-`27 tests, 0 failures`. M1-1, M1-2 and M1-3 have landed since; the next unstarted work is
-§3·M1-4.
+`27 tests, 0 failures`. M1-1 to M1-4 have landed since; the next unstarted work is
+§3·M1-5.
 
 The items are kept in full because their diagnoses are the record of *why* the code looks
 the way it does — why the parser drops empty rungs, why `CLAUDE.md` once documented an
@@ -775,6 +775,17 @@ role checks on operands, `2b093de`; (6) documents, the commit after.
 
 ### M1-4 · Make `xic` and `xio` complementary by construction
 
+**Status: DONE — landed 2026-09-28.** The strict half came with M1-3 (`2b093de`). The
+`bit/2` half is the sketch below with one correction: `xic` reads `bit/2`, `xio` its
+negation, and `get_arg/2` defaults a missing tag to 0, but `bit/2` reads a number by value
+(`!= 0`) and a boolean as itself, with `nil` and a missing tag open. The sketch's
+`not in [0, nil]` matched strictly, so `0.0` and `false` read *closed* — a regression for
+`0.0`, which the old `== 0` read correctly, and a `false` from a host would have closed an
+`xic`. `end_to_end_test.exs` pins complementarity for 0, 1, 5, -3, 0.0, -0.0, 2.5, `false`,
+`true`, `nil` and a missing tag, and `move` from a missing tag. Reverting either contact, the
+`get_arg/2` default, or `bit/2`'s treatment of floats, `false`, `nil` or a missing tag, or
+`bit/2` becoming `== 1`, each turns it red. What follows is the item as written.
+
 the `{:xic, _, [{:name, _, arg}]}` clause tests `== 1` and `{:xio, …}` tests `== 0` — two independent *positive*
 tests, so any value outside `{0,1}` reads false for both:
 
@@ -839,9 +850,9 @@ ever disagree, §5 is the decision of record.)
 
 **The strict half landed with M1-3** (`2b093de`): a `dint` on `xic`, `xio` or a coil is a
 located diagnostic, and an undeclared tag, `move undefined_tag dst` included, can no longer
-reach `env`. What is left of M1-4 is `bit/2`, for values the host supplies — an env built
+reach `env`. What was left of M1-4 was `bit/2`, for values the host supplies — an env built
 by hand rather than by `Logex.Program.initial_env/1` can still hold a 5 or leave a tag out
-— until M1-5's `scan/2` checks them.
+— and that has landed too (status above).
 
 ### M1-5 · A real public API
 
@@ -1307,7 +1318,7 @@ Each of these was blocked on the dialect question. Full rationale and sources in
 - **M1-4 nonzero-is-true — keep as a totality guarantee, reject as a language rule.** Land
   `bit/2` so `xic`/`xio` are complementary by construction, then once M1-3's tag table
   exists make a non-BOOL operand a located diagnostic rather than a coercion (that half
-  **landed with M1-3**). The survey
+  **landed with M1-3**; `bit/2` **landed with M1-4**). The survey
   is unanimous against nonzero-is-true, with no vendor precedent: even Mitsubishi's
   untyped devices require a *bit* (`D.b`), not a word. The escape hatch every vendor gives
   is bit addressing — `xic setpoint.3`.
@@ -1449,7 +1460,7 @@ otherwise.
 | M0-5 | med | grammar | `rnd` is a strict infix separator, and a branch leg cannot be empty | `ladder_parser.yrl:8,12,16,21` | **closed** `b65e756` |
 | B1 | med | lexer | Missing space before `nxb` fuses into an identifier — parallel silently becomes series | `ladder_lexer.xrl:8` | **closed** — delimiters are `(` `\|` `)`; guarded by "deleting a space around a delimiter is a no-op" in `end_to_end_test.exs` |
 | M1-2 | med | lowering | No validation pass: unknown mnemonic → bare `MatchError`; short arity → truncated IR; and `mov src ote` silently eats the next mnemonic as a tag, no error, energised rung | `instructionize/1`, name clause | **closed** `e569113` — a located diagnostic for each case, every mistake in a routine reported (`validation_test.exs`) |
-| M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | `evaluate/2`, xic+xio clauses | partly closed (`2b093de`): unreachable from source; open for host-built envs |
+| M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | `evaluate/2`, xic+xio clauses | closed: unreachable from source (`2b093de`, M1-3); complementary by construction (M1-4) |
 | B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `Logex.Lexer`, the whitespace clause (was `ladder_lexer.xrl:6,10`) | open |
 | M0-4 | low | lexer | `NAME` regex: `+` rejects single-char tags; `a-zA-z` typo admits ``[ \ ] ^ ` `` | `ladder_lexer.xrl:5` | **closed** `3f3b104` |
 | — | low | tests | M0-4's fix was unguarded: no test used a single-character tag or a bracketed name, so reverting `ladder_lexer.xrl:5` left `mix test` fully green | `end_to_end_test.exs` | **closed** `b8fc743` |

@@ -336,4 +336,35 @@ defmodule Logex.EndToEndTest do
       assert shown.(env) == %{"motor" => 0, "run_lamp" => 0, "fault" => 1, "speed_sp" => 0}
     end
   end
+
+  describe "contacts on an env the host builds (M1-4)" do
+    # The compiler lets only a bool reach a contact, but evaluate/2 takes whatever env the
+    # host hands it. xic and xio must still disagree on every value: before M1-4 a 5, a
+    # nil or a missing tag read false for both, so an interlock on xio never fired.
+    @contacts "var t bool\nvar hi bool\nvar lo bool\nxic t ote hi\nxio t ote lo"
+
+    test "xic and xio are complementary for every value: a number by value, a boolean as itself" do
+      for {env, closed} <- [
+            {%{"t" => 0}, 0},
+            {%{"t" => 1}, 1},
+            {%{"t" => 5}, 1},
+            {%{"t" => -3}, 1},
+            {%{"t" => 0.0}, 0},
+            {%{"t" => -0.0}, 0},
+            {%{"t" => 2.5}, 1},
+            {%{"t" => false}, 0},
+            {%{"t" => true}, 1},
+            {%{"t" => nil}, 0},
+            {%{}, 0}
+          ] do
+        assert %{"hi" => ^closed, "lo" => lo} = run(@contacts, env)
+        assert lo == 1 - closed, "xio must be the complement of xic for #{inspect(env)}"
+      end
+    end
+
+    test "move from a tag the host left out copies 0, not nil" do
+      src = "var s dint\nvar d dint\nmove s d"
+      assert %{"d" => 0} = run(src, %{})
+    end
+  end
 end

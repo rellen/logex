@@ -372,7 +372,7 @@ defmodule Logex.Compiler do
   end
 
   def evaluate({:xic, _, [{:name, _, arg}]}, {true, env}) do
-    {Map.get(env, arg) == 1, env}
+    {bit(env, arg), env}
   end
 
   def evaluate({:xic, _, _}, {false, env}) do
@@ -380,7 +380,7 @@ defmodule Logex.Compiler do
   end
 
   def evaluate({:xio, _, [{:name, _, arg}]}, {true, env}) do
-    {Map.get(env, arg) == 0, env}
+    {not bit(env, arg), env}
   end
 
   def evaluate({:xio, _, _}, {false, env}) do
@@ -420,5 +420,17 @@ defmodule Logex.Compiler do
   end
 
   defp get_arg(_env, {:int_lit, _, val}), do: val
-  defp get_arg(env, {:name, _, name}), do: Map.get(env, name)
+  defp get_arg(env, {:name, _, name}), do: Map.get(env, name, 0)
+
+  # M1-4: `xic` reads this and `xio` its negation, so the two are complementary by
+  # construction, whatever the env holds. The compiler lets only a bool reach a contact,
+  # but an env the host builds by hand can hold a 5, a 0.0, a `false`, a nil, or leave a
+  # tag out. A number is read by value, nonzero closed (PLAN.md §5), and a boolean as
+  # itself; nil and a missing tag are open; anything else is closed. A missing tag reads
+  # as 0 in get_arg/2 too, so `move` copies a 0 rather than a nil.
+  defp bit(env, name), do: closed?(Map.get(env, name))
+
+  defp closed?(value) when is_number(value), do: value != 0
+  defp closed?(value) when value in [nil, false], do: false
+  defp closed?(_value), do: true
 end

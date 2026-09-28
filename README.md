@@ -109,11 +109,12 @@ short-circuit, so a later leg's `ote` and `move` still take effect after an earl
 already true; and the environment threads through the legs in order, so a leg can see what
 an earlier leg wrote. Both match how a real controller scans a rung.
 
-One behaviour that is a known defect, not a choice: `xic` and `xio` are independent
-positive tests, so a tag holding anything other than 0 or 1 reads false for *both*. The
-compiler now rejects a `dint` on either, so the defect is left to values the host
-supplies: an env built by hand, not from `Logex.Program.initial_env/1`, can still hold a 5
-or leave a tag out. See `PLAN.md` M1-4.
+`xic` and `xio` are complementary by construction: whatever a tag holds, exactly one of
+them passes power. The compiler lets only a `bool` reach either, but an env built by hand
+rather than by `Logex.Program.initial_env/1` can still hold a 5, a `false` or leave a tag
+out, so evaluation settles it: a number reads by value, nonzero closed (so `0.0` is open);
+a boolean reads as itself; `nil` and a missing tag are open. That totality is a guarantee,
+not a feature to write programs against (`PLAN.md` §5).
 
 ### Settled, not yet landed
 

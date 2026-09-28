@@ -766,7 +766,7 @@ column is naming.md's, not a new decision.
 ᵃ MatIEC has no LD front end. Contact/coil/rail/branch cells are Beremiz's editor and the
 PLCopen schema; function/FB cells are MatIEC's own libraries.
 ᵇ From [`docs/naming.md`](naming.md); *(proposed)*, *(planned)* and *(deferred)* are its
-markings. `xic`/`xio` are two independent positive tests, not IEC's strict complement.
+markings. `xic`/`xio` were two independent positive tests until M1-4 made `xio` the negation of `xic`; they are now IEC's strict complement.
 ᶜ LDmicro's `ElemContacts` struct has only `negated` and `set1` — no edge field. Its
 edge handling is the separate inline one-shot elements.
 
