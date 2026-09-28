@@ -247,4 +247,45 @@ defmodule Logex.EndToEndTest do
       assert %{"motor" => 0} = scan3
     end
   end
+
+  describe "the tag table (M1-3)" do
+    test "every declared tag starts at its initial value" do
+      {:ok, program} =
+        compile("var_input go bool\nvar_output sp dint 1200\nvar lamp bool 1\nxic go move 0 sp")
+
+      assert Logex.Program.initial_env(program) == %{"go" => 0, "sp" => 1200, "lamp" => 1}
+    end
+
+    test "the README's motor program, declared, runs four scans" do
+      src = """
+      var_input start bool
+      var_input stop bool
+      var_input overtemp bool
+      var_input reset bool
+      var_output motor bool
+      var_output run_lamp bool
+      var_output speed_sp dint 1200
+      var fault bool
+
+      ( xic start | xic motor ) xio stop ote motor
+      xic motor ote run_lamp
+      xic overtemp otl fault
+      xic reset otu fault
+      xic fault move 0 speed_sp
+      """
+
+      {:ok, program} = compile(src)
+      scan = fn env -> elem(Logex.Compiler.evaluate(program, {true, env}), 1) end
+      shown = &Map.take(&1, ~w(motor run_lamp fault speed_sp))
+
+      env = scan.(%{Logex.Program.initial_env(program) | "start" => 1})
+      assert shown.(env) == %{"motor" => 1, "run_lamp" => 1, "fault" => 0, "speed_sp" => 1200}
+      env = scan.(%{env | "start" => 0})
+      assert shown.(env) == %{"motor" => 1, "run_lamp" => 1, "fault" => 0, "speed_sp" => 1200}
+      env = scan.(%{env | "overtemp" => 1})
+      assert shown.(env) == %{"motor" => 1, "run_lamp" => 1, "fault" => 1, "speed_sp" => 0}
+      env = scan.(%{env | "stop" => 1})
+      assert shown.(env) == %{"motor" => 0, "run_lamp" => 0, "fault" => 1, "speed_sp" => 0}
+    end
+  end
 end

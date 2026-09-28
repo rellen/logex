@@ -30,30 +30,28 @@ defmodule Logex.InstructionizeTest do
           {:rung, [{:name, 9, "ote"}, {:name, 9, "zz"}]}
         ]}}
 
-    assert {:ok, ir} = Logex.Compiler.instructionize(ast)
+    assert {:ok, %Logex.Program{rungs: rungs}} = Logex.Compiler.instructionize(ast)
 
-    assert ir ==
-             {:routine,
-              {:rungs,
-               [
-                 {:rung,
-                  [
-                    {:branches,
+    assert rungs ==
+             [
+               {:rung,
+                [
+                  {:branches,
+                   [
+                     [{:move, 4, [{:name, 4, "aa"}, {:name, 4, "bb"}]}],
+                     [{:move, 4, [{:name, 4, "cc"}, {:name, 4, "dd"}]}],
                      [
-                       [{:move, 4, [{:name, 4, "aa"}, {:name, 4, "bb"}]}],
-                       [{:move, 4, [{:name, 4, "cc"}, {:name, 4, "dd"}]}],
-                       [
-                         {:move, 4, [{:name, 4, "ee"}, {:name, 4, "ff"}]},
-                         {:branches, [[{:move, 4, [{:int_lit, 4, 123}, {:name, 4, "hh"}]}]]}
-                       ]
-                     ]},
-                    {:branches,
-                     [
-                       [{:ote, 4, [{:name, 4, "xx"}]}],
-                       [{:ote, 4, [{:name, 4, "yy"}]}]
-                     ]}
-                  ]},
-                 {:rung, [{:ote, 9, [{:name, 9, "zz"}]}]}
-               ]}}
+                       {:move, 4, [{:name, 4, "ee"}, {:name, 4, "ff"}]},
+                       {:branches, [[{:move, 4, [{:int_lit, 4, 123}, {:name, 4, "hh"}]}]]}
+                     ]
+                   ]},
+                  {:branches,
+                   [
+                     [{:ote, 4, [{:name, 4, "xx"}]}],
+                     [{:ote, 4, [{:name, 4, "yy"}]}]
+                   ]}
+                ]},
+               {:rung, [{:ote, 9, [{:name, 9, "zz"}]}]}
+             ]
   end
 end

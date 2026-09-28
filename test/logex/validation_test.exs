@@ -157,8 +157,143 @@ defmodule Logex.ValidationTest do
 
   describe "the IR" do
     test "every instruction carries its mnemonic's line" do
-      assert {:ok, {:routine, {:rungs, [{:rung, [{:xic, 3, _}, {:move, 3, _}]}]}}} =
+      assert {:ok, %Logex.Program{rungs: [{:rung, [{:xic, 3, _}, {:move, 3, _}]}]}} =
                compile("\n\nxic aa move 1 bb")
+    end
+
+    test "declaration lines become the tag table, not rungs" do
+      assert {:ok, %Logex.Program{rungs: [{:rung, [{:ote, 3, _}]}], tags: tags}} =
+               source_compile("var_input go bool\nvar_output sp dint 1200\note sp")
+
+      assert tags == %{
+               "go" => %Logex.Tag{name: "go", type: :bool, section: :var_input, line: 1},
+               "sp" => %Logex.Tag{
+                 name: "sp",
+                 type: :dint,
+                 section: :var_output,
+                 initial: 1200,
+                 line: 2
+               }
+             }
+    end
+  end
+
+  describe "declaration lines (M1-3)" do
+    test "section and type words match in any case; the tag keeps its own" do
+      assert {:ok, %Logex.Program{tags: %{"Start" => %Logex.Tag{section: :var_input}}}} =
+               source_compile("VAR_INPUT Start BOOL\nxic Start ote Start")
+    end
+
+    test "a tag declared twice is named, with the first declaration's line" do
+      assert source_errors("var a bool\nvar a dint") == [
+               "line 2: `a` is declared twice: first on line 1"
+             ]
+    end
+
+    test "two tags differing only in case are an error" do
+      assert source_errors("var a bool\nvar A bool") == [
+               "line 2: `A` and `a` (line 1) differ only in case: tags are case-sensitive, " <>
+                 "so these would be two tags"
+             ]
+    end
+
+    test "a declaration after the first rung is named" do
+      assert source_errors("var a bool\nxic a ote b\nvar b bool") == [
+               "line 3: `var` after the first rung (line 2): declarations come first"
+             ]
+    end
+
+    test "diagnostics from declaration lines and from rungs come in line order" do
+      assert source_errors("var a bool\nzzz\nvar b bool\nyyy") == [
+               "line 2: unknown instruction `zzz`",
+               "line 3: `var` after the first rung (line 2): declarations come first",
+               "line 4: unknown instruction `yyy`"
+             ]
+    end
+
+    test "a section word where an instruction starts is named as a declaration" do
+      assert source_errors("xic aa var bb") == [
+               "line 1: `var` starts a declaration, which is a line of its own before the first rung"
+             ]
+    end
+
+    test "every malformed line is named, each with its own line" do
+      assert source_errors(
+               "var b\nvar c int\nvar e bool 2\nvar f dint 3000000000\nvar ote bool\n" <>
+                 "var Bool bool\nvar var_input bool\nvar 7 bool\nvar g bool 1 2\nvar x 5\n" <>
+                 "var\nvar_input i bool 1\nvar h ( xic a )\nvar retain r bool\nvar p q bool"
+             ) == [
+               "line 1: `b` needs a type: `var b bool` or `var b dint`",
+               "line 2: unknown type `int`: logex has `bool` and `dint`",
+               "line 3: `e` is a bool: its initial value must be 0 or 1, found `2`",
+               "line 4: `f` is a dint: `3000000000` does not fit in 32 bits",
+               "line 5: `ote` is an instruction and cannot name a tag",
+               "line 6: `Bool` is a type and cannot name a tag",
+               "line 7: `var_input` is a keyword and cannot name a tag",
+               "line 8: expected a tag name after `var`, found `7`",
+               "line 9: unexpected `2` after the declaration of `g`",
+               "line 10: `x` needs a type before its initial value `5`",
+               "line 11: `var` needs a tag name and a type, as in `var fault bool`",
+               "line 12: `i` is a var_input: its value comes from outside, so it takes no initial value",
+               "line 13: a declaration cannot hold a branch group",
+               "line 14: `retain` is not supported yet: nothing restarts a logex program, " <>
+                 "so there is nothing for a tag to survive (PLAN.md M1-5)",
+               "line 15: `var` declares one tag: found `p` and `q` before the type"
+             ]
+    end
+
+    test "a dint's largest value, and a bool's 0 and 1, are initial values" do
+      assert {:ok, %Logex.Program{tags: tags}} =
+               source_compile(
+                 "var lo dint 0\nvar hi dint 2147483647\nvar t bool 1\nvar f bool 0\nxic t ote f"
+               )
+
+      assert Map.new(tags, fn {name, tag} -> {name, tag.initial} end) ==
+               %{"lo" => 0, "hi" => 2_147_483_647, "t" => 1, "f" => 0}
+    end
+  end
+
+  describe "tags declared from Elixir (M1-3)" do
+    test "are checked by the same rules as a declaration line" do
+      assert source_errors("var ote bool") == [
+               "line 1: `ote` is an instruction and cannot name a tag"
+             ]
+
+      assert_raise ArgumentError, "`ote` is an instruction and cannot name a tag", fn ->
+        Logex.Tag.new!("ote", :bool)
+      end
+
+      assert_raise ArgumentError, ~s("t1 x" is not a tag name), fn ->
+        Logex.Tag.new!("t1 x", :bool)
+      end
+
+      assert_raise ArgumentError,
+                   "`i` is a var_input: its value comes from outside, " <>
+                     "so it takes no initial value",
+                   fn ->
+                     Logex.Tag.new!("i", :bool, :var_input, 1)
+                   end
+    end
+
+    test "enter the table before the source's own, which may not clash with them" do
+      declared = [Logex.Tag.new!("a", :bool), Logex.Tag.new!("Start", :bool)]
+
+      assert source_errors("var a bool\nvar start bool", declared) == [
+               "line 1: `a` is declared twice: the caller's table already has it",
+               "line 2: `start` and `Start` (the caller's table) differ only in case: " <>
+                 "tags are case-sensitive, so these would be two tags"
+             ]
+    end
+
+    test "that clash among themselves raise" do
+      assert_raise ArgumentError,
+                   "`a` is declared twice: the caller's table already has it",
+                   fn ->
+                     source_compile("ote a", [
+                       Logex.Tag.new!("a", :bool),
+                       Logex.Tag.new!("a", :dint)
+                     ])
+                   end
     end
   end
 
@@ -166,6 +301,18 @@ defmodule Logex.ValidationTest do
     {:ok, tokens, _} = Compiler.tokenize(source)
     {:ok, ast} = Compiler.parse(tokens)
     Compiler.instructionize(ast)
+  end
+
+  # From source alone, or with a table declared from Elixir: the M1-3 cases.
+  defp source_compile(source, declared \\ []) do
+    {:ok, tokens, _} = Compiler.tokenize(source)
+    {:ok, ast} = Compiler.parse(tokens)
+    Compiler.instructionize(ast, declared)
+  end
+
+  defp source_errors(source, declared \\ []) do
+    {:error, diagnostics} = source_compile(source, declared)
+    Enum.map(diagnostics, &Logex.Diagnostic.format/1)
   end
 
   defp errors(source) do

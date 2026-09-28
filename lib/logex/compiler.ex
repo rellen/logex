@@ -1,4 +1,6 @@
 defmodule Logex.Compiler do
+  alias Logex.{Declarations, Diagnostic, Program}
+
   defdelegate tokenize(source), to: Logex.Lexer
   defdelegate parse(tokens), to: Logex.Parser
 
@@ -25,30 +27,38 @@ defmodule Logex.Compiler do
   def instructions, do: @instructions
 
   @doc """
-  Lowers a parse AST to the IR, checking every instruction against its operand signature.
+  Lowers a parse AST to a `%Logex.Program{}`: its leading declaration lines become the tag
+  table (`Logex.Declarations`), and every other rung is lowered to the IR, each instruction
+  checked against its operand signature.
 
-  Returns `{:ok, ir}`, where an instruction is `{symbol, line, operands}`, or
-  `{:error, diagnostics}`: every `%Logex.Diagnostic{}` in the routine, in source order.
+  Returns `{:ok, %Logex.Program{}}`, where an instruction in `rungs` is
+  `{symbol, line, operands}`, or `{:error, diagnostics}`: every `%Logex.Diagnostic{}` in
+  the routine, in line order. `declared` is a list of `%Logex.Tag{}` built in Elixir with
+  `Logex.Tag.new!/4`, entered in the table before the source's own.
 
   After a word that cannot start an instruction (an unknown word, an old branch keyword, or
   a number), the words after it are skipped up to the next instruction or branch group, so
   its would-be operands are not each reported as unknown instructions too. An instruction's
   operands stop early at an instruction or a branch group, which is then lowered as usual.
   """
-  def instructionize({:routine, {:rungs, rungs}}) do
-    {rungs, diagnostics} = Enum.map_reduce(rungs, [], &lower_rung/2)
-    lowered(rungs, Enum.reverse(diagnostics))
+  def instructionize({:routine, {:rungs, rungs}}, declared \\ []) do
+    {tags, logic, declaring} = Declarations.split(rungs, declared)
+    {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung/2)
+    lowered(rungs, tags, declaring ++ Enum.reverse(lowering))
   end
 
-  defp lowered(rungs, []), do: {:ok, {:routine, {:rungs, rungs}}}
-  defp lowered(_rungs, diagnostics), do: {:error, diagnostics}
+  defp lowered(rungs, tags, []), do: {:ok, %Program{rungs: rungs, tags: tags}}
+
+  # A declaration after the first rung is reported where it stands, so the two lists are
+  # merged by line. The sort is stable: within a line, the order each list gave is kept.
+  defp lowered(_rungs, _tags, diagnostics), do: {:error, Enum.sort_by(diagnostics, & &1.line)}
 
   defp lower_rung({:rung, elements}, diagnostics) do
     {ir, diagnostics} = lower(elements, [], diagnostics)
     {{:rung, ir}, diagnostics}
   end
 
-  # Diagnostics are accumulated newest first and reversed once, in instructionize/1.
+  # Diagnostics are accumulated newest first and reversed once, in instructionize/2.
   defp lower([], ir, diagnostics), do: {Enum.reverse(ir), diagnostics}
 
   defp lower([{:branches, legs} | rest], ir, diagnostics) do
@@ -92,7 +102,13 @@ defmodule Logex.Compiler do
   defp unknown("mov", word),
     do: "unknown instruction `#{word}` — did you mean `move`? (renamed to its IEC name)"
 
-  defp unknown(_key, word), do: "unknown instruction `#{word}`"
+  defp unknown(key, word), do: unknown_word(Declarations.reserved(key), word)
+
+  # A declaration is a line of its own, recognised only as a rung's first word.
+  defp unknown_word(:section, word),
+    do: "`#{word}` starts a declaration, which is a line of its own before the first rung"
+
+  defp unknown_word(_reserved, word), do: "unknown instruction `#{word}`"
 
   # Takes up to `n` operands, stopping early at a branch group, at the end of the leg, or
   # at a mnemonic: that is the next instruction, so `move src ote bb` leaves `ote bb` intact.
@@ -175,7 +191,9 @@ defmodule Logex.Compiler do
 
   defp mnemonic?(word), do: Map.has_key?(@instructions, String.downcase(word))
 
-  defp diagnostic(line, message), do: %Logex.Diagnostic{line: line, message: message}
+  defp diagnostic(line, message), do: %Diagnostic{line: line, message: message}
+
+  def evaluate(%Program{rungs: rungs}, acc), do: evaluate({:routine, {:rungs, rungs}}, acc)
 
   def evaluate({:routine, {:rungs, rungs}}, {_, env}) do
     new_env =

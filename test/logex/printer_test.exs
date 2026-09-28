@@ -125,7 +125,7 @@ defmodule Logex.PrinterTest do
   end
 
   defp lower!(rung) do
-    {:ok, {:routine, {:rungs, [ir]}}} = Compiler.instructionize({:routine, {:rungs, [rung]}})
+    {:ok, %Logex.Program{rungs: [ir]}} = Compiler.instructionize({:routine, {:rungs, [rung]}})
     ir
   end
 

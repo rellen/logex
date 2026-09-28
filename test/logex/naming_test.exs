@@ -4,7 +4,8 @@ defmodule Logex.NamingTest do
 
   `docs/naming.md` records what IEC 61131-3 and the major vendors call each
   operation, and why logex chose the name it did. This test fails if a mnemonic
-  reaches `@instructions` without a stanza there.
+  reaches `@instructions`, or a section or type word reaches `Logex.Declarations`,
+  without a stanza there.
 
   The check is deliberately one-way: a stanza with no implementation is fine and
   encouraged — surveying an instruction long before building it is the point.
@@ -43,6 +44,19 @@ defmodule Logex.NamingTest do
     Survey the name before shipping it — see the recipe in CLAUDE.md. Copy the
     template from the "Adding a stanza" section of docs/naming.md, fill every
     dialect row, and mark anything you could not check `unverified`.
+    """
+  end
+
+  test "every section and type word of a declaration line has been surveyed" do
+    words = Logex.Declarations.keywords() |> MapSet.new()
+    unsurveyed = MapSet.difference(words, surveyed_mnemonics())
+
+    assert MapSet.equal?(unsurveyed, MapSet.new()), """
+    These declaration words are in Logex.Declarations but have no stanza in docs/naming.md:
+
+        #{unsurveyed |> Enum.sort() |> Enum.join(", ")}
+
+    A section or type word is reserved like a mnemonic, and is surveyed like one.
     """
   end
 
