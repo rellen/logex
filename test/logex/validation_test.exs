@@ -166,8 +166,8 @@ defmodule Logex.ValidationTest do
     end
 
     test "declaration lines become the tag table, not rungs" do
-      assert {:ok, %Logex.Program{rungs: [{:rung, [{:ote, 3, _}]}], tags: tags}} =
-               source_compile("var_input go bool\nvar_output sp dint 1200\note sp")
+      assert {:ok, %Logex.Program{rungs: [{:rung, [{:xic, 3, _}, {:move, 3, _}]}], tags: tags}} =
+               source_compile("var_input go bool\nvar_output sp dint 1200\nxic go move 0 sp")
 
       assert tags == %{
                "go" => %Logex.Tag{name: "go", type: :bool, section: :var_input, line: 1},
@@ -185,7 +185,7 @@ defmodule Logex.ValidationTest do
   describe "declaration lines (M1-3)" do
     test "section and type words match in any case; the tag keeps its own" do
       assert {:ok, %Logex.Program{tags: %{"Start" => %Logex.Tag{section: :var_input}}}} =
-               source_compile("VAR_INPUT Start BOOL\nxic Start ote Start")
+               source_compile("VAR_INPUT Start BOOL\nVar Run Bool\nxic Start ote Run")
     end
 
     test "a tag declared twice is named, with the first declaration's line" do
@@ -294,9 +294,72 @@ defmodule Logex.ValidationTest do
                "line 2: `a` is not declared"
              ]
     end
+  end
 
-    test "a reserved word used as a tag is never declared" do
-      assert source_errors("var b bool\nxic dint ote b") == ["line 2: `dint` is not declared"]
+  describe "types and roles (M1-3)" do
+    test "a dint on a contact or coil is named, with its declaration" do
+      assert source_errors("var d dint\nvar b bool\nxic d ote b\nxic b ote d") == [
+               "line 3: `xic` reads a bool, but `d` is a dint (declared on line 1)",
+               "line 4: `ote` writes a bool, but `d` is a dint (declared on line 1)"
+             ]
+    end
+
+    test "logic cannot write a var_input, by any instruction that writes" do
+      assert source_errors(
+               "var_input i bool\nvar_input n dint\nvar b bool\n" <>
+                 "xic b ote i\nxic b otl i\nxic b otu i\nmove 5 n"
+             ) == [
+               "line 4: `ote` writes `i`, a var_input (declared on line 1): logic must not write an input",
+               "line 5: `otl` writes `i`, a var_input (declared on line 1): logic must not write an input",
+               "line 6: `otu` writes `i`, a var_input (declared on line 1): logic must not write an input",
+               "line 7: `move` writes `n`, a var_input (declared on line 2): logic must not write an input"
+             ]
+    end
+
+    test "logic may read a var_input and read and write a var_output" do
+      assert {:ok, _} =
+               source_compile("var_input i bool\nvar_output o bool\n( xic i | xic o ) ote o")
+    end
+
+    test "move takes operands of one type" do
+      assert source_errors("var b bool\nvar d dint\nmove b d\nmove d b\nmove d d\nmove b b") == [
+               "line 3: `move` takes operands of one type: `b` is a bool, `d` is a dint",
+               "line 4: `move` takes operands of one type: `d` is a dint, `b` is a bool"
+             ]
+    end
+
+    test "a literal must fit the tag move writes it into" do
+      assert source_errors(
+               "var b bool\nvar d dint\nmove 2 b\nmove 3000000000 d\n" <>
+                 "move 1 b\nmove 0 b\nmove 2147483647 d"
+             ) == [
+               "line 3: `move` writes `2` into `b`, a bool: only 0 or 1 fit",
+               "line 4: `move` writes `3000000000` into `d`, a dint: it does not fit in 32 bits"
+             ]
+    end
+
+    test "a literal where a tag must go is reported once, not range-checked too" do
+      assert source_errors("var b bool\nxic b ote 7\nmove 3000000000 7") == [
+               "line 2: `ote` expects a tag, found `7`",
+               "line 3: `move` expects a tag, found `7`"
+             ]
+    end
+
+    test "a keyword or type is not a tag" do
+      assert source_errors("var b bool\nxic bool ote b\nxic VAR ote b\nmove Dint b") == [
+               "line 2: `xic` expects a tag, found the type `bool`",
+               "line 3: `xic` expects a tag, found the keyword `VAR`",
+               "line 4: `move` expects a tag, found the type `Dint`"
+             ]
+    end
+
+    test "a tag declared from Elixir is cited without a line" do
+      declared = [Logex.Tag.new!("d", :dint), Logex.Tag.new!("i", :bool, :var_input)]
+
+      assert source_errors("xic d ote i", declared) == [
+               "line 1: `xic` reads a bool, but `d` is a dint",
+               "line 1: `ote` writes `i`, a var_input: logic must not write an input"
+             ]
     end
   end
 

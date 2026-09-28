@@ -283,6 +283,17 @@ defmodule Logex.EndToEndTest do
                "line 3: `strat` is not declared — did you mean `start`?"
     end
 
+    test "logic cannot write an input" do
+      assert {:error, [diagnostic]} =
+               compile(
+                 "var_input start bool\nvar_output motor bool\n( xic start | xic motor ) ote start"
+               )
+
+      assert Logex.Diagnostic.format(diagnostic) ==
+               "line 3: `ote` writes `start`, a var_input (declared on line 1): " <>
+                 "logic must not write an input"
+    end
+
     test "every declared tag starts at its initial value" do
       {:ok, program} =
         compile("var_input go bool\nvar_output sp dint 1200\nvar lamp bool 1\nxic go move 0 sp")

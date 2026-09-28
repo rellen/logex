@@ -1,5 +1,5 @@
 defmodule Logex.Compiler do
-  alias Logex.{Declarations, Diagnostic, Program}
+  alias Logex.{Declarations, Diagnostic, Program, Tag}
 
   defdelegate tokenize(source), to: Logex.Lexer
   defdelegate parse(tokens), to: Logex.Parser
@@ -88,7 +88,7 @@ defmodule Logex.Compiler do
     {operands, rest} = take_operands(rest, length(signature), [])
     diagnostics = check_count(signature, operands, rest, at, diagnostics)
     diagnostics = check_kinds(signature, operands, at, diagnostics)
-    diagnostics = check_tags(operands, tags, diagnostics)
+    diagnostics = check_tags(signature, operands, at, tags, diagnostics)
     lower(rest, [{symbol, line, operands} | ir], diagnostics, tags)
   end
 
@@ -184,18 +184,99 @@ defmodule Logex.Compiler do
   defp check_kind(kind, {:int_lit, _, value}, {line, word}, diagnostics),
     do: [diagnostic(line, "`#{word}` expects #{kind(kind)}, found `#{value}`") | diagnostics]
 
-  # M1-3: every tag an instruction names must be declared. A literal where a tag must go was
-  # reported by check_kind/4 and is not looked at again.
-  defp check_tags(operands, tags, diagnostics),
-    do: Enum.reduce(operands, diagnostics, &check_tag(&1, tags, &2))
+  # M1-3: each operand against the tag table -- declared, of the type its slot reads or
+  # writes, and not a var_input where the slot writes. A literal where a tag must go was
+  # reported by check_kind/4 and is not looked at again. Then the `:any` operands must agree.
+  defp check_tags(signature, operands, at, tags, diagnostics) do
+    slots = Enum.zip(signature, operands)
+    diagnostics = Enum.reduce(slots, diagnostics, &check_tag(&1, at, tags, &2))
 
-  defp check_tag({:int_lit, _, _}, _tags, diagnostics), do: diagnostics
+    unify(
+      for({{_, :any}, operand} <- slots, typed = typed(operand, tags), do: typed),
+      at,
+      diagnostics
+    )
+  end
 
-  defp check_tag({:name, line, name}, tags, diagnostics),
-    do: declared(Map.has_key?(tags, name), line, name, diagnostics)
+  defp check_tag({_slot, {:int_lit, _, _}}, _at, _tags, diagnostics), do: diagnostics
 
-  defp declared(true, _line, _name, diagnostics), do: diagnostics
-  defp declared(false, line, name, diagnostics), do: [{:undeclared, line, name} | diagnostics]
+  defp check_tag({slot, {:name, _, name} = operand}, at, tags, diagnostics),
+    do:
+      resolve(Declarations.reserved(name), Map.fetch(tags, name), slot, operand, at, diagnostics)
+
+  # take_operands/3 never takes a mnemonic, so a reserved operand is a section or type word.
+  defp resolve(:type, _, _slot, {:name, line, name}, {_, word}, diagnostics),
+    do: [diagnostic(line, "`#{word}` expects a tag, found the type `#{name}`") | diagnostics]
+
+  defp resolve(:section, _, _slot, {:name, line, name}, {_, word}, diagnostics),
+    do: [diagnostic(line, "`#{word}` expects a tag, found the keyword `#{name}`") | diagnostics]
+
+  defp resolve(nil, :error, _slot, {:name, line, name}, _at, diagnostics),
+    do: [{:undeclared, line, name} | diagnostics]
+
+  defp resolve(nil, {:ok, tag}, {access, type}, {:name, line, _}, {_, word}, diagnostics),
+    do:
+      diagnostics
+      |> check_type(access, type, tag, {line, word})
+      |> check_access(access, tag, {line, word})
+
+  defp check_type(diagnostics, _access, :any, _tag, _at), do: diagnostics
+  defp check_type(diagnostics, _access, type, %Tag{type: type}, _at), do: diagnostics
+
+  defp check_type(diagnostics, access, type, tag, {line, word}) do
+    message =
+      "`#{word}` #{verb(access)} a #{type}, but `#{tag.name}` is a #{tag.type}#{declared(tag)}"
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp verb(:write), do: "writes"
+  defp verb(_access), do: "reads"
+
+  # IEC's rule for VAR_INPUT: "not modifiable within organization unit" (docs/naming.md).
+  defp check_access(diagnostics, :write, %Tag{section: :var_input} = tag, {line, word}) do
+    message =
+      "`#{word}` writes `#{tag.name}`, a var_input#{declared(tag)}: logic must not write an input"
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp check_access(diagnostics, _access, _tag, _at), do: diagnostics
+
+  defp declared(%Tag{line: nil}), do: ""
+  defp declared(%Tag{line: line}), do: " (declared on line #{line})"
+
+  defp typed({:int_lit, _, value}, _tags), do: {:literal, value}
+  defp typed({:name, _, name}, tags), do: Map.get(tags, name)
+
+  # Every `:any` operand of one instruction has one type: two tags must agree, and a literal
+  # must fit the tag it goes into. Anything else was reported already, or is not a tag.
+  defp unify([%Tag{type: type}, %Tag{type: type}], _at, diagnostics), do: diagnostics
+
+  defp unify([%Tag{} = a, %Tag{} = b], {line, word}, diagnostics) do
+    message =
+      "`#{word}` takes operands of one type: `#{a.name}` is a #{a.type}, `#{b.name}` is a #{b.type}"
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp unify([{:literal, value}, %Tag{type: type} = tag], at, diagnostics),
+    do: fits(Declarations.fits?(type, value), value, tag, at, diagnostics)
+
+  defp unify(_typed, _at, diagnostics), do: diagnostics
+
+  defp fits(true, _value, _tag, _at, diagnostics), do: diagnostics
+
+  defp fits(false, value, %Tag{type: :bool} = tag, {line, word}, diagnostics),
+    do: [
+      diagnostic(line, "`#{word}` writes `#{value}` into `#{tag.name}`, a bool: only 0 or 1 fit")
+      | diagnostics
+    ]
+
+  defp fits(false, value, %Tag{type: :dint} = tag, {line, word}, diagnostics) do
+    message = "`#{word}` writes `#{value}` into `#{tag.name}`, a dint: it does not fit in 32 bits"
+    [diagnostic(line, message) | diagnostics]
+  end
 
   # An undeclared tag is reported once, at its first use, with the nearest declared name. A
   # program with no declaration line -- one written before M1-3 -- is told how to declare,
