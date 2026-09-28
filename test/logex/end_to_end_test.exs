@@ -301,7 +301,7 @@ defmodule Logex.EndToEndTest do
       assert Logex.Program.initial_env(program) == %{"go" => 0, "sp" => 1200, "lamp" => 1}
     end
 
-    test "the README's motor program, declared, runs four scans" do
+    test "the README's motor program, declared, runs five scans" do
       src = """
       var_input start bool
       var_input stop bool
@@ -330,6 +330,9 @@ defmodule Logex.EndToEndTest do
       env = scan.(%{env | "overtemp" => 1})
       assert shown.(env) == %{"motor" => 1, "run_lamp" => 1, "fault" => 1, "speed_sp" => 0}
       env = scan.(%{env | "stop" => 1})
+      assert shown.(env) == %{"motor" => 0, "run_lamp" => 0, "fault" => 1, "speed_sp" => 0}
+      # The fault stays latched after the overtemperature input clears.
+      env = scan.(%{env | "stop" => 0, "overtemp" => 0})
       assert shown.(env) == %{"motor" => 0, "run_lamp" => 0, "fault" => 1, "speed_sp" => 0}
     end
   end

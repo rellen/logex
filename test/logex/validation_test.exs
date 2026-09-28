@@ -258,6 +258,110 @@ defmodule Logex.ValidationTest do
     end
   end
 
+  describe "declaration lines, the rarer shapes (M1-3)" do
+    test "a line breaking two rules gets both, in order" do
+      assert source_errors("var ote bool 2") == [
+               "line 1: `ote` is an instruction and cannot name a tag",
+               "line 1: `ote` is a bool: its initial value must be 0 or 1, found `2`"
+             ]
+
+      assert source_errors("xic a ote a\nvar b") == [
+               "line 1: `a` is not declared",
+               "line 2: `var` after the first rung (line 1): declarations come first",
+               "line 2: `b` needs a type: `var b bool` or `var b dint`"
+             ]
+    end
+
+    test "a branch group anywhere in a declaration gets one message" do
+      assert source_errors("var ( xic a )\nvar g bool ( xic a )\nvar h bool 1 ( xic a )") == [
+               "line 1: a declaration cannot hold a branch group",
+               "line 2: a declaration cannot hold a branch group",
+               "line 3: a declaration cannot hold a branch group"
+             ]
+    end
+
+    test "anything after a declaration's type and initial value is named" do
+      assert source_errors("var g bool x\nvar h bool 1 x") == [
+               "line 1: unexpected `x` after the declaration of `g`",
+               "line 2: unexpected `x` after the declaration of `h`"
+             ]
+    end
+
+    test "a reserved word where the tag name belongs is named for what it is" do
+      assert source_errors("var bool\nvar dint 5\nvar xic\nvar var\nvar Ote bool") == [
+               "line 1: `var` needs a tag name before the type `bool`, as in `var fault bool`",
+               "line 2: `var` needs a tag name before the type `dint`, as in `var fault dint`",
+               "line 3: `xic` is an instruction and cannot name a tag",
+               "line 4: `var` is a keyword and cannot name a tag",
+               "line 5: `Ote` is an instruction and cannot name a tag"
+             ]
+    end
+
+    test "two names before the type are named, however the line goes on" do
+      assert source_errors("var p q bool 1\nvar p q r bool\nvar p q ote") == [
+               "line 1: `var` declares one tag: found `p` and `q` before the type",
+               "line 2: `var` declares one tag: found `p` and `q` before the type",
+               "line 3: unknown type `q`: logex has `bool` and `dint`"
+             ]
+    end
+
+    test "`retain` is recognised in any case, and the section word is quoted as written" do
+      assert source_errors("VAR RETAIN r bool\nVAR b") == [
+               "line 1: `retain` is not supported yet: nothing restarts a logex program, " <>
+                 "so there is nothing for a tag to survive (PLAN.md M1-5)",
+               "line 2: `b` needs a type: `VAR b bool` or `VAR b dint`"
+             ]
+
+      assert source_errors("VAR a bool\nxic a ote a\nVAR b bool") == [
+               "line 3: `VAR` after the first rung (line 2): declarations come first"
+             ]
+    end
+
+    test "a late declaration cites the first rung's own line, or none when it has none" do
+      assert source_errors("var a bool\n( xic a )\nxic a ote a\nvar b bool") == [
+               "line 4: `var` after the first rung (line 2): declarations come first"
+             ]
+
+      assert source_errors("var a bool\n( )\nxic a ote a\nvar b bool") == [
+               "line 4: `var` after the first rung: declarations come first"
+             ]
+
+      assert source_errors("var a bool\n( )\nvar b bool") == [
+               "line 3: `var` after the first rung: declarations come first"
+             ]
+    end
+
+    test "a type word where an instruction starts is an unknown instruction" do
+      assert source_errors("bool a") == ["line 1: unknown instruction `bool`"]
+    end
+
+    test "the dint range ends exactly at 2147483647" do
+      assert source_errors("var f dint 2147483648\nvar d dint\nmove 2147483648 d") == [
+               "line 1: `f` is a dint: `2147483648` does not fit in 32 bits",
+               "line 3: `move` writes `2147483648` into `d`, a dint: it does not fit in 32 bits"
+             ]
+    end
+
+    test "after a clash the first declaration is the one in the table" do
+      assert source_errors("var a bool\nvar a dint\nxic a ote a") == [
+               "line 2: `a` is declared twice: first on line 1"
+             ]
+
+      assert source_errors("var a bool\nvar A bool\nxic A ote a") == [
+               "line 2: `A` and `a` (line 1) differ only in case: tags are case-sensitive, " <>
+                 "so these would be two tags",
+               "line 3: `A` is not declared — did you mean `a`? (tags are case-sensitive)"
+             ]
+    end
+
+    test "Logex.Declarations.split/2 gives its diagnostics in line order" do
+      {:ok, tokens, _} = Compiler.tokenize("var a bool\nvar a bool\nvar b int")
+      {:ok, {:routine, {:rungs, rungs}}} = Compiler.parse(tokens)
+      {_tags, [], diagnostics} = Logex.Declarations.split(rungs)
+      assert Enum.map(diagnostics, & &1.line) == [2, 3]
+    end
+  end
+
   describe "strictness (M1-3): every tag a rung uses is declared" do
     test "an undeclared tag is named once, at its first use, with the nearest declared name" do
       assert source_errors("var_input start bool\nvar m bool\nxic strat ote m\nxic strat ote m") ==
@@ -281,10 +385,32 @@ defmodule Logex.ValidationTest do
              ]
     end
 
+    test "a near miss is suggested, and a far one is not" do
+      assert source_errors("var start bool\nxic stort ote start") == [
+               "line 2: `stort` is not declared — did you mean `start`?"
+             ]
+
+      assert source_errors("var lamp bool\nxic lmp_x ote lamp") == [
+               "line 2: `lmp_x` is not declared"
+             ]
+    end
+
+    test "the how-to note needs a program with no declaration at all, and survives other errors" do
+      assert source_errors("xic zz ote a", [Logex.Tag.new!("a", :bool)]) == [
+               "line 1: `zz` is not declared"
+             ]
+
+      assert source_errors("zzz\nxic a") == [
+               "line 1: unknown instruction `zzz`",
+               "line 2: `a` is not declared (this program declares no tags: each is now " <>
+                 "declared before the first rung, as `var a bool` or `var a dint`)"
+             ]
+    end
+
     test "a program that declares nothing is told how, once" do
       assert source_errors("xic a ote b") == [
                "line 1: `a` is not declared (this program declares no tags: each is now " <>
-                 "declared before the first rung, as `var a bool`)",
+                 "declared before the first rung, as `var a bool` or `var a dint`)",
                "line 1: `b` is not declared"
              ]
     end
@@ -303,6 +429,15 @@ defmodule Logex.ValidationTest do
                "line 3: `xic` reads a bool, but `d` is a dint (declared on line 1)",
                "line 4: `ote` writes a bool, but `d` is a dint (declared on line 1)"
              ]
+    end
+
+    test "xio, otl and otu take only a bool, as xic and ote do" do
+      assert source_errors("var d dint\nvar b bool\nxic b xio d ote b\nxic b otl d\nxic b otu d") ==
+               [
+                 "line 3: `xio` reads a bool, but `d` is a dint (declared on line 1)",
+                 "line 4: `otl` writes a bool, but `d` is a dint (declared on line 1)",
+                 "line 5: `otu` writes a bool, but `d` is a dint (declared on line 1)"
+               ]
     end
 
     test "logic cannot write a var_input, by any instruction that writes" do
@@ -384,6 +519,54 @@ defmodule Logex.ValidationTest do
                    fn ->
                      Logex.Tag.new!("i", :bool, :var_input, 1)
                    end
+    end
+
+    test "are returned as declared, and start at their initial value" do
+      assert Logex.Tag.new!("x", :bool) ==
+               %Logex.Tag{name: "x", type: :bool, section: :var, initial: nil, line: nil}
+
+      assert Logex.Tag.new!("x", :dint, :var, -2_147_483_648).initial == -2_147_483_648
+
+      {:ok, program} =
+        source_compile("var Lamp bool 1\nxic Lamp ote Lamp ote x\nmove 5 sp", [
+          Logex.Tag.new!("x", :bool),
+          Logex.Tag.new!("sp", :dint, :var_output, 5)
+        ])
+
+      assert Logex.Program.initial_env(program) == %{"Lamp" => 1, "x" => 0, "sp" => 5}
+    end
+
+    test "raise ArgumentError for every rule they break, whatever the argument" do
+      for {args, message} <- [
+            {["x", :bool, :input], "unknown section :input"},
+            {["x", :int], "unknown type :int: logex has `bool` and `dint`"},
+            {["ote", :int], "`ote` is an instruction and cannot name a tag"},
+            {[{:a}, :bool, :var_input, 1], "{:a} is not a tag name"},
+            {["a", :dint, :var, {1}], "the initial value of `a` must be an integer, found {1}"},
+            {["a", :bool, :var, "1"], ~s(the initial value of `a` must be an integer, found "1")},
+            {["x", :dint, :var, -2_147_483_649],
+             "`x` is a dint: `-2147483649` does not fit in 32 bits"},
+            {["x", :int, :var, 5], "unknown type :int: logex has `bool` and `dint`"},
+            {[" a", :bool], ~s(" a" is not a tag name)},
+            {["a b", :bool], ~s("a b" is not a tag name)}
+          ] do
+        assert_raise ArgumentError, message, fn -> apply(Logex.Tag, :new!, args) end
+      end
+    end
+
+    test "are checked again as they enter the table, however they were built" do
+      for {declared, message} <- [
+            {[%Logex.Tag{name: "a", type: :real, section: :var}],
+             "unknown type :real: logex has `bool` and `dint`"},
+            {[%Logex.Tag{name: "a", type: :bool, section: :var, initial: 7}],
+             "`a` is a bool: its initial value must be 0 or 1, found `7`"},
+            {["a"], ~s(expected a %Logex.Tag{}, got: "a")},
+            {%Logex.Tag{name: "a", type: :bool, section: :var},
+             "declared must be a list of %Logex.Tag{}, got: " <>
+               inspect(%Logex.Tag{name: "a", type: :bool, section: :var})}
+          ] do
+        assert_raise ArgumentError, message, fn -> source_compile("xic a ote a", declared) end
+      end
     end
 
     test "enter the table before the source's own, which may not clash with them" do

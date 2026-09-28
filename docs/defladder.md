@@ -100,7 +100,7 @@ The four scans of the README example gave the same output through the text front
 
 The DSL errors are clear. An unknown mnemonic gives `lib/logex/examples/bad_mnemonic.ex:5: unknown instruction xxc`. An incorrect operand count gives `ote takes 1 operand(s), got 0`. A tag that the head does not declare gives `undeclared tag strat`. Each error gives the user's file name and the line of the rung.
 
-The text front end errors are not clear. The text front end gives `MatchError: no match of right hand side value: nil` for the first two errors, with no name and no line. The text front end gives no error for the third. (That was before M1-2. `instructionize/1` now returns a list of `%Logex.Diagnostic{}`, each with its line, and an unknown mnemonic is "unknown instruction" followed by the word. Since M1-3 an undeclared tag is an error too, with a did-you-mean.)
+The text front end errors are not clear. The text front end gives `MatchError: no match of right hand side value: nil` for the first two errors, with no name and no line. The text front end gives no error for the third. (That was before M1-2. `instructionize/2` now returns a list of `%Logex.Diagnostic{}`, each with its line, and an unknown mnemonic is "unknown instruction" followed by the word. Since M1-3 an undeclared tag is an error too, with a did-you-mean.)
 
 The spike also made a second variant of 79 lines. It emits one Elixir function for each rung, with no interpreter. Design 2, in section 8, is also 79 lines. The two counts are not related.
 
@@ -132,7 +132,7 @@ The test conventions are also applicable to the DSL. A correction must have a te
 
 An oracle that compares the two ASTs is not sufficient. Two front ends that make the same incorrect IR are equal for that oracle. Only a test from source to tag map can find that error. That is the rule of `test/logex/end_to_end_test.exs`.
 
-The public functions that a DSL uses at this time are `instructions/0` and `tokenize/1`. Backlog item B5 will change the recursive clauses of `instructionize/1` and `evaluate/2` to `defp`. (M1-2 has done so for `instructionize/1`, which now returns `{:ok, ir}` or `{:error, diagnostics}`.) Those two functions are not on the list of functions that the DSL uses. Thus, B5 has no effect on the DSL code.
+The public functions that a DSL uses at this time are `instructions/0` and `tokenize/1`. Backlog item B5 will change the recursive clauses of `instructionize/1` and `evaluate/2` to `defp`. (M1-2 has done so for `instructionize`, which since M1-3 is `instructionize/2` and returns `{:ok, %Logex.Program{rungs:, tags:}}` or `{:error, diagnostics}`.) Those two functions are not on the list of functions that the DSL uses. Thus, B5 has no effect on the DSL code.
 
 ## 8. The three designs
 

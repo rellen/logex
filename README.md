@@ -189,10 +189,11 @@ env = scan.(%{env | "start" => 1});    show.("start pressed ", env)
 env = scan.(%{env | "start" => 0});    show.("start released", env)
 env = scan.(%{env | "overtemp" => 1}); show.("overtemp      ", env)
 env = scan.(%{env | "stop" => 1});     show.("stop pressed  ", env)
+env = scan.(%{env | "stop" => 0, "overtemp" => 0}); show.("cooled, idle  ", env)
 ```
 
 The first env is every declared tag at its initial value: 0, except `speed_sp` at 1200.
-Four scans, because a seal-in and a latch only show across scans:
+Five scans, because a seal-in and a latch only show across scans:
 
 ```
 $ mix run scan.exs
@@ -200,6 +201,7 @@ start pressed   %{"fault" => 0, "motor" => 1, "run_lamp" => 1, "speed_sp" => 120
 start released  %{"fault" => 0, "motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}
 overtemp        %{"fault" => 1, "motor" => 1, "run_lamp" => 1, "speed_sp" => 0}
 stop pressed    %{"fault" => 1, "motor" => 0, "run_lamp" => 0, "speed_sp" => 0}
+cooled, idle    %{"fault" => 1, "motor" => 0, "run_lamp" => 0, "speed_sp" => 0}
 ```
 
 The motor holds itself in after the start button is released, and the fault stays latched

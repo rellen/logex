@@ -44,9 +44,12 @@ them and holds everything downstream; `Logex.Printer` turns a parse AST back int
    │  Logex.Compiler.parse/1           Logex.Parser             recursive descent
    ▼  {:ok, ast}
  {:routine, {:rungs, [{:rung, [{:name, 1, "xic"}, {:name, 1, "aa"}, {:branches, [[…]]}]}]}}
-   │  Logex.Compiler.instructionize/1  lowering, checked against each operand signature
-   ▼  {:ok, ir} | {:error, [%Logex.Diagnostic{line:, message:}]}
- {:routine, {:rungs, [{:rung, [{:xic, 1, [{:name, 1, "aa"}]}, {:ote, 1, [{:name, 1, "bb"}]}]}]}}
+   │  Logex.Compiler.instructionize/2  declarations to a tag table (Logex.Declarations);
+   │                                   lowering, checked against each operand signature
+   │                                   and each tag's declaration
+   ▼  {:ok, program} | {:error, [%Logex.Diagnostic{line:, message:}]}
+ %Logex.Program{rungs: [{:rung, [{:xic, 3, [{:name, 3, "aa"}]}, {:ote, 3, [{:name, 3, "bb"}]}]}],
+                tags: %{"aa" => %Logex.Tag{type: :bool, section: :var_input, …}, …}}
    │  Logex.Compiler.evaluate/2        the evaluate/2 clauses         {power_flow, env} fold
    ▼  {true, %{"aa" => 1, "bb" => 1}}
 ```
@@ -86,9 +89,10 @@ M0-4 closed them. Of the three listed below, two gave *wrong answers* silently a
 unusable error; only the first is still open.
 
 - **`xic` and `xio` are not complementary.** Two independent *positive* tests, so a tag
-  holding anything outside `{0,1}` — or no value at all — reads false for both. Reachable
-  from source: `move 250 sp xic sp ote hi` → `hi=0`, and `move 250 sp xio sp ote lo` →
-  `lo=0`. See M1-4.
+  holding anything outside `{0,1}` — or no value at all — reads false for both. *No
+  longer reachable from source since M1-3*: `move 250 sp xic sp ote hi`, which gave
+  `hi=0`, is now a compile error however `sp` is declared (a dint on `xic`, or 250 into a
+  bool). What remains is an env the host builds by hand. See M1-4.
 - **A missing space before `nxb` silently turned OR into AND.** ***Closed — §4·B1.***
   `bst xic aa nxb xic bb bnd ote dd` with `aa=0,bb=1` gave `dd=1`; deleting the one space
   before `nxb` gave `dd=0`, with no error anywhere. The delimiters are `(` `|` `)` now,
@@ -593,7 +597,8 @@ After a validator, a formatter and a language server exist this touches all of t
 **Status: DONE — `e569113` (the validation pass) and the `mov` → `move` rename after it.**
 `instructionize/1` returns `{:ok, ir}` or `{:error, diagnostics}`: every
 `%Logex.Diagnostic{line:, message:}` in the routine, in source order. `@instructions` maps
-each mnemonic to an operand signature (`"move" => {:move, [:value, :tag]}`), and every case
+each mnemonic to an operand signature (`"move" => {:move, [:value, :tag]}` then; M1-3 made
+each operand `{access, type}`), and every case
 in the table below is a located diagnostic, each pinned in `validation_test.exs`. The open
 call at the end of this item was decided for the instruction tuple: it is
 `{symbol, line, operands}` now, so a later pass can cite a line too. One decision was
@@ -667,15 +672,18 @@ they were on purpose rather than guess which M1-2 wants.
 ### M1-3 · A tag table with types
 
 **Status: DONE — landed 2026-09-28**, in the six commits listed at the end of this item;
-107 tests pass on Elixir 1.20.4, and each code commit's message records its mutation
-table. Where the landing departs from the text below: the note for a program with no
-declaration line reads "each is now declared before the first rung", naming no plan item;
-it is given only when there is no declaration line at all, not when every declaration was
-wrong; and an undeclared tag cites its operand's own line. Every recommendation of the
-design panel was adopted, together with `docs/organisation.md` §6.1's four additions. A
-spike of this design on a copy of `37b7932`, on Elixir 1.20.4 / OTP 28, passed 90 tests
-(76 migrated, 14 new) with the README output byte-identical; it is a receipt, not code in
-the repository.
+124 tests pass on Elixir 1.20.4, and the messages of steps (3) to (5) record their
+mutation tables; (2) is a refactor with none. An adversarial review then added tests for
+the mutants those tables missed, and fixed what it found; its commit follows (6). Where
+the landing departs from the text below: the note for a program with no declaration line
+reads "each is now declared before the first rung", naming no plan item; it is given only
+when there is no declaration line at all, not when every declaration was wrong, and it
+offers `bool` or `dint` rather than guessing; an undeclared tag cites its operand's own
+line; and `%Logex.Tag{}` keeps `initial: nil` when none was declared, which
+`Logex.Program.initial_env/1` reads as 0. Every recommendation of the design panel was
+adopted, together with `docs/organisation.md` §6.1's four additions. A spike of this
+design on a copy of `37b7932`, on Elixir 1.20.4 / OTP 28, passed 90 tests (76 migrated, 14
+new) with the README output byte-identical; it is a receipt, not code in the repository.
 
 The problem: no declarations, no BOOL/DINT distinction, no scope. That is what makes M1-4
 possible and what makes a typo'd tag name a silent dead rung rather than a compile error.
@@ -883,8 +891,8 @@ and each has a tested `format_error/1` — an unclosed group is reported at the 
 calls them yet; the single `%Logex.Error{}` below is still this item's to design, and can
 now carry a column. M1-2 added `%Logex.Diagnostic{line:, message:}` for lowering: make that
 the one error type, widened with a stage and a column, rather than add a second. The
-`%Logex.Program{}` below is also still this item's: `instructionize/1` returns the routine
-tuple wrapped in `{:ok, _}`.* As first written: normalise errors while here: `tokenize/1` returns
+`%Logex.Program{rungs:, tags:}` below came forward with M1-3, and `instructionize/2`
+returns it; naming it, and `source:` and `warnings:`, are still this item's.* As first written: normalise errors while here: `tokenize/1` returns
 leex's 3-tuple, `parse/1` yecc's 2-tuple, `instructionize/1` a bare value that raises. Raw Erlang charlists leak, and
 `format_error/1` is exported by both generated modules and called by neither — the
 lexer's is genuinely useful (`{:illegal, ~c"@"}` → `illegal characters "@"`). Empty input
@@ -1441,7 +1449,7 @@ otherwise.
 | M0-5 | med | grammar | `rnd` is a strict infix separator, and a branch leg cannot be empty | `ladder_parser.yrl:8,12,16,21` | **closed** `b65e756` |
 | B1 | med | lexer | Missing space before `nxb` fuses into an identifier — parallel silently becomes series | `ladder_lexer.xrl:8` | **closed** — delimiters are `(` `\|` `)`; guarded by "deleting a space around a delimiter is a no-op" in `end_to_end_test.exs` |
 | M1-2 | med | lowering | No validation pass: unknown mnemonic → bare `MatchError`; short arity → truncated IR; and `mov src ote` silently eats the next mnemonic as a tag, no error, energised rung | `instructionize/1`, name clause | **closed** `e569113` — a located diagnostic for each case, every mistake in a routine reported (`validation_test.exs`) |
-| M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | `evaluate/2`, xic+xio clauses | open |
+| M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | `evaluate/2`, xic+xio clauses | partly closed (`2b093de`): unreachable from source; open for host-built envs |
 | B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `Logex.Lexer`, the whitespace clause (was `ladder_lexer.xrl:6,10`) | open |
 | M0-4 | low | lexer | `NAME` regex: `+` rejects single-char tags; `a-zA-z` typo admits ``[ \ ] ^ ` `` | `ladder_lexer.xrl:5` | **closed** `3f3b104` |
 | — | low | tests | M0-4's fix was unguarded: no test used a single-character tag or a bracketed name, so reverting `ladder_lexer.xrl:5` left `mix test` fully green | `end_to_end_test.exs` | **closed** `b8fc743` |

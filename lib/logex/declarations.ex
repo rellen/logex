@@ -42,20 +42,39 @@ defmodule Logex.Declarations do
 
   @doc """
   Splits parsed rungs into a tag table and the rungs of logic:
-  `{tags, logic_rungs, diagnostics}`, the diagnostics in source order.
+  `{tags, logic_rungs, diagnostics}`, the diagnostics in line order.
 
-  `declared` are tags built in Elixir with `Logex.Tag.new!/4`; they enter the table first,
-  and a clash among them raises. A declaration after the first rung is reported and still
-  declared, so its tag is not also reported as undeclared wherever it is used.
+  `declared` are tags built in Elixir with `Logex.Tag.new!/4`. Each is checked again by
+  `validate!/1` and they enter the table first; anything invalid among them, a clash
+  included, raises `ArgumentError`. A declaration after the first rung is reported and
+  still declared, so its tag is not also reported as undeclared wherever it is used.
   """
-  def split(rungs, declared \\ []) do
+  def split(rungs, declared \\ [])
+
+  def split(rungs, declared) when is_list(declared) do
     {leading, rest} = Enum.split_while(rungs, &declaration?/1)
     {late, logic} = Enum.split_with(rest, &declaration?/1)
     late = Enum.map(late, &late(&1, first_line(logic)))
     {tags, diagnostics} = Enum.flat_map_reduce(leading ++ late, [], &declare/2)
-    {table, diagnostics} = table(declared, tags, diagnostics)
-    {table, logic, Enum.reverse(diagnostics)}
+    {table, diagnostics} = table(Enum.map(declared, &validate!/1), tags, diagnostics)
+    {table, logic, Enum.sort_by(Enum.reverse(diagnostics), & &1.line)}
   end
+
+  def split(_rungs, declared),
+    do: raise(ArgumentError, "declared must be a list of %Logex.Tag{}, got: #{inspect(declared)}")
+
+  @doc """
+  A tag declared from Elixir, checked by `check/1`: the tag itself, or `ArgumentError`
+  with the first rule it breaks. It can be applied twice, as `Logex.Tag.new!/4` and
+  `split/2` both do.
+  """
+  def validate!(%Tag{} = tag), do: validated(check(tag), tag)
+
+  def validate!(other),
+    do: raise(ArgumentError, "expected a %Logex.Tag{}, got: #{inspect(other)}")
+
+  defp validated([], tag), do: tag
+  defp validated([message | _], _tag), do: raise(ArgumentError, message)
 
   defp declaration?({:rung, [{:name, _, word} | _]}), do: reserved(word) == :section
   defp declaration?(_rung), do: false
@@ -72,7 +91,9 @@ defmodule Logex.Declarations do
   defp at(nil), do: ""
   defp at(line), do: " (line #{line})"
 
-  defp first_line([{:rung, elements} | rest]), do: line_in(elements) || first_line(rest)
+  # The first rung's own line. A rung of empty groups, such as `( )`, has none, and then no
+  # line is cited rather than a later rung's.
+  defp first_line([{:rung, elements} | _]), do: line_in(elements)
   defp first_line([]), do: nil
 
   defp line_in([{:branches, legs} | rest]), do: Enum.find_value(legs, &line_in/1) || line_in(rest)
@@ -94,8 +115,7 @@ defmodule Logex.Declarations do
   defp declared({:error, message}, _section, line, diagnostics),
     do: {[], [diagnostic(line, message) | diagnostics]}
 
-  defp checked([], tag, _line, diagnostics),
-    do: {[%{tag | initial: tag.initial || 0}], diagnostics}
+  defp checked([], tag, _line, diagnostics), do: {[tag], diagnostics}
 
   defp checked(messages, _tag, line, diagnostics),
     do: {[], Enum.reverse(Enum.map(messages, &diagnostic(line, &1)), diagnostics)}
@@ -109,11 +129,10 @@ defmodule Logex.Declarations do
   defp shape([{:int_lit, _, v} | _], kw),
     do: {:error, "expected a tag name after `#{kw}`, found `#{v}`"}
 
-  defp shape([{:name, _, name}], kw),
-    do: {:error, "`#{name}` needs a type: `#{kw} #{name} bool` or `#{kw} #{name} dint`"}
+  defp shape([{:name, _, name}], kw), do: {:error, short(reserved(name), name, nil, kw)}
 
-  defp shape([{:name, _, name}, {:int_lit, _, v} | _], _kw),
-    do: {:error, "`#{name}` needs a type before its initial value `#{v}`"}
+  defp shape([{:name, _, name}, {:int_lit, _, v} | _], kw),
+    do: {:error, short(reserved(name), name, v, kw)}
 
   defp shape([{:name, _, _}, {:branches, _} | _], _kw),
     do: {:error, "a declaration cannot hold a branch group"}
@@ -127,11 +146,27 @@ defmodule Logex.Declarations do
   defp typed(type, name, _word, [], _kw), do: {:ok, name, type, nil}
   defp typed(type, name, _word, [{:int_lit, _, v}], _kw), do: {:ok, name, type, v}
 
+  defp typed(_type, _name, _word, [{:branches, _} | _], _kw),
+    do: {:error, "a declaration cannot hold a branch group"}
+
+  defp typed(_type, _name, _word, [{:int_lit, _, _}, {:branches, _} | _], _kw),
+    do: {:error, "a declaration cannot hold a branch group"}
+
   defp typed(_type, name, _word, [{:int_lit, _, _}, extra | _], _kw),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
 
   defp typed(_type, name, _word, [extra | _], _kw),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
+
+  # A line with one word after its section: a tag with no type, or a type with no tag.
+  defp short(:type, word, _v, kw),
+    do: "`#{kw}` needs a tag name before the type `#{word}`, as in `#{kw} fault #{word}`"
+
+  defp short(nil, name, nil, kw),
+    do: "`#{name}` needs a type: `#{kw} #{name} bool` or `#{kw} #{name} dint`"
+
+  defp short(nil, name, v, _kw), do: "`#{name}` needs a type before its initial value `#{v}`"
+  defp short(reserved, name, _v, _kw), do: hd(name(reserved, name, :reserved))
 
   # IEC's RETAIN qualifier (docs/instruction-sets.md §3.2, Table 33 f3a) is not a tag name
   # here, because a tag name is never followed by a second name.
@@ -154,7 +189,6 @@ defmodule Logex.Declarations do
 
   defp describe({:name, _, word}), do: "`#{word}`"
   defp describe({:int_lit, _, v}), do: "`#{v}`"
-  defp describe({:branches, _}), do: "a branch group"
 
   @doc """
   The rules a tag must meet however it is declared, as messages: the one validator for a
@@ -179,10 +213,17 @@ defmodule Logex.Declarations do
   defp section(section) when section in @section_atoms, do: []
   defp section(section), do: ["unknown section #{inspect(section)}"]
 
+  # Messages name the tag with label/1, because from Elixir the name itself may be the
+  # thing that is wrong.
   defp initial(%Tag{initial: nil}), do: []
 
   defp initial(%Tag{section: :var_input, name: name}),
-    do: ["`#{name}` is a var_input: its value comes from outside, so it takes no initial value"]
+    do: [
+      "#{label(name)} is a var_input: its value comes from outside, so it takes no initial value"
+    ]
+
+  defp initial(%Tag{name: name, initial: v}) when not is_integer(v),
+    do: ["the initial value of #{label(name)} must be an integer, found #{inspect(v)}"]
 
   defp initial(%Tag{type: type, name: name, initial: v}) when type in @type_atoms,
     do: fit(fits?(type, v), type, name, v)
@@ -192,9 +233,13 @@ defmodule Logex.Declarations do
   defp fit(true, _type, _name, _v), do: []
 
   defp fit(false, :bool, name, v),
-    do: ["`#{name}` is a bool: its initial value must be 0 or 1, found `#{v}`"]
+    do: ["#{label(name)} is a bool: its initial value must be 0 or 1, found `#{v}`"]
 
-  defp fit(false, :dint, name, v), do: ["`#{name}` is a dint: `#{v}` does not fit in 32 bits"]
+  defp fit(false, :dint, name, v),
+    do: ["#{label(name)} is a dint: `#{v}` does not fit in 32 bits"]
+
+  defp label(name) when is_binary(name), do: "`#{name}`"
+  defp label(name), do: inspect(name)
 
   # Tags from Elixir first, then the source's own, each checked against those before it.
   # `folded` indexes the table by lowercased name, so a case-only twin is one lookup.

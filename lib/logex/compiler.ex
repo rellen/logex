@@ -303,7 +303,7 @@ defmodule Logex.Compiler do
   defp how(true, name),
     do:
       " (this program declares no tags: each is now declared before the first rung, " <>
-        "as `var #{name} bool`)"
+        "as `var #{name} bool` or `var #{name} dint`)"
 
   # A declared name differing only in case is always the suggestion; otherwise the nearest
   # by Jaro distance, if it is near enough.
