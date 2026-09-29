@@ -338,7 +338,7 @@ defmodule Logex.Compiler do
 
   defp mnemonic?(word), do: Map.has_key?(@instructions, String.downcase(word))
 
-  defp diagnostic(line, message), do: %Diagnostic{line: line, message: message}
+  defp diagnostic(line, message), do: %Diagnostic{stage: :validate, line: line, message: message}
 
   def evaluate(%Program{rungs: rungs}, acc), do: evaluate({:routine, {:rungs, rungs}}, acc)
 

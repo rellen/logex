@@ -282,5 +282,5 @@ defmodule Logex.Declarations do
   defp report(:report, tag, message, diagnostics),
     do: [diagnostic(tag.line, message) | diagnostics]
 
-  defp diagnostic(line, message), do: %Diagnostic{line: line, message: message}
+  defp diagnostic(line, message), do: %Diagnostic{stage: :validate, line: line, message: message}
 end
