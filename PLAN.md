@@ -16,7 +16,7 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
-§1 and §3·M1-1 to M1-4 have been brought current. M1-5 onward is still forward work.
+§1 and §3·M1-1 to M1-5 have been brought current. M1-6 onward is still forward work.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -34,7 +34,10 @@ vocabulary. Its code is all hand-written — `lib/`, `test/` and `mix.exs`; the 
 generated file is the golden record, `test/fixtures/frontend_golden.txt` — and it has no
 dependencies. The front end is `Logex.Lexer` and `Logex.Parser` (§6
 says why they are hand-written); `Logex.Compiler` delegates `tokenize/1` and `parse/1` to
-them and holds everything downstream; `Logex.Printer` turns a parse AST back into source.
+them and holds the validating lowering; `Logex.Printer` turns a parse AST back into source.
+Since M1-5 a host calls none of those stages: `Logex.compile/2` and `Logex.compile_file/1`
+run the first three and return one error type, and `Logex.Runtime` runs the scans, through
+an evaluator that is private to it (B5). The stage functions stay public for the tests.
 
 ```
  source string
@@ -50,8 +53,8 @@ them and holds everything downstream; `Logex.Printer` turns a parse AST back int
    ▼  {:ok, program} | {:error, [%Logex.Diagnostic{line:, message:}]}
  %Logex.Program{rungs: [{:rung, [{:xic, 3, [{:name, 3, "aa"}]}, {:ote, 3, [{:name, 3, "bb"}]}]}],
                 tags: %{"aa" => %Logex.Tag{type: :bool, section: :var_input, …}, …}}
-   │  Logex.Compiler.evaluate/2        the evaluate/2 clauses         {power_flow, env} fold
-   ▼  {true, %{"aa" => 1, "bb" => 1}}
+   │  Logex.Runtime.call/4             the evaluate/2 clauses, private {power_flow, env} fold
+   ▼  {outputs, %Logex.Instance{env: %{"aa" => 1, "bb" => 1}, …}}
 ```
 
 ### What works
@@ -59,7 +62,7 @@ them and holds everything downstream; `Logex.Printer` turns a parse AST back int
 - Series contacts, parallel branches to arbitrary nesting depth.
 - `xic`, `xio`, `ote`, `otl`, `otu`, `move` with **correct** latch/unlatch retention semantics.
 - Multi-rung routines, with power flow correctly reset per rung.
-- Driven one `evaluate/2` call per scan, a correct seal-in motor circuit.
+- Driven one scan at a time through `Logex.Runtime` (M1-5), a correct seal-in motor circuit.
 
 These were each verified directly:
 
@@ -125,8 +128,8 @@ stage-boundary mismatch. M0-1 (`690fc2d`) reconciled the fixtures on `:int_lit` 
 **All five items are landed and merged; nothing in this section is waiting to be done.**
 M0-1 `690fc2d`, M0-2 `03c10e0`, M0-3 `dde8c1d`, M0-4 `3f3b104` (PR #3, merge `22bc81a`);
 M0-5 `b65e756` (PR #4, merge `863af6f`). Re-verified on `main` after M1-1: `mix test` →
-`27 tests, 0 failures`. M1-1 to M1-4 have landed since; the next unstarted work is
-§3·M1-5.
+`27 tests, 0 failures`. M1-1 to M1-5 have landed since; the next unstarted work is
+§3·M1-6.
 
 The items are kept in full because their diagnoses are the record of *why* the code looks
 the way it does — why the parser drops empty rungs, why `CLAUDE.md` once documented an
@@ -729,7 +732,9 @@ var fault bool
 - **Types.** `bool` holds 0 or 1; `dint` is 32-bit (Ed 2 Table 10). The default initial
   value is 0 (Ed 2 Table 13). Other types, arrays and STRUCT wait, each an `unknown type`
   diagnostic. `var retain r bool` is a diagnostic until M1-5's `restart` gives a tag
-  something to survive; `retain` itself stays unreserved.
+  something to survive; `retain` itself stays unreserved. *(M1-5 landed `restart/3` and
+  left `retain` out, for scope; the diagnostic now says a warm restart starts every tag at
+  its initial value.)*
 - **Roles.** `var_input` is supplied from outside: logic may read it but not write it —
   IEC's own rule, *"Externally supplied, not modifiable within organization unit"* (Ed 2
   Table 16a) — and it takes no initial value. `var_output` is produced for the caller.
@@ -754,6 +759,7 @@ var fault bool
   the DSL's output) stays B9's.
 - **Deferred:** warnings (declared but unused, a `var_output` never written, duplicate
   coil) go to M1-5's `warnings:`; a declaration-inferring migration aid is not built.
+  *(All three landed with M1-5, `a34fa87`.)*
 
 **Diagnostics** (the spike's wording): `` `strat` is not declared — did you mean
 `start`? `` · `` `xic` reads a bool, but `speed_sp` is a dint (declared on line 7) `` ·
@@ -856,6 +862,17 @@ by hand rather than by `Logex.Program.initial_env/1` can still hold a 5 or leave
 
 ### M1-5 · A real public API
 
+**Status: DONE — landed 2026-09-29**, in the nine commits listed at the end of this item;
+184 tests pass on Elixir 1.20.4 (6 of them doctests), and each commit's message records
+its mutation table. Where the landing departs from the text below: B5 landed before the
+documents, not after, so the documents could describe the finished surface once; a second
+`ote` on the same rung is reported as "already has an `ote` in this rung" rather than
+citing its own line; and the seeded property also requires every refusal's message to
+begin with one of the pinned prefixes, so a crash with the wrong message cannot pass as a
+refusal. A reversed clock (a negative `elapsed_ms`) is caught by `runtime_test.exs` and not
+by the property alone, whose generator never makes one. The Milestone-1 done sentence is
+met, and `test/logex_test.exs` runs it as written.
+
 **Decided 2026-09-28, from `docs/organisation.md` §6.1** (its rationale is there):
 1. `%Logex.Program{name:, tags:, rungs:, source:, warnings:}`, named and stateless. The name
    is the file's basename (`Logex.compile_file("motor.ld")`) or `compile(source, name:)`;
@@ -931,6 +948,9 @@ reverted:** (1) the diagnostic widening; (2) `Logex.compile*`, the named program
 `restart/3`; (6) a seeded property over the host contract; (7) the suite run through the
 public API rather than `evaluate/2` (test-only); (8) documents; (9) B5.
 
+**Landed as:** (1) `6d57d19`; (2) `cb5049e`; (3) `a34fa87`; (4) `ee91fe5`; (5) `88ba3ab`;
+(6) `02d555e`; (7) `72bee33`; (9) B5, `d0870b3`; (8) the documents, the commit after.
+
 The item as written follows.
 
 There is no `Logex` module at all: the `mix new` stub and its doctest were deleted
@@ -984,7 +1004,9 @@ can silently outlive.
 
 **Decided 2026-09-28, from `docs/organisation.md` §6.1 and §4.6:**
 1. `evaluate/3` threads a read-only `%Logex.Scan{now:, first:}`; the accumulator stays
-   `{power_flow, env}`. CLAUDE.md's `evaluate/2` convention changes with it.
+   `{power_flow, env}`. CLAUDE.md's `evaluate/2` convention changes with it. *(Since M1-5
+   the `%Scan{}` exists and `Logex.Runtime.call/4` checks and receives it; the evaluator
+   is `Logex.Runtime`'s, private, so `evaluate/3` is a change inside that module.)*
 2. Timers are declared instances, `var t1 ton`; an undeclared one gets M1-3's diagnostic.
 3. Instance state nests: a per-instance record with a schema per FB type
    (`%Logex.FbType{}`), which M2-5's user function blocks reuse. `ons` reads
@@ -1021,12 +1043,19 @@ Note there is currently no scan loop at all: `evaluate/2` runs exactly one pass,
 repeat, no scan counter, no first-scan bit, and no separation of input image from output
 image — so nothing marks which tags are physical inputs that logic must not write. The
 semantics are correct; only the driver is missing, and it is roughly an `Enum.reduce`.
+*(Since M1-3 a `var_input` is declared and logic may not write it; since M1-5 an instance
+carries its clock and first-scan bit, and `put_inputs/3` keeps the input image apart from
+the `var_output`s a scan returns. There is still no loop: the host calls each scan, and
+scheduling is Milestone 2's.)*
 
 **Milestone 1 is done when a seal-in circuit written in a `.ld` file on disk can be
 compiled once into a named, stateless value you can hold, run for N scans as an instance
 against a typed tag table, and report a located diagnostic — ``seal.ld: line 3: unknown
 instruction `xyz` `` — instead of raising.** (Amended 2026-09-28 per M1-5, and its example
-2026-09-29 to the message `Logex.compile_file/1` really gives.) That single sentence
+2026-09-29 to the message `Logex.compile_file/1` really gives.) **Met with M1-5:**
+`test/logex_test.exs` compiles `seal.ld` from disk, runs it for four scans as an
+instance, and asserts that message for a broken file, which `format/1` prefixes with the
+path as it was given. That single sentence
 exercises M1-1 through M1-5; M1-6 is what proves the design was right rather than merely
 plausible.
 
@@ -1249,6 +1278,12 @@ diagnostic naming its file and line.
   `instructionize/1`'s private), so `Logex.Compiler.evaluate([{:xic, …}], {true, env})` on a
   half-formed IR is a supported entry point. Make every recursive clause a `defp` with a
   distinct name.
+  *The narrow part landed with M1-5 (`d0870b3`): the evaluator is in `Logex.Runtime`,
+  every clause private, the recursion split into `rung/2`, `series/2` and `element/2`, and
+  `runtime_test.exs` pins the public surface of `Logex`, `Logex.Runtime` and
+  `Logex.Compiler`; M1-5 also added `Logex.Warnings`, `Logex.Instance` and
+  `Logex.Scan`. What remains is the lowering (`Ast`, `Instruction`, `Analyzer`), still in
+  `Logex.Compiler`.*
 
 - **B6 · Project metadata.** No `@spec`/`@moduledoc` on `Logex.Compiler`; no
   `description`/`package`/`licenses` in `mix.exs` despite a full Apache-2.0 `LICENSE`;
@@ -1317,7 +1352,8 @@ diagnostic naming its file and line.
   parallel group spelled `branch(leg, leg)` rather than an infix operator, because `|||`
   and `|` both bind looser than `|>` and an unparenthesised seal-in silently becomes
   OR-of-AND (B1's defect class on a surface no gate sees). Preconditions if adopted: M1-2
-  (one validator) and M1-5 (a `%Program{}` and a runtime for `name/1` to sit on), and a
+  (one validator) and M1-5 (a `%Program{}` and a runtime for `name/1` to sit on; both
+  met, M1-5 on 2026-09-29), and a
   re-run of the whole study on Elixir 1.20, the floor in `mix.exs` — every receipt is from the 1.14
   sandbox. The report's §15 lists the decisions this item is waiting on, and they are still
   open. One seam came forward on its own: M1-3, decided 2026-09-28, provides the
@@ -1526,14 +1562,14 @@ otherwise.
 | B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `Logex.Lexer`, the whitespace clause (was `ladder_lexer.xrl:6,10`) | open |
 | M0-4 | low | lexer | `NAME` regex: `+` rejects single-char tags; `a-zA-z` typo admits ``[ \ ] ^ ` `` | `ladder_lexer.xrl:5` | **closed** `3f3b104` |
 | — | low | tests | M0-4's fix was unguarded: no test used a single-character tag or a bracketed name, so reverting `ladder_lexer.xrl:5` left `mix test` fully green | `end_to_end_test.exs` | **closed** `b8fc743` |
-| M1-5 | low | API | No public entry point and no `Logex` module; no scan loop | — | open |
-| M1-5 | low | errors | Three error conventions across four stages; `format_error/1` never called; empty program reports line `999999` | `tokenize/1`, `parse/1` | **partly closed** — `999999` by `b65e756`; the other two clauses open |
+| M1-5 | low | API | No public entry point and no `Logex` module; no scan loop | — | **closed** (M1-5) — `Logex.compile/2`, `compile_file/1` and `Logex.Runtime`; the host calls each scan, and a scheduler is Milestone 2's |
+| M1-5 | low | errors | Three error conventions across four stages; `format_error/1` never called; empty program reports line `999999` | `tokenize/1`, `parse/1` | **closed** — `999999` by `b65e756`; for a host, M1-5: `Logex.compile*` return `%Logex.Diagnostic{}` only, the front end's through its `format_error/1`. The stage functions keep their own shapes on purpose, for the golden record |
 | M0-3 | low | tooling | Generated `src/*.erl` tracked, embedding absolute `/nix/store` paths → ~700-line cross-OTP churn | `src/ladder_lexer.erl:1` (at `c9c7f51`; untracked since) | **closed** `dde8c1d` |
 | B4 | low | tooling | nix dev shell bit-rotted: `erlangR26` alias removed from nixpkgs master 2024-05-24; flake tracked `master`; lock from 2024-01-19 | `shell.nix`, `flake.nix` | **landed** `9c1a7bd` — OTP 28 / Elixir 1.20 on `nixos-26.05`; lock refresh owed |
 | B2 | low | lexer | Digit-led lexeme splits rather than erroring: `1bst` → `int_lit(1)` + `name("bst")` | `Logex.Lexer`, the integer clause (was `ladder_lexer.xrl:20`) | **closed** — a located `:missing_separator` lex error naming the whole run |
 | B3 | low | history | 2 commits ship a red suite (`ec0534a`, `35fe1b9`) — an interior island; `d47eb21` is a clean bisect baseline | — | open |
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | open |
-| B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `evaluate/2` | open |
+| B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
 | §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | open |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed |

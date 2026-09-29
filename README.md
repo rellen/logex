@@ -1,18 +1,18 @@
 # logex
 
-A Ladder Logic compiler and interpreter in Elixir. It reads a ladder routine written as
-text, lowers it to instructions, and evaluates it against a tag environment. No
-dependencies and no generated code: the lexer and parser are written by hand, and the whole
-compiler is eight small modules.
+A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
+text into a named, stateless value, and runs it as instances, one scan at a time, with the
+time the host injects. No dependencies and no generated code: the lexer and parser are
+written by hand, and the whole thing is thirteen small modules.
 
 **Stage: early, and honest about it.** Six instructions, parallel branches to arbitrary
 nesting depth, latch/unlatch that holds across scans, power flow that resets per rung, a
-typed tag table that every tag is declared in, and a printer that turns an AST back into
+typed tag table that every tag is declared in, a public API (`Logex.compile/2`,
+`Logex.compile_file/1` and `Logex.Runtime`), and a printer that turns an AST back into
 source so a routine round-trips — all of that works and is tested end to end, and a
-routine with mistakes in it gets every one reported with its line rather than an
-exception, a misspelt tag included. What does not exist yet: a public API (you call the
-compiler stages yourself), timers and counters, and a scan loop — one `evaluate/2` call is
-exactly one scan. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
+program with mistakes in it gets every one reported with its line rather than an
+exception, a misspelt tag included. What does not exist yet: timers and counters, and a
+scheduler — the host calls one scan at a time. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
 what order it gets fixed, and why.
 
 ## The dialect
@@ -162,51 +162,58 @@ xic fault move 0 speed_sp
 Rung 1 is the seal-in: `start` OR `motor` itself, AND not `stop`. Because `ote` is
 non-retentive, `motor` drops out the moment `stop` closes. Rung 3 latches `fault`, which
 only rung 4 can clear — that is what makes `otl`/`otu` different from `ote`. A misspelt
-tag is a compile error, not a rung that silently never fires: `xic motor ote run_lmap`
-gives `` line 11: `run_lmap` is not declared — did you mean `run_lamp`? ``.
+tag is a compile error, not a rung that silently never fires: with `xic motor ote
+run_lmap`, `Logex.compile_file/1` gives
+`` motor.ld: line 11: `run_lmap` is not declared — did you mean `run_lamp`? ``.
 
-`scan.exs` — there is no public API yet, so the program is compiled by hand, once, and each
-scan evaluates it:
+`scan.exs` — the program is compiled once, named `motor` after its file, and run as one
+instance. Each step sets the inputs that changed, then scans:
 
 ```elixir
-source = File.read!("motor.ld")
+{:ok, motor} = Logex.compile_file("motor.ld")
 
-{:ok, tokens, _} = Logex.Compiler.tokenize(source)
-{:ok, ast} = Logex.Compiler.parse(tokens)
-{:ok, program} = Logex.Compiler.instructionize(ast)
-
-scan = fn env ->
-  {_power_flow, env} = Logex.Compiler.evaluate(program, {true, env})
-  env
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(motor, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(motor, state)
+  IO.puts("#{label}  #{inspect(outputs)}  fault=#{state.env["fault"]}")
+  state
 end
 
-show = fn label, env ->
-  IO.puts("#{label}  #{inspect(Map.take(env, ["motor", "run_lamp", "fault", "speed_sp"]))}")
-end
-
-env = Logex.Program.initial_env(program)
-
-env = scan.(%{env | "start" => 1});    show.("start pressed ", env)
-env = scan.(%{env | "start" => 0});    show.("start released", env)
-env = scan.(%{env | "overtemp" => 1}); show.("overtemp      ", env)
-env = scan.(%{env | "stop" => 1});     show.("stop pressed  ", env)
-env = scan.(%{env | "stop" => 0, "overtemp" => 0}); show.("cooled, idle  ", env)
+Logex.Runtime.instance(motor)
+|> scan.("start pressed ", %{"start" => 1})
+|> scan.("start released", %{"start" => 0})
+|> scan.("overtemp      ", %{"overtemp" => 1})
+|> scan.("stop pressed  ", %{"stop" => 1})
+|> scan.("cooled, idle  ", %{"stop" => 0, "overtemp" => 0})
 ```
 
-The first env is every declared tag at its initial value: 0, except `speed_sp` at 1200.
-Five scans, because a seal-in and a latch only show across scans:
+An instance starts with every declared tag at its initial value: 0, except `speed_sp` at
+1200. A scan gives back the `var_output`s; `fault` is internal, read from the instance's
+state. Five scans, because a seal-in and a latch only show across scans:
 
 ```
 $ mix run scan.exs
-start pressed   %{"fault" => 0, "motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}
-start released  %{"fault" => 0, "motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}
-overtemp        %{"fault" => 1, "motor" => 1, "run_lamp" => 1, "speed_sp" => 0}
-stop pressed    %{"fault" => 1, "motor" => 0, "run_lamp" => 0, "speed_sp" => 0}
-cooled, idle    %{"fault" => 1, "motor" => 0, "run_lamp" => 0, "speed_sp" => 0}
+start pressed   %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}  fault=0
+start released  %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}  fault=0
+overtemp        %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 0}  fault=1
+stop pressed    %{"motor" => 0, "run_lamp" => 0, "speed_sp" => 0}  fault=1
+cooled, idle    %{"motor" => 0, "run_lamp" => 0, "speed_sp" => 0}  fault=1
 ```
 
 The motor holds itself in after the start button is released, and the fault stays latched
 after the overtemperature input clears.
+
+A mistake by the host raises `ArgumentError`, with every problem in one message.
+`Logex.Runtime.put_inputs(motor, state, %{"motor" => 1, "strat" => 1})` gives:
+
+```
+input `motor` is a var_output (declared on line 5), not a var_input: only a var_input is set from outside
+input `strat` is not declared — did you mean `start`?
+```
+
+`scan/3` takes the milliseconds since the last scan, for the timers to come;
+`Logex.Runtime.call/4` is one scan with the time given explicitly, which is what a
+scheduler will call; `restart/3` starts an instance again, keeping its inputs.
 
 ## Running it
 

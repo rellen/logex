@@ -40,7 +40,7 @@ The study had four tasks. Is a DSL correct for a ladder language? Which design m
 
 logex is a ladder logic compiler and interpreter in Elixir, with no dependencies. It reads a routine as text, for example `( xic start | xic motor ) xio stop ote motor`. The lexer (leex, `src/ladder_lexer.xrl`) makes tokens. The parser (yecc, `src/ladder_parser.yrl`) makes an AST. (That was the front end when this study was written. It is now hand-written, as `Logex.Lexer` and `Logex.Parser`: see `PLAN.md` §6.)
 
-`Logex.Compiler.instructionize/1` lowers the AST to an IR. `Logex.Compiler.evaluate/2` runs the IR with a tag map, one call for one scan. The language has six instructions: `xic`, `xio`, `ote`, `otl`, `otu` and `mov`. It has parallel branches to all depths. (`mov` is `move` since M1-2, and mnemonics are now reserved words, so the DSL examples below that write `mov` need the same rename.)
+`Logex.Compiler.instructionize/1` lowers the AST to an IR. `Logex.Compiler.evaluate/2` runs the IR with a tag map, one call for one scan. The language has six instructions: `xic`, `xio`, `ote`, `otl`, `otu` and `mov`. It has parallel branches to all depths. (`mov` is `move` since M1-2, and mnemonics are now reserved words, so the DSL examples below that write `mov` need the same rename. Since M1-5, on 2026-09-29, a host calls neither stage: `Logex.compile/2` and `Logex.compile_file/1` return a named `%Logex.Program{}`, and `Logex.Runtime` runs it one scan at a time through an evaluator that is private to it.)
 
 Each operand in the AST is the lexer token, `{:name, line, "start"}` or `{:int_lit, line, 123}`. Milestone 1 item M1-1 (commit `a22bf39`) put the line in that position. (The AST shape is unchanged since, but the hand-written lexer's tokens carry `{line, column}` and the parser keeps only the line, so an operand is no longer the token itself.) Ten locations in `compiler.ex` read that position as `_`.
 
@@ -132,7 +132,7 @@ The test conventions are also applicable to the DSL. A correction must have a te
 
 An oracle that compares the two ASTs is not sufficient. Two front ends that make the same incorrect IR are equal for that oracle. Only a test from source to tag map can find that error. That is the rule of `test/logex/end_to_end_test.exs`.
 
-The public functions that a DSL uses at this time are `instructions/0` and `tokenize/1`. Backlog item B5 will change the recursive clauses of `instructionize/1` and `evaluate/2` to `defp`. (M1-2 has done so for `instructionize`, which since M1-3 is `instructionize/2` and returns `{:ok, %Logex.Program{rungs:, tags:}}` or `{:error, diagnostics}`.) Those two functions are not on the list of functions that the DSL uses. Thus, B5 has no effect on the DSL code.
+The public functions that a DSL uses at this time are `instructions/0` and `tokenize/1`. Backlog item B5 will change the recursive clauses of `instructionize/1` and `evaluate/2` to `defp`. (M1-2 has done so for `instructionize`, which since M1-3 is `instructionize/2` and returns `{:ok, %Logex.Program{rungs:, tags:}}` or `{:error, diagnostics}`.) Those two functions are not on the list of functions that the DSL uses. Thus, B5 has no effect on the DSL code. (B5 landed with M1-5: `Logex.Compiler.evaluate/2` is gone, and the evaluator is private to `Logex.Runtime`. `instructions/0` and `tokenize/1` are still public, and a test pins them.)
 
 ## 8. The three designs
 
@@ -223,7 +223,7 @@ Errors use `raise CompileError, file: __CALLER__.file, line: line, description: 
 | Tracing at call time | None. Nothing in the IR is unknown at compile time. The walk runs at compile time and does not run user code. |
 | `Nx.Defn.Expr` graph | The logex AST and IR. They are rungs in sequence with side effects, not a graph. |
 | `Nx.Defn.Compiler` behavior | None. logex has one backend. A behavior for one implementation is an unnecessary abstraction. The second backend gave different results on 5,708 of 20,000 maps. |
-| `Nx.Defn.Evaluator` | `Logex.Compiler.evaluate/2`. It is a tree walker with one clause for each operation. After M1-5, `Logex.Runtime.scan/2`. |
+| `Nx.Defn.Evaluator` | `Logex.Compiler.evaluate/2`. It is a tree walker with one clause for each operation. After M1-5, `Logex.Runtime.scan/2` (so it is, since 2026-09-29). |
 | `jit`, `compile`, templates, tensor shape cache | None. There are no tensor shapes, and the macro does not wait for a call. "Compile once" is `name/0`, which gives data. |
 | `deftransform` | The DSL uses usual Elixir at build time. User macros that assemble rungs are possible, but this plan does not include them. |
 | `io_call`, hooks | A hook for each rung in the scan loop of M1-5, not in the DSL. |
@@ -242,7 +242,7 @@ Errors use `raise CompileError, file: __CALLER__.file, line: line, description: 
 | M1-1 (done) | The necessary prerequisite: a line in each operand. It is complete in commits `a22bf39` and `1b1b1df`. |
 | M1-2 | Precondition of B9. After M1-2, remove the eight-line arity check of the macro and call the one validator. The decision of M1-2 on the branches node changes one DSL clause. (M1-2 has landed: `instructions/0` now returns operand signatures, not arities, and the branches node is unchanged.) |
 | M1-3 | Add one sentence: a second declarer of tags will exist, and the DSL head can contain `start :: bool` as data. The head declarations must also be in the output by then, because `name/0` discards them at this time. (M1-3 has landed with that declarer: `instructionize(ast, declared)` takes `%Logex.Tag{}` values built with `Logex.Tag.new!/4`, checked as a declaration line is. Whether the head declarations are in the DSL's output, §15 decision 3, stays B9's.) |
-| M1-4 | No effect. The correction is in the evaluator only. If the maintainer accepts a backend subsequently, `bit/2` must be public and `evaluate/2` must call it. |
+| M1-4 | No effect. The correction is in the evaluator only. If the maintainer accepts a backend subsequently, `bit/2` must be public and `evaluate/2` must call it. (Both are private to `Logex.Runtime` since B5.) |
 | M1-5 | Precondition of B9. Add one sentence: `Logex.compile/1` must also operate on an AST, and `source:` must have a module variant. The doctest can contain the seal-in in the two spellings. |
 | M1-6 | B9 has no dependency on M1-6. The `t1.dn` clause is six lines, and the maintainer merges it together with the lexer rule for `t1.dn`. When the maintainer merges the rule, change the sentinel test. |
 | B1 | **Landed.** The fusion defect cannot occur in the DSL. `bst`, `nxb` and `bnd` are permitted tags in both front ends now, with no DSL edit. This study predates the change, so its twin tests are written against the old spelling and will need the same rewrite the rest of the repository took. |

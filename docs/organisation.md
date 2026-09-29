@@ -17,11 +17,17 @@ The maintainer's brief:
 > things in IEC (with a logex flavour) because we need the hierarchy and the different
 > task-style execution, IO mappings, etc.
 
-**What logex has today.** A `.ld` file is one routine. `evaluate/2` runs it once against a
-flat `env`. There is no program name, no instance, no task and no scan loop. There is
-nothing to mark which tags are physical inputs (`PLAN.md` M1-6). Milestone 1 adds typed
-declarations (M1-3), a compiled `%Logex.Program{}` with a runtime (M1-5), and timers with
-a scan loop (M1-6). None of those items says what sits above one program.
+**What logex has today.** A `.ld` file is one program type. `Logex.compile_file/1` turns
+it into a named `%Logex.Program{}` whose tags are declared and typed, with `var_input` and
+`var_output` roles (M1-3). `Logex.Runtime` runs one instance of it, one scan per call, with
+a clock and a first-scan bit the host advances (M1-5). There is no task, no configuration
+and no loop: the host calls every scan. Timers come with M1-6. None of those items says
+what sits above one program.
+
+*(When this document was written, on 2026-09-28, a `.ld` file was one routine that
+`evaluate/2` ran once against a flat `env`, with no program name, instance or scan loop,
+and nothing to mark which tags are physical inputs. §6.1's Milestone-1 changes are what
+changed that.)*
 
 **The direction.** logex follows IEC 61131-3's software model:
 
@@ -612,7 +618,11 @@ instructions ref., ONS, p.73). `first` is per instance.
 
 **Caveats to document.**
 - A `ton` in an event-task program times across events. It should be an M1-5 warning.
-- A `now` that goes backwards is an error, never a negative `.acc`.
+  *(M1-5 had neither a `ton` nor an event task to warn about; the warning waits until
+  both exist, M1-6 and M2-1.)*
+- A `now` that goes backwards is an error, never a negative `.acc`. *(Landed with M1-5:
+  `Logex.Runtime.call/4` raises `ArgumentError` for a `%Scan{}` earlier than the
+  instance's clock, and `scan/3` for a negative elapsed time.)*
 
 **Deviations from IEC task semantics, labelled.**
 
@@ -627,8 +637,11 @@ instructions ref., ONS, p.73). `first` is per instance.
 **The API** (M1-5, then M2-1):
 
 ```elixir
+Logex.Runtime.instance(program) :: state                                         # a %Logex.Instance{}, at its first scan
 Logex.Runtime.call(program, state, inputs, %Logex.Scan{}) :: {outputs, state}   # one scan: copy in, run, copy out
+Logex.Runtime.put_inputs(program, state, inputs) :: state                        # the sugar's input image
 Logex.Runtime.scan(program, state) / scan(program, state, elapsed_ms)            # sugar: the implicit configuration
+Logex.Runtime.restart(program, state, :cold | :warm) :: state                    # keeps the var_inputs and the clock
 Logex.Runtime.start(config) :: rt
 Logex.Runtime.cycle(rt, elapsed_ms, inputs) :: {rt, outputs, [event]}
 Logex.Runtime.next_due_in(rt) :: non_neg_integer | :infinity                    # what the runner sleeps on
@@ -639,6 +652,10 @@ Logex.Runtime.get(rt, "m1.t1.acc")                                              
 `scan/2` and a one-line configuration must give identical outputs for the README program.
 A test pins that, or the two runtimes drift apart. PLAN M1-5 defines `scan/3` as "n
 scans"; the elapsed-time `scan/3` above replaces that meaning, and M1-5 must say so.
+*(It did, and the first five lines landed with M1-5 on 2026-09-29, `scan/2` returning
+`{outputs, state}` like `call/4`. `restart/3` keeps the var_inputs because they are the
+host's input image, which a configuration's copy-in refreshes every scan anyway: that is
+what keeps `scan/2` and the one-line configuration in agreement across a restart.)*
 
 **Receipt.** The configuration spike ran an earlier form of the §4.4 plant: the §4.2
 `motor`, no event task, no `estop` and no snapshot, and `m2.reset` wired to `pb_reset`
@@ -718,7 +735,7 @@ names they break (CLAUDE.md step 2).
 | FB-to-task association (`FB1 WITH SLOW_1`, Table 49 f6b) | deferred | Rarely needed. It splits an FB's execution from its program's scan |
 | Direct representation `%IX0.0` and raw addresses in connections | not adopted; the fallback for §4.5 | One declared, named I/O list instead |
 | Wall-clock runner, `Logex.IO` adapters, watchdog | target, after Milestone 2 | Outside the pure core. Nothing in M2 blocks them |
-| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values. RETAIN: with M1-5's `restart`. Forcing: a force map applied after the input latch and before the output return, in `cycle/3` |
+| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values. RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3` |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
@@ -770,6 +787,13 @@ Each is a field or a sentence now and a migration later.
 6. **Land B5 immediately after.** Every recursive `evaluate` clause becomes a `defp`. An FB
    call re-enters rung evaluation for another body, and it must not do so through a
    public clause.
+
+*Landed 2026-09-29, all six; `PLAN.md` M1-5 records the design the maintainer took and
+where the landing departs from it. Beyond the six: `%Logex.Diagnostic{}` also gained
+`severity:`, for the three warnings M1-3 deferred; an instance is a `%Logex.Instance{type:,
+env:, now:, first:}` that holds no program and is matched to one by name; and `restart/3`
+keeps the var_inputs, with `:warm` equal to `:cold` until `retain` lands. B5 went in just
+before M1-5's documents rather than just after them.*
 
 **M1-6 (TON, ONS, comparisons, scan loop).**
 1. **`evaluate/3` with a read-only `%Logex.Scan{now:, first:}`.** This changes CLAUDE.md's
@@ -879,8 +903,8 @@ checked by reverting it (CLAUDE.md; PLAN §2·M0-4). For example:
 - `README.md` gets a syntax-list entry and an example that is re-run.
 - `PLAN.md` has the Milestone 2 section and a §8 entry ("program organisation"); each
   stage still updates B5's module list and B9's preconditions.
-- CLAUDE.md's Key Files gets `configuration.ex` and `runtime.ex`, and its `evaluate`
-  convention changes at M1-6.
+- CLAUDE.md's Key Files gets `configuration.ex` and `runtime.ex` (`runtime.ex` since
+  M1-5), and its `evaluate` convention changes at M1-6.
 - PLAN §5's organisation bullet carries the one-line summary: "a file is a POU type,
   state is an instance, a configuration instantiates, wires and schedules; no routines,
   no controller scope, no preemption."
