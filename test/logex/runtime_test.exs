@@ -351,4 +351,16 @@ defmodule Logex.RuntimeTest do
       end)
     end
   end
+
+  describe "the public surface (B5)" do
+    test "is exactly this: every evaluate clause is private, in Logex.Runtime" do
+      assert Enum.sort(Logex.__info__(:functions)) == [compile: 2, compile_file: 1]
+
+      assert Enum.sort(Runtime.__info__(:functions)) ==
+               [call: 4, instance: 1, put_inputs: 3, restart: 3, scan: 2, scan: 3]
+
+      assert Enum.sort(Logex.Compiler.__info__(:functions)) ==
+               [instructionize: 1, instructionize: 2, instructions: 0, parse: 1, tokenize: 1]
+    end
+  end
 end

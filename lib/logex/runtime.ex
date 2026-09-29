@@ -83,8 +83,8 @@ defmodule Logex.Runtime do
   defp mode!(mode),
     do: raise(ArgumentError, "restart takes :cold or :warm, got: #{inspect(mode)}")
 
-  defp run(%Instance{env: env} = state, program, %Scan{now: now}) do
-    {_power_flow, env} = Logex.Compiler.evaluate(program, {true, env})
+  defp run(%Instance{env: env} = state, %Program{rungs: rungs} = program, %Scan{now: now}) do
+    env = Enum.reduce(rungs, env, &rung/2)
     {outputs(program, env), %{state | env: env, now: now, first: false}}
   end
 
@@ -242,4 +242,88 @@ defmodule Logex.Runtime do
 
   defp on_line(%Tag{line: nil}), do: ""
   defp on_line(%Tag{line: line}), do: " (declared on line #{line})"
+
+  # The evaluator (B5): private, so no logic runs past the checks above. Each rung starts
+  # with power, and `{power_flow, env}` threads through its elements in order.
+  defp rung({:rung, elements}, env) do
+    {_power_flow, env} = series(elements, {true, env})
+    env
+  end
+
+  defp series(elements, acc), do: Enum.reduce(elements, acc, &element/2)
+
+  # Every leg runs, from the power flowing into the group, with the env threading through
+  # the legs in order, so a leg sees what an earlier one wrote. The group passes power if
+  # any leg does: branches do not short-circuit.
+  defp element({:branches, legs}, {power, env}) do
+    {powers, env} = Enum.map_reduce(legs, env, fn leg, env -> series(leg, {power, env}) end)
+    {Enum.any?(powers), env}
+  end
+
+  defp element(instruction, acc), do: evaluate(instruction, acc)
+
+  # One instruction: `(instruction, {power_flow, env})` to `{power_flow, env}`, a clause
+  # for an energised rung and one for a de-energised one (CLAUDE.md).
+  defp evaluate({:xic, _, [{:name, _, arg}]}, {true, env}) do
+    {bit(env, arg), env}
+  end
+
+  defp evaluate({:xic, _, _}, {false, env}) do
+    {false, env}
+  end
+
+  defp evaluate({:xio, _, [{:name, _, arg}]}, {true, env}) do
+    {not bit(env, arg), env}
+  end
+
+  defp evaluate({:xio, _, _}, {false, env}) do
+    {false, env}
+  end
+
+  defp evaluate({:ote, _, [{:name, _, arg}]}, {true, env}) do
+    {true, Map.put(env, arg, 1)}
+  end
+
+  defp evaluate({:ote, _, [{:name, _, arg}]}, {false, env}) do
+    {false, Map.put(env, arg, 0)}
+  end
+
+  defp evaluate({:otl, _, [{:name, _, arg}]}, {true, env}) do
+    {true, Map.put(env, arg, 1)}
+  end
+
+  defp evaluate({:otl, _, _}, {false, env}) do
+    {false, env}
+  end
+
+  defp evaluate({:otu, _, [{:name, _, arg}]}, {true, env}) do
+    {true, Map.put(env, arg, 0)}
+  end
+
+  defp evaluate({:otu, _, _}, {false, env}) do
+    {false, env}
+  end
+
+  defp evaluate({:move, _, [arg1, {:name, _, arg2}]}, {true, env}) do
+    {true, Map.put(env, arg2, get_arg(env, arg1))}
+  end
+
+  defp evaluate({:move, _, _}, {false, env}) do
+    {false, env}
+  end
+
+  defp get_arg(_env, {:int_lit, _, val}), do: val
+  defp get_arg(env, {:name, _, name}), do: Map.get(env, name, 0)
+
+  # M1-4: `xic` reads this and `xio` its negation, so the two are complementary by
+  # construction, whatever the env holds. The compiler lets only a bool reach a contact,
+  # but an env the host builds by hand can hold a 5, a 0.0, a `false`, a nil, or leave a
+  # tag out. A number is read by value, nonzero closed (PLAN.md §5), and a boolean as
+  # itself; nil and a missing tag are open; anything else is closed. A missing tag reads
+  # as 0 in get_arg/2 too, so `move` copies a 0 rather than a nil.
+  defp bit(env, name), do: closed?(Map.get(env, name))
+
+  defp closed?(value) when is_number(value), do: value != 0
+  defp closed?(value) when value in [nil, false], do: false
+  defp closed?(_value), do: true
 end
