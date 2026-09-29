@@ -5,7 +5,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 ## Commands
 
 - `mix compile` — compile.
-- `mix test` — run tests (must pass before committing). Judge a run by its exit code, not by
+- `mix test --warnings-as-errors` — run tests (must pass before committing; the flag fails
+  on a warning in a test file, which `mix compile` never sees). Judge a run by its exit code, not by
   grepping its output: Elixir 1.20 prints `Result: 39/40 passed`, which a grep for
   `[0-9]+ passed` reads as a pass.
 - `mix format` — format code before committing

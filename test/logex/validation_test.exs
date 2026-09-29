@@ -393,6 +393,15 @@ defmodule Logex.ValidationTest do
       assert source_errors("var lamp bool\nxic lmp_x ote lamp") == [
                "line 2: `lmp_x` is not declared"
              ]
+
+      # Either side of the 0.8 cut-off: a Jaro distance of 0.815, and of 0.790.
+      assert source_errors("var stop bool\nxic stop_hold ote stop") == [
+               "line 2: `stop_hold` is not declared — did you mean `stop`?"
+             ]
+
+      assert source_errors("var start bool\nxic stat_pb ote start") == [
+               "line 2: `stat_pb` is not declared"
+             ]
     end
 
     test "the how-to note needs a program with no declaration at all, and survives other errors" do
@@ -548,6 +557,17 @@ defmodule Logex.ValidationTest do
              ]
     end
 
+    test "a use inside a group nested in another group counts" do
+      assert source_warnings("var a bool\nvar b bool\nxic a ( xio a | ( xic b | xio b ) ) ote a") ==
+               []
+
+      assert source_warnings(
+               "var a bool\nvar m bool\nxic a ote m\nxic a ( xio a | ( xic a ote m | xio a ) )"
+             ) == [
+               "line 4: warning: `m` already has an `ote` on line 3: the last one in the scan decides it"
+             ]
+    end
+
     test "otl and otu may share a tag with an ote, as a latch and its reset do" do
       assert source_warnings("var a bool\nvar m bool\nxic a otl m\nxio a otu m\nxic m ote m") ==
                []
@@ -622,6 +642,9 @@ defmodule Logex.ValidationTest do
             {["x", :int], "unknown type :int: logex has `bool` and `dint`"},
             {["ote", :int], "`ote` is an instruction and cannot name a tag"},
             {[{:a}, :bool, :var_input, 1], "{:a} is not a tag name"},
+            # 0 is the default, and still not the program's to give.
+            {["i", :bool, :var_input, 0],
+             "`i` is a var_input: its value comes from outside, so it takes no initial value"},
             {["a", :dint, :var, {1}], "the initial value of `a` must be an integer, found {1}"},
             {["a", :bool, :var, "1"], ~s(the initial value of `a` must be an integer, found "1")},
             {["x", :dint, :var, -2_147_483_649],
@@ -640,6 +663,9 @@ defmodule Logex.ValidationTest do
              "unknown type :real: logex has `bool` and `dint`"},
             {[%Logex.Tag{name: "a", type: :bool, section: :var, initial: 7}],
              "`a` is a bool: its initial value must be 0 or 1, found `7`"},
+            # A line marks a tag declared in source, which the warnings would then cite.
+            {[%Logex.Tag{name: "a", type: :bool, section: :var, line: 2}],
+             "a tag declared from Elixir has no line, got: 2"},
             {["a"], ~s(expected a %Logex.Tag{}, got: "a")},
             {%Logex.Tag{name: "a", type: :bool, section: :var},
              "declared must be a list of %Logex.Tag{}, got: " <>

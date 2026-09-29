@@ -113,8 +113,8 @@ an earlier leg wrote. Both match how a real controller scans a rung.
 them passes power. The compiler lets only a `bool` reach either, but an env built by hand
 rather than by `Logex.Program.initial_env/1` can still hold a 5, a `false` or leave a tag
 out, so evaluation settles it: a number reads by value, nonzero closed (so `0.0` is open);
-a boolean reads as itself; `nil` and a missing tag are open. That totality is a guarantee,
-not a feature to write programs against (`PLAN.md` §5).
+a boolean reads as itself; `nil` and a missing tag are open; anything else is closed. That
+totality is a guarantee, not a feature to write programs against (`PLAN.md` §5).
 
 ### Settled, not yet landed
 

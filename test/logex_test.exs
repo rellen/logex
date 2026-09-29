@@ -214,6 +214,18 @@ defmodule LogexTest do
              ]
     end
 
+    # The rule the code has, pinned: the basename less its last extension, whatever it is.
+    # No document chooses between that and `.ld` only; if one does, the first line flips.
+    test "the name is the basename less its last extension", %{tmp_dir: dir} do
+      assert {:ok, %Logex.Program{name: "seal"}} =
+               Logex.compile_file(write(dir, "seal.txt", @seal))
+
+      assert {:ok, %Logex.Program{name: "seal"}} = Logex.compile_file(write(dir, "seal", @seal))
+
+      assert {:error, [%Diagnostic{stage: :file, message: ~s("seal.v2" cannot name) <> _}]} =
+               Logex.compile_file(write(dir, "seal.v2.ld", @seal))
+    end
+
     test "a file named after a word reserved in .ld files compiles", %{tmp_dir: dir} do
       path = write(dir, "move.ld", @seal)
       assert {:ok, %Logex.Program{name: "move"}} = Logex.compile_file(path)

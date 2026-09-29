@@ -362,7 +362,8 @@ defmodule Logex.EndToEndTest do
     # nil or a missing tag read false for both, so an interlock on xio never fired.
     @contacts "var t bool\nvar hi bool\nvar lo bool\nxic t ote hi\nxio t ote lo"
 
-    test "xic and xio are complementary for every value: a number by value, a boolean as itself" do
+    test "xic and xio are complementary for every value: a number by value, a boolean as " <>
+           "itself, anything else closed" do
       for {env, closed} <- [
             {%{"t" => 0}, 0},
             {%{"t" => 1}, 1},
@@ -374,7 +375,9 @@ defmodule Logex.EndToEndTest do
             {%{"t" => false}, 0},
             {%{"t" => true}, 1},
             {%{"t" => nil}, 0},
-            {%{}, 0}
+            {%{}, 0},
+            {%{"t" => :on}, 1},
+            {%{"t" => "0"}, 1}
           ] do
         assert %{"hi" => ^closed, "lo" => lo} = run(@contacts, env)
         assert lo == 1 - closed, "xio must be the complement of xic for #{inspect(env)}"

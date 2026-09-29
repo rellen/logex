@@ -797,7 +797,9 @@ env:, now:, first:}` that holds no program and is matched to one by name; and `r
 keeps the var_inputs, with `:warm` equal to `:cold` until `retain` lands. B5 went in just
 before M1-5's documents rather than just after them.*
 
-**M1-6 (TON, ONS, comparisons, scan loop).**
+**M1-6 (TON, ONS, comparisons, scan loop).** *(The scan loop is not M1-6's after all:
+since M1-5 the host calls each scan, scheduling is M2-1's, and the wall-clock runner comes
+after Milestone 2, §5.)*
 1. **`evaluate/3` with a read-only `%Logex.Scan{now:, first:}`.** This changes CLAUDE.md's
    `evaluate/2` convention. The accumulator stays `{power_flow, env}`. Every existing
    clause gains an ignored third argument.

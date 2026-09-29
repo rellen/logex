@@ -99,9 +99,13 @@ defmodule Logex.Declarations do
   @doc """
   A tag declared from Elixir, checked by `check/1`: the tag itself, or `ArgumentError`
   with the first rule it breaks. It can be applied twice, as `Logex.Tag.new!/4` and
-  `split/2` both do.
+  `split/2` both do. Such a tag has no `line`: a line is what marks a tag declared in
+  source, which the warnings and every "declared on line" message rely on.
   """
-  def validate!(%Tag{} = tag), do: validated(check(tag), tag)
+  def validate!(%Tag{line: nil} = tag), do: validated(check(tag), tag)
+
+  def validate!(%Tag{line: line}),
+    do: raise(ArgumentError, "a tag declared from Elixir has no line, got: #{inspect(line)}")
 
   def validate!(other),
     do: raise(ArgumentError, "expected a %Logex.Tag{}, got: #{inspect(other)}")

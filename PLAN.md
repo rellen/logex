@@ -118,7 +118,7 @@ M0-2 closed this with `test/logex/end_to_end_test.exs` (`03c10e0`), which drives
 an environment and names no IR tag in any assertion — its one AST match is the
 `{:routine, {:rungs, _}}` wrapper used to count rungs — so no fixture in it can encode a
 stage-boundary mismatch. M0-1 (`690fc2d`) reconciled the fixtures on `:int_lit` —
-`evaluation_test.exs:14` and `:59` now read `{:int_lit, 2, 123}`, the 3-tuple since M1-1
+`evaluation_test.exs:19` and `:69` now read `{:move, 2, [{:int_lit, 2, 123}, …]}`, the 3-tuple since M1-1
 (`a22bf39`) — and the `:lit_int` atom appears nowhere in the tree.
 
 ---
@@ -598,7 +598,7 @@ After a validator, a formatter and a language server exist this touches all of t
 ### M1-2 · A validation pass
 
 **Status: DONE — `e569113` (the validation pass) and the `mov` → `move` rename after it.**
-`instructionize/1` returns `{:ok, ir}` or `{:error, diagnostics}`: every
+`instructionize/1` returned `{:ok, ir}` or `{:error, diagnostics}`: every
 `%Logex.Diagnostic{line:, message:}` in the routine, in source order. `@instructions` maps
 each mnemonic to an operand signature (`"move" => {:move, [:value, :tag]}` then; M1-3 made
 each operand `{access, type}`), and every case
@@ -607,7 +607,9 @@ call at the end of this item was decided for the instruction tuple: it is
 `{symbol, line, operands}` now, so a later pass can cite a line too. One decision was
 added: **mnemonics are reserved words**, in any case (§5), which is what closes
 `mov src ote`. Mnemonics are matched case-insensitively (§5). `%Program{}` stayed with
-M1-5: `ir` is the same routine tuple as before. What follows is the item as written.
+M1-5: `ir` is the same routine tuple as before. *(M1-3 brought `%Logex.Program{rungs:,
+tags:}` forward: `instructionize/2` returns `{:ok, %Logex.Program{}}`, and since M1-5 its
+`warnings:` too.)* What follows is the item as written.
 
 `instructionize/1` validates nothing. `{symbol, args} = Map.get(@instructions, name)`
 in the `[{:name, _, name} | tail]` clause of `instructionize/1` destructures `nil` for any
@@ -788,7 +790,8 @@ negation, and `get_arg/2` defaults a missing tag to 0, but `bit/2` reads a numbe
 `not in [0, nil]` matched strictly, so `0.0` and `false` read *closed* — a regression for
 `0.0`, which the old `== 0` read correctly, and a `false` from a host would have closed an
 `xic`. `end_to_end_test.exs` pins complementarity for 0, 1, 5, -3, 0.0, -0.0, 2.5, `false`,
-`true`, `nil` and a missing tag, and `move` from a missing tag. Reverting either contact, the
+`true`, `nil` and a missing tag, and `move` from a missing tag (and, since M1-5's second
+review, an atom and a string, which read closed). Reverting either contact, the
 `get_arg/2` default, or `bit/2`'s treatment of floats, `false`, `nil` or a missing tag, or
 `bit/2` becoming `== 1`, each turns it red. What follows is the item as written.
 
@@ -887,6 +890,20 @@ no test failed without, each now pinned and checked by reverting it: among them 
 AND after an open contact, the power each coil passes on (step 7 had dropped the one
 assertion that guarded a de-energised `ote`'s), the state and program checks at every
 entry point, and the edges of the name rule.
+
+A second round (five lenses over the fixed code, a skeptic per finding) confirmed 27 findings,
+23 once merged, and refuted 6; its fixes are the commit after `b8a9bd8`, and the suite is at
+196 tests (6 doctests). One was a defect: `Logex.Declarations.validate!/1` let a tag
+declared from Elixir carry a `line`, and the warnings then took it for one declared in
+source; it now raises. Seven were rules no test failed without (among them a use in a
+group nested in another group, "anything else is closed", the did-you-mean's 0.8 cut-off,
+and how a file's name becomes the program's). Two were the property's own claims: it
+checked that a refusal was documented but never that a mistake was refused or a good call
+accepted, and it never reached a dint `var_input`, a bad state outside `call/4`, or two of
+its nine refusal kinds. It now has that oracle and asserts its reach, and by itself catches
+twelve rule-breaks the old one missed. Six were stale passages. Seven were practices, now
+in `CONTRIBUTING.md`: among them the commit gate's `mix test --warnings-as-errors`, since
+`mix compile` never sees a warning in a test file.
 
 **Decided 2026-09-28, from `docs/organisation.md` §6.1** (its rationale is there):
 1. `%Logex.Program{name:, tags:, rungs:, source:, warnings:}`, named and stateless. The name
@@ -1236,7 +1253,9 @@ diagnostic naming its file and line.
   bare `1`, and identifiers ending in digits (`bst1`, `tag1`) are unaffected.
 
 - **B3 · CI.** *Since the hand-written front end (§6), three lines:
-  `mix compile --force --warnings-as-errors`, `mix format --check-formatted`, `mix test`,
+  `mix compile --force --warnings-as-errors`, `mix format --check-formatted`,
+  `mix test --warnings-as-errors` (the flag since M1-5's second review: `mix compile` never
+  compiles the tests, so a warning in one passed the plain `mix test` for six commits),
   each judged by exit code. The grammar-conflict gate below went with yecc; there is no
   grammar left to check.* As first written, four lines: `mix compile --warnings-as-errors`,
   `mix format --check-formatted`, `mix test`, and a grammar-conflict gate:
@@ -1304,8 +1323,9 @@ diagnostic naming its file and line.
   `description`/`package`/`licenses` in `mix.exs` despite a full Apache-2.0 `LICENSE`;
   unused `extra_applications: [:logger]`. `mix test --cover` reported a meaningless ~54%
   while it counted the generated scanners (`Logex.Compiler` 90%, `:ladder_lexer` 30%).
-  With the front end hand-written (§6) it reports 97.92% on 1.20.4: `Logex.Compiler`
-  94.59%, and `Logex.Lexer`, `Logex.Parser` and `Logex.Printer` 100%.
+  With the front end hand-written (§6, `65d9bc4`) it reported 97.92% on 1.20.4
+  (`Logex.Compiler` 94.59%); after M1-5's first review (`b8a9bd8`) it reported 99.17%,
+  every module 100% but `Logex.Diagnostic` (90.00%) and `Logex.Declarations` (97.69%).
 
 - **B7 · Style.** Five `{false, env}` clauses with identical *bodies*
   (`xic`, `xio`, `otl`, `otu`, `move` — the heads differ) collapse to one guard clause
@@ -1566,11 +1586,13 @@ were the `{:branches, _}` and `is_list(branch)` clauses of `Logex.Compiler.evalu
 
 ## 7. Findings register
 
-Every defect the review turned up, with the milestone item or backlog bullet that closes
-it, and its status as of `1b1b1df`. `B1`–`B8` are the §4 backlog bullets. Items that are
-pure forward work rather than defects (M1-3, M1-6, B5) have no row. An ID of `—` means the
-finding has no plan item yet. Locations are current as of `1b1b1df` unless a cell says
-otherwise.
+Every defect the review and the audit after Milestone 0 (`440bc83`) turned up, with the
+milestone item or backlog bullet that closes it, and its status as of M1-5 and its two
+reviews (2026-09-29). `B1`–`B9` are the §4 backlog bullets; B9 is proposed work, listed for
+its status. Other items that are pure forward work rather than defects (M1-3, M1-6, B5)
+have no row, and the later reviews of M1-3 and M1-5 are recorded in those items' Status
+blocks instead. An ID of `—` means the finding has no plan item yet. Locations are current
+as of `1b1b1df` unless a cell says otherwise.
 
 | ID | Sev | Area | Finding | Location | Status |
 |---|---|---|---|---|---|
@@ -1606,7 +1628,10 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
 
 1. **Timers and counters (TON/TOF/RTO, CTU/CTD/RES)** — decisive. Essentially no real
    routine exists without them, and they are why the scan model matters. See M1-6.
-2. **A scan loop and I/O image.** See M1-6.
+2. **A scan loop and I/O image.** The input image, the clock and the first-scan bit landed
+   with M1-5 (`put_inputs/3`, `%Logex.Scan{}`). There is no loop: the host calls each scan.
+   Scheduling is Milestone 2's (M2-1), and a wall-clock runner comes after it
+   (`docs/organisation.md` §5).
 3. **A tag table with types.** Landed with M1-3.
 4. **Comparisons (`eq ne lt gt le ge` — IEC names, see `docs/naming.md`)** — high value,
    low cost. See M1-6.

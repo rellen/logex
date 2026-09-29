@@ -110,6 +110,14 @@ Check by reverting, not by reasoning.
 A single test asserting "tags work" would have passed with half the regex broken. Make each
 test fail for exactly one reason.
 
+New code has no fix to revert: revert a feature commit's `lib/` and every test that calls
+it fails, whatever those tests assert. Revert each *rule* instead, one at a time — each
+clause, guard, fallback and sort the diff adds — and take the list from the diff, not from
+what the tests were written to catch. `ee91fe5` recorded 31 mutants, each red, yet its
+`on_line(%Tag{line: nil})` clause could be deleted with all 184 tests green at `4a1079c`.
+The review of M1-5 found fifteen rules no test failed without, twelve of them in code M1-5
+added (`b8a9bd8`); the review of M1-3 had 52 of its 112 mutants survive (`0e83b5f`).
+
 ### Beware of a green suite
 
 `690fc2d` fixed an atom that no stage in the pipeline could produce — `get_arg/2` matched
@@ -129,6 +137,23 @@ Also beware assertions that cannot see the bug. The empty-rung fix was first dra
 an acceptance block that printed only the environment — provably identical with and without
 the phantom-rung defect it was meant to verify. `b65e756` shipped with rung-count
 assertions instead. Assert on the thing that changed, not on a projection of it.
+
+Moving a test can drop what it saw, and a commit that only rewrites tests cannot be checked
+by reverting it: the old form still passes. Check it with the old form's mutants instead.
+Wherever the rewrite narrows an assertion, name the mutant only the dropped part caught,
+apply it, and watch the new form fail. `72bee33` moved the suite off `evaluate/2`; the
+printer's `{false, %{"xx" => 0}}` became `%{"xx" => 0}`, because no public function returns
+power flow, and the dropped `false` had been the one guard on the power a de-energised
+`ote` passes on. With that clause passing `true`, the suite failed at `02d555e` and passed
+at `72bee33`, and stayed green until `b8a9bd8`.
+
+A property pins only what its generator reaches. `api_contract_test.exs` went red for
+every mutant in its own table (`02d555e`), yet it never declared a dint `var_input`, never
+produced 2 of its 9 refusal kinds, and gave a bad program or state only to `call/4`: it
+caught none of twelve rule-breaks off those paths. It now asserts its reach, the way
+`printer_test.exs`'s `@required_shapes` does — every compile stage, every refusal kind a
+host can cause — and that each call is refused exactly when it is a mistake. Give a new
+property the same.
 
 The same trap has a live instance. `PLAN.md` §6 keeps the sequential `env` threading in the
 `{:branches, _}` reducer deliberately, and B7 invites rewriting that reducer. Until
@@ -164,6 +189,14 @@ cleaned that up.
 Cite `the {:xic, _, [{:name, _, arg}]} clause of evaluate/2`, not `compiler.ex:79`. Clause heads,
 function names, grammar productions and bullet titles survive edits above them. §1 and §2
 keep their numbers deliberately; §2 is explicitly historical.
+
+They do not survive their own removal. When a commit renames, moves or removes a function
+or clause, grep the documents for each old clause head, not only the function's name, and
+fix every hit in that commit or the documents pass after it. A name can outlive its
+clauses: B5 (`d0870b3`) kept `evaluate/2`, private in `Logex.Runtime`, but removed its
+`{:branches, _}` and `is_list(branch)` clauses. The documents pass (`4a1079c`) fixed every
+`Logex.Compiler.evaluate/2`, and left `PLAN.md` §6 and B7 citing "the `is_list(branch)`
+clause" until `b8a9bd8`.
 
 ### Landing work stales the plan
 
@@ -205,6 +238,24 @@ choice, not an oversight to fix.
   to 2.2x slower than leex with every token right; `bin_opt_info` flagged only the lesser
   cost beside it, returning `{acc, rest}`. Measure the run and cut it from the source once;
   `lexer_binaries_test.exs` fails otherwise.
+- **Test a pass over the program for growth, not speed.** `Logex.Warnings` walked every use
+  once per declared tag (`a34fa87`), so compiling was quadratic — 16,000 tags took 7.5 s
+  against 0.3 s — with every warning right and the suite green for seven commits.
+  `b8a9bd8` groups the uses once. Compile two sizes and compare reductions
+  (`Process.info(self(), :reductions)`), not time, so the bound holds on any machine:
+  "compiling stays linear in the program's size" in `logex_test.exs` sees 4.1x for 4x the
+  tags, and saw 14.2x. A new pass over rungs or tags must be reached by that test's
+  program, or get a test like it.
+- **A map of 32 keys or fewer iterates in key order.** So a missing `Enum.sort` over a map,
+  or over a list built from one, is invisible to every test with a small table. M1-5 hit
+  it twice: the order of the input problems (pinned in `ee91fe5`), and the var_input list in
+  the did-you-mean, whose `Enum.sort` could be deleted with the suite green at `4a1079c`. A
+  test of an order that comes from a map gives *that map* more than 32 keys — for the
+  var_input list, the whole tag table.
+- **A deliberate host mistake draws a type warning.** Elixir 1.20's type checker sees
+  `Runtime.instance(:motor)` and warns on every run. Pass the bad value through a helper it
+  cannot see through, as `runtime_test.exs`'s `opaque/1` does (copy it into another file
+  that needs it), rather than living with the warning.
 - **Never skip, disable or quarantine a test to get to green.**
 - **Some code that looks wrong is not.** The non-short-circuiting fold along a rung
   (`series/2` in `Logex.Runtime`) and the sequential `env` threading through parallel
@@ -217,10 +268,13 @@ choice, not an oversight to fix.
 
     mix compile --force --warnings-as-errors
     mix format --check-formatted
-    mix test
+    mix test --warnings-as-errors
 
-All three must pass, judged by exit code. `--force` recompiles every module, so a warning
-in a file you did not touch still fails the build. If you changed what the language
+All three must pass, judged by exit code. `--force` recompiles every module in `lib/`, so a
+warning in a file you did not touch still fails the build. `mix compile` never compiles the
+tests, and plain `mix test` exits 0 when they warn: from `ee91fe5` to `4a1079c` the type
+checker printed two warnings on every run of `runtime_test.exs`, across six commits that
+passed the old three lines, and `mix test --warnings-as-errors` exits 1 on them. If you changed what the language
 accepts, or the golden record's generator, on purpose, regenerate the record in the same
 commit and read its diff:
 

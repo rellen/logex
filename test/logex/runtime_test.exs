@@ -167,6 +167,7 @@ defmodule Logex.RuntimeTest do
             {%{s | now: nil},
              "state.now must be a non-negative integer of milliseconds, got: nil"},
             {%{s | now: -5}, "state.now must be a non-negative integer of milliseconds, got: -5"},
+            {%{s | now: -1}, "state.now must be a non-negative integer of milliseconds, got: -1"},
             {%{s | first: nil}, "state.first must be true or false, got: nil"}
           ] do
         raises(message, fn -> Runtime.call(m, state, %{}, %Scan{now: 0, first: true}) end)
@@ -302,8 +303,9 @@ defmodule Logex.RuntimeTest do
     test "the state and its owner are checked before the inputs", %{motor: m, state: s} do
       {:ok, pump} = Logex.compile(@motor, name: "pump")
 
+      # A bad input as well, so the owner must be checked first to be the one blamed.
       raises("this state is an instance of `motor`, not of `pump`", fn ->
-        put(pump, s, %{"start" => 1})
+        put(pump, s, %{"zz" => 1})
       end)
 
       raises("expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: nil", fn ->

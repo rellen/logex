@@ -229,7 +229,7 @@ Errors use `raise CompileError, file: __CALLER__.file, line: line, description: 
 | `io_call`, hooks | A hook for each rung in the scan loop of M1-5, not in the DSL. (M1-5 landed no loop: the host calls each scan, and scheduling is Milestone 2's.) |
 | `print_expr` | `Plant.Motor.motor()` gives the routine as data. `instructionize/1` on it gives the IR. |
 | `grad`, `custom_grad`, `stop_grad` | None. These are tensor-only graph rewrites. |
-| `while` | None. The scan loop of M1-5, outside the routine, is the only related item. |
+| `while` | None. The scan loop of M1-5, outside the routine, is the only related item. (M1-5 landed no loop: the host calls each scan, and scheduling is Milestone 2's.) |
 | `@before_compile` rewrite | The DSL does not use it. The definition that Nx reads again is post-expansion. The DSL keeps only `__define__`. |
 | `compile_error!(meta, state, desc)` | The DSL keeps it with no change: `raise CompileError` with the node's line and the caller's file. |
 | `.formatter.exs` with `locals_without_parens` and `export:` | The DSL keeps `[defladder: 2, rung: 1]`. |
