@@ -146,6 +146,28 @@ defmodule LogexTest do
                "#{path}: line 1: warning: `spare` is declared but no rung uses it"
     end
 
+    test "Milestone 1's done sentence, as written in PLAN.md", %{tmp_dir: dir} do
+      # A seal-in circuit written in a .ld file on disk ...
+      path = write(dir, "seal.ld", @seal)
+      # ... compiled once into a named, stateless value you can hold ...
+      assert {:ok, %Logex.Program{name: "seal"} = seal} = Logex.compile_file(path)
+      # ... run for N scans as an instance against a typed tag table ...
+      steps = [{%{"start" => 1}, 1}, {%{"start" => 0}, 1}, {%{}, 1}, {%{"stop" => 1}, 0}]
+
+      Enum.reduce(steps, Logex.Runtime.instance(seal), fn {inputs, motor}, state ->
+        state = Logex.Runtime.put_inputs(seal, state, inputs)
+        assert {%{"motor" => ^motor}, state} = Logex.Runtime.scan(seal, state, 10)
+        state
+      end)
+
+      # ... and report a located diagnostic instead of raising.
+      broken = write(dir, "broken.ld", "var_input a bool\nvar b bool\nxyz a\nxic a ote b")
+
+      assert formatted(Logex.compile_file(broken)) == [
+               "#{broken}: line 3: unknown instruction `xyz`"
+             ]
+    end
+
     test "a file named after a word reserved in .ld files compiles", %{tmp_dir: dir} do
       path = write(dir, "move.ld", @seal)
       assert {:ok, %Logex.Program{name: "move"}} = Logex.compile_file(path)

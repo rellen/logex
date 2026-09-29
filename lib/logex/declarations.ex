@@ -36,6 +36,39 @@ defmodule Logex.Declarations do
   defp reserved_as(key, false) when is_map_key(@types, key), do: :type
   defp reserved_as(_key, false), do: nil
 
+  @doc """
+  Whether `word` is shaped like a name: a letter or `_`, then letters, digits or `_`. The
+  one rule for a program's name, and the lexer's for a tag.
+  """
+  def name?(word) when is_binary(word), do: String.match?(word, ~r/\A[A-Za-z_][A-Za-z0-9_]*\z/)
+  def name?(_word), do: false
+
+  @doc """
+  A did-you-mean for `name` among `names`, as a suffix for a message, or "". A name
+  differing only in case is always the suggestion; otherwise the nearest by Jaro distance,
+  if it is near enough. A `name` that is not valid UTF-8 gets none.
+  """
+  def suggest(name, names), do: suggest(String.valid?(name), name, names)
+
+  defp suggest(false, _name, _names), do: ""
+
+  defp suggest(true, name, names) do
+    folded = String.downcase(name)
+    same_but_case(Enum.find(names, &(String.downcase(&1) == folded)), name, names)
+  end
+
+  defp same_but_case(nil, name, names),
+    do: nearest(Enum.max_by(names, &String.jaro_distance(&1, name), fn -> nil end), name)
+
+  defp same_but_case(same, _name, _names),
+    do: " — did you mean `#{same}`? (tags are case-sensitive)"
+
+  defp nearest(nil, _name), do: ""
+  defp nearest(best, name), do: near(String.jaro_distance(best, name) >= 0.8, best)
+
+  defp near(true, best), do: " — did you mean `#{best}`?"
+  defp near(false, _best), do: ""
+
   @doc "Whether an integer fits a type."
   def fits?(:bool, value), do: value in [0, 1]
   def fits?(:dint, value), do: value in @dint

@@ -295,7 +295,10 @@ defmodule Logex.Compiler do
   defp first_use(true, _line, _name, _tags, acc), do: {[], acc}
 
   defp first_use(false, line, name, tags, {seen, note?}) do
-    message = "`#{name}` is not declared" <> suggest(name, Map.keys(tags)) <> how(note?, name)
+    message =
+      "`#{name}` is not declared" <>
+        Declarations.suggest(name, Map.keys(tags)) <> how(note?, name)
+
     {[diagnostic(line, message)], {MapSet.put(seen, name), false}}
   end
 
@@ -305,25 +308,6 @@ defmodule Logex.Compiler do
     do:
       " (this program declares no tags: each is now declared before the first rung, " <>
         "as `var #{name} bool` or `var #{name} dint`)"
-
-  # A declared name differing only in case is always the suggestion; otherwise the nearest
-  # by Jaro distance, if it is near enough.
-  defp suggest(name, names) do
-    folded = String.downcase(name)
-    same_but_case(Enum.find(names, &(String.downcase(&1) == folded)), name, names)
-  end
-
-  defp same_but_case(nil, name, names),
-    do: nearest(Enum.max_by(names, &String.jaro_distance(&1, name), fn -> nil end), name)
-
-  defp same_but_case(same, _name, _names),
-    do: " — did you mean `#{same}`? (tags are case-sensitive)"
-
-  defp nearest(nil, _name), do: ""
-  defp nearest(best, name), do: near(String.jaro_distance(best, name) >= 0.8, best)
-
-  defp near(true, best), do: " — did you mean `#{best}`?"
-  defp near(false, _best), do: ""
 
   # After a word that is not an instruction there is no signature to go by, so everything
   # up to the next instruction or branch group is taken to belong to it.

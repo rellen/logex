@@ -13,6 +13,21 @@ defmodule Logex do
       iex> {:ok, seal} = Logex.compile(source, name: "seal")
       iex> seal.name
       "seal"
+      iex> state = Logex.Runtime.instance(seal)
+      iex> state = Logex.Runtime.put_inputs(seal, state, %{"start" => 1})
+      iex> {outputs, state} = Logex.Runtime.scan(seal, state)
+      iex> outputs
+      %{"motor" => 1}
+      iex> state = Logex.Runtime.put_inputs(seal, state, %{"start" => 0})
+      iex> {outputs, state} = Logex.Runtime.scan(seal, state, 10)
+      iex> outputs
+      %{"motor" => 1}
+      iex> state = Logex.Runtime.put_inputs(seal, state, %{"stop" => 1})
+      iex> {outputs, _state} = Logex.Runtime.scan(seal, state, 10)
+      iex> outputs
+      %{"motor" => 0}
+
+  Released, the start button leaves the motor sealed in; the stop button drops it out.
 
   A mistake is a located diagnostic, not an exception:
 
@@ -100,8 +115,7 @@ defmodule Logex do
 
   # Shape only. Reserved words are scoped by file kind (docs/organisation.md decision 10),
   # and a program type's name is never spelled inside a `.ld` body.
-  defp name_problem(name),
-    do: shaped(String.match?(name, ~r/\A[A-Za-z_][A-Za-z0-9_]*\z/), name)
+  defp name_problem(name), do: shaped(Logex.Declarations.name?(name), name)
 
   defp shaped(true, _name), do: nil
 
