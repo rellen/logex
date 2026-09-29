@@ -13,19 +13,18 @@ defmodule Logex.EndToEndTest do
   use ExUnit.Case
 
   defp run(src, env) do
-    {:ok, tokens, _} = Logex.Compiler.tokenize(src)
-    {:ok, ast} = Logex.Compiler.parse(tokens)
-
-    {:ok, program} = Logex.Compiler.instructionize(ast)
-    {_power_flow, new_env} = Logex.Compiler.evaluate(program, {true, env})
-
-    new_env
+    {:ok, program} = compile(src)
+    env_after(program, env)
   end
 
-  defp compile(src) do
-    {:ok, tokens, _} = Logex.Compiler.tokenize(src)
-    {:ok, ast} = Logex.Compiler.parse(tokens)
-    Logex.Compiler.instructionize(ast)
+  defp compile(src), do: Logex.compile(src, name: "t")
+
+  # One scan through the public API, from an env the test chooses: an instance built by
+  # hand, which Logex.Runtime runs without checking its values (outside its contract).
+  defp env_after(program, env) do
+    state = %Logex.Instance{type: program.name, env: env, now: 0, first: true}
+    {_outputs, state} = Logex.Runtime.call(program, state, %{}, %Logex.Scan{now: 0, first: true})
+    state.env
   end
 
   defp rung_count(src) do
@@ -257,7 +256,7 @@ defmodule Logex.EndToEndTest do
     end
   end
 
-  describe "a seal-in motor circuit, one scan per evaluate/2 call" do
+  describe "a seal-in motor circuit, one scan per call" do
     @seal "var_input start bool\nvar_input stop bool\nvar_output motor bool\n" <>
             "( xic start | xic motor ) xio stop ote motor"
 
@@ -319,21 +318,24 @@ defmodule Logex.EndToEndTest do
       xic fault move 0 speed_sp
       """
 
-      {:ok, program} = compile(src)
-      scan = fn env -> elem(Logex.Compiler.evaluate(program, {true, env}), 1) end
-      shown = &Map.take(&1, ~w(motor run_lamp fault speed_sp))
+      # As the README runs it: compiled once, one instance, each step's inputs, one scan.
+      {:ok, motor} = Logex.compile(src, name: "motor")
 
-      env = scan.(%{Logex.Program.initial_env(program) | "start" => 1})
-      assert shown.(env) == %{"motor" => 1, "run_lamp" => 1, "fault" => 0, "speed_sp" => 1200}
-      env = scan.(%{env | "start" => 0})
-      assert shown.(env) == %{"motor" => 1, "run_lamp" => 1, "fault" => 0, "speed_sp" => 1200}
-      env = scan.(%{env | "overtemp" => 1})
-      assert shown.(env) == %{"motor" => 1, "run_lamp" => 1, "fault" => 1, "speed_sp" => 0}
-      env = scan.(%{env | "stop" => 1})
-      assert shown.(env) == %{"motor" => 0, "run_lamp" => 0, "fault" => 1, "speed_sp" => 0}
-      # The fault stays latched after the overtemperature input clears.
-      env = scan.(%{env | "stop" => 0, "overtemp" => 0})
-      assert shown.(env) == %{"motor" => 0, "run_lamp" => 0, "fault" => 1, "speed_sp" => 0}
+      steps = [
+        {%{"start" => 1}, %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}, 0},
+        {%{"start" => 0}, %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}, 0},
+        {%{"overtemp" => 1}, %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 0}, 1},
+        {%{"stop" => 1}, %{"motor" => 0, "run_lamp" => 0, "speed_sp" => 0}, 1},
+        # The fault stays latched after the overtemperature input clears.
+        {%{"stop" => 0, "overtemp" => 0}, %{"motor" => 0, "run_lamp" => 0, "speed_sp" => 0}, 1}
+      ]
+
+      Enum.reduce(steps, Logex.Runtime.instance(motor), fn {inputs, outputs, fault}, state ->
+        state = Logex.Runtime.put_inputs(motor, state, inputs)
+        assert {^outputs, state} = Logex.Runtime.scan(motor, state)
+        assert state.env["fault"] == fault
+        state
+      end)
     end
   end
 

@@ -37,19 +37,18 @@ defmodule Logex.EvaluationTest do
       "yy" => 0
     }
 
-    result = Logex.Compiler.evaluate(ast, {true, env})
+    {:routine, {:rungs, rungs}} = ast
 
-    assert result ==
-             {true,
-              %{
-                "bit0" => 1,
-                "bit1" => 0,
-                "aa" => 1,
-                "bb" => 2,
-                "dd" => 123,
-                "xx" => 0,
-                "yy" => 1
-              }}
+    assert env_after(%Logex.Program{rungs: rungs, tags: %{}}, env) ==
+             %{
+               "bit0" => 1,
+               "bit1" => 0,
+               "aa" => 1,
+               "bb" => 2,
+               "dd" => 123,
+               "xx" => 0,
+               "yy" => 1
+             }
   end
 
   test "evaluates an AST with OTLs and OTUs" do
@@ -88,18 +87,25 @@ defmodule Logex.EvaluationTest do
       "yy" => 0
     }
 
-    result = Logex.Compiler.evaluate(ast, {true, env})
+    {:routine, {:rungs, rungs}} = ast
 
-    assert result ==
-             {true,
-              %{
-                "bit0" => 1,
-                "bit1" => 0,
-                "aa" => 1,
-                "bb" => 2,
-                "dd" => 123,
-                "xx" => 1,
-                "yy" => 1
-              }}
+    assert env_after(%Logex.Program{rungs: rungs, tags: %{}}, env) ==
+             %{
+               "bit0" => 1,
+               "bit1" => 0,
+               "aa" => 1,
+               "bb" => 2,
+               "dd" => 123,
+               "xx" => 1,
+               "yy" => 1
+             }
+  end
+
+  # One scan through the public API, from an env the test chooses: a program and an
+  # instance built by hand, which Logex.Runtime runs without checking (outside its contract).
+  defp env_after(program, env) do
+    state = %Logex.Instance{type: program.name, env: env, now: 0, first: true}
+    {_outputs, state} = Logex.Runtime.call(program, state, %{}, %Logex.Scan{now: 0, first: true})
+    state.env
   end
 end

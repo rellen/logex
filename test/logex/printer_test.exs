@@ -100,13 +100,12 @@ defmodule Logex.PrinterTest do
     test "a group with no legs differs in meaning from a group with one empty leg" do
       # The two would print alike, so printing the first is refused. They evaluate
       # differently: Enum.any? is false over zero legs, while one empty leg is a
-      # jumper and passes power. Evaluated as rungs rather than as routines, because
-      # the `{:routine, _}` clause reports {true, env} whatever the last rung did.
+      # jumper and passes power. The power flow shows in what `ote xx` writes.
       no_legs = {:rung, [{:branches, []}, {:name, 1, "ote"}, {:name, 1, "xx"}]}
       {:routine, {:rungs, [one_empty]}} = parse!("( ) ote xx")
 
-      assert {false, %{"xx" => 0}} = Compiler.evaluate(lower!(no_legs), {true, %{}})
-      assert {true, %{"xx" => 1}} = Compiler.evaluate(lower!(one_empty), {true, %{}})
+      assert %{"xx" => 0} = env_after(lower!(no_legs), %{"xx" => 1})
+      assert %{"xx" => 1} = env_after(lower!(one_empty), %{"xx" => 0})
 
       assert_raise ArgumentError, ~r/no legs/, fn -> Printer.print(no_legs) end
       assert Printer.print(one_empty) == "( ) ote xx"
@@ -126,18 +125,23 @@ defmodule Logex.PrinterTest do
   end
 
   defp run(source, env) do
-    {:ok, ir} = Compiler.instructionize(parse!(source))
-    {_, new_env} = Compiler.evaluate(ir, {true, env})
-    new_env
+    {:ok, program} = Compiler.instructionize(parse!(source))
+    env_after(program, env)
   end
 
+  # One scan through the public API, from an env the test chooses: an instance built by
+  # hand, which Logex.Runtime runs without checking its values (outside its contract).
+  defp env_after(program, env) do
+    state = %Logex.Instance{type: program.name, env: env, now: 0, first: true}
+    {_outputs, state} = Logex.Runtime.call(program, state, %{}, %Logex.Scan{now: 0, first: true})
+    state.env
+  end
+
+  # One rung, lowered alone into a program of its own.
   defp lower!(rung) do
     declared = [Logex.Tag.new!("xx", :bool)]
-
-    {:ok, %Logex.Program{rungs: [ir]}} =
-      Compiler.instructionize({:routine, {:rungs, [rung]}}, declared)
-
-    ir
+    {:ok, program} = Compiler.instructionize({:routine, {:rungs, [rung]}}, declared)
+    program
   end
 
   # Printing drops line numbers and re-parsing assigns fresh ones from the printed

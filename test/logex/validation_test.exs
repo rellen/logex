@@ -688,8 +688,9 @@ defmodule Logex.ValidationTest do
   end
 
   defp run(source, env) do
-    {:ok, ir} = compile(source)
-    {_, env} = Compiler.evaluate(ir, {true, env})
-    env
+    {:ok, program} = compile(source)
+    state = %Logex.Instance{type: program.name, env: env, now: 0, first: true}
+    {_outputs, state} = Logex.Runtime.call(program, state, %{}, %Logex.Scan{now: 0, first: true})
+    state.env
   end
 end
