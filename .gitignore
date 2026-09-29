@@ -17,3 +17,6 @@ erl_crash.dump
 # built before then can still have them after pulling; this keeps them out of commits.
 # frontend_test.exs fails until `rm -rf src/*.erl _build` has been run.
 /src/*.erl
+
+# ExUnit's @tag :tmp_dir writes under tmp/ in the project.
+/tmp/
