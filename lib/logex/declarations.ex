@@ -206,7 +206,7 @@ defmodule Logex.Declarations do
   defp untyped("retain", _name, _type, _tail, _kw),
     do:
       "`retain` is not supported yet: a warm restart, like a cold one, " <>
-        "starts every tag at its initial value"
+        "starts every tag but the var_inputs at its initial value"
 
   defp untyped(_key, name, type, tail, kw),
     do: unknown_type(Enum.any?(tail, &type_word?/1), name, type, kw)

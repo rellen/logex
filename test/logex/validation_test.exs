@@ -242,7 +242,7 @@ defmodule Logex.ValidationTest do
                "line 12: `i` is a var_input: its value comes from outside, so it takes no initial value",
                "line 13: a declaration cannot hold a branch group",
                "line 14: `retain` is not supported yet: a warm restart, like a cold one, " <>
-                 "starts every tag at its initial value",
+                 "starts every tag but the var_inputs at its initial value",
                "line 15: `var` declares one tag: found `p` and `q` before the type"
              ]
     end
@@ -308,7 +308,7 @@ defmodule Logex.ValidationTest do
     test "`retain` is recognised in any case, and the section word is quoted as written" do
       assert source_errors("VAR RETAIN r bool\nVAR b") == [
                "line 1: `retain` is not supported yet: a warm restart, like a cold one, " <>
-                 "starts every tag at its initial value",
+                 "starts every tag but the var_inputs at its initial value",
                "line 2: `b` needs a type: `VAR b bool` or `VAR b dint`"
              ]
 
@@ -501,10 +501,15 @@ defmodule Logex.ValidationTest do
 
   describe "warnings (M1-5): what compiles but is probably a mistake" do
     test "a tag declared but used by no rung, var_inputs included" do
-      assert source_warnings("var_input spare_in bool\nvar spare bool\nvar a bool\nxic a ote a") ==
+      assert source_warnings(
+               "var_input spare_in bool\nvar spare bool\nvar_output spare_out bool\n" <>
+                 "var a bool\nxic a ote a"
+             ) ==
                [
                  "line 1: warning: `spare_in` is declared but no rung uses it",
-                 "line 2: warning: `spare` is declared but no rung uses it"
+                 "line 2: warning: `spare` is declared but no rung uses it",
+                 # Unused says more than unwritten, so a var_output no rung names gets this one.
+                 "line 3: warning: `spare_out` is declared but no rung uses it"
                ]
     end
 
@@ -520,6 +525,13 @@ defmodule Logex.ValidationTest do
 
     test "a var that is read and never written is not warned about" do
       assert source_warnings("var a bool\nvar b bool\nxic a ote b") == []
+    end
+
+    test "a var_output that only move, otl or otu writes is written" do
+      assert source_warnings(
+               "var a bool\nvar_output sp dint 1200\nvar_output on bool\nvar_output off bool\n" <>
+                 "xic a move 5 sp\nxic a otl on\nxio a otu off"
+             ) == []
     end
 
     test "a second ote on one tag cites the first, in its rung or on its line" do

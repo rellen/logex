@@ -733,8 +733,8 @@ var fault bool
   value is 0 (Ed 2 Table 13). Other types, arrays and STRUCT wait, each an `unknown type`
   diagnostic. `var retain r bool` is a diagnostic until M1-5's `restart` gives a tag
   something to survive; `retain` itself stays unreserved. *(M1-5 landed `restart/3` and
-  left `retain` out, for scope; the diagnostic now says a warm restart starts every tag at
-  its initial value.)*
+  left `retain` out, for scope; the diagnostic now says a warm restart, like a cold one,
+  starts every tag but the `var_input`s at its initial value.)*
 - **Roles.** `var_input` is supplied from outside: logic may read it but not write it —
   IEC's own rule, *"Externally supplied, not modifiable within organization unit"* (Ed 2
   Table 16a) — and it takes no initial value. `var_output` is produced for the caller.
@@ -754,7 +754,7 @@ var fault bool
   instances in it, and no M1-3 check may depend on it being flat.
 - **The Elixir-side declarer.** `instructionize(ast, declared)` takes `%Logex.Tag{}` values
   built with `Logex.Tag.new!/4`, validated by the same checks as a declaration line. It is
-  the seam `docs/defladder.md` §11's M1-3 row asks for, and M1-5's `compile/1` does not
+  the seam `docs/defladder.md` §11's M1-3 row asks for, and M1-5's `compile/2` does not
   expose it. defladder.md §15's decisions stay open; its decision 3 (head declarations in
   the DSL's output) stays B9's.
 - **Deferred:** warnings (declared but unused, a `var_output` never written, duplicate
@@ -869,9 +869,24 @@ documents, not after, so the documents could describe the finished surface once;
 `ote` on the same rung is reported as "already has an `ote` in this rung" rather than
 citing its own line; and the seeded property also requires every refusal's message to
 begin with one of the pinned prefixes, so a crash with the wrong message cannot pass as a
-refusal. A reversed clock (a negative `elapsed_ms`) is caught by `runtime_test.exs` and not
-by the property alone, whose generator never makes one. The Milestone-1 done sentence is
-met, and `test/logex_test.exs` runs it as written.
+refusal. A `scan/3` that accepted a negative `elapsed_ms` would be caught by
+`runtime_test.exs` and not by the property alone: the property does pass one, but the
+scan's own time check then refuses it with a documented message. A clock that goes
+backwards in `call/4` is caught by both. The Milestone-1 done sentence is met, and
+`test/logex_test.exs` runs it as written.
+
+An adversarial review of the ten commits (six lenses, and a skeptic reproducing each
+finding) confirmed 26 findings, 21 once the ones found twice are merged, and refuted 3.
+Its fixes are the commit after the documents, and the suite is at 194 tests (6
+doctests). One was a defect: the warnings walked every use for every tag, so compiling
+was quadratic (16,000 tags took 7.5 s); a test now bounds the growth in reductions. One
+was a false message: step 5 reworded M1-3's `retain` diagnostic to say a warm restart
+starts *every* tag at its initial value, which `restart/3` contradicts for the
+`var_input`s. Four were stale passages in these documents. The other fifteen were rules
+no test failed without, each now pinned and checked by reverting it: among them series
+AND after an open contact, the power each coil passes on (step 7 had dropped the one
+assertion that guarded a de-energised `ote`'s), the state and program checks at every
+entry point, and the edges of the name rule.
 
 **Decided 2026-09-28, from `docs/organisation.md` §6.1** (its rationale is there):
 1. `%Logex.Program{name:, tags:, rungs:, source:, warnings:}`, named and stateless. The name
@@ -1316,6 +1331,11 @@ diagnostic naming its file and line.
   bails once the accumulator is true, skips a later branch's OTE/MOV side effects and
   still passes every CI gate. §6 explains why that matters. The `{:rung, branch}`
   clause `{:rung, branch}` names the `{power_flow, env}` pair `env`.
+  *B5 (`d0870b3`, 2026-09-29) took part of this with it: the `== true` is gone
+  (`Enum.any?(powers)`), `Enum.map_reduce` keeps the legs in order with no reversed list,
+  `rung/2` names the env map `env`, and `evaluate/2` has no routine, rung or branches clause
+  left for a guard to shadow. The five identical `{false, env}` bodies stand, and so does
+  the intermediate `powers` list in `element({:branches, _}, _)`.*
 
 - **B8 · A lone `\r` never delimits a rung, so a CR-only file is silently one rung.**
   *Written against leex; `Logex.Lexer` kept the behaviour on purpose (its whitespace
@@ -1535,10 +1555,12 @@ returns a list.
 against the `@instructions` module attribute, so adding an instruction touches a map
 plus two `evaluate/2` clauses and never the front end. That is the right dividing line.
 
-**Keep the sequential `env` threading through parallel branches** (the `{:branches, _}`
-clause of `evaluate/2`)
-and the non-short-circuiting reduce (the `is_list(branch)` clause). Both look like accidents of using
-`Enum.reduce` and are in fact faithful controller behaviour.
+**Keep the sequential `env` threading through parallel branches** (the
+`element({:branches, legs}, _)` clause in `Logex.Runtime`, an `Enum.map_reduce` that runs
+every leg from the power flowing into the group) and the non-short-circuiting fold along a
+rung (`series/2`, an `Enum.reduce` over `element/2`). Both look like accidents of using
+`Enum.reduce` and are in fact faithful controller behaviour. *(Until B5, 2026-09-29, these
+were the `{:branches, _}` and `is_list(branch)` clauses of `Logex.Compiler.evaluate/2`.)*
 
 ---
 

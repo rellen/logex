@@ -132,6 +132,8 @@ defmodule Logex.EndToEndTest do
       src = decl(~w(aa bb cc res)) <> "xic aa ( xic bb | xic cc ) ote res"
       assert %{"res" => 1} = run(src, %{"aa" => 1, "bb" => 0, "cc" => 1})
       assert %{"res" => 0} = run(src, %{"aa" => 1, "bb" => 0, "cc" => 0})
+      # The AND: an open contact before the group leaves every leg without power.
+      assert %{"res" => 0} = run(src, %{"aa" => 0, "bb" => 1, "cc" => 1})
     end
 
     test "an empty branch leg is a jumper and passes power unconditionally" do
@@ -250,6 +252,21 @@ defmodule Logex.EndToEndTest do
   end
 
   describe "output instructions" do
+    test "a de-energised contact stays open, whatever its bit" do
+      src = decl(~w(gg hh xx yy)) <> "xio gg xic hh ote xx\nxio gg xio yy ote yy"
+      assert %{"xx" => 0, "yy" => 0} = run(src, %{"gg" => 1, "hh" => 1, "xx" => 1})
+      assert %{"xx" => 1, "yy" => 1} = run(src, %{"gg" => 0, "hh" => 1})
+    end
+
+    test "a coil passes on the power it receives, energised or not" do
+      src =
+        decl(~w(gg m1 n1 m2 n2 m3 n3)) <>
+          "xic gg otl m1 ote n1\nxic gg ote m2 ote n2\nxic gg otu m3 ote n3"
+
+      assert %{"n1" => 1, "n2" => 1, "n3" => 1} = run(src, %{"gg" => 1})
+      assert %{"n1" => 0, "n2" => 0, "n3" => 0} = run(src, %{"gg" => 0, "n1" => 1, "n3" => 1})
+    end
+
     test "ote de-energises on a false rung, otl does not" do
       assert %{"xx" => 0} = run(decl(~w(gg xx)) <> "xic gg ote xx", %{"gg" => 0, "xx" => 1})
       assert %{"xx" => 1} = run(decl(~w(gg xx)) <> "xic gg otl xx", %{"gg" => 0, "xx" => 1})

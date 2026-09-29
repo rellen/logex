@@ -206,8 +206,9 @@ choice, not an oversight to fix.
   cost beside it, returning `{acc, rest}`. Measure the run and cut it from the source once;
   `lexer_binaries_test.exs` fails otherwise.
 - **Never skip, disable or quarantine a test to get to green.**
-- **Some code that looks wrong is not.** The non-short-circuiting `Enum.reduce` and the
-  sequential `env` threading through parallel branches both look like accidents and are
+- **Some code that looks wrong is not.** The non-short-circuiting fold along a rung
+  (`series/2` in `Logex.Runtime`) and the sequential `env` threading through parallel
+  branches (its `element({:branches, _}, _)` clause) both look like accidents and are
   faithful controller behaviour. `PLAN.md` §6 lists them; read it before "fixing" one.
 
 ---

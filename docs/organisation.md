@@ -1,6 +1,8 @@
 # Program organisation: the IEC software model, in logex's dialect
 
-**Status: decided, not yet implemented.** On 2026-09-28 the maintainer adopted the
+**Status: decided; the Milestone-1 changes in §6.1 landed with M1-3 and M1-5 (M1-6's are
+to come), and the organisation itself — configurations, tasks, I/O mapping, Milestone 2 —
+is not yet implemented.** On 2026-09-28 the maintainer adopted the
 direction in §1 (IEC's software model, in logex's dialect: the hierarchy, task-style
 execution and I/O mapping), deferred routines, and took every decision in §7 as
 recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1

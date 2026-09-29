@@ -28,6 +28,10 @@ defmodule Logex.RuntimeTest do
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
 
+  # A host mistake the type checker can see is a warning on every run; this hides the
+  # deliberately wrong argument from it, since Process.get/2 may return anything.
+  defp opaque(value), do: Process.get(:__opaque_to_the_type_checker__, value)
+
   describe "instance/1" do
     test "every tag at its initial value, before a first scan at 0 ms", %{motor: motor} do
       assert Runtime.instance(motor) == %Instance{
@@ -47,8 +51,23 @@ defmodule Logex.RuntimeTest do
 
     test "raises for anything but a program" do
       raises("expected a %Logex.Program{} from Logex.compile/2, got: :motor", fn ->
-        Runtime.instance(:motor)
+        Runtime.instance(opaque(:motor))
       end)
+    end
+
+    # The program is checked first everywhere, so a good state is never blamed for it.
+    test "every function blames a non-program before a good state", %{state: s} do
+      motor = opaque(:motor)
+
+      for f <- [
+            fn -> Runtime.call(motor, s, %{}, %Scan{now: 0, first: true}) end,
+            fn -> Runtime.put_inputs(motor, s, %{}) end,
+            fn -> Runtime.scan(motor, s) end,
+            fn -> Runtime.scan(motor, s, 5) end,
+            fn -> Runtime.restart(motor, s, :cold) end
+          ] do
+        raises("expected a %Logex.Program{} from Logex.compile/2, got: :motor", f)
+      end
     end
   end
 
@@ -143,6 +162,8 @@ defmodule Logex.RuntimeTest do
       for {state, message} <- [
             {%{s | type: :motor}, "state.type must be a program name, got: :motor"},
             {%{s | env: nil}, "state.env must be a map of tag names to values, got: nil"},
+            {%{s | env: %Scan{now: 0, first: true}},
+             "state.env must be a map of tag names to values, got: %Logex.Scan{now: 0, first: true}"},
             {%{s | now: nil},
              "state.now must be a non-negative integer of milliseconds, got: nil"},
             {%{s | now: -5}, "state.now must be a non-negative integer of milliseconds, got: -5"},
@@ -174,6 +195,13 @@ defmodule Logex.RuntimeTest do
              "input `Stop` is not declared — did you mean `stop`? (tags are case-sensitive)"},
             {%{"b" => 1},
              "input `b` is not declared: the var_inputs are `sp_in`, `start`, `stop`"},
+            # Close to a var_output and a var: the did-you-mean offers only a var_input.
+            {%{"moter" => 1},
+             "input `moter` is not declared: the var_inputs are `sp_in`, `start`, `stop`"},
+            {%{"Fault" => 1},
+             "input `Fault` is not declared: the var_inputs are `sp_in`, `start`, `stop`"},
+            {%{"stop_pb" => 1}, "input `stop_pb` is not declared — did you mean `stop`?"},
+            {%{"start\n" => 1}, ~s(input "start\\n" is not declared — did you mean `start`?)},
             {%{"a b" => 1},
              ~s(input "a b" is not declared: the var_inputs are `sp_in`, `start`, `stop`)},
             {%{"motor" => 1},
@@ -189,6 +217,10 @@ defmodule Logex.RuntimeTest do
              "input `sp_in` is a dint: -2147483649 does not fit in 32 bits"},
             {%{"sp_in" => 2.0},
              "input `sp_in` is a dint: its value must be an integer, found 2.0"},
+            {%{"sp_in" => "12"},
+             ~s(input `sp_in` is a dint: its value must be an integer, found "12")},
+            {%{"sp_in" => %{}},
+             "input `sp_in` is a dint: its value must be an integer, found %{}"},
             {%{start: 1},
              ~s|input :start is not a tag name: inputs are keyed by tag name, as a string, as in %{"start" => 1}|}
           ] do
@@ -232,6 +264,51 @@ defmodule Logex.RuntimeTest do
         )
 
       raises(message, fn -> put(m, s, Map.new(names, &{&1, 0})) end)
+    end
+
+    test "the var_inputs are listed in order in a program of more than 32 tags" do
+      # A map of 32 keys or fewer iterates in key order, so only a larger tag table can
+      # show whether the list is sorted.
+      spares = for i <- 1..40, do: "v#{String.pad_leading(Integer.to_string(i), 2, "0")}"
+
+      source =
+        "var_input start bool\nvar_input stop bool\nvar_input sp_in dint\n" <>
+          Enum.map_join(spares, &"var #{&1} bool\n") <>
+          "xic start xio stop " <> Enum.map_join(spares, " ", &"ote #{&1}")
+
+      {:ok, p} = Logex.compile(source, name: "p")
+
+      raises("input `b` is not declared: the var_inputs are `sp_in`, `start`, `stop`", fn ->
+        put(p, Runtime.instance(p), %{"b" => 1, "sp_in" => 0})
+      end)
+    end
+
+    test "a tag declared from Elixir is cited without a line", %{motor: m} do
+      {:ok, tokens, _} = Logex.Compiler.tokenize("xic a ote b")
+      {:ok, ast} = Logex.Compiler.parse(tokens)
+      declared = [Logex.Tag.new!("a", :bool, :var_input), Logex.Tag.new!("b", :bool, :var_output)]
+      {:ok, p} = Logex.Compiler.instructionize(ast, declared)
+
+      raises(
+        "input `b` is a var_output, not a var_input: only a var_input is set from outside",
+        fn -> put(p, Runtime.instance(p), %{"b" => 1}) end
+      )
+
+      raises("this state is an instance of an unnamed program, not of `motor`", fn ->
+        put(m, Runtime.instance(p), %{"start" => 1})
+      end)
+    end
+
+    test "the state and its owner are checked before the inputs", %{motor: m, state: s} do
+      {:ok, pump} = Logex.compile(@motor, name: "pump")
+
+      raises("this state is an instance of `motor`, not of `pump`", fn ->
+        put(pump, s, %{"start" => 1})
+      end)
+
+      raises("expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: nil", fn ->
+        put(m, nil, %{"start" => 1})
+      end)
     end
 
     test "a key that is not valid UTF-8 is named, not a crash", %{motor: m, state: s} do
@@ -284,13 +361,23 @@ defmodule Logex.RuntimeTest do
       assert %Instance{now: 40, first: false} = s
     end
 
+    test "scan/2 and scan/3 check the state before reading its clock", %{motor: m, state: s} do
+      raises("expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: nil", fn ->
+        Runtime.scan(m, opaque(nil))
+      end)
+
+      raises("state.now must be a non-negative integer of milliseconds, got: nil", fn ->
+        Runtime.scan(m, %{s | now: nil}, 5)
+      end)
+    end
+
     test "elapsed_ms must be a non-negative integer", %{motor: m, state: s} do
       raises("elapsed_ms must be a non-negative integer of milliseconds, got: -1", fn ->
         Runtime.scan(m, s, -1)
       end)
 
       raises("elapsed_ms must be a non-negative integer of milliseconds, got: 2.5", fn ->
-        Runtime.scan(m, s, 2.5)
+        Runtime.scan(m, s, opaque(2.5))
       end)
     end
 
@@ -348,6 +435,14 @@ defmodule Logex.RuntimeTest do
 
       raises("this state is an instance of `motor`, not of `pump`", fn ->
         Runtime.restart(pump, s, :cold)
+      end)
+
+      raises("expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: nil", fn ->
+        Runtime.restart(m, opaque(nil), :cold)
+      end)
+
+      raises("state.now must be a non-negative integer of milliseconds, got: nil", fn ->
+        Runtime.restart(m, %{s | now: nil}, :cold)
       end)
     end
   end

@@ -14,6 +14,19 @@ defmodule LogexTest do
 
   defp formatted({:error, diagnostics}), do: Enum.map(diagnostics, &Diagnostic.format/1)
 
+  defp reductions_to_compile(tags) do
+    names = for i <- 1..tags, do: "t#{i}"
+
+    source =
+      Enum.map_join(names, "\n", &"var #{&1} bool") <>
+        "\n" <> Enum.map_join(names, "\n", &"xic #{&1} ote #{&1}")
+
+    {:reductions, before} = Process.info(self(), :reductions)
+    {:ok, _program} = Logex.compile(source, name: "big")
+    {:reductions, later} = Process.info(self(), :reductions)
+    later - before
+  end
+
   describe "compile/2" do
     test "names the program, keeps its source, and lowers it as instructionize/2 does" do
       {:ok, tokens, _} = Logex.Compiler.tokenize(@seal)
@@ -63,8 +76,16 @@ defmodule LogexTest do
              ~s(Logex.compile/2 takes source text as a binary, got: ~c"xic a")},
             {fn -> Logex.compile(@seal, name: :seal) end,
              "a program's name is a string, got: :seal"},
+            {fn -> Logex.compile(@seal, name: nil) end, "a program's name is a string, got: nil"},
             {fn -> Logex.compile(@seal, name: "my seal") end,
              ~s("my seal" cannot name a program: a name is a letter or `_`, ) <>
+               "then letters, digits or `_`"},
+            # The rule is anchored at the very end: `$` would let a final newline through.
+            {fn -> Logex.compile(@seal, name: "seal\n") end,
+             ~s("seal\\n" cannot name a program: a name is a letter or `_`, ) <>
+               "then letters, digits or `_`"},
+            {fn -> Logex.compile(@seal, name: "") end,
+             ~s("" cannot name a program: a name is a letter or `_`, ) <>
                "then letters, digits or `_`"},
             {fn -> Logex.compile(@seal, []) end,
              "Logex.compile/2 takes a name and no other option, as in " <>
@@ -77,9 +98,18 @@ defmodule LogexTest do
       end
     end
 
+    # Counted in reductions rather than time, so the bound holds on any machine. At 500
+    # and 2,000 tags a linear compile grows about 4x; a pass that walks every use for
+    # every tag, as the warnings first did, grows about 14x.
+    test "compiling stays linear in the program's size" do
+      ratio = reductions_to_compile(2000) / reductions_to_compile(500)
+      assert ratio < 6, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
+    end
+
     test "a name is checked for shape only: a word reserved in .ld files is a good name" do
       assert {:ok, %Logex.Program{name: "move"}} = Logex.compile(@seal, name: "move")
       assert {:ok, %Logex.Program{name: "_Seal2"}} = Logex.compile(@seal, name: "_Seal2")
+      assert {:ok, %Logex.Program{name: "motor_v2"}} = Logex.compile(@seal, name: "motor_v2")
     end
   end
 
@@ -124,6 +154,9 @@ defmodule LogexTest do
          %{tmp_dir: dir} do
       clean = write(dir, "motor-v2.ld", @seal)
 
+      assert {:error, [%Diagnostic{stage: :file, line: nil, file: ^clean}]} =
+               Logex.compile_file(clean)
+
       assert formatted(Logex.compile_file(clean)) == [
                ~s(#{clean}: "motor-v2" cannot name a program: a name is a letter or `_`, ) <>
                  "then letters, digits or `_` (rename the file)"
@@ -131,10 +164,23 @@ defmodule LogexTest do
 
       broken = write(dir, "2motor.ld", "var a bool\nxyz a")
 
+      assert {:error,
+              [%Diagnostic{stage: :file, line: nil}, %Diagnostic{stage: :validate, line: 2}]} =
+               Logex.compile_file(broken)
+
       assert formatted(Logex.compile_file(broken)) == [
                ~s(#{broken}: "2motor" cannot name a program: a name is a letter or `_`, ) <>
                  "then letters, digits or `_` (rename the file)",
                "#{broken}: line 2: unknown instruction `xyz`"
+             ]
+    end
+
+    test "a refused name gives no warnings: an :error result carries none", %{tmp_dir: dir} do
+      path = write(dir, "motor-v2.ld", "var spare bool\nvar a bool\nxic a ote a")
+
+      assert formatted(Logex.compile_file(path)) == [
+               ~s(#{path}: "motor-v2" cannot name a program: a name is a letter or `_`, ) <>
+                 "then letters, digits or `_` (rename the file)"
              ]
     end
 

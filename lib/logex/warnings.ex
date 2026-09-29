@@ -16,11 +16,14 @@ defmodule Logex.Warnings do
   def of(rungs, tags) do
     signatures = Map.new(Compiler.instructions(), fn {_word, {symbol, sig}} -> {symbol, sig} end)
     uses = Enum.flat_map(rungs, fn {:rung, elements} -> uses(elements, signatures) end)
+    # Grouped once, so the pass stays linear in the program's size.
+    accesses =
+      Enum.group_by(uses, fn {_, name, _, _} -> name end, fn {access, _, _, _} -> access end)
 
     tags
     |> Map.values()
     |> Enum.filter(& &1.line)
-    |> Enum.flat_map(&declared(&1, uses))
+    |> Enum.flat_map(&about(&1, Map.get(accesses, &1.name, [])))
     |> Kernel.++(second_otes(uses, tags))
     |> Enum.sort_by(& &1.line)
   end
@@ -36,11 +39,6 @@ defmodule Logex.Warnings do
         {{access, _type}, {:name, _, name}} <- Enum.zip(Map.fetch!(signatures, symbol), operands),
         do: {access, name, line, symbol}
       )
-
-  defp declared(%Tag{name: name} = tag, uses) do
-    mine = for {access, ^name, _line, _symbol} <- uses, do: access
-    about(tag, mine)
-  end
 
   defp about(%Tag{} = tag, []),
     do: [warning(tag.line, "`#{tag.name}` is declared but no rung uses it")]
