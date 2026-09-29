@@ -870,6 +870,67 @@ by hand rather than by `Logex.Program.initial_env/1` can still hold a 5 or leave
 5. The Milestone-1 done sentence below is amended accordingly.
 6. B5 lands straight after: every recursive `evaluate` clause becomes a `defp`.
 
+**Designed and decided 2026-09-29.** A design panel built three designs (the smallest
+surface, one shaped for M1-6 and M2-1, one built around the error model and the host
+contract), each spiked on a copy of `36fa3b5`; two judges scored them, a synthesis was
+spiked as nine commits (188 tests on Elixir 1.20.4, every rule reverted and caught), and
+two refuters checked it. The maintainer took every recommendation, including two where the
+refuters overturned the synthesis (program names, and restart keeping the inputs). The
+design:
+
+- **Compiling.** `Logex.compile(source, name: name)` and `Logex.compile_file(path)` return
+  `{:ok, %Logex.Program{}}` or `{:error, [%Logex.Diagnostic{}]}`. The name is required, so
+  there is no `compile/1`, and there is no raising `compile!/1`. `compile_file/1` names the
+  program after the file's basename and stamps `file:` on every diagnostic. `source:` holds
+  the text. A lex or parse error is one diagnostic with its column; every later mistake is
+  reported, in line order, with M1-2's and M1-3's messages unchanged.
+  `Logex.Compiler.tokenize/1` and `parse/1` keep their own error shapes, for the golden
+  record.
+- **One diagnostic.** `%Logex.Diagnostic{stage:, line:, message:, file:, column:,
+  severity:}`: `stage` is `:file | :lex | :parse | :validate`, and `severity` is `:error`
+  or `:warning`. `severity` goes beyond the decided three fields on purpose, in the same one
+  widening. `format/1` gives `motor.ld: line 3, column 5: message`, dropping what is nil,
+  and puts `warning: ` before a warning's message.
+- **File problems.** An unreadable file is a `:file` diagnostic, not a `File.Error`. A
+  basename that is not shaped like a name (a letter or `_`, then letters, digits or `_`) is
+  a `:file` diagnostic, and the source is still compiled. Names are checked for shape only:
+  reserved words are scoped by file kind (`docs/organisation.md` decision 10), and a program
+  type's name is never spelled in a `.ld` body, so the `.lcf` words wait for M2-2.
+- **Warnings**, only when the program compiles, never for a tag declared from Elixir: a tag
+  declared but used by no rung; a `var_output` no rung writes ("it stays at" its initial
+  value); a second `ote` on one tag.
+- **Running.** `Logex.Runtime.instance(program) :: %Logex.Instance{type:, env:, now:,
+  first:}`, which holds no program; `call(program, state, inputs, %Logex.Scan{now:,
+  first:}) :: {outputs, state}`; `put_inputs(program, state, inputs) :: state`, the checked
+  way into the task-less sugar's input image; `scan(program, state, elapsed_ms \\ 0) ::
+  {outputs, state}`; `restart(program, state, :cold | :warm) :: state`. `%Logex.Scan{}`
+  lands now and is checked, and nothing reads it until M1-6.
+- **The host contract.** A mistake in the source is a returned diagnostic; a mistake by
+  the host raises `ArgumentError` (§4.6: "it is a host bug"), with every input problem in
+  one raise and a did-you-mean. Only a declared `var_input` may be set, by its string name,
+  with a value that fits its type exactly (a bool is 0 or 1, a dint 32 bits), and inputs
+  merge into a persistent image. Outputs are every `var_output`. Time never goes backwards
+  for an instance; `first` is per instance, and a `%Scan{}` that disagrees with it raises.
+  A state is matched to its program by name, and its values are not checked each scan, so
+  M1-4's totality stays reachable. A `%Program{}` or `%Instance{}` built by hand is outside
+  the contract.
+- **Restart** puts every tag but the `var_input`s back to its initial value, marks the next
+  scan first, and keeps the clock. The `var_input`s are the host's input image: IEC leaves
+  inputs *"initialized in an implementation-dependent manner"* (Ed 2 §2.4.2 rule 4, p.38),
+  and keeping them is what makes `scan/2` agree with a one-instance configuration, whose
+  copy-in refreshes them every scan (§4.6). `:warm` equals `:cold` until `retain` exists;
+  `retain` does not land in M1-5, for scope — nothing needs it yet, and it owes a naming
+  stanza (Ed 2 Table 33 f3a) first.
+- **B5.** The evaluator moves into `Logex.Runtime`, private; `Logex.Compiler.evaluate/2`
+  goes. The stage functions stay public. A test pins the exact public surface of `Logex`,
+  `Logex.Runtime` and `Logex.Compiler`.
+
+**Landing, in commits, each green and each with a test that fails when its change is
+reverted:** (1) the diagnostic widening; (2) `Logex.compile*`, the named program and
+`doctest Logex`; (3) the warnings; (4) `Logex.Runtime` with `Instance` and `Scan`; (5)
+`restart/3`; (6) a seeded property over the host contract; (7) the suite run through the
+public API rather than `evaluate/2` (test-only); (8) documents; (9) B5.
+
 The item as written follows.
 
 There is no `Logex` module at all: the `mix new` stub and its doctest were deleted
@@ -963,8 +1024,9 @@ semantics are correct; only the driver is missing, and it is roughly an `Enum.re
 
 **Milestone 1 is done when a seal-in circuit written in a `.ld` file on disk can be
 compiled once into a named, stateless value you can hold, run for N scans as an instance
-against a typed tag table, and report a located diagnostic — `line 3: unknown instruction
-"xyz"` — instead of raising.** (Amended 2026-09-28 per M1-5.) That single sentence
+against a typed tag table, and report a located diagnostic — ``seal.ld: line 3: unknown
+instruction `xyz` `` — instead of raising.** (Amended 2026-09-28 per M1-5, and its example
+2026-09-29 to the message `Logex.compile_file/1` really gives.) That single sentence
 exercises M1-1 through M1-5; M1-6 is what proves the design was right rather than merely
 plausible.
 
