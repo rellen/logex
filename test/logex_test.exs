@@ -138,6 +138,14 @@ defmodule LogexTest do
              ]
     end
 
+    test "stamps the file on every warning too", %{tmp_dir: dir} do
+      path = write(dir, "w.ld", "var spare bool\nvar a bool\nxic a ote a")
+      assert {:ok, %Logex.Program{warnings: [warning]}} = Logex.compile_file(path)
+
+      assert Diagnostic.format(warning) ==
+               "#{path}: line 1: warning: `spare` is declared but no rung uses it"
+    end
+
     test "a file named after a word reserved in .ld files compiles", %{tmp_dir: dir} do
       path = write(dir, "move.ld", @seal)
       assert {:ok, %Logex.Program{name: "move"}} = Logex.compile_file(path)

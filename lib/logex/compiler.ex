@@ -51,7 +51,8 @@ defmodule Logex.Compiler do
   # No declaration line at all, as opposed to declarations that were all wrong.
   defp declares_nothing?({:routine, {:rungs, rungs}}, logic), do: length(rungs) == length(logic)
 
-  defp lowered(rungs, tags, []), do: {:ok, %Program{rungs: rungs, tags: tags}}
+  defp lowered(rungs, tags, []),
+    do: {:ok, %Program{rungs: rungs, tags: tags, warnings: Logex.Warnings.of(rungs, tags)}}
 
   # A declaration after the first rung is reported where it stands, so the two lists are
   # merged by line. The sort is stable: within a line, the order each list gave is kept.

@@ -499,6 +499,74 @@ defmodule Logex.ValidationTest do
     end
   end
 
+  describe "warnings (M1-5): what compiles but is probably a mistake" do
+    test "a tag declared but used by no rung, var_inputs included" do
+      assert source_warnings("var_input spare_in bool\nvar spare bool\nvar a bool\nxic a ote a") ==
+               [
+                 "line 1: warning: `spare_in` is declared but no rung uses it",
+                 "line 2: warning: `spare` is declared but no rung uses it"
+               ]
+    end
+
+    test "a var_output a rung reads but none writes stays at its initial value" do
+      assert source_warnings(
+               "var_output lamp bool\nvar_output sp dint 1200\nvar_output m bool\n" <>
+                 "var a dint\nxic lamp ote m\nmove sp a"
+             ) == [
+               "line 1: warning: `lamp` is a var_output, but no rung writes it: it stays at 0",
+               "line 2: warning: `sp` is a var_output, but no rung writes it: it stays at 1200"
+             ]
+    end
+
+    test "a var that is read and never written is not warned about" do
+      assert source_warnings("var a bool\nvar b bool\nxic a ote b") == []
+    end
+
+    test "a second ote on one tag cites the first, in its rung or on its line" do
+      assert source_warnings(
+               "var a bool\nvar m bool\nxic a ote m\n( xic a ote m | xio a )\nxic a ote m ote m"
+             ) == [
+               "line 4: warning: `m` already has an `ote` on line 3: the last one in the scan decides it",
+               "line 5: warning: `m` already has an `ote` on line 3: the last one in the scan decides it",
+               "line 5: warning: `m` already has an `ote` on line 3: the last one in the scan decides it"
+             ]
+
+      assert source_warnings("var a bool\nvar m bool\nxic a ote m ote m") == [
+               "line 3: warning: `m` already has an `ote` in this rung: the last one in the scan decides it"
+             ]
+    end
+
+    test "otl and otu may share a tag with an ote, as a latch and its reset do" do
+      assert source_warnings("var a bool\nvar m bool\nxic a otl m\nxio a otu m\nxic m ote m") ==
+               []
+    end
+
+    test "are in line order, stamped :validate, with severity :warning" do
+      {:ok, program} =
+        source_compile("var a bool\nvar m bool\nvar_output z bool\nxic a ote m\nxic a ote m")
+
+      assert [%Logex.Diagnostic{line: 3}, %Logex.Diagnostic{line: 5}] = program.warnings
+
+      assert Enum.all?(
+               program.warnings,
+               &match?(%Logex.Diagnostic{stage: :validate, severity: :warning}, &1)
+             )
+    end
+
+    test "are given only when the program compiles" do
+      assert {:error, diagnostics} = source_compile("var spare bool\nzzz")
+
+      assert Enum.map(diagnostics, &Logex.Diagnostic.format/1) == [
+               "line 2: unknown instruction `zzz`"
+             ]
+    end
+
+    test "are never about a tag declared from Elixir" do
+      declared = [Logex.Tag.new!("m", :bool), Logex.Tag.new!("unused", :bool, :var_output)]
+      assert {:ok, %Logex.Program{warnings: []}} = source_compile("xic m ote m ote m", declared)
+    end
+  end
+
   describe "tags declared from Elixir (M1-3)" do
     test "are checked by the same rules as a declaration line" do
       assert source_errors("var ote bool") == [
@@ -602,6 +670,11 @@ defmodule Logex.ValidationTest do
     {:ok, tokens, _} = Compiler.tokenize(source)
     {:ok, ast} = Compiler.parse(tokens)
     Compiler.instructionize(ast, declared)
+  end
+
+  defp source_warnings(source) do
+    {:ok, program} = source_compile(source)
+    Enum.map(program.warnings, &Logex.Diagnostic.format/1)
   end
 
   defp source_errors(source, declared \\ []) do
