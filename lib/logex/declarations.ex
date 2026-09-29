@@ -205,8 +205,8 @@ defmodule Logex.Declarations do
   # here, because a tag name is never followed by a second name.
   defp untyped("retain", _name, _type, _tail, _kw),
     do:
-      "`retain` is not supported yet: nothing restarts a logex program, " <>
-        "so there is nothing for a tag to survive (PLAN.md M1-5)"
+      "`retain` is not supported yet: a warm restart, like a cold one, " <>
+        "starts every tag at its initial value"
 
   defp untyped(_key, name, type, tail, kw),
     do: unknown_type(Enum.any?(tail, &type_word?/1), name, type, kw)

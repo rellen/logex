@@ -241,8 +241,8 @@ defmodule Logex.ValidationTest do
                "line 11: `var` needs a tag name and a type, as in `var fault bool`",
                "line 12: `i` is a var_input: its value comes from outside, so it takes no initial value",
                "line 13: a declaration cannot hold a branch group",
-               "line 14: `retain` is not supported yet: nothing restarts a logex program, " <>
-                 "so there is nothing for a tag to survive (PLAN.md M1-5)",
+               "line 14: `retain` is not supported yet: a warm restart, like a cold one, " <>
+                 "starts every tag at its initial value",
                "line 15: `var` declares one tag: found `p` and `q` before the type"
              ]
     end
@@ -307,8 +307,8 @@ defmodule Logex.ValidationTest do
 
     test "`retain` is recognised in any case, and the section word is quoted as written" do
       assert source_errors("VAR RETAIN r bool\nVAR b") == [
-               "line 1: `retain` is not supported yet: nothing restarts a logex program, " <>
-                 "so there is nothing for a tag to survive (PLAN.md M1-5)",
+               "line 1: `retain` is not supported yet: a warm restart, like a cold one, " <>
+                 "starts every tag at its initial value",
                "line 2: `b` needs a type: `VAR b bool` or `VAR b dint`"
              ]
 

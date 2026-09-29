@@ -8,7 +8,7 @@ defmodule Logex.Runtime do
     outputs back. It is what a configuration's scheduler calls for each instance it runs.
   - `put_inputs/3`, `scan/2` and `scan/3` are the task-less sugar: the implicit
     configuration of one instance, whose var_inputs are the host's input image.
-  - `restart/3` starts an instance again.
+  - `restart/3` starts an instance again, keeping its input image and its clock.
 
   **The host contract.** A mistake by the host raises `ArgumentError` (a host bug, not a
   PLC event, `docs/organisation.md` §4.6); a mistake in the source is a diagnostic from
@@ -58,6 +58,30 @@ defmodule Logex.Runtime do
     %Instance{now: now, first: first} = state = state!(state, program)
     call(program, state, %{}, %Scan{now: now + elapsed!(elapsed_ms), first: first})
   end
+
+  @doc """
+  Starts an instance again: every tag back at its initial value except the `var_input`s,
+  the next scan marked first, and the clock kept, since time never goes backwards.
+
+  The `var_input`s are the host's input image, not the program's state: IEC leaves inputs
+  "initialized in an implementation-dependent manner" (Ed 2 §2.4.2 rule 4), and keeping
+  them is what makes `scan/2` agree with a configuration, whose copy-in refreshes them
+  every scan. `:warm` is `:cold` until `retain` exists: nothing is retained yet.
+  """
+  def restart(program, state, mode) do
+    program!(program)
+    %Instance{env: env} = state = state!(state, program)
+    mode!(mode)
+    %{state | env: Map.merge(Program.initial_env(program), inputs(program, env)), first: true}
+  end
+
+  defp inputs(%Program{tags: tags}, env),
+    do: Map.take(env, for({name, %Tag{section: :var_input}} <- tags, do: name))
+
+  defp mode!(mode) when mode in [:cold, :warm], do: :ok
+
+  defp mode!(mode),
+    do: raise(ArgumentError, "restart takes :cold or :warm, got: #{inspect(mode)}")
 
   defp run(%Instance{env: env} = state, program, %Scan{now: now}) do
     {_power_flow, env} = Logex.Compiler.evaluate(program, {true, env})

@@ -301,4 +301,54 @@ defmodule Logex.RuntimeTest do
       assert {%{"motor" => 0}, _} = Runtime.scan(m, b)
     end
   end
+
+  describe "restart/3" do
+    setup %{motor: m, state: s} do
+      s = Runtime.put_inputs(m, s, %{"start" => 1, "sp_in" => 900})
+      {_, s} = Runtime.scan(m, s, 30)
+      {_, s} = Runtime.scan(m, s, 20)
+      %{running: s}
+    end
+
+    test "puts every tag but the var_inputs back at its initial value", %{motor: m, running: s} do
+      assert %{"motor" => 1, "speed_sp" => 900} = s.env
+      restarted = Runtime.restart(m, s, :cold)
+
+      assert restarted.env == %{
+               "start" => 1,
+               "stop" => 0,
+               "sp_in" => 900,
+               "motor" => 0,
+               "speed_sp" => 1200,
+               "fault" => 0
+             }
+    end
+
+    test "marks the next scan first, and keeps the clock", %{motor: m, running: s} do
+      assert %Instance{now: 50, first: true} = Runtime.restart(m, s, :cold)
+    end
+
+    test "keeps the input image, so scan/2 still sees what the host holds", %{
+      motor: m,
+      running: s
+    } do
+      # A configuration copies its inputs in on every scan, so after a restart its instance
+      # sees `start` still held; the sugar must agree (docs/organisation.md §4.6).
+      assert {%{"motor" => 1, "speed_sp" => 900}, _} =
+               Runtime.scan(m, Runtime.restart(m, s, :cold))
+    end
+
+    test "a warm restart is a cold one until retain exists", %{motor: m, running: s} do
+      assert Runtime.restart(m, s, :warm) == Runtime.restart(m, s, :cold)
+    end
+
+    test "raises for another mode, or a state that is not this program's", %{motor: m, running: s} do
+      raises("restart takes :cold or :warm, got: :hot", fn -> Runtime.restart(m, s, :hot) end)
+      {:ok, pump} = Logex.compile(@motor, name: "pump")
+
+      raises("this state is an instance of `motor`, not of `pump`", fn ->
+        Runtime.restart(pump, s, :cold)
+      end)
+    end
+  end
 end
