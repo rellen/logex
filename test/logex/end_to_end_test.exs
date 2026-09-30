@@ -547,6 +547,426 @@ defmodule Logex.EndToEndTest do
     end
   end
 
+  describe "ton (M1-6)" do
+    @timer """
+    var_input go bool
+    var_input newpre bool
+    var_input setacc bool
+    var_input sp dint
+    var_output done bool
+    var_output timing bool
+    var_output enabled bool
+    var_output acc dint
+    var_output pre dint
+    var t1 ton
+
+    xic newpre move sp t1.pre
+    xic setacc move sp t1.acc
+    xic go ton t1 5000
+    xic t1.dn ote done
+    xic t1.tt ote timing
+    xic t1.en ote enabled
+    move t1.acc acc
+    move t1.pre pre
+    """
+
+    defp timer_trace(steps),
+      do: Enum.map(drive(program(@timer), steps), &Map.take(&1, ~w(acc done timing enabled)))
+
+    test "times from the first scan that sees its rung true, and is done at its preset" do
+      assert timer_trace([
+               {0, %{}},
+               {700, %{"go" => 1}},
+               {10, %{}},
+               {4980, %{}},
+               {10, %{}},
+               {1000, %{}}
+             ]) == [
+               %{"acc" => 0, "done" => 0, "timing" => 0, "enabled" => 0},
+               # The 700 ms before the rung went true are not counted.
+               %{"acc" => 0, "done" => 0, "timing" => 1, "enabled" => 1},
+               %{"acc" => 10, "done" => 0, "timing" => 1, "enabled" => 1},
+               %{"acc" => 4990, "done" => 0, "timing" => 1, "enabled" => 1},
+               %{"acc" => 5000, "done" => 1, "timing" => 0, "enabled" => 1},
+               # .acc stops at the preset.
+               %{"acc" => 5000, "done" => 1, "timing" => 0, "enabled" => 1}
+             ]
+    end
+
+    test "a false rung resets a done timer too" do
+      assert timer_trace([{0, %{"go" => 1}}, {6000, %{}}, {10, %{"go" => 0}}]) == [
+               %{"acc" => 0, "done" => 0, "timing" => 1, "enabled" => 1},
+               %{"acc" => 5000, "done" => 1, "timing" => 0, "enabled" => 1},
+               %{"acc" => 0, "done" => 0, "timing" => 0, "enabled" => 0}
+             ]
+    end
+
+    test "a false rung resets it, and it starts again from 0 at the next true one" do
+      assert timer_trace([
+               {0, %{"go" => 1}},
+               {3000, %{}},
+               {10, %{"go" => 0}},
+               {500, %{"go" => 1}},
+               {100, %{}}
+             ]) == [
+               %{"acc" => 0, "done" => 0, "timing" => 1, "enabled" => 1},
+               %{"acc" => 3000, "done" => 0, "timing" => 1, "enabled" => 1},
+               %{"acc" => 0, "done" => 0, "timing" => 0, "enabled" => 0},
+               # The 500 ms the rung was false are not counted.
+               %{"acc" => 0, "done" => 0, "timing" => 1, "enabled" => 1},
+               %{"acc" => 100, "done" => 0, "timing" => 1, "enabled" => 1}
+             ]
+    end
+
+    test "a leg beside a ton is a path of its own: it runs from the power into the group" do
+      # Nothing may follow a ton on its path (validation_test.exs), but a parallel leg is
+      # not on its path.
+      src =
+        "var_input go bool\nvar_output beside bool\nvar_output done bool\nvar t1 ton\n" <>
+          "xic go ( ton t1 20 | ote beside )\nxic t1.dn ote done"
+
+      assert drive(program(src), [{0, %{"go" => 1}}, {20, %{}}, {10, %{"go" => 0}}]) == [
+               %{"beside" => 1, "done" => 0},
+               %{"beside" => 1, "done" => 1},
+               %{"beside" => 0, "done" => 0}
+             ]
+    end
+
+    test "keeps the time of its last run in state.env, energised or not, and nothing a " <>
+           "host could set" do
+      p = program(@timer)
+      state = Logex.Runtime.put_inputs(p, Logex.Runtime.instance(p), %{"go" => 1})
+      {_, state} = Logex.Runtime.scan(p, state, 40)
+      {_, state} = Logex.Runtime.scan(p, state, 60)
+
+      assert state.env["t1"] == %{
+               "pre" => 5000,
+               "acc" => 60,
+               "dn" => 0,
+               "tt" => 1,
+               "en" => 1,
+               "last" => 100
+             }
+
+      # De-energised, it still runs, and `last` is its time (decision 5); the edge is read
+      # from `.en`, so the next true scan adds nothing.
+      state = Logex.Runtime.put_inputs(p, state, %{"go" => 0})
+      {_, state} = Logex.Runtime.scan(p, state, 25)
+
+      assert state.env["t1"] == %{
+               "pre" => 5000,
+               "acc" => 0,
+               "dn" => 0,
+               "tt" => 0,
+               "en" => 0,
+               "last" => 125
+             }
+
+      state = Logex.Runtime.put_inputs(p, state, %{"go" => 1})
+      {_, state} = Logex.Runtime.scan(p, state, 30)
+      assert %{"acc" => 0, "en" => 1, "last" => 155} = state.env["t1"]
+    end
+
+    test "its preset is where .pre starts: a move into .pre holds, the ton never " <>
+           "rewrites it, and a restart puts it back" do
+      p = program(@timer)
+
+      steps = [
+        {0, %{"go" => 1, "newpre" => 1, "sp" => 2000}},
+        {10, %{"newpre" => 0}},
+        {1990, %{}}
+      ]
+
+      assert [%{"pre" => 2000}, %{"pre" => 2000, "done" => 0}, %{"pre" => 2000, "done" => 1}] =
+               drive(p, steps)
+
+      state =
+        Logex.Runtime.put_inputs(p, Logex.Runtime.instance(p), %{"newpre" => 1, "sp" => 2000})
+
+      {%{"pre" => 2000}, state} = Logex.Runtime.scan(p, state)
+
+      restarted =
+        Logex.Runtime.restart(p, Logex.Runtime.put_inputs(p, state, %{"newpre" => 0}), :cold)
+
+      assert [%{"pre" => 5000}] = drive(p, restarted, [{10, %{}}])
+    end
+
+    test "a move into .acc is counted from, while the rung stays true" do
+      assert timer_trace([
+               {0, %{"go" => 1}},
+               {6000, %{}},
+               {10, %{"setacc" => 1, "sp" => 0}},
+               {10, %{"setacc" => 0}},
+               {10, %{"setacc" => 1, "sp" => 4995}},
+               {10, %{"setacc" => 0}}
+             ]) ==
+               [
+                 %{"acc" => 0, "done" => 0, "timing" => 1, "enabled" => 1},
+                 %{"acc" => 5000, "done" => 1, "timing" => 0, "enabled" => 1},
+                 # 0 is moved into .acc before the ton runs, which then adds its 10 ms.
+                 %{"acc" => 10, "done" => 0, "timing" => 1, "enabled" => 1},
+                 %{"acc" => 20, "done" => 0, "timing" => 1, "enabled" => 1},
+                 %{"acc" => 5000, "done" => 1, "timing" => 0, "enabled" => 1},
+                 %{"acc" => 5000, "done" => 1, "timing" => 0, "enabled" => 1}
+               ]
+    end
+
+    test "a negative .acc written by logic counts from 0" do
+      # -50 is floored to 0 before the 100 ms are added, not after: 100, not 50.
+      steps = [{0, %{"go" => 1}}, {100, %{"setacc" => 1, "sp" => -50}}, {10, %{"setacc" => 0}}]
+      assert [_, %{"acc" => 100, "timing" => 1}, %{"acc" => 110}] = drive(program(@timer), steps)
+    end
+
+    test "a member written below the ton takes effect at the next scan: its invariants hold " <>
+           "right after the ton runs, not at the end of every scan" do
+      src =
+        "var_input go bool\nvar_input lower bool\nvar t1 ton\n" <>
+          "xic go ton t1 5000\nxic lower move 1000 t1.pre"
+
+      p = program(src)
+      state = Logex.Runtime.put_inputs(p, Logex.Runtime.instance(p), %{"go" => 1})
+      {_, state} = Logex.Runtime.scan(p, state)
+
+      {_, state} =
+        Logex.Runtime.scan(p, Logex.Runtime.put_inputs(p, state, %{"lower" => 1}), 1500)
+
+      # A host reading state.env sees .acc past .pre, and not done.
+      assert %{"pre" => 1000, "acc" => 1500, "dn" => 0, "tt" => 1} = state.env["t1"]
+      {_, state} = Logex.Runtime.scan(p, state, 10)
+      assert %{"pre" => 1000, "acc" => 1000, "dn" => 1, "tt" => 0} = state.env["t1"]
+    end
+
+    test "an instance kept under a recompiled program of the same name keeps its old .pre " <>
+           "until a restart" do
+      # The preset is where .pre starts, so an edit reaches a new or restarted instance only
+      # (docs/organisation.md, the online-edit row, must answer this when that lands).
+      src =
+        &"var_input go bool\nvar_output done bool\nvar t1 ton\nxic go ton t1 #{&1}\nxic t1.dn ote done"
+
+      {:ok, v1} = Logex.compile(src.(5000), name: "m")
+      {:ok, v2} = Logex.compile(src.(3000), name: "m")
+
+      state = Logex.Runtime.put_inputs(v1, Logex.Runtime.instance(v1), %{"go" => 1})
+      {_, state} = Logex.Runtime.scan(v1, state)
+      {%{"done" => 0}, state} = Logex.Runtime.scan(v2, state, 3000)
+      {%{"done" => 0}, state} = Logex.Runtime.scan(v2, state, 10)
+      assert %{"pre" => 5000, "acc" => 3010} = state.env["t1"]
+      {%{"done" => 1}, state} = Logex.Runtime.scan(v2, state, 1990)
+
+      restarted = Logex.Runtime.restart(v2, state, :cold)
+      assert %{"pre" => 3000, "acc" => 0} = restarted.env["t1"]
+    end
+
+    test "a preset lowered below .acc is done at the next true scan, .acc brought down to it" do
+      steps = [{0, %{"go" => 1}}, {3000, %{}}, {10, %{"newpre" => 1, "sp" => 1000}}]
+
+      assert [_, %{"acc" => 3000, "done" => 0}, %{"acc" => 1000, "done" => 1, "pre" => 1000}] =
+               drive(program(@timer), steps)
+    end
+
+    test "a preset raised after it is done resumes the count: .dn is .acc against .pre on " <>
+           "every true scan" do
+      steps = [{0, %{"go" => 1}}, {6000, %{}}, {10, %{"newpre" => 1, "sp" => 8000}}]
+
+      assert [_, %{"acc" => 5000, "done" => 1}, %{"acc" => 5010, "done" => 0, "timing" => 1}] =
+               drive(program(@timer), steps)
+    end
+
+    test "a negative preset times as 0: done at the first true scan, .acc 0, .pre as written" do
+      steps = [{0, %{"newpre" => 1, "sp" => -5}}, {10, %{"go" => 1}}]
+
+      assert [_, %{"acc" => 0, "done" => 1, "timing" => 0, "pre" => -5}] =
+               drive(program(@timer), steps)
+    end
+
+    test "a ton in a branch group starts from its own preset too" do
+      src =
+        "var_input go bool\nvar_output done bool\nvar t1 ton\n" <>
+          "( xic go ton t1 50 | )\nxic t1.dn ote done"
+
+      assert [%{"done" => 0}, %{"done" => 0}, %{"done" => 1}] =
+               drive(program(src), [{0, %{"go" => 1}}, {40, %{}}, {10, %{}}])
+    end
+
+    test "a preset of 0 is done at the first true scan" do
+      src =
+        "var_input go bool\nvar_output done bool\nvar t1 ton\nxic go ton t1 0\nxic t1.dn ote done"
+
+      assert [%{"done" => 0}, %{"done" => 1}] =
+               drive(program(src), [{0, %{}}, {10, %{"go" => 1}}])
+    end
+
+    test "however long the gap between scans, .acc comes to the preset and no further" do
+      steps = [{0, %{"go" => 1}}, {1_000_000_000_000_000, %{}}]
+      assert [_, %{"acc" => 5000, "done" => 1}] = drive(program(@timer), steps)
+    end
+
+    test "the increment is the time that passed, not a nominal interval: stepped at 10, " <>
+           "25, 30 or 7 ms, it is done at the first scan at or after 5000 ms" do
+      for {step, done_at} <- [{10, 5000}, {25, 5000}, {30, 5010}, {7, 5005}] do
+        steps = [{0, %{"go" => 1}} | List.duplicate({step, %{}}, div(6000, step))]
+        times = Enum.scan(steps, 0, fn {elapsed, _}, t -> t + elapsed end)
+        trace = drive(program(@timer), steps)
+
+        assert {%{"acc" => 5000}, ^done_at} =
+                 Enum.zip(trace, times) |> Enum.find(fn {o, _t} -> o["done"] == 1 end)
+      end
+    end
+
+    # Each instance stepped through call/4 at the times given, with `go` as `at.(now)`
+    # gives it, since tasks, which would schedule them, are M2-1's.
+    defp scans(program, times, go) do
+      {trace, _} =
+        Enum.map_reduce(times, Logex.Runtime.instance(program), fn now, state ->
+          scan = %Logex.Scan{now: now, first: state.first}
+          {outputs, state} = Logex.Runtime.call(program, state, %{"go" => go.(now)}, scan)
+          {{now, outputs}, state}
+        end)
+
+      trace
+    end
+
+    defp done_at(trace), do: Enum.find_value(trace, fn {now, out} -> out["done"] == 1 && now end)
+
+    # PLAN.md M1-6, decision 6: before the model is called settled, one program type, two
+    # instances on 10 ms and 50 ms tasks, and .acc reaching the preset at the same logical
+    # time in both. `go` rises at 1000 ms, a time both scan. `last` is stamped on every run,
+    # so a first energised scan that counted the time since it would be done at 5990 ms
+    # and 5950 ms; the edge is read from `.en`, and that scan counts nothing.
+    test "decision 6: two instances of one program, scanned every 10 ms and every 50 ms, " <>
+           "reach the preset at the same logical time" do
+      p = program(@timer)
+      go = fn now -> if now >= 1000, do: 1, else: 0 end
+      fast = scans(p, Enum.to_list(0..8000//10), go)
+      slow = scans(p, Enum.to_list(0..8000//50), go)
+
+      assert done_at(fast) == 6000
+      assert done_at(slow) == 6000
+      assert {6000, %{"acc" => 5000}} = List.keyfind(slow, 6000, 0)
+
+      # At every time both scan, the two agree exactly.
+      fast_at = Map.new(fast)
+      for {now, outputs} <- slow, do: assert(fast_at[now] == outputs, "at #{now} ms")
+
+      # The actual time counts, not a nominal period: scanned irregularly, a third
+      # instance is not done at 5999 ms, and is at 6000 ms.
+      jittered = scans(p, [0, 7, 1000, 1003, 2500, 2501, 4444, 5999, 6000], go)
+
+      assert for({now, out} <- jittered, now >= 5999, do: {now, out["acc"], out["done"]}) ==
+               [{5999, 4999, 0}, {6000, 5000, 1}]
+    end
+
+    # The same logical time holds per rising edge: it needs both instances to see the edge
+    # at one time, and a preset both periods divide. Otherwise each is done at its first
+    # scan at or after edge + preset, with .acc stopped at the preset: M2-3's acceptance
+    # should say so.
+    test "decision 6's condition: a preset of 1030 ms is done at 1030 ms on 10 ms scans " <>
+           "and at 1050 ms on 50 ms scans, .acc 1030 in both" do
+      p = program(String.replace(@timer, "ton t1 5000", "ton t1 1030"))
+      fast = scans(p, Enum.to_list(0..2000//10), fn _ -> 1 end)
+      slow = scans(p, Enum.to_list(0..2000//50), fn _ -> 1 end)
+      assert {1030, %{"acc" => 1030}} = List.keyfind(fast, done_at(fast), 0)
+      assert {1050, %{"acc" => 1030}} = List.keyfind(slow, done_at(slow), 0)
+    end
+
+    # Per rising edge, not per period: a timer that re-triggers itself is reset by the scan
+    # after it is done and restarts on the scan after that, adding nothing, so it repeats
+    # every preset plus two task periods, as MatIEC's TON does, and its period differs at
+    # 10 and 50 ms although both see its first edge at 0 ms.
+    test "decision 6 holds per rising edge: a timer that re-triggers itself repeats every " <>
+           "preset plus two task periods" do
+      p =
+        program(
+          "var_input go bool\nvar_output pulse bool\nvar t1 ton\n" <>
+            "xic go xio t1.dn ton t1 1000\nxic t1.dn ote pulse"
+        )
+
+      pulses = fn period ->
+        for {now, %{"pulse" => 1}} <- scans(p, Enum.to_list(0..4000//period), fn _ -> 1 end),
+            do: now
+      end
+
+      assert pulses.(10) == [1000, 2020, 3040]
+      assert pulses.(50) == [1000, 2100, 3200]
+    end
+
+    # PLAN.md M2-3's motor, the README's plus a timer, compiles as written and times.
+    test "M2-3's motor: the README motor with `var t1 ton` and `xic motor ton t1 5000`" do
+      src = """
+      var_input start bool
+      var_input stop bool
+      var_input overtemp bool
+      var_input reset bool
+      var_output motor bool
+      var_output run_lamp bool
+      var_output speed_sp dint 1200
+      var_output running_ms dint
+      var fault bool
+      var t1 ton
+
+      ( xic start | xic motor ) xio stop ote motor
+      xic motor ote run_lamp
+      xic overtemp otl fault
+      xic reset otu fault
+      xic fault move 0 speed_sp
+      xic motor ton t1 5000
+      xic motor move t1.acc running_ms
+      """
+
+      assert {:ok, %Logex.Program{warnings: []} = p} = compile(src)
+      steps = [{0, %{"start" => 1}}, {10, %{"start" => 0}} | List.duplicate({10, %{}}, 500)]
+      trace = drive(p, steps)
+      assert %{"motor" => 1, "running_ms" => 0} = hd(trace)
+      assert %{"motor" => 1, "running_ms" => 5000} = List.last(trace)
+      assert Enum.at(trace, 300)["running_ms"] == 3000
+    end
+  end
+
+  describe "ton on an env the host builds (M1-6)" do
+    @ton "var_input go bool\nvar t1 ton\nxic go ton t1 50"
+
+    test "leaves a well-formed timer, whatever was there, energised or not" do
+      p = program(@ton)
+
+      for junk <- [
+            5,
+            nil,
+            "x",
+            [1],
+            %{},
+            %{"pre" => "q", "acc" => :a, "last" => "z", "en" => 1},
+            %{"dn" => nil, "acc" => 2.5, "pre" => 1.0},
+            %Logex.Scan{now: 0, first: true}
+          ] do
+        {_, on} = later_scan(p, %{"t1" => junk, "go" => 1})
+        {_, off} = later_scan(p, %{"t1" => junk, "go" => 0})
+
+        assert on["t1"] == %{"pre" => 0, "acc" => 0, "dn" => 1, "tt" => 0, "en" => 1, "last" => 7},
+               inspect(junk)
+
+        assert off["t1"] ==
+                 %{"pre" => 0, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => 7},
+               inspect(junk)
+      end
+    end
+
+    test "a `last` later than now, or .en read as a contact reads it" do
+      p = program(@ton)
+      timer = %{"pre" => 50, "acc" => 5, "dn" => 0, "tt" => 1, "last" => 1000}
+
+      assert {_, %{"t1" => %{"acc" => 5, "last" => 7}}} =
+               later_scan(p, %{"t1" => Map.put(timer, "en", 1), "go" => 1})
+
+      for {en, acc} <- [{1, 7}, {true, 7}, {5, 7}, {0, 5}, {nil, 5}, {false, 5}] do
+        from_zero = %{timer | "last" => 5}
+
+        assert {_, %{"t1" => %{"acc" => ^acc}}} =
+                 later_scan(p, %{"t1" => Map.put(from_zero, "en", en), "go" => 1}),
+               inspect(en)
+      end
+    end
+  end
+
   describe "members (M1-6)" do
     @members """
     var_input set bool

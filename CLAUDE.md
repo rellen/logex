@@ -109,7 +109,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   if a mnemonic reaches `@instructions` unsurveyed.
 - New instructions, step 2: add the mnemonic and its operand signature (one
   `{access, type}` per operand: access `:read` or `:write` for a tag, `:value` for a tag
-  or a literal; type `:bool`, `:dint` or `:any`) to the `@instructions` map in
+  or a literal, `:instance` for an instance the instruction runs, whose type is then the
+  function block type's name (`{:instance, "ton"}`), `:preset` for a literal number of
+  milliseconds; type `:bool`, `:dint` or `:any`; a tag may be a member, `t1.acc`, which
+  has its schema's type) to the `@instructions` map in
   `compiler.ex` **and** two
   `evaluate/3` clauses in `runtime.ex` — one for `{true, env}` and one for `{false, env}`. The map also
   reserves the name: no tag may be spelled like a mnemonic, in any case, so a new

@@ -24,6 +24,9 @@ defmodule Logex.Declarations do
   # IEC 61131-3 Ed 2 Table 10: a BOOL is 0 or 1, and a DINT is 32 bits, -(2^31)..2^31 - 1.
   @dint -2_147_483_648..2_147_483_647
 
+  # A preset is a dint number of milliseconds, and never negative (docs/naming.md, `ton`).
+  @preset 0..2_147_483_647
+
   @doc "The section and type words, lowercase. Each is reserved, in any case."
   def keywords, do: Map.keys(@sections) ++ Map.keys(@types) ++ Map.keys(FbType.builtins())
 
@@ -88,6 +91,12 @@ defmodule Logex.Declarations do
   @doc "Whether an integer fits a type."
   def fits?(:bool, value), do: value in [0, 1]
   def fits?(:dint, value), do: value in @dint
+
+  @doc """
+  Whether an integer is a preset, 0 to 2147483647 ms (M1-6): what a `ton`'s preset slot
+  takes, and so where a timer's `.pre` may start, however it is declared.
+  """
+  def preset?(value), do: value in @preset
 
   @doc """
   Splits parsed rungs into a tag table and the rungs of logic:
@@ -345,10 +354,33 @@ defmodule Logex.Declarations do
 
   defp instance(%Tag{initial: nil}), do: []
 
+  # A compiled timer carries its preset as its `pre`'s initial value (Logex.Compiler), and
+  # a tag declared from Elixir may carry one too: a map of the type's inputs to values
+  # that fit them. A number, or a struct, is never one.
+  defp instance(%Tag{initial: %{} = initial} = tag) when not is_struct(initial),
+    do: inputs(Enum.all?(initial, &input?(tag.type, &1)), tag)
+
   defp instance(%Tag{name: name} = tag),
     do: [
       "#{label(name)} is a #{tag.type.name}: its preset is the number on its `ton` " <>
-        "instruction, as in `ton #{display(name)} 5000`, so its declaration takes no initial value"
+        "instruction, as in `ton #{display(name)} 5000`, not an initial value on its declaration"
+    ]
+
+  # A timer's `.pre` starts where its preset would put it, so it takes what the `ton`
+  # preset slot takes (Logex.Compiler): 0 to 2147483647 ms, not any dint.
+  defp input?(%FbType{name: "ton"}, {"pre", value}), do: preset?(value)
+  defp input?(type, {name, value}), do: fits_input?(FbType.member(type, name), value)
+
+  defp fits_input?({:ok, %{role: :input, type: type}}, value), do: fits?(type, value)
+
+  defp fits_input?(_member, _value), do: false
+
+  defp inputs(true, _tag), do: []
+
+  defp inputs(false, %Tag{name: name} = tag),
+    do: [
+      "#{label(name)} is a #{tag.type.name}: its initial value is a map of its inputs to " <>
+        ~s|values that fit them, as in %{"pre" => 5000}, found #{inspect(tag.initial)}|
     ]
 
   defp display(name) when is_binary(name), do: name

@@ -30,7 +30,13 @@ defmodule Logex.Program do
   def initial_env(%__MODULE__{tags: tags}),
     do: Map.new(tags, fn {name, tag} -> {name, start(tag)} end)
 
-  defp start(%Logex.Tag{type: %Logex.FbType{} = type}), do: Logex.FbType.initial(type)
+  defp start(%Logex.Tag{type: %Logex.FbType{} = type, initial: nil}),
+    do: Logex.FbType.initial(type)
+
+  # A timer's preset, from the `ton` that runs it (Logex.Compiler), is its `pre` to start.
+  defp start(%Logex.Tag{type: %Logex.FbType{} = type, initial: inputs}),
+    do: Logex.FbType.initial(type, inputs)
+
   defp start(%Logex.Tag{initial: nil}), do: 0
   defp start(%Logex.Tag{initial: initial}), do: initial
 end

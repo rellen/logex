@@ -15,23 +15,27 @@ defmodule LogexTest do
   defp formatted({:error, diagnostics}), do: Enum.map(diagnostics, &Diagnostic.format/1)
 
   # Each tag has a rung of its own, with a one-shot whose storage bit a second rung also
-  # writes, a comparison of two literals and a timer whose members are read and written,
-  # so every pass over the program, the M1-6 warnings among them, has work to do.
+  # writes, a comparison of two literals, and a timer run by a `ton` whose members are read
+  # and written, so every pass over the program, the M1-6 warnings among them, has work to
+  # do. A second copy runs each timer with a second `ton`, followed on its path by a
+  # contact, two errors, so the one-ton rule's and the path rule's reports are timed too.
   defp reductions_to_compile(tags) do
     names = for i <- 1..tags, do: "t#{i}"
+    declarations = Enum.map(names, &"var #{&1} bool\nvar #{&1}_s bool\nvar #{&1}_t ton")
 
-    source =
-      Enum.map_join(names, "\n", &"var #{&1} bool\nvar #{&1}_s bool\nvar #{&1}_t ton") <>
-        "\n" <>
-        Enum.map_join(
-          names,
-          "\n",
-          &("xic #{&1} ons #{&1}_s eq 1 1 ote #{&1}\nxio #{&1} ote #{&1}_s\n" <>
-              "xic #{&1}_t.dn move #{&1}_t.acc #{&1}_t.pre")
-        )
+    rungs =
+      Enum.map(
+        names,
+        &("xic #{&1} ons #{&1}_s eq 1 1 ote #{&1}\nxio #{&1} ote #{&1}_s\n" <>
+            "xic #{&1}_t.dn move #{&1}_t.acc #{&1}_t.pre\nxic #{&1} ton #{&1}_t 50")
+      )
+
+    source = Enum.join(declarations ++ rungs, "\n")
+    twice = Enum.join(declarations ++ rungs ++ Enum.map(names, &"ton #{&1}_t 60 xic #{&1}"), "\n")
 
     {:reductions, before} = Process.info(self(), :reductions)
     {:ok, _program} = Logex.compile(source, name: "big")
+    {:error, _two_tons} = Logex.compile(twice, name: "big")
     {:reductions, later} = Process.info(self(), :reductions)
     later - before
   end

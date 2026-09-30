@@ -8,12 +8,13 @@ defmodule Logex.Warnings do
   - a second `ote` on one tag: only the last one in the scan decides it;
   - an `ons` storage bit that another instruction writes (M1-6): the one-shot then fires
     on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`);
-  - a comparison of two literals (M1-6): its result never changes.
+  - a comparison of two literals (M1-6): its result never changes;
+  - a timer no `ton` runs (M1-6): it never times.
 
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
   """
 
-  alias Logex.{Compiler, Diagnostic, Tag}
+  alias Logex.{Compiler, Diagnostic, FbType, Tag}
 
   @doc "The warnings for lowered `rungs` checked against the tag table `tags`."
   def of(rungs, tags) do
@@ -59,7 +60,16 @@ defmodule Logex.Warnings do
     do: [warning(tag.line, "`#{tag.name}` is declared but no rung uses it")]
 
   defp about(%Tag{section: :var_output} = tag, accesses), do: unwritten(:write in accesses, tag)
+
+  defp about(%Tag{type: %FbType{name: "ton"}} = tag, accesses),
+    do: unrun(:instance in accesses, tag)
+
   defp about(_tag, _accesses), do: []
+
+  defp unrun(true, _tag), do: []
+
+  defp unrun(false, tag),
+    do: [warning(tag.line, "`#{tag.name}` is a ton, but no `ton` runs it: it never times")]
 
   defp unwritten(true, _tag), do: []
 

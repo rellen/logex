@@ -825,7 +825,7 @@ defmodule Logex.ValidationTest do
                "line 2: `t2` is a ton: an instance is the program's own, declared with `var`, " <>
                  "as in `var t2 ton`, not with `var_output`",
                "line 3: `t3` is a ton: its preset is the number on its `ton` instruction, " <>
-                 "as in `ton t3 5000`, so its declaration takes no initial value"
+                 "as in `ton t3 5000`, not an initial value on its declaration"
              ]
     end
 
@@ -866,7 +866,7 @@ defmodule Logex.ValidationTest do
                "line 2: `var` declares one tag: found `p` and `q` before the type",
                "line 3: unknown type `timer`: logex has `bool`, `dint` and `ton`",
                "line 4: `t7.x` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`",
-               "line 5: `ton` is a type and cannot name a tag"
+               "line 5: `ton` is an instruction and cannot name a tag"
              ]
 
       # With no name, a timer in another section is shown the declaration that works.
@@ -890,7 +890,7 @@ defmodule Logex.ValidationTest do
                "as in `var t1 ton`, not with `var_input`"},
             {["t1", ton, :var, 5000],
              "`t1` is a ton: its preset is the number on its `ton` instruction, " <>
-               "as in `ton t1 5000`, so its declaration takes no initial value"},
+               "as in `ton t1 5000`, not an initial value on its declaration"},
             {["t1", %{ton | name: "tof"}],
              ~s|unknown function block type "tof": logex has Logex.FbType.ton()|},
             {["t1", %{ton | members: []}],
@@ -904,7 +904,16 @@ defmodule Logex.ValidationTest do
             {["t1", %{ton | name: %{}}, :var_input],
              "unknown function block type %{}: logex has Logex.FbType.ton()"},
             {["t1", %{ton | name: {:a}}, :var, 5],
-             "unknown function block type {:a}: logex has Logex.FbType.ton()"}
+             "unknown function block type {:a}: logex has Logex.FbType.ton()"},
+            # Whatever an unknown schema's members hold, and a struct is never taken for a
+            # map of inputs.
+            {["t1", %{ton | members: :junk}, :var, %{"acc" => 1}],
+             ~s|unknown function block type "ton": logex has Logex.FbType.ton()|},
+            {["t1", %{ton | members: [1]}, :var, %{"acc" => 1}],
+             ~s|unknown function block type "ton": logex has Logex.FbType.ton()|},
+            {["t1", ton, :var, %Logex.Scan{now: 0, first: true}],
+             "`t1` is a ton: its preset is the number on its `ton` instruction, " <>
+               "as in `ton t1 5000`, not an initial value on its declaration"}
           ] do
         assert_raise ArgumentError, message, fn -> apply(Logex.Tag, :new!, args) end
       end
@@ -921,7 +930,245 @@ defmodule Logex.ValidationTest do
 
     test "a timer declared and used by no rung is warned about; a member's use is a use" do
       assert source_warnings("var t1 ton\nvar t2 ton\nvar a bool\nxic t2.dn ote a") == [
-               "line 1: warning: `t1` is declared but no rung uses it"
+               "line 1: warning: `t1` is declared but no rung uses it",
+               "line 2: warning: `t2` is a ton, but no `ton` runs it: it never times"
+             ]
+    end
+  end
+
+  describe "ton (M1-6)" do
+    @timer "var t1 ton\nvar a bool\nvar d dint\n"
+
+    test "runs a declared timer with a literal preset, in any case" do
+      assert {:ok, program} = source_compile(@timer <> "xic a ton t1 5000\nxic t1.dn ote a")
+      assert {:ok, _} = source_compile(@timer <> "xic a TON t1 0")
+      # The preset is the timer's starting .pre, carried by the compiled tag, which the
+      # one validator still accepts.
+      assert %Logex.Tag{initial: %{"pre" => 5000}} = program.tags["t1"]
+      assert Logex.Declarations.check(program.tags["t1"]) == []
+    end
+
+    test "its first operand is a declared timer, and nothing else" do
+      assert source_errors(
+               @timer <> "ton a 5\nton t1.acc 5\nton 5 5000\nton t1\nton t9 5\nton d 5"
+             ) == [
+               "line 4: `ton` runs a ton, but `a` is a bool (declared on line 2)",
+               "line 5: `ton` runs a ton, but `t1.acc` is a dint",
+               "line 6: `ton` expects a ton, found `5`",
+               "line 7: `ton` expects 2 operands (a ton, then a preset), found 1",
+               "line 8: `t9` is not declared",
+               "line 9: `ton` runs a ton, but `d` is a dint (declared on line 3)"
+             ]
+    end
+
+    test "its preset is a number of 0 to 2147483647 ms, and one from a tag is moved " <>
+           "into .pre instead" do
+      assert source_errors(@timer <> "ton t1 d\nton t1 zz\nton t1 2147483648\nton 5 d") == [
+               "line 4: `ton` takes its preset as a number of milliseconds, found `d`: " <>
+                 "to preset `t1` from a tag, `move d t1.pre` on a rung above",
+               "line 5: `ton` takes its preset as a number of milliseconds, found `zz`: " <>
+                 "to preset `t1` from a tag, `move zz t1.pre` on a rung above",
+               "line 5: `t1` is already run by the `ton` on line 4: one `ton` runs a timer",
+               "line 6: `ton` takes a preset of 0 to 2147483647 ms, found `2147483648`",
+               "line 6: `t1` is already run by the `ton` on line 4: one `ton` runs a timer",
+               "line 7: `ton` expects a ton, found `5`",
+               "line 7: `ton` takes its preset as a number of milliseconds, found `d`"
+             ]
+    end
+
+    test "a negative preset is refused, ready for when negative literals lex" do
+      # `-1` does not lex yet (PLAN.md §5), so the rung is built as the parser would build it.
+      {:ok, tokens, _} = Compiler.tokenize("var t1 ton")
+      {:ok, {:routine, {:rungs, declarations}}} = Compiler.parse(tokens)
+      rung = {:rung, [{:name, 2, "ton"}, {:name, 2, "t1"}, {:int_lit, 2, -1}]}
+
+      assert {:error, [diagnostic]} =
+               Compiler.instructionize({:routine, {:rungs, declarations ++ [rung]}})
+
+      assert diagnostic.message == "`ton` takes a preset of 0 to 2147483647 ms, found `-1`"
+    end
+
+    test "one ton runs a timer: a second is an error, citing the first" do
+      assert source_errors(
+               @timer <>
+                 "xic a ton t1 5\n( xic a ton t1 6 | xio a )\nxic a ( ton t1 7 | ton t1 8 )"
+             ) == [
+               "line 5: `t1` is already run by the `ton` on line 4: one `ton` runs a timer",
+               "line 6: `t1` is already run by the `ton` on line 4: one `ton` runs a timer",
+               "line 6: `t1` is already run by the `ton` on line 4: one `ton` runs a timer"
+             ]
+
+      assert source_errors(@timer <> "xic a ( ton t1 5 | ton t1 5 )") == [
+               "line 4: `t1` is already run by the `ton` in this rung: one `ton` runs a timer"
+             ]
+    end
+
+    test "a ton with a wrong preset still runs its timer, so a second ton is reported too" do
+      # A tag, a number out of range, and no preset at all.
+      for preset <- ["d", "3000000000", ""] do
+        assert [_, "line 5: `t1` is already run by the `ton` on line 4: one `ton` runs a timer"] =
+                 source_errors(@timer <> "xic a ton t1 #{preset}\nxic a ton t1 5000")
+      end
+    end
+
+    test "a ton on a declared tag that is not a timer runs nothing, so a second is not counted" do
+      assert source_errors(@timer <> "xic a ton a 5\nxic a ton d 6\nxic a ton a 7") == [
+               "line 4: `ton` runs a ton, but `a` is a bool (declared on line 2)",
+               "line 5: `ton` runs a ton, but `d` is a dint (declared on line 3)",
+               "line 6: `ton` runs a ton, but `a` is a bool (declared on line 2)"
+             ]
+    end
+
+    test "a ton in a group nested in another group carries its preset, and is counted" do
+      assert {:ok, program} =
+               source_compile(@timer <> "xic a ( xic a | ( xio a | ton t1 5000 ) )")
+
+      assert %Logex.Tag{initial: %{"pre" => 5000}} = program.tags["t1"]
+
+      assert source_errors(@timer <> "( xic a | ( ton t1 5 | xio a ) )\n( ( ton t1 6 ) )") == [
+               "line 5: `t1` is already run by the `ton` on line 4: one `ton` runs a timer"
+             ]
+    end
+
+    test "is reserved in any case, as an instruction as well as a type" do
+      assert source_errors("var ton bool\nvar TON dint\nvar tOn ton") == [
+               "line 1: `ton` is an instruction and cannot name a tag",
+               "line 2: `TON` is an instruction and cannot name a tag",
+               "line 3: `tOn` is an instruction and cannot name a tag"
+             ]
+    end
+
+    test "a timer read but run by no ton is warned about; one run is not" do
+      assert source_warnings(
+               "var t1 ton\nvar t2 ton\nvar a bool\nxic a ton t1 5\nxic t1.dn xic t2.dn ote a"
+             ) == ["line 2: warning: `t2` is a ton, but no `ton` runs it: it never times"]
+
+      declared = [Logex.Tag.new!("t3", Logex.FbType.ton()), Logex.Tag.new!("a", :bool)]
+      assert {:ok, %Logex.Program{warnings: []}} = source_compile("xic t3.dn ote a", declared)
+    end
+
+    test "from Elixir, a timer may carry its preset as a map of its inputs, which a ton " <>
+           "on the rung replaces" do
+      ton = Logex.FbType.ton()
+      tag = Logex.Tag.new!("t1", ton, :var, %{"pre" => 50})
+      assert %Logex.Tag{initial: %{"pre" => 50}} = tag
+      a = Logex.Tag.new!("a", :bool)
+
+      {:ok, unrun} = source_compile("xic t1.dn ote a", [tag, a])
+      assert %{"pre" => 50} = Logex.Program.initial_env(unrun)["t1"]
+      {:ok, run} = source_compile("xic a ton t1 7", [tag, a])
+      assert %{"pre" => 7} = Logex.Program.initial_env(run)["t1"]
+
+      # A starting .pre is what a preset slot takes, 0 to 2147483647 ms, not any dint.
+      for initial <- [
+            %{"acc" => 5},
+            %{"pre" => 2_147_483_648},
+            %{"pre" => -5},
+            %{"pre" => 1.5},
+            %{"last" => 0}
+          ] do
+        assert_raise ArgumentError,
+                     "`t1` is a ton: its initial value is a map of its inputs to values that " <>
+                       ~s|fit them, as in %{"pre" => 5000}, found #{inspect(initial)}|,
+                     fn -> Logex.Tag.new!("t1", ton, :var, initial) end
+      end
+    end
+  end
+
+  describe "nothing may follow a ton on its path (M1-6)" do
+    @paths "var_input go bool\nvar_input b bool\nvar_output lamp bool\nvar t1 ton\nvar t2 ton\n"
+
+    # Whether the power after a ton is the rung's or the timer's .dn is not settled, so a
+    # ton ends its path, and the message says what to write instead.
+    defp after_ton(line, element, timer \\ "t1"),
+      do:
+        "line #{line}: #{element} follows `ton #{timer}` on its path: what passes on after a " <>
+          "`ton` is not settled, so a `ton` ends its path; read the timer with " <>
+          "`xic #{timer}.dn` on a rung below"
+
+    test "an element in series after a ton is an error at its line, each one, citing the ton" do
+      assert source_errors(@paths <> "xic go ton t1 5000 ote lamp") == [
+               after_ton(6, "`ote lamp`")
+             ]
+
+      assert source_errors(@paths <> "xic go ton t1 5000 xic b ote lamp\nTON t2 5 XIC t1.dn") == [
+               after_ton(6, "`xic b`"),
+               after_ton(6, "`ote lamp`"),
+               after_ton(7, "`xic t1.dn`", "t2")
+             ]
+    end
+
+    test "so is one after a group one of whose legs ends in a ton, or holds one" do
+      assert source_errors(
+               @paths <>
+                 "xic go ( ton t1 5000 | xic b ) ote lamp\n( xic b | xio go ton t2 5 ) move 1 lamp"
+             ) == [
+               after_ton(6, "`ote lamp`"),
+               after_ton(7, "`move 1 lamp`", "t2")
+             ]
+    end
+
+    test "and one after a group nested in another, however deep the ton, once, in its own " <>
+           "series" do
+      assert source_errors(
+               @paths <>
+                 "xic go ( xic b | ( xio b | ton t1 5000 ) ) ote lamp\n" <>
+                 "xic go ( ( ton t2 5 ) xic b | xio b )"
+             ) == [
+               after_ton(6, "`ote lamp`"),
+               after_ton(7, "`xic b`", "t2")
+             ]
+    end
+
+    test "a group, or a second ton, after a ton is one element, and cites the first ton" do
+      assert source_errors(@paths <> "xic go ton t1 5 ( ote lamp | xic b ) ton t2 5 ote lamp") ==
+               [
+                 after_ton(6, "a branch group"),
+                 after_ton(6, "`ton t2 5`"),
+                 after_ton(6, "`ote lamp`")
+               ]
+    end
+
+    test "a leg beside a ton is not on its path" do
+      assert {:ok, _} =
+               source_compile(
+                 @paths <>
+                   "xic go ( ton t1 5000 | ote lamp )\n( xic b | ( ton t2 5 | xio b ) )\n" <>
+                   "xic t1.dn xic t2.dn ote lamp"
+               )
+    end
+
+    test "an element is cited at its own line" do
+      # A rung is one line, so from source every element shares the ton's; a hand-built
+      # rung shows the line cited is the element's own.
+      {:ok, tokens, _} = Compiler.tokenize("var t1 ton\nvar a bool")
+      {:ok, {:routine, {:rungs, declarations}}} = Compiler.parse(tokens)
+
+      rung =
+        {:rung,
+         [
+           {:name, 3, "ton"},
+           {:name, 3, "t1"},
+           {:int_lit, 3, 5},
+           {:name, 4, "ote"},
+           {:name, 4, "a"}
+         ]}
+
+      assert {:error, [diagnostic]} =
+               Compiler.instructionize({:routine, {:rungs, declarations ++ [rung]}})
+
+      assert %Logex.Diagnostic{line: 4, message: "`ote a` follows `ton t1` on its path" <> _} =
+               diagnostic
+    end
+
+    test "a ton with a mistake of its own is still the end of its path" do
+      assert source_errors(@paths <> "xic go ton t9 5 ote lamp\nxic go ton ote lamp") == [
+               "line 6: `t9` is not declared",
+               after_ton(6, "`ote lamp`", "t9"),
+               "line 7: `ton` expects 2 operands (a ton, then a preset), found none " <>
+                 "before the instruction `ote`",
+               "line 7: `ote lamp` follows `ton` on its path: what passes on after a `ton` is " <>
+                 "not settled, so a `ton` ends its path; read the timer's `.dn` on a rung below"
              ]
     end
   end
@@ -1117,6 +1364,14 @@ defmodule Logex.ValidationTest do
              "`a` is a bool: its initial value must be 0 or 1, found `7`"},
             {[%Logex.Tag{name: "a", type: %Logex.FbType{name: nil, members: nil}, section: :var}],
              "unknown function block type nil: logex has Logex.FbType.ton()"},
+            {[
+               %Logex.Tag{
+                 name: "a",
+                 type: %Logex.FbType{name: "ton", members: :junk},
+                 section: :var,
+                 initial: %{"acc" => 1}
+               }
+             ], ~s|unknown function block type "ton": logex has Logex.FbType.ton()|},
             # A line marks a tag declared in source, which the warnings would then cite.
             {[%Logex.Tag{name: "a", type: :bool, section: :var, line: 2}],
              "a tag declared from Elixir has no line, got: 2"},

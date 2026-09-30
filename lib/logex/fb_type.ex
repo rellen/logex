@@ -46,7 +46,7 @@ defmodule Logex.FbType do
   # The on-delay timer (docs/naming.md, `ton`): the conventional TIMER's members,
   # lowercased. `.pre` plays IEC's PT, `.acc` its ET and `.dn` its Q, by an inference
   # docs/organisation.md §8 records; `.tt` and `.en` are the conventional set's. `last` is
-  # the time of the timer's last energised scan (docs/organisation.md §4.6): a `:clock`,
+  # the time its `ton` last ran, energised or not (docs/organisation.md §4.6): a `:clock`,
   # an unbounded count of milliseconds, which no declaration can give a tag.
   @doc "The built-in on-delay timer, as `var t1 ton` declares it."
   def ton,

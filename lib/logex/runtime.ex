@@ -365,6 +365,24 @@ defmodule Logex.Runtime do
     {false, env}
   end
 
+  # The on-delay timer (docs/naming.md, `ton`; docs/organisation.md §4.6). Rung power is
+  # its IN. `last` is the time this `ton` last ran, energised or not (decision 5), and
+  # energised, `.acc` gains `now - last`, unless `.en` shows it was not already enabled:
+  # timing starts at the scan that first sees the rung true, which adds nothing. `.acc`
+  # stays in 0..max(.pre, 0), so it never leaves a dint however long the gap, and `.dn` is
+  # set when it gets there. De-energised, `.acc .dn .tt .en` go to 0. `last` changes only
+  # here, so a timer that does not run (a frozen function block, M2-5) catches up when it
+  # next does. The preset operand is not read: it is the timer's starting `.pre`, and logic
+  # may have written another. Nothing may follow a `ton` on its path (Logex.Compiler), so
+  # the power each clause hands on is never read; which it should be is not settled.
+  defp evaluate({:ton, _, [timer, _preset]}, {true, env}, %Scan{now: now}) do
+    {true, write(env, timer, timing(as_map(read(env, timer)), now))}
+  end
+
+  defp evaluate({:ton, _, [timer, _preset]}, {false, env}, %Scan{now: now}) do
+    {false, write(env, timer, reset(as_map(read(env, timer)), now))}
+  end
+
   # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is
   # complementary by construction, as `xic` and `xio` are (M1-4). Erlang's term order is
   # total, so a comparison of whatever a hand-built env holds never raises.
@@ -374,6 +392,46 @@ defmodule Logex.Runtime do
   defp compare(:ge, a, b), do: not compare(:lt, a, b)
   defp compare(:gt, a, b), do: a > b
   defp compare(:le, a, b), do: not compare(:gt, a, b)
+
+  # Whatever a hand-built env left in a timer, a well-formed one comes back: a member that
+  # is not an integer reads 0, `.en` is read as a contact, and a `last` that is not an
+  # integer, or is later than now, adds nothing. A negative `.acc`, which logic may write,
+  # counts from 0: it is floored before the time is added, not after.
+  defp timing(timer, now) do
+    pre = integer(Map.get(timer, "pre"))
+    limit = max(pre, 0)
+    elapsed = elapsed(closed?(Map.get(timer, "en")), Map.get(timer, "last"), now)
+    acc = min(max(integer(Map.get(timer, "acc")), 0) + elapsed, limit)
+    done = acc == limit
+
+    %{
+      "pre" => pre,
+      "acc" => acc,
+      "dn" => one(done),
+      "tt" => one(not done),
+      "en" => 1,
+      "last" => now
+    }
+  end
+
+  defp reset(timer, now),
+    do: %{
+      "pre" => integer(Map.get(timer, "pre")),
+      "acc" => 0,
+      "dn" => 0,
+      "tt" => 0,
+      "en" => 0,
+      "last" => now
+    }
+
+  defp elapsed(true, last, now) when is_integer(last), do: max(now - last, 0)
+  defp elapsed(_enabled, _last, _now), do: 0
+
+  defp integer(value) when is_integer(value), do: value
+  defp integer(_not_an_integer), do: 0
+
+  defp one(true), do: 1
+  defp one(false), do: 0
 
   # An operand's value: a literal's own, a tag's, or a member's, reached by its path. A tag
   # or member the env leaves out, or one whose instance a hand-built env left as anything

@@ -7,10 +7,13 @@ defmodule Logex.Compiler do
 
   # Each mnemonic's operand signature, in order, one `{access, type}` per operand. Access:
   # `:read` and `:write` must be a tag, and `:value` may be a tag or an integer literal.
-  # Type: `:bool`, `:dint`, or `:any`, which IEC's MOVE takes (`IN : ANY` -> `OUT : ANY`,
-  # docs/naming.md). A tag here may be a member of an instance, `t1.acc`, which has the type
-  # its schema gives it (M1-6). Mnemonics are matched case-insensitively and are reserved:
-  # no tag may be named after one, in any case.
+  # M1-6 adds two: `{:instance, type}` is an instance of that function block type, which
+  # the instruction runs, the only slot where an instance is named whole; `:preset` is a
+  # literal number of milliseconds, 0 to 2147483647. Type: `:bool`, `:dint`, or `:any`,
+  # which IEC's MOVE takes (`IN : ANY` -> `OUT : ANY`, docs/naming.md). A tag here may be
+  # a member of an instance, `t1.acc`, which has the type its schema gives it (M1-6).
+  # Mnemonics are matched case-insensitively and are reserved: no tag may be named after
+  # one, in any case.
   @instructions %{
     "xic" => {:xic, [{:read, :bool}]},
     "xio" => {:xio, [{:read, :bool}]},
@@ -24,7 +27,8 @@ defmodule Logex.Compiler do
     "lt" => {:lt, [{:value, :dint}, {:value, :dint}]},
     "gt" => {:gt, [{:value, :dint}, {:value, :dint}]},
     "le" => {:le, [{:value, :dint}, {:value, :dint}]},
-    "ge" => {:ge, [{:value, :dint}, {:value, :dint}]}
+    "ge" => {:ge, [{:value, :dint}, {:value, :dint}]},
+    "ton" => {:ton, [{:instance, "ton"}, {:preset, :dint}]}
   }
 
   @doc """
@@ -55,7 +59,10 @@ defmodule Logex.Compiler do
     {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, tags))
     note? = map_size(tags) == 0 and declares_nothing?(routine, logic)
     shared = shared_bits(rungs, tags)
-    lowered(rungs, tags, declaring ++ undeclared(Enum.reverse(lowering), tags, note?) ++ shared)
+    {tags, timing} = presets(rungs, tags)
+    paths = Enum.flat_map(rungs, fn {:rung, elements} -> elem(path(elements), 0) end)
+    errors = declaring ++ undeclared(Enum.reverse(lowering), tags, note?) ++ shared ++ timing
+    lowered(rungs, tags, errors ++ paths)
   end
 
   # M1-6: one `ons` uses a storage bit. A second `ons` on one bit is an error at its own
@@ -90,6 +97,106 @@ defmodule Logex.Compiler do
   end
 
   defp storage_bit(:error, _not_a_bool, _ons, acc), do: acc
+
+  # M1-6: one `ton` runs a timer, and the number on it is the timer's preset, its `.pre`
+  # when an instance starts or restarts, which logic may then change (decision 4). So the
+  # compiled tag carries it, as the initial value of its `pre`. A second `ton` on a timer
+  # is an error at its own line, citing the first, as a second `ons` on a storage bit is:
+  # two would give a timer two presets, and a false one resets the timer under a true one
+  # every scan. One walk in rung order, so it stays linear.
+  defp presets(rungs, tags) do
+    {run, diagnostics} =
+      rungs
+      |> Enum.flat_map(fn {:rung, elements} -> instructions(elements) end)
+      |> Enum.flat_map(&ton/1)
+      |> Enum.reduce({%{}, []}, &preset(&1, &2, tags))
+
+    {Enum.reduce(run, tags, fn {timer, {_line, pre}}, tags -> starts(tags, timer, pre) end),
+     Enum.reverse(diagnostics)}
+  end
+
+  # Every `ton` that names a timer runs it, whatever its preset: `ton t1 sp` and a second
+  # `ton t1 5000` are two mistakes. A preset that is not a literal was reported already, and
+  # a program with a diagnostic never runs, so its nil is never a timer's `.pre`.
+  defp ton({:ton, line, [{:name, _, timer} | preset]}), do: [{timer, line, preset_of(preset)}]
+  defp ton(_instruction), do: []
+
+  defp preset_of([{:int_lit, _, preset}]), do: preset
+  defp preset_of(_reported), do: nil
+
+  defp preset({timer, line, pre}, {run, diagnostics}, tags),
+    do:
+      run_by(Map.fetch(run, timer), Map.get(tags, timer), {timer, line, pre}, {run, diagnostics})
+
+  defp run_by(:error, %Tag{type: %FbType{}}, {timer, line, pre}, {run, diagnostics}),
+    do: {Map.put(run, timer, {line, pre}), diagnostics}
+
+  defp run_by({:ok, {first, _}}, %Tag{}, {timer, line, _pre}, {run, diagnostics}) do
+    message =
+      "`#{timer}` is already run by the `ton` #{where(first, line)}: one `ton` runs a timer"
+
+    {run, [diagnostic(line, message) | diagnostics]}
+  end
+
+  defp run_by(:error, _not_an_instance, _ton, acc), do: acc
+
+  defp starts(tags, timer, pre), do: Map.update!(tags, timer, &%{&1 | initial: %{"pre" => pre}})
+
+  # M1-6: nothing may follow a `ton` on its path. Whether the power after a `ton` is the
+  # rung's, as after `ote`, or the timer's `.dn`, IEC's Q, is not settled, and refusing
+  # both is the reversible way to leave it open. An element bears a `ton` if it is one, or
+  # if it is a group one of whose legs holds one, and in every series, a rung or a leg,
+  # each element after one that bears a `ton` is an error at its own line, once, citing
+  # the first such `ton`. Legs beside a `ton` are not on its path, and are fine. One walk,
+  # which gives a series' diagnostics and the first `ton` it bears.
+  defp path(elements), do: Enum.flat_map_reduce(elements, nil, &on_path/2)
+
+  defp on_path(element, before) do
+    {inside, borne} = bears(element)
+    {follows(before, element) ++ inside, earliest(before, borne)}
+  end
+
+  defp bears({:ton, _, _} = ton), do: {[], ton}
+  defp bears({:branches, legs}), do: Enum.flat_map_reduce(legs, nil, &leg/2)
+  defp bears(_instruction), do: {[], nil}
+
+  defp leg(elements, before) do
+    {diagnostics, borne} = path(elements)
+    {diagnostics, earliest(before, borne)}
+  end
+
+  defp earliest(nil, bears), do: bears
+  defp earliest(before, _bears), do: before
+
+  defp follows(nil, _element), do: []
+
+  defp follows({:ton, line, operands}, element) do
+    message =
+      "#{shown(element)} follows #{shown({:ton, line, Enum.take(operands, 1)})} on its path: " <>
+        "what passes on after a `ton` is not settled, so a `ton` ends its path; " <>
+        read_timer(operands)
+
+    [diagnostic(line_of(element, line), message)]
+  end
+
+  defp shown({:branches, _legs}), do: "a branch group"
+  defp shown({symbol, _line, []}), do: "`#{symbol}`"
+
+  defp shown({symbol, _line, operands}),
+    do: "`#{symbol} #{Enum.map_join(operands, " ", &text/1)}`"
+
+  defp text({:name, _, name}), do: name
+  defp text({:int_lit, _, value}), do: "#{value}"
+  defp text({:member, _, path}), do: Enum.join(path, ".")
+
+  defp read_timer([{:name, _, timer} | _]),
+    do: "read the timer with `xic #{timer}.dn` on a rung below"
+
+  defp read_timer(_no_timer), do: "read the timer's `.dn` on a rung below"
+
+  # A group carries no line of its own, so it is cited at the `ton`'s: a rung is one line.
+  defp line_of({:branches, _legs}, ton_line), do: ton_line
+  defp line_of({_symbol, line, _operands}, _ton_line), do: line
 
   # Every instruction of a rung, in order, the legs of a group, however deeply nested,
   # included.
@@ -143,6 +250,7 @@ defmodule Logex.Compiler do
     diagnostics = check_count(signature, operands, rest, at, diagnostics)
     diagnostics = check_kinds(signature, operands, at, diagnostics)
     diagnostics = check_tags(signature, operands, at, tags, diagnostics)
+    diagnostics = check_preset(signature, operands, at, diagnostics)
     lower(rest, [{symbol, line, Enum.map(operands, &operand/1)} | ir], diagnostics, tags)
   end
 
@@ -220,6 +328,8 @@ defmodule Logex.Compiler do
   defp kind({:read, _type}), do: "a tag"
   defp kind({:write, _type}), do: "a tag"
   defp kind({:value, _type}), do: "a value"
+  defp kind({:instance, type}), do: "a #{type}"
+  defp kind({:preset, _type}), do: "a preset"
 
   defp found(0), do: "none"
   defp found(count), do: "#{count}"
@@ -243,9 +353,31 @@ defmodule Logex.Compiler do
   defp check_kind({:write, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
   defp check_kind({:value, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
   defp check_kind({:value, _type}, {:int_lit, _, _}, _at, diagnostics), do: diagnostics
+  defp check_kind({:instance, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
+  defp check_kind({:preset, _type}, {:int_lit, _, _}, _at, diagnostics), do: diagnostics
+
+  # A preset from a tag is not a preset: check_preset/4 names the `move` that is meant.
+  defp check_kind({:preset, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
 
   defp check_kind(kind, {:int_lit, _, value}, {line, word}, diagnostics),
     do: [diagnostic(line, "`#{word}` expects #{kind(kind)}, found `#{value}`") | diagnostics]
+
+  # M1-6: `ton t1 sp`. The preset is the timer's starting `.pre`, a number on the rung; a
+  # value from a tag is moved into `.pre` instead, which logic may write (decision 4).
+  defp check_preset([_, {:preset, _}], [first, {:name, line, name}], {_, word}, diagnostics) do
+    message =
+      "`#{word}` takes its preset as a number of milliseconds, found `#{name}`" <>
+        moved(first, name)
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp check_preset(_signature, _operands, _at, diagnostics), do: diagnostics
+
+  defp moved({:name, _, timer}, name),
+    do: ": to preset `#{timer}` from a tag, `move #{name} #{timer}.pre` on a rung above"
+
+  defp moved(_not_a_timer, _name), do: ""
 
   # M1-3: each operand against the tag table -- declared, of the type its slot reads or
   # writes, and not a var_input where the slot writes. A literal where a tag must go was
@@ -266,10 +398,25 @@ defmodule Logex.Compiler do
   defp check_tag({{:value, :dint}, {:int_lit, line, value}}, {_, word}, _tags, diagnostics),
     do: literal(Declarations.fits?(:dint, value), value, {line, word}, diagnostics)
 
+  # A preset is a dint number of milliseconds, and never negative (docs/naming.md, `ton`).
+  defp check_tag({{:preset, _}, {:int_lit, line, value}}, {_, word}, _tags, diagnostics),
+    do: preset(Declarations.preset?(value), value, {line, word}, diagnostics)
+
   defp check_tag({_slot, {:int_lit, _, _}}, _at, _tags, diagnostics), do: diagnostics
+
+  # Reported by check_preset/4, and never looked up.
+  defp check_tag({{:preset, _}, {:name, _, _}}, _at, _tags, diagnostics), do: diagnostics
 
   defp check_tag({slot, {:name, _, name} = operand}, at, tags, diagnostics),
     do: resolve(Declarations.reserved(name), lookup(name, tags), slot, operand, at, diagnostics)
+
+  defp preset(true, _value, _at, diagnostics), do: diagnostics
+
+  defp preset(false, value, {line, word}, diagnostics),
+    do: [
+      diagnostic(line, "`#{word}` takes a preset of 0 to 2147483647 ms, found `#{value}`")
+      | diagnostics
+    ]
 
   defp literal(true, _value, _at, diagnostics), do: diagnostics
 
@@ -314,6 +461,9 @@ defmodule Logex.Compiler do
 
   # An instance is named whole only where an instruction runs it; anywhere else, by one of
   # its members, which the message suggests when one would fit the slot.
+  defp resolve(nil, {:ok, %Tag{type: %FbType{name: type}}}, {:instance, type}, _, _, diagnostics),
+    do: diagnostics
+
   defp resolve(
          nil,
          {:ok, %Tag{type: %FbType{} = type} = tag},
@@ -437,6 +587,7 @@ defmodule Logex.Compiler do
   end
 
   defp verb(:write), do: "writes"
+  defp verb(:instance), do: "runs"
   defp verb(_access), do: "reads"
 
   # IEC's rule for VAR_INPUT: "not modifiable within organization unit" (docs/naming.md).
