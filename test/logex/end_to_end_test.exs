@@ -467,6 +467,93 @@ defmodule Logex.EndToEndTest do
     end
   end
 
+  describe "comparisons (M1-6)" do
+    @compare """
+    var_input a dint
+    var_input b dint
+    var_input on bool
+    var_output o_eq bool
+    var_output o_ne bool
+    var_output o_lt bool
+    var_output o_gt bool
+    var_output o_le bool
+    var_output o_ge bool
+    var_output big bool
+    var_output small bool
+    var_output gated bool
+    var_output either bool
+
+    eq a b ote o_eq
+    ne a b ote o_ne
+    lt a b ote o_lt
+    gt a b ote o_gt
+    le a b ote o_le
+    ge a b ote o_ge
+    gt a 100 ote big
+    lt 100 a ote small
+    xic on ( eq a a | ne a a | lt a a | gt a a | le a a | ge a a ) ote gated
+    ( lt a b | gt a b ) ote either
+    """
+
+    test "each compares its first operand with its second, as `lt a b` reads a < b" do
+      p = program(@compare)
+
+      for {a, b, expected} <- [
+            {1, 2, [0, 1, 1, 0, 1, 0]},
+            {2, 2, [1, 0, 0, 0, 1, 1]},
+            {3, 2, [0, 1, 0, 1, 0, 1]},
+            {-2_147_483_648, 2_147_483_647, [0, 1, 1, 0, 1, 0]},
+            {2_147_483_647, -2_147_483_648, [0, 1, 0, 1, 0, 1]}
+          ] do
+        [outputs] = drive(p, [{0, %{"a" => a, "b" => b}}])
+        found = Enum.map(~w(o_eq o_ne o_lt o_gt o_le o_ge), &outputs[&1])
+        assert found == expected, "a=#{a} b=#{b}"
+      end
+    end
+
+    test "a literal may stand on either side" do
+      p = program(@compare)
+      assert [%{"big" => 1, "small" => 1}] = drive(p, [{0, %{"a" => 101}}])
+      assert [%{"big" => 0, "small" => 0}] = drive(p, [{0, %{"a" => 100}}])
+    end
+
+    test "on a de-energised rung each passes no power, whatever it would find" do
+      # With `on`, `eq a a`, `le a a` and `ge a a` hold, so the group passes power.
+      assert [%{"gated" => 1}] = drive(program(@compare), [{0, %{"on" => 1}}])
+      assert [%{"gated" => 0}] = drive(program(@compare), [{0, %{"on" => 0}}])
+    end
+
+    test "in parallel legs they OR, as contacts do" do
+      p = program(@compare)
+      assert [%{"either" => 1}] = drive(p, [{0, %{"a" => 1, "b" => 2}}])
+      assert [%{"either" => 0}] = drive(p, [{0, %{"a" => 2, "b" => 2}}])
+    end
+
+    test "on an env the host builds, they never raise, and each pair is complementary" do
+      src =
+        "var a dint\nvar b dint\nvar eq_ bool\nvar ne_ bool\nvar lt_ bool\nvar ge_ bool\n" <>
+          "var gt_ bool\nvar le_ bool\neq a b ote eq_\nne a b ote ne_\nlt a b ote lt_\n" <>
+          "ge a b ote ge_\ngt a b ote gt_\nle a b ote le_"
+
+      p = program(src)
+      values = [0, 1, -1, 1.0, 2.5, nil, true, :on, "0", [], %{}, {1}, :missing]
+
+      for a <- values, b <- values do
+        env = for({k, v} <- [{"a", a}, {"b", b}], v != :missing, into: %{}, do: {k, v})
+        {_, env} = later_scan(p, env)
+        pairs = [{"eq_", "ne_"}, {"lt_", "ge_"}, {"gt_", "le_"}]
+        assert Enum.all?(pairs, fn {x, y} -> env[x] + env[y] == 1 end), inspect({a, b})
+      end
+    end
+  end
+
+  describe "comparisons on an env the host builds (M1-6)" do
+    test "a tag the host left out reads 0, as move reads it" do
+      p = program("var a dint\nvar z bool\nvar n bool\neq a 0 ote z\nlt a 0 ote n")
+      assert {_, %{"z" => 1, "n" => 0}} = later_scan(p, %{})
+    end
+  end
+
   describe "contacts on an env the host builds (M1-4)" do
     # The compiler lets only a bool reach a contact, but evaluate/3 takes whatever env the
     # host hands it. xic and xio must still disagree on every value: before M1-4 a 5, a

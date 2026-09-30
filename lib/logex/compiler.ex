@@ -16,7 +16,13 @@ defmodule Logex.Compiler do
     "otl" => {:otl, [{:write, :bool}]},
     "otu" => {:otu, [{:write, :bool}]},
     "move" => {:move, [{:value, :any}, {:write, :any}]},
-    "ons" => {:ons, [{:write, :bool}]}
+    "ons" => {:ons, [{:write, :bool}]},
+    "eq" => {:eq, [{:value, :dint}, {:value, :dint}]},
+    "ne" => {:ne, [{:value, :dint}, {:value, :dint}]},
+    "lt" => {:lt, [{:value, :dint}, {:value, :dint}]},
+    "gt" => {:gt, [{:value, :dint}, {:value, :dint}]},
+    "le" => {:le, [{:value, :dint}, {:value, :dint}]},
+    "ge" => {:ge, [{:value, :dint}, {:value, :dint}]}
   }
 
   @doc """
@@ -244,11 +250,23 @@ defmodule Logex.Compiler do
     )
   end
 
+  # A literal in a dint slot must fit 32 bits, as a declared initial value must (M1-6: the
+  # comparisons). An `:any` slot's literal is checked against the tag beside it, by unify/3.
+  defp check_tag({{:value, :dint}, {:int_lit, line, value}}, {_, word}, _tags, diagnostics),
+    do: literal(Declarations.fits?(:dint, value), value, {line, word}, diagnostics)
+
   defp check_tag({_slot, {:int_lit, _, _}}, _at, _tags, diagnostics), do: diagnostics
 
   defp check_tag({slot, {:name, _, name} = operand}, at, tags, diagnostics),
     do:
       resolve(Declarations.reserved(name), Map.fetch(tags, name), slot, operand, at, diagnostics)
+
+  defp literal(true, _value, _at, diagnostics), do: diagnostics
+
+  defp literal(false, value, {line, word}, diagnostics),
+    do: [
+      diagnostic(line, "`#{word}` reads a dint: `#{value}` does not fit in 32 bits") | diagnostics
+    ]
 
   # take_operands/3 never takes a mnemonic, so a reserved operand is a section or type word.
   defp resolve(:type, _, _slot, {:name, line, name}, {_, word}, diagnostics),

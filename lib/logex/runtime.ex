@@ -23,6 +23,8 @@ defmodule Logex.Runtime do
 
   alias Logex.{Declarations, Instance, Program, Scan, Tag}
 
+  @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
+
   @doc "A new instance of `program`: every tag at its initial value, before its first scan."
   def instance(program) do
     program!(program)
@@ -329,8 +331,29 @@ defmodule Logex.Runtime do
     {false, Map.put(env, storage, 0)}
   end
 
+  # The six comparisons (docs/naming.md, `eq` to `ge`) are input instructions, as a contact
+  # is: energised, power is the comparison of the first operand with the second, `lt a b`
+  # reading a < b; de-energised, no power. Neither writes anything.
+  defp evaluate({op, _, [a, b]}, {true, env}, _scan) when op in @comparisons do
+    {compare(op, get_arg(env, a), get_arg(env, b)), env}
+  end
+
+  defp evaluate({op, _, _}, {false, env}, _scan) when op in @comparisons do
+    {false, env}
+  end
+
   defp get_arg(_env, {:int_lit, _, val}), do: val
   defp get_arg(env, {:name, _, name}), do: Map.get(env, name, 0)
+
+  # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is
+  # complementary by construction, as `xic` and `xio` are (M1-4). Erlang's term order is
+  # total, so a comparison of whatever a hand-built env holds never raises.
+  defp compare(:eq, a, b), do: a == b
+  defp compare(:ne, a, b), do: not compare(:eq, a, b)
+  defp compare(:lt, a, b), do: a < b
+  defp compare(:ge, a, b), do: not compare(:lt, a, b)
+  defp compare(:gt, a, b), do: a > b
+  defp compare(:le, a, b), do: not compare(:gt, a, b)
 
   # M1-4: `xic` reads this and `xio` its negation, so the two are complementary by
   # construction, whatever the env holds. The compiler lets only a bool reach a contact,

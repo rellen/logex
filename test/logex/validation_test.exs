@@ -761,6 +761,49 @@ defmodule Logex.ValidationTest do
     end
   end
 
+  describe "comparisons (M1-6)" do
+    test "take two dints, each a tag or a literal that fits 32 bits" do
+      assert source_errors(
+               "var b bool\nvar d dint\nvar_input i dint\nvar_output o dint\n" <>
+                 "eq b d ote b\ngt d 2147483648 ote b\nge d ote b\nlt 2147483647 i le o i ote b"
+             ) == [
+               "line 5: `eq` reads a dint, but `b` is a bool (declared on line 1)",
+               "line 6: `gt` reads a dint: `2147483648` does not fit in 32 bits",
+               "line 7: `ge` expects 2 operands (a value, then a value), found 1 " <>
+                 "before the instruction `ote`"
+             ]
+    end
+
+    test "a literal may stand on either side, and a var_input or var_output be read" do
+      assert source_warnings(
+               "var_input i dint\nvar_output o dint\nvar b bool\n" <>
+                 "lt 2147483647 i le o i ne i 0 ote b\nmove i o"
+             ) == []
+    end
+
+    test "are reserved in any case" do
+      assert source_errors(
+               "var eq bool\nvar NE bool\nvar lt dint\nvar Gt dint\nvar le bool\nvar gE bool"
+             ) ==
+               for(
+                 {word, line} <- Enum.with_index(~w(eq NE lt Gt le gE), 1),
+                 do: "line #{line}: `#{word}` is an instruction and cannot name a tag"
+               )
+    end
+
+    test "two literals compile, with a warning, in a branch leg too" do
+      assert source_warnings("var b bool\neq 1 1 ote b\n( ge 0 5 | xic b ) ote b") == [
+               "line 2: warning: `eq` compares two literals, `1` and `1`: its result never changes",
+               "line 3: warning: `b` already has an `ote` on line 2: the last one in the scan decides it",
+               "line 3: warning: `ge` compares two literals, `0` and `5`: its result never changes"
+             ]
+
+      assert source_warnings("var b bool\nxic b ( xic b | ( lt 2 3 | xio b ) ) ote b") == [
+               "line 2: warning: `lt` compares two literals, `2` and `3`: its result never changes"
+             ]
+    end
+  end
+
   describe "tags declared from Elixir (M1-3)" do
     test "are checked by the same rules as a declaration line" do
       assert source_errors("var ote bool") == [

@@ -7,7 +7,8 @@ defmodule Logex.Warnings do
   - a `var_output` a rung reads but none writes: it stays at its initial value;
   - a second `ote` on one tag: only the last one in the scan decides it;
   - an `ons` storage bit that another instruction writes (M1-6): the one-shot then fires
-    on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`).
+    on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`);
+  - a comparison of two literals (M1-6): its result never changes.
 
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
   """
@@ -32,6 +33,7 @@ defmodule Logex.Warnings do
     |> Enum.flat_map(&about(&1, Map.get(accesses, &1.name, [])))
     |> Kernel.++(second_otes(uses, tags, owners))
     |> Kernel.++(storage_writes(uses, tags, owners))
+    |> Kernel.++(Enum.flat_map(rungs, fn {:rung, elements} -> constants(elements) end))
     |> Enum.sort_by(& &1.line)
   end
 
@@ -105,6 +107,25 @@ defmodule Logex.Warnings do
 
   defp where(line, line), do: "in this rung"
   defp where(first, _line), do: "on line #{first}"
+
+  # M1-6: a comparison of two literals compiles, as IEC's EQ(1, 1) does, but its result
+  # never changes. In rung order.
+  @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
+
+  defp constants(elements), do: Enum.flat_map(elements, &constant/1)
+
+  defp constant({:branches, legs}), do: Enum.flat_map(legs, &constants/1)
+
+  defp constant({symbol, line, [{:int_lit, _, a}, {:int_lit, _, b}]})
+       when symbol in @comparisons,
+       do: [
+         warning(
+           line,
+           "`#{symbol}` compares two literals, `#{a}` and `#{b}`: its result never changes"
+         )
+       ]
+
+  defp constant(_instruction), do: []
 
   defp from_source?(tags, name),
     do: match?(%Tag{line: line} when line != nil, Map.get(tags, name))
