@@ -315,6 +315,20 @@ defmodule Logex.Runtime do
     {false, env}
   end
 
+  # The one-shot on the rung condition (docs/naming.md, `ons`): power for the one scan in
+  # which the power reaching it rises. The storage bit holds the power it received last
+  # scan, read as a contact reads a bit. On an instance's first scan it passes none,
+  # whatever the storage bit holds: the conventional ONS's "set to true to prevent an
+  # invalid trigger during the first scan", read from the scan rather than set by a
+  # prescan (PLAN.md M1-6, decision 3).
+  defp evaluate({:ons, _, [{:name, _, storage}]}, {true, env}, %Scan{first: first}) do
+    {not first and not bit(env, storage), Map.put(env, storage, 1)}
+  end
+
+  defp evaluate({:ons, _, [{:name, _, storage}]}, {false, env}, _scan) do
+    {false, Map.put(env, storage, 0)}
+  end
+
   defp get_arg(_env, {:int_lit, _, val}), do: val
   defp get_arg(env, {:name, _, name}), do: Map.get(env, name, 0)
 

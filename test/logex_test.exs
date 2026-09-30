@@ -14,12 +14,15 @@ defmodule LogexTest do
 
   defp formatted({:error, diagnostics}), do: Enum.map(diagnostics, &Diagnostic.format/1)
 
+  # Each tag has a rung of its own, and a one-shot whose storage bit a second rung also
+  # writes, so every pass over the program, the M1-6 warnings among them, has work to do.
   defp reductions_to_compile(tags) do
     names = for i <- 1..tags, do: "t#{i}"
 
     source =
-      Enum.map_join(names, "\n", &"var #{&1} bool") <>
-        "\n" <> Enum.map_join(names, "\n", &"xic #{&1} ote #{&1}")
+      Enum.map_join(names, "\n", &"var #{&1} bool\nvar #{&1}_s bool") <>
+        "\n" <>
+        Enum.map_join(names, "\n", &"xic #{&1} ons #{&1}_s ote #{&1}\nxio #{&1} ote #{&1}_s")
 
     {:reductions, before} = Process.info(self(), :reductions)
     {:ok, _program} = Logex.compile(source, name: "big")

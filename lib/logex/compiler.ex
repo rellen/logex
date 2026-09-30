@@ -15,7 +15,8 @@ defmodule Logex.Compiler do
     "ote" => {:ote, [{:write, :bool}]},
     "otl" => {:otl, [{:write, :bool}]},
     "otu" => {:otu, [{:write, :bool}]},
-    "move" => {:move, [{:value, :any}, {:write, :any}]}
+    "move" => {:move, [{:value, :any}, {:write, :any}]},
+    "ons" => {:ons, [{:write, :bool}]}
   }
 
   @doc """
@@ -45,8 +46,52 @@ defmodule Logex.Compiler do
     {tags, logic, declaring} = Declarations.split(rungs, declared)
     {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, tags))
     note? = map_size(tags) == 0 and declares_nothing?(routine, logic)
-    lowered(rungs, tags, declaring ++ undeclared(Enum.reverse(lowering), tags, note?))
+    shared = shared_bits(rungs, tags)
+    lowered(rungs, tags, declaring ++ undeclared(Enum.reverse(lowering), tags, note?) ++ shared)
   end
+
+  # M1-6: one `ons` uses a storage bit. A second `ons` on one bit is an error at its own
+  # line, citing the first: the false one clears the bit every scan, so the true one fires
+  # on every scan its rung is true, and no arrangement of two works. Any other writer of
+  # the bit is only a warning (Logex.Warnings), since it may be a deliberate re-arm. An
+  # `ons` on anything but a declared bool was reported already and is passed over. One walk
+  # in rung order, so it stays linear.
+  defp shared_bits(rungs, tags) do
+    {_first, diagnostics} =
+      rungs
+      |> Enum.flat_map(fn {:rung, elements} -> instructions(elements) end)
+      |> Enum.reduce({%{}, []}, &shared_bit(&1, &2, tags))
+
+    Enum.reverse(diagnostics)
+  end
+
+  defp shared_bit({:ons, line, [{:name, _, bit}]}, {first, diagnostics}, tags),
+    do: storage_bit(Map.fetch(first, bit), Map.get(tags, bit), {bit, line}, {first, diagnostics})
+
+  defp shared_bit(_instruction, acc, _tags), do: acc
+
+  defp storage_bit(:error, %Tag{type: :bool}, {bit, line}, {first, diagnostics}),
+    do: {Map.put(first, bit, line), diagnostics}
+
+  defp storage_bit({:ok, first_line}, %Tag{}, {bit, line}, {first, diagnostics}) do
+    message =
+      "`#{bit}` is already the storage bit of the `ons` #{where(first_line, line)}: " <>
+        "each `ons` needs a storage bit of its own"
+
+    {first, [diagnostic(line, message) | diagnostics]}
+  end
+
+  defp storage_bit(:error, _not_a_bool, _ons, acc), do: acc
+
+  # Every instruction of a rung, in order, the legs of a group, however deeply nested,
+  # included.
+  defp instructions(elements), do: Enum.flat_map(elements, &instruction/1)
+
+  defp instruction({:branches, legs}), do: Enum.flat_map(legs, &instructions/1)
+  defp instruction(instruction), do: [instruction]
+
+  defp where(line, line), do: "in this rung"
+  defp where(first, _line), do: "on line #{first}"
 
   # No declaration line at all, as opposed to declarations that were all wrong.
   defp declares_nothing?({:routine, {:rungs, rungs}}, logic), do: length(rungs) == length(logic)

@@ -376,6 +376,97 @@ defmodule Logex.EndToEndTest do
     end
   end
 
+  # M1-6: several scans of one instance through the public API, each step `{elapsed_ms,
+  # inputs}`, giving each scan's outputs.
+  defp drive(program, steps), do: drive(program, Logex.Runtime.instance(program), steps)
+
+  defp drive(program, state, steps) do
+    {trace, _state} =
+      Enum.map_reduce(steps, state, fn {elapsed, inputs}, state ->
+        state = Logex.Runtime.put_inputs(program, state, inputs)
+        Logex.Runtime.scan(program, state, elapsed)
+      end)
+
+    trace
+  end
+
+  defp program(src) do
+    {:ok, program} = compile(src)
+    program
+  end
+
+  # One scan, not the first, at 7 ms, from an env the test builds by hand.
+  defp later_scan(program, env) do
+    state = %Logex.Instance{type: program.name, env: env, now: 0, first: false}
+    {outputs, state} = Logex.Runtime.call(program, state, %{}, %Logex.Scan{now: 7, first: false})
+    {outputs, state.env}
+  end
+
+  describe "ons (M1-6)" do
+    @ons "var_input go bool\nvar_output pulse bool\nvar s1 bool\nxic go ons s1 ote pulse"
+
+    defp pulses(src, gos),
+      do:
+        src |> program() |> drive(Enum.map(gos, &{10, %{"go" => &1}})) |> Enum.map(& &1["pulse"])
+
+    test "passes power once per rising edge: not while held, and again after a drop" do
+      assert pulses(@ons, [0, 1, 1, 1, 0, 1, 0, 0, 1]) == [0, 1, 0, 0, 0, 1, 0, 0, 1]
+    end
+
+    test "a rung already true on the first scan does not fire, whatever the storage bit holds" do
+      for initial <- ["", " 0", " 1"] do
+        src = String.replace(@ons, "var s1 bool", "var s1 bool" <> initial)
+        assert pulses(src, [1, 1, 0, 1]) == [0, 0, 0, 1], "declared `var s1 bool#{initial}`"
+      end
+    end
+
+    test "nor on the first scan after a restart, with the input still held" do
+      p = program(@ons)
+      state = Logex.Runtime.put_inputs(p, Logex.Runtime.instance(p), %{"go" => 0})
+      {_, state} = Logex.Runtime.scan(p, state)
+      state = Logex.Runtime.put_inputs(p, state, %{"go" => 1})
+      {%{"pulse" => 1}, state} = Logex.Runtime.scan(p, state, 10)
+      restarted = Logex.Runtime.restart(p, state, :cold)
+
+      assert [%{"pulse" => 0}, %{"pulse" => 0}, %{"pulse" => 1}] =
+               drive(p, restarted, [{10, %{}}, {10, %{"go" => 0}}, {10, %{"go" => 1}}])
+    end
+
+    test "after xio it fires on a falling edge" do
+      src = "var_input go bool\nvar_output pulse bool\nvar s1 bool\nxio go ons s1 ote pulse"
+      assert pulses(src, [1, 1, 0, 0, 1, 0]) == [0, 0, 1, 0, 0, 1]
+    end
+
+    test "the storage bit follows the power it receives, and a var_output may hold it" do
+      src =
+        "var_input go bool\nvar_output s1 bool 1\nvar_output pulse bool\nxic go ons s1 ote pulse"
+
+      assert drive(program(src), Enum.map([0, 1, 1, 0], &{10, %{"go" => &1}})) == [
+               %{"s1" => 0, "pulse" => 0},
+               %{"s1" => 1, "pulse" => 1},
+               %{"s1" => 1, "pulse" => 0},
+               %{"s1" => 0, "pulse" => 0}
+             ]
+    end
+
+    test "in a branch leg it is held back on the first scan too, and fires on the next edge" do
+      src =
+        "var_input go bool\nvar_input other bool\nvar_output pulse bool\nvar s1 bool\n" <>
+          "( xic go ons s1 | xic other ) ote pulse"
+
+      assert pulses(src, [1, 0, 1]) == [0, 0, 1]
+    end
+
+    test "a storage bit holding anything is read as a contact reads it" do
+      p = program(@ons)
+
+      for {junk, fires} <- [{0, 1}, {nil, 1}, {false, 1}, {0.0, 1}, {5, 0}, {"x", 0}, {true, 0}] do
+        assert {%{"pulse" => ^fires}, %{"s1" => 1}} = later_scan(p, %{"s1" => junk, "go" => 1}),
+               inspect(junk)
+      end
+    end
+  end
+
   describe "contacts on an env the host builds (M1-4)" do
     # The compiler lets only a bool reach a contact, but evaluate/3 takes whatever env the
     # host hands it. xic and xio must still disagree on every value: before M1-4 a 5, a

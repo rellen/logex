@@ -623,6 +623,144 @@ defmodule Logex.ValidationTest do
     end
   end
 
+  describe "ons (M1-6)" do
+    test "its storage bit is a bool tag it writes: M1-3's rules refuse anything else" do
+      assert source_errors(
+               "var_input i bool\nvar d dint\nvar a bool\nxic a ons i\nxic a ons d\nxic a ons 5\nons"
+             ) == [
+               "line 4: `ons` writes `i`, a var_input (declared on line 1): " <>
+                 "logic must not write an input",
+               "line 5: `ons` writes a bool, but `d` is a dint (declared on line 2)",
+               "line 6: `ons` expects a tag, found `5`",
+               "line 7: `ons` expects 1 operand (a tag), found none"
+             ]
+    end
+
+    test "its storage bit may be a var or a var_output, and is read freely elsewhere" do
+      assert source_warnings(
+               "var_input go bool\nvar s1 bool\nvar_output s2 bool\nvar_output p bool\n" <>
+                 "xic go ons s1 ote p\nxio go ons s2 ote p\nxic s1 xic s2 ote p"
+             ) == [
+               "line 6: warning: `p` already has an `ote` on line 5: the last one in the scan decides it",
+               "line 7: warning: `p` already has an `ote` on line 5: the last one in the scan decides it"
+             ]
+    end
+
+    test "is reserved in any case" do
+      assert source_errors("var ons bool\nvar Ons bool") == [
+               "line 1: `ons` is an instruction and cannot name a tag",
+               "line 2: `Ons` is an instruction and cannot name a tag"
+             ]
+    end
+
+    test "another write to its storage bit, before or after it, is warned about at the write" do
+      assert source_warnings(
+               "var go bool\nvar s1 bool\nvar d bool\nxio go otu s1\nxic go ons s1 ote d\n" <>
+                 "xic d ote s1\nxic d otl s1\nxic d move 1 s1"
+             ) == [
+               "line 4: warning: `otu` writes `s1`, the storage bit of the `ons` on line 5: " <>
+                 "the one-shot then fires on the wrong scans",
+               "line 6: warning: `ote` writes `s1`, the storage bit of the `ons` on line 5: " <>
+                 "the one-shot then fires on the wrong scans",
+               "line 7: warning: `otl` writes `s1`, the storage bit of the `ons` on line 5: " <>
+                 "the one-shot then fires on the wrong scans",
+               "line 8: warning: `move` writes `s1`, the storage bit of the `ons` on line 5: " <>
+                 "the one-shot then fires on the wrong scans"
+             ]
+    end
+
+    test "a second ons on one storage bit is an error citing the first, in its rung or on its line" do
+      # The false one clears the bit every scan, so the true one fires every scan.
+      assert source_errors(
+               "var go bool\nvar s1 bool\nvar d bool\nxic go ons s1 ons s1 ote d\n" <>
+                 "( xio go ons s1 | xic d ) ote d\nxic d ( xic go | ( xio d | ons s1 ) )"
+             ) == [
+               "line 4: `s1` is already the storage bit of the `ons` in this rung: " <>
+                 "each `ons` needs a storage bit of its own",
+               "line 5: `s1` is already the storage bit of the `ons` on line 4: " <>
+                 "each `ons` needs a storage bit of its own",
+               "line 6: `s1` is already the storage bit of the `ons` on line 4: " <>
+                 "each `ons` needs a storage bit of its own"
+             ]
+    end
+
+    test "a second ons is an error however its storage bit was declared" do
+      declared = [Logex.Tag.new!("go", :bool), Logex.Tag.new!("s1", :bool)]
+
+      assert source_errors("xic go ons s1\nxio go ons s1", declared) == [
+               "line 2: `s1` is already the storage bit of the `ons` on line 1: " <>
+                 "each `ons` needs a storage bit of its own"
+             ]
+
+      # A var_input bool is still a bool the ons names: two mistakes on line 3.
+      assert source_errors("var_input i bool\nxic i ons i\nxio i ons i") == [
+               "line 2: `ons` writes `i`, a var_input (declared on line 1): " <>
+                 "logic must not write an input",
+               "line 3: `ons` writes `i`, a var_input (declared on line 1): " <>
+                 "logic must not write an input",
+               "line 3: `i` is already the storage bit of the `ons` on line 2: " <>
+                 "each `ons` needs a storage bit of its own"
+             ]
+    end
+
+    test "an ons on a tag that cannot be a storage bit is reported once, not as a second ons" do
+      assert source_errors(
+               "var d dint\nvar a bool\nxic a ons d\nxic a ons d\nxic a ons zz ons zz"
+             ) ==
+               [
+                 "line 3: `ons` writes a bool, but `d` is a dint (declared on line 1)",
+                 "line 4: `ons` writes a bool, but `d` is a dint (declared on line 1)",
+                 "line 5: `zz` is not declared"
+               ]
+    end
+
+    test "two otes on a storage bit get one warning each, never the second ote's" do
+      # The ons on line 6 writes s1 last, so the line-5 ote does not decide it.
+      assert source_warnings(
+               "var go bool\nvar b bool\nvar s1 bool\nxic b ote s1\nxio b ote s1\n" <>
+                 "xic go ons s1 ote b\nxic s1 ote b"
+             ) == [
+               "line 4: warning: `ote` writes `s1`, the storage bit of the `ons` on line 6: " <>
+                 "the one-shot then fires on the wrong scans",
+               "line 5: warning: `ote` writes `s1`, the storage bit of the `ons` on line 6: " <>
+                 "the one-shot then fires on the wrong scans",
+               "line 7: warning: `b` already has an `ote` on line 6: the last one in the scan decides it"
+             ]
+    end
+
+    test "a write to a storage bit in the ons's own rung cites it there" do
+      assert source_warnings("var go bool\nvar s1 bool\nxic go ons s1 ( otl s1 | otu s1 )") == [
+               "line 3: warning: `otl` writes `s1`, the storage bit of the `ons` in this rung: " <>
+                 "the one-shot then fires on the wrong scans",
+               "line 3: warning: `otu` writes `s1`, the storage bit of the `ons` in this rung: " <>
+                 "the one-shot then fires on the wrong scans"
+             ]
+    end
+
+    test "storage warnings on one line come in rung order, however many there are" do
+      # 40 storage bits, written on one line in the reverse of their names' order: an order
+      # taken from a map of more than 32 keys would not be this one.
+      names = for i <- 40..1//-1, do: "s" <> String.pad_leading("#{i}", 2, "0")
+      declarations = Enum.map_join(names, &"var #{&1} bool\n")
+      shots = Enum.map_join(names, "\n", &"xic go ons #{&1}")
+      writes = "xic go " <> Enum.map_join(names, " ", &"ote #{&1}")
+
+      assert source_warnings("var go bool\n" <> declarations <> shots <> "\n" <> writes) ==
+               Enum.map(names, fn name ->
+                 "line 82: warning: `ote` writes `#{name}`, the storage bit of the `ons` " <>
+                   "on line #{42 + Enum.find_index(names, &(&1 == name))}: " <>
+                   "the one-shot then fires on the wrong scans"
+               end)
+    end
+
+    test "is never warned about for a storage bit declared from Elixir" do
+      declared = [Logex.Tag.new!("go", :bool), Logex.Tag.new!("s1", :bool)]
+
+      assert {:ok, %Logex.Program{warnings: []}} =
+               source_compile("xic go ons s1\nxic go ote s1 otl s1", declared)
+    end
+  end
+
   describe "tags declared from Elixir (M1-3)" do
     test "are checked by the same rules as a declaration line" do
       assert source_errors("var ote bool") == [

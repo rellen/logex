@@ -5,7 +5,9 @@ defmodule Logex.Warnings do
 
   - a tag declared but used by no rung;
   - a `var_output` a rung reads but none writes: it stays at its initial value;
-  - a second `ote` on one tag: only the last one in the scan decides it.
+  - a second `ote` on one tag: only the last one in the scan decides it;
+  - an `ons` storage bit that another instruction writes (M1-6): the one-shot then fires
+    on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`).
 
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
   """
@@ -20,11 +22,16 @@ defmodule Logex.Warnings do
     accesses =
       Enum.group_by(uses, fn {_, name, _, _} -> name end, fn {access, _, _, _} -> access end)
 
+    # M1-6: each `ons` storage bit, to the line of the one `ons` that writes it. The
+    # compiler refuses a second `ons` on one bit, so a program that compiles has one.
+    owners = Map.new(for {:write, name, line, :ons} <- uses, do: {name, line})
+
     tags
     |> Map.values()
     |> Enum.filter(& &1.line)
     |> Enum.flat_map(&about(&1, Map.get(accesses, &1.name, [])))
-    |> Kernel.++(second_otes(uses, tags))
+    |> Kernel.++(second_otes(uses, tags, owners))
+    |> Kernel.++(storage_writes(uses, tags, owners))
     |> Enum.sort_by(& &1.line)
   end
 
@@ -59,11 +66,14 @@ defmodule Logex.Warnings do
   defp start(nil), do: 0
   defp start(initial), do: initial
 
-  # Each `ote` after the first on a tag declared in source cites the first.
-  defp second_otes(uses, tags) do
+  # Each `ote` after the first on a tag declared in source cites the first. An `ons`
+  # storage bit is left to storage_writes/3, which warns about every `ote` on it: the `ons`
+  # writes it too, so the last `ote` need not be what decides it, and one instruction gets
+  # one warning.
+  defp second_otes(uses, tags, owners) do
     uses
     |> Enum.filter(fn {_access, name, _line, symbol} ->
-      symbol == :ote and from_source?(tags, name)
+      symbol == :ote and from_source?(tags, name) and not Map.has_key?(owners, name)
     end)
     |> Enum.group_by(fn {_access, name, _line, _symbol} -> name end, fn {_, _, line, _} ->
       line
@@ -72,6 +82,29 @@ defmodule Logex.Warnings do
       Enum.map(later, &second_ote(name, first, &1))
     end)
   end
+
+  # M1-6: every other write to an `ons` storage bit declared in source, before or after
+  # the `ons` in the scan, is warned about at its own line, citing the `ons`. The uses are
+  # walked in rung order, not grouped into a map, whose order stops being sorted past 32
+  # keys.
+  defp storage_writes(uses, tags, owners) do
+    for {:write, name, line, symbol} <- uses,
+        symbol != :ons,
+        {:ok, first} <- [Map.fetch(owners, name)],
+        from_source?(tags, name),
+        do: storage_write(symbol, name, first, line)
+  end
+
+  defp storage_write(symbol, name, first, line),
+    do:
+      warning(
+        line,
+        "`#{symbol}` writes `#{name}`, the storage bit of the `ons` #{where(first, line)}: " <>
+          "the one-shot then fires on the wrong scans"
+      )
+
+  defp where(line, line), do: "in this rung"
+  defp where(first, _line), do: "on line #{first}"
 
   defp from_source?(tags, name),
     do: match?(%Tag{line: line} when line != nil, Map.get(tags, name))
