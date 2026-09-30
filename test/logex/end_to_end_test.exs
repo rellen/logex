@@ -249,7 +249,7 @@ defmodule Logex.EndToEndTest do
   describe "line numbers" do
     test "no stage depends on an instruction sitting on line 1" do
       # Every operand carries its line, and so does every instruction since M1-2;
-      # each evaluate/3 and get_arg/2 pattern destructures them as `_`. That is only
+      # each evaluate/3, read/2 and write/3 pattern destructures them as `_`. That is only
       # a wildcard if nothing breaks when every instruction sits below line 1 -- so:
       # every instruction, both power states, a literal and a tag operand, from line
       # 3 down. The last rung opens its first contact, so every instruction after it
@@ -544,6 +544,75 @@ defmodule Logex.EndToEndTest do
         pairs = [{"eq_", "ne_"}, {"lt_", "ge_"}, {"gt_", "le_"}]
         assert Enum.all?(pairs, fn {x, y} -> env[x] + env[y] == 1 end), inspect({a, b})
       end
+    end
+  end
+
+  describe "members (M1-6)" do
+    @members """
+    var_input set bool
+    var_input sp dint
+    var_output pre dint
+    var_output acc dint
+    var_output done bool
+    var_output early bool
+    var t1 ton
+
+    gt t1.pre 0 ote early
+    xic set move sp t1.pre
+    xic set move sp t1.acc
+    move t1.pre pre
+    move t1.acc acc
+    xic t1.dn ote done
+    """
+
+    test "a move into .pre or .acc holds from scan to scan, and a rung reads what an " <>
+           "earlier rung of the scan wrote" do
+      assert drive(program(@members), [
+               {0, %{}},
+               {10, %{"set" => 1, "sp" => 300}},
+               {10, %{"set" => 0}}
+             ]) == [
+               %{"pre" => 0, "acc" => 0, "done" => 0, "early" => 0},
+               # `early` is above the move: it sees last scan's .pre.
+               %{"pre" => 300, "acc" => 300, "done" => 0, "early" => 0},
+               %{"pre" => 300, "acc" => 300, "done" => 0, "early" => 1}
+             ]
+    end
+  end
+
+  describe "members on an env the host builds (M1-6)" do
+    # Outside the contract, like M1-4's contacts, but still total: whatever a hand-built
+    # env holds where a timer belongs, or in its members, nothing raises.
+    @junk [5, nil, "x", [1], %{}, %{"dn" => nil, "acc" => 2.5}, %Logex.Scan{now: 0, first: true}]
+
+    test "a contact on a member is total, and xic and xio stay complementary" do
+      p = program("var t1 ton\nvar hi bool\nvar lo bool\nxic t1.dn ote hi\nxio t1.dn ote lo")
+
+      for junk <- @junk ++ [%{"dn" => 1}, %{"dn" => true}, %{"dn" => 0}] do
+        {_, env} = later_scan(p, %{"t1" => junk})
+        assert env["hi"] + env["lo"] == 1, inspect(junk)
+      end
+
+      assert {_, %{"hi" => 1}} = later_scan(p, %{"t1" => %{"dn" => 1}})
+    end
+
+    test "move from a member the host left out, or of a timer that is not a map, copies 0" do
+      p = program("var t1 ton\nvar d dint\nmove t1.acc d")
+
+      for junk <- @junk -- [%{"dn" => nil, "acc" => 2.5}] do
+        assert {_, %{"d" => 0}} = later_scan(p, %{"t1" => junk, "d" => 9}), inspect(junk)
+      end
+    end
+
+    test "a write into a timer that is not a map makes one" do
+      p = program("var t1 ton\nmove 3 t1.pre")
+
+      for junk <- [5, nil, "x", [1]] do
+        assert {_, %{"t1" => %{"pre" => 3}}} = later_scan(p, %{"t1" => junk}), inspect(junk)
+      end
+
+      assert {_, %{"t1" => %{"pre" => 3, "acc" => 4}}} =
+               later_scan(p, %{"t1" => %{"pre" => 1, "acc" => 4}})
     end
   end
 

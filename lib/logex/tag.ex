@@ -1,8 +1,11 @@
 defmodule Logex.Tag do
   @moduledoc """
-  One declared tag. `initial` is the initial value as declared, or nil when none was, and
-  the tag then starts at 0 (`Logex.Program.initial_env/1`). `line` is its declaration's
-  line in the source, or nil for a tag declared from Elixir with `new!/4`.
+  One declared tag. `type` is `:bool`, `:dint`, or for an instance of a function block a
+  `%Logex.FbType{}`, the schema itself, as `Logex.FbType.ton()` (M1-6). `initial` is the
+  initial value as declared, or nil when none was, and the tag then starts at 0
+  (`Logex.Program.initial_env/1`); an instance is declared with none, and its members
+  start where its type says. `line` is its declaration's line in the source, or nil for a
+  tag declared from Elixir with `new!/4`.
   """
 
   @enforce_keys [:name, :type, :section]
@@ -10,7 +13,7 @@ defmodule Logex.Tag do
 
   @type t :: %__MODULE__{
           name: String.t(),
-          type: :bool | :dint,
+          type: :bool | :dint | Logex.FbType.t(),
           section: :var | :var_input | :var_output,
           initial: integer | nil,
           line: pos_integer | nil

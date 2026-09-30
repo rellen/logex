@@ -1,5 +1,6 @@
 defmodule Logex.Compiler do
-  alias Logex.{Declarations, Diagnostic, Program, Tag}
+  alias Logex.{Declarations, Diagnostic, FbType, Program, Tag}
+  alias Logex.FbType.Member
 
   defdelegate tokenize(source), to: Logex.Lexer
   defdelegate parse(tokens), to: Logex.Parser
@@ -7,8 +8,9 @@ defmodule Logex.Compiler do
   # Each mnemonic's operand signature, in order, one `{access, type}` per operand. Access:
   # `:read` and `:write` must be a tag, and `:value` may be a tag or an integer literal.
   # Type: `:bool`, `:dint`, or `:any`, which IEC's MOVE takes (`IN : ANY` -> `OUT : ANY`,
-  # docs/naming.md). Mnemonics are matched case-insensitively and are reserved: no tag may
-  # be named after one, in any case.
+  # docs/naming.md). A tag here may be a member of an instance, `t1.acc`, which has the type
+  # its schema gives it (M1-6). Mnemonics are matched case-insensitively and are reserved:
+  # no tag may be named after one, in any case.
   @instructions %{
     "xic" => {:xic, [{:read, :bool}]},
     "xio" => {:xio, [{:read, :bool}]},
@@ -141,13 +143,22 @@ defmodule Logex.Compiler do
     diagnostics = check_count(signature, operands, rest, at, diagnostics)
     diagnostics = check_kinds(signature, operands, at, diagnostics)
     diagnostics = check_tags(signature, operands, at, tags, diagnostics)
-    lower(rest, [{symbol, line, operands} | ir], diagnostics, tags)
+    lower(rest, [{symbol, line, Enum.map(operands, &operand/1)} | ir], diagnostics, tags)
   end
 
   defp lower_word(:error, key, {line, word}, {rest, ir, diagnostics, tags}) do
     unknown = diagnostic(line, unknown(key, word))
     lower(skip_operands(rest), ir, [unknown | diagnostics], tags)
   end
+
+  # M1-6: a member is lowered to its path, so the runtime reads and writes it without
+  # splitting its name again: `t1.acc` becomes `{:member, line, ["t1", "acc"]}`. A dotted
+  # name that resolves to nothing has a diagnostic, and a program with one never runs.
+  defp operand({:name, line, name}), do: dotted(String.split(name, "."), line, name)
+  defp operand(literal), do: literal
+
+  defp dotted([_one], line, name), do: {:name, line, name}
+  defp dotted(path, line, _name), do: {:member, line, path}
 
   @migrated ~w(bst nxb bnd)
 
@@ -244,7 +255,7 @@ defmodule Logex.Compiler do
     diagnostics = Enum.reduce(slots, diagnostics, &check_tag(&1, at, tags, &2))
 
     unify(
-      for({{_, :any}, operand} <- slots, typed = typed(operand, tags), do: typed),
+      for({{access, :any}, operand} <- slots, typed = typed(access, operand, tags), do: typed),
       at,
       diagnostics
     )
@@ -258,8 +269,7 @@ defmodule Logex.Compiler do
   defp check_tag({_slot, {:int_lit, _, _}}, _at, _tags, diagnostics), do: diagnostics
 
   defp check_tag({slot, {:name, _, name} = operand}, at, tags, diagnostics),
-    do:
-      resolve(Declarations.reserved(name), Map.fetch(tags, name), slot, operand, at, diagnostics)
+    do: resolve(Declarations.reserved(name), lookup(name, tags), slot, operand, at, diagnostics)
 
   defp literal(true, _value, _at, diagnostics), do: diagnostics
 
@@ -267,6 +277,26 @@ defmodule Logex.Compiler do
     do: [
       diagnostic(line, "`#{word}` reads a dint: `#{value}` does not fit in 32 bits") | diagnostics
     ]
+
+  # A name is a tag, or with `.` parts a member of an instance (M1-6), its part looked up
+  # among the members its type lets a program name. A dotted name that is not a declared
+  # member is a diagnostic, never a reach into another instance (docs/organisation.md
+  # §4.7). An internal member, such as a ton's last-scanned time, is not there to find.
+  defp lookup(name, tags), do: lookup_parts(String.split(name, "."), tags)
+
+  defp lookup_parts([name], tags), do: Map.fetch(tags, name)
+  defp lookup_parts([head | parts], tags), do: owned(Map.fetch(tags, head), head, parts)
+
+  defp owned(:error, head, _parts), do: {:undeclared, head}
+
+  defp owned({:ok, %Tag{type: %FbType{} = type} = tag}, _head, [part | deeper]),
+    do: in_type(FbType.member(type, part), tag, part, deeper)
+
+  defp owned({:ok, tag}, _head, [part | _]), do: {:no_members, tag, part}
+
+  defp in_type({:ok, member}, tag, _part, []), do: {:member, tag, member}
+  defp in_type({:ok, member}, tag, _part, _deeper), do: {:too_deep, tag, member}
+  defp in_type(:error, tag, part, _deeper), do: {:unknown_member, tag, part}
 
   # take_operands/3 never takes a mnemonic, so a reserved operand is a section or type word.
   defp resolve(:type, _, _slot, {:name, line, name}, {_, word}, diagnostics),
@@ -276,13 +306,125 @@ defmodule Logex.Compiler do
     do: [diagnostic(line, "`#{word}` expects a tag, found the keyword `#{name}`") | diagnostics]
 
   defp resolve(nil, :error, _slot, {:name, line, name}, _at, diagnostics),
-    do: [{:undeclared, line, name} | diagnostics]
+    do: [{:undeclared, line, name, false} | diagnostics]
+
+  # A member of an undeclared name reports the name, once, however many members are used.
+  defp resolve(nil, {:undeclared, head}, _slot, {:name, line, _}, _at, diagnostics),
+    do: [{:undeclared, line, head, true} | diagnostics]
+
+  # An instance is named whole only where an instruction runs it; anywhere else, by one of
+  # its members, which the message suggests when one would fit the slot.
+  defp resolve(
+         nil,
+         {:ok, %Tag{type: %FbType{} = type} = tag},
+         {access, slot_type},
+         {:name, line, _},
+         {_, word},
+         diagnostics
+       ) do
+    message =
+      "`#{word}` #{verb(access)} #{a_type(slot_type)}, but `#{tag.name}` is a " <>
+        "#{type.name}#{declared(tag)}" <> example(fitting(access, slot_type, type), tag)
+
+    [diagnostic(line, message) | diagnostics]
+  end
 
   defp resolve(nil, {:ok, tag}, {access, type}, {:name, line, _}, {_, word}, diagnostics),
     do:
       diagnostics
       |> check_type(access, type, tag, {line, word})
       |> check_access(access, tag, {line, word})
+
+  defp resolve(nil, {:member, tag, member}, slot, {:name, line, name}, {_, word}, diagnostics),
+    do:
+      diagnostics
+      |> check_member_type(slot, name, member, {line, word})
+      |> check_member_write(slot, tag, name, member, {line, word})
+
+  # Matched on the member's own name: on the whole name, every member of `t1` shares `t1.`,
+  # and IEC's `t1.et` would come out nearest to `t1.tt`.
+  defp resolve(nil, {:unknown_member, tag, part}, _slot, {:name, line, name}, _at, diagnostics) do
+    names = Enum.map(FbType.public(tag.type), & &1.name)
+    suggestion = Declarations.suggest(part, names, &"#{tag.name}.#{&1}", "members")
+
+    message =
+      "`#{name}` is not a member of `#{tag.name}`, a #{tag.type.name}" <>
+        members(suggestion, names)
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp resolve(nil, {:no_members, tag, part}, _slot, {:name, line, name}, _at, diagnostics),
+    do: [diagnostic(line, no_members(Integer.parse(part), name, tag)) | diagnostics]
+
+  defp resolve(nil, {:too_deep, tag, member}, _slot, {:name, line, name}, _at, diagnostics) do
+    message =
+      "`#{name}` goes too deep: `#{tag.name}.#{member.name}` is a #{member.type}, " <>
+        "which has no members"
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp members("", names), do: ": its members are " <> listed(Enum.map(names, &"`#{&1}`"))
+  defp members(suggestion, _names), do: suggestion
+
+  defp listed([one]), do: one
+  defp listed(names), do: Enum.join(Enum.drop(names, -1), ", ") <> " and " <> List.last(names)
+
+  # `word.3` is PLAN.md §5's bit access, settled and not landed.
+  defp no_members({_bit, ""}, name, tag),
+    do: "`#{name}` names a bit of `#{tag.name}`, a #{tag.type}: bit access is not supported yet"
+
+  defp no_members(_not_a_bit, name, tag),
+    do:
+      "`#{name}` names a member of `#{tag.name}`, but `#{tag.name}` is a #{tag.type}" <>
+        "#{declared(tag)}: only a timer has members"
+
+  # The member to suggest for an instance named whole: one of the slot's type that the slot
+  # may use, a value the block sets for a read, one logic may write for a write.
+  defp fitting(:write, slot_type, type), do: of_type(FbType.writable(type), slot_type)
+
+  defp fitting(_access, slot_type, type),
+    do: of_type(Enum.filter(FbType.public(type), &(&1.role == :output)), slot_type)
+
+  defp of_type(members, :any), do: List.first(members)
+  defp of_type(members, slot_type), do: Enum.find(members, &(&1.type == slot_type))
+
+  defp example(nil, _tag), do: ""
+  defp example(member, tag), do: ": name one of its members, as in `#{tag.name}.#{member.name}`"
+
+  defp a_type(:any), do: "a value"
+  defp a_type(type), do: "a #{type}"
+
+  defp check_member_type(diagnostics, {_access, :any}, _name, _member, _at), do: diagnostics
+
+  defp check_member_type(diagnostics, {_access, type}, _name, %Member{type: type}, _at),
+    do: diagnostics
+
+  defp check_member_type(diagnostics, {access, type}, name, member, {line, word}),
+    do: [
+      diagnostic(line, "`#{word}` #{verb(access)} a #{type}, but `#{name}` is a #{member.type}")
+      | diagnostics
+    ]
+
+  # Decision 4: members are read anywhere, and logic writes only those its type allows.
+  defp check_member_write(
+         diagnostics,
+         {:write, _},
+         tag,
+         name,
+         %Member{write: false},
+         {line, word}
+       ) do
+    writable = listed(Enum.map(FbType.writable(tag.type), &"`.#{&1.name}`"))
+
+    message =
+      "`#{word}` writes `#{name}`, but logic may write only #{writable} of a #{tag.type.name}"
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp check_member_write(diagnostics, _slot, _tag, _name, _member, _at), do: diagnostics
 
   defp check_type(diagnostics, _access, :any, _tag, _at), do: diagnostics
   defp check_type(diagnostics, _access, type, %Tag{type: type}, _at), do: diagnostics
@@ -310,8 +452,19 @@ defmodule Logex.Compiler do
   defp declared(%Tag{line: nil}), do: ""
   defp declared(%Tag{line: line}), do: " (declared on line #{line})"
 
-  defp typed({:int_lit, _, value}, _tags), do: {:literal, value}
-  defp typed({:name, _, name}, tags), do: Map.get(tags, name)
+  defp typed(_access, {:int_lit, _, value}, _tags), do: {:literal, value}
+  defp typed(access, {:name, _, name}, tags), do: typed_ref(access, lookup(name, tags))
+
+  # A member stands in as a tag of its type. An instance named whole, and a member written
+  # that logic may not write, were reported by resolve/6 and are not looked at again.
+  defp typed_ref(_access, {:ok, %Tag{type: %FbType{}}}), do: nil
+  defp typed_ref(_access, {:ok, %Tag{} = tag}), do: tag
+  defp typed_ref(:write, {:member, _tag, %Member{write: false}}), do: nil
+
+  defp typed_ref(_access, {:member, tag, member}),
+    do: %Tag{name: "#{tag.name}.#{member.name}", type: member.type, section: :var}
+
+  defp typed_ref(_access, _unresolved), do: nil
 
   # Every `:any` operand of one instruction has one type: two tags must agree, and a literal
   # must fit the tag it goes into. Anything else was reported already, or is not a tag.
@@ -350,23 +503,22 @@ defmodule Logex.Compiler do
     diagnostics
   end
 
-  defp report({:undeclared, line, name}, {seen, _} = acc, tags),
-    do: first_use(MapSet.member?(seen, name), line, name, tags, acc)
+  defp report({:undeclared, line, name, dotted?}, {seen, _} = acc, tags),
+    do: first_use(MapSet.member?(seen, name), line, {name, dotted?}, tags, acc)
 
   defp report(%Diagnostic{} = diagnostic, acc, _tags), do: {[diagnostic], acc}
 
   defp first_use(true, _line, _name, _tags, acc), do: {[], acc}
 
-  # A name with a `.` cannot be declared (members are M1-6's), so it is not told how, and
-  # the note waits for the next undeclared name that can be.
-  defp first_use(false, line, name, tags, {seen, note?}) do
-    member? = String.contains?(name, ".")
-
+  # A member of an undeclared name reports the name (M1-6), but is not told how to declare
+  # it, since the name is likely an instance's and not a bool's or a dint's: the note waits
+  # for the next undeclared name that is used whole.
+  defp first_use(false, line, {name, dotted?}, tags, {seen, note?}) do
     message =
       "`#{name}` is not declared" <>
-        Declarations.suggest(name, Map.keys(tags)) <> how(note? and not member?, name)
+        Declarations.suggest(name, Map.keys(tags)) <> how(note? and not dotted?, name)
 
-    {[diagnostic(line, message)], {MapSet.put(seen, name), note? and member?}}
+    {[diagnostic(line, message)], {MapSet.put(seen, name), note? and dotted?}}
   end
 
   defp how(false, _name), do: ""

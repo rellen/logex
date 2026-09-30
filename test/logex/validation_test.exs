@@ -229,7 +229,7 @@ defmodule Logex.ValidationTest do
                  "var\nvar_input i bool 1\nvar h ( xic a )\nvar retain r bool\nvar p q bool"
              ) == [
                "line 1: `b` needs a type: `var b bool` or `var b dint`",
-               "line 2: unknown type `int`: logex has `bool` and `dint`",
+               "line 2: unknown type `int`: logex has `bool`, `dint` and `ton`",
                "line 3: `e` is a bool: its initial value must be 0 or 1, found `2`",
                "line 4: `f` is a dint: `3000000000` does not fit in 32 bits",
                "line 5: `ote` is an instruction and cannot name a tag",
@@ -265,7 +265,7 @@ defmodule Logex.ValidationTest do
       assert source_errors("var t1.dn bool\nvar word.3 dint\nvar a bool\nxic t1.dn ote a") == [
                "line 1: `t1.dn` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`",
                "line 2: `word.3` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`",
-               "line 4: `t1.dn` is not declared"
+               "line 4: `t1` is not declared"
              ]
 
       # Refused for its name even with no type, rather than told to add one.
@@ -317,7 +317,7 @@ defmodule Logex.ValidationTest do
       assert source_errors("var p q bool 1\nvar p q r bool\nvar p q ote") == [
                "line 1: `var` declares one tag: found `p` and `q` before the type",
                "line 2: `var` declares one tag: found `p` and `q` before the type",
-               "line 3: unknown type `q`: logex has `bool` and `dint`"
+               "line 3: unknown type `q`: logex has `bool`, `dint` and `ton`"
              ]
     end
 
@@ -442,7 +442,7 @@ defmodule Logex.ValidationTest do
 
     test "a name with a `.` is not told to declare itself; the next name is" do
       assert source_errors("xic t1.dn ote b") == [
-               "line 1: `t1.dn` is not declared",
+               "line 1: `t1` is not declared",
                "line 1: `b` is not declared (this program declares no tags: each is now " <>
                  "declared before the first rung, as `var b bool` or `var b dint`)"
              ]
@@ -450,7 +450,7 @@ defmodule Logex.ValidationTest do
 
     test "a program whose declarations were all wrong is not told it declares nothing" do
       assert source_errors("var a int\nxic a ote a") == [
-               "line 1: unknown type `int`: logex has `bool` and `dint`",
+               "line 1: unknown type `int`: logex has `bool`, `dint` and `ton`",
                "line 2: `a` is not declared"
              ]
     end
@@ -804,6 +804,248 @@ defmodule Logex.ValidationTest do
     end
   end
 
+  describe "timers declared (M1-6)" do
+    test "`var t1 ton` declares a timer, the type word in any case" do
+      assert {:ok, program} =
+               source_compile("var t1 ton\nVAR T2 TON\nvar a bool\nxic t1.dn xic T2.dn ote a")
+
+      assert %Logex.Tag{type: %Logex.FbType{name: "ton"}, section: :var} = program.tags["t1"]
+      assert %Logex.Tag{type: %Logex.FbType{name: "ton"}, line: 2} = program.tags["T2"]
+      assert "ton" in Logex.Declarations.keywords()
+    end
+
+    test "only with `var`, and with no initial value, but still declared, so its uses " <>
+           "are not each undeclared" do
+      assert source_errors(
+               "var_input t1 ton\nvar_output t2 ton\nvar t3 ton 5000\nvar a bool\n" <>
+                 "xic t1.dn xic t2.dn xic t3.dn ote a"
+             ) == [
+               "line 1: `t1` is a ton: an instance is the program's own, declared with `var`, " <>
+                 "as in `var t1 ton`, not with `var_input`",
+               "line 2: `t2` is a ton: an instance is the program's own, declared with `var`, " <>
+                 "as in `var t2 ton`, not with `var_output`",
+               "line 3: `t3` is a ton: its preset is the number on its `ton` instruction, " <>
+                 "as in `ton t3 5000`, so its declaration takes no initial value"
+             ]
+    end
+
+    test "a misdeclared timer enters the table as `var t1 ton` would" do
+      rungs = fn source ->
+        {:ok, tokens, _} = Compiler.tokenize(source)
+        {:ok, {:routine, {:rungs, rungs}}} = Compiler.parse(tokens)
+        rungs
+      end
+
+      {tags, [], [_, _]} = Logex.Declarations.split(rungs.("var_input t1 ton\nvar t2 ton 5"))
+      ton = Logex.FbType.ton()
+      assert %Logex.Tag{type: ^ton, section: :var, initial: nil, line: 1} = tags["t1"]
+      assert %Logex.Tag{type: ^ton, section: :var, initial: nil, line: 2} = tags["t2"]
+    end
+
+    test "a misdeclared timer with a name that cannot be a tag is not declared" do
+      assert source_errors("var_input var ton\nvar a bool\nxic a ote a") == [
+               "line 1: `var` is a keyword and cannot name a tag",
+               "line 1: `var` is a ton: an instance is the program's own, declared with " <>
+                 "`var`, as in `var var ton`, not with `var_input`"
+             ]
+
+      # Not in the table, so not offered to a near miss either.
+      assert source_errors("var_input t1.x ton\nvar a bool\nxic t1 ote a") == [
+               "line 1: `t1.x` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`",
+               "line 1: `t1.x` is a ton: an instance is the program's own, declared with " <>
+                 "`var`, as in `var t1.x ton`, not with `var_input`",
+               "line 3: `t1` is not declared"
+             ]
+    end
+
+    test "the rarer shapes of a timer's declaration line" do
+      assert source_errors(
+               "var ton\nvar p q ton\nvar t6 timer\nvar t7.x ton\nvar ton bool\nvar a bool\nxic a ote a"
+             ) == [
+               "line 1: `var` needs a tag name before the type `ton`, as in `var t1 ton`",
+               "line 2: `var` declares one tag: found `p` and `q` before the type",
+               "line 3: unknown type `timer`: logex has `bool`, `dint` and `ton`",
+               "line 4: `t7.x` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`",
+               "line 5: `ton` is a type and cannot name a tag"
+             ]
+
+      # With no name, a timer in another section is shown the declaration that works.
+      assert source_errors("var_input ton\nvar_output TON\nVAR Ton\nvar a bool\nxic a ote a") == [
+               "line 1: `var_input` needs a tag name before the type `ton`; " <>
+                 "a ton is declared with `var`, as in `var t1 ton`",
+               "line 2: `var_output` needs a tag name before the type `TON`; " <>
+                 "a ton is declared with `var`, as in `var t1 TON`",
+               "line 3: `VAR` needs a tag name before the type `Ton`, as in `VAR t1 Ton`"
+             ]
+    end
+
+    test "from Elixir, a timer is a tag whose type is Logex.FbType.ton(), checked alike" do
+      ton = Logex.FbType.ton()
+      assert %Logex.Tag{name: "t1", type: ^ton, section: :var} = Logex.Tag.new!("t1", ton)
+
+      for {args, message} <- [
+            {["t1", :ton], "unknown type :ton: logex has :bool, :dint and Logex.FbType.ton()"},
+            {["t1", ton, :var_input],
+             "`t1` is a ton: an instance is the program's own, declared with `var`, " <>
+               "as in `var t1 ton`, not with `var_input`"},
+            {["t1", ton, :var, 5000],
+             "`t1` is a ton: its preset is the number on its `ton` instruction, " <>
+               "as in `ton t1 5000`, so its declaration takes no initial value"},
+            {["t1", %{ton | name: "tof"}],
+             ~s|unknown function block type "tof": logex has Logex.FbType.ton()|},
+            {["t1", %{ton | members: []}],
+             ~s|unknown function block type "ton": logex has Logex.FbType.ton()|},
+            # A hand-built schema may hold anything, and is refused, never looked up by it.
+            {["t1", %{ton | name: nil}],
+             "unknown function block type nil: logex has Logex.FbType.ton()"},
+            {["t1", %{ton | name: 5}, :var_input],
+             "unknown function block type 5: logex has Logex.FbType.ton()"},
+            # Nor is it looked into, where a name that cannot be printed would escape.
+            {["t1", %{ton | name: %{}}, :var_input],
+             "unknown function block type %{}: logex has Logex.FbType.ton()"},
+            {["t1", %{ton | name: {:a}}, :var, 5],
+             "unknown function block type {:a}: logex has Logex.FbType.ton()"}
+          ] do
+        assert_raise ArgumentError, message, fn -> apply(Logex.Tag, :new!, args) end
+      end
+
+      # A name that is not a string is refused first, and the other messages name it as
+      # given, suggesting `t1` in its place.
+      assert Logex.Declarations.check(%Logex.Tag{name: :t1, type: ton, section: :var_output}) ==
+               [
+                 ":t1 is not a tag name",
+                 ":t1 is a ton: an instance is the program's own, declared with `var`, " <>
+                   "as in `var t1 ton`, not with `var_output`"
+               ]
+    end
+
+    test "a timer declared and used by no rung is warned about; a member's use is a use" do
+      assert source_warnings("var t1 ton\nvar t2 ton\nvar a bool\nxic t2.dn ote a") == [
+               "line 1: warning: `t1` is declared but no rung uses it"
+             ]
+    end
+  end
+
+  describe "members (M1-6)" do
+    @timer "var t1 ton\nvar a bool\nvar d dint\n"
+
+    test "are typed, read anywhere, and written only where logic may: .pre and .acc" do
+      assert {:ok, _} =
+               source_compile(
+                 @timer <>
+                   "xic t1.dn xio t1.tt xic t1.en ote a\nmove t1.acc d\nmove t1.pre d\n" <>
+                   "move 3000 t1.pre\nmove d t1.acc\neq t1.acc 5 ote a\nmove t1.acc t1.pre"
+               )
+    end
+
+    test "take their type from the schema, as a tag takes its declaration's" do
+      assert source_errors(
+               @timer <>
+                 "xic t1.acc ote a\nmove t1.dn d\nmove 2147483648 t1.pre\nlt t1.tt 5 ote a"
+             ) == [
+               "line 4: `xic` reads a bool, but `t1.acc` is a dint",
+               "line 5: `move` takes operands of one type: `t1.dn` is a bool, `d` is a dint",
+               "line 6: `move` writes `2147483648` into `t1.pre`, a dint: it does not fit in 32 bits",
+               "line 7: `lt` reads a dint, but `t1.tt` is a bool"
+             ]
+    end
+
+    test "a write to .dn, .tt or .en is one diagnostic, by every instruction that writes" do
+      assert source_errors(
+               @timer <>
+                 "xic a ote t1.dn\nxic a otl t1.tt\nxic a otu t1.en\nmove 5 t1.dn\nxic a ons t1.en"
+             ) ==
+               for(
+                 {word, member, line} <- [
+                   {"ote", "dn", 4},
+                   {"otl", "tt", 5},
+                   {"otu", "en", 6},
+                   {"move", "dn", 7},
+                   {"ons", "en", 8}
+                 ],
+                 do:
+                   "line #{line}: `#{word}` writes `t1.#{member}`, but logic may write only " <>
+                     "`.pre` and `.acc` of a ton"
+               )
+    end
+
+    test "an unknown member gets the member it is near, matched on its own name, or the list" do
+      assert source_errors(
+               @timer <>
+                 "xic t1.dne ote a\nxic t1.DN ote a\nxic t1.et ote a\nxic t1.pt ote a\n" <>
+                 "xic t1.in ote a\nxic t1.last ote a\nxic t1.q ote a"
+             ) ==
+               [
+                 "line 4: `t1.dne` is not a member of `t1`, a ton — did you mean `t1.dn`?",
+                 "line 5: `t1.DN` is not a member of `t1`, a ton — did you mean `t1.dn`? " <>
+                   "(members are case-sensitive)"
+               ] ++
+                 for(
+                   {member, line} <- [{"et", 6}, {"pt", 7}, {"in", 8}, {"last", 9}, {"q", 10}],
+                   do:
+                     "line #{line}: `t1.#{member}` is not a member of `t1`, a ton: " <>
+                       "its members are `pre`, `acc`, `dn`, `tt` and `en`"
+                 )
+    end
+
+    test "a dotted name on a tag that is not an instance, or past a member, is named" do
+      assert source_errors(
+               @timer <> "xic a.b ote a\nxic d.3 ote a\nmove t1.acc.x d\nxic a.dn.x ote a"
+             ) == [
+               "line 4: `a.b` names a member of `a`, but `a` is a bool (declared on line 2): " <>
+                 "only a timer has members",
+               "line 5: `d.3` names a bit of `d`, a dint: bit access is not supported yet",
+               "line 6: `t1.acc.x` goes too deep: `t1.acc` is a dint, which has no members",
+               "line 7: `a.dn.x` names a member of `a`, but `a` is a bool (declared on line 2): " <>
+                 "only a timer has members"
+             ]
+    end
+
+    test "an undeclared instance is named once, whichever members are used, and never " <>
+           "reached into from another" do
+      assert source_errors(
+               "var timer1 ton\nvar a bool\nxic t9.dn ote a\nxic t9.tt ote a\nxic t9 ote a\n" <>
+                 "xic timr1.dn ote a\nxic m1.t1.acc ote a\nxic timer1.dn ote a"
+             ) == [
+               "line 3: `t9` is not declared",
+               "line 6: `timr1` is not declared — did you mean `timer1`?",
+               "line 7: `m1` is not declared"
+             ]
+    end
+
+    test "an instance named whole is refused, with a member suggested where one fits" do
+      assert source_errors(
+               @timer <>
+                 "xic t1 ote a\nmove t1 d\nmove d t1\nxic a ote t1\neq t1 5 ote a\nmove t1 a"
+             ) == [
+               "line 4: `xic` reads a bool, but `t1` is a ton (declared on line 1): " <>
+                 "name one of its members, as in `t1.dn`",
+               "line 5: `move` reads a value, but `t1` is a ton (declared on line 1): " <>
+                 "name one of its members, as in `t1.acc`",
+               "line 6: `move` writes a value, but `t1` is a ton (declared on line 1): " <>
+                 "name one of its members, as in `t1.pre`",
+               "line 7: `ote` writes a bool, but `t1` is a ton (declared on line 1)",
+               "line 8: `eq` reads a dint, but `t1` is a ton (declared on line 1): " <>
+                 "name one of its members, as in `t1.acc`",
+               # One diagnostic: an instance named whole is not also unified with `a`.
+               "line 9: `move` reads a value, but `t1` is a ton (declared on line 1): " <>
+                 "name one of its members, as in `t1.acc`"
+             ]
+    end
+
+    test "of a timer declared from Elixir, cited without a line" do
+      declared = [Logex.Tag.new!("t1", Logex.FbType.ton()), Logex.Tag.new!("a", :bool)]
+
+      assert source_errors("xic t1 ote a\nxic a.dn ote a", declared) == [
+               "line 1: `xic` reads a bool, but `t1` is a ton: name one of its members, " <>
+                 "as in `t1.dn`",
+               "line 2: `a.dn` names a member of `a`, but `a` is a bool: only a timer has members"
+             ]
+
+      assert {:ok, _} = source_compile("xic t1.dn ote a", declared)
+    end
+  end
+
   describe "tags declared from Elixir (M1-3)" do
     test "are checked by the same rules as a declaration line" do
       assert source_errors("var ote bool") == [
@@ -844,7 +1086,7 @@ defmodule Logex.ValidationTest do
     test "raise ArgumentError for every rule they break, whatever the argument" do
       for {args, message} <- [
             {["x", :bool, :input], "unknown section :input"},
-            {["x", :int], "unknown type :int: logex has `bool` and `dint`"},
+            {["x", :int], "unknown type :int: logex has :bool, :dint and Logex.FbType.ton()"},
             {["ote", :int], "`ote` is an instruction and cannot name a tag"},
             {[{:a}, :bool, :var_input, 1], "{:a} is not a tag name"},
             # 0 is the default, and still not the program's to give.
@@ -854,7 +1096,8 @@ defmodule Logex.ValidationTest do
             {["a", :bool, :var, "1"], ~s(the initial value of `a` must be an integer, found "1")},
             {["x", :dint, :var, -2_147_483_649],
              "`x` is a dint: `-2147483649` does not fit in 32 bits"},
-            {["x", :int, :var, 5], "unknown type :int: logex has `bool` and `dint`"},
+            {["x", :int, :var, 5],
+             "unknown type :int: logex has :bool, :dint and Logex.FbType.ton()"},
             {[" a", :bool], ~s(" a" is not a tag name)},
             {["t1.dn", :bool],
              "`t1.dn` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`"},
@@ -869,9 +1112,11 @@ defmodule Logex.ValidationTest do
     test "are checked again as they enter the table, however they were built" do
       for {declared, message} <- [
             {[%Logex.Tag{name: "a", type: :real, section: :var}],
-             "unknown type :real: logex has `bool` and `dint`"},
+             "unknown type :real: logex has :bool, :dint and Logex.FbType.ton()"},
             {[%Logex.Tag{name: "a", type: :bool, section: :var, initial: 7}],
              "`a` is a bool: its initial value must be 0 or 1, found `7`"},
+            {[%Logex.Tag{name: "a", type: %Logex.FbType{name: nil, members: nil}, section: :var}],
+             "unknown function block type nil: logex has Logex.FbType.ton()"},
             # A line marks a tag declared in source, which the warnings would then cite.
             {[%Logex.Tag{name: "a", type: :bool, section: :var, line: 2}],
              "a tag declared from Elixir has no line, got: 2"},

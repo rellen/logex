@@ -21,7 +21,7 @@ defmodule Logex.Runtime do
   `%Logex.Instance{}` built or edited by hand is outside this contract.
   """
 
-  alias Logex.{Declarations, Instance, Program, Scan, Tag}
+  alias Logex.{Declarations, FbType, Instance, Program, Scan, Tag}
 
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
 
@@ -207,10 +207,8 @@ defmodule Logex.Runtime do
   defp problem(key, value, tags), do: declared(Map.fetch(tags, key), key, value, tags)
 
   defp declared(:error, key, _value, tags) do
-    inputs = for {name, %Tag{section: :var_input}} <- tags, do: name
-
-    "input #{label(key)} is not declared" <>
-      hint(Declarations.suggest(key, inputs), Enum.sort(inputs))
+    [head | path] = String.split(key, ".")
+    undeclared(Map.get(tags, head), path, key, tags)
   end
 
   defp declared({:ok, %Tag{section: :var_input} = tag}, _key, value, _tags), do: fit(tag, value)
@@ -219,6 +217,28 @@ defmodule Logex.Runtime do
     do:
       "input #{label(key)} is a #{tag.section}#{on_line(tag)}, not a var_input: " <>
         "only a var_input is set from outside"
+
+  # M1-6: the host never sets anything inside an instance. A key naming a declared tag was
+  # found before this, so here a key found by its first part has a `.`, and it is called a
+  # member only when the compiler would take it for one: `t1.dn`, never `t1.last`,
+  # `t1.zz` or `t1.dn.x`, which reach into `t1` all the same.
+  defp undeclared(%Tag{type: %FbType{} = type} = tag, path, key, _tags),
+    do:
+      "input #{label(key)} #{reaches(member(type, path))} `#{tag.name}`, a #{type.name}: " <>
+        "only a var_input is set from outside"
+
+  defp undeclared(_tag, _path, key, tags) do
+    inputs = for {name, %Tag{section: :var_input}} <- tags, do: name
+
+    "input #{label(key)} is not declared" <>
+      hint(Declarations.suggest(key, inputs), Enum.sort(inputs))
+  end
+
+  defp member(type, [name]), do: FbType.member(type, name)
+  defp member(_type, _deeper), do: :error
+
+  defp reaches({:ok, _member}), do: "names a member of"
+  defp reaches(:error), do: "reaches into"
 
   defp hint("", []), do: ": this program has no var_input"
   defp hint("", inputs), do: ": the var_inputs are " <> Enum.map_join(inputs, ", ", &"`#{&1}`")
@@ -237,7 +257,8 @@ defmodule Logex.Runtime do
   defp fits(false, %Tag{type: :dint} = tag, value),
     do: "input `#{tag.name}` is a dint: #{value} does not fit in 32 bits"
 
-  defp label(key), do: labelled(Declarations.name?(key), key)
+  # A key is quoted as a name when every `.` part of it is one, so `t1.dn` reads as written.
+  defp label(key), do: labelled(Enum.all?(String.split(key, "."), &Declarations.name?/1), key)
 
   defp labelled(true, key), do: "`#{key}`"
   defp labelled(false, key), do: inspect(key)
@@ -268,49 +289,51 @@ defmodule Logex.Runtime do
   defp element(instruction, acc, scan), do: evaluate(instruction, acc, scan)
 
   # One instruction: `(instruction, {power_flow, env}, %Scan{})` to `{power_flow, env}`, a
-  # clause for an energised rung and one for a de-energised one (CLAUDE.md).
-  defp evaluate({:xic, _, [{:name, _, arg}]}, {true, env}, _scan) do
-    {bit(env, arg), env}
+  # clause for an energised rung and one for a de-energised one (CLAUDE.md). An operand is
+  # `{:name, _, tag}`, `{:int_lit, _, value}` or, since M1-6, `{:member, _, path}`; read/2
+  # and write/3 take all three, so no instruction clause cares which it got.
+  defp evaluate({:xic, _, [operand]}, {true, env}, _scan) do
+    {closed?(read(env, operand)), env}
   end
 
   defp evaluate({:xic, _, _}, {false, env}, _scan) do
     {false, env}
   end
 
-  defp evaluate({:xio, _, [{:name, _, arg}]}, {true, env}, _scan) do
-    {not bit(env, arg), env}
+  defp evaluate({:xio, _, [operand]}, {true, env}, _scan) do
+    {not closed?(read(env, operand)), env}
   end
 
   defp evaluate({:xio, _, _}, {false, env}, _scan) do
     {false, env}
   end
 
-  defp evaluate({:ote, _, [{:name, _, arg}]}, {true, env}, _scan) do
-    {true, Map.put(env, arg, 1)}
+  defp evaluate({:ote, _, [operand]}, {true, env}, _scan) do
+    {true, write(env, operand, 1)}
   end
 
-  defp evaluate({:ote, _, [{:name, _, arg}]}, {false, env}, _scan) do
-    {false, Map.put(env, arg, 0)}
+  defp evaluate({:ote, _, [operand]}, {false, env}, _scan) do
+    {false, write(env, operand, 0)}
   end
 
-  defp evaluate({:otl, _, [{:name, _, arg}]}, {true, env}, _scan) do
-    {true, Map.put(env, arg, 1)}
+  defp evaluate({:otl, _, [operand]}, {true, env}, _scan) do
+    {true, write(env, operand, 1)}
   end
 
   defp evaluate({:otl, _, _}, {false, env}, _scan) do
     {false, env}
   end
 
-  defp evaluate({:otu, _, [{:name, _, arg}]}, {true, env}, _scan) do
-    {true, Map.put(env, arg, 0)}
+  defp evaluate({:otu, _, [operand]}, {true, env}, _scan) do
+    {true, write(env, operand, 0)}
   end
 
   defp evaluate({:otu, _, _}, {false, env}, _scan) do
     {false, env}
   end
 
-  defp evaluate({:move, _, [arg1, {:name, _, arg2}]}, {true, env}, _scan) do
-    {true, Map.put(env, arg2, get_arg(env, arg1))}
+  defp evaluate({:move, _, [source, destination]}, {true, env}, _scan) do
+    {true, write(env, destination, read(env, source))}
   end
 
   defp evaluate({:move, _, _}, {false, env}, _scan) do
@@ -323,27 +346,24 @@ defmodule Logex.Runtime do
   # whatever the storage bit holds: the conventional ONS's "set to true to prevent an
   # invalid trigger during the first scan", read from the scan rather than set by a
   # prescan (PLAN.md M1-6, decision 3).
-  defp evaluate({:ons, _, [{:name, _, storage}]}, {true, env}, %Scan{first: first}) do
-    {not first and not bit(env, storage), Map.put(env, storage, 1)}
+  defp evaluate({:ons, _, [storage]}, {true, env}, %Scan{first: first}) do
+    {not first and not closed?(read(env, storage)), write(env, storage, 1)}
   end
 
-  defp evaluate({:ons, _, [{:name, _, storage}]}, {false, env}, _scan) do
-    {false, Map.put(env, storage, 0)}
+  defp evaluate({:ons, _, [storage]}, {false, env}, _scan) do
+    {false, write(env, storage, 0)}
   end
 
   # The six comparisons (docs/naming.md, `eq` to `ge`) are input instructions, as a contact
   # is: energised, power is the comparison of the first operand with the second, `lt a b`
   # reading a < b; de-energised, no power. Neither writes anything.
   defp evaluate({op, _, [a, b]}, {true, env}, _scan) when op in @comparisons do
-    {compare(op, get_arg(env, a), get_arg(env, b)), env}
+    {compare(op, read(env, a), read(env, b)), env}
   end
 
   defp evaluate({op, _, _}, {false, env}, _scan) when op in @comparisons do
     {false, env}
   end
-
-  defp get_arg(_env, {:int_lit, _, val}), do: val
-  defp get_arg(env, {:name, _, name}), do: Map.get(env, name, 0)
 
   # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is
   # complementary by construction, as `xic` and `xio` are (M1-4). Erlang's term order is
@@ -355,14 +375,36 @@ defmodule Logex.Runtime do
   defp compare(:gt, a, b), do: a > b
   defp compare(:le, a, b), do: not compare(:gt, a, b)
 
+  # An operand's value: a literal's own, a tag's, or a member's, reached by its path. A tag
+  # or member the env leaves out, or one whose instance a hand-built env left as anything
+  # but a map, reads as 0, as a missing tag always has, so `move` copies a 0, not a nil.
+  defp read(_env, {:int_lit, _, value}), do: value
+  defp read(env, {:name, _, name}), do: Map.get(env, name, 0)
+  defp read(env, {:member, _, path}), do: walk(env, path)
+
+  defp walk(value, []), do: value
+  defp walk(%{} = map, [key | path]), do: walk(Map.get(map, key, 0), path)
+  defp walk(_not_a_map, _path), do: 0
+
+  # A write to a member puts an instance back together where a hand-built env broke it:
+  # what is not a map on the way becomes one.
+  defp write(env, {:name, _, name}, value), do: Map.put(env, name, value)
+  defp write(env, {:member, _, path}, value), do: put_path(env, path, value)
+
+  defp put_path(map, [key], value), do: Map.put(map, key, value)
+
+  defp put_path(map, [key | path], value),
+    do: Map.put(map, key, put_path(as_map(Map.get(map, key)), path, value))
+
+  defp as_map(%{} = map), do: map
+  defp as_map(_not_a_map), do: %{}
+
   # M1-4: `xic` reads this and `xio` its negation, so the two are complementary by
   # construction, whatever the env holds. The compiler lets only a bool reach a contact,
   # but an env the host builds by hand can hold a 5, a 0.0, a `false`, a nil, or leave a
   # tag out. A number is read by value, nonzero closed (PLAN.md §5), and a boolean as
-  # itself; nil and a missing tag are open; anything else is closed. A missing tag reads
-  # as 0 in get_arg/2 too, so `move` copies a 0 rather than a nil.
-  defp bit(env, name), do: closed?(Map.get(env, name))
-
+  # itself; nil and a missing tag are open; anything else is closed. A member is read
+  # the same way (M1-6).
   defp closed?(value) when is_number(value), do: value != 0
   defp closed?(value) when value in [nil, false], do: false
   defp closed?(_value), do: true

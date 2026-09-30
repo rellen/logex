@@ -449,6 +449,124 @@ defmodule Logex.RuntimeTest do
     end
   end
 
+  describe "a timer in an instance (M1-6)" do
+    @timed """
+    var_input go bool
+    var_input sp dint
+    var_output done bool
+    var t1 ton
+
+    xic go move sp t1.pre
+    xic t1.dn ote done
+    """
+
+    setup do
+      {:ok, timed} = Logex.compile(@timed, name: "timed")
+      %{timed: timed}
+    end
+
+    test "is a map of its members in state.env, every key a string, and never an output", %{
+      timed: p
+    } do
+      state = Runtime.instance(p)
+
+      assert state.env["t1"] ==
+               %{"pre" => 0, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => 0}
+
+      assert {%{"done" => 0}, _} = Runtime.scan(p, state)
+    end
+
+    test "restart puts it back at its initial state, and keeps the input image", %{timed: p} do
+      state = Runtime.put_inputs(p, Runtime.instance(p), %{"go" => 1, "sp" => 700})
+      {_, state} = Runtime.scan(p, state)
+      assert %{"pre" => 700} = state.env["t1"]
+      restarted = Runtime.restart(p, state, :cold)
+      assert %{"pre" => 0} = restarted.env["t1"]
+      assert %{"go" => 1, "sp" => 700} = restarted.env
+    end
+
+    test "a member is not an input: the host sets none, nor the instance whole", %{timed: p} do
+      state = Runtime.instance(p)
+
+      raises(
+        "input `t1.dn` names a member of `t1`, a ton: only a var_input is set from outside",
+        fn ->
+          Runtime.put_inputs(p, state, %{"t1.dn" => 1})
+        end
+      )
+
+      raises(
+        "input `t1` is a var (declared on line 4), not a var_input: " <>
+          "only a var_input is set from outside",
+        fn -> Runtime.put_inputs(p, state, %{"t1" => 1}) end
+      )
+
+      raises("input `zz.dn` is not declared: the var_inputs are `go`, `sp`", fn ->
+        Runtime.put_inputs(p, state, %{"zz.dn" => 1})
+      end)
+
+      raises(
+        ~s|input "t1.1x" reaches into `t1`, a ton: only a var_input is set from outside|,
+        fn ->
+          Runtime.call(p, state, %{"t1.1x" => 1}, %Scan{now: 0, first: true})
+        end
+      )
+
+      # Called a member only where the compiler would take it for one: `last` is internal.
+      for key <- ~w(t1.last t1.zz t1.dn.x t1.DN) do
+        raises(
+          "input `#{key}` reaches into `t1`, a ton: only a var_input is set from outside",
+          fn -> Runtime.put_inputs(p, state, %{key => 1}) end
+        )
+      end
+
+      raises(
+        "input `t1.pre` names a member of `t1`, a ton: only a var_input is set from outside",
+        fn -> Runtime.put_inputs(p, state, %{"t1.pre" => 1}) end
+      )
+
+      raises(~s|input "go." is not declared — did you mean `go`?|, fn ->
+        Runtime.put_inputs(p, state, %{"go." => 1})
+      end)
+    end
+  end
+
+  describe "Logex.FbType (M1-6)" do
+    alias Logex.FbType
+    alias Logex.FbType.Member
+
+    test "the ton's members, and which a program may name and write" do
+      ton = FbType.ton()
+      assert Enum.map(ton.members, & &1.name) == ~w(pre acc dn tt en last)
+      assert Enum.map(FbType.public(ton), & &1.name) == ~w(pre acc dn tt en)
+      assert Enum.map(FbType.writable(ton), & &1.name) == ~w(pre acc)
+      assert {:ok, %Member{name: "dn", type: :bool, role: :output}} = FbType.member(ton, "dn")
+      assert FbType.member(ton, "last") == :error
+      assert FbType.member(ton, "DN") == :error
+      assert FbType.builtin("TON") == ton
+      assert FbType.builtin("tof") == nil
+      assert FbType.builtins() == %{"ton" => ton}
+    end
+
+    test "a new instance starts where its type says, overridden member by member, and " <>
+           "nested" do
+      ton = FbType.ton()
+      base = %{"pre" => 0, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => 0}
+      assert FbType.initial(ton) == base
+      assert FbType.initial(ton, %{"pre" => 50}) == %{base | "pre" => 50}
+
+      outer = %FbType{
+        name: "outer",
+        members: [
+          %Member{name: "t", type: ton, role: :output, initial: %{"pre" => 9}},
+          %Member{name: "n", type: :dint, role: :output, initial: 7}
+        ]
+      }
+
+      assert FbType.initial(outer) == %{"t" => %{base | "pre" => 9}, "n" => 7}
+    end
+  end
+
   describe "the public surface (B5)" do
     test "is exactly this: every evaluate clause is private, in Logex.Runtime" do
       assert Enum.sort(Logex.__info__(:functions)) == [compile: 2, compile_file: 1]
@@ -458,6 +576,19 @@ defmodule Logex.RuntimeTest do
 
       assert Enum.sort(Logex.Compiler.__info__(:functions)) ==
                [instructionize: 1, instructionize: 2, instructions: 0, parse: 1, tokenize: 1]
+
+      assert Enum.sort(Logex.FbType.__info__(:functions)) == [
+               __struct__: 0,
+               __struct__: 1,
+               builtin: 1,
+               builtins: 0,
+               initial: 1,
+               initial: 2,
+               member: 2,
+               public: 1,
+               ton: 0,
+               writable: 1
+             ]
     end
   end
 end

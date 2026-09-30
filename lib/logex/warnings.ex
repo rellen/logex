@@ -37,7 +37,8 @@ defmodule Logex.Warnings do
     |> Enum.sort_by(& &1.line)
   end
 
-  # Every tag operand, in rung order, as {access, name, line, symbol}.
+  # Every tag operand, in rung order, as {access, name, line, symbol}. A member is a use of
+  # its instance, `t1.dn` of `t1`, with its slot's access (M1-6).
   defp uses(elements, signatures), do: Enum.flat_map(elements, &element(&1, signatures))
 
   defp element({:branches, legs}, signatures), do: Enum.flat_map(legs, &uses(&1, signatures))
@@ -45,9 +46,14 @@ defmodule Logex.Warnings do
   defp element({symbol, line, operands}, signatures),
     do:
       for(
-        {{access, _type}, {:name, _, name}} <- Enum.zip(Map.fetch!(signatures, symbol), operands),
+        {{access, _type}, operand} <- Enum.zip(Map.fetch!(signatures, symbol), operands),
+        name = tag_of(operand),
         do: {access, name, line, symbol}
       )
+
+  defp tag_of({:name, _, name}), do: name
+  defp tag_of({:member, _, [instance | _]}), do: instance
+  defp tag_of({:int_lit, _, _}), do: nil
 
   defp about(%Tag{} = tag, []),
     do: [warning(tag.line, "`#{tag.name}` is declared but no rung uses it")]

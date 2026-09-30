@@ -23,10 +23,14 @@ defmodule Logex.Program do
           warnings: [Logex.Diagnostic.t()]
         }
 
-  @doc "The first env: every declared tag at its initial value, 0 when none was declared."
+  @doc """
+  The first env: every declared tag at its initial value, 0 when none was declared, and
+  every instance of a function block a map of its members at theirs (M1-6).
+  """
   def initial_env(%__MODULE__{tags: tags}),
-    do: Map.new(tags, fn {name, %Logex.Tag{initial: initial}} -> {name, start(initial)} end)
+    do: Map.new(tags, fn {name, tag} -> {name, start(tag)} end)
 
-  defp start(nil), do: 0
-  defp start(initial), do: initial
+  defp start(%Logex.Tag{type: %Logex.FbType{} = type}), do: Logex.FbType.initial(type)
+  defp start(%Logex.Tag{initial: nil}), do: 0
+  defp start(%Logex.Tag{initial: initial}), do: initial
 end

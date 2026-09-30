@@ -5,13 +5,15 @@ defmodule Logex.Declarations do
   is a section keyword, and every one comes before the first rung of logic.
 
       <section> <name> <type> [<initial>]     section: var | var_input | var_output
-                                              type:    bool | dint
+                                              type:    bool | dint | ton
 
-  The section and type words are data, in `@sections` and `@types`: a new section or type
-  is a row there and a stanza in `docs/naming.md`, not a second declaration parser.
+  The section and type words are data, in `@sections` and `@types`, and a function block
+  type's word is `Logex.FbType.builtins/0`'s: a new section or type is a row there and a
+  stanza in `docs/naming.md`, not a second declaration parser. An instance of a function
+  block, `var t1 ton` (M1-6), is declared with `var` and takes no initial value.
   """
 
-  alias Logex.{Diagnostic, Tag}
+  alias Logex.{Diagnostic, FbType, Tag}
 
   @sections %{"var" => :var, "var_input" => :var_input, "var_output" => :var_output}
   @types %{"bool" => :bool, "dint" => :dint}
@@ -23,7 +25,13 @@ defmodule Logex.Declarations do
   @dint -2_147_483_648..2_147_483_647
 
   @doc "The section and type words, lowercase. Each is reserved, in any case."
-  def keywords, do: Map.keys(@sections) ++ Map.keys(@types)
+  def keywords, do: Map.keys(@sections) ++ Map.keys(@types) ++ Map.keys(FbType.builtins())
+
+  # A type word names an elementary type or a function block type, in any case.
+  defp type_word(word), do: type_of(String.downcase(word))
+
+  defp type_of(key) when is_map_key(@types, key), do: Map.fetch!(@types, key)
+  defp type_of(key), do: FbType.builtin(key)
 
   @doc "What a word is reserved as, in any case: `:mnemonic`, `:section`, `:type` or nil."
   def reserved(word) do
@@ -34,7 +42,10 @@ defmodule Logex.Declarations do
   defp reserved_as(_key, true), do: :mnemonic
   defp reserved_as(key, false) when is_map_key(@sections, key), do: :section
   defp reserved_as(key, false) when is_map_key(@types, key), do: :type
-  defp reserved_as(_key, false), do: nil
+  defp reserved_as(key, false), do: fb_word(FbType.builtin(key))
+
+  defp fb_word(nil), do: nil
+  defp fb_word(%FbType{}), do: :type
 
   @doc """
   Whether `word` is shaped like a name: a letter or `_`, then letters, digits or `_`. The
@@ -46,25 +57,30 @@ defmodule Logex.Declarations do
   @doc """
   A did-you-mean for `name` among `names`, as a suffix for a message, or "". A name
   differing only in case is always the suggestion; otherwise the nearest by Jaro distance,
-  if it is near enough. A `name` that is not valid UTF-8 gets none.
+  if it is near enough. A `name` that is not valid UTF-8 gets none. `shown` renders the
+  name chosen, so a member is matched on its own name and shown whole, as `t1.dn`, and
+  `kind` says what is case-sensitive: `"tags"`, or `"members"`.
   """
-  def suggest(name, names), do: suggest(String.valid?(name), name, names)
+  def suggest(name, names, shown \\ & &1, kind \\ "tags"),
+    do: suggested(String.valid?(name), name, names, {shown, kind})
 
-  defp suggest(false, _name, _names), do: ""
+  defp suggested(false, _name, _names, _how), do: ""
 
-  defp suggest(true, name, names) do
+  defp suggested(true, name, names, how) do
     folded = String.downcase(name)
-    same_but_case(Enum.find(names, &(String.downcase(&1) == folded)), name, names)
+    same_but_case(Enum.find(names, &(String.downcase(&1) == folded)), name, names, how)
   end
 
-  defp same_but_case(nil, name, names),
-    do: nearest(Enum.max_by(names, &String.jaro_distance(&1, name), fn -> nil end), name)
+  defp same_but_case(nil, name, names, how),
+    do: nearest(Enum.max_by(names, &String.jaro_distance(&1, name), fn -> nil end), name, how)
 
-  defp same_but_case(same, _name, _names),
-    do: " — did you mean `#{same}`? (tags are case-sensitive)"
+  defp same_but_case(same, _name, _names, {shown, kind}),
+    do: " — did you mean `#{shown.(same)}`? (#{kind} are case-sensitive)"
 
-  defp nearest(nil, _name), do: ""
-  defp nearest(best, name), do: near(String.jaro_distance(best, name) >= 0.8, best)
+  defp nearest(nil, _name, _how), do: ""
+
+  defp nearest(best, name, {shown, _kind}),
+    do: near(String.jaro_distance(best, name) >= 0.8, shown.(best))
 
   defp near(true, best), do: " — did you mean `#{best}`?"
   defp near(false, _best), do: ""
@@ -154,8 +170,20 @@ defmodule Logex.Declarations do
 
   defp checked([], tag, _line, diagnostics), do: {[tag], diagnostics}
 
-  defp checked(messages, _tag, line, diagnostics),
-    do: {[], Enum.reverse(Enum.map(messages, &diagnostic(line, &1)), diagnostics)}
+  defp checked(messages, tag, line, diagnostics),
+    do: {recovered(tag), Enum.reverse(Enum.map(messages, &diagnostic(line, &1)), diagnostics)}
+
+  # M1-6: an instance declared in the wrong section, or with an initial value, is still
+  # plainly an instance, so it is declared as `var t1 ton` too, and its uses are not each
+  # reported as undeclared: one mistake, one message. A bad name is not recovered, and
+  # any other broken declaration declares nothing, as M1-3 decided.
+  defp recovered(%Tag{type: %FbType{}, name: name} = tag),
+    do: recover(name(name), %{tag | section: :var, initial: nil})
+
+  defp recovered(_tag), do: []
+
+  defp recover([], tag), do: [tag]
+  defp recover(_problems, _tag), do: []
 
   # The shape of a declaration line, before its meaning is checked.
   defp shape([], kw),
@@ -166,16 +194,16 @@ defmodule Logex.Declarations do
   defp shape([{:int_lit, _, v} | _], kw),
     do: {:error, "expected a tag name after `#{kw}`, found `#{v}`"}
 
-  defp shape([{:name, _, name}], kw), do: {:error, short(reserved(name), name, nil, kw)}
+  defp shape([{:name, _, name}], kw), do: {:error, short(one(name), name, nil, kw)}
 
   defp shape([{:name, _, name}, {:int_lit, _, v} | _], kw),
-    do: {:error, short(reserved(name), name, v, kw)}
+    do: {:error, short(one(name), name, v, kw)}
 
   defp shape([{:name, _, _}, {:branches, _} | _], _kw),
     do: {:error, "a declaration cannot hold a branch group"}
 
   defp shape([{:name, _, name}, {:name, _, type} | tail], kw),
-    do: typed(Map.get(@types, String.downcase(type)), name, type, tail, kw)
+    do: typed(type_word(type), name, type, tail, kw)
 
   defp typed(nil, name, type, tail, kw),
     do: {:error, untyped(String.downcase(name), name, type, tail, kw)}
@@ -195,15 +223,29 @@ defmodule Logex.Declarations do
   defp typed(_type, name, _word, [extra | _], _kw),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
 
+  # The one word after a section: a type word first, since `ton` is a mnemonic too (M1-6).
+  defp one(word), do: one(type_word(word), word)
+  defp one(nil, word), do: reserved(word)
+  defp one(type, _word), do: {:type, type}
+
   # A line with one word after its section: a tag with no type, or a type with no tag.
-  defp short(:type, word, _v, kw),
-    do: "`#{kw}` needs a tag name before the type `#{word}`, as in `#{kw} fault #{word}`"
+  defp short({:type, type}, word, _v, kw),
+    do:
+      "`#{kw}` needs a tag name before the type `#{word}`" <>
+        as_in(type, Map.fetch!(@sections, String.downcase(kw)), word, kw)
 
   # A name that can never be declared says so first, rather than ask for a type.
   defp short(nil, name, v, kw),
     do: typeless(dotted(String.contains?(name, "."), name), name, v, kw)
 
   defp short(reserved, name, _v, _kw), do: hd(name(reserved, name, :reserved))
+
+  # An instance is declared only with `var` (M1-6), so its example is the declaration that
+  # works, whatever section the line was written with.
+  defp as_in(%FbType{name: name} = type, section, word, _kw) when section != :var,
+    do: "; a #{name} is declared with `var`, as in `var #{example(type)} #{word}`"
+
+  defp as_in(type, _section, word, kw), do: ", as in `#{kw} #{example(type)} #{word}`"
 
   defp typeless([message], _name, _v, _kw), do: message
 
@@ -226,10 +268,13 @@ defmodule Logex.Declarations do
     do: "`#{kw}` declares one tag: found `#{name}` and `#{type}` before the type"
 
   defp unknown_type(false, _name, type, _kw),
-    do: "unknown type `#{type}`: logex has `bool` and `dint`"
+    do: "unknown type `#{type}`: logex has `bool`, `dint` and `ton`"
 
-  defp type_word?({:name, _, word}), do: reserved(word) == :type
+  defp type_word?({:name, _, word}), do: type_word(word) != nil
   defp type_word?(_element), do: false
+
+  defp example(%FbType{name: name}), do: String.first(name) <> "1"
+  defp example(_elementary), do: "fault"
 
   defp describe({:name, _, word}), do: "`#{word}`"
   defp describe({:int_lit, _, v}), do: "`#{v}`"
@@ -238,6 +283,11 @@ defmodule Logex.Declarations do
   The rules a tag must meet however it is declared, as messages: the one validator for a
   declaration line and for `Logex.Tag.new!/4`.
   """
+  def check(%Tag{type: %FbType{} = type} = tag) do
+    known = fb_type(type)
+    name(tag.name) ++ known ++ section(tag.section) ++ looked_into(known, tag)
+  end
+
   def check(%Tag{} = tag) do
     name(tag.name) ++ type(tag.type) ++ section(tag.section) ++ initial(tag)
   end
@@ -262,7 +312,47 @@ defmodule Logex.Declarations do
     do: ["`#{name}` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`"]
 
   defp type(type) when type in @type_atoms, do: []
-  defp type(type), do: ["unknown type #{inspect(type)}: logex has `bool` and `dint`"]
+
+  defp type(type),
+    do: ["unknown type #{inspect(type)}: logex has :bool, :dint and Logex.FbType.ton()"]
+
+  # Only a built-in function block type, exactly as Logex.FbType gives it, until M2-5. A
+  # hand-built one may hold anything, and is refused, never looked up by a name that is not
+  # a string.
+  defp fb_type(%FbType{name: name} = type) when is_binary(name),
+    do: known(FbType.builtin(name) == type, type)
+
+  defp fb_type(type), do: known(false, type)
+
+  # An instance of a type that is not logex's is not looked into: its members may be junk.
+  defp looked_into([], tag), do: instance(tag)
+  defp looked_into(_unknown, _tag), do: []
+
+  defp known(true, _type), do: []
+
+  defp known(false, type),
+    do: ["unknown function block type #{inspect(type.name)}: logex has Logex.FbType.ton()"]
+
+  # M1-6: an instance is the program's own state. It is not supplied from outside, and the
+  # host reads none as an output, so a scan's outputs stay integers (docs/organisation.md
+  # §4.6). Its preset is the operand of the instruction that runs it.
+  defp instance(%Tag{section: section, name: name} = tag)
+       when section in [:var_input, :var_output],
+       do: [
+         "#{label(name)} is a #{tag.type.name}: an instance is the program's own, declared " <>
+           "with `var`, as in `var #{display(name)} #{tag.type.name}`, not with `#{section}`"
+       ]
+
+  defp instance(%Tag{initial: nil}), do: []
+
+  defp instance(%Tag{name: name} = tag),
+    do: [
+      "#{label(name)} is a #{tag.type.name}: its preset is the number on its `ton` " <>
+        "instruction, as in `ton #{display(name)} 5000`, so its declaration takes no initial value"
+    ]
+
+  defp display(name) when is_binary(name), do: name
+  defp display(_name), do: "t1"
 
   defp section(section) when section in @section_atoms, do: []
   defp section(section), do: ["unknown section #{inspect(section)}"]
