@@ -3,7 +3,7 @@ defmodule Logex.FrontendTest do
   What `frontend_golden_test.exs` cannot check. That record reduces every location to its
   line and keeps the AST rather than the tokens, so it cannot see columns, messages, or
   the token stream itself. The deliberate departures from the leex/yecc front end are
-  pinned here too: columns, invalid UTF-8 and B2. All but one of these tests fail against
+  pinned here too: columns, invalid UTF-8, B2 and B8. All but one of these tests fail against
   that front end; "the AST keeps only the line" is a parity pin and passes on both. The
   last test checks that a checkout upgraded from it has been cleaned.
   """
@@ -55,6 +55,32 @@ defmodule Logex.FrontendTest do
     test "an error at a run of newlines is reported where the run starts" do
       assert {:error, {{1, 9}, Logex.Parser, _}} = parse("( xic aa\n\n)")
       assert {:error, {{1, 10}, Logex.Parser, _}} = parse("( xic aa\r\n\r\n)")
+    end
+  end
+
+  describe "B8: a lone CR is a newline" do
+    test "it ends the line and the rung, with real line numbers after it" do
+      assert {:ok, tokens, 2} = Compiler.tokenize("ote aa\rote bb")
+
+      assert tokens == [
+               {:name, {1, 1}, "ote"},
+               {:name, {1, 5}, "aa"},
+               {:rnd, {1, 7}},
+               {:name, {2, 1}, "ote"},
+               {:name, {2, 5}, "bb"}
+             ]
+
+      assert {:error, {{3, 3}, Logex.Lexer, {:illegal, "@"}}, 3} = Compiler.tokenize("a\r\r  @")
+    end
+
+    test "a CRLF is still one newline, located at its LF" do
+      assert {:ok, [{:name, {1, 1}, "a"}, {:rnd, {1, 3}}, {:name, {2, 1}, "b"}], 2} =
+               Compiler.tokenize("a\r\nb")
+    end
+
+    test "a CR before a CRLF is a newline of its own, in the same run" do
+      assert {:ok, [{:name, {1, 1}, "a"}, {:rnd, {1, 2}}, {:name, {3, 1}, "b"}], 3} =
+               Compiler.tokenize("a\r\r\nb")
     end
   end
 

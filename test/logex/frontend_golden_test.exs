@@ -6,10 +6,10 @@ defmodule Logex.FrontendGoldenTest do
   and `parse/1` produce: the parse AST and the lexer's end line, or the line a lex or
   parse error is reported on. The leex/yecc front end wrote the first record (`19f461a`)
   and its hand-written replacement matched it unchanged. It has changed since only on
-  purpose: B2 rewrote 139 entries (`157393c`), and the header's wording changed once. It
-  exercises the front end far more widely than the rest of the suite — CRLF, blank and
-  whitespace-only lines, token boundaries, every unbalanced delimiter — and is the only
-  test of a lone CR.
+  purpose: B2 rewrote 139 entries (`157393c`), B8 165 (every one an input with a lone CR),
+  and the header's wording changed once. It exercises the front end far more widely than
+  the rest of the suite — CRLF, lone CRs, blank and whitespace-only lines, token
+  boundaries, every unbalanced delimiter.
 
   It keeps the AST and error lines, not the tokens. Newline coalescing is invisible to it
   (one `rnd` or three parse alike), and where a run of newlines reports an error would

@@ -827,7 +827,7 @@ after Milestone 2, §5.)*
    - The golden record changes in exactly two entries, `"ote a.b"` and `"ote aa //
      note"`, which move from `{:lex_error, 1}` to parsed ASTs. The commit reads that diff.
 7. **Fix B8 (a lone CR) before any `.lcf` exists.** It would bite configuration files
-   exactly as it bites programs.
+   exactly as it bites programs. *(Landed 2026-09-30.)*
 
 ### 6.2 Milestone 2: organisation (now `PLAN.md` §3, Milestone 2)
 

@@ -54,8 +54,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`; `validation_test.exs` holds every diagnostic and warning `instructionize/2` gives, driven from source. `test/logex_test.exs` pins `Logex` (and walks Milestone 1's done sentence), `runtime_test.exs` every message the runtime raises and the exact public surface, and `api_contract_test.exs` a seeded property over the host contract
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
-  catches front-end changes the rest of the suite cannot see — making a lone CR end a rung
-  leaves every other test green. It keeps the AST and error lines, not the tokens or
+  catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
+  rung, failed it and nothing else until B8's own tests came with it. It keeps the AST and error lines, not the tokens or
   columns, so newline coalescing, columns and messages are pinned in
   `test/logex/frontend_test.exs` instead. Regenerate it only in a commit that changes the
   language or the generator on purpose, and read the diff:

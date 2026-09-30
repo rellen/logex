@@ -1053,7 +1053,7 @@ can silently outlive.
    logical time in both.
 7. The settled `.` and `//` lexer rules land exactly as written: `a.1b` is a lex error,
    `ote a // note⏎ote b` is two rungs, and the golden record changes in exactly two
-   entries. B8 is fixed before any configuration file exists.
+   entries. B8 is fixed before any configuration file exists. *(B8 landed 2026-09-30.)*
 
 Both need per-instance cross-scan state, so they are the proof that M1-5's architecture
 is right. TON is what turns this from an expression evaluator into something
@@ -1361,6 +1361,11 @@ diagnostic naming its file and line.
   the intermediate `powers` list in `element({:branches, _}, _)`.*
 
 - **B8 · A lone `\r` never delimits a rung, so a CR-only file is silently one rung.**
+  **Status: DONE — landed 2026-09-30, as the fix below says.** A CRLF is still one
+  newline located at its `\n`, a lone `\r` is a newline of its own, and `\r\r\n` is two
+  newlines in one run. The golden record changed in exactly the 165 entries predicted,
+  each an input with a lone CR; `frontend_test.exs` and `end_to_end_test.exs` now pin it
+  too, so the golden test is no longer the only one to see it.
   *Written against leex; `Logex.Lexer` kept the behaviour on purpose (its whitespace
   clause takes `?\r`), so the finding stands and only the fix below changes form.*
   `WHITESPACE = [\s\t\r]` (`ladder_lexer.xrl:6`) claims `\r` before `RND = (\r?\n)`
@@ -1606,7 +1611,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | B1 | med | lexer | Missing space before `nxb` fuses into an identifier — parallel silently becomes series | `ladder_lexer.xrl:8` | **closed** — delimiters are `(` `\|` `)`; guarded by "deleting a space around a delimiter is a no-op" in `end_to_end_test.exs` |
 | M1-2 | med | lowering | No validation pass: unknown mnemonic → bare `MatchError`; short arity → truncated IR; and `mov src ote` silently eats the next mnemonic as a tag, no error, energised rung | `instructionize/1`, name clause | **closed** `e569113` — a located diagnostic for each case, every mistake in a routine reported (`validation_test.exs`) |
 | M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | `evaluate/2`, xic+xio clauses | closed: unreachable from source (`2b093de`, M1-3); complementary by construction (M1-4) |
-| B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `Logex.Lexer`, the whitespace clause (was `ladder_lexer.xrl:6,10`) | open |
+| B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `Logex.Lexer`, the whitespace clause (was `ladder_lexer.xrl:6,10`) | **closed** 2026-09-30 — a lone `\r` is a newline |
 | M0-4 | low | lexer | `NAME` regex: `+` rejects single-char tags; `a-zA-z` typo admits ``[ \ ] ^ ` `` | `ladder_lexer.xrl:5` | **closed** `3f3b104` |
 | — | low | tests | M0-4's fix was unguarded: no test used a single-character tag or a bracketed name, so reverting `ladder_lexer.xrl:5` left `mix test` fully green | `end_to_end_test.exs` | **closed** `b8fc743` |
 | M1-5 | low | API | No public entry point and no `Logex` module; no scan loop | — | **closed** (M1-5) — `Logex.compile/2`, `compile_file/1` and `Logex.Runtime`; the host calls each scan, and a scheduler is Milestone 2's |

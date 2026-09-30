@@ -91,6 +91,17 @@ defmodule Logex.EndToEndTest do
       assert %{"xx" => 1, "yy" => 1} = run(decl(~w(xx yy)) <> "  ote xx  \n\n  ote yy\n", %{})
     end
 
+    # B8: a lone CR was whitespace, so a file with classic-Mac line endings was one rung,
+    # and `r2` read the first rung's power flow instead of starting its own.
+    test "a lone CR ends a rung, as LF and CRLF do" do
+      for newline <- ["\n", "\r\n", "\r"] do
+        source = decl(~w(gg r1 r2)) <> "xic gg ote r1" <> newline <> "ote r2"
+        assert %{"r1" => 0, "r2" => 1} = run(source, %{"gg" => 0}), inspect(newline)
+      end
+
+      assert 2 = rung_count("ote xx\rote yy")
+    end
+
     test "blank lines do not become empty rungs" do
       assert 1 = rung_count("ote xx\n")
       assert 1 = rung_count("\note xx")

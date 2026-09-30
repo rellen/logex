@@ -32,7 +32,7 @@ defmodule FrontendGolden do
   defp line({line, _column}), do: line
   defp line(line) when is_integer(line), do: line
 
-  # Shapes the rest of the suite exercises thinly or not at all: lone CR (only here), CRLF,
+  # Shapes the rest of the suite exercises thinly or not at all: lone CR, CRLF,
   # blank and whitespace-only lines, token boundaries, every unbalanced shape, and where an
   # error is reported when it is not on line 1. Newline coalescing is invisible here,
   # because the record keeps the AST and not the tokens; frontend_test.exs pins it.
