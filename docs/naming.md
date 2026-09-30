@@ -468,3 +468,123 @@ words of `PLAN.md` M1-3's declaration lines, surveyed before their code.
 **Chosen:** `dint`
 **Why:** Rule 1: DINT is IEC's name for a 32-bit signed integer, and all five dialects spell the keyword the same. logex has one integer type, and it has 32 bits rather than INT's 16. Two reasons settle it. The conventional family's native integer, and its timer preset, is DINT. And a 16-bit millisecond preset tops out at under 33 seconds. Before M1-3, logex integers had no bound at all, so a literal outside DINT's range, which used to be accepted, is now a diagnostic. Each further integer type gets its own stanza.
 **Checked:** 2026-09-28. Sources: IEC 61131-3:2003 Tables 10 and 13, and IEC 61131-3:2013 Table 10, both read directly; the conventional family's general instruction reference (Sept 2025) and tag-data manual (Nov 2023); TIA V21 (11/2025); Siemens A5E02486680-AP and A5E41552389-AA; CODESYS Development System help V3.5.22.0; Mitsubishi SH(NA)-081264ENG-AR and SH(NA)-081215ENG-AN.
+
+### `ons` — one-shot on the rung condition
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `xic go ons s1 ote pulse` | Passes power for the one scan in which the power reaching it rises from 0 to 1, and none otherwise. `s1` is its storage bit, an ordinary declared bool, a `var` or a `var_output`: it holds the power this `ons` received last scan. On an instance's first scan since it started or restarted it passes no power, whatever `s1` holds, so a rung already true at start does not fire. De-energised, it passes none and clears `s1`. After `xio`, it fires on a falling edge. |
+| IEC 61131-3 | **none** | The transition-sensing contacts `--\|P\|--` and `--\|N\|--` (Ed 2 Table 61 features 5 and 7) sense a named operand, not the rung result, and the transition-sensing coils `--(P)--` and `--(N)--` (Table 62 features 8 and 9) write a variable; neither gates power on the accumulated rung condition. The function-block form is R_TRIG (Ed 2 §2.5.2.3.2, Table 35), `Q := CLK AND NOT M; M := CLK;` (`docs/instruction-sets.md` §3.2), whose NOTE says its Q *"will stand at BOOL#1 after its first execution following a “cold restart”"* (Ed 2 p.78, as `docs/organisation.md` §4.6 quotes it): the opposite of this instruction's first scan. |
+| Conventional | **ONS** — One Shot | One user-named storage bit, *"set to true to prevent an invalid trigger during the first scan"* (general instructions ref., ONS, p.73, as `docs/organisation.md` §4.6 quotes it). OSR and OSF are the coil forms, with a storage bit and an output bit. Which tags its storage bit may be, and whether its verifier refuses one shared by two instructions: `unverified`. |
+| Siemens STEP 7 / TIA Portal LAD | TIA **P_TRIG** "Scan RLO for positive signal edge"; classic `---( P )---` | Classic `---( P )---` is the RLO one-shot; TIA's `--(P)--` is a different thing, a coil that sets an operand on a positive edge. Whether P_TRIG suppresses an edge on the first cycle: `unverified`. |
+| CODESYS | no inline element; an **R_TRIG** instance | |
+| Mitsubishi GX Works | **MEP** | FX against iQ-R, and the first-cycle behaviour: `unverified`. |
+
+**Chosen:** `ons`
+**Why:** Rule 2: IEC has no element for a one-shot on the rung condition, so logex takes the clearest vendor mnemonic, the conventional set's ONS, whose user-named storage bit keeps the cross-scan state in an ordinary tag. The split between `ons` (inline) and `osr`/`osf` (coils) is the conventional set's and not universal: LDmicro's `ELEM_ONE_SHOT_RISING` and `_FALLING` are inline series elements and it has no ONS, and Beremiz makes an edge a modifier on a contact or coil, lowered to a hidden R_TRIG (`docs/instruction-sets.md` §8). A reader from LDmicro will expect `osr` to be the inline one; the Edge detection table keeps `osr` for the coil form. The first-scan suppression is the conventional ONS's, read from the scan's `first` rather than set by a prescan, which logex does not have (`PLAN.md` M1-6, decision 3); the one visible difference is that before its first scan the storage bit holds its declared initial value, not 1. It is the opposite of R_TRIG's first execution, and of the event-task trigger logex takes from MatIEC (`docs/organisation.md` §4.6). A second `ons` on one storage bit is an error, as a second `ton` on one timer is: the false one clears the bit on every scan, so the true one fires on every scan its rung is true, and no arrangement of two works. Any other write to the storage bit (`ote`, `otl`, `otu`, `move`) is a warning, as a second `ote` on one tag is: it makes the one-shot fire on the wrong scans, and logex cannot tell a deliberate re-arm from a mistake.
+**Checked:** 2026-09-30, from this repository's survey only: the Edge detection and one-shots table above; `docs/instruction-sets.md` §3.2 (R_TRIG, Table 35), §7 and §8; `docs/organisation.md` §4.6 (the ONS quote and the R_TRIG NOTE). Not re-checked against IEC or a vendor manual for this stanza; the Siemens, CODESYS and Mitsubishi rows are the table's.
+
+### `ton` — on-delay timer: the instruction, and the type word of a timer
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var t1 ton`; `xic go ton t1 5000`; `xic t1.dn ote lamp`, `ge t1.acc 3000` | The type word declares a timer, a `var` with no initial value. The instruction runs it, and one `ton` runs a timer: rung power is its IN. Energised, `.acc` gains the milliseconds since this `ton` last ran, but nothing on the scan that first sees the rung true, and stops at `.pre`, where `.dn` is set; `.tt` is set while it times, `.en` while the rung is true. De-energised, `.acc .dn .tt .en` go to 0. `5000` is the preset, a literal of 0 to 2147483647 ms: the timer's `.pre` when its instance starts or restarts. Logic may `move` another value into `.pre` or `.acc`, and only the `ton` sets `.dn .tt .en`. Nothing may follow it on its path: read the timer with `xic t1.dn` on a rung below. |
+| IEC 61131-3 | **TON** | A standard function block: Ed 2 §2.5.2.3.4 Table 37 feature 2a (Ed 3 Table 46), `IN : BOOL`, `PT : TIME` → `Q : BOOL`, `ET : TIME`; a false IN resets ET to 0 at once (`docs/instruction-sets.md` §3.2). An instance is declared as a variable of type TON: `VAR RETAIN TMR1: TON ; END_VAR` is Table 33 feature 3a's own example. The Table 37 NOTE makes the effect of changing PT mid-timing *"implementation-dependent"* (the Timers table above). In IL, the input operators `IN`, `PT` call it (Ed 2 Table 54, rows 11–13 for TP/TON/TOF, `docs/instruction-sets.md` §4). |
+| Conventional | **TON** (ladder only); a **TIMER** tag | `.PRE` is DINT, *"(1 millisecond units)"* (general instructions ref., TIMER structure, p.132, as `docs/organisation.md` §3 quotes it); `.ACC`, `.DN`, `.TT`, `.EN`. `ACC = ACC + (current_time − last_time_scanned)`, with a 69-minute scan warning. Prescan clears `.ACC`, `.DN`, `.TT` and `.EN` (general instructions ref., TON, p.134, per `docs/organisation.md` §4.6). TONR is TON with a reset pin, FBD/ST only, and not retentive. That its preset operand is the stored `.PRE` and not re-applied each scan, that logic may `move` into `.PRE` and `.ACC`, which rung condition it passes on, whether it caps `.ACC` at `.PRE`, and what `.DN` does when `.PRE` is raised after done: `unverified`. |
+| Siemens STEP 7 / TIA Portal LAD | TIA: IEC box **TON** and coil `---( TON )---`, an IEC_TIMER in an instance DB, `#MyTimer.Q`; classic S5: **S_ODT** / `---( SD )---` | |
+| CODESYS | **TON**, an FB instance: `TON1.Q` | |
+| Mitsubishi GX Works | native `OUT T0 K100`; FB library TON / TON_E / TON_HIGH / TON_HIGH_E | A global device number split into TS0 / TC0 / TN0. |
+
+**Chosen:** `ton`, for the instruction and for the type word.
+**Why:** Rule 1: IEC names the operation TON, and the Timers table finds it *"the one mnemonic every party spells identically"*. The type word is IEC's too: an instance is a variable of type TON, and logex drops the colon as it does in every declaration (`docs/organisation.md` §6.1). The conventional set's TIMER is a vendor word for the same thing, and rule 3 keeps logex from coining `timer`. One word as a mnemonic and a type is read by position, a mnemonic where an instruction starts and a type as a declaration's third word, and it is reserved in any case either way. The model is the conventional set's, not IEC's EN (`docs/organisation.md` §4.3): rung power is IN, and the members are the conventional TIMER's, lowercased, in integer milliseconds, which keeps `T#5s` literals out of the lexer. The rest is logex's own, and each part is said here because the conventional behaviour behind it is `unverified`. The preset literal is the timer's starting `.pre`, and the instruction never writes `.pre`, so a `move` into `.pre` holds until a restart: IEC's PT, an input copied at every call, would make that `move` do nothing. Timing starts at the scan that first sees IN true, as MatIEC's TON takes `START_TIME := CURRENT_TIME` on IN's rising edge and leaves ET at 0 on that call (its `lib/timer.txt`, `TON`). `.acc` stops at `.pre`, as MatIEC sets `ET := PT` when done, and comes down to `.pre` if logic lowers `.pre` below it, as MatIEC's does while counting. `.dn` is `.acc` against `.pre` on every energised scan, so raising `.pre` after done resumes timing where MatIEC's STATE 2 latches Q until IN falls. A negative `.pre` times as 0. A preset of 0 is done on the first energised scan, where MatIEC compares only on the calls after the one that starts the timer. Nothing may follow a `ton` on its path, in its leg or after a group one of whose legs ends in it. logex's output instructions all pass on the power they receive, where an IEC reader draws Q on the right of the block and would expect `.dn` there; which the conventional TON passes on is `unverified`. Refusing both readings leaves the question open, and is the reversible way to leave it: allowing either later breaks no program.
+**Checked:** 2026-09-30, from this repository's survey only: the Timers table above, `docs/instruction-sets.md` §3.2, §4 and §7, `docs/organisation.md` §3, §4.3, §4.6 and §6.1; and MatIEC `lib/timer.txt`, `TON`, the file `docs/organisation.md` §8 cites at `7680ed8`, read for this stanza from a copy whose revision was not checked against it. Not re-checked against IEC or a vendor manual for this stanza.
+
+### `eq` — equal
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `eq a b`, `eq t1.acc 0` | An input instruction: energised, it passes power when `a` equals `b`; de-energised, it passes none. It writes nothing. Each operand is a dint tag, a dint member or a literal that fits 32 bits; two literals compile, with a warning. |
+| IEC 61131-3 | **EQ** | A standard comparison *function*, not an LD element: Ed 3 Table 33 features 1–6, p.91, and Ed 2 Table 28 features 5–10, p.62, list `GT GE EQ LE LT NE` (`docs/instruction-sets.md` §3.1); `docs/instruction-sets.md` §7 reads EQ as T33 f3 from that order, and which feature is which operator is not stated in the survey: `unverified`. ST `=`. Every comparison but NE is extensible: `OUT := (IN1>IN2) & (IN2>IN3) & …`. IL had them as operators, Ed 2 Table 52 rows 12–17, `GT GE EQ NE LE LT` (`docs/instruction-sets.md` §4.1), gone with IL in Ed 4. Which input types the standard admits was not recorded in this survey: `unverified`. |
+| Conventional | **EQ** (formerly EQU) | LD and FBD, *"not available in structured text"*; Source A / Source B; also compares strings. Renamed in the 2024 conformance sweep *"to conform to IEC 61131-3 and PLCopen standards"*. Whether it takes BOOL operands: `unverified`. |
+| Siemens STEP 7 / TIA Portal LAD | TIA `CMP ==`, typed by the operands' data type; classic `CMP ==I` / `==D` / `==R` | |
+| CODESYS | **EQ** ("the IEC operator") | |
+| Mitsubishi GX Works | `LD=` / `AND=` / `OR=`; `_U` unsigned; `LDD=` 32-bit | Rung position is part of the mnemonic, as with LD / AND / OR. |
+
+**Chosen:** `eq`
+**Why:** Rule 1: IEC names the operation EQ, and since the 2024 sweep the conventional set does too, so the old contrast between the two no longer exists. The arity is two, because logex has no variadic operands: a chain is comparisons in series. The operands are dints only: a bool is tested with `xic` and `xio`, and admitting bools later breaks no program, where narrowing would. Two literals are legal, as IEC's `EQ(1, 1)` is, but draw a warning, since the result never changes. The operand order is IEC's IN1, IN2 and the conventional Source A, Source B. LDmicro still spells it `EQU` (`docs/instruction-sets.md` §7).
+**Checked:** 2026-09-30, from the Comparison table above and `docs/instruction-sets.md` §3.1, §4.1 and §7; not re-checked against their sources for this stanza.
+
+### `ne` — not equal
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `ne a b` | As `eq`, passing power when `a` and `b` differ. It is `eq` negated, so the two are complementary whatever the env holds. |
+| IEC 61131-3 | **NE** | As `eq`. The one non-extensible comparison: *"Inequality NE <> OUT := (IN1 <> IN2) (non-extensible)"* (`docs/instruction-sets.md` §3.1). |
+| Conventional | **NE** (formerly NEQ) | |
+| Siemens STEP 7 / TIA Portal LAD | `CMP <>` | |
+| CODESYS | **NE** | |
+| Mitsubishi GX Works | `LD<>` | |
+
+**Chosen:** `ne`
+**Why:** Rule 1, as `eq`.
+**Checked:** 2026-09-30, as `eq`.
+
+### `lt` — less than
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `lt a b` | As `eq`, passing power when `a` < `b`. |
+| IEC 61131-3 | **LT** | As `eq`; `docs/instruction-sets.md` §7 reads it as T33 f5 from the list's order, `unverified`. |
+| Conventional | **LT** (formerly LES) | |
+| Siemens STEP 7 / TIA Portal LAD | `CMP <` | |
+| CODESYS | **LT** | |
+| Mitsubishi GX Works | `LD<` | |
+
+**Chosen:** `lt`
+**Why:** Rule 1, as `eq`. `lt aa bb` reads "aa < bb": the conventional set, IEC and Mitsubishi agree on that order.
+**Checked:** 2026-09-30, as `eq`.
+
+### `gt` — greater than
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `gt a b` | As `eq`, passing power when `a` > `b`. |
+| IEC 61131-3 | **GT** | As `eq`. |
+| Conventional | **GT** (formerly GRT) | |
+| Siemens STEP 7 / TIA Portal LAD | `CMP >` | |
+| CODESYS | **GT** | |
+| Mitsubishi GX Works | `LD>` | |
+
+**Chosen:** `gt`
+**Why:** Rule 1, as `eq`, with the operand order of `lt`.
+**Checked:** 2026-09-30, as `eq`.
+
+### `le` — less than or equal
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `le a b` | As `eq`, passing power when `a` ≤ `b`. It is `gt` negated. |
+| IEC 61131-3 | **LE** | As `eq`. |
+| Conventional | **LE** (formerly LEQ) | The instruction-set reference's LEQ page prints the rename as *"from LES to LE"*, a typo; its summary table gives LEQ→LE (the Comparison table above). |
+| Siemens STEP 7 / TIA Portal LAD | `CMP <=` | |
+| CODESYS | **LE** | |
+| Mitsubishi GX Works | `LD<=` | |
+
+**Chosen:** `le`
+**Why:** Rule 1, as `eq`, with the operand order of `lt`.
+**Checked:** 2026-09-30, as `eq`.
+
+### `ge` — greater than or equal
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `ge a b`, `ge t1.acc 3000` | As `eq`, passing power when `a` ≥ `b`. It is `lt` negated. |
+| IEC 61131-3 | **GE** | As `eq`. |
+| Conventional | **GE** (formerly GEQ) | |
+| Siemens STEP 7 / TIA Portal LAD | `CMP >=` | |
+| CODESYS | **GE** | |
+| Mitsubishi GX Works | `LD>=` | |
+
+**Chosen:** `ge`
+**Why:** Rule 1, as `eq`, with the operand order of `lt`.
+**Checked:** 2026-09-30, as `eq`.
