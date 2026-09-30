@@ -259,6 +259,16 @@ defmodule Logex.ValidationTest do
   end
 
   describe "declaration lines, the rarer shapes (M1-3)" do
+    # A name with `.` parts is one token since PLAN.md §5's rule landed, and the `.` is for
+    # members, so it names no tag. Until M1-6 declares members, using one is undeclared.
+    test "a name with a `.` cannot be declared, and is undeclared where it is used" do
+      assert source_errors("var t1.dn bool\nvar word.3 dint\nvar a bool\nxic t1.dn ote a") == [
+               "line 1: `t1.dn` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`",
+               "line 2: `word.3` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`",
+               "line 4: `t1.dn` is not declared"
+             ]
+    end
+
     test "a line breaking two rules gets both, in order" do
       assert source_errors("var ote bool 2") == [
                "line 1: `ote` is an instruction and cannot name a tag",
@@ -651,6 +661,8 @@ defmodule Logex.ValidationTest do
              "`x` is a dint: `-2147483649` does not fit in 32 bits"},
             {["x", :int, :var, 5], "unknown type :int: logex has `bool` and `dint`"},
             {[" a", :bool], ~s(" a" is not a tag name)},
+            {["t1.dn", :bool],
+             "`t1.dn` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`"},
             {["a b", :bool], ~s("a b" is not a tag name)}
           ] do
         assert_raise ArgumentError, message, fn -> apply(Logex.Tag, :new!, args) end

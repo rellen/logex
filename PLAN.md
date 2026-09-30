@@ -1053,7 +1053,9 @@ can silently outlive.
    logical time in both.
 7. The settled `.` and `//` lexer rules land exactly as written: `a.1b` is a lex error,
    `ote a // note⏎ote b` is two rungs, and the golden record changes in exactly two
-   entries. B8 is fixed before any configuration file exists. *(B8 landed 2026-09-30.)*
+   entries. B8 is fixed before any configuration file exists. *(All three landed
+   2026-09-30. The golden record changed in exactly those two entries for the two rules,
+   and in the 165 entries B8 predicted.)*
 
 Both need per-instance cross-scan state, so they are the proof that M1-5's architecture
 is right. TON is what turns this from an expression evaluator into something
@@ -1473,7 +1475,11 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   token; **no grammar edit**. `env` holds a per-instance record, since `.acc` and `.dn`
   must update together in one scan. Array subscripts defer cleanly, because `[`/`]` stayed
   free. Two traps: the token no longer round-trips to a flat `env` key, and `.` in the
-  lexer is safe only while there are no float literals.
+  lexer is safe only while there are no float literals. **The lexer rule landed
+  2026-09-30**, as a `Logex.Lexer` clause: `a.1b` is B2's mistyped lexeme, named whole, and
+  a `.` with no name or integer after it is illegal. Since a tag name is whatever lexes as
+  one name, the same commit forbids a `.` in a declared tag's name. Members, and what a
+  dotted name means, are M1-6's; until then one is simply undeclared.
 - **Comments — `//` to end of line.** `//[^\r\n]* : skip_token.` — it must **not**
   consume the newline, or `ote a // note\note b` silently becomes one rung. Test exactly
   that. Keep `;` a lex error: it is the rung *terminator* in neutral text and reusing it
@@ -1626,7 +1632,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | open |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
-| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments landed 2026-09-30; negative literals and structured addressing open |
+| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30; members (M1-6) and negative literals open |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed |
 
 ---

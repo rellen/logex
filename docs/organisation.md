@@ -826,6 +826,9 @@ after Milestone 2, §5.)*
    - `ote a // note⏎ote b` must parse as two rungs.
    - The golden record changes in exactly two entries, `"ote a.b"` and `"ote aa //
      note"`, which move from `{:lex_error, 1}` to parsed ASTs. The commit reads that diff.
+
+   *(Landed 2026-09-30, as written: two commits, one entry each. A declared tag's name may
+   not have a `.`.)*
 7. **Fix B8 (a lone CR) before any `.lcf` exists.** It would bite configuration files
    exactly as it bites programs. *(Landed 2026-09-30.)*
 

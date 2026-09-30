@@ -28,7 +28,9 @@ defmodule Logex.PrinterTest do
                      # elems -> elem elems
                      :many_elems,
                      # rungs -> rung rnd rungs
-                     :many_rungs
+                     :many_rungs,
+                     # a name with `.` parts: a lexer rule, not a production, but printed
+                     :dotted_name
                    ])
 
   describe "round trip" do
@@ -168,7 +170,7 @@ defmodule Logex.PrinterTest do
     for _ <- 1..@corpus_size, do: routine()
   end
 
-  @names ~w(aa bb start motor stop overtemp fault x1 speed_sp)
+  @names ~w(aa bb start motor stop overtemp fault x1 speed_sp t1.dn word.3)
 
   defp routine, do: {:routine, {:rungs, for(_ <- 1..:rand.uniform(3), do: rung())}}
 
@@ -201,7 +203,10 @@ defmodule Logex.PrinterTest do
   end
 
   defp shapes({:rung, elements}, depth), do: shapes_of(elements, depth)
-  defp shapes({:name, _, _}, _depth), do: MapSet.new([:name])
+
+  defp shapes({:name, _, name}, _depth),
+    do: MapSet.new([:name | dotted_shape(String.contains?(name, "."))])
+
   defp shapes({:int_lit, _, _}, _depth), do: MapSet.new([:int_lit])
 
   defp shapes({:branches, legs}, depth) do
@@ -232,4 +237,6 @@ defmodule Logex.PrinterTest do
   defp empty_leg_shape(false), do: []
   defp depth_shape(depth) when depth > 0, do: [:nested]
   defp depth_shape(_), do: []
+  defp dotted_shape(true), do: [:dotted_name]
+  defp dotted_shape(false), do: []
 end

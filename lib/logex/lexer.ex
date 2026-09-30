@@ -8,6 +8,8 @@ defmodule Logex.Lexer do
       {:bst, loc}  {:nxb, loc}  {:bnd, loc}  {:rnd, loc}
       {:name, loc, binary}  {:int_lit, loc, integer}
 
+  A name may have `.` parts, `t1.dn` or `word.3`, and is still one `name` token.
+
   `Logex.Parser` keeps only the line in the AST, whose shape the suite pins; the column
   is there for diagnostics. Whitespace and `//` comments are never emitted.
 
@@ -63,11 +65,8 @@ defmodule Logex.Lexer do
     number(rest, digits, l, c, acc)
   end
 
-  defp lex(<<h, _::binary>> = src, l, c, acc) when is_name_start(h) do
-    n = word(src, 0)
-    <<name::binary-size(^n), rest::binary>> = src
-    lex(rest, l, c + n, [{:name, {l, c}, name} | acc])
-  end
+  defp lex(<<h, _::binary>> = src, l, c, acc) when is_name_start(h),
+    do: name(src, name_part(src, 0), l, c, acc)
 
   defp lex(<<>>, l, _c, acc), do: {:ok, Enum.reverse(acc), l}
 
@@ -107,8 +106,37 @@ defmodule Logex.Lexer do
   defp number(rest, digits, l, c, acc),
     do: lex(rest, l, c + byte_size(digits), [{:int_lit, {l, c}, String.to_integer(digits)} | acc])
 
-  # Each returns `n` plus the length of the run it starts on. Both lexemes are ASCII, so
-  # their byte size is their width in characters.
+  defp name(src, {:ok, n}, l, c, acc) do
+    <<name::binary-size(^n), rest::binary>> = src
+    lex(rest, l, c + n, [{:name, {l, c}, name} | acc])
+  end
+
+  defp name(src, {:mistyped, n}, l, c, _acc) do
+    <<run::binary-size(^n), _::binary>> = src
+    {:error, {{l, c}, __MODULE__, {:missing_separator, run}}, l}
+  end
+
+  # PLAN.md §5: a name goes on in `.` parts, each a name or an integer, and stays one
+  # token: `t1.dn`, `word.3`, `m1.t1.acc`. Each returns `{:ok, n}` for a name `n` long, or
+  # `{:mistyped, n}` when an integer part runs straight into a letter or `_`, which is B2's
+  # mistyped lexeme: `a.1b` is an error naming `a.1b`, not the name `a.1` and a tag `b`. A
+  # `.` not followed by a name or an integer ends the name and is itself illegal.
+  defp name_part(<<ch, rest::binary>>, n) when is_name_char(ch), do: name_part(rest, n + 1)
+  defp name_part(rest, n), do: dot(rest, n)
+
+  defp integer_part(<<d, rest::binary>>, n) when d in ?0..?9, do: integer_part(rest, n + 1)
+
+  defp integer_part(<<h, _::binary>> = rest, n) when is_name_start(h),
+    do: {:mistyped, n + word(rest, 0)}
+
+  defp integer_part(rest, n), do: dot(rest, n)
+
+  defp dot(<<?., h, rest::binary>>, n) when is_name_start(h), do: name_part(rest, n + 2)
+  defp dot(<<?., d, rest::binary>>, n) when d in ?0..?9, do: integer_part(rest, n + 2)
+  defp dot(_rest, n), do: {:ok, n}
+
+  # Each returns `n` plus the length of the run it starts on. Every lexeme is ASCII, so
+  # its byte size is its width in characters.
   defp digits(<<d, rest::binary>>, n) when d in ?0..?9, do: digits(rest, n + 1)
   defp digits(_, n), do: n
 

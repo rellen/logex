@@ -34,6 +34,8 @@ Source syntax today:
   error naming `1bst`, not the number `1` and a tag `bst`
 - no operand parentheses, no terminator
 - `//` starts a comment, which runs to the end of its line
+- a name may have `.` parts, `t1.dn` or `word.3`, for the members that timers will bring;
+  no tag is declared with one
 - a newline ends a rung: LF, CRLF or a lone CR
 - `(` … `|` … `)` open, separate and close a parallel branch group
 

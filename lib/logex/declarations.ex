@@ -241,8 +241,18 @@ defmodule Logex.Declarations do
   defp name(:mnemonic, name, _), do: ["`#{name}` is an instruction and cannot name a tag"]
   defp name(:type, name, _), do: ["`#{name}` is a type and cannot name a tag"]
   defp name(:section, name, _), do: ["`#{name}` is a keyword and cannot name a tag"]
-  defp name(nil, name, {:ok, [{:name, _, name}], _}), do: []
+
+  defp name(nil, name, {:ok, [{:name, _, name}], _}),
+    do: dotted(String.contains?(name, "."), name)
+
   defp name(nil, name, _), do: ["#{inspect(name)} is not a tag name"]
+
+  # A name with `.` parts lexes as one token (PLAN.md §5), but the `.` reaches into an
+  # instance, so it never names a tag of its own.
+  defp dotted(false, _name), do: []
+
+  defp dotted(true, name),
+    do: ["`#{name}` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`"]
 
   defp type(type) when type in @type_atoms, do: []
   defp type(type), do: ["unknown type #{inspect(type)}: logex has `bool` and `dint`"]

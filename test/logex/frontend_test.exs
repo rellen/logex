@@ -85,6 +85,48 @@ defmodule Logex.FrontendTest do
     end
   end
 
+  describe "names with `.` parts" do
+    test "are one name token, whatever their parts" do
+      assert {:ok, tokens, 1} = Compiler.tokenize("xic t1.dn ote word.3 m1.t1.acc a._b.2")
+
+      assert tokens == [
+               {:name, {1, 1}, "xic"},
+               {:name, {1, 5}, "t1.dn"},
+               {:name, {1, 11}, "ote"},
+               {:name, {1, 15}, "word.3"},
+               {:name, {1, 22}, "m1.t1.acc"},
+               {:name, {1, 32}, "a._b.2"}
+             ]
+    end
+
+    test "an integer part running into a letter is B2's mistyped lexeme, named whole" do
+      assert {:error, {{1, 5}, Logex.Lexer, {:missing_separator, "a.1bst"}}, 1} =
+               Compiler.tokenize("xic a.1bst ote b")
+
+      assert {:error, {{1, 1}, Logex.Lexer, {:missing_separator, "t1.2_"}}, 1} =
+               Compiler.tokenize("t1.2_")
+
+      assert Logex.Lexer.format_error({:missing_separator, "a.1b"}) ==
+               ~s(missing separator after integer: "a.1b" is neither a number nor a tag)
+    end
+
+    test "a `.` with no name or integer after it is illegal, and there are no decimals" do
+      for {source, column} <- [
+            {"a.", 2},
+            {"a. b", 2},
+            {".a", 1},
+            {"a..b", 2},
+            {"a.b.", 4},
+            {"1.5", 2},
+            {"a.(", 2}
+          ] do
+        assert {:error, {{1, ^column}, Logex.Lexer, {:illegal, "."}}, 1} =
+                 Compiler.tokenize(source),
+               inspect(source)
+      end
+    end
+  end
+
   describe "// comments" do
     test "a comment runs to the end of the line, and not past it" do
       assert {:ok, tokens, 2} = Compiler.tokenize("ote a // note\note b")
