@@ -199,11 +199,18 @@ defmodule Logex.Declarations do
   defp short(:type, word, _v, kw),
     do: "`#{kw}` needs a tag name before the type `#{word}`, as in `#{kw} fault #{word}`"
 
-  defp short(nil, name, nil, kw),
+  # A name that can never be declared says so first, rather than ask for a type.
+  defp short(nil, name, v, kw),
+    do: typeless(dotted(String.contains?(name, "."), name), name, v, kw)
+
+  defp short(reserved, name, _v, _kw), do: hd(name(reserved, name, :reserved))
+
+  defp typeless([message], _name, _v, _kw), do: message
+
+  defp typeless([], name, nil, kw),
     do: "`#{name}` needs a type: `#{kw} #{name} bool` or `#{kw} #{name} dint`"
 
-  defp short(nil, name, v, _kw), do: "`#{name}` needs a type before its initial value `#{v}`"
-  defp short(reserved, name, _v, _kw), do: hd(name(reserved, name, :reserved))
+  defp typeless([], name, v, _kw), do: "`#{name}` needs a type before its initial value `#{v}`"
 
   # IEC's RETAIN qualifier (docs/instruction-sets.md §3.2, Table 33 f3a) is not a tag name
   # here, because a tag name is never followed by a second name.

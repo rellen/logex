@@ -27,12 +27,12 @@ defmodule Logex.Printer do
   single spaces between elements, and integers in their shortest form. So
   `"  xic   aa  "` prints as `"xic aa"` and `"mov 007 hh"` as `"mov 7 hh"`. That is a
   decision, not an accident — `print/1` emits the one spelling logex considers
-  correct, and `test/logex/printer_test.exs` pins both losses so that neither can
-  change silently. Mnemonic case is the exception: it carries no meaning since M1-2,
-  but the parse AST does not know which names are mnemonics, so `XIC` prints as
-  written. Anything that must survive a round trip unchanged has to reach the
-  AST as structure; comments are the open case (`PLAN.md` §5), and landing `//` as
-  `skip_token` would make this printer destructive.
+  correct, and `test/logex/printer_test.exs` pins each loss so that none can change
+  silently. Mnemonic case is the exception: it carries no meaning since M1-2, but the
+  parse AST does not know which names are mnemonics, so `XIC` prints as written.
+  Anything that must survive a round trip unchanged has to reach the AST as structure.
+  `//` comments do not: `Logex.Lexer` skips them, so printing drops them, until
+  `PLAN.md` §5's comment above a rung gives one somewhere to live.
 
   Raises on two AST shapes that `parse/1` cannot produce, rather than emitting text
   that would read back as something else:

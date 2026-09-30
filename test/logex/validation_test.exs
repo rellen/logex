@@ -267,6 +267,12 @@ defmodule Logex.ValidationTest do
                "line 2: `word.3` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`",
                "line 4: `t1.dn` is not declared"
              ]
+
+      # Refused for its name even with no type, rather than told to add one.
+      assert source_errors("var m1.t1.acc\nvar_input x.y 5\nvar a bool\nxic a ote a") == [
+               "line 1: `m1.t1.acc` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`",
+               "line 2: `x.y` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`"
+             ]
     end
 
     test "a line breaking two rules gets both, in order" do
@@ -431,6 +437,14 @@ defmodule Logex.ValidationTest do
                "line 1: `a` is not declared (this program declares no tags: each is now " <>
                  "declared before the first rung, as `var a bool` or `var a dint`)",
                "line 1: `b` is not declared"
+             ]
+    end
+
+    test "a name with a `.` is not told to declare itself; the next name is" do
+      assert source_errors("xic t1.dn ote b") == [
+               "line 1: `t1.dn` is not declared",
+               "line 1: `b` is not declared (this program declares no tags: each is now " <>
+                 "declared before the first rung, as `var b bool` or `var b dint`)"
              ]
     end
 
@@ -663,6 +677,8 @@ defmodule Logex.ValidationTest do
             {[" a", :bool], ~s(" a" is not a tag name)},
             {["t1.dn", :bool],
              "`t1.dn` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`"},
+            {["m1.t1.acc", :bool],
+             "`m1.t1.acc` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`"},
             {["a b", :bool], ~s("a b" is not a tag name)}
           ] do
         assert_raise ArgumentError, message, fn -> apply(Logex.Tag, :new!, args) end

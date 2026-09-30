@@ -129,8 +129,8 @@ Milestone 2) and will change the source language:
   called with `cal`. Each new word still gets its `docs/naming.md` stanza, which may change
   a spelling.
 
-- **`//` starts a comment**; `.` gives member access (`t1.dn`, `word.3`); negative integer
-  literals lex.
+- **`.` gives member access** (`t1.dn`, `word.3`), with timers: a dotted name lexes
+  already, but no member exists yet. Negative integer literals lex.
 - **Timers, counters, comparisons and math** arrive as `ton tof tp rto res`, `ctu ctd`,
   `eq ne lt gt le ge`, `add sub mul div mod abs sqrt neg` — IEC names wherever IEC names
   the operation. `rto`, `res` and `neg` are the exceptions: the standard has no retentive

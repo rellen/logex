@@ -3,8 +3,8 @@ defmodule Logex.FrontendTest do
   What `frontend_golden_test.exs` cannot check. That record reduces every location to its
   line and keeps the AST rather than the tokens, so it cannot see columns, messages, or
   the token stream itself. The deliberate departures from the leex/yecc front end are
-  pinned here too: columns, invalid UTF-8, B2 and B8. So are `//` comments, which leex's
-  lexer never had. All but one of these tests fail against
+  pinned here too: columns, invalid UTF-8, B2 and B8. So are `//` comments and names with
+  `.` parts, which leex's lexer never had. All but one of these tests fail against
   that front end; "the AST keeps only the line" is a parity pin and passes on both. The
   last test checks that a checkout upgraded from it has been cleaned.
   """
@@ -79,6 +79,11 @@ defmodule Logex.FrontendTest do
                Compiler.tokenize("a\r\nb")
     end
 
+    test "a run of lone CRs is one rnd, at the first" do
+      assert {:ok, [{:name, {1, 1}, "a"}, {:rnd, {1, 2}}, {:name, {3, 1}, "b"}], 3} =
+               Compiler.tokenize("a\r\rb")
+    end
+
     test "a CR before a CRLF is a newline of its own, in the same run" do
       assert {:ok, [{:name, {1, 1}, "a"}, {:rnd, {1, 2}}, {:name, {3, 1}, "b"}], 3} =
                Compiler.tokenize("a\r\r\nb")
@@ -99,7 +104,29 @@ defmodule Logex.FrontendTest do
              ]
     end
 
+    test "an integer part may hold any digits, and any part may follow it" do
+      assert {:ok, tokens, 1} = Compiler.tokenize("word.10 panel.i.0 a.1.b m1.3.acc Timer.DN")
+
+      assert tokens == [
+               {:name, {1, 1}, "word.10"},
+               {:name, {1, 9}, "panel.i.0"},
+               {:name, {1, 19}, "a.1.b"},
+               {:name, {1, 25}, "m1.3.acc"},
+               {:name, {1, 34}, "Timer.DN"}
+             ]
+    end
+
     test "an integer part running into a letter is B2's mistyped lexeme, named whole" do
+      # Named on past a `.`, since `b.c` alone is a name: the run is all of `a.1b.c`.
+      assert {:error, {{1, 5}, Logex.Lexer, {:missing_separator, "a.1b.c"}}, 1} =
+               Compiler.tokenize("xic a.1b.c ote b")
+
+      assert {:error, {{1, 6}, Logex.Lexer, {:missing_separator, "1b.c"}}, 1} =
+               Compiler.tokenize("move 1b.c x")
+
+      assert {:error, {{1, 1}, Logex.Lexer, {:missing_separator, "a.1B"}}, 1} =
+               Compiler.tokenize("a.1B")
+
       assert {:error, {{1, 5}, Logex.Lexer, {:missing_separator, "a.1bst"}}, 1} =
                Compiler.tokenize("xic a.1bst ote b")
 
@@ -139,8 +166,9 @@ defmodule Logex.FrontendTest do
                {:name, {2, 5}, "b"}
              ]
 
-      for newline <- ["\r\n", "\r"] do
-        assert {:ok, [_, _, {:rnd, _}, _, _], 2} =
+      # A CRLF is located at its LF here too, as B8 has it everywhere.
+      for {newline, column} <- [{"\r\n", 12}, {"\r", 11}] do
+        assert {:ok, [_, _, {:rnd, {1, ^column}}, _, _], 2} =
                  Compiler.tokenize("ote a // x" <> newline <> "ote b")
       end
     end
@@ -155,6 +183,10 @@ defmodule Logex.FrontendTest do
                Compiler.tokenize("ote a//no space")
 
       assert {:ok, [_, _], 1} = Compiler.tokenize("ote a // é ✓ ( | ) @ ; 1bst")
+      assert {:ok, [_, _], 1} = Compiler.tokenize("ote a // a/b\tc\x01")
+
+      # A character is one column, however many bytes it takes.
+      assert {:ok, [_, _, {:rnd, {1, 12}}, _], 2} = Compiler.tokenize("ote a // é✓\nb")
       assert {:ok, [], 1} = Compiler.tokenize("//")
     end
 

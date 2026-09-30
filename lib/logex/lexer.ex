@@ -14,11 +14,13 @@ defmodule Logex.Lexer do
   is there for diagnostics. Whitespace and `//` comments are never emitted.
 
   This replaced `src/ladder_lexer.xrl`. `test/fixtures/frontend_golden.txt` is the record
-  that one first wrote, which this matched before B2 and B8 changed it on purpose. Four
-  things differ on purpose: locations carry a column; a source that is not valid UTF-8 is
-  a located error rather than the `UnicodeConversionError` that `String.to_charlist/1`
-  raised before leex ever ran; a number running straight into a tag, `1bst`, is an error
-  rather than two tokens (B2); and a lone `\r` is a newline, not whitespace (B8).
+  that one first wrote, which this matched before B2, B8 and PLAN.md §5's comment and
+  `.` rules changed it on purpose. Six things differ on purpose: locations carry a column;
+  a source that is not valid UTF-8 is a located error rather than the
+  `UnicodeConversionError` that `String.to_charlist/1` raised before leex ever ran; a
+  number running straight into a tag, `1bst`, is an error rather than two tokens (B2); a
+  lone `\r` is a newline, not whitespace (B8); `//` starts a comment; and a name may have
+  `.` parts. leex made the last two illegal characters.
   """
 
   defguardp is_name_start(ch) when ch in ?a..?z or ch in ?A..?Z or ch == ?_
@@ -136,10 +138,12 @@ defmodule Logex.Lexer do
   defp dot(_rest, n), do: {:ok, n}
 
   # Each returns `n` plus the length of the run it starts on. Every lexeme is ASCII, so
-  # its byte size is its width in characters.
+  # its byte size is its width in characters. A mistyped run goes on through `.` parts, so
+  # `1b.c` and `a.1b.c` are named whole, since `b.c` alone would be one name.
   defp digits(<<d, rest::binary>>, n) when d in ?0..?9, do: digits(rest, n + 1)
   defp digits(_, n), do: n
 
   defp word(<<ch, rest::binary>>, n) when is_name_char(ch), do: word(rest, n + 1)
+  defp word(<<?., ch, rest::binary>>, n) when is_name_char(ch), do: word(rest, n + 2)
   defp word(_, n), do: n
 end

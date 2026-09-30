@@ -294,12 +294,16 @@ defmodule Logex.Compiler do
 
   defp first_use(true, _line, _name, _tags, acc), do: {[], acc}
 
+  # A name with a `.` cannot be declared (members are M1-6's), so it is not told how, and
+  # the note waits for the next undeclared name that can be.
   defp first_use(false, line, name, tags, {seen, note?}) do
+    member? = String.contains?(name, ".")
+
     message =
       "`#{name}` is not declared" <>
-        Declarations.suggest(name, Map.keys(tags)) <> how(note?, name)
+        Declarations.suggest(name, Map.keys(tags)) <> how(note? and not member?, name)
 
-    {[diagnostic(line, message)], {MapSet.put(seen, name), false}}
+    {[diagnostic(line, message)], {MapSet.put(seen, name), note? and member?}}
   end
 
   defp how(false, _name), do: ""
