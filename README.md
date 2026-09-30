@@ -33,6 +33,7 @@ Source syntax today:
 - operands separated by spaces — and a number must be followed by one: `move 1bst aa` is an
   error naming `1bst`, not the number `1` and a tag `bst`
 - no operand parentheses, no terminator
+- `//` starts a comment, which runs to the end of its line
 - a newline ends a rung: LF, CRLF or a lone CR
 - `(` … `|` … `)` open, separate and close a parallel branch group
 

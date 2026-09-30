@@ -9,7 +9,7 @@ defmodule Logex.Lexer do
       {:name, loc, binary}  {:int_lit, loc, integer}
 
   `Logex.Parser` keeps only the line in the AST, whose shape the suite pins; the column
-  is there for diagnostics.
+  is there for diagnostics. Whitespace and `//` comments are never emitted.
 
   This replaced `src/ladder_lexer.xrl`. `test/fixtures/frontend_golden.txt` is the record
   that one first wrote, which this matched before B2 and B8 changed it on purpose. Four
@@ -48,6 +48,10 @@ defmodule Logex.Lexer do
   defp lex(<<ws, rest::binary>>, l, c, acc) when ws in [?\s, ?\t],
     do: lex(rest, l, c + 1, acc)
 
+  # `//` to the end of the line is a comment (PLAN.md §5). It stops before the newline, or
+  # `ote a // note` and `ote b` on the next line would silently be one rung.
+  defp lex(<<?/, ?/, rest::binary>>, l, c, acc), do: comment(rest, l, c + 2, acc)
+
   # A lexeme is measured first and then cut from the source in one match. Cut, a lexeme of
   # up to 64 bytes is a heap binary, and a longer one a sub-binary of the source. Grown with
   # `<<acc::binary, ch>>`, each was an off-heap, 256-byte writable binary, and allocating
@@ -71,6 +75,17 @@ defmodule Logex.Lexer do
     do: {:error, {{l, c}, __MODULE__, {:illegal, <<ch::utf8>>}}, l}
 
   defp lex(<<byte, _::binary>>, l, c, _acc),
+    do: {:error, {{l, c}, __MODULE__, {:illegal, <<byte>>}}, l}
+
+  # Any character may be in a comment, counted as one column, but a source that is not
+  # valid UTF-8 is still a located error there.
+  defp comment(<<nl, _::binary>> = rest, l, c, acc) when nl in [?\n, ?\r],
+    do: lex(rest, l, c, acc)
+
+  defp comment(<<_::utf8, rest::binary>>, l, c, acc), do: comment(rest, l, c + 1, acc)
+  defp comment(<<>>, l, c, acc), do: lex(<<>>, l, c, acc)
+
+  defp comment(<<byte, _::binary>>, l, c, _acc),
     do: {:error, {{l, c}, __MODULE__, {:illegal, <<byte>>}}, l}
 
   # A run of newlines and the whitespace between them is one rung delimiter, so blank

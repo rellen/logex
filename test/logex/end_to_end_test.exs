@@ -102,6 +102,15 @@ defmodule Logex.EndToEndTest do
       assert 2 = rung_count("ote xx\rote yy")
     end
 
+    test "a comment ends at the end of its line, not of the rung, and never runs" do
+      source = decl(~w(gg r1 r2)) <> "// seal-in\nxic gg ote r1 // not ote r2\note r2"
+      assert %{"r1" => 0, "r2" => 1} = run(source, %{"gg" => 0, "r2" => 0})
+      assert %{"r2" => 0} = run(decl(~w(r1 r2)) <> "ote r1 // ote r2", %{"r2" => 0})
+
+      declared = "var_input gg bool // the start button\nvar r1 bool\nxic gg ote r1"
+      assert %{"r1" => 1} = run(declared, %{"gg" => 1})
+    end
+
     test "blank lines do not become empty rungs" do
       assert 1 = rung_count("ote xx\n")
       assert 1 = rung_count("\note xx")

@@ -1479,7 +1479,10 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   that. Keep `;` a lex error: it is the rung *terminator* in neutral text and reusing it
   would mislead. Later, promote a comment above a rung into a structural
   `%Logex.Rung{comment:, elements:}` — a compiler that only skips comments can never print
-  `rung 4 ("seal-in for main motor"): unknown instruction`.
+  `rung 4 ("seal-in for main motor"): unknown instruction`. **Landed 2026-09-30** as a
+  `Logex.Lexer` clause that stops before `\n` or `\r`; a comment may hold any character,
+  but invalid UTF-8 in one is still a located error, and the printer drops comments (the
+  structural form above is still later work).
 - **Negative literals — one lexer rule**, `-[0-9]+`, sign glued to the digits, no leading
   `+`. Widen §4·B2's digit-led rule to `-?[0-9]+…` in the same change. logex has no infix
   operators, so `-` can only be a sign; record that this must move to the grammar when
@@ -1623,7 +1626,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | open |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
-| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | open |
+| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments landed 2026-09-30; negative literals and structured addressing open |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed |
 
 ---

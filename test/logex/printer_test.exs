@@ -72,9 +72,9 @@ defmodule Logex.PrinterTest do
   end
 
   describe "canonical form" do
-    # print/1 emits one spelling rather than reproducing the input. Both losses are
-    # pinned here so that neither can change without a test going red — in an editing
-    # box that shows a rung back, every render rewrites what the user typed.
+    # print/1 emits one spelling rather than reproducing the input. Every loss is pinned
+    # here so that none can change without a test going red — in an editing box that
+    # shows a rung back, every render rewrites what the user typed.
     test "runs of whitespace collapse to one space and a rung to one line" do
       assert Printer.print(parse!("  xic   aa \t   ote   bb   ")) == "xic aa ote bb"
     end
@@ -85,6 +85,13 @@ defmodule Logex.PrinterTest do
 
     test "a branch group prints with single spaces around every delimiter" do
       assert Printer.print(parse!("(  xic aa  |  ) ote xx")) == "( xic aa | ) ote xx"
+    end
+
+    # The parse AST has nowhere to keep a comment. PLAN.md §5 has one kept later, above a
+    # rung; until then printing drops them.
+    test "comments are dropped" do
+      assert Printer.print(parse!("// seal-in\nxic aa ote bb // latch\nxic cc")) ==
+               "xic aa ote bb\nxic cc"
     end
   end
 

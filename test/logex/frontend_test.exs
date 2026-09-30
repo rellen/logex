@@ -3,7 +3,8 @@ defmodule Logex.FrontendTest do
   What `frontend_golden_test.exs` cannot check. That record reduces every location to its
   line and keeps the AST rather than the tokens, so it cannot see columns, messages, or
   the token stream itself. The deliberate departures from the leex/yecc front end are
-  pinned here too: columns, invalid UTF-8, B2 and B8. All but one of these tests fail against
+  pinned here too: columns, invalid UTF-8, B2 and B8. So are `//` comments, which leex's
+  lexer never had. All but one of these tests fail against
   that front end; "the AST keeps only the line" is a parity pin and passes on both. The
   last test checks that a checkout upgraded from it has been cleaned.
   """
@@ -81,6 +82,50 @@ defmodule Logex.FrontendTest do
     test "a CR before a CRLF is a newline of its own, in the same run" do
       assert {:ok, [{:name, {1, 1}, "a"}, {:rnd, {1, 2}}, {:name, {3, 1}, "b"}], 3} =
                Compiler.tokenize("a\r\r\nb")
+    end
+  end
+
+  describe "// comments" do
+    test "a comment runs to the end of the line, and not past it" do
+      assert {:ok, tokens, 2} = Compiler.tokenize("ote a // note\note b")
+
+      assert tokens == [
+               {:name, {1, 1}, "ote"},
+               {:name, {1, 5}, "a"},
+               {:rnd, {1, 14}},
+               {:name, {2, 1}, "ote"},
+               {:name, {2, 5}, "b"}
+             ]
+
+      for newline <- ["\r\n", "\r"] do
+        assert {:ok, [_, _, {:rnd, _}, _, _], 2} =
+                 Compiler.tokenize("ote a // x" <> newline <> "ote b")
+      end
+    end
+
+    test "a line that is only a comment is a blank line" do
+      assert {:ok, [{:name, {1, 1}, "a"}, {:rnd, {1, 2}}, {:name, {3, 1}, "b"}], 3} =
+               Compiler.tokenize("a\n  // note\nb")
+    end
+
+    test "it may end the source, follow a token directly, and hold any character" do
+      assert {:ok, [{:name, {1, 1}, "ote"}, {:name, {1, 5}, "a"}], 1} =
+               Compiler.tokenize("ote a//no space")
+
+      assert {:ok, [_, _], 1} = Compiler.tokenize("ote a // é ✓ ( | ) @ ; 1bst")
+      assert {:ok, [], 1} = Compiler.tokenize("//")
+    end
+
+    test "a newline after a comment is located where it is, for the parser's errors" do
+      assert {:error, {{1, 14}, Logex.Parser, _}} = parse("( xic aa // x\n)")
+    end
+
+    test "a lone / and a ; are still illegal, and so is invalid UTF-8 in a comment" do
+      assert {:error, {{1, 7}, Logex.Lexer, {:illegal, "/"}}, 1} = Compiler.tokenize("ote a / b")
+      assert {:error, {{1, 6}, Logex.Lexer, {:illegal, ";"}}, 1} = Compiler.tokenize("ote a;")
+
+      assert {:error, {{1, 10}, Logex.Lexer, {:illegal, <<0xFF>>}}, 1} =
+               Compiler.tokenize(<<"ote a // ", 0xFF>>)
     end
   end
 
