@@ -7,12 +7,21 @@ defmodule Logex.ApiContractTest do
 
   A property pins only what its generator reaches, so each test asserts its reach: every
   stage's diagnostics, and every kind of refusal a host can cause.
+
+  M1-6: the programs hold timers, one-shots, members and comparisons. Every accepted scan
+  is checked against an oracle for `ton` and `ons`, and every accepted call is made twice
+  and must give the same result, since the runtime is a pure function of its arguments.
+  A timer's invariants hold right after its `ton` runs, and a member written below the
+  `ton` takes effect at the next scan, so the generated `ton` comes last: at the end of the
+  scan the oracle sees the timer as its `ton` left it. The reach assertions cover every
+  M1-6 diagnostic and warning, and what a timer and a one-shot do.
   """
   use ExUnit.Case, async: true
 
   alias Logex.{Diagnostic, Instance, Program, Runtime, Scan, Tag}
 
   @words ~w(var var_input var_output bool dint xic xio ote otl otu move a b c start stop Motor) ++
+           ~w(ton ons eq ne lt gt le ge t1 t1.dn t1.acc t1.pre t1.zz t1.et a.b s1 n d.3) ++
            ["(", "|", ")", "0", "1", "7", "1200", "3000000000", "retain", "\n", "\n"]
 
   # Words that are lex errors: in a soup they end the compile at the lexer.
@@ -29,7 +38,60 @@ defmodule Logex.ApiContractTest do
     "var f bool 7",
     "var g dint 3000000000",
     "var h bool 1 2",
-    "var_input i bool 0"
+    "var_input i bool 0",
+    "var t2 ton 5",
+    "var_output t3 ton",
+    "var ton",
+    "var t4.x bool"
+  ]
+
+  # M1-6 rung mistakes, one or more for each diagnostic in @m16_diagnostics, which a soup of
+  # words rarely assembles: most need a declared timer, which a soup declares half the time.
+  @rung_mistakes [
+    "xic a ton t1 5 ton t1 6",
+    "ote t1.dn",
+    "xic t1.zz ote a",
+    "xic a.b ote a",
+    "xic d.3 ote a",
+    "move t1.acc.x n",
+    "move t1 n",
+    "xic a ton t1 n",
+    "ton t1 3000000000",
+    "ton a 5",
+    "eq a n ote a",
+    "gt n 3000000000 ote a",
+    "xic t9.dn ote a",
+    "xic a ton t1 5 ote a",
+    "xic a ons s1 ote b\nxio a ons s1"
+  ]
+
+  # M1-6's diagnostics, by a fragment of each, that the compile test must reach.
+  @m16_diagnostics [
+    "is already run by the `ton`",
+    "but logic may write only",
+    "is not a member of",
+    "only a timer has members",
+    "bit access is not supported yet",
+    "goes too deep",
+    "name one of its members",
+    "takes its preset as a number",
+    "takes a preset of 0 to",
+    "`ton` runs a ton, but",
+    "`eq` reads a dint, but",
+    "`gt` reads a dint: `3000000000`",
+    "`t9` is not declared",
+    "follows `ton t1` on its path",
+    "is already the storage bit of the `ons`",
+    "not an initial value on its declaration",
+    "an instance is the program's own",
+    "needs a tag name before the type `ton`"
+  ]
+
+  # And its warnings, which only a program that compiles gets.
+  @m16_warnings [
+    "compares two literals",
+    "the storage bit of the `ons`",
+    "no `ton` runs it"
   ]
 
   @junk [
@@ -69,6 +131,9 @@ defmodule Logex.ApiContractTest do
     "this state is an instance"
   ]
 
+  # What the M1-6 oracle must see a timer and a one-shot do, at least once each.
+  @behaviours [:idle, :timing, :done, :clamped, :negative_preset, :fired, :held_first]
+
   setup do
     :rand.seed(:exsss, {2026, 9, 29})
     :ok
@@ -85,12 +150,34 @@ defmodule Logex.ApiContractTest do
   defp source(1) do
     inputs = Enum.filter(~w(start stop), fn _ -> :rand.uniform(2) == 1 end)
     bools = inputs ++ ~w(a b c)
-    dint_input = Enum.filter(["var_input sp dint"], fn _ -> :rand.uniform(2) == 1 end)
+    # Half the programs time and one-shot on `go`, a third of those also moving into the
+    # timer's members; and a third carry one of the M1-6 warnings' cases. A timed program
+    # has the dint input, which it moves into its timer's .pre.
+    timed? = :rand.uniform(2) == 1
+    dint_input = Enum.filter(["var_input sp dint"], fn _ -> timed? or :rand.uniform(2) == 1 end)
+    members? = timed? and :rand.uniform(3) == 1
+    warned = if :rand.uniform(3) == 1, do: [pick(warned())], else: []
 
     declarations =
       Enum.map(inputs, &"var_input #{&1} bool") ++
         dint_input ++
-        Enum.map(~w(a b c), &"#{pick(~w(var var_output))} #{&1} bool") ++ ["var_output n dint 7"]
+        Enum.map(~w(a b c), &"#{pick(~w(var var_output))} #{&1} bool") ++
+        ["var_output n dint 7"] ++
+        if(timed?,
+          do: [
+            "var_input go bool",
+            "var t1 ton",
+            "var s1 bool",
+            "var_output p bool"
+          ],
+          else: []
+        ) ++
+        Enum.flat_map(warned, &elem(&1, 0))
+
+    outputs =
+      ["ote #{pick(~w(a b c))}", "otl #{pick(~w(a b c))}", "otu a", "move 5 n", "move 1 b"] ++
+        ["( xic a | ) ote c", "eq n 7 ote b", "lt n #{pick([5, 7, 9])} ote c"] ++
+        if(timed?, do: ["ge t1.acc #{pick([0, 5, 20])} ote c", "xic t1.dn ote b"], else: [])
 
     rungs =
       for _ <- 1..:rand.uniform(5) do
@@ -99,15 +186,41 @@ defmodule Logex.ApiContractTest do
             "#{pick(~w(xic xio))} #{pick(bools)}"
           end)
 
-        "#{contacts} #{pick(["ote #{pick(~w(a b c))}", "otl #{pick(~w(a b c))}", "otu a", "move 5 n", "move 1 b", "( xic a | ) ote c"])}"
+        "#{contacts} #{pick(outputs)}"
       end
 
     moves = Enum.map(dint_input, fn _ -> "xic a move sp n" end)
-    Enum.join(declarations ++ rungs ++ moves, "\n")
+
+    # A dint input moved into .pre while `go` is off, so while the timer is reset, keeps the
+    # exact oracle below true; it may be negative, which times as 0.
+    member_moves =
+      if(members?, do: ["xic a move #{pick([3, 50])} t1.pre", "xic b move 0 t1.acc"], else: []) ++
+        if timed?, do: ["xio go move sp t1.pre"], else: []
+
+    # The one-shot and the timer come last, so the oracle sees them as they left them: a
+    # timer's invariants hold right after its `ton` runs. Nothing follows the `ton`.
+    timing =
+      if timed?,
+        do: ["xic go ons s1 ote p", "xic go ton t1 #{pick([0, 10, 25, 5000])}"],
+        else: []
+
+    Enum.join(
+      declarations ++
+        rungs ++ moves ++ Enum.flat_map(warned, &elem(&1, 1)) ++ member_moves ++ timing,
+      "\n"
+    )
   end
 
   defp source(2), do: soup(@words)
   defp source(3), do: soup(@words ++ @lex_errors)
+
+  # Programs that compile with an M1-6 warning: declarations, then rungs.
+  defp warned,
+    do: [
+      {[], ["eq 1 #{pick([1, 2])} ote c"]},
+      {["var s2 bool"], ["xic a ons s2 ote b", "xio a ote s2"]},
+      {["var t2 ton"], ["xic t2.dn ote c"]}
+    ]
 
   defp soup(words) do
     lines =
@@ -118,15 +231,21 @@ defmodule Logex.ApiContractTest do
     declarations =
       for name <- ~w(a b c start stop), :rand.uniform(3) > 1 do
         "#{pick(~w(var var_input var_output))} #{name} #{pick(~w(bool bool dint))}"
-      end
+      end ++
+        Enum.filter(["var t1 ton", "var s1 bool", "var n dint", "var d dint"], fn _ ->
+          :rand.uniform(2) == 1
+        end)
 
-    Enum.join(declarations ++ [pick(@declaration_mistakes)] ++ lines, "\n")
+    mistakes = [pick(@declaration_mistakes)] ++ lines ++ [pick(@rung_mistakes)]
+    Enum.join(declarations ++ mistakes, "\n")
   end
 
   test "compile/2 never raises for any source, and its diagnostics are in line order" do
+    results = for _ <- 1..600, do: Logex.compile(source(), name: "p")
+
     reached =
-      for _ <- 1..600, into: MapSet.new() do
-        case Logex.compile(source(), name: "p") do
+      for result <- results, into: MapSet.new() do
+        case result do
           {:ok, %Program{name: "p", warnings: warnings}} ->
             assert warnings == Enum.sort_by(warnings, & &1.line)
             :ok
@@ -143,6 +262,15 @@ defmodule Logex.ApiContractTest do
       end
 
     assert reached == MapSet.new([:ok, :lex, :parse, :validate])
+
+    errors = for {:error, diagnostics} <- results, d <- diagnostics, do: d.message
+    warnings = for {:ok, program} <- results, w <- program.warnings, do: w.message
+
+    for {fragment, messages} <-
+          Enum.map(@m16_diagnostics, &{&1, errors}) ++ Enum.map(@m16_warnings, &{&1, warnings}) do
+      assert Enum.any?(messages, &String.contains?(&1, fragment)),
+             "no source reached the message containing #{inspect(fragment)}"
+    end
   end
 
   test "the runtime refuses every host mistake with a documented ArgumentError, accepts " <>
@@ -157,16 +285,24 @@ defmodule Logex.ApiContractTest do
 
     assert length(programs) == 40
     assert Enum.any?(programs, &match?(%{tags: %{"sp" => %Tag{section: :var_input}}}, &1))
+    assert Enum.any?(programs, &match?(%{tags: %{"t1" => %Tag{type: %Logex.FbType{}}}}, &1))
+    assert Enum.any?(programs, &String.contains?(&1.source, "move 0 t1.acc"))
 
     for program <- programs do
       # Another program's instance, for the owner check.
       {:ok, other} = Logex.compile(program.source, name: "q")
-      walk(program, Runtime.instance(other), Runtime.instance(program), 30)
+      walk(program, Runtime.instance(other), Runtime.instance(program), steps(program))
     end
 
     # "state." is left out: only an instance edited by hand, outside the contract, gets it.
     assert Process.get(:refused, MapSet.new()) == MapSet.new(@refusals -- ["state."])
+    assert Process.get(:behaviours, MapSet.new()) == MapSet.new(@behaviours)
   end
+
+  # A timed program walks longer, so a timer is seen through its edges: a preset set while
+  # it is reset and then timed, a gap long enough to clamp.
+  defp steps(%Program{tags: %{"go" => _}}), do: 90
+  defp steps(_program), do: 30
 
   # Random operations on one instance. Each says whether it is a host mistake, and the
   # runtime must agree: refuse it if so, accept it if not.
@@ -187,7 +323,7 @@ defmodule Logex.ApiContractTest do
     end
   end
 
-  defp operation(program, other, state), do: operation(:rand.uniform(6), program, other, state)
+  defp operation(program, other, state), do: operation(:rand.uniform(7), program, other, state)
 
   defp operation(1, program, _other, state) do
     inputs = inputs(program)
@@ -195,22 +331,22 @@ defmodule Logex.ApiContractTest do
   end
 
   defp operation(2, program, _other, state) do
-    elapsed = pick([0, 0, 5, 10, -1, 1.5, nil])
+    elapsed = pick([0, 0, 5, 10, 25, 5000, 10_000_000_000, -1, 1.5, nil])
 
     {not (is_integer(elapsed) and elapsed >= 0),
-     fn -> scanned(program, Runtime.scan(program, state, elapsed)) end}
+     fn -> scanned(program, state, %{}, Runtime.scan(program, state, elapsed)) end}
   end
 
   defp operation(3, program, _other, state) do
     inputs = inputs(program)
 
     scan = %Scan{
-      now: state.now + pick([0, 3, -1]),
+      now: state.now + pick([0, 3, 10, 4990, 10_000_000_000, -1]),
       first: pick([state.first, state.first, not state.first])
     }
 
     {bad_inputs?(program, inputs) or scan.now < state.now or scan.first != state.first,
-     fn -> scanned(program, Runtime.call(program, state, inputs, scan)) end}
+     fn -> scanned(program, state, inputs, Runtime.call(program, state, inputs, scan)) end}
   end
 
   defp operation(4, program, _other, state) do
@@ -227,7 +363,7 @@ defmodule Logex.ApiContractTest do
     ]
 
     {args != [program, state, %{}, %Scan{now: state.now, first: state.first}],
-     fn -> scanned(program, apply(Runtime, :call, args)) end}
+     fn -> scanned(program, state, %{}, apply(Runtime, :call, args)) end}
   end
 
   # The other entry points, given a bad program, state or inputs map.
@@ -243,6 +379,18 @@ defmodule Logex.ApiContractTest do
       4 -> {[p, s] != [program, state], fn -> Runtime.restart(p, s, :cold) end}
     end
   end
+
+  # M1-6: a timed program's `go` held or dropped, so its timer and one-shot run often.
+  # Dropping `go` often sets a new preset for `xio go move sp t1.pre`, sometimes negative.
+  defp operation(7, %Program{tags: %{"go" => _} = tags} = program, _other, state) do
+    inputs = go(pick([1, 1, 0]), Map.has_key?(tags, "sp"))
+    {false, fn -> Runtime.put_inputs(program, state, inputs) end}
+  end
+
+  defp operation(7, program, other, state), do: operation(1, program, other, state)
+
+  defp go(0, true), do: %{"go" => 0, "sp" => pick([-5, -5, 40])}
+  defp go(go, _sp?), do: %{"go" => go}
 
   # A new instance is checked and set aside: the walk goes on with its own.
   defp kept(%Instance{now: 0, first: true}, state), do: state
@@ -266,9 +414,66 @@ defmodule Logex.ApiContractTest do
     state
   end
 
+  # A scan whose state before it is known: the M1-6 oracle, then the checks above.
+  defp scanned(program, before, inputs, {outputs, %Instance{} = later} = result) do
+    timed(program, before, Map.merge(before.env, inputs), outputs, later)
+    scanned(program, result)
+  end
+
+  defp timed(%Program{tags: %{"go" => _}} = program, before, env, outputs, later) do
+    go = env["go"]
+
+    # ons: power once a rise is seen, never on the first scan; the bit follows `go`.
+    fires = go == 1 and before.env["s1"] == 0 and not before.first
+    assert outputs["p"] == if(fires, do: 1, else: 0)
+    assert later.env["s1"] == go
+    behaviour(:fired, fires)
+    behaviour(:held_first, before.first and go == 1)
+
+    # ton, whose rung is last: the timer as its ton left it, `last` stamped on every run.
+    t1 = later.env["t1"]
+    assert Enum.sort(Map.keys(t1)) == ~w(acc dn en last pre tt)
+    assert t1["en"] == go
+    assert t1["last"] == later.now
+    timer(go, program, before.env["t1"], t1)
+  end
+
+  defp timed(_program, _before, _env, _outputs, _later), do: :ok
+
+  defp timer(1, program, was, t1) do
+    limit = max(t1["pre"], 0)
+    assert t1["acc"] in 0..limit//1
+    assert t1["dn"] == if(t1["acc"] == limit, do: 1, else: 0)
+    assert t1["tt"] == 1 - t1["dn"]
+    behaviour(if(t1["dn"] == 1, do: :done, else: :timing), true)
+    behaviour(:negative_preset, t1["pre"] < 0)
+    exact(String.contains?(program.source, "move 0 t1.acc"), was, t1, limit)
+  end
+
+  defp timer(0, _program, _was, t1) do
+    assert %{"acc" => 0, "dn" => 0, "tt" => 0} = t1
+    behaviour(:idle, true)
+  end
+
+  # Where no rung writes a member, .acc is exactly the delta formula's: nothing on the scan
+  # that first sees the rung true, then the time since the ton last ran, added to .acc
+  # floored at 0, and capped.
+  defp exact(true, _was, _t1, _limit), do: :ok
+
+  defp exact(false, was, t1, limit) do
+    delta = if was["en"] == 1, do: t1["last"] - was["last"], else: 0
+    assert t1["acc"] == min(max(was["acc"], 0) + delta, limit)
+    behaviour(:clamped, was["acc"] + delta > limit and delta > 1_000_000)
+  end
+
+  defp behaviour(_name, false), do: :ok
+
+  defp behaviour(name, true),
+    do: Process.put(:behaviours, MapSet.put(Process.get(:behaviours, MapSet.new()), name))
+
   defp inputs(program) do
     var_inputs = for {name, %Tag{section: :var_input}} <- program.tags, do: name
-    names = Map.keys(program.tags) ++ ["zz", "Start", <<255>>, :start, 7]
+    names = Map.keys(program.tags) ++ ["zz", "Start", "t1.dn", <<255>>, :start, 7]
     Map.new(1..:rand.uniform(3), fn _ -> pair(:rand.uniform(2), var_inputs, names, program) end)
   end
 
@@ -281,9 +486,13 @@ defmodule Logex.ApiContractTest do
   defp pair(_, _var_inputs, names, _program),
     do: {pick(names), pick([0, 1, 1, 0, 2_147_483_647] ++ @junk)}
 
-  # Records each documented kind of refusal it sees, for the reach assertion.
+  # Records each documented kind of refusal it sees, for the reach assertion. An accepted
+  # call is made twice and must give the same result: nothing in the runtime reads a clock
+  # or any state but its arguments (docs/organisation.md §4.6).
   defp attempt(fun) do
-    {:ok, fun.()}
+    result = fun.()
+    assert fun.() == result, "the same call gave two results"
+    {:ok, result}
   rescue
     error in ArgumentError ->
       kind = Enum.find(@refusals, &String.starts_with?(error.message, &1))
