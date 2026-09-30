@@ -253,7 +253,13 @@ choice, not an oversight to fix.
   (`Process.info(self(), :reductions)`), not time, so the bound holds on any machine:
   "compiling stays linear in the program's size" in `logex_test.exs` sees 4.2x for 4x the
   tags since M1-6, and saw 14.2x. A new pass over rungs or tags must be reached by that test's
-  program, or get a test like it.
+  program, or get a test like it. **Growth in depth is a second axis**: M1-6's path pass
+  copied what it found in a group at every level of nesting, so a rung 8,000 groups deep
+  took 2.9 s, and the size test, which never nests, stayed green. "compiling stays linear
+  in the depth of nesting" now reaches every walk into a group. It compares 500 and 8,000
+  levels, not 500 and 2,000, because `++` is charged few reductions for what it copies: a
+  walk that copies with `Enum.flat_map` at every level grew 4.3x to 4.7x for 4x the depth,
+  within the size test's bound, and grows 19x to 24x for 16x, where a linear one grows 15x.
 - **A map of 32 keys or fewer iterates in key order.** So a missing `Enum.sort` over a map,
   or over a list built from one, is invisible to every test with a small table. M1-5 hit
   it twice: the order of the input problems (pinned in `ee91fe5`), and the var_input list in

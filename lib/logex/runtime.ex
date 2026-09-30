@@ -17,8 +17,12 @@ defmodule Logex.Runtime do
   input problem in one call comes in one raise, a line each, in key order. Inputs merge
   into the instance, so a host sends only what changed. Outputs are every `var_output`.
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
-  `first`. A state is matched to its program by name. A `%Logex.Program{}` or
-  `%Logex.Instance{}` built or edited by hand is outside this contract.
+  `first`. A state is matched to its program by name, and its values are not checked each
+  scan: an instance kept across a recompile of the same name keeps them until `restart/3`.
+  A tag the recompile adds reads 0 until then, so an added timer starts at a `.pre` of 0,
+  and a tag whose type it changes keeps its old value, a timer's map reaching the outputs
+  and the contacts. A `%Logex.Program{}` or `%Logex.Instance{}` built or edited by hand is
+  outside this contract.
   """
 
   alias Logex.{Declarations, FbType, Instance, Program, Scan, Tag}

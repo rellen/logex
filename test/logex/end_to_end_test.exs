@@ -757,6 +757,28 @@ defmodule Logex.EndToEndTest do
       assert %{"pre" => 3000, "acc" => 0} = restarted.env["t1"]
     end
 
+    test "a timer a recompile of the same name adds is missing from a kept instance, so it " <>
+           "starts at .pre 0 until a restart" do
+      # As any tag a recompile adds reads 0, not its initial value, until a restart.
+      {:ok, v1} =
+        Logex.compile("var_input go bool\nvar_output done bool\nxic go ote done", name: "m")
+
+      {:ok, v2} =
+        Logex.compile(
+          "var_input go bool\nvar_output done bool\nvar t2 ton\nxic go ton t2 5000\n" <>
+            "xic t2.dn ote done",
+          name: "m"
+        )
+
+      state = Logex.Runtime.put_inputs(v1, Logex.Runtime.instance(v1), %{"go" => 1})
+      {_, state} = Logex.Runtime.scan(v1, state)
+      {%{"done" => 1}, state} = Logex.Runtime.scan(v2, state, 10)
+      assert %{"pre" => 0, "acc" => 0, "dn" => 1} = state.env["t2"]
+
+      restarted = Logex.Runtime.restart(v2, state, :cold)
+      assert %{"pre" => 5000, "acc" => 0, "dn" => 0} = restarted.env["t2"]
+    end
+
     test "a preset lowered below .acc is done at the next true scan, .acc brought down to it" do
       steps = [{0, %{"go" => 1}}, {3000, %{}}, {10, %{"newpre" => 1, "sp" => 1000}}]
 
@@ -947,6 +969,17 @@ defmodule Logex.EndToEndTest do
         assert off["t1"] ==
                  %{"pre" => 0, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => 7},
                inspect(junk)
+      end
+    end
+
+    test "a `last` that is not an integer adds nothing" do
+      # A .pre with room above .acc, so the cap cannot hide what was added.
+      for last <- ["z", nil, 1.5] do
+        timer = %{"pre" => 50, "acc" => 5, "en" => 1, "last" => last}
+
+        assert {_, %{"t1" => %{"acc" => 5, "last" => 7}}} =
+                 later_scan(program(@ton), %{"t1" => timer, "go" => 1}),
+               inspect(last)
       end
     end
 

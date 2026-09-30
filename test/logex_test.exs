@@ -40,6 +40,26 @@ defmodule LogexTest do
     later - before
   end
 
+  # One rung nested `depth` groups deep, each with a second leg and a contact after it, and
+  # a timer's contact, a comparison of two literals and a one-shot innermost, so every walk
+  # of a rung has work at every depth. A second copy has a `ton` innermost, which the
+  # contact after every group follows on its path: an error at every depth.
+  defp reductions_to_nest(depth) do
+    nest = fn innermost ->
+      Enum.reduce(1..depth, innermost, fn _, inner -> "( #{inner} | xic b ) xic a" end)
+    end
+
+    declarations = "var a bool\nvar b bool\nvar s bool\nvar t1 ton\n"
+    source = declarations <> "xic a ton t1 5\n" <> nest.("xic t1.dn eq 1 1 ons s") <> " ote b"
+    timed = declarations <> nest.("xic a ton t1 5")
+
+    {:reductions, before} = Process.info(self(), :reductions)
+    {:ok, _program} = Logex.compile(source, name: "deep")
+    {:error, _after_a_ton} = Logex.compile(timed, name: "deep")
+    {:reductions, later} = Process.info(self(), :reductions)
+    later - before
+  end
+
   describe "compile/2" do
     test "names the program, keeps its source, and lowers it as instructionize/2 does" do
       {:ok, tokens, _} = Logex.Compiler.tokenize(@seal)
@@ -117,6 +137,15 @@ defmodule LogexTest do
     test "compiling stays linear in the program's size" do
       ratio = reductions_to_compile(2000) / reductions_to_compile(500)
       assert ratio < 6, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
+    end
+
+    # And in its depth. At 500 and 8,000 levels a linear compile grows about 15x. A walk
+    # that copies what it found in a group at every level, as the instruction and warning
+    # walks first did, grows 19x to 24x, since `++` is charged few reductions for what it
+    # copies; the path pass, which copied its diagnostics so, grew about 150x.
+    test "compiling stays linear in the depth of nesting" do
+      ratio = reductions_to_nest(8000) / reductions_to_nest(500)
+      assert ratio < 17, "16x the depth took #{Float.round(ratio, 1)}x the reductions"
     end
 
     test "a name is checked for shape only: a word reserved in .ld files is a good name" do

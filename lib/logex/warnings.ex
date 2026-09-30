@@ -19,7 +19,8 @@ defmodule Logex.Warnings do
   @doc "The warnings for lowered `rungs` checked against the tag table `tags`."
   def of(rungs, tags) do
     signatures = Map.new(Compiler.instructions(), fn {_word, {symbol, sig}} -> {symbol, sig} end)
-    uses = Enum.flat_map(rungs, fn {:rung, elements} -> uses(elements, signatures) end)
+    instructions = instructions(rungs)
+    uses = Enum.flat_map(instructions, &uses(&1, signatures))
     # Grouped once, so the pass stays linear in the program's size.
     accesses =
       Enum.group_by(uses, fn {_, name, _, _} -> name end, fn {access, _, _, _} -> access end)
@@ -34,17 +35,27 @@ defmodule Logex.Warnings do
     |> Enum.flat_map(&about(&1, Map.get(accesses, &1.name, [])))
     |> Kernel.++(second_otes(uses, tags, owners))
     |> Kernel.++(storage_writes(uses, tags, owners))
-    |> Kernel.++(Enum.flat_map(rungs, fn {:rung, elements} -> constants(elements) end))
+    |> Kernel.++(Enum.flat_map(instructions, &constant/1))
     |> Enum.sort_by(& &1.line)
   end
 
-  # Every tag operand, in rung order, as {access, name, line, symbol}. A member is a use of
-  # its instance, `t1.dn` of `t1`, with its slot's access (M1-6).
-  defp uses(elements, signatures), do: Enum.flat_map(elements, &element(&1, signatures))
+  # Every instruction of every rung, in order, the legs of a group, however deeply nested,
+  # included. Gathered newest first and reversed once, so the pass stays linear in the
+  # depth of nesting too.
+  defp instructions(rungs) do
+    rungs
+    |> Enum.reduce([], fn {:rung, elements}, gathered -> gather(elements, gathered) end)
+    |> Enum.reverse()
+  end
 
-  defp element({:branches, legs}, signatures), do: Enum.flat_map(legs, &uses(&1, signatures))
+  defp gather(elements, gathered), do: Enum.reduce(elements, gathered, &gathered/2)
 
-  defp element({symbol, line, operands}, signatures),
+  defp gathered({:branches, legs}, gathered), do: Enum.reduce(legs, gathered, &gather/2)
+  defp gathered(instruction, gathered), do: [instruction | gathered]
+
+  # Each tag operand of an instruction, as {access, name, line, symbol}. A member is a use
+  # of its instance, `t1.dn` of `t1`, with its slot's access (M1-6).
+  defp uses({symbol, line, operands}, signatures),
     do:
       for(
         {{access, _type}, operand} <- Enum.zip(Map.fetch!(signatures, symbol), operands),
@@ -125,12 +136,8 @@ defmodule Logex.Warnings do
   defp where(first, _line), do: "on line #{first}"
 
   # M1-6: a comparison of two literals compiles, as IEC's EQ(1, 1) does, but its result
-  # never changes. In rung order.
+  # never changes.
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
-
-  defp constants(elements), do: Enum.flat_map(elements, &constant/1)
-
-  defp constant({:branches, legs}), do: Enum.flat_map(legs, &constants/1)
 
   defp constant({symbol, line, [{:int_lit, _, a}, {:int_lit, _, b}]})
        when symbol in @comparisons,

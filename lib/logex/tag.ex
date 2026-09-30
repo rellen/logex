@@ -24,7 +24,9 @@ defmodule Logex.Tag do
   @doc """
   A tag declared from Elixir, checked by the same rules as a declaration line. Raises
   `ArgumentError` with the message a declaration line would have got. With no initial
-  value the tag starts at 0.
+  value a bool or a dint starts at 0, and an instance of a function block where its type
+  says (`Logex.FbType.initial/2`); a timer may instead be given `%{"pre" => ms}`, its
+  starting preset.
   """
   def new!(name, type, section \\ :var, initial \\ nil),
     do:

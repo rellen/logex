@@ -177,15 +177,19 @@ defmodule Logex.Declarations do
   defp declared({:error, message}, _section, line, diagnostics),
     do: {[], [diagnostic(line, message) | diagnostics]}
 
+  defp declared({:error, message, tag}, _section, line, diagnostics),
+    do: {recovered(%{tag | line: line}), [diagnostic(line, message) | diagnostics]}
+
   defp checked([], tag, _line, diagnostics), do: {[tag], diagnostics}
 
   defp checked(messages, tag, line, diagnostics),
     do: {recovered(tag), Enum.reverse(Enum.map(messages, &diagnostic(line, &1)), diagnostics)}
 
-  # M1-6: an instance declared in the wrong section, or with an initial value, is still
-  # plainly an instance, so it is declared as `var t1 ton` too, and its uses are not each
-  # reported as undeclared: one mistake, one message. A bad name is not recovered, and
-  # any other broken declaration declares nothing, as M1-3 decided.
+  # M1-6: an instance declared in the wrong section, with an initial value, or with its
+  # line broken after its type word, is still plainly an instance, so it is declared as
+  # `var t1 ton` too, and its uses are not each reported as undeclared: one mistake, one
+  # message. A bad name is not recovered, and any other broken line declares nothing, as a
+  # broken line for a bool or a dint does, whose initial value could be any of its words.
   defp recovered(%Tag{type: %FbType{}, name: name} = tag),
     do: recover(name(name), %{tag | section: :var, initial: nil})
 
@@ -211,8 +215,16 @@ defmodule Logex.Declarations do
   defp shape([{:name, _, _}, {:branches, _} | _], _kw),
     do: {:error, "a declaration cannot hold a branch group"}
 
-  defp shape([{:name, _, name}, {:name, _, type} | tail], kw),
-    do: typed(type_word(type), name, type, tail, kw)
+  defp shape([{:name, _, name}, {:name, _, word} | tail], kw) do
+    type = type_word(word)
+    salvaged(typed(type, name, word, tail, kw), type, name)
+  end
+
+  # `var t1 ton 5 6`: the name and the type word came before the mistake (M1-6).
+  defp salvaged({:error, message}, %FbType{} = type, name),
+    do: {:error, message, %Tag{name: name, type: type, section: :var}}
+
+  defp salvaged(shaped, _type, _name), do: shaped
 
   defp typed(nil, name, type, tail, kw),
     do: {:error, untyped(String.downcase(name), name, type, tail, kw)}
@@ -343,8 +355,9 @@ defmodule Logex.Declarations do
     do: ["unknown function block type #{inspect(type.name)}: logex has Logex.FbType.ton()"]
 
   # M1-6: an instance is the program's own state. It is not supplied from outside, and the
-  # host reads none as an output, so a scan's outputs stay integers (docs/organisation.md
-  # §4.6). Its preset is the operand of the instruction that runs it.
+  # host reads none as an output, so the outputs of a scan of the program's own state stay
+  # integers (docs/organisation.md §4.6; Logex.Runtime says what a state kept across a
+  # recompile carries). Its preset is the operand of the instruction that runs it.
   defp instance(%Tag{section: section, name: name} = tag)
        when section in [:var_input, :var_output],
        do: [
@@ -358,7 +371,7 @@ defmodule Logex.Declarations do
   # a tag declared from Elixir may carry one too: a map of the type's inputs to values
   # that fit them. A number, or a struct, is never one.
   defp instance(%Tag{initial: %{} = initial} = tag) when not is_struct(initial),
-    do: inputs(Enum.all?(initial, &input?(tag.type, &1)), tag)
+    do: inputs(Enum.reject(initial, &input?(tag.type, &1)), tag)
 
   defp instance(%Tag{name: name} = tag),
     do: [
@@ -375,9 +388,16 @@ defmodule Logex.Declarations do
 
   defp fits_input?(_member, _value), do: false
 
-  defp inputs(true, _tag), do: []
+  defp inputs([], _tag), do: []
 
-  defp inputs(false, %Tag{name: name} = tag),
+  # A `pre` that is a dint but no preset fits its type, so the message names the range.
+  defp inputs([{"pre", v} | _], %Tag{type: %FbType{name: "ton"}, name: name})
+       when is_integer(v),
+       do: [
+         "#{label(name)} is a ton: its `pre` starts at a preset, 0 to 2147483647 ms, found `#{v}`"
+       ]
+
+  defp inputs(_refused, %Tag{name: name} = tag),
     do: [
       "#{label(name)} is a #{tag.type.name}: its initial value is a map of its inputs to " <>
         ~s|values that fit them, as in %{"pre" => 5000}, found #{inspect(tag.initial)}|

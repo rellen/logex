@@ -373,10 +373,17 @@ defmodule Logex.ApiContractTest do
     inputs = pick([%{}, %{}, [], nil])
 
     case :rand.uniform(4) do
-      1 -> {p != program, fn -> kept(Runtime.instance(p), state) end}
-      2 -> {[p, s, inputs] != [program, state, %{}], fn -> Runtime.put_inputs(p, s, inputs) end}
-      3 -> {[p, s] != [program, state], fn -> scanned(program, Runtime.scan(p, s)) end}
-      4 -> {[p, s] != [program, state], fn -> Runtime.restart(p, s, :cold) end}
+      1 ->
+        {p != program, fn -> kept(Runtime.instance(p), state) end}
+
+      2 ->
+        {[p, s, inputs] != [program, state, %{}], fn -> Runtime.put_inputs(p, s, inputs) end}
+
+      3 ->
+        {[p, s] != [program, state], fn -> scanned(program, state, %{}, Runtime.scan(p, s)) end}
+
+      4 ->
+        {[p, s] != [program, state], fn -> Runtime.restart(p, s, :cold) end}
     end
   end
 

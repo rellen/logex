@@ -1061,6 +1061,33 @@ and a group after one as "a branch group"; an `ons` on anything but a declared b
 at the landing: compiling 4x the tags takes 4.2x the reductions, and a scan of the README
 motor 280.9 reductions against 265.7 at `19868d4`, the 5.7% the design records.
 
+An adversarial review of the eight commits (five lenses, and a skeptic reproducing each
+finding) confirmed 22 findings, 19 once the ones found twice are merged, and refuted 5.
+Its fixes are the commit after the documents, and the suite is at 317 tests (6
+doctests). Two were defects. The path pass copied what it had found in a group at every
+level of nesting, so a rung 8,000 groups deep with a `ton` innermost took 205 million
+reductions and 2.9 s; it, and the instruction and warning walks, which copied in the same
+way, now gather newest first and reverse once, and a second growth test bounds compiling
+in depth as the first does in size. And a timer line broken after its type word, `var
+t1 ton 5 6`, declared nothing, against the design's "a misdeclared timer is still
+declared"; it is now declared, and its uses are not reported as undeclared. Five were
+misleading messages: the `move` a tag preset is told to write and the `xic t1.dn` a path
+error names are given only where they would compile; a timer first met in a program that
+declares nothing is shown `var t1 ton`, not `bool` or `dint`; `ton.dn` is a member of an
+instruction, not an undeclared name; `t1.acc.3` is bit access, not a path too deep; and a
+starting `pre` out of range from Elixir is told the range, which -5, a dint, is not. Five
+were rules no test failed without: which `ton` a group with two cites, a bool member's
+too-deep message, the preset range's upper end, the section check on a timer from
+Elixir, and that a `last` which is not an integer adds nothing. One was the property's
+claim: operation 6's `scan/2` skipped the oracle, which now checks all 490 accepted scans
+of a timed program at the seed, not 466. Six were stale passages: `Logex.Tag.new!/4`'s
+doc, CLAUDE.md's rule for a type word, instruction-sets.md's "flat env", defladder.md's
+`bit/2`, and two things the contract did not say about a state kept across a recompile
+of the same name, now in `Logex.Runtime`'s moduledoc and organisation.md's online-edit
+row, with a test of the second: a tag whose type the recompile changes keeps its old
+value, a timer's map reaching the outputs; and a tag it adds reads 0 until a restart, so
+an added timer starts at a `.pre` of 0 and is done at its first true scan.
+
 **Decided 2026-09-28, from `docs/organisation.md` §6.1 and §4.6:**
 1. `evaluate/3` threads a read-only `%Logex.Scan{now:, first:}`; the accumulator stays
    `{power_flow, env}`. CLAUDE.md's `evaluate/2` convention changes with it. *(Since M1-5
@@ -1149,6 +1176,8 @@ negative `.acc`). The design:
   restart. An instance kept running under a recompiled program of the same name keeps its
   old `.pre` until a restart, which organisation.md's online-edit row must answer when that
   lands. A scan costs about 5.7% more reductions, nearly all of it `evaluate/3`'s threading.
+  *(The review above found two more for that row: a tag the recompile adds, or whose type
+  it changes.)*
 
 **Landing, in commits, each green and each with a test that fails when its change is
 reverted:** (1) the eight naming stanzas; (2) `evaluate/3`, a refactor; (3) `ons`; (4) the

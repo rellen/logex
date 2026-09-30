@@ -129,8 +129,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - Every tag a program uses is declared (M1-3): in the source, `var aa bool` before the first
   rung, or from Elixir, `Logex.Tag.new!/4` passed to `instructionize/2`. A test that only
   needs tags to exist declares them either way; `validation_test.exs`'s `@declared` is the
-  Elixir form. A new section or type word is a row in `Logex.Declarations`, is reserved in
-  any case, and owes a `docs/naming.md` stanza, which `naming_test.exs` checks.
+  Elixir form. A new section or elementary type word is a row in `Logex.Declarations`,
+  and a function block type word a key of `Logex.FbType.builtins/0`; either is reserved in
+  any case and owes a `docs/naming.md` stanza, which `naming_test.exs` checks.
 - A fix needs a test that **fails when the fix is reverted**. Check it by reverting, not by
   reasoning: `mix test` stayed fully green after the `NAME` regex was corrected, because
   no test used a single-character tag. `PLAN.md` §2·M0-4 has the worked mutation table.
