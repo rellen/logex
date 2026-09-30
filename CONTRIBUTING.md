@@ -170,7 +170,7 @@ Two steps, in `CLAUDE.md`, and step 1 has a test behind it.
    fails if a mnemonic reaches `@instructions` without one.
 2. **Then the code** — the mnemonic and its operand signature in `@instructions` (each
    operand's access and type, as `compiler.ex` describes above the map), plus
-   **two** `evaluate/2` clauses, in `Logex.Runtime`. The de-energised `{false, env}` clause
+   **two** `evaluate/3` clauses, in `Logex.Runtime`. The de-energised `{false, env}` clause
    is mandatory; without it the instruction works on an energised rung and raises `FunctionClauseError`
    the moment a contact opens. The new mnemonic becomes a reserved word, in any case, so it
    breaks any program with a tag of that name: say so in the commit.
@@ -186,7 +186,7 @@ Two steps, in `CLAUDE.md`, and step 1 has a test behind it.
 edited `CLAUDE.md`, shifting every `CLAUDE.md` line reference in `PLAN.md`. `747d630`
 cleaned that up.
 
-Cite `the {:xic, _, [{:name, _, arg}]} clause of evaluate/2`, not `compiler.ex:79`. Clause heads,
+Cite `the {:xic, _, [{:name, _, arg}]} clause of evaluate/3`, not `compiler.ex:79`. Clause heads,
 function names, grammar productions and bullet titles survive edits above them. §1 and §2
 keep their numbers deliberately; §2 is explicitly historical.
 
@@ -258,8 +258,8 @@ choice, not an oversight to fix.
   that needs it), rather than living with the warning.
 - **Never skip, disable or quarantine a test to get to green.**
 - **Some code that looks wrong is not.** The non-short-circuiting fold along a rung
-  (`series/2` in `Logex.Runtime`) and the sequential `env` threading through parallel
-  branches (its `element({:branches, _}, _)` clause) both look like accidents and are
+  (`series/3` in `Logex.Runtime`) and the sequential `env` threading through parallel
+  branches (its `element({:branches, _}, _, _)` clause) both look like accidents and are
   faithful controller behaviour. `PLAN.md` §6 lists them; read it before "fixing" one.
 
 ---

@@ -25,8 +25,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `lib/logex/runtime.ex` — runs a program as instances (M1-5): `instance/1`, `call/4` (one
   scan of one instance, at a given `%Logex.Scan{}`), `put_inputs/3` with `scan/2,3` (the
   task-less sugar) and `restart/3`, with the host contract in its moduledoc: a host
-  mistake raises `ArgumentError`. The evaluator lives here too, private (B5): `rung/2`,
-  `series/2`, `element/2`, and the instruction clauses of `evaluate/2`.
+  mistake raises `ArgumentError`. The evaluator lives here too, private (B5): `rung/3`,
+  `series/3`, `element/3`, and the instruction clauses of `evaluate/3`, each threading the
+  scan's read-only `%Logex.Scan{}`.
   `lib/logex/instance.ex` and `lib/logex/scan.ex` hold its two structs.
 - `lib/logex/compiler.ex` — the stages: `tokenize/1` and `parse/1` delegate to the two
   modules below; `instructionize/2` takes the declaration lines off into a tag table,
@@ -86,7 +87,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 
 ## Conventions
 
-- `evaluate/2` clauses, private in `Logex.Runtime`, take `(instruction, {power_flow_bool, env_map})` and return `{new_power_flow_bool, new_env_map}`. No test calls the evaluator: a test runs a program through `Logex.Runtime.call/4`, on a hand-built `%Logex.Instance{}` when it needs a particular env
+- `evaluate/3` clauses, private in `Logex.Runtime`, take `(instruction, {power_flow_bool, env_map}, %Logex.Scan{})` and return `{new_power_flow_bool, new_env_map}`. The scan is read-only and the same for every instruction of one call: a clause that needs the time reads `scan.now`, one that needs the first scan reads `scan.first`, and every other clause ignores it as `_scan` (M1-6). No test calls the evaluator: a test runs a program through `Logex.Runtime.call/4`, on a hand-built `%Logex.Instance{}` when it needs a particular env
 - A mistake in the source is a `%Logex.Diagnostic{}`, returned; a mistake by the host is an `ArgumentError`, raised, whose message a test pins. Nothing else may escape the public API (`api_contract_test.exs`)
 - An operand in the AST is `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. The lexer's tokens carry `{line, column}`; the parser keeps only the line, because the suite pins that shape. An instruction in the IR is `{symbol, line, operands}`, carrying its mnemonic's line; a `{:branches, legs}` node carries no line of its own
 - New instructions, step 1 — **survey the name before writing any code**: add a
@@ -102,7 +103,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `{access, type}` per operand: access `:read` or `:write` for a tag, `:value` for a tag
   or a literal; type `:bool`, `:dint` or `:any`) to the `@instructions` map in
   `compiler.ex` **and** two
-  `evaluate/2` clauses in `runtime.ex` — one for `{true, env}` and one for `{false, env}`. The map also
+  `evaluate/3` clauses in `runtime.ex` — one for `{true, env}` and one for `{false, env}`. The map also
   reserves the name: no tag may be spelled like a mnemonic, in any case, so a new
   instruction breaks any program with a tag of that name — say so in the commit. The
   de-energised clause is mandatory: without it the instruction works on an energised

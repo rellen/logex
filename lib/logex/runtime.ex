@@ -83,8 +83,8 @@ defmodule Logex.Runtime do
   defp mode!(mode),
     do: raise(ArgumentError, "restart takes :cold or :warm, got: #{inspect(mode)}")
 
-  defp run(%Instance{env: env} = state, %Program{rungs: rungs} = program, %Scan{now: now}) do
-    env = Enum.reduce(rungs, env, &rung/2)
+  defp run(%Instance{env: env} = state, %Program{rungs: rungs} = program, %Scan{now: now} = scan) do
+    env = Enum.reduce(rungs, env, &rung(&1, &2, scan))
     {outputs(program, env), %{state | env: env, now: now, first: false}}
   end
 
@@ -244,71 +244,74 @@ defmodule Logex.Runtime do
   defp on_line(%Tag{line: line}), do: " (declared on line #{line})"
 
   # The evaluator (B5): private, so no logic runs past the checks above. Each rung starts
-  # with power, and `{power_flow, env}` threads through its elements in order.
-  defp rung({:rung, elements}, env) do
-    {_power_flow, env} = series(elements, {true, env})
+  # with power, and `{power_flow, env}` threads through its elements in order. The scan is
+  # read-only and the same for every instruction of every rung of one call (M1-6).
+  defp rung({:rung, elements}, env, scan) do
+    {_power_flow, env} = series(elements, {true, env}, scan)
     env
   end
 
-  defp series(elements, acc), do: Enum.reduce(elements, acc, &element/2)
+  defp series(elements, acc, scan), do: Enum.reduce(elements, acc, &element(&1, &2, scan))
 
   # Every leg runs, from the power flowing into the group, with the env threading through
   # the legs in order, so a leg sees what an earlier one wrote. The group passes power if
   # any leg does: branches do not short-circuit.
-  defp element({:branches, legs}, {power, env}) do
-    {powers, env} = Enum.map_reduce(legs, env, fn leg, env -> series(leg, {power, env}) end)
+  defp element({:branches, legs}, {power, env}, scan) do
+    {powers, env} =
+      Enum.map_reduce(legs, env, fn leg, env -> series(leg, {power, env}, scan) end)
+
     {Enum.any?(powers), env}
   end
 
-  defp element(instruction, acc), do: evaluate(instruction, acc)
+  defp element(instruction, acc, scan), do: evaluate(instruction, acc, scan)
 
-  # One instruction: `(instruction, {power_flow, env})` to `{power_flow, env}`, a clause
-  # for an energised rung and one for a de-energised one (CLAUDE.md).
-  defp evaluate({:xic, _, [{:name, _, arg}]}, {true, env}) do
+  # One instruction: `(instruction, {power_flow, env}, %Scan{})` to `{power_flow, env}`, a
+  # clause for an energised rung and one for a de-energised one (CLAUDE.md).
+  defp evaluate({:xic, _, [{:name, _, arg}]}, {true, env}, _scan) do
     {bit(env, arg), env}
   end
 
-  defp evaluate({:xic, _, _}, {false, env}) do
+  defp evaluate({:xic, _, _}, {false, env}, _scan) do
     {false, env}
   end
 
-  defp evaluate({:xio, _, [{:name, _, arg}]}, {true, env}) do
+  defp evaluate({:xio, _, [{:name, _, arg}]}, {true, env}, _scan) do
     {not bit(env, arg), env}
   end
 
-  defp evaluate({:xio, _, _}, {false, env}) do
+  defp evaluate({:xio, _, _}, {false, env}, _scan) do
     {false, env}
   end
 
-  defp evaluate({:ote, _, [{:name, _, arg}]}, {true, env}) do
+  defp evaluate({:ote, _, [{:name, _, arg}]}, {true, env}, _scan) do
     {true, Map.put(env, arg, 1)}
   end
 
-  defp evaluate({:ote, _, [{:name, _, arg}]}, {false, env}) do
+  defp evaluate({:ote, _, [{:name, _, arg}]}, {false, env}, _scan) do
     {false, Map.put(env, arg, 0)}
   end
 
-  defp evaluate({:otl, _, [{:name, _, arg}]}, {true, env}) do
+  defp evaluate({:otl, _, [{:name, _, arg}]}, {true, env}, _scan) do
     {true, Map.put(env, arg, 1)}
   end
 
-  defp evaluate({:otl, _, _}, {false, env}) do
+  defp evaluate({:otl, _, _}, {false, env}, _scan) do
     {false, env}
   end
 
-  defp evaluate({:otu, _, [{:name, _, arg}]}, {true, env}) do
+  defp evaluate({:otu, _, [{:name, _, arg}]}, {true, env}, _scan) do
     {true, Map.put(env, arg, 0)}
   end
 
-  defp evaluate({:otu, _, _}, {false, env}) do
+  defp evaluate({:otu, _, _}, {false, env}, _scan) do
     {false, env}
   end
 
-  defp evaluate({:move, _, [arg1, {:name, _, arg2}]}, {true, env}) do
+  defp evaluate({:move, _, [arg1, {:name, _, arg2}]}, {true, env}, _scan) do
     {true, Map.put(env, arg2, get_arg(env, arg1))}
   end
 
-  defp evaluate({:move, _, _}, {false, env}) do
+  defp evaluate({:move, _, _}, {false, env}, _scan) do
     {false, env}
   end
 

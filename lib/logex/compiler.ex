@@ -176,7 +176,7 @@ defmodule Logex.Compiler do
 
   # What each kind accepts, as an allowlist. take_operands/3 only ever takes names and
   # literals, so a literal where a tag must go is the one thing left to report; any other
-  # pairing raises here rather than reaching evaluate/2 unchecked.
+  # pairing raises here rather than reaching evaluate/3 unchecked.
   defp check_kind({:read, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
   defp check_kind({:write, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
   defp check_kind({:value, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics

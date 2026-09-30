@@ -249,7 +249,7 @@ defmodule Logex.EndToEndTest do
   describe "line numbers" do
     test "no stage depends on an instruction sitting on line 1" do
       # Every operand carries its line, and so does every instruction since M1-2;
-      # each evaluate/2 and get_arg/2 pattern destructures them as `_`. That is only
+      # each evaluate/3 and get_arg/2 pattern destructures them as `_`. That is only
       # a wildcard if nothing breaks when every instruction sits below line 1 -- so:
       # every instruction, both power states, a literal and a tag operand, from line
       # 3 down. The last rung opens its first contact, so every instruction after it
@@ -377,7 +377,7 @@ defmodule Logex.EndToEndTest do
   end
 
   describe "contacts on an env the host builds (M1-4)" do
-    # The compiler lets only a bool reach a contact, but evaluate/2 takes whatever env the
+    # The compiler lets only a bool reach a contact, but evaluate/3 takes whatever env the
     # host hands it. xic and xio must still disagree on every value: before M1-4 a 5, a
     # nil or a missing tag read false for both, so an interlock on xio never fired.
     @contacts "var t bool\nvar hi bool\nvar lo bool\nxic t ote hi\nxio t ote lo"

@@ -4,8 +4,8 @@ defmodule Logex.Scan do
   `first`, whether it is the instance's first scan since it started or restarted.
 
   `Logex.Runtime.call/4` checks it against the instance: time never goes backwards, and
-  `first` must agree. Nothing reads it yet; M1-6's timers read `now` and `ons` reads
-  `first` (PLAN.md M1-6).
+  `first` must agree. The evaluator threads it, unchanged, to every instruction of every
+  rung (`evaluate/3`); M1-6's timers read `now` and `ons` reads `first` (PLAN.md M1-6).
   """
 
   @enforce_keys [:now, :first]
