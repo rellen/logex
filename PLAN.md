@@ -1112,7 +1112,10 @@ rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
   of one `.ld` program type, wired in a configuration file to different input and output
   points, run for N cycles from one input image and keep independent state; a mis-wired,
   unknown, undriven-input or mistyped connection is a located diagnostic naming its file
-  and line.
+  and line. *Also decided 2026-09-30:* the extension says what kind of file it is, so
+  `Logex.compile_file/1` refuses anything but `.ld` with a `:file` diagnostic. Until
+  then it names a program after its basename less the last extension, whatever that is,
+  and `test/logex_test.exs` pins that; its `seal.txt` assertion flips with this item.
 - **M2-3 · Periodic tasks in text.** `task <n> interval <ms> priority <p>` and `with`.
   *Done when* the plant of `docs/organisation.md` §4.4 without its event task, its `motor`
   the §4.2 one plus `var t1 ton` and a rung `xic motor ton t1 5000` (so no `estop`,
