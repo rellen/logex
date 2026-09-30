@@ -1057,6 +1057,80 @@ can silently outlive.
    2026-09-30. The golden record changed in exactly those two entries for the two rules,
    and in the 165 entries B8 predicted.)*
 
+**Designed and decided 2026-09-30.** A design panel built three designs (the conventional
+reading, one shaped for Milestone 2, one built around the error model and the host
+contract), each spiked on a copy of `da2159b`; two judges scored them, and a synthesis
+took the contract design's semantics and error model, the Milestone-2 design's data model,
+and the conventional design's decision-6 test, and was spiked as eight commits (290 tests
+on Elixir 1.20.4, 128 rules each reverted and caught). Two refuters checked it. The
+maintainer took every recommendation, including five where the refuters changed the
+synthesis (a second `ons`, `last`, what follows a `ton`, decision 6's wording, and a
+negative `.acc`). The design:
+
+- **Surface.** Eight mnemonics, reserved in any case: `ons`, `eq ne lt gt le ge`, `ton`
+  (a program with a tag of any of those names stops compiling). `ton` is a type word too.
+  No syntax change: `t1.dn` has lexed as one name since `46f17f0`.
+- **`evaluate/3`** threads the checked `%Scan{}`, read-only, to every instruction; only
+  `ons` reads `first` and only `ton` reads `now`.
+- **`ons s1`**, `[{:write, :bool}]`: power on the one scan in which the power reaching it
+  rises, never on an instance's first scan (it reads `scan.first`, which stands for the
+  conventional prescan). `s1` is an ordinary `var` or `var_output` bool. A second `ons` on
+  one storage bit is an error at its line, citing the first: the false one clears the bit
+  every scan, so the true one fires every scan, and no arrangement of two works. Another
+  writer (`ote`, `otl`, `otu`, `move`) is a warning citing the `ons`, since a deliberate
+  re-arm cannot be told from a mistake; the second-`ote` warning skips a storage bit.
+- **Comparisons**, `[{:value, :dint}, {:value, :dint}]`: dint tags, members or literals
+  that fit 32 bits, `lt a b` meaning a < b. They are input instructions and pass no power
+  de-energised; `ne ge le` are the negations of `eq lt gt`, so each pair is complementary.
+  Two literals compile, with a warning that the result never changes.
+- **Timers.** `var t1 ton`, in `var` only, with no initial value; a misdeclared timer is
+  still declared, so its uses do not cascade. `%Logex.FbType{}` is the schema, carried
+  inline as the tag's type, with members that have a role and a write flag; M2-5 reuses
+  it. State nests: `env["t1"]` is `%{"pre", "acc", "dn", "tt", "en", "last"}`, every key a
+  string. `last` is internal: no name reaches it, and it is the time of the timer's last
+  run, as decision 5 has it.
+- **Members** are typed by the schema (`.pre .acc` dint, `.dn .tt .en` bool, all
+  case-sensitive), read anywhere, written only to `.pre` and `.acc`, and lowered to
+  `{:member, line, path}` in the IR, so the runtime never splits a name. Every other
+  dotted name is a located diagnostic of its own: an unknown member (a did-you-mean on the
+  member's name, else the member list), a member of a non-instance, bit access (`word.3`,
+  not supported yet), a path too deep, an undeclared instance (named once), and an
+  instance named whole where a value belongs.
+- **`ton t1 5000`**, `[{:instance, "ton"}, {:preset, :dint}]`. The preset is a literal of 0
+  to 2147483647 ms and the timer's starting `.pre`: the compiled tag carries it, and
+  `instance/1` and `restart/3` restore it. The instruction never writes `.pre`, so a
+  `move` into it holds. One `ton` runs a timer; a second is an error. Energised, `.en` is 1
+  and `.acc` gains `now − last` if `.en` was already 1, nothing on the first true scan;
+  `.acc` is floored at 0 before the time is added and capped at `max(.pre, 0)`; `.dn` is
+  `.acc` at the cap, recomputed each true scan, so a raised `.pre` resumes timing; `.tt`
+  is `1 − .dn`. De-energised, `.acc .dn .tt .en` are 0. `last` is set to `now` on every
+  run. **Nothing may follow a `ton` on its path** (in its leg, or after a group one of whose
+  legs ends in it): whether the power after a `ton` is the rung's, as after `ote`, or the
+  timer's `.dn`, IEC's Q, is left open, and refusing is the reversible way to leave it.
+  A timer no `ton` runs is a warning.
+- **The host contract** is M1-5's, unchanged: a member as an input key is refused with its
+  own `input …` message, values are not checked each scan, and the evaluator is total on a
+  hand-built env, a timer entry of any shape included.
+- **Decision 6, measured.** One program type, two instances stepped through `call/4` every
+  10 ms and every 50 ms, `go` rising at 1000 ms with a 5000 ms preset: both are done at
+  6000 ms and agree at every time both scan. The equality holds per rising edge, when both
+  instances see that edge at one time and the preset is a multiple of both periods (a
+  1030 ms preset is done at 1030 ms and 1050 ms). A timer that re-triggers itself repeats
+  every preset plus two task periods, as MatIEC's TON does, so its period differs at 10 and
+  50 ms.
+- **Known costs, recorded.** After `move 3000 t1.pre` the rung still reads 5000 until a
+  restart. An instance kept running under a recompiled program of the same name keeps its
+  old `.pre` until a restart, which organisation.md's online-edit row must answer when that
+  lands. A scan costs about 5.7% more reductions, nearly all of it `evaluate/3`'s threading.
+
+**Landing, in commits, each green and each with a test that fails when its change is
+reverted:** (1) the eight naming stanzas; (2) `evaluate/3`, a refactor; (3) `ons`; (4) the
+comparisons; (5) `var t1 ton` and members; (6) `ton`; (7) the host-contract property over
+all of it; (8) the documents. A new backlog item, B10, records that
+`Logex.Warnings.second_otes/2` orders warnings that share a line by a map, never by rung.
+
+The item as written follows.
+
 Both need per-instance cross-scan state, so they are the proof that M1-5's architecture
 is right. TON is what turns this from an expression evaluator into something
 recognisable as a PLC: it needs a per-instance struct (`.PRE/.ACC/.DN/.TT/.EN`)
