@@ -118,6 +118,12 @@ what the tests were written to catch. `ee91fe5` recorded 31 mutants, each red, y
 The review of M1-5 found fifteen rules no test failed without, twelve of them in code M1-5
 added (`b8a9bd8`); the review of M1-3 had 52 of its 112 mutants survive (`0e83b5f`).
 
+A walk over a rung must reach a group nested in another, and a test must say so. M1-6's
+spike walked a rung for its `ton`s and for its comparisons of two literals, and cutting
+either walk to one group deep left the whole suite green: a nested `ton t1 5000` then
+started with `.pre` 0 and was done at once. "A group nested in another" is a standing row
+of every rung walker's mutation table.
+
 ### Beware of a green suite
 
 `690fc2d` fixed an atom that no stage in the pipeline could produce — `get_arg/2` matched
@@ -153,7 +159,9 @@ produced 2 of its 9 refusal kinds, and gave a bad program or state only to `call
 caught none of twelve rule-breaks off those paths. It now asserts its reach, the way
 `printer_test.exs`'s `@required_shapes` does — every compile stage, every refusal kind a
 host can cause — and that each call is refused exactly when it is a mistake. Give a new
-property the same.
+property the same, and run its reach under a few other seeds before trusting it: M1-6's
+first draft saw a timer with a negative preset under the fixed seed and under none of
+eight others.
 
 The same trap has a live instance. `PLAN.md` §6 keeps the sequential `env` threading in the
 `{:branches, _}` reducer deliberately, and B7 invites rewriting that reducer. Until
@@ -243,8 +251,8 @@ choice, not an oversight to fix.
   against 0.3 s — with every warning right and the suite green for seven commits.
   `b8a9bd8` groups the uses once. Compile two sizes and compare reductions
   (`Process.info(self(), :reductions)`), not time, so the bound holds on any machine:
-  "compiling stays linear in the program's size" in `logex_test.exs` sees 4.1x for 4x the
-  tags, and saw 14.2x. A new pass over rungs or tags must be reached by that test's
+  "compiling stays linear in the program's size" in `logex_test.exs` sees 4.2x for 4x the
+  tags since M1-6, and saw 14.2x. A new pass over rungs or tags must be reached by that test's
   program, or get a test like it.
 - **A map of 32 keys or fewer iterates in key order.** So a missing `Enum.sort` over a map,
   or over a list built from one, is invisible to every test with a small table. M1-5 hit

@@ -3,7 +3,7 @@ defmodule Logex.Printer do
   The other direction: a parse AST back to source text.
 
   Without this the pipeline is one-way — `tokenize/1`, `parse/1`, `instructionize/2`
-  and `evaluate/2` all consume toward an environment — so logex could read a rung
+  and `evaluate/3` all consume toward an environment — so logex could read a rung
   written as text but never write one. That makes it a textual *input format* rather
   than a textual *representation*, which is the thing a per-rung editing box needs:
   the vendor's own guide for the software logex borrows its mnemonics from describes

@@ -190,7 +190,7 @@ CONTROLLER                                   CONFIGURATION (+ one implicit RESOU
 | network | one rung, one line | — | done |
 | PROGRAM type | one `.ld` file, named by its file: `motor.ld` is type `motor` | none. `%Logex.Program{}` is stateless | M1-3, M1-5 |
 | VAR / VAR_INPUT / VAR_OUTPUT | `var fault bool`, `var_input start bool`, `var_output motor bool` | the instance | M1-3 |
-| standard FB instance | `var t1 ton`, then `ton t1 5000` on a rung, and `t1.acc` | nested in the instance: `t1` | M1-6 |
+| standard FB instance | `var t1 ton`, then `ton t1 5000` on a rung, and `t1.acc` | nested in the instance: `t1` | M1-6 (landed) |
 | program instance, no task | M1: `Logex.Runtime.scan/2`. M2: `program m1 motor` | one state per instance | M1-5, M2-2 |
 | CONFIGURATION, single resource | one `.lcf` file (the extension is a placeholder) | globals, instances, task clocks | M2-1, M2-2 |
 | VAR_GLOBAL, located or not | `var_global k1 bool at panel.q.0`, `var_global estop bool` | the configuration | M2-2 |
@@ -302,7 +302,12 @@ That is why the example routes `estop` into `halt`, not in front of `cal`:
 **Built-in timers and counters keep the conventional model**, which is not IEC's EN. On
 `ton t1 5000`, rung power is the timer's IN, and a false rung resets it (`docs/naming.md`
 Timers). The two meanings of rung power are deliberate, and the `cal` stanza must say so.
-The de-energised `evaluate` clause is mandatory for both (CLAUDE.md).
+The de-energised `evaluate` clause is mandatory for both (CLAUDE.md). What power a `ton`
+passes on is left open: the rung's, as after `ote`, or the timer's `.dn`, IEC's Q, which
+the item-2 rule above would have a reader expect on the right of the block. Until that is
+settled nothing may follow a `ton` on its path, in its leg or after a group one of whose
+legs holds one (M1-6), and a rung below reads `t1.dn`; allowing either reading later
+breaks no program.
 
 **`cal`'s signature comes from the FB type, not from `@instructions`.**
 - The operands are positional, in declaration order: the var_inputs, then the var_outputs.
@@ -603,6 +608,21 @@ conventional formula `docs/naming.md` settled: its Timers table gives
 supplied by the caller"*, *"the only version that is a pure function of its inputs"*. MatIEC's TON behaves the same
 way: its `START_TIME := CURRENT_TIME` is absolute (`lib/timer.txt`, `TON`).
 
+*As landed (M1-6):* the formula counts only from the scan that first sees the rung true.
+Its last-scanned time is `last`, the time the `ton` last ran, set on every run, energised
+or not, as `PLAN.md` M1-6's decision 5 words it. Energised, `ton` adds `now − last` where
+its `.en` was already 1, and nothing on the scan that starts it, which is where MatIEC's
+TON takes `START_TIME` on IN's rising edge. Without that edge, read from `.en`, the formula
+would charge a timer for the scan before its rung went true, and decision 6's two-rate
+test tells the readings apart: 6000 ms at both rates as landed, against 5990 and 5950 ms
+(both measured). Do not "fix" this back to the literal formula. `.acc` is floored at 0
+before the time is added, so a negative `.acc` written by logic counts from 0, and capped
+at max(`.pre`, 0), so no gap takes it out of a dint; `.pre` starts at the preset on the
+`ton`, which the instruction never rewrites. These hold right after the `ton` runs: a
+member written on a rung below it takes effect at the next scan, and a host reading
+`state.env` in between can see `.acc` past `.pre`. Nothing may follow a `ton` on its path
+(§4.3).
+
 **Why not a per-instance `dt`?** A `dt` (time since the instance's last scan) equals the
 per-timer formula only when the timer runs on every scan of its instance. A `ton` inside a
 frozen `cal` (§4.3), or one a future `jmp` skips, loses the gap; both precedents catch it
@@ -613,15 +633,16 @@ the nominal interval: a 10 ms task stepped at 25 ms must still reach its preset 
 
 **First scan.** M1-3's `initial_env/1` puts every declared tag at its initial value.
 Extended to a timer, it clears `.acc`, `.dn`, `.tt` and `.en`, which is what the
-conventional TON prescan does (general instructions ref., TON, p.134). `scan.first`
+conventional TON prescan does (general instructions ref., TON, p.134), and starts `.pre`
+at the preset on the timer's `ton` (M1-6). `scan.first`
 gives `ons` its settled behaviour, *"The storage
 bit is set to true to prevent an invalid trigger during the first scan"* (general
 instructions ref., ONS, p.73). `first` is per instance.
 
 **Caveats to document.**
 - A `ton` in an event-task program times across events. It should be an M1-5 warning.
-  *(M1-5 had neither a `ton` nor an event task to warn about; the warning waits until
-  both exist, M1-6 and M2-1.)*
+  *(M1-5 had neither a `ton` nor an event task to warn about. `ton` landed with M1-6; the
+  warning waits for event tasks, M2-6.)*
 - A `now` that goes backwards is an error, never a negative `.acc`. *(Landed with M1-5:
   `Logex.Runtime.call/4` raises `ArgumentError` for a `%Scan{}` earlier than the
   instance's clock, and `scan/3` for a negative elapsed time.)*
@@ -678,8 +699,18 @@ What it shows:
 - At t=10 only `m1` has run. `m2`, on the 50 ms task, picks up its button at t=50.
 - `m1`'s latched fault drops `sp_1` and leaves `m2` alone.
 
-No spike has yet run a real `ton` under two task rates. M1-6 owes that before this model is
-called settled (§6.1).
+**Receipt: a real `ton` under two rates (M1-6).** One program type, `xic go ton t1 5000`,
+two instances stepped through `call/4` every 10 ms and every 50 ms from one clock, `go`
+rising at 1000 ms: both are done at 6000 ms with `.acc` 5000, and their outputs agree at
+every time both scan; a third instance stepped at irregular times is not done at 5999 ms
+and is at 6000 ms (`end_to_end_test.exs`, "decision 6"). The equality holds per rising
+edge, when both instances see that edge at one time and the preset is a multiple of both
+periods: with a 1030 ms preset they are done at 1030 and 1050 ms, `.acc` 1030 in both. A
+timer that re-triggers itself, `xio t1.dn ton t1 1000`, is reset by the scan after it is
+done and starts again on the scan after that, so it repeats every preset plus two task
+periods, at 1020 ms steps on 10 ms scans and 1100 ms steps on 50 ms scans, as MatIEC's
+TON does; per-edge equality does not make its rate independent of the task. So the model
+is settled as §6.1 asked, and M2-3's acceptance should say how its inputs are timed.
 
 ### 4.7 One `.` token, three readings
 
@@ -688,7 +719,7 @@ what it means, and each wrong reading gets a diagnostic that names it:
 
 | Reading | Where it is legal | Example |
 |---|---|---|
-| member of an instance or bit of a word | a `.ld` body | `t1.acc`, `s1.run`, `word.3` |
+| member of an instance or bit of a word | a `.ld` body | `t1.acc`, `s1.run`, `word.3` (members landed with M1-6; a bit is refused until bit access lands) |
 | instance path | a `.lcf` connection line; `Runtime.get/2` | `m1.start`, `m1.t1.acc` |
 | location | only after `at` in a `.lcf` | `panel.i.0` |
 
@@ -743,7 +774,7 @@ names they break (CLAUDE.md step 2).
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays |
 | IEC textual paste-compatibility (`END_*` blocks, `:=`, `;`) | not adopted | logex is a dialect (`PLAN.md` §5) |
-| Online edit (a new type, instances keep their state) | deferred | The constraint is recorded now: instance state stays keyed by declared tag name |
+| Online edit (a new type, instances keep their state) | deferred | The constraint is recorded now: instance state stays keyed by declared tag name. Since M1-6 a second one: the number on `ton t1 5000` is where `.pre` starts, so an instance kept under a recompiled type keeps its old `.pre` until a restart (`end_to_end_test.exs` pins it). The migration must move a changed preset into the running instances, for example where `.pre` still equals the old compiled preset, or say plainly that it does not |
 
 ---
 
@@ -831,6 +862,14 @@ after Milestone 2, §5.)*
    not have a `.`.)*
 7. **Fix B8 (a lone CR) before any `.lcf` exists.** It would bite configuration files
    exactly as it bites programs. *(Landed 2026-09-30.)*
+
+*Landed 2026-09-30, points 1 to 5 as written; `PLAN.md` M1-6 records the design and where
+it goes beyond them. Beyond the five: the schema is `%Logex.FbType{}` carried inline as a
+tag's type, with members that have a role and a write flag; a member is lowered to
+`{:member, line, path}`; the preset is the timer's starting `.pre`, not rewritten by
+`ton`; one `ton` runs a timer, and one `ons` uses a storage bit; nothing may follow a
+`ton` on its path (§4.3); and the first true scan adds no time, with `last` stamped on
+every run (§4.6).*
 
 ### 6.2 Milestone 2: organisation (now `PLAN.md` §3, Milestone 2)
 
@@ -1026,6 +1065,5 @@ numbers").**
 - **Absence claims are weaker for Ed 3.** Its text layer splits words ("ca nnot"), so
   "occurs zero times" there is weaker evidence than for Ed 2.
 - **`.lcf`:** whether the extension clashes with an existing tool.
-- **Not yet measured:**
-  - a real `ton` under two task rates (§6.1);
-  - the §4.4 diagnostics under any test. They are spike output only.
+- **Not yet measured:** the §4.4 diagnostics under any test. They are spike output only.
+  *(A real `ton` under two rates was measured with M1-6: §4.6's receipt.)*

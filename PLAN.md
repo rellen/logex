@@ -16,7 +16,7 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
-§1 and §3·M1-1 to M1-5 have been brought current. M1-6 onward is still forward work.
+§1 and §3·M1-1 to M1-6 have been brought current. Milestone 2 onward is still forward work.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -53,7 +53,8 @@ an evaluator that is private to it (B5). The stage functions stay public for the
    ▼  {:ok, program} | {:error, [%Logex.Diagnostic{line:, message:}]}
  %Logex.Program{rungs: [{:rung, [{:xic, 3, [{:name, 3, "aa"}]}, {:ote, 3, [{:name, 3, "bb"}]}]}],
                 tags: %{"aa" => %Logex.Tag{type: :bool, section: :var_input, …}, …}}
-   │  Logex.Runtime.call/4             the evaluate/2 clauses, private {power_flow, env} fold
+   │  Logex.Runtime.call/4             the evaluate/3 clauses, private: a {power_flow, env} fold
+   │                                   with the scan's read-only %Logex.Scan{now:, first:}
    ▼  {outputs, %Logex.Instance{env: %{"aa" => 1, "bb" => 1}, …}}
 ```
 
@@ -63,6 +64,8 @@ an evaluator that is private to it (B5). The stage functions stay public for the
 - `xic`, `xio`, `ote`, `otl`, `otu`, `move` with **correct** latch/unlatch retention semantics.
 - Multi-rung routines, with power flow correctly reset per rung.
 - Driven one scan at a time through `Logex.Runtime` (M1-5), a correct seal-in motor circuit.
+- `ton` on the injected clock, `ons`, and `eq ne lt gt le ge` (M1-6); a timer is a declared
+  instance, `var t1 ton`, whose members `t1.dn` and `t1.acc` are read anywhere.
 
 These were each verified directly:
 
@@ -128,8 +131,8 @@ stage-boundary mismatch. M0-1 (`690fc2d`) reconciled the fixtures on `:int_lit` 
 **All five items are landed and merged; nothing in this section is waiting to be done.**
 M0-1 `690fc2d`, M0-2 `03c10e0`, M0-3 `dde8c1d`, M0-4 `3f3b104` (PR #3, merge `22bc81a`);
 M0-5 `b65e756` (PR #4, merge `863af6f`). Re-verified on `main` after M1-1: `mix test` →
-`27 tests, 0 failures`. M1-1 to M1-5 have landed since; the next unstarted work is
-§3·M1-6.
+`27 tests, 0 failures`. M1-1 to M1-6 have landed since; the next unstarted work is
+§3's Milestone 2.
 
 The items are kept in full because their diagnoses are the record of *why* the code looks
 the way it does — why the parser drops empty rungs, why `CLAUDE.md` once documented an
@@ -1034,6 +1037,30 @@ can silently outlive.
 
 ### M1-6 · TON and ONS
 
+**Status: DONE — landed 2026-09-30**, as the eight commits of the landing order below: (1)
+the naming stanzas, `a64e42f`; (2) `evaluate/3`, `cd83e71`; (3) `ons`, `6775890`; (4) the
+comparisons, `d73886d`; (5) `var t1 ton` and members, `260a02d`; (6) `ton`, `8d6ea80`; (7)
+the host-contract property, `615d5ea`; (8) the documents, the commit after it. 307 tests
+pass on Elixir 1.20.4 (6 of them doctests), up from 214. The messages of (3) to (6) record
+their mutation tables, every rule reverted alone and the full suite judged by exit code,
+each red; (7) records its `lib/` mutants against the property alone; (1), (2) and (8) are
+documents and a refactor. The maintainer's five changes to the synthesis landed in the
+commits the design below names, each with a test that fails when it is reverted: a second
+`ons` in (3); `last`, a negative `.acc` and nothing after a `ton` in (6); decision 6 per
+rising edge in (6), with a test of a timer that re-triggers itself. So did the second
+refuter's fixes: every malformed schema or initial value raises `ArgumentError` from
+`Logex.Tag.new!/4` and `split/2` ((5) and (6)); a `ton` or two compared literals in a group
+nested in another is found ((4), (6)); a `ton` with a wrong preset, or none, still counts,
+so a second `ton` is reported too, and one on a declared tag that is not a timer runs
+nothing; `var_input ton` is told a ton is declared with `var`; a dotted input key is called
+a member only when it is one; and a timer declared from Elixir starts at a `.pre` of 0 to
+2147483647 ms, what the preset slot takes. No departure from the design. Beyond its text: an
+element after a `ton` is reported once, at its own line, citing the first `ton` on its path,
+and a group after one as "a branch group"; an `ons` on anything but a declared bool, like a
+`ton` on anything but a declared timer, is left to the diagnostic it already has. Measured
+at the landing: compiling 4x the tags takes 4.2x the reductions, and a scan of the README
+motor 280.9 reductions against 265.7 at `19868d4`, the 5.7% the design records.
+
 **Decided 2026-09-28, from `docs/organisation.md` §6.1 and §4.6:**
 1. `evaluate/3` threads a read-only `%Logex.Scan{now:, first:}`; the accumulator stays
    `{power_flow, env}`. CLAUDE.md's `evaluate/2` convention changes with it. *(Since M1-5
@@ -1165,7 +1192,7 @@ instruction `xyz` `` — instead of raising.** (Amended 2026-09-28 per M1-5, and
 instance, and asserts that message for a broken file, which `format/1` prefixes with the
 path as it was given. That single sentence
 exercises M1-1 through M1-5; M1-6 is what proves the design was right rather than merely
-plausible.
+plausible. *(M1-6 landed 2026-09-30: decision 6's two-rate test is its proof.)*
 
 ### Milestone 2 — program organisation
 
@@ -1197,7 +1224,11 @@ rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
   the §4.2 one plus `var t1 ton` and a rung `xic motor ton t1 5000` (so no `estop`,
   `var_external` or `cal`, which arrive with M2-4 and M2-5), driven for one simulated
   second, runs `m1` 100 times and `m2` 20 times, and each instance's `t1` times against
-  the one clock.
+  the one clock. *(M1-6: that motor compiles without a warning and times. Say how the
+  inputs are timed: an instance sees an edge when a scan copies it in, so the equality
+  holds per rising edge, when two instances see that edge at one time and the preset is a
+  multiple of both periods. A timer that re-triggers itself repeats every preset plus two
+  task periods, so its rate differs between tasks, as MatIEC's TON does.)*
 - **M2-4 · Shared globals.** `var_external` in `.ld`; type agreement (Ed 2 §2.4.3); no
   writes to an input point; a two-writer warning. *Done when* an e-stop declared once as
   a `var_global` and read by two instances through `var_external` stops both in the same
@@ -1210,7 +1241,13 @@ rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
   once as a function block and instantiated three times in one program behaves as three
   independent seal-ins, `m1.s2.run` reads one of them, a false EN freezes only its own
   instance, and a recursive type, an unknown FB type or a `cal` of a non-instance is a
-  located diagnostic.
+  located diagnostic. *(From M1-6, for this item: `Logex.FbType` already recurses into a
+  member whose type is a type, and `public/1` leaves a `:local` role out by default; a
+  frozen instance must leave a timer's `.en` and `last` alone, so a timer that was timing
+  catches up; the "no `ton` runs it" warning must say `cal` for a user type; `first` is
+  the program instance's, so an `ons` inside a block frozen on the first scan is not held
+  back when it first runs; which of a user block's members logic may write is open; and
+  `cal` on a built-in type should be refused.)*
 - **M2-6 · Event tasks.** `task <n> single <g> [interval <ms>] priority <p>`, fired by a
   rising edge, and in the first cycle if the trigger is already true; with `interval` too,
   it runs periodically only while the trigger is 0, plus a run on each edge (IEC rule 2). *Done when* an event task triggered
@@ -1396,7 +1433,8 @@ diagnostic naming its file and line.
   `runtime_test.exs` pins the public surface of `Logex`, `Logex.Runtime` and
   `Logex.Compiler`; M1-5 also added `Logex.Warnings`, `Logex.Instance` and
   `Logex.Scan`. What remains is the lowering (`Ast`, `Instruction`, `Analyzer`), still in
-  `Logex.Compiler`.*
+  `Logex.Compiler`. M1-6 made them `rung/3`, `series/3`, `element/3` and `evaluate/3`, and
+  added `Logex.FbType`, whose surface the same test pins.*
 
 - **B6 · Project metadata.** No `@spec`/`@moduledoc` on `Logex.Compiler`; no
   `description`/`package`/`licenses` in `mix.exs` despite a full Apache-2.0 `LICENSE`;
@@ -1434,7 +1472,8 @@ diagnostic naming its file and line.
   (`Enum.any?(powers)`), `Enum.map_reduce` keeps the legs in order with no reversed list,
   `rung/2` names the env map `env`, and `evaluate/2` has no routine, rung or branches clause
   left for a guard to shadow. The five identical `{false, env}` bodies stand, and so does
-  the intermediate `powers` list in `element({:branches, _}, _)`.*
+  the intermediate `powers` list in `element({:branches, _}, _)`. M1-6 made these
+  `evaluate/3` and `element/3`, and the six comparisons share one guarded clause pair.*
 
 - **B8 · A lone `\r` never delimits a rung, so a CR-only file is silently one rung.**
   **Status: DONE — landed 2026-09-30, as the fix below says.** A CRLF is still one
@@ -1485,6 +1524,15 @@ diagnostic naming its file and line.
   M1-3 row asks for; §15's decision 3 (head declarations in the DSL's output) stays B9's.
   Nothing else in §3 or §5 changes until they are made. No codegen backend: the second backend the spike built
   disagreed with `evaluate/2` on 5,708 of 20,000 seeded envs and on 0 text-reachable ones.
+
+- **B10 · `Logex.Warnings.second_otes/3` orders by a map.** It groups the `ote` uses with
+  `Enum.group_by/3` and walks the groups, so two second-`ote` warnings on one line come
+  out in the map's order: the names' order for 32 names or fewer, no order past that
+  (CONTRIBUTING's "32 keys or fewer"), and never rung order. The final sort by line keeps
+  lines in order, not the warnings within one. M1-6's own passes walk the uses in rung
+  order, and a test with 40 storage bits on one line pins that; do the same here, with a
+  test past 32 names. Found by the M1-6 design panel; not M1-6's to change. *(M1-6 gave
+  the function a third argument, the `ons` storage bits it leaves to their own warning.)*
 
 ---
 
@@ -1552,8 +1600,10 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   lexer is safe only while there are no float literals. **The lexer rule landed
   2026-09-30**, as a `Logex.Lexer` clause: `a.1b` is B2's mistyped lexeme, named whole, and
   a `.` with no name or integer after it is illegal. Since a tag name is whatever lexes as
-  one name, the same commit forbids a `.` in a declared tag's name. Members, and what a
-  dotted name means, are M1-6's; until then one is simply undeclared.
+  one name, the same commit forbids a `.` in a declared tag's name. **Members landed with
+  M1-6:** `t1.dn` is a member of the timer `t1`, resolved in the compiler and lowered to
+  `{:member, line, path}`; a dotted name that is not a declared member is a diagnostic;
+  `word.3`, bit access, is refused with its own message until it lands.
 - **Comments — `//` to end of line.** `//[^\r\n]* : skip_token.` — it must **not**
   consume the newline, or `ote a // note\note b` silently becomes one rung. Test exactly
   that. Keep `;` a lex error: it is the rung *terminator* in neutral text and reusing it
@@ -1583,7 +1633,7 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   each new instruction reserves its name when it lands, and breaks any program with a
   tag of that name. IEC reserves its keywords case-insensitively too. M1-3 reserved five
   more words the same way, the section and type words `var var_input var_output bool
-  dint`.
+  dint`, and M1-6 eight, `ons eq ne lt gt le ge ton`, `ton` as a type word too.
 - **Program organisation follows IEC's software model, in logex's dialect.** Decided
   2026-09-28: logex is heading for IEC's hierarchy (configuration, tasks, program
   instances, function-block instances, globals), its task-style execution (continuous,
@@ -1664,12 +1714,12 @@ returns a list.
 
 **Keep mnemonics out of the grammar.** They arrive as ordinary `name` tokens and resolve
 against the `@instructions` module attribute, so adding an instruction touches a map
-plus two `evaluate/2` clauses and never the front end. That is the right dividing line.
+plus two `evaluate/3` clauses and never the front end. That is the right dividing line.
 
 **Keep the sequential `env` threading through parallel branches** (the
-`element({:branches, legs}, _)` clause in `Logex.Runtime`, an `Enum.map_reduce` that runs
-every leg from the power flowing into the group) and the non-short-circuiting fold along a
-rung (`series/2`, an `Enum.reduce` over `element/2`). Both look like accidents of using
+`element({:branches, legs}, _, _)` clause in `Logex.Runtime`, an `Enum.map_reduce` that
+runs every leg from the power flowing into the group) and the non-short-circuiting fold
+along a rung (`series/3`, an `Enum.reduce` over `element/3`). Both look like accidents of using
 `Enum.reduce` and are in fact faithful controller behaviour. *(Until B5, 2026-09-29, these
 were the `{:branches, _}` and `is_list(branch)` clauses of `Logex.Compiler.evaluate/2`.)*
 
@@ -1679,7 +1729,7 @@ were the `{:branches, _}` and `is_list(branch)` clauses of `Logex.Compiler.evalu
 
 Every defect the review and the audit after Milestone 0 (`440bc83`) turned up, with the
 milestone item or backlog bullet that closes it, and its status as of M1-5 and its two
-reviews (2026-09-29). `B1`–`B9` are the §4 backlog bullets; B9 is proposed work, listed for
+reviews (2026-09-29). `B1`–`B10` are the §4 backlog bullets; B9 is proposed work, listed for
 its status. Other items that are pure forward work rather than defects (M1-3, M1-6, B5)
 have no row, and the later reviews of M1-3 and M1-5 are recorded in those items' Status
 blocks instead. An ID of `—` means the finding has no plan item yet. Locations are current
@@ -1693,7 +1743,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | M0-5 | med | grammar | `rnd` is a strict infix separator, and a branch leg cannot be empty | `ladder_parser.yrl:8,12,16,21` | **closed** `b65e756` |
 | B1 | med | lexer | Missing space before `nxb` fuses into an identifier — parallel silently becomes series | `ladder_lexer.xrl:8` | **closed** — delimiters are `(` `\|` `)`; guarded by "deleting a space around a delimiter is a no-op" in `end_to_end_test.exs` |
 | M1-2 | med | lowering | No validation pass: unknown mnemonic → bare `MatchError`; short arity → truncated IR; and `mov src ote` silently eats the next mnemonic as a tag, no error, energised rung | `instructionize/1`, name clause | **closed** `e569113` — a located diagnostic for each case, every mistake in a routine reported (`validation_test.exs`) |
-| M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | `evaluate/2`, xic+xio clauses | closed: unreachable from source (`2b093de`, M1-3); complementary by construction (M1-4) |
+| M1-4 | med | semantics | `xic`/`xio` are independent positive tests — a non-bit or undefined tag reads false for both | the xic and xio clauses of `evaluate/3` (were `evaluate/2`'s) | closed: unreachable from source (`2b093de`, M1-3); complementary by construction (M1-4) |
 | B8 | med | lexer | A lone `\r` never delimits a rung, so a CR-only file is silently one rung and disagrees with the same text in LF | `Logex.Lexer`, the whitespace clause (was `ladder_lexer.xrl:6,10`) | **closed** 2026-09-30 — a lone `\r` is a newline |
 | M0-4 | low | lexer | `NAME` regex: `+` rejects single-char tags; `a-zA-z` typo admits ``[ \ ] ^ ` `` | `ladder_lexer.xrl:5` | **closed** `3f3b104` |
 | — | low | tests | M0-4's fix was unguarded: no test used a single-character tag or a bracketed name, so reverting `ladder_lexer.xrl:5` left `mix test` fully green | `end_to_end_test.exs` | **closed** `b8fc743` |
@@ -1706,8 +1756,9 @@ as of `1b1b1df` unless a cell says otherwise.
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | open |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
-| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30; members (M1-6) and negative literals open |
+| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, and members with M1-6; bit access, arrays and negative literals open |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed |
+| B10 | nit | warnings | Second-`ote` warnings on one line come in map order, not rung order | `Logex.Warnings.second_otes/3` | open |
 
 ---
 
@@ -1718,16 +1769,19 @@ retentive OTL/OTU, top-to-bottom rungs with immediate data-table updates — is 
 The mnemonic set is authentic ladder vocabulary rather than invented. What is missing:
 
 1. **Timers and counters (TON/TOF/RTO, CTU/CTD/RES)** — decisive. Essentially no real
-   routine exists without them, and they are why the scan model matters. See M1-6.
+   routine exists without them, and they are why the scan model matters. *`ton` landed with
+   M1-6, as a declared instance on the injected clock; TOF, TP, RTO, RES and the counters
+   are open, and reuse its `%Logex.FbType{}`.*
 2. **A scan loop and I/O image.** The input image, the clock and the first-scan bit landed
    with M1-5 (`put_inputs/3`, `%Logex.Scan{}`). There is no loop: the host calls each scan.
    Scheduling is Milestone 2's (M2-1), and a wall-clock runner comes after it
    (`docs/organisation.md` §5).
 3. **A tag table with types.** Landed with M1-3.
 4. **Comparisons (`eq ne lt gt le ge` — IEC names, see `docs/naming.md`)** — high value,
-   low cost. See M1-6.
+   low cost. *Landed with M1-6, on dints.*
 5. **Math (ADD/SUB/MUL/DIV), one-shots (ONS/OSR/OSF), then control flow (JMP/LBL/MCR).**
-   ONS is the canonical instruction that cannot exist without cross-scan state. JMP/LBL
+   ONS is the canonical instruction that cannot exist without cross-scan state. *`ons`
+   landed with M1-6; OSR and OSF are open.* JMP/LBL
    do *not* require abandoning the `Enum.reduce` over rungs — widening the accumulator
    from `env` to `{skip, env}` is enough for forward jumps; only backward jumps need an
    indexed loop.

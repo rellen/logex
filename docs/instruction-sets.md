@@ -824,7 +824,8 @@ edge handling is the separate inline one-shot elements.
   `builtins.rs`); MatIEC solves the same problem inside ST by embedding an `R_TRIG` instance
   in `CTU`/`CTD`/`CTUD`. Every one of those is a list of *the instructions that need
   cross-scan state* — which in logex means ordinary tags in the flat env, and which is
-  exactly the set whose `evaluate/2` clauses will need a storage operand. It is also a
+  exactly the set whose `evaluate/3` clauses need a storage operand (M1-6's `ons` takes
+  one, and `ton` an instance). It is also a
   reminder that a mandatory de-energized clause is not optional for any of them.
 
 ---

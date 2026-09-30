@@ -32,15 +32,19 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `lib/logex/compiler.ex` — the stages: `tokenize/1` and `parse/1` delegate to the two
   modules below; `instructionize/2` takes the declaration lines off into a tag table,
   checks every instruction against its operand signature and every operand against the
-  table, and returns `{:ok, %Logex.Program{}}` (warnings included) or
+  table, members included (M1-6), gives each timer the preset on the one `ton` that runs
+  it, refuses a second `ons` on one storage bit and anything after a `ton` on its path,
+  and returns `{:ok, %Logex.Program{}}` (warnings included) or
   `{:error, [%Logex.Diagnostic{}]}`. The stage functions stay public for the golden
   record, the Elixir-side declarer and the naming test.
-- `lib/logex/warnings.ex` — the three warnings every compiled program carries: a tag used
-  by no rung, a `var_output` no rung writes, a second `ote` on one tag
+- `lib/logex/warnings.ex` — the warnings a compiled program carries: a tag used by no
+  rung, a `var_output` no rung writes, a second `ote` on one tag, and since M1-6 another
+  write to an `ons` storage bit, a comparison of two literals, a timer no `ton` runs
 - `lib/logex/declarations.ex` — declaration lines to a tag table, after parsing: the
   section and type words as data (`@sections`, `@types`, and the function block type
-  words of `Logex.FbType.builtins/0`), `reserved/1`, `fits?/2`, and `check/1`, the one
-  validator for a declaration line and for `Logex.Tag.new!/4`
+  words of `Logex.FbType.builtins/0`), `reserved/1`, `fits?/2`, `preset?/1` (a `ton`'s
+  preset range, 0 to 2147483647 ms), and `check/1`, the one validator for a declaration
+  line and for `Logex.Tag.new!/4`
 - `lib/logex/tag.ex` — `%Logex.Tag{}`, whose type is `:bool`, `:dint` or, for an instance
   of a function block such as `var t1 ton`, the `%Logex.FbType{}` itself; and `new!/4`,
   which declares a tag from Elixir
@@ -60,7 +64,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `lib/logex/diagnostic.ex` — `%Logex.Diagnostic{stage:, line:, message:, file:, column:,
   severity:}`, the one error and warning type of every stage, and `format/1` for the
   `motor.ld: line 3, column 5: …` form
-- Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`; `validation_test.exs` holds every diagnostic and warning `instructionize/2` gives, driven from source. `test/logex_test.exs` pins `Logex` (and walks Milestone 1's done sentence), `runtime_test.exs` every message the runtime raises and the exact public surface, and `api_contract_test.exs` a seeded property over the host contract
+- Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`; `validation_test.exs` holds every diagnostic and warning `instructionize/2` gives, driven from source. `test/logex_test.exs` pins `Logex` (and walks Milestone 1's done sentence), `runtime_test.exs` every message the runtime raises and the exact public surface, and `api_contract_test.exs` a seeded property over the host contract, which since M1-6 checks every accepted scan against an oracle for `ton` and `ons` and makes every accepted call twice
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
@@ -70,10 +74,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   language or the generator on purpose, and read the diff:
   `test/fixtures/generate_frontend_golden.exs`.
 - `test/logex/end_to_end_test.exs` drives source to an environment, through `Logex.compile/2`
-  and `Logex.Runtime.call/4` on an instance whose env the test chooses; its *assertions* name
-  no IR tag (one helper matches the `{:routine, {:rungs, _}}` wrapper to count rungs). It
-  was the first test to cross every stage boundary, and is where a behaviour change is
-  pinned; `validation_test.exs` and `printer_test.exs` also run source to an environment
+  and `Logex.Runtime.call/4` on an instance whose env the test chooses, or several scans
+  of one instance; its *assertions* name no IR tag (one helper matches the
+  `{:routine, {:rungs, _}}` wrapper to count rungs). It was the first test to cross every
+  stage boundary, and is where a behaviour change is pinned, `ton`'s and PLAN M1-6's
+  decision-6 test among them; `validation_test.exs` and `printer_test.exs` also run source to an environment
   in places. `lex_and_parse_test.exs` starts from a
   source string and so crosses the tokenize→parse seam, but no further; the other two
   hand-type one stage's input and cannot see a seam at all.
@@ -118,7 +123,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   reserves the name: no tag may be spelled like a mnemonic, in any case, so a new
   instruction breaks any program with a tag of that name — say so in the commit. The
   de-energised clause is mandatory: without it the instruction works on an energised
-  rung and raises `FunctionClauseError` the moment a contact opens.
+  rung and raises `FunctionClauseError` the moment a contact opens. If what power the
+  instruction passes on is not settled, the compiler refuses anything after it on its
+  path, as it does after `ton` (M1-6), rather than let a program depend on either reading.
 - Every tag a program uses is declared (M1-3): in the source, `var aa bool` before the first
   rung, or from Elixir, `Logex.Tag.new!/4` passed to `instructionize/2`. A test that only
   needs tags to exist declares them either way; `validation_test.exs`'s `@declared` is the

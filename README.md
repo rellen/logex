@@ -3,16 +3,17 @@
 A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
 text into a named, stateless value, and runs it as instances, one scan at a time, with the
 time the host injects. No dependencies and no generated code: the lexer and parser are
-written by hand, and the whole thing is thirteen small modules.
+written by hand, and the whole thing is fifteen small modules.
 
-**Stage: early, and honest about it.** Six instructions, parallel branches to arbitrary
-nesting depth, latch/unlatch that holds across scans, power flow that resets per rung, a
-typed tag table that every tag is declared in, a public API (`Logex.compile/2`,
+**Stage: early, and honest about it.** Fourteen instructions, among them an on-delay
+timer, a one-shot and six comparisons, parallel branches to arbitrary nesting depth,
+latch/unlatch that holds across scans, power flow that resets per rung, a typed tag table
+that every tag is declared in, a public API (`Logex.compile/2`,
 `Logex.compile_file/1` and `Logex.Runtime`), and a printer that turns an AST back into
 source so a routine round-trips — all of that works and is tested end to end, and a
 program with mistakes in it gets every one reported with its line rather than an
-exception, a misspelt tag included. What does not exist yet: timers and counters, and a
-scheduler — the host calls one scan at a time. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
+exception, a misspelt tag included. What does not exist yet: counters, the other timers,
+math, and a scheduler — the host calls one scan at a time. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
 what order it gets fixed, and why.
 
 ## The dialect
@@ -23,10 +24,11 @@ become an importer.**
 Source syntax today:
 
 - declaration lines before the first rung, one tag each: `<section> <name> <type>
-  [<initial>]`, the section `var`, `var_input` or `var_output`, the type `bool` or `dint`,
-  as in `var_output speed_sp dint 1200`. Every tag a rung uses must be declared. A
-  `var_input` is supplied from outside and no instruction may write it; a tag with no
-  initial value starts at 0
+  [<initial>]`, the section `var`, `var_input` or `var_output`, the type `bool`, `dint`
+  or `ton`, as in `var_output speed_sp dint 1200`. Every tag a rung uses must be
+  declared. A `var_input` is supplied from outside and no instruction may write it; a tag
+  with no initial value starts at 0. A timer, `var t1 ton`, is declared only with `var`
+  and with no initial value: its preset is the number on the `ton` that runs it
 - mnemonics, sections and types in any case (`xic`, `XIC`, `VAR_INPUT`), and reserved: no
   tag may be named after one, in any case, so `ote`, `Ote` and `bool` are never tags; tags
   are case-sensitive (`aa` and `AA` are two tags)
@@ -34,8 +36,11 @@ Source syntax today:
   error naming `1bst`, not the number `1` and a tag `bst`
 - no operand parentheses, no terminator
 - `//` starts a comment, which runs to the end of its line
-- a name may have `.` parts, `t1.dn` or `word.3`, for the members that timers will bring;
-  no tag is declared with one
+- a name may have `.` parts: `t1.dn` is the member `dn` of the timer `t1`. A timer's
+  members are `.pre` and `.acc` (dint, which logic may write) and `.dn`, `.tt` and `.en`
+  (bool, which only its `ton` sets), read anywhere; members are case-sensitive, and a
+  dotted name that is not a declared member is an error. `word.3`, bit access, is
+  refused for now. No tag is declared with a `.`
 - a newline ends a rung: LF, CRLF or a lone CR
 - `(` … `|` … `)` open, separate and close a parallel branch group
 
@@ -93,6 +98,9 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `otl xx` | bool tag, not a `var_input` | output latch — writes 1 on a true rung, leaves the tag alone otherwise |
 | `otu xx` | bool tag, not a `var_input` | output unlatch — writes 0 on a true rung, leaves the tag alone otherwise |
 | `move 123 hh` | source, then a destination of the same type, not a `var_input` | copies a literal or a tag into a tag; a literal must fit the destination (`mov` until M1-2; it now gets a diagnostic pointing here) |
+| `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
+| `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two dints, each a tag, a member or a literal | compare — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`; none on a false rung. Two literals are a warning |
+| `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
 | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
 
 Each instruction's operands are checked against this table and against their tags'
@@ -129,13 +137,12 @@ Milestone 2) and will change the source language:
   called with `cal`. Each new word still gets its `docs/naming.md` stanza, which may change
   a spelling.
 
-- **`.` gives member access** (`t1.dn`, `word.3`), with timers: a dotted name lexes
-  already, but no member exists yet. Negative integer literals lex.
-- **Timers, counters, comparisons and math** arrive as `ton tof tp rto res`, `ctu ctd`,
-  `eq ne lt gt le ge`, `add sub mul div mod abs sqrt neg` — IEC names wherever IEC names
-  the operation. `rto`, `res` and `neg` are the exceptions: the standard has no retentive
-  timer, no standalone counter reset and no negate function, so those follow rule 2 and
-  come from a vendor. `docs/naming.md` says which, per mnemonic.
+- **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
+- **The other timers, counters and math** arrive as `tof tp rto res`, `ctu ctd`, `add sub
+  mul div mod abs sqrt neg` — IEC names wherever IEC names the operation. `rto`, `res` and
+  `neg` are the exceptions: the standard has no retentive timer, no standalone counter
+  reset and no negate function, so those follow rule 2 and come from a vendor.
+  `docs/naming.md` says which, per mnemonic.
 
 ## An example
 
@@ -214,9 +221,73 @@ input `motor` is a var_output (declared on line 5), not a var_input: only a var_
 input `strat` is not declared — did you mean `start`?
 ```
 
-`scan/3` takes the milliseconds since the last scan, for the timers to come;
+`scan/3` takes the milliseconds since the last scan, which a timer counts;
 `Logex.Runtime.call/4` is one scan with the time given explicitly, which is what a
 scheduler will call; `restart/3` starts an instance again, keeping its inputs.
+
+### A timer and a one-shot
+
+`delay.ld` — a lamp that lights once `go` has been held for three seconds, and a pulse on
+the scan `go` rises:
+
+```
+var_input go bool
+var_output lamp bool
+var_output pulse bool
+var_output waited dint
+var t1 ton
+var s1 bool
+
+xic go ton t1 3000
+xic t1.dn ote lamp
+xic go ons s1 ote pulse
+move t1.acc waited
+```
+
+`delay.exs` steps it with `scan/3`, giving the milliseconds since the last scan:
+
+```elixir
+{:ok, delay} = Logex.compile_file("delay.ld")
+
+scan = fn state, elapsed, label, inputs ->
+  state = Logex.Runtime.put_inputs(delay, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(delay, state, elapsed)
+  IO.puts("t=#{String.pad_leading("#{state.now}", 4)}  #{label}  #{inspect(outputs)}")
+  state
+end
+
+Logex.Runtime.instance(delay)
+|> scan.(0, "idle      ", %{})
+|> scan.(100, "go on     ", %{"go" => 1})
+|> scan.(1000, "held      ", %{})
+|> scan.(2000, "held      ", %{})
+|> scan.(500, "held      ", %{})
+|> scan.(10, "go off    ", %{"go" => 0})
+```
+
+```
+$ mix run delay.exs
+t=   0  idle        %{"lamp" => 0, "pulse" => 0, "waited" => 0}
+t= 100  go on       %{"lamp" => 0, "pulse" => 1, "waited" => 0}
+t=1100  held        %{"lamp" => 0, "pulse" => 0, "waited" => 1000}
+t=3100  held        %{"lamp" => 1, "pulse" => 0, "waited" => 3000}
+t=3600  held        %{"lamp" => 1, "pulse" => 0, "waited" => 3000}
+t=3610  go off      %{"lamp" => 0, "pulse" => 0, "waited" => 0}
+```
+
+The timer starts at the scan that first sees `go` (t=100), counts the time that passed,
+not the number of scans, and stops at its preset; a false rung resets it. The one-shot
+fires once per rise, and never on an instance's first scan, even with `go` already held.
+The timer's members are in the instance's state, `state.env["t1"]`, a map with `pre`,
+`acc`, `dn`, `tt` and `en`, and `last`, the time its `ton` last ran.
+
+The lamp is read from `t1.dn` on a rung of its own. Whether the power after a `ton` is
+the rung's or the timer's `.dn` is not settled, so nothing may follow a `ton` on its path,
+and `xic go ton t1 3000 ote lamp` is refused:
+
+```
+delay.ld: line 8: `ote lamp` follows `ton t1` on its path: what passes on after a `ton` is not settled, so a `ton` ends its path; read the timer with `xic t1.dn` on a rung below
+```
 
 ## Running it
 
