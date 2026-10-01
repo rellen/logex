@@ -132,7 +132,7 @@ stage-boundary mismatch. M0-1 (`690fc2d`) reconciled the fixtures on `:int_lit` 
 M0-1 `690fc2d`, M0-2 `03c10e0`, M0-3 `dde8c1d`, M0-4 `3f3b104` (PR #3, merge `22bc81a`);
 M0-5 `b65e756` (PR #4, merge `863af6f`). Re-verified on `main` after M1-1: `mix test` →
 `27 tests, 0 failures`. M1-1 to M1-6 have landed since; the next unstarted work is
-§3's Milestone 2.
+§3's OE-1, a staged edit of one program instance, then Milestone 2.
 
 The items are kept in full because their diagnoses are the record of *why* the code looks
 the way it does — why the parser drops empty rungs, why `CLAUDE.md` once documented an
@@ -1288,6 +1288,12 @@ rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
   injected clock, runs each instance exactly as often as its task dictates, in priority
   order; a late cycle yields one `{:overlap, …}` and no lost phase; the README program
   gives identical outputs through `scan/2` and through a one-instance configuration.
+  *(Online edit, 2026-10-01: M2-1 also keeps `docs/organisation.md` §4.9's constraints,
+  so OE-2 needs no rework: the runtime value holds plain data only; state is keyed by name
+  and flat by instance, and execution order is a list; each item's rule for a new piece
+  of state serves both `start/1` and an edit that adds one, with the edit's exceptions
+  listed; one checked constructor, which M2-2's parser feeds; an opaque
+  `%Logex.Runtime{}`; one copy of each global; and an open set of events.)*
 - **M2-2 · The configuration file, task-less.** A separate `.lcf` file (the extension is
   still a placeholder; choose it before this item lands): `var_global`, plain and located
   (`at panel.q.0`), `program <inst> <type>`, arrow-free connections (`m1.start
@@ -1348,6 +1354,35 @@ and to a shared global; schedules them under a periodic task, an event task and 
 runs deterministically for N cycles from an injected clock and input image, with the same
 outputs on every run; and reports every wiring, typing or scheduling mistake as a located
 diagnostic naming its file and line.
+
+### Online edit — decided 2026-10-01
+
+**Decided 2026-10-01** (§5; design, measurements and sources in `docs/organisation.md`
+§4.9, decisions 15–20 in its §7). A running controller is changed the way the conventional
+family's is: a candidate is accepted beside the running program, tested, untested, and
+assembled or cancelled, with state moved by name, and never through the Elixir compiler.
+Each item surveys any new word in `docs/naming.md` first, lands green, and pins every rule
+with a test that fails when the rule is reverted.
+
+- **OE-1 · A staged edit of one program instance, before M2-1.** Accept, test, untest,
+  assemble and cancel over one `%Logex.Instance{}` and two programs of one name, with
+  §4.9's migration defaults and a report from every step. Its design pass first settles
+  the four questions §4.9 leaves open: which `ons` bits are armed, a timer whose `ton` an
+  edit restores, the report for a done timer whose preset rises, and which steps read the
+  live state. It also gives the rules for a new piece of state that M2-1's `start/1` will
+  share. *Done when* an instance of the README motor running one version takes a candidate
+  that adds a timer, raises a preset, adds an `ons` and removes the rung that drives a
+  var_output: test runs the candidate with the decided `.pre`, initial values and no
+  one-shot pulse; untest runs the original over the same state; assemble prunes; every
+  step's report names the held output and the dropped `.dn`; a type change is refused at
+  accept; and a program built from data that the text cannot say is refused.
+- **OE-2 · A staged edit of a configuration, after Milestone 2.** The same cycle over the
+  whole `%Logex.Configuration{}` and `%Logex.Runtime{}`, switched between two cycles, with
+  each M2 item's rule for new state; a task's interval and priority changed while running;
+  moving an instance to another task, adding or removing a task, located I/O, devices and
+  a function block's members refused (each until its own item lifts it); output points
+  left undriven held and reported. *Done when* (to be written by its design pass, after
+  M2-6).
 
 ---
 
@@ -1604,6 +1639,14 @@ diagnostic naming its file and line.
   M1-3 row asks for; §15's decision 3 (head declarations in the DSL's output) stays B9's.
   Nothing else in §3 or §5 changes until they are made. No codegen backend: the second backend the spike built
   disagreed with `evaluate/2` on 5,708 of 20,000 seeded envs and on 0 text-reachable ones.
+  *(Re-scoped 2026-10-01, `docs/organisation.md` §4.9: a running controller is edited as
+  data, so a DSL can only write a first version. Its output must be a whole program,
+  name, declarations and rungs, as text or data that `Logex.compile/2` accepts, which
+  settles §15's decision 3; and nothing writes a later edit back into the `.ex` file.
+  Spark was considered for the same role and is not adopted inside logex: as a separate
+  authoring package it works (a probe produced a `%Logex.Program{}` equal to the text
+  path's), but its rungs are wordy, its autocomplete is ElixirLS-only, and it is a
+  dependency.)*
 
 - **B10 · `Logex.Warnings.second_otes/3` orders by a map.** It groups the `ote` uses with
   `Enum.group_by/3` and walks the groups, so two second-`ote` warnings on one line come
@@ -1621,6 +1664,28 @@ diagnostic naming its file and line.
 *Several decisions below are written as leex rules (`//` comments, `QUALIFIED` names,
 negative literals, line continuations). The lexer is hand-written now (§6); each rule
 becomes a clause in `Logex.Lexer`, and the behaviour it specifies still stands.*
+
+**How does Elixir declare a controller, and how is a running one changed?**
+
+**Decided 2026-10-01: as data, staged, and never through the Elixir compiler** (design,
+measurements and sources in `docs/organisation.md` §4.9; its decisions 15–20; work items
+OE-1 and OE-2 in §3).
+- One model, held as data: `%Logex.Program{}` and, from M2-1, `%Logex.Configuration{}`.
+  Their saved form is `.ld` and `.lcf` text, which printers write, and a data API refuses
+  what the text cannot say.
+- Nothing compiles a user's program to BEAM, and no front end puts the Elixir compiler on
+  the path that changes a running program (§6).
+- Spark is not adopted inside logex. An authoring package outside it may come later, as a
+  one-way seed that emits the same data (B9).
+- Online edit is staged from its first version, as the conventional family's is: accept,
+  test, untest, assemble, cancel. State moves by name: an added tag starts at its initial
+  value, a removed one is pruned at assemble, a type change is refused while running, a
+  timer's `.pre` follows its preset where logic left it alone, and an edit never makes an
+  `ons` fire.
+- While running, a task's interval and priority may change; moving an instance to another
+  task, and adding or removing a task, are refused.
+- An output an edit leaves undriven holds its last value, as the conventional family's
+  do, and every step's report lists each one with the value it holds.
 
 **Does logex aim to ingest a vendor export format, or to be its own dialect?**
 
@@ -1792,6 +1857,18 @@ One known limit to accept alongside this: the grammar declares no `error` produc
 diagnostic. That is *why* M1-5's front-end error is singular while M1-2's validation
 returns a list.
 
+**Nothing compiles a user's program to BEAM, and no front end puts the Elixir compiler on
+the path that changes a running program** (decided 2026-10-01, `docs/organisation.md`
+§4.9). Every front end ends in `%Logex.Program{}` (and from M2-1 `%Logex.Configuration{}`)
+data that `Logex.Runtime` interprets. A generated-code backend was rejected once already:
+the defladder spike's disagreed with the interpreter on 5,708 of 20,000 seeded envs (B9).
+An edit through the Elixir compiler was measured on 2026-10-01 and fails every test that
+matters for a running controller: a Spark-defined module recompiled with
+`Code.compile_string/2` took 75–95 ms for 4 tags and 0.5–0.7 s for 200, against 22 µs and
+1.7 ms for `Logex.compile/2`; it ran arbitrary code written in the edit; an edit that
+failed validation unloaded the running module; and where names are atoms, as Spark
+entities' usually are, every new name is an atom that is never collected.
+
 **Keep mnemonics out of the grammar.** They arrive as ordinary `name` tokens and resolve
 against the `@instructions` module attribute, so adding an instruction touches a map
 plus two `evaluate/3` clauses and never the front end. That is the right dividing line.
@@ -1837,7 +1914,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
 | §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, and members with M1-6; bit access, arrays and negative literals open |
-| B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed |
+| B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed; re-scoped 2026-10-01 as a one-way seed that emits a whole program as data |
 | B10 | nit | warnings | Second-`ote` warnings on one line come in map order, not rung order | `Logex.Warnings.second_otes/3` | open |
 
 ---

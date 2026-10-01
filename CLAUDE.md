@@ -93,7 +93,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `docs/organisation.md` — where logex is heading above one program: IEC's configuration,
   tasks, program instances and I/O mapping, in logex's dialect. Decided (PLAN §5; the
   work is PLAN's M1-3, M1-5, M1-6 and Milestone 2). Read it before designing anything
-  that names a program, schedules one, or binds I/O.
+  that names a program, schedules one, binds I/O, or changes a running controller (§4.9,
+  online edit, decided 2026-10-01).
 - `docs/instruction-sets.md` — reference: IEC's LD elements and standard library by table number,
   Instruction List (withdrawn in Ed 4), and the free-software instruction sets. Read it before
   writing a naming.md stanza; it carries the IEC feature numbers a stanza should cite.
@@ -132,6 +133,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   Elixir form. A new section or elementary type word is a row in `Logex.Declarations`,
   and a function block type word a key of `Logex.FbType.builtins/0`; either is reserved in
   any case and owes a `docs/naming.md` stanza, which `naming_test.exs` checks.
+- Nothing compiles a user's program to BEAM: every front end (the text, an Elixir data
+  API, any later macro) ends in `%Logex.Program{}` data that `Logex.Runtime` interprets,
+  and no front end puts the Elixir compiler on the path that changes a running program
+  (`PLAN.md` §6; online edit, `docs/organisation.md` §4.9)
 - A fix needs a test that **fails when the fix is reverted**. Check it by reverting, not by
   reasoning: `mix test` stayed fully green after the `NAME` regex was corrected, because
   no test used a single-character tag. `PLAN.md` §2·M0-4 has the worked mutation table.

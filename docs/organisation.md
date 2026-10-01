@@ -1,8 +1,8 @@
 # Program organisation: the IEC software model, in logex's dialect
 
-**Status: decided; the Milestone-1 changes in §6.1 landed with M1-3 and M1-5 (M1-6's are
-to come), and the organisation itself — configurations, tasks, I/O mapping, Milestone 2 —
-is not yet implemented.** On 2026-09-28 the maintainer adopted the
+**Status: decided; the Milestone-1 changes in §6.1 landed with M1-3, M1-5 and M1-6, and the
+organisation itself — configurations, tasks, I/O mapping, Milestone 2 — is not yet
+implemented. How a running controller is changed, §4.9, was decided on 2026-10-01.** On 2026-09-28 the maintainer adopted the
 direction in §1 (IEC's software model, in logex's dialect: the hierarchy, task-style
 execution and I/O mapping), deferred routines, and took every decision in §7 as
 recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1
@@ -23,8 +23,8 @@ The maintainer's brief:
 it into a named `%Logex.Program{}` whose tags are declared and typed, with `var_input` and
 `var_output` roles (M1-3). `Logex.Runtime` runs one instance of it, one scan per call, with
 a clock and a first-scan bit the host advances (M1-5). There is no task, no configuration
-and no loop: the host calls every scan. Timers come with M1-6. None of those items says
-what sits above one program.
+and no loop: the host calls every scan. M1-6 added declared timers (`var t1 ton`), `ons`
+and the comparisons. None of those items says what sits above one program.
 
 *(When this document was written, on 2026-09-28, a `.ld` file was one routine that
 `evaluate/2` ran once against a flat `env`, with no program name, instance or scan loop,
@@ -756,6 +756,102 @@ golden-record source, a test or `lib/`; they occur there only as English, in com
 test names. Each commit must still name the words it reserves and the tag
 names they break (CLAUDE.md step 2).
 
+### 4.9 Changing a running controller (online edit)
+
+**Decided 2026-10-01** (§7, decisions 15–20). The brief: *"I would like to be able to
+modify the whole controller/configuration at runtime like in [the conventional family],
+and I don't necessarily want to have to run that through an Elixir compiler first."*
+
+**One model, held as data.** A running controller holds values: a `%Logex.Program{}` per
+program type and, from M2-1, one `%Logex.Configuration{}`. Their saved form is text,
+`.ld` and `.lcf`, which printers write. Every way of writing a controller (the text, a
+plain-Elixir data API, any later macro) ends in the one validator and produces the same
+values, and the data API refuses anything the text cannot say. Today that is a negative
+literal, which does not lex yet, and a timer preset given only from Elixir
+(`Logex.Tag.new!/4` with `%{"pre" => ms}`).
+
+**No Elixir compiler on the edit path.** Nothing compiles a user's program to BEAM
+(`PLAN.md` §6). Measured on 1.20.4 on 2026-10-01: `Logex.compile/2` takes about 45 µs for
+the README motor and 31 ms for 2,000 rungs, and a tracer counted no call into the Elixir
+compiler, from text or from a program built as data. The same change made to a
+Spark-defined module through `Code.compile_string/2` took 75–95 ms for 4 tags and 0.5–0.7
+s for 200; it ran arbitrary code written in the edit; and an edit that failed validation
+unloaded the module that was running, because Elixir purges a module whose compilation
+raises. Spark is not adopted inside logex. An Elixir authoring package outside it may
+come later, as a one-way seed that emits the same data (`PLAN.md` B9).
+
+**The edit cycle is staged, as the conventional family's is.**
+1. *Accept.* A candidate, the whole program (from M2, the whole configuration), is
+   compiled and checked beside the running one. It does not run, and a candidate with a
+   diagnostic goes no further.
+2. *Test.* The candidate runs and the original is kept. The state is shared, moved to the
+   candidate's shape by the rules below, and nothing is pruned.
+3. *Untest.* The original runs again over the same state, moved back. Test and untest may
+   repeat.
+4. *Assemble.* The original is dropped, and state the candidate no longer declares is
+   pruned.
+5. *Cancel.* The candidate is dropped, from accept or after an untest.
+
+Every switch happens between two scans, and from M2-1 between two cycles. The conventional
+family's documents do not say whether its switch is atomic at a scan boundary; Beremiz
+states that its hot swap happens "between two cycles, never inside one". Each step
+returns a report.
+
+**State moves by name.** The defaults:
+
+| Change | At test, and in reverse at untest | At assemble |
+|---|---|---|
+| Same name and type | kept | kept |
+| An added tag | its declared initial value | — |
+| A removed tag | kept, unused | pruned |
+| A tag's or member's type | refused: the candidate is not accepted, and a restart re-initialises it | — |
+| A timer's preset | `.pre` follows the new preset where it still equals the old one, and is kept where logic changed it | — |
+| A one-shot | an edit never makes an `ons` fire | — |
+| `now` and `first` | kept; `first` stays false, so no initialisation runs, as in CODESYS | — |
+
+Open, for the design pass of `PLAN.md` OE-1:
+- which `ons` storage bits are armed. A probe that armed only the storage tags an edit adds
+  still pulsed for an `ons` added on an existing tag, and for one whose condition changed;
+- a timer whose `ton` an edit removes and a later edit restores catches up the whole gap,
+  because its `.en` and `last` froze. It must start timing at the edit instead;
+- raising a done timer's preset drops `.dn` while its rung stays true, as raising `.pre`
+  does from logic. The report must name it;
+- which steps depend on the live state, and so run when the step is taken, not when the
+  candidate is accepted.
+
+**An output that an edit leaves undriven holds its last value**, as the conventional
+family's do: *"Outputs in the original logic stay in their last state unless executed by
+the test edits (or other logic)"*, and the same on untest and on finalising (its quick
+start, Oct 2009, pp.121 and 124). The report of every step lists each var_output, and
+from M2-2 each output point, that no logic drives any more, with the value it holds.
+
+**Refused while running.** A restart, which may keep values by name, is the way to make
+these changes:
+- the type of a tag or a member;
+- located I/O and devices: CODESYS, Siemens and Beremiz refuse a device change while
+  running, the conventional family allows some within limits, and logex binds devices
+  only at start (§4.5);
+- moving a program instance to another task, which the conventional family refuses in Run
+  mode; and adding or removing a task, until its rule for that is verified (§8);
+- the members of a function block type, until M2-5 brings the nested migration: copy the
+  members that match by name and type, as CODESYS does, and initialise the rest.
+
+Allowed while running: rungs; adding and removing tags, instances, globals and
+connections; and a task's interval and priority, which the conventional family lets logic
+write while it runs.
+
+**What Milestone 2 must keep, so that this needs no rework** (`PLAN.md` M2-1):
+- the runtime value holds plain data only: no funs, pids or refs;
+- every piece of runtime state is keyed by name, never by position, and flat by instance;
+  execution order is a list in the configuration;
+- each M2 item writes its rule for a new piece of state once, used by `start/1` and by an
+  edit that adds one, with the edit's exceptions listed: `ons`, an event task's trigger and
+  `first`;
+- one checked constructor, which the `.lcf` parser feeds;
+- `%Logex.Runtime{}` is opaque, and its configuration changes only through the API;
+- one copy of each global's value;
+- the events `cycle/3` returns are an open set, which a host must tolerate.
+
 ---
 
 ## 5. Decided now, and deferred
@@ -776,7 +872,7 @@ names they break (CLAUDE.md step 2).
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays |
 | IEC textual paste-compatibility (`END_*` blocks, `:=`, `;`) | not adopted | logex is a dialect (`PLAN.md` §5) |
-| Online edit (a new type, instances keep their state) | deferred | The constraint is recorded now: instance state stays keyed by declared tag name. Since M1-6 a second one: the number on `ton t1 5000` is where `.pre` starts, so an instance kept under a recompiled type keeps its old `.pre` until a restart (`end_to_end_test.exs` pins it). The migration must move a changed preset into the running instances, for example where `.pre` still equals the old compiled preset, or say plainly that it does not. Two more, since a state's values are not checked each scan: a tag the recompile adds is missing from a kept instance and reads 0, not its initial value, until a restart, so an added timer starts at a `.pre` of 0 and is done at its first true scan (pinned too); and a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output. A restart puts both right, keeping only the var_inputs whose values fit their types. The migration must start what is added and convert or refuse what changes type |
+| Online edit (a new type, instances keep their state) | **designed 2026-10-01** (§4.9); built as `PLAN.md` OE-1 and OE-2 | What a kept instance does today, before OE-1. The constraint is recorded now: instance state stays keyed by declared tag name. Since M1-6 a second one: the number on `ton t1 5000` is where `.pre` starts, so an instance kept under a recompiled type keeps its old `.pre` until a restart (`end_to_end_test.exs` pins it). The migration must move a changed preset into the running instances, for example where `.pre` still equals the old compiled preset, or say plainly that it does not. Two more, since a state's values are not checked each scan: a tag the recompile adds is missing from a kept instance and reads 0, not its initial value, until a restart, so an added timer starts at a `.pre` of 0 and is done at its first true scan (pinned too); and a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output. A restart puts both right, keeping only the var_inputs whose values fit their types. The migration must start what is added and convert or refuse what changes type |
 
 ---
 
@@ -884,6 +980,7 @@ checked by reverting it (CLAUDE.md; PLAN §2·M0-4). For example:
 - drop priority ordering → a test fails.
 
 **M2-1 · The scheduler, built from Elixir data. No syntax.**
+- Keeps §4.9's constraints, so online edit needs no rework.
 - `%Logex.Configuration{}` with a pure, checked constructor.
 - `Runtime.start/cycle/next_due_in/get`.
 - Periodic and task-less instances, copy-in/copy-out, overlap events.
@@ -961,8 +1058,8 @@ checked by reverting it (CLAUDE.md; PLAN §2·M0-4). For example:
 
 ## 7. Decisions
 
-All fourteen were taken as recommended on 2026-09-28. They are kept with their options so
-the reasons stay with them.
+The first fourteen were taken as recommended on 2026-09-28, and 15–20 on 2026-10-01. They
+are kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted.
@@ -1013,6 +1110,24 @@ the reasons stay with them.
 14. **What a watchdog fault does to outputs,** when the runner exists: stop scheduling,
     zero the output image once, report, and require an explicit restart. Holding the last
     outputs is the alternative. *Recommend zeroing; decide with the runner.*
+15. **Declaring a controller from Elixir:** a Spark or macro DSL as the model, or one model
+    held as data with text as its saved form. *Recommend data*: whatever a DSL declares is
+    compiled into a module, so it cannot be the copy a running controller edits. Adopted,
+    with the data API refusing what the text cannot say.
+16. **The Elixir compiler on the edit path:** allowed, or never. *Recommend never* (§4.9's
+    measurements). Adopted, and recorded in `PLAN.md` §6.
+17. **Spark:** inside logex, as a separate authoring package, or not at all. *Recommend not
+    inside logex*; a separate package, a one-way seed, stays open. Adopted.
+18. **Online edit:** applied at once in its first version, or staged from the start
+    (accept, test, untest, assemble, cancel), with §4.9's migration defaults. *Recommended
+    applied at once, staging later.* The maintainer chose staging from the start.
+19. **Task changes while running:** refuse all, as CODESYS does, or allow what the
+    conventional family allows. *Either was open.* The maintainer chose the conventional
+    family's: interval and priority may change; moving an instance to another task is
+    refused; adding or removing a task is refused until its rule is verified.
+20. **Outputs an edit leaves undriven:** hold their last value, or go to 0. *Recommend
+    hold, as the conventional family does, with every step's report listing each one and
+    the value it holds.* Adopted.
 
 ---
 
@@ -1048,6 +1163,22 @@ numbers").**
 - OpenPLC v3 `webserver/core/main.cpp` (the cycle), `webserver/core/ladder.h` (the
   hardware layer) and `utils/glue_generator_src/glue_generator.cpp` (`updateTime`), at
   `b5d4135`.
+
+**Online edit (§4.9), read on 2026-10-01.**
+- The conventional family: its quick start (Oct 2009), pp.120–124, for the edit cycle and
+  the three output sentences (verified again on 2026-10-01); its current online-editing
+  help (pending, accept, test, untest, assemble); its reference manual (Sept 2025), p.65
+  (partial import online, and rescheduling a program refused in Run mode) and pp.85, 88
+  and 91 (a tag's data type, or an existing user-defined type, changed offline only); and the TASK object of its general
+  instructions reference, whose rate and priority logic may write at runtime.
+- CODESYS online help: "Online Change" (Table 106, what forces a full download) and
+  `FB_Init`/`FB_Reinit` (how an instance's data is copied).
+- Siemens: the S7-300/400/1200/1500 comparison list for programming languages (11/2019).
+- Beremiz, "PLC logic hot-swap" (2026-09-12).
+- Spark 2.7.3 (hex tarball), read and probed.
+- **Unverified:** whether the conventional family's switch is atomic at a scan boundary;
+  whether it can create a task online (a third-party guide says offline only, and no first
+  party source was found); when CODESYS and Siemens switch within a cycle.
 
 **Unverified or from memory. Do not repeat these as fact.**
 - **From memory:**
