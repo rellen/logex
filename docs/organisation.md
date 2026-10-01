@@ -2,7 +2,9 @@
 
 **Status: decided; the Milestone-1 changes in §6.1 landed with M1-3, M1-5 and M1-6, and the
 organisation itself — configurations, tasks, I/O mapping, Milestone 2 — is not yet
-implemented. How a running controller is changed, §4.9, was decided on 2026-10-01.** On 2026-09-28 the maintainer adopted the
+implemented. How a running controller is changed, §4.9, was decided on 2026-10-01, and
+the design of its first step, OE-1's edit of one program instance, was recorded there the
+same day (decisions 21–29).** On 2026-09-28 the maintainer adopted the
 direction in §1 (IEC's software model, in logex's dialect: the hierarchy, task-style
 execution and I/O mapping), deferred routines, and took decisions 1–14 in §7 as
 recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1
@@ -65,8 +67,10 @@ still gets its own `docs/naming.md` stanza before its code lands (CLAUDE.md, ste
   - the *design considerations reference* (Sept 2025);
   - the *ladder-diagram programming manual* (July 2022);
   - the *quick start* (Oct 2009).
-- The spikes behind this design ran on copies of `37b7932`, and those behind §4.9 on
-  copies of `1984b07`, all on Elixir 1.20.4 / OTP 28. They are not in the repository. Their output is quoted as receipts and pins nothing.
+- The spikes behind this design ran on copies of `37b7932`, those behind §4.9 on copies
+  of `1984b07`, and OE-1's (§4.9, "OE-1's design") on copies of `730cb16`, all on Elixir
+  1.20.4 / OTP 28. They are not in the repository. Their output is quoted as receipts and
+  pins nothing.
 
 ---
 
@@ -760,17 +764,21 @@ names they break (CLAUDE.md step 2).
 
 ### 4.9 Changing a running controller (online edit)
 
-**Decided 2026-10-01** (§7, decisions 15–20). The brief: *"I would like to be able to
-modify the whole controller/configuration at runtime like in [the conventional family],
-and I don't necessarily want to have to run that through an Elixir compiler first."*
+**Decided 2026-10-01** (§7, decisions 15–20); **OE-1's design, the edit of one program
+instance, recorded the same day** ("OE-1's design" below; decisions 21–29). The brief:
+*"I would like to be able to modify the whole controller/configuration at runtime like in
+[the conventional family], and I don't necessarily want to have to run that through an
+Elixir compiler first."*
 
 **One model, held as data.** A running controller holds values: a `%Logex.Program{}` per
 program type and, from M2-1, one `%Logex.Configuration{}`. Their saved form is text,
 `.ld` and `.lcf`, which printers write. Every way of writing a controller (the text, a
 plain-Elixir data API, any later macro) ends in the one validator and produces the same
-values, and the data API refuses anything the text cannot say. Today that is a negative
-literal, which does not lex yet, and a timer preset given only from Elixir
-(`Logex.Tag.new!/4` with `%{"pre" => ms}`).
+values, and the data API refuses anything the text cannot say. When this was decided, the
+data path still took two such things: a negative literal, which does not lex yet, and a
+timer preset given only from Elixir (`Logex.Tag.new!/4` with `%{"pre" => ms}`). OE-1
+refuses both, and every parse tree that `Logex.Parser.parse/1` could not have produced
+(decisions 24 and 28; "The data path" below).
 
 **No Elixir compiler on the edit path.** Nothing compiles a user's program to BEAM
 (`PLAN.md` §6). Measured on 1.20.4 on 2026-10-01: `Logex.compile/2` takes about 45 µs for
@@ -812,17 +820,32 @@ returns a report.
 | A one-shot | an `ons` the edit adds does not fire at the switch | — |
 | `now` and `first` | kept; `first` stays false, so no initialisation runs, as in CODESYS | — |
 
-Open, for the design pass of `PLAN.md` OE-1:
+OE-1's design, below, gives the rules in full. It refines three of these rows: which
+one-shots are blocked, a timer whose `ton` stops or returns, and a value a plain swap
+left. It also adds three: a tag's section, a changed initial value, and the inputs a
+switch makes live or leaves unread.
+
+Left open for the design pass of `PLAN.md` OE-1, and settled by it:
 - which `ons` storage bits are armed, and whether an existing `ons` whose condition the
   edit changes is armed too, at the cost of a genuine edge on the switch scan. A probe that
   armed only the storage tags an edit adds still pulsed for an `ons` added on an existing
-  tag, and for one whose condition changed;
+  tag, and for one whose condition changed. **Settled (decision 21):** no bit is armed,
+  because no switch writes a storage bit. An `ons` the edit adds, or whose rung changed
+  (line numbers ignored), passes no power on the first scan after the switch, as every
+  `ons` does on a first scan. An untouched `ons` keeps a genuine edge on that scan;
 - a timer whose `ton` an edit removes and a later edit restores catches up the whole gap,
-  because its `.en` and `last` froze. It must start timing at the edit instead;
+  because its `.en` and `last` froze. It must start timing at the edit instead.
+  **Settled:** it resumes from the switch. Its `last` becomes the instance's `now`, and the
+  gap is reported. Its `.pre` stays frozen while no `ton` runs it, and takes the new preset
+  outright when one returns (decision 23);
 - raising a done timer's preset drops `.dn` while its rung stays true, as raising `.pre`
-  does from logic. The report must name it;
+  does from logic. The report must name it. **Settled:** it is reported as `:dn_drops`,
+  and lowering a preset under a timing `.acc` is reported as `:dn_rises`. No latch is
+  added;
 - which steps depend on the live state, and so run when the step is taken, not when the
-  candidate is accepted.
+  candidate is accepted. **Settled:** test, untest, assemble and cancel each read the
+  state when they are taken. Accept reads the two programs to build its plans, and reads
+  the state only for a forecast, which is never applied (decision 27).
 
 **An output that an edit leaves undriven holds its last value**, as the conventional
 family's do: *"Outputs in the original logic stay in their last state unless executed by
@@ -842,8 +865,8 @@ these changes:
   members that match by name and type, as CODESYS does, and initialise the rest.
 
 Allowed while running: rungs; adding and removing tags, instances, globals and
-connections; and a task's interval and priority, which the conventional family lets logic
-write while it runs.
+connections; a tag's section, its value kept (decision 25); and a task's interval and
+priority, which the conventional family lets logic write while it runs.
 
 **What Milestone 2 must keep, so that this needs no rework** (`PLAN.md` M2-1):
 - the runtime value holds plain data only: no funs, pids or refs;
@@ -854,9 +877,275 @@ write while it runs.
   edit that adds one, with the edit's exceptions listed: `ons`, an event task's trigger and
   `first`;
 - one checked constructor, which the `.lcf` parser feeds;
+- `start/1` builds each instance through the same constructor as `Runtime.instance/1`,
+  so an instance's `first`, its one-shot block list and any field it gains later cannot
+  drift between the two (OE-1; fix F14 in §7);
 - `%Logex.Runtime{}` is opaque, and its configuration changes only through the API;
 - one copy of each global's value;
 - the events `cycle/3` returns are an open set, which a host must tolerate.
+
+**OE-1's design: a staged edit of one program instance.** Designed on 2026-10-01 against
+`730cb16`, and built as `PLAN.md` OE-1. A spike on a copy of `730cb16` ran the Done-when
+end to end. Two reviews of it, one for correctness and one for fit with this section and
+the host contract, and the spike's own report gave sixteen fixes, listed in §7 as F1–F16;
+decisions 21–29 settle what the pass left to the maintainer. *What it fixes:* with no edit, the
+Done-when's candidate scanned over the kept state (a *plain swap*) pulses its new `ons`,
+which moves `speed_sp` to 900; keeps `t1` at `pre 5000, dn 1`; and starts the added `t2`
+at `pre 0`, so `t2` is done on its first true scan.
+
+*The API.* One module, `Logex.Edit`. The host holds a `%Logex.Edit{}` beside the
+instance; the struct is opaque and holds plain data only.
+
+```elixir
+Logex.Edit.accept(running, candidate, state) ::
+  {:ok, edit, forecast} | {:error, [%Logex.Diagnostic{stage: :edit}]}
+Logex.Edit.test(edit, state)     :: {edit, state, report}
+Logex.Edit.untest(edit, state)   :: {edit, state, report}
+Logex.Edit.assemble(edit, state) :: {candidate, state, report}  # the edit ends
+Logex.Edit.cancel(edit, state)   :: {original, state, report}   # the edit ends
+Logex.Edit.running(edit) :: %Logex.Program{}                    # what the host scans now
+Logex.Edit.stage(edit)   :: :accepted | :testing | :untested
+```
+
+- **Accept** takes the state and returns a forecast: the report a test taken now would
+  give. It applies nothing (decision 27). A test taken later reads the state as it is
+  then, so it sees a `.pre` that logic wrote after accept.
+- **`running/1`** is the candidate under test and the original otherwise. It is the
+  program that goes to `call/4`, `scan/2,3`, `put_inputs/3` and `restart/3` until the edit
+  ends. After that, they take the program that assemble or cancel returned.
+- **A restart during an edit** is allowed, through `running/1`, and keeps the edit's
+  stage. It drops what only the other program declares; the next switch starts that
+  again and reports it as `:added`, or a var_input as `:input`.
+- **One edit per instance.** At accept the edit builds two plans from the two programs
+  alone, one per direction: original to candidate, and back. It also keeps a record of one
+  instance's switches. A switch and a prune are separate functions of one plan, that
+  record and one state, so OE-2 can build one plan per program type and call them once for
+  each instance (fix F5). In OE-1 each instance takes its own edit. A report names a tag;
+  from OE-2 it names an `instance.tag` path.
+
+*The stages.* Every step is taken between two scans.
+
+| Step | Taken from | The host then scans | The state |
+|---|---|---|---|
+| accept | — | the original | read for the forecast, unchanged |
+| test | accepted, untested | the candidate | switched to the candidate's shape |
+| untest | testing | the original | switched back |
+| assemble | testing | the candidate; the edit ends | pruned to the candidate's tags |
+| cancel | accepted | the original; the edit ends | unchanged; the report is `[]` |
+| cancel | untested | the original; the edit ends | pruned to the original's tags |
+
+To finalise without scanning the candidate, the host takes test and assemble at one
+boundary.
+
+*Refusals.*
+- **A source mistake** comes back from accept as `{:error, diagnostics}`, at stage
+  `:edit`. Every tag both programs declare whose type differs is refused: any `Tag.type`
+  inequality, whether bool and dint, a tag and a timer, or one function block schema and
+  another. Each is cited at the candidate's declaration line, in line order, a tag
+  declared from Elixir (which has no line) last: ``line 7: `speed_sp` is a dint in the
+  running program and a bool in the candidate: a tag's type changes only with a
+  restart``. A section change is not a type change (decision 25), and neither is a
+  changed initial value (decision 29). A warning in the candidate does not stop it.
+  An `:edit` diagnostic carries no file, because a `%Logex.Program{}` keeps none: a
+  candidate from `Logex.compile_file/1` is cited as `line 7: …` without its path. The gap
+  is documented, and Milestone 2's configuration edit must close it (fix F15).
+- **A host mistake** raises `ArgumentError`, and a test pins each message:
+  - something other than a program, at accept: the runtime's own message;
+  - a candidate with another name: ``the candidate is `pump`, but the running program is
+    `motor`: an edit keeps the program's name``. Two unnamed programs count as one name;
+  - something other than an edit: `expected a %Logex.Edit{} from Logex.Edit.accept/3,
+    got: …`;
+  - a state that is not the running program's: the runtime's own messages;
+  - a step at the wrong stage: `test takes an edit accepted or untested, but this one is
+    under test`, and likewise for the other steps;
+  - an instance whose one-shot block list is not a proper list of storage bit names
+    (fix F8);
+  - a `%Logex.Scan{}` whose block list the host filled in, since the runtime fills it from
+    the instance.
+
+  A step checks the edit, then the state, then the stage.
+- **Outside the contract, and documented:** scanning the program the edit is not running;
+  two edits of one instance at once; a step on an edit that has ended or been superseded;
+  and accepting against a program the state is not running. None of these is detected
+  until OE-2's configuration carries a generation counter. A plain swap stays in the
+  contract, as today (decision 26).
+
+*A switch.* Test and untest each switch the state from the program they stop, F, to the
+one they start, T: test from the original to the candidate, untest back. A switch reads
+and writes only the state and the edit's record of the instance. Its plan was built at
+accept from the programs alone, so the plan cannot go stale. A switch never prunes. Its
+rules, in order:
+
+| Rule | What the switch does | Report |
+|---|---|---|
+| Start what is missing | A tag T declares that the state lacks starts at its initial value: a tag the candidate adds, or one a restart during the edit dropped | `{:added, n, v}` |
+| Start what the candidate adds | At the first test only (from accept), every tag the candidate adds starts at its initial value, over whatever a plain swap left under its name | `{:added, n, v}` |
+| Restart what does not fit (decision 26) | At the first test only, every tag of the candidate whose value does not fit its declared type starts again at its initial value. Fit is `Declarations.fits?/2`, or for a timer its member keys | `{:added, n, v}` |
+| Inputs (decision 22) | A var_input of T that was not one of F (added, back at untest, or made one by a section change) is reported with the value it reads now, and the host sends its real value before the next scan. A var_input of F that is not one of T (removed, or given another section) is reported with the value it holds, and the host stops sending it. A var_input whose value a rule above writes is reported here, not as `:added`, because its value is the host's | `{:input, n, v}`, `{:unread, n, v}` |
+| `.pre`, undone first (fix F1) | Each switch records, for each timer, the `.pre` it left and the `.pre` it found. The next switch first restores the found value wherever `.pre` still equals the one left, so an untest gives back exactly the `.pre` its test found. The two `.pre` rules below apply only where this one does not | `{:preset, t, {left, found}}` where it moves; `{:preset_kept, t, {pre, preset}}` where it does not and `.pre` is not T's preset |
+| `.pre`, both programs run a `ton` | For a timer F and T both run, with presets p0 and p1, a `.pre` still at p0 moves to p1. A `.pre` logic changed is kept, and reported where it differs from p1 | `{:preset, t, {p0, p1}}`, `{:preset_kept, t, {pre, p1}}` |
+| `.pre`, a `ton` stopped or restored (decision 23) | A timer T runs no `ton` on keeps its `.pre` frozen. A timer T runs and F did not takes T's preset outright | `{:preset, t, {pre, p1}}` where it moves |
+| `.dn` (fix F6) | After any move of the `.pre` of a timer T runs: with `.dn` 1 and `.acc` below the new preset, `.dn` drops at the next scan with its rung true, unless at least preset − acc ms have passed. With `.en` 1, `.dn` 0 and `.acc` at or past the preset, `.dn` rises at that scan. No latch is added | `{:dn_drops, t, {acc, preset}}`, `{:dn_rises, t, {acc, preset}}` |
+| Resume | A timer T runs and F did not, timing when last run (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes `now`, so the time no `ton` ran it is not caught up | `{:resumed, t, ms}` |
+| One-shots (decision 21) | Blocks an `ons` for the next scan: below | `{:ons_blocked, b, v}` |
+| Held outputs (decision 20) | Records each output no logic drives any more: below | `{:held, o, v}` |
+| Initial values (decision 29) | A bool or dint both programs declare, of one type, whose initial value (as `Program.initial_env/1` gives it) differs keeps its running value; the new one applies when a restart next starts it | `{:initial_changed, n, {old, new}}` |
+| `now` and `first` | Never touched, so no switch makes a scan first | — |
+
+**One-shots (decision 21; fixes F2, F3, F7, F9).** No switch writes a storage bit: a bit
+armed by writing 1 echoes into any rung that reads it. Instead `%Logex.Instance{}` gains
+`ons_blocked`, the storage bits its next scan blocks. The runtime hands the list to that
+one scan in `%Logex.Scan{}`, and `ons` reads it as it reads `first`: an `ons` whose bit is
+listed passes no power, and still writes its bit. A scan empties the list, and so does a
+restart. A switch lists:
+- each `ons` of T that is new, or whose rung differs with line numbers ignored, against
+  the program that last scanned;
+- each `ons` of T whose storage bit that program wrote through anything but an identical
+  `ons`, such as an `otu` (fix F7).
+
+An untouched `ons` is not listed, so it keeps a genuine edge on the switch scan. The
+program that last scanned is F, unless no scan has run since the last switch. The
+instance records whether one has, and within one edit the edit knows which program last
+scanned, so a test and an untest with no scan between lose no real edge (fix F3). Where
+the last switch was an earlier edit's, the edit does not know that program. The switch
+then compares against F, and keeps listed every pending bit that T still has an `ons` on,
+so a second edit taken before any scan cannot make a one-shot fire (fix F2). Each listed
+bit is reported with its value, which the switch leaves alone. The list is called
+`ons_blocked` and its report kind `:ons_blocked`, never "held": here "held" means an
+output keeping its value (fix F9).
+
+**Held outputs (decision 20; fix F4).** A var_output of F or of T that F drove (wrote
+through a `:write` slot, an `ons` bit included) and T does not drive as a var_output
+(removed, given another section, or no longer written) holds the value it last showed,
+and the host holds its point. The edit records that value at the switch that stops
+driving the output, from the state as the last scan left it, and every later step reports
+the record. It never re-reads a value a restart has since cleared, or one that logic
+driving the tag as a var has since changed. Where no scan has run since the instance
+started or restarted (`first` is true), the state is not what the point shows, so nothing
+is recorded and the output is not reported. Test, its forecast and assemble report the
+outputs the original drove and the candidate does not; untest, and cancel after an
+untest, report the reverse.
+
+**Assemble and cancel** are not switches: they block no one-shot and move no `.pre`.
+Assemble prunes the state to the candidate's tags, and cancel after an untest to the
+original's. Each reports every tag it prunes, `{:pruned, n, v}` with the value it had,
+and its direction's held outputs. Cancel from accept changes nothing and reports `[]`.
+
+**The report.** A list of `{kind, name, detail}`, sorted, with at most one entry per kind
+and name. The kinds are an open set, which a host must tolerate:
+
+| Kind | Detail | Given by |
+|---|---|---|
+| `:added` | the initial value it started at | a switch |
+| `:input` | the value it reads now; the host sends its real value before the next scan | a switch |
+| `:unread` | the value it holds; the host stops sending it | a switch |
+| `:preset` | `{from, to}`, the move of `.pre` | a switch |
+| `:preset_kept` | `{pre, preset}`: `.pre` kept where logic changed it | a switch |
+| `:dn_drops`, `:dn_rises` | `{acc, preset}`: what `.dn` does at the next scan with its rung true | a switch |
+| `:resumed` | the milliseconds not caught up | a switch |
+| `:ons_blocked` | the storage bit's value, unchanged | a switch |
+| `:initial_changed` | `{old, new}` initial values; the running value is kept | a switch |
+| `:held` | the value the output last showed | every step |
+| `:pruned` | the value it had | assemble, cancel |
+
+The writes a report lists, applied to the state before its step, give the state after it,
+exactly: `:added`, `:input`, `:preset`, `:resumed` (`last` set to `now`), `:pruned`, and
+`:ons_blocked` as the new block list. The other kinds state facts and forecasts.
+`api_contract_test.exs`'s edit walk checks this.
+
+**The host's duties during an edit** (fix F10; `Logex.Runtime`'s moduledoc gains the
+first two):
+- under test, send only the var_inputs of `Logex.Edit.running(edit)`. A host that sends
+  its whole input image is refused once the candidate removes an input;
+- resend every input a step reports as `{:input, …}` before the next scan. Across a
+  switch, "a host sends only what changed" is no longer enough;
+- stop sending each input a step reports as `{:unread, …}`;
+- hold each point a step reports as `{:held, …}` at its value, since it is no longer among
+  the outputs;
+- scan, set inputs and restart through `running/1`, and tolerate a report kind it does
+  not know.
+
+**One rule for new state.** `Logex.Program.initial_env/1` stays the one rule.
+`Runtime.instance/1`, `restart/3`, the edit's three start rules and, later, M2-1's
+`start/1` all start a tag by it, and `start/1` builds each instance through the same
+constructor as `instance/1` (fix F14). Its doc lists the edit's exceptions, for state an
+instance already holds around the new piece:
+- `first` stays false;
+- an `ons` the edit adds or changes is blocked by `ons_blocked`, where a new instance
+  relies on `first`;
+- a var_input a switch makes live is reported as `:input`, because its value is the
+  host's;
+- at the first test, a tag the candidate adds, or one whose value does not fit its type,
+  starts at its initial value over what a plain swap left;
+- a kept tag whose initial value changed keeps its value until a restart, and is reported
+  as `:initial_changed`;
+- M2-6 will add an event task's trigger.
+
+**The data path (decisions 24 and 28).** What the text cannot say is refused where data
+enters, so accept needs no check of its own, and every program within the contract can be
+written as text.
+- `Logex.Compiler.instructionize/2` checks its routine on entry against exactly what
+  `Logex.Parser.parse/1` can produce. One public function beside the parser states that
+  shape, and the parser's moduledoc calls it the definition of a well-formed tree:
+  - `{:routine, {:rungs, rungs}}`, where `rungs` is a list;
+  - a rung is `{:rung, elements}` with at least one element;
+  - an element is `{:name, line, word}`, where `word` lexes as exactly one name token;
+    `{:int_lit, line, n}`, where `n` is a non-negative integer; or `{:branches, legs}`
+    with at least one leg, a leg being a list of elements, possibly empty;
+  - every line is a positive integer. Every name and literal of one rung, inside its
+    groups too, carries one line, and the lines of successive rungs strictly increase. A
+    rung of nothing but empty groups carries no line and orders nothing.
+
+  A tree outside that shape is a host mistake: an `ArgumentError` whose message names the
+  offending node, pinned by a test. That covers an empty group or rung, a negative
+  literal, a missing, zero, negative or non-integer line, two rungs on one line, and any
+  malformed tuple, so no `FunctionClauseError` or `Protocol.UndefinedError` escapes. The
+  check is linear in the tree's size. It widens when `PLAN.md` §5's negative literals and
+  line continuations land. Until then the compiler code that handles either cannot be
+  reached; it is kept, and documented, not deleted.
+- `Logex.Tag.new!/4` refuses any initial value on an instance, with the message a
+  declaration line gets. The `%{"pre" => ms}` map M1-6 allowed is withdrawn: where a `ton`
+  runs the timer, its preset silently replaced the map, and where none does, no text could
+  give that `.pre` (decision 24). `new!/4` also refuses a negative initial value, in the
+  declaration line's style, until a negative literal lexes.
+
+**Cost.** Accept builds both plans once, in time linear in the two programs, and a switch
+is linear in them too. A test in reductions at two program sizes keeps accept and a
+switch linear (fix F16; CONTRIBUTING.md, "Test a pass over the program for growth"). The
+spike needed one: its first plan of held outputs was quadratic, and accept took 2.4 s at
+2,000 rungs until a probe found it. Once fixed, at 2,000 rungs and 4,000 tags, accept took
+19–24 ms, a test 0.36–0.37 ms, an untest 0.41–0.46 ms and an assemble 0.76–0.82 ms,
+against 1.4–1.5 ms for one scan and 76–86 ms to compile the candidate.
+
+**Tests.** Each rule gets a test that fails when that rule alone is reverted.
+- `edit_test.exs`: every host-mistake message, every `:edit` diagnostic, and a test per
+  rule. Its programs are built within the contract: an unnamed one comes from
+  `instructionize/2`, never from editing a struct (fix F12).
+- `end_to_end_test.exs`: the Done-when, the type-change refusal and the data-built
+  refusal. The Done-when's text is not changed. Its candidate's `ons` moves a setpoint, so
+  it drives no new var_output; one that did would rightly be listed as held at untest,
+  against the Done-when's "lists no undriven output".
+- `api_contract_test.exs`: an edit walk that lands with `Logex.Edit` (fix F11). It checks
+  the refusals and that the listed writes rebuild the state, and makes every accepted step
+  twice. The timer and one-shot work each add their oracles, two of them independent of
+  the rules: a one-shot pulses only if the previous scan ran the same `ons` rung text with
+  its condition 0; and a test then an untest with no scan between leaves the original's
+  tags and next outputs unchanged. Every property asserts its reach.
+- The entry check: every tree in the front-end golden record, and every tree the printer
+  test's generator produces, passes it (a property). The hand-built trees in the suite
+  that the parser could never produce become `ArgumentError` tests: `validation_test.exs`'s
+  negative preset and its rung over two lines, and `printer_test.exs`'s group with no legs.
+- `runtime_test.exs`: the exact public surface, `Logex.Edit`'s included, and the block
+  list's messages.
+
+**Known limits, documented.**
+- A one-shot block left pending by an earlier edit stays wherever the program started has
+  an `ons` on its bit, even when that `ons` matches the one that last scanned. At worst one
+  genuine edge is lost; no false pulse is made.
+- A restart during test puts `.pre` at the candidate's preset. Where logic had set `.pre`
+  to exactly that value before the test, the untest that follows gives back logic's value,
+  where a restart of the original would give the original's preset.
+- An `:edit` diagnostic carries no file (above).
 
 ---
 
@@ -878,7 +1167,7 @@ write while it runs.
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays |
 | IEC textual paste-compatibility (`END_*` blocks, `:=`, `;`) | not adopted | logex is a dialect (`PLAN.md` §5) |
-| Online edit (a new type, instances keep their state) | **designed 2026-10-01** (§4.9); built as `PLAN.md` OE-1 and OE-2 | What a kept instance does today, before OE-1. The constraint is recorded now: instance state stays keyed by declared tag name. Since M1-6 a second one: the number on `ton t1 5000` is where `.pre` starts, so an instance kept under a recompiled type keeps its old `.pre` until a restart (`end_to_end_test.exs` pins it). The migration must move a changed preset into the running instances, for example where `.pre` still equals the old compiled preset, or say plainly that it does not. Two more, since a state's values are not checked each scan: a tag the recompile adds is missing from a kept instance and reads 0, not its initial value, until a restart, so an added timer starts at a `.pre` of 0 and is done at its first true scan (pinned too); and a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output. A restart puts both right, keeping only the var_inputs whose values fit their types. The migration must start what is added and convert or refuse what changes type |
+| Online edit (a new type, instances keep their state) | **designed 2026-10-01** (§4.9); built as `PLAN.md` OE-1 and OE-2 | What a kept instance does today, before OE-1. The constraint is recorded now: instance state stays keyed by declared tag name. Since M1-6 a second one: the number on `ton t1 5000` is where `.pre` starts, so an instance kept under a recompiled type keeps its old `.pre` until a restart (`end_to_end_test.exs` pins it). The migration must move a changed preset into the running instances, for example where `.pre` still equals the old compiled preset, or say plainly that it does not. Two more, since a state's values are not checked each scan: a tag the recompile adds is missing from a kept instance and reads 0, not its initial value, until a restart, so an added timer starts at a `.pre` of 0 and is done at its first true scan (pinned too); and a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output. A restart puts both right, keeping only the var_inputs whose values fit their types. The migration must start what is added and convert or refuse what changes type. *(OE-1's design, §4.9, answers each: a switch moves `.pre` where it still holds the old preset, starts what is added, and at the first test restarts a value that does not fit its type; accept refuses a type change.)* |
 
 ---
 
@@ -1064,9 +1353,10 @@ checked by reverting it (CLAUDE.md; PLAN §2·M0-4). For example:
 
 ## 7. Decisions
 
-The first fourteen were taken as recommended on 2026-09-28. Decisions 15–20 were taken on
-2026-10-01: 18 against its recommendation, 19 with none to follow, the others as
-recommended. They are kept with their options so the reasons stay with them.
+The first fourteen were taken as recommended on 2026-09-28. Decisions 15–29 were taken on
+2026-10-01: 18, 28 and 29 against their recommendations, 19 with none to follow, the
+others as recommended. Decisions 21–29 are OE-1's design (§4.9), and the work cites them
+as E1–E9. All twenty-nine are kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted.
@@ -1135,6 +1425,113 @@ recommended. They are kept with their options so the reasons stay with them.
 20. **Outputs an edit leaves undriven:** hold their last value, or go to 0. *Recommend
     hold, as the conventional family does, with every step's report listing each one and
     the value it holds.* Adopted.
+21. **One-shots across a switch (E1):**
+    - arm the storage bits the edit adds, by writing them;
+    - arm every storage bit;
+    - hold every `ons` on the scan after a switch;
+    - or block, for that one scan, each `ons` the edit adds or whose rung changed (line
+      numbers ignored), through a block list on the instance, never by writing the bit.
+
+    *Recommend the block list.* Arming by writing 1 echoes into a rung that reads the bit.
+    Arming only the added bits still pulsed for an `ons` added on an existing tag, and for
+    one whose condition changed. Holding every `ons` loses a genuine edge on rungs the
+    edit never touched. Adopted: an untouched `ons` behaves normally.
+22. **Inputs across a switch (E2):** report each var_input that becomes live,
+    `{:input, name, value}`, and each one the running program no longer reads,
+    `{:unread, name, value}`, the host sending the real value of each live one before the
+    next scan; or require those inputs as an argument of test and untest. *Recommend
+    report*, the input side of decision 20. OE-2's copy-in will then make it automatic.
+    Adopted.
+23. **A timer whose `ton` the switched-to program does not run (E3):** its `.pre` goes to
+    that program's preset for it, 0, and comes back by the preset rule; or it stays
+    frozen, and a switch that restores a `ton` the stopped program did not run sets `.pre`
+    to the new preset outright, reported as `:preset`. *Recommend frozen.* Going to 0
+    turned an output on under test (`ge t1.acc t1.pre ote early`, with `.acc` at 3000),
+    and nothing in the report predicted it. Frozen, then set outright, still gives a
+    remove, assemble and restore the preset a restart gives. Adopted.
+24. **`Logex.Tag.new!/4`'s preset map (E4):** withdraw it, refusing any initial value on
+    an instance with the message a declaration line gets; or refuse it only where no `ton`
+    runs the timer. *Recommend withdrawing it.* Where a `ton` runs the timer, its preset
+    silently replaced the map; where none does, no text could say it. Adopted: M1-6's
+    `%{"pre" => ms}` from Elixir is withdrawn.
+25. **Section changes while running (E5):** allowed, the value kept, and reported through
+    `:held`, `:input` and `:unread`; or refused, as a type change is. *Recommend allowed*:
+    §4.9 refuses only type changes, and every consequence of a section change is in the
+    report. Adopted.
+26. **The plain swap (E6):** scanning a recompiled program over a kept instance, with no
+    edit, stays in the contract as today, and an edit's first test re-initialises, at its
+    declared initial value, any tag whose value does not fit its declared type
+    (`Declarations.fits?/2`, or a timer's member keys), reported as `:added`; or the plain
+    swap is ruled out. *Recommend keeping it, with that re-initialisation, and leaving a
+    version check to OE-2's generation counter.* A review found a plain swap that left a
+    dint's 7 under a tag the next program declares a timer; an edit then passed it
+    silently, and the timer was done 10 ms into a 5000 ms preset. Adopted.
+27. **Accept and the state (E7):** `accept/2`, from the programs alone; or `accept/3`,
+    which takes the state and returns a forecast, the report a test taken now would give,
+    with nothing applied. *Recommend `accept/3`*, so that every step returns a report,
+    accept included. Adopted.
+28. **What the data path refuses (E8):**
+    - the narrow refusal of four cases: a negative literal (a `:validate` diagnostic), a
+      negative initial value and the preset map from Elixir, and an empty group or rung
+      (`ArgumentError`), with the rest of a hand-built tree declared outside the contract;
+    - or the full entry check: `instructionize/2` checks its routine against exactly what
+      `Logex.Parser.parse/1` can produce, stated in one function beside the parser, and
+      refuses anything else as `ArgumentError`.
+
+    *Recommended the narrow refusal.* The maintainer chose the full entry check. A review
+    had found that `instructionize/2` took a missing, zero or negative line, giving a
+    diagnostic that `Logex.Diagnostic`'s line rule does not allow; took two rungs on one
+    line, losing the second-`ote` warning the text gives; and raised `FunctionClauseError`
+    or `Protocol.UndefinedError` on a malformed tuple. `Tag.new!/4` refuses a negative
+    initial value and, by decision 24, the preset map.
+29. **A changed initial value of a kept bool or dint (E9):** it keeps its running value
+    either way, and the new value applies at the next restart. Say nothing, or report it
+    at every switch as `{:initial_changed, name, {old, new}}`, sorted with the rest of the
+    report. *Recommended saying nothing.* The maintainer chose to report it.
+
+**The fixes, accepted with decisions 21–29.** OE-1's spike had two reviews, one for
+correctness and one for fit with §4.9 and the host contract. Their fixes, and one from the
+spike's own report (F16), were all accepted. The work cites them as F1–F16:
+- **F1.** Untest restores exactly the `.pre` its test found. Each switch records, per
+  timer, the `.pre` it left and the one it found; the next switch first restores the found
+  value wherever `.pre` still equals the one left, and otherwise the preset rules apply,
+  so a value logic writes after accept is still respected.
+- **F2.** A pending one-shot block survives a second edit taken before any scan, wherever
+  the program started still has an `ons` on the bit, and is reported as `:ons_blocked`.
+- **F3.** Switches with no scan between them lose no real edge: blocks are worked out
+  against the program that last scanned, so the instance records whether a scan has run
+  since the last switch.
+- **F4.** `{:held, output, value}` reports the value the output last showed, recorded at
+  the switch that stopped driving it, never a value re-read after a restart cleared it;
+  and only for an output whose value is known.
+- **F5.** A plan per program, built at accept, and a switch and a prune per instance,
+  which OE-2 can call once for each instance. OE-1 documents one edit per instance.
+- **F6.** `:dn_drops` means `.dn` drops at the next scan with its rung true, unless at
+  least preset − acc ms have passed; the documents say so.
+- **F7.** An `ons` whose storage bit the program that last scanned wrote through anything
+  other than an identical `ons` is blocked too.
+- **F8.** The instance's block list is checked as a proper list of storage bit names, with
+  a pinned message.
+- **F9.** Names: the block list is `ons_blocked` and its report kind `:ons_blocked`, never
+  "hold", since held means an output keeping its value; the rules that start a tag are
+  named for what they do, never by a letter the one-shot probes already use.
+- **F10.** `Logex.Runtime`'s moduledoc gains two host duties: under test, send only the
+  var_inputs of `Logex.Edit.running(edit)`; resend every input a step reports.
+- **F11.** `api_contract_test.exs`'s edit walk lands with `Logex.Edit` (its refusals, the
+  rule that the listed writes rebuild the state, every accepted step made twice), and
+  gains the timer and one-shot oracles with their work, two of them independent of the
+  rules. Every property asserts its reach.
+- **F12.** Tests build an unnamed program within the contract, through
+  `Compiler.instructionize/2`, never by editing a struct.
+- **F13.** When decisions 24 and 28 land, `CLAUDE.md`'s "one validator" wording is
+  corrected if checks made only from Elixir move outside `Declarations.check/1`, and
+  `PLAN.md` M1-6's record notes that the preset map from Elixir is withdrawn.
+- **F14.** `PLAN.md` M2-1 records that `start/1` builds each instance through the same
+  constructor as `Runtime.instance/1`.
+- **F15.** An `:edit` diagnostic carries no file, since a `%Logex.Program{}` keeps none.
+  The gap is documented; Milestone 2 needs it closed.
+- **F16.** A test in reductions keeps accept and a switch linear at two program sizes,
+  because a quadratic step got into the spike.
 
 ---
 

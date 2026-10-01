@@ -1277,9 +1277,9 @@ plausible. *(M1-6 landed 2026-09-30: decision 6's two-rate test is its proof.)*
 ### Milestone 2 — program organisation
 
 **Decided 2026-09-28** (§5; design and rationale in `docs/organisation.md`, whose §7
-decisions were all taken as recommended). *(Its §7 has since gained decisions 15–20, on
-online edit, taken on 2026-10-01: 18 departs from its recommendation and 19 had none; see
-"Online edit — decided 2026-10-01".)* Each item surveys its new words in
+decisions were all taken as recommended). *(Its §7 has since gained decisions 15–29, on
+online edit, taken on 2026-10-01: 18, 28 and 29 depart from their recommendations and 19
+had none; see "Online edit — decided 2026-10-01".)* Each item surveys its new words in
 `docs/naming.md` first, lands green, and pins every rule with a test that fails when the
 rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
 
@@ -1296,7 +1296,10 @@ rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
   list; each item's rule for a new piece
   of state serves both `start/1` and an edit that adds one, with the edit's exceptions
   listed; one checked constructor, which M2-2's parser feeds; an opaque
-  `%Logex.Runtime{}`; one copy of each global; and an open set of events.)*
+  `%Logex.Runtime{}`; one copy of each global; and an open set of events. OE-1's design
+  adds one: `start/1` builds each instance through the same constructor as
+  `Runtime.instance/1`, so an instance's `first`, its one-shot block list and any field it
+  gains later cannot drift between the two.)*
 - **M2-2 · The configuration file, task-less.** A separate `.lcf` file (the extension is
   still a placeholder; choose it before this item lands): `var_global`, plain and located
   (`at panel.q.0`), `program <inst> <type>`, arrow-free connections (`m1.start
@@ -1361,11 +1364,11 @@ diagnostic naming its file and line.
 ### Online edit — decided 2026-10-01
 
 **Decided 2026-10-01** (§5; design, measurements and sources in `docs/organisation.md`
-§4.9, decisions 15–20 in its §7). A running controller is changed the way the conventional
-family's is: a candidate is accepted beside the running program, tested, untested, and
-assembled or cancelled, with state moved by name, and never through the Elixir compiler.
-Each item surveys any new word in `docs/naming.md` first, lands green, and pins every rule
-with a test that fails when the rule is reverted.
+§4.9, decisions 15–20 in its §7, and OE-1's design decisions 21–29). A running controller
+is changed the way the conventional family's is: a candidate is accepted beside the
+running program, tested, untested, and assembled or cancelled, with state moved by name,
+and never through the Elixir compiler. Each item surveys any new word in `docs/naming.md`
+first, lands green, and pins every rule with a test that fails when the rule is reverted.
 
 - **OE-1 · A staged edit of one program instance, before M2-1.** Accept, test, untest,
   assemble and cancel over one `%Logex.Instance{}` and two programs of one name, with
@@ -1381,7 +1384,9 @@ with a test that fails when the rule is reverted.
   output and the dropped `.dn`; untest runs the original over the same state, and its
   report lists no undriven output; assemble prunes, and its report names the held output;
   a type change is refused at accept; and a program built from data that the text cannot
-  say is refused.
+  say is refused. *(Designed 2026-10-01, the four questions answered:
+  `docs/organisation.md` §4.9, "OE-1's design", and its §7 decisions 21–29 and fixes
+  F1–F16.)*
 - **OE-2 · A staged edit of a configuration, after Milestone 2.** The same cycle over the
   whole `%Logex.Configuration{}` and `%Logex.Runtime{}`, switched between two cycles, with
   each M2 item's rule for new state; a task's interval and priority changed while running;
@@ -1675,8 +1680,8 @@ becomes a clause in `Logex.Lexer`, and the behaviour it specifies still stands.*
 **How does Elixir declare a controller, and how is a running one changed?**
 
 **Decided 2026-10-01: as data, staged, and never through the Elixir compiler** (design,
-measurements and sources in `docs/organisation.md` §4.9; its decisions 15–20; work items
-OE-1 and OE-2 in §3).
+measurements and sources in `docs/organisation.md` §4.9; its decisions 15–20, and 21–29
+for OE-1's design; work items OE-1 and OE-2 in §3).
 - One model, held as data: `%Logex.Program{}` and, from M2-1, `%Logex.Configuration{}`.
   Their saved form is `.ld` and `.lcf` text, which printers write, and a data API refuses
   what the text cannot say.
@@ -1687,8 +1692,8 @@ OE-1 and OE-2 in §3).
 - Online edit is staged from its first version, as the conventional family's is: accept,
   test, untest, assemble, cancel. State moves by name: an added tag starts at its initial
   value, a removed one is pruned at assemble, a type change is refused while running, a
-  timer's `.pre` follows its preset where logic left it alone, and an `ons` the edit adds
-  does not fire at the switch.
+  timer's `.pre` follows its preset where logic left it alone, and an `ons` the edit adds,
+  or whose rung it changes, does not fire on the first scan after the switch.
 - While running, a task's interval and priority may change; moving an instance to another
   task, and adding or removing a task, are refused.
 - An output an edit leaves undriven holds its last value, as the conventional family's
