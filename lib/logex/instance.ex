@@ -12,8 +12,8 @@ defmodule Logex.Instance do
   - `ons_blocked` lists the storage bits whose `ons` its next scan blocks: each passes no
     power on that scan, as every `ons` passes none on a first scan, and still writes its
     bit. That scan empties it, and so does `Logex.Runtime.restart/3`. It is `[]` except
-    between an online edit's switch and the next scan (OE-1, `docs/organisation.md`
-    §4.9), and nothing sets it yet.
+    between an online edit's switch, which sets it (`Logex.Edit`), and the next scan
+    (OE-1, `docs/organisation.md` §4.9).
   - `switched` says whether an online edit has switched it to another program since its
     last scan (`Logex.Edit`): a switch sets it, and a scan clears it. It is how an edit
     knows whether the program it stops has scanned since the last switch, and so whether

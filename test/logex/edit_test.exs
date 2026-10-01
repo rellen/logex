@@ -1051,6 +1051,163 @@ defmodule Logex.EditTest do
     end
   end
 
+  describe "an ons across a switch (decision 21; fixes F2, F3, F7)" do
+    @d "var_input go bool\nvar_input a bool\nvar_input b bool\nvar_input q bool\nvar s9 bool\n" <>
+         "var_output pulse bool\nvar_output y bool\n"
+
+    # Runs `src1` through `before`, tests `src2` over its state, then drives `src2` through
+    # `after_`: the last outputs, the test's report, and its state.
+    defp switched(src1, src2, before, after_) do
+      v1 = c!(@d <> src1)
+      v2 = c!(@d <> src2)
+      {_, state} = run(v1, before)
+      {:ok, edit, forecast} = Edit.accept(v1, v2, state)
+      {_edit, tested, report} = Edit.test(edit, state)
+      assert report == forecast
+      {out, _} = drive(v2, tested, after_)
+      {out, report, tested}
+    end
+
+    test "one the edit adds on a tag that already exists does not fire on the next scan " <>
+           "(hazard A1), and the next real edge fires" do
+      src1 = "xio go ote s9\nxic a ote pulse"
+      src2 = "xic go ons s9 ote pulse"
+      before = [{0, %{"go" => 1}}, {10, %{}}]
+
+      assert {%{"pulse" => 0}, [{:ons_blocked, "s9", 0}], %Instance{ons_blocked: ["s9"]}} =
+               switched(src1, src2, before, [{10, %{}}])
+
+      assert {%{"pulse" => 1}, _, _} =
+               switched(src1, src2, before, [{10, %{}}, {10, %{"go" => 0}}, {10, %{"go" => 1}}])
+    end
+
+    test "one on a storage bit the edit adds is blocked too, and reported at the bit's " <>
+           "initial value" do
+      src2 = "var s8 bool 1\nxic go ons s8 ote pulse"
+
+      assert {%{"pulse" => 0}, report, %Instance{ons_blocked: ["s8"]}} =
+               switched("xic go ote y", src2, [{0, %{"go" => 1}}], [{10, %{}}])
+
+      assert report == [{:added, "s8", 1}, {:held, "y", 1}, {:ons_blocked, "s8", 1}]
+    end
+
+    test "nor one whose condition the edit changed (hazard A2), which fires on the next " <>
+           "real edge" do
+      src1 = "xic a ons s9 ote pulse\nxic b ote y"
+      src2 = "xic b ons s9 ote pulse\nxic b ote y"
+      before = [{0, %{"b" => 1}}, {50, %{}}]
+
+      assert {%{"pulse" => 0}, [{:ons_blocked, "s9", 0}], _} =
+               switched(src1, src2, before, [{10, %{}}])
+
+      assert {%{"pulse" => 1}, _, _} =
+               switched(src1, src2, before, [{10, %{}}, {10, %{"b" => 0}}, {10, %{"b" => 1}}])
+    end
+
+    test "one the edit leaves alone keeps a real edge on the switch scan, though its rung " <>
+           "moved" do
+      for src2 <- ["xic go ons s9 ote pulse\nxic b ote y", "xic b ote y\nxic go ons s9 ote pulse"] do
+        assert {%{"pulse" => 1}, [], %Instance{ons_blocked: []}} =
+                 switched(
+                   "xic go ons s9 ote pulse\nxic a ote y",
+                   src2,
+                   [{0, %{}}, {10, %{}}],
+                   [{10, %{"go" => 1}}]
+                 )
+      end
+    end
+
+    test "no switch writes a storage bit, so a rung that reads one sees no phantom write" do
+      assert {%{"y" => 0, "pulse" => 0}, [{:ons_blocked, "s9", 0}], %Instance{env: env}} =
+               switched(
+                 "xic a ons s9 ote pulse",
+                 "xic s9 ote y\nxic b ons s9 ote pulse",
+                 [{0, %{}}, {10, %{}}],
+                 [{10, %{"b" => 1}}]
+               )
+
+      assert env["s9"] == 0
+    end
+
+    test "untest blocks one the candidate changed, the candidate having last scanned" do
+      v1 = c!(@d <> "xic a ons s9 ote pulse")
+      v2 = c!(@d <> "xic b ons s9 ote pulse")
+      {_, state} = run(v1, [{0, %{}}, {10, %{}}])
+      {edit, state, _} = Edit.test(accept!(v1, v2, state), state)
+      {_, state} = drive(v2, state, [{10, %{}}])
+      {_edit, state, report} = Edit.untest(edit, state)
+      assert report == [{:ons_blocked, "s9", 0}]
+      assert {%{"pulse" => 0}, state} = drive(v1, state, [{10, %{"a" => 1}}])
+      assert {%{"pulse" => 1}, _} = drive(v1, state, [{10, %{"a" => 0}}, {10, %{"a" => 1}}])
+    end
+
+    test "a test then an untest with no scan between blocks nothing at the untest, so the " <>
+           "original loses no real edge (R8, fix F3)" do
+      v1 = c!(@d <> "xic a ons s9 ote pulse")
+      v2 = c!(@d <> "xic b ons s9 ote pulse")
+      {_, state} = run(v1, [{0, %{}}, {10, %{}}])
+      {edit, tested, [{:ons_blocked, "s9", 0}]} = Edit.test(accept!(v1, v2, state), state)
+      {edit, state, report} = Edit.untest(edit, tested)
+      assert report == [] and state.ons_blocked == []
+      assert {%{"pulse" => 1}, _} = drive(v1, state, [{10, %{"a" => 1}}])
+
+      # Nor a test after an untest with no scan between, where the candidate last scanned:
+      # its storage bit is as it left it.
+      {edit, state, _} = Edit.test(edit, state)
+      {_, state} = drive(v2, state, [{10, %{}}])
+      {edit, state, [{:ons_blocked, "s9", 0}]} = Edit.untest(edit, state)
+      {_edit, state, report} = Edit.test(edit, state)
+      assert report == [] and state.ons_blocked == []
+      assert {%{"pulse" => 1}, _} = drive(v2, state, [{10, %{"b" => 1}}])
+    end
+
+    test "a block no scan has used survives a second edit, wherever the program started " <>
+           "still has that ons (R1, fix F2)" do
+      decl =
+        "var_input go bool\nvar_output q bool\nvar s1 bool\nvar s2 bool\nvar s3 bool\n" <>
+          "var_output p1 bool\nvar_output p2 bool\nvar_output p3 bool\nxic go ote q\n"
+
+      o = c!(decl)
+      c1 = c!(decl <> "xic go ons s1 ote p1\nxic go ons s3 ote p3")
+      {_, state} = run(o, [{0, %{"go" => 1}}, {10, %{}}])
+      {edit, state, _} = Edit.test(accept!(o, c1, state), state)
+      {^c1, state, _} = Edit.assemble(edit, state)
+      assert state.ons_blocked == ["s1", "s3"]
+
+      # The second edit adds an ons on s2 and changes s3's: each bit is listed once.
+      c2 = c!(decl <> "xic go ons s1 ote p1\nxic go ons s2 ote p2\nxic q ons s3 ote p3")
+      {edit, tested, report} = Edit.test(accept!(c1, c2, state), state)
+      assert for({:ons_blocked, bit, 0} <- report, do: bit) == ["s1", "s2", "s3"]
+      assert tested.ons_blocked == ["s1", "s2", "s3"]
+      assert {%{"p1" => 0, "p2" => 0, "p3" => 0}, _} = Runtime.scan(c2, tested, 10)
+
+      # Given back with no scan, the untest leaves the list the test found.
+      assert {_, %Instance{ons_blocked: ["s1", "s3"]}, _} = Edit.untest(edit, tested)
+
+      # A pending bit the program started has no ons on is dropped.
+      c3 = c!(decl <> "xic go ons s1 ote p1")
+      {_edit, tested, report} = Edit.test(accept!(c1, c3, state), state)
+      assert for({:ons_blocked, bit, _} <- report, do: bit) == ["s1"]
+      assert tested.ons_blocked == ["s1"]
+    end
+
+    test "one whose storage bit the program that last scanned also writes another way is " <>
+           "blocked (R6, fix F7)" do
+      v1 = c!(@d <> "xic a ons s9 ote pulse")
+      v2 = c!(@d <> "xic a ons s9 ote pulse\nxic q otu s9")
+      assert Enum.any?(v2.warnings, &(&1.message =~ "the one-shot then fires on the wrong scans"))
+      {_, state} = run(v1, [{0, %{"a" => 1, "q" => 1}}, {10, %{}}])
+      # The original writes s9 through its ons alone, so the test blocks nothing.
+      {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
+      {%{"pulse" => 0}, state} = drive(v2, state, [{10, %{}}])
+      assert state.env["s9"] == 0
+      {_edit, state, report} = Edit.untest(edit, state)
+      assert report == [{:ons_blocked, "s9", 0}]
+      # a has been 1 throughout: no real edge, so no pulse.
+      assert {%{"pulse" => 0}, _} = drive(v1, state, [{10, %{}}])
+    end
+  end
+
   describe "the report" do
     test "is sorted, past the 32 keys where a map stops being" do
       many = Enum.map_join(1..40, fn i -> "var x#{i} dint #{i}\n" end)
@@ -1105,21 +1262,24 @@ defmodule Logex.EditTest do
     defp edited(n) do
       o =
         Enum.map_join(1..n, "\n", fn i ->
-          "var_input i#{i} bool\nvar_output o#{i} bool\nvar_output k#{i} dint 1\nvar t#{i} ton"
+          "var_input i#{i} bool\nvar_output o#{i} bool\nvar_output k#{i} dint 1\nvar t#{i} ton\n" <>
+            "var s#{i} bool\nvar u#{i} bool"
         end) <>
           "\n" <>
           Enum.map_join(1..n, "\n", fn i ->
-            "xic i#{i} ote o#{i}\nxic i#{i} move 5 k#{i}\nxic i#{i} ton t#{i} 50"
+            "xic i#{i} ote o#{i}\nxic i#{i} move 5 k#{i}\nxic i#{i} ons s#{i} move 7 k#{i}\n" <>
+              "xic i#{i} ons u#{i} move 8 k#{i}\nxic i#{i} ton t#{i} 50"
           end)
 
       c =
         Enum.map_join(1..n, "\n", fn i ->
           "var_input i#{i} bool\nvar_input j#{i} bool\nvar_output k#{i} dint 2\n" <>
-            "var t#{i} ton\nvar a#{i} dint 4"
+            "var t#{i} ton\nvar a#{i} dint 4\nvar s#{i} bool\nvar u#{i} bool"
         end) <>
           "\n" <>
           Enum.map_join(1..n, "\n", fn i ->
-            "xic j#{i} move 6 k#{i}\nxic i#{i} move a#{i} a#{i}\nxic i#{i} ton t#{i} 60"
+            "xic j#{i} move 6 k#{i}\nxic i#{i} move a#{i} a#{i}\nxic j#{i} ons s#{i} move 7 k#{i}\n" <>
+              "xic i#{i} ons u#{i} move 8 k#{i}\nxic i#{i} ton t#{i} 60"
           end)
 
       {c!(o, "big"), c!(c, "big")}
@@ -1145,7 +1305,9 @@ defmodule Logex.EditTest do
 
     # At 500 and 2,000 of each tag a linear edit grows about 4x; one that walks a list for
     # every tag grows about 16x. Every timer's preset changes, so each switch moves every
-    # `.pre`, and the untest and second test give each back from the record.
+    # `.pre`, and the untest and second test give each back from the record; and every
+    # program has two `ons` per input, one whose rung the candidate changes, which each
+    # test blocks, and one it leaves alone.
     test "accept and its steps stay linear in the program's size" do
       ratio = reductions_to_edit(edited(2000)) / reductions_to_edit(edited(500))
       assert ratio < 6, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
@@ -1153,11 +1315,12 @@ defmodule Logex.EditTest do
 
     defp deep(depth) do
       nest =
-        Enum.reduce(1..depth, "xic a ote y", fn _, inner -> "( #{inner} | xic b ote z ) xic a" end)
+        Enum.reduce(1..depth, "xic a ons s ote y", fn _, inner ->
+          "( #{inner} | xic b ote z ) xic a"
+        end)
 
-      o = "var a bool\nvar b bool\nvar_output y bool\nvar_output z bool\n" <> nest <> " ote b"
-      c = "var a bool\nvar b bool\nvar_output y bool\nvar_output z bool\nxic a ote b"
-      {c!(o, "deep"), c!(c, "deep")}
+      decl = "var a bool\nvar b bool\nvar s bool\nvar_output y bool\nvar_output z bool\n"
+      {c!(decl <> nest <> " ote b", "deep"), c!(decl <> "xic a ote b", "deep")}
     end
 
     # At 500 and 8,000 levels a linear walk grows about 16x; one that copies what it found

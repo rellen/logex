@@ -56,6 +56,7 @@ defmodule Logex.Edit do
   - *initial values* (decision 29): a bool or dint both programs declare whose initial
     value differs keeps its running value, and the new one applies when a restart next
     starts it;
+  - *one-shots* (decision 21): below;
   - *timers:* below.
 
   **Timers** (decision 23, fixes F1 and F6). A timer a rule above starts is at its initial
@@ -85,6 +86,29 @@ defmodule Logex.Edit do
   `.dn`, now 0 while timing with `.acc` at or past the new `.pre`, rises at that scan. No
   latch is added: `.dn` is `.acc` against `.pre`, as `ton` counts them.
 
+  **One-shots** (decision 21, fixes F2, F3 and F7). No switch writes a storage bit: a bit
+  armed by writing 1 would echo into any rung that reads it. A switch lists bits in the
+  instance's `ons_blocked` instead, and the next scan blocks each one's `ons`, as a first
+  scan blocks every `ons` (`Logex.Instance`): it passes no power, and still writes its
+  bit. Against the program that last scanned, a switch lists each `ons` of the program it
+  starts that is not in an identical rung there, line numbers ignored, or whose bit that
+  program also writes through another instruction: an `ons` the edit adds, one whose rung
+  it changes, and one whose bit may not hold the power the `ons` last received. An
+  untouched `ons` is not listed, and keeps a real edge on the switch scan.
+  - The program that last scanned is the one the switch stops where a scan has run since
+    the last switch (`Logex.Instance`'s `switched` is false), and otherwise the one this
+    edit recorded at that switch.
+  - Where it is the program the switch starts, whose bits are as it left them, the switch
+    lists none of that program's own, so a test and an untest with no scan between lose no
+    real edge (F3).
+  - Where the last switch was an earlier edit's, whose programs this edit does not know,
+    the program the switch stops is taken for it, and every bit still listed that the
+    program started has an `ons` on stays listed, so a second edit taken before any scan
+    cannot make a one-shot fire (F2). At worst a real edge is lost.
+
+  Each listed bit is reported as `:ons_blocked`, with its value, which the switch leaves
+  alone.
+
   **Held outputs** (decision 20, fix F4). A var_output of either program that the program
   stopped drove, writing it through an instruction's write operand (an `ons` storage bit
   included), and that the program started does not drive as a var_output (it removes it,
@@ -104,7 +128,8 @@ defmodule Logex.Edit do
   does not; untest, and cancel after an untest, report the reverse.
 
   **Assemble** (from test) and **cancel** (after an untest) are not switches: each prunes
-  the state to the tags of the program it keeps and reports its held outputs. Cancel from
+  the state to the tags of the program it keeps and reports its held outputs, and blocks
+  no one-shot, so one the last switch blocked stays blocked for the next scan. Cancel from
   accept changes nothing and reports `[]`.
 
   **The report** is a list of `{kind, name, detail}`, sorted, with at most one entry per
@@ -120,11 +145,13 @@ defmodule Logex.Edit do
   | `:preset_kept` | `{pre, preset}`: `.pre` kept, not the preset of the `ton` that runs it | a switch |
   | `:dn_drops`, `:dn_rises` | `{acc, pre}`, as `ton` counts them, a negative `.acc` as 0 | a switch |
   | `:resumed` | the milliseconds not caught up: `last` moves on by that many, to `now` | a switch |
+  | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan | a switch |
   | `:held` | the value the output's point holds | every step |
   | `:pruned` | the value it had | assemble, cancel |
 
   The writes a report lists, `:added`, `:input`, `:preset`, `:resumed` and `:pruned`,
-  applied to the state before its step, give the state after it, but for `switched`,
+  applied to the state before its step, give the state after it, with the bits of its
+  `:ons_blocked` entries, in order, as the block list a switch leaves, and `switched`,
   which a switch sets. The other kinds state facts and forecasts.
 
   **One edit per instance** (fix F5). At accept the edit builds two plans, original to
@@ -155,9 +182,12 @@ defmodule Logex.Edit do
   @opaque t :: %__MODULE__{}
 
   # The edit's record of one instance (F5): `shown`, the value each held output's point
-  # holds, as the edit has learnt it (F4); and `pre`, for each timer, the `.pre` the last
-  # switch left and the one it found, `{left, found}` (F1).
-  @record %{shown: %{}, pre: %{}}
+  # holds, as the edit has learnt it (F4); `pre`, for each timer, the `.pre` the last
+  # switch left and the one it found, `{left, found}` (F1); and `scanned`, nil until the
+  # edit's first switch, then `{side, pending}`: which of its two programs, `:original` or
+  # `:candidate`, left the storage bits, and the bits still blocked against it from an
+  # earlier edit (F2, F3).
+  @record %{shown: %{}, pre: %{}, scanned: nil}
 
   @doc """
   Accepts `candidate` beside `running`, the program `state` is an instance of:
@@ -341,18 +371,28 @@ defmodule Logex.Edit do
     forward = held(o, c)
     back = held(c, o)
     watched = Map.new(forward ++ back, &{&1, true})
-    %{test: plan(o, c, forward, watched), untest: plan(c, o, back, watched)}
+
+    %{
+      test: plan({:original, o}, c, forward, watched),
+      untest: plan({:candidate, c}, o, back, watched)
+    }
   end
 
-  defp facts(%Program{tags: tags} = program),
-    do: %{
+  defp facts(%Program{tags: tags} = program) do
+    {writes, ons} = rungs(program)
+
+    %{
       tags: tags,
       initial: Program.initial_env(program),
       inputs: section(tags, :var_input),
       outputs: section(tags, :var_output),
-      writes: writes(program),
+      writes: writes,
+      ons: ons,
+      ons_rungs: Map.new(ons, fn {rung, _bits} -> {rung, true} end),
+      ons_bits: for({_rung, bits} <- ons, bit <- bits, into: %{}, do: {bit, true}),
       timers: for({name, %Tag{type: %FbType{}} = tag} <- tags, into: %{}, do: {name, preset(tag)})
     }
+  end
 
   defp section(tags, wanted),
     do: for({name, %Tag{section: ^wanted}} <- tags, into: %{}, do: {name, true})
@@ -365,9 +405,14 @@ defmodule Logex.Edit do
 
   # One direction, from the program a switch stops to the one it starts, or a prune keeps.
   # `left` is the watched outputs the program stopped shows: what a switch taken while it
-  # is the program that last scanned learns from the state.
-  defp plan(from, to, held, watched),
+  # is the program that last scanned learns from the state. `stops` names the program
+  # stopped, `:original` or `:candidate`, and `blocks` is the one-shots of the program
+  # started to block where the program stopped is the one that last scanned.
+  defp plan({stops, from}, to, held, watched),
     do: %{
+      stops: stops,
+      blocks: blocks(from, to),
+      ons: to.ons_bits,
       initial: to.initial,
       keep: to.tags,
       starts: for({name, tag} <- to.tags, do: {name, not is_map_key(from.tags, name), fit(tag)}),
@@ -420,26 +465,66 @@ defmodule Logex.Edit do
 
   defp fit(%Tag{type: type}), do: type
 
-  # Every name a program writes through a write operand, an `ons` storage bit included:
-  # one walk, into every group however deep, accumulating rather than copying.
-  defp writes(%Program{rungs: rungs}) do
+  # What a program's rungs write and where its one-shots are, in one walk, into every group
+  # however deep, accumulating rather than copying: how many times each name is written
+  # through a write operand, an `ons` storage bit included; and, for each rung that holds
+  # an `ons`, the rung with its line numbers taken out, beside the storage bits of its
+  # `ons`. A rung is stripped once and compared once, however many `ons` it holds.
+  defp rungs(%Program{rungs: rungs}) do
     signatures = Map.new(Compiler.instructions(), fn {_word, {symbol, sig}} -> {symbol, sig} end)
-    Enum.reduce(rungs, %{}, fn {:rung, elements}, acc -> written(elements, acc, signatures) end)
+
+    Enum.reduce(rungs, {%{}, []}, fn {:rung, elements}, {writes, ons} ->
+      {writes, bits} = written(elements, {writes, []}, signatures)
+      {writes, oned(bits, elements, ons)}
+    end)
   end
+
+  defp oned([], _elements, ons), do: ons
+  defp oned(bits, elements, ons), do: [{stripped(elements), bits} | ons]
 
   defp written([], acc, _signatures), do: acc
 
   defp written([{:branches, legs} | rest], acc, signatures),
     do: written(rest, Enum.reduce(legs, acc, &written(&1, &2, signatures)), signatures)
 
-  defp written([{symbol, _line, operands} | rest], acc, signatures),
-    do: written(rest, wrote(Map.fetch!(signatures, symbol), operands, acc), signatures)
+  defp written([{:ons, _line, [{:name, _, bit}]} | rest], {writes, bits}, signatures),
+    do: written(rest, {count(writes, bit), [bit | bits]}, signatures)
+
+  defp written([{symbol, _line, operands} | rest], {writes, bits}, signatures),
+    do: written(rest, {wrote(Map.fetch!(signatures, symbol), operands, writes), bits}, signatures)
 
   defp wrote([{:write, _type} | signature], [{:name, _, name} | operands], acc),
-    do: wrote(signature, operands, Map.put(acc, name, true))
+    do: wrote(signature, operands, count(acc, name))
 
   defp wrote([_slot | signature], [_operand | operands], acc), do: wrote(signature, operands, acc)
   defp wrote(_signature, _operands, acc), do: acc
+
+  defp count(writes, name), do: Map.update(writes, name, 1, &(&1 + 1))
+
+  # A rung as the text says it, line numbers taken out: a rung moved or renumbered is the
+  # same rung (decision 21).
+  defp stripped(elements), do: Enum.map(elements, &bare/1)
+
+  defp bare({:branches, legs}), do: {:branches, Enum.map(legs, &stripped/1)}
+  defp bare({symbol, _line, operands}), do: {symbol, Enum.map(operands, &operand/1)}
+
+  defp operand({kind, _line, value}), do: {kind, value}
+
+  # Decision 21 and fix F7: the storage bits of the `ons` of `to` that a switch from `from`,
+  # the program that last scanned, blocks for one scan. Each is blocked unless `from` has
+  # that `ons` in an identical rung, line numbers ignored, and writes its bit through
+  # nothing else: an `ons` that `to` adds, one whose rung it changes, and one whose bit
+  # `from` also writes through another instruction, which may leave the bit at a value
+  # that is not the power the `ons` last received.
+  defp blocks(from, to),
+    do:
+      for(
+        {rung, bits} <- to.ons,
+        same <- [is_map_key(from.ons_rungs, rung)],
+        bit <- bits,
+        not (same and Map.get(from.writes, bit) == 1),
+        do: bit
+      )
 
   # ---- the per-instance half: a switch, between two scans, and a prune --------------------
 
@@ -453,18 +538,21 @@ defmodule Logex.Edit do
 
     env = Map.merge(env, Map.take(plan.initial, started))
     {inputs, added} = Enum.split_with(started, &is_map_key(plan.inputs, &1))
+    scanned = scanned(record.scanned, state, plan)
+    blocked = blocked(scanned, plan)
 
     report =
       for(name <- added, do: {:added, name, Map.fetch!(env, name)}) ++
         for(name <- Enum.uniq(plan.live ++ inputs), do: {:input, name, Map.fetch!(env, name)}) ++
         for(name <- plan.unread, do: {:unread, name, Map.get(env, name, 0)}) ++
         for({name, old, new} <- plan.changed, do: {:initial_changed, name, {old, new}}) ++
+        for(bit <- blocked, do: {:ons_blocked, bit, Map.fetch!(env, bit)}) ++
         holding(plan, shown, env)
 
     {env, timed, pre} = Enum.reduce(plan.timers, {env, [], %{}}, &timed(&1, record.pre, now, &2))
 
-    {%{state | env: env, switched: true}, %{record | shown: shown, pre: pre},
-     Enum.sort(timed ++ report)}
+    {%{state | env: env, switched: true, ons_blocked: blocked},
+     %{record | shown: shown, pre: pre, scanned: scanned}, Enum.sort(timed ++ report)}
   end
 
   # Whether a switch starts a tag at its initial value: one the state lacks, always; and at
@@ -474,6 +562,31 @@ defmodule Logex.Edit do
   defp starts?({:ok, _value}, _added?, _fit, false), do: false
   defp starts?({:ok, _value}, true, _fit, true), do: true
   defp starts?({:ok, value}, false, fit, true), do: not fits?(fit, value)
+
+  # ---- one-shots across a switch (decision 21; fixes F2, F3 and F7) ----------------------
+
+  # Which program left the storage bits, the one each `ons` would read them from, and the
+  # bits still blocked against it. A scan since the last switch (`switched` false): the
+  # program stopped, with nothing pending, since a scan empties the list. No scan since,
+  # and that switch this edit's: what it recorded, so a test and an untest with no scan
+  # between lose no real edge (F3). No scan since an earlier edit's switch, whose program
+  # this edit cannot know: the program stopped is taken for it, with the earlier edit's
+  # blocks still pending (F2).
+  defp scanned(_known, %Instance{switched: false}, plan), do: {plan.stops, []}
+  defp scanned(nil, %Instance{ons_blocked: pending}, plan), do: {plan.stops, pending}
+  defp scanned(known, _state, _plan), do: known
+
+  # The block list a switch leaves: its plan's blocks where the program stopped left the
+  # bits, none where the program started did, since its bits are then as it left them; and
+  # every pending bit the program started still has an `ons` on. Sorted, each bit once.
+  defp blocked({last, pending}, plan),
+    do:
+      Enum.sort(
+        Enum.uniq(own(last, plan) ++ for(bit <- pending, is_map_key(plan.ons, bit), do: bit))
+      )
+
+  defp own(stops, %{stops: stops, blocks: blocks}), do: blocks
+  defp own(_started, _plan), do: []
 
   # A timer fits by its member keys (decision 26): a map with none missing. A plain swap can
   # leave one that lacks some: where the program swapped out held a bool under the name,

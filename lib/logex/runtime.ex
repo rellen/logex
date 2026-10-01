@@ -15,7 +15,7 @@ defmodule Logex.Runtime do
   `docs/organisation.md` §4.9): accept, test, untest, assemble or cancel, each between two
   scans, its state moved by name. An instance carries two fields for it
   (`Logex.Instance`): `ons_blocked`, the storage bits whose `ons` its next scan blocks,
-  which only the runtime fills into a scan (`Logex.Scan`) and which nothing sets yet; and
+  which an edit's switch sets and only the runtime fills into a scan (`Logex.Scan`); and
   `switched`, which an edit's switch sets and a scan clears.
 
   **The host contract.** A mistake by the host raises `ArgumentError` (a host bug, not a
@@ -34,10 +34,11 @@ defmodule Logex.Runtime do
   timer whose `ton` it gives back catches up all the time it was not run.
   `Logex.Edit` moves a state to a new program by rule instead: it starts what is added,
   restarts a value that does not fit its type, refuses a type change, moves a timer's
-  `.pre` to a changed preset where logic left it alone, and resumes a timer it gives back
-  its `ton` from the switch. `restart/3`
-  starts every tag again but the `var_input`s whose values fit their types, and empties
-  `ons_blocked`. A `%Logex.Program{}`, `%Logex.Instance{}` or `%Logex.Edit{}` built or
+  `.pre` to a changed preset where logic left it alone, resumes a timer it gives back
+  its `ton` from the switch, and blocks for one scan each one-shot it adds or changes,
+  where a plain swap's first scan can fire one whose condition was already true.
+  `restart/3` starts every tag again but the `var_input`s whose values fit their types,
+  and empties `ons_blocked`. A `%Logex.Program{}`, `%Logex.Instance{}` or `%Logex.Edit{}` built or
   edited by hand is outside this contract.
 
   **During an edit** the host scans, sets inputs and restarts through

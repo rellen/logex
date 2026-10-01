@@ -35,6 +35,16 @@ defmodule Logex.ApiContractTest do
   switch forecast; and a test then an untest with no scan between leaves the original's
   tags as they were, but for what either switch listed as started and the test as
   resumed, and its next scan's outputs with them (R2).
+
+  Its one-shots (decision 21, fixes F2, F3 and F7): each switch's block list is checked
+  against the rule restated from the text, with the walk's own record of which side of
+  the edit last scanned and what an earlier edit left pending. Two oracles do not restate
+  it (F11): a one-shot pulses only if the previous scan ran the same `ons` rung text with
+  its condition 0, which the rung writes to a tag of its own, wherever the program scanned
+  writes the bit through its `ons` alone; and the round trip leaves the block list as it
+  found it too, but before a first scan, which blocks every `ons`. Now and then a host
+  finalises an edit at one boundary and takes another before any scan, so a block is
+  still pending.
   """
   use ExUnit.Case, async: true
 
@@ -559,6 +569,7 @@ defmodule Logex.ApiContractTest do
     :held,
     :initial_changed,
     :input,
+    :ons_blocked,
     :preset,
     :preset_kept,
     :pruned,
@@ -589,7 +600,16 @@ defmodule Logex.ApiContractTest do
     :resumed_scan,
     :dn_scan,
     :round_trip,
-    :round_trip_timer
+    :round_trip_timer,
+    :round_trip_ons,
+    :ons_new,
+    :ons_changed,
+    :ons_written,
+    :ons_untouched,
+    :ons_same_side,
+    :ons_pending,
+    :ons_switch_edge,
+    :ons_blocked_edge
   ]
 
   @allowed %{
@@ -602,21 +622,24 @@ defmodule Logex.ApiContractTest do
   # One vocabulary, so two draws share their names: `start` and `stop` move between
   # var_input and var, `a`, `b` and `c` between var and var_output, `n`'s initial value
   # changes, and `r` and `t1` change type now and then, which a plain swap leaves in the
-  # state and an edit refuses. `s1` is a var_output driven by a one-shot's storage bit.
+  # state and an edit refuses. `s1` is a var_output driven by a one-shot's storage bit, and
+  # `cn` the one-shot's condition, which the rung writes just before it; `s1` is declared
+  # now and then with no `ons` on it, and written now and then by another instruction
+  # after the `ons`, as only a program with a warning can.
   defp edit_source do
     inputs = Enum.flat_map(~w(start stop), &declared(&1, pick(~w(var_input var_input var none))))
     sp = pick(["var_input sp dint", "var sp dint", nil])
     bools = Enum.map(~w(a b c), &{&1, pick(~w(var var_output var_output))})
     r = pick([:bool, :dint, nil])
     t1 = pick([:ton, :ton, :bool, nil])
-    ons? = :rand.uniform(3) == 1
+    ons = pick([nil, nil, :tags, :rung, :rung, :written])
 
     declarations =
       Enum.map(inputs, fn {name, section} -> "#{section} #{name} bool" end) ++
         Enum.reject([sp], &is_nil/1) ++
         Enum.map(bools, fn {name, section} -> "#{section} #{name} bool" end) ++
         ["var_output n dint #{pick(["", "7", "9"])}"] ++
-        typed("r", r) ++ typed("t1", t1) ++ timer_input(t1) ++ ons_tags(ons?)
+        typed("r", r) ++ typed("t1", t1) ++ timer_input(t1) ++ ons_tags(ons)
 
     writable =
       ~w(a b c) ++
@@ -633,7 +656,7 @@ defmodule Logex.ApiContractTest do
           :rand.uniform(2) == 1
         end) ++
         moves_into("r", r) ++
-        ons_rung(ons?, readable) ++ preset_rung(t1, readable, sp) ++ timer_rung(t1)
+        ons_rungs(ons, readable) ++ preset_rung(t1, readable, sp) ++ timer_rung(t1)
 
     Enum.join(declarations ++ rungs, "\n")
   end
@@ -666,11 +689,15 @@ defmodule Logex.ApiContractTest do
 
   defp preset_rung(_t1, _readable, _sp), do: []
 
-  defp ons_tags(true), do: ["var_output s1 bool", "var_output p bool"]
-  defp ons_tags(false), do: []
+  defp ons_tags(nil), do: []
+  defp ons_tags(_ons), do: ["var_output s1 bool", "var_output p bool", "var cn bool"]
 
-  defp ons_rung(true, readable), do: ["xic #{pick(readable)} ons s1 ote p"]
-  defp ons_rung(false, _readable), do: []
+  defp ons_rungs(:rung, readable), do: ["xic #{pick(readable)} ote cn ons s1 ote p"]
+
+  defp ons_rungs(:written, readable),
+    do: ons_rungs(:rung, readable) ++ ["xic #{pick(readable)} #{pick(~w(otu otl ote))} s1"]
+
+  defp ons_rungs(_ons, _readable), do: []
 
   defp sp_word(nil), do: []
   defp sp_word(_sp), do: ["sp"]
@@ -713,7 +740,7 @@ defmodule Logex.ApiContractTest do
          "each step gives the report its rules and its writes say" do
     :rand.seed(:exsss, {2026, 10, 1})
 
-    for _ <- 1..150 do
+    for _ <- 1..200 do
       program = edit_program()
       {:ok, other} = Logex.compile(program.source, name: "q")
 
@@ -726,7 +753,9 @@ defmodule Logex.ApiContractTest do
         points: %{},
         pre: %{},
         timed: [],
-        round: nil
+        round: nil,
+        scanned: nil,
+        prev: nil
       }
 
       edit_walk(Map.put(walk, :other, Runtime.instance(other)), 60)
@@ -747,7 +776,7 @@ defmodule Logex.ApiContractTest do
   # plain swap left is reached, and the timer's `ton` changes its preset; or with its `ton`
   # dropped, so the `ton` goes and comes back while the timer is timing.
   defp edit_op(op, %{e: nil, p: p} = w) when op in [5, 6],
-    do: accept(pick([edit_program(), variant(p), without_ton(p)]), w)
+    do: accept(pick([edit_program(), variant(p), without_ton(p), without_ton(p)]), w)
 
   defp edit_op(op, w) when op in 5..9, do: step(pick([:test, :untest, :assemble, :cancel]), w)
 
@@ -771,8 +800,10 @@ defmodule Logex.ApiContractTest do
 
   # With an edit open, a trial run: a test, a scan of the candidate, an untest and a scan
   # of the original, each step refused where the stage does not allow it. A timer whose
-  # `ton` the candidate drops is then given it back while it was timing.
-  defp edit_op(11, w), do: edit_op(1, step(:untest, edit_op(1, step(:test, w))))
+  # `ton` the candidate drops is then given it back while it was timing. Or the edit is
+  # finalised at one boundary, a test and an assemble, and another taken before any scan,
+  # so a one-shot it blocked is still pending (fix F2).
+  defp edit_op(11, w), do: pick([&trial/1, &trial/1, &again/1]).(w)
 
   # A host mistake: a renamed candidate, another program's state, a bad state, something
   # that is not a program or an edit, or an edit given another program's state.
@@ -806,6 +837,13 @@ defmodule Logex.ApiContractTest do
   defp open_mistakes(%{e: edit} = w, step, bad),
     do: [fn -> Edit.test(edit, w.other) end, fn -> apply(Edit, step, [edit, bad]) end]
 
+  defp trial(w), do: edit_op(1, step(:untest, edit_op(1, step(:test, w))))
+
+  defp again(w) do
+    w = step(:assemble, step(:test, w))
+    step(:test, accept(variant(w.p), w))
+  end
+
   # A scan of the program the host runs, with inputs that fit: the host's image of its
   # outputs takes what the scan gives. A plain swap's scan catches a frozen timer up, as
   # it always has, so only another is held to the bound on what a timer gains.
@@ -822,7 +860,9 @@ defmodule Logex.ApiContractTest do
     assert Enum.sort(Map.keys(outputs)) == outputs_of(p)
     assert later.switched == false
     timed!(scan, p, s, later, w.timed)
-    %{w | s: later, points: Map.merge(w.points, outputs), timed: [], round: nil}
+    pulsed!(scan, p, s, later, outputs, w.prev)
+    prev = %{rung: ons_line(p), cn: later.env["cn"]}
+    %{w | s: later, points: Map.merge(w.points, outputs), timed: [], round: nil, prev: prev}
   end
 
   defp accept(candidate, %{p: p, s: s} = w),
@@ -833,7 +873,7 @@ defmodule Logex.ApiContractTest do
     assert {_, _, ^forecast} = Edit.test(edit, s)
     assert Edit.stage(edit) == :accepted and Edit.running(edit) == p
     edit_reach(:forecast, true)
-    %{w | e: edit, o: p, c: candidate, pre: %{}}
+    %{w | e: edit, o: p, c: candidate, pre: %{}, scanned: nil}
   end
 
   defp edit_accepted({:ok, {:error, diagnostics}}, candidate, %{p: p} = w) do
@@ -870,18 +910,26 @@ defmodule Logex.ApiContractTest do
   defp stepped(name, stage, true, {:ok, {next, later, report}}, %{s: before} = w)
        when name in [:test, :untest] do
     report!(report)
-    assert later == %{before | env: rebuilt(before.env, report), switched: true}
+
+    assert later == %{
+             before
+             | env: rebuilt(before.env, report),
+               switched: true,
+               ons_blocked: names(report, :ons_blocked)
+           }
+
     to = Edit.running(next)
     switched!(w.p, to, before, later, report, {name, stage})
     held!(w.p, to, report, later, w.points)
     pre = timers!(w.p, to, before, later, report, w.pre)
+    scanned = ons!(sides(name, w), before, later, report, w.scanned)
     edit_reach(:second_test, name == :test and stage == :untested)
     round = round_trip!(name, w.round, to, before, later, report)
 
     timed =
       for {kind, _, _} = entry <- report, kind in [:dn_drops, :dn_rises, :resumed], do: entry
 
-    %{w | e: next, s: later, p: to, pre: pre, timed: timed, round: round}
+    %{w | e: next, s: later, p: to, pre: pre, timed: timed, round: round, scanned: scanned}
   end
 
   defp stepped(:cancel, :accepted, true, {:ok, {program, later, report}}, %{s: before} = w) do
@@ -1173,6 +1221,8 @@ defmodule Logex.ApiContractTest do
     expected = %{was | env: rebuilt(was.env, kept)}
     tags = Map.keys(original.tags)
     assert Map.take(later.env, tags) == Map.take(expected.env, tags)
+    # Before a first scan, which blocks every `ons`, the list makes no difference.
+    assert later.ons_blocked == was.ons_blocked or was.first
     {outputs, _} = Runtime.scan(original, expected, 10)
     assert {^outputs, _} = Runtime.scan(original, later, 10)
     edit_reach(:round_trip, true)
@@ -1182,8 +1232,87 @@ defmodule Logex.ApiContractTest do
       Enum.any?(tested ++ report, &(elem(&1, 0) in [:preset, :preset_kept]))
     )
 
+    edit_reach(:round_trip_ons, names(tested, :ons_blocked) != [])
     nil
   end
+
+  # Decision 21 and fixes F2, F3 and F7, restated from the two programs' text, with the
+  # walk's own record of which side of the edit left the storage bits and what is pending
+  # against it: `s1` is blocked where the program started has its `ons`, unless the side
+  # that last scanned is the one started, or has that `ons` in the same rung text and
+  # writes `s1` no other way; or where it is pending and the program started has its
+  # `ons`. Returns the record for the next switch.
+  defp ons!({stops, sides}, before, later, report, scanned) do
+    {last, pending} = scanned = ons_basis(scanned, before, stops)
+    to = sides[started(stops)]
+    {own, how} = own_blocks(last == stops, sides[last], to, before)
+    kept = for "s1" <- pending, ons_line(to) != nil, do: "s1"
+    assert names(report, :ons_blocked) == Enum.sort(Enum.uniq(own ++ kept))
+
+    for {:ons_blocked, bit, value} <- report, do: assert(value == later.env[bit])
+
+    edit_reach(how, how != :none)
+    edit_reach(:ons_pending, own == [] and kept != [])
+    scanned
+  end
+
+  defp sides(:test, w), do: {:original, %{original: w.o, candidate: w.c}}
+  defp sides(:untest, w), do: {:candidate, %{original: w.o, candidate: w.c}}
+
+  defp started(:original), do: :candidate
+  defp started(:candidate), do: :original
+
+  defp ons_basis(_known, %Instance{switched: false}, stops), do: {stops, []}
+  defp ons_basis(nil, %Instance{ons_blocked: pending}, stops), do: {stops, pending}
+  defp ons_basis(known, _state, _stops), do: known
+
+  defp own_blocks(false, _last, to, _before), do: {[], same_side(ons_line(to))}
+
+  defp own_blocks(true, last, to, before),
+    do: own_ons(ons_line(last), ons_line(to), elsewhere?(last), Map.has_key?(before.env, "s1"))
+
+  defp same_side(nil), do: :none
+  defp same_side(_rung), do: :ons_same_side
+
+  defp own_ons(_rung, nil, _elsewhere?, _existing?), do: {[], :none}
+  defp own_ons(nil, _rung, _elsewhere?, true), do: {["s1"], :ons_new}
+  defp own_ons(nil, _rung, _elsewhere?, false), do: {["s1"], :none}
+  defp own_ons(rung, rung, true, _existing?), do: {["s1"], :ons_written}
+  defp own_ons(rung, rung, false, _existing?), do: {[], :ons_untouched}
+  defp own_ons(_rung, _changed, _elsewhere?, _existing?), do: {["s1"], :ons_changed}
+
+  # The rung of the program's `ons`, as its text, and whether anything else writes `s1`.
+  defp ons_line(program),
+    do: Enum.find(String.split(program.source, "\n"), &String.contains?(&1, " ons s1 "))
+
+  defp elsewhere?(program),
+    do: Regex.match?(~r/(^|\s)((ote|otl|otu) s1|move \S+ s1)(\s|$)/m, program.source)
+
+  # F11, independent of the rules: a one-shot pulses only if the previous scan ran the same
+  # `ons` rung text with its condition 0. Read where the program scanned writes `s1` through
+  # its `ons` alone, as a one-shot's own scans then bear it out, and not at a plain swap's
+  # scan, which nothing blocks. Reached by a real edge on the scan right after a switch,
+  # and by a block that kept a would-be pulse off.
+  defp pulsed!(:plain_swap, _program, _state, _later, _outputs, _prev), do: :ok
+
+  defp pulsed!(:running, program, state, later, outputs, prev),
+    do: pulse!(ons_line(program), elsewhere?(program), state, later, outputs, prev)
+
+  defp pulse!(nil, _elsewhere?, _state, _later, _outputs, _prev), do: :ok
+  defp pulse!(_rung, true, _state, _later, _outputs, _prev), do: :ok
+
+  defp pulse!(rung, false, state, _later, %{"p" => 1}, prev) do
+    assert %{rung: ^rung, cn: 0} = prev
+    edit_reach(:ons_switch_edge, state.switched)
+  end
+
+  defp pulse!(_rung, false, state, later, %{"p" => 0}, _prev),
+    do:
+      edit_reach(
+        :ons_blocked_edge,
+        "s1" in state.ons_blocked and later.env["cn"] == 1 and state.env["s1"] == 0 and
+          not state.first
+      )
 
   defp names(report, kind), do: for({^kind, name, _} <- report, do: name)
 

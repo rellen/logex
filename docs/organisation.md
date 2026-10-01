@@ -1010,8 +1010,14 @@ restart. A switch lists:
 An untouched `ons` is not listed, so it keeps a genuine edge on the switch scan. The
 program that last scanned is F, unless no scan has run since the last switch. The
 instance records whether one has, in its `switched` (below), and within one edit the edit
-knows which program last scanned, so a test and an untest with no scan between lose no
-real edge (fix F3). Where the last switch was an earlier edit's, the edit does not know
+knows which program last scanned, recording it at each switch, so a test and an untest
+with no scan between lose no real edge (fix F3). Where the program that last scanned is T
+itself, the same one of the edit's two programs, as at an untest taken with no scan since
+its test, the switch lists none of T's own: T's bits are as T left them, T's own other
+writers included, so neither rule above applies. The rule of fix F7 guards against
+another program's writes; read against T itself it would block, at every such untest, an
+`ons` that T also writes another way, and the round trip below would no longer leave the
+original as it was. Where the last switch was an earlier edit's, the edit does not know
 that program. The switch then compares against F, and keeps listed every pending bit that
 T still has an `ons` on, so a second edit taken before any scan cannot make a one-shot
 fire (fix F2). Each listed bit is reported with its value, which the switch leaves alone.
@@ -1145,9 +1151,11 @@ against 1.4–1.5 ms for one scan and 76–86 ms to compile the candidate.
   the refusals and that the listed writes rebuild the state, and makes every accepted step
   twice. The timer and one-shot work each add their oracles, two of them independent of
   the rules: a one-shot pulses only if the previous scan ran the same `ons` rung text with
-  its condition 0; and a test then an untest with no scan between leaves the original's
-  tags and next outputs unchanged, but for what either switch listed as started and the
-  test as resumed, which no untest undoes. The timer work adds two more: no scan lets a
+  its condition 0, wherever the program scanned writes its bit through the `ons` alone;
+  and a test then an untest with no scan between leaves the original's tags and next
+  outputs unchanged, but for what either switch listed as started and the test as
+  resumed, which no untest undoes, and its block list too, but before a first scan,
+  which blocks every `ons` anyway. The timer work adds two more: no scan lets a
   timer gain more than the scan's own time, as one caught up would, a plain swap's scan,
   which catches a frozen timer up as it always has, aside; and the scan right after a
   switch does to `.dn` what the switch forecast. Every property asserts its reach.
