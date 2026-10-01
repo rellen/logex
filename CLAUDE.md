@@ -91,9 +91,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   language or the generator on purpose, and read the diff:
   `test/fixtures/generate_frontend_golden.exs`.
 - `test/logex/edit_test.exs` pins `Logex.Edit`: every host-mistake message and the order of
-  its checks, every `:edit` diagnostic, a test per rule of §4.9 (grouped by the decision,
-  fix or hazard it answers), and two growth tests in reductions (F16) that run accept,
-  test, untest, test and assemble at two sizes and two depths. Its programs come from
+  its checks, every `:edit` diagnostic, a test per rule of §4.9 (grouped by the decision
+  or fix it answers), and four growth tests in reductions (F16): accept, test, untest,
+  test and assemble at two sizes and two depths, the scan right after a switch at two
+  numbers of blocked one-shots, and a second edit before any scan at two numbers of
+  pending blocks. Its programs come from
   source, an unnamed one through `instructionize/2`, never from editing a struct.
   `api_contract_test.exs`'s edit walk checks the same rules restated from the programs'
   text, and carries oracles that know nothing of them
@@ -127,7 +129,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 
 ## Conventions
 
-- `evaluate/3` clauses, private in `Logex.Runtime`, take `(instruction, {power_flow_bool, env_map}, %Logex.Scan{})` and return `{new_power_flow_bool, new_env_map}`. The scan is read-only and the same for every instruction of one call: a clause that needs the time reads `scan.now`, one that needs the first scan reads `scan.first`, and every other clause ignores it as `_scan` (M1-6). `ons` reads `scan.first` and `scan.ons_blocked`, the storage bits whose `ons` passes no power on this one scan, which `call/4` copies from the instance's `ons_blocked`, emptying the instance's list after the scan (OE-1); a host never fills it in. No test calls the evaluator: a test runs a program through `Logex.Runtime.call/4`, on a hand-built `%Logex.Instance{}` when it needs a particular env
+- `evaluate/3` clauses, private in `Logex.Runtime`, take `(instruction, {power_flow_bool, env_map}, %Logex.Scan{})` and return `{new_power_flow_bool, new_env_map}`. The scan is read-only and the same for every instruction of one call: a clause that needs the time reads `scan.now`, one that needs the first scan reads `scan.first`, and every other clause ignores it as `_scan` (M1-6). `ons` reads `scan.first` and `scan.ons_blocked`, the storage bits whose `ons` passes no power on this one scan, which `call/4` builds from the instance's `ons_blocked` list as a map of those bits, each to `true`, so that each `ons` looks its bit up rather than walking the list, emptying the instance's list after the scan (OE-1); a host never fills it in. No test calls the evaluator: a test runs a program through `Logex.Runtime.call/4`, on a hand-built `%Logex.Instance{}` when it needs a particular env
 - A mistake in the source is a `%Logex.Diagnostic{}`, returned; a mistake by the host is an `ArgumentError`, raised, whose message a test pins. Nothing else may escape the public API (`api_contract_test.exs`)
 - An operand in the AST is `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. `Logex.Parser.well_formed!/1` states the whole tree `parse/1` can produce, and `instructionize/2` raises `ArgumentError` on any other (OE-1): every line a positive integer, every element of a rung on its one line, each rung on a line after the last, a name that lexes as one name token, a literal of 0 or more, a rung of one element or more and a group of one leg or more. A test that builds a tree by hand builds one of those. The lexer's tokens carry `{line, column}`; the parser keeps only the line, because the suite pins that shape. An instruction in the IR is `{symbol, line, operands}`, carrying its mnemonic's line; a `{:branches, legs}` node carries no line of its own. In the IR, and only there, a member of an instance is `{:member, line, path}`, `t1.acc` becoming `{:member, 3, ["t1", "acc"]}` (M1-6): the runtime's `read/2` and `write/3` take it as they take a tag, and anything that walks IR operands must handle it
 - New instructions, step 1 — **survey the name before writing any code**: add a

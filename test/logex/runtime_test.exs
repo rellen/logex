@@ -605,8 +605,8 @@ defmodule Logex.RuntimeTest do
   describe "an instance's one-shot block list (OE-1)" do
     @ons "var_input go bool\nvar_output pulse bool\nvar s1 bool\nxic go ons s1 ote pulse"
 
-    # Nothing public sets the list yet: an online edit's switch will (docs/organisation.md
-    # §4.9), so these instances are given one by hand, after a first scan.
+    # Only Logex.Edit's switch sets it (edit_test.exs); here it is set by hand, after a
+    # first scan, to see what the runtime does with it.
     setup do
       {:ok, p} = Logex.compile(@ons, name: "o")
 

@@ -157,6 +157,18 @@ defmodule Logex.EditTest do
         Edit.accept(v1, opaque(:y), s)
       end)
 
+      # A program's struct is not enough: its tags must be a map and its rungs a list,
+      # checked before anything walks either.
+      for {running, candidate, bad} <- [
+            {%{v1 | tags: nil}, v2, %{v1 | tags: nil}},
+            {v1, %{v2 | tags: nil}, %{v2 | tags: nil}},
+            {v1, %{v2 | rungs: nil}, %{v2 | rungs: nil}}
+          ] do
+        raises("expected a %Logex.Program{} from Logex.compile/2, got: #{inspect(bad)}", fn ->
+          Edit.accept(opaque(running), opaque(candidate), s)
+        end)
+      end
+
       raises(
         "the candidate is `pump`, but the running program is `motor`: " <>
           "an edit keeps the program's name",
@@ -562,6 +574,23 @@ defmodule Logex.EditTest do
 
       refute Map.has_key?(env, "stop")
     end
+
+    test "one the state lacks after a plain swap, that the candidate keeps as a var, is " <>
+           "unread at the value the switch starts it at" do
+      v0 = c!(@seal <> "xic start ote motor")
+      v1 = c!(@seal <> @stop <> "xic start xio stop ote motor")
+      v2 = c!(@seal <> "var stop bool 1\nxic start xio stop ote motor")
+      {_, state} = run(v0, [{0, %{"start" => 1}}])
+      {_, state} = Runtime.scan(v1, state, 10)
+      refute Map.has_key?(state.env, "stop")
+
+      # The report states the state it leaves: `stop` holds 1 after the test, not the 0 a
+      # read of the state before the start rules would give.
+      assert {_, %Instance{env: %{"stop" => 1}}, report} =
+               Edit.test(accept!(v1, v2, state), state)
+
+      assert report == [{:added, "stop", 1}, {:unread, "stop", 1}]
+    end
   end
 
   describe "an output an edit leaves undriven holds its value, and is reported (F4)" do
@@ -692,6 +721,22 @@ defmodule Logex.EditTest do
       assert {_, _, [{:held, "y", 0}]} = Edit.test(edit, state)
     end
 
+    test "a restart after a switch, with no scan since, leaves the record standing at the " <>
+           "next switch" do
+      v1 = c!(@out <> "xic go ote y")
+      v2 = c!(@out <> "var_output blip bool\nxic go ote y\nxic go ote blip")
+      {_, state} = run(v1, [{0, %{"go" => 1}}])
+      {edit, state, _} = Edit.test(accept!(v1, v2, state), state)
+      {%{"blip" => 1}, state} = Runtime.scan(v2, state, 10)
+      {edit, state, [{:held, "blip", 1}]} = Edit.untest(edit, state)
+      {edit, state, []} = Edit.test(edit, state)
+      # The restart clears the state, not the point: nothing has scanned since the
+      # candidate showed blip as 1, so the point still holds it.
+      state = Runtime.restart(Edit.running(edit), state, :cold)
+      assert %Instance{switched: true, env: %{"blip" => 0}} = state
+      assert {_, _, [{:held, "blip", 1}]} = Edit.untest(edit, state)
+    end
+
     test "before any scan, a point no program has shown is not reported" do
       v1 = c!(@out <> "xic go ote y")
       v2 = c!(@out <> "var_output z bool\nvar w bool\nxic go ote w")
@@ -740,6 +785,29 @@ defmodule Logex.EditTest do
       assert %{"sp" => 900, "b" => 1} = Runtime.restart(v2, state, :cold).env
     end
 
+    test "is not reported for a tag the first test starts again, which :added reports" do
+      p0 = c!("var x dint\nvar_output y bool\nmove 7 x")
+      v1 = c!("var x bool\nvar_output y bool\nxic x ote y")
+      v2 = c!("var x bool 1\nvar_output y bool\nxic x ote y")
+      {_, state} = run(p0, [{0, %{}}])
+      {_, state} = drive(v1, state, [{0, %{}}])
+      assert {:ok, edit, [{:added, "x", 1}]} = Edit.accept(v1, v2, state)
+      {edit, state, [{:added, "x", 1}]} = Edit.test(edit, state)
+      assert {_, _, [{:initial_changed, "x", {1, 0}}]} = Edit.untest(edit, state)
+    end
+
+    test "is not reported for a var_input of the program started, whose value a restart keeps" do
+      v1 = c!("var sp dint 100\nvar_output out dint\nmove sp out")
+      v2 = c!("var_input sp dint\nvar_output out dint\nmove sp out")
+      {_, state} = run(v1, [{0, %{}}])
+      {edit, state, report} = Edit.test(accept!(v1, v2, state), state)
+      assert report == [{:input, "sp", 100}]
+      assert Runtime.restart(v2, state, :cold).env["sp"] == 100
+
+      assert {_, _, [{:initial_changed, "sp", {0, 100}}, {:unread, "sp", 100}]} =
+               Edit.untest(edit, state)
+    end
+
     test "is not reported for a tag only one program declares" do
       v1 = c!("var_input go bool\nvar_output sp dint 1200\nxic go move sp sp")
       v2 = c!("var_input go bool\nvar_output sq dint 900\nxic go move sq sq")
@@ -770,7 +838,7 @@ defmodule Logex.EditTest do
     end
 
     test "is kept where logic changed it, as the test finds it and not as accept did " <>
-           "(hazard E)" do
+           "(decision 27)" do
       v1 = c!(@timed <> "xic go ton t1 5000")
       v2 = c!(@timed <> "xic go ton t1 9000")
       {_, state} = run(v1, [{0, %{"go" => 1}}])
@@ -781,7 +849,7 @@ defmodule Logex.EditTest do
       assert state.env["t1"]["pre"] == 7000
     end
 
-    test "untest gives back exactly the .pre its test found, where the test moved none (R2)" do
+    test "untest gives back exactly the .pre its test found, where the test moved none (F1)" do
       r =
         "var_input go bool\nvar_input up bool\nvar_output lamp bool\nvar t1 ton\n" <>
           "xic up move 8000 t1.pre\n"
@@ -813,7 +881,7 @@ defmodule Logex.EditTest do
       assert {_, _, [{:preset_kept, "t1", {7000, 9000}}]} = Edit.test(edit, state)
     end
 
-    test "a timer whose ton the candidate removes keeps its .pre frozen (R9, decision 23)" do
+    test "a timer whose ton the candidate removes keeps its .pre frozen (decision 23)" do
       e = "var_input go bool\nvar_output early bool\nvar t1 ton\nge t1.acc t1.pre ote early\n"
       v1 = c!(e <> "xic go ton t1 5000")
       v2 = c!(e)
@@ -902,7 +970,7 @@ defmodule Logex.EditTest do
     end
 
     test "a timer the candidate removes is kept, unused, through the test, and the original " <>
-           "finds it as it was (hazard D)" do
+           "finds it as it was" do
       v1 =
         c!(
           "var_input go bool\nvar_output lamp bool\nvar t1 ton\n" <>
@@ -920,7 +988,7 @@ defmodule Logex.EditTest do
     end
   end
 
-  describe "a timer's .dn after its .pre moves (hazard C, fix F6)" do
+  describe "a timer's .dn after its .pre moves (fix F6)" do
     defp lamp(preset),
       do:
         c!(
@@ -990,7 +1058,7 @@ defmodule Logex.EditTest do
     end
   end
 
-  describe "a timer the switch gives back its ton resumes from the switch (hazard B)" do
+  describe "a timer the switch gives back its ton resumes from the switch (§4.9's Resume rule)" do
     @back "var_input go bool\nvar_output lamp bool\nvar t1 ton\n"
 
     test "so the time no ton ran it is not caught up" do
@@ -1019,6 +1087,51 @@ defmodule Logex.EditTest do
       assert report == [{:resumed, "t2", 500}]
       {_, state} = Runtime.scan(v2, state, 10)
       assert state.env["t2"]["acc"] == 30
+    end
+
+    test "and an untest with no scan since gives the resume back, so a plain swap after " <>
+           "catches up as it would have (F11)" do
+      b1 = c!(@back <> "xic go ton t1 5000\nxic t1.dn ote lamp")
+      b2 = c!(@back <> "xic t1.dn ote lamp")
+      {_, state} = run(b1, [{0, %{"go" => 1}}, {1000, %{}}])
+      {edit, state, _} = Edit.test(accept!(b1, b2, state), state)
+      {^b2, state, _} = Edit.assemble(edit, state)
+      {_, frozen} = Runtime.scan(b2, state, 3000)
+      assert %{"en" => 1, "last" => 1000} = frozen.env["t1"]
+      {edit, tested, [{:resumed, "t1", 3000}]} = Edit.test(accept!(b2, b1, frozen), frozen)
+      {edit, untested, report} = Edit.untest(edit, tested)
+      assert report == [{:resume_undone, "t1", 3000}]
+      assert untested == %{tested | env: rebuilt(tested.env, report)}
+      assert untested.env == frozen.env
+      {^b2, cancelled, []} = Edit.cancel(edit, untested)
+      {_, cancelled} = Runtime.scan(b2, cancelled, 1000)
+      {_, frozen} = Runtime.scan(b2, frozen, 1000)
+      assert cancelled == frozen
+      assert {%{"lamp" => 1}, _} = Runtime.scan(b1, cancelled, 1000)
+    end
+
+    test "but not after a scan of the program the test started" do
+      b1 = c!(@back <> "xic go ton t1 5000\nxic t1.dn ote lamp")
+      b2 = c!(@back <> "xic t1.dn ote lamp")
+      {_, state} = run(b1, [{0, %{"go" => 1}}, {1000, %{}}])
+      {edit, state, _} = Edit.test(accept!(b1, b2, state), state)
+      {^b2, state, _} = Edit.assemble(edit, state)
+      {_, state} = Runtime.scan(b2, state, 3000)
+      {edit, state, [{:resumed, "t1", 3000}]} = Edit.test(accept!(b2, b1, state), state)
+      {_, state} = Runtime.scan(b1, state, 0)
+      assert {_, %{env: %{"t1" => %{"last" => 4000}}}, []} = Edit.untest(edit, state)
+    end
+
+    test "nor after a restart of it, which started the timer again" do
+      b1 = c!(@back <> "xic go ton t1 5000\nxic t1.dn ote lamp")
+      b2 = c!(@back <> "xic t1.dn ote lamp")
+      {_, state} = run(b1, [{0, %{"go" => 1}}, {1000, %{}}])
+      {edit, state, _} = Edit.test(accept!(b1, b2, state), state)
+      {^b2, state, _} = Edit.assemble(edit, state)
+      {_, state} = Runtime.scan(b2, state, 3000)
+      {edit, state, [{:resumed, "t1", 3000}]} = Edit.test(accept!(b2, b1, state), state)
+      state = Runtime.restart(b1, state, :cold)
+      assert {_, ^state, []} = Edit.untest(edit, state)
     end
 
     test "but not one that was not timing when it last ran" do
@@ -1069,7 +1182,7 @@ defmodule Logex.EditTest do
     end
 
     test "one the edit adds on a tag that already exists does not fire on the next scan " <>
-           "(hazard A1), and the next real edge fires" do
+           "(decision 21), and the next real edge fires" do
       src1 = "xio go ote s9\nxic a ote pulse"
       src2 = "xic go ons s9 ote pulse"
       before = [{0, %{"go" => 1}}, {10, %{}}]
@@ -1091,7 +1204,7 @@ defmodule Logex.EditTest do
       assert report == [{:added, "s8", 1}, {:held, "y", 1}, {:ons_blocked, "s8", 1}]
     end
 
-    test "nor one whose condition the edit changed (hazard A2), which fires on the next " <>
+    test "nor one whose condition the edit changed (decision 21), which fires on the next " <>
            "real edge" do
       src1 = "xic a ons s9 ote pulse\nxic b ote y"
       src2 = "xic b ons s9 ote pulse\nxic b ote y"
@@ -1142,7 +1255,7 @@ defmodule Logex.EditTest do
     end
 
     test "a test then an untest with no scan between blocks nothing at the untest, so the " <>
-           "original loses no real edge (R8, fix F3)" do
+           "original loses no real edge (fix F3)" do
       v1 = c!(@d <> "xic a ons s9 ote pulse")
       v2 = c!(@d <> "xic b ons s9 ote pulse")
       {_, state} = run(v1, [{0, %{}}, {10, %{}}])
@@ -1162,7 +1275,7 @@ defmodule Logex.EditTest do
     end
 
     test "a block no scan has used survives a second edit, wherever the program started " <>
-           "still has that ons (R1, fix F2)" do
+           "still has that ons (fix F2)" do
       decl =
         "var_input go bool\nvar_output q bool\nvar s1 bool\nvar s2 bool\nvar s3 bool\n" <>
           "var_output p1 bool\nvar_output p2 bool\nvar_output p3 bool\nxic go ote q\n"
@@ -1192,7 +1305,7 @@ defmodule Logex.EditTest do
     end
 
     test "one whose storage bit the program that last scanned also writes another way is " <>
-           "blocked (R6, fix F7)" do
+           "blocked (fix F7)" do
       v1 = c!(@d <> "xic a ons s9 ote pulse")
       v2 = c!(@d <> "xic a ons s9 ote pulse\nxic q otu s9")
       assert Enum.any?(v2.warnings, &(&1.message =~ "the one-shot then fires on the wrong scans"))
@@ -1251,6 +1364,7 @@ defmodule Logex.EditTest do
         {kind, name, value}, env when kind in [:added, :input] -> Map.put(env, name, value)
         {:preset, name, {_from, to}}, env -> put_in(env, [name, "pre"], to)
         {:resumed, name, gap}, env -> update_in(env, [name, "last"], &(&1 + gap))
+        {:resume_undone, name, gap}, env -> update_in(env, [name, "last"], &(&1 - gap))
         {:pruned, name, _value}, env -> Map.delete(env, name)
         _fact, env -> env
       end)
@@ -1328,6 +1442,111 @@ defmodule Logex.EditTest do
     test "accept stays linear in the depth of nesting" do
       ratio = reductions_to_edit(deep(8000)) / reductions_to_edit(deep(500))
       assert ratio < 18.5, "16x the depth took #{Float.round(ratio, 1)}x the reductions"
+    end
+
+    # A program of n rungs on `go`, edited to one whose every rung gains a one-shot, all of
+    # which the test blocks: the reductions of the scan after the switch, with `go` set so
+    # that every `ons` is energised and looks its bit up in the block list.
+    defp reductions_to_scan_blocked(n) do
+      decl =
+        "var_input go bool\n" <> Enum.map_join(1..n, "\n", &"var s#{&1} bool\nvar p#{&1} bool")
+
+      original = c!(decl <> "\n" <> Enum.map_join(1..n, "\n", &"xic go ote p#{&1}"), "big")
+
+      candidate =
+        c!(decl <> "\n" <> Enum.map_join(1..n, "\n", &"xic go ons s#{&1} ote p#{&1}"), "big")
+
+      {_, state} = Runtime.scan(original, Runtime.instance(original))
+      {:ok, edit, _} = Edit.accept(original, candidate, state)
+      {_edit, state, _report} = Edit.test(edit, state)
+      assert length(state.ons_blocked) == n
+      state = Runtime.put_inputs(candidate, state, %{"go" => 1})
+
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          {_, %Instance{env: env}} = Runtime.scan(candidate, state, 10)
+          {:reductions, later} = Process.info(self(), :reductions)
+          assert env["s#{n}"] == 1 and env["p#{n}"] == 0
+          later - before
+        end
+      )
+    end
+
+    # At 500 and 8,000 one-shots a scan that looks each blocked bit up grows about 16x; one
+    # that walks the block list for every `ons` grows about 60x.
+    test "the scan after a switch stays linear in the one-shots it blocks" do
+      ratio = reductions_to_scan_blocked(8000) / reductions_to_scan_blocked(500)
+      assert ratio < 18.5, "16x the one-shots took #{Float.round(ratio, 1)}x the reductions"
+    end
+
+    # Three versions of n one-shots: the first edit changes every `ons` rung and is kept
+    # with no scan after, so its n blocks are still pending; the second leaves those rungs
+    # alone and changes one other, so only the pending path keeps the blocks (F2).
+    defp pending(n) do
+      decl =
+        "var_input a bool\nvar_input b bool\nvar_output q bool\n" <>
+          Enum.map_join(1..n, "\n", &"var s#{&1} bool\nvar_output p#{&1} bool")
+
+      version = fn edge, other ->
+        decl <>
+          "\nxic #{other} ote q\n" <>
+          Enum.map_join(1..n, "\n", &"xic #{edge} ons s#{&1} ote p#{&1}")
+      end
+
+      {c!(version.("a", "a"), "big"), c!(version.("b", "a"), "big"),
+       c!(version.("b", "b"), "big")}
+    end
+
+    defp reductions_to_second_edit({original, first, second}) do
+      {_, state} = Runtime.scan(original, Runtime.instance(original))
+      {edit, state, _} = Edit.test(accept!(original, first, state), state)
+      {^first, state, _} = Edit.assemble(edit, state)
+      assert state.ons_blocked != []
+
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          {:ok, edit, _} = Edit.accept(first, second, state)
+          {edit, s, report} = Edit.test(edit, state)
+          {edit, s, _} = Edit.untest(edit, s)
+          {edit, s, _} = Edit.test(edit, s)
+          {_, _, _} = Edit.assemble(edit, s)
+          {:reductions, later} = Process.info(self(), :reductions)
+          assert for({:ons_blocked, bit, _} <- report, do: bit) == state.ons_blocked
+          later - before
+        end
+      )
+    end
+
+    # Every switch of a second edit taken before any scan filters the first edit's pending
+    # bits by its plan's one-shots. At 500 and 8,000 bits that grows about 17x, its sort
+    # being n log n; a filter that walks a list of the one-shots for every bit grows about
+    # 100x. At 500 and 2,000 such a filter grows 6x to 8.5x, too near a linear switch's 4x.
+    test "a second edit before any scan stays linear in the bits still pending (F2)" do
+      ratio = reductions_to_second_edit(pending(8000)) / reductions_to_second_edit(pending(500))
+      assert ratio < 32, "16x the pending bits took #{Float.round(ratio, 1)}x the reductions"
+    end
+  end
+
+  describe "the labels this work cites" do
+    @root Path.expand("../..", __DIR__)
+
+    # The edit's code, tests and CLAUDE.md cite decisions and fixes by the names
+    # docs/organisation.md §7 gives them. A label only the design pass's own notes define,
+    # such as a lettered hazard or a numbered review finding, cannot be resolved from the
+    # repository, so none may be cited.
+    test "are only those docs/organisation.md defines" do
+      files =
+        Path.wildcard(Path.join(@root, "{lib,test}/**/*.{ex,exs}")) ++
+          [Path.join(@root, "CLAUDE.md")]
+
+      cited =
+        for file <- files,
+            [label] <- Regex.scan(~r/\b[Hh]azard [A-Z]\d?\b|\bR\d+\b/, File.read!(file)),
+            do: {Path.relative_to(file, @root), label}
+
+      assert cited == []
     end
   end
 end

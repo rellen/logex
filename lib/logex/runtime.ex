@@ -133,14 +133,16 @@ defmodule Logex.Runtime do
     do: raise(ArgumentError, "restart takes :cold or :warm, got: #{inspect(mode)}")
 
   # The evaluator's scan is the host's `now` and `first` with the instance's block list,
-  # which holds for this one scan (OE-1). A scan is what clears `switched`: the state then
-  # holds what this program gave the host.
+  # which holds for this one scan (OE-1), made a map once here so that each `ons` looks its
+  # bit up: a walk of the list made the scan after a switch quadratic in the one-shots it
+  # blocks. A scan is what clears `switched`: the state then holds what this program gave
+  # the host.
   defp run(
          %Instance{env: env, ons_blocked: blocked} = state,
          %Program{rungs: rungs} = program,
          %Scan{now: now, first: first}
        ) do
-    scan = %Scan{now: now, first: first, ons_blocked: blocked}
+    scan = %Scan{now: now, first: first, ons_blocked: Map.from_keys(blocked, true)}
     env = Enum.reduce(rungs, env, &rung(&1, &2, scan))
 
     {outputs(program, env),
@@ -192,7 +194,7 @@ defmodule Logex.Runtime do
         "expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: #{inspect(other)}"
       )
 
-  # F8: a proper list of names, or the `ons` clause's `bit in blocked` raises an unpinned
+  # F8: a proper list of names, or `run/3`'s `Map.from_keys/2` raises an unpinned
   # ArgumentError for an improper one.
   defp bits?([]), do: true
   defp bits?([bit | bits]) when is_binary(bit), do: bits?(bits)
@@ -477,7 +479,7 @@ defmodule Logex.Runtime do
   # `{:name, _, bit}`: no member is a bool that logic may write (a ton's `pre` and `acc`
   # are dints). An `ons` on a member, which only a program built by hand can hold, is never
   # blocked. M2-5, whose function blocks may have such a member, decides how one is named.
-  defp blocked?({:name, _, bit}, blocked), do: bit in blocked
+  defp blocked?({:name, _, bit}, blocked), do: is_map_key(blocked, bit)
   defp blocked?({:member, _, _path}, _blocked), do: false
 
   # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is

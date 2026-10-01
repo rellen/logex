@@ -23,18 +23,20 @@ defmodule Logex.ApiContractTest do
   take is accepted, made twice and gives the same result. The writes each report lists,
   applied to the state before the step, give the state after it, and each kind of entry is
   checked against the rule restated from the two programs' text. Each held output is
-  checked against the host's own image of its outputs, the latest value each scan gave
-  it, independently of the edit. Its reach covers every report kind, every refusal and
-  every oracle.
+  checked independently of the edit too: one the program that runs next does not show
+  against the host's own image of its outputs, the latest value each scan gave it, and
+  one it still shows against what its next scan gives, unless a restart comes first. Its
+  reach covers every report kind, every refusal and every oracle.
 
   Its timers (decision 23, fixes F1 and F6): each switch's `.pre`, `.dn` forecasts and
   resumes are checked against the rules restated from the text, with the walk's own
   record of what the last switch left and found. Three oracles do not restate them: no
   scan but a plain swap's lets a timer gain more than the scan's own time, as one caught
-  up after a switch would (hazard B); the scan right after a switch does to `.dn` what the
-  switch forecast; and a test then an untest with no scan between leaves the original's
-  tags as they were, but for what either switch listed as started and the test as
-  resumed, and its next scan's outputs with them (R2).
+  up after a switch would (§4.9's Resume rule); the scan right after a switch does to
+  `.dn` what the switch forecast; and a test then an untest with no scan between leaves
+  the original's tags as they were, a timer the test resumed included, but for what
+  either switch started, found from the two programs' text and the state and never from
+  the reports, and its next scan's outputs with them (fixes F1 and F11).
 
   Its one-shots (decision 21, fixes F2, F3 and F7): each switch's block list is checked
   against the rule restated from the text, with the walk's own record of which side of
@@ -573,11 +575,12 @@ defmodule Logex.ApiContractTest do
     :preset,
     :preset_kept,
     :pruned,
+    :resume_undone,
     :resumed,
     :unread
   ]
 
-  @timer_kinds [:dn_drops, :dn_rises, :preset, :preset_kept, :resumed]
+  @timer_kinds [:dn_drops, :dn_rises, :preset, :preset_kept, :resume_undone, :resumed]
 
   # What the walk must see happen, and its oracles check, at least once each.
   @edit_reach [
@@ -590,6 +593,7 @@ defmodule Logex.ApiContractTest do
     :second_test,
     :held_point,
     :held_shown,
+    :held_shown_scan,
     :assembled,
     :cancelled_accepted,
     :cancelled_untested,
@@ -601,6 +605,7 @@ defmodule Logex.ApiContractTest do
     :dn_scan,
     :round_trip,
     :round_trip_timer,
+    :round_trip_resumed,
     :round_trip_ons,
     :ons_new,
     :ons_changed,
@@ -731,6 +736,17 @@ defmodule Logex.ApiContractTest do
     program
   end
 
+  # The running program with a `ton` on its timer, where it declares one and runs none.
+  defp with_ton(%Program{source: source} = p),
+    do: with_ton(source =~ ~r/^var t1 ton$/m and not (source =~ ~r/ ton t1 /), p)
+
+  defp with_ton(true, %Program{source: source}) do
+    {:ok, program} = Logex.compile(source <> "\nxic go ton t1 #{pick([30, 5000])}", name: "p")
+    program
+  end
+
+  defp with_ton(false, p), do: variant(p)
+
   defp drop_one([]), do: []
   defp drop_one(rungs), do: List.delete_at(rungs, :rand.uniform(length(rungs)) - 1)
 
@@ -751,6 +767,7 @@ defmodule Logex.ApiContractTest do
         o: nil,
         c: nil,
         points: %{},
+        shows: %{},
         pre: %{},
         timed: [],
         round: nil,
@@ -771,19 +788,35 @@ defmodule Logex.ApiContractTest do
 
   defp edit_op(op, w) when op <= 4, do: edit_scan(w, :running)
 
-  # Two candidates in three are the running program with one rung dropped, and `n`'s
-  # initial value and the timer's preset redrawn, so the two keep their types, a value a
-  # plain swap left is reached, and the timer's `ton` changes its preset; or with its `ton`
-  # dropped, so the `ton` goes and comes back while the timer is timing.
+  # One candidate in six is a new program; the rest are the running program changed: with
+  # one rung dropped, and `n`'s initial value and the timer's preset redrawn, so the two
+  # keep their types, a value a plain swap left is reached, and the timer's `ton` changes
+  # its preset; with its `ton` dropped, so the `ton` goes and comes back while the timer is
+  # timing; or with it given back, so a test resumes the timer, where it declares one and
+  # runs none (and otherwise as the first). Half the time a test and an untest with no scan
+  # between follow at once, so an untest gives a resume back (fix F11).
   defp edit_op(op, %{e: nil, p: p} = w) when op in [5, 6],
-    do: accept(pick([edit_program(), variant(p), without_ton(p), without_ton(p)]), w)
+    do:
+      pick([&Function.identity/1, &there_and_back/1]).(
+        accept(
+          pick([
+            edit_program(),
+            variant(p),
+            without_ton(p),
+            without_ton(p),
+            with_ton(p),
+            with_ton(p)
+          ]),
+          w
+        )
+      )
 
   defp edit_op(op, w) when op in 5..9, do: step(pick([:test, :untest, :assemble, :cancel]), w)
 
   defp edit_op(10, %{p: p, s: s} = w) do
     {:ok, s} = edit_attempt(fn -> Runtime.restart(p, s, :cold) end)
     edit_reach(:restart_in_edit, w.e != nil)
-    %{w | s: s, timed: [], round: nil}
+    %{w | s: s, timed: [], round: nil, shows: %{}}
   end
 
   # A plain swap, within the runtime's contract while no edit is open: a scan of another
@@ -799,11 +832,12 @@ defmodule Logex.ApiContractTest do
   end
 
   # With an edit open, a trial run: a test, a scan of the candidate, an untest and a scan
-  # of the original, each step refused where the stage does not allow it. A timer whose
-  # `ton` the candidate drops is then given it back while it was timing. Or the edit is
-  # finalised at one boundary, a test and an assemble, and another taken before any scan,
-  # so a one-shot it blocked is still pending (fix F2).
-  defp edit_op(11, w), do: pick([&trial/1, &trial/1, &again/1]).(w)
+  # of the original, each step refused where the stage does not allow it; or a test and an
+  # untest with no scan between. A timer whose `ton` the candidate drops is then given it
+  # back while it was timing. Or the edit is finalised at one boundary, a test and an
+  # assemble, and another taken before any scan, so a one-shot it blocked is still pending
+  # (fix F2).
+  defp edit_op(11, w), do: pick([&trial/1, &trial/1, &there_and_back/1, &again/1]).(w)
 
   # A host mistake: a renamed candidate, another program's state, a bad state, something
   # that is not a program or an edit, or an edit given another program's state.
@@ -839,6 +873,8 @@ defmodule Logex.ApiContractTest do
 
   defp trial(w), do: edit_op(1, step(:untest, edit_op(1, step(:test, w))))
 
+  defp there_and_back(w), do: step(:untest, step(:test, w))
+
   defp again(w) do
     w = step(:assemble, step(:test, w))
     step(:test, accept(variant(w.p), w))
@@ -861,8 +897,18 @@ defmodule Logex.ApiContractTest do
     assert later.switched == false
     timed!(scan, p, s, later, w.timed)
     pulsed!(scan, p, s, later, outputs, w.prev)
+    shown_scan!(scan, outputs, w.shows)
     prev = %{rung: ons_line(p), cn: later.env["cn"]}
-    %{w | s: later, points: Map.merge(w.points, outputs), timed: [], round: nil, prev: prev}
+
+    %{
+      w
+      | s: later,
+        points: Map.merge(w.points, outputs),
+        timed: [],
+        round: nil,
+        prev: prev,
+        shows: %{}
+    }
   end
 
   defp accept(candidate, %{p: p, s: s} = w),
@@ -924,12 +970,22 @@ defmodule Logex.ApiContractTest do
     pre = timers!(w.p, to, before, later, report, w.pre)
     scanned = ons!(sides(name, w), before, later, report, w.scanned)
     edit_reach(:second_test, name == :test and stage == :untested)
-    round = round_trip!(name, w.round, to, before, later, report)
+    round = round_trip!(name, w.round, {w.p, to, stage}, before, later, report)
 
     timed =
       for {kind, _, _} = entry <- report, kind in [:dn_drops, :dn_rises, :resumed], do: entry
 
-    %{w | e: next, s: later, p: to, pre: pre, timed: timed, round: round, scanned: scanned}
+    %{
+      w
+      | e: next,
+        s: later,
+        p: to,
+        pre: pre,
+        timed: timed,
+        round: round,
+        scanned: scanned,
+        shows: shown(report, to)
+    }
   end
 
   defp stepped(:cancel, :accepted, true, {:ok, {program, later, report}}, %{s: before} = w) do
@@ -952,7 +1008,7 @@ defmodule Logex.ApiContractTest do
 
     held!(dropped, kept, report, before, w.points)
     edit_reach(pruned(name), true)
-    %{w | e: nil, s: later, p: kept, round: nil}
+    %{w | e: nil, s: later, p: kept, round: nil, shows: shown(report, kept)}
   end
 
   defp dropped(:assemble, w), do: w.o
@@ -980,6 +1036,7 @@ defmodule Logex.ApiContractTest do
 
   defp write({:preset, name, {_from, to}}, env), do: put_in(env, [name, "pre"], to)
   defp write({:resumed, name, gap}, env), do: update_in(env, [name, "last"], &(&1 + gap))
+  defp write({:resume_undone, name, gap}, env), do: update_in(env, [name, "last"], &(&1 - gap))
   defp write({:pruned, name, _value}, env), do: Map.delete(env, name)
   defp write(_fact, env), do: env
 
@@ -989,13 +1046,7 @@ defmodule Logex.ApiContractTest do
     first_test? = name == :test and stage == :accepted
     initial = Program.initial_env(to)
 
-    started =
-      for {tag, declared} <- to.tags,
-          not Map.has_key?(before.env, tag) or
-            (first_test? and
-               (not Map.has_key?(from.tags, tag) or not typed_as?(declared, before.env[tag]))),
-          do: tag
-
+    started = starts(from, to, before.env, first_test?)
     inputs = var_inputs(to)
     assert names(report, :added) == Enum.sort(started -- inputs)
 
@@ -1008,7 +1059,7 @@ defmodule Logex.ApiContractTest do
 
     for {kind, tag, value} <- report, kind in [:added, :input, :unread] do
       assert value == Map.get(later.env, tag, 0)
-      assert kind == :unread or value == initial[tag] or tag not in started
+      assert kind == :unread or value == entry_value(tag in started, initial, before.env, tag)
     end
 
     old = Program.initial_env(from)
@@ -1018,6 +1069,8 @@ defmodule Logex.ApiContractTest do
           type in [:bool, :dint],
           match?(%Tag{type: ^type}, from.tags[tag]),
           old[tag] != initial[tag],
+          tag not in started,
+          tag not in inputs,
           do: {:initial_changed, tag, {old[tag], initial[tag]}}
 
     assert for({:initial_changed, _, _} = entry <- report, do: entry) == Enum.sort(changed)
@@ -1034,6 +1087,23 @@ defmodule Logex.ApiContractTest do
         Enum.any?(started, &(Map.has_key?(before.env, &1) and not Map.has_key?(from.tags, &1)))
     )
   end
+
+  # The tags a switch starts at their initial value, from the text and the state: one the
+  # state lacks, and at the first test one the candidate adds or whose value does not fit.
+  defp starts(from, to, env, first_test?),
+    do:
+      for(
+        {tag, declared} <- to.tags,
+        not Map.has_key?(env, tag) or
+          (first_test? and
+             (not Map.has_key?(from.tags, tag) or not typed_as?(declared, env[tag]))),
+        do: tag
+      )
+
+  # A tag started holds its initial value; any other the value it held, a section change
+  # included (decision 25).
+  defp entry_value(true, initial, _env, tag), do: initial[tag]
+  defp entry_value(false, _initial, env, tag), do: env[tag]
 
   defp typed_as?(%Tag{type: :bool}, value), do: value in [0, 1]
 
@@ -1074,6 +1144,18 @@ defmodule Logex.ApiContractTest do
     edit_reach(:held_point, true)
   end
 
+  # F4, independently of the edit: a held output the program that runs next still shows is
+  # what that program's next scan gives the host, unless a restart comes first.
+  defp shown(report, kept),
+    do: for({:held, tag, value} <- report, tag in outputs_of(kept), into: %{}, do: {tag, value})
+
+  defp shown_scan!(:running, outputs, shows) do
+    assert Map.take(outputs, Map.keys(shows)) == shows
+    edit_reach(:held_shown_scan, shows != %{})
+  end
+
+  defp shown_scan!(_plain_swap, _outputs, _shows), do: :ok
+
   defp writes?(program, tag),
     do:
       Regex.match?(
@@ -1092,10 +1174,13 @@ defmodule Logex.ApiContractTest do
 
     {expected, record} =
       Enum.reduce(timers, {[], %{}}, fn tag, {expected, next} ->
-        timer!(started[tag], {tag, ton_of(from, tag), ton_of(to, tag)}, later, record[tag], {
-          expected,
-          next
-        })
+        timer!(
+          started[tag],
+          {tag, ton_of(from, tag), ton_of(to, tag)},
+          {later, before.switched},
+          record[tag],
+          {expected, next}
+        )
       end)
 
     assert for({kind, _, _} = entry <- report, kind in @timer_kinds, do: entry) ==
@@ -1106,24 +1191,32 @@ defmodule Logex.ApiContractTest do
 
   # A timer's map may lack members: a plain swap that writes `t1.pre` where the program
   # swapped out held a bool leaves `%{"pre" => 40}`, which no `ton` has run since.
-  defp timer!(%{"pre" => pre} = was, {tag, from, to}, later, undo, {expected, next}) do
+  defp timer!(%{"pre" => pre} = was, {tag, from, to}, {later, switched}, undo, {expected, next}) do
     {how, target} = pre_target(undo, pre, from, to)
     now = later.now
+    {was, undone} = resume_undone(was, undo, switched, now, tag)
     resumed? = to != nil and was["en"] == 1 and was["last"] < now
     moved = Map.put(was, "pre", target)
     assert later.env[tag] == if(resumed?, do: Map.put(moved, "last", now), else: moved)
 
     entries =
       preset_entries(tag, pre, target, to, was) ++
-        if(resumed?, do: [{:resumed, tag, now - was["last"]}], else: [])
+        undone ++ if(resumed?, do: [{:resumed, tag, now - was["last"]}], else: [])
 
     edit_reach(how, target != pre or how == :pre_frozen)
-    {entries ++ expected, Map.put(next, tag, {target, pre})}
+    {entries ++ expected, Map.put(next, tag, {target, pre, if(resumed?, do: was["last"])})}
   end
 
   defp timer!(_not_a_timer, _timer, _later, _undo, acc), do: acc
 
-  defp pre_target({pre, found}, pre, _from, _to), do: {:pre_restored, found}
+  # Where the last switch resumed the timer and no scan has run since, its `last`, still
+  # at `now`, goes back to the one that switch found.
+  defp resume_undone(%{"last" => now} = was, {_, _, last}, true, now, tag) when last != nil,
+    do: {Map.put(was, "last", last), [{:resume_undone, tag, now - last}]}
+
+  defp resume_undone(was, _undo, _switched, _now, _tag), do: {was, []}
+
+  defp pre_target({pre, found, _last}, pre, _from, _to), do: {:pre_restored, found}
   defp pre_target(_undo, pre, from, nil) when from != nil and pre != 0, do: {:pre_frozen, pre}
   defp pre_target(_undo, pre, _from, nil), do: {:frozen_unseen, pre}
   defp pre_target(_undo, _pre, nil, to), do: {:pre_outright, to}
@@ -1157,7 +1250,7 @@ defmodule Logex.ApiContractTest do
     end
   end
 
-  # Independent of the rules, a scan's timers against `ton` itself. Hazard B: no scan lets
+  # Independent of the rules, a scan's timers against `ton` itself. Resume: no scan lets
   # a timer its program runs gain more than the scan's own time, as one caught up after a
   # switch would; reached where the last switch resumed the timer, and catching up would
   # have broken the bound. F6: the scan right after a switch, with the timer's rung true and
@@ -1202,23 +1295,23 @@ defmodule Logex.ApiContractTest do
   defp acc_of(%{"acc" => acc}), do: max(acc, 0)
   defp acc_of(_not_a_timer), do: 0
 
-  # R2, independent of the rules: a test then an untest with no scan between leaves the
-  # original's tags as they were, and so its next scan's outputs, but for the writes either
-  # switch listed that no untest undoes: a tag started, which the state lacked or held a
-  # value of the wrong type for, and a timer the test resumed. A test starts the round; an
-  # untest that follows it at once ends it; a scan, a restart, accept, assemble and cancel
-  # clear it, through the walk.
-  defp round_trip!(:test, _round, _to, before, _later, report), do: {before, report}
+  # F1 and F11, independent of the rules and of the reports: a test then an untest with no
+  # scan between leaves the original's tags as they were, and so its next scan's outputs, a
+  # timer the test resumed included, but for the writes no untest undoes, found from the
+  # two programs' text and the state: a tag either switch started, which the state lacked
+  # or (at a first test) held a value of the wrong type for, at its initial value. A test
+  # starts the round; an untest that follows it at once ends it; a scan, a restart,
+  # accept, assemble and cancel clear it, through the walk.
+  defp round_trip!(:test, _round, {from, to, stage}, before, _later, report) do
+    started = starts(from, to, before.env, stage == :accepted)
+    {before, report, Map.merge(before.env, Map.take(Program.initial_env(to), started))}
+  end
 
-  defp round_trip!(:untest, nil, _to, _before, _later, _report), do: nil
+  defp round_trip!(:untest, nil, _programs, _before, _later, _report), do: nil
 
-  defp round_trip!(:untest, {was, tested}, original, _before, later, report) do
-    kept =
-      for {kind, _, _} = entry <- tested ++ report,
-          kind in [:added, :input] or (kind == :resumed and entry in tested),
-          do: entry
-
-    expected = %{was | env: rebuilt(was.env, kept)}
+  defp round_trip!(:untest, {was, tested, kept}, {_from, original, _stage}, before, later, report) do
+    lacked = for {tag, _} <- original.tags, not Map.has_key?(before.env, tag), do: tag
+    expected = %{was | env: Map.merge(kept, Map.take(Program.initial_env(original), lacked))}
     tags = Map.keys(original.tags)
     assert Map.take(later.env, tags) == Map.take(expected.env, tags)
     # Before a first scan, which blocks every `ons`, the list makes no difference.
@@ -1232,6 +1325,7 @@ defmodule Logex.ApiContractTest do
       Enum.any?(tested ++ report, &(elem(&1, 0) in [:preset, :preset_kept]))
     )
 
+    edit_reach(:round_trip_resumed, names(tested, :resumed) != [])
     edit_reach(:round_trip_ons, names(tested, :ons_blocked) != [])
     nil
   end

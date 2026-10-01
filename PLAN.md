@@ -1409,8 +1409,10 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   it, among them the README's "Changing a running program", whose output is a real run.
   420 tests pass on Elixir 1.20.4 (6 of them doctests), up from 320. The messages of (2)
   to (6) record their mutation tables, every rule each adds reverted alone and the full
-  suite judged by exit code: 188 rules (35, 17, 78, 40 and 18), every one red, one of
-  (4)'s only from (5), which added the test that fails without it. (7) adds no rule; it
+  suite judged by exit code: 187 rules, every one red. The tables hold 188 rows (35, 17,
+  78, 40 and 18) because (4)'s mutant E46, red only from (5), which added the test that
+  fails without it, is a row of both; a table's labels are its own, and (4)'s mutants
+  E1–E71 are not decisions E1–E9. (7) adds no rule; it
   reverted 20 that the Done-when relies on, each red, and `end_to_end_test.exs` alone
   fails 19 of them. (1) and (8) are documents. Each of decisions 21–29 and fixes F1–F16 is
   cited by name in the commit that landed it. Where the design left a gap, a commit
@@ -1433,6 +1435,35 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   about 17% more reductions, since the entry check lexes every name again, and stays
   linear; and at 2,000 rungs and 4,000 tags a test takes 0.68–1.19 ms against 1.31–1.36 ms
   for one scan (`docs/organisation.md` §4.9, "Cost").
+
+  An adversarial review of the eight commits (three lenses, correctness, contract and
+  mutation, and a skeptic reproducing each finding) confirmed 15 findings, 14 once the one
+  found twice is merged. Its fixes are the commit after (8), and the suite is at 430 tests
+  (6 doctests). Two were defects. The scan right after a switch looked each `ons` up in
+  the block list by walking it, so 16x the blocked one-shots cost 65x the reductions of
+  that scan, which comes when a controller most needs to stay on time; the scan now makes
+  the list a map once, and a growth test counts that scan. And a test then an untest with
+  no scan between left a timer the test resumed with its `last` moved, unreported, so a
+  later plain swap caught it up from the test's switch; the untest now gives the `last`
+  back, as fix F1 gives back `.pre`, and reports it as `:resume_undone`, a new report
+  kind. One was a report's meaning: `:initial_changed`, "the running value is kept", was
+  also given for a tag a start rule had just started, and for a var_input of the program
+  started, whose new initial value a restart never applies; neither is reported now.
+  Four were rules no test failed without: a restart after a switch, with no scan since,
+  leaves the record of held outputs standing; the pending-block filter of fix F2, now
+  bounded by a growth test of a second edit taken before any scan; `:unread`'s value, read
+  after the start rules; and accept's check that a program's tags are a map and its rungs
+  a list. One was the walk: its round trip took its exemptions from the reports under
+  test, so an edit that reset an input whose section changed passed it; it now finds what
+  a switch starts from the programs' text and the state, and checks decision 25. The rest
+  were documents: fix F4's wording against an output the next program still shows (§7
+  gains an as-built note, and the walk now checks such an output against its next scan);
+  "the program the state is running", now defined once, which had shut fix F2's case out
+  of the contract and let in an accept against the original after an assemble; labels
+  (lettered hazards, numbered refuter findings) that only the design notes defined, now
+  replaced by decision and fix names, with a test that refuses them; a stale test comment;
+  and the rule count above. Step (7)'s message ends with a paragraph after its mutation
+  table, against the house shape; history is not rewritten, and the fix commit says so.
 - **OE-2 · A staged edit of a configuration, after Milestone 2.** The same cycle over the
   whole `%Logex.Configuration{}` and `%Logex.Runtime{}`, switched between two cycles, with
   each M2 item's rule for new state; a task's interval and priority changed while running;

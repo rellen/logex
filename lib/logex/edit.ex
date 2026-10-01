@@ -55,7 +55,8 @@ defmodule Logex.Edit do
   - *held outputs* (decision 20): below;
   - *initial values* (decision 29): a bool or dint both programs declare whose initial
     value differs keeps its running value, and the new one applies when a restart next
-    starts it;
+    starts it. It is not reported where a rule above started it, which `:added` reports,
+    nor where it is a var_input of the program started, whose value a restart keeps;
   - *one-shots* (decision 21): below;
   - *timers:* below.
 
@@ -73,6 +74,10 @@ defmodule Logex.Edit do
     keeps its `.pre` frozen, and one it runs that the program stopped did not takes its
     preset outright, so a `ton` removed and restored at a new preset gives the `.pre` a
     restart would;
+  - *a resume undone* (fix F11): where the last switch resumed a timer and no scan has
+    run since (`switched`), a `last` still at `now` goes back to the one that switch
+    found, so a test and an untest with no scan between leave the original's timers as
+    they were;
   - *resume:* a timer the program started runs, timing when it last ran (`.en` 1) and not
     run since (its `last` before `now`, which within the contract means the program
     stopped did not run it), resumes from the switch: its `last` becomes `now`, so the
@@ -145,14 +150,15 @@ defmodule Logex.Edit do
   | `:preset_kept` | `{pre, preset}`: `.pre` kept, not the preset of the `ton` that runs it | a switch |
   | `:dn_drops`, `:dn_rises` | `{acc, pre}`, as `ton` counts them, a negative `.acc` as 0 | a switch |
   | `:resumed` | the milliseconds not caught up: `last` moves on by that many, to `now` | a switch |
+  | `:resume_undone` | the milliseconds of the last switch's resume: `last` moves back by that many | a switch |
   | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan | a switch |
-  | `:held` | the value the output's point holds | every step |
+  | `:held` | the value the output's point holds; for one the next program shows, what its next scan gives | every step |
   | `:pruned` | the value it had | assemble, cancel |
 
-  The writes a report lists, `:added`, `:input`, `:preset`, `:resumed` and `:pruned`,
-  applied to the state before its step, give the state after it, with the bits of its
-  `:ons_blocked` entries, in order, as the block list a switch leaves, and `switched`,
-  which a switch sets. The other kinds state facts and forecasts.
+  The writes a report lists, `:added`, `:input`, `:preset`, `:resume_undone`, `:resumed`
+  and `:pruned`, applied to the state before its step, give the state after it, with the
+  bits of its `:ons_blocked` entries, in order, as the block list a switch leaves, and
+  `switched`, which a switch sets. The other kinds state facts and forecasts.
 
   **One edit per instance** (fix F5). At accept the edit builds two plans, original to
   candidate and back, from the two programs alone, so a plan cannot go stale; a switch and
@@ -168,10 +174,13 @@ defmodule Logex.Edit do
   then the state, then the stage. Outside the contract, and not detected until OE-2's
   configuration carries a generation: scanning the program the edit is not running, two
   edits of one instance at once, a step on an edit that has ended or been superseded, an
-  edit accepted against a program the state is not running (one that has not scanned,
-  started or restarted it since another program last scanned it), and an edit built or
-  changed by hand. A plain swap is a scan of the new program, so the program it swaps in
-  is then the one the state is running.
+  edit accepted against a program the state is not running, and an edit built or changed
+  by hand. The program the state is running is the one the last of these left it with:
+  `Logex.Runtime.instance/1`, `Logex.Runtime.restart/3`, a scan, or this module's
+  `assemble/2` or `cancel/2`. A plain swap is a scan of the new program, so the program
+  it swaps in is then the one the state is running; a test and an assemble at one
+  boundary leave it running the candidate, so another edit may be accepted against the
+  candidate before any scan (F2), and none against the original.
   """
 
   alias Logex.{Compiler, Declarations, Diagnostic, FbType, Instance, Program, Runtime, Tag}
@@ -183,8 +192,9 @@ defmodule Logex.Edit do
 
   # The edit's record of one instance (F5): `shown`, the value each held output's point
   # holds, as the edit has learnt it (F4); `pre`, for each timer, the `.pre` the last
-  # switch left and the one it found, `{left, found}` (F1); and `scanned`, nil until the
-  # edit's first switch, then `{side, pending}`: which of its two programs, `:original` or
+  # switch left and the one it found (F1), and the `last` it found where it resumed the
+  # timer, nil otherwise (F11), `{left, found, last}`; and `scanned`, nil until the edit's
+  # first switch, then `{side, pending}`: which of its two programs, `:original` or
   # `:candidate`, left the storage bits, and the bits still blocked against it from an
   # earlier edit (F2, F3).
   @record %{shown: %{}, pre: %{}, scanned: nil}
@@ -449,12 +459,14 @@ defmodule Logex.Edit do
   defp drives?(facts, name),
     do: is_map_key(facts.outputs, name) and is_map_key(facts.writes, name)
 
-  # Decision 29: a bool or a dint both declare, of one type, whose initial value differs.
+  # Decision 29: a bool or a dint both declare, of one type, whose initial value differs,
+  # and that is no var_input of `to`, since a restart keeps a var_input's value.
   defp changed(from, to),
     do:
       for(
         {name, %Tag{type: type}} <- to.tags,
         type in [:bool, :dint],
+        not is_map_key(to.inputs, name),
         {:ok, %Tag{type: ^type}} <- [Map.fetch(from.tags, name)],
         Map.fetch!(from.initial, name) != Map.fetch!(to.initial, name),
         do: {name, Map.fetch!(from.initial, name), Map.fetch!(to.initial, name)}
@@ -536,7 +548,8 @@ defmodule Logex.Edit do
           starts?(Map.fetch(env, name), added?, fit, first_test?),
           do: name
 
-    env = Map.merge(env, Map.take(plan.initial, started))
+    fresh = Map.take(plan.initial, started)
+    env = Map.merge(env, fresh)
     {inputs, added} = Enum.split_with(started, &is_map_key(plan.inputs, &1))
     scanned = scanned(record.scanned, state, plan)
     blocked = blocked(scanned, plan)
@@ -545,11 +558,16 @@ defmodule Logex.Edit do
       for(name <- added, do: {:added, name, Map.fetch!(env, name)}) ++
         for(name <- Enum.uniq(plan.live ++ inputs), do: {:input, name, Map.fetch!(env, name)}) ++
         for(name <- plan.unread, do: {:unread, name, Map.get(env, name, 0)}) ++
-        for({name, old, new} <- plan.changed, do: {:initial_changed, name, {old, new}}) ++
+        for(
+          {name, old, new} <- plan.changed,
+          not is_map_key(fresh, name),
+          do: {:initial_changed, name, {old, new}}
+        ) ++
         for(bit <- blocked, do: {:ons_blocked, bit, Map.fetch!(env, bit)}) ++
         holding(plan, shown, env)
 
-    {env, timed, pre} = Enum.reduce(plan.timers, {env, [], %{}}, &timed(&1, record.pre, now, &2))
+    {env, timed, pre} =
+      Enum.reduce(plan.timers, {env, [], %{}}, &timed(&1, record.pre, {now, state.switched}, &2))
 
     {%{state | env: env, switched: true, ons_blocked: blocked},
      %{record | shown: shown, pre: pre, scanned: scanned}, Enum.sort(timed ++ report)}
@@ -601,18 +619,27 @@ defmodule Logex.Edit do
   # One timer either program declares, `from` and `to` the presets of the `ton`s that run
   # it in the program stopped and the one started, nil for none, taken after the start
   # rules, so one they started is at its initial value, where these rules move nothing.
-  # Its `.pre` moves, it may resume, and the record keeps the `.pre` left and the one found.
+  # A resume the last switch made may be undone, its `.pre` moves, it may resume, and the
+  # record keeps the `.pre` left, the one found, and the `last` a resume found.
   # A map a plain swap left with `.pre` but not every member is one no `ton` of either
   # program runs (below), so the rules that read the others never reach it.
-  defp timed({name, _from, _to} = timer, undo, now, {env, _report, _left} = acc),
-    do: timer(Map.get(env, name), timer, Map.get(undo, name), now, acc)
+  defp timed({name, _from, _to} = timer, undo, clock, {env, _report, _left} = acc),
+    do: timer(Map.get(env, name), timer, Map.get(undo, name), clock, acc)
 
-  defp timer(%{"pre" => pre} = value, {name, from, to}, undo, now, {env, report, left}) do
+  defp timer(
+         %{"pre" => pre} = value,
+         {name, from, to},
+         undo,
+         {now, switched},
+         {env, report, left}
+       ) do
+    {value, undone} = undone(value, undo, switched, now, name)
     target = target(undo, pre, from, to)
-    {value, resumed} = resumed(to, %{value | "pre" => target}, name, now)
+    {value, resumed, found} = resumed(to, %{value | "pre" => target}, name, now)
 
-    {Map.put(env, name, value), moved(name, pre, target, to, value) ++ resumed ++ report,
-     Map.put(left, name, {target, pre})}
+    {Map.put(env, name, value),
+     moved(name, pre, target, to, value) ++ undone ++ resumed ++ report,
+     Map.put(left, name, {target, pre, found})}
   end
 
   # No `.pre`: what a plain swap left under the name of a timer the candidate does not
@@ -626,8 +653,9 @@ defmodule Logex.Edit do
   # switch found. Otherwise, decision 23: a timer the program started runs no `ton` on keeps
   # its `.pre` frozen, and one it runs that the program stopped did not takes its preset
   # outright. And where both run one: a `.pre` still at the old preset takes the new one,
-  # and one logic changed is kept (hazard E).
-  defp target({pre, found}, pre, _from, _to), do: found
+  # and one logic changed is kept, read when the switch is taken, not at accept (decision
+  # 27).
+  defp target({pre, found, _last}, pre, _from, _to), do: found
   defp target(_undo, pre, _from, nil), do: pre
   defp target(_undo, _pre, nil, to), do: to
   defp target(_undo, from, from, to), do: to
@@ -660,13 +688,23 @@ defmodule Logex.Edit do
   # A timer the program started runs, timing when it last ran and not run since: its `last`
   # is before `now`, which within the contract means the program stopped did not run it,
   # since every `ton` stamps `last` at every scan. It resumes from the switch, so the time
-  # no `ton` ran it is not caught up (hazard B).
-  defp resumed(nil, timer, _name, _now), do: {timer, []}
+  # no `ton` ran it is not caught up (§4.9's Resume rule). The `last` it found where it
+  # resumes is returned too, for the next switch to give back (F11).
+  defp resumed(nil, timer, _name, _now), do: {timer, [], nil}
 
   defp resumed(_to, %{"en" => 1, "last" => last} = timer, name, now) when last < now,
-    do: {%{timer | "last" => now}, [{:resumed, name, now - last}]}
+    do: {%{timer | "last" => now}, [{:resumed, name, now - last}], last}
 
-  defp resumed(_to, timer, _name, _now), do: {timer, []}
+  defp resumed(_to, timer, _name, _now), do: {timer, [], nil}
+
+  # A resume undone: where the last switch resumed the timer and no scan has run since
+  # (`switched`), its `last`, still that switch's `now`, goes back to the one it found, so
+  # a test and an untest with no scan between leave the original's timers as they were.
+  defp undone(%{"last" => now} = timer, {_pre, _found, last}, true, now, name)
+       when is_integer(last),
+       do: {%{timer | "last" => last}, [{:resume_undone, name, now - last}]}
+
+  defp undone(timer, _undo, _switched, _now, _name), do: {timer, []}
 
   # What the points of `outputs`, the watched outputs of the program the step stops, hold,
   # learnt from the state while that program is the one that last scanned (F4). A restart

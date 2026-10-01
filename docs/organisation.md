@@ -888,7 +888,8 @@ priority, which the conventional family lets logic write while it runs.
 
 **OE-1's design: a staged edit of one program instance.** Designed on 2026-10-01 against
 `730cb16`, and landed the same day as `PLAN.md` OE-1, in the eight commits after
-`730cb16`; what follows is the edit as it landed, and `Logex.Edit`'s moduledoc gives the
+`730cb16`, with a ninth for what the review of them confirmed (`PLAN.md` OE-1); what
+follows is the edit as it landed and was fixed, and `Logex.Edit`'s moduledoc gives the
 same rules. A spike on a copy of `730cb16` ran the Done-when end to end. Two reviews of
 it, one for correctness and one for fit with this section and the host contract, and the
 spike's own report gave sixteen fixes, listed in §7 as F1–F16; decisions 21–29 settle what
@@ -972,8 +973,11 @@ boundary.
   A step checks the edit, then the state, then the stage.
 - **Outside the contract, and documented:** scanning the program the edit is not running;
   two edits of one instance at once; a step on an edit that has ended or been superseded;
-  and accepting against a program the state is not running, one that has not scanned,
-  started or restarted it since another program last scanned it. None of these is
+  and accepting against a program the state is not running. The program the state is
+  running is the one the last of `Runtime.instance/1`, `Runtime.restart/3`, a scan, or
+  an edit's assemble or cancel left it with, so a test and an assemble at one boundary
+  leave it running the candidate: another edit may be accepted against the candidate
+  before any scan (fix F2), and none against the original. None of these is
   detected until OE-2's configuration carries a generation counter. A plain swap stays in
   the contract, as today (decision 26): it is a scan of the new program over the kept
   state, so the program it swaps in is then the one the state is running. Accepted before
@@ -996,10 +1000,11 @@ rules, in order:
 | `.pre`, both programs run a `ton` | For a timer F and T both run, with presets p0 and p1, a `.pre` still at p0 moves to p1. A `.pre` logic changed is kept, and reported where it differs from p1 | `{:preset, t, {p0, p1}}`, `{:preset_kept, t, {pre, p1}}` |
 | `.pre`, a `ton` stopped or restored (decision 23) | A timer T runs no `ton` on keeps its `.pre` frozen. A timer T runs and F did not takes T's preset outright | `{:preset, t, {pre, p1}}` where it moves |
 | `.dn` (fix F6) | After any move of the `.pre` of a timer T runs: with `.dn` 1 and `.acc` below the new preset, `.dn` drops at the next scan with its rung true, unless at least preset − acc ms have passed. With `.en` 1, `.dn` 0 and `.acc` at or past the preset, `.dn` rises at that scan. A negative `.acc` counts as 0, as `ton` counts it. No latch is added | `{:dn_drops, t, {acc, preset}}`, `{:dn_rises, t, {acc, preset}}` |
+| Resume undone (fix F11) | Where the last switch resumed a timer and no scan has run since (`switched`), a `last` still at `now` goes back to the one that switch found, before the rule below, so a test and an untest with no scan between leave the original's timers as they were | `{:resume_undone, t, ms}` |
 | Resume | A timer T runs and F did not, timing when last run (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes `now`, so the time no `ton` ran it is not caught up. Every `ton` stamps `last` at every scan, so within the contract a `last` before `now` says F did not run it, and the switch reads no more | `{:resumed, t, ms}` |
 | One-shots (decision 21) | Blocks an `ons` for the next scan: below | `{:ons_blocked, b, v}` |
 | Held outputs (decision 20) | Records each output no logic drives any more: below | `{:held, o, v}` |
-| Initial values (decision 29) | A bool or dint both programs declare, of one type, whose initial value (as `Program.initial_env/1` gives it) differs keeps its running value; the new one applies when a restart next starts it | `{:initial_changed, n, {old, new}}` |
+| Initial values (decision 29) | A bool or dint both programs declare, of one type, whose initial value (as `Program.initial_env/1` gives it) differs keeps its running value; the new one applies when a restart next starts it. Not reported where a rule above started it, nor for a var_input of the program started, whose value a restart keeps | `{:initial_changed, n, {old, new}}` |
 | `now` and `first` | Never touched, so no switch makes a scan first | — |
 
 **One-shots (decision 21; fixes F2, F3, F7, F9).** No switch writes a storage bit: a bit
@@ -1045,12 +1050,15 @@ gains `switched` for this: a switch sets it, a scan clears it, and a restart lea
 With `switched` and `first` both false, the state holds what the last scan showed the
 host. With `switched` true, no scan has run since the last switch, so no point has
 changed and the record stands. With `switched` false and `first` true, a restart has
-cleared what the last scan showed, and the edit forgets it. So the edit never re-reads a
-value a restart has since cleared, or one that logic driving the tag as a var has since
-changed, and an output whose value it has not learnt is not reported. Test, its forecast
-and assemble report the outputs the original drove and the candidate does not; untest,
-and cancel after an untest, report the reverse. The one-shot rules read `switched` too
-(fix F3).
+cleared what the last scan showed, and the edit forgets it. So, for an output the program
+that runs next does not show, the edit never re-reads a value a restart has since
+cleared, or one that logic driving the tag as a var has since changed, and one whose
+value it has not learnt is not reported. An output it does show is always reported, at
+the state's value, which is what its next scan gives the host, and which can differ from
+what the point holds until then: after a restart, or after the program stopped wrote the
+tag as a var. Test, its forecast and assemble report the outputs the original drove and
+the candidate does not; untest, and cancel after an untest, report the reverse. The
+one-shot rules read `switched` too (fix F3).
 
 **Assemble and cancel** are not switches: they block no one-shot and move no `.pre`.
 Assemble prunes the state to the candidate's tags, and cancel after an untest to the
@@ -1069,15 +1077,17 @@ and name. The kinds are an open set, which a host must tolerate:
 | `:preset_kept` | `{pre, preset}`: `.pre` kept where logic changed it, on a timer the program started runs | a switch |
 | `:dn_drops`, `:dn_rises` | `{acc, preset}`: what `.dn` does at the next scan with its rung true, a negative `.acc` counted as 0 | a switch |
 | `:resumed` | the milliseconds not caught up | a switch |
+| `:resume_undone` | the milliseconds of the last switch's resume, which `last` moves back by | a switch |
 | `:ons_blocked` | the storage bit's value, unchanged | a switch |
 | `:initial_changed` | `{old, new}` initial values; the running value is kept | a switch |
 | `:held` | the value the output's point holds: the state's, for an output the program that runs next still shows, and otherwise the value the point last received | every step |
 | `:pruned` | the value it had | assemble, cancel |
 
 The writes a report lists, applied to the state before its step, give the state after it,
-exactly: `:added`, `:input`, `:preset`, `:resumed` (`last` set to `now`), `:pruned`, and
-`:ons_blocked` as the new block list, with `switched`, which a switch sets. The other
-kinds state facts and forecasts. `api_contract_test.exs`'s edit walk checks this.
+exactly: `:added`, `:input`, `:preset`, `:resume_undone` (`last` given back), `:resumed`
+(`last` set to `now`), `:pruned`, and `:ons_blocked` as the new block list, with
+`switched`, which a switch sets. The other kinds state facts and forecasts.
+`api_contract_test.exs`'s edit walk checks this.
 
 **The host's duties during an edit** (fix F10; `Logex.Runtime`'s moduledoc gives the
 first three, and `Logex.Edit`'s the rest):
@@ -1086,8 +1096,9 @@ first three, and `Logex.Edit`'s the rest):
 - resend every input a step reports as `{:input, …}` before the next scan. Across a
   switch, "a host sends only what changed" is no longer enough;
 - stop sending each input a step reports as `{:unread, …}`;
-- hold each point a step reports as `{:held, …}` at its value, since it is no longer among
-  the outputs;
+- hold each point a step reports as `{:held, …}` at its value. One the program that runs
+  next no longer shows is among no scan's outputs; one it still shows, a var_output it
+  writes no more, is among them, and its next scan gives that value;
 - scan, set inputs and restart through `running/1`, and tolerate a report kind it does
   not know.
 
@@ -1144,7 +1155,13 @@ test and assemble at 500 and 2,000 of each tag, and at 500 and 8,000 levels of n
 The spike needed them: its first plan of held outputs was quadratic, and accept took 2.4
 s at 2,000 rungs until a probe found it. As landed, read from the tests' own failure
 messages with their bounds set to fail, 4x the tags takes 4.4x the reductions (bound 6)
-and 16x the depth 14.4x to 14.6x (bound 18.5). The spike's cost probe, run on 1.20.4 on
+and 16x the depth 14.4x to 14.6x (bound 18.5). Two more, from the review of OE-1, keep
+the scan right after a switch linear in the one-shots it blocks, and a second edit taken
+before any scan linear in the blocks still pending (fix F2): 16x the blocked one-shots
+takes 16.4x to 16.5x the reductions of that scan (bound 18.5), where a walk of the block
+list for every `ons` took about 65x, and 16x the pending blocks 16.3x to 16.8x the
+reductions of the second edit's steps (bound 32), where a walk of a list of the one-shots
+for every pending bit took about 113x. The spike's cost probe, run on 1.20.4 on
 the landed code and on the spike in turn (three runs each, every figure a median of 20),
 gives at 2,000 rungs and 4,000 tags, landed against spike: accept 17–19 ms against 18–21;
 a test 0.68–1.19 ms against 0.35–0.36; an untest 0.58–0.65 ms against 0.41–0.47; an
@@ -1155,7 +1172,9 @@ F3, the held values of F4) and still costs less than one scan.
 
 **Tests.** Each rule gets a test that fails when that rule alone is reverted.
 - `edit_test.exs`: every host-mistake message and the order of its checks, every `:edit`
-  diagnostic, a test per rule, and the two growth tests above. Its programs are built
+  diagnostic, a test per rule, the four growth tests above, and a test that the code, the
+  tests and CLAUDE.md cite only the decisions and fixes this document defines, no label
+  of the design pass's own notes. Its programs are built
   within the contract: an unnamed one comes from `instructionize/2`, never from editing a
   struct (fix F12).
 - `end_to_end_test.exs`: the Done-when, the type-change refusal and the data-built
@@ -1165,14 +1184,16 @@ F3, the held values of F4) and still costs less than one scan.
 - `api_contract_test.exs`: an edit walk, 200 walks of 60 operations, that landed with
   `Logex.Edit` (fix F11). It checks the refusals and that the listed writes rebuild the
   state, makes every accepted step twice, checks each report kind against its rule
-  restated from the two programs' text, checks each held value against the walk's own
-  image of the outputs it received, and checks that a forecast is the report a test taken
-  at once gives. The timer and one-shot work each add their oracles, two of them
+  restated from the two programs' text, checks each held value the next program does not
+  show against the walk's own image of the outputs it received, and each it does show
+  against what that program's next scan gives, and checks that a forecast is the report a
+  test taken at once gives. The timer and one-shot work each add their oracles, two of them
   independent of the rules: a one-shot pulses only if the previous scan ran the same `ons`
   rung text with its condition 0, wherever the program scanned writes its bit through the
   `ons` alone; and a test then an untest with no scan between leaves the original's tags
-  and next outputs unchanged, but for what either switch listed as started and the test as
-  resumed, which no untest undoes, and its block list too, but before a first scan, which
+  and next outputs unchanged, a timer the test resumed included, but for what either
+  switch started, which no untest undoes, found from the two programs' text and the state
+  and never from the reports, and its block list too, but before a first scan, which
   blocks every `ons` anyway. The timer work adds two more: no scan lets a timer gain more
   than the scan's own time, as one caught up would, a plain swap's scan, which catches a
   frozen timer up as it always has, aside; and the scan right after a switch does to `.dn`
@@ -1555,7 +1576,9 @@ spike's own report (F16), were all accepted. The work cites them as F1–F16:
   since the last switch.
 - **F4.** `{:held, output, value}` reports the value the output last showed, recorded at
   the switch that stopped driving it, never a value re-read after a restart cleared it;
-  and only for an output whose value is known.
+  and only for an output whose value is known. *As built (§4.9): this is the rule for an
+  output the program that runs next does not show; one it still shows, a var_output it
+  writes no more, is reported at the state's value, what its next scan gives the host.*
 - **F5.** A plan per program, built at accept, and a switch and a prune per instance,
   which OE-2 can call once for each instance. OE-1 documents one edit per instance.
 - **F6.** `:dn_drops` means `.dn` drops at the next scan with its rung true, unless at
@@ -1572,7 +1595,11 @@ spike's own report (F16), were all accepted. The work cites them as F1–F16:
 - **F11.** `api_contract_test.exs`'s edit walk lands with `Logex.Edit` (its refusals, the
   rule that the listed writes rebuild the state, every accepted step made twice), and
   gains the timer and one-shot oracles with their work, two of them independent of the
-  rules. Every property asserts its reach.
+  rules. Every property asserts its reach. *As fixed after the review of OE-1 (§4.9): the
+  round trip first held only with two exemptions no fix approved, a timer the test
+  resumed and every write the reports listed as `:added` or `:input`. An untest now gives
+  a resume back, `:resume_undone`, and the round trip exempts only what a switch starts,
+  found from the two programs' text and the state.*
 - **F12.** Tests build an unnamed program within the contract, through
   `Compiler.instructionize/2`, never by editing a struct.
 - **F13.** When decisions 24 and 28 land, `CLAUDE.md`'s "one validator" wording is
