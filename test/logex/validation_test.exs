@@ -183,6 +183,190 @@ defmodule Logex.ValidationTest do
     end
   end
 
+  describe "the entry check (OE-1): only a tree Logex.Parser.parse/1 could produce" do
+    # Decision 28: a tree built as data that no text could have said is a host mistake,
+    # refused before any stage reads it, by an ArgumentError naming the first node that
+    # parse/1 could not have produced. Logex.Parser.well_formed!/1 states the shape.
+    @refused "not a tree Logex.Parser.parse/1 can produce: "
+
+    defp refused(tree, message, declared \\ []) do
+      assert_raise ArgumentError, @refused <> message, fn ->
+        Compiler.instructionize(tree, declared)
+      end
+    end
+
+    defp rungs(rungs), do: {:routine, {:rungs, rungs}}
+
+    # A good rung on line 1, so a broken node is never the first thing the walk meets.
+    @good {:rung, [{:name, 1, "xic"}, {:name, 1, "aa"}]}
+
+    test "a tree that is not {:routine, {:rungs, rungs}}, checked before declared" do
+      for tree <- [:motor, {:routine, []}, {:routine, {:rungs, :x}}, {:rungs, []}, [@good]] do
+        refused(tree, "a tree is {:routine, {:rungs, rungs}}, got: #{inspect(tree)}")
+      end
+
+      refused(:motor, "a tree is {:routine, {:rungs, rungs}}, got: :motor", :not_a_list)
+    end
+
+    test "an empty rung, or a rung of no known shape" do
+      for rung <- [{:rung, []}, {:rung, :x}, {:rung, [{:name, 1, "a"}], 1}, :x, []] do
+        refused(
+          rungs([@good, rung]),
+          "a rung is {:rung, elements}, with one element or more, got: #{inspect(rung)}"
+        )
+      end
+    end
+
+    test "an element of no known shape, an instruction of the IR among them" do
+      for element <- [{:xic, 2, [{:name, 2, "aa"}]}, {:name, 2}, {:name, 2, "a", 2}, "xic", nil] do
+        refused(
+          rungs([@good, {:rung, [{:name, 2, "xic"}, element]}]),
+          "an element is {:name, line, word}, {:int_lit, line, n} or {:branches, legs}, " <>
+            "got: #{inspect(element)}"
+        )
+      end
+    end
+
+    test "a name whose word does not lex as one name token" do
+      for word <- ["a b", "", "7", "t1.", "a//b", "é", "a\n", "(", :aa, ~c"aa", 7] do
+        name = {:name, 2, word}
+
+        refused(
+          rungs([@good, {:rung, [{:name, 2, "xic"}, name]}]),
+          "a name's word lexes as one name token, got: #{inspect(name)}"
+        )
+      end
+
+      # The lexer is the rule, so a name with `.` parts is a name, as in source.
+      tree = rungs([{:rung, [{:name, 1, "xic"}, {:name, 1, "t1.dn"}, {:name, 1, "ote"}]}])
+      assert {:error, _undeclared} = Compiler.instructionize(tree)
+    end
+
+    test "a negative literal, or one that is not an integer, in a declaration line too" do
+      for value <- [-1, -2_147_483_648, 1.5, :x, "1"] do
+        literal = {:int_lit, 2, value}
+
+        message =
+          "a literal is an integer, 0 or more: a negative one does not lex yet " <>
+            "(PLAN.md §5), got: #{inspect(literal)}"
+
+        refused(rungs([@good, {:rung, [{:name, 2, "move"}, literal, {:name, 2, "aa"}]}]), message)
+
+        refused(
+          rungs([{:rung, [{:name, 2, "var"}, {:name, 2, "k"}, {:name, 2, "dint"}, literal]}]),
+          message
+        )
+      end
+
+      # The lexer reads any number of digits, so a literal of any size is a tree, and the
+      # compiler says what it does not fit.
+      tree = rungs([{:rung, [{:name, 1, "move"}, {:int_lit, 1, 10 ** 40}, {:name, 1, "aa"}]}])
+
+      assert {:error, [%Logex.Diagnostic{message: "`move` writes `1" <> _}]} =
+               Compiler.instructionize(tree, @declared)
+    end
+
+    test "a branch group with no legs, which differs from one with an empty leg" do
+      for group <- [{:branches, []}, {:branches, :x}, {:branches, {[]}}] do
+        refused(
+          rungs([@good, {:rung, [group, {:name, 2, "ote"}, {:name, 2, "aa"}]}]),
+          "a branch group is {:branches, legs}, with one leg or more: `( )` is one empty " <>
+            "leg, got: #{inspect(group)}"
+        )
+      end
+
+      # One empty leg is `( )`, a jumper.
+      tree = rungs([{:rung, [{:branches, [[]]}, {:name, 1, "ote"}, {:name, 1, "aa"}]}])
+      assert {:ok, _} = Compiler.instructionize(tree, @declared)
+    end
+
+    test "a leg that is not a list of elements" do
+      for leg <- [:x, {:name, 2, "aa"}, nil] do
+        refused(
+          rungs([@good, {:rung, [{:branches, [[], leg]}, {:name, 2, "ote"}, {:name, 2, "aa"}]}]),
+          "a leg is a list of elements, got: #{inspect(leg)}"
+        )
+      end
+    end
+
+    test "a line that is not a positive integer, on a name or a literal, in a group too" do
+      for line <- [nil, 0, -3, 1.0, "2", :two] do
+        name = {:name, line, "aa"}
+        literal = {:int_lit, line, 5}
+        message = &"a line is a positive integer, got: #{inspect(&1)}"
+
+        refused(rungs([{:rung, [name]}]), message.(name))
+        refused(rungs([{:rung, [literal]}]), message.(literal))
+        refused(rungs([{:rung, [{:branches, [[], [{:branches, [[name]]}]]}]}]), message.(name))
+      end
+    end
+
+    test "a rung over two lines, in a group nested in another too" do
+      refused(
+        rungs([@good, {:rung, [{:name, 2, "xic"}, {:name, 3, "aa"}]}]),
+        ~s|a rung is one line, and this one began on line 2, got: {:name, 3, "aa"}|
+      )
+
+      deep = {:branches, [[{:name, 2, "xic"}], [{:branches, [[], [{:int_lit, 1, 7}]]}]]}
+
+      refused(
+        rungs([{:rung, [deep]}]),
+        "a rung is one line, and this one began on line 2, got: {:int_lit, 1, 7}"
+      )
+    end
+
+    test "two rungs on one line, or out of order" do
+      later = {:rung, [{:name, 1, "ote"}, {:name, 1, "bb"}]}
+
+      refused(
+        rungs([@good, later]),
+        ~s|each rung starts on a line of its own, after line 1, got: {:name, 1, "ote"}|
+      )
+
+      refused(
+        rungs([{:rung, [{:name, 3, "xic"}, {:name, 3, "aa"}]}, @good]),
+        ~s|each rung starts on a line of its own, after line 3, got: {:name, 1, "xic"}|
+      )
+
+      # From text, two rungs are on two lines, and the second `ote` is warned about; as two
+      # rungs on one line built as data, it went unwarned before the entry check.
+      assert source_warnings("var a bool\nxic a ote a\nxio a ote a") == [
+               "line 3: warning: `a` already has an `ote` on line 2: the last one in the scan " <>
+                 "decides it"
+             ]
+    end
+
+    test "a rung of nothing but empty groups carries no line, but stands on a line of its own" do
+      jumper = {:rung, [{:branches, [[], [{:branches, [[]]}]]}]}
+      on = &{:rung, [{:name, &1, "ote"}, {:name, &1, "aa"}]}
+
+      # From text: `ote aa`, then `( | ( ) )`, then `ote aa` on the line after.
+      assert {:ok, _} = Compiler.instructionize(rungs([on.(1), jumper, on.(3)]), @declared)
+      assert {:ok, _} = Compiler.instructionize(rungs([jumper, jumper, on.(3)]), @declared)
+
+      refused(
+        rungs([on.(1), jumper, on.(2)]),
+        ~s|each rung starts on a line of its own, after line 2, got: {:name, 2, "ote"}|
+      )
+
+      refused(
+        rungs([jumper, on.(1)]),
+        ~s|each rung starts on a line of its own, after line 1, got: {:name, 1, "ote"}|
+      )
+    end
+
+    test "an improper list of rungs, of elements or of legs" do
+      for tree <- [
+            {:routine, {:rungs, [@good | :x]}},
+            rungs([@good, {:rung, [{:name, 2, "ote"} | :x]}]),
+            rungs([@good, {:rung, [{:branches, [[] | :x]}]}]),
+            rungs([@good, {:rung, [{:branches, [[{:name, 2, "ote"} | :x]]}]}])
+          ] do
+        refused(tree, "every list in it ends in [], got a list ending in: :x")
+      end
+    end
+  end
+
   describe "declaration lines (M1-3)" do
     test "section and type words match in any case; the tag keeps its own" do
       assert {:ok, %Logex.Program{tags: %{"Start" => %Logex.Tag{section: :var_input}}}} =
@@ -997,10 +1181,14 @@ defmodule Logex.ValidationTest do
     test "runs a declared timer with a literal preset, in any case" do
       assert {:ok, program} = source_compile(@timer <> "xic a ton t1 5000\nxic t1.dn ote a")
       assert {:ok, _} = source_compile(@timer <> "xic a TON t1 0")
-      # The preset is the timer's starting .pre, carried by the compiled tag, which the
-      # one validator still accepts.
+      # The preset is the timer's starting .pre, carried by the compiled tag. Only the
+      # compiler gives that map (OE-1): as a declaration, the one validator refuses it.
       assert %Logex.Tag{initial: %{"pre" => 5000}} = program.tags["t1"]
-      assert Logex.Declarations.check(program.tags["t1"]) == []
+
+      assert Logex.Declarations.check(program.tags["t1"]) == [
+               "`t1` is a ton: its preset is the number on its `ton` instruction, " <>
+                 "as in `ton t1 5000`, not an initial value on its declaration"
+             ]
     end
 
     test "its first operand is a declared timer, and nothing else" do
@@ -1030,12 +1218,9 @@ defmodule Logex.ValidationTest do
                "line 7: `ton` takes its preset as a number of milliseconds, found `d`"
              ]
 
-      # The range ends exactly at 2147483647, however the timer is declared.
+      # The range ends exactly at 2147483647, the one place a preset is given (OE-1).
       assert {:ok, program} = source_compile(@timer <> "xic a ton t1 2147483647")
       assert %{"pre" => 2_147_483_647} = Logex.Program.initial_env(program)["t1"]
-
-      assert %Logex.Tag{initial: %{"pre" => 2_147_483_647}} =
-               Logex.Tag.new!("t1", Logex.FbType.ton(), :var, %{"pre" => 2_147_483_647})
     end
 
     test "the move for a tag preset is named only where that move would compile" do
@@ -1091,16 +1276,19 @@ defmodule Logex.ValidationTest do
              ]
     end
 
-    test "a negative preset is refused, ready for when negative literals lex" do
-      # `-1` does not lex yet (PLAN.md §5), so the rung is built as the parser would build it.
+    test "a negative preset never reaches the compiler: the tree is refused on entry" do
+      # `-1` does not lex yet (PLAN.md §5), so only a tree built as data holds it, and
+      # instructionize/2 refuses that as a host mistake (OE-1, decision 28). Until a
+      # negative literal lexes, the preset's range is reached only at its upper end, above.
       {:ok, tokens, _} = Compiler.tokenize("var t1 ton")
       {:ok, {:routine, {:rungs, declarations}}} = Compiler.parse(tokens)
       rung = {:rung, [{:name, 2, "ton"}, {:name, 2, "t1"}, {:int_lit, 2, -1}]}
 
-      assert {:error, [diagnostic]} =
-               Compiler.instructionize({:routine, {:rungs, declarations ++ [rung]}})
-
-      assert diagnostic.message == "`ton` takes a preset of 0 to 2147483647 ms, found `-1`"
+      assert_raise ArgumentError,
+                   "not a tree Logex.Parser.parse/1 can produce: a literal is an integer, " <>
+                     "0 or more: a negative one does not lex yet (PLAN.md §5), " <>
+                     "got: {:int_lit, 2, -1}",
+                   fn -> Compiler.instructionize({:routine, {:rungs, declarations ++ [rung]}}) end
     end
 
     test "one ton runs a timer: a second is an error, citing the first" do
@@ -1162,33 +1350,41 @@ defmodule Logex.ValidationTest do
       assert {:ok, %Logex.Program{warnings: []}} = source_compile("xic t3.dn ote a", declared)
     end
 
-    test "from Elixir, a timer may carry its preset as a map of its inputs, which a ton " <>
-           "on the rung replaces" do
+    test "from Elixir, a timer takes no preset: that is the number on the ton that runs it" do
+      # OE-1 (decision 24) withdrew M1-6's `%{"pre" => ms}`: a ton on the rung silently
+      # replaced it, and with none no text could give that .pre. Any initial value on an
+      # instance gets the message its declaration line would, whatever the value.
       ton = Logex.FbType.ton()
-      tag = Logex.Tag.new!("t1", ton, :var, %{"pre" => 50})
-      assert %Logex.Tag{initial: %{"pre" => 50}} = tag
-      a = Logex.Tag.new!("a", :bool)
 
-      {:ok, unrun} = source_compile("xic t1.dn ote a", [tag, a])
-      assert %{"pre" => 50} = Logex.Program.initial_env(unrun)["t1"]
-      {:ok, run} = source_compile("xic a ton t1 7", [tag, a])
-      assert %{"pre" => 7} = Logex.Program.initial_env(run)["t1"]
+      assert source_errors("var t1 ton 50
+var a bool
+xic a ton t1 7") == [
+               "line 1: `t1` is a ton: its preset is the number on its `ton` instruction, " <>
+                 "as in `ton t1 5000`, not an initial value on its declaration"
+             ]
 
-      for initial <- [%{"acc" => 5}, %{"pre" => 1.5}, %{"last" => 0}, %{"acc" => 5, "pre" => -5}] do
+      for initial <- [
+            %{"pre" => 50},
+            %{"pre" => 2_147_483_647},
+            %{"pre" => 0},
+            %{"acc" => 5},
+            %{"pre" => -5},
+            %{},
+            0
+          ] do
         assert_raise ArgumentError,
-                     "`t1` is a ton: its initial value is a map of its inputs to values that " <>
-                       ~s|fit them, as in %{"pre" => 5000}, found #{inspect(initial)}|,
+                     "`t1` is a ton: its preset is the number on its `ton` instruction, " <>
+                       "as in `ton t1 5000`, not an initial value on its declaration",
                      fn -> Logex.Tag.new!("t1", ton, :var, initial) end
       end
 
-      # A starting .pre is what a preset slot takes, 0 to 2147483647 ms, not any dint: -5
-      # fits a dint, so the message names the range.
-      for pre <- [-5, 2_147_483_648] do
-        assert_raise ArgumentError,
-                     "`t1` is a ton: its `pre` starts at a preset, 0 to 2147483647 ms, " <>
-                       "found `#{pre}`",
-                     fn -> Logex.Tag.new!("t1", ton, :var, %{"pre" => pre}) end
-      end
+      # So a timer from Elixir starts where a declaration line's does: at the preset of the
+      # ton that runs it, or at 0 with none.
+      declared = [Logex.Tag.new!("t1", ton), Logex.Tag.new!("a", :bool)]
+      {:ok, unrun} = source_compile("xic t1.dn ote a", declared)
+      assert %{"pre" => 0} = Logex.Program.initial_env(unrun)["t1"]
+      {:ok, run} = source_compile("xic a ton t1 7", declared)
+      assert %{"pre" => 7} = Logex.Program.initial_env(run)["t1"]
     end
   end
 
@@ -1304,9 +1500,11 @@ defmodule Logex.ValidationTest do
                )
     end
 
-    test "an element is cited at its own line" do
-      # A rung is one line, so from source every element shares the ton's; a hand-built
-      # rung shows the line cited is the element's own.
+    test "a rung over two lines never reaches the path check: it is refused on entry" do
+      # A rung is one line, so every element after a ton shares the ton's line. A rung over
+      # two lines, which once showed an element cited at its own, is built only as data,
+      # and instructionize/2 refuses it (OE-1, decision 28) until PLAN.md §5's line
+      # continuations land; the citing of an element's own line is kept for them.
       {:ok, tokens, _} = Compiler.tokenize("var t1 ton\nvar a bool")
       {:ok, {:routine, {:rungs, declarations}}} = Compiler.parse(tokens)
 
@@ -1320,11 +1518,10 @@ defmodule Logex.ValidationTest do
            {:name, 4, "a"}
          ]}
 
-      assert {:error, [diagnostic]} =
-               Compiler.instructionize({:routine, {:rungs, declarations ++ [rung]}})
-
-      assert %Logex.Diagnostic{line: 4, message: "`ote a` follows `ton t1` on its path" <> _} =
-               diagnostic
+      assert_raise ArgumentError,
+                   "not a tree Logex.Parser.parse/1 can produce: a rung is one line, and this " <>
+                     ~s|one began on line 3, got: {:name, 4, "ote"}|,
+                   fn -> Compiler.instructionize({:routine, {:rungs, declarations ++ [rung]}}) end
     end
 
     test "a ton with a mistake of its own is still the end of its path" do
@@ -1525,7 +1722,8 @@ defmodule Logex.ValidationTest do
       assert Logex.Tag.new!("x", :bool) ==
                %Logex.Tag{name: "x", type: :bool, section: :var, initial: nil, line: nil}
 
-      assert Logex.Tag.new!("x", :dint, :var, -2_147_483_648).initial == -2_147_483_648
+      assert Logex.Tag.new!("x", :dint, :var, 2_147_483_647).initial == 2_147_483_647
+      assert Logex.Tag.new!("x", :dint, :var, 0).initial == 0
 
       {:ok, program} =
         source_compile("var Lamp bool 1\nxic Lamp ote Lamp ote x\nmove 5 sp", [
@@ -1549,6 +1747,15 @@ defmodule Logex.ValidationTest do
             {["a", :bool, :var, "1"], ~s(the initial value of `a` must be an integer, found "1")},
             {["x", :dint, :var, -2_147_483_649],
              "`x` is a dint: `-2147483649` does not fit in 32 bits"},
+            # What no declaration line can say, until a negative literal lexes (OE-1).
+            {["x", :dint, :var, -1],
+             "`x` is a dint: its initial value `-1` is negative, which no declaration line " <>
+               "can say until a negative literal lexes"},
+            {["x", :dint, :var_output, -2_147_483_648],
+             "`x` is a dint: its initial value `-2147483648` is negative, which no declaration " <>
+               "line can say until a negative literal lexes"},
+            {["x", :bool, :var, -1],
+             "`x` is a bool: its initial value must be 0 or 1, found `-1`"},
             {["x", :int, :var, 5],
              "unknown type :int: logex has :bool, :dint and Logex.FbType.ton()"},
             {[" a", :bool], ~s(" a" is not a tag name)},
@@ -1568,6 +1775,19 @@ defmodule Logex.ValidationTest do
              "unknown type :real: logex has :bool, :dint and Logex.FbType.ton()"},
             {[%Logex.Tag{name: "a", type: :bool, section: :var, initial: 7}],
              "`a` is a bool: its initial value must be 0 or 1, found `7`"},
+            {[%Logex.Tag{name: "a", type: :dint, section: :var, initial: -7}],
+             "`a` is a dint: its initial value `-7` is negative, which no declaration line " <>
+               "can say until a negative literal lexes"},
+            {[
+               %Logex.Tag{
+                 name: "a",
+                 type: Logex.FbType.ton(),
+                 section: :var,
+                 initial: %{"pre" => 5000}
+               }
+             ],
+             "`a` is a ton: its preset is the number on its `ton` instruction, " <>
+               "as in `ton a 5000`, not an initial value on its declaration"},
             {[%Logex.Tag{name: "a", type: %Logex.FbType{name: nil, members: nil}, section: :var}],
              "unknown function block type nil: logex has Logex.FbType.ton()"},
             {[

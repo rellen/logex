@@ -107,13 +107,19 @@ defmodule Logex.PrinterTest do
     end
 
     test "a group with no legs differs in meaning from a group with one empty leg" do
-      # The two would print alike, so printing the first is refused. They evaluate
-      # differently: Enum.any? is false over zero legs, while one empty leg is a
-      # jumper and passes power. The power flow shows in what `ote xx` writes.
+      # The two would print alike, so printing the first is refused. Nor does it compile
+      # (OE-1, decision 28): a tree no text could say is a host mistake on entry. It
+      # evaluated differently, Enum.any? being false over zero legs, where one empty leg
+      # is a jumper and passes power, which the `ote xx` here shows.
       no_legs = {:rung, [{:branches, []}, {:name, 1, "ote"}, {:name, 1, "xx"}]}
       {:routine, {:rungs, [one_empty]}} = parse!("( ) ote xx")
 
-      assert %{"xx" => 0} = env_after(lower!(no_legs), %{"xx" => 1})
+      assert_raise ArgumentError,
+                   "not a tree Logex.Parser.parse/1 can produce: a branch group is " <>
+                     "{:branches, legs}, with one leg or more: `( )` is one empty leg, " <>
+                     "got: {:branches, []}",
+                   fn -> lower!(no_legs) end
+
       assert %{"xx" => 1} = env_after(lower!(one_empty), %{"xx" => 0})
 
       assert_raise ArgumentError, ~r/no legs/, fn -> Printer.print(no_legs) end
@@ -124,6 +130,43 @@ defmodule Logex.PrinterTest do
       assert_raise ArgumentError, ~r/empty rung/, fn ->
         Printer.print({:routine, {:rungs, [{:rung, []}]}})
       end
+
+      assert_raise ArgumentError,
+                   "not a tree Logex.Parser.parse/1 can produce: a rung is {:rung, elements}, " <>
+                     "with one element or more, got: {:rung, []}",
+                   fn -> lower!({:rung, []}) end
+    end
+  end
+
+  describe "the entry check (OE-1): Logex.Parser.well_formed!/1" do
+    test "takes every tree the generator makes, as parse/1 could produce each" do
+      for ast <- corpus() do
+        assert Logex.Parser.well_formed!(ast) == ast
+      end
+    end
+
+    # Each way of breaking a node, by its kind, into one that no tree parse/1 produces
+    # can hold, whatever the node's place: so a tree broken at any one node is refused.
+    @breaks %{
+      name: [:junk, :line_zero, :two_words, :not_a_word],
+      int_lit: [:negative, :not_an_integer, :line_nil],
+      branches: [:no_legs, :leg_not_a_list, :improper]
+    }
+
+    test "refuses a generated tree broken at any one node, with nothing but ArgumentError" do
+      broken =
+        for ast <- corpus(), {kind, count} <- counts(ast), how <- @breaks[kind] do
+          tree = break_nth(ast, kind, :rand.uniform(count), how)
+
+          assert_raise ArgumentError, ~r/^not a tree Logex.Parser.parse\/1 can produce: /, fn ->
+            Compiler.instructionize(tree)
+          end
+
+          how
+        end
+
+      # Its reach: every way of breaking a node was tried.
+      assert MapSet.new(broken) == MapSet.new(Enum.concat(Map.values(@breaks)))
     end
   end
 
@@ -172,28 +215,78 @@ defmodule Logex.PrinterTest do
 
   @names ~w(aa bb start motor stop overtemp fault x1 speed_sp t1.dn word.3)
 
-  defp routine, do: {:routine, {:rungs, for(_ <- 1..:rand.uniform(3), do: rung())}}
+  # Each rung on a line of its own, the next below it, as parse/1 gives them, so every
+  # tree is one Logex.Parser.well_formed!/1 takes. The lines draw nothing from :rand, so
+  # the corpus is the shapes it was before they were added.
+  defp routine, do: {:routine, {:rungs, for(line <- 1..:rand.uniform(3), do: rung(line))}}
 
   # `routine`'s own filter drops empty rungs, so the generator never makes one.
-  defp rung, do: {:rung, elements(:rand.uniform(3), 2)}
+  defp rung(line), do: {:rung, elements(:rand.uniform(3), 2, line)}
 
-  defp elements(count, depth), do: for(_ <- 1..count, do: element(depth))
+  defp elements(count, depth, line), do: for(_ <- 1..count, do: element(depth, line))
 
-  defp element(0), do: leaf()
-  defp element(depth), do: element(depth, :rand.uniform(4))
+  defp element(0, line), do: leaf(line)
+  defp element(depth, line), do: element(depth, :rand.uniform(4), line)
 
-  defp element(depth, 1), do: group(depth - 1)
-  defp element(_depth, _), do: leaf()
+  defp element(depth, 1, line), do: group(depth - 1, line)
+  defp element(_depth, _, line), do: leaf(line)
 
-  defp leaf, do: leaf(:rand.uniform(4))
-  defp leaf(1), do: {:int_lit, 1, :rand.uniform(300) - 1}
-  defp leaf(_), do: {:name, 1, Enum.random(@names)}
+  defp leaf(line), do: leaf(:rand.uniform(4), line)
+  defp leaf(1, line), do: {:int_lit, line, :rand.uniform(300) - 1}
+  defp leaf(_, line), do: {:name, line, Enum.random(@names)}
 
-  defp group(depth), do: {:branches, for(_ <- 1..(1 + :rand.uniform(2)), do: leg(depth))}
+  defp group(depth, line),
+    do: {:branches, for(_ <- 1..(1 + :rand.uniform(2)), do: leg(depth, line))}
 
-  defp leg(depth), do: leg(depth, :rand.uniform(4))
-  defp leg(_depth, 1), do: []
-  defp leg(depth, _), do: elements(:rand.uniform(2), depth)
+  defp leg(depth, line), do: leg(depth, :rand.uniform(4), line)
+  defp leg(_depth, 1, _line), do: []
+  defp leg(depth, _, line), do: elements(:rand.uniform(2), depth, line)
+
+  # How many nodes of each kind a tree holds, in reading order, a group before its legs.
+  defp counts({:routine, {:rungs, rungs}}),
+    do: Enum.frequencies(Enum.flat_map(rungs, fn {:rung, elements} -> kinds(elements) end))
+
+  defp kinds(elements) when is_list(elements), do: Enum.flat_map(elements, &kinds/1)
+  defp kinds({:branches, legs}), do: [:branches | kinds(Enum.concat(legs))]
+  defp kinds({kind, _line, _value}), do: [kind]
+
+  # The tree with the nth node of a kind, counted as counts/1 counts, broken `how`.
+  defp break_nth({:routine, {:rungs, rungs}}, kind, n, how) do
+    {rungs, _} = Enum.map_reduce(rungs, n, &broken(&1, kind, &2, how))
+    {:routine, {:rungs, rungs}}
+  end
+
+  defp broken({:rung, elements}, kind, n, how) do
+    {elements, n} = broken(elements, kind, n, how)
+    {{:rung, elements}, n}
+  end
+
+  defp broken(elements, kind, n, how) when is_list(elements),
+    do: Enum.map_reduce(elements, n, &broken(&1, kind, &2, how))
+
+  defp broken({:branches, _} = group, :branches, 1, how), do: {break(how, group), 0}
+
+  defp broken({:branches, legs}, kind, n, how) do
+    {legs, n} = Enum.map_reduce(legs, n - here(:branches, kind), &broken(&1, kind, &2, how))
+    {{:branches, legs}, n}
+  end
+
+  defp broken({kind, _, _} = node, kind, 1, how), do: {break(how, node), 0}
+  defp broken({node_kind, _, _} = node, kind, n, _how), do: {node, n - here(node_kind, kind)}
+
+  defp here(kind, kind), do: 1
+  defp here(_node_kind, _kind), do: 0
+
+  defp break(:junk, _name), do: :junk
+  defp break(:line_zero, {:name, _, word}), do: {:name, 0, word}
+  defp break(:two_words, {:name, line, _}), do: {:name, line, "a b"}
+  defp break(:not_a_word, {:name, line, _}), do: {:name, line, :aa}
+  defp break(:negative, {:int_lit, line, n}), do: {:int_lit, line, -n - 1}
+  defp break(:not_an_integer, {:int_lit, line, n}), do: {:int_lit, line, n + 0.5}
+  defp break(:line_nil, {:int_lit, _, n}), do: {:int_lit, nil, n}
+  defp break(:no_legs, {:branches, _}), do: {:branches, []}
+  defp break(:leg_not_a_list, {:branches, [_ | legs]}), do: {:branches, [:leg | legs]}
+  defp break(:improper, {:branches, legs}), do: {:branches, legs ++ [[] | :x]}
 
   # Which grammar productions a generated AST actually reaches.
   defp shapes({:routine, {:rungs, rungs}}) do

@@ -42,7 +42,8 @@ defmodule Logex.Printer do
       (`Enum.any?` over zero legs), the second passes power.
 
   Both are reachable only by building an AST by hand, which is what the test
-  generator does.
+  generator does. Neither compiles: `Logex.Compiler.instructionize/2` refuses both on
+  entry, as it refuses every tree `Logex.Parser.well_formed!/1` does not take (OE-1).
   """
   def print({:routine, {:rungs, rungs}}), do: Enum.map_join(rungs, "\n", &print/1)
 

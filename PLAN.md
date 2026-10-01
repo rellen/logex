@@ -1054,7 +1054,11 @@ nested in another is found ((4), (6)); a `ton` with a wrong preset, or none, sti
 so a second `ton` is reported too, and one on a declared tag that is not a timer runs
 nothing; `var_input ton` is told a ton is declared with `var`; a dotted input key is called
 a member only when it is one; and a timer declared from Elixir starts at a `.pre` of 0 to
-2147483647 ms, what the preset slot takes. No departure from the design. Beyond its text: an
+2147483647 ms, what the preset slot takes. *(Withdrawn by OE-1 on 2026-10-01:
+`Logex.Tag.new!/4` no longer takes a timer's `%{"pre" => ms}`, nor any initial value on an
+instance, which gets the message a declaration line does. A `ton` silently replaced the
+map, and with none no text could give that `.pre`; `docs/organisation.md` §7, decision 24.)*
+No departure from the design. Beyond its text: an
 element after a `ton` is reported once, at its own line, citing the first `ton` on its path,
 and a group after one as "a branch group"; an `ons` on anything but a declared bool, like a
 `ton` on anything but a declared timer, is left to the diagnostic it already has. Measured
@@ -1075,7 +1079,8 @@ misleading messages: the `move` a tag preset is told to write and the `xic t1.dn
 error names are given only where they would compile; a timer first met in a program that
 declares nothing is shown `var t1 ton`, not `bool` or `dint`; `ton.dn` is a member of an
 instruction, not an undeclared name; `t1.acc.3` is bit access, not a path too deep; and a
-starting `pre` out of range from Elixir is told the range, which -5, a dint, is not. Five
+starting `pre` out of range from Elixir is told the range, which -5, a dint, is not (a
+message withdrawn with the map, above). Five
 were rules no test failed without: which `ton` a group with two cites, a bool member's
 too-deep message, the preset range's upper end, the section check on a timer from
 Elixir, and that a `last` which is not an integer adds nothing. One was the property's
@@ -1773,7 +1778,9 @@ Each of these was blocked on the dialect question. Full rationale and sources in
 - **Negative literals — one lexer rule**, `-[0-9]+`, sign glued to the digits, no leading
   `+`. Widen §4·B2's digit-led rule to `-?[0-9]+…` in the same change. logex has no infix
   operators, so `-` can only be a sign; record that this must move to the grammar when
-  infix arithmetic arrives.
+  infix arithmetic arrives. *(OE-1: until this lands, `Logex.Parser.well_formed!/1`
+  refuses a negative literal in a tree built as data, and `Logex.Declarations.check/1` a
+  negative initial value from Elixir. Landing it widens both, in the same change.)*
 - **Case — mnemonics case-insensitive, tags case-sensitive.** **Landed with M1-2.** One
   `String.downcase/1` at `instructionize/1`'s mnemonic lookup. IEC and every vendor are case-*insensitive*, so a user arriving from
   any of them has a correct prior. M1-3 added the rest (**landed**): two declared tags
@@ -1862,7 +1869,9 @@ time a production is added for comments, negative literals or structured address
 Keep every whitespace and newline subtlety inside the lexer (now `Logex.Lexer`) and keep
 the grammar newline-naive — that part of the reasoning survives the reversal. Line
 continuations, when wanted, are one `Logex.Lexer` clause that skips a `\` followed by
-blanks and a newline, and zero grammar changes.
+blanks and a newline, and zero grammar changes. *(OE-1: `Logex.Parser.well_formed!/1`
+holds every rung of a tree built as data to one line, as the parser gives them today; the
+clause widens it in the same change.)*
 
 One known limit to accept alongside this: the grammar declares no `error` productions, so
 `parse/1` aborts at the first syntax error — three independent errors yield one

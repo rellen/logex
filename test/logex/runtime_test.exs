@@ -577,6 +577,10 @@ defmodule Logex.RuntimeTest do
       assert Enum.sort(Logex.Compiler.__info__(:functions)) ==
                [instructionize: 1, instructionize: 2, instructions: 0, parse: 1, tokenize: 1]
 
+      # OE-1: the definition of a well-formed tree, which instructionize/2 checks on entry.
+      assert Enum.sort(Logex.Parser.__info__(:functions)) ==
+               [format_error: 1, parse: 1, well_formed!: 1]
+
       assert Enum.sort(Logex.FbType.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,

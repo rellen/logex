@@ -20,6 +20,10 @@ defmodule Logex.FrontendGoldenTest do
   The record changes only in a commit that changes the language or the generator on
   purpose, by regenerating it (`test/fixtures/generate_frontend_golden.exs`) and reading
   the diff.
+
+  Since OE-1 it also holds `Logex.Parser.well_formed!/1`, the definition of a tree
+  `parse/1` can produce, to every tree in the record: a check that refused one would
+  make `Logex.compile/2` raise on that source.
   """
   use ExUnit.Case, async: true
 
@@ -43,6 +47,18 @@ defmodule Logex.FrontendGoldenTest do
              end)
   end
 
+  test "every tree in the record is one Logex.Parser.well_formed!/1 takes, unchanged" do
+    trees = for {_source, {:ok, tree, _end_line}} <- entries(), do: tree
+
+    for tree <- trees do
+      assert Logex.Parser.well_formed!(tree) == tree
+    end
+
+    # Its reach: what each rule of the check meets in a tree parse/1 gives.
+    assert trees |> Enum.flat_map(&reach/1) |> MapSet.new() ==
+             MapSet.new([:many_rungs, :later_line, :int_lit, :dotted, :nested, :no_line])
+  end
+
   test "the record covers every outcome the front end can have" do
     kinds = entries() |> Enum.map(fn {_, expected} -> elem(expected, 0) end) |> MapSet.new()
     assert kinds == MapSet.new([:ok, :lex_error, :parse_error])
@@ -62,6 +78,39 @@ defmodule Logex.FrontendGoldenTest do
         end
     end
   end
+
+  # What a tree holds that a rule of the check meets.
+  defp reach({:routine, {:rungs, rungs}}),
+    do: rung_count(length(rungs)) ++ Enum.flat_map(rungs, &rung_reach/1)
+
+  defp rung_count(count) when count > 1, do: [:many_rungs]
+  defp rung_count(_count), do: []
+
+  defp rung_reach({:rung, elements}) do
+    found = Enum.flat_map(elements, &element_reach(&1, 0))
+    lined(Enum.member?(found, :leaf)) ++ Enum.reject(found, &(&1 == :leaf))
+  end
+
+  # A rung with no name or literal, such as `( )`, carries no line.
+  defp lined(true), do: []
+  defp lined(false), do: [:no_line]
+
+  defp element_reach({:branches, legs}, depth),
+    do: nested(depth) ++ Enum.flat_map(Enum.concat(legs), &element_reach(&1, depth + 1))
+
+  defp element_reach({:name, line, word}, _depth),
+    do: [:leaf | later(line)] ++ dotted(String.contains?(word, "."))
+
+  defp element_reach({:int_lit, line, _n}, _depth), do: [:leaf, :int_lit | later(line)]
+
+  defp nested(0), do: []
+  defp nested(_depth), do: [:nested]
+
+  defp later(1), do: []
+  defp later(_line), do: [:later_line]
+
+  defp dotted(true), do: [:dotted]
+  defp dotted(false), do: []
 
   defp line({line, _column}), do: line
   defp line(line) when is_integer(line), do: line

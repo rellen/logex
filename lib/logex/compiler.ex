@@ -53,8 +53,14 @@ defmodule Logex.Compiler do
   a number), the words after it are skipped up to the next instruction or branch group, so
   its would-be operands are not each reported as unknown instructions too. An instruction's
   operands stop early at an instruction or a branch group, which is then lowered as usual.
+
+  The routine is checked first, against `Logex.Parser.well_formed!/1`: a tree that
+  `Logex.Parser.parse/1` could not have produced, such as an empty group, a negative
+  literal or a rung over two lines, raises `ArgumentError`, a host mistake, since no
+  source text says it and no diagnostic could cite it (OE-1). Then `declared`.
   """
-  def instructionize({:routine, {:rungs, rungs}} = routine, declared \\ []) do
+  def instructionize(routine, declared \\ []) do
+    {:routine, {:rungs, rungs}} = Logex.Parser.well_formed!(routine)
     {tags, logic, declaring} = Declarations.split(rungs, declared)
     known = {tags, folded(tags)}
     {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, known))
@@ -225,6 +231,9 @@ defmodule Logex.Compiler do
   defp folded(tags), do: Map.new(tags, fn {name, _tag} -> {String.downcase(name), name} end)
 
   # A group carries no line of its own, so it is cited at the `ton`'s: a rung is one line.
+  # An element is cited at its own, which is the `ton`'s too until PLAN.md §5's line
+  # continuations land: Logex.Parser.well_formed!/1 keeps every rung to one line (OE-1).
+  # Kept for them, as the test of a rung over two lines can no longer reach it.
   defp line_of({:branches, _legs}, ton_line), do: ton_line
   defp line_of({_symbol, line, _operands}, _ton_line), do: line
 
@@ -464,10 +473,14 @@ defmodule Logex.Compiler do
 
   # A literal in a dint slot must fit 32 bits, as a declared initial value must (M1-6: the
   # comparisons). An `:any` slot's literal is checked against the tag beside it, by unify/3.
+  # Until PLAN.md §5's negative literals lex, Logex.Parser.well_formed!/1 refuses one on
+  # entry (OE-1), so this and unify/3 meet only a literal too large, never one too small;
+  # the lower ends are kept for them.
   defp check_tag({{:value, :dint}, {:int_lit, line, value}}, {_, word}, _tags, diagnostics),
     do: literal(Declarations.fits?(:dint, value), value, {line, word}, diagnostics)
 
   # A preset is a dint number of milliseconds, and never negative (docs/naming.md, `ton`).
+  # Only a preset too large reaches this until a negative literal lexes, as above.
   defp check_tag({{:preset, _}, {:int_lit, line, value}}, {_, word}, _tags, diagnostics),
     do: preset(Declarations.preset?(value), value, {line, word}, diagnostics)
 

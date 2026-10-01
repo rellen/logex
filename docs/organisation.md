@@ -1085,8 +1085,9 @@ instance already holds around the new piece:
 enters, so accept needs no check of its own, and every program within the contract can be
 written as text.
 - `Logex.Compiler.instructionize/2` checks its routine on entry against exactly what
-  `Logex.Parser.parse/1` can produce. One public function beside the parser states that
-  shape, and the parser's moduledoc calls it the definition of a well-formed tree:
+  `Logex.Parser.parse/1` can produce. One public function beside the parser,
+  `Logex.Parser.well_formed!/1`, states that shape, and the parser's moduledoc calls it
+  the definition of a well-formed tree:
   - `{:routine, {:rungs, rungs}}`, where `rungs` is a list;
   - a rung is `{:rung, elements}` with at least one element;
   - an element is `{:name, line, word}`, where `word` lexes as exactly one name token;
@@ -1094,7 +1095,8 @@ written as text.
     with at least one leg, a leg being a list of elements, possibly empty;
   - every line is a positive integer. Every name and literal of one rung, inside its
     groups too, carries one line, and the lines of successive rungs strictly increase. A
-    rung of nothing but empty groups carries no line and orders nothing.
+    rung of nothing but empty groups, `( )`, carries no line, but stands on a line of its
+    own, as it does in the text, so the next rung's line is past that one too.
 
   A tree outside that shape is a host mistake: an `ArgumentError` whose message names the
   offending node, pinned by a test. That covers an empty group or rung, a negative

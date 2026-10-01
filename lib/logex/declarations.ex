@@ -94,7 +94,8 @@ defmodule Logex.Declarations do
 
   @doc """
   Whether an integer is a preset, 0 to 2147483647 ms (M1-6): what a `ton`'s preset slot
-  takes, and so where a timer's `.pre` may start, however it is declared.
+  takes, and so where a timer's `.pre` starts. The slot is the one place a preset is
+  given: `Logex.Tag.new!/4` took one too, as `%{"pre" => ms}`, until OE-1 withdrew it.
   """
   def preset?(value), do: value in @preset
 
@@ -304,6 +305,13 @@ defmodule Logex.Declarations do
   @doc """
   The rules a tag must meet however it is declared, as messages: the one validator for a
   declaration line and for `Logex.Tag.new!/4`.
+
+  So it refuses, from Elixir too, what no declaration line can say (OE-1;
+  `docs/organisation.md` §4.9, decisions 24 and 28): any initial value on an instance,
+  whose preset is the number on the `ton` that runs it, with the message `var t1 ton 5`
+  gets; and a negative initial value, which no line holds until a negative literal lexes.
+  A compiled timer carries its preset as an initial value (`Logex.Compiler`), which no
+  declaration may give, so this refuses it too.
   """
   def check(%Tag{type: %FbType{} = type} = tag) do
     known = fb_type(type)
@@ -358,7 +366,9 @@ defmodule Logex.Declarations do
   # M1-6: an instance is the program's own state. It is not supplied from outside, and the
   # host reads none as an output, so the outputs of a scan of the program's own state stay
   # integers (docs/organisation.md §4.6; Logex.Runtime says what a state kept across a
-  # recompile carries). Its preset is the operand of the instruction that runs it.
+  # recompile carries). Its preset is the operand of the instruction that runs it, and
+  # nothing else: OE-1 withdrew the `%{"pre" => ms}` a tag from Elixir could carry, since a
+  # `ton` silently replaced it and, with none, no text could give that `.pre`.
   defp instance(%Tag{section: section, name: name} = tag)
        when section in [:var_input, :var_output],
        do: [
@@ -368,40 +378,10 @@ defmodule Logex.Declarations do
 
   defp instance(%Tag{initial: nil}), do: []
 
-  # A compiled timer carries its preset as its `pre`'s initial value (Logex.Compiler), and
-  # a tag declared from Elixir may carry one too: a map of the type's inputs to values
-  # that fit them. A number, or a struct, is never one.
-  defp instance(%Tag{initial: %{} = initial} = tag) when not is_struct(initial),
-    do: inputs(Enum.reject(initial, &input?(tag.type, &1)), tag)
-
   defp instance(%Tag{name: name} = tag),
     do: [
       "#{label(name)} is a #{tag.type.name}: its preset is the number on its `ton` " <>
         "instruction, as in `ton #{display(name)} 5000`, not an initial value on its declaration"
-    ]
-
-  # A timer's `.pre` starts where its preset would put it, so it takes what the `ton`
-  # preset slot takes (Logex.Compiler): 0 to 2147483647 ms, not any dint.
-  defp input?(%FbType{name: "ton"}, {"pre", value}), do: preset?(value)
-  defp input?(type, {name, value}), do: fits_input?(FbType.member(type, name), value)
-
-  defp fits_input?({:ok, %{role: :input, type: type}}, value), do: fits?(type, value)
-
-  defp fits_input?(_member, _value), do: false
-
-  defp inputs([], _tag), do: []
-
-  # A `pre` that is a dint but no preset fits its type, so the message names the range.
-  defp inputs([{"pre", v} | _], %Tag{type: %FbType{name: "ton"}, name: name})
-       when is_integer(v),
-       do: [
-         "#{label(name)} is a ton: its `pre` starts at a preset, 0 to 2147483647 ms, found `#{v}`"
-       ]
-
-  defp inputs(_refused, %Tag{name: name} = tag),
-    do: [
-      "#{label(name)} is a #{tag.type.name}: its initial value is a map of its inputs to " <>
-        ~s|values that fit them, as in %{"pre" => 5000}, found #{inspect(tag.initial)}|
     ]
 
   defp display(name) when is_binary(name), do: name
@@ -426,6 +406,15 @@ defmodule Logex.Declarations do
     do: fit(fits?(type, v), type, name, v)
 
   defp initial(_tag), do: []
+
+  # A negative literal does not lex until PLAN.md §5's rule lands, so no declaration line
+  # holds one, and one from Elixir is refused as what the text cannot say (OE-1). Goes when
+  # the rule lands.
+  defp fit(true, :dint, name, v) when v < 0,
+    do: [
+      "#{label(name)} is a dint: its initial value `#{v}` is negative, which no declaration " <>
+        "line can say until a negative literal lexes"
+    ]
 
   defp fit(true, _type, _name, _v), do: []
 

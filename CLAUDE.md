@@ -30,7 +30,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   scan's read-only `%Logex.Scan{}`.
   `lib/logex/instance.ex` and `lib/logex/scan.ex` hold its two structs.
 - `lib/logex/compiler.ex` — the stages: `tokenize/1` and `parse/1` delegate to the two
-  modules below; `instructionize/2` takes the declaration lines off into a tag table,
+  modules below; `instructionize/2` first checks its routine against
+  `Logex.Parser.well_formed!/1` and raises `ArgumentError` on a tree no text could say
+  (OE-1), then takes the declaration lines off into a tag table,
   checks every instruction against its operand signature and every operand against the
   table, members included (M1-6), gives each timer the preset on the one `ton` that runs
   it, refuses a second `ons` on one storage bit and anything after a `ton` on its path,
@@ -44,10 +46,13 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   section and type words as data (`@sections`, `@types`, and the function block type
   words of `Logex.FbType.builtins/0`), `reserved/1`, `fits?/2`, `preset?/1` (a `ton`'s
   preset range, 0 to 2147483647 ms), and `check/1`, the one validator for a declaration
-  line and for `Logex.Tag.new!/4`
+  line and for `Logex.Tag.new!/4`, so from Elixir too it refuses what no line can say: an
+  initial value on an instance, and a negative one (OE-1)
 - `lib/logex/tag.ex` — `%Logex.Tag{}`, whose type is `:bool`, `:dint` or, for an instance
   of a function block such as `var t1 ton`, the `%Logex.FbType{}` itself; and `new!/4`,
-  which declares a tag from Elixir
+  which declares a tag from Elixir. Since OE-1 it takes no timer preset (the
+  `%{"pre" => ms}` M1-6 allowed: a preset is the number on the `ton` that runs the
+  timer) and no negative initial value
 - `lib/logex/fb_type.ex` — `%Logex.FbType{}`, a function block type's schema (M1-6), which
   M2-5's user function blocks reuse: its members, each a `%Logex.FbType.Member{}` with a
   type, a role (`:input`, `:output`, `:internal`) and whether logic may write it;
@@ -57,7 +62,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   program type, named and stateless, with `initial_env/1` for an instance's first env
 - `lib/logex/lexer.ex` / `lib/logex/parser.ex` — the front end, written by hand: binary
   pattern matching, and recursive descent (the parser's moduledoc gives the grammar and
-  which function parses each production). There is no generator, so nothing reports a
+  which function parses each production). `Logex.Parser.well_formed!/1` is the definition
+  of a well-formed parse tree, exactly what `parse/1` can produce, which
+  `instructionize/2` checks on entry (OE-1). There is no generator, so nothing reports a
   grammar conflict: **a new syntax form goes into `printer_test.exs`'s generator and
   `@required_shapes` before it lands**, and the golden record below must stay green.
 - `lib/logex/printer.ex` — the parse AST back to canonical source text
@@ -103,7 +110,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 
 - `evaluate/3` clauses, private in `Logex.Runtime`, take `(instruction, {power_flow_bool, env_map}, %Logex.Scan{})` and return `{new_power_flow_bool, new_env_map}`. The scan is read-only and the same for every instruction of one call: a clause that needs the time reads `scan.now`, one that needs the first scan reads `scan.first`, and every other clause ignores it as `_scan` (M1-6). No test calls the evaluator: a test runs a program through `Logex.Runtime.call/4`, on a hand-built `%Logex.Instance{}` when it needs a particular env
 - A mistake in the source is a `%Logex.Diagnostic{}`, returned; a mistake by the host is an `ArgumentError`, raised, whose message a test pins. Nothing else may escape the public API (`api_contract_test.exs`)
-- An operand in the AST is `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. The lexer's tokens carry `{line, column}`; the parser keeps only the line, because the suite pins that shape. An instruction in the IR is `{symbol, line, operands}`, carrying its mnemonic's line; a `{:branches, legs}` node carries no line of its own. In the IR, and only there, a member of an instance is `{:member, line, path}`, `t1.acc` becoming `{:member, 3, ["t1", "acc"]}` (M1-6): the runtime's `read/2` and `write/3` take it as they take a tag, and anything that walks IR operands must handle it
+- An operand in the AST is `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. `Logex.Parser.well_formed!/1` states the whole tree `parse/1` can produce, and `instructionize/2` raises `ArgumentError` on any other (OE-1): every line a positive integer, every element of a rung on its one line, each rung on a line after the last, a name that lexes as one name token, a literal of 0 or more, a rung of one element or more and a group of one leg or more. A test that builds a tree by hand builds one of those. The lexer's tokens carry `{line, column}`; the parser keeps only the line, because the suite pins that shape. An instruction in the IR is `{symbol, line, operands}`, carrying its mnemonic's line; a `{:branches, legs}` node carries no line of its own. In the IR, and only there, a member of an instance is `{:member, line, path}`, `t1.acc` becoming `{:member, 3, ["t1", "acc"]}` (M1-6): the runtime's `read/2` and `write/3` take it as they take a tag, and anything that walks IR operands must handle it
 - New instructions, step 1 — **survey the name before writing any code**: add a
   ``### `mnemonic` `` stanza to `docs/naming.md` (IEC 61131-3 element, function or
   function block with clause and table number, then the major vendor toolchains, then the
