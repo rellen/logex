@@ -1079,14 +1079,38 @@ starting `pre` out of range from Elixir is told the range, which -5, a dint, is 
 were rules no test failed without: which `ton` a group with two cites, a bool member's
 too-deep message, the preset range's upper end, the section check on a timer from
 Elixir, and that a `last` which is not an integer adds nothing. One was the property's
-claim: operation 6's `scan/2` skipped the oracle, which now checks all 490 accepted scans
-of a timed program at the seed, not 466. Six were stale passages: `Logex.Tag.new!/4`'s
+claim: operation 6's `scan/2` skipped the oracle, which now checks all 245 accepted scans
+of a timed program at the seed, not 233 (490 oracle runs, not 466, since each accepted
+call is made twice). Six were stale passages: `Logex.Tag.new!/4`'s
 doc, CLAUDE.md's rule for a type word, instruction-sets.md's "flat env", defladder.md's
 `bit/2`, and two things the contract did not say about a state kept across a recompile
 of the same name, now in `Logex.Runtime`'s moduledoc and organisation.md's online-edit
 row, with a test of the second: a tag whose type the recompile changes keeps its old
 value, a timer's map reaching the outputs; and a tag it adds reads 0 until a restart, so
 an added timer starts at a `.pre` of 0 and is done at its first true scan.
+
+A second round (four lenses over those fixes, among them a comparison of both compilers'
+output on generated programs, and a skeptic per finding) confirmed 18 findings, 14 once
+merged, and refuted 2. Its fixes are the commit after `77d1b01`, and the suite is at 320
+tests (6 doctests). Six were messages: the hints still named a `move` or an `xic t1.dn`
+that never compiles where the timer and the preset are one name (`ton b b`) or where a
+name differs from a declared tag only in case; a timer first used as a member or as a
+bool, and run by a `ton`, was not shown `var t1 ton`; `bool.3` was called a member, and
+is now, like `ton.dn`, a name that "begins with `bool`, a type, which cannot name a tag";
+`t1.acc.3.x` had become bit access, and goes too deep again; and a bool's bit, `a.0` or
+`t1.dn.0`, was told bit access is "not supported yet", where a bool has no bits. One was
+the contract: `restart/3` kept a var_input whose type a recompile had changed, against
+the new sentence that a restart puts a kept state right; it keeps only the var_inputs
+whose values fit their types now. Four were rules no test failed without: the salvaged
+timer's line and its name check, the order of path errors across legs and nested groups,
+and the walk that finds the first rung's line for a declaration after it, which the depth
+test's programs never reached. Finding that line once, not once per late declaration,
+also removes an older quadratic cost, from M1-3. Three were documents: the growth
+figures, the 490 above, which counted each accepted call twice, and instruction-sets.md's
+"flat-env" heading. The depth test now takes the least of three counts and a bound of
+18.5, where the fixed compile measures 15.7x and the copying walks 21x to 29x: one
+refuted finding reported a single run of the earlier test at 18.0x, which 582 runs could
+not reproduce.
 
 **Decided 2026-09-28, from `docs/organisation.md` §6.1 and §4.6:**
 1. `evaluate/3` threads a read-only `%Logex.Scan{now:, first:}`; the accumulator stays

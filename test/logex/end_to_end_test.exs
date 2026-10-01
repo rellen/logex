@@ -779,6 +779,30 @@ defmodule Logex.EndToEndTest do
       assert %{"pre" => 5000, "acc" => 0, "dn" => 0} = restarted.env["t2"]
     end
 
+    test "a restart under a recompile of the same name starts again a var_input whose type " <>
+           "it changed" do
+      {:ok, v1} =
+        Logex.compile("var_input go bool\nvar_input x dint\nvar t1 ton\nxic go ton t1 50",
+          name: "m"
+        )
+
+      {:ok, v2} =
+        Logex.compile(
+          "var_input go bool\nvar_input x bool\nvar_input t1 dint\nvar_output y dint\n" <>
+            "xic x move t1 y",
+          name: "m"
+        )
+
+      state = Logex.Runtime.put_inputs(v1, Logex.Runtime.instance(v1), %{"go" => 1, "x" => 5})
+      {_, state} = Logex.Runtime.scan(v1, state)
+      {_, state} = Logex.Runtime.scan(v1, state, 10)
+      assert %{"x" => 5, "t1" => %{"acc" => 10}} = state.env
+
+      # `go` still fits, and is kept as the input image is; `x` and `t1` no longer do.
+      restarted = Logex.Runtime.restart(v2, state, :cold)
+      assert restarted.env == %{"go" => 1, "x" => 0, "t1" => 0, "y" => 0}
+    end
+
     test "a preset lowered below .acc is done at the next true scan, .acc brought down to it" do
       steps = [{0, %{"go" => 1}}, {3000, %{}}, {10, %{"newpre" => 1, "sp" => 1000}}]
 

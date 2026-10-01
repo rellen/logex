@@ -817,7 +817,8 @@ edge handling is the separate inline one-shot elements.
   logex should follow IEC and zero-fill "and say so in the docs" — this is evidence that a
   serious IEC compiler went the other way, so the docs sentence needs to be explicit and
   the test needs a negative operand.
-- **The stateful-FB boundary is now empirical, and it matches logex's flat-env problem.**
+- **The stateful-FB boundary is now empirical, and it matches where logex keeps cross-scan
+  state.**
   IronPLC's ADR-0042 restricts compiler intrinsics to blocks whose retained state cannot be
   expressed in ST, and enumerates exactly `SR RS R_TRIG F_TRIG CTU CTD CTUD TON TOF TP`;
   rusty reaches the same split from the other side (`{external}` FB declarations plus

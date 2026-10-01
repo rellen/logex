@@ -21,7 +21,8 @@ defmodule Logex.Runtime do
   scan: an instance kept across a recompile of the same name keeps them until `restart/3`.
   A tag the recompile adds reads 0 until then, so an added timer starts at a `.pre` of 0,
   and a tag whose type it changes keeps its old value, a timer's map reaching the outputs
-  and the contacts. A `%Logex.Program{}` or `%Logex.Instance{}` built or edited by hand is
+  and the contacts. `restart/3` starts every tag again but the `var_input`s whose values
+  fit their types. A `%Logex.Program{}` or `%Logex.Instance{}` built or edited by hand is
   outside this contract.
   """
 
@@ -66,8 +67,9 @@ defmodule Logex.Runtime do
   end
 
   @doc """
-  Starts an instance again: every tag back at its initial value except the `var_input`s,
-  the next scan marked first, and the clock kept, since time never goes backwards.
+  Starts an instance again: every tag back at its initial value except the `var_input`s
+  whose values fit their types, the next scan marked first, and the clock kept, since time
+  never goes backwards.
 
   The `var_input`s are the host's input image, not the program's state: IEC leaves inputs
   "initialized in an implementation-dependent manner" (Ed 2 §2.4.2 rule 4), and keeping
@@ -81,8 +83,17 @@ defmodule Logex.Runtime do
     %{state | env: Map.merge(Program.initial_env(program), inputs(program, env)), first: true}
   end
 
+  # A var_input whose value does not fit its type, as after a recompile of the same name
+  # that changed the type, starts again with the rest.
   defp inputs(%Program{tags: tags}, env),
-    do: Map.take(env, for({name, %Tag{section: :var_input}} <- tags, do: name))
+    do:
+      for(
+        {name, %Tag{section: :var_input, type: type}} <- tags,
+        {:ok, value} <- [Map.fetch(env, name)],
+        Declarations.fits?(type, value),
+        into: %{},
+        do: {name, value}
+      )
 
   defp mode!(mode) when mode in [:cold, :warm], do: :ok
 

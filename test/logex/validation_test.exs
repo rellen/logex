@@ -456,6 +456,20 @@ defmodule Logex.ValidationTest do
              ]
     end
 
+    test "so is a timer first used as a member, or whole as a bool, that a `ton` runs" do
+      assert source_errors("xio t1.dn ton t1 1000\nxic t1.dn ote pulse") == [
+               "line 1: `t1` is not declared (this program declares no tags: each is now " <>
+                 "declared before the first rung, as `var t1 ton`)",
+               "line 2: `pulse` is not declared"
+             ]
+
+      assert source_errors("xic t1 ote x\nton t1 5000") == [
+               "line 1: `t1` is not declared (this program declares no tags: each is now " <>
+                 "declared before the first rung, as `var t1 ton`)",
+               "line 1: `x` is not declared"
+             ]
+    end
+
     test "a program whose declarations were all wrong is not told it declares nothing" do
       assert source_errors("var a int\nxic a ote a") == [
                "line 1: unknown type `int`: logex has `bool`, `dint` and `ton`",
@@ -860,6 +874,24 @@ defmodule Logex.ValidationTest do
                "line 3: a declaration cannot hold a branch group",
                "line 4: unexpected `6` after the declaration of `t4`"
              ]
+
+      # Declared on its own line, as any source tag is, which a later message cites.
+      assert source_errors("var t1 ton 5 6\nvar t1 bool\nvar a bool\nxic t1 ote a") == [
+               "line 1: unexpected `6` after the declaration of `t1`",
+               "line 2: `t1` is declared twice: first on line 1",
+               "line 4: `xic` reads a bool, but `t1` is a ton (declared on line 1): " <>
+                 "name one of its members, as in `t1.dn`"
+             ]
+
+      # A bad name is not salvaged: not offered to a near miss, and no clash.
+      assert source_errors(
+               "var tt.x ton 5 6\nvar Var ton 5 6\nvar VAR ton 5 6\nvar a bool\nxic a ton tt 5"
+             ) == [
+               "line 1: unexpected `6` after the declaration of `tt.x`",
+               "line 2: unexpected `6` after the declaration of `Var`",
+               "line 3: unexpected `6` after the declaration of `VAR`",
+               "line 5: `tt` is not declared"
+             ]
     end
 
     test "a misdeclared timer with a name that cannot be a tag is not declared" do
@@ -1024,7 +1056,13 @@ defmodule Logex.ValidationTest do
             {"ton d t2.acc", "t2.acc",
              ["`ton` runs a ton, but `d` is a dint (declared on line 3)"]},
             {"ton t1.dn d", "d", ["`ton` runs a ton, but `t1.dn` is a bool"]},
-            {"ton dint d", "d", ["`ton` expects a tag, found the type `dint`"]}
+            {"ton dint d", "d", ["`ton` expects a tag, found the type `dint`"]},
+            # One name cannot be both the timer and the dint moved into it.
+            {"ton b b", "b", ["`b` is not declared"]},
+            # A case-only twin of a declared tag can never be declared.
+            {"ton t1 D", "D", []},
+            {"ton T1 d", "d",
+             ["`T1` is not declared — did you mean `t1`? (tags are case-sensitive)"]}
           ] do
         assert source_errors(@timer <> "var t2 ton\n" <> rung) ==
                  Enum.map(also, &"line 5: #{&1}") ++
@@ -1033,6 +1071,12 @@ defmodule Logex.ValidationTest do
                    ],
                rung
       end
+
+      assert source_errors("ton b b") == [
+               "line 1: `b` is not declared (this program declares no tags: each is now " <>
+                 "declared before the first rung, as `var b ton`)",
+               "line 1: `ton` takes its preset as a number of milliseconds, found `b`"
+             ]
     end
 
     test "a negative preset is refused, ready for when negative literals lex" do
@@ -1212,6 +1256,25 @@ defmodule Logex.ValidationTest do
                "line 8: `ton` expects a tag, found the type `bool`",
                "line 8: `ote lamp` follows `ton bool` " <> unnamed
              ]
+
+      # A case-only twin of a declared timer can never be declared.
+      assert source_errors(@paths <> "xic go ton T1 5000 ote lamp") == [
+               "line 6: `T1` is not declared — did you mean `t1`? (tags are case-sensitive)",
+               "line 6: `ote lamp` follows `ton T1` " <> unnamed
+             ]
+    end
+
+    test "in rung order: a group's own error, then each leg's, then what follows the group" do
+      assert source_errors(
+               @paths <>
+                 "var t3 ton\n" <>
+                 "xic go ton t1 5 ( xic b ton t2 5 ote lamp | ton t3 5 xic b ) ote lamp"
+             ) == [
+               after_ton(7, "a branch group"),
+               after_ton(7, "`ote lamp`", "t2"),
+               after_ton(7, "`xic b`", "t3"),
+               after_ton(7, "`ote lamp`")
+             ]
     end
 
     test "a leg beside a ton is not on its path" do
@@ -1335,21 +1398,30 @@ defmodule Logex.ValidationTest do
              ]
     end
 
-    test "a bit of a member is bit access, as a bit of a tag is" do
-      assert source_errors(@timer <> "move t1.acc.3 d\nxic t1.dn.0 ote a") == [
+    test "a bit of a member is bit access, as a bit of a tag is, and a bool has none" do
+      assert source_errors(
+               @timer <>
+                 "move t1.acc.3 d\nxic t1.dn.0 ote a\nxic a.0 ote a\nmove t1.acc.3.x d\nmove t1.acc.3.4 d"
+             ) == [
                "line 4: `t1.acc.3` names a bit of `t1.acc`, a dint: bit access is not supported yet",
-               "line 5: `t1.dn.0` names a bit of `t1.dn`, a bool: bit access is not supported yet"
+               "line 5: `t1.dn.0` names a bit of `t1.dn`, a bool, which has no bits",
+               "line 6: `a.0` names a bit of `a`, a bool, which has no bits",
+               # Past a bit, as past a member, a path goes too deep, bit access or none.
+               "line 7: `t1.acc.3.x` goes too deep: `t1.acc` is a dint, which has no members",
+               "line 8: `t1.acc.3.4` goes too deep: `t1.acc` is a dint, which has no members"
              ]
     end
 
     test "a dotted name on a reserved word is named as such, never as undeclared" do
-      assert source_errors(@timer <> "xic ton.dn ote a\nxic VAR.dn xic bool.x ote a") == [
-               "line 4: `ton.dn` names a member of `ton`, but `ton` is an instruction: " <>
-                 "only a timer has members",
-               "line 5: `VAR.dn` names a member of `VAR`, but `VAR` is a keyword: " <>
-                 "only a timer has members",
-               "line 5: `bool.x` names a member of `bool`, but `bool` is a type: " <>
-                 "only a timer has members"
+      assert source_errors(
+               @timer <>
+                 "xic ton.dn ote a\nxic VAR.dn xic bool.x ote a\nxic bool.3 xic ton.3.x ote a"
+             ) == [
+               "line 4: `ton.dn` begins with `ton`, an instruction, which cannot name a tag",
+               "line 5: `VAR.dn` begins with `VAR`, a keyword, which cannot name a tag",
+               "line 5: `bool.x` begins with `bool`, a type, which cannot name a tag",
+               "line 6: `bool.3` begins with `bool`, a type, which cannot name a tag",
+               "line 6: `ton.3.x` begins with `ton`, an instruction, which cannot name a tag"
              ]
     end
 

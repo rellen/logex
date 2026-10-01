@@ -678,7 +678,9 @@ scans"; the elapsed-time `scan/3` above replaces that meaning, and M1-5 must say
 *(It did, and the first five lines landed with M1-5 on 2026-09-29, `scan/2` returning
 `{outputs, state}` like `call/4`. `restart/3` keeps the var_inputs because they are the
 host's input image, which a configuration's copy-in refreshes every scan anyway: that is
-what keeps `scan/2` and the one-line configuration in agreement across a restart.)*
+what keeps `scan/2` and the one-line configuration in agreement across a restart. Since
+M1-6 it keeps only those whose values fit their types, which a recompile of the same name
+may have changed.)*
 
 **Receipt.** The configuration spike ran an earlier form of the §4.4 plant: the §4.2
 `motor`, no event task, no `estop` and no snapshot, and `m2.reset` wired to `pb_reset`
@@ -774,7 +776,7 @@ names they break (CLAUDE.md step 2).
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays |
 | IEC textual paste-compatibility (`END_*` blocks, `:=`, `;`) | not adopted | logex is a dialect (`PLAN.md` §5) |
-| Online edit (a new type, instances keep their state) | deferred | The constraint is recorded now: instance state stays keyed by declared tag name. Since M1-6 a second one: the number on `ton t1 5000` is where `.pre` starts, so an instance kept under a recompiled type keeps its old `.pre` until a restart (`end_to_end_test.exs` pins it). The migration must move a changed preset into the running instances, for example where `.pre` still equals the old compiled preset, or say plainly that it does not. Two more, since a state's values are not checked each scan: a tag the recompile adds is missing from a kept instance and reads 0, not its initial value, until a restart, so an added timer starts at a `.pre` of 0 and is done at its first true scan (pinned too); and a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output. The migration must start what is added and convert or refuse what changes type |
+| Online edit (a new type, instances keep their state) | deferred | The constraint is recorded now: instance state stays keyed by declared tag name. Since M1-6 a second one: the number on `ton t1 5000` is where `.pre` starts, so an instance kept under a recompiled type keeps its old `.pre` until a restart (`end_to_end_test.exs` pins it). The migration must move a changed preset into the running instances, for example where `.pre` still equals the old compiled preset, or say plainly that it does not. Two more, since a state's values are not checked each scan: a tag the recompile adds is missing from a kept instance and reads 0, not its initial value, until a restart, so an added timer starts at a `.pre` of 0 and is done at its first true scan (pinned too); and a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output. A restart puts both right, keeping only the var_inputs whose values fit their types. The migration must start what is added and convert or refuse what changes type |
 
 ---
 

@@ -112,7 +112,8 @@ defmodule Logex.Declarations do
   def split(rungs, declared) when is_list(declared) do
     {leading, rest} = Enum.split_while(rungs, &declaration?/1)
     {late, logic} = Enum.split_with(rest, &declaration?/1)
-    late = Enum.map(late, &late(&1, first_line(logic)))
+    first = first_line(logic)
+    late = Enum.map(late, &late(&1, first))
     {tags, diagnostics} = Enum.flat_map_reduce(leading ++ late, [], &declare/2)
     {table, diagnostics} = table(Enum.map(declared, &validate!/1), tags, diagnostics)
     {table, logic, Enum.sort_by(Enum.reverse(diagnostics), & &1.line)}

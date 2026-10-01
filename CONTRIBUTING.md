@@ -256,10 +256,14 @@ choice, not an oversight to fix.
   program, or get a test like it. **Growth in depth is a second axis**: M1-6's path pass
   copied what it found in a group at every level of nesting, so a rung 8,000 groups deep
   took 2.9 s, and the size test, which never nests, stayed green. "compiling stays linear
-  in the depth of nesting" now reaches every walk into a group. It compares 500 and 8,000
+  in the depth of nesting" reaches every walk into a group, the one that finds the first
+  rung's line for a declaration after it included: its first program had no such
+  declaration, and a copying rewrite of that walk passed it. It compares 500 and 8,000
   levels, not 500 and 2,000, because `++` is charged few reductions for what it copies: a
-  walk that copies with `Enum.flat_map` at every level grew 4.3x to 4.7x for 4x the depth,
-  within the size test's bound, and grows 19x to 24x for 16x, where a linear one grows 15x.
+  walk that copies with `Enum.flat_map` at every level grew 4.1x to 4.8x for 4x the depth,
+  within the size test's bound, and grows 21x to 29x for 16x, where a linear compile grows
+  about 16x. It takes the least of three counts, since a busy VM can raise one by a few
+  percent.
 - **A map of 32 keys or fewer iterates in key order.** So a missing `Enum.sort` over a map,
   or over a list built from one, is invisible to every test with a small table. M1-5 hit
   it twice: the order of the input problems (pinned in `ee91fe5`), and the var_input list in

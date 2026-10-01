@@ -205,11 +205,23 @@ defmodule Logex.Compiler do
   # Whether a hint may name `name` as a timer: a declared one, or a name not declared yet,
   # which the hint fits once it is declared as one. Anything else, a bool, a member or a
   # reserved word, has a diagnostic of its own, which a hint beside it would contradict.
-  defp timer?(name, tags), do: runnable?(Declarations.reserved(name), lookup(name, tags))
+  defp timer?(name, tags), do: runnable?(Declarations.reserved(name), hinted(name, tags))
 
   defp runnable?(nil, {:ok, %Tag{type: %FbType{name: "ton"}}}), do: true
   defp runnable?(nil, :error), do: true
   defp runnable?(_reserved, _found), do: false
+
+  # A name not declared yet is one that can be: a name differing from a declared tag only
+  # in case never can be (Logex.Declarations), so a hint naming it would never compile.
+  defp hinted(name, tags), do: declarable(lookup(name, tags), String.downcase(name), tags)
+
+  defp declarable(:error, folded, tags),
+    do: twin(Enum.find(Map.keys(tags), &(String.downcase(&1) == folded)))
+
+  defp declarable(found, _folded, _tags), do: found
+
+  defp twin(nil), do: :error
+  defp twin(declared), do: {:twin, declared}
 
   # A group carries no line of its own, so it is cited at the `ton`'s: a rung is one line.
   defp line_of({:branches, _legs}, ton_line), do: ton_line
@@ -399,7 +411,10 @@ defmodule Logex.Compiler do
   defp check_preset(_signature, _operands, _at, _tags, diagnostics), do: diagnostics
 
   # The `move` is named only where it would compile, once a name in it not declared yet is
-  # declared: into a timer's `.pre`, from a dint.
+  # declared: into a timer's `.pre`, from a dint. One name is never both, so `ton b b` has
+  # none.
+  defp moved({:name, _, name}, name, _tags), do: ""
+
   defp moved({:name, _, timer}, name, tags),
     do: move(timer?(timer, tags) and dint?(name, tags), timer, name)
 
@@ -410,7 +425,7 @@ defmodule Logex.Compiler do
 
   defp move(false, _timer, _name), do: ""
 
-  defp dint?(name, tags), do: dint_value?(Declarations.reserved(name), lookup(name, tags))
+  defp dint?(name, tags), do: dint_value?(Declarations.reserved(name), hinted(name, tags))
 
   defp dint_value?(nil, {:ok, %Tag{type: :dint}}), do: true
   defp dint_value?(nil, {:member, _tag, %Member{type: :dint}}), do: true
@@ -479,15 +494,17 @@ defmodule Logex.Compiler do
 
   defp owned({:ok, tag}, _head, [part | _]), do: {:no_members, tag, part}
 
-  # A word that can never be declared is not reported as undeclared: `ton.dn`.
+  # A word that can never be declared is not reported as undeclared: `ton.dn`, `bool.3`.
   defp unowned(nil, head), do: {:undeclared, head}
   defp unowned(reserved, head), do: {:reserved, reserved, head}
 
   defp in_type({:ok, member}, tag, _part, []), do: {:member, tag, member}
-  defp in_type({:ok, member}, tag, _part, [next | _]), do: past(Integer.parse(next), tag, member)
+  defp in_type({:ok, member}, tag, _part, [next]), do: past(Integer.parse(next), tag, member)
+  defp in_type({:ok, member}, tag, _part, _deeper), do: {:too_deep, tag, member}
   defp in_type(:error, tag, part, _deeper), do: {:unknown_member, tag, part}
 
-  # `t1.acc.3` is bit access of a member, as `d.3` is of a tag.
+  # `t1.acc.3` is bit access of a member, as `d.3` is of a tag; `t1.acc.3.x` goes too deep,
+  # as it will when bit access lands.
   defp past({_bit, ""}, tag, member), do: {:member_bit, tag, member}
   defp past(_not_a_bit, tag, member), do: {:too_deep, tag, member}
 
@@ -508,8 +525,7 @@ defmodule Logex.Compiler do
 
   defp resolve(nil, {:reserved, reserved, head}, _slot, {:name, line, name}, _at, diagnostics) do
     message =
-      "`#{name}` names a member of `#{head}`, but `#{head}` is #{reserved_as(reserved)}: " <>
-        "only a timer has members"
+      "`#{name}` begins with `#{head}`, #{reserved_as(reserved)}, which cannot name a tag"
 
     [diagnostic(line, message) | diagnostics]
   end
@@ -590,6 +606,9 @@ defmodule Logex.Compiler do
     do:
       "`#{name}` names a member of `#{tag.name}`, but `#{tag.name}` is a #{tag.type}" <>
         "#{declared(tag)}: only a timer has members"
+
+  # Bit access, when it lands, reaches a bit of a word; a bool is one bit, and has none.
+  defp bit(name, word, :bool), do: "`#{name}` names a bit of `#{word}`, a bool, which has no bits"
 
   defp bit(name, word, type),
     do: "`#{name}` names a bit of `#{word}`, a #{type}: bit access is not supported yet"
@@ -714,21 +733,24 @@ defmodule Logex.Compiler do
   # program with no declaration line -- one written before M1-3 -- is told how to declare,
   # in its first report only.
   defp undeclared(found, tags, note?) do
-    {diagnostics, _} = Enum.flat_map_reduce(found, {MapSet.new(), note?}, &report(&1, &2, tags))
+    runs = Map.new(for {:undeclared, _, name, {:instance, _} = slot} <- found, do: {name, slot})
+    acc = {MapSet.new(), note?}
+    {diagnostics, _} = Enum.flat_map_reduce(found, acc, &report(&1, &2, {tags, runs}))
     diagnostics
   end
 
-  defp report({:undeclared, line, name, slot}, {seen, _} = acc, tags),
-    do: first_use(MapSet.member?(seen, name), line, {name, slot}, tags, acc)
+  # A name an instruction runs anywhere, as `ton` runs a timer, is shown the declaration
+  # that fits it, whatever its first use.
+  defp report({:undeclared, line, name, slot}, {seen, _} = acc, {tags, runs}),
+    do: first_use(MapSet.member?(seen, name), line, {name, Map.get(runs, name, slot)}, tags, acc)
 
-  defp report(%Diagnostic{} = diagnostic, acc, _tags), do: {[diagnostic], acc}
+  defp report(%Diagnostic{} = diagnostic, acc, _context), do: {[diagnostic], acc}
 
   defp first_use(true, _line, _name, _tags, acc), do: {[], acc}
 
-  # A member of an undeclared name reports the name (M1-6), but is not told how to declare
-  # it, since the name is likely an instance's and not a bool's or a dint's: the note waits
-  # for the next undeclared name that is used whole. A name an instruction runs, as `ton`
-  # runs a timer, is shown the one declaration that fits it.
+  # A member of an undeclared name reports the name (M1-6), but unless an instruction runs
+  # it, is not told how to declare it, since the name is likely an instance's and not a
+  # bool's or a dint's: the note waits for the next undeclared name reported.
   defp first_use(false, line, {name, slot}, tags, {seen, note?}) do
     message =
       "`#{name}` is not declared" <>
