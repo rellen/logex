@@ -35,9 +35,11 @@ defmodule Logex.Program do
   scan by the instance's `ons_blocked`, where a new instance relies on `first`; a
   var_input a switch starts or makes live is reported, since its value is the host's; at
   the first test, a tag the candidate adds, or one whose value does not fit its type,
-  starts here over what a plain swap left; and a kept tag whose initial value changed
-  keeps its value until a restart, and is reported. M2-6 will add an event task's
-  trigger.
+  starts here over what a plain swap left; and a kept bool or dint whose initial value
+  changed keeps its value until a restart, and is reported as `:initial_changed`, except
+  one the switch starts here, at its new initial value, and a var_input of the program
+  started, whose value a restart keeps: neither is so reported. M2-6 will add an event
+  task's trigger.
   """
   def initial_env(%__MODULE__{tags: tags}),
     do: Map.new(tags, fn {name, tag} -> {name, start(tag)} end)

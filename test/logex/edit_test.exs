@@ -751,7 +751,8 @@ defmodule Logex.EditTest do
   end
 
   describe "a changed initial value (decision 29)" do
-    test "keeps the running value, is reported at every switch, and applies at a restart" do
+    test "for a kept var or var_output, keeps the running value, is reported at each " <>
+           "switch, and applies at a restart" do
       # A timer's preset is not the initial value of a bool or a dint.
       v1 =
         c!("var_input go bool\nvar_output sp dint 1200\nvar b bool\nvar t1 ton\nxic go ton t1 50")
@@ -1473,11 +1474,15 @@ defmodule Logex.EditTest do
       )
     end
 
-    # At 500 and 8,000 one-shots a scan that looks each blocked bit up grows about 16x; one
-    # that walks the block list for every `ons` grows about 60x.
+    # At 500 and 8,000 one-shots a scan that looks each blocked bit up grows 16.4x to 17.9x
+    # over 48 runs on Elixir 1.20.4; one that walks the block list for every `ons`, as the
+    # scan did before the review of OE-1, grows 65.4x to 65.8x over 10. The figure moves by
+    # up to 9% from run to run, with garbage collection, so the bound is a third above the
+    # highest run, where 18.5, the bound this test landed with, was 3% above it, and still
+    # a third of the walk's lowest.
     test "the scan after a switch stays linear in the one-shots it blocks" do
       ratio = reductions_to_scan_blocked(8000) / reductions_to_scan_blocked(500)
-      assert ratio < 18.5, "16x the one-shots took #{Float.round(ratio, 1)}x the reductions"
+      assert ratio < 24, "16x the one-shots took #{Float.round(ratio, 1)}x the reductions"
     end
 
     # Three versions of n one-shots: the first edit changes every `ons` rung and is kept
@@ -1520,33 +1525,72 @@ defmodule Logex.EditTest do
     end
 
     # Every switch of a second edit taken before any scan filters the first edit's pending
-    # bits by its plan's one-shots. At 500 and 8,000 bits that grows about 17x, its sort
-    # being n log n; a filter that walks a list of the one-shots for every bit grows about
-    # 100x. At 500 and 2,000 such a filter grows 6x to 8.5x, too near a linear switch's 4x.
+    # bits by its plan's one-shots. At 500 and 8,000 bits that grows 16.2x to 17.5x, over
+    # 48 runs on Elixir 1.20.4, its sort being n log n. A filter that walks a list of the
+    # one-shots, built once, for every bit grows 36.5x to 38.3x over 10, the lowest of the
+    # quadratic filters measured; one that builds that list again for every bit, 108x to
+    # 116x. The bound is a third above the highest run, and the list walk's lowest is half
+    # as much again as the bound. At 500 and 2,000 the two quadratic filters grow 5.1x and
+    # 6.8x, too near a linear switch's 4x.
     test "a second edit before any scan stays linear in the bits still pending (F2)" do
       ratio = reductions_to_second_edit(pending(8000)) / reductions_to_second_edit(pending(500))
-      assert ratio < 32, "16x the pending bits took #{Float.round(ratio, 1)}x the reductions"
+      assert ratio < 24, "16x the pending bits took #{Float.round(ratio, 1)}x the reductions"
     end
   end
 
   describe "the labels this work cites" do
     @root Path.expand("../..", __DIR__)
 
-    # The edit's code, tests and CLAUDE.md cite decisions and fixes by the names
-    # docs/organisation.md §7 gives them. A label only the design pass's own notes define,
-    # such as a lettered hazard or a numbered review finding, cannot be resolved from the
-    # repository, so none may be cited.
+    # The code, the tests and CLAUDE.md cite decisions and fixes by the names
+    # docs/organisation.md §7 gives them, a number for a decision and F and a number for a
+    # fix, and cite them only where §7 defines that number. A label only the design pass's
+    # own notes define, a lettered hazard or a numbered review finding, cannot be resolved
+    # from the repository, so none may be cited: a hazard in the singular or the plural,
+    # its letter bare or in brackets, and R and a number. A decision is checked by its
+    # number alone, since the design decisions of PLAN.md M1-6, cited in places, share
+    # §7's numbers; the other labels of PLAN.md and of commit messages are not checked.
     test "are only those docs/organisation.md defines" do
+      [_, rest] =
+        String.split(File.read!(Path.join(@root, "docs/organisation.md")), "\n## 7. Decisions\n")
+
+      [seven | _] = String.split(rest, "\n## 8. ")
+      decisions = numbered(~r/^(\d+)\. \*\*/m, seven)
+      fixes = numbered(~r/^- \*\*F(\d+)\.\*\*/m, seven)
+      assert decisions != [] and decisions == Enum.to_list(1..length(decisions))
+      assert fixes != [] and fixes == Enum.to_list(1..length(fixes))
+
       files =
         Path.wildcard(Path.join(@root, "{lib,test}/**/*.{ex,exs}")) ++
           [Path.join(@root, "CLAUDE.md")]
 
       cited =
         for file <- files,
-            [label] <- Regex.scan(~r/\b[Hh]azard [A-Z]\d?\b|\bR\d+\b/, File.read!(file)),
+            text = File.read!(file),
+            label <- refused(text) ++ undefined(text, decisions, fixes),
             do: {Path.relative_to(file, @root), label}
 
       assert cited == []
+    end
+
+    defp numbered(regex, text),
+      do: Enum.sort(for [_, n] <- Regex.scan(regex, text), do: String.to_integer(n))
+
+    defp refused(text),
+      do: for([label] <- Regex.scan(~r/\b[Hh]azards? \(?[A-Z]\d?\b|\bR\d+\b/, text), do: label)
+
+    # "decision 21", "decisions 24 and 28", "decisions 21–29", over a line break too.
+    defp undefined(text, decisions, fixes) do
+      list = ~r/\b[Dd]ecisions? (\d+(?:(?:\s*[–,]\s*|\s+and\s+)(?:#\s+)?\d+)*)/u
+
+      for(
+        [label, numbers] <- Regex.scan(list, text),
+        [n] <- Regex.scan(~r/\d+/, numbers),
+        String.to_integer(n) not in decisions,
+        do: label
+      ) ++
+        for [label, n] <- Regex.scan(~r/\bF(\d+)\b/, text),
+            String.to_integer(n) not in fixes,
+            do: label
     end
   end
 end

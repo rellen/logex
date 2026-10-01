@@ -63,10 +63,12 @@ defmodule Logex.Edit do
   **Timers** (decision 23, fixes F1 and F6). A timer a rule above starts is at its initial
   value; one kept keeps every member but `.pre` and `last`, which move by these rules, in
   order:
-  - *`.pre`, undone first:* each switch records, for each timer either program declares,
-    the `.pre` it left and the one it found. The next switch first gives back the one found
-    wherever `.pre` still equals the one left, so an untest gives back exactly the `.pre`
-    its test found. Where logic has changed it since, the two rules below apply instead;
+  - *`.pre`, undone first:* each switch records in the edit, for each timer either program
+    declares, the `.pre` it left and the one it found. The edit's next switch first gives
+    back the one found wherever `.pre` still equals the one left, so an untest gives back
+    exactly the `.pre` its test found. Where logic has changed it since, the two rules
+    below apply instead. A new edit's record starts empty, so it gives back no `.pre` an
+    earlier edit's switch moved;
   - *`.pre`, a `ton` in both:* where both programs run a `ton` on the timer, a `.pre`
     still at the preset of the program stopped moves to that of the program started, and
     one that logic changed is kept;
@@ -74,10 +76,10 @@ defmodule Logex.Edit do
     keeps its `.pre` frozen, and one it runs that the program stopped did not takes its
     preset outright, so a `ton` removed and restored at a new preset gives the `.pre` a
     restart would;
-  - *a resume undone* (fix F11): where the last switch resumed a timer and no scan has
-    run since (`switched`), a `last` still at `now` goes back to the one that switch
-    found, so a test and an untest with no scan between leave the original's timers as
-    they were;
+  - *a resume undone* (fix F11): where this edit's last switch resumed a timer and no
+    scan has run since (`switched`), a `last` still at `now` goes back to the one that
+    switch found, so a test and an untest with no scan between leave the original's
+    timers as they were. A resume an earlier edit's last switch made is not given back;
   - *resume:* a timer the program started runs, timing when it last ran (`.en` 1) and not
     run since (its `last` before `now`, which within the contract means the program
     stopped did not run it), resumes from the switch: its `last` becomes `now`, so the
@@ -118,10 +120,11 @@ defmodule Logex.Edit do
   stopped drove, writing it through an instruction's write operand (an `ons` storage bit
   included), and that the program started does not drive as a var_output (it removes it,
   makes it another section, or writes it no more), holds its value, as the conventional
-  family's outputs do, and the host holds its point. Every step reports it with the value
-  the point holds:
+  family's outputs do, and the host holds its point. Every step reports it with a value:
   - for an output the program that runs next still shows, a var_output no logic of it
-    writes, the state's value, which that program shows at every scan;
+    writes, the state's value, which that program's next scan gives the host, and which
+    can differ from what the point holds until that scan: after a restart, or where the
+    program stopped wrote the tag as a var;
   - for one it does not show, the value the point last received. The edit learns it from
     the state at a step taken while the program it stops is the one that last scanned
     (`Logex.Instance`'s `switched` is false), with no restart since (`first` is false), and
@@ -150,9 +153,9 @@ defmodule Logex.Edit do
   | `:preset_kept` | `{pre, preset}`: `.pre` kept, not the preset of the `ton` that runs it | a switch |
   | `:dn_drops`, `:dn_rises` | `{acc, pre}`, as `ton` counts them, a negative `.acc` as 0 | a switch |
   | `:resumed` | the milliseconds not caught up: `last` moves on by that many, to `now` | a switch |
-  | `:resume_undone` | the milliseconds of the last switch's resume: `last` moves back by that many | a switch |
+  | `:resume_undone` | the milliseconds of the resume this edit's last switch made: `last` moves back by that many | a switch |
   | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan | a switch |
-  | `:held` | the value the output's point holds; for one the next program shows, what its next scan gives | every step |
+  | `:held` | for an output the next program shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |
   | `:pruned` | the value it had | assemble, cancel |
 
   The writes a report lists, `:added`, `:input`, `:preset`, `:resume_undone`, `:resumed`
@@ -619,8 +622,8 @@ defmodule Logex.Edit do
   # One timer either program declares, `from` and `to` the presets of the `ton`s that run
   # it in the program stopped and the one started, nil for none, taken after the start
   # rules, so one they started is at its initial value, where these rules move nothing.
-  # A resume the last switch made may be undone, its `.pre` moves, it may resume, and the
-  # record keeps the `.pre` left, the one found, and the `last` a resume found.
+  # A resume this edit's last switch made may be undone, its `.pre` moves, it may resume,
+  # and the record keeps the `.pre` left, the one found, and the `last` a resume found.
   # A map a plain swap left with `.pre` but not every member is one no `ton` of either
   # program runs (below), so the rules that read the others never reach it.
   defp timed({name, _from, _to} = timer, undo, clock, {env, _report, _left} = acc),
@@ -649,12 +652,12 @@ defmodule Logex.Edit do
   # rule reads it.
   defp timer(_not_a_timer, _timer, _undo, _now, acc), do: acc
 
-  # Where `.pre` goes. F1 first: still what the last switch left, it goes back to what that
-  # switch found. Otherwise, decision 23: a timer the program started runs no `ton` on keeps
-  # its `.pre` frozen, and one it runs that the program stopped did not takes its preset
-  # outright. And where both run one: a `.pre` still at the old preset takes the new one,
-  # and one logic changed is kept, read when the switch is taken, not at accept (decision
-  # 27).
+  # Where `.pre` goes. F1 first: still what this edit's last switch left, it goes back to
+  # what that switch found. Otherwise, decision 23: a timer the program started runs no
+  # `ton` on keeps its `.pre` frozen, and one it runs that the program stopped did not
+  # takes its preset outright. And where both run one: a `.pre` still at the old preset
+  # takes the new one, and one logic changed is kept, read when the switch is taken, not
+  # at accept (decision 27).
   defp target({pre, found, _last}, pre, _from, _to), do: found
   defp target(_undo, pre, _from, nil), do: pre
   defp target(_undo, _pre, nil, to), do: to
@@ -697,9 +700,10 @@ defmodule Logex.Edit do
 
   defp resumed(_to, timer, _name, _now), do: {timer, [], nil}
 
-  # A resume undone: where the last switch resumed the timer and no scan has run since
-  # (`switched`), its `last`, still that switch's `now`, goes back to the one it found, so
-  # a test and an untest with no scan between leave the original's timers as they were.
+  # A resume undone: where this edit's last switch resumed the timer and no scan has run
+  # since (`switched`), its `last`, still that switch's `now`, goes back to the one it
+  # found, so a test and an untest with no scan between leave the original's timers as
+  # they were. The `last` found is in the edit's record, so an earlier edit's is unknown.
   defp undone(%{"last" => now} = timer, {_pre, _found, last}, true, now, name)
        when is_integer(last),
        do: {%{timer | "last" => last}, [{:resume_undone, name, now - last}]}
@@ -718,9 +722,10 @@ defmodule Logex.Edit do
 
   defp learnt(shown, _outputs, %Instance{switched: true}), do: shown
 
-  # Each held output with the value its point holds: the state's, for one the program that
-  # runs next still shows, since no logic of it writes the output; otherwise what the
-  # point last received, if the edit has learnt it.
+  # Each held output with its value: for one the program that runs next still shows, the
+  # state's, which that program's next scan gives the host, since no logic of it writes
+  # the output, and which can differ from what the point holds until that scan; otherwise
+  # what the point last received, if the edit has learnt it.
   defp holding(plan, shown, env),
     do:
       for(

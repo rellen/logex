@@ -136,7 +136,8 @@ defmodule Logex.RuntimeTest do
             {%Scan{now: 1.5, first: true},
              "scan.now must be a non-negative integer of milliseconds, got: 1.5"},
             {%Scan{now: 0, first: nil}, "scan.first must be true or false, got: nil"},
-            # OE-1: the block list is the instance's, which call/4 puts in the scan itself.
+            # OE-1: the block list is the instance's, which call/4 puts in the scan itself,
+            # as a map of its bits.
             {%Scan{now: 0, first: true, ons_blocked: ["s1"]},
              "scan.ons_blocked is the runtime's, taken from the instance: " <>
                ~s|a host leaves it out, got: ["s1"]|},

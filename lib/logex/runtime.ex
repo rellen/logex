@@ -25,13 +25,14 @@ defmodule Logex.Runtime do
   input problem in one call comes in one raise, a line each, in key order. Inputs merge
   into the instance, so a host sends only what changed. Outputs are every `var_output`.
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
-  `first`; its `ons_blocked` is the instance's, which `call/4` fills in, so a host leaves
-  it out. A state is matched to its program by name, and its values are not checked each
-  scan. Scanning a recompile of the same name over a kept instance, a *plain swap*, stays
-  in this contract: the instance keeps its values until `restart/3`, so a tag the
-  recompile adds reads 0, an added timer starting at a `.pre` of 0, a tag whose type it
-  changes keeps its old value, a timer's map reaching the outputs and the contacts, and a
-  timer whose `ton` it gives back catches up all the time it was not run.
+  `first`; its `ons_blocked` is the runtime's, which `call/4` fills in with a map of the
+  bits the instance's list names, so a host leaves it out. A state is matched to its program
+  by name, and its values are not checked each scan. Scanning a recompile of the same name
+  over a kept instance, a *plain swap*, stays in this contract: the instance keeps its
+  values until `restart/3`, so a tag the recompile adds reads 0, an added timer starting at
+  a `.pre` of 0, a tag whose type it changes keeps its old value, a timer's map reaching the
+  outputs and the contacts, and a timer whose `ton` it gives back catches up all the time it
+  was not run.
   `Logex.Edit` moves a state to a new program by rule instead: it starts what is added,
   restarts a value that does not fit its type, refuses a type change, moves a timer's
   `.pre` to a changed preset where logic left it alone, resumes a timer it gives back

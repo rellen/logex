@@ -91,12 +91,14 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   language or the generator on purpose, and read the diff:
   `test/fixtures/generate_frontend_golden.exs`.
 - `test/logex/edit_test.exs` pins `Logex.Edit`: every host-mistake message and the order of
-  its checks, every `:edit` diagnostic, a test per rule of §4.9 (grouped by the decision
-  or fix it answers), and four growth tests in reductions (F16): accept, test, untest,
-  test and assemble at two sizes and two depths, the scan right after a switch at two
-  numbers of blocked one-shots, and a second edit before any scan at two numbers of
-  pending blocks. Its programs come from
-  source, an unnamed one through `instructionize/2`, never from editing a struct.
+  its checks, every `:edit` diagnostic, a test per rule of §4.9 (grouped by the decision,
+  fix or §4.9 rule it answers), and four growth tests in reductions (F16): accept, test,
+  untest, test and assemble at two sizes and two depths, the scan right after a switch at
+  two numbers of blocked one-shots, and a second edit before any scan at two numbers of
+  pending blocks; and a test that `lib/`, `test/` and this file cite no lettered hazard or
+  numbered review finding, and no fix or decision number `docs/organisation.md` §7 does
+  not define. Its programs come from source, an unnamed one through `instructionize/2`,
+  never from editing a struct.
   `api_contract_test.exs`'s edit walk checks the same rules restated from the programs'
   text, and carries oracles that know nothing of them
 - `test/logex/end_to_end_test.exs` drives source to an environment, through `Logex.compile/2`

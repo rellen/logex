@@ -30,13 +30,16 @@ defmodule Logex.ApiContractTest do
 
   Its timers (decision 23, fixes F1 and F6): each switch's `.pre`, `.dn` forecasts and
   resumes are checked against the rules restated from the text, with the walk's own
-  record of what the last switch left and found. Three oracles do not restate them: no
-  scan but a plain swap's lets a timer gain more than the scan's own time, as one caught
-  up after a switch would (§4.9's Resume rule); the scan right after a switch does to
-  `.dn` what the switch forecast; and a test then an untest with no scan between leaves
-  the original's tags as they were, a timer the test resumed included, but for what
-  either switch started, found from the two programs' text and the state and never from
-  the reports, and its next scan's outputs with them (fixes F1 and F11).
+  record of what the edit's last switch left and found. Three oracles do not restate
+  those rules: no scan but a plain swap's lets a timer gain more than the scan's own time,
+  as one caught up after a switch would (§4.9's Resume rule); the scan right after a
+  switch does to `.dn` what the switch forecast; and a test then an untest with no scan
+  between leaves the original's tags as they were, a timer the test resumed included, but
+  for what either switch started, found from the two programs' text and the state and
+  never from the reports, and its next scan's outputs with them (fixes F1 and F11). Right
+  after a switch that resumed a timer, the walk often switches back at once, and now and
+  then restarts first, which starts the timer again, so that the switch back must give
+  no resume back.
 
   Its one-shots (decision 21, fixes F2, F3 and F7): each switch's block list is checked
   against the rule restated from the text, with the walk's own record of which side of
@@ -589,6 +592,8 @@ defmodule Logex.ApiContractTest do
     :plain_swap,
     :misfit,
     :stale,
+    :initial_started,
+    :initial_input,
     :restart_in_edit,
     :second_test,
     :held_point,
@@ -601,11 +606,13 @@ defmodule Logex.ApiContractTest do
     :pre_outright,
     :pre_frozen,
     :pre_restored,
+    :undo_after_restart,
     :resumed_scan,
     :dn_scan,
     :round_trip,
     :round_trip_timer,
     :round_trip_resumed,
+    :round_trip_started,
     :round_trip_ons,
     :ons_new,
     :ons_changed,
@@ -627,13 +634,17 @@ defmodule Logex.ApiContractTest do
   # One vocabulary, so two draws share their names: `start` and `stop` move between
   # var_input and var, `a`, `b` and `c` between var and var_output, `n`'s initial value
   # changes, and `r` and `t1` change type now and then, which a plain swap leaves in the
-  # state and an edit refuses. `s1` is a var_output driven by a one-shot's storage bit, and
-  # `cn` the one-shot's condition, which the rung writes just before it; `s1` is declared
-  # now and then with no `ons` on it, and written now and then by another instruction
-  # after the `ons`, as only a program with a warning can.
+  # state and an edit refuses. Decision 29's exceptions are reached too: `n` is left out one
+  # time in three, so a state can lack it where both programs declare it, and a switch
+  # starts it at a changed initial value; and `sp` takes an initial value now and then, and
+  # moves between var and var_input, so one whose initial value changes becomes an input.
+  # `s1` is a var_output driven by a one-shot's storage bit, and `cn` the one-shot's
+  # condition, which the rung writes just before it; `s1` is declared now and then with no
+  # `ons` on it, and written now and then by another instruction after the `ons`, as only a
+  # program with a warning can.
   defp edit_source do
     inputs = Enum.flat_map(~w(start stop), &declared(&1, pick(~w(var_input var_input var none))))
-    sp = pick(["var_input sp dint", "var sp dint", nil])
+    sp = pick(["var_input sp dint", "var sp dint", "var sp dint 5", nil])
     bools = Enum.map(~w(a b c), &{&1, pick(~w(var var_output var_output))})
     r = pick([:bool, :dint, nil])
     t1 = pick([:ton, :ton, :bool, nil])
@@ -643,7 +654,7 @@ defmodule Logex.ApiContractTest do
       Enum.map(inputs, fn {name, section} -> "#{section} #{name} bool" end) ++
         Enum.reject([sp], &is_nil/1) ++
         Enum.map(bools, fn {name, section} -> "#{section} #{name} bool" end) ++
-        ["var_output n dint #{pick(["", "7", "9"])}"] ++
+        Enum.take(["var_output n dint #{pick(["", "7", "9"])}"], pick([0, 1, 1])) ++
         typed("r", r) ++ typed("t1", t1) ++ timer_input(t1) ++ ons_tags(ons)
 
     writable =
@@ -784,24 +795,43 @@ defmodule Logex.ApiContractTest do
   end
 
   defp edit_walk(w, 0), do: w
-  defp edit_walk(w, n), do: edit_walk(edit_op(:rand.uniform(12), w), n - 1)
+  defp edit_walk(w, n), do: edit_walk(edit_op(op(w, :rand.uniform(12)), w), n - 1)
+
+  # The operation that follows, as the walk or a trial run draws it; but right after a
+  # switch that resumed a timer, half the time a scan, which must not catch the timer up; a
+  # quarter of the time the switch back with no scan between, which gives the resume back;
+  # and a quarter a restart, which starts the timer again, and then the switch back, which
+  # then gives nothing back (fix F11). Resumes are rare, and a resume this edit's last
+  # switch made is what each of the three needs.
+  defp op(%{e: nil}, otherwise), do: otherwise
+  defp op(w, otherwise), do: op(Edit.stage(w.e), names(w.timed, :resumed), otherwise)
+
+  defp op(stage, [_ | _], _otherwise) when stage in [:testing, :untested],
+    do: pick([1, 1, :back, :restart_back])
+
+  defp op(_stage, _resumed, otherwise), do: otherwise
+
+  defp edit_op(:back, w), do: step(back(Edit.stage(w.e)), w)
+  defp edit_op(:restart_back, w), do: edit_op(:back, edit_op(10, w))
 
   defp edit_op(op, w) when op <= 4, do: edit_scan(w, :running)
 
-  # One candidate in six is a new program; the rest are the running program changed: with
+  # One candidate in seven is a new program; the rest are the running program changed: with
   # one rung dropped, and `n`'s initial value and the timer's preset redrawn, so the two
   # keep their types, a value a plain swap left is reached, and the timer's `ton` changes
-  # its preset; with its `ton` dropped, so the `ton` goes and comes back while the timer is
-  # timing; or with it given back, so a test resumes the timer, where it declares one and
-  # runs none (and otherwise as the first). Half the time a test and an untest with no scan
-  # between follow at once, so an untest gives a resume back (fix F11).
+  # its preset; three in seven with its `ton` dropped, so the `ton` goes and comes back
+  # while the timer is timing, which its untest resumes; or two in seven with it given
+  # back, so a test resumes the timer, where it declares one and runs none (and otherwise
+  # as the first). Two times in three a test and an untest with no scan between follow at
+  # once, so an untest gives a resume back (fix F11).
   defp edit_op(op, %{e: nil, p: p} = w) when op in [5, 6],
     do:
-      pick([&Function.identity/1, &there_and_back/1]).(
+      pick([&Function.identity/1, &there_and_back/1, &there_and_back/1]).(
         accept(
           pick([
             edit_program(),
             variant(p),
+            without_ton(p),
             without_ton(p),
             without_ton(p),
             with_ton(p),
@@ -871,7 +901,13 @@ defmodule Logex.ApiContractTest do
   defp open_mistakes(%{e: edit} = w, step, bad),
     do: [fn -> Edit.test(edit, w.other) end, fn -> apply(Edit, step, [edit, bad]) end]
 
-  defp trial(w), do: edit_op(1, step(:untest, edit_op(1, step(:test, w))))
+  defp trial(w) do
+    w = step(:untest, edit_op(1, step(:test, w)))
+    edit_op(op(w, 1), w)
+  end
+
+  defp back(:testing), do: :untest
+  defp back(:untested), do: :test
 
   defp there_and_back(w), do: step(:untest, step(:test, w))
 
@@ -1069,11 +1105,15 @@ defmodule Logex.ApiContractTest do
           type in [:bool, :dint],
           match?(%Tag{type: ^type}, from.tags[tag]),
           old[tag] != initial[tag],
-          tag not in started,
-          tag not in inputs,
-          do: {:initial_changed, tag, {old[tag], initial[tag]}}
+          do: tag
 
-    assert for({:initial_changed, _, _} = entry <- report, do: entry) == Enum.sort(changed)
+    reported = for tag <- changed, tag not in started, tag not in inputs, do: tag
+
+    assert for({:initial_changed, _, _} = entry <- report, do: entry) ==
+             Enum.sort(for tag <- reported, do: {:initial_changed, tag, {old[tag], initial[tag]}})
+
+    edit_reach(:initial_started, Enum.any?(changed, &(&1 in started)))
+    edit_reach(:initial_input, Enum.any?(changed, &(&1 in inputs and &1 not in started)))
 
     edit_reach(
       :misfit,
@@ -1165,7 +1205,7 @@ defmodule Logex.ApiContractTest do
 
   # Decision 23 and fixes F1 and F6, restated from the two programs' text: each timer
   # either program declares, as the start rules left it, takes the `.pre` the walk's own
-  # record of the last switch, or the presets, say; is reported so; and resumes where it
+  # record of the edit's last switch, or the presets, say; is reported so; and resumes where it
   # was timing and not run since. Returns the record for the next switch: for each timer,
   # the `.pre` this switch left and the one it found.
   defp timers!(from, to, before, later, report, record) do
@@ -1194,6 +1234,7 @@ defmodule Logex.ApiContractTest do
   defp timer!(%{"pre" => pre} = was, {tag, from, to}, {later, switched}, undo, {expected, next}) do
     {how, target} = pre_target(undo, pre, from, to)
     now = later.now
+    edit_reach(:undo_after_restart, switched and found?(undo) and was["last"] != now)
     {was, undone} = resume_undone(was, undo, switched, now, tag)
     resumed? = to != nil and was["en"] == 1 and was["last"] < now
     moved = Map.put(was, "pre", target)
@@ -1209,12 +1250,16 @@ defmodule Logex.ApiContractTest do
 
   defp timer!(_not_a_timer, _timer, _later, _undo, acc), do: acc
 
-  # Where the last switch resumed the timer and no scan has run since, its `last`, still
-  # at `now`, goes back to the one that switch found.
+  # Where this edit's last switch resumed the timer and no scan has run since, its `last`,
+  # still at `now`, goes back to the one that switch found; not after a restart, which
+  # started the timer again.
   defp resume_undone(%{"last" => now} = was, {_, _, last}, true, now, tag) when last != nil,
     do: {Map.put(was, "last", last), [{:resume_undone, tag, now - last}]}
 
   defp resume_undone(was, _undo, _switched, _now, _tag), do: {was, []}
+
+  defp found?({_, _, last}), do: last != nil
+  defp found?(nil), do: false
 
   defp pre_target({pre, found, _last}, pre, _from, _to), do: {:pre_restored, found}
   defp pre_target(_undo, pre, from, nil) when from != nil and pre != 0, do: {:pre_frozen, pre}
@@ -1311,7 +1356,8 @@ defmodule Logex.ApiContractTest do
 
   defp round_trip!(:untest, {was, tested, kept}, {_from, original, _stage}, before, later, report) do
     lacked = for {tag, _} <- original.tags, not Map.has_key?(before.env, tag), do: tag
-    expected = %{was | env: Map.merge(kept, Map.take(Program.initial_env(original), lacked))}
+    initial = Program.initial_env(original)
+    expected = %{was | env: Map.merge(kept, Map.take(initial, lacked))}
     tags = Map.keys(original.tags)
     assert Map.take(later.env, tags) == Map.take(expected.env, tags)
     # Before a first scan, which blocks every `ons`, the list makes no difference.
@@ -1326,6 +1372,14 @@ defmodule Logex.ApiContractTest do
     )
 
     edit_reach(:round_trip_resumed, names(tested, :resumed) != [])
+
+    edit_reach(
+      :round_trip_started,
+      Enum.any?(original.tags, fn {tag, _} ->
+        not Map.has_key?(was.env, tag) and Map.has_key?(kept, tag) and kept[tag] != initial[tag]
+      end)
+    )
+
     edit_reach(:round_trip_ons, names(tested, :ons_blocked) != [])
     nil
   end

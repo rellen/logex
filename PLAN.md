@@ -1409,10 +1409,12 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   it, among them the README's "Changing a running program", whose output is a real run.
   420 tests pass on Elixir 1.20.4 (6 of them doctests), up from 320. The messages of (2)
   to (6) record their mutation tables, every rule each adds reverted alone and the full
-  suite judged by exit code: 187 rules, every one red. The tables hold 188 rows (35, 17,
-  78, 40 and 18) because (4)'s mutant E46, red only from (5), which added the test that
-  fails without it, is a row of both; a table's labels are its own, and (4)'s mutants
-  E1–E71 are not decisions E1–E9. (7) adds no rule; it
+  suite judged by exit code: 187 rules, every one red. By the messages' own totals the
+  tables hold 188 (35, 17, 78, 40 and 18), because (4)'s mutant E46, red only from (5),
+  which added the test that fails without it, is in both; as rows they hold 186 (35, 18,
+  75, 40 and 18), because (3)'s row X1 is a behaviour its total leaves out and (4)'s row
+  E10–E13 is four rules. A table's labels are its own, and (4)'s mutants E1–E71 are not
+  decisions E1–E9. (7) adds no rule; it
   reverted 20 that the Done-when relies on, each red, and `end_to_end_test.exs` alone
   fails 19 of them. (1) and (8) are documents. Each of decisions 21–29 and fixes F1–F16 is
   cited by name in the commit that landed it. Where the design left a gap, a commit
@@ -1464,6 +1466,24 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   replaced by decision and fix names, with a test that refuses them; a stale test comment;
   and the rule count above. Step (7)'s message ends with a paragraph after its mutation
   table, against the house shape; history is not rewritten, and the fix commit says so.
+
+  A review of that fix commit, `d05d4a2`, confirmed 14 findings, fixed in the commit
+  after it; the suite stays at 430 tests. None was in `lib/`'s behaviour. The walk's
+  generator never reached decision 29's two exceptions, nor a restart between a switch
+  that resumed a timer and the switch back, so the walk's restatements of them decided
+  nothing; it now reaches both and asserts it. The two new growth tests had bounds set
+  from a few runs, and over 48 the one-shot test came within 3% of its bound; both bounds
+  are now 24. The labels test missed a hazard in the plural or in brackets, and now also
+  checks each fix and decision number cited against §7. The rest were documents: decision
+  29's exceptions in `Program.initial_env/1`'s doc, §4.9 and §7; `:held` for an output the
+  next program shows, the state's value, which can differ from the point's; the undo of a
+  `.pre` or a resume, which holds only within one edit; the map a scan is given; and the
+  row count above. History is not rewritten, so three earlier messages stay wrong:
+  `3e45ea8`'s "Contract:" paragraph, which `d05d4a2`'s item 5 supersedes (after a test
+  and an assemble at one boundary an edit is accepted against the candidate, not the
+  original); `1e3efc1`'s "29 (E9) {:initial_changed, ...} at every switch"; and
+  `d05d4a2`'s ranges for those growth tests, 16.4x to 16.5x and 16.3x to 16.8x, which 48
+  runs put at 16.4x to 17.9x and 16.2x to 17.5x.
 - **OE-2 · A staged edit of a configuration, after Milestone 2.** The same cycle over the
   whole `%Logex.Configuration{}` and `%Logex.Runtime{}`, switched between two cycles, with
   each M2 item's rule for new state; a task's interval and priority changed while running;
