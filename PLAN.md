@@ -1483,7 +1483,8 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   and an assemble at one boundary an edit is accepted against the candidate, not the
   original); `1e3efc1`'s "29 (E9) {:initial_changed, ...} at every switch"; and
   `d05d4a2`'s ranges for those growth tests, 16.4x to 16.5x and 16.3x to 16.8x, which 48
-  runs put at 16.4x to 17.9x and 16.2x to 17.5x.
+  runs put at 16.4x to 17.9x and 16.2x to 17.5x, and the check of those fixes, 63 more
+  runs of the second, at up to 17.8x.
 - **OE-2 · A staged edit of a configuration, after Milestone 2.** The same cycle over the
   whole `%Logex.Configuration{}` and `%Logex.Runtime{}`, switched between two cycles, with
   each M2 item's rule for new state; a task's interval and priority changed while running;

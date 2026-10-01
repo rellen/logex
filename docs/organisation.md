@@ -1158,13 +1158,14 @@ test and assemble at 500 and 2,000 of each tag, and at 500 and 8,000 levels of n
 The spike needed them: its first plan of held outputs was quadratic, and accept took 2.4
 s at 2,000 rungs until a probe found it. Two more, from the review of OE-1, keep the
 scan right after a switch linear in the one-shots it blocks, and a second edit taken
-before any scan linear in the blocks still pending (fix F2). Each figure moves by up to
-9% from run to run, with garbage collection, so each is the range of 48 runs on 1.20.4
-(the four tests printing their own ratios, after the review of the OE-1 fixes), and a
-mutant's the range of 10: 4x the tags takes 4.3x to 4.6x the reductions (bound 6); 16x
+before any scan linear in the blocks still pending (fix F2). Each figure moves by about
+10% from run to run, with garbage collection, so each is the range of the runs that
+measured it on 1.20.4, not a limit: 48 runs of the four tests printing their own ratios,
+after the review of the OE-1 fixes, and up to 63 more in the check of those fixes; a
+mutant's, 10 to 25 runs: 4x the tags takes 4.3x to 4.6x the reductions (bound 6); 16x
 the depth 14.4x to 14.6x (bound 18.5); 16x the blocked one-shots 16.4x to 17.9x the
 reductions of that scan, where a walk of the block list for every `ons` took 65.4x to
-65.8x; and 16x the pending blocks 16.2x to 17.5x the reductions of the second edit's
+65.8x; and 16x the pending blocks 16.2x to 17.8x the reductions of the second edit's
 steps, where a walk of a list of the one-shots, built once, for every pending bit took
 36.5x to 38.3x. The last two have the bound 24, a third above their highest runs: they
 landed with 18.5 and 32, set from a few runs, and the first of those was only 3% above
@@ -1190,7 +1191,7 @@ F3, the held values of F4) and still costs less than one scan.
   refusal. The Done-when's text is not changed. Its candidate's `ons` moves a setpoint, so
   it drives no new var_output; one that did would rightly be listed as held at untest,
   against the Done-when's "lists no undriven output".
-- `api_contract_test.exs`: an edit walk, 200 walks of 60 operations, that landed with
+- `api_contract_test.exs`: an edit walk, 400 walks of 60 operations, that landed with
   `Logex.Edit` (fix F11). It checks the refusals and that the listed writes rebuild the
   state, makes every accepted step twice, checks each report kind against its rule
   restated from the two programs' text, checks each held value the next program does not
@@ -1574,9 +1575,10 @@ as E1–E9. All twenty-nine are kept with their options so the reasons stay with
     at every switch as `{:initial_changed, name, {old, new}}`, sorted with the rest of the
     report. *Recommended saying nothing.* The maintainer chose to report it. *As built
     (§4.9): not at every switch. A tag a start rule starts, at its new initial value, is
-    reported as `:added`, not as `:initial_changed`; and a var_input of the program
-    started is not reported, since a restart keeps its value, so the new one never
-    applies.*
+    reported as `:added`, or as `:input` where it is a var_input, not as
+    `:initial_changed`; and a var_input of the program started is not reported as
+    `:initial_changed`, since a restart keeps its value, so the new one never applies. It
+    is still reported as `:input` (decision 22).*
 
 **The fixes, accepted with decisions 21–29.** OE-1's spike had two reviews, one for
 correctness and one for fit with §4.9 and the host contract. Their fixes, and one from the
@@ -1584,7 +1586,9 @@ spike's own report (F16), were all accepted. The work cites them as F1–F16:
 - **F1.** Untest restores exactly the `.pre` its test found. Each switch records, per
   timer, the `.pre` it left and the one it found; the next switch first restores the found
   value wherever `.pre` still equals the one left, and otherwise the preset rules apply,
-  so a value logic writes after accept is still respected.
+  so a value logic writes after accept is still respected. *As built (§4.9): the next
+  switch of the same edit. A new edit's record starts empty, so it gives back no `.pre`
+  an earlier edit's switch moved.*
 - **F2.** A pending one-shot block survives a second edit taken before any scan, wherever
   the program started still has an `ons` on the bit, and is reported as `:ons_blocked`.
 - **F3.** Switches with no scan between them lose no real edge: blocks are worked out

@@ -176,7 +176,9 @@ eight others. The same holds inside a property: OE-1's walk restated decision 29
 exceptions and the condition on undoing a resume, but under its seed its generator
 reached none of the cases they decide, so deleting any of them, from the walk or from
 `lib/`, left the walk green. Give each condition of a restated rule a reach atom for the
-case it decides.
+case it decides, and measure the reach under seeds the draw was not tuned on: the walk's
+draw, weighted until its reach held under 25 seeds, still missed an atom at 4 of the
+seeds 1 to 60, all outside those 25, until it took 400 walks instead of 200.
 
 A property that restates a rule cannot catch that rule's defect. OE-1's edit walk checks
 every report entry against its rule, restated from the two programs' text. The
@@ -307,10 +309,11 @@ choice, not an oversight to fix.
   levels, the figure first written here. Read a figure from the committed
   test's own failure message, and quote the fixed compile's and the lowest mutant's, not a
   range for every walk. The test takes the least of three counts, since a busy VM can raise
-  one by a few percent. Even so the figure moves by up to 9% from run to run, so a bound
-  set from a few runs can sit on the figure: the review of the OE-1 fixes found one 3%
-  above the highest of 48 runs. Read a new test's figure over 30 runs or more, in a copy
-  that prints it, quote the range, and set the bound a fifth or more above its top. **A
+  one by a few percent. Even so the figure moves by about 10% from run to run, so a bound
+  set from a few runs can sit on the figure: after the review of the OE-1 fixes, 48 runs
+  put one bound only 3% above the highest of them. Read a new test's figure over 30 runs
+  or more, in a copy that prints it, quote the range, and set the bound a fifth or more
+  above its top. **A
   pass that is not a compile needs a growth test of its own**:
   OE-1's spike planned its held outputs quadratically, and accept took 2.4 s at 2,000
   rungs until a probe timed it. `edit_test.exs`'s "growth (F16)" runs accept and every

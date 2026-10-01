@@ -56,7 +56,8 @@ defmodule Logex.Edit do
   - *initial values* (decision 29): a bool or dint both programs declare whose initial
     value differs keeps its running value, and the new one applies when a restart next
     starts it. It is not reported where a rule above started it, which `:added` reports,
-    nor where it is a var_input of the program started, whose value a restart keeps;
+    or `:input` for a var_input, nor where it is a var_input of the program started,
+    whose value a restart keeps;
   - *one-shots* (decision 21): below;
   - *timers:* below.
 

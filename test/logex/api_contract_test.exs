@@ -767,7 +767,10 @@ defmodule Logex.ApiContractTest do
          "each step gives the report its rules and its writes say" do
     :rand.seed(:exsss, {2026, 10, 1})
 
-    for _ <- 1..200 do
+    # Its rarer cases, a resume undone after a restart or a round trip that resumed a timer,
+    # come up a few times a run, so the reach is measured beyond the seeds the draw was
+    # tuned on: 200 walks missed an atom at 4 of the seeds 1 to 60, and 400 at none.
+    for _ <- 1..400 do
       program = edit_program()
       {:ok, other} = Logex.compile(program.source, name: "q")
 

@@ -1475,9 +1475,9 @@ defmodule Logex.EditTest do
     end
 
     # At 500 and 8,000 one-shots a scan that looks each blocked bit up grows 16.4x to 17.9x
-    # over 48 runs on Elixir 1.20.4; one that walks the block list for every `ons`, as the
-    # scan did before the review of OE-1, grows 65.4x to 65.8x over 10. The figure moves by
-    # up to 9% from run to run, with garbage collection, so the bound is a third above the
+    # over 78 runs on Elixir 1.20.4; one that walks the block list for every `ons`, as the
+    # scan did before the review of OE-1, grows 65.4x to 65.8x over 25. The figure moves by
+    # about 10% from run to run, with garbage collection, so the bound is a third above the
     # highest run, where 18.5, the bound this test landed with, was 3% above it, and still
     # a third of the walk's lowest.
     test "the scan after a switch stays linear in the one-shots it blocks" do
@@ -1525,11 +1525,11 @@ defmodule Logex.EditTest do
     end
 
     # Every switch of a second edit taken before any scan filters the first edit's pending
-    # bits by its plan's one-shots. At 500 and 8,000 bits that grows 16.2x to 17.5x, over
-    # 48 runs on Elixir 1.20.4, its sort being n log n. A filter that walks a list of the
-    # one-shots, built once, for every bit grows 36.5x to 38.3x over 10, the lowest of the
+    # bits by its plan's one-shots. At 500 and 8,000 bits that grows 16.2x to 17.8x, over
+    # 111 runs on Elixir 1.20.4, its sort being n log n. A filter that walks a list of the
+    # one-shots, built once, for every bit grows 36.5x to 38.3x over 25, the lowest of the
     # quadratic filters measured; one that builds that list again for every bit, 108x to
-    # 116x. The bound is a third above the highest run, and the list walk's lowest is half
+    # 121x. The bound is a third above the highest run, and the list walk's lowest is half
     # as much again as the bound. At 500 and 2,000 the two quadratic filters grow 5.1x and
     # 6.8x, too near a linear switch's 4x.
     test "a second edit before any scan stays linear in the bits still pending (F2)" do
@@ -1565,7 +1565,7 @@ defmodule Logex.EditTest do
 
       cited =
         for file <- files,
-            text = File.read!(file),
+            text = joined(File.read!(file)),
             label <- refused(text) ++ undefined(text, decisions, fixes),
             do: {Path.relative_to(file, @root), label}
 
@@ -1575,12 +1575,19 @@ defmodule Logex.EditTest do
     defp numbered(regex, text),
       do: Enum.sort(for [_, n] <- Regex.scan(regex, text), do: String.to_integer(n))
 
-    defp refused(text),
-      do: for([label] <- Regex.scan(~r/\b[Hh]azards? \(?[A-Z]\d?\b|\bR\d+\b/, text), do: label)
+    # A label may wrap onto the next line of a comment or a paragraph, so each line break,
+    # with the indent and comment marker after it, reads as one space.
+    defp joined(text), do: String.replace(text, ~r/\s*\n\s*(?:#+\s*)?/, " ")
 
-    # "decision 21", "decisions 24 and 28", "decisions 21–29", over a line break too.
+    defp refused(text),
+      do: for([label] <- Regex.scan(~r/\b[Hh]azards?\s+\(?[A-Z]\d?\b|\bR\d+\b/, text), do: label)
+
+    # "decision 21", "decisions 24 and 28", "decisions 21, 24, and 28", "decisions 24 or
+    # 28", and a range, "decisions 21–29", "21-29" or "21 to 29". A range is checked at its
+    # two ends, which is enough: §7 numbers its decisions 1 to N with none missing.
     defp undefined(text, decisions, fixes) do
-      list = ~r/\b[Dd]ecisions? (\d+(?:(?:\s*[–,]\s*|\s+and\s+)(?:#\s+)?\d+)*)/u
+      list =
+        ~r/\b[Dd]ecisions?\s+(\d+(?:(?:\s*[–,-]\s*(?:(?:and|or)\s+)?|\s+(?:and|or|to)\s+)\d+)*)/u
 
       for(
         [label, numbers] <- Regex.scan(list, text),
