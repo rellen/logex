@@ -378,27 +378,45 @@ defmodule Logex.EditTest do
       assert %{"pre" => 5000} = state.env["k"]
     end
 
+    test "a timer's map that a plain swap left without all its members does not fit" do
+      # Over a bool, a member write makes a map of that member alone.
+      v0 = c!("var_input go bool\nvar t1 bool\nxic go ote t1")
+      v1 = c!("var_input go bool\nvar t1 ton\nxic go move 40 t1.pre")
+      v2 = c!("var_input go bool\nvar t1 ton\nxic go move 40 t1.pre\nxic go ton t1 300")
+      {_, state} = run(v0, [{0, %{"go" => 1}}])
+      {_, state} = Runtime.scan(v1, state, 10)
+      assert state.env["t1"] == %{"pre" => 40}
+      {:ok, edit, forecast} = Edit.accept(v1, v2, state)
+      {_edit, state, report} = Edit.test(edit, state)
+      assert report == [{:added, "t1", Runtime.instance(v2).env["t1"]}] and report == forecast
+      assert %{"pre" => 300, "acc" => 0, "en" => 0} = state.env["t1"]
+    end
+
     test "a kept timer fits, whatever values logic gave its members" do
       v1 = c!("var_input go bool\nvar_input sp dint\nvar t1 ton\nxio go move sp t1.pre")
       v2 = c!("var_input go bool\nvar_input sp dint\nvar t1 ton\nxic go ton t1 50")
       {_, state} = run(v1, [{0, %{"sp" => -5}}])
       assert state.env["t1"]["pre"] == -5
 
-      assert {_, %Instance{env: %{"t1" => %{"pre" => -5}}}, []} =
+      # Kept, not started again: the ton the candidate adds then gives it its preset.
+      assert {_, %Instance{env: %{"t1" => t1}}, [{:preset, "t1", {-5, 50}}]} =
                Edit.test(accept!(v1, v2, state), state)
+
+      assert t1 == %{state.env["t1"] | "pre" => 50}
     end
 
     test "a value that does not fit is started only at the first test, and only for the " <>
            "candidate's tags" do
-      # The plain swap leaves 7 under `b`, a bool of the original the candidate drops: the
-      # first test leaves it alone, and so does the untest, which starts nothing.
-      v0 = c!("var_input go bool\nvar b dint\nxic go move 7 b")
-      v1 = c!("var_input go bool\nvar b bool\nvar_output y bool\nxic go ote y")
+      # The plain swap leaves 7 under `b`, a bool of the original the candidate drops, and 9
+      # under `k`, a timer of it: the first test leaves both alone, and so does the untest,
+      # which starts nothing, and whose timer rules read no timer that is not a map.
+      v0 = c!("var_input go bool\nvar b dint\nvar k dint\nxic go move 7 b\nxic go move 9 k")
+      v1 = c!("var_input go bool\nvar b bool\nvar k ton\nvar_output y bool\nxic go ote y")
       v2 = c!("var_input go bool\nvar_output y bool\nxic go ote y")
       {_, state} = run(v0, [{0, %{"go" => 1}}])
       {_, state} = Runtime.scan(v1, state, 10)
       {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
-      assert {_, %Instance{env: %{"b" => 7}}, []} = Edit.untest(edit, state)
+      assert {_, %Instance{env: %{"b" => 7, "k" => 9}}, []} = Edit.untest(edit, state)
     end
 
     test "a restart during the test drops what only the original declares, and untest " <>
@@ -700,11 +718,23 @@ defmodule Logex.EditTest do
 
       {_, state} = run(v1, [{0, %{"go" => 1}}])
       {edit, state, report} = Edit.test(accept!(v1, v2, state), state)
-      assert report == [{:initial_changed, "b", {0, 1}}, {:initial_changed, "sp", {1200, 900}}]
+
+      assert report == [
+               {:initial_changed, "b", {0, 1}},
+               {:initial_changed, "sp", {1200, 900}},
+               {:preset, "t1", {50, 80}}
+             ]
+
       assert %{"sp" => 1200, "b" => 0} = state.env
       {edit, back, report} = Edit.untest(edit, state)
-      assert report == [{:initial_changed, "b", {1, 0}}, {:initial_changed, "sp", {900, 1200}}]
-      assert back.env == state.env
+
+      assert report == [
+               {:initial_changed, "b", {1, 0}},
+               {:initial_changed, "sp", {900, 1200}},
+               {:preset, "t1", {80, 50}}
+             ]
+
+      assert back.env == %{state.env | "t1" => %{state.env["t1"] | "pre" => 50}}
       {edit, state, _} = Edit.test(edit, back)
       assert {_, _, []} = Edit.assemble(edit, state)
       assert %{"sp" => 900, "b" => 1} = Runtime.restart(v2, state, :cold).env
@@ -716,6 +746,308 @@ defmodule Logex.EditTest do
       {_, state} = run(v1, [{0, %{"go" => 1}}])
       {_edit, _state, report} = Edit.test(accept!(v1, v2, state), state)
       assert report == [{:added, "sq", 900}, {:held, "sp", 1200}]
+    end
+  end
+
+  describe "a timer's .pre across a switch (decision 23, fix F1)" do
+    @timed "var_input go bool\nvar_input w bool\nvar_input sp dint\nvar t1 ton\n" <>
+             "xic w move sp t1.pre\n"
+
+    test "follows the new preset where it still holds the old one, and untest gives it back" do
+      v1 = c!(@timed <> "xic go ton t1 5000")
+      v2 = c!(@timed <> "xic go ton t1 9000")
+      {_, state} = run(v1, [{0, %{"go" => 1}}])
+      {:ok, edit, forecast} = Edit.accept(v1, v2, state)
+      assert forecast == [{:preset, "t1", {5000, 9000}}]
+      {edit, state, ^forecast} = Edit.test(edit, state)
+      assert state.env["t1"]["pre"] == 9000
+      {_, state} = Runtime.scan(v2, state, 10)
+      {edit, state, [{:preset, "t1", {9000, 5000}}]} = Edit.untest(edit, state)
+      assert state.env["t1"]["pre"] == 5000
+
+      assert {_, %Instance{env: %{"t1" => %{"pre" => 9000}}}, [{:preset, "t1", {5000, 9000}}]} =
+               Edit.test(edit, state)
+    end
+
+    test "is kept where logic changed it, as the test finds it and not as accept did " <>
+           "(hazard E)" do
+      v1 = c!(@timed <> "xic go ton t1 5000")
+      v2 = c!(@timed <> "xic go ton t1 9000")
+      {_, state} = run(v1, [{0, %{"go" => 1}}])
+      {:ok, edit, [{:preset, "t1", {5000, 9000}}]} = Edit.accept(v1, v2, state)
+      {_, state} = drive(v1, state, [{10, %{"w" => 1, "sp" => 7000}}, {10, %{"w" => 0}}])
+      {_edit, state, report} = Edit.test(edit, state)
+      assert report == [{:preset_kept, "t1", {7000, 9000}}]
+      assert state.env["t1"]["pre"] == 7000
+    end
+
+    test "untest gives back exactly the .pre its test found, where the test moved none (R2)" do
+      r =
+        "var_input go bool\nvar_input up bool\nvar_output lamp bool\nvar t1 ton\n" <>
+          "xic up move 8000 t1.pre\n"
+
+      v1 = c!(r <> "xic go ton t1 5000\nxic t1.dn ote lamp")
+      v2 = c!(r <> "xic go ton t1 8000\nxic t1.dn ote lamp")
+      {_, state} = run(v1, [{0, %{"go" => 1, "up" => 1}}, {10, %{"up" => 0}}, {6000, %{}}])
+      assert %{"pre" => 8000, "acc" => 6010, "dn" => 0} = state.env["t1"]
+      # Logic gave .pre the candidate's preset: the test moves nothing, and reports nothing.
+      {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
+      {_edit, state, report} = Edit.untest(edit, state)
+      assert report == [{:preset_kept, "t1", {8000, 5000}}]
+      assert state.env["t1"]["pre"] == 8000
+      # The original's next scan, as if no edit had been taken: the lamp stays off.
+      assert {%{"lamp" => 0}, _} = Runtime.scan(v1, state, 10)
+    end
+
+    test "a .pre logic changed since the last switch is not given back: the preset rules " <>
+           "apply instead" do
+      v1 = c!(@timed <> "xic go ton t1 5000")
+      v2 = c!(@timed <> "xic go ton t1 9000")
+      {_, state} = run(v1, [{0, %{"go" => 1}}])
+      {edit, state, [{:preset, "t1", {5000, 9000}}]} = Edit.test(accept!(v1, v2, state), state)
+      {_, state} = drive(v2, state, [{10, %{"w" => 1, "sp" => 7000}}, {10, %{"w" => 0}}])
+      {edit, state, report} = Edit.untest(edit, state)
+      assert report == [{:preset_kept, "t1", {7000, 5000}}]
+      assert state.env["t1"]["pre"] == 7000
+      # What this untest found, the next test gives back.
+      assert {_, _, [{:preset_kept, "t1", {7000, 9000}}]} = Edit.test(edit, state)
+    end
+
+    test "a timer whose ton the candidate removes keeps its .pre frozen (R9, decision 23)" do
+      e = "var_input go bool\nvar_output early bool\nvar t1 ton\nge t1.acc t1.pre ote early\n"
+      v1 = c!(e <> "xic go ton t1 5000")
+      v2 = c!(e)
+      {%{"early" => 0}, state} = run(v1, [{0, %{"go" => 1}}, {3000, %{}}])
+      assert state.env["t1"]["acc"] == 3000
+      {_edit, state, []} = Edit.test(accept!(v1, v2, state), state)
+      assert state.env["t1"]["pre"] == 5000
+      # At a .pre of 0 the candidate's first scan would turn `early` on.
+      assert {%{"early" => 0}, _} = Runtime.scan(v2, state, 10)
+    end
+
+    test "a ton the switch restores, where logic changed the frozen .pre, takes its preset " <>
+           "outright" do
+      tb = "var_input go bool\nvar_input w bool\nvar_output y bool\nvar t1 ton\n"
+      v1 = c!(tb <> "xic go ton t1 5000\nxic t1.dn ote y")
+      v2 = c!(tb <> "xic w move 3000 t1.pre\nxic t1.dn ote y")
+      {_, state} = run(v1, [{0, %{"go" => 1}}, {100, %{}}])
+      {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
+      {_, state} = drive(v2, state, [{10, %{"w" => 1}}])
+      assert state.env["t1"]["pre"] == 3000
+      {_edit, untested, report} = Edit.untest(edit, state)
+      assert report == [{:preset, "t1", {3000, 5000}}, {:resumed, "t1", 10}]
+      assert untested == %{state | env: rebuilt(state.env, report), switched: true}
+      assert %{"pre" => 5000, "last" => 110} = untested.env["t1"]
+    end
+
+    test "a ton removed, assembled and restored at a new preset takes it outright, as a " <>
+           "restart would (decision 23)" do
+      tb = "var_input go bool\nvar_output y bool\nvar t1 ton\nxic t1.dn ote y\n"
+      v1 = c!(tb <> "xic go ton t1 5000")
+      v2 = c!(tb)
+      v3 = c!(tb <> "xic go ton t1 8000")
+      {_, state} = run(v1, [{0, %{"go" => 1}}, {100, %{}}])
+      {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
+      {^v2, state, []} = Edit.assemble(edit, state)
+      {_, state} = Runtime.scan(v2, state, 10)
+      assert state.env["t1"]["pre"] == 5000
+      {_edit, state, report} = Edit.test(accept!(v2, v3, state), state)
+      assert report == [{:preset, "t1", {5000, 8000}}, {:resumed, "t1", 10}]
+      assert state.env["t1"]["pre"] == Runtime.restart(v3, state, :cold).env["t1"]["pre"]
+    end
+
+    test "a ton the candidate adds on a timer no ton ran takes its preset outright, and " <>
+           "untest gives back the .pre it found, with no forecast of .dn" do
+      v1 = c!("var_input go bool\nvar_output y bool\nvar t1 ton\nxic t1.dn ote y")
+
+      v2 =
+        c!("var_input go bool\nvar_output y bool\nvar t1 ton\nxic go ton t1 300\nxic t1.dn ote y")
+
+      {_, state} = run(v1, [{0, %{"go" => 1}}])
+      {edit, state, [{:preset, "t1", {0, 300}}]} = Edit.test(accept!(v1, v2, state), state)
+      {%{"y" => 0}, state} = Runtime.scan(v2, state, 10)
+      assert %{"en" => 1, "dn" => 0, "acc" => 0} = state.env["t1"]
+      # Back at 0, with .acc at it: .dn would rise, if a ton of the original counted it.
+      {_edit, state, report} = Edit.untest(edit, state)
+      assert report == [{:preset, "t1", {300, 0}}]
+      assert state.env["t1"]["pre"] == 0
+    end
+
+    test "a later test gives a timer the original runs no ton on the .pre it had under the " <>
+           "candidate (F1)" do
+      timed = "var_output y bool\n" <> @timed
+      v1 = c!(timed <> "xic t1.dn ote y")
+      v2 = c!(timed <> "xic go ton t1 9000\nxic t1.dn ote y")
+      {_, state} = run(v1, [{0, %{"go" => 1}}])
+      {edit, state, [{:preset, "t1", {0, 9000}}]} = Edit.test(accept!(v1, v2, state), state)
+      {_, state} = drive(v2, state, [{10, %{"w" => 1, "sp" => 7000}}, {10, %{"w" => 0}}])
+      # Frozen under the original, which runs no ton on it.
+      {edit, state, []} = Edit.untest(edit, state)
+      assert state.env["t1"]["pre"] == 7000
+      assert {_, state, [{:preset_kept, "t1", {7000, 9000}}]} = Edit.test(edit, state)
+      assert state.env["t1"]["pre"] == 7000
+    end
+
+    test "untest gives back the .pre of a timer the candidate drops, though logic changed it" do
+      d = "var_input go bool\nvar_input w bool\nvar_output y bool\n"
+      v1 = c!(d <> "var t1 ton\nxic w move 7000 t1.pre\nxic go ton t1 5000\nxic go ote y")
+      v2 = c!(d <> "xic go ote y")
+      {_, state} = run(v1, [{0, %{"go" => 1, "w" => 1}}, {10, %{"w" => 0}}])
+      assert state.env["t1"]["pre"] == 7000
+      {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
+      {_, state} = Runtime.scan(v2, state, 10)
+      {_edit, state, report} = Edit.untest(edit, state)
+      assert report == [{:preset_kept, "t1", {7000, 5000}}, {:resumed, "t1", 10}]
+      assert state.env["t1"]["pre"] == 7000
+    end
+
+    test "a timer the candidate removes is kept, unused, through the test, and the original " <>
+           "finds it as it was (hazard D)" do
+      v1 =
+        c!(
+          "var_input go bool\nvar_output lamp bool\nvar t1 ton\n" <>
+            "xic go ton t1 5000\nxic t1.dn ote lamp"
+        )
+
+      v2 = c!("var_input go bool\nvar_output lamp bool\nxic go ote lamp")
+      {_, state} = run(v1, [{0, %{"go" => 1}}, {10, %{}}])
+      {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
+      {_, state} = Runtime.scan(v2, state, 10)
+      assert %{"pre" => 5000, "acc" => 10, "en" => 1} = state.env["t1"]
+      {_edit, state, [{:resumed, "t1", 10}]} = Edit.untest(edit, state)
+      {%{"lamp" => 0}, state} = Runtime.scan(v1, state, 10)
+      assert %{"pre" => 5000, "acc" => 20, "dn" => 0} = state.env["t1"]
+    end
+  end
+
+  describe "a timer's .dn after its .pre moves (hazard C, fix F6)" do
+    defp lamp(preset),
+      do:
+        c!(
+          "var_input go bool\nvar_input sp dint\nvar_output lamp bool\nvar t1 ton\n" <>
+            "xic go ton t1 #{preset}\nxic t1.dn ote lamp"
+        )
+
+    test "a preset raised over a done timer's .acc drops .dn at the next scan with its rung " <>
+           "true, and the report says so" do
+      {%{"lamp" => 1}, state} = run(lamp(1000), [{0, %{"go" => 1}}, {1500, %{}}])
+      assert %{"acc" => 1000, "dn" => 1} = state.env["t1"]
+      {:ok, edit, forecast} = Edit.accept(lamp(1000), lamp(5000), state)
+      assert forecast == [{:dn_drops, "t1", {1000, 5000}}, {:preset, "t1", {1000, 5000}}]
+      {edit, tested, ^forecast} = Edit.test(edit, state)
+      assert {%{"lamp" => 0}, scanned} = Runtime.scan(lamp(5000), tested, 10)
+      assert %{"acc" => 1010, "dn" => 0} = scanned.env["t1"]
+      # Given back with no scan between, at its .acc: still done, so no news of .dn.
+      assert {_, _, [{:preset, "t1", {5000, 1000}}]} = Edit.untest(edit, tested)
+    end
+
+    test "unless .pre - .acc ms have passed by that scan" do
+      {_, state} = run(lamp(1000), [{0, %{"go" => 1}}, {1500, %{}}])
+
+      {_edit, state, [{:dn_drops, "t1", {1000, 1005}}, {:preset, "t1", {1000, 1005}}]} =
+        Edit.test(accept!(lamp(1000), lamp(1005), state), state)
+
+      assert {%{"lamp" => 0}, _} = Runtime.scan(lamp(1005), state, 4)
+      assert {%{"lamp" => 1}, _} = Runtime.scan(lamp(1005), state, 5)
+    end
+
+    test "a preset lowered under a timing timer's .acc raises .dn at that scan; lowered on " <>
+           "a done timer, .dn stays" do
+      {_, timing} = run(lamp(5000), [{0, %{"go" => 1}}, {2000, %{}}])
+      {_edit, state, report} = Edit.test(accept!(lamp(5000), lamp(1000), timing), timing)
+      assert report == [{:dn_rises, "t1", {2000, 1000}}, {:preset, "t1", {5000, 1000}}]
+      assert {%{"lamp" => 1}, state} = Runtime.scan(lamp(1000), state, 0)
+      assert %{"dn" => 1, "acc" => 1000} = state.env["t1"]
+
+      {_, done} = run(lamp(5000), [{0, %{"go" => 1}}, {6000, %{}}])
+
+      assert {_, _, [{:preset, "t1", {5000, 1000}}]} =
+               Edit.test(accept!(lamp(5000), lamp(1000), done), done)
+    end
+
+    test "is not forecast for an idle timer, which starts timing against whatever .pre it has" do
+      {_, idle} = run(lamp(5000), [{0, %{"go" => 0}}])
+      assert %{"en" => 0, "dn" => 0, "acc" => 0} = idle.env["t1"]
+
+      assert {_, _, [{:preset, "t1", {5000, 0}}]} =
+               Edit.test(accept!(lamp(5000), lamp(0), idle), idle)
+    end
+
+    test "counts a negative .acc as 0, as ton does" do
+      neg = fn preset ->
+        c!(
+          "var_input go bool\nvar_input sp dint\nvar t1 ton\n" <>
+            "xic go ton t1 #{preset}\nxic go move sp t1.acc"
+        )
+      end
+
+      {_, state} = run(neg.(5000), [{0, %{"go" => 1, "sp" => -5}}, {10, %{}}])
+      assert %{"acc" => -5, "dn" => 0, "en" => 1} = state.env["t1"]
+      {_edit, state, report} = Edit.test(accept!(neg.(5000), neg.(0), state), state)
+      assert report == [{:dn_rises, "t1", {0, 0}}, {:preset, "t1", {5000, 0}}]
+      {_, state} = Runtime.scan(neg.(0), state, 10)
+      assert state.env["t1"]["dn"] == 1
+    end
+  end
+
+  describe "a timer the switch gives back its ton resumes from the switch (hazard B)" do
+    @back "var_input go bool\nvar_output lamp bool\nvar t1 ton\n"
+
+    test "so the time no ton ran it is not caught up" do
+      b1 = c!(@back <> "xic go ton t1 5000\nxic t1.dn ote lamp")
+      b2 = c!(@back <> "xic t1.dn ote lamp")
+      {_, state} = run(b1, [{0, %{"go" => 1}}, {990, %{}}])
+      assert %{"acc" => 990, "en" => 1} = state.env["t1"]
+      {edit, state, []} = Edit.test(accept!(b1, b2, state), state)
+      {_, state} = drive(b2, state, List.duplicate({1000, %{}}, 58))
+      {_edit, state, report} = Edit.untest(edit, state)
+      assert report == [{:resumed, "t1", 58_000}]
+      assert state.env["t1"]["last"] == state.now
+      {%{"lamp" => 0}, state} = Runtime.scan(b1, state, 10)
+      assert %{"acc" => 1000, "dn" => 0} = state.env["t1"]
+    end
+
+    test "and so does one the candidate added, frozen while the original ran" do
+      v1 = c!("var_input go bool\nvar_output y bool\nxic go ote y")
+      v2 = c!("var_input go bool\nvar_output y bool\nvar t2 ton\nxic go ote y\nxic go ton t2 900")
+      {_, state} = run(v1, [{0, %{"go" => 1}}])
+      {edit, state, _} = Edit.test(accept!(v1, v2, state), state)
+      {_, state} = drive(v2, state, List.duplicate({10, %{}}, 3))
+      {edit, state, []} = Edit.untest(edit, state)
+      {_, state} = drive(v1, state, List.duplicate({10, %{}}, 50))
+      {_edit, state, report} = Edit.test(edit, state)
+      assert report == [{:resumed, "t2", 500}]
+      {_, state} = Runtime.scan(v2, state, 10)
+      assert state.env["t2"]["acc"] == 30
+    end
+
+    test "but not one that was not timing when it last ran" do
+      b1 = c!(@back <> "xic go ton t1 5000\nxic t1.dn ote lamp")
+      b2 = c!(@back <> "xic t1.dn ote lamp")
+      {_, state} = run(b1, [{0, %{"go" => 0}}, {10, %{}}])
+      {edit, state, []} = Edit.test(accept!(b1, b2, state), state)
+      {_, state} = drive(b2, state, List.duplicate({10, %{}}, 5))
+      assert {_, _, []} = Edit.untest(edit, state)
+    end
+
+    test "nor one a ton ran at the last scan: a switch with no scan since resumes nothing" do
+      b1 = c!(@back <> "xic go ton t1 5000\nxic t1.dn ote lamp")
+      b2 = c!(@back <> "xic t1.dn ote lamp")
+      {_, state} = run(b1, [{0, %{"go" => 1}}, {10, %{}}])
+      {edit, state, []} = Edit.test(accept!(b1, b2, state), state)
+      assert {_, _, []} = Edit.untest(edit, state)
+    end
+
+    test "nor one the program started runs no ton on" do
+      b1 = c!(@back <> "xic go ton t1 5000\nxic t1.dn ote lamp")
+      b2 = c!(@back <> "xic t1.dn ote lamp")
+      b3 = c!(@back <> "var_output z bool\nxic t1.dn ote lamp\nxic go ote z")
+      {_, state} = run(b1, [{0, %{"go" => 1}}, {10, %{}}])
+      {edit, state, []} = Edit.test(accept!(b1, b2, state), state)
+      {^b2, state, []} = Edit.assemble(edit, state)
+      {_, state} = Runtime.scan(b2, state, 10)
+      assert %{"en" => 1, "last" => 10} = state.env["t1"]
+      assert {_, _, [{:added, "z", 0}]} = Edit.test(accept!(b2, b3, state), state)
     end
   end
 
@@ -760,6 +1092,8 @@ defmodule Logex.EditTest do
     do:
       Enum.reduce(report, env, fn
         {kind, name, value}, env when kind in [:added, :input] -> Map.put(env, name, value)
+        {:preset, name, {_from, to}}, env -> put_in(env, [name, "pre"], to)
+        {:resumed, name, gap}, env -> update_in(env, [name, "last"], &(&1 + gap))
         {:pruned, name, _value}, env -> Map.delete(env, name)
         _fact, env -> env
       end)
@@ -810,7 +1144,8 @@ defmodule Logex.EditTest do
     end
 
     # At 500 and 2,000 of each tag a linear edit grows about 4x; one that walks a list for
-    # every tag grows about 16x.
+    # every tag grows about 16x. Every timer's preset changes, so each switch moves every
+    # `.pre`, and the untest and second test give each back from the record.
     test "accept and its steps stay linear in the program's size" do
       ratio = reductions_to_edit(edited(2000)) / reductions_to_edit(edited(500))
       assert ratio < 6, "4x the tags took #{Float.round(ratio, 1)}x the reductions"

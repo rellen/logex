@@ -26,6 +26,15 @@ defmodule Logex.ApiContractTest do
   checked against the host's own image of its outputs, the latest value each scan gave
   it, independently of the edit. Its reach covers every report kind, every refusal and
   every oracle.
+
+  Its timers (decision 23, fixes F1 and F6): each switch's `.pre`, `.dn` forecasts and
+  resumes are checked against the rules restated from the text, with the walk's own
+  record of what the last switch left and found. Three oracles do not restate them: no
+  scan but a plain swap's lets a timer gain more than the scan's own time, as one caught
+  up after a switch would (hazard B); the scan right after a switch does to `.dn` what the
+  switch forecast; and a test then an untest with no scan between leaves the original's
+  tags as they were, but for what either switch listed as started and the test as
+  resumed, and its next scan's outputs with them (R2).
   """
   use ExUnit.Case, async: true
 
@@ -543,7 +552,21 @@ defmodule Logex.ApiContractTest do
     "cancel takes"
   ]
 
-  @report_kinds [:added, :held, :initial_changed, :input, :pruned, :unread]
+  @report_kinds [
+    :added,
+    :dn_drops,
+    :dn_rises,
+    :held,
+    :initial_changed,
+    :input,
+    :preset,
+    :preset_kept,
+    :pruned,
+    :resumed,
+    :unread
+  ]
+
+  @timer_kinds [:dn_drops, :dn_rises, :preset, :preset_kept, :resumed]
 
   # What the walk must see happen, and its oracles check, at least once each.
   @edit_reach [
@@ -558,7 +581,15 @@ defmodule Logex.ApiContractTest do
     :held_shown,
     :assembled,
     :cancelled_accepted,
-    :cancelled_untested
+    :cancelled_untested,
+    :pre_followed,
+    :pre_outright,
+    :pre_frozen,
+    :pre_restored,
+    :resumed_scan,
+    :dn_scan,
+    :round_trip,
+    :round_trip_timer
   ]
 
   @allowed %{
@@ -601,7 +632,8 @@ defmodule Logex.ApiContractTest do
         Enum.filter(["xic #{pick(readable)} move #{pick(["5", "7"] ++ sp_word(sp))} n"], fn _ ->
           :rand.uniform(2) == 1
         end) ++
-        moves_into("r", r) ++ ons_rung(ons?, readable) ++ timer_rung(t1)
+        moves_into("r", r) ++
+        ons_rung(ons?, readable) ++ preset_rung(t1, readable, sp) ++ timer_rung(t1)
 
     Enum.join(declarations ++ rungs, "\n")
   end
@@ -623,6 +655,16 @@ defmodule Logex.ApiContractTest do
     do: Enum.take(["xic go ton t1 #{pick([30, 5000])}"], :rand.uniform(3) - 1)
 
   defp timer_rung(_t1), do: []
+
+  # Logic that changes the timer's `.pre`, so a switch finds one that is not a preset.
+  defp preset_rung(:ton, readable, sp),
+    do:
+      Enum.take(
+        ["xic #{pick(readable)} move #{pick(["40", "7"] ++ sp_word(sp))} t1.pre"],
+        :rand.uniform(2) - 1
+      )
+
+  defp preset_rung(_t1, _readable, _sp), do: []
 
   defp ons_tags(true), do: ["var_output s1 bool", "var_output p bool"]
   defp ons_tags(false), do: []
@@ -647,11 +689,19 @@ defmodule Logex.ApiContractTest do
     {declarations, rungs} = Enum.split_with(String.split(source, "\n"), &(&1 =~ ~r/^var/))
     n = "var_output n dint #{pick(["", "7", "9"])}"
     declarations = Enum.map(declarations, &String.replace(&1, ~r/^var_output n dint.*/, n))
+    ton = "ton t1 #{pick([0, 30, 5000])}"
+    rungs = Enum.map(drop_one(rungs), &String.replace(&1, ~r/ton t1 \d+/, ton))
 
-    case Logex.compile(Enum.join(declarations ++ drop_one(rungs), "\n"), name: "p") do
+    case Logex.compile(Enum.join(declarations ++ rungs, "\n"), name: "p") do
       {:ok, program} -> program
       {:error, _} -> edit_program()
     end
+  end
+
+  defp without_ton(%Program{source: source}) do
+    lines = Enum.reject(String.split(source, "\n"), &(&1 =~ ~r/ ton t1 /))
+    {:ok, program} = Logex.compile(Enum.join(lines, "\n"), name: "p")
+    program
   end
 
   defp drop_one([]), do: []
@@ -666,7 +716,19 @@ defmodule Logex.ApiContractTest do
     for _ <- 1..150 do
       program = edit_program()
       {:ok, other} = Logex.compile(program.source, name: "q")
-      walk = %{p: program, s: Runtime.instance(program), e: nil, o: nil, c: nil, points: %{}}
+
+      walk = %{
+        p: program,
+        s: Runtime.instance(program),
+        e: nil,
+        o: nil,
+        c: nil,
+        points: %{},
+        pre: %{},
+        timed: [],
+        round: nil
+      }
+
       edit_walk(Map.put(walk, :other, Runtime.instance(other)), 60)
     end
 
@@ -678,34 +740,21 @@ defmodule Logex.ApiContractTest do
   defp edit_walk(w, 0), do: w
   defp edit_walk(w, n), do: edit_walk(edit_op(:rand.uniform(12), w), n - 1)
 
-  # A scan of the program the host runs, with inputs that fit: the host's image of its
-  # outputs takes what the scan gives.
-  defp edit_op(op, %{p: p} = w) when op <= 4 do
-    inputs =
-      for {name, %Tag{section: :var_input, type: type}} <- p.tags,
-          :rand.uniform(2) == 1,
-          into: %{},
-          do: {name, pick(@edges[type] |> Enum.take(3))}
+  defp edit_op(op, w) when op <= 4, do: edit_scan(w, :running)
 
-    elapsed = pick([0, 10, 25, 5000])
-    {:ok, s} = edit_attempt(fn -> Runtime.put_inputs(p, w.s, inputs) end)
-    {:ok, {outputs, s}} = edit_attempt(fn -> Runtime.scan(p, s, elapsed) end)
-    assert Enum.sort(Map.keys(outputs)) == outputs_of(p)
-    assert s.switched == false
-    %{w | s: s, points: Map.merge(w.points, outputs)}
-  end
-
-  # Half the candidates are the running program with one rung dropped and `n`'s initial
-  # value redrawn, so the two keep their types and a value a plain swap left is reached.
+  # Two candidates in three are the running program with one rung dropped, and `n`'s
+  # initial value and the timer's preset redrawn, so the two keep their types, a value a
+  # plain swap left is reached, and the timer's `ton` changes its preset; or with its `ton`
+  # dropped, so the `ton` goes and comes back while the timer is timing.
   defp edit_op(op, %{e: nil, p: p} = w) when op in [5, 6],
-    do: accept(pick([edit_program(), variant(p)]), w)
+    do: accept(pick([edit_program(), variant(p), without_ton(p)]), w)
 
   defp edit_op(op, w) when op in 5..9, do: step(pick([:test, :untest, :assemble, :cancel]), w)
 
   defp edit_op(10, %{p: p, s: s} = w) do
     {:ok, s} = edit_attempt(fn -> Runtime.restart(p, s, :cold) end)
     edit_reach(:restart_in_edit, w.e != nil)
-    %{w | s: s}
+    %{w | s: s, timed: [], round: nil}
   end
 
   # A plain swap, within the runtime's contract while no edit is open: a scan of another
@@ -715,12 +764,15 @@ defmodule Logex.ApiContractTest do
   # still holds.
   defp edit_op(11, %{e: nil, p: old} = w) do
     edit_reach(:plain_swap, true)
-    swapped = edit_op(1, %{w | p: edit_program()})
+    swapped = edit_scan(%{w | p: edit_program()}, :plain_swap)
     candidate = pick([variant(swapped.p), old])
     pick([&edit_op(1, &1), &accept(candidate, &1), &step(:test, accept(candidate, &1))]).(swapped)
   end
 
-  defp edit_op(11, w), do: edit_op(1, w)
+  # With an edit open, a trial run: a test, a scan of the candidate, an untest and a scan
+  # of the original, each step refused where the stage does not allow it. A timer whose
+  # `ton` the candidate drops is then given it back while it was timing.
+  defp edit_op(11, w), do: edit_op(1, step(:untest, edit_op(1, step(:test, w))))
 
   # A host mistake: a renamed candidate, another program's state, a bad state, something
   # that is not a program or an edit, or an edit given another program's state.
@@ -754,6 +806,25 @@ defmodule Logex.ApiContractTest do
   defp open_mistakes(%{e: edit} = w, step, bad),
     do: [fn -> Edit.test(edit, w.other) end, fn -> apply(Edit, step, [edit, bad]) end]
 
+  # A scan of the program the host runs, with inputs that fit: the host's image of its
+  # outputs takes what the scan gives. A plain swap's scan catches a frozen timer up, as
+  # it always has, so only another is held to the bound on what a timer gains.
+  defp edit_scan(%{p: p} = w, scan) do
+    inputs =
+      for {name, %Tag{section: :var_input, type: type}} <- p.tags,
+          :rand.uniform(2) == 1,
+          into: %{},
+          do: {name, pick(@edges[type] |> Enum.take(2))}
+
+    elapsed = pick([0, 10, 25, 5000])
+    {:ok, s} = edit_attempt(fn -> Runtime.put_inputs(p, w.s, inputs) end)
+    {:ok, {outputs, later}} = edit_attempt(fn -> Runtime.scan(p, s, elapsed) end)
+    assert Enum.sort(Map.keys(outputs)) == outputs_of(p)
+    assert later.switched == false
+    timed!(scan, p, s, later, w.timed)
+    %{w | s: later, points: Map.merge(w.points, outputs), timed: [], round: nil}
+  end
+
   defp accept(candidate, %{p: p, s: s} = w),
     do: edit_accepted(edit_attempt(fn -> Edit.accept(p, candidate, s) end), candidate, w)
 
@@ -762,7 +833,7 @@ defmodule Logex.ApiContractTest do
     assert {_, _, ^forecast} = Edit.test(edit, s)
     assert Edit.stage(edit) == :accepted and Edit.running(edit) == p
     edit_reach(:forecast, true)
-    %{w | e: edit, o: p, c: candidate}
+    %{w | e: edit, o: p, c: candidate, pre: %{}}
   end
 
   defp edit_accepted({:ok, {:error, diagnostics}}, candidate, %{p: p} = w) do
@@ -803,14 +874,20 @@ defmodule Logex.ApiContractTest do
     to = Edit.running(next)
     switched!(w.p, to, before, later, report, {name, stage})
     held!(w.p, to, report, later, w.points)
+    pre = timers!(w.p, to, before, later, report, w.pre)
     edit_reach(:second_test, name == :test and stage == :untested)
-    %{w | e: next, s: later, p: to}
+    round = round_trip!(name, w.round, to, before, later, report)
+
+    timed =
+      for {kind, _, _} = entry <- report, kind in [:dn_drops, :dn_rises, :resumed], do: entry
+
+    %{w | e: next, s: later, p: to, pre: pre, timed: timed, round: round}
   end
 
   defp stepped(:cancel, :accepted, true, {:ok, {program, later, report}}, %{s: before} = w) do
     assert {program, later, report} == {w.o, before, []}
     edit_reach(:cancelled_accepted, true)
-    %{w | e: nil, p: program}
+    %{w | e: nil, p: program, round: nil}
   end
 
   defp stepped(name, _stage, true, {:ok, {kept, later, report}}, %{s: before} = w) do
@@ -827,7 +904,7 @@ defmodule Logex.ApiContractTest do
 
     held!(dropped, kept, report, before, w.points)
     edit_reach(pruned(name), true)
-    %{w | e: nil, s: later, p: kept}
+    %{w | e: nil, s: later, p: kept, round: nil}
   end
 
   defp dropped(:assemble, w), do: w.o
@@ -853,6 +930,8 @@ defmodule Logex.ApiContractTest do
   defp write({kind, name, value}, env) when kind in [:added, :input],
     do: Map.put(env, name, value)
 
+  defp write({:preset, name, {_from, to}}, env), do: put_in(env, [name, "pre"], to)
+  defp write({:resumed, name, gap}, env), do: update_in(env, [name, "last"], &(&1 + gap))
   defp write({:pruned, name, _value}, env), do: Map.delete(env, name)
   defp write(_fact, env), do: env
 
@@ -953,6 +1032,158 @@ defmodule Logex.ApiContractTest do
         ~r/(^|\s)((ote|otl|otu|ons) #{tag}|move \S+ #{tag})(\s|$)/m,
         program.source
       )
+
+  # Decision 23 and fixes F1 and F6, restated from the two programs' text: each timer
+  # either program declares, as the start rules left it, takes the `.pre` the walk's own
+  # record of the last switch, or the presets, say; is reported so; and resumes where it
+  # was timing and not run since. Returns the record for the next switch: for each timer,
+  # the `.pre` this switch left and the one it found.
+  defp timers!(from, to, before, later, report, record) do
+    started = rebuilt(before.env, for({k, _, _} = e <- report, k in [:added, :input], do: e))
+    timers = Enum.uniq(timers_of(from) ++ timers_of(to))
+
+    {expected, record} =
+      Enum.reduce(timers, {[], %{}}, fn tag, {expected, next} ->
+        timer!(started[tag], {tag, ton_of(from, tag), ton_of(to, tag)}, later, record[tag], {
+          expected,
+          next
+        })
+      end)
+
+    assert for({kind, _, _} = entry <- report, kind in @timer_kinds, do: entry) ==
+             Enum.sort(expected)
+
+    record
+  end
+
+  # A timer's map may lack members: a plain swap that writes `t1.pre` where the program
+  # swapped out held a bool leaves `%{"pre" => 40}`, which no `ton` has run since.
+  defp timer!(%{"pre" => pre} = was, {tag, from, to}, later, undo, {expected, next}) do
+    {how, target} = pre_target(undo, pre, from, to)
+    now = later.now
+    resumed? = to != nil and was["en"] == 1 and was["last"] < now
+    moved = Map.put(was, "pre", target)
+    assert later.env[tag] == if(resumed?, do: Map.put(moved, "last", now), else: moved)
+
+    entries =
+      preset_entries(tag, pre, target, to, was) ++
+        if(resumed?, do: [{:resumed, tag, now - was["last"]}], else: [])
+
+    edit_reach(how, target != pre or how == :pre_frozen)
+    {entries ++ expected, Map.put(next, tag, {target, pre})}
+  end
+
+  defp timer!(_not_a_timer, _timer, _later, _undo, acc), do: acc
+
+  defp pre_target({pre, found}, pre, _from, _to), do: {:pre_restored, found}
+  defp pre_target(_undo, pre, from, nil) when from != nil and pre != 0, do: {:pre_frozen, pre}
+  defp pre_target(_undo, pre, _from, nil), do: {:frozen_unseen, pre}
+  defp pre_target(_undo, _pre, nil, to), do: {:pre_outright, to}
+  defp pre_target(_undo, from, from, to), do: {:pre_followed, to}
+  defp pre_target(_undo, pre, _from, _to), do: {:kept, pre}
+
+  defp preset_entries(_tag, pre, pre, to, _was) when to in [nil, pre], do: []
+  defp preset_entries(tag, pre, pre, to, _was), do: [{:preset_kept, tag, {pre, to}}]
+
+  defp preset_entries(tag, pre, target, nil, _was), do: [{:preset, tag, {pre, target}}]
+
+  defp preset_entries(tag, pre, target, _to, was),
+    do: [{:preset, tag, {pre, target}} | dn_forecast(tag, was, target)]
+
+  defp dn_forecast(tag, %{"dn" => 1, "acc" => acc}, pre) when max(acc, 0) < pre,
+    do: [{:dn_drops, tag, {max(acc, 0), pre}}]
+
+  defp dn_forecast(tag, %{"dn" => 0, "en" => 1, "acc" => acc}, pre) when max(acc, 0) >= pre,
+    do: [{:dn_rises, tag, {max(acc, 0), pre}}]
+
+  defp dn_forecast(_tag, _was, _pre), do: []
+
+  # The timers a program declares, and the preset of the `ton` that runs one, from its text.
+  defp timers_of(program),
+    do: for([_, tag] <- Regex.scan(~r/^var (\S+) ton$/m, program.source), do: tag)
+
+  defp ton_of(program, tag) do
+    case Regex.run(~r/(^|\s)ton #{tag} (\d+)/, program.source) do
+      [_, _, preset] -> String.to_integer(preset)
+      nil -> nil
+    end
+  end
+
+  # Independent of the rules, a scan's timers against `ton` itself. Hazard B: no scan lets
+  # a timer its program runs gain more than the scan's own time, as one caught up after a
+  # switch would; reached where the last switch resumed the timer, and catching up would
+  # have broken the bound. F6: the scan right after a switch, with the timer's rung true and
+  # its `.pre` as the switch left it, drops `.dn` where the switch said it would, unless
+  # `.pre` - `.acc` ms passed, and raises it where the switch said it would (forecast!/5).
+  defp timed!(:plain_swap, _program, _before, _later, _timed), do: :ok
+
+  defp timed!(:running, program, before, later, timed) do
+    dt = later.now - before.now
+
+    for tag <- timers_of(program), ton_of(program, tag) != nil do
+      was = acc_of(before.env[tag])
+      timer = later.env[tag]
+      assert timer["acc"] <= was + dt
+
+      edit_reach(
+        :resumed_scan,
+        tag in names(timed, :resumed) and timer["en"] == 1 and was + dt < max(timer["pre"], 0)
+      )
+
+      for {kind, ^tag, {acc, pre}} <- timed, kind in [:dn_drops, :dn_rises] do
+        forecast!(kind, {acc, pre}, before.env[tag], timer, dt)
+      end
+    end
+  end
+
+  # A forecast speaks of the timer as the switch left it, a drop of a `.dn` at 1 and a rise
+  # of one at 0, and is borne out by the next scan wherever the rung is true and `.pre` as
+  # it was.
+  defp forecast!(kind, {acc, pre}, was, timer, dt) do
+    assert {was["dn"], acc, pre} == {dn_before(kind), acc_of(was), was["pre"]}
+
+    if timer["en"] == 1 and timer["pre"] == pre and (kind == :dn_rises or dt < pre - acc) do
+      assert timer["dn"] == 1 - dn_before(kind)
+      edit_reach(:dn_scan, true)
+    end
+  end
+
+  defp dn_before(:dn_drops), do: 1
+  defp dn_before(:dn_rises), do: 0
+
+  defp acc_of(%{"acc" => acc}), do: max(acc, 0)
+  defp acc_of(_not_a_timer), do: 0
+
+  # R2, independent of the rules: a test then an untest with no scan between leaves the
+  # original's tags as they were, and so its next scan's outputs, but for the writes either
+  # switch listed that no untest undoes: a tag started, which the state lacked or held a
+  # value of the wrong type for, and a timer the test resumed. A test starts the round; an
+  # untest that follows it at once ends it; a scan, a restart, accept, assemble and cancel
+  # clear it, through the walk.
+  defp round_trip!(:test, _round, _to, before, _later, report), do: {before, report}
+
+  defp round_trip!(:untest, nil, _to, _before, _later, _report), do: nil
+
+  defp round_trip!(:untest, {was, tested}, original, _before, later, report) do
+    kept =
+      for {kind, _, _} = entry <- tested ++ report,
+          kind in [:added, :input] or (kind == :resumed and entry in tested),
+          do: entry
+
+    expected = %{was | env: rebuilt(was.env, kept)}
+    tags = Map.keys(original.tags)
+    assert Map.take(later.env, tags) == Map.take(expected.env, tags)
+    {outputs, _} = Runtime.scan(original, expected, 10)
+    assert {^outputs, _} = Runtime.scan(original, later, 10)
+    edit_reach(:round_trip, true)
+
+    edit_reach(
+      :round_trip_timer,
+      Enum.any?(tested ++ report, &(elem(&1, 0) in [:preset, :preset_kept]))
+    )
+
+    nil
+  end
 
   defp names(report, kind), do: for({^kind, name, _} <- report, do: name)
 

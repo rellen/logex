@@ -55,9 +55,35 @@ defmodule Logex.Edit do
   - *held outputs* (decision 20): below;
   - *initial values* (decision 29): a bool or dint both programs declare whose initial
     value differs keeps its running value, and the new one applies when a restart next
-    starts it.
+    starts it;
+  - *timers:* below.
 
-  A timer is state like any other here: a kept timer keeps every member, `.pre` included.
+  **Timers** (decision 23, fixes F1 and F6). A timer a rule above starts is at its initial
+  value; one kept keeps every member but `.pre` and `last`, which move by these rules, in
+  order:
+  - *`.pre`, undone first:* each switch records, for each timer either program declares,
+    the `.pre` it left and the one it found. The next switch first gives back the one found
+    wherever `.pre` still equals the one left, so an untest gives back exactly the `.pre`
+    its test found. Where logic has changed it since, the two rules below apply instead;
+  - *`.pre`, a `ton` in both:* where both programs run a `ton` on the timer, a `.pre`
+    still at the preset of the program stopped moves to that of the program started, and
+    one that logic changed is kept;
+  - *`.pre`, a `ton` stopped or restored:* a timer the program started runs no `ton` on
+    keeps its `.pre` frozen, and one it runs that the program stopped did not takes its
+    preset outright, so a `ton` removed and restored at a new preset gives the `.pre` a
+    restart would;
+  - *resume:* a timer the program started runs, timing when it last ran (`.en` 1) and not
+    run since (its `last` before `now`, which within the contract means the program
+    stopped did not run it), resumes from the switch: its `last` becomes `now`, so the
+    time no `ton` ran it is not caught up.
+
+  Each move of `.pre` is reported as `:preset`. A `.pre` that stays, on a timer the
+  program started runs, is reported as `:preset_kept` where it is not that program's
+  preset. After a move of the `.pre` of a timer the program started runs, `:dn_drops` says
+  that its `.dn`, now 1 with `.acc` below the new `.pre`, drops at the next scan with its
+  rung true, unless at least `.pre` − `.acc` ms have passed by then; `:dn_rises` that its
+  `.dn`, now 0 while timing with `.acc` at or past the new `.pre`, rises at that scan. No
+  latch is added: `.dn` is `.acc` against `.pre`, as `ton` counts them.
 
   **Held outputs** (decision 20, fix F4). A var_output of either program that the program
   stopped drove, writing it through an instruction's write operand (an `ons` storage bit
@@ -90,12 +116,16 @@ defmodule Logex.Edit do
   | `:input` | the value it reads now: the host sends its real value before the next scan | a switch |
   | `:unread` | the value it holds, 0 if the state lacks it: the host stops sending it | a switch |
   | `:initial_changed` | `{old, new}`, the two initial values; the running value is kept | a switch |
+  | `:preset` | `{from, to}`, the move of the timer's `.pre` | a switch |
+  | `:preset_kept` | `{pre, preset}`: `.pre` kept, not the preset of the `ton` that runs it | a switch |
+  | `:dn_drops`, `:dn_rises` | `{acc, pre}`, as `ton` counts them, a negative `.acc` as 0 | a switch |
+  | `:resumed` | the milliseconds not caught up: `last` moves on by that many, to `now` | a switch |
   | `:held` | the value the output's point holds | every step |
   | `:pruned` | the value it had | assemble, cancel |
 
-  The writes a report lists, `:added`, `:input` and `:pruned`, applied to the state before
-  its step, give the state after it, but for `switched`, which a switch sets. The other
-  kinds state facts.
+  The writes a report lists, `:added`, `:input`, `:preset`, `:resumed` and `:pruned`,
+  applied to the state before its step, give the state after it, but for `switched`,
+  which a switch sets. The other kinds state facts and forecasts.
 
   **One edit per instance** (fix F5). At accept the edit builds two plans, original to
   candidate and back, from the two programs alone, so a plan cannot go stale; a switch and
@@ -125,8 +155,9 @@ defmodule Logex.Edit do
   @opaque t :: %__MODULE__{}
 
   # The edit's record of one instance (F5): `shown`, the value each held output's point
-  # holds, as the edit has learnt it (F4).
-  @record %{shown: %{}}
+  # holds, as the edit has learnt it (F4); and `pre`, for each timer, the `.pre` the last
+  # switch left and the one it found, `{left, found}` (F1).
+  @record %{shown: %{}, pre: %{}}
 
   @doc """
   Accepts `candidate` beside `running`, the program `state` is an instance of:
@@ -319,11 +350,18 @@ defmodule Logex.Edit do
       initial: Program.initial_env(program),
       inputs: section(tags, :var_input),
       outputs: section(tags, :var_output),
-      writes: writes(program)
+      writes: writes(program),
+      timers: for({name, %Tag{type: %FbType{}} = tag} <- tags, into: %{}, do: {name, preset(tag)})
     }
 
   defp section(tags, wanted),
     do: for({name, %Tag{section: ^wanted}} <- tags, into: %{}, do: {name, true})
+
+  # The preset of the `ton` that runs a timer, which the compiler gives the timer as the
+  # `pre` of its initial value (Logex.Compiler), or nil where no `ton` of the program runs
+  # it, and its initial value is none.
+  defp preset(%Tag{initial: %{"pre" => preset}}), do: preset
+  defp preset(%Tag{initial: nil}), do: nil
 
   # One direction, from the program a switch stops to the one it starts, or a prune keeps.
   # `left` is the watched outputs the program stopped shows: what a switch taken while it
@@ -339,8 +377,18 @@ defmodule Logex.Edit do
       held: held,
       shows: to.outputs,
       left: for(name <- Map.keys(watched), is_map_key(from.outputs, name), do: name),
-      changed: changed(from, to)
+      changed: changed(from, to),
+      timers: timers(from, to)
     }
+
+  # Each timer either program declares, with the preset of the `ton` that runs it in the
+  # program stopped and in the one started, nil for none: the `.pre` rules read no more.
+  defp timers(from, to),
+    do:
+      for(
+        name <- Map.keys(Map.merge(from.timers, to.timers)),
+        do: {name, Map.get(from.timers, name), Map.get(to.timers, name)}
+      )
 
   # Decision 20: a var_output of either program that `from` drove and `to` does not drive
   # as a var_output.
@@ -395,7 +443,7 @@ defmodule Logex.Edit do
 
   # ---- the per-instance half: a switch, between two scans, and a prune --------------------
 
-  defp switch(plan, record, %Instance{env: env} = state, first_test?) do
+  defp switch(plan, record, %Instance{env: env, now: now} = state, first_test?) do
     shown = learnt(record.shown, plan.left, state)
 
     started =
@@ -413,7 +461,10 @@ defmodule Logex.Edit do
         for({name, old, new} <- plan.changed, do: {:initial_changed, name, {old, new}}) ++
         holding(plan, shown, env)
 
-    {%{state | env: env, switched: true}, %{record | shown: shown}, Enum.sort(report)}
+    {env, timed, pre} = Enum.reduce(plan.timers, {env, [], %{}}, &timed(&1, record.pre, now, &2))
+
+    {%{state | env: env, switched: true}, %{record | shown: shown, pre: pre},
+     Enum.sort(timed ++ report)}
   end
 
   # Whether a switch starts a tag at its initial value: one the state lacks, always; and at
@@ -424,12 +475,85 @@ defmodule Logex.Edit do
   defp starts?({:ok, _value}, true, _fit, true), do: true
   defp starts?({:ok, value}, false, fit, true), do: not fits?(fit, value)
 
-  # A timer fits by its member keys (decision 26). Within the contract the only map a
-  # state can hold under a timer's name is a ton's, so until M2-5 adds a second function
-  # block type, comparing the keys decides nothing that "is a map" would not.
+  # A timer fits by its member keys (decision 26): a map with none missing. A plain swap can
+  # leave one that lacks some: where the program swapped out held a bool under the name,
+  # a program that writes `t1.pre` and runs no `ton` on it leaves `%{"pre" => 40}`, which
+  # the timer rules, reading `.acc`, `.dn` and `.en`, could not take.
   defp fits?({:members, keys}, %{} = timer), do: Enum.sort(Map.keys(timer)) == keys
   defp fits?({:members, _keys}, _not_a_timer), do: false
   defp fits?(type, value), do: Declarations.fits?(type, value)
+
+  # ---- a timer across a switch (decision 23; fixes F1 and F6) -----------------------------
+
+  # One timer either program declares, `from` and `to` the presets of the `ton`s that run
+  # it in the program stopped and the one started, nil for none, taken after the start
+  # rules, so one they started is at its initial value, where these rules move nothing.
+  # Its `.pre` moves, it may resume, and the record keeps the `.pre` left and the one found.
+  # A map a plain swap left with `.pre` but not every member is one no `ton` of either
+  # program runs (below), so the rules that read the others never reach it.
+  defp timed({name, _from, _to} = timer, undo, now, {env, _report, _left} = acc),
+    do: timer(Map.get(env, name), timer, Map.get(undo, name), now, acc)
+
+  defp timer(%{"pre" => pre} = value, {name, from, to}, undo, now, {env, report, left}) do
+    target = target(undo, pre, from, to)
+    {value, resumed} = resumed(to, %{value | "pre" => target}, name, now)
+
+    {Map.put(env, name, value), moved(name, pre, target, to, value) ++ resumed ++ report,
+     Map.put(left, name, {target, pre})}
+  end
+
+  # No `.pre`: what a plain swap left under the name of a timer the candidate does not
+  # declare, since the first test starts again every one of its own that does not fit: a
+  # value of another type, or a map of only the members logic wrote. No `ton` of either
+  # program runs it, or that program's scan would have made it a timer's whole map, and no
+  # rule reads it.
+  defp timer(_not_a_timer, _timer, _undo, _now, acc), do: acc
+
+  # Where `.pre` goes. F1 first: still what the last switch left, it goes back to what that
+  # switch found. Otherwise, decision 23: a timer the program started runs no `ton` on keeps
+  # its `.pre` frozen, and one it runs that the program stopped did not takes its preset
+  # outright. And where both run one: a `.pre` still at the old preset takes the new one,
+  # and one logic changed is kept (hazard E).
+  defp target({pre, found}, pre, _from, _to), do: found
+  defp target(_undo, pre, _from, nil), do: pre
+  defp target(_undo, _pre, nil, to), do: to
+  defp target(_undo, from, from, to), do: to
+  defp target(_undo, pre, _from, _to), do: pre
+
+  # What a switch reports of `.pre`: a move, with what it does to `.dn` where the program
+  # started runs the timer; or, where `.pre` stays on a timer that program runs, a `.pre`
+  # that is not its preset.
+  defp moved(_name, pre, pre, nil, _timer), do: []
+  defp moved(_name, pre, pre, pre, _timer), do: []
+  defp moved(name, pre, pre, to, _timer), do: [{:preset_kept, name, {pre, to}}]
+
+  defp moved(name, pre, target, to, timer),
+    do: [{:preset, name, {pre, target}} | done(to, timer, name)]
+
+  # F6: `.dn` is `.acc` against `.pre`, with no latch (docs/naming.md, `ton`), so after a
+  # move it drops at the next scan with its rung true, unless `.pre` - `.acc` ms pass by
+  # then, or rises at that scan, where it is timing. Each counted as `ton` counts it, a
+  # negative `.acc` as 0. A moved `.pre` is never negative where the program started runs
+  # the timer: a switch moves it to a preset, or back from one.
+  defp done(nil, _timer, _name), do: []
+
+  defp done(_to, %{"pre" => pre, "acc" => acc, "dn" => dn, "en" => en}, name),
+    do: done(dn, en, max(acc, 0), pre, name)
+
+  defp done(1, _en, acc, pre, name) when acc < pre, do: [{:dn_drops, name, {acc, pre}}]
+  defp done(0, 1, acc, pre, name) when acc >= pre, do: [{:dn_rises, name, {acc, pre}}]
+  defp done(_dn, _en, _acc, _pre, _name), do: []
+
+  # A timer the program started runs, timing when it last ran and not run since: its `last`
+  # is before `now`, which within the contract means the program stopped did not run it,
+  # since every `ton` stamps `last` at every scan. It resumes from the switch, so the time
+  # no `ton` ran it is not caught up (hazard B).
+  defp resumed(nil, timer, _name, _now), do: {timer, []}
+
+  defp resumed(_to, %{"en" => 1, "last" => last} = timer, name, now) when last < now,
+    do: {%{timer | "last" => now}, [{:resumed, name, now - last}]}
+
+  defp resumed(_to, timer, _name, _now), do: {timer, []}
 
   # What the points of `outputs`, the watched outputs of the program the step stops, hold,
   # learnt from the state while that program is the one that last scanned (F4). A restart

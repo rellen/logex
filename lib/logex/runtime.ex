@@ -29,10 +29,13 @@ defmodule Logex.Runtime do
   it out. A state is matched to its program by name, and its values are not checked each
   scan. Scanning a recompile of the same name over a kept instance, a *plain swap*, stays
   in this contract: the instance keeps its values until `restart/3`, so a tag the
-  recompile adds reads 0, an added timer starting at a `.pre` of 0, and a tag whose type it
-  changes keeps its old value, a timer's map reaching the outputs and the contacts.
+  recompile adds reads 0, an added timer starting at a `.pre` of 0, a tag whose type it
+  changes keeps its old value, a timer's map reaching the outputs and the contacts, and a
+  timer whose `ton` it gives back catches up all the time it was not run.
   `Logex.Edit` moves a state to a new program by rule instead: it starts what is added,
-  restarts a value that does not fit its type, and refuses a type change. `restart/3`
+  restarts a value that does not fit its type, refuses a type change, moves a timer's
+  `.pre` to a changed preset where logic left it alone, and resumes a timer it gives back
+  its `ton` from the switch. `restart/3`
   starts every tag again but the `var_input`s whose values fit their types, and empties
   `ons_blocked`. A `%Logex.Program{}`, `%Logex.Instance{}` or `%Logex.Edit{}` built or
   edited by hand is outside this contract.

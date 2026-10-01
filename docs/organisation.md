@@ -986,11 +986,11 @@ rules, in order:
 | Start what the candidate adds | At the first test only (from accept), every tag the candidate adds starts at its initial value, over whatever a plain swap left under its name | `{:added, n, v}` |
 | Restart what does not fit (decision 26) | At the first test only, every tag of the candidate whose value does not fit its declared type starts again at its initial value. Fit is `Declarations.fits?/2`, or for a timer its member keys | `{:added, n, v}` |
 | Inputs (decision 22) | A var_input of T that was not one of F (added, back at untest, or made one by a section change) is reported with the value it reads now, and the host sends its real value before the next scan. A var_input of F that is not one of T (removed, or given another section) is reported with the value it holds, and the host stops sending it. A var_input whose value a rule above writes is reported here, not as `:added`, because its value is the host's | `{:input, n, v}`, `{:unread, n, v}` |
-| `.pre`, undone first (fix F1) | Each switch records, for each timer, the `.pre` it left and the `.pre` it found. The next switch first restores the found value wherever `.pre` still equals the one left, so an untest gives back exactly the `.pre` its test found. The two `.pre` rules below apply only where this one does not | `{:preset, t, {left, found}}` where it moves; `{:preset_kept, t, {pre, preset}}` where it does not and `.pre` is not T's preset |
+| `.pre`, undone first (fix F1) | Each switch records, for each timer F or T declares, the `.pre` it left and the `.pre` it found. The next switch first restores the found value wherever `.pre` still equals the one left, so an untest gives back exactly the `.pre` its test found, a timer the candidate drops included. The two `.pre` rules below apply only where this one does not | `{:preset, t, {left, found}}` where it moves; `{:preset_kept, t, {pre, preset}}` where it does not, T runs the timer and `.pre` is not T's preset |
 | `.pre`, both programs run a `ton` | For a timer F and T both run, with presets p0 and p1, a `.pre` still at p0 moves to p1. A `.pre` logic changed is kept, and reported where it differs from p1 | `{:preset, t, {p0, p1}}`, `{:preset_kept, t, {pre, p1}}` |
 | `.pre`, a `ton` stopped or restored (decision 23) | A timer T runs no `ton` on keeps its `.pre` frozen. A timer T runs and F did not takes T's preset outright | `{:preset, t, {pre, p1}}` where it moves |
-| `.dn` (fix F6) | After any move of the `.pre` of a timer T runs: with `.dn` 1 and `.acc` below the new preset, `.dn` drops at the next scan with its rung true, unless at least preset − acc ms have passed. With `.en` 1, `.dn` 0 and `.acc` at or past the preset, `.dn` rises at that scan. No latch is added | `{:dn_drops, t, {acc, preset}}`, `{:dn_rises, t, {acc, preset}}` |
-| Resume | A timer T runs and F did not, timing when last run (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes `now`, so the time no `ton` ran it is not caught up | `{:resumed, t, ms}` |
+| `.dn` (fix F6) | After any move of the `.pre` of a timer T runs: with `.dn` 1 and `.acc` below the new preset, `.dn` drops at the next scan with its rung true, unless at least preset − acc ms have passed. With `.en` 1, `.dn` 0 and `.acc` at or past the preset, `.dn` rises at that scan. A negative `.acc` counts as 0, as `ton` counts it. No latch is added | `{:dn_drops, t, {acc, preset}}`, `{:dn_rises, t, {acc, preset}}` |
+| Resume | A timer T runs and F did not, timing when last run (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes `now`, so the time no `ton` ran it is not caught up. Every `ton` stamps `last` at every scan, so within the contract a `last` before `now` says F did not run it, and the switch reads no more | `{:resumed, t, ms}` |
 | One-shots (decision 21) | Blocks an `ons` for the next scan: below | `{:ons_blocked, b, v}` |
 | Held outputs (decision 20) | Records each output no logic drives any more: below | `{:held, o, v}` |
 | Initial values (decision 29) | A bool or dint both programs declare, of one type, whose initial value (as `Program.initial_env/1` gives it) differs keeps its running value; the new one applies when a restart next starts it | `{:initial_changed, n, {old, new}}` |
@@ -1054,8 +1054,8 @@ and name. The kinds are an open set, which a host must tolerate:
 | `:input` | the value it reads now; the host sends its real value before the next scan | a switch |
 | `:unread` | the value it holds; the host stops sending it | a switch |
 | `:preset` | `{from, to}`, the move of `.pre` | a switch |
-| `:preset_kept` | `{pre, preset}`: `.pre` kept where logic changed it | a switch |
-| `:dn_drops`, `:dn_rises` | `{acc, preset}`: what `.dn` does at the next scan with its rung true | a switch |
+| `:preset_kept` | `{pre, preset}`: `.pre` kept where logic changed it, on a timer the program started runs | a switch |
+| `:dn_drops`, `:dn_rises` | `{acc, preset}`: what `.dn` does at the next scan with its rung true, a negative `.acc` counted as 0 | a switch |
 | `:resumed` | the milliseconds not caught up | a switch |
 | `:ons_blocked` | the storage bit's value, unchanged | a switch |
 | `:initial_changed` | `{old, new}` initial values; the running value is kept | a switch |
@@ -1146,7 +1146,11 @@ against 1.4–1.5 ms for one scan and 76–86 ms to compile the candidate.
   twice. The timer and one-shot work each add their oracles, two of them independent of
   the rules: a one-shot pulses only if the previous scan ran the same `ons` rung text with
   its condition 0; and a test then an untest with no scan between leaves the original's
-  tags and next outputs unchanged. Every property asserts its reach.
+  tags and next outputs unchanged, but for what either switch listed as started and the
+  test as resumed, which no untest undoes. The timer work adds two more: no scan lets a
+  timer gain more than the scan's own time, as one caught up would, a plain swap's scan,
+  which catches a frozen timer up as it always has, aside; and the scan right after a
+  switch does to `.dn` what the switch forecast. Every property asserts its reach.
 - The entry check: every tree in the front-end golden record, and every tree the printer
   test's generator produces, passes it (a property). The hand-built trees in the suite
   that the parser could never produce become `ArgumentError` tests: `validation_test.exs`'s
