@@ -380,15 +380,15 @@ defmodule Logex.EndToEndTest do
   # inputs}`, giving each scan's outputs.
   defp drive(program, steps), do: drive(program, Logex.Runtime.instance(program), steps)
 
-  defp drive(program, state, steps) do
-    {trace, _state} =
+  defp drive(program, state, steps), do: elem(driven(program, state, steps), 0)
+
+  # As drive/3, keeping the state the last scan left: `{trace, state}`.
+  defp driven(program, state, steps),
+    do:
       Enum.map_reduce(steps, state, fn {elapsed, inputs}, state ->
         state = Logex.Runtime.put_inputs(program, state, inputs)
         Logex.Runtime.scan(program, state, elapsed)
       end)
-
-    trace
-  end
 
   defp program(src) do
     {:ok, program} = compile(src)
@@ -1131,6 +1131,240 @@ defmodule Logex.EndToEndTest do
     test "move from a tag the host left out copies 0, not nil" do
       src = "var s dint\nvar d dint\nmove s d"
       assert %{"d" => 0} = run(src, %{})
+    end
+  end
+
+  describe "online edit (OE-1)" do
+    # PLAN.md OE-1's Done-when, as it is worded, through the public API alone: source
+    # compiled by Logex.compile/2, one instance scanned by Logex.Runtime, and a staged edit
+    # by Logex.Edit (docs/organisation.md §4.9). M2-3's motor: the README's, with
+    # `var t1 ton` and a rung `xic motor ton t1 5000`.
+    @motor """
+    var_input start bool
+    var_input stop bool
+    var_input overtemp bool
+    var_input reset bool
+    var_output motor bool
+    var_output run_lamp bool
+    var_output speed_sp dint 1200
+    var fault bool
+    var t1 ton
+
+    ( xic start | xic motor ) xio stop ote motor
+    xic motor ote run_lamp
+    xic overtemp otl fault
+    xic reset otu fault
+    xic fault move 0 speed_sp
+    xic motor ton t1 5000
+    """
+
+    # The candidate raises t1's preset, adds a second timer and an ons, and removes the rung
+    # that drives the var_output run_lamp, and with it run_lamp's declaration, which
+    # assemble then prunes. It keeps the motor's own rung, so t1's rung stays true. Its ons
+    # moves a setpoint the original drives too, so it drives no new var_output: one that
+    # did would rightly be held at untest, against the Done-when's "lists no undriven
+    # output" (§4.9, Tests).
+    @candidate """
+    var_input start bool
+    var_input stop bool
+    var_input overtemp bool
+    var_input reset bool
+    var_output motor bool
+    var_output speed_sp dint 1200
+    var fault bool
+    var t1 ton
+    var t2 ton
+    var s1 bool
+
+    ( xic start | xic motor ) xio stop ote motor
+    xic overtemp otl fault
+    xic reset otu fault
+    xic fault move 0 speed_sp
+    xic motor ton t1 8000
+    xic motor ton t2 2000
+    xic motor ons s1 move 900 speed_sp
+    """
+
+    # An edit keeps the program's name, so both programs are `motor`.
+    defp motor(src) do
+      {:ok, program} = Logex.compile(src, name: "motor")
+      program
+    end
+
+    # The motor started, then run in 10 ms scans until t1 is done, 5,000 ms later.
+    defp running_with_t1_done(running) do
+      steps = [{0, %{"start" => 1}}, {10, %{"start" => 0}} | List.duplicate({10, %{}}, 500)]
+      {trace, state} = driven(running, Logex.Runtime.instance(running), steps)
+      assert List.last(trace) == %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}
+      assert %{"pre" => 5000, "acc" => 5000, "dn" => 1} = state.env["t1"]
+      state
+    end
+
+    # The parse tree of `src`, through the stages' public functions, as a host building a
+    # program as data would start from it.
+    defp tree(src) do
+      {:ok, tokens, _end_line} = Logex.Compiler.tokenize(src)
+      {:ok, tree} = Logex.Compiler.parse(tokens)
+      tree
+    end
+
+    # `term` with every `from` in it, however deep, replaced by `to`: a change made to data
+    # without naming any node of it.
+    defp replace(from, from, to), do: to
+    defp replace(list, from, to) when is_list(list), do: Enum.map(list, &replace(&1, from, to))
+
+    defp replace(tuple, from, to) when is_tuple(tuple),
+      do: tuple |> Tuple.to_list() |> replace(from, to) |> List.to_tuple()
+
+    defp replace(other, _from, _to), do: other
+
+    test "test, untest and assemble, over an instance running with t1 done" do
+      running = motor(@motor)
+      candidate = motor(@candidate)
+      state = running_with_t1_done(running)
+
+      {:ok, edit, forecast} = Logex.Edit.accept(running, candidate, state)
+      assert Logex.Edit.running(edit) == running
+
+      # Test runs the candidate with the decided .pre, initial values and no one-shot pulse,
+      # and its report names the held output and the dropped .dn. Accept forecast it.
+      {edit, state, report} = Logex.Edit.test(edit, state)
+
+      assert report == [
+               {:added, "s1", 0},
+               {:added, "t2",
+                %{"pre" => 2000, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => 0}},
+               {:dn_drops, "t1", {5000, 8000}},
+               {:held, "run_lamp", 1},
+               {:ons_blocked, "s1", 0},
+               {:preset, "t1", {5000, 8000}}
+             ]
+
+      assert report == forecast
+      assert Logex.Edit.running(edit) == candidate
+
+      # The one-shot's rung is true on the switch scan, and the setpoint does not move. t1
+      # times on from 5000 ms towards 8000, so its .dn drops; t2 starts timing from 0.
+      {[outputs], state} = driven(candidate, state, [{10, %{}}])
+      assert outputs == %{"motor" => 1, "speed_sp" => 1200}
+      assert %{"pre" => 8000, "acc" => 5010, "dn" => 0} = state.env["t1"]
+      assert %{"pre" => 2000, "acc" => 0, "dn" => 0, "en" => 1} = state.env["t2"]
+
+      # 2,990 ms more: each timer is done at its preset, and the setpoint never pulses.
+      {trace, state} = driven(candidate, state, List.duplicate({10, %{}}, 299))
+      assert Enum.uniq(trace) == [outputs]
+      assert %{"pre" => 8000, "acc" => 8000, "dn" => 1} = state.env["t1"]
+      assert %{"pre" => 2000, "acc" => 2000, "dn" => 1} = state.env["t2"]
+
+      # Untest runs the original over the same state, and its report lists no undriven
+      # output. t1's .pre goes back to the one the test found; what the candidate added
+      # stays, unused, until the edit ends.
+      {edit, state, report} = Logex.Edit.untest(edit, state)
+      assert report == [{:preset, "t1", {8000, 5000}}]
+      refute List.keymember?(report, :held, 0)
+      assert Logex.Edit.running(edit) == running
+
+      {[outputs], state} = driven(running, state, [{10, %{}}])
+      assert outputs == %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}
+      assert %{"pre" => 5000, "acc" => 5000, "dn" => 1} = state.env["t1"]
+      assert %{"s1" => 1, "t2" => %{"dn" => 1}} = state.env
+
+      # Assemble is taken under test: a second test, then assemble at the same boundary, as
+      # a host finalises without scanning the candidate again. Assemble prunes what only
+      # the original declares, and its report names the held output.
+      {edit, state, report} = Logex.Edit.test(edit, state)
+
+      assert report == [
+               {:dn_drops, "t1", {5000, 8000}},
+               {:held, "run_lamp", 1},
+               {:ons_blocked, "s1", 1},
+               {:preset, "t1", {5000, 8000}},
+               {:resumed, "t2", 10}
+             ]
+
+      {program, state, report} = Logex.Edit.assemble(edit, state)
+      assert program == candidate
+      assert report == [{:held, "run_lamp", 1}, {:pruned, "run_lamp", 1}]
+      assert Enum.sort(Map.keys(state.env)) == Enum.sort(Map.keys(candidate.tags))
+
+      # The candidate runs on, and its one-shot fires at the motor's next real start.
+      assert {[
+                %{"motor" => 1, "speed_sp" => 1200},
+                %{"motor" => 0, "speed_sp" => 1200},
+                %{"motor" => 1, "speed_sp" => 900}
+              ], _state} =
+               driven(candidate, state, [
+                 {10, %{}},
+                 {10, %{"stop" => 1}},
+                 {10, %{"stop" => 0, "start" => 1}}
+               ])
+    end
+
+    # What the edit is for (§4.9, "What it fixes"): the same candidate swapped in with no
+    # edit, a plain swap, pulses its new one-shot, keeps t1 at the old preset and done, and
+    # starts t2 at a preset of 0, done on its first scan.
+    test "without an edit, a plain swap of the same candidate pulses and keeps t1's old preset" do
+      state = running_with_t1_done(motor(@motor))
+      {[outputs], state} = driven(motor(@candidate), state, [{10, %{}}])
+      assert outputs == %{"motor" => 1, "speed_sp" => 900}
+      assert %{"pre" => 5000, "dn" => 1} = state.env["t1"]
+      assert %{"pre" => 0, "acc" => 0, "dn" => 1} = state.env["t2"]
+    end
+
+    test "a type change is refused at accept" do
+      running = motor(@motor)
+      state = running_with_t1_done(running)
+
+      # The candidate, keeping run_lamp's declaration, as a dint.
+      retyped =
+        motor(
+          String.replace(
+            @candidate,
+            "var_output speed_sp",
+            "var_output run_lamp dint\nvar_output speed_sp"
+          )
+        )
+
+      assert {:error, [%Logex.Diagnostic{stage: :edit} = diagnostic]} =
+               Logex.Edit.accept(running, retyped, state)
+
+      assert Logex.Diagnostic.format(diagnostic) ==
+               "line 6: `run_lamp` is a bool in the running program and a dint in the " <>
+                 "candidate: a tag's type changes only with a restart"
+    end
+
+    # The data path refuses what the text cannot say where the data enters, so accept
+    # needs no check of its own (§4.9, "The data path"; validation_test.exs pins each
+    # message and every malformed tree).
+    test "a program built from data that the text cannot say is refused" do
+      # The candidate built as data: its parse tree, and t2 declared from Elixir. Said as
+      # the text can say it, it is a program.
+      tree = tree(String.replace(@candidate, "var t2 ton\n", ""))
+      t2 = Logex.Tag.new!("t2", Logex.FbType.ton())
+      assert {:ok, %Logex.Program{}} = Logex.Compiler.instructionize(tree, [t2])
+
+      # No text says `move -900 speed_sp` until a negative literal lexes (PLAN.md §5), so
+      # the tree that would is a host mistake. Matched by its rule: the rest of the message
+      # prints the node, a shape of the tree.
+      error =
+        assert_raise ArgumentError, fn ->
+          Logex.Compiler.instructionize(replace(tree, 900, -900), [t2])
+        end
+
+      assert "not a tree Logex.Parser.parse/1 can produce: a literal is an integer, 0 or " <>
+               "more: a negative one does not lex yet (PLAN.md §5), got: " <> _node =
+               error.message
+
+      # Nor does a declaration line give a timer its preset, or a tag a negative value.
+      assert_raise ArgumentError,
+                   "`t2` is a ton: its preset is the number on its `ton` instruction, as in " <>
+                     "`ton t2 5000`, not an initial value on its declaration",
+                   fn -> Logex.Tag.new!("t2", Logex.FbType.ton(), :var, %{"pre" => 2000}) end
+
+      assert_raise ArgumentError,
+                   "`speed_sp` is a dint: its initial value `-1` is negative, which no " <>
+                     "declaration line can say until a negative literal lexes",
+                   fn -> Logex.Tag.new!("speed_sp", :dint, :var_output, -1) end
     end
   end
 end
