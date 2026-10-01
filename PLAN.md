@@ -1108,7 +1108,7 @@ test's programs never reached. Finding that line once, not once per late declara
 also removes an older quadratic cost, from M1-3. Three were documents: the growth
 figures, the 490 above, which counted each accepted call twice, and instruction-sets.md's
 "flat-env" heading. The depth test now takes the least of three counts and a bound of
-18.5, where the fixed compile measures 15.5x to 16x and the copying walks 20x or more
+18.5, where the fixed compile measures about 16x and the copying walks 20x or more
 (`2c8cfea`'s message says 15.7x and 21x to 29x, which the third round below corrects):
 one refuted finding reported a single run of the earlier test at 18.0x, which 582 runs
 could not reproduce.
@@ -1127,6 +1127,17 @@ was a rule no test failed without: a twin declared in capitals and used in lower
 And the growth figures, which the test itself does not give as quoted: reductions count
 garbage collection, so a mutant's ratio moves from run to run, and CONTRIBUTING now says
 to quote the fixed compile's figure and the lowest mutant's.
+
+A fourth round (two lenses over `2afed5a`, a skeptic per finding) confirmed 3 findings and
+refuted none, all about that commit's own figures and claims; the code was left as it was.
+Its message gives the fixed compile 15.5x and D2b, the compiler's two copying walks as at
+`b30ab18`, 29x "as the test itself runs them": the committed test gives 16.1x, and D2b 50x
+to 61x. Both wrong figures came from a copy of the test that also
+timed 2,000 levels after 8,000, which moved the garbage collection the counts include;
+CONTRIBUTING now records that. And its row Q1 says both growth tests catch the walk on
+each miss, but the Q1 mutant walked the table on every lookup, hits included: reverted
+faithfully, as a walk on a miss only, the walk is caught by the size test alone, since the
+depth test's timer is declared and its hints never miss.
 
 **Decided 2026-09-28, from `docs/organisation.md` §6.1 and §4.6:**
 1. `evaluate/3` threads a read-only `%Logex.Scan{now:, first:}`; the accumulator stays

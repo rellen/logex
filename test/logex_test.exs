@@ -149,7 +149,7 @@ defmodule LogexTest do
       assert ratio < 6, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
     end
 
-    # And in its depth. At 500 and 8,000 levels a linear compile grows 15.5x to 16x. A walk
+    # And in its depth. At 500 and 8,000 levels a linear compile grows about 16x. A walk
     # that copies what it found in a group at every level, as the instruction and warning
     # walks first did, grows 20x or more, since `++` is charged few reductions for what it
     # copies; the path pass, which copied its diagnostics so, grew about 140x, and finding
