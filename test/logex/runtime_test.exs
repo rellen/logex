@@ -38,6 +38,7 @@ defmodule Logex.RuntimeTest do
                type: "motor",
                now: 0,
                first: true,
+               ons_blocked: [],
                env: %{
                  "start" => 0,
                  "stop" => 0,
@@ -133,7 +134,14 @@ defmodule Logex.RuntimeTest do
              "scan.now must be a non-negative integer of milliseconds, got: -1"},
             {%Scan{now: 1.5, first: true},
              "scan.now must be a non-negative integer of milliseconds, got: 1.5"},
-            {%Scan{now: 0, first: nil}, "scan.first must be true or false, got: nil"}
+            {%Scan{now: 0, first: nil}, "scan.first must be true or false, got: nil"},
+            # OE-1: the block list is the instance's, which call/4 puts in the scan itself.
+            {%Scan{now: 0, first: true, ons_blocked: ["s1"]},
+             "scan.ons_blocked is the runtime's, taken from the instance: " <>
+               ~s|a host leaves it out, got: ["s1"]|},
+            {%Scan{now: 0, first: true, ons_blocked: nil},
+             "scan.ons_blocked is the runtime's, taken from the instance: " <>
+               "a host leaves it out, got: nil"}
           ] do
         raises(message, fn -> Runtime.call(m, s, %{}, scan) end)
       end
@@ -163,15 +171,34 @@ defmodule Logex.RuntimeTest do
             {%{s | type: :motor}, "state.type must be a program name, got: :motor"},
             {%{s | env: nil}, "state.env must be a map of tag names to values, got: nil"},
             {%{s | env: %Scan{now: 0, first: true}},
-             "state.env must be a map of tag names to values, got: %Logex.Scan{now: 0, first: true}"},
+             "state.env must be a map of tag names to values, " <>
+               "got: %Logex.Scan{now: 0, first: true, ons_blocked: []}"},
             {%{s | now: nil},
              "state.now must be a non-negative integer of milliseconds, got: nil"},
             {%{s | now: -5}, "state.now must be a non-negative integer of milliseconds, got: -5"},
             {%{s | now: -1}, "state.now must be a non-negative integer of milliseconds, got: -1"},
-            {%{s | first: nil}, "state.first must be true or false, got: nil"}
+            {%{s | first: nil}, "state.first must be true or false, got: nil"},
+            # OE-1, F8: a proper list of names, or a blocked `ons` would raise unpinned.
+            {%{s | ons_blocked: nil},
+             "state.ons_blocked must be a list of storage bit names, got: nil"},
+            {%{s | ons_blocked: "s1"},
+             ~s|state.ons_blocked must be a list of storage bit names, got: "s1"|},
+            {%{s | ons_blocked: %{"s1" => true}},
+             ~s|state.ons_blocked must be a list of storage bit names, got: %{"s1" => true}|},
+            {%{s | ons_blocked: ["s1" | "x"]},
+             ~s|state.ons_blocked must be a list of storage bit names, got: ["s1" \| "x"]|},
+            {%{s | ons_blocked: [:s1]},
+             "state.ons_blocked must be a list of storage bit names, got: [:s1]"},
+            {%{s | ons_blocked: ["s1", 7]},
+             ~s|state.ons_blocked must be a list of storage bit names, got: ["s1", 7]|}
           ] do
         raises(message, fn -> Runtime.call(m, state, %{}, %Scan{now: 0, first: true}) end)
       end
+
+      # The state's own fields are checked before its owner, the block list among them.
+      raises("state.ons_blocked must be a list of storage bit names, got: [:s1]", fn ->
+        Runtime.call(pump, %{s | ons_blocked: [:s1]}, %{}, %Scan{now: 0, first: true})
+      end)
     end
 
     test "the values in a state's env are not checked, so M1-4's totality stays reachable", %{
@@ -567,6 +594,66 @@ defmodule Logex.RuntimeTest do
     end
   end
 
+  describe "an instance's one-shot block list (OE-1)" do
+    @ons "var_input go bool\nvar_output pulse bool\nvar s1 bool\nxic go ons s1 ote pulse"
+
+    # Nothing public sets the list yet: an online edit's switch will (docs/organisation.md
+    # §4.9), so these instances are given one by hand, after a first scan.
+    setup do
+      {:ok, p} = Logex.compile(@ons, name: "o")
+
+      {%{"pulse" => 0}, running} =
+        Runtime.call(p, Runtime.instance(p), %{}, %Scan{now: 0, first: true})
+
+      %{ons: p, blocked: %{running | ons_blocked: ["s1"]}}
+    end
+
+    test "blocks each ons it names for one scan, which still writes the storage bit", %{
+      ons: p,
+      blocked: b
+    } do
+      # A real edge, blocked.
+      {%{"pulse" => 0}, s} = Runtime.call(p, b, %{"go" => 1}, %Scan{now: 10, first: false})
+      assert s.ons_blocked == [] and s.env["s1"] == 1
+      # The bit was written, so `go` held is no edge; and the next edge fires.
+      {%{"pulse" => 0}, s} = Runtime.call(p, s, %{}, %Scan{now: 20, first: false})
+      {%{"pulse" => 0}, s} = Runtime.call(p, s, %{"go" => 0}, %Scan{now: 30, first: false})
+      assert {%{"pulse" => 1}, _} = Runtime.call(p, s, %{"go" => 1}, %Scan{now: 40, first: false})
+    end
+
+    test "an ons it does not name fires on a real edge", %{ons: p, blocked: b} do
+      other = %{b | ons_blocked: ["s9", "pulse"]}
+
+      assert {%{"pulse" => 1}, _} =
+               Runtime.call(p, other, %{"go" => 1}, %Scan{now: 10, first: false})
+    end
+
+    test "put_inputs/3 keeps it, and scan/2 and scan/3 use it, as call/4 does", %{
+      ons: p,
+      blocked: b
+    } do
+      s = Runtime.put_inputs(p, b, %{"go" => 1})
+      assert s.ons_blocked == ["s1"]
+      assert {%{"pulse" => 0}, %Instance{ons_blocked: []}} = Runtime.scan(p, s, 10)
+      assert {%{"pulse" => 0}, %Instance{ons_blocked: []}} = Runtime.scan(p, s)
+      assert {%{"pulse" => 1}, _} = Runtime.scan(p, %{s | ons_blocked: []})
+    end
+
+    test "restart/3 empties it", %{ons: p, blocked: b} do
+      assert %Instance{ons_blocked: [], first: true} = Runtime.restart(p, b, :cold)
+    end
+
+    test "a host fills in no scan's list, not even the instance's own", %{ons: p, blocked: b} do
+      raises(
+        "scan.ons_blocked is the runtime's, taken from the instance: " <>
+          ~s|a host leaves it out, got: ["s1"]|,
+        fn -> Runtime.call(p, b, %{}, %Scan{now: 10, first: false, ons_blocked: ["s1"]}) end
+      )
+
+      assert {_, _} = Runtime.call(p, b, %{}, %Scan{now: 10, first: false, ons_blocked: []})
+    end
+  end
+
   describe "the public surface (B5)" do
     test "is exactly this: every evaluate clause is private, in Logex.Runtime" do
       assert Enum.sort(Logex.__info__(:functions)) == [compile: 2, compile_file: 1]
@@ -576,6 +663,12 @@ defmodule Logex.RuntimeTest do
 
       assert Enum.sort(Logex.Compiler.__info__(:functions)) ==
                [instructionize: 1, instructionize: 2, instructions: 0, parse: 1, tokenize: 1]
+
+      # The two structs a host holds and builds; OE-1 gave both `ons_blocked`.
+      assert Enum.sort(Map.keys(Instance.__struct__())) ==
+               [:__struct__, :env, :first, :now, :ons_blocked, :type]
+
+      assert Enum.sort(Map.keys(Scan.__struct__())) == [:__struct__, :first, :now, :ons_blocked]
 
       # OE-1: the definition of a well-formed tree, which instructionize/2 checks on entry.
       assert Enum.sort(Logex.Parser.__info__(:functions)) ==

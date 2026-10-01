@@ -118,10 +118,12 @@ defmodule Logex.ApiContractTest do
     dint: [0, -2_147_483_648, 2_147_483_647, -2_147_483_649, 2_147_483_648, 1.0, %{}]
   }
 
-  # The documented kinds of refusal, by their first words.
+  # The documented kinds of refusal, by their first words. A scan's block list, which only
+  # the runtime fills in (OE-1), is a kind of its own, so the walk is seen to reach it.
   @refusals [
     "input ",
     "inputs must be",
+    "scan.ons_blocked",
     "scan.",
     "state.",
     "time went backwards",
@@ -359,7 +361,12 @@ defmodule Logex.ApiContractTest do
       pick([program, :x, %{}]),
       pick([state, other, %{}, nil]),
       pick([%{}, [], nil]),
-      pick([%Scan{now: state.now, first: state.first}, 0, nil])
+      pick([
+        %Scan{now: state.now, first: state.first},
+        %Scan{now: state.now, first: state.first, ons_blocked: ["s1"]},
+        0,
+        nil
+      ])
     ]
 
     {args != [program, state, %{}, %Scan{now: state.now, first: state.first}],

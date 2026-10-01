@@ -11,6 +11,11 @@ defmodule Logex.Runtime do
   - `restart/3` starts an instance again, keeping its clock and the inputs that fit their
     types.
 
+  An instance also carries `ons_blocked`, the storage bits whose `ons` its next scan
+  blocks, which only the runtime fills into a scan (`Logex.Instance`, `Logex.Scan`): the
+  hook by which an online edit keeps a new or changed one-shot from firing (OE-1,
+  `docs/organisation.md` §4.9). Nothing sets it yet.
+
   **The host contract.** A mistake by the host raises `ArgumentError` (a host bug, not a
   PLC event, `docs/organisation.md` §4.6); a mistake in the source is a diagnostic from
   `Logex.compile/2`. Only a declared `var_input` may be set, by its name as a string, with
@@ -18,13 +23,14 @@ defmodule Logex.Runtime do
   input problem in one call comes in one raise, a line each, in key order. Inputs merge
   into the instance, so a host sends only what changed. Outputs are every `var_output`.
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
-  `first`. A state is matched to its program by name, and its values are not checked each
+  `first`; its `ons_blocked` is the instance's, which `call/4` fills in, so a host leaves
+  it out. A state is matched to its program by name, and its values are not checked each
   scan: an instance kept across a recompile of the same name keeps them until `restart/3`.
   A tag the recompile adds reads 0 until then, so an added timer starts at a `.pre` of 0,
   and a tag whose type it changes keeps its old value, a timer's map reaching the outputs
   and the contacts. `restart/3` starts every tag again but the `var_input`s whose values
-  fit their types. A `%Logex.Program{}` or `%Logex.Instance{}` built or edited by hand is
-  outside this contract.
+  fit their types, and empties `ons_blocked`. A `%Logex.Program{}` or `%Logex.Instance{}`
+  built or edited by hand is outside this contract.
   """
 
   alias Logex.{Declarations, FbType, Instance, Program, Scan, Tag}
@@ -69,8 +75,8 @@ defmodule Logex.Runtime do
 
   @doc """
   Starts an instance again: every tag back at its initial value except the `var_input`s
-  whose values fit their types, the next scan marked first, and the clock kept, since time
-  never goes backwards.
+  whose values fit their types, the next scan marked first, no one-shot blocked, and the
+  clock kept, since time never goes backwards.
 
   The `var_input`s are the host's input image, not the program's state: IEC leaves inputs
   "initialized in an implementation-dependent manner" (Ed 2 §2.4.2 rule 4), and keeping
@@ -81,7 +87,13 @@ defmodule Logex.Runtime do
     program!(program)
     %Instance{env: env} = state = state!(state, program)
     mode!(mode)
-    %{state | env: Map.merge(Program.initial_env(program), inputs(program, env)), first: true}
+
+    %{
+      state
+      | env: Map.merge(Program.initial_env(program), inputs(program, env)),
+        first: true,
+        ons_blocked: []
+    }
   end
 
   # A var_input whose value does not fit its type, as after a recompile of the same name
@@ -101,9 +113,16 @@ defmodule Logex.Runtime do
   defp mode!(mode),
     do: raise(ArgumentError, "restart takes :cold or :warm, got: #{inspect(mode)}")
 
-  defp run(%Instance{env: env} = state, %Program{rungs: rungs} = program, %Scan{now: now} = scan) do
+  # The evaluator's scan is the host's `now` and `first` with the instance's block list,
+  # which holds for this one scan (OE-1).
+  defp run(
+         %Instance{env: env, ons_blocked: blocked} = state,
+         %Program{rungs: rungs} = program,
+         %Scan{now: now, first: first}
+       ) do
+    scan = %Scan{now: now, first: first, ons_blocked: blocked}
     env = Enum.reduce(rungs, env, &rung(&1, &2, scan))
-    {outputs(program, env), %{state | env: env, now: now, first: false}}
+    {outputs(program, env), %{state | env: env, now: now, first: false, ons_blocked: []}}
   end
 
   # A var_output a hand-built env leaves out reads 0, as a contact reads it (M1-4).
@@ -138,10 +157,8 @@ defmodule Logex.Runtime do
   defp state!(%Instance{first: first}, _program) when not is_boolean(first),
     do: raise(ArgumentError, "state.first must be true or false, got: #{inspect(first)}")
 
-  defp state!(%Instance{type: name} = state, %Program{name: name}), do: state
-
-  defp state!(%Instance{type: type}, %Program{name: name}),
-    do: raise(ArgumentError, "this state is an instance of #{named(type)}, not of #{named(name)}")
+  defp state!(%Instance{ons_blocked: blocked} = state, program),
+    do: owner!(blocked!(bits?(blocked), state), program)
 
   defp state!(other, _program),
     do:
@@ -149,6 +166,26 @@ defmodule Logex.Runtime do
         ArgumentError,
         "expected a %Logex.Instance{} from Logex.Runtime.instance/1, got: #{inspect(other)}"
       )
+
+  # F8: a proper list of names, or the `ons` clause's `bit in blocked` raises an unpinned
+  # ArgumentError for an improper one.
+  defp bits?([]), do: true
+  defp bits?([bit | bits]) when is_binary(bit), do: bits?(bits)
+  defp bits?(_not_bits), do: false
+
+  defp blocked!(true, state), do: state
+
+  defp blocked!(false, %Instance{ons_blocked: blocked}),
+    do:
+      raise(
+        ArgumentError,
+        "state.ons_blocked must be a list of storage bit names, got: #{inspect(blocked)}"
+      )
+
+  defp owner!(%Instance{type: name} = state, %Program{name: name}), do: state
+
+  defp owner!(%Instance{type: type}, %Program{name: name}),
+    do: raise(ArgumentError, "this state is an instance of #{named(type)}, not of #{named(name)}")
 
   defp named(nil), do: "an unnamed program"
   defp named(name), do: "`#{name}`"
@@ -158,6 +195,14 @@ defmodule Logex.Runtime do
 
   defp scan!(%Scan{first: first}, _state) when not is_boolean(first),
     do: raise(ArgumentError, "scan.first must be true or false, got: #{inspect(first)}")
+
+  defp scan!(%Scan{ons_blocked: blocked}, _state) when blocked != [],
+    do:
+      raise(
+        ArgumentError,
+        "scan.ons_blocked is the runtime's, taken from the instance: a host leaves it out, " <>
+          "got: #{inspect(blocked)}"
+      )
 
   defp scan!(%Scan{now: now}, %Instance{now: last}) when now < last,
     do:
@@ -361,9 +406,13 @@ defmodule Logex.Runtime do
   # scan, read as a contact reads a bit. On an instance's first scan it passes none,
   # whatever the storage bit holds: the conventional ONS's "set to true to prevent an
   # invalid trigger during the first scan", read from the scan rather than set by a
-  # prescan (PLAN.md M1-6, decision 3).
-  defp evaluate({:ons, _, [storage]}, {true, env}, %Scan{first: first}) do
-    {not first and not closed?(read(env, storage)), write(env, storage, 1)}
+  # prescan (PLAN.md M1-6, decision 3). One whose bit is in `scan.ons_blocked` passes none
+  # in the same way, for the one scan after an online edit's switch (OE-1): it still
+  # writes its bit, which the edit never does, so no rung that reads the bit sees a write
+  # that no logic made.
+  defp evaluate({:ons, _, [storage]}, {true, env}, %Scan{first: first, ons_blocked: blocked}) do
+    {not first and not blocked?(storage, blocked) and not closed?(read(env, storage)),
+     write(env, storage, 1)}
   end
 
   defp evaluate({:ons, _, [storage]}, {false, env}, _scan) do
@@ -398,6 +447,13 @@ defmodule Logex.Runtime do
   defp evaluate({:ton, _, [timer, _preset]}, {false, env}, %Scan{now: now}) do
     {false, write(env, timer, reset(as_map(read(env, timer)), now))}
   end
+
+  # The block list names storage bits, and a storage bit is a declared bool, always a
+  # `{:name, _, bit}`: no member is a bool that logic may write (a ton's `pre` and `acc`
+  # are dints). An `ons` on a member, which only a program built by hand can hold, is never
+  # blocked. M2-5, whose function blocks may have such a member, decides how one is named.
+  defp blocked?({:name, _, bit}, blocked), do: bit in blocked
+  defp blocked?({:member, _, _path}, _blocked), do: false
 
   # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is
   # complementary by construction, as `xic` and `xio` are (M1-4). Erlang's term order is
