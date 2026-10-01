@@ -1277,7 +1277,9 @@ plausible. *(M1-6 landed 2026-09-30: decision 6's two-rate test is its proof.)*
 ### Milestone 2 — program organisation
 
 **Decided 2026-09-28** (§5; design and rationale in `docs/organisation.md`, whose §7
-decisions were all taken as recommended). Each item surveys its new words in
+decisions were all taken as recommended). *(Its §7 has since gained decisions 15–20, on
+online edit, taken on 2026-10-01: 18 departs from its recommendation and 19 had none; see
+"Online edit — decided 2026-10-01".)* Each item surveys its new words in
 `docs/naming.md` first, lands green, and pins every rule with a test that fails when the
 rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
 
@@ -1289,8 +1291,9 @@ rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
   order; a late cycle yields one `{:overlap, …}` and no lost phase; the README program
   gives identical outputs through `scan/2` and through a one-instance configuration.
   *(Online edit, 2026-10-01: M2-1 also keeps `docs/organisation.md` §4.9's constraints,
-  so OE-2 needs no rework: the runtime value holds plain data only; state is keyed by name
-  and flat by instance, and execution order is a list; each item's rule for a new piece
+  so OE-2 needs no rework: the runtime value holds plain data only; state is keyed by name,
+  program instances are held flat and never nested under a task, and execution order is a
+  list; each item's rule for a new piece
   of state serves both `start/1` and an edit that adds one, with the edit's exceptions
   listed; one checked constructor, which M2-2's parser feeds; an opaque
   `%Logex.Runtime{}`; one copy of each global; and an open set of events.)*
@@ -1370,17 +1373,21 @@ with a test that fails when the rule is reverted.
   the four questions §4.9 leaves open: which `ons` bits are armed, a timer whose `ton` an
   edit restores, the report for a done timer whose preset rises, and which steps read the
   live state. It also gives the rules for a new piece of state that M2-1's `start/1` will
-  share. *Done when* an instance of the README motor running one version takes a candidate
-  that adds a timer, raises a preset, adds an `ons` and removes the rung that drives a
-  var_output: test runs the candidate with the decided `.pre`, initial values and no
-  one-shot pulse; untest runs the original over the same state; assemble prunes; every
-  step's report names the held output and the dropped `.dn`; a type change is refused at
-  accept; and a program built from data that the text cannot say is refused.
+  share. *Done when* an instance of the README motor plus `var t1 ton` and a rung `xic motor ton
+  t1 5000` (M2-3's motor), running with `t1` done, takes a candidate that raises `t1`'s
+  preset, adds a second timer, adds an `ons` and removes the rung that drives a var_output
+  (keeping the motor's own rung, so `t1`'s rung stays true): test runs the candidate with
+  the decided `.pre`, initial values and no one-shot pulse, and its report names the held
+  output and the dropped `.dn`; untest runs the original over the same state, and its
+  report lists no undriven output; assemble prunes, and its report names the held output;
+  a type change is refused at accept; and a program built from data that the text cannot
+  say is refused.
 - **OE-2 · A staged edit of a configuration, after Milestone 2.** The same cycle over the
   whole `%Logex.Configuration{}` and `%Logex.Runtime{}`, switched between two cycles, with
   each M2 item's rule for new state; a task's interval and priority changed while running;
   moving an instance to another task, adding or removing a task, located I/O, devices and
-  a function block's members refused (each until its own item lifts it); output points
+  a function block's members refused (adding or removing a task until its rule is
+  verified, a function block's members until M2-5); output points
   left undriven held and reported. *Done when* (to be written by its design pass, after
   M2-6).
 
@@ -1641,8 +1648,8 @@ with a test that fails when the rule is reverted.
   disagreed with `evaluate/2` on 5,708 of 20,000 seeded envs and on 0 text-reachable ones.
   *(Re-scoped 2026-10-01, `docs/organisation.md` §4.9: a running controller is edited as
   data, so a DSL can only write a first version. Its output must be a whole program,
-  name, declarations and rungs, as text or data that `Logex.compile/2` accepts, which
-  settles §15's decision 3; and nothing writes a later edit back into the `.ex` file.
+  name, declarations and rungs, as text that `Logex.compile/2` accepts or as data that
+  the data API accepts (`docs/organisation.md` §4.9), which settles §15's decision 3; and nothing writes a later edit back into the `.ex` file.
   Spark was considered for the same role and is not adopted inside logex: as a separate
   authoring package it works (a probe produced a `%Logex.Program{}` equal to the text
   path's), but its rungs are wordy, its autocomplete is ElixirLS-only, and it is a
@@ -1680,8 +1687,8 @@ OE-1 and OE-2 in §3).
 - Online edit is staged from its first version, as the conventional family's is: accept,
   test, untest, assemble, cancel. State moves by name: an added tag starts at its initial
   value, a removed one is pruned at assemble, a type change is refused while running, a
-  timer's `.pre` follows its preset where logic left it alone, and an edit never makes an
-  `ons` fire.
+  timer's `.pre` follows its preset where logic left it alone, and an `ons` the edit adds
+  does not fire at the switch.
 - While running, a task's interval and priority may change; moving an instance to another
   task, and adding or removing a task, are refused.
 - An output an edit leaves undriven holds its last value, as the conventional family's
@@ -1864,8 +1871,8 @@ data that `Logex.Runtime` interprets. A generated-code backend was rejected once
 the defladder spike's disagreed with the interpreter on 5,708 of 20,000 seeded envs (B9).
 An edit through the Elixir compiler was measured on 2026-10-01 and fails every test that
 matters for a running controller: a Spark-defined module recompiled with
-`Code.compile_string/2` took 75–95 ms for 4 tags and 0.5–0.7 s for 200, against 22 µs and
-1.7 ms for `Logex.compile/2`; it ran arbitrary code written in the edit; an edit that
+`Code.compile_string/2` took 74–95 ms for 4 tags and 0.5–0.7 s for 200, against 22 µs and
+1.7 ms for `Logex.compile/2` on the same two programs; it ran arbitrary code written in the edit; an edit that
 failed validation unloaded the running module; and where names are atoms, as Spark
 entities' usually are, every new name is an atom that is never collected.
 

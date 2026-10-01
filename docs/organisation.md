@@ -4,7 +4,7 @@
 organisation itself — configurations, tasks, I/O mapping, Milestone 2 — is not yet
 implemented. How a running controller is changed, §4.9, was decided on 2026-10-01.** On 2026-09-28 the maintainer adopted the
 direction in §1 (IEC's software model, in logex's dialect: the hierarchy, task-style
-execution and I/O mapping), deferred routines, and took every decision in §7 as
+execution and I/O mapping), deferred routines, and took decisions 1–14 in §7 as
 recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1
 changes, and §3's Milestone 2 the §6.2 items. The syntax below is decided, but each new
 word still gets its `docs/naming.md` stanza before its code lands, and a stanza may still
@@ -62,9 +62,11 @@ still gets its own `docs/naming.md` stanza before its code lands (CLAUDE.md, ste
   date:
   - the *import/export reference* (Sept 2025);
   - the *general instructions reference* (Sept 2025);
-  - the *ladder-diagram programming manual* (July 2022).
-- The spikes behind this design ran on copies of `37b7932`, on Elixir 1.20.4 / OTP 28. They
-  are not in the repository. Their output is quoted as receipts and pins nothing.
+  - the *design considerations reference* (Sept 2025);
+  - the *ladder-diagram programming manual* (July 2022);
+  - the *quick start* (Oct 2009).
+- The spikes behind this design ran on copies of `37b7932`, and those behind §4.9 on
+  copies of `1984b07`, all on Elixir 1.20.4 / OTP 28. They are not in the repository. Their output is quoted as receipts and pins nothing.
 
 ---
 
@@ -208,7 +210,7 @@ CONTROLLER                                   CONFIGURATION (+ one implicit RESOU
    - it maps each declared name to an integer, or to a nested instance (`t1`, `s1`);
    - M1-3's flat `%{String.t() => integer}` is a Milestone-1 fact, not an invariant;
    - it is keyed by declared tag name. That is what later lets a new program type replace
-     an old one while each instance keeps its state (online edit, deferred).
+     an old one while each instance keeps its state (online edit, §4.9; `PLAN.md` OE-1 and OE-2).
 3. **`var_input` and `var_output` are the program's interface.** A configuration binds that
    interface to the I/O image. In IEC the image is the `%I`/`%Q` area, and VAR_OUTPUT is
    only an interface. Making the declarations double as the image for a lone `.ld` is
@@ -773,17 +775,18 @@ literal, which does not lex yet, and a timer preset given only from Elixir
 **No Elixir compiler on the edit path.** Nothing compiles a user's program to BEAM
 (`PLAN.md` §6). Measured on 1.20.4 on 2026-10-01: `Logex.compile/2` takes about 45 µs for
 the README motor and 31 ms for 2,000 rungs, and a tracer counted no call into the Elixir
-compiler, from text or from a program built as data. The same change made to a
-Spark-defined module through `Code.compile_string/2` took 75–95 ms for 4 tags and 0.5–0.7
-s for 200; it ran arbitrary code written in the edit; and an edit that failed validation
+compiler, from text or from a program built as data. Recompiling a Spark-defined
+module through `Code.compile_string/2` took 74–95 ms for a 4-tag program and 0.5–0.7 s
+for a 200-tag one, against 22 µs and 1.7 ms for `Logex.compile/2` on the same two
+programs; it ran arbitrary code written in the edit; and an edit that failed validation
 unloaded the module that was running, because Elixir purges a module whose compilation
 raises. Spark is not adopted inside logex. An Elixir authoring package outside it may
 come later, as a one-way seed that emits the same data (`PLAN.md` B9).
 
 **The edit cycle is staged, as the conventional family's is.**
 1. *Accept.* A candidate, the whole program (from M2, the whole configuration), is
-   compiled and checked beside the running one. It does not run, and a candidate with a
-   diagnostic goes no further.
+   compiled and checked beside the running one. It does not run, and a candidate with an
+   error goes no further; a warning does not stop it.
 2. *Test.* The candidate runs and the original is kept. The state is shared, moved to the
    candidate's shape by the rules below, and nothing is pruned.
 3. *Untest.* The original runs again over the same state, moved back. Test and untest may
@@ -804,14 +807,16 @@ returns a report.
 | Same name and type | kept | kept |
 | An added tag | its declared initial value | — |
 | A removed tag | kept, unused | pruned |
-| A tag's or member's type | refused: the candidate is not accepted, and a restart re-initialises it | — |
+| A tag's or member's type | refused: the candidate is not accepted, and a restart re-initialises it, but keeps a var_input whose value fits its new type | — |
 | A timer's preset | `.pre` follows the new preset where it still equals the old one, and is kept where logic changed it | — |
-| A one-shot | an edit never makes an `ons` fire | — |
+| A one-shot | an `ons` the edit adds does not fire at the switch | — |
 | `now` and `first` | kept; `first` stays false, so no initialisation runs, as in CODESYS | — |
 
 Open, for the design pass of `PLAN.md` OE-1:
-- which `ons` storage bits are armed. A probe that armed only the storage tags an edit adds
-  still pulsed for an `ons` added on an existing tag, and for one whose condition changed;
+- which `ons` storage bits are armed, and whether an existing `ons` whose condition the
+  edit changes is armed too, at the cost of a genuine edge on the switch scan. A probe that
+  armed only the storage tags an edit adds still pulsed for an `ons` added on an existing
+  tag, and for one whose condition changed;
 - a timer whose `ton` an edit removes and a later edit restores catches up the whole gap,
   because its `.en` and `last` froze. It must start timing at the edit instead;
 - raising a done timer's preset drops `.dn` while its rung stays true, as raising `.pre`
@@ -842,8 +847,9 @@ write while it runs.
 
 **What Milestone 2 must keep, so that this needs no rework** (`PLAN.md` M2-1):
 - the runtime value holds plain data only: no funs, pids or refs;
-- every piece of runtime state is keyed by name, never by position, and flat by instance;
-  execution order is a list in the configuration;
+- every piece of runtime state is keyed by name, never by position; program instances are
+  held flat, keyed by instance name, never nested under a task; execution order is a list
+  in the configuration;
 - each M2 item writes its rule for a new piece of state once, used by `start/1` and by an
   edit that adds one, with the edit's exceptions listed: `ons`, an event task's trigger and
   `first`;
@@ -1058,8 +1064,9 @@ checked by reverting it (CLAUDE.md; PLAN §2·M0-4). For example:
 
 ## 7. Decisions
 
-The first fourteen were taken as recommended on 2026-09-28, and 15–20 on 2026-10-01. They
-are kept with their options so the reasons stay with them.
+The first fourteen were taken as recommended on 2026-09-28. Decisions 15–20 were taken on
+2026-10-01: 18 against its recommendation, 19 with none to follow, the others as
+recommended. They are kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted.
@@ -1167,7 +1174,7 @@ numbers").**
 **Online edit (§4.9), read on 2026-10-01.**
 - The conventional family: its quick start (Oct 2009), pp.120–124, for the edit cycle and
   the three output sentences (verified again on 2026-10-01); its current online-editing
-  help (pending, accept, test, untest, assemble); its reference manual (Sept 2025), p.65
+  help (pending, accept, test, untest, assemble); its *design considerations reference* (Sept 2025), p.65
   (partial import online, and rescheduling a program refused in Run mode) and pp.85, 88
   and 91 (a tag's data type, or an existing user-defined type, changed offline only); and the TASK object of its general
   instructions reference, whose rate and priority logic may write at runtime.
