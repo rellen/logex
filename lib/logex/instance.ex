@@ -14,19 +14,25 @@ defmodule Logex.Instance do
     bit. That scan empties it, and so does `Logex.Runtime.restart/3`. It is `[]` except
     between an online edit's switch and the next scan (OE-1, `docs/organisation.md`
     §4.9), and nothing sets it yet.
+  - `switched` says whether an online edit has switched it to another program since its
+    last scan (`Logex.Edit`): a switch sets it, and a scan clears it. It is how an edit
+    knows whether the program it stops has scanned since the last switch, and so whether
+    the state holds what that program last gave the host. `restart/3` leaves it alone,
+    since a restart is not a scan.
 
   Make one with `Logex.Runtime.instance/1`. One built or edited by hand is outside the
   contract of `Logex.Runtime`.
   """
 
   @enforce_keys [:type, :env, :now, :first]
-  defstruct [:type, :env, :now, :first, ons_blocked: []]
+  defstruct [:type, :env, :now, :first, ons_blocked: [], switched: false]
 
   @type t :: %__MODULE__{
           type: String.t() | nil,
           env: %{String.t() => integer | %{String.t() => integer}},
           now: non_neg_integer,
           first: boolean,
-          ons_blocked: [String.t()]
+          ons_blocked: [String.t()],
+          switched: boolean
         }
 end

@@ -39,6 +39,7 @@ defmodule Logex.RuntimeTest do
                now: 0,
                first: true,
                ons_blocked: [],
+               switched: false,
                env: %{
                  "start" => 0,
                  "stop" => 0,
@@ -178,6 +179,9 @@ defmodule Logex.RuntimeTest do
             {%{s | now: -5}, "state.now must be a non-negative integer of milliseconds, got: -5"},
             {%{s | now: -1}, "state.now must be a non-negative integer of milliseconds, got: -1"},
             {%{s | first: nil}, "state.first must be true or false, got: nil"},
+            # OE-1: an edit's switch sets it and a scan clears it.
+            {%{s | switched: nil}, "state.switched must be true or false, got: nil"},
+            {%{s | switched: 1}, "state.switched must be true or false, got: 1"},
             # OE-1, F8: a proper list of names, or a blocked `ons` would raise unpinned.
             {%{s | ons_blocked: nil},
              "state.ons_blocked must be a list of storage bit names, got: nil"},
@@ -198,6 +202,10 @@ defmodule Logex.RuntimeTest do
       # The state's own fields are checked before its owner, the block list among them.
       raises("state.ons_blocked must be a list of storage bit names, got: [:s1]", fn ->
         Runtime.call(pump, %{s | ons_blocked: [:s1]}, %{}, %Scan{now: 0, first: true})
+      end)
+
+      raises("state.switched must be true or false, got: nil", fn ->
+        Runtime.call(pump, %{s | switched: nil}, %{}, %Scan{now: 0, first: true})
       end)
     end
 
@@ -654,6 +662,28 @@ defmodule Logex.RuntimeTest do
     end
   end
 
+  describe "an instance's `switched` (OE-1)" do
+    # Only Logex.Edit's switch sets it (edit_test.exs); here it is set by hand, to see what
+    # the runtime does with it.
+    setup %{motor: m, state: s} do
+      {_, running} = Runtime.scan(m, s)
+      %{switched: %{running | switched: true}}
+    end
+
+    test "a new instance has none, and a scan clears it", %{motor: m, switched: s} do
+      assert %Instance{switched: false} = Runtime.instance(m)
+      assert {_, %Instance{switched: false}} = Runtime.scan(m, s, 10)
+
+      assert {_, %Instance{switched: false}} =
+               Runtime.call(m, s, %{}, %Scan{now: 10, first: false})
+    end
+
+    test "put_inputs/3 and restart/3 keep it, as neither is a scan", %{motor: m, switched: s} do
+      assert %Instance{switched: true} = Runtime.put_inputs(m, s, %{"start" => 1})
+      assert %Instance{switched: true, first: true} = Runtime.restart(m, s, :cold)
+    end
+  end
+
   describe "the public surface (B5)" do
     test "is exactly this: every evaluate clause is private, in Logex.Runtime" do
       assert Enum.sort(Logex.__info__(:functions)) == [compile: 2, compile_file: 1]
@@ -664,11 +694,25 @@ defmodule Logex.RuntimeTest do
       assert Enum.sort(Logex.Compiler.__info__(:functions)) ==
                [instructionize: 1, instructionize: 2, instructions: 0, parse: 1, tokenize: 1]
 
-      # The two structs a host holds and builds; OE-1 gave both `ons_blocked`.
+      # The two structs a host holds and builds; OE-1 gave both `ons_blocked`, and the
+      # instance `switched`.
       assert Enum.sort(Map.keys(Instance.__struct__())) ==
-               [:__struct__, :env, :first, :now, :ons_blocked, :type]
+               [:__struct__, :env, :first, :now, :ons_blocked, :switched, :type]
 
       assert Enum.sort(Map.keys(Scan.__struct__())) == [:__struct__, :first, :now, :ons_blocked]
+
+      # OE-1: the staged edit of one instance, whose struct is opaque.
+      assert Enum.sort(Logex.Edit.__info__(:functions)) == [
+               __struct__: 0,
+               __struct__: 1,
+               accept: 3,
+               assemble: 2,
+               cancel: 2,
+               running: 1,
+               stage: 1,
+               test: 2,
+               untest: 2
+             ]
 
       # OE-1: the definition of a well-formed tree, which instructionize/2 checks on entry.
       assert Enum.sort(Logex.Parser.__info__(:functions)) ==

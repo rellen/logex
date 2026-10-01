@@ -26,6 +26,16 @@ defmodule Logex.Program do
   @doc """
   The first env: every declared tag at its initial value, 0 when none was declared, and
   every instance of a function block a map of its members at theirs (M1-6).
+
+  The one rule for a new piece of state (`docs/organisation.md` §4.9):
+  `Logex.Runtime.instance/1` and `restart/3` start every tag by it, an online edit's
+  switch (`Logex.Edit`) starts each tag it adds by it, and M2-1's `start/1` will start
+  every instance by it. The edit's exceptions, for state an instance already holds around
+  the new piece: `first` stays false; a var_input a switch starts or makes live is
+  reported, since its value is the host's; at the first test, a tag the candidate adds,
+  or one whose value does not fit its type, starts here over what a plain swap left; and
+  a kept tag whose initial value changed keeps its value until a restart, and is
+  reported. M2-6 will add an event task's trigger.
   """
   def initial_env(%__MODULE__{tags: tags}),
     do: Map.new(tags, fn {name, tag} -> {name, start(tag)} end)

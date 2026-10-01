@@ -966,9 +966,13 @@ boundary.
   A step checks the edit, then the state, then the stage.
 - **Outside the contract, and documented:** scanning the program the edit is not running;
   two edits of one instance at once; a step on an edit that has ended or been superseded;
-  and accepting against a program the state is not running. None of these is detected
-  until OE-2's configuration carries a generation counter. A plain swap stays in the
-  contract, as today (decision 26).
+  and accepting against a program the state is not running, one that has not scanned,
+  started or restarted it since another program last scanned it. None of these is
+  detected until OE-2's configuration carries a generation counter. A plain swap stays in
+  the contract, as today (decision 26): it is a scan of the new program over the kept
+  state, so the program it swaps in is then the one the state is running. Accepted before
+  that scan, an edit would take the state for what the new program showed the host, which
+  OE-1's contract walk found.
 
 *A switch.* Test and untest each switch the state from the program they stop, F, to the
 one they start, T: test from the original to the candidate, untest back. A switch reads
@@ -1005,26 +1009,36 @@ restart. A switch lists:
 
 An untouched `ons` is not listed, so it keeps a genuine edge on the switch scan. The
 program that last scanned is F, unless no scan has run since the last switch. The
-instance records whether one has, and within one edit the edit knows which program last
-scanned, so a test and an untest with no scan between lose no real edge (fix F3). Where
-the last switch was an earlier edit's, the edit does not know that program. The switch
-then compares against F, and keeps listed every pending bit that T still has an `ons` on,
-so a second edit taken before any scan cannot make a one-shot fire (fix F2). Each listed
-bit is reported with its value, which the switch leaves alone. The list is called
-`ons_blocked` and its report kind `:ons_blocked`, never "held": here "held" means an
-output keeping its value (fix F9).
+instance records whether one has, in its `switched` (below), and within one edit the edit
+knows which program last scanned, so a test and an untest with no scan between lose no
+real edge (fix F3). Where the last switch was an earlier edit's, the edit does not know
+that program. The switch then compares against F, and keeps listed every pending bit that
+T still has an `ons` on, so a second edit taken before any scan cannot make a one-shot
+fire (fix F2). Each listed bit is reported with its value, which the switch leaves alone.
+The list is called `ons_blocked` and its report kind `:ons_blocked`, never "held": here
+"held" means an output keeping its value (fix F9).
 
 **Held outputs (decision 20; fix F4).** A var_output of F or of T that F drove (wrote
 through a `:write` slot, an `ons` bit included) and T does not drive as a var_output
-(removed, given another section, or no longer written) holds the value it last showed,
-and the host holds its point. The edit records that value at the switch that stops
-driving the output, from the state as the last scan left it, and every later step reports
-the record. It never re-reads a value a restart has since cleared, or one that logic
-driving the tag as a var has since changed. Where no scan has run since the instance
-started or restarted (`first` is true), the state is not what the point shows, so nothing
-is recorded and the output is not reported. Test, its forecast and assemble report the
-outputs the original drove and the candidate does not; untest, and cancel after an
-untest, report the reverse.
+(removed, given another section, or no longer written) holds its value, and every step
+reports it with the value its point holds:
+- an output the program that runs next still shows, a var_output none of its logic
+  writes, holds the state's value, which that program shows at every scan;
+- for one it does not show, the host holds its point at the value it last received, and
+  the edit reports that value from its record of the instance.
+
+The edit learns a point's value from the state only at a step taken while the program it
+stops is the one that last scanned, with no restart since that scan. `%Logex.Instance{}`
+gains `switched` for this: a switch sets it, a scan clears it, and a restart leaves it.
+With `switched` and `first` both false, the state holds what the last scan showed the
+host. With `switched` true, no scan has run since the last switch, so no point has
+changed and the record stands. With `switched` false and `first` true, a restart has
+cleared what the last scan showed, and the edit forgets it. So the edit never re-reads a
+value a restart has since cleared, or one that logic driving the tag as a var has since
+changed, and an output whose value it has not learnt is not reported. Test, its forecast
+and assemble report the outputs the original drove and the candidate does not; untest,
+and cancel after an untest, report the reverse. The one-shot rules read `switched` too
+(fix F3).
 
 **Assemble and cancel** are not switches: they block no one-shot and move no `.pre`.
 Assemble prunes the state to the candidate's tags, and cancel after an untest to the
@@ -1148,6 +1162,9 @@ against 1.4–1.5 ms for one scan and 76–86 ms to compile the candidate.
   to exactly that value before the test, the untest that follows gives back logic's value,
   where a restart of the original would give the original's preset.
 - An `:edit` diagnostic carries no file (above).
+- An edit's record starts empty. A new edit whose first test comes with no scan since an
+  earlier edit's last switch knows no point's value yet, so it reports only the held
+  outputs its candidate still shows.
 
 ---
 

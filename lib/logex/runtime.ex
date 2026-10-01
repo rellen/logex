@@ -11,10 +11,12 @@ defmodule Logex.Runtime do
   - `restart/3` starts an instance again, keeping its clock and the inputs that fit their
     types.
 
-  An instance also carries `ons_blocked`, the storage bits whose `ons` its next scan
-  blocks, which only the runtime fills into a scan (`Logex.Instance`, `Logex.Scan`): the
-  hook by which an online edit keeps a new or changed one-shot from firing (OE-1,
-  `docs/organisation.md` §4.9). Nothing sets it yet.
+  A running instance takes a changed program through `Logex.Edit` (OE-1,
+  `docs/organisation.md` §4.9): accept, test, untest, assemble or cancel, each between two
+  scans, its state moved by name. An instance carries two fields for it
+  (`Logex.Instance`): `ons_blocked`, the storage bits whose `ons` its next scan blocks,
+  which only the runtime fills into a scan (`Logex.Scan`) and which nothing sets yet; and
+  `switched`, which an edit's switch sets and a scan clears.
 
   **The host contract.** A mistake by the host raises `ArgumentError` (a host bug, not a
   PLC event, `docs/organisation.md` §4.6); a mistake in the source is a diagnostic from
@@ -25,12 +27,24 @@ defmodule Logex.Runtime do
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
   `first`; its `ons_blocked` is the instance's, which `call/4` fills in, so a host leaves
   it out. A state is matched to its program by name, and its values are not checked each
-  scan: an instance kept across a recompile of the same name keeps them until `restart/3`.
-  A tag the recompile adds reads 0 until then, so an added timer starts at a `.pre` of 0,
-  and a tag whose type it changes keeps its old value, a timer's map reaching the outputs
-  and the contacts. `restart/3` starts every tag again but the `var_input`s whose values
-  fit their types, and empties `ons_blocked`. A `%Logex.Program{}` or `%Logex.Instance{}`
-  built or edited by hand is outside this contract.
+  scan. Scanning a recompile of the same name over a kept instance, a *plain swap*, stays
+  in this contract: the instance keeps its values until `restart/3`, so a tag the
+  recompile adds reads 0, an added timer starting at a `.pre` of 0, and a tag whose type it
+  changes keeps its old value, a timer's map reaching the outputs and the contacts.
+  `Logex.Edit` moves a state to a new program by rule instead: it starts what is added,
+  restarts a value that does not fit its type, and refuses a type change. `restart/3`
+  starts every tag again but the `var_input`s whose values fit their types, and empties
+  `ons_blocked`. A `%Logex.Program{}`, `%Logex.Instance{}` or `%Logex.Edit{}` built or
+  edited by hand is outside this contract.
+
+  **During an edit** the host scans, sets inputs and restarts through
+  `Logex.Edit.running/1`; scanning the other program is outside this contract. The edit
+  adds two duties (OE-1, fix F10):
+  - under test, send only the var_inputs of `Logex.Edit.running(edit)`: one the candidate
+    removed is refused as undeclared, like any other;
+  - resend every input a step reports as `{:input, name, value}` before the next scan,
+    since across a switch "a host sends only what changed" is no longer enough, and stop
+    sending each one it reports as `{:unread, name, value}`.
   """
 
   alias Logex.{Declarations, FbType, Instance, Program, Scan, Tag}
@@ -76,7 +90,8 @@ defmodule Logex.Runtime do
   @doc """
   Starts an instance again: every tag back at its initial value except the `var_input`s
   whose values fit their types, the next scan marked first, no one-shot blocked, and the
-  clock kept, since time never goes backwards.
+  clock kept, since time never goes backwards. `switched` is kept too: a restart is not a
+  scan, so it shows the host nothing.
 
   The `var_input`s are the host's input image, not the program's state: IEC leaves inputs
   "initialized in an implementation-dependent manner" (Ed 2 §2.4.2 rule 4), and keeping
@@ -114,7 +129,8 @@ defmodule Logex.Runtime do
     do: raise(ArgumentError, "restart takes :cold or :warm, got: #{inspect(mode)}")
 
   # The evaluator's scan is the host's `now` and `first` with the instance's block list,
-  # which holds for this one scan (OE-1).
+  # which holds for this one scan (OE-1). A scan is what clears `switched`: the state then
+  # holds what this program gave the host.
   defp run(
          %Instance{env: env, ons_blocked: blocked} = state,
          %Program{rungs: rungs} = program,
@@ -122,7 +138,9 @@ defmodule Logex.Runtime do
        ) do
     scan = %Scan{now: now, first: first, ons_blocked: blocked}
     env = Enum.reduce(rungs, env, &rung(&1, &2, scan))
-    {outputs(program, env), %{state | env: env, now: now, first: false, ons_blocked: []}}
+
+    {outputs(program, env),
+     %{state | env: env, now: now, first: false, ons_blocked: [], switched: false}}
   end
 
   # A var_output a hand-built env leaves out reads 0, as a contact reads it (M1-4).
@@ -156,6 +174,9 @@ defmodule Logex.Runtime do
 
   defp state!(%Instance{first: first}, _program) when not is_boolean(first),
     do: raise(ArgumentError, "state.first must be true or false, got: #{inspect(first)}")
+
+  defp state!(%Instance{switched: switched}, _program) when not is_boolean(switched),
+    do: raise(ArgumentError, "state.switched must be true or false, got: #{inspect(switched)}")
 
   defp state!(%Instance{ons_blocked: blocked} = state, program),
     do: owner!(blocked!(bits?(blocked), state), program)

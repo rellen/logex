@@ -15,10 +15,21 @@ defmodule Logex.ApiContractTest do
   `ton` takes effect at the next scan, so the generated `ton` comes last: at the end of the
   scan the oracle sees the timer as its `ton` left it. The reach assertions cover every
   M1-6 diagnostic and warning, and what a timer and a one-shot do.
+
+  OE-1: a third walk takes online edits (`Logex.Edit`) between its scans, the candidates
+  drawn from one vocabulary so that two programs share their names, and now and then
+  swaps a program without an edit (a plain swap), so a state holds what does not fit.
+  Every host mistake it makes is refused with a documented message, and every step it may
+  take is accepted, made twice and gives the same result. The writes each report lists,
+  applied to the state before the step, give the state after it, and each kind of entry is
+  checked against the rule restated from the two programs' text. Each held output is
+  checked against the host's own image of its outputs, the latest value each scan gave
+  it, independently of the edit. Its reach covers every report kind, every refusal and
+  every oracle.
   """
   use ExUnit.Case, async: true
 
-  alias Logex.{Diagnostic, Instance, Program, Runtime, Scan, Tag}
+  alias Logex.{Diagnostic, Edit, Instance, Program, Runtime, Scan, Tag}
 
   @words ~w(var var_input var_output bool dint xic xio ote otl otu move a b c start stop Motor) ++
            ~w(ton ons eq ne lt gt le ge t1 t1.dn t1.acc t1.pre t1.zz t1.et a.b s1 n d.3) ++
@@ -503,15 +514,455 @@ defmodule Logex.ApiContractTest do
   # Records each documented kind of refusal it sees, for the reach assertion. An accepted
   # call is made twice and must give the same result: nothing in the runtime reads a clock
   # or any state but its arguments (docs/organisation.md §4.6).
-  defp attempt(fun) do
+  defp attempt(fun, refusals \\ @refusals, key \\ :refused) do
     result = fun.()
     assert fun.() == result, "the same call gave two results"
     {:ok, result}
   rescue
     error in ArgumentError ->
-      kind = Enum.find(@refusals, &String.starts_with?(error.message, &1))
+      kind = Enum.find(refusals, &String.starts_with?(error.message, &1))
       assert kind, "undocumented refusal: #{error.message}"
-      Process.put(:refused, MapSet.put(Process.get(:refused, MapSet.new()), kind))
+      reached(key, kind)
       :refused
   end
+
+  defp reached(key, name),
+    do: Process.put(key, MapSet.put(Process.get(key, MapSet.new()), name))
+
+  # ---- OE-1: the walk with online edits -------------------------------------------------
+
+  # The refusals an edit gives, and the runtime's that it passes on, by their first words.
+  @edit_refusals [
+    "expected a %Logex.",
+    "the candidate is",
+    "this state is an instance",
+    "state.",
+    "test takes",
+    "untest takes",
+    "assemble takes",
+    "cancel takes"
+  ]
+
+  @report_kinds [:added, :held, :initial_changed, :input, :pruned, :unread]
+
+  # What the walk must see happen, and its oracles check, at least once each.
+  @edit_reach [
+    :diagnosed,
+    :forecast,
+    :plain_swap,
+    :misfit,
+    :stale,
+    :restart_in_edit,
+    :second_test,
+    :held_point,
+    :held_shown,
+    :assembled,
+    :cancelled_accepted,
+    :cancelled_untested
+  ]
+
+  @allowed %{
+    test: [:accepted, :untested],
+    untest: [:testing],
+    assemble: [:testing],
+    cancel: [:accepted, :untested]
+  }
+
+  # One vocabulary, so two draws share their names: `start` and `stop` move between
+  # var_input and var, `a`, `b` and `c` between var and var_output, `n`'s initial value
+  # changes, and `r` and `t1` change type now and then, which a plain swap leaves in the
+  # state and an edit refuses. `s1` is a var_output driven by a one-shot's storage bit.
+  defp edit_source do
+    inputs = Enum.flat_map(~w(start stop), &declared(&1, pick(~w(var_input var_input var none))))
+    sp = pick(["var_input sp dint", "var sp dint", nil])
+    bools = Enum.map(~w(a b c), &{&1, pick(~w(var var_output var_output))})
+    r = pick([:bool, :dint, nil])
+    t1 = pick([:ton, :ton, :bool, nil])
+    ons? = :rand.uniform(3) == 1
+
+    declarations =
+      Enum.map(inputs, fn {name, section} -> "#{section} #{name} bool" end) ++
+        Enum.reject([sp], &is_nil/1) ++
+        Enum.map(bools, fn {name, section} -> "#{section} #{name} bool" end) ++
+        ["var_output n dint #{pick(["", "7", "9"])}"] ++
+        typed("r", r) ++ typed("t1", t1) ++ timer_input(t1) ++ ons_tags(ons?)
+
+    writable =
+      ~w(a b c) ++
+        for({name, "var"} <- inputs, do: name) ++
+        for({name, :bool} <- [{"r", r}, {"t1", t1}], do: name)
+
+    readable = writable ++ for({name, "var_input"} <- inputs, do: name) ++ timer_bit(t1)
+
+    rungs =
+      for _ <- 1..:rand.uniform(4) do
+        "#{pick(~w(xic xio))} #{pick(readable)} #{pick(~w(ote ote otl otu))} #{pick(writable)}"
+      end ++
+        Enum.filter(["xic #{pick(readable)} move #{pick(["5", "7"] ++ sp_word(sp))} n"], fn _ ->
+          :rand.uniform(2) == 1
+        end) ++
+        moves_into("r", r) ++ ons_rung(ons?, readable) ++ timer_rung(t1)
+
+    Enum.join(declarations ++ rungs, "\n")
+  end
+
+  defp declared(_name, "none"), do: []
+  defp declared(name, section), do: [{name, section}]
+
+  defp typed(_name, nil), do: []
+  defp typed(name, type), do: ["var #{name} #{type}"]
+
+  defp timer_input(:ton), do: ["var_input go bool"]
+  defp timer_input(_t1), do: []
+
+  defp timer_bit(:ton), do: ["t1.dn"]
+  defp timer_bit(_t1), do: []
+
+  # A timer no `ton` runs keeps whatever a plain swap left under its name, as a misfit.
+  defp timer_rung(:ton),
+    do: Enum.take(["xic go ton t1 #{pick([30, 5000])}"], :rand.uniform(3) - 1)
+
+  defp timer_rung(_t1), do: []
+
+  defp ons_tags(true), do: ["var_output s1 bool", "var_output p bool"]
+  defp ons_tags(false), do: []
+
+  defp ons_rung(true, readable), do: ["xic #{pick(readable)} ons s1 ote p"]
+  defp ons_rung(false, _readable), do: []
+
+  defp sp_word(nil), do: []
+  defp sp_word(_sp), do: ["sp"]
+
+  defp moves_into(name, :dint), do: ["move 3 #{name}"]
+  defp moves_into(_name, _type), do: []
+
+  defp edit_program do
+    case Logex.compile(edit_source(), name: "p") do
+      {:ok, program} -> program
+      {:error, _} -> edit_program()
+    end
+  end
+
+  defp variant(%Program{source: source}) do
+    {declarations, rungs} = Enum.split_with(String.split(source, "\n"), &(&1 =~ ~r/^var/))
+    n = "var_output n dint #{pick(["", "7", "9"])}"
+    declarations = Enum.map(declarations, &String.replace(&1, ~r/^var_output n dint.*/, n))
+
+    case Logex.compile(Enum.join(declarations ++ drop_one(rungs), "\n"), name: "p") do
+      {:ok, program} -> program
+      {:error, _} -> edit_program()
+    end
+  end
+
+  defp drop_one([]), do: []
+  defp drop_one(rungs), do: List.delete_at(rungs, :rand.uniform(length(rungs)) - 1)
+
+  defp edit_attempt(fun), do: attempt(fun, @edit_refusals, :edit_refused)
+
+  test "an online edit refuses every host mistake with a documented ArgumentError, and " <>
+         "each step gives the report its rules and its writes say" do
+    :rand.seed(:exsss, {2026, 10, 1})
+
+    for _ <- 1..150 do
+      program = edit_program()
+      {:ok, other} = Logex.compile(program.source, name: "q")
+      walk = %{p: program, s: Runtime.instance(program), e: nil, o: nil, c: nil, points: %{}}
+      edit_walk(Map.put(walk, :other, Runtime.instance(other)), 60)
+    end
+
+    assert Process.get(:edit_refused, MapSet.new()) == MapSet.new(@edit_refusals)
+    assert Process.get(:kinds, MapSet.new()) == MapSet.new(@report_kinds)
+    assert Process.get(:edit_reach, MapSet.new()) == MapSet.new(@edit_reach)
+  end
+
+  defp edit_walk(w, 0), do: w
+  defp edit_walk(w, n), do: edit_walk(edit_op(:rand.uniform(12), w), n - 1)
+
+  # A scan of the program the host runs, with inputs that fit: the host's image of its
+  # outputs takes what the scan gives.
+  defp edit_op(op, %{p: p} = w) when op <= 4 do
+    inputs =
+      for {name, %Tag{section: :var_input, type: type}} <- p.tags,
+          :rand.uniform(2) == 1,
+          into: %{},
+          do: {name, pick(@edges[type] |> Enum.take(3))}
+
+    elapsed = pick([0, 10, 25, 5000])
+    {:ok, s} = edit_attempt(fn -> Runtime.put_inputs(p, w.s, inputs) end)
+    {:ok, {outputs, s}} = edit_attempt(fn -> Runtime.scan(p, s, elapsed) end)
+    assert Enum.sort(Map.keys(outputs)) == outputs_of(p)
+    assert s.switched == false
+    %{w | s: s, points: Map.merge(w.points, outputs)}
+  end
+
+  # Half the candidates are the running program with one rung dropped and `n`'s initial
+  # value redrawn, so the two keep their types and a value a plain swap left is reached.
+  defp edit_op(op, %{e: nil, p: p} = w) when op in [5, 6],
+    do: accept(pick([edit_program(), variant(p)]), w)
+
+  defp edit_op(op, w) when op in 5..9, do: step(pick([:test, :untest, :assemble, :cancel]), w)
+
+  defp edit_op(10, %{p: p, s: s} = w) do
+    {:ok, s} = edit_attempt(fn -> Runtime.restart(p, s, :cold) end)
+    edit_reach(:restart_in_edit, w.e != nil)
+    %{w | s: s}
+  end
+
+  # A plain swap, within the runtime's contract while no edit is open: a scan of another
+  # program over the state. An edit often follows, and is accepted only against a program
+  # that has run the state: a variant of it, which keeps its types, so a value the swap
+  # left that does not fit is reached; or the program swapped out, whose tags the state
+  # still holds.
+  defp edit_op(11, %{e: nil, p: old} = w) do
+    edit_reach(:plain_swap, true)
+    swapped = edit_op(1, %{w | p: edit_program()})
+    candidate = pick([variant(swapped.p), old])
+    pick([&edit_op(1, &1), &accept(candidate, &1), &step(:test, accept(candidate, &1))]).(swapped)
+  end
+
+  defp edit_op(11, w), do: edit_op(1, w)
+
+  # A host mistake: a renamed candidate, another program's state, a bad state, something
+  # that is not a program or an edit, or an edit given another program's state.
+  defp edit_op(12, %{p: p, s: s} = w) do
+    {:ok, renamed} = Logex.compile(p.source, name: "q")
+    {candidate, step} = {edit_program(), pick([:test, :untest, :assemble, :cancel])}
+
+    {junk, bad} =
+      {pick([nil, %{}, renamed.rungs]), pick([%{s | switched: nil}, %{s | now: -1}, nil])}
+
+    not_edit = pick([junk, p])
+
+    calls =
+      [
+        fn -> Edit.accept(p, renamed, s) end,
+        fn -> Edit.accept(p, candidate, w.other) end,
+        fn -> Edit.accept(junk, p, s) end,
+        fn -> Edit.accept(p, junk, s) end,
+        fn -> Edit.accept(p, p, bad) end,
+        fn -> apply(Edit, step, [not_edit, s]) end,
+        fn -> Edit.running(not_edit) end,
+        fn -> Edit.stage(not_edit) end
+      ] ++ open_mistakes(w, step, bad)
+
+    assert :refused = edit_attempt(pick(calls))
+    w
+  end
+
+  defp open_mistakes(%{e: nil}, _step, _bad), do: []
+
+  defp open_mistakes(%{e: edit} = w, step, bad),
+    do: [fn -> Edit.test(edit, w.other) end, fn -> apply(Edit, step, [edit, bad]) end]
+
+  defp accept(candidate, %{p: p, s: s} = w),
+    do: edit_accepted(edit_attempt(fn -> Edit.accept(p, candidate, s) end), candidate, w)
+
+  defp edit_accepted({:ok, {:ok, edit, forecast}}, candidate, %{p: p, s: s} = w) do
+    report!(forecast)
+    assert {_, _, ^forecast} = Edit.test(edit, s)
+    assert Edit.stage(edit) == :accepted and Edit.running(edit) == p
+    edit_reach(:forecast, true)
+    %{w | e: edit, o: p, c: candidate}
+  end
+
+  defp edit_accepted({:ok, {:error, diagnostics}}, candidate, %{p: p} = w) do
+    assert Enum.all?(diagnostics, &match?(%Diagnostic{stage: :edit, severity: :error}, &1))
+    assert Enum.map(diagnostics, & &1.line) == Enum.sort(Enum.map(diagnostics, & &1.line))
+    cited = for d <- diagnostics, do: d.message |> String.split("`") |> Enum.at(1)
+
+    retyped =
+      for {name, %Tag{type: type}} <- candidate.tags,
+          match?(%Tag{}, p.tags[name]) and p.tags[name].type != type,
+          do: name
+
+    assert Enum.sort(cited) == Enum.sort(retyped) and retyped != []
+    edit_reach(:diagnosed, true)
+    w
+  end
+
+  defp step(name, %{e: nil, s: s} = w) do
+    assert :refused = edit_attempt(fn -> apply(Edit, name, [nil, s]) end)
+    w
+  end
+
+  defp step(name, %{e: edit, s: s} = w) do
+    stage = Edit.stage(edit)
+    result = edit_attempt(fn -> apply(Edit, name, [edit, s]) end)
+    stepped(name, stage, stage in @allowed[name], result, w)
+  end
+
+  defp stepped(_name, _stage, false, result, w) do
+    assert result == :refused, "a step at the wrong stage was accepted"
+    w
+  end
+
+  defp stepped(name, stage, true, {:ok, {next, later, report}}, %{s: before} = w)
+       when name in [:test, :untest] do
+    report!(report)
+    assert later == %{before | env: rebuilt(before.env, report), switched: true}
+    to = Edit.running(next)
+    switched!(w.p, to, before, later, report, {name, stage})
+    held!(w.p, to, report, later, w.points)
+    edit_reach(:second_test, name == :test and stage == :untested)
+    %{w | e: next, s: later, p: to}
+  end
+
+  defp stepped(:cancel, :accepted, true, {:ok, {program, later, report}}, %{s: before} = w) do
+    assert {program, later, report} == {w.o, before, []}
+    edit_reach(:cancelled_accepted, true)
+    %{w | e: nil, p: program}
+  end
+
+  defp stepped(name, _stage, true, {:ok, {kept, later, report}}, %{s: before} = w) do
+    report!(report)
+    dropped = dropped(name, w)
+    assert kept == Edit.running(w.e)
+    assert later == %{before | env: rebuilt(before.env, report)}
+    assert Enum.sort(Map.keys(later.env)) == Enum.sort(Map.keys(kept.tags))
+
+    assert for({:pruned, tag, value} <- report, do: {tag, value}) ==
+             Enum.sort(
+               for {tag, value} <- before.env, not Map.has_key?(kept.tags, tag), do: {tag, value}
+             )
+
+    held!(dropped, kept, report, before, w.points)
+    edit_reach(pruned(name), true)
+    %{w | e: nil, s: later, p: kept}
+  end
+
+  defp dropped(:assemble, w), do: w.o
+  defp dropped(:cancel, w), do: w.c
+
+  defp pruned(:assemble), do: :assembled
+  defp pruned(:cancel), do: :cancelled_untested
+
+  defp report!(report) do
+    assert report == Enum.sort(report)
+    keys = for {kind, name, _detail} <- report, do: {kind, name}
+    assert keys == Enum.uniq(keys)
+
+    for {kind, name, _detail} <- report do
+      assert kind in @report_kinds and is_binary(name)
+      reached(:kinds, kind)
+    end
+  end
+
+  # The writes a report lists, applied to a state's env.
+  defp rebuilt(env, report), do: Enum.reduce(report, env, &write/2)
+
+  defp write({kind, name, value}, env) when kind in [:added, :input],
+    do: Map.put(env, name, value)
+
+  defp write({:pruned, name, _value}, env), do: Map.delete(env, name)
+  defp write(_fact, env), do: env
+
+  # A switch's rules, restated from the two programs: which tags start, at what value,
+  # which inputs go live or unread, and which initial values changed.
+  defp switched!(from, to, before, later, report, {name, stage}) do
+    first_test? = name == :test and stage == :accepted
+    initial = Program.initial_env(to)
+
+    started =
+      for {tag, declared} <- to.tags,
+          not Map.has_key?(before.env, tag) or
+            (first_test? and
+               (not Map.has_key?(from.tags, tag) or not typed_as?(declared, before.env[tag]))),
+          do: tag
+
+    inputs = var_inputs(to)
+    assert names(report, :added) == Enum.sort(started -- inputs)
+
+    assert names(report, :input) ==
+             Enum.sort(
+               Enum.uniq((inputs -- var_inputs(from)) ++ (started -- (started -- inputs)))
+             )
+
+    assert names(report, :unread) == Enum.sort(var_inputs(from) -- inputs)
+
+    for {kind, tag, value} <- report, kind in [:added, :input, :unread] do
+      assert value == Map.get(later.env, tag, 0)
+      assert kind == :unread or value == initial[tag] or tag not in started
+    end
+
+    old = Program.initial_env(from)
+
+    changed =
+      for {tag, %Tag{type: type}} <- to.tags,
+          type in [:bool, :dint],
+          match?(%Tag{type: ^type}, from.tags[tag]),
+          old[tag] != initial[tag],
+          do: {:initial_changed, tag, {old[tag], initial[tag]}}
+
+    assert for({:initial_changed, _, _} = entry <- report, do: entry) == Enum.sort(changed)
+
+    edit_reach(
+      :misfit,
+      first_test? and
+        Enum.any?(started, &(Map.has_key?(before.env, &1) and Map.has_key?(from.tags, &1)))
+    )
+
+    edit_reach(
+      :stale,
+      first_test? and
+        Enum.any?(started, &(Map.has_key?(before.env, &1) and not Map.has_key?(from.tags, &1)))
+    )
+  end
+
+  defp typed_as?(%Tag{type: :bool}, value), do: value in [0, 1]
+
+  defp typed_as?(%Tag{type: :dint}, value),
+    do: is_integer(value) and value in -2_147_483_648..2_147_483_647//1
+
+  defp typed_as?(%Tag{}, %{} = timer), do: Enum.sort(Map.keys(timer)) == ~w(acc dn en last pre tt)
+  defp typed_as?(%Tag{}, _value), do: false
+
+  # Decision 20 restated from the text, and F4 checked against the host's own image: a
+  # held output is one of either program's outputs that the program stopped (or dropped)
+  # wrote, and the program kept does not write as an output. One the program kept shows
+  # holds the state's value, and every such one is reported; one it does not show holds
+  # what the host last received for it, and is reported only when the edit knows it.
+  defp held!(stopped, kept, report, state, points) do
+    expected =
+      for tag <- Enum.uniq(outputs_of(stopped) ++ outputs_of(kept)),
+          writes?(stopped, tag),
+          not (tag in outputs_of(kept) and writes?(kept, tag)),
+          do: tag
+
+    reported = names(report, :held)
+    assert reported -- expected == []
+    assert Enum.filter(expected, &(&1 in outputs_of(kept))) -- reported == []
+
+    for {:held, tag, value} <- report do
+      held_value(tag in outputs_of(kept), tag, value, state, points)
+    end
+  end
+
+  defp held_value(true, tag, value, state, _points) do
+    assert value == Map.get(state.env, tag, 0)
+    edit_reach(:held_shown, true)
+  end
+
+  defp held_value(false, tag, value, _state, points) do
+    assert Map.fetch(points, tag) == {:ok, value}
+    edit_reach(:held_point, true)
+  end
+
+  defp writes?(program, tag),
+    do:
+      Regex.match?(
+        ~r/(^|\s)((ote|otl|otu|ons) #{tag}|move \S+ #{tag})(\s|$)/m,
+        program.source
+      )
+
+  defp names(report, kind), do: for({^kind, name, _} <- report, do: name)
+
+  defp var_inputs(program),
+    do: Enum.sort(for {name, %Tag{section: :var_input}} <- program.tags, do: name)
+
+  defp outputs_of(program),
+    do: Enum.sort(for {name, %Tag{section: :var_output}} <- program.tags, do: name)
+
+  defp edit_reach(name, true), do: reached(:edit_reach, name)
+
+  defp edit_reach(_name, false), do: :ok
 end
