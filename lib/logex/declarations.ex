@@ -280,8 +280,8 @@ defmodule Logex.Declarations do
   # here, because a tag name is never followed by a second name.
   defp untyped("retain", _name, _type, _tail, _kw),
     do:
-      "`retain` is not supported yet: a warm restart, like a cold one, " <>
-        "starts every tag but the var_inputs at its initial value"
+      "`retain` is not supported yet: a warm restart, like a cold one, starts every tag " <>
+        "at its initial value but the var_inputs whose values fit their types"
 
   defp untyped(_key, name, type, tail, kw),
     do: unknown_type(Enum.any?(tail, &type_word?/1), name, type, kw)

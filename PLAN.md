@@ -1108,9 +1108,25 @@ test's programs never reached. Finding that line once, not once per late declara
 also removes an older quadratic cost, from M1-3. Three were documents: the growth
 figures, the 490 above, which counted each accepted call twice, and instruction-sets.md's
 "flat-env" heading. The depth test now takes the least of three counts and a bound of
-18.5, where the fixed compile measures 15.7x and the copying walks 21x to 29x: one
-refuted finding reported a single run of the earlier test at 18.0x, which 582 runs could
-not reproduce.
+18.5, where the fixed compile measures 15.5x to 16x and the copying walks 20x or more
+(`2c8cfea`'s message says 15.7x and 21x to 29x, which the third round below corrects):
+one refuted finding reported a single run of the earlier test at 18.0x, which 582 runs
+could not reproduce.
+
+A third round (three lenses over `2c8cfea`, a skeptic per finding) confirmed 9 findings,
+6 once merged, and refuted 3. Its fixes are the commit after `2c8cfea`; the suite stays
+at 320 tests. One was a regression: the twin check walked the whole tag table on each
+lookup miss, so many hints after one undeclared timer compiled quadratically (8,000 of
+them beside 8,000 tags took 24 s). The declared names are indexed by their lowercase form once per
+compile now, and the size test's program runs a timer no line declares, so it reaches
+that lookup. Two were messages: `ton b B` still hinted `move B b.pre`, where two names
+that differ only in case cannot both be declared; and `d.3.x` on a plain tag was still
+bit access, and goes too deep now, as `t1.acc.3.x` does. One was a message the restart
+change made stale, the `retain` diagnostic's "starts every tag but the var_inputs". One
+was a rule no test failed without: a twin declared in capitals and used in lowercase.
+And the growth figures, which the test itself does not give as quoted: reductions count
+garbage collection, so a mutant's ratio moves from run to run, and CONTRIBUTING now says
+to quote the fixed compile's figure and the lowest mutant's.
 
 **Decided 2026-09-28, from `docs/organisation.md` §6.1 and §4.6:**
 1. `evaluate/3` threads a read-only `%Logex.Scan{now:, first:}`; the accumulator stays

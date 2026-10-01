@@ -8,7 +8,8 @@ defmodule Logex.Runtime do
     outputs back. It is what a configuration's scheduler calls for each instance it runs.
   - `put_inputs/3`, `scan/2` and `scan/3` are the task-less sugar: the implicit
     configuration of one instance, whose var_inputs are the host's input image.
-  - `restart/3` starts an instance again, keeping its input image and its clock.
+  - `restart/3` starts an instance again, keeping its clock and the inputs that fit their
+    types.
 
   **The host contract.** A mistake by the host raises `ArgumentError` (a host bug, not a
   PLC event, `docs/organisation.md` §4.6); a mistake in the source is a diagnostic from

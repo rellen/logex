@@ -223,7 +223,7 @@ input `strat` is not declared — did you mean `start`?
 
 `scan/3` takes the milliseconds since the last scan, which a timer counts;
 `Logex.Runtime.call/4` is one scan with the time given explicitly, which is what a
-scheduler will call; `restart/3` starts an instance again, keeping its inputs.
+scheduler will call; `restart/3` starts an instance again, keeping the inputs that fit their types.
 
 ### A timer and a one-shot
 

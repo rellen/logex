@@ -242,7 +242,8 @@ defmodule Logex.ValidationTest do
                "line 12: `i` is a var_input: its value comes from outside, so it takes no initial value",
                "line 13: a declaration cannot hold a branch group",
                "line 14: `retain` is not supported yet: a warm restart, like a cold one, " <>
-                 "starts every tag but the var_inputs at its initial value",
+                 "starts every tag at its initial value but the var_inputs whose values fit " <>
+                 "their types",
                "line 15: `var` declares one tag: found `p` and `q` before the type"
              ]
     end
@@ -324,7 +325,8 @@ defmodule Logex.ValidationTest do
     test "`retain` is recognised in any case, and the section word is quoted as written" do
       assert source_errors("VAR RETAIN r bool\nVAR b") == [
                "line 1: `retain` is not supported yet: a warm restart, like a cold one, " <>
-                 "starts every tag but the var_inputs at its initial value",
+                 "starts every tag at its initial value but the var_inputs whose values fit " <>
+                 "their types",
                "line 2: `b` needs a type: `VAR b bool` or `VAR b dint`"
              ]
 
@@ -1059,6 +1061,9 @@ defmodule Logex.ValidationTest do
             {"ton dint d", "d", ["`ton` expects a tag, found the type `dint`"]},
             # One name cannot be both the timer and the dint moved into it.
             {"ton b b", "b", ["`b` is not declared"]},
+            # Nor two that differ only in case, which cannot both be declared.
+            {"ton b B", "B", ["`b` is not declared"]},
+            {"ton T9 t9", "t9", ["`T9` is not declared"]},
             # A case-only twin of a declared tag can never be declared.
             {"ton t1 D", "D", []},
             {"ton T1 d", "d",
@@ -1071,6 +1076,13 @@ defmodule Logex.ValidationTest do
                    ],
                rung
       end
+
+      # A twin is a twin whichever of the two is in capitals, the declared or the used.
+      assert source_errors("var T1 ton\nvar D dint\nton T1 d\nton t1 D") == [
+               "line 3: `ton` takes its preset as a number of milliseconds, found `d`",
+               "line 4: `t1` is not declared — did you mean `T1`? (tags are case-sensitive)",
+               "line 4: `ton` takes its preset as a number of milliseconds, found `D`"
+             ]
 
       assert source_errors("ton b b") == [
                "line 1: `b` is not declared (this program declares no tags: each is now " <>
@@ -1257,10 +1269,16 @@ defmodule Logex.ValidationTest do
                "line 8: `ote lamp` follows `ton bool` " <> unnamed
              ]
 
-      # A case-only twin of a declared timer can never be declared.
+      # A case-only twin of a declared timer can never be declared, whichever of the two
+      # is in capitals.
       assert source_errors(@paths <> "xic go ton T1 5000 ote lamp") == [
                "line 6: `T1` is not declared — did you mean `t1`? (tags are case-sensitive)",
                "line 6: `ote lamp` follows `ton T1` " <> unnamed
+             ]
+
+      assert source_errors(@paths <> "var T3 ton\nxic go ton t3 5000 ote lamp") == [
+               "line 7: `t3` is not declared — did you mean `T3`? (tags are case-sensitive)",
+               "line 7: `ote lamp` follows `ton t3` " <> unnamed
              ]
     end
 
@@ -1410,6 +1428,17 @@ defmodule Logex.ValidationTest do
                "line 7: `t1.acc.3.x` goes too deep: `t1.acc` is a dint, which has no members",
                "line 8: `t1.acc.3.4` goes too deep: `t1.acc` is a dint, which has no members"
              ]
+
+      assert source_errors(
+               @timer <> "move d.3.x d\nmove d.3.4 d\nxic a.0.1 ote a\nxic a.b.1 ote a"
+             ) ==
+               [
+                 "line 4: `d.3.x` goes too deep: `d` is a dint, which has no members",
+                 "line 5: `d.3.4` goes too deep: `d` is a dint, which has no members",
+                 "line 6: `a.0.1` goes too deep: `a` is a bool, which has no members",
+                 "line 7: `a.b.1` names a member of `a`, but `a` is a bool (declared on " <>
+                   "line 2): only a timer has members"
+               ]
     end
 
     test "a dotted name on a reserved word is named as such, never as undeclared" do

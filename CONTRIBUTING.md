@@ -260,10 +260,12 @@ choice, not an oversight to fix.
   rung's line for a declaration after it included: its first program had no such
   declaration, and a copying rewrite of that walk passed it. It compares 500 and 8,000
   levels, not 500 and 2,000, because `++` is charged few reductions for what it copies: a
-  walk that copies with `Enum.flat_map` at every level grew 4.1x to 4.8x for 4x the depth,
-  within the size test's bound, and grows 21x to 29x for 16x, where a linear compile grows
-  about 16x. It takes the least of three counts, since a busy VM can raise one by a few
-  percent.
+  walk that copies with `Enum.flat_map` at every level grew 4.0x to 4.7x for 4x the depth,
+  within the size test's bound, and grows 20x to 37x for 16x, where a linear compile grows
+  15.5x to 16x. Those figures move with garbage collection, which reductions count: other
+  runs of the same mutants gave up to 53x, so quote the fixed compile's figure and the
+  lowest mutant's, not a range for every walk. The test takes the least of three counts,
+  since a busy VM can raise one by a few percent.
 - **A map of 32 keys or fewer iterates in key order.** So a missing `Enum.sort` over a map,
   or over a list built from one, is invisible to every test with a small table. M1-5 hit
   it twice: the order of the input problems (pinned in `ee91fe5`), and the var_input list in

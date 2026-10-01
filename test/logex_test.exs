@@ -18,7 +18,9 @@ defmodule LogexTest do
   # writes, a comparison of two literals, and a timer run by a `ton` whose members are read
   # and written, so every pass over the program, the M1-6 warnings among them, has work to
   # do. A second copy runs each timer with a second `ton`, followed on its path by a
-  # contact, two errors, so the one-ton rule's and the path rule's reports are timed too.
+  # contact, two errors, so the one-ton rule's and the path rule's reports are timed too,
+  # and runs a timer no line declares, with a tag preset and a contact after it, so the
+  # hints that look for a declared twin of it are.
   defp reductions_to_compile(tags) do
     names = for i <- 1..tags, do: "t#{i}"
     declarations = Enum.map(names, &"var #{&1} bool\nvar #{&1}_s bool\nvar #{&1}_t ton")
@@ -31,7 +33,8 @@ defmodule LogexTest do
       )
 
     source = Enum.join(declarations ++ rungs, "\n")
-    twice = Enum.join(declarations ++ rungs ++ Enum.map(names, &"ton #{&1}_t 60 xic #{&1}"), "\n")
+    tons = Enum.map(names, &"ton #{&1}_t 60 xic #{&1}\nton zz #{&1} xic #{&1}")
+    twice = Enum.join(declarations ++ rungs ++ tons, "\n")
 
     {:reductions, before} = Process.info(self(), :reductions)
     {:ok, _program} = Logex.compile(source, name: "big")
@@ -146,9 +149,9 @@ defmodule LogexTest do
       assert ratio < 6, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
     end
 
-    # And in its depth. At 500 and 8,000 levels a linear compile grows about 16x. A walk
+    # And in its depth. At 500 and 8,000 levels a linear compile grows 15.5x to 16x. A walk
     # that copies what it found in a group at every level, as the instruction and warning
-    # walks first did, grows 21x to 29x, since `++` is charged few reductions for what it
+    # walks first did, grows 20x or more, since `++` is charged few reductions for what it
     # copies; the path pass, which copied its diagnostics so, grew about 140x, and finding
     # the first rung's line again for each declaration after it about 180x.
     test "compiling stays linear in the depth of nesting" do

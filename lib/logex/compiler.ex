@@ -56,12 +56,13 @@ defmodule Logex.Compiler do
   """
   def instructionize({:routine, {:rungs, rungs}} = routine, declared \\ []) do
     {tags, logic, declaring} = Declarations.split(rungs, declared)
-    {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, tags))
+    known = {tags, folded(tags)}
+    {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, known))
     note? = map_size(tags) == 0 and declares_nothing?(routine, logic)
     instructions = instructions(rungs)
     shared = shared_bits(instructions, tags)
     {tags, timing} = presets(instructions, tags)
-    paths = Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, tags) end)
+    paths = Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end)
     errors = declaring ++ undeclared(Enum.reverse(lowering), tags, note?) ++ shared ++ timing
     lowered(rungs, tags, errors ++ paths)
   end
@@ -147,41 +148,41 @@ defmodule Logex.Compiler do
   # the first such `ton`. Legs beside a `ton` are not on its path, and are fine. One walk of
   # a rung, whose diagnostics are gathered newest first and reversed once, so a group
   # nested deep is not copied at every level.
-  defp path(elements, tags) do
-    {diagnostics, _borne} = series(elements, nil, [], tags)
+  defp path(elements, known) do
+    {diagnostics, _borne} = series(elements, nil, [], known)
     Enum.reverse(diagnostics)
   end
 
   # A series, a rung or a leg: its diagnostics onto `diagnostics`, and the first `ton` on it.
-  defp series([], before, diagnostics, _tags), do: {diagnostics, before}
+  defp series([], before, diagnostics, _known), do: {diagnostics, before}
 
-  defp series([element | rest], before, diagnostics, tags) do
-    {diagnostics, borne} = bears(element, follows(before, element, tags) ++ diagnostics, tags)
-    series(rest, earliest(before, borne), diagnostics, tags)
+  defp series([element | rest], before, diagnostics, known) do
+    {diagnostics, borne} = bears(element, follows(before, element, known) ++ diagnostics, known)
+    series(rest, earliest(before, borne), diagnostics, known)
   end
 
-  defp bears({:ton, _, _} = ton, diagnostics, _tags), do: {diagnostics, ton}
+  defp bears({:ton, _, _} = ton, diagnostics, _known), do: {diagnostics, ton}
 
-  defp bears({:branches, legs}, diagnostics, tags),
-    do: Enum.reduce(legs, {diagnostics, nil}, &leg(&1, &2, tags))
+  defp bears({:branches, legs}, diagnostics, known),
+    do: Enum.reduce(legs, {diagnostics, nil}, &leg(&1, &2, known))
 
-  defp bears(_instruction, diagnostics, _tags), do: {diagnostics, nil}
+  defp bears(_instruction, diagnostics, _known), do: {diagnostics, nil}
 
-  defp leg(elements, {diagnostics, before}, tags) do
-    {diagnostics, borne} = series(elements, nil, diagnostics, tags)
+  defp leg(elements, {diagnostics, before}, known) do
+    {diagnostics, borne} = series(elements, nil, diagnostics, known)
     {diagnostics, earliest(before, borne)}
   end
 
   defp earliest(nil, bears), do: bears
   defp earliest(before, _bears), do: before
 
-  defp follows(nil, _element, _tags), do: []
+  defp follows(nil, _element, _known), do: []
 
-  defp follows({:ton, line, operands}, element, tags) do
+  defp follows({:ton, line, operands}, element, known) do
     message =
       "#{shown(element)} follows #{shown({:ton, line, Enum.take(operands, 1)})} on its path: " <>
         "what passes on after a `ton` is not settled, so a `ton` ends its path; " <>
-        read_timer(operands, tags)
+        read_timer(operands, known)
 
     [diagnostic(line_of(element, line), message)]
   end
@@ -196,8 +197,8 @@ defmodule Logex.Compiler do
   defp text({:int_lit, _, value}), do: "#{value}"
   defp text({:member, _, path}), do: Enum.join(path, ".")
 
-  defp read_timer([{:name, _, timer} | _], tags), do: read(timer?(timer, tags), timer)
-  defp read_timer(_no_timer, _tags), do: read(false, nil)
+  defp read_timer([{:name, _, timer} | _], known), do: read(timer?(timer, known), timer)
+  defp read_timer(_no_timer, _known), do: read(false, nil)
 
   defp read(true, timer), do: "read the timer with `xic #{timer}.dn` on a rung below"
   defp read(false, _timer), do: "read the timer's `.dn` on a rung below"
@@ -205,7 +206,7 @@ defmodule Logex.Compiler do
   # Whether a hint may name `name` as a timer: a declared one, or a name not declared yet,
   # which the hint fits once it is declared as one. Anything else, a bool, a member or a
   # reserved word, has a diagnostic of its own, which a hint beside it would contradict.
-  defp timer?(name, tags), do: runnable?(Declarations.reserved(name), hinted(name, tags))
+  defp timer?(name, known), do: runnable?(Declarations.reserved(name), hinted(name, known))
 
   defp runnable?(nil, {:ok, %Tag{type: %FbType{name: "ton"}}}), do: true
   defp runnable?(nil, :error), do: true
@@ -213,15 +214,15 @@ defmodule Logex.Compiler do
 
   # A name not declared yet is one that can be: a name differing from a declared tag only
   # in case never can be (Logex.Declarations), so a hint naming it would never compile.
-  defp hinted(name, tags), do: declarable(lookup(name, tags), String.downcase(name), tags)
+  defp hinted(name, {tags, folded}),
+    do: declarable(lookup(name, tags), Map.fetch(folded, String.downcase(name)))
 
-  defp declarable(:error, folded, tags),
-    do: twin(Enum.find(Map.keys(tags), &(String.downcase(&1) == folded)))
+  defp declarable(:error, {:ok, twin}), do: {:twin, twin}
+  defp declarable(found, _twin), do: found
 
-  defp declarable(found, _folded, _tags), do: found
-
-  defp twin(nil), do: :error
-  defp twin(declared), do: {:twin, declared}
+  # Each declared name by its lowercase form, unique since the table refuses a case-only
+  # twin, so finding one is a lookup, not a walk of the table.
+  defp folded(tags), do: Map.new(tags, fn {name, _tag} -> {String.downcase(name), name} end)
 
   # A group carries no line of its own, so it is cited at the `ton`'s: a rung is one line.
   defp line_of({:branches, _legs}, ton_line), do: ton_line
@@ -254,45 +255,51 @@ defmodule Logex.Compiler do
   # merged by line. The sort is stable: within a line, the order each list gave is kept.
   defp lowered(_rungs, _tags, diagnostics), do: {:error, Enum.sort_by(diagnostics, & &1.line)}
 
-  defp lower_rung({:rung, elements}, diagnostics, tags) do
-    {ir, diagnostics} = lower(elements, [], diagnostics, tags)
+  defp lower_rung({:rung, elements}, diagnostics, known) do
+    {ir, diagnostics} = lower(elements, [], diagnostics, known)
     {{:rung, ir}, diagnostics}
   end
 
   # Diagnostics are accumulated newest first and reversed once, in instructionize/2. An
   # undeclared tag is accumulated as `{:undeclared, line, name, slot}`, with the slot it is
   # used in or `:member`, and reported by undeclared/3, at its first use only.
-  defp lower([], ir, diagnostics, _tags), do: {Enum.reverse(ir), diagnostics}
+  defp lower([], ir, diagnostics, _known), do: {Enum.reverse(ir), diagnostics}
 
-  defp lower([{:branches, legs} | rest], ir, diagnostics, tags) do
-    {legs, diagnostics} = Enum.map_reduce(legs, diagnostics, &lower(&1, [], &2, tags))
-    lower(rest, [{:branches, legs} | ir], diagnostics, tags)
+  defp lower([{:branches, legs} | rest], ir, diagnostics, known) do
+    {legs, diagnostics} = Enum.map_reduce(legs, diagnostics, &lower(&1, [], &2, known))
+    lower(rest, [{:branches, legs} | ir], diagnostics, known)
   end
 
-  defp lower([{:name, line, word} | rest], ir, diagnostics, tags) do
+  defp lower([{:name, line, word} | rest], ir, diagnostics, known) do
     key = String.downcase(word)
-    lower_word(Map.fetch(@instructions, key), key, {line, word}, {rest, ir, diagnostics, tags})
+    lower_word(Map.fetch(@instructions, key), key, {line, word}, {rest, ir, diagnostics, known})
   end
 
   # The grammar allows a literal anywhere an element can go, including where an
   # instruction must start: `123 aa`, or an extra operand as in `xic aa 7 ote bb`.
-  defp lower([{:int_lit, line, value} | rest], ir, diagnostics, tags) do
+  defp lower([{:int_lit, line, value} | rest], ir, diagnostics, known) do
     found = diagnostic(line, "expected an instruction, found `#{value}`")
-    lower(skip_operands(rest), ir, [found | diagnostics], tags)
+    lower(skip_operands(rest), ir, [found | diagnostics], known)
   end
 
-  defp lower_word({:ok, {symbol, signature}}, _key, {line, _} = at, {rest, ir, diagnostics, tags}) do
+  defp lower_word(
+         {:ok, {symbol, signature}},
+         _key,
+         {line, _} = at,
+         {rest, ir, diagnostics, known}
+       ) do
+    {tags, _folded} = known
     {operands, rest} = take_operands(rest, length(signature), [])
     diagnostics = check_count(signature, operands, rest, at, diagnostics)
     diagnostics = check_kinds(signature, operands, at, diagnostics)
     diagnostics = check_tags(signature, operands, at, tags, diagnostics)
-    diagnostics = check_preset(signature, operands, at, tags, diagnostics)
-    lower(rest, [{symbol, line, Enum.map(operands, &operand/1)} | ir], diagnostics, tags)
+    diagnostics = check_preset(signature, operands, at, known, diagnostics)
+    lower(rest, [{symbol, line, Enum.map(operands, &operand/1)} | ir], diagnostics, known)
   end
 
-  defp lower_word(:error, key, {line, word}, {rest, ir, diagnostics, tags}) do
+  defp lower_word(:error, key, {line, word}, {rest, ir, diagnostics, known}) do
     unknown = diagnostic(line, unknown(key, word))
-    lower(skip_operands(rest), ir, [unknown | diagnostics], tags)
+    lower(skip_operands(rest), ir, [unknown | diagnostics], known)
   end
 
   # M1-6: a member is lowered to its path, so the runtime reads and writes it without
@@ -400,32 +407,41 @@ defmodule Logex.Compiler do
 
   # M1-6: `ton t1 sp`. The preset is the timer's starting `.pre`, a number on the rung; a
   # value from a tag is moved into `.pre` instead, which logic may write (decision 4).
-  defp check_preset([_, {:preset, _}], [first, {:name, line, name}], {_, word}, tags, diagnostics) do
+  defp check_preset(
+         [_, {:preset, _}],
+         [first, {:name, line, name}],
+         {_, word},
+         known,
+         diagnostics
+       ) do
     message =
       "`#{word}` takes its preset as a number of milliseconds, found `#{name}`" <>
-        moved(first, name, tags)
+        moved(first, name, known)
 
     [diagnostic(line, message) | diagnostics]
   end
 
-  defp check_preset(_signature, _operands, _at, _tags, diagnostics), do: diagnostics
+  defp check_preset(_signature, _operands, _at, _known, diagnostics), do: diagnostics
 
   # The `move` is named only where it would compile, once a name in it not declared yet is
-  # declared: into a timer's `.pre`, from a dint. One name is never both, so `ton b b` has
-  # none.
-  defp moved({:name, _, name}, name, _tags), do: ""
+  # declared: into a timer's `.pre`, from a dint. One name is never both, nor are two that
+  # differ only in case (Logex.Declarations), so `ton b b` and `ton b B` have none.
+  defp moved({:name, _, timer}, name, known),
+    do: moved(String.downcase(timer) == String.downcase(name), timer, name, known)
 
-  defp moved({:name, _, timer}, name, tags),
-    do: move(timer?(timer, tags) and dint?(name, tags), timer, name)
+  defp moved(_literal, _name, _known), do: ""
 
-  defp moved(_literal, _name, _tags), do: ""
+  defp moved(true, _timer, _name, _known), do: ""
+
+  defp moved(false, timer, name, known),
+    do: move(timer?(timer, known) and dint?(name, known), timer, name)
 
   defp move(true, timer, name),
     do: ": to preset `#{timer}` from a tag, `move #{name} #{timer}.pre` on a rung above"
 
   defp move(false, _timer, _name), do: ""
 
-  defp dint?(name, tags), do: dint_value?(Declarations.reserved(name), hinted(name, tags))
+  defp dint?(name, known), do: dint_value?(Declarations.reserved(name), hinted(name, known))
 
   defp dint_value?(nil, {:ok, %Tag{type: :dint}}), do: true
   defp dint_value?(nil, {:member, _tag, %Member{type: :dint}}), do: true
@@ -492,7 +508,10 @@ defmodule Logex.Compiler do
   defp owned({:ok, %Tag{type: %FbType{} = type} = tag}, _head, [part | deeper]),
     do: in_type(FbType.member(type, part), tag, part, deeper)
 
-  defp owned({:ok, tag}, _head, [part | _]), do: {:no_members, tag, part}
+  defp owned({:ok, tag}, _head, [part]), do: {:no_members, tag, part}
+
+  # Past a bit, as past a member, a path goes too deep: `d.3.x`, as `t1.acc.3.x`.
+  defp owned({:ok, tag}, _head, [part | _deeper]), do: beyond(Integer.parse(part), tag, part)
 
   # A word that can never be declared is not reported as undeclared: `ton.dn`, `bool.3`.
   defp unowned(nil, head), do: {:undeclared, head}
@@ -507,6 +526,9 @@ defmodule Logex.Compiler do
   # as it will when bit access lands.
   defp past({_bit, ""}, tag, member), do: {:member_bit, tag, member}
   defp past(_not_a_bit, tag, member), do: {:too_deep, tag, member}
+
+  defp beyond({_bit, ""}, tag, _part), do: {:past_bit, tag}
+  defp beyond(_not_a_bit, tag, part), do: {:no_members, tag, part}
 
   # take_operands/3 never takes a mnemonic, so a reserved operand is a section or type word.
   defp resolve(:type, _, _slot, {:name, line, name}, {_, word}, diagnostics),
@@ -577,6 +599,15 @@ defmodule Logex.Compiler do
 
   defp resolve(nil, {:no_members, tag, part}, _slot, {:name, line, name}, _at, diagnostics),
     do: [diagnostic(line, no_members(Integer.parse(part), name, tag)) | diagnostics]
+
+  defp resolve(nil, {:past_bit, tag}, _slot, {:name, line, name}, _at, diagnostics),
+    do: [
+      diagnostic(
+        line,
+        "`#{name}` goes too deep: `#{tag.name}` is a #{tag.type}, which has no members"
+      )
+      | diagnostics
+    ]
 
   defp resolve(nil, {:member_bit, tag, member}, _slot, {:name, line, name}, _at, diagnostics),
     do: [diagnostic(line, bit(name, "#{tag.name}.#{member.name}", member.type)) | diagnostics]
