@@ -3,14 +3,15 @@
 A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
 text into a named, stateless value, and runs it as instances, one scan at a time, with the
 time the host injects. No dependencies and no generated code: the lexer and parser are
-written by hand, and the whole thing is fifteen small modules.
+written by hand, and the whole thing is sixteen small modules.
 
 **Stage: early, and honest about it.** Fourteen instructions, among them an on-delay
 timer, a one-shot and six comparisons, parallel branches to arbitrary nesting depth,
 latch/unlatch that holds across scans, power flow that resets per rung, a typed tag table
 that every tag is declared in, a public API (`Logex.compile/2`,
-`Logex.compile_file/1` and `Logex.Runtime`), and a printer that turns an AST back into
-source so a routine round-trips — all of that works and is tested end to end, and a
+`Logex.compile_file/1` and `Logex.Runtime`), an online edit that changes a running
+instance's program without a restart (`Logex.Edit`), and a printer that turns an AST back
+into source so a routine round-trips — all of that works and is tested end to end, and a
 program with mistakes in it gets every one reported with its line rather than an
 exception, a misspelt tag included. What does not exist yet: counters, the other timers,
 math, and a scheduler — the host calls one scan at a time. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
@@ -98,9 +99,9 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `otl xx` | bool tag, not a `var_input` | output latch — writes 1 on a true rung, leaves the tag alone otherwise |
 | `otu xx` | bool tag, not a `var_input` | output unlatch — writes 0 on a true rung, leaves the tag alone otherwise |
 | `move 123 hh` | source, then a destination of the same type, not a `var_input` | copies a literal or a tag into a tag; a literal must fit the destination (`mov` until M1-2; it now gets a diagnostic pointing here) |
-| `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
+| `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
 | `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two dints, each a tag, a member or a literal | compare — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`; none on a false rung. Two literals are a warning |
-| `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
+| `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
 | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
 
 Each instruction's operands are checked against this table and against their tags'
@@ -289,6 +290,160 @@ and `xic go ton t1 3000 ote lamp` is refused:
 delay.ld: line 8: `ote lamp` follows `ton t1` on its path: what passes on after a `ton` is not settled, so a `ton` ends its path; read the timer with `xic t1.dn` on a rung below
 ```
 
+## Changing a running program
+
+A running instance takes a changed program without a restart, the way the conventional
+family's controllers are edited online. `Logex.Edit` *accepts* a candidate beside the
+running program, *tests* it over the instance's state, *untests* back to the original as
+often as needed, and then *assembles*, keeping the candidate, or *cancels*. Every step is
+taken between two scans and returns a report of what it did to the state, and nothing
+goes through the Elixir compiler. [`docs/organisation.md`](docs/organisation.md) §4.9 has
+the design and every rule, and `Logex.Edit`'s moduledoc the rules as built.
+
+`motor_v2.ld` — the motor of `motor.ld`, with `run_lamp` replaced by `at_speed`, lit once
+the motor has run for two seconds, and a pulse, `started`, on the scan the motor starts:
+
+```
+var_input start bool
+var_input stop bool
+var_input overtemp bool
+var_input reset bool
+var_output motor bool
+var_output at_speed bool
+var_output started bool
+var_output speed_sp dint 1200
+var fault bool
+var t1 ton
+var s1 bool
+
+( xic start | xic motor ) xio stop ote motor
+xic motor ton t1 2000
+xic t1.dn ote at_speed
+xic motor ons s1 ote started
+xic overtemp otl fault
+xic reset otu fault
+xic fault move 0 speed_sp
+```
+
+`edit.exs` starts the motor, then edits its program while it runs. During the edit it
+scans whichever program `Logex.Edit.running/1` names, and after it the one `assemble/2`
+returns:
+
+```elixir
+{:ok, motor} = Logex.compile_file("motor.ld")
+# An edit keeps the program's name, and compile_file/1 would name this one `motor_v2`.
+{:ok, v2} = Logex.compile(File.read!("motor_v2.ld"), name: "motor")
+
+scan = fn state, program, elapsed, label, inputs ->
+  state = Logex.Runtime.put_inputs(program, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(program, state, elapsed)
+  IO.puts("t=#{String.pad_leading("#{state.now}", 4)}  #{label}  #{inspect(outputs)}")
+  state
+end
+
+step = fn {edit, state, report}, label ->
+  IO.puts(label)
+  Enum.each(report, &IO.puts("        #{inspect(&1)}"))
+  {edit, state}
+end
+
+state =
+  Logex.Runtime.instance(motor)
+  |> scan.(motor, 10, "start pressed ", %{"start" => 1})
+  |> scan.(motor, 10, "start released", %{"start" => 0})
+
+{:ok, edit, _forecast} = Logex.Edit.accept(motor, v2, state)
+{edit, state} = step.(Logex.Edit.test(edit, state), "test")
+
+state =
+  state
+  |> scan.(Logex.Edit.running(edit), 10, "under test    ", %{})
+  |> scan.(Logex.Edit.running(edit), 2000, "under test    ", %{})
+
+{edit, state} = step.(Logex.Edit.untest(edit, state), "untest")
+state = scan.(state, Logex.Edit.running(edit), 10, "untested      ", %{})
+{edit, state} = step.(Logex.Edit.test(edit, state), "test")
+{motor, state} = step.(Logex.Edit.assemble(edit, state), "assemble")
+
+state
+|> scan.(motor, 10, "stop pressed  ", %{"stop" => 1})
+|> scan.(motor, 10, "start pressed ", %{"stop" => 0, "start" => 1})
+```
+
+```
+$ mix run edit.exs
+t=  10  start pressed   %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}
+t=  20  start released  %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}
+test
+        {:added, "at_speed", 0}
+        {:added, "s1", 0}
+        {:added, "started", 0}
+        {:added, "t1", %{"acc" => 0, "dn" => 0, "en" => 0, "last" => 0, "pre" => 2000, "tt" => 0}}
+        {:held, "run_lamp", 1}
+        {:ons_blocked, "s1", 0}
+t=  30  under test      %{"at_speed" => 0, "motor" => 1, "speed_sp" => 1200, "started" => 0}
+t=2030  under test      %{"at_speed" => 1, "motor" => 1, "speed_sp" => 1200, "started" => 0}
+untest
+        {:held, "at_speed", 1}
+        {:held, "started", 0}
+t=2040  untested        %{"motor" => 1, "run_lamp" => 1, "speed_sp" => 1200}
+test
+        {:held, "run_lamp", 1}
+        {:ons_blocked, "s1", 1}
+        {:resumed, "t1", 10}
+assemble
+        {:held, "run_lamp", 1}
+        {:pruned, "run_lamp", 1}
+t=2050  stop pressed    %{"at_speed" => 0, "motor" => 0, "speed_sp" => 1200, "started" => 0}
+t=2060  start pressed   %{"at_speed" => 0, "motor" => 1, "speed_sp" => 1200, "started" => 1}
+```
+
+- **Accept** changed nothing. It checked the candidate against the running program and
+  returned a forecast, the report a test taken at once would give: here, the first test's
+  report exactly.
+- **Test** moved the state to the candidate by name, and the motor stayed sealed in. What
+  the candidate adds starts at its declared initial value, so `t1` starts at its preset
+  of 2000 and times from the switch. `run_lamp` is no longer among the outputs, so it is
+  *held*: the host keeps that point at 1, as the conventional family's outputs keep their
+  last state. And the new one-shot is blocked for the scan after the switch. `motor` was
+  already 1 and nothing rose, so `started` does not pulse.
+- **Untest** ran the original again over the same state. Now the outputs only the
+  candidate drove are held.
+- **Test**, again: `t1`, which no `ton` ran while the original ran, resumes from the
+  switch rather than catching up the 10 ms it missed, and the one-shot is blocked again,
+  because the original scanned last.
+- **Assemble** kept the candidate and pruned what only the original declares. The edit is
+  over, and the one-shot fires on the motor's next real start.
+
+The edit is what keeps that run right. Scanning `motor_v2` over the same state with no
+edit, a *plain swap*, is still allowed, but its first scan gives
+`%{"at_speed" => 1, "motor" => 1, "speed_sp" => 1200, "started" => 1}`: a pulse, though
+the motor was already running, and `at_speed` at once, because a timer the state lacks
+starts at a `.pre` of 0 until a restart.
+
+A candidate that changes a tag's type is refused at accept, since only a restart can
+change one. Had `motor_v2.ld` kept `run_lamp` as `var_output run_lamp dint`, on its line
+7, `accept/3` would have returned `{:error, [diagnostic]}`:
+
+```
+line 7: `run_lamp` is a bool in the running program and a dint in the candidate: a tag's type changes only with a restart
+```
+
+The diagnostic names no file, because a `%Logex.Program{}` keeps none, a gap Milestone 2
+must close. A section change and a changed initial value are not type changes: the value
+is kept, and the report says what changed.
+
+During an edit the host scans, sets inputs and restarts through `Logex.Edit.running/1`,
+and sends only that program's var_inputs. It resends each input a step reports as
+`{:input, name, value}`, stops sending each one reported as `{:unread, name, value}`,
+holds each point reported as `{:held, name, value}`, and ignores a report kind it does
+not know.
+
+A program built as data rather than text, through `Logex.Compiler.instructionize/2` and
+`Logex.Tag.new!/4`, is refused with an `ArgumentError` where no text could say it, as a
+negative literal or a timer's preset given from Elixir. So every program an edit takes
+could be written as a `.ld` file.
+
 ## Running it
 
 The toolchain this repository documents and pins is **Elixir 1.20 on Erlang/OTP 28**
@@ -321,7 +476,7 @@ mix format
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
 - `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
 - `CLAUDE.md` — commands and conventions for anyone (or anything) editing the code
-- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them (decided; program instances landed with M1-5, configurations and tasks are Milestone 2)
+- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5 and the online edit of one with OE-1; configurations and tasks are Milestone 2)
 - [`docs/defladder.md`](docs/defladder.md) — a study of an Elixir-embedded `defladder` DSL: what Nx's `defn` does, an executed spike, and a recommendation (proposed, not adopted)
 
 ## License

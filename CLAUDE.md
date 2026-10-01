@@ -36,7 +36,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   §4.9): `accept/3` (refusing a type change as `:edit` diagnostics, with a forecast),
   `test/2`, `untest/2`, `assemble/2`, `cancel/2`, `running/1` and `stage/1`, each step
   returning a report. Accept builds a plan per direction from the two programs; a switch
-  and a prune are per-instance functions of a plan, the edit's record and the state
+  and a prune are per-instance functions of a plan, the edit's record and the state,
+  private until OE-2 calls them. Its moduledoc gives every rule, report kind and host
+  mistake; §4.9 the reasons
 - `lib/logex/compiler.ex` — the stages: `tokenize/1` and `parse/1` delegate to the two
   modules below; `instructionize/2` first checks its routine against
   `Logex.Parser.well_formed!/1` and raises `ArgumentError` on a tree no text could say
@@ -88,28 +90,37 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `test/logex/frontend_test.exs` instead. Regenerate it only in a commit that changes the
   language or the generator on purpose, and read the diff:
   `test/fixtures/generate_frontend_golden.exs`.
+- `test/logex/edit_test.exs` pins `Logex.Edit`: every host-mistake message and the order of
+  its checks, every `:edit` diagnostic, a test per rule of §4.9 (grouped by the decision,
+  fix or hazard it answers), and two growth tests in reductions (F16) that run accept,
+  test, untest, test and assemble at two sizes and two depths. Its programs come from
+  source, an unnamed one through `instructionize/2`, never from editing a struct.
+  `api_contract_test.exs`'s edit walk checks the same rules restated from the programs'
+  text, and carries oracles that know nothing of them
 - `test/logex/end_to_end_test.exs` drives source to an environment, through `Logex.compile/2`
   and `Logex.Runtime.call/4` on an instance whose env the test chooses, or several scans
   of one instance; its *assertions* name no IR tag (one helper matches the
   `{:routine, {:rungs, _}}` wrapper to count rungs). It was the first test to cross every
-  stage boundary, and is where a behaviour change is pinned, `ton`'s and PLAN M1-6's
-  decision-6 test among them; `validation_test.exs` and `printer_test.exs` also run source to an environment
+  stage boundary, and is where a behaviour change is pinned, `ton`'s, PLAN M1-6's
+  decision-6 test and PLAN OE-1's Done-when among them; `validation_test.exs` and `printer_test.exs` also run source to an environment
   in places. `lex_and_parse_test.exs` starts from a
   source string and so crosses the tokenize→parse seam, but no further; the other two
   hand-type one stage's input and cannot see a seam at all.
-- `README.md` — what logex is, the dialect stance, the instruction table and a worked
-  example. **Any change to the language stales it:** a new instruction adds a row and may
-  clear a "Settled, not yet landed" bullet; a syntax change touches the syntax list, the
-  instruction table and the example (whose output is real — re-run it). Nothing tests this.
+- `README.md` — what logex is, the dialect stance, the instruction table and worked
+  examples, one of them a running program changed by `Logex.Edit`. **Any change to the
+  language stales it:** a new instruction adds a row and may clear a "Settled, not yet
+  landed" bullet; a syntax change touches the syntax list, the instruction table and the
+  examples (whose output is real — re-run it). So does a change to an edit's rules or
+  report, through "Changing a running program". Nothing tests this.
 - `CONTRIBUTING.md` — working practices, each one traced to something that broke
 - `PLAN.md` — reviewed findings and the ordered plan of work
 - `docs/naming.md` — the IEC and vendor name survey, one stanza per mnemonic or declaration
   word; append-only
 - `docs/organisation.md` — where logex is heading above one program: IEC's configuration,
   tasks, program instances and I/O mapping, in logex's dialect. Decided (PLAN §5; the
-  work is PLAN's M1-3, M1-5, M1-6, OE-1, Milestone 2 and OE-2). Read it before designing anything
-  that names a program, schedules one, binds I/O, or changes a running controller (§4.9,
-  online edit, decided 2026-10-01).
+  work is PLAN's M1-3, M1-5, M1-6, OE-1, Milestone 2 and OE-2; OE-1 has landed). Read it
+  before designing anything that names a program, schedules one, binds I/O, or changes a
+  running controller (§4.9, online edit, decided 2026-10-01).
 - `docs/instruction-sets.md` — reference: IEC's LD elements and standard library by table number,
   Instruction List (withdrawn in Ed 4), and the free-software instruction sets. Read it before
   writing a naming.md stanza; it carries the IEC feature numbers a stanza should cite.
@@ -148,6 +159,14 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   Elixir form. A new section or elementary type word is a row in `Logex.Declarations`,
   and a function block type word a key of `Logex.FbType.builtins/0`; either is reserved in
   any case and owes a `docs/naming.md` stanza, which `naming_test.exs` checks.
+- New state in an instance (a field of `%Logex.Instance{}`, a member of a function block
+  type, an M2 item's piece of state) states its rule across an online edit. A tag or member
+  starts by `Logex.Program.initial_env/1`, the one rule, whose doc and §4.9's "One rule for
+  new state" list the edit's exceptions. A field of `%Logex.Instance{}` gets a check in
+  the runtime with a message a test pins, a value from `instance/1`, and a rule for each
+  of a scan, `restart/3` and a switch, as `ons_blocked` and `switched` have. A new report
+  kind is a row in `Logex.Edit`'s table and §4.9's, and in `api_contract_test.exs`'s
+  `@report_kinds`, whose reach the walk asserts
 - Nothing compiles a user's program to BEAM: every front end (the text, an Elixir data
   API, any later macro) ends in `%Logex.Program{}` data that `Logex.Runtime` interprets,
   and no front end puts the Elixir compiler on the path that changes a running program

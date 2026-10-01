@@ -16,7 +16,8 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
-§1 and §3·M1-1 to M1-6 have been brought current. Milestone 2 onward is still forward work.
+§1, §3·M1-1 to M1-6 and §3's OE-1 have been brought current. Milestone 2 and OE-2 are
+still forward work.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -66,6 +67,9 @@ an evaluator that is private to it (B5). The stage functions stay public for the
 - Driven one scan at a time through `Logex.Runtime` (M1-5), a correct seal-in motor circuit.
 - `ton` on the injected clock, `ons`, and `eq ne lt gt le ge` (M1-6); a timer is a declared
   instance, `var t1 ton`, whose members `t1.dn` and `t1.acc` are read anywhere.
+- A staged online edit of one running instance (OE-1): `Logex.Edit` accepts a candidate
+  beside the running program, then tests, untests, assembles or cancels it between two
+  scans, moving the state by name and reporting every step.
 
 These were each verified directly:
 
@@ -131,8 +135,8 @@ stage-boundary mismatch. M0-1 (`690fc2d`) reconciled the fixtures on `:int_lit` 
 **All five items are landed and merged; nothing in this section is waiting to be done.**
 M0-1 `690fc2d`, M0-2 `03c10e0`, M0-3 `dde8c1d`, M0-4 `3f3b104` (PR #3, merge `22bc81a`);
 M0-5 `b65e756` (PR #4, merge `863af6f`). Re-verified on `main` after M1-1: `mix test` →
-`27 tests, 0 failures`. M1-1 to M1-6 have landed since; the next unstarted work is
-§3's OE-1, a staged edit of one program instance, then Milestone 2.
+`27 tests, 0 failures`. M1-1 to M1-6 and §3's OE-1, a staged edit of one program
+instance, have landed since; the next unstarted work is Milestone 2.
 
 The items are kept in full because their diagnoses are the record of *why* the code looks
 the way it does — why the parser drops empty rungs, why `CLAUDE.md` once documented an
@@ -1233,7 +1237,9 @@ negative `.acc`). The design:
   old `.pre` until a restart, which organisation.md's online-edit row must answer when that
   lands. A scan costs about 5.7% more reductions, nearly all of it `evaluate/3`'s threading.
   *(The review above found two more for that row: a tag the recompile adds, or whose type
-  it changes.)*
+  it changes. OE-1 answers all three, 2026-10-01: `Logex.Edit` moves `.pre` where it still
+  holds the old preset, starts what is added, and refuses a type change, and a plain swap
+  still does what is recorded here.)*
 
 **Landing, in commits, each green and each with a test that fails when its change is
 reverted:** (1) the eight naming stanzas; (2) `evaluate/3`, a refactor; (3) `ons`; (4) the
@@ -1392,6 +1398,41 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   say is refused. *(Designed 2026-10-01, the four questions answered:
   `docs/organisation.md` §4.9, "OE-1's design", and its §7 decisions 21–29 and fixes
   F1–F16.)*
+
+  **Status: DONE — landed 2026-10-01**, as the eight commits of its landing order: (1) the
+  design record in `docs/organisation.md` §4.9 and §7, `1e3efc1`; (2) the data path
+  refuses what the text cannot say, decisions 24 and 28, `a619e90`; (3) the instance's
+  one-shot block list, `48e1299`; (4) `Logex.Edit`, with its stages, refusals, start
+  rules, inputs, held outputs, initial values, forecast and prune, and the contract walk,
+  `3e45ea8`; (5) timers across a switch, `c1e5d54`; (6) one-shots across a switch,
+  `1a39feb`; (7) the Done-when end to end, `a4a35b3`; (8) the documents, the commit after
+  it, among them the README's "Changing a running program", whose output is a real run.
+  420 tests pass on Elixir 1.20.4 (6 of them doctests), up from 320. The messages of (2)
+  to (6) record their mutation tables, every rule each adds reverted alone and the full
+  suite judged by exit code: 188 rules (35, 17, 78, 40 and 18), every one red, one of
+  (4)'s only from (5), which added the test that fails without it. (7) adds no rule; it
+  reverted 20 that the Done-when relies on, each red, and `end_to_end_test.exs` alone
+  fails 19 of them. (1) and (8) are documents. Each of decisions 21–29 and fixes F1–F16 is
+  cited by name in the commit that landed it. Where the design left a gap, a commit
+  records its reading and §4.9 states it: a var_input a start rule writes is reported as
+  `:input`, not `:added`; fix F7's program is fix F3's, the one that last scanned, and a
+  switch blocks none of the started program's own one-shots when that program scanned
+  last; an output the next program still shows is held at the state's value, and one it
+  does not show at a value the edit learnt only while `switched` and `first` were both
+  false; `:preset_kept` is reported wherever a timer the started program runs keeps a
+  `.pre` that is not its preset; and fix F1's record covers every timer either program
+  declares. Departures, each recorded in its commit: `%Logex.Instance{}` gains `switched`
+  in (4), not (6), because fix F4 needs it too; decision 24's refusals sit inside
+  `Logex.Declarations.check/1`, so it stays the one validator and now refuses a compiled
+  timer's tag; a rung of nothing but empty groups takes a line in the rung order, as it
+  does in the text; an edit accepted before a plain swap's scan is outside the contract;
+  the switch and prune are built per instance for OE-2 but stay private until it calls
+  them; and the Done-when's assemble follows a second test at the same boundary, since
+  assemble is taken under test. Measured at the landing: accept and its steps take 4.4x
+  the reductions for 4x the tags and 14.4x to 14.6x for 16x the depth; compiling costs
+  about 17% more reductions, since the entry check lexes every name again, and stays
+  linear; and at 2,000 rungs and 4,000 tags a test takes 0.68–1.19 ms against 1.31–1.36 ms
+  for one scan (`docs/organisation.md` §4.9, "Cost").
 - **OE-2 · A staged edit of a configuration, after Milestone 2.** The same cycle over the
   whole `%Logex.Configuration{}` and `%Logex.Runtime{}`, switched between two cycles, with
   each M2 item's rule for new state; a task's interval and priority changed while running;
@@ -1695,7 +1736,7 @@ for OE-1's design; work items OE-1 and OE-2 in §3).
 - Spark is not adopted inside logex. An authoring package outside it may come later, as a
   one-way seed that emits the same data (B9).
 - Online edit is staged from its first version, as the conventional family's is: accept,
-  test, untest, assemble, cancel. State moves by name: an added tag starts at its initial
+  test, untest, assemble, cancel (landed for one program instance with OE-1, 2026-10-01). State moves by name: an added tag starts at its initial
   value, a removed one is pruned at assemble, a type change is refused while running, a
   timer's `.pre` follows its preset where logic left it alone, and an `ons` the edit adds,
   or whose rung it changes, does not fire on the first scan after the switch.

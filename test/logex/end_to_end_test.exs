@@ -738,8 +738,9 @@ defmodule Logex.EndToEndTest do
 
     test "an instance kept under a recompiled program of the same name keeps its old .pre " <>
            "until a restart" do
-      # The preset is where .pre starts, so an edit reaches a new or restarted instance only
-      # (docs/organisation.md, the online-edit row, must answer this when that lands).
+      # The preset is where .pre starts, so a recompile scanned over a kept instance, a plain
+      # swap, reaches a new or restarted instance only. Logex.Edit moves .pre by rule instead
+      # (docs/organisation.md §4.9, and its online-edit row in §5).
       src =
         &"var_input go bool\nvar_output done bool\nvar t1 ton\nxic go ton t1 #{&1}\nxic t1.dn ote done"
 

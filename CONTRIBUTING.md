@@ -118,6 +118,15 @@ what the tests were written to catch. `ee91fe5` recorded 31 mutants, each red, y
 The review of M1-5 found fifteen rules no test failed without, twelve of them in code M1-5
 added (`b8a9bd8`); the review of M1-3 had 52 of its 112 mutants survive (`0e83b5f`).
 
+A mutant that survives is not shown redundant by an argument that it is. OE-1's
+`3e45ea8` kept its one survivor, E46, a timer's value that fits by its member keys where
+"is a map" would do, on the reasoning that "under the contract, the only map a state can
+hold under a timer's name is a ton's". The next commit's contract walk, under seed
+`{2, 2, 2}`, reached a plain swap that left `%{"pre" => 40}` over a bool, a map that
+would have reached the timer rules with no `.acc`, `.dn` or `.en`; `c1e5d54` added the
+test and corrected the claim. Give a survivor a test or delete its rule, and if you keep
+it on an argument, say that the argument is all there is.
+
 A walk over a rung must reach a group nested in another, and a test must say so. M1-6's
 spike walked a rung for its `ton`s and for its comparisons of two literals, and cutting
 either walk to one group deep left the whole suite green: a nested `ton t1 5000` then
@@ -162,6 +171,24 @@ host can cause — and that each call is refused exactly when it is a mistake. G
 property the same, and run its reach under a few other seeds before trusting it: M1-6's
 first draft saw a timer with a negative preset under the fixed seed and under none of
 eight others.
+
+A property that restates a rule cannot catch that rule's defect. OE-1's edit walk checks
+every report entry against its rule, restated from the two programs' text. The
+restatement is written from the same design as the code, so a misreading of the design
+lands in both, and they agree. What can catch it is a check that knows nothing of the
+rule: a report's listed writes, replayed on the state before its step, give the state
+after it; a held value is the one the walk last saw the host receive; a one-shot pulses
+only where the previous scan ran the same `ons` rung text with its condition 0; a test
+then an untest with no scan between leaves the original as it was; and no scan lets a
+timer gain more than its own time. Switch the restatement off and run the mutation table
+again to see how far those reach: for the timers they still failed 10 of 14 mutants
+(`c1e5d54`), and for the one-shots 14 of 18 (`1a39feb`). The eight they passed are what
+a misreading shared with the restatement looks like (a `.pre` record with its pair
+swapped, no preset taken outright where a `ton` returns, a `.dn` forecast at the
+boundary or for an idle timer, line numbers compared, a block kept for a bit no `ons`
+reads, an unsorted list, a cost), and only `edit_test.exs`'s worked cases fail them. So
+a property needs both kinds of check, and a rule the independent ones cannot see needs a
+worked test of its own.
 
 The same trap has a live instance. `PLAN.md` §6 keeps the sequential `env` threading in the
 `{:branches, _}` reducer deliberately, and B7 invites rewriting that reducer. Until
@@ -268,7 +295,11 @@ choice, not an oversight to fix.
   levels, the figure first written here. Read a figure from the committed
   test's own failure message, and quote the fixed compile's and the lowest mutant's, not a
   range for every walk. The test takes the least of three counts, since a busy VM can raise
-  one by a few percent.
+  one by a few percent. **A pass that is not a compile needs a growth test of its own**:
+  OE-1's spike planned its held outputs quadratically, and accept took 2.4 s at 2,000
+  rungs until a probe timed it. `edit_test.exs`'s "growth (F16)" runs accept and every
+  step at two sizes and two depths, and sees 4.4x for 4x the tags and about 14.5x for 16x
+  the depth.
 - **A map of 32 keys or fewer iterates in key order.** So a missing `Enum.sort` over a map,
   or over a list built from one, is invisible to every test with a small table. M1-5 hit
   it twice: the order of the input problems (pinned in `ee91fe5`), and the var_input list in
