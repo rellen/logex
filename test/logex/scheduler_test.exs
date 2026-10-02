@@ -2,8 +2,9 @@ defmodule Logex.SchedulerTest do
   @moduledoc """
   M2-1: the rules of a cycle (`Logex.Runtime`'s moduledoc; `docs/organisation.md` §4.6),
   one test at least for each, driven through the public API from configurations built in
-  Elixir. The messages a host's mistakes raise are in `runtime_test.exs`, and the
-  configuration's diagnostics in `configuration_test.exs`.
+  Elixir. The messages a host's mistakes raise are in `runtime_test.exs`, the
+  configuration's diagnostics in `configuration_test.exs`, and PLAN.md M2-1's Done-when in
+  `end_to_end_test.exs`.
   """
   use ExUnit.Case, async: true
 

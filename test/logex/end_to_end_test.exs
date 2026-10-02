@@ -1368,4 +1368,257 @@ defmodule Logex.EndToEndTest do
                    fn -> Logex.Tag.new!("speed_sp", :dint, :var_output, -1) end
     end
   end
+
+  describe "a configuration, run by the scheduler (M2-1)" do
+    alias Logex.Configuration
+    alias Logex.Configuration.{Connection, Global, Instance}
+
+    @readme_motor """
+    var_input start bool
+    var_input stop bool
+    var_input overtemp bool
+    var_input reset bool
+    var_output motor bool
+    var_output run_lamp bool
+    var_output speed_sp dint 1200
+    var fault bool
+
+    ( xic start | xic motor ) xio stop ote motor
+    xic motor ote run_lamp
+    xic overtemp otl fault
+    xic reset otu fault
+    xic fault move 0 speed_sp
+    """
+
+    # One var_input copied to one var_output: what each instance below runs.
+    @relay "var_input in bool\nvar_output out bool\nxic in ote out"
+
+    # A 10 ms task and a 30 ms task, the 30 ms one first in priority (0) and last in
+    # declaration, and a task-less instance declared between them, so neither declaration
+    # order nor rate gives the order priority does. `s`, on the 30 ms task, samples the
+    # input point `x` into the global `g`; `f`, on the 10 ms task, copies `g` to the output
+    # point `y`, and the task-less `n` copies it to `z`.
+    defp three_rates do
+      Configuration.new!(
+        name: "plant",
+        programs: [program_named(@relay, "relay")],
+        tasks: [
+          %Configuration.Task{name: "fast", interval: 10, priority: 1},
+          %Configuration.Task{name: "slow", interval: 30, priority: 0}
+        ],
+        globals: [
+          %Global{name: "x", type: :bool, at: "panel.i.0"},
+          %Global{name: "g", type: :bool},
+          %Global{name: "y", type: :bool, at: "panel.q.0"},
+          %Global{name: "z", type: :bool, at: "panel.q.1"}
+        ],
+        instances: [
+          %Instance{name: "f", type: "relay", task: "fast"},
+          %Instance{name: "n", type: "relay"},
+          %Instance{name: "s", type: "relay", task: "slow"}
+        ],
+        connections: [
+          %Connection{instance: "f", member: "in", to: "g"},
+          %Connection{instance: "f", member: "out", to: "y"},
+          %Connection{instance: "n", member: "in", to: "g"},
+          %Connection{instance: "n", member: "out", to: "z"},
+          %Connection{instance: "s", member: "in", to: "x"},
+          %Connection{instance: "s", member: "out", to: "g"}
+        ]
+      )
+    end
+
+    defp program_named(source, name) do
+      {:ok, program} = Logex.compile(source, name: name)
+      program
+    end
+
+    # Cycles of a resource, each step `{elapsed_ms, inputs}`: `{runtime, trace}`, the trace
+    # a `{now, outputs, events}` for each cycle.
+    defp cycles(runtime, steps) do
+      {trace, {runtime, _now}} =
+        Enum.map_reduce(steps, {runtime, 0}, fn {elapsed, inputs}, {runtime, now} ->
+          {runtime, outputs, events} = Logex.Runtime.cycle(runtime, elapsed, inputs)
+          {{now + elapsed, outputs, events}, {runtime, now + elapsed}}
+        end)
+
+      {runtime, trace}
+    end
+
+    defp ran(trace, instance),
+      do: for({_now, _outputs, events} <- trace, {:ran, _task, ^instance, now} <- events, do: now)
+
+    # `x` is 1 for two cycles in every seven, so that a 30 ms sample of it differs from a
+    # 10 ms one.
+    defp x_at(now), do: if(rem(div(now, 10), 7) in [3, 4], do: 1, else: 0)
+
+    test "M2-1's Done-when: a 10 ms task, a 30 ms task and a task-less instance, cycled " <>
+           "every 10 ms from 0 to 990 ms, each run as often as its task dictates, in " <>
+           "priority order" do
+      times = Enum.to_list(0..990//10)
+      steps = Enum.map(times, &{if(&1 == 0, do: 0, else: 10), %{"x" => x_at(&1)}})
+      {runtime, trace} = cycles(Logex.Runtime.start(three_rates()), steps)
+
+      # As often as its task dictates: every cycle at 10 ms, every third at 30 ms, and the
+      # task-less instance in every cycle.
+      assert ran(trace, "f") == times
+      assert ran(trace, "s") == Enum.filter(times, &(rem(&1, 30) == 0))
+      assert ran(trace, "n") == times
+
+      assert {100, 34, 100} ==
+               {length(ran(trace, "f")), length(ran(trace, "s")), length(ran(trace, "n"))}
+
+      # In priority order: in every cycle the 30 ms task's instance, when due, runs first,
+      # then the 10 ms task's, then the task-less one, last.
+      for {now, _outputs, events} <- trace do
+        order = for {:ran, _task, instance, _now} <- events, do: instance
+        assert order == if(rem(now, 30) == 0, do: ~w(s f n), else: ~w(f n)), "at #{now} ms"
+      end
+
+      # Seen in the outputs too, without the events: `y` and `z` show `x` as `s` last
+      # sampled it, in the same cycle, which `f` and `n` see only because `s` ran before
+      # them. In declaration order `f` would show the sample before.
+      for {now, outputs, _events} <- trace do
+        sampled = x_at(now - rem(now, 30))
+        assert outputs == %{"y" => sampled, "z" => sampled}, "at #{now} ms"
+      end
+
+      assert Logex.Runtime.overlaps(runtime) == %{"fast" => 0, "slow" => 0}
+    end
+
+    test "M2-1's Done-when: a late cycle yields one {:overlap, ...} and no lost phase" do
+      steps =
+        [{0, %{}}] ++
+          List.duplicate({10, %{}}, 50) ++ [{25, %{}}, {5, %{}}] ++ List.duplicate({10, %{}}, 46)
+
+      {runtime, trace} = cycles(Logex.Runtime.start(three_rates()), steps)
+      assert [{_, _, _} | _] = trace
+      assert {990, _, _} = List.last(trace)
+
+      # One overlap, at the late cycle, for the one period of the 10 ms task it missed: due
+      # at 510 ms, run at 525 ms, its 520 ms period counted, not run. The 30 ms task, due at
+      # 510 ms too, missed no period, so has none.
+      assert for({_now, _outputs, events} <- trace, {:overlap, _, _} = e <- events, do: e) ==
+               [{:overlap, "fast", 1}]
+
+      # Reported before its task's scans, in the order the cycle ran them: the 30 ms task
+      # first, by priority.
+      assert [{525, _, events}] = Enum.filter(trace, fn {now, _, _} -> now == 525 end)
+
+      assert events == [
+               {:ran, "slow", "s", 525},
+               {:overlap, "fast", 1},
+               {:ran, "fast", "f", 525},
+               {:ran, :none, "n", 525}
+             ]
+
+      # No lost phase: after the late cycle each task runs on its own multiples again.
+      assert ran(trace, "f") == Enum.to_list(0..500//10) ++ [525] ++ Enum.to_list(530..990//10)
+      assert ran(trace, "s") == Enum.to_list(0..480//30) ++ [525] ++ Enum.to_list(540..990//30)
+      assert Logex.Runtime.overlaps(runtime) == %{"fast" => 1, "slow" => 0}
+    end
+
+    # Or the two runtimes drift apart (docs/organisation.md §4.6). The README's steps, then
+    # a seeded walk of input changes, and a cold or warm restart of each side now and
+    # then: `restart/3` on the lone instance, `restart/2` on the configuration, each of
+    # which keeps the host's input image, so the host sends nothing again after one.
+    test "M2-1's Done-when: the README program gives identical outputs through scan/2 and " <>
+           "through a one-instance configuration" do
+      motor = program_named(@readme_motor, "motor")
+
+      readme = [
+        %{"start" => 1},
+        %{"start" => 0},
+        %{"overtemp" => 1},
+        %{"stop" => 1},
+        %{"stop" => 0, "overtemp" => 0},
+        %{"reset" => 1},
+        %{"reset" => 0, "start" => 1}
+      ]
+
+      :rand.seed(:exsss, {2026, 10, 2})
+
+      walk =
+        for _ <- 1..300 do
+          Map.new(
+            Enum.take_random(~w(start stop overtemp reset), :rand.uniform(3)),
+            &{&1, :rand.uniform(2) - 1}
+          )
+        end
+
+      steps = Enum.map(readme, &{0, &1, nil}) ++ Enum.map(walk, &{0, &1, restart_now()})
+      assert Enum.any?(steps, &match?({_, _, mode} when mode != nil, &1))
+      side_by_side(motor, steps, "m.fault", &[&1.env["fault"]])
+    end
+
+    # And with time: M2-3's motor, its timer stepped through scan/3 and through cycles at
+    # the same elapsed times, which a task-less instance takes as they come, restarts
+    # included.
+    test "a timed program agrees through scan/3 and a one-instance configuration" do
+      timed =
+        String.replace(@readme_motor, "var fault bool\n", "var fault bool\nvar t1 ton\n") <>
+          "xic motor ton t1 500\n"
+
+      motor = program_named(timed, "motor")
+      :rand.seed(:exsss, {2026, 10, 3})
+
+      walk =
+        for _ <- 1..300 do
+          {:rand.uniform(40) - 1,
+           Map.new(Enum.take_random(~w(start stop), 1), &{&1, :rand.uniform(2) - 1}),
+           restart_now()}
+        end
+
+      steps = [{0, %{"start" => 1}, nil}, {7, %{"start" => 0}, nil} | walk]
+      side_by_side(motor, steps, "m.t1.acc", &[&1.env["t1"]["acc"]])
+    end
+
+    # One step in 30 restarts both sides, cold or warm.
+    defp restart_now, do: Enum.at([:cold, :warm | List.duplicate(nil, 28)], :rand.uniform(30) - 1)
+
+    # Each step `{elapsed_ms, inputs, restart}` on both sides: the lone instance through
+    # put_inputs/3, restart/3 and scan/3, the configuration through restart/2 and cycle/3.
+    # Their outputs are equal at every step, and so is the tag read at `path`.
+    defp side_by_side(motor, steps, path, read) do
+      Enum.reduce(
+        steps,
+        {Logex.Runtime.instance(motor), Logex.Runtime.start(one_instance(motor))},
+        fn {elapsed, inputs, mode}, {state, runtime} ->
+          {state, runtime} = restarted(motor, state, runtime, mode)
+          state = Logex.Runtime.put_inputs(motor, state, inputs)
+          {scanned, state} = Logex.Runtime.scan(motor, state, elapsed)
+          {runtime, cycled, _events} = Logex.Runtime.cycle(runtime, elapsed, inputs)
+          assert scanned == cycled
+          assert [Logex.Runtime.get(runtime, path)] == read.(state)
+          {state, runtime}
+        end
+      )
+    end
+
+    defp restarted(_motor, state, runtime, nil), do: {state, runtime}
+
+    defp restarted(motor, state, runtime, mode),
+      do: {Logex.Runtime.restart(motor, state, mode), Logex.Runtime.restart(runtime, mode)}
+
+    # The README motor in a configuration of one task-less instance: an input point named
+    # after each var_input, an output point after each var_output, each connected to it.
+    defp one_instance(program) do
+      tags = program.tags |> Map.values() |> Enum.sort_by(& &1.name)
+      inputs = for %Logex.Tag{section: :var_input} = tag <- tags, do: tag
+      outputs = for %Logex.Tag{section: :var_output} = tag <- tags, do: tag
+
+      points =
+        Enum.with_index(inputs, &%Global{name: &1.name, type: &1.type, at: "panel.i.#{&2}"}) ++
+          Enum.with_index(outputs, &%Global{name: &1.name, type: &1.type, at: "panel.q.#{&2}"})
+
+      Configuration.new!(
+        name: "plant",
+        programs: [program],
+        globals: points,
+        instances: [%Instance{name: "m", type: program.name}],
+        connections:
+          Enum.map(inputs ++ outputs, &%Connection{instance: "m", member: &1.name, to: &1.name})
+      )
+    end
+  end
 end
