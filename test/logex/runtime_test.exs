@@ -964,6 +964,36 @@ defmodule Logex.RuntimeTest do
     end
   end
 
+  describe "a resource's host contract (M2-1), the rest" do
+    alias Logex.Configuration
+    alias Logex.Configuration.{Connection, Global, Instance}
+
+    test "restart/2 takes a runtime, then :cold or :warm", %{motor: motor} do
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [motor],
+          instances: [%Instance{name: "m1", type: "motor"}],
+          connections:
+            for(m <- ~w(start stop sp_in), do: %Connection{instance: "m1", member: m, to: 0})
+        )
+
+      runtime = Runtime.start(config)
+
+      raises("expected a %Logex.Runtime{} from Logex.Runtime.start/1, got: 5", fn ->
+        Runtime.restart(opaque(5), :hot)
+      end)
+
+      for mode <- [:hot, nil, "cold"],
+          do:
+            raises("restart takes :cold or :warm, got: #{inspect(mode)}", fn ->
+              Runtime.restart(runtime, opaque(mode))
+            end)
+
+      assert %Runtime{} = Runtime.restart(runtime, :warm)
+    end
+  end
+
   describe "get/2 of an instance whole" do
     # A program may declare no tag at all, and then there is no tag to give as an example.
     test "names one of its tags, or says it declares none" do
@@ -1000,6 +1030,7 @@ defmodule Logex.RuntimeTest do
                  next_due_in: 1,
                  overlaps: 1,
                  put_inputs: 3,
+                 restart: 2,
                  restart: 3,
                  scan: 2,
                  scan: 3,

@@ -10,8 +10,8 @@ defmodule Logex.Runtime do
     configuration of one instance, whose var_inputs are the host's input image.
   - `restart/3` starts an instance again, keeping its clock and the inputs that fit their
     types.
-  - `start/1`, `cycle/3`, `next_due_in/1`, `overlaps/1` and `get/2` run a configuration
-    (`Logex.Configuration`) as one resource, `%Logex.Runtime{}`, below.
+  - `start/1`, `cycle/3`, `next_due_in/1`, `overlaps/1`, `get/2` and `restart/2` run a
+    configuration (`Logex.Configuration`) as one resource, `%Logex.Runtime{}`, below.
 
   **A configuration** (M2-1, `docs/organisation.md` §4.6). `start/1` makes the resource at
   time 0: every global at its initial value, every program instance as `instance/1` makes
@@ -45,7 +45,9 @@ defmodule Logex.Runtime do
   paces its own cycles. `get/2` reads a global, any declared tag of a program instance, a
   `var` among them, or a public member of a function block instance in one; never an
   internal member, an instance whole, a task or the configuration, and a path that names
-  one of those is told which it names. A `%Logex.Runtime{}` is opaque, plain data: one
+  one of those is told which it names. `restart/2` starts the resource again, as
+  `start/1` left it but for its clock and its input image, which it keeps, as `restart/3`
+  keeps an instance's var_inputs. A `%Logex.Runtime{}` is opaque, plain data: one
   built or edited by hand is outside this contract. A `%Logex.Configuration{}` is the data
   API, built by hand by design, so `start/1` checks it again.
 
@@ -66,8 +68,8 @@ defmodule Logex.Runtime do
 
   What it may rely on:
 
-  1. The first cycle runs at once: `next_due_in/1` is 0 after `start/1`, and a first
-     cycle a whole interval later reports the run it missed.
+  1. The first cycle runs at once: `next_due_in/1` is 0 after `start/1` and after
+     `restart/2`, and a first cycle a whole interval later reports the run it missed.
   2. Late is reported, never replayed: a task runs once however late, and keeps its phase.
   3. Inputs are a delta: only input points, each with a value that fits its type, merged
      into the image, every problem with one call in one raise, in key order. The image
@@ -82,18 +84,22 @@ defmodule Logex.Runtime do
   `start/1` uses and an online edit of a configuration (OE-2) is to use for a piece it
   adds:
   - the clock, `now`, is 0 at `start/1`, moves on by each cycle's `elapsed_ms`, and is
-    kept by an edit;
+    kept by `restart/2` and by an edit;
   - a global starts by `Logex.Configuration.initial/1`, whose doc lists the edit's
-    exceptions; an input point's value is the host's from its first cycle on;
+    exceptions; an input point's value is the host's from its first cycle on, and
+    `restart/2` keeps it;
   - a program instance starts as `instance/1` makes it, every tag by
-    `Logex.Program.initial_env/1`, whose doc lists the edit's exceptions;
-  - a task is due at the clock, `now`, with no overlap counted: at 0 by `start/1`. No edit
-    adds or removes a task while it runs (decision 19), so this rule has no edit
-    exception; a task an edit keeps keeps its due time and its count.
+    `Logex.Program.initial_env/1`, whose doc lists the edit's exceptions, and `restart/2`
+    restarts it through `restart/3`;
+  - a task is due at the clock, `now`, with no overlap counted: at 0 by `start/1`, at the
+    kept clock by `restart/2`. No edit adds or removes a task while it runs (decision 19),
+    so this rule has no edit exception; a task an edit keeps keeps its due time and its
+    count.
 
   Until OE-2, a program instance inside a resource is not edited: `Logex.Edit` takes one
   lone instance, which `instance/1` made, and the resource holds its instances itself, as
-  its opacity requires.
+  its opacity requires. `restart/2` restarts the whole resource; there is no restart of one
+  instance inside it.
 
   A lone running instance takes a changed program through `Logex.Edit` (OE-1,
   `docs/organisation.md` §4.9): accept, test, untest, assemble or cancel, each between two
@@ -267,9 +273,39 @@ defmodule Logex.Runtime do
   defp due_in(nil, _now), do: :infinity
   defp due_in(next, now), do: next - now
 
+  @doc """
+  Starts the resource again (`:warm` is `:cold` until `retain` exists). It is then as
+  `start/1` left it, but for its clock and its input image, which it keeps: every other
+  global back at its initial value, each instance through `restart/3`, every task due at
+  the next cycle, and every overlap count 0. Keeping the input image is what keeps
+  `scan/2` with `restart/3` and a one-instance configuration in agreement across a
+  restart, with nothing for the host to send again (decision 38). There is no restart of
+  one instance inside a resource.
+  """
+  def restart(runtime, mode) do
+    %__MODULE__{now: now, config: config} = runtime = runtime!(runtime)
+    mode!(mode)
+
+    %{
+      runtime
+      | globals: Map.new(config.globals, &{&1.name, restarted(&1, runtime)}),
+        instances:
+          Map.new(runtime.instances, fn {name, state} ->
+            {name, restart(Map.fetch!(config.programs, state.type), state, mode)}
+          end),
+        tasks: Map.new(runtime.tasks, fn {name, _state} -> {name, task_state(now)} end)
+    }
+  end
+
+  defp restarted(%Configuration.Global{name: name} = global, %__MODULE__{} = runtime),
+    do: input_kept(Map.has_key?(runtime.wiring.inputs, name), global, runtime)
+
+  defp input_kept(true, global, runtime), do: Map.fetch!(runtime.globals, global.name)
+  defp input_kept(false, global, _runtime), do: Configuration.initial(global)
+
   defp task_state(due), do: %{next_due: due, overlaps: 0}
 
-  @doc "Each task's overlap count, by name: the periods it missed since `start/1`."
+  @doc "Each task's overlap count, by name: the periods it missed since `start/1` or `restart/2`."
   def overlaps(runtime) do
     %__MODULE__{tasks: tasks} = runtime!(runtime)
     Map.new(tasks, fn {name, %{overlaps: overlaps}} -> {name, overlaps} end)

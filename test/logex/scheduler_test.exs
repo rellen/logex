@@ -94,7 +94,7 @@ defmodule Logex.SchedulerTest do
     end
 
     # Configuration.initial/1 is the one rule for a global's value where nothing has set
-    # it: start/1 starts every global by it.
+    # it: start/1 starts every global by it, and restart/2 every global but an input point.
     test "starts every global by the one rule" do
       config = plant()
       runtime = Runtime.start(config)
@@ -380,6 +380,68 @@ defmodule Logex.SchedulerTest do
 
       assert ran(events) ==
                for(n <- names.("a"), do: {"t", n, 0}) ++ for(n <- names.("b"), do: {:none, n, 0})
+    end
+  end
+
+  describe "restart/2" do
+    test "starts the resource again, keeping the clock and the input image" do
+      runtime = Runtime.start(plant())
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"x" => 1})
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{"x" => 0})
+
+      # Late, at 45 ms: two periods missed, and the one-shot sees `x` rise.
+      {runtime, outputs, _} = Runtime.cycle(runtime, 35, %{"x" => 1})
+      assert outputs == %{"y" => 1}
+      assert {Runtime.get(runtime, "g"), Runtime.get(runtime, "p.out")} == {0, 1}
+      assert Runtime.overlaps(runtime) == %{"t" => 2}
+
+      runtime = Runtime.restart(runtime, :cold)
+
+      # The input image is kept; every other global is back at its initial value, each
+      # instance is restarted, no overlap is counted, and every task is due at once.
+      assert Runtime.get(runtime, "x") == 1
+      assert {Runtime.get(runtime, "g"), Runtime.get(runtime, "y")} == {1, 0}
+      assert Runtime.get(runtime, "p.out") == 0
+      assert Runtime.overlaps(runtime) == %{"t" => 0}
+      assert Runtime.next_due_in(runtime) == 0
+
+      # The clock is kept: the next cycle, at elapsed 0, runs the task at 45 ms, and the
+      # task-less instance reads the kept `x`.
+      {runtime, outputs, events} = Runtime.cycle(runtime, 0, %{})
+      assert events == [{:ran, "t", "p", 45}, {:ran, :none, "inv", 45}]
+      assert {outputs, Runtime.get(runtime, "g")} == {%{"y" => 0}, 0}
+      assert Runtime.next_due_in(runtime) == 10
+      assert Runtime.restart(runtime, :warm) == Runtime.restart(runtime, :cold)
+    end
+
+    # Configuration.initial/1, the one rule, puts back every global but an input point.
+    test "puts every global but an input point back by the one rule" do
+      config = plant()
+      runtime = Runtime.start(config)
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"x" => 0})
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{"x" => 1})
+      assert {Runtime.get(runtime, "y"), Runtime.get(runtime, "g")} == {1, 0}
+      runtime = Runtime.restart(runtime, :cold)
+
+      assert Map.new(config.globals, &{&1.name, Runtime.get(runtime, &1.name)}) ==
+               Map.new(config.globals, &{&1.name, Configuration.initial(&1)})
+               |> Map.put("x", 1)
+    end
+
+    test "leaves a runtime of plain data" do
+      {runtime, _, _} = Runtime.cycle(Runtime.start(plant()), 0, %{"x" => 1})
+      assert impure(Runtime.restart(runtime, :cold)) == []
+    end
+
+    # Its first scan after the restart is a first scan: the one-shot passes no power on it
+    # though its input rose since the last scan.
+    test "each instance's next scan is a first scan" do
+      runtime = Runtime.start(plant())
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"x" => 0})
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{"x" => 0})
+      runtime = Runtime.restart(runtime, :cold)
+      {_runtime, outputs, _} = Runtime.cycle(runtime, 0, %{"x" => 1})
+      assert outputs == %{"y" => 0}
     end
   end
 

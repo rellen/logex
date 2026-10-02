@@ -31,8 +31,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   Since M2-1 it also runs a configuration as one resource, `%Logex.Runtime{}`, opaque:
   `start/1`, `cycle/3` (time, the input image, the due tasks by priority, then due time,
   then declaration, each instance copied in, scanned by `call/4` and copied out, the
-  task-less instances last, the output points), `next_due_in/1`, `overlaps/1` and
-  `get/2`, an access path; their rules, events and the host's loop are in its moduledoc.
+  task-less instances last, the output points), `next_due_in/1`, `overlaps/1`, `get/2`,
+  an access path, and `restart/2`, which keeps the clock and the input image as
+  `restart/3` keeps an instance's var_inputs; their rules, events and the host's loop are
+  in its moduledoc.
   `lib/logex/instance.ex` and `lib/logex/scan.ex` hold its two structs, each with
   `ons_blocked` since OE-1: the storage bits whose `ons` the next scan blocks, the hook an
   online edit's switch uses to keep a new or changed one-shot from firing. The instance

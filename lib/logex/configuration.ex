@@ -866,8 +866,9 @@ defmodule Logex.Configuration do
 
   The one rule for a new global (`docs/organisation.md` §4.9), as
   `Logex.Program.initial_env/1` is for a tag: `Logex.Runtime.start/1` starts every global
-  by it, and an online edit of a configuration (OE-2) is to start each global it adds by
-  it. The edit's exceptions, for a global the resource already holds: a kept global keeps
+  by it, `Logex.Runtime.restart/2` every global but an input point, whose value it keeps,
+  and an online edit of a configuration (OE-2) is to start each global it adds by it. The
+  edit's exceptions, for a global the resource already holds: a kept global keeps
   its value until a restart, a changed `initial` included; an input or output point is
   neither added nor removed while running, located I/O being refused then; and an output
   point that no connection drives any more holds its value, as an output an edit leaves
