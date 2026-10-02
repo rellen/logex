@@ -46,11 +46,12 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `check/1`, the one validator, giving a mistake a configuration's text could make as a
   `:configure` diagnostic at its element's line in the configuration's file, and raising
   one `ArgumentError` for the host's mistakes no text can make, a line each (decision 36:
-  a bad name, file or programs, a part that is not a proper list of its struct, a bad
-  line, lines neither all nil nor rising, a name no lexer reads as one token, a negative
-  number); `new!/1`, from Elixir, raising one `ArgumentError` with every problem, an
-  element that brings a line among them; `location/1`; and `initial/1`, the one rule for
-  a new global's value, as `Logex.Program.initial_env/1` is a tag's
+  a bad name, file or programs, a part that is not a proper list of its struct, a struct
+  that lacks one of its keys, a bad line, lines neither all nil nor rising, a name no
+  lexer reads as one token, a negative number); `new!/1`, from Elixir, raising one
+  `ArgumentError` with every problem, an element that brings a line among them;
+  `location/1`; and `initial/1`, the one rule for a new global's value, as
+  `Logex.Program.initial_env/1` is a tag's
 - `lib/logex/edit.ex` — a staged edit of one program instance (OE-1, `docs/organisation.md`
   §4.9): `accept/3` (refusing a type change as `:edit` diagnostics, with a forecast),
   `test/2`, `untest/2`, `assemble/2`, `cancel/2`, `running/1` and `stage/1`, each step

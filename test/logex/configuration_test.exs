@@ -249,6 +249,16 @@ defmodule Logex.ConfigurationTest do
                "task `t`: a priority is 0, the highest, to 65535, found 70000",
                "task `u`: an interval is 1 to 2147483647 ms, found 0"
              ]
+
+      # The name comes before the programs, as the file before the name.
+      assert mistakes(%{config | file: nil, programs: [seal]}) == [
+               ~s|"a b" cannot name a configuration: a name is a letter or `_`, then letters, | <>
+                 "digits or `_`",
+               "programs must be a map of program names to %Logex.Program{}, got a list: " <>
+                 "Logex.Configuration.new!/1 takes a list and keys it by name",
+               "task `t`: an interval is 1 to 2147483647 ms, found -5",
+               "program instance `m`: its type is a program's name, found :seal"
+             ]
     end
 
     test "each field is a list of its element struct, a proper one", %{seal: seal} do
@@ -280,6 +290,39 @@ defmodule Logex.ConfigurationTest do
              ]
     end
 
+    # A map that names a struct but lacks one of its keys, as Map.delete/2 makes one, is
+    # not that struct: refused as any other value is, so nothing reads the missing key.
+    test "a configuration or an element that lacks a key of its struct is not that struct",
+         %{seal: seal} do
+      config = Configuration.new!(Keyword.put(base(seal), :tasks, [task("fast", 10, 0)]))
+
+      for {part, what} <- [
+            tasks: "a task",
+            globals: "a global",
+            instances: "an instance",
+            connections: "a connection"
+          ],
+          element = hd(Map.fetch!(config, part)),
+          key <- Map.keys(element) -- [:__struct__] do
+        lacking = Map.delete(element, key)
+        message = "#{what} is a %#{inspect(element.__struct__)}{}, got: #{inspect(lacking)}"
+        assert mistakes(Map.put(config, part, [lacking])) == [message]
+        # new!/1 refuses a line on an element from Elixir, but not on one that is no element.
+        lined = Map.delete(%{element | line: 1}, key)
+        fields = Keyword.put(base(seal), :tasks, [task("fast", 10, 0)])
+
+        assert hd(refused(Keyword.put(fields, part, [lined]))) ==
+                 "#{what} is a %#{inspect(element.__struct__)}{}, got: #{inspect(lined)}"
+      end
+
+      for key <- Map.keys(config) -- [:__struct__] do
+        lacking = Map.delete(config, key)
+        message = "expected a %Logex.Configuration{}, got: #{inspect(lacking)}"
+        assert_raise ArgumentError, message, fn -> Configuration.check(lacking) end
+        assert_raise ArgumentError, message, fn -> Logex.Runtime.start(lacking) end
+      end
+    end
+
     test "a line is a positive integer, or nil", %{seal: seal} do
       config = Configuration.new!(base(seal))
 
@@ -306,6 +349,17 @@ defmodule Logex.ConfigurationTest do
                "the program under `seal` is not a %Logex.Program{} from Logex.compile/2, got: :junk",
                "the program under `x` is named `seal`"
              ]
+
+      # A %Logex.Program{} whose tags are not a map, or whose rungs are not a list, is no
+      # program Logex.compile/2 gives.
+      for junk <- [%{seal | tags: nil}, %{seal | tags: []}, %{seal | rungs: nil}],
+          do:
+            assert(
+              mistakes(%{config | programs: %{"seal" => junk}}) == [
+                "the program under `seal` is not a %Logex.Program{} from Logex.compile/2, " <>
+                  "got: #{inspect(junk)}"
+              ]
+            )
 
       assert mistakes(%{config | programs: [seal]}) == [
                "programs must be a map of program names to %Logex.Program{}, got a list: " <>
@@ -489,9 +543,9 @@ defmodule Logex.ConfigurationTest do
                "line 11: `m.sp` is connected to `aa`, which is not a global: the globals are " <>
                  "`k` and `pb`",
                "line 12: `m.motor` is connected to `zz`, which is not a global",
-               "line 13: `m` is a `seal`, which declares no `qq`: its var_inputs and " <>
-                 "var_outputs are `motor`, `sp`, `start` and `stop`",
-               "line 14: `m` is a `seal`, which declares no `ww`",
+               "line 13: `m` is a program instance of `seal`, which declares no `qq`: its " <>
+                 "var_inputs and var_outputs are `motor`, `sp`, `start` and `stop`",
+               "line 14: `m` is a program instance of `seal`, which declares no `ww`",
                "line 15: `qq.start`: there is no program instance `qq`: the program instances " <>
                  "are `m`, `x1`, `x2`, `x3` and `x4`",
                "line 16: `ww.start`: there is no program instance `ww`"
@@ -534,15 +588,17 @@ defmodule Logex.ConfigurationTest do
              ]
     end
 
+    # Such an element is left out of every diagnostic, which would cite it by a name no
+    # text can say, so its other fields are not checked.
     test "a global's or an instance's name the lexer does not read as one token is the " <>
            "host's mistake",
          %{seal: seal} do
       fields =
         Keyword.merge(base(seal),
-          globals: base(seal)[:globals] ++ [%Global{name: "", type: :bool}],
+          globals: base(seal)[:globals] ++ [%Global{name: "", type: :bool, initial: 7}],
           instances: [
             %Instance{name: "m", type: "seal"},
-            %Instance{name: "n//x", type: "seal"},
+            %Instance{name: "n//x", type: "zzz"},
             %Instance{name: "p.q", type: "seal"}
           ]
         )
@@ -782,15 +838,16 @@ defmodule Logex.ConfigurationTest do
                  ~s|in `m1.start`, found "m" and :start|,
                "program instance `u`: there is no program `zzz`: the programs are `seal`",
                "`q.start`: there is no program instance `q`: the program instances are `m` and `u`",
-               "`m` is a `seal`, which declares no `strt` — did you mean `start`?",
+               "`m` is a program instance of `seal`, which declares no `strt` — did you mean " <>
+                 "`start`?",
                "`m.t1.pre` goes too deep: a connection names a var_input or var_output of a " <>
                  "program instance, as in `m.start`",
                "`m.fault` is internal to `seal` (declared `var`): only a var_input or var_output " <>
                  "connects",
                "`m.t1` is internal to `seal` (declared `var`): only a var_input or var_output " <>
                  "connects",
-               "`m` is a `seal`, which declares no `zz`: its var_inputs and var_outputs are " <>
-                 "`motor`, `sp`, `start` and `stop`"
+               "`m` is a program instance of `seal`, which declares no `zz`: its var_inputs " <>
+                 "and var_outputs are `motor`, `sp`, `start` and `stop`"
              ]
     end
 
@@ -838,6 +895,46 @@ defmodule Logex.ConfigurationTest do
                ~s|`m.stop` is connected to "pb 2": a connection's other end is a global, by | <>
                  "name, or a constant of 0 or more"
              ]
+
+      # A var_input tied to a constant is connected as surely as one tied to a global; a
+      # name with `.` parts is one a line can hold, so connecting to one is a diagnostic.
+      again = [
+        %Connection{instance: "m", member: "start", to: 0},
+        %Connection{instance: "m", member: "start", to: "pb"},
+        %Connection{instance: "m", member: "stop", to: "m.motor"},
+        %Connection{instance: "m", member: "motor", to: "k"}
+      ]
+
+      config = Configuration.new!(base(seal))
+
+      assert Enum.map(Configuration.check(%{config | connections: again}), & &1.message) == [
+               "`m.start` is already connected, to 0: a var_input is connected once",
+               "`m.stop` is connected to `m.motor`, which is not a global: the globals are " <>
+                 "`k`, `pb`, `pb2` and `sp`"
+             ]
+    end
+
+    test "a dint var_input's constant fits in 32 bits" do
+      {:ok, dints} =
+        Logex.compile("var_input a dint\nvar_output q dint\nmove a q", name: "dints")
+
+      fields = fn to ->
+        [
+          name: "plant",
+          programs: [dints],
+          globals: [%Global{name: "n", type: :dint}],
+          instances: [%Instance{name: "d", type: "dints"}],
+          connections: [
+            %Connection{instance: "d", member: "a", to: to},
+            %Connection{instance: "d", member: "q", to: "n"}
+          ]
+        ]
+      end
+
+      assert %Configuration{} = Configuration.new!(fields.(2_147_483_647))
+
+      for to <- [2_147_483_648, 3_000_000_000],
+          do: assert(refused(fields.(to)) == ["`d.a` is a dint: `#{to}` does not fit in 32 bits"])
     end
 
     test "a var_output drives a global of its type, never an input point, and is the one " <>
@@ -873,6 +970,19 @@ defmodule Logex.ConfigurationTest do
                "`m.motor` is a bool, but `sp` is a dint",
                "`k` is already driven by `m.motor`: one connection drives a global"
              ]
+
+      # A var_output refused for its type drives nothing, so the one that then drives its
+      # global is not refused as a second: one mistake, one message.
+      mistyped = [
+        %Connection{instance: "m", member: "start", to: "pb"},
+        %Connection{instance: "m", member: "stop", to: 0},
+        %Connection{instance: "m", member: "sp", to: "k"},
+        %Connection{instance: "m", member: "motor", to: "k"}
+      ]
+
+      assert refused(Keyword.put(base(seal), :connections, mistyped)) == [
+               "`m.sp` is a dint, but `k` is a bool"
+             ]
     end
 
     test "every var_input is connected (decision 7), cited at its instance", %{seal: seal} do
@@ -885,6 +995,44 @@ defmodule Logex.ConfigurationTest do
                  "`m.start` is not connected: every var_input is connected, to a global or a constant",
                  "`m.stop` is not connected: every var_input is connected, to a global or a constant"
                ]
+
+      # In the order the program declares them, which is not the order of their names.
+      {:ok, zig} =
+        Logex.compile(
+          "var_input zeta bool\nvar_input alpha bool\nvar_output o bool\n" <>
+            "xic zeta xic alpha ote o",
+          name: "zig"
+        )
+
+      assert refused(
+               name: "plant",
+               programs: [zig],
+               instances: [%Instance{name: "z", type: "zig"}]
+             ) ==
+               [
+                 "`z.zeta` is not connected: every var_input is connected, to a global or a constant",
+                 "`z.alpha` is not connected: every var_input is connected, to a global or a constant"
+               ]
+    end
+
+    # A bad name is not recovered, as on a `.ld` declaration line: a connection whose
+    # member the host gave as an atom names no var_input, so new!/1, which gives the
+    # diagnostics beside the host's mistakes, finds that var_input not connected. A bad
+    # other end names the var_input, which counts as connected.
+    test "a connection whose end is the host's mistake connects nothing", %{seal: seal} do
+      ends = [
+        %Connection{instance: "m", member: :start, to: "pb"},
+        %Connection{instance: "m", member: "stop", to: -1},
+        %Connection{instance: "m", member: "motor", to: "k"}
+      ]
+
+      assert refused(Keyword.put(base(seal), :connections, ends)) == [
+               ~s|a connection's instance is a name, and with its member makes one path, as | <>
+                 ~s|in `m1.start`, found "m" and :start|,
+               "`m.stop` is connected to -1: a connection's other end is a global, by name, or " <>
+                 "a constant of 0 or more",
+               "`m.start` is not connected: every var_input is connected, to a global or a constant"
+             ]
     end
   end
 
@@ -958,6 +1106,61 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  describe "a refused name, in a file" do
+    # The name is all that is refused: every other field of the element is checked, as on
+    # a `.ld` declaration line, and a use of the name finds the element that kept it.
+    test "an element whose name is refused still has its other fields checked",
+         %{seal: seal} do
+      config = %Configuration{
+        name: "plant",
+        file: "plant.logex",
+        programs: %{"seal" => seal},
+        tasks: [
+          %{task("t", 10, 0) | line: 1},
+          %{task("T", 0, 70_000) | line: 2},
+          %{task("u.v", nil, nil) | line: 3}
+        ],
+        globals: [
+          %Global{name: "g", type: :bool, line: 4},
+          %Global{name: "g", type: :bool, initial: 7, at: "nowhere", line: 5}
+        ],
+        instances: [
+          %Instance{name: "m", type: "seal", line: 6},
+          %Instance{name: "m", type: "zzz", task: "qqq", line: 7}
+        ],
+        connections:
+          for(
+            {member, line} <- [{"start", 8}, {"stop", 9}],
+            do: %Connection{instance: "m", member: member, to: 0, line: line}
+          )
+      }
+
+      assert formatted(config) == [
+               "plant.logex: line 2: `T` and the task `t` (line 1) differ only in case: names " <>
+                 "are case-sensitive, so these would be two names",
+               "plant.logex: line 2: task `T`: an interval is 1 to 2147483647 ms, found 0",
+               "plant.logex: line 2: task `T`: a priority is 0, the highest, to 65535, found 70000",
+               ~s|plant.logex: line 3: "u.v" cannot name a task: a name is a letter or `_`, | <>
+                 "then letters, digits or `_`",
+               "plant.logex: line 3: task `u.v`: an interval is 1 to 2147483647 ms, found nil",
+               "plant.logex: line 3: task `u.v`: a priority is 0, the highest, to 65535, found nil",
+               "plant.logex: line 5: `g` is already the name of a global (line 4): tasks, " <>
+                 "globals and program instances share one namespace",
+               "plant.logex: line 5: global `g` is a bool: its initial value must be 0 or 1, " <>
+                 "found `7`",
+               "plant.logex: line 5: global `g` is at `nowhere`, which is not a location: a " <>
+                 "location is a device, `i` for an input or `q` for an output, then an " <>
+                 "address, as in `panel.i.0` or `panel.q.3`",
+               "plant.logex: line 7: `m` is already the name of a program instance (line 6): " <>
+                 "tasks, globals and program instances share one namespace",
+               "plant.logex: line 7: program instance `m`: there is no program `zzz`: the " <>
+                 "programs are `seal`",
+               "plant.logex: line 7: program instance `m`: there is no task `qqq`: the tasks " <>
+                 "are `t`"
+             ]
+    end
+  end
+
   describe "nothing escapes" do
     # Any of these in any field of the configuration or of one of its elements.
     @junk [nil, 0, -1, 1.5, "", "a b", "x.y", "m", "pb", "seal", "panel.i.0", :atom, [], [1 | 2]] ++
@@ -995,8 +1198,9 @@ defmodule Logex.ConfigurationTest do
       assert Enum.count(outcomes, &match?([%Diagnostic{} | _], &1)) > 10
     end
 
-    # A host's list is never trusted to be proper (fix F8): an improper one, in any part or
-    # as the keyword list itself, is refused like any other value that is not a list.
+    # A host's list is never trusted to be proper (decision 36): an improper one, in any
+    # part or as the keyword list itself, is refused like any other value that is not a
+    # list.
     test "an improper list, in any part or as the keyword list, is an ArgumentError",
          %{seal: seal} do
       for part <- ~w(programs tasks globals instances connections)a do

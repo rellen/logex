@@ -1,10 +1,11 @@
 defmodule Logex.Diagnostic do
   @moduledoc """
-  One problem found in a program: what it is, where it is, and which stage found it.
+  One problem found in a program or a configuration: what it is, where it is, and which
+  stage found it.
 
-  `Logex.compile/2` and `Logex.compile_file/1` return a list of these rather than raising,
-  and a compiled `%Logex.Program{}` carries its warnings as these too. A rung never spans
-  lines, so the line alone names the rung.
+  `Logex.compile/2`, `Logex.compile_file/1` and `Logex.Configuration.check/1` return a
+  list of these rather than raising, and a compiled `%Logex.Program{}` carries its warnings
+  as these too. A rung never spans lines, so the line alone names the rung.
 
   - `stage` is `:file` (reading the file, or its name), `:lex`, `:parse`, `:validate`
     (the declarations, instructions and tags, `Logex.Compiler.instructionize/2`),
@@ -16,9 +17,11 @@ defmodule Logex.Diagnostic do
     for a `:configure` problem with an element built from Elixir, or with the
     configuration as a whole.
   - `column` is set by the front end, which alone still knows it; `file` by
-    `Logex.compile_file/1`. An `:edit` problem has no file even for a candidate read from
-    one, since a `%Logex.Program{}` keeps none: a gap Milestone 2's configuration edit
-    must close (`docs/organisation.md` §4.9, fix F15).
+    `Logex.compile_file/1`, and on a `:configure` problem by `Logex.Configuration.check/1`
+    from the configuration's own `file`, nil for one built from Elixir. An `:edit` problem
+    has no file even for a candidate read from one, since a `%Logex.Program{}` keeps none:
+    a gap Milestone 2's configuration edit must close (`docs/organisation.md` §4.9, fix
+    F15).
   - `severity` is `:error` or `:warning`.
   """
 

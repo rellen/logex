@@ -44,12 +44,13 @@ defmodule Logex.Configuration do
   whose name is not a name, or whose file is neither a string nor nil; programs that are
   not a map of names to `%Logex.Program{}`, each under its own name, one of them a
   function block type among them; a field that is not a proper list of its element
-  struct; a line that is not a positive integer or nil; lines that are neither all nil,
-  as from Elixir, nor rising in each list, one element a line, as a file's are; a name,
-  a location, a type or a task that the lexer does not read as one name token; a number
-  that is not an integer of 0 or more, since a negative literal does not lex yet
-  (`PLAN.md` §5); a global's type that is neither `:bool` nor `:dint`; and a connection's
-  instance that is not a name, or with its member makes no one path.
+  struct, or a configuration or an element that lacks a key of its struct, as
+  `Map.delete/2` can make one; a line that is not a positive integer or nil; lines that
+  are neither all nil, as from Elixir, nor rising in each list, one element a line, as a
+  file's are; a name, a location, a type or a task that the lexer does not read as one
+  name token; a number that is not an integer of 0 or more, since a negative literal does
+  not lex yet (`PLAN.md` §5); a global's type that is neither `:bool` nor `:dint`; and a
+  connection's instance that is not a name, or with its member makes no one path.
 
   Each list of names a diagnostic ends with is given once, by the first diagnostic in
   line order that needs it, so a refusal is linear in its size. Its time is not: each
@@ -156,6 +157,7 @@ defmodule Logex.Configuration do
   @interval 1..2_147_483_647
   @priority 0..65_535
   @parts [:tasks, :globals, :instances, :connections]
+  @elements [Logex.Configuration.Task, Global, Instance, Connection]
   @lines ": a configuration's lines are all nil, as from Elixir, or rise in each list, " <>
            "one element a line"
 
@@ -164,7 +166,10 @@ defmodule Logex.Configuration do
   `%Logex.Program{}`), `tasks:`, `globals:`, `instances:` and `connections:`, each a list
   of its element struct with no `line`, the rest optional. Checked by `check/1`: the
   configuration, or one `ArgumentError` with every problem, a line each: its own, then the
-  host's mistakes `check/1` raises, then `check/1`'s diagnostics, formatted.
+  host's mistakes `check/1` raises, then `check/1`'s diagnostics, formatted. Those are the
+  diagnostics of the configuration with each mistaken field left out, never read as
+  another value, so one may follow from a mistake: a var_input whose one connection the
+  host gave a bad instance or member is also not connected.
   """
   def new!(fields) when is_list(fields), do: built(keyword?(fields), fields)
 
@@ -221,13 +226,17 @@ defmodule Logex.Configuration do
   defp unlined_list({:improper, lined}, list), do: {list, lined}
   defp unlined_list({items, lined}, _list), do: {Enum.reverse(items), lined}
 
-  defp unline(%module{line: line} = item, {items, lined})
-       when module in [Logex.Configuration.Task, Global, Instance, Connection] and line != nil,
-       do:
-         {[%{item | line: nil} | items],
-          ["#{describe(item)} from Elixir has no line, got: #{inspect(line)}" | lined]}
+  defp unline(%module{} = item, acc) when module in @elements,
+    do: unline_whole(whole?(item), item, acc)
 
   defp unline(item, {items, lined}), do: {[item | items], lined}
+
+  defp unline_whole(true, %{line: line} = item, {items, lined}) when line != nil,
+    do:
+      {[%{item | line: nil} | items],
+       ["#{describe(item)} from Elixir has no line, got: #{inspect(line)}" | lined]}
+
+  defp unline_whole(_whole, item, {items, lined}), do: {[item | items], lined}
 
   defp raised([], config), do: config
   defp raised(problems, _config), do: raise(ArgumentError, Enum.join(problems, "\n"))
@@ -317,12 +326,14 @@ defmodule Logex.Configuration do
   `ArgumentError` instead, each such mistake a line of its message (decision 36; the
   moduledoc lists them).
   """
-  def check(%__MODULE__{} = config) do
+  def check(config), do: checking(is_struct(config, __MODULE__) and whole?(config), config)
+
+  defp checking(true, config) do
     {mistakes, diagnostics} = problems(config)
     checked(mistakes, diagnostics)
   end
 
-  def check(other),
+  defp checking(false, other),
     do: raise(ArgumentError, "expected a %Logex.Configuration{}, got: #{inspect(other)}")
 
   defp checked([], diagnostics), do: diagnostics
@@ -331,7 +342,11 @@ defmodule Logex.Configuration do
   # Every problem with a configuration, of two kinds: the host's mistakes, which no
   # configuration text can make, each a line of an ArgumentError's message; and the
   # diagnostics, each a mistake a text could make too. A field that is a host's mistake is
-  # left out of every diagnostic, so one mistake is one message.
+  # left out of every diagnostic, never reported twice, and never read as another value: a
+  # bad name is not recovered, as on a `.ld` declaration line. So new!/1, which gives both
+  # kinds, may follow a mistake with a diagnostic of what is then missing: a var_input
+  # whose one connection names its instance as an atom is not connected, and an instance
+  # whose task is named by an atom names no task. check/1 raises the mistakes alone.
   defp problems(config) do
     {file, m_file} = file(config.file)
     {programs, m_programs} = programs(config.programs)
@@ -359,13 +374,15 @@ defmodule Logex.Configuration do
           into: MapSet.new(),
           do: name
 
+    # An element whose name no text can say is the host's mistake, and stays out of every
+    # diagnostic. One whose name is refused here, a duplicate, a case twin or a name with
+    # `.` parts, has every other field checked, as a `.ld` declaration line does: only its
+    # name is not kept, so a use of the name finds the element that kept it, or none.
+    [tasks, globals, instances] = Enum.map([tasks, globals, instances], &worded/1)
     {named, d_names} = namespace(tasks ++ globals ++ instances)
-    tasks = for %Logex.Configuration.Task{} = task <- named, do: task
-    globals = for %Global{} = global <- named, do: global
-    instances = for %Instance{} = instance <- named, do: instance
-    {globals_by_name, d_located} = located(Enum.sort_by(globals, &line_key/1))
-    tasks_by_name = Map.new(tasks, &{&1.name, &1})
-    {runnable, d_runs} = runs(instances, {programs, given(config.programs)}, tasks_by_name)
+    tasks_by_name = for %Logex.Configuration.Task{} = t <- named, into: %{}, do: {t.name, t}
+    globals_by_name = for %Global{} = global <- named, into: %{}, do: {global.name, global}
+    runnable = runnable(named, programs)
 
     d_wiring =
       wiring(Enum.sort_by(connections, &line_key/1), {runnable, declared}, globals_by_name)
@@ -374,8 +391,8 @@ defmodule Logex.Configuration do
       d_names,
       Enum.flat_map(tasks, &task/1),
       Enum.flat_map(globals, &global/1),
-      d_located,
-      d_runs,
+      located(Enum.sort_by(globals, &line_key/1)),
+      runs(instances, {programs, given(config.programs)}, tasks_by_name),
       d_wiring,
       empty(config.instances)
     ]
@@ -522,12 +539,21 @@ defmodule Logex.Configuration do
   defp module(:instances), do: Instance
   defp module(:connections), do: Connection
 
-  defp element(%{__struct__: module} = item, acc, module), do: line(item, acc)
+  defp element(item, acc, module),
+    do: element_of(is_struct(item, module) and whole?(item), item, acc, module)
 
-  defp element(other, {items, good, mistakes}, module),
+  defp element_of(true, item, acc, _module), do: line(item, acc)
+
+  defp element_of(false, other, {items, good, mistakes}, module),
     do:
       {items, good,
        ["#{one(module)} is a %#{inspect(module)}{}, got: #{inspect(other)}" | mistakes]}
+
+  # A struct with every key its module gives it. A map that names the struct but lacks a
+  # key, as Map.delete/2 makes one, is not that struct: nothing here reads it, so no
+  # KeyError or FunctionClauseError escapes.
+  defp whole?(%{__struct__: module} = item),
+    do: Map.keys(module.__struct__()) -- Map.keys(item) == []
 
   defp one(Logex.Configuration.Task), do: "a task"
   defp one(Global), do: "a global"
@@ -738,12 +764,15 @@ defmodule Logex.Configuration do
   defp kind(%Global{}), do: "global"
   defp kind(%Instance{}), do: "program instance"
 
+  # The elements whose name the lexer reads as one token: any other name is the host's
+  # mistake, refused already.
+  defp worded(elements), do: Enum.filter(elements, &word?(&1.name))
+
   # One namespace for tasks, globals and program instances (decided here, not in IEC): the
   # first to take a name keeps it, in line order, and a case-only twin is refused as tags'
   # are, since a name differing only in case would be read as the same one. A program type
   # is named in type position only, so `program motor motor` is not a clash. A name with
-  # `.` parts, which a line can hold, is no name; one the lexer does not read as one token
-  # is the host's mistake, refused already.
+  # `.` parts, which a line can hold, is no name.
   defp namespace(elements) do
     {named, _folded, problems} =
       elements
@@ -757,17 +786,15 @@ defmodule Logex.Configuration do
   defp line_key(%{line: line}), do: {0, line}
 
   defp take_name(%{name: name} = element, acc),
-    do: name_shaped({Declarations.name?(name), word?(name)}, element, acc)
+    do: name_shaped(Declarations.name?(name), element, acc)
 
-  defp name_shaped({true, _word}, %{name: name} = element, {named, folded, problems}) do
+  defp name_shaped(true, %{name: name} = element, {named, folded, problems}) do
     key = String.downcase(name)
     taken(Map.get(folded, key), element, key, {named, folded, problems})
   end
 
-  defp name_shaped({false, true}, element, {named, folded, problems}),
+  defp name_shaped(false, element, {named, folded, problems}),
     do: {named, folded, [diagnostic(element.line, cannot_name(element)) | problems]}
-
-  defp name_shaped({false, false}, _element, acc), do: acc
 
   defp taken(nil, element, key, {named, folded, problems}),
     do: {[element | named], Map.put(folded, key, element), problems}
@@ -929,14 +956,14 @@ defmodule Logex.Configuration do
 
   defp number(_parsed, _field, _rest, _numbers, _device, _io), do: :error
 
-  # The globals by name, and a diagnostic for each location that is not one, and each
-  # address a second global takes. A location the lexer does not read as one token is the
-  # host's mistake, refused already.
+  # A diagnostic for each location that is not one, and each address a second global
+  # takes. A location the lexer does not read as one token is the host's mistake, refused
+  # already.
   defp located(globals) do
     {_by_address, problems} =
       Enum.reduce(globals, {%{}, []}, fn global, acc -> at(global, location(global.at), acc) end)
 
-    {Map.new(globals, &{&1.name, &1}), Enum.reverse(problems)}
+    Enum.reverse(problems)
   end
 
   defp at(%Global{at: nil}, _location, acc), do: acc
@@ -972,36 +999,36 @@ defmodule Logex.Configuration do
          | problems
        ]}
 
-  # The instances that can run, each with its program, and what is wrong with the rest.
-  defp runs(instances, programs, tasks) do
-    {runnable, problems} =
-      Enum.reduce(instances, {%{}, []}, fn instance, {runnable, problems} ->
-        run(instance, programs, tasks, {runnable, problems})
-      end)
-
-    {runnable, Enum.reverse(problems)}
-  end
-
-  defp run(%Instance{type: type} = instance, programs, tasks, acc),
-    do: run_typed(word?(type), instance, programs, tasks, acc)
-
-  defp run_typed(true, instance, programs, tasks, acc),
-    do: typed(Map.fetch(elem(programs, 0), instance.type), instance, programs, tasks, acc)
-
-  defp run_typed(false, instance, _programs, tasks, acc), do: on_task(instance, tasks, acc)
-
-  defp typed({:ok, program}, instance, _programs, tasks, {runnable, problems}),
+  # The instances that can run, each with its program, by the name each keeps.
+  defp runnable(named, programs),
     do:
-      on_task(instance, tasks, {Map.put(runnable, instance.name, {instance, program}), problems})
+      for(
+        %Instance{type: type} = instance <- named,
+        {:ok, program} <- [Map.fetch(programs, type)],
+        into: %{},
+        do: {instance.name, {instance, program}}
+      )
+
+  # What is wrong with each instance's type, then its task.
+  defp runs(instances, programs, tasks),
+    do: Enum.flat_map(instances, &(of_type(word?(&1.type), &1, programs) ++ on_task(&1, tasks)))
+
+  # A type the lexer does not read as one name is the host's mistake, refused already.
+  defp of_type(false, _instance, _programs), do: []
+
+  defp of_type(true, instance, {programs, given}),
+    do: typed(Map.has_key?(programs, instance.type), instance, {programs, given})
+
+  defp typed(true, _instance, _programs), do: []
 
   # A program given under this name but refused has its own message, and an instance of it
   # cannot run: one mistake, one message.
-  defp typed(:error, instance, {programs, given}, tasks, acc),
-    do: unknown_type(MapSet.member?(given, instance.type), instance, programs, tasks, acc)
+  defp typed(false, instance, {programs, given}),
+    do: unknown_type(MapSet.member?(given, instance.type), instance, programs)
 
-  defp unknown_type(true, instance, _programs, tasks, acc), do: on_task(instance, tasks, acc)
+  defp unknown_type(true, _instance, _programs), do: []
 
-  defp unknown_type(false, instance, programs, tasks, {runnable, problems}) do
+  defp unknown_type(false, instance, programs) do
     names = Enum.sort(Map.keys(programs))
 
     message =
@@ -1012,22 +1039,22 @@ defmodule Logex.Configuration do
         "programs"
       )
 
-    on_task(instance, tasks, {runnable, [diagnostic(instance.line, message) | problems]})
+    [diagnostic(instance.line, message)]
   end
 
-  defp on_task(%Instance{task: nil}, _tasks, acc), do: acc
+  defp on_task(%Instance{task: nil}, _tasks), do: []
 
-  defp on_task(%Instance{task: task} = instance, tasks, acc),
-    do: task_word(word?(task), instance, tasks, acc)
+  defp on_task(%Instance{task: task} = instance, tasks),
+    do: task_word(word?(task), instance, tasks)
 
-  defp task_word(true, instance, tasks, acc),
-    do: task_known(Map.has_key?(tasks, instance.task), instance, tasks, acc)
+  defp task_word(true, instance, tasks),
+    do: task_known(Map.has_key?(tasks, instance.task), instance, tasks)
 
-  defp task_word(false, _instance, _tasks, acc), do: acc
+  defp task_word(false, _instance, _tasks), do: []
 
-  defp task_known(true, _instance, _tasks, acc), do: acc
+  defp task_known(true, _instance, _tasks), do: []
 
-  defp task_known(false, instance, tasks, {runnable, problems}) do
+  defp task_known(false, instance, tasks) do
     names = Enum.sort(Map.keys(tasks))
 
     message =
@@ -1038,7 +1065,7 @@ defmodule Logex.Configuration do
         "tasks"
       )
 
-    {runnable, [diagnostic(instance.line, message) | problems]}
+    [diagnostic(instance.line, message)]
   end
 
   defp hint(message, "", [], noun), do: message <> ": this configuration has no #{singular(noun)}"
@@ -1063,9 +1090,10 @@ defmodule Logex.Configuration do
 
   # The connections, each checked against its instance's program and the globals, then
   # every var_input checked to be connected (decision 7). One problem is reported per
-  # connection, the first; a var_input with a connection, good or bad, counts as
-  # connected, and a global as driven only by a good one, so one mistake is one message.
-  # A connection whose instance or member is the host's mistake is refused already.
+  # connection, the first; a var_input with a connection that names it, whatever its other
+  # end, counts as connected, and a global as driven only by a good one, so one mistake is
+  # one message. A connection whose instance or member is the host's mistake is refused
+  # already, and names no var_input: a bad name is not recovered.
   defp wiring(connections, {runnable, _declared} = instances, globals) do
     {inputs, _driven, problems} =
       Enum.reduce(connections, {%{}, %{}, []}, &connect(&1, &2, instances, globals))
@@ -1128,13 +1156,7 @@ defmodule Logex.Configuration do
       )
 
   defp of_member({:ok, _not_a_tag}, program, connection, acc, _globals),
-    do:
-      problem(
-        acc,
-        connection,
-        "`#{connection.instance}` is a `#{program.name}`, which declares no " <>
-          "`#{connection.member}`"
-      )
+    do: problem(acc, connection, declares_no(connection, program))
 
   defp of_member(:error, program, connection, acc, _globals),
     do: unknown_member(String.contains?(connection.member, "."), program, connection, acc)
@@ -1157,14 +1179,18 @@ defmodule Logex.Configuration do
       acc,
       connection,
       connects(
-        "`#{connection.instance}` is a `#{program.name}`, which declares no " <>
-          "`#{connection.member}`",
+        declares_no(connection, program),
         Declarations.suggest(connection.member, names),
         names,
         program.name
       )
     )
   end
+
+  defp declares_no(connection, program),
+    do:
+      "`#{connection.instance}` is a program instance of `#{program.name}`, which declares " <>
+        "no `#{connection.member}`"
 
   defp connects(message, "", [], _type), do: message <> ": it has no var_input or var_output"
 

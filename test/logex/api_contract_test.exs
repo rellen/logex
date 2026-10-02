@@ -1490,7 +1490,9 @@ defmodule Logex.ApiContractTest do
   # ---- M2-1: the walk over a configuration -----------------------------------------------
 
   # The refusals of a resource's calls, by the words that tell their kinds apart. Each line
-  # of a refusal is one problem, and each must be one of these.
+  # of a refusal is one problem, and each must be one of these: the first whose words it
+  # holds, so an instance's unknown tag, "is a program instance of `motor`, which declares
+  # no", is told from the instance named whole by coming first.
   @config_refusals [
     {:runtime, "expected a %Logex.Runtime{} from Logex.Runtime.start/1"},
     {:elapsed, "elapsed_ms must be"},
@@ -1509,9 +1511,10 @@ defmodule Logex.ApiContractTest do
     {:instance_key, "`, not an input point"},
     {:task, "is a task, not"},
     {:configuration, "is the configuration's name"},
-    {:whole_instance, "is a program instance of `"},
     {:no_tag, "which declares no"},
+    {:whole_instance, "is a program instance of `"},
     {:whole_block, "an access path names one of its members"},
+    {:internal_member, "an access path reads only its public members"},
     {:no_member, "is not a member of"},
     {:mode, "restart takes :cold or :warm"},
     # start/1 checks its configuration again: a host's mistake that check/1 raises, or a

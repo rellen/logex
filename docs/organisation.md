@@ -1390,7 +1390,11 @@ say. Two readings the landing made, each in `Logex.Configuration`'s moduledoc an
 task the lexer does not read as one token, a negative or non-integer number, a global's
 type other than `:bool` or `:dint`, and a connection whose instance and member make no one
 path are the host's, while a name with `.` parts, an interval or priority out of range or
-missing, and every unknown name stay diagnostics.)*
+missing, and every unknown name stay diagnostics. The review of the landing added two
+more, each pinned: an element whose name is refused, a duplicate, a case twin or a name
+with `.` parts, still has every other field checked, as a `.ld` declaration line does;
+and a configuration or an element that lacks one of its struct's keys is the host's, as
+any value that is not the struct is.)*
 - *The §4.4 checks land here.* Every check M2-1's data can express, over tasks, globals,
   located points, program instances and connections, lands with M2-1 in
   `Logex.Configuration.check/1`, the one validator, pinned by whole diagnostic lists from
@@ -1767,7 +1771,8 @@ each again from source; §4.10.)* Each rule is checked by reverting it (CLAUDE.m
   the checks land with M2-1, on data, and M2-2 asserts each again from source and ports
   its own into M2-1's `check/1`; the loader is M2-5's, decision 34.)*
 - Reserves `program var_global at bool dint` in `.logex`.
-- Adds `configuration_test.exs`.
+- Adds `configuration_test.exs`. *(M2-1 added it on 2026-10-02, pinning every check from
+  data; M2-2 asserts each again from source.)*
 - *Acceptance: two instances of one `.ld` program type, wired in a configuration file to
   different input and output points, run for N cycles from one input image and keep
   independent state; a mis-wired, unknown, undriven-input or mistyped connection is a
@@ -2056,15 +2061,18 @@ the rules in §4.10.
 
     *Recommend M2-1 first.* It is decision 1's default, and it keeps M2-5's Done-when as
     written: M2-5's own test reads `m1.s2.run` through M2-1's `get/2`, which the two
-    spikes, merged, answer with `{:ok, 1}`. With M2-5 before M2-2, the configuration
-    file's reader, its loader and the IR walk are written against `cal` from their first
-    commit. In the other order a hand merge of the spikes failed at four seams: the
-    configuration's walk of what a program writes raised on `cal`; its loader put a
-    function block type among the programs; a block's `var_external` raised
+    spikes, merged, answer with `{:ok, 1}`. *(As built with M2-1, §4.6: `get/2` returns
+    the value at the path and raises `ArgumentError` for a path that names nothing it
+    reads. The `{:ok, 1}` was the probe's own wrapper around the call, so M2-5's test
+    asserts `Logex.Runtime.get(rt, "m1.s2.run") == 1`.)* With M2-5 before M2-2, the
+    configuration file's reader, its loader and the IR walk are written against `cal` from
+    their first commit. In the other order a hand merge of the spikes failed at four
+    seams: the configuration's walk of what a program writes raised on `cal`; its loader
+    put a function block type among the programs; a block's `var_external` raised
     `FunctionClauseError`; and there were two loaders. M2-5 first would settle the nested
     state and the edit's changes while OE-1 is fresh, at the cost of rewording its
-    Done-when. The code does not choose: the two spikes conflict in the same three files in
-    either order, and their union passes. Adopted.
+    Done-when. The code does not choose: the two spikes conflict in the same three files
+    in either order, and their union passes. Adopted.
 31. **What may change in a function block type while a program that holds it runs
     (M2-5):**
     - nothing: any change to a block type is refused, line numbers ignored, and editing

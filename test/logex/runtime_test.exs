@@ -751,11 +751,14 @@ defmodule Logex.RuntimeTest do
               fn -> Runtime.cycle(runtime, opaque(elapsed), []) end
             )
 
-      raises(
-        ~s|inputs must be a map of input-point names to values, as in %{"pb_start_1" => 1}, | <>
-          "got: []",
-        fn -> Runtime.cycle(runtime, 0, opaque([])) end
-      )
+      # A struct is a map, but no input image: it is refused as a list is.
+      for inputs <- [[], %Scan{now: 0, first: true}],
+          do:
+            raises(
+              ~s|inputs must be a map of input-point names to values, as in | <>
+                ~s|%{"pb_start_1" => 1}, got: #{inspect(inputs)}|,
+              fn -> Runtime.cycle(runtime, 0, opaque(inputs)) end
+            )
     end
 
     test "only an input point is set, with a value that fits it, every problem in one raise, " <>
@@ -844,18 +847,24 @@ defmodule Logex.RuntimeTest do
             {"pb_strat",
              "`pb_strat` is neither a global nor a program instance — did you mean " <>
                "`pb_start`?"},
+            {"m11", "`m11` is neither a global nor a program instance — did you mean `m1`?"},
             {"k.x", "`k.x` goes too deep: `k` is a bool global, which has no members"},
             {"m1",
              "`m1` is a program instance of `motor`: an access path names one of its " <>
                "tags, as in `m1.fault`"},
-            {"m1.strat", "`m1` is a `motor`, which declares no `strat` — did you mean `start`?"},
+            {"m1.strat",
+             "`m1` is a program instance of `motor`, which declares no `strat` — did you " <>
+               "mean `start`?"},
             {"m1.fault.x",
              "`m1.fault.x` goes too deep: `m1.fault` is a bool, which has no members"},
             {"m1.t1",
              "`m1.t1` is a ton: an access path names one of its members, as in " <>
                "`m1.t1.acc`"},
             {"m1.t1.last",
-             "`m1.t1.last` is not a member of `m1.t1`, a ton: its members are " <>
+             "`m1.t1.last` is internal to `m1.t1`: an access path reads only its public " <>
+               "members, `pre`, `acc`, `dn`, `tt` and `en`"},
+            {"m1.t1.zz",
+             "`m1.t1.zz` is not a member of `m1.t1`, a ton: its members are " <>
                "`pre`, `acc`, `dn`, `tt` and `en`"},
             {"m1.t1.Acc",
              "`m1.t1.Acc` is not a member of `m1.t1`, a ton — did you mean " <>
@@ -937,6 +946,24 @@ defmodule Logex.RuntimeTest do
         "input `aa` is not an input point: the input points are `pb`\n" <>
           "input `zz` is not an input point",
         fn -> Runtime.cycle(runtime, 0, %{"zz" => 1, "aa" => 1}) end
+      )
+    end
+
+    # A map of 32 keys or fewer iterates in key order, so only more keys show whether the
+    # lines are sorted.
+    test "key order holds past 32 keys, the input points listed once", %{motor: motor} do
+      runtime = Runtime.start(named_plant(motor, "plant"))
+      names = for i <- 1..40, do: "wrong_#{String.pad_leading(Integer.to_string(i), 2, "0")}"
+
+      raises(
+        Enum.join(
+          [
+            "input `wrong_01` is not an input point: the input points are `pb`"
+            | for(name <- tl(names), do: "input `#{name}` is not an input point")
+          ],
+          "\n"
+        ),
+        fn -> Runtime.cycle(runtime, 0, Map.new(names, &{&1, 1})) end
       )
     end
 

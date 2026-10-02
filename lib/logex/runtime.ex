@@ -93,8 +93,9 @@ defmodule Logex.Runtime do
     restarts it through `restart/3`;
   - a task is due at the clock, `now`, with no overlap counted: at 0 by `start/1`, at the
     kept clock by `restart/2`. No edit adds or removes a task while it runs (decision 19),
-    so this rule has no edit exception; a task an edit keeps keeps its due time and its
-    count.
+    so no edit starts one by this rule. A task an edit keeps keeps its overlap count and
+    its due time, except that an interval the edit changes makes it next due at
+    `min(next_due, now + new interval)` (decision 40).
 
   Until OE-2, a program instance inside a resource is not edited: `Logex.Edit` takes one
   lone instance, which `instance/1` made, and the resource holds its instances itself, as
@@ -874,7 +875,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "`#{head}` is a `#{program.name}`, which declares no `#{tag}`" <>
+        "`#{head}` is a program instance of `#{program.name}`, which declares no `#{tag}`" <>
           Declarations.suggest(tag, Enum.sort(Map.keys(program.tags)))
       )
 
@@ -910,8 +911,7 @@ defmodule Logex.Runtime do
 
     raise(
       ArgumentError,
-      "`#{at}.#{member}` is not a member of `#{at}`, a #{type.name}" <>
-        block_hint(Declarations.suggest(member, names, &"#{at}.#{&1}", "members"), names)
+      no_member(Enum.any?(type.members, &(&1.name == member)), type, {at, member}, names)
     )
   end
 
@@ -936,6 +936,18 @@ defmodule Logex.Runtime do
         ArgumentError,
         "`#{path}` goes too deep: `#{at}.#{member}` is a #{found.type}, which has no members"
       )
+
+  # A name the type gives a member but FbType.member/2 does not is an internal member's,
+  # and the path is told so; any other is no member at all.
+  defp no_member(true, _type, {at, member}, names),
+    do:
+      "`#{at}.#{member}` is internal to `#{at}`: an access path reads only its public " <>
+        "members, " <> and_list(Enum.map(names, &"`#{&1}`"))
+
+  defp no_member(false, type, {at, member}, names),
+    do:
+      "`#{at}.#{member}` is not a member of `#{at}`, a #{type.name}" <>
+        block_hint(Declarations.suggest(member, names, &"#{at}.#{&1}", "members"), names)
 
   # The member a read of the instance would mean: the first value the block sets. Every
   # block type within the contract has one until M2-5 (`ton` is the only one), whose user

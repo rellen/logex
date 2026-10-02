@@ -1400,6 +1400,34 @@ the configuration file's must be built that way before they land.
   instance of `motor`", and a negative initial value is refused for a bool as for a dint.
   Every growth bound was read over 32 runs; the cycle at 16x the instances now has 20.5,
   where the spike's 19.5 sat less than a fifth above the measured top.
+
+  A review of the six commits (three lenses, correctness, fit and tests, and a skeptic
+  reproducing each finding) confirmed 22 findings, 20 once the two found twice are
+  merged. Their fixes are the commit after (6), and the suite is at 527 tests (8
+  doctests). Three were in `lib/`'s behaviour. `check/1` checked no other field of an
+  element whose name it refused, a duplicate, a case twin or a name with `.` parts, where
+  a `.ld` declaration line checks them; it now checks every field of such an element and
+  refuses only its name. A configuration or an element that lacked one of its struct's
+  keys escaped `check/1`, `new!/1` and `start/1` as a `KeyError` or a
+  `FunctionClauseError`; it is now the host's mistake, as any value that is not the
+  struct is (decision 36). And `get/2` told a path to an internal member, `m1.t1.last`,
+  that it was no member, where §4.10 says such a path is told what it names; it is now
+  told the member is internal. One was words: three new messages put "a" before a
+  program's name, "`m1` is a `outer`", the form the Owed list below calls a defect; they
+  say "a program instance of `outer`". Ten were rules no test failed without, each now
+  with one: `cycle/3` refusing a struct as its inputs, and its key order past 32 keys;
+  `get/2`'s did-you-mean offering an instance; `check/1` refusing a program whose tags or
+  rungs are junk, a dint var_input's constant past 32 bits, a second connection of a
+  var_input first tied to a constant, a connection to a name with `.` parts as a
+  diagnostic, a mistyped var_output driving nothing, the declaration order of unconnected
+  var_inputs, and the configuration's name before its programs among the host's
+  mistakes. The rest were documents: the runtime's one-rule section said a task an edit
+  keeps keeps its due time, against decision 40; decision 30's `{:ok, 1}`, the probe's
+  own wrapper; §6.2's "Adds `configuration_test.exs`"; `Logex.Diagnostic`'s moduledoc on
+  who returns diagnostics and sets `file`; a test comment citing fix F8 for decision 36's
+  rule; and two comments in `Logex.Configuration` claiming one message per host mistake,
+  which `new!/1` does not keep where a bad name leaves a var_input unconnected, now
+  stating the rule the code keeps: a bad name is not recovered, as on a `.ld` line.
 - **M2-2 · The configuration file, task-less.** A separate `.logex` file (the extension
   was a placeholder until decision 35 chose it on 2026-10-02): `var_global`, plain and
   located (`at panel.q.0`), `program <inst> <type>`, arrow-free connections (`m1.start
@@ -1565,7 +1593,10 @@ diagnostic naming its file and line.
   `calls/1` and `path/2`) have no revert at all. Each gets a test that fails when it is
   reverted, or the check goes.
 - **Messages.** M1-6's member messages put "a" before a type's name, which reads "a
-  outer" for a block so named.
+  outer" for a block so named. M2-1's `get/2` follows them for a function block instance
+  ("`m1.t1` is a ton", "is not a member of `m1.t1`, a ton") and owes the same. Its
+  messages that named an instance's program that way now say "a program instance of
+  `motor`".
 - **Costs to keep in view.** Every compile checks each block type it is given at full
   depth: 2,486 reductions for a small block against 244 before, and 138,358,875 for a
   chain of 400 files built one at a time. A refusal of many bad keys is quadratic in its
