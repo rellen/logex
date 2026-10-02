@@ -50,6 +50,16 @@ defmodule Logex.ApiContractTest do
   found it too, but before a first scan, which blocks every `ons`. Now and then a host
   finalises an edit at one boundary and takes another before any scan, so a block is
   still pending.
+
+  M2-1: a fourth walk runs configurations as resources, through `start/1`, `cycle/3`,
+  `get/2`, `next_due_in/1`, `overlaps/1` and `restart/2`. Every accepted cycle is checked
+  against a model that restates the scheduler's rules and scans each instance through
+  `call/4` alone, and against an oracle that knows nothing of how due tasks are found:
+  every period of a task up to now is either run or counted as missed. Every host mistake
+  is refused with a documented message, a configuration started with one mistake is
+  refused whether the mistake is the host's or one a text could make, and every accepted
+  call is made twice and gives the same result. Its reach covers every refusal and what
+  the scheduler must be seen to do.
   """
   use ExUnit.Case, async: true
 
@@ -1476,4 +1486,615 @@ defmodule Logex.ApiContractTest do
   defp edit_reach(name, true), do: reached(:edit_reach, name)
 
   defp edit_reach(_name, false), do: :ok
+
+  # ---- M2-1: the walk over a configuration -----------------------------------------------
+
+  # The refusals of a resource's calls, by the words that tell their kinds apart. Each line
+  # of a refusal is one problem, and each must be one of these.
+  @config_refusals [
+    {:runtime, "expected a %Logex.Runtime{} from Logex.Runtime.start/1"},
+    {:elapsed, "elapsed_ms must be"},
+    {:inputs, "inputs must be a map of input-point names"},
+    {:key, "is not a point name"},
+    {:output_point, "is an output point"},
+    {:unlocated, "is a global with no location"},
+    {:reaches, "reaches into the program instance"},
+    {:no_point, "is not an input point"},
+    {:bool, "is a bool: only 0 or 1 fit"},
+    {:dint, "is a dint: its value must be an integer"},
+    {:dint_range, "does not fit in 32 bits"},
+    {:path, "is not an access path"},
+    {:neither, "is neither a global nor a program instance"},
+    {:too_deep, "goes too deep"},
+    {:instance_key, "`, not an input point"},
+    {:task, "is a task, not"},
+    {:configuration, "is the configuration's name"},
+    {:whole_instance, "is a program instance of `"},
+    {:no_tag, "which declares no"},
+    {:whole_block, "an access path names one of its members"},
+    {:no_member, "is not a member of"},
+    {:mode, "restart takes :cold or :warm"},
+    # start/1 checks its configuration again: a host's mistake that check/1 raises, or a
+    # diagnostic it gives, formatted.
+    {:negative, "a priority is 0, the highest, to 65535, found -"},
+    {:priority, "a priority is 0, the highest, to 65535"},
+    {:interval, "an interval is 1 to 2147483647 ms"},
+    {:lines, "a configuration's lines are all nil"},
+    {:line, "a line is a positive integer"}
+  ]
+
+  # What the walk must see the scheduler do, at least once each.
+  @config_reach [
+    :ran_task,
+    :ran_taskless,
+    :overlap,
+    :overlap_many,
+    :no_task_due,
+    :elapsed_zero,
+    :priority_order,
+    :due_time_order,
+    :read_back,
+    :constant,
+    :copy_out_seen,
+    :first_scan_ons,
+    :timer_done,
+    :infinity,
+    :restart,
+    :image_kept
+  ]
+
+  # The program types a configuration of the walk draws from: a contact, a latch, a timer
+  # with a dint preset and output, and a one-shot.
+  @types %{
+    "relay" => "var_input in bool\nvar_output out bool\nxic in ote out",
+    "latch" =>
+      "var_input set bool\nvar_input reset bool\nvar_output q bool\nxic set otl q\nxic reset otu q",
+    "timer" =>
+      "var_input go bool\nvar_input sp dint\nvar_output done bool\nvar_output acc dint\n" <>
+        "var t1 ton\nxio go move sp t1.pre\nxic t1.dn ote done\nmove t1.acc acc\nxic go ton t1 30",
+    "pulse" => "var_input in bool\nvar_output out bool\nvar s bool\nxic in ons s ote out"
+  }
+
+  # The globals: input points, output points and unlocated globals, bool and dint.
+  @points [
+    {"i0", :bool, "panel.i.0"},
+    {"i1", :bool, "panel.i.1"},
+    {"i2", :bool, "panel.i.2"},
+    {"d0", :dint, "drive.i.0"},
+    {"o0", :bool, "panel.q.0"},
+    {"o1", :bool, "panel.q.1"},
+    {"o2", :bool, "panel.q.2"},
+    {"a0", :dint, "drive.q.0"},
+    {"g0", :bool, nil},
+    {"g1", :bool, nil},
+    {"n0", :dint, nil}
+  ]
+
+  # The one global with an initial value, which a restart puts back.
+  @initials %{"n0" => 7}
+
+  test "a resource refuses every host mistake with a documented ArgumentError, accepts " <>
+         "every call without one, and runs as its rules say" do
+    programs =
+      Map.new(@types, fn {name, source} ->
+        {:ok, program} = Logex.compile(source, name: name)
+        {name, program}
+      end)
+
+    :rand.seed(:exsss, {2026, 10, 2})
+
+    for _ <- 1..150 do
+      config = configuration(programs)
+      model = model(config)
+      runtime = Runtime.start(config)
+      config_walk(config, runtime, model, 50)
+    end
+
+    expected = MapSet.new(Enum.map(@config_refusals, &elem(&1, 0)))
+    assert Process.get(:config_refused, MapSet.new()) == expected
+    assert Process.get(:config_reach, MapSet.new()) == MapSet.new(@config_reach)
+  end
+
+  defp configuration(programs) do
+    tasks =
+      for name <- Enum.take(Enum.shuffle(~w(fast mid slow)), :rand.uniform(4) - 1),
+          do: %Logex.Configuration.Task{
+            name: name,
+            interval: pick([5, 10, 15, 30]),
+            priority: pick([0, 1, 2, 2, 65_535])
+          }
+
+    # Names drawn in a random order, so that declaration order is not name order, and no
+    # order a name gives can pass for the one the configuration declares.
+    instances =
+      for name <- Enum.take(Enum.shuffle(~w(m1 m2 m3 m4 m5)), :rand.uniform(4)),
+          do: %Logex.Configuration.Instance{
+            name: name,
+            type: pick(Map.keys(programs)),
+            task: pick([nil | Enum.map(tasks, & &1.name)])
+          }
+
+    globals =
+      for {name, type, at} <- @points,
+          do: %Logex.Configuration.Global{
+            name: name,
+            type: type,
+            at: at,
+            initial: @initials[name]
+          }
+
+    {connections, _driven} =
+      Enum.flat_map_reduce(instances, MapSet.new(), fn instance, driven ->
+        program = programs[instance.type]
+        tags = program.tags |> Map.values() |> Enum.sort_by(& &1.name)
+
+        ins =
+          for %Tag{section: :var_input} = tag <- tags,
+              do: %Logex.Configuration.Connection{
+                instance: instance.name,
+                member: tag.name,
+                to: source_for(tag.type)
+              }
+
+        Enum.flat_map_reduce(
+          for(%Tag{section: :var_output} = tag <- tags, do: tag),
+          driven,
+          fn tag, driven ->
+            sinks =
+              for {name, type, at} <- @points,
+                  type == tag.type,
+                  at == nil or String.contains?(at, ".q."),
+                  name not in driven,
+                  :rand.uniform(2) == 1,
+                  do: name
+
+            outs =
+              for sink <- Enum.take(sinks, 2),
+                  do: %Logex.Configuration.Connection{
+                    instance: instance.name,
+                    member: tag.name,
+                    to: sink
+                  }
+
+            {outs, Enum.reduce(outs, driven, &MapSet.put(&2, &1.to))}
+          end
+        )
+        |> then(fn {outs, driven} -> {ins ++ outs, driven} end)
+      end)
+
+    Logex.Configuration.new!(
+      name: "plant",
+      programs: Map.values(programs),
+      tasks: tasks,
+      globals: globals,
+      instances: instances,
+      connections: connections
+    )
+  end
+
+  # A var_input's source: a global of its type, an output point read back among them, or a
+  # constant.
+  defp source_for(:bool), do: pick(~w(i0 i1 i2 i0 i1 o0 g0 g1) ++ [0, 1])
+  defp source_for(:dint), do: pick(["d0", "d0", "n0", "a0", 0, 40, 25])
+
+  # The walk's own model of a resource, from the rules in Logex.Runtime's moduledoc and
+  # docs/organisation.md §4.6, each instance scanned by Runtime.call/4 alone: the input
+  # image and every global, each instance's state, and each task's next due time, which
+  # is a multiple of its interval since every task is due at 0.
+  defp model(config),
+    do: %{
+      now: 0,
+      globals: Map.new(config.globals, &{&1.name, Map.get(@initials, &1.name, 0)}),
+      states: Map.new(config.instances, &{&1.name, Runtime.instance(config.programs[&1.type])}),
+      anchor: Map.new(config.tasks, &{&1.name, 0}),
+      next: Map.new(config.tasks, &{&1.name, 0}),
+      overlaps: Map.new(config.tasks, &{&1.name, 0}),
+      runs: Map.new(config.tasks, &{&1.name, 0}),
+      cycles: 0
+    }
+
+  # A restart, from the rules alone: the clock and the input points kept, every other
+  # global at its initial value, each instance through restart/3, and every task anchored
+  # at the kept clock, with nothing run or missed since.
+  defp model_restart(config, model, mode),
+    do: %{
+      model
+      | globals:
+          Map.new(model.globals, fn {name, value} ->
+            {name, kept(name in input_points(), value, Map.get(@initials, name, 0))}
+          end),
+        states:
+          Map.new(model.states, fn {name, state} ->
+            {name, Runtime.restart(config.programs[state.type], state, mode)}
+          end),
+        anchor: Map.new(config.tasks, &{&1.name, model.now}),
+        next: Map.new(config.tasks, &{&1.name, model.now}),
+        overlaps: Map.new(config.tasks, &{&1.name, 0}),
+        runs: Map.new(config.tasks, &{&1.name, 0})
+    }
+
+  defp kept(true, value, _initial), do: value
+  defp kept(false, _value, initial), do: initial
+
+  defp input_points, do: for({name, _, at} <- @points, at != nil, at =~ ".i.", do: name)
+
+  defp model_cycle(config, model, elapsed, inputs) do
+    now = model.now + elapsed
+    globals = Map.merge(model.globals, inputs)
+
+    due =
+      config.tasks
+      |> Enum.with_index()
+      |> Enum.filter(fn {task, _} -> model.next[task.name] <= now end)
+      |> Enum.sort_by(fn {task, index} -> {task.priority, model.next[task.name], index} end)
+      |> Enum.map(&elem(&1, 0))
+
+    model = %{model | now: now, globals: globals, cycles: model.cycles + 1}
+
+    {model, events} =
+      Enum.reduce(due, {model, []}, fn task, {model, events} ->
+        # The periods since its due time, up to now, are the multiples of its interval
+        # from its anchor in that span: one runs, and the rest are missed.
+        anchor = model.anchor[task.name]
+        periods = div(now - anchor, task.interval)
+        missed = periods - div(model.next[task.name] - anchor, task.interval)
+
+        model = %{
+          model
+          | next: Map.put(model.next, task.name, anchor + (periods + 1) * task.interval),
+            overlaps: Map.update!(model.overlaps, task.name, &(&1 + missed)),
+            runs: Map.update!(model.runs, task.name, &(&1 + 1))
+        }
+
+        events = if missed > 0, do: [{:overlap, task.name, missed} | events], else: events
+
+        Enum.reduce(
+          for(i <- config.instances, i.task == task.name, do: i),
+          {model, events},
+          &model_scan(config, &1, task.name, &2)
+        )
+      end)
+
+    {model, events} =
+      Enum.reduce(
+        for(i <- config.instances, i.task == nil, do: i),
+        {model, events},
+        &model_scan(config, &1, :none, &2)
+      )
+
+    outputs =
+      for {name, _type, at} <- @points,
+          at != nil and String.contains?(at, ".q."),
+          into: %{},
+          do: {name, model.globals[name]}
+
+    {model, outputs, Enum.reverse(events)}
+  end
+
+  defp model_scan(config, instance, task, {model, events}) do
+    program = config.programs[instance.type]
+    mine = for c <- config.connections, c.instance == instance.name, do: c
+    section = fn c -> program.tags[c.member].section end
+
+    inputs =
+      for c <- mine,
+          section.(c) == :var_input,
+          into: %{},
+          do: {c.member, if(is_binary(c.to), do: model.globals[c.to], else: c.to)}
+
+    state = model.states[instance.name]
+
+    {outputs, state} =
+      Runtime.call(program, state, inputs, %Scan{now: model.now, first: state.first})
+
+    globals =
+      for c <- mine, section.(c) == :var_output, reduce: model.globals do
+        globals -> Map.put(globals, c.to, outputs[c.member])
+      end
+
+    {%{model | states: Map.put(model.states, instance.name, state), globals: globals},
+     [{:ran, task, instance.name, model.now} | events]}
+  end
+
+  defp config_walk(_config, _runtime, _model, 0), do: :ok
+
+  defp config_walk(config, runtime, model, n) do
+    case config_operation(:rand.uniform(8), config, runtime) do
+      {:cycle, mistake?, elapsed, inputs} ->
+        case config_attempt(fn -> Runtime.cycle(runtime, elapsed, inputs) end) do
+          {:ok, {next, outputs, events}} ->
+            before = model
+            refute mistake?, "a host mistake was accepted: #{inspect({elapsed, inputs})}"
+
+            {model, expected_outputs, expected_events} =
+              model_cycle(config, model, elapsed, inputs)
+
+            assert events == expected_events
+            assert outputs == expected_outputs
+            assert Runtime.overlaps(next) == model.overlaps
+            observe(config, {before, model}, events, elapsed)
+            check_model(config, next, model)
+            config_walk(config, next, model, n - 1)
+
+          :refused ->
+            assert mistake?,
+                   "a call without a host mistake was refused: #{inspect({elapsed, inputs})}"
+
+            config_walk(config, runtime, model, n - 1)
+        end
+
+      {:get, mistake?, path} ->
+        case config_attempt(fn -> Runtime.get(runtime, path) end) do
+          {:ok, value} ->
+            refute mistake?, "a bad path was read: #{inspect(path)}"
+            assert value == model_get(config, model, path)
+
+          :refused ->
+            assert mistake?, "a good path was refused: #{inspect(path)}"
+        end
+
+        config_walk(config, runtime, model, n - 1)
+
+      {:bad_runtime, call} ->
+        assert config_attempt(call) == :refused
+        config_walk(config, runtime, model, n - 1)
+
+      {:start, spoiled} ->
+        assert config_attempt(fn -> Runtime.start(spoiled) end) == :refused
+        config_walk(config, runtime, model, n - 1)
+
+      {:restart, mistake?, mode} ->
+        case config_attempt(fn -> Runtime.restart(runtime, mode) end) do
+          {:ok, next} ->
+            refute mistake?, "a bad restart was accepted: #{inspect(mode)}"
+            model = model_restart(config, model, mode)
+            config_reach(:restart, true)
+
+            config_reach(
+              :image_kept,
+              Enum.any?(input_points(), &(Runtime.get(next, &1) != 0))
+            )
+
+            check_restarted(config, next, model)
+            config_walk(config, next, model, n - 1)
+
+          :refused ->
+            assert mistake?, "a good restart was refused: #{inspect(mode)}"
+            config_walk(config, runtime, model, n - 1)
+        end
+    end
+  end
+
+  # Right after a restart, every task is due at once and every value is the model's.
+  defp check_restarted(config, runtime, model) do
+    assert Runtime.next_due_in(runtime) == if(config.tasks == [], do: :infinity, else: 0)
+    assert Runtime.overlaps(runtime) == model.overlaps
+    for {name, value} <- model.globals, do: assert(Runtime.get(runtime, name) == value)
+
+    for instance <- config.instances,
+        {tag, value} <- model.states[instance.name].env,
+        is_integer(value),
+        do: assert(Runtime.get(runtime, "#{instance.name}.#{tag}") == value)
+  end
+
+  # Everything the scheduler's rules say a model must also show: the next due time, every
+  # global, and every tag of every instance.
+  defp check_model(config, runtime, model) do
+    next = model.next |> Map.values() |> Enum.min(fn -> nil end)
+    expected = if next == nil, do: :infinity, else: next - model.now
+    assert Runtime.next_due_in(runtime) == expected
+    # After a cycle no task is overdue: each it ran moved past now.
+    assert expected == :infinity or expected > 0
+    config_reach(:infinity, expected == :infinity)
+
+    for {name, value} <- model.globals, do: assert(Runtime.get(runtime, name) == value)
+
+    for instance <- config.instances,
+        {tag, value} <- model.states[instance.name].env,
+        is_integer(value),
+        do: assert(Runtime.get(runtime, "#{instance.name}.#{tag}") == value)
+
+    # Every period of a task up to now is either run or counted as missed: an oracle that
+    # knows nothing of how the scheduler finds them.
+    for task <- config.tasks do
+      assert model.runs[task.name] + model.overlaps[task.name] ==
+               div(model.now - model.anchor[task.name], task.interval) + 1
+    end
+  end
+
+  defp observe(config, {before, model}, events, elapsed) do
+    ran = for {:ran, task, instance, _} <- events, do: {task, instance}
+    config_reach(:ran_task, Enum.any?(ran, &(elem(&1, 0) != :none)))
+    config_reach(:ran_taskless, Enum.any?(ran, &(elem(&1, 0) == :none)))
+    config_reach(:overlap, Enum.any?(events, &match?({:overlap, _, _}, &1)))
+    config_reach(:overlap_many, Enum.any?(events, &match?({:overlap, _, m} when m > 1, &1)))
+    config_reach(:no_task_due, config.tasks != [] and Enum.all?(ran, &(elem(&1, 0) == :none)))
+    config_reach(:elapsed_zero, elapsed == 0 and model.cycles > 1)
+
+    # Priority put a task declared later first; or, at one priority, an earlier due time
+    # did.
+    declared = config.tasks |> Enum.with_index() |> Map.new(fn {t, i} -> {t.name, {t, i}} end)
+    order = for {task, _} <- Enum.dedup_by(ran, &elem(&1, 0)), task != :none, do: declared[task]
+    indexes = Enum.map(order, &elem(&1, 1))
+    config_reach(:priority_order, indexes != Enum.sort(indexes))
+
+    config_reach(
+      :due_time_order,
+      Enum.any?(Enum.chunk_every(order, 2, 1, :discard), fn [{a, _}, {b, _}] ->
+        a.priority == b.priority and before.next[a.name] < before.next[b.name]
+      end)
+    )
+
+    config_reach(:read_back, Enum.any?(config.connections, &(&1.to in ~w(o0 a0))) and ran != [])
+    config_reach(:constant, Enum.any?(config.connections, &is_integer(&1.to)) and ran != [])
+
+    config_reach(
+      :copy_out_seen,
+      Enum.any?(
+        config.connections,
+        &(&1.to in ~w(g0 g1 n0) and model.globals[&1.to] != Map.get(@initials, &1.to, 0))
+      )
+    )
+
+    config_reach(
+      :first_scan_ons,
+      Enum.any?(config.instances, &(&1.type == "pulse")) and model.cycles == 1
+    )
+
+    config_reach(
+      :timer_done,
+      Enum.any?(model.states, fn {_, s} -> match?(%{"t1" => %{"dn" => 1}}, s.env) end)
+    )
+  end
+
+  defp config_reach(name, true), do: reached(:config_reach, name)
+  defp config_reach(_name, false), do: :ok
+
+  defp model_get(config, model, path) do
+    case String.split(path, ".") do
+      [global] ->
+        model.globals[global]
+
+      [instance | members] ->
+        get_in(model.states[instance].env, members)
+        |> then(&if(&1 == nil, do: 0, else: &1))
+        |> tap(fn _ -> assert Enum.any?(config.instances, &(&1.name == instance)) end)
+    end
+  end
+
+  # One operation: a cycle, good or bad; a read, good or bad; or a call on something that
+  # is not a runtime.
+  defp config_operation(kind, _config, _runtime) when kind in [1, 2, 3] do
+    elapsed =
+      pick([0, 0, 1, 5, 5, 10, 10, 13, 30, 47, 100] ++ if(kind == 3, do: [-1, 1.5], else: []))
+
+    {inputs, bad?} = config_inputs(kind == 3)
+    {:cycle, bad? or not (is_integer(elapsed) and elapsed >= 0), elapsed, inputs}
+  end
+
+  defp config_operation(4, config, _runtime) do
+    good =
+      Enum.map(@points, &elem(&1, 0)) ++
+        for instance <- config.instances,
+            tag <- Map.keys(config.programs[instance.type].tags),
+            tag not in ["t1"],
+            do: "#{instance.name}.#{tag}"
+
+    timers =
+      for i <- config.instances,
+          i.type == "timer",
+          m <- ~w(pre acc dn tt en),
+          do: "#{i.name}.t1.#{m}"
+
+    {:get, false, pick(good ++ timers)}
+  end
+
+  defp config_operation(5, config, _runtime) do
+    instance = pick(config.instances).name
+
+    bad =
+      [5, "", "a..b", "a b", "zz", "i0.x", instance, "#{instance}.zz", "#{instance}.in.x"] ++
+        ["plant" | Enum.map(config.tasks, & &1.name)] ++
+        for i <- config.instances,
+            i.type == "timer",
+            p <- ["t1", "t1.last", "t1.Acc", "t1.acc.x"],
+            do: "#{i.name}.#{p}"
+
+    {:get, true, pick(bad)}
+  end
+
+  defp config_operation(6, config, _runtime) do
+    junk = pick([5, nil, %{}, config])
+
+    {:bad_runtime,
+     pick([
+       fn -> Runtime.cycle(junk, 0, %{}) end,
+       fn -> Runtime.get(junk, "i0") end,
+       fn -> Runtime.next_due_in(junk) end,
+       fn -> Runtime.overlaps(junk) end,
+       fn -> Runtime.restart(junk, :cold) end
+     ])}
+  end
+
+  defp config_operation(7, _config, _runtime) do
+    mode = pick([:cold, :warm, :cold, :warm, :hot, nil])
+    {:restart, mode not in [:cold, :warm], mode}
+  end
+
+  # The configuration started again with one mistake: a negative priority or a line no
+  # file gives, which no configuration text can say, or a priority past 65535 or an
+  # interval of 0, which a text can (decisions 36 and 37).
+  defp config_operation(8, config, _runtime) do
+    task = fn interval, priority ->
+      %{
+        config
+        | tasks:
+            config.tasks ++
+              [%Logex.Configuration.Task{name: "t9", interval: interval, priority: priority}]
+      }
+    end
+
+    [first | rest] = config.globals
+
+    {:start,
+     pick([
+       task.(10, -1),
+       task.(10, 65_536),
+       task.(0, 0),
+       %{config | globals: [%{first | line: 3} | rest]},
+       %{config | globals: [%{first | line: 0} | rest]}
+     ])}
+  end
+
+  # Inputs: a few input points with values that fit, and, for a bad step, one mistake.
+  defp config_inputs(false) do
+    inputs =
+      for {name, type, at} <- @points,
+          at != nil and String.contains?(at, ".i."),
+          :rand.uniform(3) == 1,
+          into: %{},
+          do: {name, if(type == :bool, do: pick([0, 1]), else: pick([0, 20, 40, -5]))}
+
+    {inputs, false}
+  end
+
+  defp config_inputs(true) do
+    {good, false} = config_inputs(false)
+
+    bad =
+      pick([
+        {7, 1},
+        {"o0", 1},
+        {"g0", 1},
+        {"m1.in", 1},
+        {"m1", 1},
+        {"m2", 1},
+        {"fast", 1},
+        {"plant", 1},
+        {"zz", 1},
+        {"i0", 2},
+        {"d0", 1.5},
+        {"d0", 3_000_000_000}
+      ])
+
+    case pick([:pair, :pair, :pair, :list]) do
+      :pair -> {Map.put(good, elem(bad, 0), elem(bad, 1)), true}
+      :list -> {[{"i0", 1}], true}
+    end
+  end
+
+  defp config_attempt(fun) do
+    result = fun.()
+    assert fun.() == result, "the same call gave two results"
+    {:ok, result}
+  rescue
+    error in ArgumentError ->
+      for line <- String.split(error.message, "\n") do
+        kind = Enum.find(@config_refusals, fn {_, words} -> String.contains?(line, words) end)
+        assert kind, "undocumented refusal: #{line}"
+        reached(:config_refused, elem(kind, 0))
+      end
+
+      :refused
+  end
 end
