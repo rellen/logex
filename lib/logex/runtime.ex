@@ -10,8 +10,92 @@ defmodule Logex.Runtime do
     configuration of one instance, whose var_inputs are the host's input image.
   - `restart/3` starts an instance again, keeping its clock and the inputs that fit their
     types.
+  - `start/1`, `cycle/3`, `next_due_in/1`, `overlaps/1` and `get/2` run a configuration
+    (`Logex.Configuration`) as one resource, `%Logex.Runtime{}`, below.
 
-  A running instance takes a changed program through `Logex.Edit` (OE-1,
+  **A configuration** (M2-1, `docs/organisation.md` §4.6). `start/1` makes the resource at
+  time 0: every global at its initial value, every program instance as `instance/1` makes
+  it, and every task due at once. A *cycle* is one step of the resource, `cycle/3`, and a
+  *scan* one execution of one instance, `call/4`. Each cycle, in order:
+
+  1. `now` advances by `elapsed_ms`.
+  2. `inputs`, keyed by input-point name, merge into the input points, which keep their
+     values between cycles: a host sends only what changed, and every scan of the cycle
+     sees the one sample.
+  3. A periodic task is due when its next due time has come. Every task's phase is
+     anchored at 0, `start/1`'s `now`, so a first cycle that advances the clock reports
+     the periods it spans. Due tasks run by priority, 0 first, then the earlier due time,
+     then the order the configuration declares them; each runs its instances in the
+     configuration's order, and the task-less instances run last, once each, in every
+     cycle.
+  4. A scan copies each connected var_input in, from its global or constant, runs the
+     instance through `call/4`, and copies each connected var_output out to its global, so
+     an instance sees what an earlier one wrote in the same cycle and never what a later
+     one writes.
+  5. A task that ran moves its next due time on by whole intervals past `now`, so its
+     phase never drifts. Each period it missed, because the cycle came late, is counted,
+     not run again: `{:overlap, task, missed}`, and `overlaps/1` gives each task's count.
+  6. The outputs are every output point, after every scan of the cycle.
+
+  The events, in the order they happened, are `{:ran, task, instance, now}`, `task` being
+  `:none` for a task-less instance, and `{:overlap, task, missed}`, just before its task's
+  scans. They are an open set: a host tolerates a kind it does not know. `next_due_in/1`
+  is when a periodic task is next due, which a runner sleeps on: it counts periodic tasks
+  only, since task-less instances run in whatever cycle comes, so a runner of only those
+  paces its own cycles. `get/2` reads a global, any declared tag of a program instance, a
+  `var` among them, or a public member of a function block instance in one; never an
+  internal member, an instance whole, a task or the configuration, and a path that names
+  one of those is told which it names. A `%Logex.Runtime{}` is opaque, plain data: one
+  built or edited by hand is outside this contract. A `%Logex.Configuration{}` is the data
+  API, built by hand by design, so `start/1` checks it again.
+
+  A cycle and `next_due_in/1` take time linear in the tasks declared, whatever is due.
+  A refusal lists the names a key could have been once, on the first line that needs
+  them, so its message is linear in its problems; its time is not, since each unknown key
+  is matched against every name for a did-you-mean, quadratic in the two, as the `.ld`
+  compiler's refusals are. Only a host's own mistake pays it.
+
+  **A host's loop.** Only the host reads a clock. A runner sleeps `next_due_in/1`
+  milliseconds, or less when it paces task-less instances or watches for an input to
+  change, then reads its devices into an input map, calls `cycle/3` with the time that
+  really passed and that map, and writes the outputs it gets back to its devices:
+
+      rt = Logex.Runtime.start(config)
+      # loop: sleep, then
+      {rt, outputs, events} = Logex.Runtime.cycle(rt, elapsed_ms, inputs)
+
+  What it may rely on:
+
+  1. The first cycle runs at once: `next_due_in/1` is 0 after `start/1`, and a first
+     cycle a whole interval later reports the run it missed.
+  2. Late is reported, never replayed: a task runs once however late, and keeps its phase.
+  3. Inputs are a delta: only input points, each with a value that fits its type, merged
+     into the image, every problem with one call in one raise, in key order. The image
+     starts at 0, so a host's first cycle carries every input point it knows.
+  4. Outputs are a snapshot: every output point, every cycle, whether or not anything ran.
+  5. Events are a log and an open set.
+  6. A cycle is a function of its arguments, so a host that records each cycle's
+     `elapsed_ms` and inputs replays every output and event exactly.
+  7. A mistake by the host raises `ArgumentError`, and nothing else escapes.
+
+  **One rule for each piece of a resource's state** (`docs/organisation.md` §4.9), which
+  `start/1` uses and an online edit of a configuration (OE-2) is to use for a piece it
+  adds:
+  - the clock, `now`, is 0 at `start/1`, moves on by each cycle's `elapsed_ms`, and is
+    kept by an edit;
+  - a global starts by `Logex.Configuration.initial/1`, whose doc lists the edit's
+    exceptions; an input point's value is the host's from its first cycle on;
+  - a program instance starts as `instance/1` makes it, every tag by
+    `Logex.Program.initial_env/1`, whose doc lists the edit's exceptions;
+  - a task is due at the clock, `now`, with no overlap counted: at 0 by `start/1`. No edit
+    adds or removes a task while it runs (decision 19), so this rule has no edit
+    exception; a task an edit keeps keeps its due time and its count.
+
+  Until OE-2, a program instance inside a resource is not edited: `Logex.Edit` takes one
+  lone instance, which `instance/1` made, and the resource holds its instances itself, as
+  its opacity requires.
+
+  A lone running instance takes a changed program through `Logex.Edit` (OE-1,
   `docs/organisation.md` §4.9): accept, test, untest, assemble or cancel, each between two
   scans, its state moved by name. An instance carries two fields for it
   (`Logex.Instance`): `ons_blocked`, the storage bits whose `ons` its next scan blocks,
@@ -52,9 +136,18 @@ defmodule Logex.Runtime do
     sending each one it reports as `{:unread, name, value}`.
   """
 
-  alias Logex.{Declarations, FbType, Instance, Program, Scan, Tag}
+  alias Logex.{Configuration, Declarations, Diagnostic, FbType, Instance, Program, Scan, Tag}
 
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
+
+  # The resource (M2-1): the configuration it runs; `now`, its clock; `globals`, one value
+  # for each global, the input points' among them; `instances`, each program instance's
+  # state by name; `tasks`, each task's next due time and overlap count by name; and
+  # `wiring`, what `start/1` derives from the configuration once, never state of its own.
+  @enforce_keys [:config, :now, :globals, :instances, :tasks, :wiring]
+  defstruct [:config, :now, :globals, :instances, :tasks, :wiring]
+
+  @opaque t :: %__MODULE__{}
 
   @doc "A new instance of `program`: every tag at its initial value, before its first scan."
   def instance(program) do
@@ -114,6 +207,90 @@ defmodule Logex.Runtime do
         first: true,
         ons_blocked: []
     }
+  end
+
+  @doc """
+  A resource running `config`, at time 0 before its first cycle: every global at its
+  initial value, 0 where it has none; every program instance as `instance/1` makes it;
+  every task due at once, with no overlap counted. `config` is checked again
+  (`Logex.Configuration.check/1`), and one with a problem raises `ArgumentError` listing
+  every one.
+  """
+  def start(%Configuration{} = config) do
+    configured!(Configuration.check(config))
+
+    %__MODULE__{
+      config: config,
+      now: 0,
+      globals: Map.new(config.globals, &{&1.name, Configuration.initial(&1)}),
+      instances:
+        Map.new(config.instances, &{&1.name, instance(Map.fetch!(config.programs, &1.type))}),
+      tasks: Map.new(config.tasks, &{&1.name, task_state(0)}),
+      wiring: wiring(config)
+    }
+  end
+
+  def start(other),
+    do:
+      raise(
+        ArgumentError,
+        "expected a %Logex.Configuration{} from Logex.Configuration.new!/1, got: #{inspect(other)}"
+      )
+
+  @doc """
+  One cycle of the resource, `elapsed_ms` after the last: `{runtime, outputs, events}`,
+  the outputs being every output point. See the moduledoc for its order.
+  """
+  def cycle(runtime, elapsed_ms, inputs) do
+    %__MODULE__{now: now} = runtime = runtime!(runtime)
+    elapsed = elapsed!(elapsed_ms)
+    runtime = %{runtime | now: now + elapsed, globals: image!(runtime, inputs)}
+    {runtime, events} = Enum.reduce(due(runtime), {runtime, []}, &run_task/2)
+
+    {runtime, events} =
+      Enum.reduce(runtime.wiring.taskless, {runtime, events}, &scanned(&1, :none, &2))
+
+    {runtime, Map.new(runtime.wiring.outputs, &{&1, Map.fetch!(runtime.globals, &1)}),
+     Enum.reverse(events)}
+  end
+
+  @doc """
+  The milliseconds until a periodic task is next due, or `:infinity` when the
+  configuration has no task. It is 0 after `start/1`, when every task is due, and more than
+  0 after every cycle, which moves each task it runs past `now`.
+  """
+  def next_due_in(runtime) do
+    %__MODULE__{now: now, tasks: tasks} = runtime!(runtime)
+    tasks |> Map.values() |> Enum.map(& &1.next_due) |> Enum.min(fn -> nil end) |> due_in(now)
+  end
+
+  defp due_in(nil, _now), do: :infinity
+  defp due_in(next, now), do: next - now
+
+  defp task_state(due), do: %{next_due: due, overlaps: 0}
+
+  @doc "Each task's overlap count, by name: the periods it missed since `start/1`."
+  def overlaps(runtime) do
+    %__MODULE__{tasks: tasks} = runtime!(runtime)
+    Map.new(tasks, fn {name, %{overlaps: overlaps}} -> {name, overlaps} end)
+  end
+
+  @doc """
+  The value at an access path, the resource omitted (`docs/organisation.md` §4.7): a
+  global, `"estop"`; a program instance's tag, `"m1.fault"`; or a member of a function
+  block instance in it, `"m1.t1.acc"`, as logic names one. An instance named whole, an
+  internal member, or a path that names nothing raises `ArgumentError`.
+  """
+  def get(runtime, path) do
+    runtime = runtime!(runtime)
+    [head | rest] = String.split(path!(path), ".")
+
+    at_path(
+      Map.fetch(runtime.wiring.globals, head),
+      Map.fetch(runtime.wiring.types, head),
+      {head, rest, path},
+      runtime
+    )
   end
 
   # A var_input whose value does not fit its type, as after a recompile of the same name
@@ -286,7 +463,16 @@ defmodule Logex.Runtime do
   defp merged([], state, env, inputs), do: %{state | env: Map.merge(env, inputs)}
 
   defp merged(problems, _state, _env, _inputs),
-    do: raise(ArgumentError, Enum.join(problems, "\n"))
+    do: raise(ArgumentError, Enum.join(once(problems), "\n"))
+
+  # A refusal lists the names a key could have been once, on the first line that needs
+  # them: each line that does gives its key and a function that lists them, so that n
+  # wrong keys against n names make a message of n lines, not n lines of n names each.
+  defp once(problems), do: elem(Enum.map_reduce(problems, false, &listed_once/2), 0)
+
+  defp listed_once({line, list}, false), do: {line <> list.(), true}
+  defp listed_once({line, _list}, true), do: {line, true}
+  defp listed_once(line, listed), do: {line, listed}
 
   defp problem(key, _value, _tags) when not is_binary(key),
     do:
@@ -319,8 +505,7 @@ defmodule Logex.Runtime do
   defp undeclared(_tag, _path, key, tags) do
     inputs = for {name, %Tag{section: :var_input}} <- tags, do: name
 
-    "input #{label(key)} is not declared" <>
-      hint(Declarations.suggest(key, inputs), Enum.sort(inputs))
+    hint("input #{label(key)} is not declared", Declarations.suggest(key, inputs), inputs)
   end
 
   defp member(type, [name]), do: FbType.member(type, name)
@@ -329,9 +514,14 @@ defmodule Logex.Runtime do
   defp reaches({:ok, _member}), do: "names a member of"
   defp reaches(:error), do: "reaches into"
 
-  defp hint("", []), do: ": this program has no var_input"
-  defp hint("", inputs), do: ": the var_inputs are " <> Enum.map_join(inputs, ", ", &"`#{&1}`")
-  defp hint(suggestion, _inputs), do: suggestion
+  defp hint(line, "", []), do: line <> ": this program has no var_input"
+
+  defp hint(line, "", inputs),
+    do:
+      {line,
+       fn -> ": the var_inputs are " <> Enum.map_join(Enum.sort(inputs), ", ", &"`#{&1}`") end}
+
+  defp hint(line, suggestion, _inputs), do: line <> suggestion
 
   defp fit(%Tag{type: :dint} = tag, value) when not is_integer(value),
     do: "input `#{tag.name}` is a dint: its value must be an integer, found #{inspect(value)}"
@@ -354,6 +544,376 @@ defmodule Logex.Runtime do
 
   defp on_line(%Tag{line: nil}), do: ""
   defp on_line(%Tag{line: line}), do: " (declared on line #{line})"
+
+  # The configuration, checked again: check/1 raises the host's mistakes itself, and a
+  # diagnostic raises as `Logex.Configuration.new!/1`'s do, formatted, a line each.
+  defp configured!([]), do: :ok
+
+  defp configured!(diagnostics),
+    do: raise(ArgumentError, Enum.map_join(diagnostics, "\n", &Diagnostic.format/1))
+
+  # What a cycle reads of the configuration, derived once: the tasks in declaration order,
+  # each with its instances in theirs; the task-less instances; each instance's type and
+  # its connections in and out; the input points' types and the output points' names; and
+  # the globals by name.
+  defp wiring(%Configuration{} = config) do
+    by_task = Enum.group_by(config.instances, & &1.task, & &1.name)
+    types = Map.new(config.instances, &{&1.name, &1.type})
+
+    sections =
+      Enum.group_by(
+        config.connections,
+        &section(config, types, &1),
+        &{&1.instance, {&1.member, &1.to}}
+      )
+
+    points = Enum.map(config.globals, &{&1, Configuration.location(&1.at)})
+
+    %{
+      tasks:
+        config.tasks
+        |> Enum.with_index()
+        |> Enum.map(fn {task, index} ->
+          {task.name, task.interval, task.priority, index, Map.get(by_task, task.name, [])}
+        end),
+      taskless: Map.get(by_task, nil, []),
+      types: types,
+      copy_in: grouped(config.instances, Map.get(sections, :var_input, [])),
+      copy_out: grouped(config.instances, Map.get(sections, :var_output, [])),
+      inputs: Map.new(for {global, {:ok, {_, "i", _}}} <- points, do: {global.name, global.type}),
+      outputs: for({global, {:ok, {_, "q", _}}} <- points, do: global.name),
+      globals: Map.new(config.globals, &{&1.name, &1})
+    }
+  end
+
+  defp section(config, types, connection) do
+    %Tag{section: section} =
+      Map.fetch!(
+        Map.fetch!(config.programs, Map.fetch!(types, connection.instance)).tags,
+        connection.member
+      )
+
+    section
+  end
+
+  defp grouped(instances, connections) do
+    by_instance = Enum.group_by(connections, &elem(&1, 0), &elem(&1, 1))
+    Map.new(instances, &{&1.name, Map.get(by_instance, &1.name, [])})
+  end
+
+  defp runtime!(%__MODULE__{} = runtime), do: runtime
+
+  defp runtime!(other),
+    do:
+      raise(
+        ArgumentError,
+        "expected a %Logex.Runtime{} from Logex.Runtime.start/1, got: #{inspect(other)}"
+      )
+
+  # The input image: every problem with the inputs, a line each in key order, or the
+  # inputs merged into the input points.
+  defp image!(%__MODULE__{globals: globals} = runtime, inputs)
+       when is_map(inputs) and not is_struct(inputs) do
+    problems =
+      for {key, value} <- Enum.sort(inputs),
+          problem = point_problem(key, value, runtime),
+          do: problem
+
+    imaged(problems, globals, inputs)
+  end
+
+  defp image!(_runtime, inputs),
+    do:
+      raise(
+        ArgumentError,
+        ~s|inputs must be a map of input-point names to values, as in %{"pb_start_1" => 1}, | <>
+          "got: #{inspect(inputs)}"
+      )
+
+  defp imaged([], globals, inputs), do: Map.merge(globals, inputs)
+
+  defp imaged(problems, _globals, _inputs),
+    do: raise(ArgumentError, Enum.join(once(problems), "\n"))
+
+  defp point_problem(key, _value, _runtime) when not is_binary(key),
+    do:
+      "input #{inspect(key)} is not a point name: inputs are keyed by input-point name, " <>
+        ~s|as a string, as in %{"pb_start_1" => 1}|
+
+  defp point_problem(key, value, %__MODULE__{wiring: wiring} = runtime),
+    do: point(Map.fetch(wiring.inputs, key), Map.fetch(wiring.globals, key), key, value, runtime)
+
+  # An input point's value fits its type as a var_input's does, with the same messages.
+  defp point({:ok, type}, _global, key, value, _runtime),
+    do: fit(%Tag{name: key, type: type, section: :var_input}, value)
+
+  defp point(:error, {:ok, global}, key, _value, _runtime),
+    do:
+      "input #{label(key)} is #{not_input(Configuration.location(global.at), global)}: " <>
+        "only an input point is set from outside"
+
+  defp point(:error, :error, key, _value, runtime),
+    do: unknown_point(String.split(key, "."), key, runtime)
+
+  defp not_input({:ok, _output}, global),
+    do: "an output point (at `#{global.at}`), not an input point"
+
+  defp not_input(:error, _global), do: "a global with no location, not an input point"
+
+  defp unknown_point([head, _member | _], key, %__MODULE__{wiring: wiring}),
+    do: reaching(Map.has_key?(wiring.types, head), head, key, wiring)
+
+  defp unknown_point([name], key, runtime), do: named_point(kind(runtime, name), key, runtime)
+
+  # A key naming a program instance whole, a task, or the configuration is told what that
+  # name is: none of them is set from outside.
+  defp named_point({:instance, type}, key, _runtime),
+    do:
+      "input #{label(key)} is a program instance of `#{type}`, not an input point: " <>
+        "only an input point is set from outside"
+
+  defp named_point(:task, key, _runtime),
+    do:
+      "input #{label(key)} is a task, not an input point: only an input point is set from outside"
+
+  defp named_point(:configuration, key, _runtime),
+    do:
+      "input #{label(key)} is the configuration's name, not an input point: " <>
+        "only an input point is set from outside"
+
+  defp named_point(:none, key, runtime), do: no_point(key, runtime.wiring)
+
+  defp reaching(true, head, key, _wiring),
+    do:
+      "input #{label(key)} reaches into the program instance `#{head}`: " <>
+        "only an input point is set from outside"
+
+  defp reaching(false, _head, key, wiring), do: no_point(key, wiring)
+
+  defp no_point(key, wiring) do
+    points = Enum.sort(Map.keys(wiring.inputs))
+
+    point_hint(
+      "input #{label(key)} is not an input point",
+      Declarations.suggest(key, points, & &1, "names"),
+      points
+    )
+  end
+
+  defp point_hint(line, "", []), do: line <> ": this configuration has no input point"
+
+  defp point_hint(line, "", points),
+    do: {line, fn -> ": the input points are " <> and_list(Enum.map(points, &"`#{&1}`")) end}
+
+  defp point_hint(line, suggestion, _points), do: line <> suggestion
+
+  # What a name that is no global is in the resource: a program instance or a task, which
+  # share the globals' one namespace, else the configuration's own name, which a task's
+  # may equal.
+  defp kind(%__MODULE__{wiring: wiring, tasks: tasks, config: config}, name),
+    do: kind_of(Map.fetch(wiring.types, name), Map.has_key?(tasks, name), config.name == name)
+
+  defp kind_of({:ok, type}, _task, _configuration), do: {:instance, type}
+  defp kind_of(:error, true, _configuration), do: :task
+  defp kind_of(:error, false, true), do: :configuration
+  defp kind_of(:error, false, false), do: :none
+
+  # The due tasks, in the order they run: priority, then the earlier due time, then the
+  # order the configuration declares them.
+  defp due(%__MODULE__{now: now, tasks: states, wiring: %{tasks: tasks}}) do
+    for(
+      {name, _interval, priority, index, _instances} = task <- tasks,
+      %{next_due: next} = Map.fetch!(states, name),
+      next <= now,
+      do: {{priority, next, index}, task}
+    )
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.map(&elem(&1, 1))
+  end
+
+  # A due task runs once, however many periods have passed: the ones it missed are counted
+  # and reported, and its next due time moves past `now` by whole intervals.
+  defp run_task({name, interval, _priority, _index, instances}, {runtime, events}) do
+    %{next_due: next, overlaps: overlaps} = state = Map.fetch!(runtime.tasks, name)
+    missed = div(runtime.now - next, interval)
+    state = %{state | next_due: next + (missed + 1) * interval, overlaps: overlaps + missed}
+    runtime = %{runtime | tasks: Map.put(runtime.tasks, name, state)}
+    Enum.reduce(instances, {runtime, overlap(missed, name) ++ events}, &scanned(&1, name, &2))
+  end
+
+  defp overlap(0, _task), do: []
+  defp overlap(missed, task), do: [{:overlap, task, missed}]
+
+  # One scan of one instance: its var_inputs copied in, `call/4`, its var_outputs out.
+  defp scanned(
+         name,
+         task,
+         {%__MODULE__{now: now, globals: globals, wiring: wiring} = runtime, events}
+       ) do
+    program = Map.fetch!(runtime.config.programs, Map.fetch!(wiring.types, name))
+    %Instance{first: first} = state = Map.fetch!(runtime.instances, name)
+
+    inputs =
+      Map.new(Map.fetch!(wiring.copy_in, name), fn {member, to} ->
+        {member, value(to, globals)}
+      end)
+
+    {outputs, state} = call(program, state, inputs, %Scan{now: now, first: first})
+
+    globals =
+      Enum.reduce(Map.fetch!(wiring.copy_out, name), globals, fn {member, global}, globals ->
+        Map.put(globals, global, Map.fetch!(outputs, member))
+      end)
+
+    {%{runtime | instances: Map.put(runtime.instances, name, state), globals: globals},
+     [{:ran, task, name, now} | events]}
+  end
+
+  defp value(global, globals) when is_binary(global), do: Map.fetch!(globals, global)
+  defp value(constant, _globals), do: constant
+
+  # An access path: one name token to the lexer, as `m1.t1.acc` is.
+  defp path!(path) when is_binary(path), do: path_lexed(Logex.Lexer.tokenize(path), path)
+  defp path!(path), do: raise(ArgumentError, not_a_path(path))
+
+  defp path_lexed({:ok, [{:name, _, path}], _}, path), do: path
+  defp path_lexed(_lexed, path), do: raise(ArgumentError, not_a_path(path))
+
+  defp not_a_path(path),
+    do:
+      "#{inspect(path)} is not an access path: a global, or a program instance, its tag and " <>
+        ~s|the members below it, joined by `.`, as in "m1.t1.acc"|
+
+  defp at_path({:ok, _global}, _instance, {head, [], _path}, runtime),
+    do: Map.fetch!(runtime.globals, head)
+
+  defp at_path({:ok, global}, _instance, {head, _rest, path}, _runtime),
+    do:
+      raise(
+        ArgumentError,
+        "`#{path}` goes too deep: `#{head}` is a #{global.type} global, which has no members"
+      )
+
+  defp at_path(:error, {:ok, type}, {head, [], _path}, runtime),
+    do:
+      raise(
+        ArgumentError,
+        "`#{head}` is a program instance of `#{type}`: an access path names one of its tags" <>
+          example_tag(Map.fetch!(runtime.config.programs, type), head)
+      )
+
+  defp at_path(:error, {:ok, type}, {head, [tag | members], path}, runtime) do
+    program = Map.fetch!(runtime.config.programs, type)
+    env = Map.fetch!(runtime.instances, head).env
+    in_program(Map.fetch(program.tags, tag), {head, tag, members, path}, program, env)
+  end
+
+  defp at_path(:error, :error, {head, _rest, _path}, runtime),
+    do: raise(ArgumentError, unknown_head(kind(runtime, head), head, runtime))
+
+  defp unknown_head(:task, head, _runtime),
+    do:
+      "`#{head}` is a task, not a global or a program instance: an access path starts at " <>
+        "one of those, and overlaps/1 reads a task's overlap count"
+
+  defp unknown_head(:configuration, head, _runtime),
+    do:
+      "`#{head}` is the configuration's name, which an access path leaves out: it starts " <>
+        "at a global or a program instance"
+
+  defp unknown_head(:none, head, runtime) do
+    names = Enum.sort(Map.keys(runtime.wiring.globals) ++ Map.keys(runtime.wiring.types))
+
+    "`#{head}` is neither a global nor a program instance" <>
+      Declarations.suggest(head, names, & &1, "names")
+  end
+
+  # The first of its tags by name, or none for a program that declares none.
+  defp example_tag(%Program{tags: tags}, head), do: tag_example(Enum.sort(Map.keys(tags)), head)
+
+  defp tag_example([first | _], head), do: ", as in `#{head}.#{first}`"
+  defp tag_example([], _head), do: ", and it declares none"
+
+  defp in_program(:error, {head, tag, _members, _path}, program, _env),
+    do:
+      raise(
+        ArgumentError,
+        "`#{head}` is a `#{program.name}`, which declares no `#{tag}`" <>
+          Declarations.suggest(tag, Enum.sort(Map.keys(program.tags)))
+      )
+
+  defp in_program({:ok, %Tag{type: %FbType{} = type}}, {head, tag, members, path}, _program, env),
+    do: in_block(type, "#{head}.#{tag}", members, {[tag], path}, env)
+
+  defp in_program({:ok, %Tag{}}, {_head, tag, [], _path}, _program, env), do: walk(env, [tag])
+
+  defp in_program({:ok, %Tag{type: type}}, {head, tag, _members, path}, _program, _env),
+    do:
+      raise(
+        ArgumentError,
+        "`#{path}` goes too deep: `#{head}.#{tag}` is a #{type}, which has no members"
+      )
+
+  # A function block instance's public members, as logic names them: never an internal
+  # one, and never the instance whole. The walk follows a member whose type is a block as
+  # deep as the types go; which members are public, and so how deep a path reaches, is
+  # FbType.public/1's.
+  defp in_block(type, at, [], _walked, _env),
+    do:
+      raise(
+        ArgumentError,
+        "`#{at}` is a #{type.name}: an access path names one of its members" <>
+          example(at, FbType.public(type))
+      )
+
+  defp in_block(type, at, [member | deeper], {walked, path}, env),
+    do: member_at(FbType.member(type, member), type, at, {member, deeper}, {walked, path}, env)
+
+  defp member_at(:error, type, at, {member, _deeper}, _walked, _env) do
+    names = Enum.map(FbType.public(type), & &1.name)
+
+    raise(
+      ArgumentError,
+      "`#{at}.#{member}` is not a member of `#{at}`, a #{type.name}" <>
+        block_hint(Declarations.suggest(member, names, &"#{at}.#{&1}", "members"), names)
+    )
+  end
+
+  # The path walked so far is kept reversed, so a path of any depth is read in time linear
+  # in its depth.
+  defp member_at(
+         {:ok, %FbType.Member{type: %FbType{} = nested}},
+         _type,
+         at,
+         {member, deeper},
+         {walked, path},
+         env
+       ),
+       do: in_block(nested, "#{at}.#{member}", deeper, {[member | walked], path}, env)
+
+  defp member_at({:ok, _member}, _type, _at, {member, []}, {walked, _path}, env),
+    do: walk(env, Enum.reverse([member | walked]))
+
+  defp member_at({:ok, found}, _type, at, {member, _deeper}, {_walked, path}, _env),
+    do:
+      raise(
+        ArgumentError,
+        "`#{path}` goes too deep: `#{at}.#{member}` is a #{found.type}, which has no members"
+      )
+
+  # The member a read of the instance would mean: the first value the block sets. Every
+  # block type within the contract has one until M2-5 (`ton` is the only one), whose user
+  # types decide the rest from source.
+  defp example(at, members) do
+    %FbType.Member{name: name} = Enum.find(members, &(&1.role == :output))
+    ", as in `#{at}.#{name}`"
+  end
+
+  defp block_hint("", names), do: ": its members are " <> and_list(Enum.map(names, &"`#{&1}`"))
+  defp block_hint(suggestion, _names), do: suggestion
+
+  defp and_list([one]), do: one
+  defp and_list(items), do: Enum.join(Enum.drop(items, -1), ", ") <> " and " <> List.last(items)
 
   # The evaluator (B5): private, so no logic runs past the checks above. Each rung starts
   # with power, and `{power_flow, env}` threads through its elements in order. The scan is

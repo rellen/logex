@@ -1125,6 +1125,64 @@ defmodule Logex.ConfigurationTest do
     defp rnd(n), do: :rand.uniform(n) - 1
   end
 
+  describe "start/1 checks again" do
+    # start/1 runs check/1 again: a host's mistake raises as check/1 raises it, and the
+    # diagnostics raise formatted, a line each, in their order.
+    test "raises the problems check/1 gives, in their order", %{seal: seal} do
+      mistaken = %{Configuration.new!(base(seal)) | file: %{}, tasks: [task("t", -1, 0)]}
+      error = assert_raise ArgumentError, fn -> Logex.Runtime.start(mistaken) end
+      assert String.split(error.message, "\n") == mistakes(mistaken)
+      assert [_, _] = mistakes(mistaken)
+
+      config = %{
+        Configuration.new!(base(seal))
+        | file: "plant.logex",
+          tasks: [%Configuration.Task{name: "fast", interval: 0, priority: 1, line: 2}],
+          globals: [
+            %Global{name: "pb", type: :bool, at: "panel.i.0", line: 3},
+            %Global{name: "k", type: :bool, at: "panel.i.0", line: 4}
+          ],
+          instances: [%Instance{name: "fast", type: "seal", line: 9}],
+          connections: [%Connection{instance: "fast", member: "start", to: "pb", line: 5}]
+      }
+
+      error = assert_raise ArgumentError, fn -> Logex.Runtime.start(config) end
+      assert [_, _ | _] = lines = String.split(error.message, "\n")
+      assert lines == formatted(config)
+    end
+
+    # What new!/1 accepts, start/1 starts and a cycle runs.
+    test "what new!/1 accepts starts, and cycles", %{seal: seal} do
+      assert spoiled_new(seal, fn config ->
+               runtime = Logex.Runtime.start(config)
+               {_runtime, _outputs, _events} = Logex.Runtime.cycle(runtime, 10, %{})
+             end) > 2000
+    end
+
+    # The struct is the data API and may be built or edited by hand, so start/1 checks it
+    # again: valid configurations spoiled by hand, as check/1's property spoils them.
+    test "start/1 refuses a configuration spoiled by hand, raising nothing else",
+         %{seal: seal} do
+      :rand.seed(:exsss, {2026, 10, 3})
+      good = Configuration.new!(Keyword.put(base(seal), :tasks, [task("fast", 10, 0)]))
+
+      outcomes =
+        for _ <- 1..2000 do
+          config = spoil_struct(spoil_struct(good, :rand.uniform(4)), :rand.uniform(4))
+
+          try do
+            runtime = Logex.Runtime.start(config)
+            {_runtime, _outputs, _events} = Logex.Runtime.cycle(runtime, 10, %{})
+            :ran
+          rescue
+            ArgumentError -> :refused
+          end
+        end
+
+      assert Enum.count(outcomes, &(&1 == :refused)) > 1500
+    end
+  end
+
   describe "growth" do
     # A configuration of n instances, each with a task, three globals and three
     # connections, two of them refused, so every check has work to do: the namespace, the

@@ -2,7 +2,7 @@ defmodule Logex.Configuration do
   @moduledoc """
   A configuration: the program types it runs, its tasks, its globals, its program
   instances and the connections that wire them (M2-1, `docs/organisation.md` §4.4). A
-  value, plain data, which a resource runs (`docs/organisation.md` §4.6).
+  value, plain data, which `Logex.Runtime.start/1` runs as one resource.
 
   - `programs` maps each program type's name to its `%Logex.Program{}`.
   - `tasks`, `globals`, `instances` and `connections` are lists, in declaration order, of
@@ -16,8 +16,8 @@ defmodule Logex.Configuration do
     is empty.
 
   Every way of writing a configuration ends in `check/1`, the one validator: `new!/1`,
-  from Elixir, raises one `ArgumentError` listing every problem it finds, a line each. A
-  mistake a configuration's text could also make
+  from Elixir, raises one `ArgumentError` listing every problem it finds, a line each, and
+  `Logex.Runtime.start/1` checks again. A mistake a configuration's text could also make
   is a `%Logex.Diagnostic{}` at stage `:configure`, cited at its element's line, which is
   how a reader of the text will cite it. Its rules:
 
@@ -85,7 +85,7 @@ defmodule Logex.Configuration do
     @moduledoc """
     A periodic task: `name`, `interval` in ms and `priority`, 0 the highest, to 65535.
     Its instances run once in every cycle in which it is due, every `interval` ms from the
-    start, in the order of the configuration's `instances` (`docs/organisation.md` §4.6).
+    start, in the order of the configuration's `instances` (`Logex.Runtime`).
     """
     @enforce_keys [:name, :interval, :priority]
     defstruct [:name, :interval, :priority, line: nil]
@@ -865,9 +865,9 @@ defmodule Logex.Configuration do
   input point and an output point start at 0.
 
   The one rule for a new global (`docs/organisation.md` §4.9), as
-  `Logex.Program.initial_env/1` is for a tag: a resource that runs the configuration is to
-  start every global by it, and an online edit of a configuration (OE-2) each global it
-  adds. The edit's exceptions, for a global the resource already holds: a kept global keeps
+  `Logex.Program.initial_env/1` is for a tag: `Logex.Runtime.start/1` starts every global
+  by it, and an online edit of a configuration (OE-2) is to start each global it adds by
+  it. The edit's exceptions, for a global the resource already holds: a kept global keeps
   its value until a restart, a changed `initial` included; an input or output point is
   neither added nor removed while running, located I/O being refused then; and an output
   point that no connection drives any more holds its value, as an output an edit leaves

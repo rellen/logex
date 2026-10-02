@@ -293,11 +293,15 @@ defmodule Logex.RuntimeTest do
     } do
       names = for i <- 1..40, do: "x#{String.pad_leading(Integer.to_string(i), 2, "0")}"
 
+      # The var_inputs are listed once, on the first line that needs them, so a refusal of
+      # n keys against n var_inputs is n lines, not n lists of n names.
       message =
-        Enum.map_join(
-          names,
-          "\n",
-          &"input `#{&1}` is not declared: the var_inputs are `sp_in`, `start`, `stop`"
+        Enum.join(
+          [
+            "input `x01` is not declared: the var_inputs are `sp_in`, `start`, `stop`"
+            | for(name <- tl(names), do: "input `#{name}` is not declared")
+          ],
+          "\n"
         )
 
       raises(message, fn -> put(m, s, Map.new(names, &{&1, 0})) end)
@@ -685,12 +689,322 @@ defmodule Logex.RuntimeTest do
     end
   end
 
+  describe "a resource's host contract (M2-1)" do
+    alias Logex.Configuration
+    alias Logex.Configuration.{Connection, Global, Instance}
+
+    # The motor, one task-less instance: its two bools wired to input points, its dint to
+    # an unlocated global, its outputs to an output point and an unlocated dint.
+    defp plant(motor),
+      do:
+        Configuration.new!(
+          name: "plant",
+          programs: [motor],
+          tasks: [%Configuration.Task{name: "fast", interval: 10, priority: 0}],
+          globals: [
+            %Global{name: "pb_start", type: :bool, at: "panel.i.0"},
+            %Global{name: "pb_stop", type: :bool, at: "panel.i.1"},
+            %Global{name: "sp", type: :dint, at: "drive.i.0"},
+            %Global{name: "k", type: :bool, at: "panel.q.0"},
+            %Global{name: "speed", type: :dint}
+          ],
+          instances: [%Instance{name: "m1", type: "motor", task: "fast"}],
+          connections: [
+            %Connection{instance: "m1", member: "start", to: "pb_start"},
+            %Connection{instance: "m1", member: "stop", to: "pb_stop"},
+            %Connection{instance: "m1", member: "sp_in", to: "sp"},
+            %Connection{instance: "m1", member: "motor", to: "k"},
+            %Connection{instance: "m1", member: "speed_sp", to: "speed"}
+          ]
+        )
+
+    test "start/1 takes a configuration, checked again", %{motor: motor} do
+      raises(
+        "expected a %Logex.Configuration{} from Logex.Configuration.new!/1, got: 5",
+        fn -> Runtime.start(opaque(5)) end
+      )
+
+      config = %{plant(motor) | instances: [], connections: []}
+
+      raises("a configuration runs at least one program instance", fn -> Runtime.start(config) end)
+    end
+
+    test "every call takes a runtime from start/1, checked first", %{motor: motor} do
+      message = "expected a %Logex.Runtime{} from Logex.Runtime.start/1, got: 5"
+      raises(message, fn -> Runtime.cycle(opaque(5), -1, []) end)
+      raises(message, fn -> Runtime.next_due_in(opaque(5)) end)
+      raises(message, fn -> Runtime.overlaps(opaque(5)) end)
+      raises(message, fn -> Runtime.get(opaque(5), opaque(5)) end)
+      error = assert_raise ArgumentError, fn -> Runtime.cycle(opaque(plant(motor)), 0, %{}) end
+
+      assert "expected a %Logex.Runtime{} from Logex.Runtime.start/1, got: %Logex.Configuration{" <>
+               _ = error.message
+    end
+
+    test "cycle/3 takes elapsed time, then inputs", %{motor: motor} do
+      runtime = Runtime.start(plant(motor))
+
+      for elapsed <- [-1, 1.5, nil],
+          do:
+            raises(
+              "elapsed_ms must be a non-negative integer of milliseconds, got: #{inspect(elapsed)}",
+              fn -> Runtime.cycle(runtime, opaque(elapsed), []) end
+            )
+
+      raises(
+        ~s|inputs must be a map of input-point names to values, as in %{"pb_start_1" => 1}, | <>
+          "got: []",
+        fn -> Runtime.cycle(runtime, 0, opaque([])) end
+      )
+    end
+
+    test "only an input point is set, with a value that fits it, every problem in one raise, " <>
+           "in key order",
+         %{motor: motor} do
+      runtime = Runtime.start(plant(motor))
+
+      inputs = %{
+        5 => 1,
+        "k" => 1,
+        "speed" => 1,
+        "m1.start" => 1,
+        "pb_strat" => 1,
+        "zz" => 0,
+        "pb_start" => 2,
+        "sp" => 1.5,
+        "pb_stop" => 1
+      }
+
+      raises(
+        Enum.join(
+          [
+            ~s|input 5 is not a point name: inputs are keyed by input-point name, as a string, | <>
+              ~s|as in %{"pb_start_1" => 1}|,
+            "input `k` is an output point (at `panel.q.0`), not an input point: only an input " <>
+              "point is set from outside",
+            "input `m1.start` reaches into the program instance `m1`: only an input point is " <>
+              "set from outside",
+            "input `pb_start` is a bool: only 0 or 1 fit, found 2",
+            "input `pb_strat` is not an input point — did you mean `pb_start`?",
+            "input `sp` is a dint: its value must be an integer, found 1.5",
+            "input `speed` is a global with no location, not an input point: only an input " <>
+              "point is set from outside",
+            "input `zz` is not an input point: the input points are `pb_start`, `pb_stop` and `sp`"
+          ],
+          "\n"
+        ),
+        fn -> Runtime.cycle(runtime, 0, inputs) end
+      )
+
+      raises("input `sp` is a dint: 3000000000 does not fit in 32 bits", fn ->
+        Runtime.cycle(runtime, 0, %{"sp" => 3_000_000_000})
+      end)
+
+      no_points =
+        Configuration.new!(
+          name: "plant",
+          programs: [motor],
+          instances: [%Instance{name: "m1", type: "motor"}],
+          connections:
+            for(m <- ~w(start stop sp_in), do: %Connection{instance: "m1", member: m, to: 0})
+        )
+
+      raises("input `x` is not an input point: this configuration has no input point", fn ->
+        Runtime.cycle(Runtime.start(no_points), 0, %{"x" => 1})
+      end)
+    end
+
+    test "get/2 reads a global, a tag or a public member, and refuses anything else" do
+      timed =
+        String.replace(@motor, "var fault bool\n", "var fault bool\nvar t1 ton\n") <>
+          "xic motor ton t1 100\n"
+
+      {:ok, timed} = Logex.compile(timed, name: "motor")
+      runtime = Runtime.start(plant(timed))
+      {runtime, _outputs, _events} = Runtime.cycle(runtime, 0, %{"pb_start" => 1, "sp" => 7})
+
+      assert Runtime.get(runtime, "pb_start") == 1
+      assert Runtime.get(runtime, "speed") == 7
+      assert Runtime.get(runtime, "m1.sp_in") == 7
+      assert Runtime.get(runtime, "m1.motor") == 1
+      assert Runtime.get(runtime, "m1.fault") == 0
+      assert Runtime.get(runtime, "m1.t1.en") == 1
+      assert Runtime.get(runtime, "m1.t1.pre") == 100
+
+      path =
+        ~s|is not an access path: a global, or a program instance, its tag and the members | <>
+          ~s|below it, joined by `.`, as in "m1.t1.acc"|
+
+      for {bad, message} <- [
+            {5, "5 " <> path},
+            {"m1..x", ~s|"m1..x" | <> path},
+            {"", ~s|"" | <> path},
+            {"m1 t1", ~s|"m1 t1" | <> path},
+            {"zz", "`zz` is neither a global nor a program instance"},
+            {"pb_strat",
+             "`pb_strat` is neither a global nor a program instance — did you mean " <>
+               "`pb_start`?"},
+            {"k.x", "`k.x` goes too deep: `k` is a bool global, which has no members"},
+            {"m1",
+             "`m1` is a program instance of `motor`: an access path names one of its " <>
+               "tags, as in `m1.fault`"},
+            {"m1.strat", "`m1` is a `motor`, which declares no `strat` — did you mean `start`?"},
+            {"m1.fault.x",
+             "`m1.fault.x` goes too deep: `m1.fault` is a bool, which has no members"},
+            {"m1.t1",
+             "`m1.t1` is a ton: an access path names one of its members, as in " <>
+               "`m1.t1.acc`"},
+            {"m1.t1.last",
+             "`m1.t1.last` is not a member of `m1.t1`, a ton: its members are " <>
+               "`pre`, `acc`, `dn`, `tt` and `en`"},
+            {"m1.t1.Acc",
+             "`m1.t1.Acc` is not a member of `m1.t1`, a ton — did you mean " <>
+               "`m1.t1.acc`? (members are case-sensitive)"},
+            {"m1.t1.acc.x",
+             "`m1.t1.acc.x` goes too deep: `m1.t1.acc` is a dint, which has no " <>
+               "members"}
+          ],
+          do: raises(message, fn -> Runtime.get(runtime, opaque(bad)) end)
+    end
+  end
+
+  describe "a name that is no input point and no global" do
+    alias Logex.Configuration
+    alias Logex.Configuration.{Connection, Global, Instance}
+
+    defp named_plant(motor, name),
+      do:
+        Configuration.new!(
+          name: name,
+          programs: [motor],
+          tasks: [%Configuration.Task{name: "fast", interval: 10, priority: 0}],
+          globals: [%Global{name: "pb", type: :bool, at: "panel.i.0"}],
+          instances: [%Instance{name: "m1", type: "motor", task: "fast"}],
+          connections:
+            for(m <- ~w(start stop sp_in), do: %Connection{instance: "m1", member: m, to: 0})
+        )
+
+    # Tasks, globals and program instances share one namespace, and the configuration has
+    # a name: a key or a path that names one of them is told which it is.
+    test "is told what it names: a program instance, a task, or the configuration", %{
+      motor: motor
+    } do
+      runtime = Runtime.start(named_plant(motor, "plant"))
+      outside = "not an input point: only an input point is set from outside"
+
+      for {key, message} <- [
+            {"m1", "input `m1` is a program instance of `motor`, " <> outside},
+            {"fast", "input `fast` is a task, " <> outside},
+            {"plant", "input `plant` is the configuration's name, " <> outside}
+          ],
+          do: raises(message, fn -> Runtime.cycle(runtime, 0, %{key => 1}) end)
+
+      raises(
+        "`fast` is a task, not a global or a program instance: an access path starts at one " <>
+          "of those, and overlaps/1 reads a task's overlap count",
+        fn -> Runtime.get(runtime, "fast") end
+      )
+
+      raises(
+        "`plant` is the configuration's name, which an access path leaves out: it starts at " <>
+          "a global or a program instance",
+        fn -> Runtime.get(runtime, "plant") end
+      )
+    end
+
+    # The configuration's name is outside the namespace, so a task may share it: the name
+    # is then the task's.
+    test "a task that shares the configuration's name is the task", %{motor: motor} do
+      runtime = Runtime.start(named_plant(motor, "fast"))
+
+      raises(
+        "input `fast` is a task, not an input point: only an input point is set from outside",
+        fn -> Runtime.cycle(runtime, 0, %{"fast" => 1}) end
+      )
+
+      raises(
+        "`fast` is a task, not a global or a program instance: an access path starts at one " <>
+          "of those, and overlaps/1 reads a task's overlap count",
+        fn -> Runtime.get(runtime, "fast") end
+      )
+    end
+
+    # The input points are listed once, on the first line that needs them.
+    test "a refusal lists the input points once", %{motor: motor} do
+      runtime = Runtime.start(named_plant(motor, "plant"))
+
+      raises(
+        "input `aa` is not an input point: the input points are `pb`\n" <>
+          "input `zz` is not an input point",
+        fn -> Runtime.cycle(runtime, 0, %{"zz" => 1, "aa" => 1}) end
+      )
+    end
+
+    # n wrong keys against n input points: the message grows with n, not with n * n.
+    test "a refusal of many keys grows linearly in its size", %{motor: motor} do
+      bytes = fn n ->
+        config =
+          Configuration.new!(
+            name: "plant",
+            programs: [motor],
+            globals: for(i <- 1..n, do: %Global{name: "pt#{i}", type: :bool, at: "io.i.#{i}"}),
+            instances: [%Instance{name: "m1", type: "motor"}],
+            connections:
+              for(m <- ~w(start stop sp_in), do: %Connection{instance: "m1", member: m, to: 0})
+          )
+
+        runtime = Runtime.start(config)
+        inputs = Map.new(1..n, &{"wrong_#{&1}", 1})
+        error = assert_raise ArgumentError, fn -> Runtime.cycle(runtime, 0, inputs) end
+        byte_size(error.message)
+      end
+
+      ratio = bytes.(400) / bytes.(100)
+      assert ratio < 6, "4x the keys made a message #{Float.round(ratio, 1)}x the size"
+    end
+  end
+
+  describe "get/2 of an instance whole" do
+    # A program may declare no tag at all, and then there is no tag to give as an example.
+    test "names one of its tags, or says it declares none" do
+      {:ok, empty} = Logex.compile("", name: "empty")
+
+      config =
+        Logex.Configuration.new!(
+          name: "plant",
+          programs: [empty],
+          instances: [%Logex.Configuration.Instance{name: "e", type: "empty"}]
+        )
+
+      raises(
+        "`e` is a program instance of `empty`: an access path names one of its tags, and it " <>
+          "declares none",
+        fn -> Runtime.get(Runtime.start(config), "e") end
+      )
+    end
+  end
+
   describe "the public surface (B5)" do
     test "is exactly this: every evaluate clause is private, in Logex.Runtime" do
       assert Enum.sort(Logex.__info__(:functions)) == [compile: 2, compile_file: 1]
 
+      # M2-1: the scheduler, and its resource, `%Logex.Runtime{}`, opaque as an edit is.
       assert Enum.sort(Runtime.__info__(:functions)) ==
-               [call: 4, instance: 1, put_inputs: 3, restart: 3, scan: 2, scan: 3]
+               [
+                 __struct__: 0,
+                 __struct__: 1,
+                 call: 4,
+                 cycle: 3,
+                 get: 2,
+                 instance: 1,
+                 next_due_in: 1,
+                 overlaps: 1,
+                 put_inputs: 3,
+                 restart: 3,
+                 scan: 2,
+                 scan: 3,
+                 start: 1
+               ]
 
       # M2-1: the configuration, its one validator and its constructor from Elixir.
       assert Enum.sort(Logex.Configuration.__info__(:functions)) ==
