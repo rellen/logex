@@ -3,19 +3,23 @@
 A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
 text into a named, stateless value, and runs it as instances, one scan at a time, with the
 time the host injects. No dependencies and no generated code: the lexer and parser are
-written by hand, and the whole thing is sixteen small modules.
+written by hand, and the whole thing is twenty-one small modules.
 
 **Stage: early, and honest about it.** Fourteen instructions, among them an on-delay
 timer, a one-shot and six comparisons, parallel branches to arbitrary nesting depth,
 latch/unlatch that holds across scans, power flow that resets per rung, a typed tag table
 that every tag is declared in, a public API (`Logex.compile/2`,
 `Logex.compile_file/1` and `Logex.Runtime`), an online edit that changes a running
-instance's program without a restart (`Logex.Edit`), and a printer that turns an AST back
-into source so a routine round-trips — all of that works and is tested end to end, and a
-program with mistakes in it gets every one reported with its line rather than an
-exception, a misspelt tag included. What does not exist yet: counters, the other timers,
-math, and a scheduler — the host calls one scan at a time. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
-what order it gets fixed, and why.
+instance's program without a restart (`Logex.Edit`), a scheduler that runs instances of
+several programs as one configuration on periodic tasks, wired to input and output points
+(`Logex.Configuration`), and a printer that turns an AST back into source so a routine
+round-trips — all of that works and is tested end to end, and a program with mistakes in
+it gets every one reported with its line rather than an exception, a misspelt tag
+included. What does not exist yet: counters, the other timers, math, the configuration
+file, which will hold a configuration as text (a configuration is built from Elixir data
+for now), shared globals, event tasks and function blocks of your own. `PLAN.md` is a
+full review of the codebase and says precisely what is missing, in what order it gets
+fixed, and why.
 
 ## The dialect
 
@@ -134,9 +138,10 @@ These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5 and
 Milestone 2) and will change the source language:
 - **Program organisation** ([`docs/organisation.md`](docs/organisation.md)): a
   configuration file (`.logex`) that instantiates `.ld` programs, wires them to I/O points
-  and globals, and schedules them on tasks; `var_external` for shared globals; function
-  blocks called with `cal`. Each new word still gets its `docs/naming.md` stanza, which may
-  change a spelling.
+  and globals, and schedules them on tasks, in text (the configuration it reads, and its
+  scheduler, landed with M2-1, built from Elixir data); `var_external` for shared globals;
+  event tasks; function blocks called with `cal`. Each new word still gets its
+  `docs/naming.md` stanza, which may change a spelling.
 
 - **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
 - **The other timers, counters and math** arrive as `tof tp rto res`, `ctu ctd`, `add sub
@@ -223,8 +228,9 @@ input `strat` is not declared — did you mean `start`?
 ```
 
 `scan/3` takes the milliseconds since the last scan, which a timer counts;
-`Logex.Runtime.call/4` is one scan with the time given explicitly, which is what a
-scheduler will call; `restart/3` starts an instance again, keeping the inputs that fit their types.
+`Logex.Runtime.call/4` is one scan with the time given explicitly, which is what the
+scheduler calls for each instance it runs ("A configuration", below); `restart/3` starts an
+instance again, keeping the inputs that fit their types.
 
 ### A timer and a one-shot
 
@@ -289,6 +295,142 @@ and `xic go ton t1 3000 ote lamp` is refused:
 ```
 delay.ld: line 8: `ote lamp` follows `ton t1` on its path: what passes on after a `ton` is not settled, so a `ton` ends its path; read the timer with `xic t1.dn` on a rung below
 ```
+
+## A configuration
+
+A configuration runs instances of one or more programs as one resource: each instance on a
+periodic task or on none, its `var_input`s and `var_output`s connected to globals, and the
+globals located at the host's input and output points or not
+([`docs/organisation.md`](docs/organisation.md) §4.4 to §4.6). Until the configuration
+file lands, one is built from Elixir data with `Logex.Configuration.new!/1`, which checks
+it and raises every problem at once. `Logex.Runtime.start/1` makes the resource, and
+`cycle/3` steps it by the milliseconds the host says have passed, with the input points
+that changed, returning every output point and what ran.
+
+`plant.exs` — two instances of `motor.ld`, `m1` on a 10 ms task and `m2` on a 50 ms one,
+each wired to its own buttons, contactor and speed setpoint; `m2`'s `overtemp` and `reset`
+are tied to 0. It then builds the same plant with three mistakes in it:
+
+```elixir
+{:ok, motor} = Logex.compile_file("motor.ld")
+
+alias Logex.Configuration
+alias Logex.Configuration.{Connection, Global, Instance}
+
+point = fn name, type, at -> %Global{name: name, type: type, at: at} end
+
+wire = fn instance, pairs ->
+  for {member, to} <- pairs, do: %Connection{instance: instance, member: member, to: to}
+end
+
+fields = [
+  name: "plant",
+  programs: [motor],
+  tasks: [
+    %Configuration.Task{name: "fast", interval: 10, priority: 1},
+    %Configuration.Task{name: "slow", interval: 50, priority: 2}
+  ],
+  globals: [
+    point.("pb_start_1", :bool, "panel.i.0"),
+    point.("pb_stop_1", :bool, "panel.i.1"),
+    point.("tt_1", :bool, "panel.i.2"),
+    point.("pb_start_2", :bool, "panel.i.3"),
+    point.("pb_stop_2", :bool, "panel.i.4"),
+    point.("pb_reset", :bool, "panel.i.5"),
+    point.("k1", :bool, "panel.q.0"),
+    point.("k2", :bool, "panel.q.1"),
+    point.("sp_1", :dint, "drive.q.0"),
+    point.("sp_2", :dint, "drive.q.1")
+  ],
+  instances: [
+    %Instance{name: "m1", type: "motor", task: "fast"},
+    %Instance{name: "m2", type: "motor", task: "slow"}
+  ],
+  connections:
+    wire.("m1", [{"start", "pb_start_1"}, {"stop", "pb_stop_1"}, {"overtemp", "tt_1"}]) ++
+      wire.("m1", [{"reset", "pb_reset"}, {"motor", "k1"}, {"speed_sp", "sp_1"}]) ++
+      wire.("m2", [{"start", "pb_start_2"}, {"stop", "pb_stop_2"}, {"overtemp", 0}]) ++
+      wire.("m2", [{"reset", 0}, {"motor", "k2"}, {"speed_sp", "sp_2"}])
+]
+
+print = fn
+  nil, _now, _outputs, _events -> :ok
+  label, now, out, events ->
+    points = "k1=#{out["k1"]} k2=#{out["k2"]} sp_1=#{out["sp_1"]} sp_2=#{out["sp_2"]}"
+    IO.puts("t=#{String.pad_leading("#{now}", 3)}  #{label}  #{points}  #{inspect(events)}")
+end
+
+cycle = fn {rt, now}, elapsed, inputs, label ->
+  {rt, outputs, events} = Logex.Runtime.cycle(rt, elapsed, inputs)
+  print.(label, now + elapsed, outputs, events)
+  {rt, now + elapsed}
+end
+
+{rt, _now} =
+  {Logex.Runtime.start(Configuration.new!(fields)), 0}
+  |> cycle.(0, %{}, "idle         ")
+  |> cycle.(10, %{"pb_start_1" => 1, "pb_start_2" => 1}, "both started ")
+  |> cycle.(10, %{}, nil)
+  |> cycle.(10, %{}, nil)
+  |> cycle.(10, %{}, nil)
+  |> cycle.(10, %{}, "held to 50 ms")
+  |> cycle.(10, %{"pb_start_1" => 0, "pb_start_2" => 0}, "released     ")
+  |> cycle.(10, %{"tt_1" => 1}, "tt_1 trips   ")
+  |> cycle.(35, %{}, "35 ms late   ")
+
+IO.inspect(Logex.Runtime.overlaps(rt), label: "overlaps")
+IO.inspect(Logex.Runtime.next_due_in(rt), label: "next due in")
+IO.inspect(Logex.Runtime.get(rt, "m1.fault"), label: "m1.fault")
+
+bad =
+  Keyword.merge(fields,
+    tasks: [
+      %Configuration.Task{name: "fast", interval: 10, priority: -1},
+      %Configuration.Task{name: "slow", interval: 50, priority: 2}
+    ],
+    instances: [
+      %Instance{name: "m1", type: "motor", task: "fast"},
+      %Instance{name: "m2", type: "motor", task: "slwo"}
+    ],
+    connections: fields[:connections] ++ wire.("m2", [{"motor", "pb_stop_1"}])
+  )
+
+try do
+  Configuration.new!(bad)
+rescue
+  error in ArgumentError -> IO.puts(error.message)
+end
+```
+
+```
+$ mix run plant.exs
+t=  0  idle           k1=0 k2=0 sp_1=1200 sp_2=1200  [{:ran, "fast", "m1", 0}, {:ran, "slow", "m2", 0}]
+t= 10  both started   k1=1 k2=0 sp_1=1200 sp_2=1200  [{:ran, "fast", "m1", 10}]
+t= 50  held to 50 ms  k1=1 k2=1 sp_1=1200 sp_2=1200  [{:ran, "fast", "m1", 50}, {:ran, "slow", "m2", 50}]
+t= 60  released       k1=1 k2=1 sp_1=1200 sp_2=1200  [{:ran, "fast", "m1", 60}]
+t= 70  tt_1 trips     k1=1 k2=1 sp_1=0 sp_2=1200  [{:ran, "fast", "m1", 70}]
+t=105  35 ms late     k1=1 k2=1 sp_1=0 sp_2=1200  [{:overlap, "fast", 2}, {:ran, "fast", "m1", 105}, {:ran, "slow", "m2", 105}]
+overlaps: %{"fast" => 2, "slow" => 0}
+next due in: 5
+m1.fault: 1
+task `fast`: a priority is 0, the highest, to 65535, found -1
+program instance `m2`: there is no task `slwo` — did you mean `slow`?
+`pb_stop_1` is an input point: `m2.motor` cannot drive it
+```
+
+- Every task is due in the first cycle, and after it `m1` runs every 10 ms and `m2` every
+  50 ms; the cycles at 20, 30 and 40 ms ran `m1` alone and are not printed. Due tasks run
+  by priority, 0 the highest, then the earlier due time, then the order declared. `m2`
+  sees its start button only when it next runs, at 50 ms, so it starts then.
+- `tt_1` latches `m1`'s fault, which drops `sp_1` and leaves `m2` alone.
+- The last cycle came 35 ms after the one before. The 10 ms task, due at 80 ms, runs once
+  rather than three times, and reports the two periods it missed, at 80 and 90 ms, just
+  before its scan; its phase is kept, so it is next due at 110 ms. `overlaps/1` counts
+  the missed periods, and `get/2` reads any global or any instance's tag by its path.
+- A priority of -1 is a mistake no configuration file could hold, since a negative number
+  does not lex, so `Logex.Configuration.check/1` raises it as the host's; the other two a
+  file could hold, and `check/1` returns them as diagnostics, each cited at its line when
+  a file gives one. `new!/1` raises them all, the host's first.
 
 ## Changing a running program
 
@@ -444,6 +586,10 @@ A program built as data rather than text, through `Logex.Compiler.instructionize
 negative literal or a timer's preset given from Elixir. So every program an edit takes
 could be written as a `.ld` file.
 
+An edit takes one lone instance. An instance a configuration runs is not edited until
+OE-2, which edits a running configuration: a `%Logex.Runtime{}` is opaque, and changes
+only through its API.
+
 ## Running it
 
 The toolchain this repository documents and pins is **Elixir 1.20 on Erlang/OTP 28**
@@ -476,7 +622,7 @@ mix format
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
 - `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
 - `CLAUDE.md` — commands and conventions for anyone (or anything) editing the code
-- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5 and the online edit of one with OE-1; configurations and tasks are Milestone 2)
+- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, and configurations with periodic tasks, from Elixir data, with M2-1; the rest of Milestone 2 is designed)
 - [`docs/defladder.md`](docs/defladder.md) — a study of an Elixir-embedded `defladder` DSL: what Nx's `defn` does, an executed spike, and a recommendation (proposed, not adopted)
 
 ## License

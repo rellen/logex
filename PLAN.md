@@ -16,8 +16,9 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
-§1, §3·M1-1 to M1-6 and §3's OE-1 have been brought current. Milestone 2 and OE-2 are
-still forward work; Milestone 2 was designed on 2026-10-02 (§3).
+§1, §3·M1-1 to M1-6, §3's OE-1 and §3's M2-1 have been brought current. Milestone 2 was
+designed on 2026-10-02 (§3), and its first item, M2-1, landed the same day; the rest of
+Milestone 2 and OE-2 are still forward work.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -70,6 +71,11 @@ an evaluator that is private to it (B5). The stage functions stay public for the
 - A staged online edit of one running instance (OE-1): `Logex.Edit` accepts a candidate
   beside the running program, then tests, untests, assembles or cancels it between two
   scans, moving the state by name and reporting every step.
+- A configuration built from Elixir data (M2-1): `Logex.Configuration` holds program
+  types, periodic tasks, globals located at input and output points or not, program
+  instances and their connections, checked by one validator, and `Logex.Runtime` runs it
+  as one resource, a cycle at a time on the injected clock, by priority, with missed
+  periods counted and reported.
 
 These were each verified directly:
 
@@ -1309,8 +1315,8 @@ spike, 88 in the function blocks' and 127 in the configuration file's, every one
 one (owed below). The scheduler's and the function blocks' spikes, merged, pass together:
 582 tests on Elixir 1.20.4. The maintainer took decisions 30–40 as recommended but 35,
 the configuration file's extension, choosing `.logex`, outside the options offered; the
-pass's routine choices, the rules of §4.10, were all taken as recommended. None of it has
-landed.
+pass's routine choices, the rules of §4.10, were all taken as recommended. M2-1 landed
+on 2026-10-02 (below); nothing after it has.
 
 **The order (decision 30):** the design record, then M2-1, M2-5, M2-2, M2-3, M2-4 and
 M2-6.
@@ -1372,6 +1378,28 @@ the configuration file's must be built that way before they land.
   The first five are built as a gated series on copies of `47319f7`: 466, 504, 509, 510
   and 514 tests, from 430, each commit's rules red in its own tree. The second's prose
   names `restart/2` early and is trimmed when it lands.
+
+  **Status: DONE — landed 2026-10-02**, as the six commits of its landing order: (1)
+  `Logex.Configuration` and the `:configure` stage, `44bb4dd`; (2) the resource with
+  periodic tasks, `5a7db68`; (3) `restart/2`, `0216b96`; (4) the contract walk over a
+  configuration, `31bbf6a`; (5) the Done-when end to end, `cedfdb3`; (6) the documents,
+  the commit after it, among them the README's "A configuration", whose output is a real
+  run, and its "Changing a running program", which says that a configured plant is not
+  edited until OE-2: `Logex.Edit` edits a lone instance, and `%Logex.Runtime{}` changes
+  only through its API. 522 tests pass on Elixir 1.20.4 (8 of them doctests), up from
+  430. The messages of (1) to (3) record their mutation tables, every rule each adds
+  reverted alone in its own tree and the full suite judged by exit code: 148 rules (89,
+  52 and 7), every one red. (4) and (5) add no rule; each reverted the 65 rules of (1) to
+  (3) a configuration runs on in its own tree, every one red, the walk failing 50 of them
+  and the Done-when 19. The walk passed with its full reach under seeds 1 to 30 besides
+  its own. (1) applies what the spike did not follow: decision 36, `check/1` raising one
+  `ArgumentError` with every host mistake, a line each, the line between a host's mistake
+  and a diagnostic drawn by what a configuration's text can hold, its message deciding
+  each of the spike's messages by it; decision 37's bound; and the record's rule on
+  lines. Two words differ from the spike besides: an instance named whole is "a program
+  instance of `motor`", and a negative initial value is refused for a bool as for a dint.
+  Every growth bound was read over 32 runs; the cycle at 16x the instances now has 20.5,
+  where the spike's 19.5 sat less than a fifth above the measured top.
 - **M2-2 · The configuration file, task-less.** A separate `.logex` file (the extension
   was a placeholder until decision 35 chose it on 2026-10-02): `var_global`, plain and
   located (`at panel.q.0`), `program <inst> <type>`, arrow-free connections (`m1.start
@@ -2250,9 +2278,12 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    M1-6, as a declared instance on the injected clock; TOF, TP, RTO, RES and the counters
    are open, and reuse its `%Logex.FbType{}`.*
 2. **A scan loop and I/O image.** The input image, the clock and the first-scan bit landed
-   with M1-5 (`put_inputs/3`, `%Logex.Scan{}`). There is no loop: the host calls each scan.
-   Scheduling is Milestone 2's (M2-1), and a wall-clock runner comes after it
-   (`docs/organisation.md` §5).
+   with M1-5 (`put_inputs/3`, `%Logex.Scan{}`). The scheduler landed with M2-1:
+   `Logex.Runtime.cycle/3` steps a configuration's resource by the time the host says has
+   passed, merging the input points that changed into a kept image, running the due
+   tasks' instances by priority and returning every output point. A wall-clock runner,
+   the only code that will read a clock, comes after Milestone 2 (`docs/organisation.md`
+   §5).
 3. **A tag table with types.** Landed with M1-3.
 4. **Comparisons (`eq ne lt gt le ge` — IEC names, see `docs/naming.md`)** — high value,
    low cost. *Landed with M1-6, on dints.*
@@ -2264,5 +2295,5 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    indexed loop.
 6. **Surface syntax: comments, negative literals, structured addressing.** See §5.
 7. **Program organisation: configurations, tasks, program instances, I/O mapping.**
-   Decided in §5; Milestone 2 (§3), designed 2026-10-02; the model in
-   `docs/organisation.md`.
+   Decided in §5; Milestone 2 (§3), designed 2026-10-02, its first item, M2-1, landed the
+   same day; the model in `docs/organisation.md`.

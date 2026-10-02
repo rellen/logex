@@ -1,11 +1,14 @@
 # Program organisation: the IEC software model, in logex's dialect
 
-**Status: decided; the Milestone-1 changes in §6.1 landed with M1-3, M1-5 and M1-6, and the
-organisation itself — configurations, tasks, I/O mapping, Milestone 2 — is not yet
-implemented. How a running controller is changed, §4.9, was decided on 2026-10-01, and
-its first step, OE-1's edit of one program instance, was designed there (decisions 21–29)
-and landed as `Logex.Edit` the same day. Milestone 2 was designed on 2026-10-02 (§4.10,
-decisions 30–40), and none of it has landed.** On 2026-09-28 the maintainer adopted the
+**Status: decided; the Milestone-1 changes in §6.1 landed with M1-3, M1-5 and M1-6.
+How a running controller is changed, §4.9, was decided on 2026-10-01, and its first step,
+OE-1's edit of one program instance, was designed there (decisions 21–29) and landed as
+`Logex.Edit` the same day. Milestone 2 was designed on 2026-10-02 (§4.10, decisions
+30–40), and its first item, M2-1, landed the same day: configurations with periodic
+tasks, globals at I/O points and connections, built from Elixir data
+(`Logex.Configuration`) and run as one resource (`Logex.Runtime.start/1` and `cycle/3`).
+The rest of the organisation, the configuration file, shared globals, event tasks and
+function blocks, is not yet implemented.** On 2026-09-28 the maintainer adopted the
 direction in §1 (IEC's software model, in logex's dialect: the hierarchy, task-style
 execution and I/O mapping), deferred routines, and took decisions 1–14 in §7 as
 recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1
@@ -715,6 +718,10 @@ Logex.Runtime.get(rt, "m1.t1.acc")                                              
 `Logex.Runtime.restart(rt, :cold | :warm) :: rt`, which restarts every instance through
 `restart/3` and keeps the clock and the input image, and `Logex.Runtime.overlaps(rt) ::
 %{task => non_neg_integer}`. Decision 37 bounds a task's priority at 0 to 65535.)*
+*(Landed with M2-1 on 2026-10-02: `start/1`, `cycle/3`, `next_due_in/1`, `get/2`,
+`restart/2` and `overlaps/1`, the configuration built with `Logex.Configuration.new!/1`.
+`get/2` returns the value at the path, and raises `ArgumentError` for a path that names
+no global, tag or public member, as every host mistake does.)*
 
 `scan/2` and a one-line configuration must give identical outputs for the README program.
 A test pins that, or the two runtimes drift apart. PLAN M1-5 defines `scan/3` as "n
@@ -927,21 +934,33 @@ priority, which the conventional family lets logic write while it runs. *(A chan
 interval makes the task next due at `min(next_due, now + new interval)`: decision 40.
 From M2-5, a function block's body and members, by decision 31.)*
 
-**What Milestone 2 must keep, so that this needs no rework** (`PLAN.md` M2-1):
-- the runtime value holds plain data only: no funs, pids or refs;
+**What Milestone 2 must keep, so that this needs no rework** (`PLAN.md` M2-1). *(Checked
+against M2-1 as it landed, 2026-10-02: each item it can meet, it meets, as marked.)*
+- the runtime value holds plain data only: no funs, pids or refs; *(met: a
+  `%Logex.Runtime{}` is plain data at `start/1`, after cycles and after `restart/2`,
+  which `scheduler_test.exs` pins)*
 - every piece of runtime state is keyed by name, never by position; program instances are
   held flat, keyed by instance name, never nested under a task; execution order is a list
-  in the configuration;
+  in the configuration; *(met: globals, instances and tasks are each a map by name, and a
+  task's instances run in the order of the configuration's `instances` list)*
 - each M2 item writes its rule for a new piece of state once, used by `start/1` and by an
   edit that adds one, with the edit's exceptions listed: `ons`, an event task's trigger and
-  `first`;
-- one checked constructor, which the configuration file's reader feeds;
+  `first`; *(met for M2-1's pieces: `Logex.Configuration.initial/1` for a global and
+  `Logex.Runtime`'s one-rule section for the clock, an instance and a task; an event
+  task's trigger is M2-6's)*
+- one checked constructor, which the configuration file's reader feeds; *(met:
+  `Logex.Configuration.check/1`, which `new!/1` and `start/1` run; M2-2's reader is to
+  feed it)*
 - `start/1` builds each instance through the same constructor as `Runtime.instance/1`,
   so an instance's `first`, its one-shot block list and any field it gains later cannot
-  drift between the two (OE-1; fix F14 in §7);
+  drift between the two (OE-1; fix F14 in §7); *(met)*
 - `%Logex.Runtime{}` is opaque, and its configuration changes only through the API;
-- one copy of each global's value;
-- the events `cycle/3` returns are an open set, which a host must tolerate.
+  *(met: its type is `@opaque`, and nothing in M2-1 changes its configuration, so a
+  configured plant is not edited until OE-2)*
+- one copy of each global's value; *(met for M2-1's globals, one value each in the
+  resource; M2-4's `var_external` keeps it by merging the global in around each scan)*
+- the events `cycle/3` returns are an open set, which a host must tolerate. *(met:
+  `Logex.Runtime`'s moduledoc says so)*
 
 **OE-1's design: a staged edit of one program instance.** Designed on 2026-10-01 against
 `730cb16`, and landed the same day as `PLAN.md` OE-1, in the eight commits after
@@ -1171,8 +1190,8 @@ first three, and `Logex.Edit`'s the rest):
   not know.
 
 **One rule for new state.** `Logex.Program.initial_env/1` stays the one rule.
-`Runtime.instance/1`, `restart/3`, the edit's three start rules and, later, M2-1's
-`start/1` all start a tag by it, and `start/1` builds each instance through the same
+`Runtime.instance/1`, `restart/3`, the edit's three start rules and, since M2-1,
+`start/1` and `restart/2` all start a tag by it, and `start/1` builds each instance through the same
 constructor as `instance/1` (fix F14). Its doc lists the edit's exceptions, for state an
 instance already holds around the new piece:
 - `first` stays false;
@@ -1188,7 +1207,9 @@ instance already holds around the new piece:
   so reported;
 - M2-6 will add an event task's trigger.
 
-*Milestone 2's state* (designed 2026-10-02, §4.10; not landed). From M2-5 a function
+*Milestone 2's state* (designed 2026-10-02, §4.10; M2-1's pieces landed with it on
+2026-10-02, and `Logex.Runtime`'s moduledoc gives their rules as built; the rest have
+not). From M2-5 a function
 block instance is state of the program instance that holds it: `Program.initial_env/1`
 starts it, recursively; an energised `cal` runs it and a false one leaves it alone;
 `restart/3` starts it again; and a switch moves it member by member, by path (decisions 31
@@ -1333,7 +1354,8 @@ F3, the held values of F4) and still costs less than one scan.
 
 ### 4.10 Milestone 2's design (designed 2026-10-02)
 
-**Designed 2026-10-02; none of it has landed.** A design pass spiked Milestone 2 in three
+**Designed 2026-10-02; M2-1 landed the same day (`PLAN.md` M2-1), and nothing after it
+has.** A design pass spiked Milestone 2 in three
 tracks on copies of `47319f7`, on Elixir 1.20.4 / OTP 28: the scheduler from Elixir data
 (M2-1); user function blocks (M2-5); and the configuration file, shared globals and event
 tasks (M2-2, M2-3, M2-4, M2-6). Each track was reviewed for correctness and for fit with
@@ -1360,7 +1382,15 @@ are receipts, and pin nothing.
   Milestone 2, and `%Logex.Runtime{}` is opaque and changes only through the API (§4.9).
   `Logex.Edit` still edits a lone instance.
 
-**M2-1 · The scheduler, from Elixir data.**
+**M2-1 · The scheduler, from Elixir data.** *(Landed 2026-10-02, as these rules
+say. Two readings the landing made, each in `Logex.Configuration`'s moduledoc and pinned:
+`check/1` raises one `ArgumentError` with every host mistake, a line each, where
+`new!/1` gives its own problems first, then those, then the diagnostics; and decision
+36's line is drawn by what a configuration's text can hold, so a name, location, type or
+task the lexer does not read as one token, a negative or non-integer number, a global's
+type other than `:bool` or `:dint`, and a connection whose instance and member make no one
+path are the host's, while a name with `.` parts, an interval or priority out of range or
+missing, and every unknown name stay diagnostics.)*
 - *The §4.4 checks land here.* Every check M2-1's data can express, over tasks, globals,
   located points, program instances and connections, lands with M2-1 in
   `Logex.Configuration.check/1`, the one validator, pinned by whole diagnostic lists from
@@ -1715,7 +1745,8 @@ each again from source; §4.10.)* Each rule is checked by reverting it (CLAUDE.m
 - delete the input-point check → a test fails;
 - drop priority ordering → a test fails.
 
-**M2-1 · The scheduler, built from Elixir data. No syntax.**
+**M2-1 · The scheduler, built from Elixir data. No syntax.** *(Landed 2026-10-02;
+`PLAN.md` M2-1.)*
 - Keeps §4.9's constraints, so online edit needs no rework.
 - `%Logex.Configuration{}` with a pure, checked constructor.
 - `Runtime.start/cycle/next_due_in/get`.
