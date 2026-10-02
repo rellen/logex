@@ -692,6 +692,22 @@ defmodule Logex.RuntimeTest do
       assert Enum.sort(Runtime.__info__(:functions)) ==
                [call: 4, instance: 1, put_inputs: 3, restart: 3, scan: 2, scan: 3]
 
+      # M2-1: the configuration, its one validator and its constructor from Elixir.
+      assert Enum.sort(Logex.Configuration.__info__(:functions)) ==
+               [__struct__: 0, __struct__: 1, check: 1, initial: 1, location: 1, new!: 1]
+
+      assert Enum.sort(Map.keys(Logex.Configuration.__struct__())) ==
+               [:__struct__, :connections, :file, :globals, :instances, :name, :programs] ++
+                 [:tasks, :warnings]
+
+      for {module, keys} <- [
+            {Logex.Configuration.Task, [:interval, :line, :name, :priority]},
+            {Logex.Configuration.Global, [:at, :initial, :line, :name, :type]},
+            {Logex.Configuration.Instance, [:line, :name, :task, :type]},
+            {Logex.Configuration.Connection, [:instance, :line, :member, :to]}
+          ],
+          do: assert(Enum.sort(Map.keys(Map.from_struct(struct(module)))) == keys)
+
       assert Enum.sort(Logex.Compiler.__info__(:functions)) ==
                [instructionize: 1, instructionize: 2, instructions: 0, parse: 1, tokenize: 1]
 

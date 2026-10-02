@@ -7,10 +7,14 @@ defmodule Logex.Diagnostic do
   lines, so the line alone names the rung.
 
   - `stage` is `:file` (reading the file, or its name), `:lex`, `:parse`, `:validate`
-    (the declarations, instructions and tags, `Logex.Compiler.instructionize/2`) or
-    `:edit` (a candidate refused beside the running program, `Logex.Edit.accept/3`, OE-1).
+    (the declarations, instructions and tags, `Logex.Compiler.instructionize/2`),
+    `:edit` (a candidate refused beside the running program, `Logex.Edit.accept/3`, OE-1)
+    or `:configure` (a configuration's tasks, globals, instances and connections,
+    `Logex.Configuration.check/1`, M2-1).
   - `line` is nil only for a `:file` problem that no line holds, such as an unreadable
-    file, and for an `:edit` problem with a tag declared from Elixir, which has no line.
+    file, for an `:edit` problem with a tag declared from Elixir, which has no line, and
+    for a `:configure` problem with an element built from Elixir, or with the
+    configuration as a whole.
   - `column` is set by the front end, which alone still knows it; `file` by
     `Logex.compile_file/1`. An `:edit` problem has no file even for a candidate read from
     one, since a `%Logex.Program{}` keeps none: a gap Milestone 2's configuration edit
@@ -21,7 +25,7 @@ defmodule Logex.Diagnostic do
   @enforce_keys [:stage, :line, :message]
   defstruct [:stage, :line, :message, file: nil, column: nil, severity: :error]
 
-  @type stage :: :file | :lex | :parse | :validate | :edit
+  @type stage :: :file | :lex | :parse | :validate | :edit | :configure
   @type t :: %__MODULE__{
           stage: stage,
           line: pos_integer | nil,
