@@ -207,9 +207,14 @@ defmodule Logex.ConfigurationTest do
   end
 
   describe "check/1 raises a host's mistake" do
-    test "takes a configuration" do
-      assert_raise ArgumentError, "expected a %Logex.Configuration{}, got: 5", fn ->
-        Configuration.check(opaque(5))
+    # A map, another struct and a configuration's fields as a plain map are refused as 5
+    # is: being a map makes nothing a configuration, so nothing reads a key it lacks.
+    test "takes a configuration", %{seal: seal} do
+      fields = Map.from_struct(Configuration.new!(base(seal)))
+
+      for value <- [5, %{}, seal, fields] do
+        message = "expected a %Logex.Configuration{}, got: #{inspect(value)}"
+        assert_raise ArgumentError, message, fn -> Configuration.check(opaque(value)) end
       end
     end
 
@@ -291,7 +296,8 @@ defmodule Logex.ConfigurationTest do
     end
 
     # A map that names a struct but lacks one of its keys, as Map.delete/2 makes one, is
-    # not that struct: refused as any other value is, so nothing reads the missing key.
+    # not that struct, even with another key in the lacking one's place: refused as any
+    # other value is, so nothing reads the missing key.
     test "a configuration or an element that lacks a key of its struct is not that struct",
          %{seal: seal} do
       config = Configuration.new!(Keyword.put(base(seal), :tasks, [task("fast", 10, 0)]))
@@ -303,25 +309,30 @@ defmodule Logex.ConfigurationTest do
             connections: "a connection"
           ],
           element = hd(Map.fetch!(config, part)),
-          key <- Map.keys(element) -- [:__struct__] do
-        lacking = Map.delete(element, key)
+          key <- Map.keys(element) -- [:__struct__],
+          other <- [nil, :extra] do
+        lacking = instead(element, key, other)
         message = "#{what} is a %#{inspect(element.__struct__)}{}, got: #{inspect(lacking)}"
         assert mistakes(Map.put(config, part, [lacking])) == [message]
         # new!/1 refuses a line on an element from Elixir, but not on one that is no element.
-        lined = Map.delete(%{element | line: 1}, key)
+        lined = instead(%{element | line: 1}, key, other)
         fields = Keyword.put(base(seal), :tasks, [task("fast", 10, 0)])
 
         assert hd(refused(Keyword.put(fields, part, [lined]))) ==
                  "#{what} is a %#{inspect(element.__struct__)}{}, got: #{inspect(lined)}"
       end
 
-      for key <- Map.keys(config) -- [:__struct__] do
-        lacking = Map.delete(config, key)
+      for key <- Map.keys(config) -- [:__struct__], other <- [nil, :extra] do
+        lacking = instead(config, key, other)
         message = "expected a %Logex.Configuration{}, got: #{inspect(lacking)}"
         assert_raise ArgumentError, message, fn -> Configuration.check(lacking) end
         assert_raise ArgumentError, message, fn -> Logex.Runtime.start(lacking) end
       end
     end
+
+    # A struct without `key`, and with `other` in its place unless that is nil.
+    defp instead(struct, key, nil), do: Map.delete(struct, key)
+    defp instead(struct, key, other), do: Map.put(Map.delete(struct, key), other, 1)
 
     test "a line is a positive integer, or nil", %{seal: seal} do
       config = Configuration.new!(base(seal))
@@ -589,22 +600,33 @@ defmodule Logex.ConfigurationTest do
     end
 
     # Such an element is left out of every diagnostic, which would cite it by a name no
-    # text can say, so its other fields are not checked.
-    test "a global's or an instance's name the lexer does not read as one token is the " <>
-           "host's mistake",
+    # text can say, so none of its other fields is checked: here a task's interval and
+    # priority, a global's initial value, location and address, and an instance's program
+    # and task, each out of its rule, give nothing.
+    test "a task's, a global's or an instance's name the lexer does not read as one token " <>
+           "is the host's mistake",
          %{seal: seal} do
       fields =
         Keyword.merge(base(seal),
-          globals: base(seal)[:globals] ++ [%Global{name: "", type: :bool, initial: 7}],
+          tasks: [task(:t, 0, 70_000)],
+          globals:
+            base(seal)[:globals] ++
+              [
+                %Global{name: "", type: :bool, initial: 7, at: "nowhere"},
+                %Global{name: "a b", type: :bool, at: "panel.i.0"}
+              ],
           instances: [
             %Instance{name: "m", type: "seal"},
-            %Instance{name: "n//x", type: "zzz"},
+            %Instance{name: "n//x", type: "zzz", task: "qqq"},
             %Instance{name: "p.q", type: "seal"}
           ]
         )
 
       assert refused(fields) == [
+               ":t cannot name a task: a name is a letter or `_`, then letters, digits or `_`",
                ~s|"" cannot name a global: a name is a letter or `_`, then letters, digits or `_`|,
+               ~s|"a b" cannot name a global: a name is a letter or `_`, then letters, digits | <>
+                 "or `_`",
                ~s|"n//x" cannot name a program instance: a name is a letter or `_`, then | <>
                  "letters, digits or `_`",
                ~s|"p.q" cannot name a program instance: a name is a letter or `_`, then | <>
@@ -1157,6 +1179,39 @@ defmodule Logex.ConfigurationTest do
                  "programs are `seal`",
                "plant.logex: line 7: program instance `m`: there is no task `qqq`: the tasks " <>
                  "are `t`"
+             ]
+    end
+
+    # A duplicate is not recovered: a use of its name is checked against the global that
+    # kept the name, the first in line order, never the later one. So `m.start`, a bool,
+    # reads the bool `pb`, not the dint; `m.motor` drives the `k` that is no input point;
+    # and `m.sp`, a dint, cannot drive the bool `pb`.
+    test "a use of a refused name finds the element that kept it", %{seal: seal} do
+      config = %Configuration{
+        name: "plant",
+        file: "plant.logex",
+        programs: %{"seal" => seal},
+        globals: [
+          %Global{name: "pb", type: :bool, line: 1},
+          %Global{name: "pb", type: :dint, line: 2},
+          %Global{name: "k", type: :bool, line: 3},
+          %Global{name: "k", type: :bool, at: "panel.i.0", line: 4}
+        ],
+        instances: [%Instance{name: "m", type: "seal", line: 5}],
+        connections: [
+          %Connection{instance: "m", member: "start", to: "pb", line: 6},
+          %Connection{instance: "m", member: "stop", to: 0, line: 7},
+          %Connection{instance: "m", member: "motor", to: "k", line: 8},
+          %Connection{instance: "m", member: "sp", to: "pb", line: 9}
+        ]
+      }
+
+      assert formatted(config) == [
+               "plant.logex: line 2: `pb` is already the name of a global (line 1): tasks, " <>
+                 "globals and program instances share one namespace",
+               "plant.logex: line 4: `k` is already the name of a global (line 3): tasks, " <>
+                 "globals and program instances share one namespace",
+               "plant.logex: line 9: `m.sp` is a dint, but `pb` is a bool (line 1)"
              ]
     end
   end

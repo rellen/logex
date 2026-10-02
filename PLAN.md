@@ -1428,6 +1428,15 @@ the configuration file's must be built that way before they land.
   rule; and two comments in `Logex.Configuration` claiming one message per host mistake,
   which `new!/1` does not keep where a bad name leaves a var_input unconnected, now
   stating the rule the code keeps: a bad name is not recovered, as on a `.ld` line.
+
+  A check of those fixes confirmed four findings, three once the two found twice are
+  merged, all in what the tests saw and none in `lib/`'s behaviour; the commit after the
+  fixes pins each. No test held a use of a duplicate global's name to the global that
+  kept the name. The filter that keeps an element named by the host's mistake out of
+  every diagnostic was pinned as a whole, not for a task's interval and priority, a
+  global's location and address, or an instance's task alone. And no test gave `check/1`
+  a plain map or another struct, or gave it or `new!/1` an element that lacks a key and
+  has another in its place. The suite is at 528 tests (8 doctests).
 - **M2-2 · The configuration file, task-less.** A separate `.logex` file (the extension
   was a placeholder until decision 35 chose it on 2026-10-02): `var_global`, plain and
   located (`at panel.q.0`), `program <inst> <type>`, arrow-free connections (`m1.start
