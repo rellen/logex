@@ -17,7 +17,7 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
 §1, §3·M1-1 to M1-6 and §3's OE-1 have been brought current. Milestone 2 and OE-2 are
-still forward work.
+still forward work; Milestone 2 was designed on 2026-10-02 (§3).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -136,7 +136,8 @@ stage-boundary mismatch. M0-1 (`690fc2d`) reconciled the fixtures on `:int_lit` 
 M0-1 `690fc2d`, M0-2 `03c10e0`, M0-3 `dde8c1d`, M0-4 `3f3b104` (PR #3, merge `22bc81a`);
 M0-5 `b65e756` (PR #4, merge `863af6f`). Re-verified on `main` after M1-1: `mix test` →
 `27 tests, 0 failures`. M1-1 to M1-6 and §3's OE-1, a staged edit of one program
-instance, have landed since; the next unstarted work is Milestone 2.
+instance, have landed since; the next unstarted work is Milestone 2, designed on
+2026-10-02.
 
 The items are kept in full because their diagnoses are the record of *why* the code looks
 the way it does — why the parser drops empty rungs, why `CLAUDE.md` once documented an
@@ -941,7 +942,10 @@ design:
   the text. A lex or parse error is one diagnostic with its column; every later mistake is
   reported, in line order, with M1-2's and M1-3's messages unchanged.
   `Logex.Compiler.tokenize/1` and `parse/1` keep their own error shapes, for the golden
-  record.
+  record. *(Milestone 2's design, 2026-10-02: from M2-5, `compile/2` also takes `types:`,
+  a function block's file compiles to `{:ok, %Logex.FbType{}}`, and `compile_file/1`
+  loads the blocks a program names from beside its file; `docs/organisation.md` decision
+  34.)*
 - **One diagnostic.** `%Logex.Diagnostic{stage:, line:, message:, file:, column:,
   severity:}`: `stage` is `:file | :lex | :parse | :validate`, and `severity` is `:error`
   or `:warning`. `severity` goes beyond the decided three fields on purpose, in the same one
@@ -951,7 +955,7 @@ design:
   basename that is not shaped like a name (a letter or `_`, then letters, digits or `_`) is
   a `:file` diagnostic, and the source is still compiled. Names are checked for shape only:
   reserved words are scoped by file kind (`docs/organisation.md` decision 10), and a program
-  type's name is never spelled in a `.ld` body, so the `.lcf` words wait for M2-2.
+  type's name is never spelled in a `.ld` body, so the `.logex` words wait for M2-2.
 - **Warnings**, only when the program compiles, never for a tag declared from Elixir: a tag
   declared but used by no rung; a `var_output` no rung writes ("it stays at" its initial
   value); a second `ote` on one tag.
@@ -1292,15 +1296,49 @@ decisions were all taken as recommended). *(Its §7 has since gained decisions 1
 online edit, taken on 2026-10-01: 18, 28 and 29 depart from their recommendations and 19
 had none; see "Online edit — decided 2026-10-01".)* Each item surveys its new words in
 `docs/naming.md` first, lands green, and pins every rule with a test that fails when the
-rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
+rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1. *(Ordered
+2026-10-02 by decision 30, below: M2-5 lands after M2-1.)*
+
+**Designed 2026-10-02** (`docs/organisation.md` §4.10, "Milestone 2's design", and its §7
+decisions 30–40; "decision N" in this section is that §7's). A design pass spiked
+Milestone 2 in three tracks on copies of `47319f7`: the scheduler (M2-1); user function
+blocks (M2-5); and the configuration file, shared globals and event tasks (M2-2, M2-3,
+M2-4, M2-6). Each track was reviewed for correctness and for fit, then revised, and each
+reverted every rule it adds alone under its full suite: 113 rules in the scheduler's
+spike, 88 in the function blocks' and 127 in the configuration file's, every one red but
+one (owed below). The scheduler's and the function blocks' spikes, merged, pass together:
+582 tests on Elixir 1.20.4. The maintainer took decisions 30–40 as recommended but 35,
+the configuration file's extension, choosing `.logex`, outside the options offered; the
+pass's routine choices, the rules of §4.10, were all taken as recommended. None of it has
+landed.
+
+**The order (decision 30):** the design record, then M2-1, M2-5, M2-2, M2-3, M2-4 and
+M2-6.
+- **M2-1 first**, decision 1's default. M2-5's Done-when then stands as written: its
+  `m1.s2.run` is read through M2-1's `get/2`.
+- **M2-5 before M2-2,** so the configuration file's reader, its loader and the IR walk
+  are written against `cal` from their first commit. In the other order a hand merge of
+  the spikes failed at four seams: a walk of a program's writes that raised on `cal`, a
+  loader that put a function block type among the programs, a block's `var_external` that
+  raised `FunctionClauseError`, and two loaders.
+- **Then the text items in turn:** M2-3's task lines build on M2-2's reader, M2-4's checks
+  on the IR walk that is its first commit, and M2-6's event tasks on M2-3's task lines.
+  The walk lands before the first check that reads a program's writes or timers.
+
+Each commit lands green under the full gate, with its mutation rows in its message, every
+rule it adds reverted alone. Only M2-1's commits were built as a gated series; M2-5's and
+the configuration file's must be built that way before they land.
 
 - **M2-1 · The scheduler, from Elixir data, no syntax.** `%Logex.Configuration{}`,
   `Logex.Runtime.start/cycle/next_due_in/get`, periodic and task-less instances,
   copy-in/copy-out, overlap events. *Done when* a configuration built in Elixir with a 10
-  ms task, a 30 ms task and a task-less instance, cycled for one simulated second by an
+  ms task, a 30 ms task and a task-less instance, cycled every 10 ms from 0 to 990 ms by an
   injected clock, runs each instance exactly as often as its task dictates, in priority
   order; a late cycle yields one `{:overlap, …}` and no lost phase; the README program
   gives identical outputs through `scan/2` and through a one-instance configuration.
+  *(Worded 2026-10-02: "cycled every 10 ms from 0 to 990 ms" was "cycled for one
+  simulated second", which did not say how the clock is stepped. The counts are 100, 34
+  and 100 runs.)*
   *(Online edit, 2026-10-01: M2-1 also keeps `docs/organisation.md` §4.9's constraints,
   so OE-2 needs no rework: the runtime value holds plain data only; state is keyed by name,
   program instances are held flat and never nested under a task, and execution order is a
@@ -1311,9 +1349,32 @@ rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
   adds one: `start/1` builds each instance through the same constructor as
   `Runtime.instance/1`, so an instance's `first`, its one-shot block list and any field it
   gains later cannot drift between the two.)*
-- **M2-2 · The configuration file, task-less.** A separate `.lcf` file (the extension is
-  still a placeholder; choose it before this item lands): `var_global`, plain and located
-  (`at panel.q.0`), `program <inst> <type>`, arrow-free connections (`m1.start
+
+  *Designed 2026-10-02* (`docs/organisation.md` §4.10, M2-1). The scope widens twice,
+  each annotated where it was decided: every `docs/organisation.md` §4.4 check that M2-1's
+  data can express, over tasks, globals, located points, instances and connections, lands
+  here in `Logex.Configuration.check/1`, pinned from data, where M2-2 had them; and
+  `restart/2` and `overlaps/1` join §4.6's API (decision 38). A host mistake no text can
+  say raises `ArgumentError` (decision 36), and a priority is 0 to 65535 (decision 37).
+  `CLAUDE.md`'s rule for new state extends to `%Logex.Runtime{}`. A configured plant is
+  not edited until OE-2: `Logex.Edit` edits a lone instance, and `%Logex.Runtime{}`
+  changes only through the API. It lands as:
+  1. `Logex.Configuration` and the `:configure` stage: the element structs, `check/1`,
+     `new!/1`, `location/1` and `initial/1`;
+  2. the resource with periodic tasks: `%Logex.Runtime{}`, `start/1`, `cycle/3`,
+     `next_due_in/1`, `overlaps/1` and `get/2`;
+  3. `restart/2`;
+  4. the contract walk over a configuration, in `api_contract_test.exs`;
+  5. the Done-when end to end, with the walks of the README's examples;
+  6. the documents, among them the README's "Changing a running program", which says that
+     a configured plant is not edited until OE-2.
+
+  The first five are built as a gated series on copies of `47319f7`: 466, 504, 509, 510
+  and 514 tests, from 430, each commit's rules red in its own tree. The second's prose
+  names `restart/2` early and is trimmed when it lands.
+- **M2-2 · The configuration file, task-less.** A separate `.logex` file (the extension
+  was a placeholder until decision 35 chose it on 2026-10-02): `var_global`, plain and
+  located (`at panel.q.0`), `program <inst> <type>`, arrow-free connections (`m1.start
   pb_start_1`), every `var_input` connected, one driver per sink. *Done when* two instances
   of one `.ld` program type, wired in a configuration file to different input and output
   points, run for N cycles from one input image and keep independent state; a mis-wired,
@@ -1322,23 +1383,68 @@ rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
   `Logex.compile_file/1` refuses anything but `.ld` with a `:file` diagnostic. Until
   then it names a program after its basename less the last extension, whatever that is,
   and `test/logex_test.exs` pins that; its `seal.txt` assertion flips with this item.
+
+  *Designed 2026-10-02* (§4.10, M2-2). Two departures from the scope above, each annotated
+  where it was decided: the §4.4 checks M2-1's data can express land with M2-1, and M2-2
+  asserts each again as a whole diagnostic list from source; and the loader is M2-5's, one
+  memo per configuration. The file is read by a recursive descent over `Logex.Lexer`'s
+  tokens and printed back with an exact round trip. It reserves `program var_global at`
+  in the configuration file. It lands as:
+  1. the `program`, `var_global` and `at` stanzas;
+  2. `compile_file/1` takes only `.ld`, as a gate in front of M2-5's loader;
+  3. `Logex.Configuration.Text`: the reader, the text's own definition of what a line can
+     say, and the printer; it reserves the words, and each message that names a word
+     lands with it;
+  4. the configuration file's checks as rows of M2-1's `check/1`, in the file's words,
+     with one diagnostic per instance for its unconnected var_inputs;
+     `Configuration.compile/3`; every M2-1 check asserted again from source; the
+     public-surface pin of `Logex.Configuration` rewritten once;
+  5. the configuration's loader, through M2-5's with one memo per configuration, refusing
+     a block's file on a `program` line;
+  6. the round trip, totality and growth;
+  7. a location in a `.ld` rung named as one;
+  8. the Done-when on M2-1's `cycle/3`, and the documents.
+
+  The fourth is the largest piece no spike built (owed, below).
 - **M2-3 · Periodic tasks in text.** `task <n> interval <ms> priority <p>` and `with`.
   *Done when* the plant of `docs/organisation.md` §4.4 without its event task, its `motor`
   the §4.2 one plus `var t1 ton` and a rung `xic motor ton t1 5000` (so no `estop`,
-  `var_external` or `cal`, which arrive with M2-4 and M2-5), driven for one simulated
-  second, runs `m1` 100 times and `m2` 20 times, and each instance's `t1` times against
-  the one clock. *(M1-6: that motor compiles without a warning and times. Say how the
+  `var_external` or `cal`, which arrive with M2-4 and M2-5), cycled every 10 ms from 0 to
+  990 ms, runs `m1` 100 times and `m2` 20 times, and each instance's `t1` times against
+  the one clock. *(Worded 2026-10-02: "cycled every 10 ms from 0 to 990 ms" was "driven
+  for one simulated second".)*
+  *(M1-6: that motor compiles without a warning and times. Say how the
   inputs are timed: an instance sees an edge when a scan copies it in, so the equality
   holds per rising edge, when two instances see that edge at one time and the preset is a
   multiple of both periods. A timer that re-triggers itself repeats every preset plus two
   task periods, so its rate differs between tasks, as MatIEC's TON does.)*
+
+  *Designed 2026-10-02* (§4.10, M2-3). A priority is 0 to 65535 (decision 37), and the
+  item's documents state decision 40's rule for an interval OE-2 changes. It reserves
+  `task interval priority with`, and lands as: (1) the `task`, `interval`, `priority` and
+  `with` stanzas; (2) task lines and `with` turned on, with the warning for a task that
+  runs no instance; (3) the Done-when, on M2-1's scheduler, and the documents. The reader
+  is spiked.
 - **M2-4 · Shared globals.** `var_external` in `.ld`; type agreement (Ed 2 §2.4.3); no
   writes to an input point; a two-writer warning. *Done when* an e-stop declared once as
   a `var_global` and read by two instances through `var_external` stops both in the same
   cycle; a `var_external` with no matching global, or of another type, is a located
   diagnostic.
+
+  *Designed 2026-10-02* (§4.10, M2-4). One copy of each global: the scheduler merges each
+  `var_external`'s global into its instance's state before `call/4` and splits it off
+  after. A function block's file refuses `var_external`, a deliberate, reversible
+  departure from IEC. The two-writer warnings ride on the configuration's `warnings`. It
+  lands as: (1) B5's one IR walk, with public functions for which tags a program writes
+  and which timers it runs, knowing `cal` and reaching block bodies, and no change in
+  behaviour; (2) `var_external`: its stanza, the section and its `.ld` rules, and its
+  refusal in a block's file with a located diagnostic; (3) the binding checks and the two
+  writer warnings, from the walk, into M2-1's `check/1`; (4) one copy of a global at run
+  time, the Done-when and the documents. The walk, the block-file refusal and the
+  run-time copy are not spiked.
 - **M2-5 · User function blocks.** `function_block <name>` as a file's first line,
-  matching the file name;
+  matching the file name; *(its first rung since 2026-10-02: comments and blank lines may
+  come before it, §4.10)*
   instances (`var s1 seal`); `cal` with positional operands, rung power as EN, and nothing
   copied on a false EN; nesting; recursion is a diagnostic. *Done when* a seal-in written
   once as a function block and instantiated three times in one program behaves as three
@@ -1350,12 +1456,48 @@ rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1.
   catches up; the "no `ton` runs it" warning must say `cal` for a user type; `first` is
   the program instance's, so an `ons` inside a block frozen on the first scan is not held
   back when it first runs; which of a user block's members logic may write is open; and
-  `cal` on a built-in type should be refused.)*
+  `cal` on a built-in type should be refused.)* *(Answered 2026-10-02: no member of a user
+  block is written from outside it, by decision 33, and `cal` of a `ton` is refused,
+  naming the `ton` that runs it; the other notes stand as written.)*
+
+  *Designed 2026-10-02* (§4.10, M2-5). It lands after M2-1 (decision 30), so its
+  Done-when stands as written and its own test reads `get(rt, "m1.s2.run")`. The scope
+  above leaves out three things the design gives it, each annotated where it was decided:
+  the nested migration that `docs/organisation.md` §4.9 and OE-2 below assign to it, so a
+  program that holds blocks may change while it runs, by path (decision 31), a one-shot
+  inside a block blocked until a scan runs it (decision 32); the loader, ahead of M2-2,
+  `compile_file/1` finding `<word>.ld` beside the file and handing back the loaded blocks'
+  warnings (decision 34); and `types:` on `Logex.compile/2`, a block's file compiling to
+  `{:ok, %Logex.FbType{}}`. Fix F15 lands here: `%Logex.Program{}` gains a `file`. It
+  lands as:
+  1. the survey: the `function_block` and `cal` stanzas, and
+     `Logex.Declarations.kinds/0` with its naming test;
+  2. the IR walks learn a signature per instruction, with no change in behaviour;
+  3. blocks and `cal`, reserving `cal` in every `.ld`, in any case, and `function_block`
+     in a block's file; fix F15; the Done-when, through `get/2`; one message for a block
+     type given where a program goes, at every entry point, M2-1's `check/1` included;
+  4. the edit by path (decisions 31 and 32), in one push with the third, whose edit refuses
+     every change to a block;
+  5. the loader (decision 34);
+  6. the documents.
+
+  The spike holds the first five, not cut into commits. Fix F15, the `get/2` assertion,
+  the one message in `check/1` and the warnings of decision 34 are not built. A separate
+  commit after M2-5 excuses the uses of a declaration whose type is unknown.
 - **M2-6 · Event tasks.** `task <n> single <g> [interval <ms>] priority <p>`, fired by a
   rising edge, and in the first cycle if the trigger is already true; with `interval` too,
   it runs periodically only while the trigger is 0, plus a run on each edge (IEC rule 2). *Done when* an event task triggered
   from an input point runs once per rising edge, before lower-priority tasks due in the
   same cycle, and runs in cycle 1 if its trigger is already true.
+
+  *Designed 2026-10-02* (§4.10, M2-6). `single` with `interval` is decision 39; an event
+  task's due time, for the tie-break, is the cycle's `now`; a restart sets a trigger's
+  last sample to 0, and an edit keeps it. The warning for a `ton` in a program an event
+  task runs, on the configuration's `warnings`, covers a task with `interval` too and a
+  `ton` inside a block. It reserves `single`, and lands as: (1) `single`: its stanza, its
+  task lines, the warning from the walk, and `single` on `Logex.Configuration.Task`; (2)
+  edges at run time, the Done-when and the documents. The reader and the checks are
+  spiked; the edges at run time are not.
 
 The scheduling rules are decided too: PRIORITY on every task, 0 the highest; ties go to
 the earlier due time, then declaration order; no preemption; missed periods coalesced,
@@ -1363,7 +1505,8 @@ counted and reported; time injected in milliseconds, never read from a clock; re
 words scoped by file kind. Once a wall-clock runner exists, a watchdog fault is to stop
 scheduling, zero the output image once, report, and require an explicit restart: the
 recommended choice, confirmed when the runner is designed (`docs/organisation.md` §7,
-decision 14).
+decision 14). *(Since 2026-10-02 a priority is 0 to 65535, decision 37, and an event
+task's due time, for the tie-break, is the cycle's `now`.)*
 
 **Milestone 2 is done when** a configuration file on disk instantiates one `.ld` program
 type twice, with a function block inside it; wires the instances to declared I/O points
@@ -1371,6 +1514,39 @@ and to a shared global; schedules them under a periodic task, an event task and 
 runs deterministically for N cycles from an injected clock and input image, with the same
 outputs on every run; and reports every wiring, typing or scheduling mistake as a located
 diagnostic naming its file and line.
+
+**Owed, from the design (2026-10-02).**
+- **The port of the configuration checks into one validator.** The configuration
+  spike's checks stand in a validator of their own, which cannot be merged with M2-1's:
+  both add `lib/logex/configuration.ex`. M2-2's fourth commit ports them into M2-1's
+  `check/1` as rows, rewrites the public-surface pin once, and asserts every M2-1 check
+  again from source. Two device names that differ only in case are refused there, the one
+  check M2-1's data can express that M2-1 does not land; no spike built it.
+- **The seams between M2-5 and the configuration file** are planned, not built: the
+  configuration spike has no `cal`. Each commit at a seam checks it on the composed tree:
+  a `cal`'s outputs among a program's writes, a block's `ton` among its timers, a block's
+  file on a `program` line, a block's `var_external`, and one loader.
+- **Two run-time pieces were not spiked:** M2-4's one copy of a global, and M2-6's edges
+  with `single` and `interval`. Their rules are the design's text alone. A test of the
+  event task's tie-break is owed: an event task and a late periodic task of one priority,
+  both writing one global, asserting which write lands.
+- **The untested rising-lines check.** M2-5 checks that a block's body given in `types:`
+  is one a compile gives, its rungs among them on rising lines, each on one line, after
+  its declarations. Reverted alone, that line check left the function blocks' spike
+  green, and three more calls in the same check (to the compiler's `shared_bits/2`,
+  `calls/1` and `path/2`) have no revert at all. Each gets a test that fails when it is
+  reverted, or the check goes.
+- **Messages.** M1-6's member messages put "a" before a type's name, which reads "a
+  outer" for a block so named.
+- **Costs to keep in view.** Every compile checks each block type it is given at full
+  depth: 2,486 reductions for a small block against 244 before, and 138,358,875 for a
+  chain of 400 files built one at a time. A refusal of many bad keys is quadratic in its
+  keys and the names, and so is the configuration file's check of a source with many
+  mistaken names, from the same did-you-mean pass as the `.ld` compiler's; only a mistake
+  pays it. Three of the suite's existing growth tests in reductions, `logex_test.exs`'s
+  "compiling stays linear in the program's size" and two of `edit_test.exs`'s F16 tests,
+  failed now and then under a load average near 40 while the spikes ran, and pass run
+  alone; a CI runner that shares cores could see that.
 
 ### Online edit — decided 2026-10-01
 
@@ -1493,6 +1669,29 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   verified, a function block's members until M2-5); output points
   left undriven held and reported. *Done when* (to be written by its design pass, after
   M2-6).
+
+  *From Milestone 2's design (2026-10-02; `docs/organisation.md` §4.9, "One rule for new
+  state", and §4.10).* M2-5 brings the edit of a function block's members, by path
+  (decision 31), so OE-2 refuses them no longer; a block type changed for the whole
+  configuration changes each program type that holds it, by that type's own plan. A
+  changed interval makes the task next due at `min(next_due, now + new interval)`
+  (decision 40). An event task's trigger keeps its last sample across a switch, and a
+  changed `single`, or an event task's `interval` added or removed, is refused. OE-2 adds
+  the generation counter that detects an edit outside the contract; Milestone 2 does not
+  reserve it. Until OE-2 lands, a configured plant is not edited. **OE-2 decides** three
+  questions Milestone 2 leaves it, none of which an M2 commit depends on:
+  - an instance whose type an edit changes: recommended as a remove plus an add, the old
+    instance pruned and the new one started by `Runtime.instance/1`, over a refusal,
+    since instances may be added and removed while running and state is keyed by name;
+  - a kept global whose initial value changed: recommended reported, as decision 29
+    reports a tag's, one rule for two kinds of state; since that extends decision 29, it
+    is the maintainer's call;
+  - how a switch sees an instance's `var_external`s: recommended, the configuration's
+    switch merges each global into the instance's state by the running program's
+    externals before `Logex.Edit`'s per-instance switch, and splits it off by the
+    candidate's after, so the value kept is the one decision 25 keeps. How OE-2 reports
+    the write into a shared global when a `var` becomes a `var_external` is OE-2's to
+    design.
 
 ---
 
@@ -1659,7 +1858,11 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   `Logex.Compiler`; M1-5 also added `Logex.Warnings`, `Logex.Instance` and
   `Logex.Scan`. What remains is the lowering (`Ast`, `Instruction`, `Analyzer`), still in
   `Logex.Compiler`. M1-6 made them `rung/3`, `series/3`, `element/3` and `evaluate/3`, and
-  added `Logex.FbType`, whose surface the same test pins.*
+  added `Logex.FbType`, whose surface the same test pins.* *(Milestone 2's design,
+  2026-10-02: the part Milestone 2 needs, one walk of a program's IR in place of the
+  compiler's, `Logex.Warnings`' and `Logex.Edit`'s, answering which tags a program writes
+  and which timers it runs, knowing `cal` and reaching block bodies, lands as M2-4's first
+  commit. Until then M2-5 adds a `cal` clause to each walk; §3.)*
 
 - **B6 · Project metadata.** No `@spec`/`@moduledoc` on `Logex.Compiler`; no
   `description`/`package`/`licenses` in `mix.exs` despite a full Apache-2.0 `LICENSE`;
@@ -1781,7 +1984,7 @@ becomes a clause in `Logex.Lexer`, and the behaviour it specifies still stands.*
 measurements and sources in `docs/organisation.md` §4.9; its decisions 15–20, and 21–29
 for OE-1's design; work items OE-1 and OE-2 in §3).
 - One model, held as data: `%Logex.Program{}` and, from M2-1, `%Logex.Configuration{}`.
-  Their saved form is `.ld` and `.lcf` text, which printers write, and a data API refuses
+  Their saved form is `.ld` and `.logex` text, which printers write, and a data API refuses
   what the text cannot say.
 - Nothing compiles a user's program to BEAM, and no front end puts the Elixir compiler on
   the path that changes a running program (§6).
@@ -1900,7 +2103,10 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   recommended on 2026-09-28, with its Milestone-1 changes (M1-3, M1-5 and M1-6 record
   them) and Milestone 2 (§3). In one line: a file is a POU type, state is an instance, a
   configuration instantiates, wires and schedules; no routines, no controller scope, no
-  preemption. **Routines are deferred by decision** — subroutines that share their
+  preemption. Milestone 2 was designed on 2026-10-02 (§3), adding the document's
+  decisions 30–40, all taken as recommended but the configuration file's extension,
+  `.logex`, the maintainer's own choice. **Routines are deferred by decision** —
+  subroutines that share their
   program's scope, called with JSR, have no IEC counterpart, and a program's logic is
   factored with function blocks instead; revisit only if that proves too heavy.
 - **`mov` → `move`.** **Landed with M1-2**, with no alias: `mov` is an unknown
@@ -2058,4 +2264,5 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    indexed loop.
 6. **Surface syntax: comments, negative literals, structured addressing.** See §5.
 7. **Program organisation: configurations, tasks, program instances, I/O mapping.**
-   Decided in §5; Milestone 2 (§3); the model in `docs/organisation.md`.
+   Decided in §5; Milestone 2 (§3), designed 2026-10-02; the model in
+   `docs/organisation.md`.

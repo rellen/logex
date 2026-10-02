@@ -133,10 +133,10 @@ totality is a guarantee, not a feature to write programs against (`PLAN.md` §5)
 These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5 and §3's
 Milestone 2) and will change the source language:
 - **Program organisation** ([`docs/organisation.md`](docs/organisation.md)): a
-  configuration file that instantiates `.ld` programs, wires them to I/O points and
-  globals, and schedules them on tasks; `var_external` for shared globals; function blocks
-  called with `cal`. Each new word still gets its `docs/naming.md` stanza, which may change
-  a spelling.
+  configuration file (`.logex`) that instantiates `.ld` programs, wires them to I/O points
+  and globals, and schedules them on tasks; `var_external` for shared globals; function
+  blocks called with `cal`. Each new word still gets its `docs/naming.md` stanza, which may
+  change a spelling.
 
 - **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
 - **The other timers, counters and math** arrive as `tof tp rto res`, `ctu ctd`, `add sub
