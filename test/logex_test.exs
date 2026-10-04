@@ -131,11 +131,12 @@ defmodule LogexTest do
              ~s("" cannot name a program: a name is a letter or `_`, ) <>
                "then letters, digits or `_`"},
             {fn -> Logex.compile(@seal, []) end,
-             "Logex.compile/2 takes a name and no other option, as in " <>
-               ~s|Logex.compile(source, name: "motor"), got: []|},
+             "Logex.compile/2 takes a name and, where the source uses function blocks, their " <>
+               ~s|types, as in Logex.compile(source, name: "motor", types: [seal]), got: []|},
             {fn -> Logex.compile(@seal, name: "p", file: "x") end,
-             "Logex.compile/2 takes a name and no other option, as in " <>
-               ~s|Logex.compile(source, name: "motor"), got: [name: "p", file: "x"]|}
+             "Logex.compile/2 takes a name and, where the source uses function blocks, their " <>
+               ~s|types, as in Logex.compile(source, name: "motor", types: [seal]), | <>
+               ~s|got: [name: "p", file: "x"]|}
           ] do
         assert_raise ArgumentError, message, call
       end

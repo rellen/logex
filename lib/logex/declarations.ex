@@ -5,12 +5,15 @@ defmodule Logex.Declarations do
   is a section keyword, and every one comes before the first rung of logic.
 
       <section> <name> <type> [<initial>]     section: var | var_input | var_output
-                                              type:    bool | dint | ton
+                                              type:    bool | dint | ton | a block's name
 
   The section and type words are data, in `@sections` and `@types`, and a function block
   type's word is `Logex.FbType.builtins/0`'s: a new section or type is a row there and a
   stanza in `docs/naming.md`, not a second declaration parser. An instance of a function
-  block, `var t1 ton` (M1-6), is declared with `var` and takes no initial value.
+  block, `var t1 ton` (M1-6) or `var s1 seal` (M2-5), is declared with `var` and takes no
+  initial value. A user function block's name is a type word only where the compile is
+  given that block (`Logex.compile/2`'s `types:`), and is not reserved: it is built per
+  compile, not a row (PLAN.md M1-3).
   """
 
   alias Logex.{Diagnostic, FbType, Tag}
@@ -32,16 +35,46 @@ defmodule Logex.Declarations do
 
   @doc """
   The words that head a file of a kind other than a program, lowercase (M2-5), each
-  surveyed like a keyword. `docs/organisation.md` §4.8 reserves each in its kind of file
-  only, not in a program's.
+  surveyed like a keyword. Each is reserved in its kind of file only, in any case
+  (`docs/organisation.md` §4.8): `Logex.Compiler` refuses `function_block` as a tag's name
+  in a block's file and as a block's name, and takes it anywhere else as a name. A user
+  block's own name is no row here, and is not reserved: it is built per compile.
   """
   def kinds, do: ["function_block"]
 
-  # A type word names an elementary type or a function block type, in any case.
-  defp type_word(word), do: type_of(String.downcase(word))
+  @doc """
+  The words a message names an instance's type with (M2-5): `a ton` for a built-in type,
+  and `` an instance of `seal` `` for a user function block, whose name is any name, so it
+  takes no article of its own, as `an outer` or `a user` would want.
+  """
+  def instance_of(%FbType{name: name, body: nil}), do: "a #{name}"
+  def instance_of(%FbType{name: name}), do: "an instance of `#{name}`"
 
-  defp type_of(key) when is_map_key(@types, key), do: Map.fetch!(@types, key)
-  defp type_of(key), do: FbType.builtin(key)
+  @doc """
+  What a function block type given where a program goes is told, after its name (M2-5):
+  the one message of every entry point that takes a program, `Logex.Runtime`,
+  `Logex.Edit.accept/3` and `Logex.Configuration`, which runs inside a program through the
+  instruction that runs it, `cal` for a user block and a built-in's own mnemonic.
+  """
+  def not_a_program(type),
+    do:
+      "a function block type, which runs inside a program through `#{runner(type)}`: " <>
+        "an instance is of a %Logex.Program{}"
+
+  defp runner(%FbType{name: name, body: nil}) when is_binary(name), do: String.downcase(name)
+  defp runner(_user_block), do: "cal"
+
+  # A type word names an elementary type or a built-in function block type, in any case,
+  # or a function block the compile is given, by its exact name: an entry of `types`, a
+  # `%Logex.FbType{}`, or `{:recursive, chain}` for one that would hold the block being
+  # compiled (Logex.Compiler).
+  defp type_word(word, types), do: type_of(String.downcase(word), word, types)
+
+  defp type_of(key, _word, _types) when is_map_key(@types, key), do: Map.fetch!(@types, key)
+  defp type_of(key, word, types), do: builtin_or(FbType.builtin(key), word, types)
+
+  defp builtin_or(nil, word, types), do: Map.get(types, word)
+  defp builtin_or(builtin, _word, _types), do: builtin
 
   @doc "What a word is reserved as, in any case: `:mnemonic`, `:section`, `:type` or nil."
   def reserved(word) do
@@ -63,6 +96,16 @@ defmodule Logex.Declarations do
   """
   def name?(word) when is_binary(word), do: String.match?(word, ~r/\A[A-Za-z_][A-Za-z0-9_]*\z/)
   def name?(_word), do: false
+
+  @doc """
+  Whether `word` may name a user function block (M2-5): a name, spelled as a type word in
+  the files that hold the block, so no reserved word, in any case, and not the word that
+  heads a block's file, which is reserved in one (`docs/organisation.md` §4.8).
+  """
+  def block_name?(word),
+    do:
+      name?(word) and reserved(word) == nil and
+        String.downcase(word) not in kinds()
 
   @doc """
   A did-you-mean for `name` among `names`, as a suffix for a message, or "". A name
@@ -115,19 +158,19 @@ defmodule Logex.Declarations do
   included, raises `ArgumentError`. A declaration after the first rung is reported and
   still declared, so its tag is not also reported as undeclared wherever it is used.
   """
-  def split(rungs, declared \\ [])
+  def split(rungs, declared \\ [], types \\ %{})
 
-  def split(rungs, declared) when is_list(declared) do
+  def split(rungs, declared, types) when is_list(declared) do
     {leading, rest} = Enum.split_while(rungs, &declaration?/1)
     {late, logic} = Enum.split_with(rest, &declaration?/1)
     first = first_line(logic)
     late = Enum.map(late, &late(&1, first))
-    {tags, diagnostics} = Enum.flat_map_reduce(leading ++ late, [], &declare/2)
+    {tags, diagnostics} = Enum.flat_map_reduce(leading ++ late, [], &declare(&1, &2, types))
     {table, diagnostics} = table(Enum.map(declared, &validate!/1), tags, diagnostics)
     {table, logic, Enum.sort_by(Enum.reverse(diagnostics), & &1.line)}
   end
 
-  def split(_rungs, declared),
+  def split(_rungs, declared, _types),
     do: raise(ArgumentError, "declared must be a list of %Logex.Tag{}, got: #{inspect(declared)}")
 
   @doc """
@@ -171,22 +214,25 @@ defmodule Logex.Declarations do
   defp line_in([{_, line, _} | _]), do: line
   defp line_in([]), do: nil
 
-  defp declare({:late, rung, late}, diagnostics), do: declare(rung, [late | diagnostics])
+  defp declare({:late, rung, late}, diagnostics, types),
+    do: declare(rung, [late | diagnostics], types)
 
-  defp declare({:rung, [{:name, line, keyword} | rest]}, diagnostics) do
+  defp declare({:rung, [{:name, line, keyword} | rest]}, diagnostics, types) do
     section = Map.fetch!(@sections, String.downcase(keyword))
-    declared(shape(rest, keyword), section, line, diagnostics)
+    declared(shape(rest, keyword, types), section, line, diagnostics, types)
   end
 
-  defp declared({:ok, name, type, initial}, section, line, diagnostics) do
+  # A block's type came from `types`, which `Logex.compile/2` checked on entry, so it is
+  # known by being the one given under its name, not checked again for every instance.
+  defp declared({:ok, name, type, initial}, section, line, diagnostics, types) do
     tag = %Tag{name: name, type: type, section: section, initial: initial, line: line}
-    checked(check(tag), tag, line, diagnostics)
+    checked(check(tag, types), tag, line, diagnostics)
   end
 
-  defp declared({:error, message}, _section, line, diagnostics),
+  defp declared({:error, message}, _section, line, diagnostics, _types),
     do: {[], [diagnostic(line, message) | diagnostics]}
 
-  defp declared({:error, message, tag}, _section, line, diagnostics),
+  defp declared({:error, message, tag}, _section, line, diagnostics, _types),
     do: {recovered(%{tag | line: line}), [diagnostic(line, message) | diagnostics]}
 
   defp checked([], tag, _line, diagnostics), do: {[tag], diagnostics}
@@ -208,25 +254,26 @@ defmodule Logex.Declarations do
   defp recover(_problems, _tag), do: []
 
   # The shape of a declaration line, before its meaning is checked.
-  defp shape([], kw),
+  defp shape([], kw, _types),
     do: {:error, "`#{kw}` needs a tag name and a type, as in `#{kw} fault bool`"}
 
-  defp shape([{:branches, _} | _], _kw), do: {:error, "a declaration cannot hold a branch group"}
-
-  defp shape([{:int_lit, _, v} | _], kw),
-    do: {:error, "expected a tag name after `#{kw}`, found `#{v}`"}
-
-  defp shape([{:name, _, name}], kw), do: {:error, short(one(name), name, nil, kw)}
-
-  defp shape([{:name, _, name}, {:int_lit, _, v} | _], kw),
-    do: {:error, short(one(name), name, v, kw)}
-
-  defp shape([{:name, _, _}, {:branches, _} | _], _kw),
+  defp shape([{:branches, _} | _], _kw, _types),
     do: {:error, "a declaration cannot hold a branch group"}
 
-  defp shape([{:name, _, name}, {:name, _, word} | tail], kw) do
-    type = type_word(word)
-    salvaged(typed(type, name, word, tail, kw), type, name)
+  defp shape([{:int_lit, _, v} | _], kw, _types),
+    do: {:error, "expected a tag name after `#{kw}`, found `#{v}`"}
+
+  defp shape([{:name, _, name}], kw, types), do: {:error, short(one(name, types), name, nil, kw)}
+
+  defp shape([{:name, _, name}, {:int_lit, _, v} | _], kw, types),
+    do: {:error, short(one(name, types), name, v, kw)}
+
+  defp shape([{:name, _, _}, {:branches, _} | _], _kw, _types),
+    do: {:error, "a declaration cannot hold a branch group"}
+
+  defp shape([{:name, _, name}, {:name, _, word} | tail], kw, types) do
+    type = type_word(word, types)
+    salvaged(typed(type, name, word, tail, {kw, types}), type, name)
   end
 
   # `var t1 ton 5 6`: the name and the type word came before the mistake (M1-6).
@@ -235,8 +282,12 @@ defmodule Logex.Declarations do
 
   defp salvaged(shaped, _type, _name), do: shaped
 
-  defp typed(nil, name, type, tail, kw),
-    do: {:error, untyped(String.downcase(name), name, type, tail, kw)}
+  defp typed(nil, name, type, tail, {kw, types}),
+    do: {:error, untyped(String.downcase(name), name, type, tail, {kw, types})}
+
+  # M2-5: a function block never holds an instance of itself, at any depth (Ed 2 §2.5,
+  # docs/organisation.md §4.3). Logex.Compiler marks the types that would.
+  defp typed({:recursive, chain}, _name, _word, _tail, _kw), do: {:error, recursive(chain)}
 
   defp typed(type, name, _word, [], _kw), do: {:ok, name, type, nil}
   defp typed(type, name, _word, [{:int_lit, _, v}], _kw), do: {:ok, name, type, v}
@@ -254,9 +305,10 @@ defmodule Logex.Declarations do
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
 
   # The one word after a section: a type word first, since `ton` is a mnemonic too (M1-6).
-  defp one(word), do: one(type_word(word), word)
-  defp one(nil, word), do: reserved(word)
-  defp one(type, _word), do: {:type, type}
+  defp one(word, types), do: one_of(type_word(word, types), word)
+  defp one_of(nil, word), do: reserved(word)
+  defp one_of({:recursive, _chain}, word), do: reserved(word)
+  defp one_of(type, _word), do: {:type, type}
 
   # A line with one word after its section: a tag with no type, or a type with no tag.
   defp short({:type, type}, word, _v, kw),
@@ -272,8 +324,8 @@ defmodule Logex.Declarations do
 
   # An instance is declared only with `var` (M1-6), so its example is the declaration that
   # works, whatever section the line was written with.
-  defp as_in(%FbType{name: name} = type, section, word, _kw) when section != :var,
-    do: "; a #{name} is declared with `var`, as in `var #{example(type)} #{word}`"
+  defp as_in(%FbType{} = type, section, word, _kw) when section != :var,
+    do: "; #{instance_of(type)} is declared with `var`, as in `var #{example(type)} #{word}`"
 
   defp as_in(type, _section, word, kw), do: ", as in `#{kw} #{example(type)} #{word}`"
 
@@ -291,17 +343,41 @@ defmodule Logex.Declarations do
       "`retain` is not supported yet: a warm restart, like a cold one, starts every tag " <>
         "at its initial value but the var_inputs whose values fit their types"
 
-  defp untyped(_key, name, type, tail, kw),
-    do: unknown_type(Enum.any?(tail, &type_word?/1), name, type, kw)
+  defp untyped(_key, name, type, tail, {kw, types}),
+    do: unknown_type(Enum.any?(tail, &type_word?(&1, types)), name, type, {kw, types})
 
-  defp unknown_type(true, name, type, kw),
+  defp unknown_type(true, name, type, {kw, _types}),
     do: "`#{kw}` declares one tag: found `#{name}` and `#{type}` before the type"
 
-  defp unknown_type(false, _name, type, _kw),
-    do: "unknown type `#{type}`: logex has `bool`, `dint` and `ton`"
+  # M2-5: the function blocks this compile was given are named too, where it was given any,
+  # with a did-you-mean among them, since a block's name is matched exactly.
+  defp unknown_type(false, _name, type, {_kw, types}) do
+    blocks = Enum.sort(for {name, %FbType{}} <- types, do: name)
 
-  defp type_word?({:name, _, word}), do: type_word(word) != nil
-  defp type_word?(_element), do: false
+    "unknown type `#{type}`: logex has `bool`, `dint` and `ton`" <>
+      given(Enum.map(blocks, &"`#{&1}`")) <> suggest(type, blocks, & &1, "type names")
+  end
+
+  defp given([]), do: ""
+  defp given([one]), do: ", and the function block #{one}"
+
+  defp given(names),
+    do:
+      ", and the function blocks " <>
+        Enum.join(Enum.drop(names, -1), ", ") <> " and " <> List.last(names)
+
+  defp recursive([block, block]),
+    do:
+      "`#{block}` cannot hold an instance of `#{block}`: " <>
+        "a function block never holds an instance of itself"
+
+  defp recursive([block, held | _] = chain),
+    do:
+      "`#{block}` cannot hold an instance of `#{held}` (#{Enum.join(chain, " → ")}): " <>
+        "a function block never holds an instance of itself, at any depth"
+
+  defp type_word?({:name, _, word}, types), do: type_word(word, types) != nil
+  defp type_word?(_element, _types), do: false
 
   defp example(%FbType{name: name}), do: String.first(name) <> "1"
   defp example(_elementary), do: "fault"
@@ -320,12 +396,14 @@ defmodule Logex.Declarations do
   A compiled timer carries its preset as an initial value (`Logex.Compiler`), which no
   declaration may give, so this refuses it too.
   """
-  def check(%Tag{type: %FbType{} = type} = tag) do
-    known = fb_type(type)
+  def check(%Tag{} = tag), do: check(tag, %{})
+
+  defp check(%Tag{type: %FbType{} = type} = tag, types) do
+    known = fb_type(type, types)
     name(tag.name) ++ known ++ section(tag.section) ++ looked_into(known, tag)
   end
 
-  def check(%Tag{} = tag) do
+  defp check(%Tag{} = tag, _types) do
     name(tag.name) ++ type(tag.type) ++ section(tag.section) ++ initial(tag)
   end
 
@@ -353,13 +431,17 @@ defmodule Logex.Declarations do
   defp type(type),
     do: ["unknown type #{inspect(type)}: logex has :bool, :dint and Logex.FbType.ton()"]
 
-  # Only a built-in function block type, exactly as Logex.FbType gives it, until M2-5. A
-  # hand-built one may hold anything, and is refused, never looked up by a name that is not
-  # a string.
-  defp fb_type(%FbType{name: name} = type) when is_binary(name),
+  # A built-in function block type, exactly as Logex.FbType gives it; one this compile was
+  # given, by being that one; or since M2-5 any user type `Logex.compile/2` could have
+  # given (`Logex.FbType.user?/1`). A hand-built one may hold anything, and is refused,
+  # never looked up by a name that is not a string.
+  defp fb_type(%FbType{name: name, body: nil} = type, _types) when is_binary(name),
     do: known(FbType.builtin(name) == type, type)
 
-  defp fb_type(type), do: known(false, type)
+  defp fb_type(%FbType{name: name} = type, types) when is_binary(name),
+    do: known(Map.get(types, name) == type or FbType.user?(type), type)
+
+  defp fb_type(type, _types), do: known(false, type)
 
   # An instance of a type that is not logex's is not looked into: its members may be junk.
   defp looked_into([], tag), do: instance(tag)
@@ -368,7 +450,10 @@ defmodule Logex.Declarations do
   defp known(true, _type), do: []
 
   defp known(false, type),
-    do: ["unknown function block type #{inspect(type.name)}: logex has Logex.FbType.ton()"]
+    do: [
+      "unknown function block type #{inspect(type.name)}: logex has Logex.FbType.ton() " <>
+        "and the types Logex.compile/2 gives for a function block's file"
+    ]
 
   # M1-6: an instance is the program's own state. It is not supplied from outside, and the
   # host reads none as an output, so the outputs of a scan of the program's own state stay
@@ -379,11 +464,18 @@ defmodule Logex.Declarations do
   defp instance(%Tag{section: section, name: name} = tag)
        when section in [:var_input, :var_output],
        do: [
-         "#{label(name)} is a #{tag.type.name}: an instance is the program's own, declared " <>
-           "with `var`, as in `var #{display(name)} #{tag.type.name}`, not with `#{section}`"
+         "#{label(name)} is #{instance_of(tag.type)}: an instance is the program's own, " <>
+           "declared with `var`, as in `var #{display(name)} #{tag.type.name}`, not with " <>
+           "`#{section}`"
        ]
 
   defp instance(%Tag{initial: nil}), do: []
+
+  defp instance(%Tag{name: name, type: %FbType{body: %Logex.Program{}}} = tag),
+    do: [
+      "#{label(name)} is #{instance_of(tag.type)}, which takes no initial value: its " <>
+        "members start where its type says"
+    ]
 
   defp instance(%Tag{name: name} = tag),
     do: [

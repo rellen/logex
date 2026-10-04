@@ -115,7 +115,7 @@ defmodule Logex.ApiContractTest do
     "is already run by the `ton`",
     "but logic may write only",
     "is not a member of",
-    "only a timer has members",
+    "only an instance of a function block has members",
     "bit access is not supported yet",
     "goes too deep",
     "name one of its members",

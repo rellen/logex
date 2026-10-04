@@ -1,28 +1,42 @@
 defmodule Logex.FbType do
   @moduledoc """
   A function block type: the schema every instance of it shares (PLAN.md M1-6, decision
-  3). An instance is a tag whose type is the schema itself, `var t1 ton`, and its state
-  is a map from each member's name to its value, nested in the env under the instance's
-  name, so that `.acc` and `.dn` change together in one scan. Every key is a string.
+  3). An instance is a tag whose type is the schema itself, `var t1 ton` or `var s1 seal`,
+  and its state is a map from each member's name to its value, nested in the env under the
+  instance's name, so that `.acc` and `.dn` change together in one scan. Every key is a
+  string.
 
   Each member has a `role`, after IEC's declaration sections inside a function block:
 
   - `:input`, a value the block is given (IEC's VAR_INPUT);
   - `:output`, a value the block sets (VAR_OUTPUT);
+  - `:local`, a user block's own `var`, an instance it holds included (IEC's VAR): in the
+    state, and named only inside the block's own body (M2-5);
   - `:internal`, a built-in block's bookkeeping: in the state, but no name in a program
     reaches it.
 
-  Every member but an internal one may be read from outside, anywhere an operand of its
-  type may go. `write: true` marks the members logic outside the block may also write: of
-  a `ton`, `.pre` and `.acc` (decision 4). `initial` is the member's value in a new
-  instance; for a member whose type is itself a `%Logex.FbType{}`, it is a map of that
-  nested instance's own initial values, by member name.
+  Every input and output may be read from outside, anywhere an operand of its type may go.
+  `write: true` marks the members logic outside the block may also write: of a `ton`,
+  `.pre` and `.acc` (decision 9); of a user block, none (M2-5). `initial` is the member's
+  value in a new instance; for a member whose type is itself a `%Logex.FbType{}`, it is a
+  map of that nested instance's own initial values, by member name.
 
-  M1-6 has one type, the built-in `ton`. A user function block (M2-5) is this struct too,
-  with its var_inputs, var_outputs and vars as members (its vars take a fourth role,
-  `:local`, which `public/1` leaves out until M2-5 says who may read one), and a nested
-  instance is a member whose type is another `%Logex.FbType{}`.
+  A member holding an instance of a user block has the type `{:block, name}`, and the
+  block's type itself is in the body's tag table, where `cal` finds it: `type_of/2` gives
+  it. So a type holds each type it nests once, and a copy of it that keeps no sharing (a
+  message, `:erlang.term_to_binary/1`, `:erlang.phash2/1`) stays linear in the depth of
+  nesting, where a type held both as a member's and as a tag's would double at each level
+  (M2-5).
+
+  `body` is nil for the built-in `ton`. For a user function block (M2-5) it is the block's
+  compiled body, a `%Logex.Program{}` named after the block, whose tags are its members
+  and whose rungs `cal` runs over an instance's map. `of/1` builds the type from it, and is
+  the definition of a user type: one is valid exactly when it is what `of/1` gives for its
+  body, its body is one a compile gives (`Logex.Compiler.lowered?/1`), every type it holds
+  is valid too, and no type holds an instance of its own name.
   """
+
+  alias Logex.{Program, Tag}
 
   defmodule Member do
     @moduledoc "One member of a function block type. See `Logex.FbType`."
@@ -31,17 +45,21 @@ defmodule Logex.FbType do
 
     @type t :: %__MODULE__{
             name: String.t(),
-            type: :bool | :dint | :clock | Logex.FbType.t(),
-            role: :input | :output | :internal,
+            type: :bool | :dint | :clock | Logex.FbType.t() | {:block, String.t()},
+            role: :input | :output | :local | :internal,
             write: boolean,
             initial: integer | %{String.t() => integer}
           }
   end
 
   @enforce_keys [:name, :members]
-  defstruct [:name, :members]
+  defstruct [:name, :members, body: nil]
 
-  @type t :: %__MODULE__{name: String.t(), members: [Member.t()]}
+  @type t :: %__MODULE__{
+          name: String.t(),
+          members: [Member.t()],
+          body: Logex.Program.t() | nil
+        }
 
   # The on-delay timer (docs/naming.md, `ton`): the conventional TIMER's members,
   # lowercased. `.pre` plays IEC's PT, `.acc` its ET and `.dn` its Q, by an inference
@@ -72,18 +90,30 @@ defmodule Logex.FbType do
   A new instance's state: every member at its initial value, a nested instance at its
   own, and each member named in `overrides` at the value given there instead.
   """
-  def initial(%__MODULE__{members: members}, overrides \\ %{}),
+  def initial(%__MODULE__{members: members} = type, overrides \\ %{}),
     do:
       Map.new(members, fn %Member{name: name} = member ->
-        {name, Map.get_lazy(overrides, name, fn -> start(member) end)}
+        {name, Map.get_lazy(overrides, name, fn -> start(member, type) end)}
       end)
 
-  defp start(%Member{type: %__MODULE__{} = type, initial: overrides}),
+  defp start(%Member{type: %__MODULE__{} = type, initial: overrides}, _owner),
     do: initial(type, overrides)
 
-  defp start(%Member{initial: initial}), do: initial
+  defp start(%Member{type: {:block, _name}, initial: overrides} = member, owner),
+    do: initial(type_of(owner, member), overrides)
 
-  @doc "The member a program may name, `{:ok, member}`, or `:error` for none or an internal one."
+  defp start(%Member{initial: initial}, _owner), do: initial
+
+  @doc """
+  The type of `member`, a member of `type`: its own, or for one holding an instance of a
+  user block, `{:block, name}`, the block's type, taken from `type`'s body (M2-5).
+  """
+  def type_of(%__MODULE__{body: %Program{tags: tags}}, %Member{name: name, type: {:block, _}}),
+    do: Map.fetch!(tags, name).type
+
+  def type_of(_type, %Member{type: type}), do: type
+
+  @doc "The member a program may name, `{:ok, member}`, or `:error` for none or a hidden one."
   def member(%__MODULE__{} = type, name), do: found(Enum.find(public(type), &(&1.name == name)))
 
   defp found(nil), do: :error
@@ -91,11 +121,160 @@ defmodule Logex.FbType do
 
   @doc """
   The members a program may name, in the type's order: its inputs and outputs, an
-  allowlist, so an internal member is not among them, nor will M2-5's `:local` one be.
+  allowlist, so neither an internal member nor a user block's own `var` is among them.
   """
   def public(%__MODULE__{members: members}),
     do: Enum.filter(members, &(&1.role in [:input, :output]))
 
   @doc "The members logic outside the block may write, in the type's order."
   def writable(%__MODULE__{} = type), do: Enum.filter(public(type), & &1.write)
+
+  @doc """
+  A user function block's type, from its compiled body (M2-5): the body's tags become its
+  members, a `var_input` an `:input`, a `var_output` an `:output` and a `var` a `:local`.
+  Their order is `cal`'s positional order: the tags declared from Elixir first, which have
+  no line, by name, then the source's in the order they are declared. No member of a user
+  block is written from outside it.
+  """
+  def of(%Program{name: name, tags: tags} = body),
+    do: %__MODULE__{
+      name: name,
+      members: tags |> Map.values() |> Enum.sort_by(&order/1) |> Enum.map(&member_of/1),
+      body: body
+    }
+
+  defp order(%Tag{line: nil, name: name}), do: {0, name}
+  defp order(%Tag{line: line}), do: {1, line}
+
+  defp member_of(%Tag{name: name, type: type, section: section, initial: initial}),
+    do: %Member{name: name, type: held(type), role: role(section), initial: starts(type, initial)}
+
+  # A user block's type is held once, in the body's tag table; its member names it.
+  defp held(%__MODULE__{name: name, body: %Program{}}), do: {:block, name}
+  defp held(type), do: type
+
+  defp role(:var_input), do: :input
+  defp role(:var_output), do: :output
+  defp role(:var), do: :local
+
+  defp starts(%__MODULE__{}, nil), do: %{}
+  defp starts(_type, nil), do: 0
+  defp starts(_type, initial), do: initial
+
+  @doc """
+  What `cal` takes for an instance of a user block (M2-5): the instance, then each
+  var_input as a value and each var_output as a tag it writes, in declaration order, as
+  IL's non-formal CAL (docs/organisation.md §4.3). Each slot is `{access, type}`, as a
+  mnemonic's are in `Logex.Compiler.instructions/0`, with the formal it fills.
+  """
+  def signature(%__MODULE__{name: name, members: members}),
+    do: [
+      {{:instance, name}, nil}
+      | for(%Member{role: :input} = m <- members, do: {{:value, m.type}, m}) ++
+          for(%Member{role: :output} = m <- members, do: {{:write, m.type}, m})
+    ]
+
+  @doc """
+  Whether `type` is a user function block type `Logex.compile/2` could have given: what
+  `of/1` gives for its body, every type it holds the built-in `ton` or valid in turn, its
+  body's rungs, tags and warnings what a compile gives over that table
+  (`Logex.Compiler.lowered?/1`), and no type in it holding an instance of a type of its
+  own name, at any depth. So a type whose body was edited by hand, a rung or a warning,
+  is refused where it is given, whether or not the text could say what it holds. Total: a
+  hand-built value of any shape is `false`, never an exception. Each type is checked once
+  per call, so the check is linear in the types a value holds, but every call checks them
+  all again.
+  """
+  def user?(type), do: valid(type, %{}, %{}) != :error
+
+  # `{:ok, done}`, the names of the user types checked so far, each to its type, or
+  # `:error`. A type is checked once, however many instances of it a tree holds, so the
+  # check is linear in the types and not in the instances; a second type of a name already
+  # checked is refused, and so is a name on the path down to it, which would be recursion.
+  defp valid(%__MODULE__{name: name, body: %Program{name: name, tags: tags}} = type, path, done)
+       when is_binary(name) and is_map(tags),
+       do: named(Logex.Declarations.block_name?(name), type, path, done)
+
+  defp valid(_type, _path, _done), do: :error
+
+  # A name a block's first line could give: a name, and no reserved word, nor the word that
+  # heads a block's file.
+  defp named(false, _type, _path, _done), do: :error
+  defp named(true, type, path, done), do: known(Map.fetch(done, type.name), type, path, done)
+
+  defp known({:ok, type}, type, _path, done), do: {:ok, done}
+  defp known({:ok, _another}, _type, _path, _done), do: :error
+  defp known(:error, type, path, done), do: fresh(is_map_key(path, type.name), type, path, done)
+
+  defp fresh(true, _type, _path, _done), do: :error
+
+  defp fresh(false, type, path, done),
+    do: built(Enum.all?(type.body.tags, &declared?/1) and of(type.body) == type, type, path, done)
+
+  defp built(false, _type, _path, _done), do: :error
+
+  defp built(true, %__MODULE__{name: name, body: %Program{tags: tags}} = type, path, done) do
+    path = Map.put(path, name, true)
+
+    tags
+    |> Enum.reduce({:ok, done}, fn {_, tag}, ok -> holds(tag.type, path, ok) end)
+    |> lowered(type)
+    |> add(type)
+  end
+
+  # The body, once every type it holds is valid, is one a compile gives: its rungs lower
+  # to themselves (Logex.Compiler.lowered?/1), so a hand-edited rung is refused here, where
+  # the type is given, and never reaches the runtime or an edit.
+  defp lowered(:error, _type), do: :error
+  defp lowered(ok, type), do: relowered(Logex.Compiler.lowered?(type.body), ok)
+
+  defp relowered(true, ok), do: ok
+  defp relowered(false, _ok), do: :error
+
+  defp holds(_type, _path, :error), do: :error
+  defp holds(type, _path, ok) when type in [:bool, :dint], do: ok
+  defp holds(%__MODULE__{body: nil} = type, _path, ok), do: ton?(type == ton(), ok)
+  defp holds(type, path, {:ok, done}), do: valid(type, path, done)
+
+  defp ton?(true, ok), do: ok
+  defp ton?(false, _ok), do: :error
+
+  defp add(:error, _type), do: :error
+  defp add({:ok, done}, type), do: {:ok, Map.put(done, type.name, type)}
+
+  # What a compiled body's tag table holds: a tag per name, with a line, or none for a tag
+  # declared from Elixir (Logex.Tag.new!/4), a section, and an
+  # initial value a declaration line could give, or for a timer the preset the compiler
+  # gives it (Logex.Compiler). Its type is looked at by holds/3.
+  defp declared?({name, %Tag{name: name, line: line, section: section} = tag})
+       when ((is_integer(line) and line > 0) or is_nil(line)) and
+              section in [:var, :var_input, :var_output],
+       do: tag_name?(name) and starts?(tag)
+
+  defp declared?(_entry), do: false
+
+  # A name a declaration line can give in a block's file: no reserved word, no `.`, and not
+  # the word that heads the file (Logex.Declarations.check/1 holds the first two).
+  defp tag_name?(name),
+    do:
+      Logex.Declarations.check(%Tag{name: name, type: :bool, section: :var}) == [] and
+        String.downcase(name) not in Logex.Declarations.kinds()
+
+  defp starts?(%Tag{type: type, initial: nil}) when type in [:bool, :dint], do: true
+
+  defp starts?(%Tag{type: type, initial: initial, section: section})
+       when type in [:bool, :dint] and section != :var_input and is_integer(initial),
+       do: Logex.Declarations.fits?(type, initial) and initial >= 0
+
+  defp starts?(%Tag{type: %__MODULE__{}, initial: nil, section: :var}), do: true
+
+  defp starts?(%Tag{
+         type: %__MODULE__{body: nil},
+         initial: %{"pre" => pre} = preset,
+         section: :var
+       })
+       when map_size(preset) == 1,
+       do: Logex.Declarations.preset?(pre)
+
+  defp starts?(_tag), do: false
 end

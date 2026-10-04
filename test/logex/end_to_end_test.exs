@@ -1621,4 +1621,146 @@ defmodule Logex.EndToEndTest do
       )
     end
   end
+
+  describe "user function blocks (M2-5)" do
+    alias Logex.Configuration
+    alias Logex.Configuration.{Connection, Global, Instance}
+
+    @seal_block """
+    function_block seal
+    var_input start bool
+    var_input stop bool
+    var_output run bool
+
+    ( xic start | xic run ) xio stop ote run
+    """
+
+    # Three instances of one seal-in, the third run under an enable, and a lamp that reads
+    # the second's output.
+    @three_seals """
+    var_input a1 bool
+    var_input a2 bool
+    var_input a3 bool
+    var_input stop bool
+    var_input en3 bool
+    var_output k1 bool
+    var_output k2 bool
+    var_output k3 bool
+    var_output lamp bool
+    var s1 seal
+    var s2 seal
+    var s3 seal
+
+    cal s1 a1 stop k1
+    cal s2 a2 stop k2
+    xic en3 cal s3 a3 stop k3
+    xic s2.run ote lamp
+    """
+
+    # The program, with its block, in a configuration of one task-less instance `m1`, each
+    # var_input wired to an input point and each var_output to an output point of its name.
+    defp seals do
+      {:ok, seal} = Logex.compile(@seal_block, name: "seal")
+      {:ok, motor} = Logex.compile(@three_seals, name: "motor", types: [seal])
+      tags = motor.tags |> Map.values() |> Enum.sort_by(& &1.name)
+      inputs = for %Logex.Tag{section: :var_input} = tag <- tags, do: tag.name
+      outputs = for %Logex.Tag{section: :var_output} = tag <- tags, do: tag.name
+
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [motor],
+          globals:
+            Enum.with_index(inputs, &%Global{name: &1, type: :bool, at: "panel.i.#{&2}"}) ++
+              Enum.with_index(outputs, &%Global{name: &1, type: :bool, at: "panel.q.#{&2}"}),
+          instances: [%Instance{name: "m1", type: "motor"}],
+          connections:
+            Enum.map(inputs ++ outputs, &%Connection{instance: "m1", member: &1, to: &1})
+        )
+
+      Logex.Runtime.start(config)
+    end
+
+    defp cycled(runtime, steps),
+      do:
+        Enum.reduce(steps, {runtime, nil}, fn {elapsed, inputs}, {runtime, _} ->
+          {runtime, outputs, _events} = Logex.Runtime.cycle(runtime, elapsed, inputs)
+          {runtime, outputs}
+        end)
+
+    test "M2-5's Done-when: a seal-in written once as a function block and instantiated " <>
+           "three times in one program behaves as three independent seal-ins, and " <>
+           "m1.s2.run reads one of them" do
+      {rt, outputs} = cycled(seals(), [{0, %{"a1" => 1, "en3" => 1}}])
+      assert outputs == %{"k1" => 1, "k2" => 0, "k3" => 0, "lamp" => 0}
+
+      {rt, outputs} = cycled(rt, [{10, %{"a1" => 0, "a2" => 1}}, {10, %{"a2" => 0}}])
+      assert outputs == %{"k1" => 1, "k2" => 1, "k3" => 0, "lamp" => 1}
+      assert Logex.Runtime.get(rt, "m1.s2.run") == {:ok, 1}
+      assert Logex.Runtime.get!(rt, "m1.s2.run") == 1
+      assert Logex.Runtime.get(rt, "m1.s3.run") == {:ok, 0}
+
+      {rt, outputs} = cycled(rt, [{10, %{"a3" => 1}}])
+      assert outputs == %{"k1" => 1, "k2" => 1, "k3" => 1, "lamp" => 1}
+
+      {rt, outputs} = cycled(rt, [{10, %{"a3" => 0, "stop" => 1}}])
+      assert outputs == %{"k1" => 0, "k2" => 0, "k3" => 0, "lamp" => 0}
+      assert Logex.Runtime.get(rt, "m1.s2.run") == {:ok, 0}
+    end
+
+    test "M2-5's Done-when: a false EN freezes only its own instance, and the tags its " <>
+           "outputs name" do
+      {rt, _} =
+        cycled(seals(), [{0, %{"a1" => 1, "a3" => 1, "en3" => 1}}, {10, %{"a1" => 0, "a3" => 0}}])
+
+      {:ok, frozen} = Logex.Runtime.get(rt, "m1.s3.stop")
+
+      # s3's EN falls, then stop: s1 drops out, s3 and k3 hold, not even reading stop in.
+      {rt, outputs} = cycled(rt, [{10, %{"en3" => 0, "stop" => 1}}])
+      assert outputs == %{"k1" => 0, "k2" => 0, "k3" => 1, "lamp" => 0}
+      assert Logex.Runtime.get(rt, "m1.s3.stop") == {:ok, frozen}
+      assert Logex.Runtime.get(rt, "m1.s1.stop") == {:ok, 1}
+
+      # Its EN back with stop still pressed, s3 runs and drops out at once.
+      {_rt, outputs} = cycled(rt, [{10, %{"en3" => 1}}])
+      assert outputs == %{"k1" => 0, "k2" => 0, "k3" => 0, "lamp" => 0}
+    end
+
+    test "M2-5's Done-when: a recursive type, an unknown function block type and a cal of " <>
+           "a non-instance are each a located diagnostic" do
+      formatted = fn {:error, diagnostics} ->
+        Enum.map(diagnostics, &Logex.Diagnostic.format/1)
+      end
+
+      {:ok, seal} = Logex.compile(@seal_block, name: "seal")
+
+      assert formatted.(Logex.compile(@seal_block <> "var inner seal\n", name: "seal")) == [
+               "line 7: `var` after the first rung (line 6): declarations come first",
+               "line 7: `seal` cannot hold an instance of `seal`: " <>
+                 "a function block never holds an instance of itself"
+             ]
+
+      assert formatted.(
+               Logex.compile("var s1 sael\nvar_input a bool\nxic a ote a",
+                 name: "m",
+                 types: [seal]
+               )
+             ) == [
+               "line 1: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
+                 "and the function block `seal` — did you mean `seal`?",
+               "line 3: `ote` writes `a`, a var_input (declared on line 2): " <>
+                 "logic must not write an input"
+             ]
+
+      assert formatted.(
+               Logex.compile("var x bool\nvar_input a bool\ncal x a a x",
+                 name: "m",
+                 types: [seal]
+               )
+             ) == [
+               "line 3: `cal` runs an instance of a function block, but `x` is a bool " <>
+                 "(declared on line 1)"
+             ]
+    end
+  end
 end

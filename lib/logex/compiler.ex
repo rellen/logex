@@ -28,19 +28,28 @@ defmodule Logex.Compiler do
     "gt" => {:gt, [{:value, :dint}, {:value, :dint}]},
     "le" => {:le, [{:value, :dint}, {:value, :dint}]},
     "ge" => {:ge, [{:value, :dint}, {:value, :dint}]},
-    "ton" => {:ton, [{:instance, "ton"}, {:preset, :dint}]}
+    "ton" => {:ton, [{:instance, "ton"}, {:preset, :dint}]},
+    # M2-5: `cal` runs an instance of a user function block. Its entry is a marker, not a
+    # signature: the signature is the block's, built per compile from the instance's type
+    # (Logex.FbType.signature/1), the instance, then the block's var_inputs and var_outputs
+    # in declaration order. The entry still reserves the word and names its stanza.
+    "cal" => {:cal, :block}
   }
 
   @doc """
-  The mnemonic table: each lowercase mnemonic to its IR symbol and operand signature.
+  The mnemonic table: each lowercase mnemonic to its IR symbol and operand signature, or
+  for `cal` the marker `:block`, since its signature is the block's (M2-5; `signature/2`).
 
   Every key must have a `### \\`mnemonic\\`` stanza in `docs/naming.md`;
   `Logex.NamingTest` enforces it.
   """
   def instructions, do: @instructions
 
-  # Each IR symbol to its mnemonic's operand signature.
-  @signatures Map.new(@instructions, fn {_word, {symbol, signature}} -> {symbol, signature} end)
+  # Each IR symbol to its mnemonic's operand signature, where the mnemonic has one: `cal`'s
+  # is its block's, per instruction.
+  @signatures for {_word, {symbol, signature}} when is_list(signature) <- @instructions,
+                  into: %{},
+                  do: {symbol, signature}
 
   @doc """
   The slots of an instruction of the IR, `{symbol, line, operands}`: one `{access, type}`
@@ -49,12 +58,22 @@ defmodule Logex.Compiler do
   instruction's slots up here, never in a table of their own (M2-5).
 
   The slots are per instruction, given `tags`, the tag table of the program that holds it,
-  so that an instruction's slots may depend on what its operands name; none does yet. Total:
-  an instruction no mnemonic gives, or anything else that is not an instruction, which only
-  a program built by hand can hold, has none.
+  so that an instruction's slots may depend on what its operands name: a `cal`'s are its
+  instance's type's, `Logex.FbType.signature/1`'s, the instance first and then a slot per
+  formal, so a var_output it fills is written. Total: an instruction no mnemonic gives, a
+  `cal` of anything that is no user block's instance in `tags`, or anything else that is
+  not an instruction, which only a program built by hand can hold, has none.
   """
+  def signature({:cal, _line, [{:name, _, instance} | _]}, tags) when is_map(tags),
+    do: block_slots(Map.get(tags, instance))
+
   def signature({symbol, _line, _operands}, _tags), do: Map.get(@signatures, symbol, [])
   def signature(_not_an_instruction, _tags), do: []
+
+  defp block_slots(%Tag{type: %FbType{body: %Program{}} = type}),
+    do: for({slot, _formal} <- FbType.signature(type), do: slot)
+
+  defp block_slots(_not_a_block), do: []
 
   @doc """
   Lowers a parse AST to a `%Logex.Program{}`: its leading declaration lines become the tag
@@ -76,19 +95,391 @@ defmodule Logex.Compiler do
   literal or a rung over two lines, raises `ArgumentError`, a host mistake, since no
   source text says it and no diagnostic could cite it (OE-1). Then `declared`.
   """
-  def instructionize(routine, declared \\ []) do
+  def instructionize(routine, declared \\ [], types \\ []) do
     {:routine, {:rungs, rungs}} = Logex.Parser.well_formed!(routine)
-    {tags, logic, declaring} = Declarations.split(rungs, declared)
+    library = library!(types)
+    {kind, rungs, heading} = file_kind(rungs)
+    marks = marked(kind, library)
+    {tags, logic, declaring} = Declarations.split(rungs, declared, marks)
+    holds_itself!(kind, declared)
+    excused = excused(kind, rungs, marks)
+    Enum.reduce(blocks(tags), {library, :tags}, &one_version!/2)
     known = {tags, folded(tags)}
     {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, known))
     note? = map_size(tags) == 0 and declares_nothing?(routine, logic)
     instructions = instructions(rungs)
     shared = shared_bits(instructions, tags)
     {tags, timing} = presets(instructions, tags)
+    calls = calls(instructions)
     paths = Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end)
-    errors = declaring ++ undeclared(Enum.reverse(lowering), tags, note?) ++ shared ++ timing
-    lowered(rungs, tags, errors ++ paths)
+    found = Enum.reject(Enum.reverse(lowering), &excused?(&1, excused))
+    errors = declaring ++ undeclared(found, tags, note?) ++ shared ++ timing
+    lowered(kind, rungs, tags, heading ++ header_tags(kind, tags) ++ errors ++ calls ++ paths)
   end
+
+  @doc """
+  Whether `body`'s rungs, tags and warnings are exactly what `instructionize/3` gives for
+  some text over that tag table (M2-5): every rung lowers again, through the checks a
+  compile makes, to itself, with no diagnostic; the one-per-bit, one-per-timer and
+  one-per-instance rules and the path after a `ton` hold; each timer's preset is the
+  number on the `ton` that runs it; the rungs are on rising lines, each on one line, after
+  the declarations; and the warnings are the ones its rungs give, a file aside. Total: any
+  other value is `false`, never an exception.
+
+  It is the definition of a compiled body, which `Logex.FbType.user?/1` checks for a type
+  given to a compile or to `Logex.Tag.new!/4`, as `Logex.Parser.well_formed!/1` is of a
+  parse tree: what a type given cannot hold, no runtime or edit step meets. It expects
+  the tag table checked already, every entry a `%Logex.Tag{}` under its name and every
+  instance's type a valid one (`Logex.FbType.user?/1` checks those first).
+  """
+  def lowered?(%Program{rungs: rungs, tags: tags, warnings: warnings})
+      when is_list(rungs) and is_map(tags) and is_list(warnings),
+      do: relowered(proper?(rungs, &ir_rung?/1), rungs, tags, warnings)
+
+  def lowered?(_body), do: false
+
+  defp relowered(false, _rungs, _tags, _warnings), do: false
+
+  defp relowered(true, rungs, tags, warnings) do
+    known = {tags, folded(tags)}
+    instructions = instructions(rungs)
+    {timed, timing} = presets(instructions, unpreset(tags))
+
+    map_size(elem(known, 1)) == map_size(tags) and
+      Enum.all?(rungs, &lowers_to_itself?(&1, known)) and
+      shared_bits(instructions, tags) == [] and calls(instructions) == [] and timing == [] and
+      timed == tags and
+      Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end) == [] and
+      lines?(rungs, tags) and Enum.map(warnings, &fileless/1) == Logex.Warnings.of(rungs, tags)
+  end
+
+  # Each IR symbol back to its mnemonic.
+  @mnemonics Map.new(@instructions, fn {word, {symbol, _signature}} -> {symbol, word} end)
+
+  # A proper list, each element passing `test`: Enum.all?/2 raises on an improper one.
+  defp proper?([], _test), do: true
+  defp proper?([element | rest], test), do: test.(element) and proper?(rest, test)
+  defp proper?(_not_a_list, _test), do: false
+
+  defp ir_rung?({:rung, [_ | _] = elements}), do: proper?(elements, &ir_element?/1)
+  defp ir_rung?(_rung), do: false
+
+  defp ir_element?({:branches, [_ | _] = legs}), do: proper?(legs, &ir_leg?/1)
+
+  defp ir_element?({symbol, line, operands}) when is_integer(line) and line > 0,
+    do: is_map_key(@mnemonics, symbol) and proper?(operands, &ir_operand?/1)
+
+  defp ir_element?(_element), do: false
+
+  defp ir_leg?([_ | _] = elements), do: proper?(elements, &ir_element?/1)
+  defp ir_leg?(_leg), do: false
+
+  defp ir_operand?({:name, line, name}) when is_integer(line) and line > 0, do: is_binary(name)
+
+  defp ir_operand?({:int_lit, line, value}) when is_integer(line) and line > 0,
+    do: is_integer(value) and value >= 0
+
+  defp ir_operand?({:member, line, path}) when is_integer(line) and line > 0,
+    do: proper?(path, &is_binary/1)
+
+  defp ir_operand?(_operand), do: false
+
+  # A rung back to the elements its text parses to, lowered again: the same IR, and no
+  # diagnostic.
+  defp lowers_to_itself?({:rung, elements} = rung, known),
+    do: lower_rung({:rung, Enum.flat_map(elements, &unlowered/1)}, [], known) == {rung, []}
+
+  defp unlowered({:branches, legs}),
+    do: [{:branches, Enum.map(legs, &Enum.flat_map(&1, fn e -> unlowered(e) end))}]
+
+  defp unlowered({symbol, line, operands}),
+    do: [{:name, line, Map.fetch!(@mnemonics, symbol)} | Enum.map(operands, &unlowered_operand/1)]
+
+  defp unlowered_operand({:member, line, path}), do: {:name, line, Enum.join(path, ".")}
+  defp unlowered_operand(operand), do: operand
+
+  # A timer's preset is the compiler's to give, from the `ton` that runs it.
+  defp unpreset(tags),
+    do:
+      Map.new(tags, fn
+        {name, %Tag{type: %FbType{}} = tag} -> {name, %{tag | initial: nil}}
+        entry -> entry
+      end)
+
+  # Each rung on one line, after the last, and every declaration line before the first.
+  defp lines?(rungs, tags) do
+    lines = Enum.map(rungs, &rung_lines/1)
+    declared = for {_, %Tag{line: line}} <- tags, line != nil, do: line
+
+    Enum.all?(lines, &match?([_], &1)) and
+      Enum.uniq(declared) == declared and
+      rising?(Enum.sort(declared) ++ Enum.map(lines, &hd/1))
+  end
+
+  defp rung_lines({:rung, elements}),
+    do: elements |> gather([]) |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
+
+  defp rising?([one, two | rest]), do: one < two and rising?([two | rest])
+  defp rising?(_short), do: true
+
+  defp fileless(%Diagnostic{} = warning), do: %{warning | file: nil}
+  defp fileless(other), do: other
+
+  # ---- M2-5: a function block's file, and the blocks a compile is given ------------------
+
+  # A file is a function block when its first rung is `function_block <name>`, and a
+  # program otherwise (decision 4). The line comes off before the declarations, as they do
+  # before the rungs. `{kind, rungs, diagnostics}`, the kind `:program` or `{:block, name}`.
+  defp file_kind([{:rung, [{:name, line, word} | rest]} | rungs] = all),
+    do: heads(String.downcase(word) == "function_block", rest, line, rungs, all)
+
+  defp file_kind(rungs), do: {:program, rungs, []}
+
+  defp heads(false, _rest, _line, _rungs, all), do: {:program, all, []}
+  defp heads(true, [{:name, _, name}], line, rungs, _all), do: block_named(name, line, rungs)
+
+  defp heads(true, _rest, line, rungs, _all),
+    do:
+      {{:block, nil}, rungs,
+       [diagnostic(line, "`function_block` takes the block's name, as in `function_block seal`")]}
+
+  # A block's name is spelled in the files that use it, `var s1 seal`, so it is a name, and
+  # no word that is reserved: `var s1 move` would read as a mnemonic.
+  defp block_named(name, line, rungs),
+    do: {{:block, name}, rungs, block_name(Declarations.name?(name), name, line)}
+
+  defp block_name(false, name, line),
+    do: [
+      diagnostic(
+        line,
+        "`#{name}` cannot name a function block: a name is a letter or `_`, " <>
+          "then letters, digits or `_`"
+      )
+    ]
+
+  defp block_name(true, name, line), do: reserved_block(Declarations.reserved(name), name, line)
+
+  # docs/organisation.md §4.8: the word that heads a block's file is reserved in one, so it
+  # names no block, which would be spelled as a type word in a block's file.
+  defp reserved_block(nil, name, line),
+    do: header_word(String.downcase(name) in Declarations.kinds(), name, line)
+
+  defp reserved_block(reserved, name, line),
+    do: [
+      diagnostic(line, "`#{name}` is #{reserved_as(reserved)} and cannot name a function block")
+    ]
+
+  defp header_word(false, _name, _line), do: []
+
+  defp header_word(true, name, line),
+    do: [diagnostic(line, "`#{name}` is a keyword and cannot name a function block")]
+
+  # docs/organisation.md §4.8: `function_block` is reserved in a block's file only. A tag
+  # declared from Elixir, which no line can cite, is refused as a host mistake.
+  defp header_tags({:block, _name}, tags),
+    do:
+      for(
+        {name, %Tag{line: line}} <- tags,
+        String.downcase(name) in Declarations.kinds(),
+        do: header_tag(line, name)
+      )
+
+  defp header_tags(:program, _tags), do: []
+
+  defp header_tag(nil, name),
+    do:
+      raise(
+        ArgumentError,
+        "`#{name}` heads a function block's file and cannot name a tag in one"
+      )
+
+  defp header_tag(line, name),
+    do: diagnostic(line, "`#{name}` heads a function block's file and cannot name a tag in one")
+
+  # Recursion through a tag declared from Elixir, which no line can cite: a host mistake.
+  # Each type is searched once, however many instances hold it.
+  defp holds_itself!({:block, name}, declared) when is_binary(name) do
+    Enum.reduce(declared, %{}, fn
+      %Tag{name: tag, type: %FbType{} = type}, seen -> itself!(holds(type, name, seen), tag, name)
+      _tag, seen -> seen
+    end)
+
+    :ok
+  end
+
+  defp holds_itself!(_kind, _declared), do: :ok
+
+  defp itself!({true, _seen}, tag, name),
+    do:
+      raise(
+        ArgumentError,
+        "`#{tag}` holds an instance of `#{name}`, the function block being compiled: " <>
+          "a function block never holds an instance of itself, at any depth"
+      )
+
+  defp itself!({false, seen}, _tag, _name), do: seen
+
+  # Whether `type`, or a type it holds at any depth, is named `name`: `{held?, seen}`, the
+  # types searched so far each to whether it does.
+  defp holds(%FbType{name: name}, name, seen), do: {true, seen}
+  defp holds(%FbType{name: held}, _name, seen) when is_map_key(seen, held), do: {seen[held], seen}
+
+  defp holds(%FbType{name: held} = type, name, seen) do
+    {found, seen} =
+      Enum.reduce(nested(type), {false, Map.put(seen, held, false)}, fn
+        _inner, {true, seen} -> {true, seen}
+        inner, {false, seen} -> holds(inner, name, seen)
+      end)
+
+    {found, Map.put(seen, held, found)}
+  end
+
+  # One mistake, one message: a declaration refused as recursive declares nothing, and its
+  # uses are excused rather than each reported as undeclared.
+  # Only a block's own file marks a type recursive.
+  defp excused(:program, _rungs, _marks), do: %{}
+
+  defp excused(_block, rungs, marks),
+    do:
+      for(
+        {:rung, [{:name, _, section}, {:name, _, tag}, {:name, _, word} | _]} <- rungs,
+        Declarations.reserved(section) == :section,
+        match?({:recursive, _}, Map.get(marks, word)),
+        into: %{},
+        do: {tag, true}
+      )
+
+  defp excused?({:undeclared, _line, name, _slot}, excused), do: is_map_key(excused, name)
+  defp excused?(_diagnostic, _excused), do: false
+
+  # The blocks a compile is given: a list of user types, each one Logex.compile/2 gave, and
+  # no two of one name. A host mistake otherwise. By name, for the declaration lines.
+  defp library!(types) when is_list(types) do
+    library =
+      Enum.reduce(types, %{}, fn type, library -> given!(FbType.user?(type), type, library) end)
+
+    Enum.reduce(Map.values(library), {library, :types}, &one_version!/2)
+    library
+  end
+
+  defp library!(types),
+    do:
+      raise(
+        ArgumentError,
+        "types must be a list of function block types from Logex.compile/2, got: " <>
+          inspect(types)
+      )
+
+  defp given!(true, %FbType{name: name} = type, library) when not is_map_key(library, name),
+    do: Map.put(library, name, type)
+
+  defp given!(true, %FbType{name: name}, _library),
+    do:
+      raise(ArgumentError, "types holds two function blocks named `#{name}`: one name, one type")
+
+  defp given!(false, type, _library),
+    do:
+      raise(
+        ArgumentError,
+        "types must be function block types from Logex.compile/2, got: #{inspect(type)}"
+      )
+
+  defp blocks(tags), do: for({_, %Tag{type: %FbType{body: %Program{}} = type}} <- tags, do: type)
+
+  # Every block a given type holds, at any depth, is the one given under its name where one
+  # is: a program holds one type of each name, which the edit's rules (Logex.Edit) and the
+  # runtime's lookups by name rely on. Each type is walked once.
+  # `from` says where the types walked came from, `:types` or `:tags`, for the message.
+  defp one_version!(%FbType{name: name} = type, {seen, from}) do
+    same = same?(Map.get(seen, name, type), type)
+    seen = versions!(same, name, Map.put(seen, name, type), from)
+    Enum.reduce(nested(type), {seen, from}, &held_version!/2)
+  end
+
+  defp held_version!(%FbType{name: name} = type, {seen, from}) when is_map_key(seen, name),
+    do: {versions!(same?(Map.fetch!(seen, name), type), name, seen, from), from}
+
+  defp held_version!(type, acc), do: one_version!(type, acc)
+
+  # Two versions of a block are one where they run alike: its warnings, which carry the file
+  # it was compiled from, if any, under whatever spelling of its path, are no part of it. A
+  # type compared with itself, the usual case, is one term, so no walk is made.
+  defp same?(type, type), do: true
+
+  defp same?(
+         %FbType{name: name, members: members, body: %Program{} = one},
+         %FbType{name: name, members: members, body: %Program{} = other}
+       ),
+       do:
+         one.name == other.name and one.rungs == other.rungs and
+           map_size(one.tags) == map_size(other.tags) and
+           Enum.all?(one.tags, fn {key, tag} -> same_tag?(tag, Map.get(other.tags, key)) end)
+
+  defp same?(_one, _other), do: false
+
+  defp same_tag?(%Tag{type: %FbType{} = one} = tag, %Tag{type: %FbType{} = other} = another),
+    do: %{tag | type: nil} == %{another | type: nil} and same?(one, other)
+
+  defp same_tag?(tag, another), do: tag == another
+
+  defp versions!(true, _name, seen, _from), do: seen
+
+  # The tags are walked after the types, so a second version found there is in a tag
+  # declared from Elixir: a tag a declaration line declares has a type given.
+  defp versions!(false, name, _seen, :tags),
+    do:
+      raise(
+        ArgumentError,
+        "a tag declared from Elixir holds a function block named `#{name}` other than the " <>
+          "one of that name in the types given or in another tag: give every instance of a " <>
+          "block the same version, compiled against the same types"
+      )
+
+  defp versions!(false, name, _seen, :types),
+    do:
+      raise(
+        ArgumentError,
+        "types holds two different function blocks named `#{name}`, one inside another type " <>
+          "given: compile each block against the same types"
+      )
+
+  # Recursion (Ed 2 §2.5; docs/organisation.md §4.3). In a block's own file, its own name,
+  # and every type given that holds an instance of a type of that name at any depth, is
+  # marked `{:recursive, chain}`, and a declaration of one is refused at its line. Each type
+  # is searched once, however many hold it, so the marking is linear in the types.
+  defp marked(:program, library), do: library
+
+  defp marked({:block, name}, library) do
+    {chains, _seen} = Enum.reduce(library, {%{}, %{}}, fn {_, t}, acc -> chain(t, name, acc) end)
+
+    marks =
+      for {held, [_ | _] = chain} <- chains, into: %{}, do: {held, {:recursive, [name | chain]}}
+
+    library |> Map.merge(marks) |> Map.put(name, {:recursive, [name, name]})
+  end
+
+  # The chain from `type` down to a type named `name`, `[type.name, …, name]`, or nil.
+  defp chain(%FbType{name: name}, name, {chains, seen}),
+    do: {Map.put(chains, name, [name]), Map.put(seen, name, true)}
+
+  defp chain(%FbType{name: held} = type, name, {chains, seen}) when not is_map_key(seen, held) do
+    {chains, seen} =
+      Enum.reduce(nested(type), {chains, Map.put(seen, held, true)}, &chain(&1, name, &2))
+
+    {Map.put(chains, held, down(held, Enum.find_value(nested(type), &Map.get(chains, &1.name)))),
+     seen}
+  end
+
+  defp chain(_seen, _name, acc), do: acc
+
+  # The user block types a type holds, each once, from its body's tag table (Logex.FbType).
+  defp nested(%FbType{body: %Program{tags: tags}}),
+    do: for({_, %Tag{type: %FbType{body: %Program{}} = type}} <- tags, do: type)
+
+  defp nested(%FbType{body: nil}), do: []
+
+  defp down(_held, nil), do: nil
+  defp down(held, chain), do: [held | chain]
 
   # M1-6: one `ons` uses a storage bit. A second `ons` on one bit is an error at its own
   # line, citing the first: the false one clears the bit every scan, so the true one fires
@@ -274,12 +665,52 @@ defmodule Logex.Compiler do
   # No declaration line at all, as opposed to declarations that were all wrong.
   defp declares_nothing?({:routine, {:rungs, rungs}}, logic), do: length(rungs) == length(logic)
 
-  defp lowered(rungs, tags, []),
+  defp lowered(:program, rungs, tags, []),
     do: {:ok, %Program{rungs: rungs, tags: tags, warnings: Logex.Warnings.of(rungs, tags)}}
+
+  # M2-5: a block's file compiles to its type, whose body is the program of its rungs.
+  defp lowered({:block, name}, rungs, tags, []) do
+    body = %Program{
+      name: name,
+      rungs: rungs,
+      tags: tags,
+      warnings: Logex.Warnings.of(rungs, tags)
+    }
+
+    {:ok, FbType.of(body)}
+  end
 
   # A declaration after the first rung is reported where it stands, so the two lists are
   # merged by line. The sort is stable: within a line, the order each list gave is kept.
-  defp lowered(_rungs, _tags, diagnostics), do: {:error, Enum.sort_by(diagnostics, & &1.line)}
+  defp lowered(_kind, _rungs, _tags, diagnostics),
+    do: {:error, Enum.sort_by(diagnostics, & &1.line)}
+
+  # M2-5: one `cal` runs an instance, as one `ton` runs a timer: a second is an error at its
+  # own line, citing the first. Two would run the body twice a scan, and the edit's rules
+  # for the one-shots and timers inside it (Logex.Edit) name the one rung that runs it.
+  defp calls(instructions) do
+    {_first, diagnostics} =
+      Enum.reduce(instructions, {%{}, []}, fn
+        {:cal, line, [{:name, _, instance} | _]}, {first, diagnostics} ->
+          called(Map.fetch(first, instance), instance, line, {first, diagnostics})
+
+        _instruction, acc ->
+          acc
+      end)
+
+    Enum.reverse(diagnostics)
+  end
+
+  defp called(:error, instance, line, {first, diagnostics}),
+    do: {Map.put(first, instance, line), diagnostics}
+
+  defp called({:ok, first_line}, instance, line, {first, diagnostics}) do
+    message =
+      "`#{instance}` is already run by the `cal` #{where(first_line, line)}: " <>
+        "one `cal` runs an instance"
+
+    {first, [diagnostic(line, message) | diagnostics]}
+  end
 
   defp lower_rung({:rung, elements}, diagnostics, known) do
     {ir, diagnostics} = lower(elements, [], diagnostics, known)
@@ -308,6 +739,13 @@ defmodule Logex.Compiler do
     lower(skip_operands(rest), ir, [found | diagnostics], known)
   end
 
+  # M2-5: `cal`, whose signature is its instance's type's, looked up before its other
+  # operands are taken.
+  defp lower_word({:ok, {:cal, :block}}, _key, at, {rest, ir, diagnostics, known}) do
+    {instance, after_instance} = take_operands(rest, 1, [])
+    cal(instance, at, {after_instance, ir, diagnostics, known})
+  end
+
   defp lower_word(
          {:ok, {symbol, signature}},
          _key,
@@ -328,6 +766,239 @@ defmodule Logex.Compiler do
     lower(skip_operands(rest), ir, [unknown | diagnostics], known)
   end
 
+  # `cal` with no instance before the next instruction, a group or the end of its leg.
+  defp cal([], {line, word}, {rest, ir, diagnostics, known}) do
+    message = "`#{word}` expects an instance of a function block, found none" <> stopped_at(rest)
+    lower(rest, ir, [diagnostic(line, message) | diagnostics], known)
+  end
+
+  defp cal([{:int_lit, _, value}], {line, word}, {rest, ir, diagnostics, known}) do
+    message = "`#{word}` expects an instance of a function block, found `#{value}`"
+    lower(skip_operands(rest), ir, [diagnostic(line, message) | diagnostics], known)
+  end
+
+  defp cal([{:name, _, name} = instance], at, {rest, ir, diagnostics, known}) do
+    {tags, _folded} = known
+
+    runs(
+      Declarations.reserved(name),
+      lookup(name, tags),
+      instance,
+      at,
+      {rest, ir, diagnostics, known}
+    )
+  end
+
+  # The instance of a user block: its operands taken, each checked against the formal it
+  # fills, and lowered as any instruction is.
+  defp runs(nil, {:ok, %Tag{type: %FbType{body: %Program{}} = type}}, instance, at, state) do
+    {rest, ir, diagnostics, known} = state
+    {line, _word} = at
+    {tags, _folded} = known
+    [_instance | formals] = FbType.signature(type)
+    {operands, rest} = take_operands(rest, length(formals), [])
+    diagnostics = cal_count(formals, operands, rest, instance, diagnostics)
+    diagnostics = cal_operands(formals, operands, {at, instance}, tags, diagnostics)
+    lowered = {:cal, line, [instance | Enum.map(operands, &operand/1)]}
+    lower(rest, [lowered | ir], diagnostics, known)
+  end
+
+  # Anything else is not run by `cal`, and its would-be operands are passed over: a timer,
+  # which its `ton` runs; a bool or a dint; a member; a reserved word; or a name no
+  # declaration gives, reported once as undeclared.
+  defp runs(reserved, found, {:name, line, name}, {_, word}, {rest, ir, diagnostics, known}) do
+    lower(
+      skip_operands(rest),
+      ir,
+      not_run(reserved, found, line, name, word) ++ diagnostics,
+      known
+    )
+  end
+
+  defp not_run(nil, :error, line, name, _word), do: [{:undeclared, line, name, :block}]
+
+  defp not_run(nil, {:undeclared, head}, line, _name, _word),
+    do: [{:undeclared, line, head, :member}]
+
+  defp not_run(nil, {:ok, %Tag{type: %FbType{name: type}} = tag}, line, name, word),
+    do: [
+      diagnostic(
+        line,
+        "`#{word}` runs an instance of a user function block, but `#{name}` is a " <>
+          "#{type}#{declared(tag)}, which `#{type} #{name}` and its preset run"
+      )
+    ]
+
+  defp not_run(nil, {:ok, tag}, line, name, word),
+    do: [
+      diagnostic(
+        line,
+        "`#{word}` runs an instance of a function block, but `#{name}` is a " <>
+          "#{tag.type}#{declared(tag)}"
+      )
+    ]
+
+  defp not_run(nil, _member, line, name, word),
+    do: [
+      diagnostic(
+        line,
+        "`#{word}` runs an instance of a function block, named whole: found `#{name}`"
+      )
+    ]
+
+  defp not_run(reserved, _found, line, name, word),
+    do: [
+      diagnostic(
+        line,
+        "`#{word}` expects an instance of a function block, found #{reserved_word(reserved)} " <>
+          "`#{name}`"
+      )
+    ]
+
+  defp reserved_word(:mnemonic), do: "the instruction"
+  defp reserved_word(:type), do: "the type"
+  defp reserved_word(:section), do: "the keyword"
+
+  # docs/organisation.md §4.3: an arity error names every formal, in order.
+  defp cal_count(formals, operands, _rest, _instance, diagnostics)
+       when length(operands) == length(formals),
+       do: diagnostics
+
+  defp cal_count(formals, operands, rest, {:name, line, instance}, diagnostics) do
+    message =
+      "`cal #{instance}` expects #{operand_count(length(formals))} after its instance, " <>
+        "#{Enum.map_join(formals, ", then ", &formal/1)}: found #{found(length(operands))}" <>
+        stopped_at(rest)
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp formal({_slot, %Member{name: name, role: role, type: type}}),
+    do: "`#{name}` (#{section(role)} #{type})"
+
+  defp section(:input), do: "var_input"
+  defp section(:output), do: "var_output"
+
+  # Each operand against the formal it fills, which an error names: ``operand 2 of `cal s1`
+  # is `stop` (var_input bool)`` (docs/organisation.md §4.3). A tag or member of the wrong
+  # type, a literal where the block writes, a var_input or a member logic may not write
+  # where it writes, and an instance named whole. A reserved word, an undeclared name and a
+  # dotted name that is no member are reported as any instruction's are.
+  defp cal_operands(formals, operands, at, tags, diagnostics),
+    do:
+      formals
+      |> Enum.zip(operands)
+      |> Enum.with_index(1)
+      |> Enum.reduce(diagnostics, fn {{formal, operand}, n}, acc ->
+        cal_operand(formal, operand, {n, at}, tags, acc)
+      end)
+
+  defp cal_operand({{:value, type}, _} = formal, {:int_lit, line, value}, at, _tags, diagnostics),
+    do: fits_formal(Declarations.fits?(type, value), formal, value, {line, at}, diagnostics)
+
+  defp cal_operand({{:write, _}, _} = formal, {:int_lit, line, value}, at, _tags, diagnostics),
+    do: [
+      diagnostic(line, of_formal(formal, at) <> ", which it writes: found `#{value}`")
+      | diagnostics
+    ]
+
+  defp cal_operand({slot, _} = formal, {:name, line, name} = operand, at, tags, diagnostics),
+    do:
+      by_formal(
+        Declarations.reserved(name),
+        lookup(name, tags),
+        {formal, slot, operand},
+        {line, at},
+        {tags, diagnostics}
+      )
+
+  defp fits_formal(true, _formal, _value, _at, diagnostics), do: diagnostics
+
+  defp fits_formal(false, {{_, :bool}, _} = formal, value, {line, at}, diagnostics),
+    do: [
+      diagnostic(line, of_formal(formal, at) <> ": only 0 or 1 fit, found `#{value}`")
+      | diagnostics
+    ]
+
+  defp fits_formal(false, formal, value, {line, at}, diagnostics),
+    do: [
+      diagnostic(line, of_formal(formal, at) <> ": `#{value}` does not fit in 32 bits")
+      | diagnostics
+    ]
+
+  defp by_formal(
+         nil,
+         {:ok, %Tag{type: %FbType{} = type} = tag},
+         {formal, _, _},
+         {line, at},
+         {_, d}
+       ),
+       do: [
+         diagnostic(
+           line,
+           of_formal(formal, at) <>
+             ", but `#{tag.name}` is #{Declarations.instance_of(type)}#{declared(tag)}: " <>
+             "name one of its members"
+         )
+         | d
+       ]
+
+  defp by_formal(nil, {:ok, %Tag{} = tag}, {formal, {access, type}, _}, {line, at}, {_, d}),
+    do:
+      d
+      |> typed_formal(type, tag.type, tag.name, {formal, line, at})
+      |> input_formal(access, tag, {formal, line, at})
+
+  defp by_formal(
+         nil,
+         {:member, tag, member},
+         {formal, {access, type}, {:name, _, name}},
+         {line, at},
+         {_, d}
+       ),
+       do:
+         d
+         |> typed_formal(type, member.type, name, {formal, line, at})
+         |> member_formal(access, tag, member, name, {formal, line, at})
+
+  defp by_formal(
+         reserved,
+         found,
+         {_formal, slot, operand},
+         {line, {_n, {_at, _instance}}},
+         {_tags, d}
+       ),
+       do: resolve(reserved, found, slot, operand, {line, "cal"}, d)
+
+  defp typed_formal(diagnostics, type, type, _name, _at), do: diagnostics
+
+  defp typed_formal(diagnostics, _type, found, name, {formal, line, at}),
+    do: [diagnostic(line, of_formal(formal, at) <> ", but `#{name}` is a #{found}") | diagnostics]
+
+  defp input_formal(diagnostics, :write, %Tag{section: :var_input} = tag, {formal, line, at}),
+    do: [
+      diagnostic(
+        line,
+        of_formal(formal, at) <>
+          ", which it writes: `#{tag.name}` is a var_input#{declared(tag)}, and logic must not " <>
+          "write an input"
+      )
+      | diagnostics
+    ]
+
+  defp input_formal(diagnostics, _access, _tag, _at), do: diagnostics
+
+  defp member_formal(diagnostics, :write, tag, %Member{write: false}, name, {formal, line, at}),
+    do: [
+      diagnostic(line, of_formal(formal, at) <> ", which it writes: " <> unwritable(tag, name))
+      | diagnostics
+    ]
+
+  defp member_formal(diagnostics, _access, _tag, _member, _name, _at), do: diagnostics
+
+  defp of_formal({_slot, %Member{} = member}, {n, {_at, {:name, _, instance}}}),
+    do: "operand #{n} of `cal #{instance}` is #{formal({nil, member})}"
+
   # M1-6: a member is lowered to its path, so the runtime reads and writes it without
   # splitting its name again: `t1.acc` becomes `{:member, line, ["t1", "acc"]}`. A dotted
   # name that resolves to nothing has a diagnostic, and a program with one never runs.
@@ -344,6 +1015,10 @@ defmodule Logex.Compiler do
   # position is claimed -- `bst` remains a perfectly good tag name.
   defp unknown(key, word) when key in @migrated,
     do: "`#{word}` is no longer a keyword — branches are written `( … | … )`"
+
+  # M2-5: the word that heads a function block's file is a line of its own, its first.
+  defp unknown("function_block", word),
+    do: "`#{word}` heads a function block's file, as its first line"
 
   # PLAN.md §5: renamed to its IEC 61131-3 name, with no alias.
   defp unknown("mov", word),
@@ -596,8 +1271,9 @@ defmodule Logex.Compiler do
          diagnostics
        ) do
     message =
-      "`#{word}` #{verb(access)} #{a_type(slot_type)}, but `#{tag.name}` is a " <>
-        "#{type.name}#{declared(tag)}" <> example(fitting(access, slot_type, type), tag)
+      "`#{word}` #{verb(access)} #{a_type(slot_type)}, but `#{tag.name}` is " <>
+        "#{Declarations.instance_of(type)}#{declared(tag)}" <>
+        example(fitting(access, slot_type, type), tag)
 
     [diagnostic(line, message) | diagnostics]
   end
@@ -621,7 +1297,7 @@ defmodule Logex.Compiler do
     suggestion = Declarations.suggest(part, names, &"#{tag.name}.#{&1}", "members")
 
     message =
-      "`#{name}` is not a member of `#{tag.name}`, a #{tag.type.name}" <>
+      "`#{name}` is not a member of `#{tag.name}`, #{Declarations.instance_of(tag.type)}" <>
         members(suggestion, names)
 
     [diagnostic(line, message) | diagnostics]
@@ -650,6 +1326,8 @@ defmodule Logex.Compiler do
     [diagnostic(line, message) | diagnostics]
   end
 
+  # A user block may show no member outside it (M2-5).
+  defp members("", []), do: ": it has none that logic outside it may name"
   defp members("", names), do: ": its members are " <> listed(Enum.map(names, &"`#{&1}`"))
   defp members(suggestion, _names), do: suggestion
 
@@ -666,7 +1344,7 @@ defmodule Logex.Compiler do
   defp no_members(_not_a_bit, name, tag),
     do:
       "`#{name}` names a member of `#{tag.name}`, but `#{tag.name}` is a #{tag.type}" <>
-        "#{declared(tag)}: only a timer has members"
+        "#{declared(tag)}: only an instance of a function block has members"
 
   # Bit access, when it lands, reaches a bit of a word; a bool is one bit, and has none.
   defp bit(name, word, :bool), do: "`#{name}` names a bit of `#{word}`, a bool, which has no bits"
@@ -710,15 +1388,21 @@ defmodule Logex.Compiler do
          %Member{write: false},
          {line, word}
        ) do
-    writable = listed(Enum.map(FbType.writable(tag.type), &"`.#{&1.name}`"))
-
-    message =
-      "`#{word}` writes `#{name}`, but logic may write only #{writable} of a #{tag.type.name}"
-
-    [diagnostic(line, message) | diagnostics]
+    [diagnostic(line, "`#{word}` writes `#{name}`, but " <> unwritable(tag, name)) | diagnostics]
   end
 
   defp check_member_write(diagnostics, _slot, _tag, _name, _member, _at), do: diagnostics
+
+  # Decision 9 for a ton; decision 33 for a user block: logic outside it writes none of its
+  # members, which only its body writes.
+  defp unwritable(%Tag{type: type} = tag, _name),
+    do: unwritable(FbType.writable(type), type, tag)
+
+  defp unwritable([], type, tag),
+    do: "`#{tag.name}` is #{Declarations.instance_of(type)}, whose members only its body writes"
+
+  defp unwritable(writable, type, _tag),
+    do: "logic may write only #{listed(Enum.map(writable, &"`.#{&1.name}`"))} of a #{type.name}"
 
   defp check_type(diagnostics, _access, :any, _tag, _at), do: diagnostics
   defp check_type(diagnostics, _access, type, %Tag{type: type}, _at), do: diagnostics
@@ -823,6 +1507,7 @@ defmodule Logex.Compiler do
   defp how(false, _slot, _name), do: ""
   defp how(true, :member, _name), do: ""
   defp how(true, {:instance, type}, name), do: note("`var #{name} #{type}`")
+  defp how(true, :block, _name), do: ""
   defp how(true, _slot, name), do: note("`var #{name} bool` or `var #{name} dint`")
 
   defp note(declaration),

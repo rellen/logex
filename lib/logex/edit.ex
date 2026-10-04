@@ -33,7 +33,15 @@ defmodule Logex.Edit do
   declared from Elixir, which has no line, after them. A changed section or initial value
   is not a type change, and a warning in the candidate does not stop it. Its forecast is
   the report a test taken now would give; a test taken later reads the state as it is
-  then. An `:edit` diagnostic has no file, since a `%Logex.Program{}` keeps none (fix F15).
+  then. An `:edit` diagnostic cites the candidate's file, its `file`, which
+  `Logex.compile_file/1` sets, and none for a candidate compiled from text (fix F15).
+
+  A function block's instance (M2-5) is a tag whose type is the block's whole type, its
+  body included, so accept refuses any change to the block an instance both programs
+  declare holds, as `` `s1` is an instance of `seal`, which the candidate changes ``, and
+  an instance of one block that becomes another's as a type change. An instance of a block
+  both programs hold unchanged moves whole, as any tag does, and the outputs a `cal`
+  writes are writes, for the held outputs below.
 
   **A switch**, `test/2` or `untest/2`, moves the state from the program it stops to the
   one it starts. It prunes nothing, and never touches `now` or `first`, so no switch makes
@@ -306,8 +314,11 @@ defmodule Logex.Edit do
 
   # ---- host mistakes ----------------------------------------------------------------------
 
-  # The runtime's own message for a non-program.
+  # The runtime's own messages for a non-program, a function block type among them (M2-5).
   defp program!(%Program{tags: tags, rungs: rungs}) when is_map(tags) and is_list(rungs), do: :ok
+
+  defp program!(%FbType{name: name} = type) when is_binary(name),
+    do: raise(ArgumentError, "`#{name}` is " <> Declarations.not_a_program(type))
 
   defp program!(other),
     do:
@@ -354,27 +365,35 @@ defmodule Logex.Edit do
 
   # §4.9: a tag's type, a function block's members included, changes only with a restart.
   # In line order, a tag declared from Elixir (line nil, after every number) last, by name.
-  defp retyped(%Program{tags: running}, %Program{tags: candidate}) do
+  # Each is cited in the candidate's file, where it has one (fix F15).
+  #
+  # M2-5: a user function block's type is the whole of it, its body included, so any change
+  # to the block an instance holds is refused here, whatever the block keeps of its name.
+  defp retyped(%Program{tags: running}, %Program{tags: candidate, file: file}) do
     retyped =
       for {name, %Tag{type: type, line: line}} <- candidate,
           {:ok, %Tag{type: was}} <- [Map.fetch(running, name)],
           was != type,
-          do: {{line, name}, retyped(name, line, was, type)}
+          do: {{line, name}, retyped(name, {file, line}, was, type)}
 
     for {_at, diagnostic} <- Enum.sort_by(retyped, &elem(&1, 0)), do: diagnostic
   end
 
-  defp retyped(name, line, was, type),
-    do: %Diagnostic{
-      stage: :edit,
-      line: line,
-      message:
-        "`#{name}` is a #{word(was)} in the running program and a #{word(type)} in the " <>
-          "candidate: a tag's type changes only with a restart"
-    }
+  defp retyped(name, {file, line}, was, type),
+    do: %Diagnostic{stage: :edit, file: file, line: line, message: changed(name, was, type)}
 
-  defp word(%FbType{name: name}), do: name
-  defp word(type), do: Atom.to_string(type)
+  defp changed(tag, %FbType{name: b, body: %Program{}}, %FbType{name: b, body: %Program{}}),
+    do:
+      "`#{tag}` is an instance of `#{b}`, which the candidate changes: a function block " <>
+        "changes only with a restart"
+
+  defp changed(name, was, type),
+    do:
+      "`#{name}` is #{word(was)} in the running program and #{word(type)} in the " <>
+        "candidate: a tag's type changes only with a restart"
+
+  defp word(%FbType{} = type), do: Declarations.instance_of(type)
+  defp word(type), do: "a #{type}"
 
   # The per-program half (F5): what each program declares and drives, read once, and a
   # plan for each direction. A switch then reads and writes only the state and the record,

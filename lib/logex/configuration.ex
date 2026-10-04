@@ -490,8 +490,8 @@ defmodule Logex.Configuration do
        when is_map(tags) and is_list(rungs),
        do: {ok, ["the program under #{label(key)} is named #{label(name)}" | mistakes]}
 
-  defp program(key, %FbType{name: name}, ok, mistakes),
-    do: {ok, [block_type(key, name) | mistakes]}
+  defp program(key, %FbType{name: name} = type, ok, mistakes),
+    do: {ok, [block_type(key, name, type) | mistakes]}
 
   defp program(key, other, ok, mistakes),
     do:
@@ -502,17 +502,12 @@ defmodule Logex.Configuration do
          | mistakes
        ]}
 
-  # A function block type runs inside a program, never as one. The words are interim:
-  # M2-5 says how one runs there.
-  defp block_type(name, name),
-    do:
-      "#{label(name)} is a function block type, which runs inside a program: an instance " <>
-        "is of a %Logex.Program{}"
+  # A function block type runs inside a program, never as one: the one message of every
+  # entry point (Logex.Declarations.not_a_program/1), with the key where it differs.
+  defp block_type(name, name, type), do: "#{label(name)} is " <> Declarations.not_a_program(type)
 
-  defp block_type(key, name),
-    do:
-      "the program under #{label(key)} is #{label(name)}, a function block type, which runs " <>
-        "inside a program: an instance is of a %Logex.Program{}"
+  defp block_type(key, name, type),
+    do: "the program under #{label(key)} is #{label(name)}, " <> Declarations.not_a_program(type)
 
   defp program_shaped(true, %Program{name: name} = program, ok, mistakes),
     do: {Map.put(ok, name, program), mistakes}

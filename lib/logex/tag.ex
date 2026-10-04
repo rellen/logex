@@ -1,7 +1,8 @@
 defmodule Logex.Tag do
   @moduledoc """
   One declared tag. `type` is `:bool`, `:dint`, or for an instance of a function block a
-  `%Logex.FbType{}`, the schema itself, as `Logex.FbType.ton()` (M1-6). `initial` is the
+  `%Logex.FbType{}`, the schema itself, as `Logex.FbType.ton()` (M1-6) or a user block's
+  type as `Logex.compile/2` gives it for the block's file (M2-5). `initial` is the
   initial value as declared, or nil when none was, and the tag then starts at 0
   (`Logex.Program.initial_env/1`). An instance is declared with none, and its members
   start where its type says; but a compiled timer carries its preset, the number on the
@@ -34,7 +35,9 @@ defmodule Logex.Tag do
     preset is the number on the `ton` that runs it; the `%{"pre" => ms}` this took until
     OE-1 is withdrawn, since a `ton` silently replaced it and, with none, no text could
     give that `.pre`;
-  - a negative initial value, until a negative literal lexes (`PLAN.md` §5).
+  - a negative initial value, until a negative literal lexes (`PLAN.md` §5);
+  - a user block's type that no compile could give (`Logex.FbType.user?/1`), such as one
+    whose body was edited by hand (M2-5).
   """
   def new!(name, type, section \\ :var, initial \\ nil),
     do:

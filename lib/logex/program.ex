@@ -6,6 +6,9 @@ defmodule Logex.Program do
   - `name` is set by `Logex.compile/2` and `Logex.compile_file/1`; it is nil only for a
     program built by `Logex.Compiler.instructionize/2` directly, or by hand.
   - `source` is the text it was compiled from, when it came through `Logex.compile*`.
+  - `file` is the path `Logex.compile_file/1` read it from, and nil for a program from
+    text (fix F15): a diagnostic about it that cites a line, such as an online edit's
+    (`Logex.Edit`), cites that file too.
   - `rungs` are the lowered rungs. Declaration lines are rungs in the parse AST, but never
     here.
   - `tags` is the tag table, keyed by tag name.
@@ -13,19 +16,23 @@ defmodule Logex.Program do
   """
 
   @enforce_keys [:rungs, :tags]
-  defstruct [:rungs, :tags, name: nil, source: nil, warnings: []]
+  defstruct [:rungs, :tags, name: nil, source: nil, file: nil, warnings: []]
 
   @type t :: %__MODULE__{
           rungs: [{:rung, list}],
           tags: %{String.t() => Logex.Tag.t()},
           name: String.t() | nil,
           source: String.t() | nil,
+          file: String.t() | nil,
           warnings: [Logex.Diagnostic.t()]
         }
 
   @doc """
   The first env: every declared tag at its initial value, 0 when none was declared, and
   every instance of a function block a map of its members at theirs (M1-6).
+
+  An instance of a user function block (M2-5) starts as its type says, every member at its
+  initial value and every instance it holds at its own, at any depth (`Logex.FbType`).
 
   The one rule for a new piece of state (`docs/organisation.md` §4.9):
   `Logex.Runtime.instance/1` and `restart/3` start every tag by it, an online edit's

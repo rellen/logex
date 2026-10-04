@@ -104,11 +104,17 @@ defmodule Logex.Runtime do
   its opacity requires. `restart/2` restarts the whole resource; there is no restart of one
   instance inside it.
 
+  A user function block's instance (M2-5) is a map in the env, under its name, of its
+  members, an instance it holds a map in that; `cal` runs it, rung power its EN, its body
+  over that map with the scan narrowed to it (`Logex.Scan`), and on a false EN nothing at
+  all (decision 12).
+
   A lone running instance takes a changed program through `Logex.Edit` (OE-1,
   `docs/organisation.md` §4.9): accept, test, untest, assemble or cancel, each between two
   scans, its state moved by name. An instance carries two fields for it
   (`Logex.Instance`): `ons_blocked`, the storage bits whose `ons` its next scan blocks,
-  which an edit's switch sets and only the runtime fills into a scan (`Logex.Scan`); and
+  which an edit's switch sets and only the runtime fills into a scan (`Logex.Scan`), and a
+  scan empties but for a bit inside an instance whose body it did not run (M2-5); and
   `switched`, which an edit's switch sets and a scan clears.
 
   **The host contract.** A mistake by the host raises `ArgumentError` (a host bug, not a
@@ -133,7 +139,10 @@ defmodule Logex.Runtime do
   where a plain swap's first scan can fire one whose condition was already true.
   `restart/3` starts every tag again but the `var_input`s whose values fit their types,
   and empties `ons_blocked`. A `%Logex.Program{}`, `%Logex.Instance{}` or `%Logex.Edit{}` built or
-  edited by hand is outside this contract.
+  edited by hand is outside this contract; one that holds a block type whose body was
+  edited by hand still runs without raising, since a `cal` of an instance its table lacks
+  runs nothing, but a type given to `Logex.compile/2` or `Logex.Tag.new!/4` cannot be one
+  (`Logex.Compiler.lowered?/1`).
 
   **During an edit** the host scans, sets inputs and restarts through
   `Logex.Edit.running/1`; scanning the other program is outside this contract. The edit
@@ -146,6 +155,7 @@ defmodule Logex.Runtime do
   """
 
   alias Logex.{Configuration, Declarations, Diagnostic, FbType, Instance, Program, Scan, Tag}
+  alias Logex.FbType.Member
 
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
 
@@ -157,6 +167,9 @@ defmodule Logex.Runtime do
   defstruct [:config, :now, :globals, :instances, :tasks, :wiring]
 
   @opaque t :: %__MODULE__{}
+
+  # M2-5: the key under which a scan records which instances' bodies ran.
+  @ran :ran
 
   @doc "A new instance of `program`: every tag at its initial value, before its first scan."
   def instance(program) do
@@ -368,21 +381,61 @@ defmodule Logex.Runtime do
     do: raise(ArgumentError, "restart takes :cold or :warm, got: #{inspect(mode)}")
 
   # The evaluator's scan is the host's `now` and `first` with the instance's block list,
-  # which holds for this one scan (OE-1), made a map once here so that each `ons` looks its
+  # which holds for this one scan (OE-1), made a tree once here so that each `ons` looks its
   # bit up: a walk of the list made the scan after a switch quadratic in the one-shots it
-  # blocks. A scan is what clears `switched`: the state then holds what this program gave
-  # the host.
+  # blocks. A bit inside a function block instance is named by its path, `s1.edge`, and the
+  # tree holds it under its instance, so a `cal` hands its body only that instance's own
+  # (M2-5); and the program's tag table, where a `cal` finds its instance's type. A scan is
+  # what clears `switched`: the state then holds what this program gave the host.
+  #
+  # M2-5: a bit is blocked until its `ons` runs. A bit of the program's own rungs runs on
+  # this scan; one inside an instance runs only where a `cal` runs the instance's body, so
+  # the bits of an instance whose `cal` was false, or that no `cal` runs, stay in the list
+  # for the next scan, or the block would be used up unseen and the `ons` compare a changed
+  # rung against the bit the old one wrote: the false pulse decision 21 prevents.
   defp run(
          %Instance{env: env, ons_blocked: blocked} = state,
-         %Program{rungs: rungs} = program,
+         %Program{rungs: rungs, tags: tags} = program,
          %Scan{now: now, first: first}
        ) do
-    scan = %Scan{now: now, first: first, ons_blocked: Map.from_keys(blocked, true)}
-    env = Enum.reduce(rungs, env, &rung(&1, &2, scan))
+    tree = tree(blocked)
+    scan = %Scan{now: now, first: first, ons_blocked: tree, tags: tags}
+    {unrun, env} = unrun(tree, Enum.reduce(rungs, env, &rung(&1, &2, scan)))
 
     {outputs(program, env),
-     %{state | env: env, now: now, first: false, ons_blocked: [], switched: false}}
+     %{state | env: env, now: now, first: false, ons_blocked: unrun, switched: false}}
   end
+
+  # The bits of the tree whose `ons` did not run, by their paths, sorted: those inside an
+  # instance whose body did not run. Each `cal` that runs an instance's body records it in
+  # the env of the routine that runs it, under `@ran`, an atom, so no tag or member name
+  # can be it, and takes its body's record out of the instance's map (`called/5`); this
+  # takes the program's out, so no state keeps one.
+  defp unrun(tree, env) do
+    {ran, env} = recorded(env)
+    {Enum.sort(kept(tree, ran, "", [])), env}
+  end
+
+  # The record taken out of an env, a map whatever an env built by hand left under its key.
+  defp recorded(env) do
+    {ran, env} = Map.pop(env, @ran, %{})
+    {as_map(ran), env}
+  end
+
+  defp kept(tree, ran, prefix, acc),
+    do:
+      Enum.reduce(tree, acc, fn
+        {_bit, true}, acc -> acc
+        {instance, inner}, acc -> within(Map.fetch(ran, instance), inner, prefix <> instance, acc)
+      end)
+
+  defp within({:ok, ran}, inner, path, acc), do: kept(inner, as_map(ran), path <> ".", acc)
+  defp within(:error, inner, path, acc), do: paths(inner, path, acc)
+
+  defp paths(true, path, acc), do: [path | acc]
+
+  defp paths(inner, path, acc),
+    do: Enum.reduce(inner, acc, fn {name, at}, acc -> paths(at, path <> "." <> name, acc) end)
 
   # A var_output a hand-built env leaves out reads 0, as a contact reads it (M1-4).
   defp outputs(%Program{tags: tags}, env),
@@ -393,8 +446,20 @@ defmodule Logex.Runtime do
         do: {name, Map.get(env, name, 0)}
       )
 
+  # The block list as a tree, each name split at its `.`s once: linear in the list.
+  defp tree(bits), do: Enum.reduce(bits, %{}, &plant(String.split(&1, "."), &2))
+
+  defp plant([bit], tree), do: Map.put(tree, bit, true)
+
+  defp plant([instance | path], tree),
+    do: Map.put(tree, instance, plant(path, as_map(Map.get(tree, instance))))
+
   # The arguments, checked in order: program, state, the state's owner, scan, inputs.
   defp program!(%Program{tags: tags, rungs: rungs}) when is_map(tags) and is_list(rungs), do: :ok
+
+  # M2-5: what Logex.compile/2 gives for a function block's file, which a program runs.
+  defp program!(%FbType{name: name} = type) when is_binary(name),
+    do: raise(ArgumentError, "`#{name}` is " <> Declarations.not_a_program(type))
 
   defp program!(other),
     do:
@@ -464,6 +529,14 @@ defmodule Logex.Runtime do
         ArgumentError,
         "scan.ons_blocked is the runtime's, taken from the instance: a host leaves it out, " <>
           "got: #{inspect(blocked)}"
+      )
+
+  defp scan!(%Scan{tags: tags}, _state) when tags != nil,
+    do:
+      raise(
+        ArgumentError,
+        "scan.tags is the runtime's, taken from the program: a host leaves it out, " <>
+          "got: #{inspect(tags)}"
       )
 
   defp scan!(%Scan{now: now}, %Instance{now: last}) when now < last,
@@ -556,7 +629,8 @@ defmodule Logex.Runtime do
   # `t1.zz` or `t1.dn.x`, which reach into `t1` all the same.
   defp undeclared(%Tag{type: %FbType{} = type} = tag, path, key, _tags),
     do:
-      "input #{label(key)} #{reaches(member(type, path))} `#{tag.name}`, a #{type.name}: " <>
+      "input #{label(key)} #{reaches(member(type, path))} `#{tag.name}`, " <>
+        "#{Declarations.instance_of(type)}: " <>
         "only a var_input is set from outside"
 
   defp undeclared(_tag, _path, key, tags) do
@@ -922,8 +996,8 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "`#{at}` is a #{type.name}: an access path names one of its members" <>
-          example(at, FbType.public(type))
+        "`#{at}` is #{Declarations.instance_of(type)}: an access path names one of its " <>
+          "members" <> example(at, FbType.public(type))
       )
 
   defp in_block(type, at, [member | deeper], {walked, path}, env),
@@ -934,7 +1008,7 @@ defmodule Logex.Runtime do
 
     raise(
       ArgumentError,
-      no_member(Enum.any?(type.members, &(&1.name == member)), type, {at, member}, names)
+      no_member(Enum.find(type.members, &(&1.name == member)), type, {at, member}, names)
     )
   end
 
@@ -960,26 +1034,34 @@ defmodule Logex.Runtime do
         "`#{path}` goes too deep: `#{at}.#{member}` is a #{found.type}, which has no members"
       )
 
-  # A name the type gives a member but FbType.member/2 does not is an internal member's,
-  # and the path is told so; any other is no member at all.
-  defp no_member(true, _type, {at, member}, names),
-    do:
-      "`#{at}.#{member}` is internal to `#{at}`: an access path reads only its public " <>
-        "members, " <> and_list(Enum.map(names, &"`#{&1}`"))
+  # A name the type gives a member but FbType.member/2 does not is a hidden one's, and the
+  # path is told which: a built-in block's internal member, or a user block's own `var`,
+  # hidden outside it (decision 33). Any other is no member at all.
+  defp no_member(%FbType.Member{role: :internal}, _type, {at, member}, names),
+    do: "`#{at}.#{member}` is internal to `#{at}`: " <> public_only(names)
 
-  defp no_member(false, type, {at, member}, names),
+  defp no_member(%FbType.Member{role: :local}, type, {at, member}, names),
     do:
-      "`#{at}.#{member}` is not a member of `#{at}`, a #{type.name}" <>
+      "`#{at}.#{member}` is a `var` of `#{type.name}`, hidden outside it: " <> public_only(names)
+
+  defp no_member(nil, type, {at, member}, names),
+    do:
+      "`#{at}.#{member}` is not a member of `#{at}`, #{Declarations.instance_of(type)}" <>
         block_hint(Declarations.suggest(member, names, &"#{at}.#{&1}", "members"), names)
 
-  # The member a read of the instance would mean: the first value the block sets. Every
-  # block type within the contract has one until M2-5 (`ton` is the only one), whose user
-  # types decide the rest from source.
-  defp example(at, members) do
-    %FbType.Member{name: name} = Enum.find(members, &(&1.role == :output))
-    ", as in `#{at}.#{name}`"
-  end
+  defp public_only([]), do: "an access path reads only its public members, and it has none"
 
+  defp public_only(names),
+    do: "an access path reads only its public members, " <> and_list(Enum.map(names, &"`#{&1}`"))
+
+  # The member a read of the instance would mean: the first value the block sets, else the
+  # first it is given. A user block may have neither (M2-5).
+  defp example(at, members), do: example_of(Enum.sort_by(members, &(&1.role != :output)), at)
+
+  defp example_of([%FbType.Member{name: name} | _], at), do: ", as in `#{at}.#{name}`"
+  defp example_of([], _at), do: ", and it has none an access path reads"
+
+  defp block_hint("", []), do: ": it has none an access path reads"
   defp block_hint("", names), do: ": its members are " <> and_list(Enum.map(names, &"`#{&1}`"))
   defp block_hint(suggestion, _names), do: suggestion
 
@@ -1107,12 +1189,74 @@ defmodule Logex.Runtime do
     {false, write(env, timer, reset(as_map(read(env, timer)), now))}
   end
 
-  # The block list names storage bits, and a storage bit is a declared bool, always a
-  # `{:name, _, bit}`: no member is a bool that logic may write (a ton's `pre` and `acc`
-  # are dints). An `ons` on a member, which only a program built by hand can hold, is never
-  # blocked. M2-5, whose function blocks may have such a member, decides how one is named.
+  # M2-5: `cal` runs an instance of a user function block (docs/organisation.md §4.3).
+  # Rung power is its EN, and its ENO is the power out. Energised, each var_input operand
+  # is read into the instance, the block's body runs over the instance's own map, with the
+  # scan narrowed to it (its type's tag table and its own tree of blocked one-shots, `now`
+  # and `first` the program's), and each var_output is written to its operand.
+  # De-energised, nothing (decision 12): nothing is copied in, the body does not run and
+  # nothing is written out, so the instance and every tag its outputs name keep their
+  # values. A timer inside keeps its `.en` and `last` and catches up when the block next
+  # runs (decision 8), and an `ons` inside keeps its storage bit, so a block that first runs
+  # after the program's first scan can fire one on its first run.
+  defp evaluate(
+         {:cal, _, [{:name, _, instance} | operands]},
+         {true, env},
+         %Scan{tags: tags} = scan
+       ),
+       do: {true, called(Map.get(tags, instance), instance, operands, env, scan)}
+
+  defp evaluate({:cal, _, _}, {false, env}, _scan) do
+    {false, env}
+  end
+
+  # The block list names storage bits, and a storage bit is a declared bool of the routine
+  # running, always a `{:name, _, bit}`: no member is a bool that logic may write (a ton's
+  # `pre` and `acc` are dints, and no member of a user block is written from outside it).
+  # An `ons` on a member, which only a program built by hand can hold, is never blocked. A
+  # bit inside an instance is in the tree under the instance's name, which a `cal` hands its
+  # body (M2-5); a storage bit is never named as an instance of its routine is.
   defp blocked?({:name, _, bit}, blocked), do: is_map_key(blocked, bit)
   defp blocked?({:member, _, _path}, _blocked), do: false
+
+  # A `cal` of an instance its routine's table holds as a user block's. A program built by
+  # hand may name one its table lacks, or one of another type: nothing runs, as nothing runs
+  # for a hand-built env a `ton` finds no timer in.
+  defp called(
+         %Tag{type: %FbType{body: %Program{rungs: rungs, tags: own}} = type},
+         instance,
+         operands,
+         env,
+         %Scan{ons_blocked: blocked} = scan
+       ) do
+    [_instance | formals] = FbType.signature(type)
+    slots = Enum.zip(formals, operands)
+    state = Enum.reduce(slots, as_map(Map.get(env, instance)), &copy_in(&1, &2, env))
+    inner = as_map(Map.get(blocked, instance))
+    body = %{scan | tags: own, ons_blocked: inner}
+    {state, env} = ran(instance, Enum.reduce(rungs, state, &rung(&1, &2, body)), env)
+    Enum.reduce(slots, Map.put(env, instance, state), &copy_out(&1, &2, state))
+  end
+
+  defp called(_not_a_block, _instance, _operands, env, _scan), do: env
+
+  # M2-5: an instance records that its body ran, with what its own body's `cal`s recorded,
+  # so that the scan keeps the blocked bits of those that did not.
+  defp ran(instance, state, env) do
+    {nested, state} = recorded(state)
+    {state, Map.put(env, @ran, Map.put(as_map(Map.get(env, @ran)), instance, nested))}
+  end
+
+  # M2-5: a `cal`'s copy-in and copy-out, by the formal each operand fills.
+  defp copy_in({{{:value, _}, %Member{name: name}}, operand}, state, env),
+    do: Map.put(state, name, read(env, operand))
+
+  defp copy_in(_output, state, _env), do: state
+
+  defp copy_out({{{:write, _}, %Member{name: name}}, operand}, env, state),
+    do: write(env, operand, Map.get(state, name, 0))
+
+  defp copy_out(_input, env, _state), do: env
 
   # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is
   # complementary by construction, as `xic` and `xio` are (M1-4). Erlang's term order is

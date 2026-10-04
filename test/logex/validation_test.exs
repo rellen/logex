@@ -8,6 +8,9 @@ defmodule Logex.ValidationTest do
   """
   use ExUnit.Case, async: true
 
+  # M2-5: what Logex.Declarations.check/1 says an unknown function block type is not.
+  @given "and the types Logex.compile/2 gives for a function block's file"
+
   alias Logex.Compiler
 
   # The operand-shape cases below are about instructions, not tags, so their tags are
@@ -1131,25 +1134,25 @@ defmodule Logex.ValidationTest do
              "`t1` is a ton: its preset is the number on its `ton` instruction, " <>
                "as in `ton t1 5000`, not an initial value on its declaration"},
             {["t1", %{ton | name: "tof"}],
-             ~s|unknown function block type "tof": logex has Logex.FbType.ton()|},
+             ~s|unknown function block type "tof": logex has Logex.FbType.ton() | <> @given},
             {["t1", %{ton | members: []}],
-             ~s|unknown function block type "ton": logex has Logex.FbType.ton()|},
+             ~s|unknown function block type "ton": logex has Logex.FbType.ton() | <> @given},
             # A hand-built schema may hold anything, and is refused, never looked up by it.
             {["t1", %{ton | name: nil}],
-             "unknown function block type nil: logex has Logex.FbType.ton()"},
+             "unknown function block type nil: logex has Logex.FbType.ton() " <> @given},
             {["t1", %{ton | name: 5}, :var_input],
-             "unknown function block type 5: logex has Logex.FbType.ton()"},
+             "unknown function block type 5: logex has Logex.FbType.ton() " <> @given},
             # Nor is it looked into, where a name that cannot be printed would escape.
             {["t1", %{ton | name: %{}}, :var_input],
-             "unknown function block type %{}: logex has Logex.FbType.ton()"},
+             "unknown function block type %{}: logex has Logex.FbType.ton() " <> @given},
             {["t1", %{ton | name: {:a}}, :var, 5],
-             "unknown function block type {:a}: logex has Logex.FbType.ton()"},
+             "unknown function block type {:a}: logex has Logex.FbType.ton() " <> @given},
             # Whatever an unknown schema's members hold, and a struct is never taken for a
             # map of inputs.
             {["t1", %{ton | members: :junk}, :var, %{"acc" => 1}],
-             ~s|unknown function block type "ton": logex has Logex.FbType.ton()|},
+             ~s|unknown function block type "ton": logex has Logex.FbType.ton() | <> @given},
             {["t1", %{ton | members: [1]}, :var, %{"acc" => 1}],
-             ~s|unknown function block type "ton": logex has Logex.FbType.ton()|},
+             ~s|unknown function block type "ton": logex has Logex.FbType.ton() | <> @given},
             {["t1", ton, :var, %Logex.Scan{now: 0, first: true}],
              "`t1` is a ton: its preset is the number on its `ton` instruction, " <>
                "as in `ton t1 5000`, not an initial value on its declaration"}
@@ -1604,11 +1607,11 @@ xic a ton t1 7") == [
                  "xic a.b ote a\nxic d.3 ote a\nmove t1.acc.x d\nxic a.dn.x ote a\nxic t1.dn.x ote a"
              ) == [
                "line 4: `a.b` names a member of `a`, but `a` is a bool (declared on line 2): " <>
-                 "only a timer has members",
+                 "only an instance of a function block has members",
                "line 5: `d.3` names a bit of `d`, a dint: bit access is not supported yet",
                "line 6: `t1.acc.x` goes too deep: `t1.acc` is a dint, which has no members",
                "line 7: `a.dn.x` names a member of `a`, but `a` is a bool (declared on line 2): " <>
-                 "only a timer has members",
+                 "only an instance of a function block has members",
                "line 8: `t1.dn.x` goes too deep: `t1.dn` is a bool, which has no members"
              ]
     end
@@ -1634,7 +1637,7 @@ xic a ton t1 7") == [
                  "line 5: `d.3.4` goes too deep: `d` is a dint, which has no members",
                  "line 6: `a.0.1` goes too deep: `a` is a bool, which has no members",
                  "line 7: `a.b.1` names a member of `a`, but `a` is a bool (declared on " <>
-                   "line 2): only a timer has members"
+                   "line 2): only an instance of a function block has members"
                ]
     end
 
@@ -1689,7 +1692,7 @@ xic a ton t1 7") == [
       assert source_errors("xic t1 ote a\nxic a.dn ote a", declared) == [
                "line 1: `xic` reads a bool, but `t1` is a ton: name one of its members, " <>
                  "as in `t1.dn`",
-               "line 2: `a.dn` names a member of `a`, but `a` is a bool: only a timer has members"
+               "line 2: `a.dn` names a member of `a`, but `a` is a bool: only an instance of a function block has members"
              ]
 
       assert {:ok, _} = source_compile("xic t1.dn ote a", declared)
@@ -1789,7 +1792,7 @@ xic a ton t1 7") == [
              "`a` is a ton: its preset is the number on its `ton` instruction, " <>
                "as in `ton a 5000`, not an initial value on its declaration"},
             {[%Logex.Tag{name: "a", type: %Logex.FbType{name: nil, members: nil}, section: :var}],
-             "unknown function block type nil: logex has Logex.FbType.ton()"},
+             "unknown function block type nil: logex has Logex.FbType.ton() " <> @given},
             {[
                %Logex.Tag{
                  name: "a",
@@ -1797,7 +1800,7 @@ xic a ton t1 7") == [
                  section: :var,
                  initial: %{"acc" => 1}
                }
-             ], ~s|unknown function block type "ton": logex has Logex.FbType.ton()|},
+             ], ~s|unknown function block type "ton": logex has Logex.FbType.ton() | <> @given},
             # A line marks a tag declared in source, which the warnings would then cite.
             {[%Logex.Tag{name: "a", type: :bool, section: :var, line: 2}],
              "a tag declared from Elixir has no line, got: 2"},

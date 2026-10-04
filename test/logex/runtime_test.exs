@@ -174,7 +174,7 @@ defmodule Logex.RuntimeTest do
             {%{s | env: nil}, "state.env must be a map of tag names to values, got: nil"},
             {%{s | env: %Scan{now: 0, first: true}},
              "state.env must be a map of tag names to values, " <>
-               "got: %Logex.Scan{now: 0, first: true, ons_blocked: []}"},
+               "got: %Logex.Scan{now: 0, first: true, ons_blocked: [], tags: nil}"},
             {%{s | now: nil},
              "state.now must be a non-negative integer of milliseconds, got: nil"},
             {%{s | now: -5}, "state.now must be a non-negative integer of milliseconds, got: -5"},
@@ -1109,17 +1109,32 @@ defmodule Logex.RuntimeTest do
           ],
           do: assert(Enum.sort(Map.keys(Map.from_struct(struct(module)))) == keys)
 
-      # M2-5: an instruction's slots, the one lookup of Logex.Warnings and Logex.Edit.
-      assert Enum.sort(Logex.Compiler.__info__(:functions)) ==
-               [instructionize: 1, instructionize: 2, instructions: 0, parse: 1] ++
-                 [signature: 2, tokenize: 1]
+      # M2-5: an instruction's slots, the one lookup of Logex.Warnings and Logex.Edit;
+      # instructionize/3, which takes the function blocks a routine may declare instances
+      # of; and lowered?/1, the definition of a compiled body, which a type given must have.
+      assert Enum.sort(Logex.Compiler.__info__(:functions)) == [
+               instructionize: 1,
+               instructionize: 2,
+               instructionize: 3,
+               instructions: 0,
+               lowered?: 1,
+               parse: 1,
+               signature: 2,
+               tokenize: 1
+             ]
 
       # The two structs a host holds and builds; OE-1 gave both `ons_blocked`, and the
       # instance `switched`.
       assert Enum.sort(Map.keys(Instance.__struct__())) ==
                [:__struct__, :env, :first, :now, :ons_blocked, :switched, :type]
 
-      assert Enum.sort(Map.keys(Scan.__struct__())) == [:__struct__, :first, :now, :ons_blocked]
+      # M2-5: the scan also carries the tag table of the routine it runs, the runtime's.
+      assert Enum.sort(Map.keys(Scan.__struct__())) ==
+               [:__struct__, :first, :now, :ons_blocked, :tags]
+
+      # M2-5 (fix F15): a program keeps the file it was read from.
+      assert Enum.sort(Map.keys(Logex.Program.__struct__())) ==
+               [:__struct__, :file, :name, :rungs, :source, :tags, :warnings]
 
       # OE-1: the staged edit of one instance, whose struct is opaque.
       assert Enum.sort(Logex.Edit.__info__(:functions)) == [
@@ -1146,8 +1161,12 @@ defmodule Logex.RuntimeTest do
                initial: 1,
                initial: 2,
                member: 2,
+               of: 1,
                public: 1,
+               signature: 1,
                ton: 0,
+               type_of: 2,
+               user?: 1,
                writable: 1
              ]
     end

@@ -155,29 +155,45 @@ defmodule Logex.ConfigurationTest do
     end
 
     # A block type runs inside a program, never as one: refused once, as the host's
-    # mistake, and an instance that names it is not refused again as naming no program.
+    # mistake, and an instance that names it is not refused again as naming no program. The
+    # words are those of every entry point that takes a program (M2-5), each type named
+    # with the instruction that runs it, `cal` for a user block and `ton` for a timer, and
+    # the key where it differs from the type's name.
     test "a function block type is not a program, and is refused once", %{seal: seal} do
+      {:ok, latch} =
+        Logex.compile(
+          "function_block latch\nvar_input set bool\nvar_output q bool\nxic set ote q",
+          name: "latch"
+        )
+
       fields =
         base(seal)
-        |> Keyword.put(:programs, [seal, Logex.FbType.ton()])
-        |> Keyword.update!(:instances, &(&1 ++ [%Instance{name: "t", type: "ton"}]))
+        |> Keyword.put(:programs, [seal, Logex.FbType.ton(), latch])
+        |> Keyword.update!(
+          :instances,
+          &(&1 ++ [%Instance{name: "t", type: "ton"}, %Instance{name: "l", type: "latch"}])
+        )
 
       assert refused(fields) == [
-               "`ton` is a function block type, which runs inside a program: an instance " <>
-                 "is of a %Logex.Program{}"
+               "`latch` is a function block type, which runs inside a program through `cal`: " <>
+                 "an instance is of a %Logex.Program{}",
+               "`ton` is a function block type, which runs inside a program through `ton`: " <>
+                 "an instance is of a %Logex.Program{}"
              ]
 
       config = %Configuration{
         name: "plant",
-        programs: %{"ton" => Logex.FbType.ton(), "timer" => Logex.FbType.ton()},
+        programs: %{"ton" => Logex.FbType.ton(), "timer" => Logex.FbType.ton(), "s" => latch},
         instances: [%Instance{name: "t", type: "ton"}]
       }
 
       assert mistakes(config) == [
+               "the program under `s` is `latch`, a function block type, which runs inside " <>
+                 "a program through `cal`: an instance is of a %Logex.Program{}",
                "the program under `timer` is `ton`, a function block type, which runs inside " <>
-                 "a program: an instance is of a %Logex.Program{}",
-               "`ton` is a function block type, which runs inside a program: an instance " <>
-                 "is of a %Logex.Program{}"
+                 "a program through `ton`: an instance is of a %Logex.Program{}",
+               "`ton` is a function block type, which runs inside a program through `ton`: " <>
+                 "an instance is of a %Logex.Program{}"
              ]
     end
 

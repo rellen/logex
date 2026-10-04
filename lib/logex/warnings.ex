@@ -9,7 +9,8 @@ defmodule Logex.Warnings do
   - an `ons` storage bit that another instruction writes (M1-6): the one-shot then fires
     on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`);
   - a comparison of two literals (M1-6): its result never changes;
-  - a timer no `ton` runs (M1-6): it never times.
+  - a timer no `ton` runs (M1-6): it never times;
+  - an instance of a user function block no `cal` runs (M2-5): it never runs.
 
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
   """
@@ -72,8 +73,10 @@ defmodule Logex.Warnings do
 
   defp about(%Tag{section: :var_output} = tag, accesses), do: unwritten(:write in accesses, tag)
 
-  defp about(%Tag{type: %FbType{name: "ton"}} = tag, accesses),
+  defp about(%Tag{type: %FbType{body: nil}} = tag, accesses),
     do: unrun(:instance in accesses, tag)
+
+  defp about(%Tag{type: %FbType{}} = tag, accesses), do: uncalled(:instance in accesses, tag)
 
   defp about(_tag, _accesses), do: []
 
@@ -81,6 +84,18 @@ defmodule Logex.Warnings do
 
   defp unrun(false, tag),
     do: [warning(tag.line, "`#{tag.name}` is a ton, but no `ton` runs it: it never times")]
+
+  # M2-5: as the timer's, saying `cal` (PLAN.md M2-5).
+  defp uncalled(true, _tag), do: []
+
+  defp uncalled(false, tag),
+    do: [
+      warning(
+        tag.line,
+        "`#{tag.name}` is #{Logex.Declarations.instance_of(tag.type)}, but no `cal` runs " <>
+          "it: it never runs, and its members stay at their initial values"
+      )
+    ]
 
   defp unwritten(true, _tag), do: []
 
