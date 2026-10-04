@@ -35,8 +35,9 @@ defmodule Logex.Configuration do
     file's broken line is; a duplicate or a case twin is not recovered so, and a use of
     its name finds the element that kept it, as on a `.ld` declaration line. A program
     type is named in type position only, so an instance may share its type's name;
-  - a task's interval is 1 to 2147483647 ms, and its priority 0, the highest, to 65535
-    (decision 37);
+  - a task has an interval, 1 to 2147483647 ms, and a priority, 0, the highest, to 65535
+    (decision 37): IEC reads an interval of 0 as no periodic scheduling, and an instance
+    that runs every cycle is one with no task;
   - a global's initial value fits its type, and a located global takes none; a location
     is `<device>.i.<address>` for an input point or `<device>.q.<address>` for an output
     point, its device a name, its address one or more whole numbers with no leading zero,
@@ -44,7 +45,8 @@ defmodule Logex.Configuration do
     one address holds one global, and no two devices' names differ only in case. A global
     refused for its name has its location checked, but takes no address;
   - a program instance names a program type given, by a name that is no keyword, and, if
-    it has one, a task;
+    it has one, a task the configuration declares; a name with `.` parts there is told a
+    task's name has none, whatever else it could read as;
   - a connection names a var_input or a var_output of an instance. A var_input is
     connected once, to a global of its type or a constant that fits it; a var_output to a
     global of its type, never an input point, and one connection at most drives a
@@ -55,8 +57,8 @@ defmodule Logex.Configuration do
     share a value only through a global; or a member of what is no instance;
   - a configuration runs at least one program instance.
 
-  Its warnings: a global nothing uses, and an output point that something reads and
-  nothing drives, which stays at 0.
+  Its warnings: a global nothing uses; an output point that something reads and nothing
+  drives, which stays at 0; and a task that runs no instance.
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -387,6 +389,7 @@ defmodule Logex.Configuration do
     config = %__MODULE__{
       name: name,
       programs: programs,
+      tasks: for(%Logex.Configuration.Task{} = task <- elements, do: task),
       globals: for(%Global{} = global <- elements, do: global),
       instances: for(%Instance{} = instance <- elements, do: instance),
       connections: for(%Connection{} = connection <- elements, do: connection)
@@ -480,7 +483,7 @@ defmodule Logex.Configuration do
         Enum.flat_map(tasks, &task/1),
         Enum.flat_map(globals, &global/1),
         d_points,
-        runs(instances, {programs, given(config.programs)}, space),
+        runs(instances, {programs, given(config.programs)}, world),
         d_wiring,
         unconnected(instances, space.kept, world, wiring.inputs),
         empty(config.instances, named)
@@ -491,7 +494,7 @@ defmodule Logex.Configuration do
       |> elem(0)
 
     {Enum.map(diagnostics, &%{&1 | file: file}),
-     Enum.map(warnings(globals, wiring), &%{&1 | file: file})}
+     Enum.map(warnings({tasks, globals, instances}, wiring), &%{&1 | file: file})}
   end
 
   # Each list of names a diagnostic would end with is given once, by the first diagnostic
@@ -976,22 +979,62 @@ defmodule Logex.Configuration do
     do: interval(task) ++ priority(task)
 
   # An interval or a priority a line can hold, an integer of 0 or more or none, is a
-  # diagnostic outside its range; anything else was the host's mistake.
+  # diagnostic outside its range, in the configuration file's words; anything else was the
+  # host's mistake.
   defp interval(%{interval: interval}) when is_integer(interval) and interval in @interval,
     do: []
 
+  defp interval(%{name: name, interval: nil, line: line}),
+    do: [
+      diagnostic(
+        line,
+        "task `#{name}` needs an interval, as in `task #{name} interval 10 priority 1`"
+      )
+    ]
+
+  # IEC reads an interval of 0 as no periodic scheduling (rule 2), and MatIEC runs such a
+  # task every tick: an instance that runs every cycle has no task (§4.4, "Tasks").
+  defp interval(%{name: name, interval: 0, line: line}),
+    do: [
+      diagnostic(
+        line,
+        "the interval of `#{name}` is 0: an interval is at least 1 ms, and an instance " <>
+          "that runs every cycle is declared without `with`"
+      )
+    ]
+
   defp interval(%{name: name, interval: interval, line: line})
-       when interval == nil or (is_integer(interval) and interval >= 0),
-       do: [diagnostic(line, interval_rule(name) <> ", found #{inspect(interval)}")]
+       when is_integer(interval) and interval > 0,
+       do: [
+         diagnostic(
+           line,
+           "the interval of `#{name}` is `#{interval}` ms: an interval is 1 to 2147483647 ms"
+         )
+       ]
 
   defp interval(_task), do: []
 
   defp priority(%{priority: priority}) when is_integer(priority) and priority in @priority,
     do: []
 
+  defp priority(%{name: name, priority: nil, line: line}),
+    do: [
+      diagnostic(
+        line,
+        "task `#{name}` needs a priority, as in `task #{name} interval 10 priority 1`: 0 is " <>
+          "the highest"
+      )
+    ]
+
   defp priority(%{name: name, priority: priority, line: line})
-       when priority == nil or (is_integer(priority) and priority >= 0),
-       do: [diagnostic(line, priority_rule(name) <> ", found #{inspect(priority)}")]
+       when is_integer(priority) and priority >= 0,
+       do: [
+         diagnostic(
+           line,
+           "the priority of `#{name}` is `#{priority}`: a priority is 0 to 65535, and 0 is " <>
+             "the highest"
+         )
+       ]
 
   defp priority(_task), do: []
 
@@ -1206,7 +1249,8 @@ defmodule Logex.Configuration do
       points: points,
       runnable: runnable(space.names, programs),
       instances: names_of(space.names, :instance),
-      globals: names_of(space.names, :global)
+      globals: names_of(space.names, :global),
+      tasks: names_of(space.names, :task)
     }
 
   defp names_of(names, kind), do: Enum.sort(for {name, {^kind, _line, _}} <- names, do: name)
@@ -1224,8 +1268,8 @@ defmodule Logex.Configuration do
       )
 
   # What is wrong with each instance's type, then its task.
-  defp runs(instances, programs, space),
-    do: Enum.flat_map(instances, &(of_type(word?(&1.type), &1, programs) ++ on_task(&1, space)))
+  defp runs(instances, programs, world),
+    do: Enum.flat_map(instances, &(of_type(word?(&1.type), &1, programs) ++ on_task(&1, world)))
 
   # A type the lexer does not read as one name is the host's mistake, refused already.
   defp of_type(false, _instance, _programs), do: []
@@ -1284,39 +1328,36 @@ defmodule Logex.Configuration do
 
   # An instance's task: one the configuration declares, unless its name was refused, which
   # is reported once.
-  defp on_task(%Instance{task: nil}, _space), do: []
+  defp on_task(%Instance{task: nil}, _world), do: []
 
-  defp on_task(%Instance{task: task} = instance, space),
-    do: task_word(word?(task), instance, space)
+  defp on_task(%Instance{task: task} = instance, world),
+    do: task_word(word?(task), instance, world)
 
   # A task the lexer does not read as one name is the host's mistake, refused already.
-  defp task_word(false, _instance, _space), do: []
+  defp task_word(false, _instance, _world), do: []
 
-  defp task_word(true, %Instance{task: task} = instance, space),
-    do: task_held(MapSet.member?(space.silent, task), Map.get(space.names, task), instance, space)
+  defp task_word(true, %Instance{task: task} = instance, world),
+    do: task_held(MapSet.member?(world.silent, task), Map.get(world.names, task), instance, world)
 
-  defp task_held(true, _held, _instance, _space), do: []
-  defp task_held(false, {:task, _line, _ref}, _instance, _space), do: []
+  defp task_held(true, _held, _instance, _world), do: []
+  defp task_held(false, {:task, _line, _ref}, _instance, _world), do: []
 
-  defp task_held(false, _held, instance, space) do
-    names = names_of(space.names, :task)
+  defp task_held(false, {kind, line, _ref}, instance, _world),
+    do: [
+      diagnostic(instance.line, "`#{instance.task}` is #{a(kind)}#{at_line(line)}, not a task")
+    ]
 
-    message =
-      hint(
-        "program instance `#{instance.name}`: there is no task `#{instance.task}`",
-        Declarations.suggest(instance.task, names, & &1, "names"),
-        names
-      )
+  defp task_held(false, nil, %Instance{task: task} = instance, world),
+    do: [diagnostic(instance.line, no_task(String.contains?(task, "."), task, world))]
 
-    [diagnostic(instance.line, message)]
-  end
+  # A name with `.` parts after `with` is no task's: a task's name has none, so it is told
+  # that, never a global's or a member's reading (§4.7).
+  defp no_task(true, task, world),
+    do:
+      "no task `#{task}`: a task's name has no `.`, which is kept for a path and a location" <>
+        Declarations.suggest(task, world.tasks, & &1, "names")
 
-  defp hint(message, "", []), do: message <> ": this configuration has no task"
-
-  defp hint(message, "", names),
-    do: {message, :tasks, fn -> ": the tasks are " <> listed(names) end}
-
-  defp hint(message, suggestion, _names), do: message <> suggestion
+  defp no_task(false, task, world), do: no_named(:task, task, world, nil)
 
   defp listed(names) do
     quoted = Enum.map(names, &"`#{&1}`")
@@ -1416,13 +1457,20 @@ defmodule Logex.Configuration do
   defp declare("", :instance, name, _type),
     do: "no instance `#{name}`: declare it, as in `program #{name} motor`"
 
+  defp declare("", :task, name, _type),
+    do:
+      "no task `#{name}`: declare it with a `task` line, as in " <>
+        "`task #{name} interval 10 priority 1`"
+
   defp declare(suggestion, kind, name, _type), do: "no #{noun(kind)} `#{name}`" <> suggestion
 
   defp noun(:global), do: "global"
   defp noun(:instance), do: "instance"
+  defp noun(:task), do: "task"
 
   defp known(world, :global), do: world.globals
   defp known(world, :instance), do: world.instances
+  defp known(world, :task), do: world.tasks
 
   defp on_instance(:skip, _connection, acc, _world), do: acc
 
@@ -1792,15 +1840,21 @@ defmodule Logex.Configuration do
   defp no_program(false),
     do: [diagnostic(nil, "this configuration declares no `program`: it would run nothing")]
 
-  # The warnings, which stop nothing: a global nothing uses, and an output point that
-  # something reads and nothing drives, which stays at 0. An output point nothing uses is
-  # told it is unused only. A configuration that gives them has no mistake, so every global
-  # keeps its name, and every output point its address.
-  defp warnings(globals, wiring) do
-    globals
-    |> Enum.flat_map(&doubt(MapSet.member?(wiring.used, &1.name), &1, wiring))
+  # The warnings, which stop nothing: a task that runs no instance; a global nothing uses;
+  # and an output point that something reads and nothing drives, which stays at 0. An
+  # output point nothing uses is told it is unused only. A configuration that gives them
+  # has no mistake, so every task and global keeps its name, and every output point its
+  # address.
+  defp warnings({tasks, globals, instances}, wiring) do
+    running = MapSet.new(instances, & &1.task)
+
+    (Enum.flat_map(tasks, &idle(MapSet.member?(running, &1.name), &1)) ++
+       Enum.flat_map(globals, &doubt(MapSet.member?(wiring.used, &1.name), &1, wiring)))
     |> Enum.sort_by(&line_order/1)
   end
+
+  defp idle(true, _task), do: []
+  defp idle(false, task), do: [warning(task.line, "task `#{task.name}` runs no instance")]
 
   defp doubt(false, global, _wiring),
     do: [warning(global.line, "`#{global.name}` is declared but nothing uses it")]

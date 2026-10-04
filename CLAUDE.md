@@ -44,9 +44,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   §4.4 and §4.10): the program types, tasks, globals (located at `<device>.i|q.<address>`
   or not), program instances and connections, as plain data and lists in declaration
   order, under a name it must have, and `warnings` (since M2-2, a global nothing uses and
-  an output point read and not driven), which stop nothing; `check/1`, the one validator,
-  giving a mistake a configuration's text could make as a `:configure` diagnostic at its
-  element's line in the configuration's file, in the configuration file's words whether
+  an output point read and not driven; since M2-3, a task that runs no instance), which
+  stop nothing; `check/1`, the one validator, giving a mistake a configuration's text
+  could make as a `:configure` diagnostic at its element's line in the configuration's
+  file, in the configuration file's words whether
   the element came from text or from Elixir (M2-2: its keywords name nothing, a dotted
   name is told its reading, a refused name's uses are silent, decision 42, and an
   instance's unconnected var_inputs are one diagnostic), and raising one `ArgumentError`
@@ -59,8 +60,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   through `Logex.Configuration.Text.read/1` and `check/1`'s rules, what a broken line
   names declared by it; `location/1`; and `initial/1`, the one rule for a new global's
   value, as `Logex.Program.initial_env/1` is a tag's.
-  `lib/logex/configuration/text.ex` is a configuration file's text (M2-2): its words as
-  data, `keywords/0`, which `naming_test.exs` reads; `read/1`, a recursive descent over
+  `lib/logex/configuration/text.ex` is a configuration file's text (M2-2, its task lines
+  and `with` since M2-3): its words as data, `keywords/0`, which `naming_test.exs`
+  reads; `read/1`, a recursive descent over
   `Logex.Lexer`'s tokens, not `Logex.Parser`'s, giving the elements of a configuration in
   line order, each with its line, or a `:configure` diagnostic with its column for each
   line it cannot read, a placeholder for what a broken line names among the entries;

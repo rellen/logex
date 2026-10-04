@@ -7,8 +7,8 @@ defmodule Logex.ConfigurationTest do
   also make as a diagnostic, at its element's line in the configuration's file, which is
   how a reader of the text will cite it, and raises a mistake no text can make, the
   host's, as one `ArgumentError` (decision 36); and `compile/3` gives the same
-  diagnostics, in the same words, for a configuration file's text. Every check pinned
-  from data is pinned again from source, but a task's, whose lines M2-3 reads.
+  diagnostics, in the same words, for a configuration file's text (M2-2, its task lines
+  since M2-3). Every check pinned from data is pinned again from source.
   """
   use ExUnit.Case, async: true
 
@@ -210,7 +210,8 @@ defmodule Logex.ConfigurationTest do
                "global `pb` from Elixir has no line, got: 0",
                "program instance `m` from Elixir has no line, got: 6",
                "the connection of `m.start` from Elixir has no line, got: :x",
-               "task `t`: an interval is 1 to 2147483647 ms, found 0"
+               "the interval of `t` is 0: an interval is at least 1 ms, and an instance that " <>
+                 "runs every cycle is declared without `with`"
              ]
     end
   end
@@ -260,8 +261,9 @@ defmodule Logex.ConfigurationTest do
                  "digits or `_`",
                "task `t`: an interval is 1 to 2147483647 ms, found -5",
                "program instance `m`: its type is a program's name, found :seal",
-               "task `t`: a priority is 0, the highest, to 65535, found 70000",
-               "task `u`: an interval is 1 to 2147483647 ms, found 0"
+               "the priority of `t` is `70000`: a priority is 0 to 65535, and 0 is the highest",
+               "the interval of `u` is 0: an interval is at least 1 ms, and an instance that " <>
+                 "runs every cycle is declared without `with`"
              ]
 
       # The name comes before the programs, as the file before the name.
@@ -400,7 +402,8 @@ defmodule Logex.ConfigurationTest do
              ]
 
       assert formatted(%{config | file: "plant.logex"}) == [
-               "plant.logex: task `t`: an interval is 1 to 2147483647 ms, found 0"
+               "plant.logex: the interval of `t` is 0: an interval is at least 1 ms, and an " <>
+                 "instance that runs every cycle is declared without `with`"
              ]
     end
 
@@ -519,7 +522,7 @@ defmodule Logex.ConfigurationTest do
   describe "lists of names" do
     # Each list a diagnostic would end with is given once, by the first diagnostic in line
     # order that needs it: n refusals against n names are n diagnostics, not n lists. An
-    # unknown global or instance is told how to declare it, and lists nothing.
+    # unknown task, global or instance is told how to declare it, and lists nothing.
     test "each list is given once, by the first diagnostic in line order", %{seal: seal} do
       config = %Configuration{
         name: "plant",
@@ -559,8 +562,10 @@ defmodule Logex.ConfigurationTest do
       assert formatted(config) == [
                "line 5: unknown program type `aaa`: the types given are `seal`",
                "line 6: unknown program type `zzz`",
-               "line 7: program instance `x3`: there is no task `qq`: the tasks are `fast`",
-               "line 8: program instance `x4`: there is no task `ww`",
+               "line 7: no task `qq`: declare it with a `task` line, as in " <>
+                 "`task qq interval 10 priority 1`",
+               "line 8: no task `ww`: declare it with a `task` line, as in " <>
+                 "`task ww interval 10 priority 1`",
                "line 11: no global `aa`: declare it, as in `var_global aa dint`",
                "line 12: no global `zz`: declare it, as in `var_global zz bool`",
                "line 13: `m` is a `seal`, which declares no `qq`: its var_inputs and " <>
@@ -655,17 +660,22 @@ defmodule Logex.ConfigurationTest do
         task("e", -1, 1.0)
       ]
 
+      # A negative or a fractional number is the host's mistake, which no line can say; a
+      # number out of range, or none, a line can, and is told it in the file's words.
       assert refused(Keyword.put(base(seal), :tasks, tasks)) == [
                "task `d`: an interval is 1 to 2147483647 ms, found 1.5",
                "task `d`: a priority is 0, the highest, to 65535, found -1",
                "task `e`: an interval is 1 to 2147483647 ms, found -1",
                "task `e`: a priority is 0, the highest, to 65535, found 1.0",
-               "task `a`: an interval is 1 to 2147483647 ms, found 0",
-               "task `a`: a priority is 0, the highest, to 65535, found 65536",
-               "task `b`: an interval is 1 to 2147483647 ms, found 2147483648",
-               "task `b`: a priority is 0, the highest, to 65535, found 2147483648",
-               "task `c`: an interval is 1 to 2147483647 ms, found nil",
-               "task `c`: a priority is 0, the highest, to 65535, found nil"
+               "the interval of `a` is 0: an interval is at least 1 ms, and an instance that " <>
+                 "runs every cycle is declared without `with`",
+               "the priority of `a` is `65536`: a priority is 0 to 65535, and 0 is the highest",
+               "the interval of `b` is `2147483648` ms: an interval is 1 to 2147483647 ms",
+               "the priority of `b` is `2147483648`: a priority is 0 to 65535, and 0 is the " <>
+                 "highest",
+               "task `c` needs an interval, as in `task c interval 10 priority 1`",
+               "task `c` needs a priority, as in `task c interval 10 priority 1`: 0 is the " <>
+                 "highest"
              ]
     end
   end
@@ -815,27 +825,44 @@ defmodule Logex.ConfigurationTest do
           instances: [
             %Instance{name: "m", type: "seal", task: "fsat"},
             %Instance{name: "a", type: "seal", task: "q"},
-            %Instance{name: "b", type: "seal", task: "q.r"}
+            %Instance{name: "b", type: "seal", task: "q.r"},
+            %Instance{name: "c", type: "seal", task: "fast.x"},
+            %Instance{name: "d", type: "seal", task: "pb"},
+            %Instance{name: "e", type: "seal", task: "With"}
           ],
           connections:
             base(seal)[:connections] ++
               for(
-                x <- ~w(a b),
+                x <- ~w(a b c d e),
                 m <- ~w(start stop),
                 do: %Connection{instance: x, member: m, to: 0}
               )
         )
 
+      # A name with `.` parts is told a task's name has none, with a did-you-mean among the
+      # tasks; a name of another kind is told what it is; a keyword is told it names
+      # nothing; and any other name is told the near name, or how to declare it.
       assert refused(fields) == [
-               "program instance `m`: there is no task `fsat` — did you mean `fast`?",
-               "program instance `a`: there is no task `q`: the tasks are `fast` and `slow`",
-               "program instance `b`: there is no task `q.r`"
+               "no task `fsat` — did you mean `fast`?",
+               "no task `q`: declare it with a `task` line, as in `task q interval 10 priority 1`",
+               "no task `q.r`: a task's name has no `.`, which is kept for a path and a location",
+               "no task `fast.x`: a task's name has no `.`, which is kept for a path and a " <>
+                 "location — did you mean `fast`?",
+               "`pb` is a global, not a task",
+               "no task `With`: `With` is a keyword of a configuration file, and nothing in one " <>
+                 "is named so"
              ]
 
       assert refused(Keyword.put(fields, :tasks, [])) == [
-               "program instance `m`: there is no task `fsat`: this configuration has no task",
-               "program instance `a`: there is no task `q`: this configuration has no task",
-               "program instance `b`: there is no task `q.r`: this configuration has no task"
+               "no task `fsat`: declare it with a `task` line, as in " <>
+                 "`task fsat interval 10 priority 1`",
+               "no task `q`: declare it with a `task` line, as in `task q interval 10 priority 1`",
+               "no task `q.r`: a task's name has no `.`, which is kept for a path and a location",
+               "no task `fast.x`: a task's name has no `.`, which is kept for a path and a " <>
+                 "location",
+               "`pb` is a global, not a task",
+               "no task `With`: `With` is a keyword of a configuration file, and nothing in one " <>
+                 "is named so"
              ]
     end
 
@@ -1120,7 +1147,8 @@ defmodule Logex.ConfigurationTest do
                Configuration.check(config)
 
       assert formatted(config) == [
-               "plant.logex: line 2: task `fast`: an interval is 1 to 2147483647 ms, found 0",
+               "plant.logex: line 2: the interval of `fast` is 0: an interval is at least 1 ms, " <>
+                 "and an instance that runs every cycle is declared without `with`",
                "plant.logex: line 4: `k` is at `panel.i.0`, where `pb` already is (line 3): a " <>
                  "location holds one global",
                "plant.logex: line 6: `m` leaves its var_input `stop` unconnected: connect it to " <>
@@ -1192,20 +1220,24 @@ defmodule Logex.ConfigurationTest do
       assert formatted(config) == [
                "plant.logex: line 2: `T` and `t` (line 1) differ only in case: names are " <>
                  "case-sensitive, so these would be two (`t` is a task)",
-               "plant.logex: line 2: task `T`: an interval is 1 to 2147483647 ms, found 0",
-               "plant.logex: line 2: task `T`: a priority is 0, the highest, to 65535, found 70000",
+               "plant.logex: line 2: the interval of `T` is 0: an interval is at least 1 ms, " <>
+                 "and an instance that runs every cycle is declared without `with`",
+               "plant.logex: line 2: the priority of `T` is `70000`: a priority is 0 to 65535, " <>
+                 "and 0 is the highest",
                "plant.logex: line 3: `u.v` cannot name a task: `.` is kept for a path, as in " <>
                  "`m1.start`, and a location, as in `panel.i.0`",
-               "plant.logex: line 3: task `u.v`: an interval is 1 to 2147483647 ms, found nil",
-               "plant.logex: line 3: task `u.v`: a priority is 0, the highest, to 65535, found nil",
+               "plant.logex: line 3: task `u.v` needs an interval, as in " <>
+                 "`task u.v interval 10 priority 1`",
+               "plant.logex: line 3: task `u.v` needs a priority, as in " <>
+                 "`task u.v interval 10 priority 1`: 0 is the highest",
                "plant.logex: line 5: `g` is declared twice: first on line 4, as a global",
                "plant.logex: line 5: `g` is a bool: its initial value must be 0 or 1, found `7`",
                "plant.logex: line 5: `nowhere` is not a location: a location is a device, `i` " <>
                  "or `q`, and an address, as in `panel.i.0`",
                "plant.logex: line 7: `m` is declared twice: first on line 6, as an instance",
                "plant.logex: line 7: unknown program type `zzz`: the types given are `seal`",
-               "plant.logex: line 7: program instance `m`: there is no task `qqq`: the tasks " <>
-                 "are `t`"
+               "plant.logex: line 7: no task `qqq`: declare it with a `task` line, as in " <>
+                 "`task qqq interval 10 priority 1`"
              ]
     end
 
@@ -1255,6 +1287,17 @@ defmodule Logex.ConfigurationTest do
   m.motor k
   """
 
+  # `base/1` with its instance on a periodic task, as a configuration file says it.
+  @tasked "task fast interval 10 priority 0\n" <>
+            String.replace(@base, "program m seal", "program m seal with fast")
+
+  defp tasked(seal),
+    do:
+      Keyword.merge(base(seal),
+        tasks: [task("fast", 10, 0)],
+        instances: [%Instance{name: "m", type: "seal", task: "fast"}]
+      )
+
   # The §4.2 motor, which `docs/organisation.md` §4.4's plant and its receipt run.
   @motor """
   var_input start bool
@@ -1284,8 +1327,8 @@ defmodule Logex.ConfigurationTest do
   """
 
   # The receipt's broken source (`docs/organisation.md` §4.4), one mistake on each of
-  # lines 7, 9, 11, 12, 14, 15 and 16 and every other line right, as the design pass wrote
-  # it: its line 6 declares a task, and line 9's mistake is the task its instance names.
+  # lines 7, 9, 11, 12, 14, 15 and 16 and every other line right: its line 6 declares a
+  # task, and line 9's mistake is the task its instance names.
   @broken """
   // broken: seven mistakes, one a line
   var_global pb bool at panel.i.0
@@ -1316,6 +1359,11 @@ defmodule Logex.ConfigurationTest do
 
   defp compiled(source, programs), do: Configuration.compile("plant", source, programs)
 
+  # Each instance's var_inputs connected, `start` to the input point `pb` and `stop` tied
+  # off, as connection lines.
+  defp wired(instances),
+    do: Enum.map_join(instances, fn i -> "#{i}.start pb\n#{i}.stop 0\n" end)
+
   # Every diagnostic compile/3 gives for `source`, formatted.
   defp errors(source, programs) do
     assert {:error, diagnostics} = compiled(source, programs)
@@ -1328,31 +1376,44 @@ defmodule Logex.ConfigurationTest do
     Enum.map(warnings, &Diagnostic.format/1)
   end
 
-  # `docs/organisation.md` §4.4's plant, cut from the document, its task lines and each
-  # `with` blanked, so every line keeps its number: M2-2's words.
-  defp taskless_plant do
+  # `docs/organisation.md` §4.4's plant, cut from the document.
+  defp plant_source do
     [_before, rest] =
       String.split(File.read!("docs/organisation.md"), "```\n// plant.", parts: 2)
 
     [block, _after] = String.split("// plant." <> rest, "```", parts: 2)
-
     block
-    |> String.replace(~r/^task .*$/m, "")
-    |> String.replace(~r/ with \w+$/m, "")
   end
 
-  describe "compile/3 (M2-2): a configuration file's text, checked by check/1's rules" do
+  # The plant without its event task, which M2-6 brings: its `trip` line blanked, so every
+  # line keeps its number, and the snapshot that `trip` runs left with no task.
+  defp periodic_plant do
+    plant_source()
+    |> String.replace(~r/^task trip .*$/m, "")
+    |> String.replace(" with trip", "")
+  end
+
+  describe "compile/3 (M2-2, M2-3): a configuration file's text, checked by check/1's rules" do
     # The plant's motor is the §4.3 form, whose `estop` is a var_external, which M2-4
     # brings: run against the §4.2 motor, `estop` is a global nothing uses.
-    test "§4.4's plant, in M2-2's words, compiles, starts and cycles" do
+    test "§4.4's plant without its event task compiles, starts and cycles, each instance " <>
+           "on its task" do
       programs = plant_programs()
-      assert {:ok, plant} = compiled(taskless_plant(), programs)
+      assert {:ok, plant} = compiled(periodic_plant(), programs)
 
-      assert %Configuration{name: "plant", file: nil, tasks: []} = plant
+      assert %Configuration{name: "plant", file: nil} = plant
       assert plant.programs == programs
 
-      assert Enum.map(plant.instances, &{&1.name, &1.type, &1.task, &1.line}) ==
-               [{"m1", "motor", nil, 23}, {"m2", "motor", nil, 32}, {"snap", "snapshot", nil, 41}]
+      assert plant.tasks == [
+               %Configuration.Task{name: "fast", interval: 10, priority: 1, line: 2},
+               %Configuration.Task{name: "slow", interval: 50, priority: 2, line: 3}
+             ]
+
+      assert Enum.map(plant.instances, &{&1.name, &1.type, &1.task, &1.line}) == [
+               {"m1", "motor", "fast", 23},
+               {"m2", "motor", "slow", 32},
+               {"snap", "snapshot", nil, 41}
+             ]
 
       assert length(plant.globals) == 16 and length(plant.connections) == 18
 
@@ -1362,22 +1423,36 @@ defmodule Logex.ConfigurationTest do
 
       assert Configuration.check(plant) == []
       runtime = Logex.Runtime.start(plant)
-      {runtime, outputs, _events} = Logex.Runtime.cycle(runtime, 10, %{"pb_start_1" => 1})
+      {runtime, _outputs, events} = Logex.Runtime.cycle(runtime, 0, %{})
+
+      assert events == [
+               {:ran, "fast", "m1", 0},
+               {:ran, "slow", "m2", 0},
+               {:ran, :none, "snap", 0}
+             ]
+
+      {runtime, outputs, events} = Logex.Runtime.cycle(runtime, 10, %{"pb_start_1" => 1})
+      assert events == [{:ran, "fast", "m1", 10}, {:ran, :none, "snap", 10}]
       assert %{"k1" => 1, "k2" => 0, "sp_1" => 1200} = outputs
       assert Logex.Runtime.get!(runtime, "m1.motor") == 1
     end
 
-    # Six of the receipt's seven, word for word as M2-2's checks give them, with the task
-    # its line 6 declares and line 9's `with` left out, so every line keeps its number.
-    # Line 9's, an instance's unknown task, lands with M2-3, which reads `task` and `with`.
-    test "gives the receipt's diagnostics for its broken source, one a line" do
-      taskless =
-        @broken
-        |> String.replace("task fast interval 10 priority 1", "// a task line, M2-3's")
-        |> String.replace(" with medium", "")
+    # As written, its event task is a later item's: `single` is no input of a task yet, so
+    # its line is broken, and still declares `trip`, so the instance that names it is not
+    # told of it again.
+    test "§4.4's plant as written is refused at its event task alone" do
+      assert errors(plant_source(), plant_programs()) == [
+               "line 4, column 11: unexpected `single` on the line of task `trip`: a task " <>
+                 "takes `interval` and `priority`"
+             ]
+    end
 
-      assert errors(taskless, plant_programs()) == [
+    # The receipt's seven, word for word.
+    test "gives the receipt's seven diagnostics for its broken source, one a line" do
+      assert errors(@broken, plant_programs()) == [
                "line 7, column 1: unknown configuration line `progam` — did you mean `program`?",
+               "line 9: no task `medium`: declare it with a `task` line, as in " <>
+                 "`task medium interval 10 priority 1`",
                "line 11: `m1` is a `motor`, which declares no `strat` — did you mean `start`?",
                "line 12: `pb` is an input point (line 2): `m1.motor`, a var_output, cannot drive " <>
                  "it",
@@ -1385,18 +1460,6 @@ defmodule Logex.ConfigurationTest do
                "line 15: `m1.fault` is internal to `motor` (declared `var`): only a var_input or " <>
                  "var_output connects",
                "line 16: `m1.speed_sp` is a dint, but `k` is a bool (line 3)"
-             ]
-    end
-
-    # As written, its task line and its `with` are words no M2-2 line reads. The broken
-    # `program` line still declares `m1`, so nothing that names `m1` is reported again.
-    test "the receipt's source as written is refused where it names a task, its broken " <>
-           "instance's connections silent" do
-      assert errors(@broken, plant_programs()) == [
-               "line 6, column 1: unknown configuration line `task`: a line starts with " <>
-                 "`var_global` or `program`, or is a connection, as in `m1.start pb_start_1`",
-               "line 7, column 1: unknown configuration line `progam` — did you mean `program`?",
-               "line 9, column 18: unexpected `with` after `program m1 motor`"
              ]
     end
 
@@ -1451,8 +1514,8 @@ defmodule Logex.ConfigurationTest do
   end
 
   # Every check M2-1 pins from data, again as a whole list from source, in the same words
-  # (`docs/organisation.md` §4.10). A task's checks wait for M2-3, which reads task lines,
-  # and a host's mistake is no text's.
+  # (`docs/organisation.md` §4.10), a task's since M2-3 reads task lines. A host's mistake
+  # is no text's.
   describe "every check from data, again from source" do
     test "a configuration that runs", %{seal: seal} do
       programs = %{"seal" => seal}
@@ -1637,6 +1700,117 @@ defmodule Logex.ConfigurationTest do
                "line 16: `panel.q.1.02` " <> as_written <> " `panel.q.1.2`",
                "line 17: `l10` is at `panel.q.0`, where `k` already is (line 3): a location " <>
                  "holds one global"
+             ]
+    end
+
+    # The bounds are in, and a number a line holds outside them, or none, is told it.
+    test "a task has an interval, 1 to 2147483647 ms, and a priority, 0 to 65535",
+         %{seal: seal} do
+      source = """
+      task a interval 0 priority 65536
+      task b interval 2147483648 priority 2147483648
+      task c
+      task d priority 0
+      task e interval 10
+      task f interval 1 priority 0
+      task g interval 2147483647 priority 65535
+      """
+
+      runs =
+        "var_global pb bool at panel.i.0\nprogram m seal with f\nprogram n seal with g\n" <>
+          wired(["m", "n"])
+
+      assert errors(source <> runs, %{"seal" => seal}) == [
+               "line 1: the interval of `a` is 0: an interval is at least 1 ms, and an " <>
+                 "instance that runs every cycle is declared without `with`",
+               "line 1: the priority of `a` is `65536`: a priority is 0 to 65535, and 0 is the " <>
+                 "highest",
+               "line 2: the interval of `b` is `2147483648` ms: an interval is 1 to 2147483647 ms",
+               "line 2: the priority of `b` is `2147483648`: a priority is 0 to 65535, and 0 is " <>
+                 "the highest",
+               "line 3: task `c` needs an interval, as in `task c interval 10 priority 1`",
+               "line 3: task `c` needs a priority, as in `task c interval 10 priority 1`: 0 is " <>
+                 "the highest",
+               "line 4: task `d` needs an interval, as in `task d interval 10 priority 1`",
+               "line 5: task `e` needs a priority, as in `task e interval 10 priority 1`: 0 is " <>
+                 "the highest"
+             ]
+
+      bounds = String.replace(source, ~r/^task [a-e]\b.*$/m, "")
+      assert {:ok, config} = compiled(bounds <> runs, %{"seal" => seal})
+
+      assert config.tasks == [
+               %Configuration.Task{name: "f", interval: 1, priority: 0, line: 6},
+               %Configuration.Task{name: "g", interval: 2_147_483_647, priority: 65_535, line: 7}
+             ]
+    end
+
+    # Names resolve over the whole file, so `with` may come before its task's line.
+    test "an instance names a task the configuration declares", %{seal: seal} do
+      source =
+        """
+        program m1 seal with fsat
+        program m2 seal with pb
+        program m3 seal with nothing_like_it
+        program m4 seal with fast
+        program m5 seal with fast.x
+        program m6 seal with panel.i.0
+        program m7 seal with m1.start
+        program m8 seal with With
+        program m9 seal with a.b
+        program m10 seal with Fast
+        var_global pb bool at panel.i.0
+        task fast interval 10 priority 1
+        task a.b interval 10 priority 1
+        """ <> wired(for i <- 1..10, do: "m#{i}")
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 1: no task `fsat` — did you mean `fast`?",
+               "line 2: `pb` is a global (line 11), not a task",
+               "line 3: no task `nothing_like_it`: declare it with a `task` line, as in " <>
+                 "`task nothing_like_it interval 10 priority 1`",
+               "line 5: no task `fast.x`: a task's name has no `.`, which is kept for a path " <>
+                 "and a location — did you mean `fast`?",
+               "line 6: no task `panel.i.0`: a task's name has no `.`, which is kept for a " <>
+                 "path and a location",
+               "line 7: no task `m1.start`: a task's name has no `.`, which is kept for a path " <>
+                 "and a location",
+               "line 8: no task `With`: `With` is a keyword of a configuration file, and " <>
+                 "nothing in one is named so",
+               "line 10: no task `Fast` — did you mean `fast`? (names are case-sensitive)",
+               "line 13: `a.b` cannot name a task: `.` is kept for a path, as in `m1.start`, " <>
+                 "and a location, as in `panel.i.0`"
+             ]
+    end
+
+    # One namespace for tasks too: a name another element has, or one differing from it
+    # only in case, is refused, and a keyword names no task.
+    test "tasks share the one namespace, and a keyword names no task", %{seal: seal} do
+      source =
+        """
+        task fast interval 10 priority 1
+        var_global fast bool
+        task Fast interval 20 priority 2
+        task with interval 10 priority 1
+        task Task interval 10 priority 1
+        program priority seal with with
+        var_global interval bool
+        program m seal with fast
+        program n Interval
+        program o seal with Task
+        priority.start 0
+        var_global pb bool at panel.i.0
+        """ <> wired(["m", "o"])
+
+      assert errors(source, %{"seal" => seal, "Interval" => %{seal | name: "Interval"}}) == [
+               "line 2: `fast` is declared twice: first on line 1, as a task",
+               "line 3: `Fast` and `fast` (line 1) differ only in case: names are " <>
+                 "case-sensitive, so these would be two (`fast` is a task)",
+               "line 4: `with` is a keyword and cannot name a task",
+               "line 5: `Task` is a keyword and cannot name a task",
+               "line 6: `priority` is a keyword and cannot name an instance",
+               "line 7: `interval` is a keyword and cannot name a global",
+               "line 9: `Interval` is a keyword and cannot name a program type"
              ]
     end
 
@@ -1886,7 +2060,7 @@ defmodule Logex.ConfigurationTest do
     # Decision 42: a name refused for its `.` or as a keyword is refused once, at its
     # declaration, and nothing that names it is reported again, so a connection to it, an
     # instance of it, or a member of it is silent; nor is that instance's var_input
-    # unconnected. A name M2-3's task lines will say is refused so from Elixir already.
+    # unconnected. A task's name likewise, so an instance's task that names it is silent.
     test "a name refused for its `.` or as a keyword is reported once, its uses silent",
          %{seal: seal} do
       source = """
@@ -1898,12 +2072,18 @@ defmodule Logex.ConfigurationTest do
       program.start 0
       m.motor a.b
       m.motor program.motor
+      task u.v interval 10 priority 0
+      program n seal with u.v
+      n.start 0
+      n.stop 0
       """
 
       assert errors(source, %{"seal" => seal}) == [
                "line 1: `a.b` cannot name a global: `.` is kept for a path, as in `m1.start`, " <>
                  "and a location, as in `panel.i.0`",
-               "line 2: `program` is a keyword and cannot name an instance"
+               "line 2: `program` is a keyword and cannot name an instance",
+               "line 9: `u.v` cannot name a task: `.` is kept for a path, as in `m1.start`, " <>
+                 "and a location, as in `panel.i.0`"
              ]
 
       fields =
@@ -2162,7 +2342,49 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
-  describe "warnings (M2-2), which stop nothing" do
+  describe "warnings (M2-2, M2-3), which stop nothing" do
+    # A task that no instance names with `with` runs nothing (§4.10, M2-3); an instance
+    # with no task runs every cycle, under none. The warnings come in line order, a task's
+    # among a global's.
+    test "a task that runs no instance", %{seal: seal} do
+      source =
+        """
+        task fast interval 10 priority 1
+        task slow interval 50 priority 2
+        var_global spare dint
+        task idle interval 100 priority 3
+        var_global pb bool at panel.i.0
+        program m seal with fast
+        program n seal
+        """ <> wired(["m", "n"])
+
+      assert warned(source, %{"seal" => seal}) == [
+               "line 2: warning: task `slow` runs no instance",
+               "line 3: warning: `spare` is declared but nothing uses it",
+               "line 4: warning: task `idle` runs no instance"
+             ]
+
+      fields =
+        Keyword.merge(base(seal),
+          tasks: [task("fast", 10, 1), task("slow", 50, 2)],
+          instances: [%Instance{name: "m", type: "seal", task: "slow"}]
+        )
+
+      assert Enum.map(Configuration.new!(fields).warnings, &Diagnostic.format/1) == [
+               "warning: task `fast` runs no instance",
+               "warning: `pb2` is declared but nothing uses it",
+               "warning: `sp` is declared but nothing uses it"
+             ]
+
+      # An instance on a task runs it.
+      assert warned(String.replace(source, "program n seal", "program n seal with slow"), %{
+               "seal" => seal
+             }) == [
+               "line 3: warning: `spare` is declared but nothing uses it",
+               "line 4: warning: task `idle` runs no instance"
+             ]
+    end
+
     # A use is a connection's source or sink. An output point nothing uses is unused only;
     # one that something reads and nothing drives stays at 0.
     test "a global nothing uses, and an output point something reads and nothing drives",
@@ -2218,11 +2440,7 @@ defmodule Logex.ConfigurationTest do
     # The same configuration from the text and from Elixir: each diagnostic in the same
     # words, but for the line a message cites, which an element from Elixir has none of.
     test "the elements a text reads, built in Elixir, meet the same checks in the same words" do
-      source =
-        @broken
-        |> String.replace("task fast interval 10 priority 1\n", "")
-        |> String.replace("progam m0 motor\n", "")
-        |> String.replace(" with medium", "")
+      source = String.replace(@broken, "progam m0 motor\n", "")
 
       {:ok, entries} = Configuration.Text.read(source)
       unlined = Enum.map(entries, &%{&1 | line: nil})
@@ -2230,13 +2448,14 @@ defmodule Logex.ConfigurationTest do
       fields = [
         name: "plant",
         programs: Map.values(plant_programs()),
+        tasks: for(%Configuration.Task{} = t <- unlined, do: t),
         globals: for(%Global{} = g <- unlined, do: g),
         instances: for(%Instance{} = i <- unlined, do: i),
         connections: for(%Connection{} = c <- unlined, do: c)
       ]
 
       {:error, from_text} = compiled(source, plant_programs())
-      assert length(from_text) == 5
+      assert length(from_text) == 6
 
       assert refused(fields) ==
                Enum.map(from_text, &String.replace(&1.message, ~r/ \(line \d+\)/, ""))
@@ -2246,18 +2465,18 @@ defmodule Logex.ConfigurationTest do
   # `docs/organisation.md` §4.10: a printer from a configuration to its text, with an exact
   # round trip, an entry with a line printed on that line.
   describe "the round trip (M2-2): a configuration printed, and compiled back" do
-    test "§4.4's plant prints to its canonical text, which compiles back to the very " <>
-           "configuration" do
+    test "§4.4's plant without its event task prints to its canonical text, which compiles " <>
+           "back to the very configuration" do
       programs = plant_programs()
-      {:ok, plant} = compiled(taskless_plant(), programs)
+      {:ok, plant} = compiled(periodic_plant(), programs)
       text = Text.print(plant)
 
       assert compiled(text, programs) == {:ok, plant}
 
       # Each element on its own line, as the plant's own lines are once their comments and
-      # their spacing are gone: comments, blank lines and blanked task lines left empty.
+      # their spacing are gone: comments, blank lines and the blanked event task left empty.
       canonical =
-        taskless_plant()
+        periodic_plant()
         |> String.split("\n")
         |> Enum.map(&(&1 |> String.replace(~r{//.*}, "") |> String.split() |> Enum.join(" ")))
         |> Enum.join("\n")
@@ -2265,11 +2484,20 @@ defmodule Logex.ConfigurationTest do
 
       assert text == canonical <> "\n"
 
+      assert Enum.slice(String.split(text, "\n"), 0..5) == [
+               "",
+               "task fast interval 10 priority 1",
+               "task slow interval 50 priority 2",
+               "",
+               "",
+               "var_global estop bool at panel.i.7"
+             ]
+
       assert Enum.slice(String.split(text, "\n"), 19..23) == [
                "var_global k1_at_trip bool",
                "var_global k2_at_trip bool",
                "",
-               "program m1 motor",
+               "program m1 motor with fast",
                "m1.start pb_start_1"
              ]
     end
@@ -2304,21 +2532,28 @@ defmodule Logex.ConfigurationTest do
       [pb | _] = lined.globals
       fast = task("fast", 10, 0)
 
+      # A task and an instance's task print as their lines say them.
+      assert Text.print(
+               Configuration.new!(
+                 Keyword.merge(base(seal), tasks: [fast], instances: [%{m | task: "fast"}])
+               )
+             ) ==
+               "task fast interval 10 priority 0\n" <>
+                 String.replace(@base, "program m seal", "program m seal with fast")
+
       for {printed, message} <- [
-            # M2-1's data holds a task, which no line of M2-2's says.
-            {Configuration.new!(
-               Keyword.merge(base(seal), tasks: [fast], instances: [%{m | task: "fast"}])
-             ),
+            # A word a line reads as its keyword in that place, in any case.
+            {%{config | tasks: [%{fast | name: "Priority"}]},
              unsaid(
-               "an entry is a %Logex.Configuration.Global{}, %Logex.Configuration.Instance{} " <>
-                 "or %Logex.Configuration.Connection{}, with its struct's keys",
-               fast
+               "a task's name is not `interval` or `priority`, in any case: a line reads " <>
+                 "that word as its keyword",
+               %{fast | name: "Priority"}
              )},
-            {%{config | instances: [%{m | task: "fast"}]},
+            {%{config | instances: [%{m | type: "WITH"}]},
              unsaid(
-               "a `program` line names an instance and its program type, and no task, so " <>
-                 "an instance's task is nil",
-               %{m | task: "fast"}
+               "a program's type is not `with`, in any case: a line reads that word as its " <>
+                 "keyword",
+               %{m | type: "WITH"}
              )},
             # Each list in line order, which a merge by line would otherwise hide.
             {%{lined | globals: Enum.reverse(lined.globals)},
@@ -2362,11 +2597,16 @@ defmodule Logex.ConfigurationTest do
         assert back == numbered(config)
         assert Text.print(back) == text
 
+        # Its warnings, in line order, are the same ones: a task's and a global's in the
+        # order their lines interleave.
         lined = interleaved(config)
         assert Configuration.check(lined) == []
         assert {:ok, read} = compiled(Text.print(lined), programs)
         assert read == %{lined | warnings: read.warnings}
-        assert Enum.map(read.warnings, &%{&1 | line: nil}) == config.warnings
+
+        assert Enum.sort(Enum.map(read.warnings, &%{&1 | line: nil})) ==
+                 Enum.sort(config.warnings)
+
         assert compiled(Text.print(read), programs) == {:ok, read}
       end
     end
@@ -2402,40 +2642,53 @@ defmodule Logex.ConfigurationTest do
 
   defp kind_rule,
     do:
-      "an entry is a %Logex.Configuration.Global{}, %Logex.Configuration.Instance{} or " <>
-        "%Logex.Configuration.Connection{}, with its struct's keys"
+      "an entry is a %Logex.Configuration.Task{}, %Logex.Configuration.Global{}, " <>
+        "%Logex.Configuration.Instance{} or %Logex.Configuration.Connection{}, with its " <>
+        "struct's keys"
 
   # A configuration from Elixir as compile/3 reads it back from its printed text: its
-  # globals, instances and connections numbered from line 1 in that order, and its warnings
-  # at their elements' lines.
+  # tasks, globals, instances and connections numbered from line 1 in that order, and its
+  # warnings at their elements' lines, each element named first in its warning.
   defp numbered(config) do
-    {[globals, instances, connections], _next} =
-      Enum.map_reduce([config.globals, config.instances, config.connections], 1, fn part, n ->
-        {Enum.with_index(part, &%{&1 | line: n + &2}), n + length(part)}
-      end)
+    {[tasks, globals, instances, connections], _next} =
+      Enum.map_reduce(
+        [config.tasks, config.globals, config.instances, config.connections],
+        1,
+        fn part, n -> {Enum.with_index(part, &%{&1 | line: n + &2}), n + length(part)} end
+      )
 
-    lined = Map.new(globals, &{&1.name, &1.line})
+    lined = Map.new(tasks ++ globals, &{&1.name, &1.line})
 
     %{
       config
-      | globals: globals,
+      | tasks: tasks,
+        globals: globals,
         instances: instances,
         connections: connections,
         warnings:
           Enum.map(config.warnings, fn warning ->
-            [name] = Regex.run(~r/\A`([^`]+)`/, warning.message, capture: :all_but_first)
+            [name] = Regex.run(~r/`([^`]+)`/, warning.message, capture: :all_but_first)
             %{warning | line: Map.fetch!(lined, name)}
           end)
     }
   end
 
-  # A configuration new!/1 accepts: one to three motors, each wired whole, its points
-  # located or not, its fixed values given or not, a snapshot of the first two contactors
-  # or none, and a spare global or none, the warnings' two kinds; its globals and its
+  # A configuration new!/1 accepts: up to two periodic tasks, one to three motors, each on
+  # a task or none and wired whole, its points located or not, its fixed values given or
+  # not, a snapshot of the first two contactors or none, and a spare global or none, so
+  # each kind of warning, a task that runs no instance among them; its tasks, globals and
   # connections in a seeded order.
   defp generated(programs) do
     count = Enum.random(1..3)
     snapshot? = Enum.random([true, false])
+
+    tasks =
+      Enum.take(
+        Enum.shuffle([task("fast", 10, 1), task("slow", 50, 2), task("t0", 2_147_483_647, 0)]),
+        Enum.random(0..2)
+      )
+
+    on_task = fn -> Enum.random([nil | Enum.map(tasks, & &1.name)]) end
 
     globals =
       [%Global{name: "go", type: :bool, at: "panel.i.0"}] ++
@@ -2455,8 +2708,8 @@ defmodule Logex.ConfigurationTest do
         snapshots(snapshot?)
 
     instances =
-      for(i <- 1..count, do: %Instance{name: "m#{i}", type: "motor"}) ++
-        snapshot_instances(snapshot?)
+      for(i <- 1..count, do: %Instance{name: "m#{i}", type: "motor", task: on_task.()}) ++
+        snapshot_instances(snapshot?, on_task.())
 
     connections =
       Enum.flat_map(1..count, fn i ->
@@ -2475,6 +2728,7 @@ defmodule Logex.ConfigurationTest do
     Configuration.new!(
       name: "plant",
       programs: Map.values(programs),
+      tasks: tasks,
       globals: Enum.shuffle(globals),
       instances: instances,
       connections: Enum.shuffle(connections)
@@ -2485,8 +2739,8 @@ defmodule Logex.ConfigurationTest do
   defp sp(i, :fixed), do: %Global{name: "sp_#{i}", type: :dint, initial: 1200 + i}
   defp sp(i, :plain), do: %Global{name: "sp_#{i}", type: :dint}
 
-  defp snapshot_instances(false), do: []
-  defp snapshot_instances(true), do: [%Instance{name: "snap", type: "snapshot"}]
+  defp snapshot_instances(false, _task), do: []
+  defp snapshot_instances(true, task), do: [%Instance{name: "snap", type: "snapshot", task: task}]
 
   defp snapshots(false), do: []
 
@@ -2506,6 +2760,7 @@ defmodule Logex.ConfigurationTest do
   # order kept, every element on a line of its own, with up to two empty lines before it.
   defp interleaved(config) do
     parts = [
+      tasks: config.tasks,
       globals: config.globals,
       instances: config.instances,
       connections: config.connections
@@ -2517,7 +2772,7 @@ defmodule Logex.ConfigurationTest do
       )
 
     {lined, _rest, _line} =
-      Enum.reduce(order, {%{globals: [], instances: [], connections: []}, Map.new(parts), 0}, fn
+      Enum.reduce(order, {Map.new(parts, &{elem(&1, 0), []}), Map.new(parts), 0}, fn
         part, {lined, rest, line} ->
           [element | more] = Map.fetch!(rest, part)
           line = line + Enum.random(1..3)
@@ -2528,7 +2783,8 @@ defmodule Logex.ConfigurationTest do
 
     %{
       config
-      | globals: Enum.reverse(lined.globals),
+      | tasks: Enum.reverse(lined.tasks),
+        globals: Enum.reverse(lined.globals),
         instances: Enum.reverse(lined.instances),
         connections: Enum.reverse(lined.connections)
     }
@@ -2565,10 +2821,10 @@ defmodule Logex.ConfigurationTest do
   end
 
   # A keyword in another case; a name, a location or a number as it is.
-  defp recased(word) when word in ["var_global", "program", "at", "bool", "dint"],
-    do: Enum.random([word, String.upcase(word), String.capitalize(word)])
+  defp recased(word), do: recased(word in Text.keywords(), word)
 
-  defp recased(word), do: word
+  defp recased(true, word), do: Enum.random([word, String.upcase(word), String.capitalize(word)])
+  defp recased(false, word), do: word
 
   describe "compile/3's host mistakes" do
     # What no configuration text holds is the host's, raised as check/1 raises it.
@@ -2707,12 +2963,15 @@ defmodule Logex.ConfigurationTest do
 
     # The words of an entry no configuration line can say, as Text.entries!/1 gives them.
     @unsaid [
-              "an entry is a %Logex.Configuration.Global{}, %Logex.Configuration.Instance{} " <>
-                "or %Logex.Configuration.Connection{}, with its struct's keys",
+              "an entry is a %Logex.Configuration.Task{}, %Logex.Configuration.Global{}, " <>
+                "%Logex.Configuration.Instance{} or %Logex.Configuration.Connection{}, with " <>
+                "its struct's keys",
               "a line is a positive integer, or nil for an entry built in Elixir",
               "a global's type is :bool or :dint",
-              "a `program` line names an instance and its program type, and no task, so an " <>
-                "instance's task is nil",
+              "a task's name is not `interval` or `priority`, in any case: a line reads that " <>
+                "word as its keyword",
+              "a program's type is not `with`, in any case: a line reads that word as its " <>
+                "keyword",
               "a name lexes as one name token",
               "a connection's instance has no `.`: its first `.` begins the member",
               "a connection is to a global, by its name, or to a constant",
@@ -2743,8 +3002,9 @@ defmodule Logex.ConfigurationTest do
     # Words a seeded edit puts into a source: every line's keywords in other cases, a later
     # item's words, names, paths and locations good and bad, numbers in and out of range,
     # the delimiters, and a few that do not lex.
-    @vocabulary ~w(var_global VAR_GLOBAL program Program at AT bool Dint task with single
-                   m m2 m.start m.stop m.motor m.sp m.fault m.t1 m.t1.pre m.x.y m2.start pb
+    @vocabulary ~w(var_global VAR_GLOBAL program Program at AT bool Dint task Task interval
+                   PRIORITY with With single fast m m2 m.start m.stop m.motor m.sp m.fault m.t1
+                   m.t1.pre m.x.y m2.start pb
                    pb2 k sp seal Seal x.y panel.i.0 panel.I.0 panel.q.00 Panel.q.1 panel.q.0
                    drive.q.1.0 0 1 7 2147483647 2147483648 99999999999 \( | \) //) ++
                   ["\t", "\r", "\r\n", "%", "é", <<255>>]
@@ -2757,9 +3017,16 @@ defmodule Logex.ConfigurationTest do
          %{seal: seal} do
       :rand.seed(:exsss, {2026, 10, 46})
       programs = %{"seal" => seal}
-      config = Configuration.new!(base(seal))
-      {:ok, lined} = compiled(@base, programs)
-      sources = [@base, @broken, "m.start pb\nprogram m seal\nvar_global pb bool at panel.i.0"]
+      config = Configuration.new!(tasked(seal))
+      {:ok, lined} = compiled(@tasked, programs)
+
+      sources = [
+        @base,
+        @tasked,
+        @broken,
+        "m.start pb\nprogram m seal with fast\nvar_global pb bool at panel.i.0\n" <>
+          "task fast interval 10 priority 1"
+      ]
 
       outcomes =
         for _ <- 1..1500,
@@ -2903,7 +3170,8 @@ defmodule Logex.ConfigurationTest do
     # Entries a configuration's elements spoil: one field made junk or dropped, a junk
     # entry added, an improper tail, or junk whole.
     defp junk_entries(config),
-      do: spoiled_entries(config.globals ++ config.instances ++ config.connections)
+      do:
+        spoiled_entries(config.tasks ++ config.globals ++ config.instances ++ config.connections)
 
     defp spoiled_entries([]), do: [printable_junk()]
 

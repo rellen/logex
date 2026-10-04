@@ -80,9 +80,21 @@ defmodule Logex.NamingTest do
   # its own words with their stanzas (docs/organisation.md §4.10), and a word dropped
   # from the list would drop its survey from the check unseen.
   test "a configuration file's words are those of the items that have landed" do
-    # M2-2: `var_global <name> <type> [at <location>]` and `program <instance> <type>`.
+    # M2-2: `var_global <name> <type> [at <location>]` and `program <instance> <type>`;
+    # M2-3: `task <name> interval <ms> priority <p>` and `program <instance> <type> with
+    # <task>`.
     assert Enum.sort(Logex.Configuration.Text.keywords()) ==
-             ["at", "bool", "dint", "program", "var_global"]
+             [
+               "at",
+               "bool",
+               "dint",
+               "interval",
+               "priority",
+               "program",
+               "task",
+               "var_global",
+               "with"
+             ]
   end
 
   test "the check is one-way: a surveyed but unimplemented mnemonic is allowed" do

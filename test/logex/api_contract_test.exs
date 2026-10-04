@@ -1523,8 +1523,8 @@ defmodule Logex.ApiContractTest do
     # start/1 checks its configuration again: a host's mistake that check/1 raises, or a
     # diagnostic it gives, formatted.
     {:negative, "a priority is 0, the highest, to 65535, found -"},
-    {:priority, "a priority is 0, the highest, to 65535"},
-    {:interval, "an interval is 1 to 2147483647 ms"},
+    {:priority, "a priority is 0 to 65535, and 0 is the highest"},
+    {:interval, "an interval is at least 1 ms"},
     {:lines, "a configuration's lines are all nil"},
     {:line, "a line is a positive integer"}
   ]

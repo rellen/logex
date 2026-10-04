@@ -414,7 +414,7 @@ overlaps: %{"fast" => 2, "slow" => 0}
 next due in: 5
 m1.fault: 1
 task `fast`: a priority is 0, the highest, to 65535, found -1
-program instance `m2`: there is no task `slwo` — did you mean `slow`?
+no task `slwo` — did you mean `slow`?
 `pb_stop_1` is an input point: `m2.motor`, a var_output, cannot drive it
 ```
 

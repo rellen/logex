@@ -1,7 +1,7 @@
 defmodule Logex.Configuration.TextTest do
   @moduledoc """
-  `Logex.Configuration.Text` (M2-2): a configuration file read into the elements of a
-  `%Logex.Configuration{}`, each with its line, every line it cannot read a diagnostic at
+  `Logex.Configuration.Text` (M2-2, M2-3): a configuration file read into the elements of
+  a `%Logex.Configuration{}`, each with its line, every line it cannot read a diagnostic at
   its token, as whole lists from source; what a line can say, `entries!/1`; and the
   printer, whose text reads back to the very entries it printed.
 
@@ -23,12 +23,12 @@ defmodule Logex.Configuration.TextTest do
     block
   end
 
-  # The plant in M2-2's words: its task lines and each `with` blanked, so every line keeps
-  # its number.
-  defp taskless(source) do
+  # The plant without its event task, which M2-6 brings: its `trip` line blanked, so every
+  # line keeps its number, and the snapshot that `trip` runs left with no task.
+  defp periodic(source) do
     source
-    |> String.replace(~r/^task .*$/m, "")
-    |> String.replace(~r/ with \w+$/m, "")
+    |> String.replace(~r/^task trip .*$/m, "")
+    |> String.replace(" with trip", "")
   end
 
   defp errors(source) do
@@ -39,7 +39,11 @@ defmodule Logex.Configuration.TextTest do
   defp global(line, name, type, at \\ nil),
     do: %Global{name: name, type: type, at: at, line: line}
 
-  defp instance(line, name, type), do: %Instance{name: name, type: type, line: line}
+  defp instance(line, name, type, task \\ nil),
+    do: %Instance{name: name, type: type, task: task, line: line}
+
+  defp task(line, name, interval, priority),
+    do: %Logex.Configuration.Task{name: name, interval: interval, priority: priority, line: line}
 
   defp wire(line, instance, member, to),
     do: %Connection{instance: instance, member: member, to: to, line: line}
@@ -47,9 +51,15 @@ defmodule Logex.Configuration.TextTest do
   defp unsaid(rule, entry),
     do: "not an entry a configuration file can say: #{rule}, got: #{inspect(entry)}"
 
-  describe "reading (M2-2): the elements of a configuration, each with its line" do
-    test "§4.4's plant, its task lines and `with`s blanked, reads to its globals, instances " <>
-           "and connections" do
+  defp kind_rule,
+    do:
+      "an entry is a %Logex.Configuration.Task{}, %Logex.Configuration.Global{}, " <>
+        "%Logex.Configuration.Instance{} or %Logex.Configuration.Connection{}, with its " <>
+        "struct's keys"
+
+  describe "reading (M2-2, M2-3): the elements of a configuration, each with its line" do
+    test "§4.4's plant without its event task reads to its tasks, globals, instances and " <>
+           "connections" do
       globals =
         for {name, line, type, at} <- [
               {"estop", 6, :bool, "panel.i.7"},
@@ -71,11 +81,12 @@ defmodule Logex.Configuration.TextTest do
             ],
             do: global(line, name, type, at)
 
-      assert Text.read(taskless(plant())) ==
+      assert Text.read(periodic(plant())) ==
                {:ok,
-                globals ++
+                [task(2, "fast", 10, 1), task(3, "slow", 50, 2)] ++
+                  globals ++
                   [
-                    instance(23, "m1", "motor"),
+                    instance(23, "m1", "motor", "fast"),
                     wire(24, "m1", "start", "pb_start_1"),
                     wire(25, "m1", "stop", "pb_stop_1"),
                     wire(26, "m1", "overtemp", "tt_1"),
@@ -83,7 +94,7 @@ defmodule Logex.Configuration.TextTest do
                     wire(28, "m1", "motor", "k1"),
                     wire(29, "m1", "run_lamp", "lamp_1"),
                     wire(30, "m1", "speed_sp", "sp_1"),
-                    instance(32, "m2", "motor"),
+                    instance(32, "m2", "motor", "slow"),
                     wire(33, "m2", "start", "pb_start_2"),
                     wire(34, "m2", "stop", "pb_stop_2"),
                     wire(35, "m2", "overtemp", "tt_2"),
@@ -99,35 +110,39 @@ defmodule Logex.Configuration.TextTest do
                   ]}
     end
 
-    test "§4.4's plant as written is refused only where it names a task: a later item's " <>
-           "words are not read, and no message offers them" do
-      assert errors(plant()) ==
-               (for line <- 2..4 do
-                  "line #{line}, column 1: unknown configuration line `task`: a line starts " <>
-                    "with `var_global` or `program`, or is a connection, as in " <>
-                    "`m1.start pb_start_1`"
-                end) ++
-                 [
-                   "line 23, column 18: unexpected `with` after `program m1 motor`",
-                   "line 32, column 18: unexpected `with` after `program m2 motor`",
-                   "line 41, column 23: unexpected `with` after `program snap snapshot`"
-                 ]
+    # `single` is M2-6's, no input of a task yet, and no message offers it: the event
+    # task's line is broken there, and still declares `trip`, which the snapshot names.
+    test "§4.4's plant as written is refused only at its event task, a later item's" do
+      assert {:error, [diagnostic], entries} = Text.read(plant())
+
+      assert Diagnostic.format(diagnostic) ==
+               "line 4, column 11: unexpected `single` on the line of task `trip`: a task " <>
+                 "takes `interval` and `priority`"
+
+      assert {:declared, 4, %{kind: :task, name: "trip"}} in entries
+      assert instance(41, "snap", "snapshot", "trip") in entries
     end
 
     test "keywords are matched in any case, and names are not folded" do
-      assert Text.read("VAR_GLOBAL K1 DINT 7\nVar_Global Pb Bool At Panel.i.0\nPROGRAM M1 Motor") ==
+      source =
+        "VAR_GLOBAL K1 DINT 7\nVar_Global Pb Bool At Panel.i.0\nPROGRAM M1 Motor\n" <>
+          "Task Fast INTERVAL 10 Priority 1\nprogram M2 Motor WITH Fast"
+
+      assert Text.read(source) ==
                {:ok,
                 [
                   %Global{name: "K1", type: :dint, initial: 7, line: 1},
                   global(2, "Pb", :bool, "Panel.i.0"),
-                  instance(3, "M1", "Motor")
+                  instance(3, "M1", "Motor"),
+                  task(4, "Fast", 10, 1),
+                  instance(5, "M2", "Motor", "Fast")
                 ]}
     end
 
     test "a line ends at LF, CRLF or a lone CR and keeps its number, and a comment is not read" do
-      {:ok, entries} = Text.read(taskless(plant()))
-      assert Text.read(String.replace(taskless(plant()), "\n", "\r\n")) == {:ok, entries}
-      assert Text.read(String.replace(taskless(plant()), "\n", "\r")) == {:ok, entries}
+      {:ok, entries} = Text.read(periodic(plant()))
+      assert Text.read(String.replace(periodic(plant()), "\n", "\r\n")) == {:ok, entries}
+      assert Text.read(String.replace(periodic(plant()), "\n", "\r")) == {:ok, entries}
 
       assert Text.read("// a plant\n\nvar_global k bool // the contactor\n  // nothing\nm1.x k") ==
                {:ok, [global(3, "k", :bool), wire(5, "m1", "x", "k")]}
@@ -153,17 +168,20 @@ defmodule Logex.Configuration.TextTest do
   end
 
   describe "a line's grammar, each mistake a :configure diagnostic at its token" do
-    test "a line starts with `var_global` or `program`, or is a connection" do
-      assert errors("progam m1 motor\nvar_globl x bool\nzzz m1 motor\n5 m1\nm1 start pb") == [
+    test "a line starts with `task`, `var_global` or `program`, or is a connection" do
+      source = "progam m1 motor\nvar_globl x bool\nzzz m1 motor\n5 m1\nm1 start pb\ntsak t"
+
+      assert errors(source) == [
                "line 1, column 1: unknown configuration line `progam` — did you mean `program`?",
                "line 2, column 1: unknown configuration line `var_globl` — did you mean " <>
                  "`var_global`?",
-               "line 3, column 1: unknown configuration line `zzz`: a line starts with " <>
+               "line 3, column 1: unknown configuration line `zzz`: a line starts with `task`, " <>
                  "`var_global` or `program`, or is a connection, as in `m1.start pb_start_1`",
-               "line 4, column 1: unknown configuration line `5`: a line starts with " <>
+               "line 4, column 1: unknown configuration line `5`: a line starts with `task`, " <>
                  "`var_global` or `program`, or is a connection, as in `m1.start pb_start_1`",
-               "line 5, column 1: unknown configuration line `m1`: a line starts with " <>
-                 "`var_global` or `program`, or is a connection, as in `m1.start pb_start_1`"
+               "line 5, column 1: unknown configuration line `m1`: a line starts with `task`, " <>
+                 "`var_global` or `program`, or is a connection, as in `m1.start pb_start_1`",
+               "line 6, column 1: unknown configuration line `tsak` — did you mean `task`?"
              ]
 
       assert %Diagnostic{stage: :configure, line: 1, column: 1, file: nil} =
@@ -178,6 +196,96 @@ defmodule Logex.Configuration.TextTest do
                    "line #{line}, column 1: a line cannot start with `#{word}`: it goes on a " <>
                      "`var_global` line, as in `var_global k1 bool at panel.q.0`"
                )
+    end
+
+    test "`interval` and `priority` belong on a `task` line, `with` on a `program` line, " <>
+           "and none starts one" do
+      assert errors("interval 10\nPriority 1\nwith fast\nWITH") == [
+               "line 1, column 1: a line cannot start with `interval`: it goes on a `task` " <>
+                 "line, as in `task fast interval 10 priority 1`",
+               "line 2, column 1: a line cannot start with `Priority`: it goes on a `task` " <>
+                 "line, as in `task fast interval 10 priority 1`",
+               "line 3, column 1: a line cannot start with `with`: it goes on a `program` " <>
+                 "line, as in `program m1 motor with fast`",
+               "line 4, column 1: a line cannot start with `WITH`: it goes on a `program` " <>
+                 "line, as in `program m1 motor with fast`"
+             ]
+    end
+
+    # IEC's order (Ed 2 Annex B.1.7): `interval` before `priority`, each once. `single` is
+    # M2-6's and no input yet. An input left out reads as nil, for the validator to refuse.
+    test "a task line: a name, then `interval` and `priority`, once each, in that order" do
+      source = """
+      task
+      task 5 interval 10 priority 1
+      task interval 10 priority 1
+      task Priority 1
+      task t5 interval 10 priority 1 every 5
+      task t6 interval 10 priority 1 7
+      task t7 interval 10 interval 20 priority 1
+      task t8 priority 1 interval 10
+      task t9 priority 1 PRIORITY 2
+      task t10 single go priority 1
+      task t11 interval fast priority 1
+      task t12 interval 10 priority
+      task t13 interval priority 1
+      task t14 interval 10 with fast
+      """
+
+      assert errors(source) == [
+               "line 1, column 1: `task` needs a name, as in `task fast interval 10 priority 1`",
+               "line 2, column 6: expected a task's name after `task`, found `5`",
+               "line 3, column 6: `task` needs a name before `interval`, as in " <>
+                 "`task fast interval 10 priority 1`",
+               "line 4, column 6: `task` needs a name before `Priority`, as in " <>
+                 "`task fast interval 10 priority 1`",
+               "line 5, column 32: unexpected `every` on the line of task `t5`: a task takes " <>
+                 "`interval` and `priority`",
+               "line 6, column 32: unexpected `7` on the line of task `t6`: a task takes " <>
+                 "`interval` and `priority`",
+               "line 7, column 21: `interval` is given twice on the line of task `t7`",
+               "line 8, column 20: `interval` goes before `priority`, as in " <>
+                 "`task fast interval 10 priority 1`",
+               "line 9, column 20: `priority` is given twice on the line of task `t9`",
+               "line 10, column 10: unexpected `single` on the line of task `t10`: a task takes " <>
+                 "`interval` and `priority`",
+               "line 11, column 19: `interval` takes a number of milliseconds, as in " <>
+                 "`interval 10`, found `fast`",
+               "line 12, column 22: `priority` takes a number, 0 the highest, as in `priority 1`",
+               "line 13, column 19: `interval` takes a number of milliseconds, as in " <>
+                 "`interval 10`, found `priority`",
+               "line 14, column 22: unexpected `with` on the line of task `t14`: a task takes " <>
+                 "`interval` and `priority`"
+             ]
+
+      # A name, then whatever inputs it has, in order: what they mean, an input left out
+      # among it, is the validator's to refuse.
+      assert Text.read(
+               "task a interval 10 priority 1\ntask b\ntask c priority 0\ntask d interval 0"
+             ) ==
+               {:ok,
+                [
+                  task(1, "a", 10, 1),
+                  task(2, "b", nil, nil),
+                  task(3, "c", nil, 0),
+                  task(4, "d", 0, nil)
+                ]}
+    end
+
+    # Decision 13: an interval is integer milliseconds, not a TIME literal, and the lexer
+    # reads a number whole: a unit, `t#` or a fraction is no number, and stops the read.
+    test "an interval is a whole number of milliseconds: `10ms`, `t#10ms` and `1.5` do not lex" do
+      for {interval, column, message} <- [
+            {"10ms", 20,
+             ~s(missing separator after integer: "10ms" is neither a number nor a tag)},
+            {"t#10ms", 21, ~s(illegal character "#")},
+            {"1.5", 21, ~s(illegal character ".")}
+          ] do
+        assert {:error, [%Diagnostic{stage: :lex, line: 1, column: ^column} = lexed], []} =
+                 Text.read("task fast interval #{interval} priority 1")
+
+        assert lexed.message == message
+      end
     end
 
     test "a branch delimiter has no place in a configuration" do
@@ -242,7 +350,7 @@ defmodule Logex.Configuration.TextTest do
                 ]}
     end
 
-    test "a program line: an instance and its program type, and nothing after" do
+    test "a program line: an instance, its program type, then `with` and a task, or nothing" do
       source = """
       program
       program 5 motor
@@ -250,7 +358,11 @@ defmodule Logex.Configuration.TextTest do
       program m4 7
       program m5 motor fast
       program m6 motor 3
-      program m7 motor with fast
+      program m7 With fast
+      program m8 motor with
+      program m9 motor with 3
+      program m10 motor with fast slow
+      program m11 motor with fast with slow
       """
 
       assert errors(source) == [
@@ -261,12 +373,24 @@ defmodule Logex.Configuration.TextTest do
                "line 4, column 12: expected a program type after `program m4`, found `7`",
                "line 5, column 18: unexpected `fast` after `program m5 motor`",
                "line 6, column 18: unexpected `3` after `program m6 motor`",
-               "line 7, column 18: unexpected `with` after `program m7 motor`"
+               "line 7, column 12: `program m7` needs a program type before `With`, as in " <>
+                 "`program m7 motor with fast`",
+               "line 8, column 18: `with` needs a task, as in `program m8 motor with fast`",
+               "line 9, column 23: `with` needs a task, as in `program m9 motor with fast`, " <>
+                 "found `3`",
+               "line 10, column 29: unexpected `slow` after `program m10 motor with fast`",
+               "line 11, column 29: unexpected `with` after `program m11 motor with fast`"
              ]
 
-      # The type is whatever word stands third; a program type is named only there.
-      assert Text.read("program motor motor\nprogram at bool") ==
-               {:ok, [instance(1, "motor", "motor"), instance(2, "at", "bool")]}
+      # The type is whatever word stands third; a program type is named only there, and a
+      # task only after `with`.
+      assert Text.read("program motor motor\nprogram at bool\nprogram m motor with with") ==
+               {:ok,
+                [
+                  instance(1, "motor", "motor"),
+                  instance(2, "at", "bool"),
+                  instance(3, "m", "motor", "with")
+                ]}
     end
 
     test "a connection line: a path, then one global or constant" do
@@ -301,10 +425,19 @@ defmodule Logex.Configuration.TextTest do
       var_global
       program
       program m3 motor
+      task t1 interval
+      task t2 priority 1 interval 10
+      task t3 interval 10 single go
+      task
+      program m4 motor with
+      program m5 motor with t1 now
+      task t4 interval 10 priority 1
       """
 
       assert {:error, diagnostics, entries} = Text.read(source)
-      assert Enum.map(diagnostics, & &1.line) == [2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+      assert Enum.map(diagnostics, & &1.line) ==
+               [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17]
 
       assert entries == [
                global(1, "a", :bool),
@@ -315,7 +448,13 @@ defmodule Logex.Configuration.TextTest do
                {:declared, 6, %{kind: :instance, name: "m2"}},
                {:declared, 7, %{kind: :connection, instance: "m1", member: "start"}},
                {:declared, 8, %{kind: :connection, instance: "m1", member: "stop"}},
-               instance(11, "m3", "motor")
+               instance(11, "m3", "motor"),
+               {:declared, 12, %{kind: :task, name: "t1"}},
+               {:declared, 13, %{kind: :task, name: "t2"}},
+               {:declared, 14, %{kind: :task, name: "t3"}},
+               {:declared, 16, %{kind: :instance, name: "m4"}},
+               {:declared, 17, %{kind: :instance, name: "m5"}},
+               task(18, "t4", 10, 1)
              ]
     end
 
@@ -326,6 +465,8 @@ defmodule Logex.Configuration.TextTest do
       m2.start ( g
       var_global ( h bool
       ( program m4 motor
+      task fast interval 10 | priority 1
+      program m5 motor with ( fast )
       """
 
       assert {:error, diagnostics, entries} = Text.read(source)
@@ -335,7 +476,9 @@ defmodule Logex.Configuration.TextTest do
                "line 2, column 18: a configuration line cannot hold `(`",
                "line 3, column 10: a configuration line cannot hold `(`",
                "line 4, column 12: a configuration line cannot hold `(`",
-               "line 5, column 1: a configuration line cannot hold `(`"
+               "line 5, column 1: a configuration line cannot hold `(`",
+               "line 6, column 23: a configuration line cannot hold `|`",
+               "line 7, column 23: a configuration line cannot hold `(`"
              ]
 
       # The delimiter is the line's one diagnostic: what its words before it say is read
@@ -343,7 +486,9 @@ defmodule Logex.Configuration.TextTest do
       assert entries == [
                {:declared, 1, %{kind: :global, name: "g"}},
                {:declared, 2, %{kind: :instance, name: "m1"}},
-               {:declared, 3, %{kind: :connection, instance: "m2", member: "start"}}
+               {:declared, 3, %{kind: :connection, instance: "m2", member: "start"}},
+               {:declared, 6, %{kind: :task, name: "fast"}},
+               {:declared, 7, %{kind: :instance, name: "m5"}}
              ]
     end
   end
@@ -351,19 +496,25 @@ defmodule Logex.Configuration.TextTest do
   describe "printing, and what a line can say" do
     test "print/1 writes each entry in one canonical form, on its own line when it has one" do
       entries = [
+        %Logex.Configuration.Task{name: "fast", interval: 10, priority: 1},
+        %Logex.Configuration.Task{name: "t", interval: nil, priority: nil},
         %Global{name: "k1", type: :bool, at: "panel.q.0"},
         %Global{name: "sp", type: :dint, initial: 1200},
         %Global{name: "g", type: :bool, initial: 1, at: "panel.q.1"},
-        %Instance{name: "m1", type: "motor"},
+        %Instance{name: "m1", type: "motor", task: "fast"},
+        %Instance{name: "m2", type: "motor"},
         %Connection{instance: "m1", member: "start", to: "k1"},
         %Connection{instance: "m1", member: "t1.pre", to: 0}
       ]
 
       text = """
+      task fast interval 10 priority 1
+      task t
       var_global k1 bool at panel.q.0
       var_global sp dint 1200
       var_global g bool 1 at panel.q.1
-      program m1 motor
+      program m1 motor with fast
+      program m2 motor
       m1.start k1
       m1.t1.pre 0
       """
@@ -378,9 +529,14 @@ defmodule Logex.Configuration.TextTest do
       # With lines, as a file gives them, each on its own line and the lines between left
       # empty, so the text reads back to the very entries.
       {:ok, lined} =
-        Text.read("\n\nVAR_GLOBAL  K  BOOL  AT panel.i.0 // a button\n\n\nProgram M x")
+        Text.read(
+          "\n\nVAR_GLOBAL  K  BOOL  AT panel.i.0 // a button\n\n\nProgram M x  With  T\n" <>
+            "  TASK T PRIORITY 3"
+        )
 
-      assert Text.print(lined) == "\n\nvar_global K bool at panel.i.0\n\n\nprogram M x\n"
+      assert Text.print(lined) ==
+               "\n\nvar_global K bool at panel.i.0\n\n\nprogram M x with T\ntask T priority 3\n"
+
       assert Text.read(Text.print(lined)) == {:ok, lined}
     end
 
@@ -388,20 +544,12 @@ defmodule Logex.Configuration.TextTest do
       a = %Global{name: "a", type: :bool}
       m1 = %Instance{name: "m1", type: "motor"}
       start = %Connection{instance: "m1", member: "start", to: 0}
+      fast = %Logex.Configuration.Task{name: "fast", interval: 10, priority: 1}
 
       for {entry, rule} <- [
-            {%Logex.Configuration.Task{name: "t", interval: 10, priority: 1},
-             "an entry is a %Logex.Configuration.Global{}, %Logex.Configuration.Instance{} " <>
-               "or %Logex.Configuration.Connection{}, with its struct's keys"},
-            {{:declared, 1, %{kind: :global, name: "a"}},
-             "an entry is a %Logex.Configuration.Global{}, %Logex.Configuration.Instance{} " <>
-               "or %Logex.Configuration.Connection{}, with its struct's keys"},
-            {Map.delete(a, :at),
-             "an entry is a %Logex.Configuration.Global{}, %Logex.Configuration.Instance{} " <>
-               "or %Logex.Configuration.Connection{}, with its struct's keys"},
-            {Map.put(m1, :note, "x"),
-             "an entry is a %Logex.Configuration.Global{}, %Logex.Configuration.Instance{} " <>
-               "or %Logex.Configuration.Connection{}, with its struct's keys"},
+            {{:declared, 1, %{kind: :global, name: "a"}}, kind_rule()},
+            {Map.delete(a, :at), kind_rule()},
+            {Map.put(m1, :note, "x"), kind_rule()},
             {%{a | line: 0}, "a line is a positive integer, or nil for an entry built in Elixir"},
             {%{start | line: 1.0},
              "a line is a positive integer, or nil for an entry built in Elixir"},
@@ -414,9 +562,29 @@ defmodule Logex.Configuration.TextTest do
             {%{a | initial: 1.0},
              "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
             {%{m1 | type: "a b"}, "a name lexes as one name token"},
-            {%{m1 | task: "fast"},
-             "a `program` line names an instance and its program type, and no task, so an " <>
-               "instance's task is nil"},
+            {%{m1 | task: "a b"}, "a name lexes as one name token"},
+            {%{m1 | task: :fast}, "a name lexes as one name token"},
+            {%{m1 | type: "With"},
+             "a program's type is not `with`, in any case: a line reads that word as its " <>
+               "keyword"},
+            {Map.delete(fast, :priority), kind_rule()},
+            {%{fast | line: -1},
+             "a line is a positive integer, or nil for an entry built in Elixir"},
+            {%{fast | name: "t.1 x"}, "a name lexes as one name token"},
+            {%{fast | name: nil}, "a name lexes as one name token"},
+            {%{fast | interval: -10},
+             "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
+            {%{fast | interval: 1.5},
+             "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
+            {%{fast | priority: :high},
+             "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
+            # A keyword a line reads in a task's name place.
+            {%{fast | name: "INTERVAL"},
+             "a task's name is not `interval` or `priority`, in any case: a line reads that " <>
+               "word as its keyword"},
+            {%{fast | name: "priority"},
+             "a task's name is not `interval` or `priority`, in any case: a line reads that " <>
+               "word as its keyword"},
             {%{start | instance: "m1.x"},
              "a connection's instance has no `.`: its first `.` begins the member"},
             {%{start | member: "start."}, "a name lexes as one name token"},
@@ -444,10 +612,15 @@ defmodule Logex.Configuration.TextTest do
 
       # And what a line can say is taken, the words of other places among it.
       said = [
+        %Logex.Configuration.Task{name: "with", interval: nil, priority: 0},
+        %Logex.Configuration.Task{name: "task", interval: 2_147_483_648, priority: nil},
         %Global{name: "program", type: :dint, initial: 0, at: "at"},
         %Global{name: "var_global", type: :bool, at: "panel.i.0"},
+        %Global{name: "interval", type: :bool, at: "task.i.0"},
         %Instance{name: "at", type: "bool"},
-        %Connection{instance: "bool", member: "at.0", to: "dint"}
+        %Instance{name: "priority", type: "task", task: "interval"},
+        %Connection{instance: "bool", member: "at.0", to: "dint"},
+        %Connection{instance: "with", member: "task", to: "priority"}
       ]
 
       assert Text.entries!(said) == said
@@ -505,9 +678,12 @@ defmodule Logex.Configuration.TextTest do
 
     test "everything read/1 reads, entries!/1 takes, and it prints back to the same text's " <>
            "entries" do
-      # Every line of one to four words from a small vocabulary, M2-2's words and a later
-      # item's among them: read/1 never raises, and what it reads is what a line can say.
-      vocabulary = ~w(var_global program AT bool dint with x m1.a panel.i.0 5 \()
+      # Every line of one to four words from a small vocabulary, M2-2's and M2-3's words
+      # and a later item's among them: read/1 never raises, and what it reads is what a
+      # line can say.
+      vocabulary =
+        ~w(task var_global program Interval priority AT bool dint with single x m1.a panel.i.0 5) ++
+          ["("]
 
       sources =
         for n <- 1..4,
@@ -573,10 +749,24 @@ defmodule Logex.Configuration.TextTest do
         assert [_] = errors("var_global #{shown} dint"), "#{shown} was taken as a global's name"
       end
 
+      for word <- ["interval", "priority"], shown <- [word, String.upcase(word)] do
+        assert [_] = errors("task #{shown} 10"), "#{shown} was taken as a task's name"
+      end
+
+      for shown <- ["with", "WITH"] do
+        assert [_] = errors("program m1 #{shown} fast"), "#{shown} was taken as a program type"
+
+        assert {:ok, [%Instance{task: "fast"}]} = Text.read("program m1 motor #{shown} fast"),
+               "#{shown} did not name the task"
+      end
+
       for word <- ["var_global", "program"], shown <- [word, String.upcase(word)] do
         assert {:ok, [_]} = Text.read("#{shown} x bool"),
                "#{shown} did not start its line"
       end
+
+      assert {:ok, [%Logex.Configuration.Task{name: "x"}]} = Text.read("TASK x"),
+             "TASK did not start its line"
     end
 
     test "and none is reserved in a program" do
@@ -590,7 +780,7 @@ defmodule Logex.Configuration.TextTest do
   defp any_entry(names) do
     pick = fn -> Enum.random(names) end
 
-    case Enum.random(1..3) do
+    case Enum.random(1..4) do
       1 ->
         %Global{
           name: pick.(),
@@ -600,7 +790,14 @@ defmodule Logex.Configuration.TextTest do
         }
 
       2 ->
-        %Instance{name: pick.(), type: pick.(), task: Enum.random([nil, nil, nil, "fast"])}
+        %Instance{name: pick.(), type: pick.(), task: Enum.random([nil, nil, pick.(), "fast"])}
+
+      4 ->
+        %Logex.Configuration.Task{
+          name: pick.(),
+          interval: Enum.random([nil, 0, 10, 2_147_483_648]),
+          priority: Enum.random([nil, 0, 1, 65_536])
+        }
 
       3 ->
         %Connection{
@@ -675,7 +872,12 @@ defmodule Logex.Configuration.TextTest do
         }
 
       4 ->
-        %Logex.Configuration.Task{name: "t", interval: 1, priority: 1}
+        %Logex.Configuration.Task{
+          name: Enum.random(["t", junk()]),
+          interval: junk(),
+          priority: Enum.random([1, junk()]),
+          line: Enum.random([nil, 4, junk()])
+        }
 
       5 ->
         Map.delete(%Global{name: "a", type: :bool}, Enum.random([:name, :type, :at, :line]))
