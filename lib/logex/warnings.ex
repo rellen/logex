@@ -18,9 +18,8 @@ defmodule Logex.Warnings do
 
   @doc "The warnings for lowered `rungs` checked against the tag table `tags`."
   def of(rungs, tags) do
-    signatures = Map.new(Compiler.instructions(), fn {_word, {symbol, sig}} -> {symbol, sig} end)
     instructions = instructions(rungs)
-    uses = Enum.flat_map(instructions, &uses(&1, signatures))
+    uses = Enum.flat_map(instructions, &uses(&1, tags))
     # Grouped once, so the pass stays linear in the program's size.
     accesses =
       Enum.group_by(uses, fn {_, name, _, _} -> name end, fn {access, _, _, _} -> access end)
@@ -54,11 +53,12 @@ defmodule Logex.Warnings do
   defp gathered(instruction, gathered), do: [instruction | gathered]
 
   # Each tag operand of an instruction, as {access, name, line, symbol}. A member is a use
-  # of its instance, `t1.dn` of `t1`, with its slot's access (M1-6).
-  defp uses({symbol, line, operands}, signatures),
+  # of its instance, `t1.dn` of `t1`, with its slot's access (M1-6). The slots are the
+  # instruction's own, from Logex.Compiler.signature/2, the one lookup (M2-5).
+  defp uses({symbol, line, operands} = instruction, tags),
     do:
       for(
-        {{access, _type}, operand} <- Enum.zip(Map.fetch!(signatures, symbol), operands),
+        {{access, _type}, operand} <- Enum.zip(Compiler.signature(instruction, tags), operands),
         name = tag_of(operand),
         do: {access, name, line, symbol}
       )

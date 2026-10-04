@@ -1109,8 +1109,10 @@ defmodule Logex.RuntimeTest do
           ],
           do: assert(Enum.sort(Map.keys(Map.from_struct(struct(module)))) == keys)
 
+      # M2-5: an instruction's slots, the one lookup of Logex.Warnings and Logex.Edit.
       assert Enum.sort(Logex.Compiler.__info__(:functions)) ==
-               [instructionize: 1, instructionize: 2, instructions: 0, parse: 1, tokenize: 1]
+               [instructionize: 1, instructionize: 2, instructions: 0, parse: 1] ++
+                 [signature: 2, tokenize: 1]
 
       # The two structs a host holds and builds; OE-1 gave both `ons_blocked`, and the
       # instance `switched`.

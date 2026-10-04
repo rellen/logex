@@ -39,6 +39,23 @@ defmodule Logex.Compiler do
   """
   def instructions, do: @instructions
 
+  # Each IR symbol to its mnemonic's operand signature.
+  @signatures Map.new(@instructions, fn {_word, {symbol, signature}} -> {symbol, signature} end)
+
+  @doc """
+  The slots of an instruction of the IR, `{symbol, line, operands}`: one `{access, type}`
+  per operand, in order, its mnemonic's signature in `instructions/0`. The walks that read
+  a program's IR for what each operand does, `Logex.Warnings` and `Logex.Edit`, look every
+  instruction's slots up here, never in a table of their own (M2-5).
+
+  The slots are per instruction, given `tags`, the tag table of the program that holds it,
+  so that an instruction's slots may depend on what its operands name; none does yet. Total:
+  an instruction no mnemonic gives, or anything else that is not an instruction, which only
+  a program built by hand can hold, has none.
+  """
+  def signature({symbol, _line, _operands}, _tags), do: Map.get(@signatures, symbol, [])
+  def signature(_not_an_instruction, _tags), do: []
+
   @doc """
   Lowers a parse AST to a `%Logex.Program{}`: its leading declaration lines become the tag
   table (`Logex.Declarations`), and every other rung is lowered to the IR, each instruction

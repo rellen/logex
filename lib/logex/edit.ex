@@ -485,12 +485,12 @@ defmodule Logex.Edit do
   # however deep, accumulating rather than copying: how many times each name is written
   # through a write operand, an `ons` storage bit included; and, for each rung that holds
   # an `ons`, the rung with its line numbers taken out, beside the storage bits of its
-  # `ons`. A rung is stripped once and compared once, however many `ons` it holds.
-  defp rungs(%Program{rungs: rungs}) do
-    signatures = Map.new(Compiler.instructions(), fn {_word, {symbol, sig}} -> {symbol, sig} end)
-
+  # `ons`. A rung is stripped once and compared once, however many `ons` it holds. Each
+  # instruction's slots are its own, from Logex.Compiler.signature/2 given the program's
+  # tag table, the one lookup (M2-5).
+  defp rungs(%Program{rungs: rungs, tags: tags}) do
     Enum.reduce(rungs, {%{}, []}, fn {:rung, elements}, {writes, ons} ->
-      {writes, bits} = written(elements, {writes, []}, signatures)
+      {writes, bits} = written(elements, {writes, []}, tags)
       {writes, oned(bits, elements, ons)}
     end)
   end
@@ -498,16 +498,21 @@ defmodule Logex.Edit do
   defp oned([], _elements, ons), do: ons
   defp oned(bits, elements, ons), do: [{stripped(elements), bits} | ons]
 
-  defp written([], acc, _signatures), do: acc
+  defp written([], acc, _tags), do: acc
 
-  defp written([{:branches, legs} | rest], acc, signatures),
-    do: written(rest, Enum.reduce(legs, acc, &written(&1, &2, signatures)), signatures)
+  defp written([{:branches, legs} | rest], acc, tags),
+    do: written(rest, Enum.reduce(legs, acc, &written(&1, &2, tags)), tags)
 
-  defp written([{:ons, _line, [{:name, _, bit}]} | rest], {writes, bits}, signatures),
-    do: written(rest, {count(writes, bit), [bit | bits]}, signatures)
+  defp written([{:ons, _line, [{:name, _, bit}]} | rest], {writes, bits}, tags),
+    do: written(rest, {count(writes, bit), [bit | bits]}, tags)
 
-  defp written([{symbol, _line, operands} | rest], {writes, bits}, signatures),
-    do: written(rest, {wrote(Map.fetch!(signatures, symbol), operands, writes), bits}, signatures)
+  defp written([{_symbol, _line, operands} = instruction | rest], {writes, bits}, tags),
+    do:
+      written(
+        rest,
+        {wrote(Compiler.signature(instruction, tags), operands, writes), bits},
+        tags
+      )
 
   defp wrote([{:write, _type} | signature], [{:name, _, name} | operands], acc),
     do: wrote(signature, operands, count(acc, name))
