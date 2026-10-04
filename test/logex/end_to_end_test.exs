@@ -1589,7 +1589,7 @@ defmodule Logex.EndToEndTest do
           {scanned, state} = Logex.Runtime.scan(motor, state, elapsed)
           {runtime, cycled, _events} = Logex.Runtime.cycle(runtime, elapsed, inputs)
           assert scanned == cycled
-          assert [Logex.Runtime.get(runtime, path)] == read.(state)
+          assert [Logex.Runtime.get!(runtime, path)] == read.(state)
           {state, runtime}
         end
       )

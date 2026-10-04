@@ -84,9 +84,9 @@ defmodule Logex.SchedulerTest do
         )
 
       runtime = Runtime.start(config)
-      assert {Runtime.get(runtime, "x"), Runtime.get(runtime, "g")} == {0, 1}
-      assert {Runtime.get(runtime, "sp"), Runtime.get(runtime, "y")} == {1200, 0}
-      assert Runtime.get(runtime, "r.out") == 0
+      assert {Runtime.get!(runtime, "x"), Runtime.get!(runtime, "g")} == {0, 1}
+      assert {Runtime.get!(runtime, "sp"), Runtime.get!(runtime, "y")} == {1200, 0}
+      assert Runtime.get!(runtime, "r.out") == 0
       assert Runtime.next_due_in(runtime) == 0
       assert Runtime.overlaps(runtime) == %{"fast" => 0}
 
@@ -100,7 +100,7 @@ defmodule Logex.SchedulerTest do
       config = plant()
       runtime = Runtime.start(config)
 
-      assert Map.new(config.globals, &{&1.name, Runtime.get(runtime, &1.name)}) ==
+      assert Map.new(config.globals, &{&1.name, Runtime.get!(runtime, &1.name)}) ==
                Map.new(config.globals, &{&1.name, Configuration.initial(&1)})
     end
 
@@ -205,7 +205,7 @@ defmodule Logex.SchedulerTest do
 
       {runtime, outputs, _} = Runtime.cycle(Runtime.start(config), 0, %{"x" => 1})
       assert outputs == %{"y1" => 1, "y2" => 1, "spare" => 0}
-      assert Runtime.get(runtime, "g") == 1
+      assert Runtime.get!(runtime, "g") == 1
     end
 
     test "an instance sees what an earlier one wrote in the cycle, and never what a later " <>
@@ -393,16 +393,16 @@ defmodule Logex.SchedulerTest do
       # Late, at 45 ms: two periods missed, and the one-shot sees `x` rise.
       {runtime, outputs, _} = Runtime.cycle(runtime, 35, %{"x" => 1})
       assert outputs == %{"y" => 1}
-      assert {Runtime.get(runtime, "g"), Runtime.get(runtime, "p.out")} == {0, 1}
+      assert {Runtime.get!(runtime, "g"), Runtime.get!(runtime, "p.out")} == {0, 1}
       assert Runtime.overlaps(runtime) == %{"t" => 2}
 
       runtime = Runtime.restart(runtime, :cold)
 
       # The input image is kept; every other global is back at its initial value, each
       # instance is restarted, no overlap is counted, and every task is due at once.
-      assert Runtime.get(runtime, "x") == 1
-      assert {Runtime.get(runtime, "g"), Runtime.get(runtime, "y")} == {1, 0}
-      assert Runtime.get(runtime, "p.out") == 0
+      assert Runtime.get!(runtime, "x") == 1
+      assert {Runtime.get!(runtime, "g"), Runtime.get!(runtime, "y")} == {1, 0}
+      assert Runtime.get!(runtime, "p.out") == 0
       assert Runtime.overlaps(runtime) == %{"t" => 0}
       assert Runtime.next_due_in(runtime) == 0
 
@@ -410,7 +410,7 @@ defmodule Logex.SchedulerTest do
       # task-less instance reads the kept `x`.
       {runtime, outputs, events} = Runtime.cycle(runtime, 0, %{})
       assert events == [{:ran, "t", "p", 45}, {:ran, :none, "inv", 45}]
-      assert {outputs, Runtime.get(runtime, "g")} == {%{"y" => 0}, 0}
+      assert {outputs, Runtime.get!(runtime, "g")} == {%{"y" => 0}, 0}
       assert Runtime.next_due_in(runtime) == 10
       assert Runtime.restart(runtime, :warm) == Runtime.restart(runtime, :cold)
     end
@@ -421,10 +421,10 @@ defmodule Logex.SchedulerTest do
       runtime = Runtime.start(config)
       {runtime, _, _} = Runtime.cycle(runtime, 0, %{"x" => 0})
       {runtime, _, _} = Runtime.cycle(runtime, 10, %{"x" => 1})
-      assert {Runtime.get(runtime, "y"), Runtime.get(runtime, "g")} == {1, 0}
+      assert {Runtime.get!(runtime, "y"), Runtime.get!(runtime, "g")} == {1, 0}
       runtime = Runtime.restart(runtime, :cold)
 
-      assert Map.new(config.globals, &{&1.name, Runtime.get(runtime, &1.name)}) ==
+      assert Map.new(config.globals, &{&1.name, Runtime.get!(runtime, &1.name)}) ==
                Map.new(config.globals, &{&1.name, Configuration.initial(&1)})
                |> Map.put("x", 1)
     end

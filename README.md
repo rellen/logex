@@ -380,7 +380,7 @@ end
 
 IO.inspect(Logex.Runtime.overlaps(rt), label: "overlaps")
 IO.inspect(Logex.Runtime.next_due_in(rt), label: "next due in")
-IO.inspect(Logex.Runtime.get(rt, "m1.fault"), label: "m1.fault")
+IO.inspect(Logex.Runtime.get!(rt, "m1.fault"), label: "m1.fault")
 
 bad =
   Keyword.merge(fields,
@@ -426,7 +426,8 @@ program instance `m2`: there is no task `slwo` — did you mean `slow`?
 - The last cycle came 35 ms after the one before. The 10 ms task, due at 80 ms, runs once
   rather than three times, and reports the two periods it missed, at 80 and 90 ms, just
   before its scan; its phase is kept, so it is next due at 110 ms. `overlaps/1` counts
-  the missed periods, and `get/2` reads any global or any instance's tag by its path.
+  the missed periods, and `get!/2` reads any global or any instance's tag by its path;
+  `get/2` gives it as `{:ok, value}`, or `{:error, reason}` for a path that names nothing.
 - A priority of -1 is a mistake no configuration file could hold, since a negative number
   does not lex, so `Logex.Configuration.check/1` raises it as the host's; the other two a
   file could hold, and `check/1` returns them as diagnostics, each cited at its line when

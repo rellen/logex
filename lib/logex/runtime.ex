@@ -10,7 +10,7 @@ defmodule Logex.Runtime do
     configuration of one instance, whose var_inputs are the host's input image.
   - `restart/3` starts an instance again, keeping its clock and the inputs that fit their
     types.
-  - `start/1`, `cycle/3`, `next_due_in/1`, `overlaps/1`, `get/2` and `restart/2` run a
+  - `start/1`, `cycle/3`, `next_due_in/1`, `overlaps/1`, `get/2`, `get!/2` and `restart/2` run a
     configuration (`Logex.Configuration`) as one resource, `%Logex.Runtime{}`, below.
 
   **A configuration** (M2-1, `docs/organisation.md` §4.6). `start/1` makes the resource at
@@ -45,7 +45,9 @@ defmodule Logex.Runtime do
   paces its own cycles. `get/2` reads a global, any declared tag of a program instance, a
   `var` among them, or a public member of a function block instance in one; never an
   internal member, an instance whole, a task or the configuration, and a path that names
-  one of those is told which it names. `restart/2` starts the resource again, as
+  one of those is told which it names: `get/2` gives `{:ok, value}` or `{:error,
+  reason}`, and `get!/2` the value, raising `ArgumentError` with that reason (decision
+  41). `restart/2` starts the resource again, as
   `start/1` left it but for its clock and its input image, which it keeps, as `restart/3`
   keeps an instance's var_inputs. A `%Logex.Runtime{}` is opaque, plain data: one
   built or edited by hand is outside this contract. A `%Logex.Configuration{}` is the data
@@ -313,13 +315,31 @@ defmodule Logex.Runtime do
   end
 
   @doc """
-  The value at an access path, the resource omitted (`docs/organisation.md` §4.7): a
-  global, `"estop"`; a program instance's tag, `"m1.fault"`; or a member of a function
-  block instance in it, `"m1.t1.acc"`, as logic names one. An instance named whole, an
-  internal member, or a path that names nothing raises `ArgumentError`.
+  The value at an access path, the resource omitted (`docs/organisation.md` §4.7), as
+  `{:ok, value}`: a global, `"estop"`; a program instance's tag, `"m1.fault"`; or a member
+  of a function block instance in it, `"m1.t1.acc"`, as logic names one. A string that
+  names no such value, an instance named whole, an internal member, a task, the
+  configuration, a path that names nothing, or no path at all, gives `{:error, reason}`,
+  `reason` the message `get!/2` raises (decision 41). Something other than a resource,
+  or a path that is not a string, is the host's mistake and raises `ArgumentError`.
   """
   def get(runtime, path) do
-    runtime = runtime!(runtime)
+    looked_up(runtime!(runtime), string!(path))
+  end
+
+  defp looked_up(runtime, path) do
+    {:ok, value!(runtime, path)}
+  rescue
+    error in ArgumentError -> {:error, Exception.message(error)}
+  end
+
+  @doc """
+  The value at an access path, as `get/2` finds it, or `ArgumentError` with the reason
+  `get/2` gives.
+  """
+  def get!(runtime, path), do: value!(runtime!(runtime), string!(path))
+
+  defp value!(runtime, path) do
     [head | rest] = String.split(path!(path), ".")
 
     at_path(
@@ -812,6 +832,9 @@ defmodule Logex.Runtime do
   # An access path: one name token to the lexer, as `m1.t1.acc` is.
   defp path!(path) when is_binary(path), do: path_lexed(Logex.Lexer.tokenize(path), path)
   defp path!(path), do: raise(ArgumentError, not_a_path(path))
+
+  defp string!(path) when is_binary(path), do: path
+  defp string!(path), do: raise(ArgumentError, not_a_path(path))
 
   defp path_lexed({:ok, [{:name, _, path}], _}, path), do: path
   defp path_lexed(_lexed, path), do: raise(ArgumentError, not_a_path(path))

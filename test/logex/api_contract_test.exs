@@ -1827,13 +1827,15 @@ defmodule Logex.ApiContractTest do
         end
 
       {:get, mistake?, path} ->
-        case config_attempt(fn -> Runtime.get(runtime, path) end) do
+        case config_attempt(fn -> Runtime.get!(runtime, path) end) do
           {:ok, value} ->
             refute mistake?, "a bad path was read: #{inspect(path)}"
             assert value == model_get(config, model, path)
+            assert Runtime.get(runtime, path) == {:ok, value}
 
           :refused ->
             assert mistake?, "a good path was refused: #{inspect(path)}"
+            refused_get(runtime, path)
         end
 
         config_walk(config, runtime, model, n - 1)
@@ -1855,7 +1857,7 @@ defmodule Logex.ApiContractTest do
 
             config_reach(
               :image_kept,
-              Enum.any?(input_points(), &(Runtime.get(next, &1) != 0))
+              Enum.any?(input_points(), &(Runtime.get!(next, &1) != 0))
             )
 
             check_restarted(config, next, model)
@@ -1872,12 +1874,12 @@ defmodule Logex.ApiContractTest do
   defp check_restarted(config, runtime, model) do
     assert Runtime.next_due_in(runtime) == if(config.tasks == [], do: :infinity, else: 0)
     assert Runtime.overlaps(runtime) == model.overlaps
-    for {name, value} <- model.globals, do: assert(Runtime.get(runtime, name) == value)
+    for {name, value} <- model.globals, do: assert(Runtime.get!(runtime, name) == value)
 
     for instance <- config.instances,
         {tag, value} <- model.states[instance.name].env,
         is_integer(value),
-        do: assert(Runtime.get(runtime, "#{instance.name}.#{tag}") == value)
+        do: assert(Runtime.get!(runtime, "#{instance.name}.#{tag}") == value)
   end
 
   # Everything the scheduler's rules say a model must also show: the next due time, every
@@ -1890,12 +1892,12 @@ defmodule Logex.ApiContractTest do
     assert expected == :infinity or expected > 0
     config_reach(:infinity, expected == :infinity)
 
-    for {name, value} <- model.globals, do: assert(Runtime.get(runtime, name) == value)
+    for {name, value} <- model.globals, do: assert(Runtime.get!(runtime, name) == value)
 
     for instance <- config.instances,
         {tag, value} <- model.states[instance.name].env,
         is_integer(value),
-        do: assert(Runtime.get(runtime, "#{instance.name}.#{tag}") == value)
+        do: assert(Runtime.get!(runtime, "#{instance.name}.#{tag}") == value)
 
     # Every period of a task up to now is either run or counted as missed: an oracle that
     # knows nothing of how the scheduler finds them.
@@ -1965,6 +1967,16 @@ defmodule Logex.ApiContractTest do
     end
   end
 
+  # get/2 gives the reason get!/2 raises for a path that is a string (decision 41), and
+  # raises for one that is not, as get!/2 does.
+  defp refused_get(runtime, path) when is_binary(path) do
+    error = assert_raise ArgumentError, fn -> Runtime.get!(runtime, path) end
+    assert Runtime.get(runtime, path) == {:error, error.message}
+  end
+
+  defp refused_get(runtime, path),
+    do: assert_raise(ArgumentError, fn -> Runtime.get(runtime, path) end)
+
   # One operation: a cycle, good or bad; a read, good or bad; or a call on something that
   # is not a runtime.
   defp config_operation(kind, _config, _runtime) when kind in [1, 2, 3] do
@@ -2012,6 +2024,7 @@ defmodule Logex.ApiContractTest do
     {:bad_runtime,
      pick([
        fn -> Runtime.cycle(junk, 0, %{}) end,
+       fn -> Runtime.get!(junk, "i0") end,
        fn -> Runtime.get(junk, "i0") end,
        fn -> Runtime.next_due_in(junk) end,
        fn -> Runtime.overlaps(junk) end,

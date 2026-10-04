@@ -721,7 +721,9 @@ Logex.Runtime.get(rt, "m1.t1.acc")                                              
 *(Landed with M2-1 on 2026-10-02: `start/1`, `cycle/3`, `next_due_in/1`, `get/2`,
 `restart/2` and `overlaps/1`, the configuration built with `Logex.Configuration.new!/1`.
 `get/2` returns the value at the path, and raises `ArgumentError` for a path that names
-no global, tag or public member, as every host mistake does.)*
+no global, tag or public member, as every host mistake does.)* *(Changed 2026-10-04 by
+decision 41: `get/2` gives `{:ok, value}` or `{:error, reason}`, and `get!/2` gives the
+value or raises `ArgumentError` with that reason.)*
 
 `scan/2` and a one-line configuration must give identical outputs for the README program.
 A test pins that, or the two runtimes drift apart. PLAN M1-5 defines `scan/3` as "n
@@ -1226,10 +1228,10 @@ design pass recommended an answer and left the choice to OE-2's design pass; no 
 | `now` | 0 | advances by `elapsed_ms` | kept | never touched | — | — |
 | an input point's value, the input image | 0 | the inputs merged in | kept, as `restart/3` keeps var_inputs | kept | refused: located I/O | refused |
 | an output point's value | 0 | its driver's copy-out | 0 | kept; held and reported where nothing drives it any more (decision 20) | refused | refused |
-| an unlocated global's value | `Configuration.initial/1` | copy-out, and writes through `var_external` | `Configuration.initial/1` | kept. **OE-2 decides** whether a changed initial value is reported as decision 29 reports a tag's: recommended, as one rule for two kinds of state, but it extends decision 29 | `Configuration.initial/1` | kept unused at test, pruned at assemble |
+| an unlocated global's value | `Configuration.initial/1` | copy-out, and writes through `var_external` | `Configuration.initial/1` | kept. reported as decision 29 reports a tag's (decision 44) | `Configuration.initial/1` | kept unused at test, pruned at assemble |
 | a global's type or location | — | — | — | a change refused at accept | — | — |
 | a program instance | `Runtime.instance/1` (fix F14) | its `call/4` | `restart/3` | moved by OE-1's per-instance switch, one plan per program type (fix F5) | `Runtime.instance/1` | kept at test, pruned at assemble; each global it drove is held and reported |
-| an instance's type | — | — | — | **OE-2 decides**: a remove plus an add, recommended over a refusal, since instances may be added and removed while running and state is keyed by name | — | — |
+| an instance's type | — | — | — | a remove plus an add, both reported (decision 43) | — | — |
 | an instance's task | — | — | — | a change refused (decision 19) | — | — |
 | a task's `next_due` | 0, anchored at start | advances by whole intervals | the kept `now`, so due at the next cycle | kept; a changed interval gives `min(next_due, now + new interval)` (decision 40) | refused until verified (decision 19) | refused until verified |
 | a task's overlap count | 0 | adds `missed` | 0 | kept | — | — |
@@ -1433,7 +1435,8 @@ any value that is not the struct is.)*
 - *Reading.* `get/2` reads a global, any declared tag of an instance, a `var` included,
   or a public member of a function block instance. It never reads an internal member, an
   instance whole, a task or the configuration, and a path that names one of those is told
-  which it names. How deep it reaches is decision 33's. `next_due_in/1` counts periodic
+  which it names: `get/2` as `{:error, reason}`, `get!/2` as an `ArgumentError` (decision
+  41). How deep it reaches is decision 33's. `next_due_in/1` counts periodic
   tasks only, not task-less instances, which a runner paces itself. An
   `{:overlap, task, missed}` event comes just before its task's scans.
 - *Restarting* (decision 38). `restart/2` restarts each instance through `restart/3`,
@@ -1845,8 +1848,10 @@ The first fourteen were taken as recommended on 2026-09-28. Decisions 15–29 we
 others as recommended. Decisions 21–29 are OE-1's design (§4.9), and the work cites them
 as E1–E9. Decisions 30–40 are Milestone 2's design (§4.10), taken on 2026-10-02: all as
 recommended but 35, the configuration file's extension, where the maintainer chose
-`.logex`, outside the options offered. All forty are kept with their options so the
-reasons stay with them.
+`.logex`, outside the options offered. Decisions 41–44 were taken on 2026-10-04, after
+M2-1 landed: 41 outside the options recommended, the others as recommended, 42 with no
+preference stated. All forty-four are kept with their options so the reasons stay with
+them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -2064,7 +2069,8 @@ the rules in §4.10.
     spikes, merged, answer with `{:ok, 1}`. *(As built with M2-1, §4.6: `get/2` returns
     the value at the path and raises `ArgumentError` for a path that names nothing it
     reads. The `{:ok, 1}` was the probe's own wrapper around the call, so M2-5's test
-    asserts `Logex.Runtime.get(rt, "m1.s2.run") == 1`.)* With M2-5 before M2-2, the
+    asserts `Logex.Runtime.get(rt, "m1.s2.run") == 1`. Decision 41 then made `get/2` give
+    `{:ok, value}` after all, so that test asserts `{:ok, 1}`, or `get!/2`'s `1`.)* With M2-5 before M2-2, the
     configuration file's reader, its loader and the IR walk are written against `cal` from
     their first commit. In the other order a hand merge of the spikes failed at four
     seams: the configuration's walk of what a program writes raised on `cal`; its loader
@@ -2234,6 +2240,37 @@ the rules in §4.10.
     interval, adds no run and adds no state. §4.6's "the phase never drifts" describes
     steady running, and no decided text fixes `next_due` across an interval change.
     Adopted.
+
+**After M2-1 landed, decided 2026-10-04.** Four questions M2-1's landing and its reviews
+left open: one about the API that landed, one for M2-2, and two that §4.9's table had left
+to OE-2.
+
+41. **What `Runtime.get/2` returns (M2-1):**
+    - the value, raising `ArgumentError` for a path that names nothing it reads, as
+      landed, since a host mistake raises (CLAUDE.md);
+    - `{:ok, value}` or `:error`, so that a host can probe a path without rescuing;
+    - or both: `get/2` gives `{:ok, value}` or `{:error, reason}`, and `get!/2` the value
+      or `ArgumentError` with that reason, as Elixir's `Map.fetch/2` and `Map.fetch!/2`.
+
+    *Recommended the value, as landed.* The maintainer chose both. `reason` is the message
+    `get!/2` raises. A string that names nothing `get/2` reads is not a host mistake to
+    `get/2`, which a host calls to find out; something other than a resource, or a path
+    that is not a string, still raises from both.
+42. **A refused name's uses (M2-2):** a global refused for its name, `a.b`, and a
+    connection that names it: report the refusal once, its uses silent, as the `.ld`
+    compiler excuses the uses of a recursive declaration; or report each use too, as M2-1
+    does, "`m.start` is connected to `a.b`, which is not a global". *Recommend once.* The
+    maintainer stated no preference, so the recommendation stands. It lands with M2-2's
+    port of the checks; until then M2-1 reports each use.
+43. **An instance whose program type an edit changes (OE-2):** a remove plus an add, the
+    old instance pruned and the new one started by `Runtime.instance/1`, both reported;
+    or a refusal, as a tag's type change is refused. *Recommend the remove plus an add,*
+    since instances may be added and removed while running and state is keyed by name.
+    Adopted.
+44. **A kept global whose initial value an edit changes (OE-2):** report it as
+    `{:initial_changed, name, {old, new}}`, its running value kept, as decision 29 reports
+    a tag's; or say nothing. *Recommend reporting it,* one rule for two kinds of state,
+    which extends decision 29 to globals. Adopted.
 
 ---
 

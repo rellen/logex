@@ -734,7 +734,8 @@ defmodule Logex.RuntimeTest do
       raises(message, fn -> Runtime.cycle(opaque(5), -1, []) end)
       raises(message, fn -> Runtime.next_due_in(opaque(5)) end)
       raises(message, fn -> Runtime.overlaps(opaque(5)) end)
-      raises(message, fn -> Runtime.get(opaque(5), opaque(5)) end)
+      raises(message, fn -> Runtime.get!(opaque(5), opaque(5)) end)
+      raises(message, fn -> Runtime.get(opaque(5), "m1") end)
       error = assert_raise ArgumentError, fn -> Runtime.cycle(opaque(plant(motor)), 0, %{}) end
 
       assert "expected a %Logex.Runtime{} from Logex.Runtime.start/1, got: %Logex.Configuration{" <>
@@ -826,13 +827,13 @@ defmodule Logex.RuntimeTest do
       runtime = Runtime.start(plant(timed))
       {runtime, _outputs, _events} = Runtime.cycle(runtime, 0, %{"pb_start" => 1, "sp" => 7})
 
-      assert Runtime.get(runtime, "pb_start") == 1
-      assert Runtime.get(runtime, "speed") == 7
-      assert Runtime.get(runtime, "m1.sp_in") == 7
-      assert Runtime.get(runtime, "m1.motor") == 1
-      assert Runtime.get(runtime, "m1.fault") == 0
-      assert Runtime.get(runtime, "m1.t1.en") == 1
-      assert Runtime.get(runtime, "m1.t1.pre") == 100
+      assert Runtime.get!(runtime, "pb_start") == 1
+      assert Runtime.get!(runtime, "speed") == 7
+      assert Runtime.get!(runtime, "m1.sp_in") == 7
+      assert Runtime.get!(runtime, "m1.motor") == 1
+      assert Runtime.get!(runtime, "m1.fault") == 0
+      assert Runtime.get!(runtime, "m1.t1.en") == 1
+      assert Runtime.get!(runtime, "m1.t1.pre") == 100
 
       path =
         ~s|is not an access path: a global, or a program instance, its tag and the members | <>
@@ -873,7 +874,34 @@ defmodule Logex.RuntimeTest do
              "`m1.t1.acc.x` goes too deep: `m1.t1.acc` is a dint, which has no " <>
                "members"}
           ],
-          do: raises(message, fn -> Runtime.get(runtime, opaque(bad)) end)
+          do: raises(message, fn -> Runtime.get!(runtime, opaque(bad)) end)
+    end
+
+    # Decision 41: get/2 gives what get!/2 reads as {:ok, value}, and the reason get!/2
+    # raises as {:error, reason} for any string; a path that is not a string is the
+    # host's mistake, raised by both.
+    test "get/2 gives {:ok, value} or {:error, reason}, the reason get!/2 raises" do
+      timed =
+        String.replace(@motor, "var fault bool\n", "var fault bool\nvar t1 ton\n") <>
+          "xic motor ton t1 100\n"
+
+      {:ok, timed} = Logex.compile(timed, name: "motor")
+      runtime = Runtime.start(plant(timed))
+      {runtime, _outputs, _events} = Runtime.cycle(runtime, 0, %{"pb_start" => 1, "sp" => 7})
+
+      for {path, value} <- [{"pb_start", 1}, {"m1.sp_in", 7}, {"m1.t1.pre", 100}],
+          do: assert(Runtime.get(runtime, opaque(path)) == {:ok, value})
+
+      for bad <- ["m1..x", "", "zz", "m1", "m1.t1.last", "m1.t1.acc.x"] do
+        error = assert_raise ArgumentError, fn -> Runtime.get!(runtime, opaque(bad)) end
+        assert Runtime.get(runtime, opaque(bad)) == {:error, error.message}
+      end
+
+      raises(
+        ~s|5 is not an access path: a global, or a program instance, its tag and the | <>
+          ~s|members below it, joined by `.`, as in "m1.t1.acc"|,
+        fn -> Runtime.get(runtime, opaque(5)) end
+      )
     end
   end
 
@@ -911,13 +939,13 @@ defmodule Logex.RuntimeTest do
       raises(
         "`fast` is a task, not a global or a program instance: an access path starts at one " <>
           "of those, and overlaps/1 reads a task's overlap count",
-        fn -> Runtime.get(runtime, "fast") end
+        fn -> Runtime.get!(runtime, "fast") end
       )
 
       raises(
         "`plant` is the configuration's name, which an access path leaves out: it starts at " <>
           "a global or a program instance",
-        fn -> Runtime.get(runtime, "plant") end
+        fn -> Runtime.get!(runtime, "plant") end
       )
     end
 
@@ -934,7 +962,7 @@ defmodule Logex.RuntimeTest do
       raises(
         "`fast` is a task, not a global or a program instance: an access path starts at one " <>
           "of those, and overlaps/1 reads a task's overlap count",
-        fn -> Runtime.get(runtime, "fast") end
+        fn -> Runtime.get!(runtime, "fast") end
       )
     end
 
@@ -1036,7 +1064,7 @@ defmodule Logex.RuntimeTest do
       raises(
         "`e` is a program instance of `empty`: an access path names one of its tags, and it " <>
           "declares none",
-        fn -> Runtime.get(Runtime.start(config), "e") end
+        fn -> Runtime.get!(Runtime.start(config), "e") end
       )
     end
   end
@@ -1053,6 +1081,7 @@ defmodule Logex.RuntimeTest do
                  call: 4,
                  cycle: 3,
                  get: 2,
+                 get!: 2,
                  instance: 1,
                  next_due_in: 1,
                  overlaps: 1,
