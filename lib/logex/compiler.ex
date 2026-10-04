@@ -530,6 +530,19 @@ defmodule Logex.Compiler do
   defp unowned(nil, head), do: {:undeclared, head}
   defp unowned(reserved, head), do: {:reserved, reserved, head}
 
+  # A device, `i` or `q`, then one whole-number field or more: the shape of a location
+  # (decision 6), which only a configuration's `var_global ... at` line names, since a
+  # location in a program type would tie the type to one plant (docs/organisation.md
+  # §4.5). It is read in any spelling, `panel.Q.03` too, as a configuration file reads a
+  # location where it names one; only after `at` is a location held to its one spelling.
+  defp located([_device, io | [_ | _] = address], name) when io in ["i", "q", "I", "Q"],
+    do: location_slot(Enum.all?(address, &String.match?(&1, ~r/\A[0-9]+\z/)), name)
+
+  defp located(_parts, _name), do: :member
+
+  defp location_slot(true, name), do: {:location, name}
+  defp location_slot(false, _name), do: :member
+
   defp in_type({:ok, member}, tag, _part, []), do: {:member, tag, member}
   defp in_type({:ok, member}, tag, _part, [next]), do: past(Integer.parse(next), tag, member)
   defp in_type({:ok, member}, tag, _part, _deeper), do: {:too_deep, tag, member}
@@ -555,8 +568,10 @@ defmodule Logex.Compiler do
     do: [{:undeclared, line, name, slot} | diagnostics]
 
   # A member of an undeclared name reports the name, once, however many members are used.
-  defp resolve(nil, {:undeclared, head}, _slot, {:name, line, _}, _at, diagnostics),
-    do: [{:undeclared, line, head, :member} | diagnostics]
+  # A name shaped like a location, `panel.i.0`, is named as one (docs/organisation.md §4.7:
+  # each wrong reading of `.` gets a diagnostic that names it), once a device.
+  defp resolve(nil, {:undeclared, head}, _slot, {:name, line, name}, _at, diagnostics),
+    do: [{:undeclared, line, head, located(String.split(name, "."), name)} | diagnostics]
 
   defp resolve(nil, {:reserved, reserved, head}, _slot, {:name, line, name}, _at, diagnostics) do
     message =
@@ -791,6 +806,18 @@ defmodule Logex.Compiler do
   defp report(%Diagnostic{} = diagnostic, acc, _context), do: {[diagnostic], acc}
 
   defp first_use(true, _line, _name, _tags, acc), do: {[], acc}
+
+  # A program never names a point: a configuration connects one to a var_input or a
+  # var_output through the global at it (§4.5). Nothing here advises a declaration, so a
+  # program that declares nothing is told how at the next undeclared name reported.
+  defp first_use(false, line, {name, {:location, location}}, _tags, {seen, note?}) do
+    message =
+      "`#{location}` is a location, written only after `at` on a configuration's " <>
+        "`var_global` line: a program reaches a point through a var_input or var_output " <>
+        "that the configuration connects to the global at it"
+
+    {[diagnostic(line, message)], {MapSet.put(seen, name), note?}}
+  end
 
   # A member of an undeclared name reports the name (M1-6), but unless an instruction runs
   # it, is not told how to declare it, since the name is likely an instance's and not a

@@ -1696,6 +1696,93 @@ xic a ton t1 7") == [
     end
   end
 
+  # A program never names a point: a configuration connects one to a var_input or a
+  # var_output through the global at it (docs/organisation.md §4.5), so a name shaped like
+  # a location, whose first part is not declared, is named as one (§4.7).
+  describe "a location in a rung (M2-2)" do
+    @located "is a location, written only after `at` on a configuration's `var_global` " <>
+               "line: a program reaches a point through a var_input or var_output that the " <>
+               "configuration connects to the global at it"
+
+    test "is named as one, once a device, as any undeclared name" do
+      source = """
+      var_input go bool
+      var_output lamp bool
+      xic panel.i.0 ote lamp
+      xic go ote panel.Q.3
+      xic panel.q.1 ote drive.x.0
+      xic go ote m1.i.x
+      """
+
+      assert source_errors(source) == [
+               "line 3: `panel.i.0` #{@located}",
+               "line 5: `drive` is not declared",
+               "line 6: `m1` is not declared"
+             ]
+
+      # Whichever reading comes first, a device is reported once.
+      assert source_errors("var_output lamp bool\nxic panel ote lamp\nxic panel.i.0 ote lamp") ==
+               ["line 2: `panel` is not declared"]
+    end
+
+    test "in any spelling, and only in a location's shape: a device, `i` or `q`, then " <>
+           "whole numbers" do
+      source = """
+      var_input go bool
+      var_output lamp bool
+      var d dint
+      xic rack.Q.03 ote lamp
+      move drive.i.0.7 d
+      xic go ote panel.i
+      xic go ote cell.q.1.x
+      xic go ote io.iq.0
+      xic bool.i.0 ote lamp
+      """
+
+      assert source_errors(source) == [
+               "line 4: `rack.Q.03` #{@located}",
+               "line 5: `drive.i.0.7` #{@located}",
+               "line 6: `panel` is not declared",
+               "line 7: `cell` is not declared",
+               "line 8: `io` is not declared",
+               "line 9: `bool.i.0` begins with `bool`, a type, which cannot name a tag"
+             ]
+    end
+
+    test "a name whose first part is declared keeps that part's reading" do
+      source = """
+      var panel bool
+      var t1 ton
+      var_output lamp bool
+      xic panel.i.0 ote lamp
+      xic t1.q.0 ote lamp
+      """
+
+      assert source_errors(source) == [
+               "line 4: `panel.i.0` names a member of `panel`, but `panel` is a bool " <>
+                 "(declared on line 1): only a timer has members",
+               "line 5: `t1.q.0` is not a member of `t1`, a ton: its members are `pre`, " <>
+                 "`acc`, `dn`, `tt` and `en`"
+             ]
+    end
+
+    # A location's message advises no declaration, so the note waits for the next name; and
+    # a name a `ton` runs is shown the declaration that fits it, whatever its first use.
+    test "the how-to note goes to the next name, and a name a `ton` runs is a timer" do
+      assert source_errors("xic panel.i.0 ote b") == [
+               "line 1: `panel.i.0` #{@located}",
+               "line 1: `b` is not declared (this program declares no tags: each is now " <>
+                 "declared before the first rung, as `var b bool` or `var b dint`)"
+             ]
+
+      assert source_errors("xic panel.i.0 ote lamp\nton panel 1000") == [
+               "line 1: `panel` is not declared (this program declares no tags: each is now " <>
+                 "declared before the first rung, as `var panel ton`)",
+               "line 1: `lamp` is not declared"
+             ]
+    end
+  end
+
   describe "tags declared from Elixir (M1-3)" do
     test "are checked by the same rules as a declaration line" do
       assert source_errors("var ote bool") == [

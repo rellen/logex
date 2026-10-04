@@ -1091,7 +1091,9 @@ defmodule Logex.Configuration do
   # A location's parts, read so that one written another way than its one spelling is
   # told that spelling: `{:ok, address}` as written, `{:respell, address}` with `I` or `Q`
   # for `i` or `q`, or a field with a leading zero, and `:error` for no location. `at` is
-  # one name token, so its first part is a name and its others names or digits.
+  # one name token, so its first part is a name and its others names or digits. The `.ld`
+  # compiler reads the same shape in a rung, to name a location there, and a test pins the
+  # two readings as one shape.
   defp spelled(at), do: spelled_parts(String.split(at, "."), at)
 
   defp spelled_parts([device, io | fields], at) when io in ["i", "q", "I", "Q"] and fields != [],

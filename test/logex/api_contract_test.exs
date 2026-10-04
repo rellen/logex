@@ -90,7 +90,7 @@ defmodule Logex.ApiContractTest do
     "var t4.x bool"
   ]
 
-  # M1-6 rung mistakes, one or more for each diagnostic in @m16_diagnostics, which a soup of
+  # Rung mistakes, one or more for each diagnostic in @m16_diagnostics, which a soup of
   # words rarely assembles: most need a declared timer, which a soup declares half the time.
   @rung_mistakes [
     "xic a ton t1 5 ton t1 6",
@@ -107,10 +107,12 @@ defmodule Logex.ApiContractTest do
     "gt n 3000000000 ote a",
     "xic t9.dn ote a",
     "xic a ton t1 5 ote a",
-    "xic a ons s1 ote b\nxio a ons s1"
+    "xic a ons s1 ote b\nxio a ons s1",
+    "xic panel.i.0 ote a"
   ]
 
-  # M1-6's diagnostics, by a fragment of each, that the compile test must reach.
+  # M1-6's diagnostics, and since M2-2 a location in a rung, by a fragment of each, that
+  # the compile test must reach.
   @m16_diagnostics [
     "is already run by the `ton`",
     "but logic may write only",
@@ -129,7 +131,8 @@ defmodule Logex.ApiContractTest do
     "is already the storage bit of the `ons`",
     "not an initial value on its declaration",
     "an instance is the program's own",
-    "needs a tag name before the type `ton`"
+    "needs a tag name before the type `ton`",
+    "is a location, written only after `at`"
   ]
 
   # And its warnings, which only a program that compiles gets.

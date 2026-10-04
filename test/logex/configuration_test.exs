@@ -2040,6 +2040,33 @@ defmodule Logex.ConfigurationTest do
              ]
     end
 
+    # The configuration's checks and the `.ld` compiler each read the shape of a location,
+    # in any spelling, to name it where it is not written; the two readings are one shape.
+    test "a configuration file and a rung read one shape of a location", %{seal: seal} do
+      words =
+        ~w(panel.i.0 panel.q.0 panel.I.0 panel.Q.03 p.i.00 drive.i.0.7 panel.q.1.2.3) ++
+          ~w(panel.x.0 panel.i panel.i.x cell.q.1.x io.iq.0 m1.start)
+
+      located = fn diagnostics, word ->
+        Enum.any?(diagnostics, &String.starts_with?(&1.message, "`#{word}` is a location"))
+      end
+
+      readings =
+        for word <- words do
+          assert {:error, wired} =
+                   compiled("program m seal\nm.start #{word}\n", %{"seal" => seal})
+
+          assert {:error, rung} = Logex.compile("var_output k bool\nxic #{word} ote k", name: "p")
+          {word, located.(wired, word), located.(rung, word)}
+        end
+
+      assert for({word, true, true} <- readings, do: word) ==
+               ~w(panel.i.0 panel.q.0 panel.I.0 panel.Q.03 p.i.00 drive.i.0.7 panel.q.1.2.3)
+
+      assert for({word, false, false} <- readings, do: word) ==
+               ~w(panel.x.0 panel.i panel.i.x cell.q.1.x io.iq.0 m1.start)
+    end
+
     test "a name of another kind where a global or an instance is wanted says what it is",
          %{seal: seal} do
       source = @base <> "program n seal\nn.start m\nn.stop 0\nk.start 0\n"
