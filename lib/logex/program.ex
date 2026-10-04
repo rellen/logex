@@ -12,17 +12,24 @@ defmodule Logex.Program do
   - `rungs` are the lowered rungs. Declaration lines are rungs in the parse AST, but never
     here.
   - `tags` is the tag table, keyed by tag name.
+  - `blocks` is empty except in a user function block's compiled body (M2-5): there it
+    holds each user block type the body declares instances of, once, by name, and each
+    such instance's tag names its type, `{:block, name}` (`docs/organisation.md` §4.10,
+    "Held types"). So a type holds each type it nests once, however many instances of it
+    its body declares. A program's own tags hold each type itself, as `Logex.Tag.new!/4`
+    gives it, and `typed_tags/1` gives a body's table so.
   - `warnings` are `%Logex.Diagnostic{severity: :warning}`, in line order. From
     `Logex.compile_file/1` the warnings of each block it loaded beside the file follow,
     each with its block's file (decision 34); a block's body holds only its own.
   """
 
   @enforce_keys [:rungs, :tags]
-  defstruct [:rungs, :tags, name: nil, source: nil, file: nil, warnings: []]
+  defstruct [:rungs, :tags, name: nil, source: nil, file: nil, warnings: [], blocks: %{}]
 
   @type t :: %__MODULE__{
           rungs: [{:rung, list}],
           tags: %{String.t() => Logex.Tag.t()},
+          blocks: %{String.t() => Logex.FbType.t()},
           name: String.t() | nil,
           source: String.t() | nil,
           file: String.t() | nil,
@@ -63,4 +70,23 @@ defmodule Logex.Program do
 
   defp start(%Logex.Tag{initial: nil}), do: 0
   defp start(%Logex.Tag{initial: initial}), do: initial
+
+  @doc """
+  The tag table with each instance's type itself: in a block's compiled body, every tag
+  that names a type its `blocks` holds, `{:block, name}`, given that type, and every other
+  tag as it is (M2-5). It is the table a compile works over, which the walks that read an
+  instruction's slots in a body (`Logex.Compiler.signature/2`, `Logex.Warnings.of/2`) take.
+  Its tags share each type, so it costs one entry per tag, and no copy of a type. A name
+  `blocks` lacks, which only a body built by hand can give, is left as it is.
+  """
+  def typed_tags(%__MODULE__{tags: tags, blocks: blocks}),
+    do: Map.new(tags, fn {name, tag} -> {name, typed(tag, blocks)} end)
+
+  defp typed(%Logex.Tag{type: {:block, name}} = tag, blocks),
+    do: held(Map.fetch(blocks, name), tag)
+
+  defp typed(tag, _blocks), do: tag
+
+  defp held({:ok, type}, tag), do: %{tag | type: type}
+  defp held(:error, tag), do: tag
 end

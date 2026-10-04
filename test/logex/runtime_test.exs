@@ -174,7 +174,7 @@ defmodule Logex.RuntimeTest do
             {%{s | env: nil}, "state.env must be a map of tag names to values, got: nil"},
             {%{s | env: %Scan{now: 0, first: true}},
              "state.env must be a map of tag names to values, " <>
-               "got: %Logex.Scan{now: 0, first: true, ons_blocked: [], tags: nil}"},
+               "got: %Logex.Scan{now: 0, first: true, ons_blocked: [], tags: nil, blocks: nil}"},
             {%{s | now: nil},
              "state.now must be a non-negative integer of milliseconds, got: nil"},
             {%{s | now: -5}, "state.now must be a non-negative integer of milliseconds, got: -5"},
@@ -1128,13 +1128,15 @@ defmodule Logex.RuntimeTest do
       assert Enum.sort(Map.keys(Instance.__struct__())) ==
                [:__struct__, :env, :first, :now, :ons_blocked, :switched, :type]
 
-      # M2-5: the scan also carries the tag table of the routine it runs, the runtime's.
+      # M2-5: the scan also carries the tag table of the routine it runs, and the block types
+      # it holds, the runtime's.
       assert Enum.sort(Map.keys(Scan.__struct__())) ==
-               [:__struct__, :first, :now, :ons_blocked, :tags]
+               [:__struct__, :blocks, :first, :now, :ons_blocked, :tags]
 
-      # M2-5 (fix F15): a program keeps the file it was read from.
+      # M2-5 (fix F15): a program keeps the file it was read from; a block's body holds
+      # each block type its instances are of once, in `blocks`.
       assert Enum.sort(Map.keys(Logex.Program.__struct__())) ==
-               [:__struct__, :file, :name, :rungs, :source, :tags, :warnings]
+               [:__struct__, :blocks, :file, :name, :rungs, :source, :tags, :warnings]
 
       # OE-1: the staged edit of one instance, whose struct is opaque.
       assert Enum.sort(Logex.Edit.__info__(:functions)) == [

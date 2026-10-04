@@ -1563,7 +1563,15 @@ is reported; and a directory with a block's name "cannot be read".)*
   hold, at any depth.)*
 - *Held types.* A member that holds an instance names its type, `{:block, name}`, and the
   holder's body's tag table holds that type once, so a type copied flat is linear in its
-  depth. A member's type gains that form.
+  depth. A member's type gains that form. *(As landed, after M2-5's review found the type
+  held once per instance tag, so that a body holding two instances of one block, nested,
+  grew as the width to the power of the depth, and the maintainer's decision of 2026-10-04
+  to build it as recorded: each instance's tag in the body names the type too, and the
+  body's `%Logex.Program{}` holds each type once, by name, in `blocks` beside its tags,
+  which `Logex.Program.typed_tags/1` reads back as the table a compile works over. A
+  type copied flat then grows with its width and its depth together, as
+  `function_block_test.exs` pins. A program's own tags hold each type itself, as
+  `Logex.Tag.new!/4` gives it.)*
 - *Declarations.* Members declared from Elixir come first in `cal`'s operand order, by
   name, then the declaration lines in order. The uses of a declaration whose type is
   unknown are excused, as a recursive declaration's are, so a misspelled block name gives
@@ -1583,7 +1591,8 @@ is reported; and a directory with a block's name "cannot be read".)*
   instance's `now` and `first`. So the scan is the same for every instruction of one
   routine run, not of one call. Since `first` is the program instance's, a block frozen
   on the first scan fires its one-shot the first time it runs, as `PLAN.md` M2-5's note
-  from M1-6 says.
+  from M1-6 says. *(Since the held types above landed, the scan also carries the routine's
+  `blocks`, which a host may not fill either, and `cal` narrows both to its block's.)*
 - *Walks.* M2-5 adds one `cal` clause to each IR walk it meets. B5's one walk comes with
   M2-4. *(Landed as one lookup the walks share, `Logex.Compiler.signature/2`, an
   instruction's slots given its program's tag table, a `cal`'s its block's.)*

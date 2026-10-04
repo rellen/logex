@@ -9,6 +9,11 @@ defmodule Logex.Tag do
   `ton` that runs it, as `%{"pre" => 5000}`. Only the compiler gives that map: since OE-1
   a tag from Elixir carries none (`new!/4`). `line` is its declaration's line in the
   source, or nil for a tag declared from Elixir with `new!/4`.
+
+  In a user function block's compiled body (M2-5), an instance of a user block names its
+  type, `{:block, name}`, which the body holds once in its `blocks`
+  (`Logex.Program.typed_tags/1` gives the table with each type itself); a program's tags,
+  and a tag from Elixir, hold the type itself.
   """
 
   @enforce_keys [:name, :type, :section]
@@ -16,7 +21,7 @@ defmodule Logex.Tag do
 
   @type t :: %__MODULE__{
           name: String.t(),
-          type: :bool | :dint | Logex.FbType.t(),
+          type: :bool | :dint | Logex.FbType.t() | {:block, String.t()},
           section: :var | :var_input | :var_output,
           initial: integer | %{String.t() => integer} | nil,
           line: pos_integer | nil

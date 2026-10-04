@@ -588,7 +588,8 @@ defmodule Logex.Edit do
   # each rung that holds an `ons`, the rung with its line numbers taken out, beside the
   # storage bits of its `ons`. A rung is stripped once and compared once, however many
   # `ons` it holds. Each instruction's slots are its own, from Logex.Compiler.signature/2
-  # given the tag table of the routine that holds it, the one lookup (M2-5).
+  # given the tag table of the routine that holds it, each instance's type itself, the one
+  # lookup (M2-5).
   #
   # M2-5: an `ons` inside an instance a `cal` runs is a one-shot of the program's too, its
   # bit named by its path, `s1.edge`, and its rung the chain of rungs down to it, each with
@@ -599,7 +600,7 @@ defmodule Logex.Edit do
   # it. Each block type's body is read once, however many instances run it, and the walk
   # down is linear in the instances.
   defp rungs(%Program{rungs: rungs, tags: tags}) do
-    bodies = bodies(tags, %{})
+    bodies = bodies(for({_, %Tag{type: %FbType{body: %Program{}} = type}} <- tags, do: type), %{})
 
     Enum.reduce(rungs, {%{}, [], %{}, bodies}, fn {:rung, elements}, {writes, ons, called, _} ->
       {writes, bits, cals} = written(elements, {writes, [], []}, tags)
@@ -623,20 +624,22 @@ defmodule Logex.Edit do
 
   # Every user block type a program holds, at any depth, by name: the rungs of its body
   # that hold an `ons` or a `cal`, each stripped, with the bits and the instances, what the
-  # body writes, and the instances it runs.
-  defp bodies(tags, bodies),
+  # body writes, and the instances it runs. A body holds each type its instances are of
+  # once, and its walk reads its tags with each instance's type itself.
+  defp bodies(types, bodies),
     do:
-      Enum.reduce(tags, bodies, fn
-        {_name, %Tag{type: %FbType{name: name, body: %Program{} = body}}}, bodies
-        when not is_map_key(bodies, name) ->
-          bodies = bodies(body.tags, Map.put(bodies, name, nil))
+      Enum.reduce(types, bodies, fn
+        %FbType{name: name, body: %Program{} = body}, bodies when not is_map_key(bodies, name) ->
+          bodies = bodies(Map.values(body.blocks), Map.put(bodies, name, nil))
           Map.put(bodies, name, body(body))
 
-        _tag, bodies ->
+        _known, bodies ->
           bodies
       end)
 
-  defp body(%Program{rungs: rungs, tags: tags}) do
+  defp body(%Program{rungs: rungs} = body) do
+    tags = Program.typed_tags(body)
+
     {writes, held, called} =
       Enum.reduce(rungs, {%{}, [], %{}}, fn {:rung, elements}, {writes, held, called} ->
         {writes, bits, cals} = written(elements, {writes, [], []}, tags)

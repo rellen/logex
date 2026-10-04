@@ -8,8 +8,8 @@ defmodule Logex.Scan do
   rung (`evaluate/3`); M1-6's timers read `now`, and `ons` reads `first` (PLAN.md M1-6)
   and `ons_blocked`.
 
-  `ons_blocked` and `tags` are the runtime's, not the host's: a host builds a scan with
-  `now` and `first` only, leaving them out, and one that fills either in is refused.
+  `ons_blocked`, `tags` and `blocks` are the runtime's, not the host's: a host builds a
+  scan with `now` and `first` only, leaving them out, and one that fills any in is refused.
 
   - `ons_blocked` (OE-1) holds the storage bits whose `ons` this scan blocks, as a first
     scan blocks every `ons`. `call/4` takes them from the instance's `ons_blocked`, a list
@@ -20,14 +20,17 @@ defmodule Logex.Scan do
     instances whose bodies did not run (`Logex.Instance`).
   - `tags` (M2-5) is the tag table of the routine running, so that `cal` finds the type of
     the instance it runs, and the body of that type.
+  - `blocks` (M2-5) is the block types the routine running holds, by name, where a `cal`
+    finds the type a body's instance names, `{:block, name}` (`Logex.Program`'s `blocks`).
 
-  A `cal` runs its block's body with this scan narrowed to its instance: `tags` the body's
-  own and `ons_blocked` the instance's own tree, `now` and `first` unchanged. So every
-  instruction of one routine, a program's rungs or one run of a body, sees one scan.
+  A `cal` runs its block's body with this scan narrowed to its instance: `tags` and
+  `blocks` the body's own and `ons_blocked` the instance's own tree, `now` and `first`
+  unchanged. So every instruction of one routine, a program's rungs or one run of a body,
+  sees one scan.
   """
 
   @enforce_keys [:now, :first]
-  defstruct [:now, :first, ons_blocked: [], tags: nil]
+  defstruct [:now, :first, ons_blocked: [], tags: nil, blocks: nil]
 
   @type blocked :: %{optional(String.t()) => true | blocked}
 
@@ -35,6 +38,7 @@ defmodule Logex.Scan do
           now: non_neg_integer,
           first: boolean,
           ons_blocked: [] | blocked,
-          tags: nil | %{String.t() => Logex.Tag.t()}
+          tags: nil | %{String.t() => Logex.Tag.t()},
+          blocks: nil | %{String.t() => Logex.FbType.t()}
         }
 end

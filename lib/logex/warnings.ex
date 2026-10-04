@@ -17,7 +17,10 @@ defmodule Logex.Warnings do
 
   alias Logex.{Compiler, Diagnostic, FbType, Tag}
 
-  @doc "The warnings for lowered `rungs` checked against the tag table `tags`."
+  @doc """
+  The warnings for lowered `rungs` checked against the tag table `tags`, each instance's
+  type itself: for a block's body, `Logex.Program.typed_tags/1`'s table (M2-5).
+  """
   def of(rungs, tags) do
     instructions = instructions(rungs)
     uses = Enum.flat_map(instructions, &uses(&1, tags))

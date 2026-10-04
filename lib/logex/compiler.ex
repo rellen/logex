@@ -60,9 +60,11 @@ defmodule Logex.Compiler do
   The slots are per instruction, given `tags`, the tag table of the program that holds it,
   so that an instruction's slots may depend on what its operands name: a `cal`'s are its
   instance's type's, `Logex.FbType.signature/1`'s, the instance first and then a slot per
-  formal, so a var_output it fills is written. Total: an instruction no mnemonic gives, a
-  `cal` of anything that is no user block's instance in `tags`, or anything else that is
-  not an instruction, which only a program built by hand can hold, has none.
+  formal, so a var_output it fills is written. In a block's body, whose instances name
+  their types, the table is `Logex.Program.typed_tags/1`'s, each instance's type itself.
+  Total: an instruction no mnemonic gives, a `cal` of anything that is no user block's
+  instance in `tags`, or anything else that is not an instruction, which only a program
+  built by hand can hold, has none.
   """
   def signature({:cal, _line, [{:name, _, instance} | _]}, tags) when is_map(tags),
     do: block_slots(Map.get(tags, instance))
@@ -125,8 +127,11 @@ defmodule Logex.Compiler do
   compile makes, to itself, with no diagnostic; the one-per-bit, one-per-timer and
   one-per-instance rules and the path after a `ton` hold; each timer's preset is the
   number on the `ton` that runs it; the rungs are on rising lines, each on one line, after
-  the declarations; and the warnings are the ones its rungs give, a file aside. Total: any
-  other value is `false`, never an exception.
+  the declarations; and the warnings are the ones its rungs give, a file aside. Its tag
+  table is its tags with each instance's type itself (`Logex.Program.typed_tags/1`): a
+  tag naming a type its `blocks` does not hold, or anything else that is not a tag of a
+  type a compile knows, makes it no compiled body. Total: any other value is `false`,
+  never an exception.
 
   It is the definition of a compiled body, which `Logex.FbType.user?/1` checks for a type
   given to a compile or to `Logex.Tag.new!/4`, as `Logex.Parser.well_formed!/1` is of a
@@ -134,15 +139,18 @@ defmodule Logex.Compiler do
   the tag table checked already, every entry a `%Logex.Tag{}` under its name and every
   instance's type a valid one (`Logex.FbType.user?/1` checks those first).
   """
-  def lowered?(%Program{rungs: rungs, tags: tags, warnings: warnings})
-      when is_list(rungs) and is_map(tags) and not is_struct(tags) and is_list(warnings),
-      do:
-        relowered(
-          proper?(rungs, &ir_rung?/1) and proper?(warnings, &any?/1),
-          rungs,
-          tags,
-          warnings
-        )
+  def lowered?(%Program{rungs: rungs, tags: tags, blocks: blocks, warnings: warnings} = body)
+      when is_list(rungs) and is_map(tags) and not is_struct(tags) and is_map(blocks) and
+             is_list(warnings) do
+    typed = Program.typed_tags(body)
+
+    relowered(
+      proper?(rungs, &ir_rung?/1) and proper?(warnings, &any?/1) and Enum.all?(typed, &typed?/1),
+      rungs,
+      typed,
+      warnings
+    )
+  end
 
   def lowered?(_body), do: false
 
@@ -170,6 +178,11 @@ defmodule Logex.Compiler do
   defp proper?(_not_a_list, _test), do: false
 
   defp any?(_element), do: true
+
+  # A tag of a type the lowering knows, once each held type is given (M2-5).
+  defp typed?({_name, %Tag{type: type}}) when type in [:bool, :dint], do: true
+  defp typed?({_name, %Tag{type: %FbType{}}}), do: true
+  defp typed?(_entry), do: false
 
   defp ir_rung?({:rung, [_ | _] = elements}), do: proper?(elements, &ir_element?/1)
   defp ir_rung?(_rung), do: false
@@ -457,9 +470,8 @@ defmodule Logex.Compiler do
 
   defp chain(_seen, _name, acc), do: acc
 
-  # The user block types a type holds, each once, from its body's tag table (Logex.FbType).
-  defp nested(%FbType{body: %Program{tags: tags}}),
-    do: for({_, %Tag{type: %FbType{body: %Program{}} = type}} <- tags, do: type)
+  # The user block types a type holds, each once, from its body (Logex.FbType).
+  defp nested(%FbType{body: %Program{blocks: blocks}}), do: Map.values(blocks)
 
   defp nested(%FbType{body: nil}), do: []
 
@@ -664,12 +676,18 @@ defmodule Logex.Compiler do
   defp lowered(:program, rungs, tags, []),
     do: {:ok, %Program{rungs: rungs, tags: tags, warnings: Logex.Warnings.of(rungs, tags)}}
 
-  # M2-5: a block's file compiles to its type, whose body is the program of its rungs.
+  # M2-5: a block's file compiles to its type, whose body is the program of its rungs. The
+  # body holds each user block type its instances are of once, in `blocks`, and each
+  # instance's tag names it (docs/organisation.md §4.10, "Held types"): a type held in every
+  # instance's tag would grow, copied flat, as the width to the power of the depth.
   defp lowered({:block, name}, rungs, tags, []) do
+    {held, blocks} = Enum.reduce(tags, {%{}, %{}}, &hold/2)
+
     body = %Program{
       name: name,
       rungs: rungs,
-      tags: tags,
+      tags: held,
+      blocks: blocks,
       warnings: Logex.Warnings.of(rungs, tags)
     }
 
@@ -680,6 +698,16 @@ defmodule Logex.Compiler do
   # merged by line. The sort is stable: within a line, the order each list gave is kept.
   defp lowered(_kind, _rungs, _tags, diagnostics),
     do: {:error, Enum.sort_by(diagnostics, & &1.line)}
+
+  # A tag of an instance of a user block names its type, which the body holds by name: one
+  # version of each name, as the compile's one-version check holds.
+  defp hold(
+         {name, %Tag{type: %FbType{name: type, body: %Program{}} = held} = tag},
+         {tags, blocks}
+       ),
+       do: {Map.put(tags, name, %{tag | type: {:block, type}}), Map.put(blocks, type, held)}
+
+  defp hold({name, tag}, {tags, blocks}), do: {Map.put(tags, name, tag), blocks}
 
   # M2-5: one `cal` runs an instance, as one `ton` runs a timer: a second is an error at its
   # own line, citing the first. Two would run the body twice a scan, and the edit's rules

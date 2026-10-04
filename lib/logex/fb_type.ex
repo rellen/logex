@@ -21,20 +21,23 @@ defmodule Logex.FbType do
   value in a new instance; for a member whose type is itself a `%Logex.FbType{}`, it is a
   map of that nested instance's own initial values, by member name.
 
-  A member holding an instance of a user block has the type `{:block, name}`, and the
-  block's type itself is in the body's tag table, where `cal` finds it: `type_of/2` gives
-  it. So a type holds each type it nests once, and a copy of it that keeps no sharing (a
-  message, `:erlang.term_to_binary/1`, `:erlang.phash2/1`) stays linear in the depth of
-  nesting, where a type held both as a member's and as a tag's would double at each level
-  (M2-5).
+  A member holding an instance of a user block has the type `{:block, name}`, as the
+  instance's tag in the body has, and the block's type itself is held once, in the body's
+  `blocks`, by name, where `cal` finds it: `type_of/2` gives it. So a type holds each type
+  it nests once, however many instances of it its body declares, and a copy of it that
+  keeps no sharing (a message, `:erlang.term_to_binary/1`, `:erlang.phash2/1`) stays
+  linear in the depth of nesting whatever the width, where a type held in each instance's
+  tag would grow as the width to the power of the depth (M2-5; `docs/organisation.md`
+  §4.10, "Held types").
 
   `body` is nil for the built-in `ton`. For a user function block (M2-5) it is the block's
-  compiled body, a `%Logex.Program{}` named after the block, whose tags are its members
-  and whose rungs `cal` runs over an instance's map. `of/1` builds the type from it, and is
-  the definition of a user type: one is valid exactly when it is what `of/1` gives for its
-  body, its body is one a compile gives (`Logex.Compiler.lowered?/1`), every type it holds
-  is valid too, any two it holds of one name are one version (`same?/2`), and no type
-  holds an instance of its own name.
+  compiled body, a `%Logex.Program{}` named after the block, whose tags are its members,
+  whose `blocks` holds the types of the instances it declares, and whose rungs `cal` runs
+  over an instance's map. `of/1` builds the type from it, and is the definition of a user
+  type: one is valid exactly when it is what `of/1` gives for its body, its body holds
+  each type its tags name, and no other, under that type's name, its body is one a compile
+  gives (`Logex.Compiler.lowered?/1`), every type it holds is valid too, any two it holds
+  of one name are one version (`same?/2`), and no type holds an instance of its own name.
   """
 
   alias Logex.{Program, Tag}
@@ -107,10 +110,10 @@ defmodule Logex.FbType do
 
   @doc """
   The type of `member`, a member of `type`: its own, or for one holding an instance of a
-  user block, `{:block, name}`, the block's type, taken from `type`'s body (M2-5).
+  user block, `{:block, name}`, the block's type, which `type`'s body holds (M2-5).
   """
-  def type_of(%__MODULE__{body: %Program{tags: tags}}, %Member{name: name, type: {:block, _}}),
-    do: Map.fetch!(tags, name).type
+  def type_of(%__MODULE__{body: %Program{blocks: blocks}}, %Member{type: {:block, name}}),
+    do: Map.fetch!(blocks, name)
 
   def type_of(_type, %Member{type: type}), do: type
 
@@ -132,10 +135,11 @@ defmodule Logex.FbType do
 
   @doc """
   A user function block's type, from its compiled body (M2-5): the body's tags become its
-  members, a `var_input` an `:input`, a `var_output` an `:output` and a `var` a `:local`.
-  Their order is `cal`'s positional order: the tags declared from Elixir first, which have
-  no line, by name, then the source's in the order they are declared. No member of a user
-  block is written from outside it.
+  members, a `var_input` an `:input`, a `var_output` an `:output` and a `var` a `:local`,
+  each of its tag's type, so a member holding an instance of a user block names it,
+  `{:block, name}`, as its tag does. Their order is `cal`'s positional order: the tags
+  declared from Elixir first, which have no line, by name, then the source's in the order
+  they are declared. No member of a user block is written from outside it.
   """
   def of(%Program{name: name, tags: tags} = body),
     do: %__MODULE__{
@@ -148,17 +152,14 @@ defmodule Logex.FbType do
   defp order(%Tag{line: line}), do: {1, line}
 
   defp member_of(%Tag{name: name, type: type, section: section, initial: initial}),
-    do: %Member{name: name, type: held(type), role: role(section), initial: starts(type, initial)}
-
-  # A user block's type is held once, in the body's tag table; its member names it.
-  defp held(%__MODULE__{name: name, body: %Program{}}), do: {:block, name}
-  defp held(type), do: type
+    do: %Member{name: name, type: type, role: role(section), initial: starts(type, initial)}
 
   defp role(:var_input), do: :input
   defp role(:var_output), do: :output
   defp role(:var), do: :local
 
   defp starts(%__MODULE__{}, nil), do: %{}
+  defp starts({:block, _name}, nil), do: %{}
   defp starts(_type, nil), do: 0
   defp starts(_type, initial), do: initial
 
@@ -179,12 +180,12 @@ defmodule Logex.FbType do
   Whether two user function block types are one version of one block, as a compile takes
   them (M2-5; `docs/organisation.md` §4.10, "Types given"): one name and the same members,
   and bodies of one name, source text, rungs and tag table, each type they hold one
-  version in turn. Their warnings are no part of a version, nor is the file a body was
-  read from: a block compiled from its file stamps each warning with the path, under
-  whatever spelling of it, and one compiled from its text has none. A type compared with
-  itself, the usual case, is one term, so no walk is made. It is the one definition of a
-  version, for a compile's one-version check (`Logex.Compiler`) and for `user?/1`, and
-  expects two types a compile could give.
+  version in turn, by its name. Their warnings are no part of a version, nor is the file a
+  body was read from: a block compiled from its file stamps each warning with the path,
+  under whatever spelling of it, and one compiled from its text has none. A type compared
+  with itself, the usual case, is one term, so no walk is made. It is the one definition
+  of a version, for a compile's one-version check (`Logex.Compiler`) and for `user?/1`,
+  and expects two types a compile could give.
   """
   def same?(type, type), do: true
 
@@ -194,20 +195,16 @@ defmodule Logex.FbType do
       ),
       do:
         one.name == other.name and one.source == other.source and one.rungs == other.rungs and
-          map_size(one.tags) == map_size(other.tags) and
-          Enum.all?(one.tags, fn {key, tag} -> same_tag?(tag, Map.get(other.tags, key)) end)
+          one.tags == other.tags and
+          Enum.all?(one.blocks, fn {held, type} -> same?(type, Map.get(other.blocks, held)) end)
 
   def same?(_one, _other), do: false
 
-  defp same_tag?(%Tag{type: %__MODULE__{} = one} = tag, %Tag{type: %__MODULE__{} = other} = to),
-    do: %{tag | type: nil} == %{to | type: nil} and same?(one, other)
-
-  defp same_tag?(tag, another), do: tag == another
-
   @doc """
   Whether `type` is a user function block type `Logex.compile/2` could have given: what
-  `of/1` gives for its body, every type it holds the built-in `ton` or valid in turn, its
-  body's rungs, tags and warnings what a compile gives over that table
+  `of/1` gives for its body, its body holding each type its tags name, `{:block, name}`,
+  once under that name, and no other, every type it holds the built-in `ton` or valid in
+  turn, its body's rungs, tags and warnings what a compile gives over that table
   (`Logex.Compiler.lowered?/1`), and no type in it holding an instance of a type of its
   own name, at any depth. So a type whose body was edited by hand, a rung or a warning,
   is refused where it is given, whether or not the text could say what it holds. Two types
@@ -224,8 +221,12 @@ defmodule Logex.FbType do
   # version of a name already checked is checked too, and must be one version with them
   # (same?/2), as a compile takes it; a name on the path down to a type is refused, which
   # would be recursion.
-  defp valid(%__MODULE__{name: name, body: %Program{name: name, tags: tags}} = type, path, done)
-       when is_binary(name) and is_map(tags) and not is_struct(tags),
+  defp valid(
+         %__MODULE__{name: name, body: %Program{name: name, tags: tags, blocks: blocks}} = type,
+         path,
+         done
+       )
+       when is_binary(name) and is_map(tags) and not is_struct(tags) and is_map(blocks),
        do: named(Logex.Declarations.block_name?(name), type, path, done)
 
   defp valid(_type, _path, _done), do: :error
@@ -254,19 +255,42 @@ defmodule Logex.FbType do
 
   defp fresh(true, _type, _path, _done), do: :error
 
-  defp fresh(false, type, path, done),
-    do: built(Enum.all?(type.body.tags, &declared?/1) and of(type.body) == type, type, path, done)
+  defp fresh(false, %__MODULE__{body: body} = type, path, done),
+    do:
+      built(
+        Enum.all?(body.tags, &declared?/1) and held?(body) and of(body) == type,
+        type,
+        path,
+        done
+      )
 
   defp built(false, _type, _path, _done), do: :error
 
-  defp built(true, %__MODULE__{name: name, body: %Program{tags: tags}} = type, path, done) do
+  # Each type the body holds is checked once, however many of its tags name it.
+  defp built(true, %__MODULE__{name: name, body: %Program{} = body} = type, path, done) do
     path = Map.put(path, name, true)
 
-    tags
-    |> Enum.reduce({:ok, done}, fn {_, tag}, ok -> holds(tag.type, path, ok) end)
+    Enum.map(body.tags, fn {_, tag} -> tag.type end)
+    |> Kernel.++(Map.values(body.blocks))
+    |> Enum.reduce({:ok, done}, &holds(&1, path, &2))
     |> lowered(type)
     |> add(type)
   end
+
+  # What a compiled body holds of the user block types its instances are of (Logex.Compiler,
+  # docs/organisation.md §4.10, "Held types"): each type a tag names, `{:block, name}`, under
+  # that name, and no other, so that each is held once, whatever the number of its
+  # instances. The built-in `ton` is not among them: each timer's tag holds it, as a
+  # program's tags hold every type.
+  defp held?(%Program{tags: tags, blocks: blocks}) do
+    named = for {_, %Tag{type: {:block, held}}} <- tags, into: %{}, do: {held, true}
+
+    map_size(named) == map_size(blocks) and
+      Enum.all?(named, fn {held, _} -> named?(held, Map.get(blocks, held)) end)
+  end
+
+  defp named?(name, %__MODULE__{name: name, body: %Program{}}), do: true
+  defp named?(_name, _type), do: false
 
   # The body, once every type it holds is valid, is one a compile gives: its rungs lower
   # to themselves (Logex.Compiler.lowered?/1), so a hand-edited rung is refused here, where
@@ -279,6 +303,7 @@ defmodule Logex.FbType do
 
   defp holds(_type, _path, :error), do: :error
   defp holds(type, _path, ok) when type in [:bool, :dint], do: ok
+  defp holds({:block, _held}, _path, ok), do: ok
   defp holds(%__MODULE__{body: nil} = type, _path, ok), do: ton?(type == ton(), ok)
   defp holds(type, path, {:ok, done}), do: valid(type, path, done)
 
@@ -291,7 +316,8 @@ defmodule Logex.FbType do
   # What a compiled body's tag table holds: a tag per name, with a line, or none for a tag
   # declared from Elixir (Logex.Tag.new!/4), a section, and an
   # initial value a declaration line could give, or for a timer the preset the compiler
-  # gives it (Logex.Compiler). Its type is looked at by holds/3.
+  # gives it (Logex.Compiler). An instance of a user block names its type, which the body
+  # holds (held?/1). Its type is looked at by holds/3.
   defp declared?({name, %Tag{name: name, line: line, section: section} = tag})
        when ((is_integer(line) and line > 0) or is_nil(line)) and
               section in [:var, :var_input, :var_output],
@@ -312,7 +338,8 @@ defmodule Logex.FbType do
        when type in [:bool, :dint] and section != :var_input and is_integer(initial),
        do: Logex.Declarations.fits?(type, initial) and initial >= 0
 
-  defp starts?(%Tag{type: %__MODULE__{}, initial: nil, section: :var}), do: true
+  defp starts?(%Tag{type: %__MODULE__{body: nil}, initial: nil, section: :var}), do: true
+  defp starts?(%Tag{type: {:block, _held}, initial: nil, section: :var}), do: true
 
   defp starts?(%Tag{
          type: %__MODULE__{body: nil},

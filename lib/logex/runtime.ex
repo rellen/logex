@@ -142,8 +142,9 @@ defmodule Logex.Runtime do
   `restart/3` starts every tag again but the `var_input`s whose values fit their types,
   and empties `ons_blocked`. A `%Logex.Program{}`, `%Logex.Instance{}` or `%Logex.Edit{}` built or
   edited by hand is outside this contract; one that holds a block type whose body was
-  edited by hand still runs without raising, since a `cal` of an instance its table lacks
-  runs nothing, but a type given to `Logex.compile/2` or `Logex.Tag.new!/4` cannot be one
+  edited by hand still runs without raising, since a `cal` of an instance its table lacks,
+  or whose type it names and does not hold, runs nothing, but a type given to
+  `Logex.compile/2` or `Logex.Tag.new!/4` cannot be one
   (`Logex.Compiler.lowered?/1`).
 
   **During an edit** the host scans, sets inputs and restarts through
@@ -387,8 +388,9 @@ defmodule Logex.Runtime do
   # bit up: a walk of the list made the scan after a switch quadratic in the one-shots it
   # blocks. A bit inside a function block instance is named by its path, `s1.edge`, and the
   # tree holds it under its instance, so a `cal` hands its body only that instance's own
-  # (M2-5); and the program's tag table, where a `cal` finds its instance's type. A scan is
-  # what clears `switched`: the state then holds what this program gave the host.
+  # (M2-5); and the program's tag table, where a `cal` finds its instance's type, with the
+  # block types it holds. A scan is what clears `switched`: the state then holds what this
+  # program gave the host.
   #
   # M2-5: a bit is blocked until its `ons` runs. A bit of the program's own rungs runs on
   # this scan; one inside an instance runs only where a `cal` runs the instance's body, so
@@ -397,11 +399,11 @@ defmodule Logex.Runtime do
   # rung against the bit the old one wrote: the false pulse decision 21 prevents.
   defp run(
          %Instance{env: env, ons_blocked: blocked} = state,
-         %Program{rungs: rungs, tags: tags} = program,
+         %Program{rungs: rungs, tags: tags, blocks: blocks} = program,
          %Scan{now: now, first: first}
        ) do
     tree = tree(blocked)
-    scan = %Scan{now: now, first: first, ons_blocked: tree, tags: tags}
+    scan = %Scan{now: now, first: first, ons_blocked: tree, tags: tags, blocks: blocks}
     {unrun, env} = unrun(tree, Enum.reduce(rungs, env, &rung(&1, &2, scan)))
 
     {outputs(program, env),
@@ -539,6 +541,14 @@ defmodule Logex.Runtime do
         ArgumentError,
         "scan.tags is the runtime's, taken from the program: a host leaves it out, " <>
           "got: #{inspect(tags)}"
+      )
+
+  defp scan!(%Scan{blocks: blocks}, _state) when blocks != nil,
+    do:
+      raise(
+        ArgumentError,
+        "scan.blocks is the runtime's, taken from the program: a host leaves it out, " <>
+          "got: #{inspect(blocks)}"
       )
 
   defp scan!(%Scan{now: now}, %Instance{now: last}) when now < last,
@@ -1194,8 +1204,10 @@ defmodule Logex.Runtime do
   # M2-5: `cal` runs an instance of a user function block (docs/organisation.md §4.3).
   # Rung power is its EN, and its ENO is the power out. Energised, each var_input operand
   # is read into the instance, the block's body runs over the instance's own map, with the
-  # scan narrowed to it (its type's tag table and its own tree of blocked one-shots, `now`
-  # and `first` the program's), and each var_output is written to its operand.
+  # scan narrowed to it (its type's tag table and block types, and its own tree of blocked
+  # one-shots, `now` and `first` the program's), and each var_output is written to its
+  # operand. In a body, an instance's tag names its type, `{:block, name}`, which the
+  # scan's `blocks` holds.
   # De-energised, nothing (decision 12): nothing is copied in, the body does not run and
   # nothing is written out, so the instance and every tag its outputs name keep their
   # values. A timer inside keeps its `.en` and `last` and catches up when the block next
@@ -1204,9 +1216,9 @@ defmodule Logex.Runtime do
   defp evaluate(
          {:cal, _, [{:name, _, instance} | operands]},
          {true, env},
-         %Scan{tags: tags} = scan
+         %Scan{tags: tags, blocks: blocks} = scan
        ),
-       do: {true, called(Map.get(tags, instance), instance, operands, env, scan)}
+       do: {true, called(typed(Map.get(tags, instance), blocks), instance, operands, env, scan)}
 
   defp evaluate({:cal, _, _}, {false, env}, _scan) do
     {false, env}
@@ -1221,11 +1233,19 @@ defmodule Logex.Runtime do
   defp blocked?({:name, _, bit}, blocked), do: is_map_key(blocked, bit)
   defp blocked?({:member, _, _path}, _blocked), do: false
 
+  # The type of an instance a `cal` runs: its tag's own, or in a body, the one its tag names.
+  # A name the routine's blocks lack, which only a program built by hand can give, is no
+  # type, and nothing runs.
+  defp typed(%Tag{type: {:block, name}} = tag, %{} = blocks),
+    do: %{tag | type: Map.get(blocks, name)}
+
+  defp typed(tag, _blocks), do: tag
+
   # A `cal` of an instance its routine's table holds as a user block's. A program built by
   # hand may name one its table lacks, or one of another type: nothing runs, as nothing runs
   # for a hand-built env a `ton` finds no timer in.
   defp called(
-         %Tag{type: %FbType{body: %Program{rungs: rungs, tags: own}} = type},
+         %Tag{type: %FbType{body: %Program{rungs: rungs, tags: own, blocks: held}} = type},
          instance,
          operands,
          env,
@@ -1235,7 +1255,7 @@ defmodule Logex.Runtime do
     slots = Enum.zip(formals, operands)
     state = Enum.reduce(slots, as_map(Map.get(env, instance)), &copy_in(&1, &2, env))
     inner = as_map(Map.get(blocked, instance))
-    body = %{scan | tags: own, ons_blocked: inner}
+    body = %{scan | tags: own, blocks: held, ons_blocked: inner}
     {state, env} = ran(instance, Enum.reduce(rungs, state, &rung(&1, &2, body)), env)
     Enum.reduce(slots, Map.put(env, instance, state), &copy_out(&1, &2, state))
   end
