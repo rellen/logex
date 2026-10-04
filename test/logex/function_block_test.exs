@@ -3,9 +3,11 @@ defmodule Logex.FunctionBlockTest do
   M2-5: user function blocks (PLAN.md §3, Milestone 2; docs/organisation.md §4.3 and
   §4.10). A file whose first rung is `function_block <name>` compiles to its type; a
   program declares instances of it, `var s1 seal`, given the type through
-  `Logex.compile/2`'s `types:`; `cal` runs one, rung power its EN, nothing copied on a
-  false EN (decision 12). Every diagnostic list here is asserted whole, from source. The
-  Done-when is `end_to_end_test.exs`'s, through a configuration and `Logex.Runtime.get/2`.
+  `Logex.compile/2`'s `types:` or found beside it by `Logex.compile_file/1`, which hands
+  back the blocks' warnings among the program's (decision 34); `cal` runs one, rung power
+  its EN, nothing copied on a false EN (decision 12). Every diagnostic list here is
+  asserted whole, from source. The Done-when is `end_to_end_test.exs`'s, through a
+  configuration and `Logex.Runtime.get/2`, from text and from files on disk.
   An online edit of a program that holds blocks is here too (decisions 31 and 32): state
   moves member by member, by path, and the one-shots and timers inside an instance meet
   the rules of `Logex.Edit` by path (§4.9), a one-shot staying blocked until a scan runs
@@ -2184,6 +2186,252 @@ defmodule Logex.FunctionBlockTest do
       assert Diagnostic.format(diagnostic) ==
                "#{Path.join(dir, "m.ld")}: line 2: `q` is a bool in the running program and a " <>
                  "dint in the candidate: a tag's type changes only with a restart"
+    end
+  end
+
+  # Decision 34: compile_file/1 loads `<word>.ld` beside the file that names a type word,
+  # compiling each once a call, and hands back each loaded block's warnings among the
+  # program's; compile/2 gives only the program's.
+  describe "a block's file found beside the file that names it (decision 34)" do
+    @describetag :tmp_dir
+
+    defp write!(dir, name, source) do
+      path = Path.join(dir, name)
+      File.write!(path, source)
+      path
+    end
+
+    defp formatted({:error, diagnostics}), do: Enum.map(diagnostics, &Diagnostic.format/1)
+
+    # `seal` with a `var` no rung uses, `outer` holding one, each warned of in its file.
+    @warned_seal String.replace(
+                   @seal,
+                   "var_output run bool\n",
+                   "var_output run bool\nvar n bool\n"
+                 )
+
+    @outer """
+    function_block outer
+    var_input go bool
+    var_output o bool
+    var spare dint
+    var s seal
+
+    cal s go go o
+    """
+
+    @holds_both """
+    var_input a bool
+    var_output k bool
+    var_output k2 bool
+    var unused bool
+    var o outer
+    var s seal
+
+    cal o a k
+    cal s a a k2
+    """
+
+    # Its first rung read as the compiler reads it, in any case.
+    test "compile_file/1 compiles it first, and the program holds its type and runs it",
+         %{tmp_dir: dir} do
+      seal = write!(dir, "seal.ld", String.replace(@seal, "function_block", "Function_Block"))
+      path = write!(dir, "motor.ld", @three)
+      assert {:ok, motor} = Logex.compile_file(path)
+      assert {:ok, type} = Logex.compile_file(seal)
+      assert motor.tags["s1"].type == type
+      assert type.body.file == seal
+      assert motor.file == path
+
+      {outputs, _} = step(motor, Runtime.instance(motor), %{"a2" => 1})
+      assert outputs == %{"k1" => 0, "k2" => 1, "k3" => 0, "lamp" => 1}
+    end
+
+    test "each block's warnings are handed back among the program's, once a call, each " <>
+           "with its block's file, a block after those it holds",
+         %{tmp_dir: dir} do
+      seal = write!(dir, "seal.ld", @warned_seal)
+      outer = write!(dir, "outer.ld", @outer)
+      path = write!(dir, "motor.ld", @holds_both)
+
+      assert {:ok, motor} = Logex.compile_file(path)
+
+      assert warnings(motor) == [
+               "#{path}: line 4: warning: `unused` is declared but no rung uses it",
+               "#{seal}: line 5: warning: `n` is declared but no rung uses it",
+               "#{outer}: line 4: warning: `spare` is declared but no rung uses it"
+             ]
+
+      # One version of `seal`, compiled once, whichever file names it.
+      assert motor.tags["o"].type.body.tags["s"].type == motor.tags["s"].type
+    end
+
+    test "compile/2 gives only the program's warnings, and a block's file only its own",
+         %{tmp_dir: dir} do
+      write!(dir, "seal.ld", @warned_seal)
+      outer = write!(dir, "outer.ld", @outer)
+      {:ok, outer_type} = Logex.compile_file(outer)
+
+      assert warnings(outer_type.body) == [
+               "#{outer}: line 4: warning: `spare` is declared but no rung uses it"
+             ]
+
+      # The block's own type keeps its warnings, and is one a compile gives.
+      assert FbType.user?(outer_type)
+      seal_type = outer_type.body.tags["s"].type
+
+      assert [%Diagnostic{message: "`n` is declared but no rung uses it"}] =
+               seal_type.body.warnings
+
+      motor = program!(@holds_both, [outer_type, seal_type])
+
+      assert warnings(motor) == [
+               "line 4: warning: `unused` is declared but no rung uses it"
+             ]
+    end
+
+    test "a mistake in it is reported with its file, once, and stops the file that names it",
+         %{tmp_dir: dir} do
+      seal = write!(dir, "seal.ld", String.replace(@seal, "xio stop", "xio stp"))
+      path = write!(dir, "motor.ld", @three)
+
+      assert formatted(Logex.compile_file(path)) == [
+               "#{seal}: line 6: `stp` is not declared — did you mean `stop`?"
+             ]
+
+      # Named by the program and by a block it holds: the block's mistake once, and the
+      # program's own mistakes not at all, since it is compiled no further.
+      write!(dir, "outer.ld", @outer)
+      both = write!(dir, "both.ld", @holds_both <> "xyz a\n")
+
+      assert formatted(Logex.compile_file(both)) == [
+               "#{seal}: line 6: `stp` is not declared — did you mean `stop`?"
+             ]
+
+      # Two broken blocks: every mistake, each block's in line order, the blocks in the
+      # order the file names them.
+      write!(
+        dir,
+        "latch.ld",
+        "function_block latch\nvar_input a bool\nvar q bool\nxyz a\nxic b ote q\n"
+      )
+
+      two = write!(dir, "two.ld", "var l latch\nvar s seal\nvar_input a bool\ncal l a\n")
+
+      assert formatted(Logex.compile_file(two)) == [
+               "#{dir}/latch.ld: line 4: unknown instruction `xyz`",
+               "#{dir}/latch.ld: line 5: `b` is not declared",
+               "#{seal}: line 6: `stp` is not declared — did you mean `stop`?"
+             ]
+
+      # A block's file that does not lex is loaded, to be reported, with its column.
+      write!(dir, "seal.ld", String.replace(@seal, "ote run", "ote $run"))
+
+      assert formatted(Logex.compile_file(path)) == [
+               ~s(#{seal}: line 6, column 38: illegal character "$")
+             ]
+
+      # Something of that name that is no file is reported as one that cannot be read.
+      File.rm!(seal)
+      File.mkdir!(seal)
+
+      assert formatted(Logex.compile_file(path)) == [
+               "#{seal}: cannot be read: illegal operation on a directory"
+             ]
+    end
+
+    # A loader that missed the chain would recurse until the default minute ran out,
+    # gigabytes later: a chain is found in a few milliseconds.
+    @tag timeout: 10_000
+    test "a chain of files that holds itself is located in the file that closes it",
+         %{tmp_dir: dir} do
+      write!(dir, "a.ld", "function_block a\nvar_output q bool\nvar x b\ncal x q\n")
+      b = write!(dir, "b.ld", "function_block b\nvar_input go bool\nvar y a\ncal y go\n")
+
+      assert formatted(Logex.compile_file(Path.join(dir, "a.ld"))) == [
+               "#{b}: line 3: `b` cannot hold an instance of `a` (b → a → b): " <>
+                 "a function block never holds an instance of itself, at any depth"
+             ]
+
+      c = write!(dir, "c.ld", "function_block c\nvar_input go bool\nvar z a\ncal z go\n")
+      write!(dir, "b.ld", "function_block b\nvar_input go bool\nvar y c\ncal y go\n")
+
+      assert formatted(Logex.compile_file(Path.join(dir, "a.ld"))) == [
+               "#{c}: line 3: `c` cannot hold an instance of `a` (c → a → b → c): " <>
+                 "a function block never holds an instance of itself, at any depth"
+             ]
+    end
+
+    test "a program's file is no type, before any chain is looked for", %{tmp_dir: dir} do
+      write!(dir, "pump.ld", "var_output q bool\nxic q ote q\n")
+      path = write!(dir, "m.ld", "var p pump\nvar_output q bool\nxic q ote q\n")
+
+      assert formatted(Logex.compile_file(path)) == [
+               "#{path}: line 1: `pump` is a program (pump.ld), not a function block: " <>
+                 "only a function block's file gives a type for `var`"
+             ]
+
+      # A block that names a program which holds the block: the block's own line, not a
+      # chain reported in the program's file.
+      blk =
+        write!(
+          dir,
+          "blk.ld",
+          "function_block blk\nvar_input a bool\nvar_output q bool\n" <>
+            "var p prog\ncal p a q\n"
+        )
+
+      prog = write!(dir, "prog.ld", "var_input a bool\nvar_output q bool\nvar b blk\ncal b a q\n")
+
+      message =
+        "line 4: `prog` is a program (prog.ld), not a function block: " <>
+          "only a function block's file gives a type for `var`"
+
+      assert formatted(Logex.compile_file(blk)) == ["#{blk}: #{message}"]
+      assert formatted(Logex.compile_file(prog)) == ["#{blk}: #{message}"]
+    end
+
+    # Only a word a block's first rung could give is looked for: a dotted word, or the word
+    # that heads a block's file, is an unknown type where it is written, whatever is beside.
+    test "a word no block can be named is looked for in no file", %{tmp_dir: dir} do
+      write!(dir, "a.b.ld", @seal)
+      dotted = write!(dir, "dotted.ld", "var s a.b\nvar_output q bool\nxic q ote q\n")
+
+      assert formatted(Logex.compile_file(dotted)) == [
+               "#{dotted}: line 1: unknown type `a.b`: logex has `bool`, `dint` and `ton`"
+             ]
+
+      write!(dir, "Function_Block.ld", "function_block Function_Block\nvar_input a bool\n")
+      header = write!(dir, "header.ld", "var s Function_Block\nvar_output q bool\nxic q ote q\n")
+
+      assert formatted(Logex.compile_file(header)) == [
+               "#{header}: line 1: unknown type `Function_Block`: logex has `bool`, `dint` " <>
+                 "and `ton`"
+             ]
+    end
+
+    # A file whose name cannot name a program is still compiled with the blocks beside it,
+    # so the one mistake is its name: a block it names is no unknown type.
+    test "a file with a refused name finds its blocks beside it all the same",
+         %{tmp_dir: dir} do
+      write!(dir, "seal.ld", @seal)
+      path = write!(dir, "1motor.ld", @three)
+
+      assert formatted(Logex.compile_file(path)) == [
+               "#{path}: \"1motor\" cannot name a program: a name is a letter or `_`, then " <>
+                 "letters, digits or `_` (rename the file)"
+             ]
+
+      broken =
+        write!(dir, "2motor.ld", String.replace(@three, "cal s2 a2 stop k2", "cal s2 a2 k2"))
+
+      assert formatted(Logex.compile_file(broken)) == [
+               "#{broken}: \"2motor\" cannot name a program: a name is a letter or `_`, then " <>
+                 "letters, digits or `_` (rename the file)",
+               "#{broken}: line 15: `cal s2` expects 3 operands after its instance, " <>
+                 "`start` (var_input bool), then `stop` (var_input bool), then `run` " <>
+                 "(var_output bool): found 2"
+             ]
     end
   end
 

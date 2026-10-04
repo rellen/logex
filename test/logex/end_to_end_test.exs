@@ -1662,6 +1662,10 @@ defmodule Logex.EndToEndTest do
     defp seals do
       {:ok, seal} = Logex.compile(@seal_block, name: "seal")
       {:ok, motor} = Logex.compile(@three_seals, name: "motor", types: [seal])
+      configured(motor)
+    end
+
+    defp configured(motor) do
       tags = motor.tags |> Map.values() |> Enum.sort_by(& &1.name)
       inputs = for %Logex.Tag{section: :var_input} = tag <- tags, do: tag.name
       outputs = for %Logex.Tag{section: :var_output} = tag <- tags, do: tag.name
@@ -1724,6 +1728,76 @@ defmodule Logex.EndToEndTest do
       # Its EN back with stop still pressed, s3 runs and drops out at once.
       {_rt, outputs} = cycled(rt, [{10, %{"en3" => 1}}])
       assert outputs == %{"k1" => 0, "k2" => 0, "k3" => 0, "lamp" => 0}
+    end
+
+    # The same, from files on disk: compile_file/1 finds `seal.ld` beside the program that
+    # names it (decision 34), and every diagnostic names its file and line.
+    # A loader that missed the chain of a.ld and b.ld would recurse until the default
+    # minute ran out: a chain is found in a few milliseconds.
+    @tag :tmp_dir
+    @tag timeout: 10_000
+    test "M2-5's Done-when from files on disk, through compile_file/1", %{tmp_dir: dir} do
+      write = fn name, text ->
+        path = Path.join(dir, name)
+        File.write!(path, text)
+        path
+      end
+
+      formatted = fn {:error, diagnostics} ->
+        Enum.map(diagnostics, &Logex.Diagnostic.format/1)
+      end
+
+      write.("seal.ld", @seal_block)
+      motor = write.("motor.ld", @three_seals)
+      {:ok, program} = Logex.compile_file(motor)
+      assert program.name == "motor" and program.file == motor
+
+      {rt, outputs} =
+        cycled(configured(program), [
+          {0, %{"a1" => 1, "en3" => 1}},
+          {10, %{"a1" => 0, "a2" => 1}},
+          {10, %{"a2" => 0}}
+        ])
+
+      assert outputs == %{"k1" => 1, "k2" => 1, "k3" => 0, "lamp" => 1}
+      assert Logex.Runtime.get(rt, "m1.s2.run") == {:ok, 1}
+
+      # A false EN freezes s3 alone: sealed in, its EN falls, then stop drops s1 and s2.
+      {rt, _} = cycled(rt, [{10, %{"a3" => 1}}, {10, %{"a3" => 0, "en3" => 0, "stop" => 1}}])
+      assert Logex.Runtime.get(rt, "m1.s3.run") == {:ok, 1}
+      assert Logex.Runtime.get(rt, "m1.s2.run") == {:ok, 0}
+
+      loop = write.("loop.ld", "function_block loop\nvar_input a bool\nvar x loop\ncal x a\n")
+
+      assert formatted.(Logex.compile_file(loop)) == [
+               "#{loop}: line 3: `loop` cannot hold an instance of `loop`: " <>
+                 "a function block never holds an instance of itself"
+             ]
+
+      a = write.("a.ld", "function_block a\nvar_input go bool\nvar x b\ncal x go\n")
+      b = write.("b.ld", "function_block b\nvar_input go bool\nvar y a\ncal y go\n")
+
+      assert formatted.(Logex.compile_file(a)) == [
+               "#{b}: line 3: `b` cannot hold an instance of `a` (b → a → b): " <>
+                 "a function block never holds an instance of itself, at any depth"
+             ]
+
+      unknown = write.("unknown.ld", String.replace(@three_seals, "var s3 seal", "var s3 sael"))
+
+      # As for any unknown type since M1-3, the line declares nothing, so s3's use is
+      # reported too, until a commit after M2-5 excuses it.
+      assert formatted.(Logex.compile_file(unknown)) == [
+               "#{unknown}: line 12: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
+                 "and the function block `seal` — did you mean `seal`?",
+               "#{unknown}: line 16: `s3` is not declared"
+             ]
+
+      wired = write.("wired.ld", String.replace(@three_seals, "cal s1 a1", "cal a1 a1"))
+
+      assert formatted.(Logex.compile_file(wired)) == [
+               "#{wired}: line 14: `cal` runs an instance of a function block, but `a1` is a " <>
+                 "bool (declared on line 1)"
+             ]
     end
 
     test "M2-5's Done-when: a recursive type, an unknown function block type and a cal of " <>

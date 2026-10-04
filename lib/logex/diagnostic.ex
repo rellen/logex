@@ -17,11 +17,11 @@ defmodule Logex.Diagnostic do
     for a `:configure` problem with an element built from Elixir, or with the
     configuration as a whole.
   - `column` is set by the front end, which alone still knows it; `file` by
-    `Logex.compile_file/1`, and on a `:configure` problem by `Logex.Configuration.check/1`
-    from the configuration's own `file`, nil for one built from Elixir. An `:edit` problem
-    has no file even for a candidate read from one, since a `%Logex.Program{}` keeps none:
-    a gap Milestone 2's configuration edit must close (`docs/organisation.md` §4.9, fix
-    F15).
+    `Logex.compile_file/1`, the file each problem was found in, a function block's file it
+    loaded beside the one it was given among them (M2-5, decision 34); on a `:configure`
+    problem by `Logex.Configuration.check/1` from the configuration's own `file`, nil for
+    one built from Elixir; and on an `:edit` problem from the candidate's `file`, nil for a
+    candidate compiled from text (fix F15).
   - `severity` is `:error` or `:warning`.
   """
 

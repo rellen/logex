@@ -12,7 +12,9 @@ defmodule Logex.Program do
   - `rungs` are the lowered rungs. Declaration lines are rungs in the parse AST, but never
     here.
   - `tags` is the tag table, keyed by tag name.
-  - `warnings` are `%Logex.Diagnostic{severity: :warning}`, in line order.
+  - `warnings` are `%Logex.Diagnostic{severity: :warning}`, in line order. From
+    `Logex.compile_file/1` the warnings of each block it loaded beside the file follow,
+    each with its block's file (decision 34); a block's body holds only its own.
   """
 
   @enforce_keys [:rungs, :tags]
