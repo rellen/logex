@@ -3,7 +3,8 @@ defmodule Logex.Configuration do
   A configuration: the program types it runs, its tasks, its globals, its program
   instances and the connections that wire them (M2-1, `docs/organisation.md` §4.4). A
   value, plain data, which `Logex.Runtime.start/1` runs as one resource, built in Elixir
-  or written in a configuration file (`.logex`, M2-2, read by `Logex.Configuration.Text`).
+  or written in a configuration file (`.logex`, M2-2, read by `Logex.Configuration.Text`
+  and printed back by its `print/1`, the round trip exact).
 
   - `programs` maps each program type's name to its `%Logex.Program{}`.
   - `tasks`, `globals`, `instances` and `connections` are lists, in declaration order, of
@@ -351,7 +352,12 @@ defmodule Logex.Configuration do
   nothing that names it is reported again. A lex error stops it and is the only
   diagnostic. A source that is not a binary, a name that is not one, and programs
   `check/1` would refuse are the host's mistakes, raised as one `ArgumentError`, as
-  `check/1` raises them.
+  `check/1` raises them: given a name and programs it takes, any source text is a result,
+  never a raise.
+
+  Its inverse is `Logex.Configuration.Text.print/1`: a configuration it gives compiles back
+  from its printed text to itself, `compile(config.name, Text.print(config),
+  config.programs) == {:ok, config}`, each element on its line.
   """
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)
