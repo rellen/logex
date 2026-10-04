@@ -29,13 +29,14 @@ defmodule Logex.Edit do
   **Accept** checks the two programs and the state, and changes nothing. It refuses a
   candidate that changes the type of a tag both programs declare, any `Logex.Tag` type
   inequality (a bool and a dint, a tag and a timer), as `{:error, diagnostics}` at stage
-  `:edit`: every one, at the candidate's declaration line, in line order, and a tag
-  declared from Elixir, which has no line, after them. A changed section or initial value
-  is not a type change, and a warning in the candidate does not stop it. Its forecast is
-  the report a test taken now would give; a test taken later reads the state as it is
-  then. An `:edit` diagnostic cites the candidate's file, its `file`, which
-  `Logex.compile_file/1` sets, and none for a candidate compiled from text (fix F15). A
-  user function block's type, for the edit, is its name and its members' kinds (below).
+  `:edit`: every one, at the candidate's declaration line, in line order, several members
+  of one instance on its one line by path, and a tag declared from Elixir, which has no
+  line, after them. A changed section or initial value is not a type change, and a
+  warning in the candidate does not stop it. Its forecast is the report a test taken now
+  would give; a test taken later reads the state as it is then. An `:edit` diagnostic
+  cites the candidate's file, its `file`, which `Logex.compile_file/1` sets, and none for
+  a candidate compiled from text (fix F15). A user function block's type, for the edit,
+  is its name and its members' kinds (below).
 
   **A switch**, `test/2` or `untest/2`, moves the state from the program it stops to the
   one it starts. It prunes nothing, and never touches `now` or `first`, so no switch makes
@@ -399,7 +400,8 @@ defmodule Logex.Edit do
   # ---- accept: the two programs alone -----------------------------------------------------
 
   # §4.9: a tag's type, a function block's members included, changes only with a restart.
-  # In line order, a tag declared from Elixir (line nil, after every number) last, by name.
+  # In line order, a tag declared from Elixir (line nil, after every number) last, by name,
+  # and several members of one instance, on its one line, by path.
   # M2-5: an instance of a user block keeps its type while the block keeps its name and
   # every member both versions declare keeps its kind, at any depth: the block's body, and a
   # member it adds or drops, change with an edit, the state moving by member name (the
@@ -422,19 +424,22 @@ defmodule Logex.Edit do
          %FbType{name: name, body: %Program{}} = was,
          %FbType{name: name, body: %Program{}} = type,
          path
-       ),
-       do:
-         for(
-           %Member{name: member} = to <- type.members,
-           %Member{} = from <- [member_named(was, member)],
-           change <-
-             changes(FbType.type_of(was, from), FbType.type_of(type, to), path <> "." <> member),
-           do: change
-         )
+       ) do
+    before = by_name(was)
+
+    for %Member{name: member} = to <- type.members,
+        {:ok, from} <- [Map.fetch(before, member)],
+        change <-
+          changes(FbType.type_of(was, from), FbType.type_of(type, to), path <> "." <> member),
+        do: change
+  end
 
   defp changes(was, type, path), do: [{path, was, type}]
 
-  defp member_named(%FbType{members: members}, name), do: Enum.find(members, &(&1.name == name))
+  # A version's members by name, built once per type compared, so that matching the
+  # members of two versions is linear in them, not quadratic.
+  defp by_name(nil), do: %{}
+  defp by_name(%FbType{members: members}), do: Map.new(members, &{&1.name, &1})
 
   defp retyped(path, {file, line}, was, type),
     do: %Diagnostic{
@@ -770,11 +775,13 @@ defmodule Logex.Edit do
   defp planned({:ok, plan}, _key, _types, memo), do: {plan, memo}
 
   defp planned(:error, key, {was, type, runs, bodies}, memo) do
+    before = {was, by_name(was)}
+
     {members, memo} =
       Enum.map_reduce(
         type.members,
         memo,
-        &member(%{&1 | type: FbType.type_of(type, &1)}, was, {type, runs, bodies}, &2)
+        &member(%{&1 | type: FbType.type_of(type, &1)}, before, {type, runs, bodies}, &2)
       )
 
     names = Map.new(type.members, &{&1.name, true})
@@ -813,11 +820,8 @@ defmodule Logex.Edit do
     {plan, Map.put(memo, {:gone, type.name}, plan)}
   end
 
-  defp member(%Member{name: name} = member, was, context, memo),
-    do: member(member, before_member(was, name), context, memo, name)
-
-  defp before_member(nil, _name), do: nil
-  defp before_member(was, name), do: resolved(was, member_named(was, name))
+  defp member(%Member{name: name} = member, {was, before}, context, memo),
+    do: member(member, resolved(was, Map.get(before, name)), context, memo, name)
 
   # A member with its type itself, a user block's taken from the body (Logex.FbType).
   defp resolved(_type, nil), do: nil

@@ -100,13 +100,13 @@ defmodule Logex.Compiler do
   """
   def instructionize(routine, declared \\ [], types \\ []) do
     {:routine, {:rungs, rungs}} = Logex.Parser.well_formed!(routine)
-    library = library!(types)
+    {library, held} = library!(types)
     {kind, rungs, heading} = file_kind(rungs)
     marks = marked(kind, library)
     {tags, logic, declaring, untyped} = Declarations.split(rungs, declared, marks)
     holds_itself!(kind, declared)
-    Enum.reduce(blocks(tags), {library, :tags}, &one_version!/2)
-    known = {tags, folded(tags)}
+    Enum.reduce(blocks(tags), {held, :tags}, &one_version!/2)
+    known = {scope(tags), folded(tags)}
     {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, known))
     note? = map_size(tags) == 0 and declares_nothing?(routine, logic)
     instructions = instructions(rungs)
@@ -135,15 +135,21 @@ defmodule Logex.Compiler do
   instance's type a valid one (`Logex.FbType.user?/1` checks those first).
   """
   def lowered?(%Program{rungs: rungs, tags: tags, warnings: warnings})
-      when is_list(rungs) and is_map(tags) and is_list(warnings),
-      do: relowered(proper?(rungs, &ir_rung?/1), rungs, tags, warnings)
+      when is_list(rungs) and is_map(tags) and not is_struct(tags) and is_list(warnings),
+      do:
+        relowered(
+          proper?(rungs, &ir_rung?/1) and proper?(warnings, &any?/1),
+          rungs,
+          tags,
+          warnings
+        )
 
   def lowered?(_body), do: false
 
   defp relowered(false, _rungs, _tags, _warnings), do: false
 
   defp relowered(true, rungs, tags, warnings) do
-    known = {tags, folded(tags)}
+    known = {scope(tags), folded(tags)}
     instructions = instructions(rungs)
     {timed, timing} = presets(instructions, unpreset(tags))
 
@@ -162,6 +168,8 @@ defmodule Logex.Compiler do
   defp proper?([], _test), do: true
   defp proper?([element | rest], test), do: test.(element) and proper?(rest, test)
   defp proper?(_not_a_list, _test), do: false
+
+  defp any?(_element), do: true
 
   defp ir_rung?({:rung, [_ | _] = elements}), do: proper?(elements, &ir_element?/1)
   defp ir_rung?(_rung), do: false
@@ -208,18 +216,20 @@ defmodule Logex.Compiler do
         entry -> entry
       end)
 
-  # Each rung on one line, after the last, and every declaration line before the first.
+  # Each rung on one line, every operand on its instruction's, after the last; and every
+  # declaration on a line of its own, before the first. The sorted declaration lines rising
+  # refuses two on one line.
   defp lines?(rungs, tags) do
     lines = Enum.map(rungs, &rung_lines/1)
     declared = for {_, %Tag{line: line}} <- tags, line != nil, do: line
 
-    Enum.all?(lines, &match?([_], &1)) and
-      Enum.uniq(declared) == declared and
-      rising?(Enum.sort(declared) ++ Enum.map(lines, &hd/1))
+    Enum.all?(lines, &match?([_], &1)) and rising?(Enum.sort(declared) ++ Enum.map(lines, &hd/1))
   end
 
   defp rung_lines({:rung, elements}),
-    do: elements |> gather([]) |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
+    do: elements |> gather([]) |> Enum.flat_map(&lines_of/1) |> Enum.uniq()
+
+  defp lines_of({_symbol, line, operands}), do: [line | Enum.map(operands, &elem(&1, 1))]
 
   defp rising?([one, two | rest]), do: one < two and rising?([two | rest])
   defp rising?(_short), do: true
@@ -343,17 +353,22 @@ defmodule Logex.Compiler do
   defp excused?({:undeclared, _line, name, _slot}, untyped), do: MapSet.member?(untyped, name)
   defp excused?(_diagnostic, _untyped), do: false
 
-  # The blocks a compile is given: a list of user types, each one Logex.compile/2 gave, and
-  # no two of one name. A host mistake otherwise. By name, for the declaration lines.
-  defp library!(types) when is_list(types) do
+  # The blocks a compile is given: a proper list of user types, each one Logex.compile/2
+  # gave, and no two of one name. A host mistake otherwise. `{library, held}`: the types by
+  # name, for the declaration lines, and every block they hold at any depth by name, the
+  # one version of each, which the tags declared from Elixir are then checked against.
+  defp library!(types) when is_list(types), do: listed!(proper?(types, &any?/1), types)
+  defp library!(types), do: listed!(false, types)
+
+  defp listed!(true, types) do
     library =
       Enum.reduce(types, %{}, fn type, library -> given!(FbType.user?(type), type, library) end)
 
-    Enum.reduce(Map.values(library), {library, :types}, &one_version!/2)
-    library
+    {held, :types} = Enum.reduce(Map.values(library), {library, :types}, &one_version!/2)
+    {library, held}
   end
 
-  defp library!(types),
+  defp listed!(false, types),
     do:
       raise(
         ArgumentError,
@@ -382,36 +397,15 @@ defmodule Logex.Compiler do
   # runtime's lookups by name rely on. Each type is walked once.
   # `from` says where the types walked came from, `:types` or `:tags`, for the message.
   defp one_version!(%FbType{name: name} = type, {seen, from}) do
-    same = same?(Map.get(seen, name, type), type)
+    same = FbType.same?(Map.get(seen, name, type), type)
     seen = versions!(same, name, Map.put(seen, name, type), from)
     Enum.reduce(nested(type), {seen, from}, &held_version!/2)
   end
 
   defp held_version!(%FbType{name: name} = type, {seen, from}) when is_map_key(seen, name),
-    do: {versions!(same?(Map.fetch!(seen, name), type), name, seen, from), from}
+    do: {versions!(FbType.same?(Map.fetch!(seen, name), type), name, seen, from), from}
 
   defp held_version!(type, acc), do: one_version!(type, acc)
-
-  # Two versions of a block are one where they run alike: its warnings, which carry the file
-  # it was compiled from, if any, under whatever spelling of its path, are no part of it. A
-  # type compared with itself, the usual case, is one term, so no walk is made.
-  defp same?(type, type), do: true
-
-  defp same?(
-         %FbType{name: name, members: members, body: %Program{} = one},
-         %FbType{name: name, members: members, body: %Program{} = other}
-       ),
-       do:
-         one.name == other.name and one.rungs == other.rungs and
-           map_size(one.tags) == map_size(other.tags) and
-           Enum.all?(one.tags, fn {key, tag} -> same_tag?(tag, Map.get(other.tags, key)) end)
-
-  defp same?(_one, _other), do: false
-
-  defp same_tag?(%Tag{type: %FbType{} = one} = tag, %Tag{type: %FbType{} = other} = another),
-    do: %{tag | type: nil} == %{another | type: nil} and same?(one, other)
-
-  defp same_tag?(tag, another), do: tag == another
 
   defp versions!(true, _name, seen, _from), do: seen
 
@@ -619,8 +613,8 @@ defmodule Logex.Compiler do
 
   # A name not declared yet is one that can be: a name differing from a declared tag only
   # in case never can be (Logex.Declarations), so a hint naming it would never compile.
-  defp hinted(name, {tags, folded}),
-    do: declarable(lookup(name, tags), Map.fetch(folded, String.downcase(name)))
+  defp hinted(name, {scope, folded}),
+    do: declarable(lookup(name, scope), Map.fetch(folded, String.downcase(name)))
 
   defp declarable(:error, {:ok, twin}), do: {:twin, twin}
   defp declarable(found, _twin), do: found
@@ -628,6 +622,17 @@ defmodule Logex.Compiler do
   # Each declared name by its lowercase form, unique since the table refuses a case-only
   # twin, so finding one is a lookup, not a walk of the table.
   defp folded(tags), do: Map.new(tags, fn {name, _tag} -> {String.downcase(name), name} end)
+
+  # What a name is looked up in: the tag table, and the members a program may name of each
+  # instance's type, by name, built once per type (a compile holds one version of each
+  # name), so that finding a member is a lookup too, however many the type has (M2-5).
+  defp scope(tags), do: {tags, Enum.reduce(tags, %{}, &named_members/2)}
+
+  defp named_members({_, %Tag{type: %FbType{name: type} = fb}}, members)
+       when not is_map_key(members, type),
+       do: Map.put(members, type, Map.new(FbType.public(fb), &{&1.name, &1}))
+
+  defp named_members(_tag, members), do: members
 
   # A group carries no line of its own, so it is cited at the `ton`'s: a rung is one line.
   # An element is cited at its own, which is the `ton`'s too until PLAN.md §5's line
@@ -743,11 +748,11 @@ defmodule Logex.Compiler do
          {line, _} = at,
          {rest, ir, diagnostics, known}
        ) do
-    {tags, _folded} = known
+    {scope, _folded} = known
     {operands, rest} = take_operands(rest, length(signature), [])
     diagnostics = check_count(signature, operands, rest, at, diagnostics)
     diagnostics = check_kinds(signature, operands, at, diagnostics)
-    diagnostics = check_tags(signature, operands, at, tags, diagnostics)
+    diagnostics = check_tags(signature, operands, at, scope, diagnostics)
     diagnostics = check_preset(signature, operands, at, known, diagnostics)
     lower(rest, [{symbol, line, Enum.map(operands, &operand/1)} | ir], diagnostics, known)
   end
@@ -769,11 +774,11 @@ defmodule Logex.Compiler do
   end
 
   defp cal([{:name, _, name} = instance], at, {rest, ir, diagnostics, known}) do
-    {tags, _folded} = known
+    {scope, _folded} = known
 
     runs(
       Declarations.reserved(name),
-      lookup(name, tags),
+      lookup(name, scope),
       instance,
       at,
       {rest, ir, diagnostics, known}
@@ -785,11 +790,11 @@ defmodule Logex.Compiler do
   defp runs(nil, {:ok, %Tag{type: %FbType{body: %Program{}} = type}}, instance, at, state) do
     {rest, ir, diagnostics, known} = state
     {line, _word} = at
-    {tags, _folded} = known
+    {scope, _folded} = known
     [_instance | formals] = FbType.signature(type)
     {operands, rest} = take_operands(rest, length(formals), [])
     diagnostics = cal_count(formals, operands, rest, instance, diagnostics)
-    diagnostics = cal_operands(formals, operands, {at, instance}, tags, diagnostics)
+    diagnostics = cal_operands(formals, operands, {at, instance}, scope, diagnostics)
     lowered = {:cal, line, [instance | Enum.map(operands, &operand/1)]}
     lower(rest, [lowered | ir], diagnostics, known)
   end
@@ -875,32 +880,38 @@ defmodule Logex.Compiler do
   # type, a literal where the block writes, a var_input or a member logic may not write
   # where it writes, and an instance named whole. A reserved word, an undeclared name and a
   # dotted name that is no member are reported as any instruction's are.
-  defp cal_operands(formals, operands, at, tags, diagnostics),
+  defp cal_operands(formals, operands, at, scope, diagnostics),
     do:
       formals
       |> Enum.zip(operands)
       |> Enum.with_index(1)
       |> Enum.reduce(diagnostics, fn {{formal, operand}, n}, acc ->
-        cal_operand(formal, operand, {n, at}, tags, acc)
+        cal_operand(formal, operand, {n, at}, scope, acc)
       end)
 
-  defp cal_operand({{:value, type}, _} = formal, {:int_lit, line, value}, at, _tags, diagnostics),
-    do: fits_formal(Declarations.fits?(type, value), formal, value, {line, at}, diagnostics)
+  defp cal_operand(
+         {{:value, type}, _} = formal,
+         {:int_lit, line, value},
+         at,
+         _scope,
+         diagnostics
+       ),
+       do: fits_formal(Declarations.fits?(type, value), formal, value, {line, at}, diagnostics)
 
-  defp cal_operand({{:write, _}, _} = formal, {:int_lit, line, value}, at, _tags, diagnostics),
+  defp cal_operand({{:write, _}, _} = formal, {:int_lit, line, value}, at, _scope, diagnostics),
     do: [
       diagnostic(line, of_formal(formal, at) <> ", which it writes: found `#{value}`")
       | diagnostics
     ]
 
-  defp cal_operand({slot, _} = formal, {:name, line, name} = operand, at, tags, diagnostics),
+  defp cal_operand({slot, _} = formal, {:name, line, name} = operand, at, scope, diagnostics),
     do:
       by_formal(
         Declarations.reserved(name),
-        lookup(name, tags),
+        lookup(name, scope),
         {formal, slot, operand},
         {line, at},
-        {tags, diagnostics}
+        {scope, diagnostics}
       )
 
   defp fits_formal(true, _formal, _value, _at, diagnostics), do: diagnostics
@@ -957,7 +968,7 @@ defmodule Logex.Compiler do
          found,
          {_formal, slot, operand},
          {line, {_n, {_at, _instance}}},
-         {_tags, d}
+         {_scope, d}
        ),
        do: resolve(reserved, found, slot, operand, {line, "cal"}, d)
 
@@ -1143,12 +1154,12 @@ defmodule Logex.Compiler do
   # M1-3: each operand against the tag table -- declared, of the type its slot reads or
   # writes, and not a var_input where the slot writes. A literal where a tag must go was
   # reported by check_kind/4 and is not looked at again. Then the `:any` operands must agree.
-  defp check_tags(signature, operands, at, tags, diagnostics) do
+  defp check_tags(signature, operands, at, scope, diagnostics) do
     slots = Enum.zip(signature, operands)
-    diagnostics = Enum.reduce(slots, diagnostics, &check_tag(&1, at, tags, &2))
+    diagnostics = Enum.reduce(slots, diagnostics, &check_tag(&1, at, scope, &2))
 
     unify(
-      for({{access, :any}, operand} <- slots, typed = typed(access, operand, tags), do: typed),
+      for({{access, :any}, operand} <- slots, typed = typed(access, operand, scope), do: typed),
       at,
       diagnostics
     )
@@ -1159,21 +1170,21 @@ defmodule Logex.Compiler do
   # Until PLAN.md §5's negative literals lex, Logex.Parser.well_formed!/1 refuses one on
   # entry (OE-1), so this and unify/3 meet only a literal too large, never one too small;
   # the lower ends are kept for them.
-  defp check_tag({{:value, :dint}, {:int_lit, line, value}}, {_, word}, _tags, diagnostics),
+  defp check_tag({{:value, :dint}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics),
     do: literal(Declarations.fits?(:dint, value), value, {line, word}, diagnostics)
 
   # A preset is a dint number of milliseconds, and never negative (docs/naming.md, `ton`).
   # Only a preset too large reaches this until a negative literal lexes, as above.
-  defp check_tag({{:preset, _}, {:int_lit, line, value}}, {_, word}, _tags, diagnostics),
+  defp check_tag({{:preset, _}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics),
     do: preset(Declarations.preset?(value), value, {line, word}, diagnostics)
 
-  defp check_tag({_slot, {:int_lit, _, _}}, _at, _tags, diagnostics), do: diagnostics
+  defp check_tag({_slot, {:int_lit, _, _}}, _at, _scope, diagnostics), do: diagnostics
 
   # Reported by check_preset/4, and never looked up.
-  defp check_tag({{:preset, _}, {:name, _, _}}, _at, _tags, diagnostics), do: diagnostics
+  defp check_tag({{:preset, _}, {:name, _, _}}, _at, _scope, diagnostics), do: diagnostics
 
-  defp check_tag({slot, {:name, _, name} = operand}, at, tags, diagnostics),
-    do: resolve(Declarations.reserved(name), lookup(name, tags), slot, operand, at, diagnostics)
+  defp check_tag({slot, {:name, _, name} = operand}, at, scope, diagnostics),
+    do: resolve(Declarations.reserved(name), lookup(name, scope), slot, operand, at, diagnostics)
 
   defp preset(true, _value, _at, diagnostics), do: diagnostics
 
@@ -1194,20 +1205,23 @@ defmodule Logex.Compiler do
   # among the members its type lets a program name. A dotted name that is not a declared
   # member is a diagnostic, never a reach into another instance (docs/organisation.md
   # §4.7). An internal member, such as a ton's last-scanned time, is not there to find.
-  defp lookup(name, tags), do: lookup_parts(String.split(name, "."), tags)
+  defp lookup(name, scope), do: lookup_parts(String.split(name, "."), scope)
 
-  defp lookup_parts([name], tags), do: Map.fetch(tags, name)
-  defp lookup_parts([head | parts], tags), do: owned(Map.fetch(tags, head), head, parts)
+  defp lookup_parts([name], {tags, _members}), do: Map.fetch(tags, name)
 
-  defp owned(:error, head, _parts), do: unowned(Declarations.reserved(head), head)
+  defp lookup_parts([head | parts], {tags, members}),
+    do: owned(Map.fetch(tags, head), head, parts, members)
 
-  defp owned({:ok, %Tag{type: %FbType{} = type} = tag}, _head, [part | deeper]),
-    do: in_type(FbType.member(type, part), tag, part, deeper)
+  defp owned(:error, head, _parts, _members), do: unowned(Declarations.reserved(head), head)
 
-  defp owned({:ok, tag}, _head, [part]), do: {:no_members, tag, part}
+  defp owned({:ok, %Tag{type: %FbType{name: type}} = tag}, _head, [part | deeper], members),
+    do: in_type(Map.fetch(Map.fetch!(members, type), part), tag, part, deeper)
+
+  defp owned({:ok, tag}, _head, [part], _members), do: {:no_members, tag, part}
 
   # Past a bit, as past a member, a path goes too deep: `d.3.x`, as `t1.acc.3.x`.
-  defp owned({:ok, tag}, _head, [part | _deeper]), do: beyond(Integer.parse(part), tag, part)
+  defp owned({:ok, tag}, _head, [part | _deeper], _members),
+    do: beyond(Integer.parse(part), tag, part)
 
   # A word that can never be declared is not reported as undeclared: `ton.dn`, `bool.3`.
   defp unowned(nil, head), do: {:undeclared, head}
@@ -1422,8 +1436,8 @@ defmodule Logex.Compiler do
   defp declared(%Tag{line: nil}), do: ""
   defp declared(%Tag{line: line}), do: " (declared on line #{line})"
 
-  defp typed(_access, {:int_lit, _, value}, _tags), do: {:literal, value}
-  defp typed(access, {:name, _, name}, tags), do: typed_ref(access, lookup(name, tags))
+  defp typed(_access, {:int_lit, _, value}, _scope), do: {:literal, value}
+  defp typed(access, {:name, _, name}, scope), do: typed_ref(access, lookup(name, scope))
 
   # A member stands in as a tag of its type. An instance named whole, and a member written
   # that logic may not write, were reported by resolve/6 and are not looked at again.

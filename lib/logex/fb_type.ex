@@ -33,7 +33,8 @@ defmodule Logex.FbType do
   and whose rungs `cal` runs over an instance's map. `of/1` builds the type from it, and is
   the definition of a user type: one is valid exactly when it is what `of/1` gives for its
   body, its body is one a compile gives (`Logex.Compiler.lowered?/1`), every type it holds
-  is valid too, and no type holds an instance of its own name.
+  is valid too, any two it holds of one name are one version (`same?/2`), and no type
+  holds an instance of its own name.
   """
 
   alias Logex.{Program, Tag}
@@ -175,24 +176,56 @@ defmodule Logex.FbType do
     ]
 
   @doc """
+  Whether two user function block types are one version of one block, as a compile takes
+  them (M2-5; `docs/organisation.md` §4.10, "Types given"): one name and the same members,
+  and bodies of one name, source text, rungs and tag table, each type they hold one
+  version in turn. Their warnings are no part of a version, nor is the file a body was
+  read from: a block compiled from its file stamps each warning with the path, under
+  whatever spelling of it, and one compiled from its text has none. A type compared with
+  itself, the usual case, is one term, so no walk is made. It is the one definition of a
+  version, for a compile's one-version check (`Logex.Compiler`) and for `user?/1`, and
+  expects two types a compile could give.
+  """
+  def same?(type, type), do: true
+
+  def same?(
+        %__MODULE__{name: name, members: members, body: %Program{} = one},
+        %__MODULE__{name: name, members: members, body: %Program{} = other}
+      ),
+      do:
+        one.name == other.name and one.source == other.source and one.rungs == other.rungs and
+          map_size(one.tags) == map_size(other.tags) and
+          Enum.all?(one.tags, fn {key, tag} -> same_tag?(tag, Map.get(other.tags, key)) end)
+
+  def same?(_one, _other), do: false
+
+  defp same_tag?(%Tag{type: %__MODULE__{} = one} = tag, %Tag{type: %__MODULE__{} = other} = to),
+    do: %{tag | type: nil} == %{to | type: nil} and same?(one, other)
+
+  defp same_tag?(tag, another), do: tag == another
+
+  @doc """
   Whether `type` is a user function block type `Logex.compile/2` could have given: what
   `of/1` gives for its body, every type it holds the built-in `ton` or valid in turn, its
   body's rungs, tags and warnings what a compile gives over that table
   (`Logex.Compiler.lowered?/1`), and no type in it holding an instance of a type of its
   own name, at any depth. So a type whose body was edited by hand, a rung or a warning,
-  is refused where it is given, whether or not the text could say what it holds. Total: a
-  hand-built value of any shape is `false`, never an exception. Each type is checked once
-  per call, so the check is linear in the types a value holds, but every call checks them
-  all again.
+  is refused where it is given, whether or not the text could say what it holds. Two types
+  of one name in it must be one version, by `same?/2`, as a compile takes them, and each is
+  checked. Total: a hand-built value of any shape is `false`, never an exception. Each type
+  is checked once per call, so the check is linear in the types a value holds, but every
+  call checks them all again.
   """
   def user?(type), do: valid(type, %{}, %{}) != :error
 
-  # `{:ok, done}`, the names of the user types checked so far, each to its type, or
-  # `:error`. A type is checked once, however many instances of it a tree holds, so the
-  # check is linear in the types and not in the instances; a second type of a name already
-  # checked is refused, and so is a name on the path down to it, which would be recursion.
+  # `{:ok, done}`, the names of the user types checked so far, each to the versions of it
+  # checked, newest first, or `:error`. A type is checked once, however many instances of
+  # it a tree holds, so the check is linear in the types and not in the instances. Another
+  # version of a name already checked is checked too, and must be one version with them
+  # (same?/2), as a compile takes it; a name on the path down to a type is refused, which
+  # would be recursion.
   defp valid(%__MODULE__{name: name, body: %Program{name: name, tags: tags}} = type, path, done)
-       when is_binary(name) and is_map(tags),
+       when is_binary(name) and is_map(tags) and not is_struct(tags),
        do: named(Logex.Declarations.block_name?(name), type, path, done)
 
   defp valid(_type, _path, _done), do: :error
@@ -200,11 +233,24 @@ defmodule Logex.FbType do
   # A name a block's first line could give: a name, and no reserved word, nor the word that
   # heads a block's file.
   defp named(false, _type, _path, _done), do: :error
-  defp named(true, type, path, done), do: known(Map.fetch(done, type.name), type, path, done)
 
-  defp known({:ok, type}, type, _path, done), do: {:ok, done}
-  defp known({:ok, _another}, _type, _path, _done), do: :error
-  defp known(:error, type, path, done), do: fresh(is_map_key(path, type.name), type, path, done)
+  defp named(true, type, path, done),
+    do: known(Map.get(done, type.name, []), type, path, done)
+
+  defp known(versions, type, path, done), do: again(type in versions, versions, type, path, done)
+
+  defp again(true, _versions, _type, _path, done), do: {:ok, done}
+
+  defp again(false, versions, type, path, done),
+    do: one_of(versions, fresh(is_map_key(path, type.name), type, path, done), type)
+
+  # Checked in full first, so that same?/2 compares two types a compile could give.
+  defp one_of(_versions, :error, _type), do: :error
+  defp one_of([], ok, _type), do: ok
+  defp one_of([version | _], ok, type), do: one(same?(version, type), ok)
+
+  defp one(true, ok), do: ok
+  defp one(false, _ok), do: :error
 
   defp fresh(true, _type, _path, _done), do: :error
 
@@ -240,7 +286,7 @@ defmodule Logex.FbType do
   defp ton?(false, _ok), do: :error
 
   defp add(:error, _type), do: :error
-  defp add({:ok, done}, type), do: {:ok, Map.put(done, type.name, type)}
+  defp add({:ok, done}, type), do: {:ok, Map.update(done, type.name, [type], &[type | &1])}
 
   # What a compiled body's tag table holds: a tag per name, with a line, or none for a tag
   # declared from Elixir (Logex.Tag.new!/4), a section, and an

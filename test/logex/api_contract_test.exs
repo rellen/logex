@@ -2131,7 +2131,8 @@ defmodule Logex.ApiContractTest do
   # Versions of a block `blk`, of a block `wrap` that holds one, and programs that hold
   # either, drawn so that two programs share their names: a body changed in its `ons` rung,
   # a member added with an initial value that changes, a member whose kind changes, and a
-  # timer added, dropped or given one of three presets; `wrap` runs its `blk` always, under
+  # timer added, dropped or given one of three presets, or whose `.pre` logic moves; `wrap`
+  # runs its `blk` always, under
   # a condition, under a one-shot of its own, or not at all; a program runs `x` under a
   # condition or not, holds a `wrap`, or a second `blk` it runs or does not.
   @fb_blk [
@@ -2144,7 +2145,8 @@ defmodule Logex.ApiContractTest do
     "var e bool\nvar t1 ton\nxic go ons e ote p\nxic go ton t1 50",
     "var e bool\nvar n dint 5\nxic go ons e ote p\nxic go move 3 n",
     "var e bool\nvar t1 ton\nxic go ons e ote p\nxic t1.dn ote p",
-    "var t1 ton\nxic go ton t1 20\nxic t1.dn ote p"
+    "var t1 ton\nxic go ton t1 20\nxic t1.dn ote p",
+    "var t1 ton\nxic go ton t1 50\nxic go move 7 t1.pre\nxic t1.dn ote p"
   ]
 
   @fb_wrap [
@@ -2188,6 +2190,7 @@ defmodule Logex.ApiContractTest do
     {:nested, :initial_changed},
     {:nested, :ons_blocked},
     {:nested, :preset},
+    {:nested, :preset_kept},
     {:nested, :pruned},
     {:nested, :resume_undone},
     {:nested, :resumed}
@@ -2216,7 +2219,8 @@ defmodule Logex.ApiContractTest do
 
   # Its reach holds at this seed and at each of the seeds 1 to 30 in its place. Its rarest
   # atoms, a one-shot two levels down checked on a later scan, a nested `:dn_rises` and a
-  # nested `:resume_undone`, came 6 to 18, 7 to 24 and 8 to 30 times a run over those 31.
+  # nested `:resume_undone`, came 7 to 18, 6 to 20 and 7 to 32 times a run over those 31,
+  # and a nested `:preset_kept` 173 to 302.
   # Drawn as the design pass drew them, 800 walks, two presets, steps mostly past both,
   # and a candidate drawn mostly with the running block's version, a nested `:dn_rises`
   # came one to four times a run, and three seeds of the 30 missed it.

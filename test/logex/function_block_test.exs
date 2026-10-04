@@ -303,6 +303,15 @@ defmodule Logex.FunctionBlockTest do
         Logex.compile("var s1 seal", name: "m", types: [seal, seal])
       end)
 
+      # A list that is not a proper one, whatever its elements, is no list of types.
+      improper = opaque([seal | :seal])
+
+      raises(
+        "types must be a list of function block types from Logex.compile/2, got: " <>
+          inspect(improper),
+        fn -> Logex.compile("var s1 seal", name: "m", types: improper) end
+      )
+
       # The options come in either order, and the message names both.
       assert {:ok, _} = Logex.compile("var s1 seal", types: [seal], name: "m")
 
@@ -355,6 +364,30 @@ defmodule Logex.FunctionBlockTest do
       # And its warnings are the ones its rungs give, a file aside.
       refute FbType.user?(%{seal | body: %{seal.body | warnings: [:junk]}})
       assert FbType.user?(seal)
+
+      # An operand on another line than its instruction, which no text gives; warnings and
+      # tags a compile never gives either, shaped so that a walk of them would raise: a
+      # list that is not a proper one, a struct where a map goes.
+      [group, {:xio, line, [{:name, line, "stop"}]}, coil] = rung
+
+      for body <- [
+            %{seal.body | rungs: [{:rung, [group, {:xio, line, [{:name, 1, "stop"}]}, coil]}]},
+            %{seal.body | warnings: opaque([:junk | :tail])},
+            %{seal.body | tags: opaque(%Tag{name: "start", type: :bool, section: :var})},
+            %{seal.body | tags: opaque(MapSet.new())}
+          ] do
+        edited = %{seal | body: body}
+        refute FbType.user?(edited)
+
+        raises(
+          "types must be function block types from Logex.compile/2, got: #{inspect(edited)}",
+          fn -> Logex.compile("var s1 seal", name: "m", types: [edited]) end
+        )
+
+        assert_raise ArgumentError, ~r/unknown function block type "seal"/, fn ->
+          Tag.new!("s1", edited)
+        end
+      end
 
       # A tag named as no declaration line could name it, every use of it renamed too.
       renamed = fn body, from, to ->
@@ -432,6 +465,47 @@ defmodule Logex.FunctionBlockTest do
       refute FbType.user?(%{pulse | body: %{pulse.body | rungs: represet}})
     end
 
+    # A body's tag table holds what declaration lines give: a line of 1 or more, a section
+    # of `var`, `var_input` or `var_output`, an initial value a line could give, and an
+    # instance in `var` with none. Each edit but the last rebuilds the type's members and
+    # warnings from the edited table, so that only the table's own rule refuses it; a
+    # section no line gives has no role, so the last keeps the compile's members.
+    test "a type whose tag table no declaration gives is refused where it is given" do
+      held =
+        block!(
+          "function_block held\nvar_input go bool\nvar_output q bool\nvar k dint\nvar s seal\n" <>
+            "cal s go go q\nxic go move 1 k",
+          [block!(@seal)]
+        )
+
+      rebuilt = fn tag, edit ->
+        tags = Map.update!(held.body.tags, tag, edit)
+        FbType.of(%{held.body | tags: tags, warnings: Logex.Warnings.of(held.body.rungs, tags)})
+      end
+
+      assert rebuilt.("k", & &1) == held
+      retain = Map.update!(held.body.tags, "k", &%{&1 | section: :retain})
+
+      for edited <- [
+            rebuilt.("k", &%{&1 | initial: -1}),
+            rebuilt.("go", &%{&1 | initial: 1}),
+            rebuilt.("k", &%{&1 | line: 0}),
+            rebuilt.("s", &%{&1 | section: :var_output}),
+            %{held | body: %{held.body | tags: retain}}
+          ] do
+        refute FbType.user?(edited)
+
+        raises(
+          "types must be function block types from Logex.compile/2, got: #{inspect(edited)}",
+          fn -> Logex.compile("var x held", name: "m", types: [edited]) end
+        )
+
+        assert_raise ArgumentError, ~r/unknown function block type "held"/, fn ->
+          Tag.new!("x", edited)
+        end
+      end
+    end
+
     test "a type holds one version of each block, the one given under its name" do
       old = block!(@seal)
 
@@ -452,6 +526,13 @@ defmodule Logex.FunctionBlockTest do
       # The types are checked as given, whether or not the source uses them all.
       raises(message, fn -> Logex.compile("var s seal", name: "m", types: [new, outer]) end)
 
+      # Two versions that differ only in their warnings are one (docs/organisation.md
+      # §4.10); two whose text differs, if only in a comment, are two.
+      commented = block!(@seal <> "// sealed in\n")
+      assert commented.body.rungs == old.body.rungs and commented.members == old.members
+
+      raises(message, fn -> Logex.compile("var o outer", name: "m", types: [commented, outer]) end)
+
       # And a tag declared from Elixir is one type of its name with those given, or with
       # another tag's, the message naming the tag, not the types, where the second version
       # is found: with no types given at all, too.
@@ -462,6 +543,16 @@ defmodule Logex.FunctionBlockTest do
 
       raises(tagged, fn ->
         Logex.Compiler.instructionize(ast("var o outer"), [Tag.new!("s0", new)], [outer])
+      end)
+
+      # The version a type given holds counts though no line declares the type that holds
+      # it.
+      raises(tagged, fn ->
+        Logex.Compiler.instructionize(
+          ast("var_input a bool\nvar_output q bool\ncal s0 a a q"),
+          [Tag.new!("s0", new)],
+          [outer]
+        )
       end)
 
       raises(tagged, fn ->
@@ -522,6 +613,37 @@ defmodule Logex.FunctionBlockTest do
                Logex.Compiler.instructionize(ast("var o outer"), [Tag.new!("s", from_file)], [
                  outer
                ])
+
+      # A block given both versions, one inside a type it holds, is a type a compile gives,
+      # which a second compile and Logex.Tag.new!/4 take.
+      both = fn version, held ->
+        pair =
+          block!(
+            "function_block pair\nvar_input go bool\nvar_output o bool\nvar s seal\n" <>
+              "cal s go go o",
+            [held]
+          )
+
+        block!(
+          "function_block both\nvar_input go bool\nvar_output o bool\nvar p pair\n" <>
+            "var s seal\ncal p go o\ncal s go go o",
+          [pair, version]
+        )
+      end
+
+      for {version, held} <- [{from_text, from_file}, {from_file, other_spelling}] do
+        type = both.(version, held)
+        assert FbType.user?(type)
+        assert {:ok, _} = Logex.compile("var b both", name: "m", types: [type])
+        assert %Tag{type: ^type} = Tag.new!("b", type)
+      end
+
+      # Each version is checked, the second as the first: here `s`'s, its warnings edited
+      # by hand, after `p`'s, which is checked first.
+      type = both.(from_text, from_file)
+      edited = %{from_text | body: %{from_text.body | warnings: []}}
+      tags = Map.update!(type.body.tags, "s", &%{&1 | type: edited})
+      refute FbType.user?(FbType.of(%{type.body | tags: tags}))
     end
 
     test "from Elixir, an instance of a user block is a tag whose type is the block's" do
@@ -626,6 +748,13 @@ defmodule Logex.FunctionBlockTest do
                "line 3: unknown type `seal`: logex has `bool`, `dint` and `ton`"
              ]
 
+      # A block's name is matched exactly, as a tag's is.
+      assert errors(String.replace(program, "sael", "Seal"), [block!(@seal)]) == [
+               "line 3: unknown type `Seal`: logex has `bool`, `dint` and `ton`, " <>
+                 "and the function block `seal` — did you mean `seal`? " <>
+                 "(type names are case-sensitive)"
+             ]
+
       assert errors("function_block m\n" <> program, [block!(@seal)], "m") == [
                "line 4: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
                  "and the function block `seal` — did you mean `seal`?"
@@ -651,11 +780,13 @@ defmodule Logex.FunctionBlockTest do
       # Through a tag declared from Elixir, which no line can cite: a host mistake.
       ast = ast("function_block a\nvar_output q bool\nvar_input i bool\ncal y i q")
 
-      raises(
-        "`y` holds an instance of `a`, the function block being compiled: " <>
-          "a function block never holds an instance of itself, at any depth",
-        fn -> Logex.Compiler.instructionize(ast, [Tag.new!("y", b)], []) end
-      )
+      for held <- [b, c] do
+        raises(
+          "`y` holds an instance of `a`, the function block being compiled: " <>
+            "a function block never holds an instance of itself, at any depth",
+          fn -> Logex.Compiler.instructionize(ast, [Tag.new!("y", held)], []) end
+        )
+      end
     end
   end
 
@@ -702,6 +833,15 @@ defmodule Logex.FunctionBlockTest do
                "line 7: `cal s1` expects 3 operands after its instance, `start` (var_input " <>
                  "bool), then `stop` (var_input bool), then `run` (var_output bool): found 1 " <>
                  "before the instruction `ote`"
+             ]
+
+      # One too many is read as the next instruction, as after any instruction.
+      assert errors(@decl <> "cal s1 a b q r\nxic a ton t1 5", [seal]) == [
+               "line 7: unknown instruction `r`"
+             ]
+
+      assert errors(@decl <> "cal s1 a b q 5\nxic a ton t1 5", [seal]) == [
+               "line 7: expected an instruction, found `5`"
              ]
     end
 
@@ -967,16 +1107,18 @@ defmodule Logex.FunctionBlockTest do
       program =
         program!(
           "var_input a bool\nvar_input en bool\nvar_output q bool\nvar s1 seal\n" <>
-            "xic en cal s1 a 0 q\nxio en otu q",
+            "xio en otu q\nxic en cal s1 a 0 q",
           [seal]
         )
 
-      {_, state} = step(program, Runtime.instance(program), %{"a" => 1, "en" => 1}, 0)
+      {outputs, state} = step(program, Runtime.instance(program), %{"a" => 1, "en" => 1}, 0)
       frozen = state.env["s1"]
       assert frozen == %{"start" => 1, "stop" => 0, "run" => 1}
+      assert outputs == %{"q" => 1}
 
       # Its EN false, a changed input is not read in, the body does not run, and nothing is
-      # written out: `q`, which a rung clears, stays cleared.
+      # written out: `q`, which the rung above clears, stays cleared, where a copy out of
+      # the frozen `run` would set it again.
       {outputs, state} = step(program, state, %{"a" => 0, "en" => 0})
       assert outputs == %{"q" => 0}
       assert state.env["s1"] == frozen
@@ -1130,6 +1272,19 @@ defmodule Logex.FunctionBlockTest do
       assert state.ons_blocked == []
     end
 
+    test "the bits of instances no scan ran stay blocked, sorted by path" do
+      program =
+        program!(
+          "var_input a bool\nvar_input en bool\nvar_output y bool\nvar_output z bool\n" <>
+            "var p1 pulse\nvar p2 pulse\nxic en cal p1 a y\nxic en cal p2 a z",
+          [block!(@pulse)]
+        )
+
+      state = blocked(program, ["p1.edge", "p2.edge"])
+      {_, state} = step(program, state, %{"a" => 1, "en" => 0})
+      assert state.ons_blocked == ["p1.edge", "p2.edge"]
+    end
+
     test "a body sees its own instance's blocked bits, and no other's of one name" do
       pulse = block!(@pulse)
 
@@ -1244,6 +1399,15 @@ defmodule Logex.FunctionBlockTest do
 
       for junk <- [nil, :x, %{}, %{body(@two) | rungs: :x}, %{body(@two) | tags: []}],
           do: refute(Logex.Compiler.lowered?(junk))
+
+      # Shapes a walk of them would raise on: warnings that are no proper list, and a
+      # struct, which is a map, for the tags.
+      for junk <- [
+            %{body(@two) | warnings: opaque([:junk | :tail])},
+            %{body(@two) | tags: opaque(%Tag{name: "go", type: :bool, section: :var})},
+            %{body(@two) | tags: opaque(MapSet.new())}
+          ],
+          do: refute(Logex.Compiler.lowered?(junk))
     end
 
     test "its rungs are on rising lines" do
@@ -1254,18 +1418,26 @@ defmodule Logex.FunctionBlockTest do
       refute Logex.Compiler.lowered?(relined(two, [{:rung, line(r, 6)}, {:rung, line(q, 5)}]))
     end
 
-    test "each rung is on one line" do
+    test "each rung is on one line, its operands too" do
       two = body(@two)
       [{:rung, [contact, coil]}, r] = two.rungs
       over_two = [{:rung, [contact, at_line(coil, 6)]}, at_rung(r, 7)]
       assert Logex.Compiler.lowered?(relined(two, [{:rung, [contact, coil]}, at_rung(r, 7)]))
       refute Logex.Compiler.lowered?(relined(two, over_two))
+
+      {:xic, line, [{:name, line, go}]} = contact
+      operand = [{:rung, [{:xic, line, [{:name, 1, go}]}, coil]}, r]
+      refute Logex.Compiler.lowered?(relined(two, operand))
     end
 
-    test "its rungs come after its declarations" do
+    test "its rungs come after its declarations, each on a line of its own" do
       two = body(@two)
       [{:rung, q}, {:rung, r}] = two.rungs
       refute Logex.Compiler.lowered?(relined(two, [{:rung, line(q, 3)}, {:rung, line(r, 6)}]))
+
+      # `q` moved to `go`'s line, 2, or to the header's, 1, which no declaration holds.
+      assert Logex.Compiler.lowered?(%{two | tags: Map.update!(two.tags, "q", &%{&1 | line: 1})})
+      refute Logex.Compiler.lowered?(%{two | tags: Map.update!(two.tags, "q", &%{&1 | line: 2})})
     end
 
     test "one ons uses a storage bit" do
@@ -1487,6 +1659,28 @@ defmodule Logex.FunctionBlockTest do
       assert Diagnostic.format(diagnostic) ==
                "line 3: `w.k` is an instance of `inner` in the running program and an " <>
                  "instance of `other` in the candidate: a member's type changes only with a restart"
+
+      # Several in one instance, on its one line, by path.
+      pair = fn type ->
+        block =
+          block!(
+            "function_block pair\nvar_input go bool\nvar_output q bool\nvar zz #{type}\n" <>
+              "var aa #{type}\nxic go ote q"
+          )
+
+        program!("var_input go bool\nvar_output q bool\nvar p pair\ncal p go q", [block])
+      end
+
+      {_, pairs} = running(pair.("bool"), [{0, %{}}])
+      assert {:error, diagnostics} = Edit.accept(pair.("bool"), pair.("dint"), pairs)
+
+      assert Enum.map(diagnostics, &Diagnostic.format/1) ==
+               for(
+                 member <- ["p.aa", "p.zz"],
+                 do:
+                   "line 3: `#{member}` is a bool in the running program and a dint in the " <>
+                     "candidate: a member's type changes only with a restart"
+               )
 
       latch = block!(String.replace(@pulse, "function_block pulse", "function_block latch"))
       renamed = program!(String.replace(@runs_pulse, "var p pulse", "var p latch"), [latch])
@@ -1774,6 +1968,26 @@ defmodule Logex.FunctionBlockTest do
       {_edit, state, report} = Edit.untest(edit, state)
       assert report == [{:preset, "p.t1", {250, 100}}]
       assert state.env["p"]["t1"]["pre"] == 100
+    end
+
+    # Logic moved its `.pre`, so a switch keeps it rather than the candidate's preset, and
+    # says so by its path, in the forecast and in the report.
+    test "a timer inside a block whose .pre logic moved keeps it, reported by its path" do
+      timed = fn preset ->
+        block!(
+          String.replace(@pulse, "ton t1 100", "ton t1 #{preset}") <> "xic go move 7 t1.pre\n"
+        )
+      end
+
+      v1 = runs(timed.(100))
+      v2 = runs(timed.(200))
+      {_, state} = running(v1, [{0, %{"a" => 1, "en" => 1}}])
+      assert state.env["p"]["t1"]["pre"] == 7
+
+      kept = [{:preset_kept, "p.t1", {7, 200}}]
+      assert {:ok, edit, ^kept} = Edit.accept(v1, v2, state)
+      assert {_edit, state, ^kept} = Edit.test(edit, state)
+      assert state.env["p"]["t1"]["pre"] == 7
     end
 
     test "at the first test a member whose value does not fit its type starts again " <>
@@ -2433,6 +2647,30 @@ defmodule Logex.FunctionBlockTest do
              ]
     end
 
+    # Looked for as written: a block whose name has capitals is in a file of that name.
+    test "a type word is looked for as `<word>.ld`, in its own case", %{tmp_dir: dir} do
+      write!(dir, "Seal.ld", String.replace(@seal, "function_block seal", "function_block Seal"))
+      path = write!(dir, "m.ld", String.replace(@three, " seal\n", " Seal\n"))
+      assert {:ok, %Logex.Program{} = program} = Logex.compile_file(path)
+      assert program.tags["s1"].type.name == "Seal"
+    end
+
+    # Any section line's type word is looked for, so an instance declared in the wrong
+    # section is told what compile/2 with `types:` tells it, not that its type is unknown.
+    test "a section line of any kind finds its block beside it", %{tmp_dir: dir} do
+      write!(dir, "seal.ld", @seal)
+
+      for section <- ["var_input", "var_output"] do
+        path = write!(dir, "in_#{section}.ld", "var_input a bool\n#{section} s1 seal\n")
+
+        assert formatted(Logex.compile_file(path)) == [
+                 "#{path}: line 2: `s1` is an instance of `seal`: an instance is the " <>
+                   "program's own, declared with `var`, as in `var s1 seal`, not with " <>
+                   "`#{section}`"
+               ]
+      end
+    end
+
     # A file whose name cannot name a program is still compiled with the blocks beside it,
     # so the one mistake is its name: a block it names is no unknown type.
     test "a file with a refused name finds its blocks beside it all the same",
@@ -2660,6 +2898,111 @@ defmodule Logex.FunctionBlockTest do
 
       ratio = compile.(16) / compile.(1)
       assert ratio < 3, "16 instances took #{Float.round(ratio, 1)}x the reductions of one"
+    end
+
+    # So too for instances declared from Elixir, through instructionize/3: a type is
+    # checked once a compile, the first tag that holds it checking it and the rest known
+    # by being that one, and a type given is known by being the one given, as a
+    # declaration line's is. 16 instances cost 1.04 times one, and one declared from Elixir
+    # 1.0 times one declared by a line; checked again for each, 15.5 times, and for the one
+    # given, 2.0 times.
+    test "a compile checks a type held by instances declared from Elixir once" do
+      top = chain(200)
+
+      declared = fn n, types ->
+        routine =
+          ast(
+            "var_input a bool\nvar_output y bool\n" <>
+              Enum.map_join(1..n, "\n", &"cal p#{&1} a y")
+          )
+
+        tags = for k <- 1..n, do: Tag.new!("p#{k}", top)
+        reductions(fn -> {:ok, _} = Logex.Compiler.instructionize(routine, tags, types) end)
+      end
+
+      ratio = declared.(16, []) / declared.(1, [])
+      assert ratio < 3, "16 instances took #{Float.round(ratio, 1)}x the reductions of one"
+
+      line = ast("var_input a bool\nvar_output y bool\nvar p1 b1\ncal p1 a y")
+
+      ratio =
+        declared.(1, [top]) /
+          reductions(fn -> {:ok, _} = Logex.Compiler.instructionize(line, [], [top]) end)
+
+      assert ratio < 1.5,
+             "an instance from Elixir took #{Float.round(ratio, 1)}x the reductions of a line's"
+    end
+  end
+
+  describe "growth in a block's members" do
+    # `wide`, a block of m var_inputs and m var_outputs, each output driven by its input
+    # through `contact`.
+    defp wide(m, contact) do
+      block!(
+        "function_block wide\n" <>
+          Enum.map_join(1..m, "", &"var_input i#{&1} bool\n") <>
+          Enum.map_join(1..m, "", &"var_output o#{&1} bool\n") <>
+          Enum.map_join(1..m, "\n", &"#{contact} i#{&1} ote o#{&1}")
+      )
+    end
+
+    # Each member a program names is found in a table of its type's members built once a
+    # compile, so a compile reading every output of a block of m stays linear in m, and so
+    # does a compile given a block whose body reads them, which checks that body again. At
+    # 250 and 1,000 members, 4x, both took 4.0x; with each member found by a walk of the
+    # type's members, 11.2x and 11.4x.
+    test "a compile stays linear in the members a program reads" do
+      reads = fn m, section ->
+        Enum.map_join(1..m, "", &"#{section} x#{&1} bool\n") <>
+          "var s wide\n" <> Enum.map_join(1..m, "\n", &"xic s.o#{&1} ote x#{&1}")
+      end
+
+      program = fn m ->
+        type = wide(m, "xic")
+        source = reads.(m, "var_output")
+        reductions(fn -> {:ok, _} = Logex.compile(source, name: "m", types: [type]) end)
+      end
+
+      given = fn m ->
+        outer =
+          block!(
+            "function_block outer\nvar_input go bool\n" <> reads.(m, "var"),
+            [wide(m, "xic")]
+          )
+
+        source = "var_input a bool\nvar_output y bool\nvar k outer\ncal k a"
+
+        reductions(fn -> {:ok, _} = Logex.compile(source, name: "m", types: [outer]) end)
+      end
+
+      for {what, fun} <- [program: program, given: given] do
+        ratio = fun.(1000) / fun.(250)
+
+        assert ratio < 6,
+               "4x the members took #{Float.round(ratio, 1)}x the reductions for #{what}"
+      end
+    end
+
+    # Accept matches the members of a block's two versions by name, through a table built
+    # once per version, in the type check and in the plan. At 250 and 1,000 members, 4x,
+    # accept took 4.0x; with each found by a walk of the other version's members, 11.6x
+    # where the type check walked and 13.4x where the plan did.
+    test "accept stays linear in a block's members" do
+      accept = fn m ->
+        head =
+          Enum.map_join(1..m, "", &"var_input a#{&1} bool\n") <>
+            Enum.map_join(1..m, "", &"var_output q#{&1} bool\n") <>
+            "var s wide\ncal s " <>
+            Enum.map_join(1..m, " ", &"a#{&1}") <> " " <> Enum.map_join(1..m, " ", &"q#{&1}")
+
+        v1 = program!(head, [wide(m, "xic")])
+        v2 = program!(head, [wide(m, "xio")])
+        {_, state} = step(v1, Runtime.instance(v1), %{}, 0)
+        reductions(fn -> {:ok, _, _} = Edit.accept(v1, v2, state) end)
+      end
+
+      ratio = accept.(1000) / accept.(250)
+      assert ratio < 6, "4x the members took #{Float.round(ratio, 1)}x the reductions"
     end
   end
 

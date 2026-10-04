@@ -127,7 +127,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   compiled `%Logex.Program{}`; `ton/0`, the built-in timer; `initial/2`, a new instance's
   state, a map keyed by member name; `member/2` and `public/1`, which give only the inputs
   and outputs. Since M2-5 `of/1` builds a user type from its body, `signature/1` is
-  `cal`'s operands, `user?/1` says whether a value is a type a compile could give, and a
+  `cal`'s operands, `user?/1` says whether a value is a type a compile could give,
+  `same?/2` whether two are one version of a block (warnings, and the file a body was
+  read from, aside), the one definition a compile's one-version check shares, and a
   member holding an instance of a user block has the type `{:block, name}`, the type
   itself held once, in the body's tag table, where `type_of/2` finds it
 - `lib/logex/program.ex` — `%Logex.Program{name:, source:, file:, rungs:, tags:,

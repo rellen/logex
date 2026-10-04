@@ -1562,7 +1562,9 @@ configuration file's must be built that way before they land.
   commit after M2-5 excuses the uses of a declaration whose type is unknown.
 
   **Status: DONE — landed 2026-10-04**, as seven commits: the first five of its landing
-  order, then the excusal the record put after M2-5, then the documents. (1) The survey,
+  order, then the excusal the record put after M2-5, then the documents, a departure from
+  the record's order made so that the documents describe the excusal with the rest; and
+  an eighth that fixes what a review of the seven confirmed (below). (1) The survey,
   `4db37b1`; (2) one lookup of an instruction's slots for the walks,
   `Logex.Compiler.signature/2`, with no change in behaviour, `e8a55b6`; (3) blocks and
   `cal`, `969a5a4`; (4) the edit by path, `a87edcc`; (5) the loader, `2c3c609`; (6) the
@@ -1602,13 +1604,37 @@ configuration file's must be built that way before they land.
   block that file names is still loaded, so each broken one is reported; and a directory
   with a block's name "cannot be read". It reserves `cal` in every `.ld`, in any case,
   and `function_block` in a block's file; no test, `lib/` file or fixture names a tag
-  either. Growth is pinned in reductions: a type given is checked once a compile, not
-  once an instance (16 instances cost 1.05x one); a switch and the scan after it grow
-  with the block list's bytes, bound 1.3x their growth; the scan right after a switch at
-  16x the instances took 16.2x to 16.4x, and a second edit's steps at 16x the pending
-  nested bits 16.4x to 16.8x, each bound 24. The edit walk over blocks in
+  either. Growth is pinned in reductions: a type given is checked once a compile, not once
+  an instance (16 instances cost 1.05x one; declared from Elixir, 1.04x, since the
+  review's fix); a switch and the scan after it grow with the block list's bytes, bound
+  1.3x their growth; the scan right after a switch at 16x the instances took 16.2x to
+  16.4x, and a second edit's steps at 16x the pending nested bits 16.4x to 16.8x, each
+  bound 24. The edit walk over blocks in
   `api_contract_test.exs` passed with its full reach under seeds 1 to 30 besides its own,
   the rarest of what it asserts it reaches at least 6 times a run.
+
+  A review of the seven commits confirmed 23 findings, and the eighth commit fixes 21,
+  each fix a test can see with a test that fails when that fix alone is reverted.
+  `Logex.FbType.same?/2` is now the one definition of a version of a block, which a
+  compile and `user?/1` share, so a block given two versions of a block it holds that the
+  compile took as one is a type the next compile takes; it compares the source text, as
+  §4.10 says. `user?/1` and `lowered?/1` are total over warnings that are not a proper
+  list and a struct for tags, `lowered?/1` checks each operand's line, `types:` must be a
+  proper list, and a tag declared from Elixir is one version with every block the types
+  given hold. Accept, a compile's lookup of a member, and the check of a type that
+  instances declared from Elixir hold are linear, as growth tests in a block's members
+  and in such instances pin. Tests now pin what had none: nothing copied out on a false
+  EN, a body's tag table, recursion through a tag two levels down, a block's name matched
+  exactly, the loader's case and its section lines, a nested `:preset_kept` (in the walk
+  too), the order of the bits a scan keeps blocked and of several kind changes on one
+  line, and a `cal` with one operand too many. Two are left for the maintainer. A body
+  holding two instances of one block holds its type twice, once per tag, so a copy that
+  keeps no sharing grows as the width to the power of the depth, where §4.10's "Held
+  types" says linear: is each block type to be held once per body, its instances' tags
+  naming it, or is the claim to be restated for one instance of a type per level? And
+  three walks that predate M2-5 each miss one atom of their reach under one seed of 1 to
+  30 in a family other than the one they were measured under: are they to keep their
+  reach under any family, at the cost of more draws?
 - **M2-6 · Event tasks.** `task <n> single <g> [interval <ms>] priority <p>`, fired by a
   rising edge, and in the first cycle if the trigger is already true; with `interval` too,
   it runs periodically only while the trigger is 0, plus a run on each edge (IEC rule 2). *Done when* an event task triggered
@@ -1672,7 +1698,10 @@ diagnostic naming its file and line.
   `path/2`) have no revert at all. Each gets a test that fails when it is reverted, or the
   check goes. *(Closed by M2-5's third commit, `969a5a4`: each check inside
   `Logex.Compiler.lowered?/1`, those four among them, has a test that fails when it alone
-  is reverted.)*
+  is reverted. All but one: the review of M2-5 found that two declarations on one line
+  were refused twice, by a check of their own and by the rising lines, so the first could
+  not fail alone; the fix after the documents drops it, and a test pins the second for
+  them. It also checks each operand's line, which the rising-lines check missed.)*
 - **Messages.** M1-6's member messages put "a" before a type's name, which reads "a outer"
   for a block so named. M2-1's `get/2` follows them for a function block instance
   ("`m1.t1` is a ton", "is not a member of `m1.t1`, a ton") and owes the same. Its
@@ -1691,9 +1720,10 @@ diagnostic naming its file and line.
   failed now and then under a load average near 40 while the spikes ran, and pass run
   alone; a CI runner that shares cores could see that. *(As M2-5 landed, the full-depth
   check of each type given stands, as §4.10 decided, and runs once a compile, however many
-  instances declare the type, which a growth test pins. The three growth tests failed now
-  and then again while M2-5's mutation rows ran three copies at a time, and passed in
-  every gate.)*
+  instances declare the type, which a growth test pins: for instances declared from Elixir
+  only since the review's fix, before which each checked it again. The three growth tests
+  failed now and then again while M2-5's mutation rows ran three copies at a time, and
+  passed in every gate.)*
 
 ### Online edit — decided 2026-10-01
 

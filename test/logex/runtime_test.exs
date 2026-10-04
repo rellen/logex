@@ -1153,6 +1153,8 @@ defmodule Logex.RuntimeTest do
       assert Enum.sort(Logex.Parser.__info__(:functions)) ==
                [format_error: 1, parse: 1, well_formed!: 1]
 
+      # M2-5: same?/2, the one definition of one version of a block, which a compile's
+      # one-version check and user?/1 share.
       assert Enum.sort(Logex.FbType.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,
@@ -1163,6 +1165,7 @@ defmodule Logex.RuntimeTest do
                member: 2,
                of: 1,
                public: 1,
+               same?: 2,
                signature: 1,
                ton: 0,
                type_of: 2,

@@ -155,8 +155,11 @@ defmodule Logex.Declarations do
 
   `declared` are tags built in Elixir with `Logex.Tag.new!/4`. Each is checked again by
   `validate!/1` and they enter the table first; anything invalid among them, a clash
-  included, raises `ArgumentError`. A declaration after the first rung is reported and
-  still declared, so its tag is not also reported as undeclared wherever it is used.
+  included, raises `ArgumentError`. A function block type is checked once a call, however
+  many of them hold it: one given in `types` is known by being the one given, and another
+  is known once a tag before it held that very type. A declaration after the first rung is
+  reported and still declared, so its tag is not also reported as undeclared wherever it
+  is used.
 
   `untyped` is the `MapSet` of the names declared by a line refused for its type word
   alone (M2-5): a word that names no type this compile knows, or a function block that
@@ -175,7 +178,8 @@ defmodule Logex.Declarations do
     late = Enum.map(late, &late(&1, first))
     {entries, diagnostics} = Enum.flat_map_reduce(leading ++ late, [], &declare(&1, &2, types))
     {untyped, tags} = Enum.split_with(entries, &match?({:untyped, _name}, &1))
-    {table, diagnostics} = table(Enum.map(declared, &validate!/1), tags, diagnostics)
+    {declared, _types} = Enum.map_reduce(declared, types, &validate!/2)
+    {table, diagnostics} = table(declared, tags, diagnostics)
     sorted = Enum.sort_by(Enum.reverse(diagnostics), & &1.line)
     {table, logic, sorted, MapSet.new(untyped, fn {:untyped, name} -> name end)}
   end
@@ -199,6 +203,14 @@ defmodule Logex.Declarations do
 
   defp validated([], tag), do: tag
   defp validated([message | _], _tag), do: raise(ArgumentError, message)
+
+  # validate!/1 for split/3, given the types known: a type given, or one a tag before held,
+  # is not checked again for each instance of it (M2-5).
+  defp validate!(%Tag{line: nil, type: %FbType{name: name} = type} = tag, types)
+       when is_binary(name),
+       do: {validated(check(tag, types), tag), Map.put(types, name, type)}
+
+  defp validate!(tag, types), do: {validate!(tag), types}
 
   defp declaration?({:rung, [{:name, _, word} | _]}), do: reserved(word) == :section
   defp declaration?(_rung), do: false

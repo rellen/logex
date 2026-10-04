@@ -1552,7 +1552,15 @@ is reported; and a directory with a block's name "cannot be read".)*
   checks to themselves, so a hand-edited type is an `ArgumentError` where it is given,
   never in the runtime or an edit. That is forced by decision 28 and by §4.9's "the data
   API refuses anything the text cannot say". No mark of an earlier check is trusted, so a
-  chain of N blocks built one at a time costs O(N²).
+  chain of N blocks built one at a time costs O(N²). *(As landed, with the fix that
+  followed M2-5's review: two versions are one where they differ only in their warnings
+  or in the file their body was read from, under any spelling of its path, which stamps
+  each warning; two whose source text differs, if only in a comment, are two.
+  `Logex.FbType.same?/2` is that one definition, for a compile and for `user?/1` alike,
+  so a block given both versions of a block it holds is a type a compile gives. Each
+  distinct type is checked once a compile, an instance declared from Elixir included,
+  and the tags declared from Elixir are one version with every block the types given
+  hold, at any depth.)*
 - *Held types.* A member that holds an instance names its type, `{:block, name}`, and the
   holder's body's tag table holds that type once, so a type copied flat is linear in its
   depth. A member's type gains that form.
@@ -1560,9 +1568,10 @@ is reported; and a directory with a block's name "cannot be read".)*
   name, then the declaration lines in order. The uses of a declaration whose type is
   unknown are excused, as a recursive declaration's are, so a misspelled block name gives
   one message; this lands in its own commit, after M2-5. *(Landed as M2-5's sixth commit,
-  before its documents: a line given the unknown-type message, or refused as recursive,
-  excuses every use of its own name, as written; a line refused for another reason
-  excuses nothing.)*
+  before its documents, a departure from "after M2-5" made so that the documents commit
+  describes it with the rest: a line given the unknown-type message, or refused as
+  recursive, excuses every use of its own name, as written; a line refused for another
+  reason excuses nothing.)*
 - *`cal`.* Its `@instructions` entry is the marker `{:cal, :block}`, so that table still
   reserves it and the naming test still sees it, and its signature is the block's, built
   per compile. `cal` is reserved in every `.ld`, in any case. One `cal` runs an instance:
