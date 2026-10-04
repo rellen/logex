@@ -30,6 +30,13 @@ defmodule Logex.Declarations do
   @doc "The section and type words, lowercase. Each is reserved, in any case."
   def keywords, do: Map.keys(@sections) ++ Map.keys(@types) ++ Map.keys(FbType.builtins())
 
+  @doc """
+  The words that head a file of a kind other than a program, lowercase (M2-5), each
+  surveyed like a keyword. `docs/organisation.md` §4.8 reserves each in its kind of file
+  only, not in a program's.
+  """
+  def kinds, do: ["function_block"]
+
   # A type word names an elementary type or a function block type, in any case.
   defp type_word(word), do: type_of(String.downcase(word))
 

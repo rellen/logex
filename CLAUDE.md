@@ -75,7 +75,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   write to an `ons` storage bit, a comparison of two literals, a timer no `ton` runs
 - `lib/logex/declarations.ex` — declaration lines to a tag table, after parsing: the
   section and type words as data (`@sections`, `@types`, and the function block type
-  words of `Logex.FbType.builtins/0`), `reserved/1`, `fits?/2`, `preset?/1` (a `ton`'s
+  words of `Logex.FbType.builtins/0`), `kinds/0` (M2-5: the words that head a file of
+  another kind, `function_block`), `reserved/1`, `fits?/2`, `preset?/1` (a `ton`'s
   preset range, 0 to 2147483647 ms), and `check/1`, the one validator for a declaration
   line and for `Logex.Tag.new!/4`, so from Elixir too it refuses what no line can say: an
   initial value on an instance, and a negative one (OE-1)
@@ -143,8 +144,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   running program". Nothing tests this.
 - `CONTRIBUTING.md` — working practices, each one traced to something that broke
 - `PLAN.md` — reviewed findings and the ordered plan of work
-- `docs/naming.md` — the IEC and vendor name survey, one stanza per mnemonic or declaration
-  word; append-only
+- `docs/naming.md` — the IEC and vendor name survey, one stanza per mnemonic, declaration
+  word or word that heads a file; append-only
 - `docs/organisation.md` — where logex is heading above one program: IEC's configuration,
   tasks, program instances and I/O mapping, in logex's dialect. Decided (PLAN §5; the
   work is PLAN's M1-3, M1-5, M1-6, OE-1, Milestone 2 and OE-2; OE-1 and M2-1 have landed,
@@ -188,7 +189,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   needs tags to exist declares them either way; `validation_test.exs`'s `@declared` is the
   Elixir form. A new section or elementary type word is a row in `Logex.Declarations`,
   and a function block type word a key of `Logex.FbType.builtins/0`; either is reserved in
-  any case and owes a `docs/naming.md` stanza, which `naming_test.exs` checks.
+  any case and owes a `docs/naming.md` stanza, which `naming_test.exs` checks. A word that
+  heads a file of another kind, an entry of `Logex.Declarations.kinds/0` (`function_block`,
+  M2-5), owes a stanza too, which the same test checks; `docs/organisation.md` §4.8
+  reserves it in that kind of file only.
 - New state in an instance (a field of `%Logex.Instance{}`, a member of a function block
   type, an M2 item's piece of state) states its rule across an online edit. A tag or member
   starts by `Logex.Program.initial_env/1`, the one rule, whose doc and §4.9's "One rule for

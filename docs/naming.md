@@ -2,8 +2,9 @@
 
 Every logex instruction is named after surveying what IEC 61131-3 and the major vendors
 call the same operation. This file is that survey: the reference tables first, then one
-stanza per mnemonic or declaration word. It is **append-only** — a stanza with no implementation is fine and
-encouraged, so an instruction can be surveyed long before it is built.
+stanza per mnemonic, declaration word or word that heads a file. It is **append-only** — a
+stanza with no implementation is fine and encouraged, so an instruction can be surveyed
+long before it is built.
 
 `test/logex/naming_test.exs` fails if a mnemonic reaches `@instructions` without a stanza
 here.
@@ -52,9 +53,10 @@ because IEC gives those only a picture.
 Copy the template, fill every dialect row, and mark anything you could not check
 `unverified` rather than guessing. New stanzas go at the **end of the file**, under
 `## Stanzas` — the file is append-only and the reference tables above stay where they are.
-A stanza is owed by anything that becomes a key of `@instructions`, and by each section or
-type word of a declaration line; syntax tokens like the branch delimiters are not words and
-need none. Read across stanzas with
+A stanza is owed by anything that becomes a key of `@instructions`, by each section or
+type word of a declaration line, and by each word that heads a file of a kind other than a
+program, `function_block` among them (`Logex.Declarations.kinds/0`); syntax tokens like the
+branch delimiters are not words and need none. Read across stanzas with
 `sed -n '/^## Stanzas/,$p' docs/naming.md | grep '^### '` — the reference tables above also
 use `###` headings, so a bare grep matches those too.
 
@@ -280,10 +282,10 @@ narrowing the language.
 
 ## Stanzas
 
-One per mnemonic or declaration word. The first six below are the instructions logex
-shipped when this file was written; all were surveyed retrospectively, in the commit that
-introduced it. `move` has since replaced `mov`. The five after it, `var` to `dint`, are the
-words of `PLAN.md` M1-3's declaration lines, surveyed before their code.
+One per mnemonic, declaration word or word that heads a file. The first six below are the
+instructions logex shipped when this file was written; all were surveyed retrospectively,
+in the commit that introduced it. `move` has since replaced `mov`. The five after it, `var`
+to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before their code.
 
 ### `xic` — examine if closed (normally-open contact)
 
@@ -588,3 +590,33 @@ words of `PLAN.md` M1-3's declaration lines, surveyed before their code.
 **Chosen:** `ge`
 **Why:** Rule 1, as `eq`, with the operand order of `lt`.
 **Checked:** 2026-09-30, as `eq`.
+
+### `function_block` — a function block's file: its header, and its kind
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `function_block seal`, a `.ld` file's first rung, comments and blank lines allowed before it | The file is a function block type, named on that line as its file is named: `seal.ld` holds `seal`. Its declarations are its members, in order: each `var_input` an input, each `var_output` an output, each `var` its own, an instance it holds included, which only its body names. Its rungs are its body. No `end_function_block`: the file ends it. `Logex.compile/2` returns it as a `%Logex.FbType{}`, which a program's compile takes in `types:`, and `Logex.compile_file/1` finds it beside the file that names it; an instance of it is declared as `var s1 seal` and run by `cal`. From outside, an instance's inputs and outputs are read, as `s1.run`, and nothing writes any of its members. The word is reserved in a function block's file, and recognised in any case as any file's first rung only. A block's name is spelled as a type word in the files that hold it, so it may be no reserved word, and it is matched exactly; it is not reserved itself, so `var seal seal` is legal. No block holds an instance of itself, at any depth. |
+| IEC 61131-3 | **FUNCTION_BLOCK** … END_FUNCTION_BLOCK | Ed 2:2003 §2.5.2.2 rule 1, p.69: *"The delimiting keywords for declaration of function blocks shall be FUNCTION_BLOCK...END_FUNCTION_BLOCK"*; Table 33, p.71. Ed 3:2013 §6.6.3.2 rule 1, p.99: *"The keyword FUNCTION_BLOCK, followed by an identifier specifying the name of the function block being declared"*; Table 40 feature 1, p.100. Ed 3 lets inputs be initialised (rule 8), declares instances in every section but VAR_TEMP (rule 17), and makes a VAR PRIVATE unless declared PUBLIC (rule 11). Recursion: Ed 2 §2.5, p.45, *"Program organization units shall not be recursive"*; Ed 3 §6.6.1.1, p.58, *"Implementer specific"*. Ed 2 Table C.2 lists FUNCTION_BLOCK among its keywords. |
+| Conventional | a **user-defined instruction** definition | Input, Output and InOut parameters, and local tags that *"are not accessible programmatically"* from outside (the family's manual for its user-defined instructions, Sept 2025, p.23); nested up to 16 levels (p.21); an existing one is edited offline only (design-considerations reference, Sept 2025, p.65). Whether one may hold an instance of itself, and the keyword of its text export: `unverified`. |
+| Siemens STEP 7 / TIA Portal LAD | **FB**, a function block, with an instance data block per instance | Its SCL source keyword: `unverified` here. |
+| CODESYS | **FUNCTION_BLOCK** … END_FUNCTION_BLOCK, a POU object | `unverified` for this stanza: no CODESYS page on the declaration was read. |
+| Mitsubishi GX Works | **FB**, a function block POU | `unverified`. |
+
+**Chosen:** `function_block`
+**Why:** Rule 1: IEC's keyword, lowercased, as `var_input` takes VAR_INPUT. A header line rather than a second extension says the file's kind (`docs/organisation.md` §4.3 and decision 4) and keeps one extension for every POU. `end_function_block` is dropped as `end_var` was: one file is one block, so nothing needs closing. The name on the line must match the file's because state is keyed by name (`docs/organisation.md` §4.1): two names for one block would let a file be renamed under a running instance. Its members follow IEC's sections; the departures are logex's earlier ones: no initial value on an input (`var_input`), and an instance only in `var` (`ton`). A block's own `var` is hidden from outside, IEC Ed 3's PRIVATE default and the conventional family's local tags, so from outside an instance has no member deeper than one `.`. Recursion is refused as Ed 2 refuses it, which Ed 3 leaves to the implementer: one instance is one nested map. The word is reserved by file kind (`docs/organisation.md` §4.8), so a program keeps a tag named `function_block`; a program's file can never begin with it, since no instruction is so named.
+**Checked:** 2026-10-02. IEC 61131-3:2003 §2.5 p.45, §2.5.2.2 p.69, Table 33 p.71 and Table C.2, and IEC 61131-3:2013 §6.6.1.1 p.58, §6.6.3.2 pp.99–100 and Table 40 p.100, read directly; the conventional family's manual for its user-defined instructions (Sept 2025) pp.21 and 23 and design-considerations reference (Sept 2025) p.65. The Siemens, CODESYS and Mitsubishi rows were not checked for this stanza.
+
+### `cal` — run an instance of a user function block
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var s1 seal`; `xic ready cal s1 start halt motor` | Runs `s1`, an instance of the user function block `seal`. The operands are positional: `seal`'s var_inputs, then its var_outputs, each in declaration order, IL's non-formal call. Rung power is the instance's EN, and the power `cal` passes on is its ENO, which no block can reset, so it is EN. Energised, each input operand is copied into its input, the block's rungs run over the instance's state, and each output is copied out to its operand. De-energised, nothing is copied in, the body does not run, and nothing is written out: the instance is frozen, and so is every tag its outputs name. A timer inside it keeps `.en` and `last` and catches up when it next runs; a one-shot inside it never sees the rung go false. A body runs on its program instance's clock and first scan, so an `ons` in a block first run after the first scan can fire on that run. One `cal` runs an instance; `cal` runs no built-in timer, which `ton t1 5000` runs. |
+| IEC 61131-3 | **CAL**, with the C and N modifiers (IL) | Ed 2:2003 §3.2.3 and Table 52 feature 19, pp.125–126; Table 53 feature 1a, p.127, the non-formal call `CAL CMD_TMR(%IX5, T#300ms, OUT, ELAPSED)`. Ed 2's text on p.126 calls feature 1a the formal list and 1b the non-formal, the reverse of its table; logex follows the table, which Ed 3 confirms. The conditional call: *"All assignments in an argument list of a conditional function block invocation shall only be performed together with the invocation, if the condition is true"* (Ed 2 §3.2.3, p.126; Ed 3 §7.2.4.3, p.198). Ed 3: Table 68 feature 21, p.197, and Table 69 feature 1a, p.199. Ed 3 §7.2.1, p.195, marks IL deprecated, and Ed 4 removed it. ST calls an instance by its name (Ed 2 Table 56 item 2, p.132, as `docs/organisation.md` §4.3 quotes it); LD draws a block with EN and ENO (Ed 2 §2.5.2.1a), p.68; Ed 3 §6.6.1.5, pp.63–64). EN and ENO are keywords in Ed 2 Table C.2, and logex has no word for either. |
+| Conventional | a **user-defined instruction**, by its own name on the rung; **JSR** for a routine | On a false rung it *"Does not execute any logic for the [instruction] and does not write any outputs. Input parameters are passed values."* (the family's manual for its user-defined instructions, Sept 2025, p.43); a one-shot inside one *"will not detect the rung-in transition to the false state"* (p.20). JSR "Jump to Subroutine" calls a routine, which IEC and logex do not have (the Program control table above). |
+| Siemens STEP 7 / TIA Portal LAD | an FB box with its instance data block; classic `---( CALL )`, CALL_FB | As the Program control table above; not checked again for this stanza. |
+| CODESYS | IL **CAL**; in LD and FBD a box with EN and ENO | *"When the EN input has the value FALSE at the time of the POU call, the operations defined in the POU are not executed. … The ENO output has the same value as the EN input."* (help, *FBD/LD/IL Element: Box with EN/ENO*, read 2026-10-02). Whether it copies inputs in, or outputs out, on a false EN: `unverified`. |
+| Mitsubishi GX Works | CALL(P), FCALL, ECALL, EFCALL | As the Program control table above; how a function block instance is called: `unverified`. |
+
+**Chosen:** `cal`, which supersedes the Program control table's `cal <routine>` row: logex has no routines (`docs/organisation.md` §5), and `cal` runs a function block instance.
+**Why:** Rule 1, with its basis stated: IEC has three spellings of the call and `CAL` is the only word among them, and it rests on Ed 2 and Ed 3's IL, which Ed 4 removed (`docs/organisation.md` §4.3). ST's form, the instance's name as the call, would put a tag where an instruction starts, so the words that start an instruction would depend on each file's declarations; that undoes the rule that mnemonics are reserved and never tags. The positional operands are IL's non-formal call: the arity and type errors name the formal, and two swapped bool operands still compile, the price of the form. Rung power has two meanings, on purpose: on `ton` it is the timer's IN, and a false rung resets the timer, the conventional model; on `cal` it is the instance's EN, IEC's. What a false EN does is the implementer's to state under Ed 3 (§6.6.1.5 rule 4: outputs on a false ENO are *"Implementer specific"*), and logex states it: nothing in, nothing out, IEC Ed 3's "external implementation" (EXAMPLES 2 and 4, p.64) and IL's conditional call; MatIEC copies inputs in and the frozen outputs out (its "internal implementation", EXAMPLE 1 and 3), and the conventional family copies inputs in. One `cal` per instance, as one `ton` per timer: IEC lets an instance be called twice in a scan, which would run its body twice with its inputs replaced halfway, so logex refuses the second, which allowing later breaks no program. `cal` passes on the power it receives, so anything may follow it on its path.
+**Checked:** 2026-10-02. IEC 61131-3:2003 §2.5.2.1a) p.68, §3.2.3 and Tables 52 and 53, pp.125–127, Table C.2; IEC 61131-3:2013 §6.6.1.5 pp.63–64, §7.2.1 p.195, §7.2.4.3 p.198, Tables 68 and 69, pp.197–199, read directly; the conventional family's manual for its user-defined instructions (Sept 2025) pp.20 and 43; CODESYS help, *FBD/LD/IL Element: Box with EN/ENO*; MatIEC at `3a41303`, `stage4/generate_c/generate_c.cc` and `generate_c_st.cc` (`fb_invocation_c`). The Siemens and Mitsubishi rows are the Program control table's.

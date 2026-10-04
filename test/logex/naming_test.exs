@@ -5,6 +5,7 @@ defmodule Logex.NamingTest do
   `docs/naming.md` records what IEC 61131-3 and the major vendors call each
   operation, and why logex chose the name it did. This test fails if a mnemonic
   reaches `@instructions`, or a section or type word reaches `Logex.Declarations`,
+  or a word that heads a file of another kind reaches `Logex.Declarations.kinds/0`,
   without a stanza there.
 
   The check is deliberately one-way: a stanza with no implementation is fine and
@@ -57,6 +58,22 @@ defmodule Logex.NamingTest do
         #{unsurveyed |> Enum.sort() |> Enum.join(", ")}
 
     A section or type word is reserved like a mnemonic, and is surveyed like one.
+    """
+  end
+
+  test "every word that heads a file of another kind has been surveyed (M2-5)" do
+    words = Logex.Declarations.kinds() |> MapSet.new()
+    unsurveyed = MapSet.difference(words, surveyed_mnemonics())
+
+    # A guard over no words guards nothing: a function block's file is headed by
+    # `function_block` (docs/organisation.md §4.3).
+    assert "function_block" in words
+
+    assert MapSet.equal?(unsurveyed, MapSet.new()), """
+    These words head a file in Logex.Declarations.kinds/0 but have no stanza in
+    docs/naming.md:
+
+        #{unsurveyed |> Enum.sort() |> Enum.join(", ")}
     """
   end
 
