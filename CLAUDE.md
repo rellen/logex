@@ -128,7 +128,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   compiled `%Logex.Program{}`; `ton/0`, the built-in timer; `initial/2`, a new instance's
   state, a map keyed by member name; `member/2` and `public/1`, which give only the inputs
   and outputs. Since M2-5 `of/1` builds a user type from its body, `signature/1` is
-  `cal`'s operands, `user?/1` says whether a value is a type a compile could give,
+  `cal`'s operands, `user?/1` says whether a value has the shape of a type a compile
+  gives (it never compiles a body's source text again),
   `same?/2` whether two are one version of a block (warnings, and the file a body was
   read from, aside), the one definition a compile's one-version check shares, and a
   member holding an instance of a user block has the type `{:block, name}`, as the
@@ -139,7 +140,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   instance's first env; `file` is the path `compile_file/1` read it from (fix F15);
   `blocks`, empty except in a block's body, holds each user block type the body's instances
   are of once, by name (M2-5, §4.10 "Held types"), and `typed_tags/1` gives the body's
-  table with each instance's type itself, the table the compiler and the walks read
+  table with each instance's type itself, the table the compiler and the walks read, and
+  that `initial_env/1`, the runtime's `get/2` and input check and `Logex.Edit` read, so a
+  body run as a program reads each instance it holds as a compile does
 - `lib/logex/lexer.ex` / `lib/logex/parser.ex` — the front end, written by hand: binary
   pattern matching, and recursive descent (the parser's moduledoc gives the grammar and
   which function parses each production). `Logex.Parser.well_formed!/1` is the definition

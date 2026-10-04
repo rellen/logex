@@ -129,15 +129,19 @@ defmodule Logex.Compiler do
   number on the `ton` that runs it; the rungs are on rising lines, each on one line, after
   the declarations; and the warnings are the ones its rungs give, a file aside. Its tag
   table is its tags with each instance's type itself (`Logex.Program.typed_tags/1`): a
-  tag naming a type its `blocks` does not hold, or anything else that is not a tag of a
-  type a compile knows, makes it no compiled body. Total: any other value is `false`,
-  never an exception.
+  tag naming a type its `blocks` does not hold, or an entry that is no `%Logex.Tag{}`,
+  makes it no compiled body.
 
   It is the definition of a compiled body, which `Logex.FbType.user?/1` checks for a type
   given to a compile or to `Logex.Tag.new!/4`, as `Logex.Parser.well_formed!/1` is of a
   parse tree: what a type given cannot hold, no runtime or edit step meets. It expects
-  the tag table checked already, every entry a `%Logex.Tag{}` under its name and every
-  instance's type a valid one (`Logex.FbType.user?/1` checks those first).
+  that table checked already, every tag under its own name and every instance's type,
+  once each held type is given, the built-in `ton` or a type `Logex.FbType.user?/1`
+  takes, which `user?/1` checks first. Over such a table it is total, `true` or `false`
+  and never an exception, and so it is for a value that is no `%Logex.Program{}`, or
+  whose rungs, tags, blocks or warnings are no list, map, map and list, or whose tags
+  are a struct. A direct call given another table, such as a tag under a key that is no
+  string or an instance whose type's members are no list of members, may raise.
   """
   def lowered?(%Program{rungs: rungs, tags: tags, blocks: blocks, warnings: warnings} = body)
       when is_list(rungs) and is_map(tags) and not is_struct(tags) and is_map(blocks) and

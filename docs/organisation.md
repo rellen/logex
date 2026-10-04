@@ -360,9 +360,15 @@ cycle among FB types, which fits a model where one instance is one nested map.
 - *A block's file* compiles to `{:ok, %Logex.FbType{}}`. Its members are its
   declarations, each with a role: `:input`, `:output`, or `:local` for its own `var`, an
   instance it holds included. Its `body` is the `%Logex.Program{}` of its rungs, named
-  after the block. `Logex.FbType.user?/1` holds exactly for a type a compile could give,
+  after the block. `Logex.FbType.user?/1` holds for a type of the shape a compile gives,
   its body checked by `Logex.Compiler.lowered?/1`, the definition of a compiled body, so
-  a type edited by hand is an `ArgumentError` where it is given.
+  a type edited by hand into one no compile gives over its tag table is an
+  `ArgumentError` where it is given. *(Narrowed 2026-10-04, after the check of M2-5's
+  fixes, from "holds exactly for a type a compile could give": `user?/1` never compiles
+  a body's source text again, so a rung edited into another that text could say, the
+  text left as it was, passes as a version of its own, which only a compile that also
+  holds the genuine one refuses, by `Logex.FbType.same?/2`. Whether `user?/1` is to
+  compile the source again is left to the maintainer, `PLAN.md` M2-5.)*
 - *Getting a block.* A source is given its blocks in `Logex.compile/2`'s `types:`, or
   `Logex.compile_file/1` finds each type word that could name one as `<word>.ld` beside
   the file that names it, compiles it first, once a call, and hands back its warnings
@@ -1310,9 +1316,20 @@ written as text.
   declaration line's style, until a negative literal lexes.
 
 **Cost.** Accept builds both plans once, in time linear in the two programs, and a switch
-is linear in them too. Two tests in reductions keep accept and every step linear (fix
-F16; CONTRIBUTING.md, "Test a pass over the program for growth"): accept, test, untest,
-test and assemble at 500 and 2,000 of each tag, and at 500 and 8,000 levels of nesting.
+is linear in them too. *(Restated 2026-10-04, after the check of M2-5's fixes, for a
+program that holds blocks: accept and a switch are linear in the two programs and in the
+instances they nest, which is the state, since the forecast, the plans' one-shots and
+timers and a switch's writes go by path, an entry per instance path. A program whose types
+each hold two instances of the type below is linear in its width and depth, each type held
+once (§4.10, "Held types"), but its instances grow as 2 to the power of the depth, and
+accept and a switch with them: at 4 and 10 levels the program took 2,789 and 5,789 words
+copied flat, its state 1,478 and 94,214, accept of the program against itself 20,263 and
+748,898 reductions, accept of a change to the deepest timer's preset 23,782 and 1,001,698
+with a forecast of 16 and 1,024 entries, and the switch 2,906 and 180,351. With one
+instance per level, or no blocks, nothing changes.)* Two tests in reductions keep accept
+and every step linear (fix F16; CONTRIBUTING.md, "Test a pass over the program for
+growth"): accept, test, untest, test and assemble at 500 and 2,000 of each tag, and at 500
+and 8,000 levels of nesting.
 The spike needed them: its first plan of held outputs was quadratic, and accept took 2.4
 s at 2,000 rungs until a probe found it. Two more, from the review of OE-1, keep the
 scan right after a switch linear in the one-shots it blocks, and a second edit taken
@@ -1560,7 +1577,13 @@ is reported; and a directory with a block's name "cannot be read".)*
   so a block given both versions of a block it holds is a type a compile gives. Each
   distinct type is checked once a compile, an instance declared from Elixir included,
   and the tags declared from Elixir are one version with every block the types given
-  hold, at any depth.)*
+  hold, at any depth. Narrowed after the check of those fixes: a type edited by hand into
+  one a compile gives over its tag table, a rung changed into another that text could say
+  with its source text left as it was, is no `ArgumentError` where it is given, since
+  `user?/1` checks the shape `Logex.Compiler.lowered?/1` defines and never compiles the
+  source again; it is a version of its own, which the one-version check refuses beside the
+  genuine one. Whether `user?/1` is to compile the source again is left to the
+  maintainer, `PLAN.md` M2-5.)*
 - *Held types.* A member that holds an instance names its type, `{:block, name}`, and the
   holder's body's tag table holds that type once, so a type copied flat is linear in its
   depth. A member's type gains that form. *(As landed, after M2-5's review found the type
@@ -1569,9 +1592,17 @@ is reported; and a directory with a block's name "cannot be read".)*
   to build it as recorded: each instance's tag in the body names the type too, and the
   body's `%Logex.Program{}` holds each type once, by name, in `blocks` beside its tags,
   which `Logex.Program.typed_tags/1` reads back as the table a compile works over. A
-  type copied flat then grows with its width and its depth together, as
-  `function_block_test.exs` pins. A program's own tags hold each type itself, as
-  `Logex.Tag.new!/4` gives it.)*
+  type copied flat then grows linearly in its depth, however many instances of the type
+  below each level declares, as `function_block_test.exs` pins, wherever each type is
+  reached through one holder. A type reached through more, as when each level has two
+  types and each holds both of the level below, is written out once per path of holders,
+  so copied flat it still grows as 2 to the power of the depth, as an instance's state
+  does: 36,405 words at 6 levels and 2,354,805 at 12, against an instance's state of
+  176,118. "Linear in its depth" holds for the first shape only. Holding each type once
+  per outermost type would hold it for both, and is left to the maintainer, `PLAN.md`
+  M2-5. A program's own tags hold each type itself, as `Logex.Tag.new!/4` gives it. A
+  block's compiled body run as a program is read through `typed_tags/1` too, by the
+  runtime, `get/2` and an edit, as a compile reads it.)*
 - *Declarations.* Members declared from Elixir come first in `cal`'s operand order, by
   name, then the declaration lines in order. The uses of a declaration whose type is
   unknown are excused, as a recursive declaration's are, so a misspelled block name gives

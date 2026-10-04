@@ -586,10 +586,10 @@ defmodule Logex.Runtime do
   defp ms, do: "a non-negative integer of milliseconds"
 
   # Every input problem, a line each in key order, or the inputs merged into the state.
-  defp merge!(%Instance{env: env} = state, %Program{tags: tags}, inputs)
+  defp merge!(%Instance{env: env} = state, %Program{} = program, inputs)
        when is_map(inputs) and not is_struct(inputs) do
     problems =
-      for {key, value} <- Enum.sort(inputs), problem = problem(key, value, tags), do: problem
+      for {key, value} <- Enum.sort(inputs), problem = problem(key, value, program), do: problem
 
     merged(problems, state, env, inputs)
   end
@@ -616,21 +616,24 @@ defmodule Logex.Runtime do
   defp listed_once({line, _list}, true), do: {line, true}
   defp listed_once(line, listed), do: {line, listed}
 
-  defp problem(key, _value, _tags) when not is_binary(key),
+  defp problem(key, _value, _program) when not is_binary(key),
     do:
       "input #{inspect(key)} is not a tag name: inputs are keyed by tag name, as a string, " <>
         ~s|as in %{"start" => 1}|
 
-  defp problem(key, value, tags), do: declared(Map.fetch(tags, key), key, value, tags)
+  defp problem(key, value, %Program{tags: tags} = program),
+    do: declared(Map.fetch(tags, key), key, value, program)
 
-  defp declared(:error, key, _value, tags) do
+  # A key naming no tag is told what its first part is, an instance's type itself (tag_of/2).
+  defp declared(:error, key, _value, %Program{tags: tags} = program) do
     [head | path] = String.split(key, ".")
-    undeclared(Map.get(tags, head), path, key, tags)
+    undeclared(tag_of(program, head), path, key, tags)
   end
 
-  defp declared({:ok, %Tag{section: :var_input} = tag}, _key, value, _tags), do: fit(tag, value)
+  defp declared({:ok, %Tag{section: :var_input} = tag}, _key, value, _program),
+    do: fit(tag, value)
 
-  defp declared({:ok, %Tag{} = tag}, key, _value, _tags),
+  defp declared({:ok, %Tag{} = tag}, key, _value, _program),
     do:
       "input #{label(key)} is a #{tag.section}#{on_line(tag)}, not a var_input: " <>
         "only a var_input is set from outside"
@@ -639,7 +642,7 @@ defmodule Logex.Runtime do
   # found before this, so here a key found by its first part has a `.`, and it is called a
   # member only when the compiler would take it for one: `t1.dn`, never `t1.last`,
   # `t1.zz` or `t1.dn.x`, which reach into `t1` all the same.
-  defp undeclared(%Tag{type: %FbType{} = type} = tag, path, key, _tags),
+  defp undeclared({:ok, %Tag{type: %FbType{} = type} = tag}, path, key, _tags),
     do:
       "input #{label(key)} #{reaches(member(type, path))} `#{tag.name}`, " <>
         "#{Declarations.instance_of(type)}: " <>
@@ -951,7 +954,7 @@ defmodule Logex.Runtime do
   defp at_path(:error, {:ok, type}, {head, [tag | members], path}, runtime) do
     program = Map.fetch!(runtime.config.programs, type)
     env = Map.fetch!(runtime.instances, head).env
-    in_program(Map.fetch(program.tags, tag), {head, tag, members, path}, program, env)
+    in_program(tag_of(program, tag), {head, tag, members, path}, program, env)
   end
 
   defp at_path(:error, :error, {head, _rest, _path}, runtime),
@@ -979,6 +982,14 @@ defmodule Logex.Runtime do
 
   defp tag_example([first | _], head), do: ", as in `#{head}.#{first}`"
   defp tag_example([], _head), do: ", and it declares none"
+
+  # A program's tag, with its instance's type itself: a block's compiled body, which runs
+  # as a program too, names each type its `blocks` holds (M2-5).
+  defp tag_of(%Program{tags: tags, blocks: blocks}, name),
+    do: fetched(Map.fetch(tags, name), blocks)
+
+  defp fetched({:ok, tag}, blocks), do: {:ok, typed(tag, blocks)}
+  defp fetched(:error, _blocks), do: :error
 
   defp in_program(:error, {head, tag, _members, _path}, program, _env),
     do:

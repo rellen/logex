@@ -23,12 +23,17 @@ defmodule Logex.FbType do
 
   A member holding an instance of a user block has the type `{:block, name}`, as the
   instance's tag in the body has, and the block's type itself is held once, in the body's
-  `blocks`, by name, where `cal` finds it: `type_of/2` gives it. So a type holds each type
-  it nests once, however many instances of it its body declares, and a copy of it that
-  keeps no sharing (a message, `:erlang.term_to_binary/1`, `:erlang.phash2/1`) stays
-  linear in the depth of nesting whatever the width, where a type held in each instance's
-  tag would grow as the width to the power of the depth (M2-5; `docs/organisation.md`
-  §4.10, "Held types").
+  `blocks`, by name, where `cal` finds it: `type_of/2` gives it. So a body holds each type
+  it names once, however many instances of it it declares (M2-5; `docs/organisation.md`
+  §4.10, "Held types"). A copy of a type that keeps no sharing (a message,
+  `:erlang.term_to_binary/1`, `:erlang.phash2/1`) writes each type out once for each path
+  of holders down to it. Where each type is reached through one holder, as in a chain
+  whose every level holds instances of one type, the copy stays linear in the depth
+  however many instances each level declares, where a type held in each instance's tag
+  grew as the width to the power of the depth. A type reached through two holders at
+  every level, as when each level has two types and each holds both of the level below,
+  is copied once per path, so the copy grows as 2 to the power of the depth, as an
+  instance's state does.
 
   `body` is nil for the built-in `ton`. For a user function block (M2-5) it is the block's
   compiled body, a `%Logex.Program{}` named after the block, whose tags are its members,
@@ -201,17 +206,23 @@ defmodule Logex.FbType do
   def same?(_one, _other), do: false
 
   @doc """
-  Whether `type` is a user function block type `Logex.compile/2` could have given: what
-  `of/1` gives for its body, its body holding each type its tags name, `{:block, name}`,
-  once under that name, and no other, every type it holds the built-in `ton` or valid in
-  turn, its body's rungs, tags and warnings what a compile gives over that table
-  (`Logex.Compiler.lowered?/1`), and no type in it holding an instance of a type of its
-  own name, at any depth. So a type whose body was edited by hand, a rung or a warning,
-  is refused where it is given, whether or not the text could say what it holds. Two types
-  of one name in it must be one version, by `same?/2`, as a compile takes them, and each is
-  checked. Total: a hand-built value of any shape is `false`, never an exception. Each type
-  is checked once per call, so the check is linear in the types a value holds, but every
-  call checks them all again.
+  Whether `type` has the shape of a user function block type `Logex.compile/2` gives:
+  what `of/1` gives for its body, its body holding each type its tags name,
+  `{:block, name}`, once under that name, and no other, every type it holds the built-in
+  `ton` or valid in turn, its body's rungs, tags and warnings what a compile gives over
+  that table (`Logex.Compiler.lowered?/1`), and no type in it holding an instance of a
+  type of its own name, at any depth. So a type whose body was edited by hand into one no
+  compile gives over its tag table, a rung no text lowers to, a tag's line, section or
+  initial value no declaration gives, or a warning its rungs do not give, is refused
+  where it is given. It never compiles a body's source text again, so it does not ask
+  that a body be the one its text gives: a rung edited into another that text could say,
+  the text left as it was, a source text or file changed, or a key added to a tag, still
+  passes, as a version of its own, which a compile that holds the genuine one too refuses
+  (`same?/2` compares source and rungs). Two types of one name in it must be one version,
+  by `same?/2`, as a compile takes them, and each is checked. Total: a hand-built value
+  of any shape is `false`, never an exception. Each type is checked once per call,
+  however many paths of holders reach it, so the check is linear in the types a value
+  holds, but every call checks them all again.
   """
   def user?(type), do: valid(type, %{}, %{}) != :error
 
@@ -293,8 +304,9 @@ defmodule Logex.FbType do
   defp named?(_name, _type), do: false
 
   # The body, once every type it holds is valid, is one a compile gives: its rungs lower
-  # to themselves (Logex.Compiler.lowered?/1), so a hand-edited rung is refused here, where
-  # the type is given, and never reaches the runtime or an edit.
+  # to themselves (Logex.Compiler.lowered?/1), so a rung edited by hand into one no text
+  # lowers to over its table is refused here, where the type is given, and never reaches
+  # the runtime or an edit.
   defp lowered(:error, _type), do: :error
   defp lowered(ok, type), do: relowered(Logex.Compiler.lowered?(type.body), ok)
 

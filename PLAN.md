@@ -1563,8 +1563,11 @@ configuration file's must be built that way before they land.
 
   **Status: DONE — landed 2026-10-04**, as seven commits: the first five of its landing
   order, then the excusal the record put after M2-5, then the documents, a departure from
-  the record's order made so that the documents describe the excusal with the rest; and
-  an eighth that fixes what a review of the seven confirmed (below). (1) The survey,
+  the record's order made so that the documents describe the excusal with the rest; an
+  eighth that fixes what a review of the seven confirmed, `4fc8587`; a ninth that holds
+  each block type once per body, `9ff76f6`; and a tenth, the commit after `4230f65`, that
+  fixes what a check of the eighth, the ninth and `4230f65` confirmed (below). `4230f65`,
+  which gives three older walks more draws, is not part of M2-5. (1) The survey,
   `4db37b1`; (2) one lookup of an instruction's slots for the walks,
   `Logex.Compiler.signature/2`, with no change in behaviour, `e8a55b6`; (3) blocks and
   `cal`, `969a5a4`; (4) the edit by path, `a87edcc`; (5) the loader, `2c3c609`; (6) the
@@ -1622,19 +1625,46 @@ configuration file's must be built that way before they land.
   list and a struct for tags, `lowered?/1` checks each operand's line, `types:` must be a
   proper list, and a tag declared from Elixir is one version with every block the types
   given hold. Accept, a compile's lookup of a member, and the check of a type that
-  instances declared from Elixir hold are linear, as growth tests in a block's members
-  and in such instances pin. Tests now pin what had none: nothing copied out on a false
-  EN, a body's tag table, recursion through a tag two levels down, a block's name matched
+  instances declared from Elixir hold are linear, as growth tests in a block's members and
+  in such instances pin. Tests now pin what had none: nothing copied out on a false EN, a
+  body's tag table, recursion through a tag two levels down, a block's name matched
   exactly, the loader's case and its section lines, a nested `:preset_kept` (in the walk
   too), the order of the bits a scan keeps blocked and of several kind changes on one
-  line, and a `cal` with one operand too many. Two are left for the maintainer. A body
-  holding two instances of one block holds its type twice, once per tag, so a copy that
-  keeps no sharing grows as the width to the power of the depth, where §4.10's "Held
-  types" says linear: is each block type to be held once per body, its instances' tags
-  naming it, or is the claim to be restated for one instance of a type per level? And
-  three walks that predate M2-5 each miss one atom of their reach under one seed of 1 to
-  30 in a family other than the one they were measured under: are they to keep their
-  reach under any family, at the cost of more draws?
+  line, and a `cal` with one operand too many. It left two questions, which the maintainer
+  decided on 2026-10-04. A body holding two instances of one block held its type twice,
+  once per tag, so a copy that keeps no sharing grew as the width to the power of the
+  depth: each block type is to be held once per body, its instances' tags naming it, as
+  §4.10's "Held types" records, which `9ff76f6` builds, the type held in the body's
+  `blocks` and read back by `Logex.Program.typed_tags/1`. And three walks that predate
+  M2-5 each missed one atom of their reach under one seed of a family they were not
+  measured under: they get more draws until their reach holds under 60 seeds of more than
+  one family, measured on seeds they were not tuned on, which `4230f65` builds, 2,000
+  sources, 150 programs and 400 configurations a run, up from 600, 40 and 150.
+
+  A check of `4fc8587`, `9ff76f6` and `4230f65` confirmed 15 findings, 11 once the four
+  found twice are merged, and the commit after `4230f65` fixes them, but for the two
+  questions below. A block's compiled body run as a program started each instance it holds
+  at 0 and ran it wrong, and `get/2` and `Logex.Edit.accept/3` raised errors that are no
+  `ArgumentError` on it: the runtime, `get/2` and the edit now read a program's tags
+  through `typed_tags/1`, as a compile does. Tests now pin what had none: a timer's tag in
+  a section no line gives it, each rung on one line inside a group, a nested group and
+  past an instruction's first operand, `same?/2`'s rungs and every held type it compares,
+  `user?/1` checking each type once however many paths reach it (a diamond of types), and
+  accept reading a block's body once however many instances run it: 661 tests pass on
+  Elixir 1.20.4 (8 of them doctests), up from 654. Documents that claimed more than the
+  code does are narrowed: a type copied flat is linear in its depth where each type is
+  reached through one holder; §4.9's cost for a program that holds blocks is linear in its
+  instances too; `user?/1` checks a type's shape, not that its body is the one its source
+  text gives; and `lowered?/1` is total over the tag tables it expects. Two are left for
+  the maintainer. Where each level has two types and each holds both of the level below, a
+  type copied flat is written out once per path and grows as 2 to the power of the depth,
+  as an instance's state does: is each user type to be held once per outermost type,
+  beyond §4.10's once per body, so that it stays linear there too? And `user?/1` takes a
+  type whose rung was edited into another that text could say, its source text left as it
+  was, as a version of its own, which only a compile that holds the genuine one too
+  refuses: is `user?/1` to compile a body's source text again and ask that it give that
+  body, so that §4.10's "a hand-edited type is an `ArgumentError` where it is given" holds
+  for it?
 - **M2-6 · Event tasks.** `task <n> single <g> [interval <ms>] priority <p>`, fired by a
   rising edge, and in the first cycle if the trigger is already true; with `interval` too,
   it runs periodically only while the trigger is 0, plus a run on each edge (IEC rule 2). *Done when* an event task triggered

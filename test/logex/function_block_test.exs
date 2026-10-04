@@ -342,8 +342,11 @@ defmodule Logex.FunctionBlockTest do
     end
 
     # The body of a type given is one a compile gives (Logex.Compiler.lowered?/1): a rung
-    # edited by hand is refused where the type is given, never met by the runtime or an
-    # edit, however it is shaped, and whether the text could say it or not.
+    # edited by hand into one no compile gives over its table is refused where the type is
+    # given, never met by the runtime or an edit, however it is shaped, and whether the
+    # text could say it or not. One a compile gives, with the source text left as it was,
+    # is a version of its own ("a block compiled from its file, and from its text, is one
+    # version").
     test "a type whose body was edited by hand is refused where it is given" do
       seal = block!(@seal)
       [{:rung, rung}] = seal.body.rungs
@@ -484,9 +487,12 @@ defmodule Logex.FunctionBlockTest do
 
     # A body's tag table holds what declaration lines give: a line of 1 or more, a section
     # of `var`, `var_input` or `var_output`, an initial value a line could give, and an
-    # instance in `var` with none. Each edit but the last rebuilds the type's members and
-    # warnings from the edited table, so that only the table's own rule refuses it; a
-    # section no line gives has no role, so the last keeps the compile's members.
+    # instance in `var` with none, a timer's preset aside. Each edit but the `retain` one
+    # rebuilds the type's members and warnings from the edited table, so that only the
+    # table's own rule refuses it; a section no line gives has no role, so that one keeps
+    # the compile's members. A timer, idle or given its preset by a `ton`, is moved to
+    # each section an instance is never in; Logex.Warnings.of/2 would print a var_output's
+    # preset as its value, so the timed one there keeps the compile's warnings.
     test "a type whose tag table no declaration gives is refused where it is given" do
       held =
         block!(
@@ -495,31 +501,50 @@ defmodule Logex.FunctionBlockTest do
           [block!(@seal)]
         )
 
-      rebuilt = fn tag, edit ->
-        body = %{held.body | tags: Map.update!(held.body.tags, tag, edit)}
+      rebuilt = fn type, tag, edit ->
+        body = %{type.body | tags: Map.update!(type.body.tags, tag, edit)}
         typed = Logex.Program.typed_tags(body)
         FbType.of(%{body | warnings: Logex.Warnings.of(body.rungs, typed)})
       end
 
-      assert rebuilt.("k", & &1) == held
+      assert rebuilt.(held, "k", & &1) == held
       retain = Map.update!(held.body.tags, "k", &%{&1 | section: :retain})
 
+      idle =
+        block!(
+          "function_block idle\nvar_input go bool\nvar_output q bool\nvar t1 ton\n" <>
+            "xic go xic t1.dn ote q"
+        )
+
+      timed =
+        block!(
+          "function_block timed\nvar_input go bool\nvar_output q bool\nvar t1 ton\n" <>
+            "xic go ton t1 100\nxic t1.dn ote q"
+        )
+
+      assert timed.body.tags["t1"].initial == %{"pre" => 100}
+      output = Map.update!(timed.body.tags, "t1", &%{&1 | section: :var_output})
+
       for edited <- [
-            rebuilt.("k", &%{&1 | initial: -1}),
-            rebuilt.("go", &%{&1 | initial: 1}),
-            rebuilt.("k", &%{&1 | line: 0}),
-            rebuilt.("s", &%{&1 | section: :var_output}),
-            rebuilt.("s", &%{&1 | initial: %{"run" => 1}}),
-            %{held | body: %{held.body | tags: retain}}
+            rebuilt.(held, "k", &%{&1 | initial: -1}),
+            rebuilt.(held, "go", &%{&1 | initial: 1}),
+            rebuilt.(held, "k", &%{&1 | line: 0}),
+            rebuilt.(held, "s", &%{&1 | section: :var_output}),
+            rebuilt.(held, "s", &%{&1 | initial: %{"run" => 1}}),
+            %{held | body: %{held.body | tags: retain}},
+            rebuilt.(idle, "t1", &%{&1 | section: :var_input}),
+            rebuilt.(idle, "t1", &%{&1 | section: :var_output}),
+            rebuilt.(timed, "t1", &%{&1 | section: :var_input}),
+            FbType.of(%{timed.body | tags: output})
           ] do
         refute FbType.user?(edited)
 
         raises(
           "types must be function block types from Logex.compile/2, got: #{inspect(edited)}",
-          fn -> Logex.compile("var x held", name: "m", types: [edited]) end
+          fn -> Logex.compile("var x #{edited.name}", name: "m", types: [edited]) end
         )
 
-        assert_raise ArgumentError, ~r/unknown function block type "held"/, fn ->
+        assert_raise ArgumentError, ~r/unknown function block type "#{edited.name}"/, fn ->
           Tag.new!("x", edited)
         end
       end
@@ -736,6 +761,36 @@ defmodule Logex.FunctionBlockTest do
       refute FbType.user?(
                FbType.of(%{type.body | blocks: %{type.body.blocks | "seal" => edited}})
              )
+
+      # A version is its rungs too: `seal` with a rung edited by hand and its source text
+      # left as it was is another version than the one `outer` holds, which the compile's
+      # one-version check refuses.
+      [{:rung, [group, {:xio, l, stop}, coil]}] = from_text.body.rungs
+      rung = [{:rung, [group, {:xic, l, stop}, coil]}]
+      rung_edited = %{from_text | body: %{from_text.body | rungs: rung}}
+      assert rung_edited.body.source == from_text.body.source
+      refute FbType.same?(from_text, rung_edited)
+
+      raises(
+        "types holds two different function blocks named `seal`, one inside another type " <>
+          "given: compile each block against the same types",
+        fn -> Logex.compile("var o outer", name: "m", types: [rung_edited, outer]) end
+      )
+
+      # And every type two versions hold is compared, not only the first by name: two
+      # holders of `pulse` and `seal` that differ only in the `seal` they hold, which sorts
+      # after `pulse`, are two.
+      holds = fn seal ->
+        block!(
+          "function_block holds\nvar_input go bool\nvar_output o bool\nvar_output r bool\n" <>
+            "var p pulse\nvar s seal\ncal p go o\ncal s go go r",
+          [block!(@pulse), seal]
+        )
+      end
+
+      assert Map.keys(holds.(from_text).body.blocks) == ["pulse", "seal"]
+      assert FbType.same?(holds.(from_text), holds.(from_file))
+      refute FbType.same?(holds.(from_text), holds.(new))
     end
 
     test "from Elixir, an instance of a user block is a tag whose type is the block's" do
@@ -1561,6 +1616,39 @@ defmodule Logex.FunctionBlockTest do
       {:xic, line, [{:name, line, go}]} = contact
       operand = [{:rung, [{:xic, line, [{:name, 1, go}]}, coil]}, r]
       refute Logex.Compiler.lowered?(relined(two, operand))
+
+      # An operand past an instruction's first, and one inside a group and inside a group
+      # nested in another, each moved to line 1: the walk reaches every one
+      # (CONTRIBUTING.md, a walk over a rung).
+      nested =
+        body(
+          "function_block nested\nvar_input go bool\nvar_output q bool\nvar n dint\n" <>
+            "xic go move 1 n\n( xic go | ( xic go | xio go ) ) ote q"
+        )
+
+      [
+        {:rung, [contact, {:move, l, [one, n]}]} = moves,
+        {:rung, [{:branches, [[outer], [{:branches, [[inner], low]}]]}, coil]} = group
+      ] = nested.rungs
+
+      first = fn {symbol, at, [operand | rest]} ->
+        {symbol, at, [put_elem(operand, 1, 1) | rest]}
+      end
+
+      assert Logex.Compiler.lowered?(nested)
+
+      for rungs <- [
+            [{:rung, [contact, {:move, l, [one, put_elem(n, 1, 1)]}]}, group],
+            [
+              moves,
+              {:rung, [{:branches, [[first.(outer)], [{:branches, [[inner], low]}]]}, coil]}
+            ],
+            [
+              moves,
+              {:rung, [{:branches, [[outer], [{:branches, [[first.(inner)], low]}]]}, coil]}
+            ]
+          ],
+          do: refute(Logex.Compiler.lowered?(relined(nested, rungs)))
     end
 
     test "its rungs come after its declarations, each on a line of its own" do
@@ -2944,6 +3032,110 @@ defmodule Logex.FunctionBlockTest do
     end
   end
 
+  # A block's compiled body is a %Logex.Program{} named after the block (docs/organisation.md
+  # §4.10), which the runtime, a configuration and an edit take as they take any program.
+  # Each instance its body declares names a type its `blocks` holds, and every reader of
+  # its tag table there reads that type, as a compile does (Logex.Program.typed_tags/1).
+  describe "a block's compiled body, run as a program" do
+    @timed_seal """
+    function_block seal
+    var_input start bool
+    var_output run bool
+    var_output n dint 3
+    var t ton
+
+    xic start ton t 100
+    xic t.dn ote run
+    """
+
+    @pair """
+    function_block pair
+    var_input a bool
+    var_output r bool
+    var_output m dint
+    var s seal
+    var x bool
+
+    cal s a x m
+    xic x ote r
+    """
+
+    defp pair(source \\ @pair, seal \\ @timed_seal), do: block!(source, [block!(seal)]).body
+
+    test "starts each instance it holds as its type says, and runs it" do
+      body = pair()
+      assert body.tags["s"].type == {:block, "seal"}
+      in_a_program = program!("var s seal", [block!(@timed_seal)])
+      state = Runtime.instance(body)
+      assert state.env["s"] == Runtime.instance(in_a_program).env["s"]
+      assert state.env["s"]["n"] == 3 and state.env["s"]["t"]["pre"] == 100
+
+      # The timer's preset is the 100 its `ton` gives it: done 100 ms after `a` rises.
+      {outputs, state} = drive(body, state, [{0, %{"a" => 0}}, {50, %{"a" => 1}}, {60, %{}}])
+      assert outputs == %{"m" => 3, "r" => 0} and state.env["s"]["t"]["acc"] == 60
+      assert {%{"m" => 3, "r" => 1}, _} = step(body, state, %{}, 50)
+    end
+
+    test "a key inside an instance it holds is told what it names" do
+      body = pair()
+
+      raises(
+        "input `s.run` names a member of `s`, an instance of `seal`: only a var_input is set " <>
+          "from outside",
+        fn -> Runtime.put_inputs(body, Runtime.instance(body), %{"s.run" => 1}) end
+      )
+    end
+
+    test "a configuration reads the instances it holds by path" do
+      body = pair()
+
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [body],
+          globals: [],
+          instances: [%Configuration.Instance{name: "m1", type: "pair"}],
+          connections: [%Configuration.Connection{instance: "m1", member: "a", to: 1}]
+        )
+
+      {rt, _outputs, _events} = Runtime.cycle(Runtime.start(config), 10, %{})
+      assert Runtime.get(rt, "m1.s.run") == {:ok, 0}
+      assert Runtime.get!(rt, "m1.s.n") == 3
+
+      assert Runtime.get(rt, "m1.s") ==
+               {:error,
+                "`m1.s` is an instance of `seal`: an access path names one of its members, " <>
+                  "as in `m1.s.run`"}
+    end
+
+    test "an edit takes it, each instance it holds moving whole" do
+      body = pair()
+      state = Runtime.instance(body)
+      added = pair(String.replace(@pair, "var x bool\n", "var x bool\nvar k dint 4\n"))
+      assert {:ok, edit, [{:added, "k", 4}]} = Edit.accept(body, added, state)
+      {_edit, tested, _report} = Edit.test(edit, state)
+      assert tested.env["k"] == 4 and tested.env["s"] == state.env["s"]
+    end
+
+    test "an edit refuses a change of a held instance's member kind, by its path" do
+      body = pair()
+      state = Runtime.instance(body)
+
+      retyped =
+        pair(
+          String.replace(@pair, "var x bool\n", "var x bool\nvar y bool\n")
+          |> String.replace("cal s a x m", "cal s a x y"),
+          String.replace(@timed_seal, "var_output n dint 3", "var_output n bool")
+        )
+
+      assert {:error, [diagnostic]} = Edit.accept(body, retyped, state)
+
+      assert Diagnostic.format(diagnostic) ==
+               "line 5: `s.n` is a dint in the running program and a bool in the candidate: " <>
+                 "a member's type changes only with a restart"
+    end
+  end
+
   describe "growth in the depth of nesting" do
     # A chain of n block types, each holding the next and running it, the deepest holding
     # a one-shot and a timer.
@@ -3069,6 +3261,55 @@ defmodule Logex.FunctionBlockTest do
     end
   end
 
+  describe "growth in the paths to a type" do
+    # A diamond `depth` levels deep: two types at each level, `l<k>` and `r<k>`, each
+    # holding one instance of each of the two below and running both, so a type k levels
+    # down is reached through 2^k paths, though each body holds each type it names once.
+    defp diamond(depth) do
+      leaf = fn side ->
+        block!("function_block #{side}0\nvar_input a bool\nvar_output q bool\nxic a ote q")
+      end
+
+      {top, _right} =
+        Enum.reduce(1..depth, {leaf.("l"), leaf.("r")}, fn k, {l, r} ->
+          level = fn side ->
+            block!(
+              "function_block #{side}#{k}\nvar_input a bool\nvar_output q bool\n" <>
+                "var u l#{k - 1}\nvar v r#{k - 1}\nvar x bool\ncal u a x\ncal v x q",
+              [l, r]
+            )
+          end
+
+          {level.("l"), level.("r")}
+        end)
+
+      top
+    end
+
+    # Logex.FbType.user?/1 checks each type once a call, however many paths reach it, so
+    # it, and a compile given the type, stay linear in the types. At 6 and 12 levels,
+    # twice the depth took 2.01x and 1.95x the reductions in every run; with each type
+    # checked again wherever a path reaches it, 64.8x. Each bound is a fifth above.
+    test "a type reached through many paths is checked once" do
+      measured =
+        for d <- [6, 12], into: %{} do
+          type = diamond(d)
+          source = "var_input a bool\nvar_output y bool\nvar p l#{d}\ncal p a y"
+
+          {d,
+           {reductions(fn -> true = FbType.user?(type) end),
+            reductions(fn -> {:ok, _} = Logex.compile(source, name: "m", types: [type]) end)}}
+        end
+
+      for {what, index, bound} <- [{"user?/1", 0, 2.42}, {"a compile given it", 1, 2.34}] do
+        ratio = elem(measured[12], index) / elem(measured[6], index)
+
+        assert ratio < bound,
+               "twice the depth took #{Float.round(ratio, 2)}x the reductions for #{what}"
+      end
+    end
+  end
+
   describe "growth in a block's members" do
     # `wide`, a block of m var_inputs and m var_outputs, each output driven by its input
     # through `contact`.
@@ -3141,6 +3382,35 @@ defmodule Logex.FunctionBlockTest do
     end
   end
 
+  describe "growth in a block's body" do
+    # Accept reads each block type's body once, however many instances run it, so at 100
+    # instances, 4x the rungs of the block's body cost little more: 50 and 200 rungs took
+    # 1.12x the reductions in every run; with the body read again for each instance,
+    # 3.34x. The bound is a fifth above.
+    test "accept reads a block's body once, however many instances run it" do
+      accept = fn r ->
+        big =
+          block!(
+            "function_block big\nvar_input go bool\nvar_output q bool\nvar n dint\n" <>
+              String.duplicate("xic go move 1 n\n", r) <> "xic go ote q"
+          )
+
+        head =
+          "var_input a bool\nvar_output y bool\nvar_output z bool\n" <>
+            Enum.map_join(1..100, "", &"var p#{&1} big\n") <>
+            Enum.map_join(1..100, "\n", &"cal p#{&1} a y")
+
+        v1 = program!(head, [big])
+        v2 = program!(head <> "\nxic a ote z", [big])
+        {_, state} = step(v1, Runtime.instance(v1), %{}, 0)
+        reductions(fn -> {:ok, _, _} = Edit.accept(v1, v2, state) end)
+      end
+
+      ratio = accept.(200) / accept.(50)
+      assert ratio < 1.35, "4x the body's rungs took #{Float.round(ratio, 2)}x the reductions"
+    end
+  end
+
   describe "growth in the size of a term" do
     # Each nested block type is held once, in its holder's body, its member naming it:
     # held twice, as a member's type and a tag's, a copy that keeps no sharing (a message to
@@ -3170,15 +3440,17 @@ defmodule Logex.FunctionBlockTest do
         )
 
     # docs/organisation.md §4.10, "Held types": a body holds each block type its instances
-    # are of once, in `blocks`, each instance's tag naming it, so a type copied flat grows
-    # with its width and its depth, not as the width to the power of the depth. At width 1
-    # and 2 and depth 6 and 12, twice the depth took 1.92x and 1.94x the words, at width 1
-    # and 2, and twice the width 1.40x and 1.42x, at depth 6 and 12; held in each
-    # instance's tag, twice the depth took 64.7x at width 2, and twice the width 19.3x and
-    # 654x. A compile given the type checks each type once (Logex.FbType.user?/1), and
-    # took 1.81x and 1.86x the reductions for twice the depth, 1.36x and 1.40x for twice
-    # the width, as it did with the type held in each tag, whose copies shared it. Each
-    # bound is a fifth above the highest of 25 runs of the suite, every run alike.
+    # are of once, in `blocks`, each instance's tag naming it, so a type each of whose types
+    # is reached through one holder, as here, grows copied flat with its width and its
+    # depth, not as the width to the power of the depth ("growth in the paths to a type"
+    # has two holders a level). At width 1 and 2 and depth 6 and 12, twice the depth took
+    # 1.92x and 1.94x the words, at width 1 and 2, and twice the width 1.40x and 1.42x, at
+    # depth 6 and 12; held in each instance's tag, twice the depth took 64.7x at width 2,
+    # and twice the width 19.3x and 654x. A compile given the type checks each type once
+    # (Logex.FbType.user?/1), and took 1.81x and 1.86x the reductions for twice the depth,
+    # 1.36x and 1.40x for twice the width, as it did with the type held in each tag, whose
+    # copies shared it. Each bound is a fifth above the highest of 25 runs of the suite,
+    # every run alike.
     test "a type copied flat, and a compile given it, stay linear in the width and the depth" do
       measured =
         for w <- [1, 2], d <- [6, 12], into: %{} do

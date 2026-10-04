@@ -407,8 +407,12 @@ defmodule Logex.Edit do
   # member it adds or drops, change with an edit, the state moving by member name (the
   # nested migration, §4.9; decision 31). A member whose kind changes is cited by its path,
   # at the line of the instance that holds it. Each is cited in the candidate's file, where
-  # it has one (fix F15).
-  defp retyped(%Program{tags: running}, %Program{tags: candidate, file: file}) do
+  # it has one (fix F15). Each program's tags are read with each instance's type itself, as
+  # a block's compiled body, which runs as a program too, names the types it holds.
+  defp retyped(%Program{} = original, %Program{file: file} = edited) do
+    running = Program.typed_tags(original)
+    candidate = Program.typed_tags(edited)
+
     retyped =
       for {name, %Tag{type: type, line: line}} <- candidate,
           {:ok, %Tag{type: was}} <- [Map.fetch(running, name)],
@@ -474,8 +478,12 @@ defmodule Logex.Edit do
     }
   end
 
-  defp facts(%Program{tags: tags} = program) do
-    {writes, ons, called, bodies} = rungs(program)
+  # A program's tags with each instance's type itself (Logex.Program.typed_tags/1), as
+  # every walk below reads them: a block's compiled body, which runs as a program too,
+  # names each type it holds.
+  defp facts(%Program{rungs: rungs} = program) do
+    tags = Program.typed_tags(program)
+    {writes, ons, called, bodies} = rungs(rungs, tags)
 
     %{
       tags: tags,
@@ -599,7 +607,7 @@ defmodule Logex.Edit do
   # (decision 21, by path). Its bit is written as many times as its block's body writes
   # it. Each block type's body is read once, however many instances run it, and the walk
   # down is linear in the instances.
-  defp rungs(%Program{rungs: rungs, tags: tags}) do
+  defp rungs(rungs, tags) do
     bodies = bodies(for({_, %Tag{type: %FbType{body: %Program{}} = type}} <- tags, do: type), %{})
 
     Enum.reduce(rungs, {%{}, [], %{}, bodies}, fn {:rung, elements}, {writes, ons, called, _} ->

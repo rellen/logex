@@ -41,7 +41,9 @@ defmodule Logex.Program do
   every instance of a function block a map of its members at theirs (M1-6).
 
   An instance of a user function block (M2-5) starts as its type says, every member at its
-  initial value and every instance it holds at its own, at any depth (`Logex.FbType`).
+  initial value and every instance it holds at its own, at any depth (`Logex.FbType`). A
+  block's compiled body, which runs as a program too, is read through `typed_tags/1`, so
+  each instance whose type its `blocks` holds starts so as well.
 
   The one rule for a new piece of state (`docs/organisation.md` §4.9):
   `Logex.Runtime.instance/1` and `restart/3` start every tag by it, an online edit's
@@ -58,8 +60,8 @@ defmodule Logex.Program do
   started, whose value a restart keeps: neither is so reported. M2-6 will add an event
   task's trigger.
   """
-  def initial_env(%__MODULE__{tags: tags}),
-    do: Map.new(tags, fn {name, tag} -> {name, start(tag)} end)
+  def initial_env(%__MODULE__{} = program),
+    do: Map.new(typed_tags(program), fn {name, tag} -> {name, start(tag)} end)
 
   defp start(%Logex.Tag{type: %Logex.FbType{} = type, initial: nil}),
     do: Logex.FbType.initial(type)
@@ -77,12 +79,13 @@ defmodule Logex.Program do
   tag as it is (M2-5). It is the table a compile works over, which the walks that read an
   instruction's slots in a body (`Logex.Compiler.signature/2`, `Logex.Warnings.of/2`) take.
   Its tags share each type, so it costs one entry per tag, and no copy of a type. A name
-  `blocks` lacks, which only a body built by hand can give, is left as it is.
+  `blocks` lacks, or `blocks` that are no map, which only a program built by hand can
+  give, is left as it is.
   """
   def typed_tags(%__MODULE__{tags: tags, blocks: blocks}),
     do: Map.new(tags, fn {name, tag} -> {name, typed(tag, blocks)} end)
 
-  defp typed(%Logex.Tag{type: {:block, name}} = tag, blocks),
+  defp typed(%Logex.Tag{type: {:block, name}} = tag, blocks) when is_map(blocks),
     do: held(Map.fetch(blocks, name), tag)
 
   defp typed(tag, _blocks), do: tag
