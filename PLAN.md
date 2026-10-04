@@ -1506,7 +1506,12 @@ the configuration file's must be built that way before they land.
   refusal in a block's file with a located diagnostic; (3) the binding checks and the two
   writer warnings, from the walk, into M2-1's `check/1`; (4) one copy of a global at run
   time, the Done-when and the documents. The walk, the block-file refusal and the
-  run-time copy are not spiked.
+  run-time copy are not spiked. *(A throwaway spike of the run-time copy, 2026-10-04,
+  built it on `025199a` against a model with no merge or split, every rule red when
+  reverted; decisions 46–49 and §4.10's rules settled what it found. The Done-when is
+  tested on §4.4's plant at a cycle both tasks are due, 50 ms, with a second test that a
+  pulse shorter than `m2`'s interval never reaches it (decision 46). The survey is
+  committed first, on its branch, since CLAUDE.md asks for the survey before the code.)*
 - **M2-5 · User function blocks.** `function_block <name>` as a file's first line,
   matching the file name; *(its first rung since 2026-10-02: comments and blank lines may
   come before it, §4.10)*
@@ -1562,7 +1567,13 @@ the configuration file's must be built that way before they land.
   `ton` inside a block. It reserves `single`, and lands as: (1) `single`: its stanza, its
   task lines, the warning from the walk, and `single` on `Logex.Configuration.Task`; (2)
   edges at run time, the Done-when and the documents. The reader and the checks are
-  spiked; the edges at run time are not.
+  spiked; the edges at run time are not. *(Reordered 2026-10-04: a throwaway spike of the
+  edges at run time, on `025199a`, found that after (1) `cycle/3` raises
+  `ArithmeticError` on an event task, against the host contract. So the stanza comes
+  first, then the data and the run time (the field, `check/1`'s rows, the edges, the
+  Done-when from data, the contract walk), then the text (the task lines, `single`
+  reserved, the warning from the walk, the Done-when from source) and the documents.
+  Decisions 50–52 and §4.10's rules settled what the spike found.)*
 
 The scheduling rules are decided too: PRIORITY on every task, 0 the highest; ties go to
 the earlier due time, then declaration order; no preemption; missed periods coalesced,

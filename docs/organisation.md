@@ -412,7 +412,11 @@ not through a connection. `snapshot.ld` is four declarations (`var_input a bool`
 `var_input b bool`, `var_output a_was bool`, `var_output b_was bool`) and two rungs,
 `xic a ote a_was` and `xic b ote b_was`. The `trip` task has priority 0, so on the cycle
 the e-stop rises it runs before `m1` and `m2`. It records which contactors were closed at
-the trip, reading the output points back, which is allowed.
+the trip, reading the output points back, which is allowed. *(Worded more exactly
+2026-10-04, decision 46: it runs before any instance due in that cycle. An instance sees a
+global when it runs, so `m2`, on the 50 ms task, sees the e-stop only at its next scan, and
+an e-stop must be held at least as long as the slowest interval that reads it, as a
+maintained e-stop contact is: a 10 ms pulse never reaches `m2`.)*
 
 **Line shapes.** Every line is a keyword line, like M1-3's declarations, or a connection
 line, which starts with a qualified name. Indentation is cosmetic.
@@ -1601,6 +1605,28 @@ any value that is not the struct is.)*
 - *In a block's file,* `var_external` is refused with a located diagnostic. That departs
   from IEC, which allows it, deliberately and reversibly (§4.8): a block takes a global
   through a var_input operand.
+- *Settled by the run-time spike, 2026-10-04* (decisions 46–49 and these):
+  - the copy-out of a connection lands after the `var_external` is split off (decision
+    47), and visibility otherwise follows the scan order, with no rule of its own;
+  - a `var_external` named in a connection gets its own message: it reaches the global
+    itself, so only a var_input or var_output connects;
+  - a lone instance's `var_external` is its own tag at 0, refused as an input and reset to
+    0 by `restart/3`: exactly a one-instance configuration with an unlocated global of no
+    initial value that no other instance uses, which `Logex.Runtime`'s moduledoc and §4.6
+    say beside "`scan/2` and a one-line configuration give identical outputs";
+  - the write check on an input point is made once a program type, at its first instance,
+    naming the type's file and the line of the first write, so the IR walk gives each
+    written tag its first line;
+  - M2-2's warnings for a global nothing uses and an output point nothing drives count a
+    `var_external` of an instantiated type as a use, and a write through one as driving;
+  - `get/2` reads a `var_external`'s path as the global directly;
+  - a `var_external` may not be named like a word the configuration file reserves, as
+    `Logex.Configuration.Text`'s list stands when M2-4 lands; M2-6's commit names
+    `var_external single` among the names it breaks;
+  - the two warnings go through M2-2's warnings pipeline, which `start/1` never reads,
+    with each connection's instance found through an index made once, so checking stays
+    linear in the instances;
+  - "one copy" is pinned by a test that looks inside the resource (decision 49).
 
 **M2-6 · Event tasks.**
 - *`single` with `interval`:* decision 39. A task with `single` alone never overlaps.
@@ -1616,6 +1642,30 @@ any value that is not the struct is.)*
 - *Warning:* a `ton` in a program an event task runs, whether the task has `single` alone
   or with `interval`, a `ton` inside a block the program's `cal`s run included (§4.6's
   caveat).
+- *Settled by the run-time spike, 2026-10-04* (decisions 50–52 and these):
+  - `next_due_in/1` counts periodic due times only, and the host's loop cycles at once
+    after `start/1` and `restart/2` whatever it says (decision 50);
+  - an edge run's due time, for the tie-break, is the cycle's `now`, also for a task with
+    `interval` whose periodic due time came in the same cycle, since decision 39 skips
+    that due time;
+  - a late host's edge cycle skips, and does not count, the due times since the last
+    sample (decision 51), and a falling cycle runs a due time that came while the image
+    held 1 (decision 52);
+  - the owed tie-break test is written in both forms: two writers of one global through
+    `var_external` (M2-4 lands first) in `end_to_end_test.exs`, and, beside the rule
+    tests, one instance writing a global that another copies to an output point;
+  - `Logex.Configuration.Task` enforces `name` and `priority` only, and a test pins the
+    enforced keys;
+  - an unknown `single`'s did-you-mean is among the bool globals; an example in a message
+    names the task only when its name is one; a dotted `single` gets M2-2's readings of a
+    location or an instance path;
+  - `overlaps/1` lists an event-only task at 0, and no new event kind is added;
+  - a trigger nothing can raise, an unlocated global that nothing writes, fires once a
+    start if its initial value is 1 and never otherwise; the documents say so, and the
+    warning waits for the one for a global read and written by nothing, with `var_config`;
+  - the one contract walk draws event tasks too, its oracle counting skipped periods, and
+    asserts its reach;
+  - the commits land data and run time first, then the text (PLAN M2-6).
 
 ---
 
@@ -1850,8 +1900,10 @@ as E1–E9. Decisions 30–40 are Milestone 2's design (§4.10), taken on 2026-1
 recommended but 35, the configuration file's extension, where the maintainer chose
 `.logex`, outside the options offered. Decisions 41–45 were taken on 2026-10-04, after
 M2-1 landed: 41 outside the options recommended, the others as recommended, 42 with no
-preference stated. All forty-five are kept with their options so the reasons stay with
-them.
+preference stated. Decisions 46–52 were taken the same day, all as recommended, from two
+throwaway spikes of the run-time pieces no design spike had built, one copy of a global
+(M2-4) and event tasks (M2-6). All fifty-two are kept with their options so the reasons
+stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -2287,6 +2339,78 @@ to OE-2.
     *Recommend the running program's in, the candidate's out.* It keeps decision 25's one
     rule for a section change and leaves the global alone. How OE-2 reports the write into
     a shared global when a `var` becomes a `var_external` stays OE-2's to design. Adopted.
+
+**From the spikes of M2-4's and M2-6's run time, decided 2026-10-04.** Two throwaway
+spikes on `025199a` built the pieces of Milestone 2 no design spike had: one copy of a
+global at run time, and event tasks at run time, each against an independent model, every
+rule reverted alone and red. They found the record right in its rules and silent or wrong
+in the places below. Their routine answers are §4.10's rules under M2-4 and M2-6.
+
+46. **The e-stop Done-when (M2-4).** PLAN M2-4's "stops both in the same cycle" holds only
+    in a cycle where both instances run: on §4.4's plant `m1` runs every 10 ms and `m2`
+    every 50 ms, and a 10 ms e-stop pulse never reaches `m2`.
+    - Keep the words and test them on §4.4's plant with the e-stop raised at a cycle both
+      tasks are due, 50 ms, beside a test that pins the sampling; §4.4 says an e-stop must
+      be held at least the slowest interval that reads it;
+    - reword the Done-when to "each instance stops at its next scan";
+    - or add a mechanism that reaches every reader in the cycle the e-stop rises, which no
+      decided text asks for.
+
+    *Recommend the first.* It keeps the decided words true of the decided plant and
+    documents what they do not say. Adopted.
+47. **A write through a `var_external` and a connection's copy-out to one global, in one
+    scan (M2-4):** the copy-out lands last, after the `var_external` is split off, as
+    IEC and MatIEC write an external during the body and `=>` after it; or the write
+    through the `var_external` lands last; or a global one instance both writes through a
+    `var_external` and drives by a connection is refused. *Recommend the copy-out last,*
+    stated in `Logex.Runtime`'s cycle steps and in the warning's words; a refusal would
+    refuse what IEC allows and §4.4 makes a warning. Adopted.
+48. **The two writer warnings' words (M2-4).** The design's "the later of the two in a
+    cycle wins" is false for two instances that only latch one alarm, for an `ons` whose
+    storage bit is a `var_external` shared by two instances (the second never fires on the
+    same edge), and for one instance that writes a global both ways (its copy-out wins
+    whatever the order).
+    - One wording true of all, "each scan reads what the other last wrote, and the later
+      write in a cycle stands", with the same-instance case in its own words ("its own
+      copy-out, after the scan, stands") and the shared storage bit in the one-shot
+      warning's words;
+    - warn only where a writer writes every scan (`ote`, `move`, `ons`), sparing latches;
+    - or, as the first, and refuse an `ons` on a `var_external` storage bit in `.ld`.
+
+    *Recommend the first,* keeping the two decided warnings and their scope; the refusal
+    stays a later tightening, since refusing later breaks programs and warning now does
+    not. Adopted.
+49. **How "one copy of each global" is pinned (M2-4).** It cannot be seen through the
+    public API: reverting any of the three places that drop a global from an instance's
+    state left the spike's whole suite green. Pin it by a test that looks inside the
+    opaque `%Logex.Runtime{}` on purpose, as the plain-data test does; or only through
+    OE-2's switch, when it lands; or let the state keep a stale copy, overwritten at
+    every merge. *Recommend the test that looks inside:* the drops are one line each and a
+    refactor can lose them, and decision 45's switch depends on them. Adopted.
+50. **`next_due_in/1` with event tasks, and the host's loop (M2-6).** It counts periodic
+    tasks only, so a configuration of event tasks, or of task-less instances alone, as on
+    main already, answers `:infinity`, against the moduledoc's "`next_due_in/1` is 0 after
+    `start/1` and after `restart/2`".
+    - Periodic due times only, and the host's loop restated: a runner cycles at once after
+      `start/1` and `restart/2`, whatever `next_due_in/1` says; a trigger written by logic
+      fires at the next cycle the runner makes;
+    - the same, and 0 after `start/1` and `restart/2` for an event-only task;
+    - or 0 whenever an edge is pending, which a task-less instance raising two triggers in
+      turn holds at 0 for ever, a livelock in zero time.
+
+    *Recommend periodic due times only, the loop restated.* A pending edge's hazard is a
+    runner's concern, and the runner is not designed. Adopted.
+51. **A late host's edge cycle (M2-6).** For a task with `single` and `interval`, the
+    periodic due times that came between the last cycle, whose sample was 0, and this
+    one, whose sample is 1: skipped and not counted, as decision 39 reads by this cycle's
+    sample; or counted as missed periods. *Recommend skipped, not counted.* It hides a
+    host's lateness only while the trigger is 1, when rule 2 owes no periodic run anyway.
+    Adopted.
+52. **A late host's falling cycle (M2-6).** A periodic due time that came while the input
+    image still held 1, in a cycle that samples 0: it runs, since the sample decides; or
+    it is skipped, since the image held 1 until this cycle's merge. *Recommend it runs:*
+    one rule for every source of trigger, since only the sample is known both for a
+    trigger written by logic and for an input point. Adopted.
 
 ---
 
