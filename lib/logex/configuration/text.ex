@@ -59,8 +59,9 @@ defmodule Logex.Configuration.Text do
   **What a line can say.** `entries!/1` is the text's own definition of its data, as
   `Logex.Parser.well_formed!/1` is a program's: exactly the entries a line can say, and so
   exactly those `print/1` can print and `read/1` read back. Data from Elixir is not held
-  to it until it is printed, so `Logex.Configuration.new!/1` still takes a global named
-  `at`, which no line can declare.
+  to it until it is printed: `Logex.Configuration.check/1` refuses a global named `at`,
+  which no line can declare, as it refuses one named `program`, which a line can, since a
+  configuration file's keyword names nothing in one.
   """
 
   alias Logex.{Declarations, Diagnostic, FbType}
