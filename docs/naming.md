@@ -2,11 +2,12 @@
 
 Every logex instruction is named after surveying what IEC 61131-3 and the major vendors
 call the same operation. This file is that survey: the reference tables first, then one
-stanza per mnemonic or declaration word. It is **append-only** — a stanza with no implementation is fine and
+stanza per mnemonic, declaration word or configuration file's word. It is **append-only** — a stanza with no implementation is fine and
 encouraged, so an instruction can be surveyed long before it is built.
 
-`test/logex/naming_test.exs` fails if a mnemonic reaches `@instructions` without a stanza
-here.
+`test/logex/naming_test.exs` fails if a mnemonic reaches `@instructions`, a declaration
+word `Logex.Declarations`, or a configuration file's word `Logex.Configuration.Text`,
+without a stanza here.
 
 ## Why survey at all
 
@@ -52,9 +53,9 @@ because IEC gives those only a picture.
 Copy the template, fill every dialect row, and mark anything you could not check
 `unverified` rather than guessing. New stanzas go at the **end of the file**, under
 `## Stanzas` — the file is append-only and the reference tables above stay where they are.
-A stanza is owed by anything that becomes a key of `@instructions`, and by each section or
-type word of a declaration line; syntax tokens like the branch delimiters are not words and
-need none. Read across stanzas with
+A stanza is owed by anything that becomes a key of `@instructions`, by each section or
+type word of a declaration line, and by each word of a configuration file's lines; syntax
+tokens like the branch delimiters are not words and need none. Read across stanzas with
 `sed -n '/^## Stanzas/,$p' docs/naming.md | grep '^### '` — the reference tables above also
 use `###` headings, so a bare grep matches those too.
 
@@ -588,3 +589,48 @@ words of `PLAN.md` M1-3's declaration lines, surveyed before their code.
 **Chosen:** `ge`
 **Why:** Rule 1, as `eq`, with the operand order of `lt`.
 **Checked:** 2026-09-30, as `eq`.
+
+### `program` — instantiate a program type in a configuration
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `program m1 motor`, `program m1 motor with fast` | A line of a configuration file (`.logex`): an instance `m1` of the program type `motor`, compiled from `motor.ld` beside it. The type is always the third word, and is named only there, so `program motor motor` is no clash. Without `with` the instance has no task and runs once in every cycle, after the tasks. Reserved, in any case, in a configuration file only (`docs/organisation.md` §4.8): a program's `.ld` file has no header line and never spells its own type. |
+| IEC 61131-3 | **PROGRAM** … **WITH** … **:** | Ed 2 §2.7.1 Table 49 (p.112) features 6a, *"WITH construction for PROGRAM to TASK association"*, and 6c, *"PROGRAM declaration with no TASK association"*; Figure 20 (p.113): `PROGRAM P1 WITH SLOW_1 : F(x1 := %IX1.1) ;`. Ed 2 §2.5.3 (p.83): *"Programs can only be instantiated within resources"*. Ed 3 Table 62 (pp.178–179) and Figure 28 the same. Ed 2 Table C.2 lists `PROGRAM...WITH...`. |
+| Conventional | a **program**, defined and scheduled at once | *"Programs can be scheduled under only one task."* and *"Scheduled programs must be defined."* (import/export reference, Sept 2025, p.63). That it has no type and instance apart is an inference (`docs/organisation.md` §8). |
+| Siemens STEP 7 / TIA Portal LAD | no program instance: an organization block (OB) the operating system calls, which calls FBs and FCs | *"OBs are the interface between the operating system and the user program. They are called by the operating system"*; *"Several Main OBs can be created in a program. The OBs are processed sequentially by OB number."* (Siemens *Programming Guideline for S7-1200/S7-1500*, Entry ID 81318674, V1.5, 03/2017, §3.2.1, pp.43–44). No keyword. |
+| CODESYS | a POU of type PROGRAM, in a task's list of program calls | *"You can configure the priority, the type with time behavior, and a watchdog. You can also add PROGRAM calls."* (*Object: Task*, help read 2026-10-02). |
+| Mitsubishi GX Works | a **program block** in a program file | *"A program block is a unit for making up a program. Multiple program blocks can be created in a program file and executed in the order specified in the program file setting."* (Mitsubishi *MELSEC iQ-R Programming Manual (Program Design)*, SH(NA)-081265ENG-R, §3.1, p.12). GX Works3; no keyword names an instance of one. |
+
+**Chosen:** `program`
+**Why:** Rule 1, IEC's keyword lowercased, for the same thing: a program type instantiated in a configuration. The order of the words is logex's: IEC writes `PROGRAM inst WITH task : type`, and with the `:` dropped that order reads badly, so the type is always the third word and `with` comes last (`docs/organisation.md` §4.4).
+**Checked:** 2026-10-02. IEC 61131-3:2003 §2.5.3, §2.7.1 Table 49 and Figure 20, Table C.2, and IEC 61131-3:2013 Table 62 and Figure 28, read directly; the conventional family's import/export reference (Sept 2025); CODESYS online help, *Object: Task*; Siemens *Programming Guideline for S7-1200/S7-1500*, Entry ID 81318674, V1.5, 03/2017; Mitsubishi *MELSEC iQ-R Programming Manual (Program Design)*, SH(NA)-081265ENG-R. Each quotation and page number checked again against the text of its source on 2026-10-04.
+
+### `var_global` — declare a global of a configuration
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var_global estop bool`, `var_global setpoint dint 900`, `var_global k1 bool at panel.q.0` | A line of a configuration file (`.logex`): a bool or a dint with one value for the whole configuration. Unlocated, it may take an initial value; located with `at` it is an input or an output point and takes none. Instances reach it through a connection, `m1.start estop`, or by name through `var_external`. Reserved, in any case, in a configuration file only (`docs/organisation.md` §4.8), so a program's `.ld` file may still name a tag `var_global`. |
+| IEC 61131-3 | **VAR_GLOBAL** … END_VAR | Ed 2 Table 16a (p.39): *"Global variable declaration (2.7.1)"*; Table 49 (p.112) feature 2, *"VAR_GLOBAL...END_VAR construction within CONFIGURATION"*, and 7, *"Declaration of directly represented variables in VAR_GLOBAL"*; §2.4.3 (p.40): such variables *"are only accessible to a program organization unit via a VAR_EXTERNAL declaration"*. Ed 3 Figure 7 (p.50) and Table 62 features 2 and 7. |
+| Conventional | a controller-scope tag | *"Controller tags are seen by routines in any program."* (import/export reference, Sept 2025, ch.8): no declaration is needed to reach one. |
+| Siemens STEP 7 / TIA Portal LAD | a PLC tag, or a tag of a **global data block** | *"Variable data is located in data blocks that are available to the entire user program."*, *"All blocks in the user program can access global DBs."* (Siemens *Programming Guideline for S7-1200/S7-1500*, Entry ID 81318674, V1.5, 03/2017, §3.2.7, p.52); *"The global memory area is available for each block in the user program."* (§3.4, p.60). No VAR_GLOBAL keyword in that source. |
+| CODESYS | **VAR_GLOBAL**, in a global variable list | *"You declare global variables in global variable lists or in the declaration part of programming objects between the keywords VAR_GLOBAL and END_VAR."* (*Variable: VAR_GLOBAL*, help read 2026-10-02). |
+| Mitsubishi GX Works | a **global label**, class **VAR_GLOBAL** | *"A label that is valid for all the program data when multiple program data are created in the project."* (Mitsubishi *MELSEC iQ-R CPU Module User's Manual (Application)*, SH(NA)-081264ENG-AR, Terms, p.35); its class is VAR_GLOBAL, as for a global FB instance (Mitsubishi *MELSEC iQ-R Programming Manual (Program Design)*, SH(NA)-081265ENG-R, §3.3, p.24). |
+
+**Chosen:** `var_global`
+**Why:** Rule 1, IEC's keyword lowercased, spelled as `var_input` and `var_output` are. One declaration a line and no END_VAR, as M1-3's declarations. A global is a bool or a dint: a function block instance stays inside its program (`var t1 ton`).
+**Checked:** 2026-10-02. IEC 61131-3:2003 §2.4.3, Table 16a and Table 49, and IEC 61131-3:2013 Figure 7 and Table 62, read directly; the conventional family's import/export reference (Sept 2025); CODESYS online help, *Variable: VAR_GLOBAL*; Siemens *Programming Guideline for S7-1200/S7-1500*, Entry ID 81318674, V1.5, 03/2017; Mitsubishi *MELSEC iQ-R Programming Manual (Program Design)*, SH(NA)-081265ENG-R; Mitsubishi *MELSEC iQ-R CPU Module User's Manual (Application)*, SH(NA)-081264ENG-AR. Each quotation and page number checked again against the text of its source on 2026-10-04, which corrected Ed 3's Table 62 features from 2 and 4 (a global in a resource) to 2 and 7.
+
+### `at` — give a global a location
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var_global k1 bool at panel.q.0`, `var_global sp_1 dint at drive.q.0`, `… at rack.i.2.7` | Makes a global a point: `i` an input point, set only from the input image, `q` an output point, returned in the output image. A location is a device's name, `i` or `q` in lowercase, then one whole-number field or more with no leading zero, the leftmost the highest, so each point has one spelling; it lexes as one name. One address holds one global, and two device names that differ only in case are refused, as two names are. What a device and an address mean is the host's (`docs/organisation.md` §4.5). Reserved, in any case, in a configuration file only (`docs/organisation.md` §4.8), so a program's `.ld` file may still name a tag `at`. |
+| IEC 61131-3 | **AT** | Ed 2 §2.4.3.1 (p.41): *"The assignment of a physical or logical address to a symbolically represented variable shall be accomplished by the use of the AT keyword"*, *"in programs and VAR_GLOBAL declarations only"*. Ed 2 §2.4.1.1 (p.37): a direct representation is `%`, a location prefix (I, Q, M), a size prefix (X, B, W, D, L) and *"a hierarchical physical or logical address with the leftmost field representing the highest level of the hierarchy"*, as `%IX1.1`. Ed 2 Table C.2 lists AT. |
+| Conventional | an alias tag on an I/O member | `tag_name [OF alias]` (import/export reference, ch.6, p.124), over I/O tags such as `Local:0:I.Data` (general instructions reference, p.563): no location keyword. |
+| Siemens STEP 7 / TIA Portal LAD | a PLC tag with an absolute address, `%I0.0` | *"PLC tag of the type of the created PLC data type and start address of the I/O data area (%Ix.0 or %Qx.0, e.g., %I0.0, %Q12.0, …)"* (Siemens *Programming Guideline for S7-1200/S7-1500*, Entry ID 81318674, V1.5, 03/2017, §3.6.5, p.75). The word `AT` names something else there: an *"AT instruction"*, an access type of a non-optimized block (Table 2-6, p.18); what it does was not read in a primary source (`unverified`). |
+| CODESYS | **AT** `%IX7.5` | *"The `AT` keyword in the variables declaration assigns to a project variable a specific input address, output address, or memory address of the controller which is configured in the device tree."* Syntax `<variable name> AT %<address>:<data type>;` (*AT Declaration*, help read 2026-10-02). |
+| Mitsubishi GX Works | a global label assigned a device, `X0` an input, `Y0` an output | A global label is *"an optional label, which can be created for any specified device"*; *"Devices such as X, Y, M, D, and others are provided depending on the intended use."* (Mitsubishi *MELSEC iQ-R CPU Module User's Manual (Application)*, SH(NA)-081264ENG-AR, Terms, p.35). No keyword. |
+
+**Chosen:** `at`, with the location `panel.q.0`.
+**Why:** The keyword is rule 1, IEC's lowercased. The location is where this stanza strains rule 3, and says so: IEC has a standard form, `%QX0.0`, and logex coins `panel.q.0`, a named device where IEC writes `%`. It keeps what IEC standardises: `i` and `q` are Table 15's prefixes, lowercased, and the integer fields are IEC's hierarchical address. It drops two things for stated reasons: the size letter, since the declared type carries the size and logex has no BYTE or WORD; and `%`, since a logex host binds devices by name when it starts a runner, and IEC leaves an address's meaning to the manufacturer (§2.4.1.1). It also lexes as one name under the settled `.` rule, where `%` is an illegal character and would need a lexeme of its own. The cost is real: a reader who knows `%QX0.0` must learn that `panel.q.0` is an output on the device `panel`. The fallback, `at %ix0.0` after `at` only, stays open (`docs/organisation.md` decision 6). There is no `m`: memory is an unlocated global.
+**Checked:** 2026-10-02. IEC 61131-3:2003 §2.4.1.1 and §2.4.3.1 and Table C.2, read directly; the conventional family's import/export and general instructions references, as `docs/organisation.md` §3 quotes them; CODESYS online help, *AT Declaration*; Siemens *Programming Guideline for S7-1200/S7-1500*, Entry ID 81318674, V1.5, 03/2017; Mitsubishi *MELSEC iQ-R CPU Module User's Manual (Application)*, SH(NA)-081264ENG-AR. Each quotation and page number checked again against the text of its source on 2026-10-04, the CODESYS page by fetching it again.

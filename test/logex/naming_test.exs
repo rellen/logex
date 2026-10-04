@@ -4,8 +4,9 @@ defmodule Logex.NamingTest do
 
   `docs/naming.md` records what IEC 61131-3 and the major vendors call each
   operation, and why logex chose the name it did. This test fails if a mnemonic
-  reaches `@instructions`, or a section or type word reaches `Logex.Declarations`,
-  without a stanza there.
+  reaches `@instructions`, a section or type word reaches `Logex.Declarations`, or a
+  word of a configuration file's lines reaches `Logex.Configuration.Text`, without a
+  stanza there.
 
   The check is deliberately one-way: a stanza with no implementation is fine and
   encouraged — surveying an instruction long before building it is the point.
@@ -58,6 +59,30 @@ defmodule Logex.NamingTest do
 
     A section or type word is reserved like a mnemonic, and is surveyed like one.
     """
+  end
+
+  test "every word of a configuration file has been surveyed" do
+    words = Logex.Configuration.Text.keywords() |> MapSet.new()
+    unsurveyed = MapSet.difference(words, surveyed_mnemonics())
+
+    assert MapSet.equal?(unsurveyed, MapSet.new()), """
+    These words of a configuration file are in Logex.Configuration.Text but have no stanza
+    in docs/naming.md:
+
+        #{unsurveyed |> Enum.sort() |> Enum.join(", ")}
+
+    Survey a configuration file's word as a mnemonic is surveyed; docs/organisation.md §4.8
+    says where it is reserved.
+    """
+  end
+
+  # The test above reads this list, so the list is pinned: each Milestone 2 item brings
+  # its own words with their stanzas (docs/organisation.md §4.10), and a word dropped
+  # from the list would drop its survey from the check unseen.
+  test "a configuration file's words are those of the items that have landed" do
+    # M2-2: `var_global <name> <type> [at <location>]` and `program <instance> <type>`.
+    assert Enum.sort(Logex.Configuration.Text.keywords()) ==
+             ["at", "bool", "dint", "program", "var_global"]
   end
 
   test "the check is one-way: a surveyed but unimplemented mnemonic is allowed" do
