@@ -1621,4 +1621,127 @@ defmodule Logex.EndToEndTest do
       )
     end
   end
+
+  describe "a configuration file, run by the scheduler (M2-3)" do
+    alias Logex.Configuration
+
+    # The snapshot docs/organisation.md §4.4's plant runs.
+    @snapshot """
+    var_input a bool
+    var_input b bool
+    var_output a_was bool
+    var_output b_was bool
+
+    xic a ote a_was
+    xic b ote b_was
+    """
+
+    # docs/organisation.md §4.4's plant, cut from the document, without its event task,
+    # which M2-6 brings: its `trip` line blanked, so every line keeps its number, and the
+    # snapshot that `trip` runs left with no task, so it runs in every cycle.
+    defp periodic_plant do
+      [_before, rest] =
+        String.split(File.read!("docs/organisation.md"), "```\n// plant.", parts: 2)
+
+      [plant, _after] = String.split("// plant." <> rest, "```", parts: 2)
+      plant |> String.replace(~r/^task trip .*$/m, "") |> String.replace(" with trip", "")
+    end
+
+    # What a motor's scan at `scanned` leaves, `{motor, t1.acc}`: 1 from the scan that saw
+    # its start button until the one that saw its stop button, its timer counting the
+    # clock's time since the first, and 0 and 0 while stopped. Each instance sees the first
+    # start at 100 ms and the stop at 500 ms, and the second start at `restarted`.
+    defp seen(scanned, _restarted) when scanned < 100, do: {0, 0}
+    defp seen(scanned, _restarted) when scanned < 500, do: {1, scanned - 100}
+    defp seen(scanned, restarted) when scanned < restarted, do: {0, 0}
+    defp seen(scanned, restarted), do: {1, scanned - restarted}
+
+    # PLAN.md M2-3's Done-when, as worded on 2026-10-02. The plant is read from its text by
+    # Configuration.compile/3, its program types given as data, since the loader that
+    # reads `motor.ld` beside the file is M2-5's: M2-3's motor, `@motor` above (the §4.2
+    # one with `var t1 ton` and `xic motor ton t1 5000`), and §4.4's snapshot.
+    #
+    # How the inputs are timed. An instance sees an input when a scan of it copies the
+    # input in: `m1`, on the 10 ms task, in the cycle the input changes, and `m2`, on the
+    # 50 ms task, at its next multiple of 50 ms. Each `t1` starts on the scan that first
+    # sees its motor run, which adds nothing, and then adds the one clock's time since its
+    # last scan, 10 ms at a time in `m1` and 50 ms in `m2`. So the two time alike per
+    # rising edge, when both instances see the edge at one time. Both start buttons are
+    # pressed at 100 ms, a time both tasks run, so where both scan the two `.acc`s agree;
+    # both stop buttons at 500 ms, which both see, stop both; and both start buttons again
+    # at 620 ms, which `m2` sees only at 650 ms, so its `.acc` is then 30 ms behind. In 990
+    # ms neither is done. Had they run on, an edge both see would have them done at one
+    # time too, since 5000 ms is a multiple of both periods: the condition PLAN.md M1-6's
+    # two-rate tests, above, pin.
+    test "M2-3's Done-when: §4.4's plant without its event task, cycled every 10 ms from 0 " <>
+           "to 990 ms, runs m1 100 times and m2 20 times, and each t1 times against the one " <>
+           "clock" do
+      assert %Logex.Program{warnings: []} = motor = motor(@motor)
+      programs = %{"motor" => motor, "snapshot" => program_named(@snapshot, "snapshot")}
+      assert {:ok, plant} = Configuration.compile("plant", periodic_plant(), programs)
+
+      assert Enum.map(plant.tasks, &{&1.name, &1.interval, &1.priority}) ==
+               [{"fast", 10, 1}, {"slow", 50, 2}]
+
+      assert Enum.map(plant.instances, &{&1.name, &1.task}) ==
+               [{"m1", "fast"}, {"m2", "slow"}, {"snap", nil}]
+
+      # `estop` is read by §4.3's motor through a var_external, which M2-4 brings.
+      assert Enum.map(plant.warnings, &Logex.Diagnostic.format/1) ==
+               ["line 6: warning: `estop` is declared but nothing uses it"]
+
+      # The host sends what changes, when it changes: the input image keeps the rest.
+      presses = %{
+        100 => %{"pb_start_1" => 1, "pb_start_2" => 1},
+        110 => %{"pb_start_1" => 0, "pb_start_2" => 0},
+        500 => %{"pb_stop_1" => 1, "pb_stop_2" => 1},
+        510 => %{"pb_stop_1" => 0, "pb_stop_2" => 0},
+        620 => %{"pb_start_1" => 1, "pb_start_2" => 1},
+        700 => %{"pb_start_1" => 0, "pb_start_2" => 0}
+      }
+
+      times = Enum.to_list(0..990//10)
+      steps = Enum.zip([0 | List.duplicate(10, 99)], times)
+
+      {cycled, runtime} =
+        Enum.map_reduce(steps, Logex.Runtime.start(plant), fn {elapsed, now}, runtime ->
+          {runtime, outputs, events} =
+            Logex.Runtime.cycle(runtime, elapsed, Map.get(presses, now, %{}))
+
+          timers =
+            {Logex.Runtime.get!(runtime, "m1.t1.acc"), Logex.Runtime.get!(runtime, "m2.t1.acc")}
+
+          {{{now, outputs, events}, {now, outputs, timers}}, runtime}
+        end)
+
+      {trace, timed} = Enum.unzip(cycled)
+
+      # As often as its task dictates: `m1` in every cycle and `m2` in every fifth, from
+      # the first, and the snapshot, with no task, in every cycle.
+      assert ran(trace, "m1") == times
+      assert ran(trace, "m2") == Enum.filter(times, &(rem(&1, 50) == 0))
+      assert ran(trace, "snap") == times
+      assert {length(ran(trace, "m1")), length(ran(trace, "m2"))} == {100, 20}
+      assert Logex.Runtime.overlaps(runtime) == %{"fast" => 0, "slow" => 0}
+
+      # Each motor and its `t1.acc` as its last scan left them: `m1`'s scan in this cycle,
+      # and `m2`'s at the last multiple of 50 ms.
+      for {now, outputs, {m1, m2}} <- timed do
+        assert {outputs["k1"], m1} == seen(now, 620), "m1 at #{now} ms"
+        assert {outputs["k2"], m2} == seen(now - rem(now, 50), 650), "m2 at #{now} ms"
+      end
+
+      # Where both scan, `m1`'s lead: none after the start both saw at one time, and 30 ms
+      # after the one `m2` saw 30 ms late.
+      lead = for {now, _outputs, {m1, m2}} <- timed, rem(now, 50) == 0, do: {now, m1 - m2}
+      assert for({now, ms} <- lead, now in 100..450, uniq: true, do: ms) == [0]
+      assert for({now, ms} <- lead, now >= 650, uniq: true, do: ms) == [30]
+
+      # Neither is done, each `.pre` the preset on its `ton`.
+      for timer <- ~w(m1.t1 m2.t1) do
+        assert {Logex.Runtime.get!(runtime, timer <> ".pre"),
+                Logex.Runtime.get!(runtime, timer <> ".dn")} == {5000, 0}
+      end
+    end
+  end
 end
