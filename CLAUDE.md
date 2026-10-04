@@ -64,7 +64,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   lexer reads as one token, a negative number); `new!/1`, from Elixir, raising one
   `ArgumentError` with every problem, an element that brings a line among them;
   `location/1`; and `initial/1`, the one rule for a new global's value, as
-  `Logex.Program.initial_env/1` is a tag's
+  `Logex.Program.initial_env/1` is a tag's.
+  `lib/logex/configuration/text.ex` is a configuration file's text (M2-2): so far its
+  words, as data, `keywords/0`, which `naming_test.exs` reads
 - `lib/logex/edit.ex` — a staged edit of one program instance (OE-1, `docs/organisation.md`
   §4.9): `accept/3` (refusing a type change as `:edit` diagnostics, in the candidate's
   `file` (fix F15), with a forecast),
@@ -212,7 +214,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `CONTRIBUTING.md` — working practices, each one traced to something that broke
 - `PLAN.md` — reviewed findings and the ordered plan of work
 - `docs/naming.md` — the IEC and vendor name survey, one stanza per mnemonic, declaration
-  word or word that heads a file; append-only
+  word, word that heads a file or configuration file's word; append-only
 - `docs/organisation.md` — where logex is heading above one program: IEC's configuration,
   tasks, program instances and I/O mapping, in logex's dialect. Decided (PLAN §5; the
   work is PLAN's M1-3, M1-5, M1-6, OE-1, Milestone 2 and OE-2; OE-1, M2-1 and M2-5 have
@@ -260,9 +262,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   any case and owes a `docs/naming.md` stanza, which `naming_test.exs` checks. A word that
   heads a file of another kind, an entry of `Logex.Declarations.kinds/0` (`function_block`,
   M2-5), owes a stanza too, which the same test checks; `Logex.Compiler` reserves it in
-  that kind of file only, in any case (`docs/organisation.md` §4.8). A user function
-  block's name is no row and owes no stanza: it is a type word only where a compile is
-  given the block, through `types:` or a tag's type, and is not reserved.
+  that kind of file only, in any case (`docs/organisation.md` §4.8). A word of a
+  configuration file's lines is a row of `Logex.Configuration.Text`'s, and owes one too.
+  A user function block's name is no row and owes no stanza: it is a type word only where
+  a compile is given the block, through `types:` or a tag's type, and is not reserved.
 - New state in an instance (a field of `%Logex.Instance{}`, a member of a function block
   type, an M2 item's piece of state) states its rule across an online edit. A tag or member
   starts by `Logex.Program.initial_env/1`, the one rule, whose doc and §4.9's "One rule for
