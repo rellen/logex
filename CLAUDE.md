@@ -100,8 +100,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `Logex.Parser.well_formed!/1` and raises `ArgumentError` on a tree no text could say
   (OE-1), then takes the declaration lines off into a tag table,
   checks every instruction against its operand signature and every operand against the
-  table, members included (M1-6), gives each timer the preset on the one `ton` that runs
-  it, refuses a second `ons` on one storage bit and anything after a `ton` on its path,
+  table, members included (M1-6), names as a location an operand shaped like one whose
+  first part is not declared, as `panel.i.0` (M2-2), gives each timer the preset on the
+  one `ton` that runs it, refuses a second `ons` on one storage bit and anything after a `ton` on its path,
   and returns `{:ok, %Logex.Program{}}` (warnings included) or
   `{:error, [%Logex.Diagnostic{}]}`. Since M2-5 `instructionize/3` takes the function
   block types a routine may hold, each checked at full depth, one version per name; a
