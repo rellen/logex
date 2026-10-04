@@ -534,7 +534,9 @@ defmodule Logex.Configuration.TextTest do
             {fn -> Text.read(~c"program m1 motor") end,
              "Logex.Configuration.Text.read/1 takes source text as a binary, got: " <>
                ~s(~c"program m1 motor")},
-            {fn -> Text.print(:entries) end, "entries must be a list, got: :entries"},
+            {fn -> Text.print(:entries) end,
+             "Logex.Configuration.Text.print/1 takes a %Logex.Configuration{} or a list of " <>
+               "entries, got: :entries"},
             {fn -> Text.entries!(%{}) end, "entries must be a list, got: %{}"},
             {fn -> Text.print(improper) end, "entries must be a list, got: #{inspect(improper)}"},
             {fn -> Text.entries!(improper) end,

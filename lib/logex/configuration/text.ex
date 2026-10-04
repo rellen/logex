@@ -383,19 +383,74 @@ defmodule Logex.Configuration.Text do
   defp add(line, lines), do: [Enum.reverse(line) | lines]
 
   @doc """
-  The canonical text of `entries`, one line each, in their order: lowercase keywords, one
-  space between words, no indentation and no comments. An entry with a line is printed on
-  that line, the lines between left empty; entries with no line, from Elixir, are printed
-  on lines 1, 2, 3 and on. `read/1` reads the text back to the same entries, each on the
-  line it was printed on, which is how data is held to what the text can say
-  (`docs/organisation.md` §4.9).
+  The canonical text of a configuration, or of `entries`, one line each, in their order:
+  lowercase keywords, one space between words, no indentation and no comments. An entry
+  with a line is printed on that line, the lines between left empty; entries with no line,
+  from Elixir, are printed on lines 1, 2, 3 and on. `read/1` reads the text back to the
+  same entries, each on the line it was printed on, which is how data is held to what the
+  text can say (`docs/organisation.md` §4.9).
 
-  Entries no configuration line could say raise `ArgumentError`, as `entries!/1` does.
+  A `%Logex.Configuration{}` is printed as its elements, merged in line order, as the file
+  that declared them held them, or, built in Elixir with no lines, its globals, then its
+  program instances, then its connections. The round trip is exact (§4.10): what
+  `Logex.Configuration.compile/3` gives, `compile(config.name, print(config),
+  config.programs)` gives back, each element on its line, its warnings included; a
+  configuration from `Logex.Configuration.new!/1` comes back with its elements numbered
+  from line 1. Its name and its programs are `compile/3`'s arguments, which no line says,
+  and its warnings `compile/3`'s to give, so none of them is printed.
+
+  Entries no configuration line could say raise `ArgumentError`, as `entries!/1` does, and
+  so does a configuration whose parts are not each a proper list of them, their lines nil
+  or rising: a task, which no line of a configuration file says yet, an instance's task,
+  and a line two of its lists share among them.
   """
-  def print(entries) do
-    entries!(entries)
-    entries |> Enum.reduce({1, []}, &placed/2) |> elem(1) |> Enum.reverse() |> Enum.join()
+  def print(%Logex.Configuration{
+        tasks: tasks,
+        globals: globals,
+        instances: instances,
+        connections: connections
+      }) do
+    parts = [tasks: tasks, globals: globals, instances: instances, connections: connections]
+    Enum.each(parts, &part!/1)
+
+    # Each list rises, so the one order of its elements is by line, which entries!/1 then
+    # checks across the lists, a line two of them share refused; with no lines the sort
+    # keeps them as listed.
+    parts |> Keyword.values() |> Enum.concat() |> Enum.sort_by(& &1.line) |> print()
   end
+
+  def print(entries) when is_list(entries) do
+    entries!(entries)
+    text(entries)
+  end
+
+  def print(other),
+    do:
+      raise(
+        ArgumentError,
+        "Logex.Configuration.Text.print/1 takes a %Logex.Configuration{} or a list of " <>
+          "entries, got: #{inspect(other)}"
+      )
+
+  # One part of a configuration, a proper list of what its lines can say, in rising lines
+  # or none, before the parts are merged: a merge would hide a list out of order.
+  defp part!({part, entries}), do: part_listed!(proper?(entries), part, entries)
+
+  defp part_listed!(true, _part, entries), do: entries!(entries)
+
+  defp part_listed!(false, part, entries),
+    do:
+      raise(
+        ArgumentError,
+        "a configuration's #{part} must be a list of its elements, got: #{inspect(entries)}"
+      )
+
+  defp proper?([]), do: true
+  defp proper?([_entry | rest]), do: proper?(rest)
+  defp proper?(_tail), do: false
+
+  defp text(entries),
+    do: entries |> Enum.reduce({1, []}, &placed/2) |> elem(1) |> Enum.reverse() |> Enum.join()
 
   defp placed(%{line: nil} = entry, {next, text}), do: {next + 1, [printed(entry) | text]}
 

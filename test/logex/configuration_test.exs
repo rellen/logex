@@ -15,7 +15,7 @@ defmodule Logex.ConfigurationTest do
   doctest Logex.Configuration
 
   alias Logex.{Configuration, Diagnostic}
-  alias Logex.Configuration.{Connection, Global, Instance}
+  alias Logex.Configuration.{Connection, Global, Instance, Text}
 
   # A seal-in with a dint output, an internal var and a timer: every kind of member a
   # connection may name, and two it may not.
@@ -2216,6 +2216,333 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  # `docs/organisation.md` §4.10: a printer from a configuration to its text, with an exact
+  # round trip, an entry with a line printed on that line.
+  describe "the round trip (M2-2): a configuration printed, and compiled back" do
+    test "§4.4's plant prints to its canonical text, which compiles back to the very " <>
+           "configuration" do
+      programs = plant_programs()
+      {:ok, plant} = compiled(taskless_plant(), programs)
+      text = Text.print(plant)
+
+      assert compiled(text, programs) == {:ok, plant}
+
+      # Each element on its own line, as the plant's own lines are once their comments and
+      # their spacing are gone: comments, blank lines and blanked task lines left empty.
+      canonical =
+        taskless_plant()
+        |> String.split("\n")
+        |> Enum.map(&(&1 |> String.replace(~r{//.*}, "") |> String.split() |> Enum.join(" ")))
+        |> Enum.join("\n")
+        |> String.trim_trailing()
+
+      assert text == canonical <> "\n"
+
+      assert Enum.slice(String.split(text, "\n"), 19..23) == [
+               "var_global k1_at_trip bool",
+               "var_global k2_at_trip bool",
+               "",
+               "program m1 motor",
+               "m1.start pb_start_1"
+             ]
+    end
+
+    test "a configuration built in Elixir prints its globals, then its program instances, " <>
+           "then its connections, and compiles back numbered from line 1",
+         %{seal: seal} do
+      config = Configuration.new!(base(seal))
+      assert Text.print(config) == @base
+
+      assert {:ok, back} = compiled(@base, %{"seal" => seal})
+      assert back == numbered(config)
+      assert Enum.map(back.warnings, & &1.line) == [2, 4]
+      assert Enum.map(back.warnings, &%{&1 | line: nil}) == config.warnings
+    end
+
+    test "elements whose lines interleave their lists print merged in line order, as the " <>
+           "file held them",
+         %{seal: seal} do
+      source = "m.start pb\n\nprogram m seal\nvar_global pb bool at panel.i.0\nm.stop 0\n"
+      assert {:ok, config} = compiled(source, %{"seal" => seal})
+      assert Text.print(config) == source
+      assert compiled(Text.print(config), %{"seal" => seal}) == {:ok, config}
+    end
+
+    test "what no line of a configuration file says is refused, a configuration's own " <>
+           "shapes among them",
+         %{seal: seal} do
+      config = Configuration.new!(base(seal))
+      {:ok, lined} = compiled(@base, %{"seal" => seal})
+      [m] = config.instances
+      [pb | _] = lined.globals
+      fast = task("fast", 10, 0)
+
+      for {printed, message} <- [
+            # M2-1's data holds a task, which no line of M2-2's says.
+            {Configuration.new!(
+               Keyword.merge(base(seal), tasks: [fast], instances: [%{m | task: "fast"}])
+             ),
+             unsaid(
+               "an entry is a %Logex.Configuration.Global{}, %Logex.Configuration.Instance{} " <>
+                 "or %Logex.Configuration.Connection{}, with its struct's keys",
+               fast
+             )},
+            {%{config | instances: [%{m | task: "fast"}]},
+             unsaid(
+               "a `program` line names an instance and its program type, and no task, so " <>
+                 "an instance's task is nil",
+               %{m | task: "fast"}
+             )},
+            # Each list in line order, which a merge by line would otherwise hide.
+            {%{lined | globals: Enum.reverse(lined.globals)},
+             lines_unsaid(", and this one comes after line 4", Enum.at(lined.globals, 2))},
+            # A line two lists share, and lines beside none.
+            {%{lined | instances: [%{hd(lined.instances) | line: 1}]},
+             lines_unsaid(", and this one comes after line 1", %{hd(lined.instances) | line: 1})},
+            {%{lined | globals: config.globals},
+             lines_unsaid(", and this one comes after line 8", hd(config.globals))},
+            {%{config | instances: lined.instances},
+             lines_unsaid(", and this one comes after line 5", hd(config.globals))},
+            {%{config | connections: :none},
+             "a configuration's connections must be a list of its elements, got: :none"},
+            {%{config | globals: [pb | :tail]},
+             "a configuration's globals must be a list of its elements, got: " <>
+               inspect([pb | :tail])},
+            {%{config | globals: [:pb]}, unsaid(kind_rule(), :pb)},
+            {Map.delete(config, :tasks),
+             "Logex.Configuration.Text.print/1 takes a %Logex.Configuration{} or a list of " <>
+               "entries, got: #{inspect(Map.delete(config, :tasks))}"}
+          ] do
+        assert_raise ArgumentError, message, fn -> Text.print(printed) end
+      end
+
+      # Its name, file, programs and warnings are no line's, and are not printed.
+      assert Text.print(%{config | name: nil, file: 7, programs: :none, warnings: :none}) ==
+               @base
+    end
+
+    # A configuration the constructor accepts, from a seeded vocabulary, printed both ways:
+    # from Elixir, with no lines, and as a file holds it, its lists interleaved and lines
+    # left empty between its elements.
+    test "every configuration new!/1 accepts prints to text that compile/3 reads back to it" do
+      :rand.seed(:exsss, {2026, 10, 44})
+      programs = plant_programs()
+
+      for _ <- 1..200 do
+        config = generated(programs)
+        text = Text.print(config)
+        assert {:ok, back} = compiled(text, programs)
+        assert back == numbered(config)
+        assert Text.print(back) == text
+
+        lined = interleaved(config)
+        assert Configuration.check(lined) == []
+        assert {:ok, read} = compiled(Text.print(lined), programs)
+        assert read == %{lined | warnings: read.warnings}
+        assert Enum.map(read.warnings, &%{&1 | line: nil}) == config.warnings
+        assert compiled(Text.print(read), programs) == {:ok, read}
+      end
+    end
+
+    # The same configurations written as a person might write them: keywords in any case,
+    # words spaced and indented, comments, blank lines, and every line ending. What
+    # compile/3 accepts prints to the canonical text line for line, which compiles back to
+    # the very configuration.
+    test "every source compile/3 accepts prints to its canonical text, on the same lines" do
+      :rand.seed(:exsss, {2026, 10, 45})
+      programs = plant_programs()
+
+      for _ <- 1..200 do
+        canonical = Text.print(interleaved(generated(programs)))
+        {source, expected} = written(canonical)
+        assert {:ok, config} = compiled(source, programs), source
+        assert Text.print(config) == expected, source
+        assert compiled(expected, programs) == {:ok, config}
+      end
+    end
+  end
+
+  defp unsaid(rule, entry),
+    do: "not an entry a configuration file can say: #{rule}, got: #{inspect(entry)}"
+
+  defp lines_unsaid(rule, entry),
+    do:
+      unsaid(
+        "lines are nil for entries built in Elixir, or rise from entry to entry, one entry " <>
+          "a line" <> rule,
+        entry
+      )
+
+  defp kind_rule,
+    do:
+      "an entry is a %Logex.Configuration.Global{}, %Logex.Configuration.Instance{} or " <>
+        "%Logex.Configuration.Connection{}, with its struct's keys"
+
+  # A configuration from Elixir as compile/3 reads it back from its printed text: its
+  # globals, instances and connections numbered from line 1 in that order, and its warnings
+  # at their elements' lines.
+  defp numbered(config) do
+    {[globals, instances, connections], _next} =
+      Enum.map_reduce([config.globals, config.instances, config.connections], 1, fn part, n ->
+        {Enum.with_index(part, &%{&1 | line: n + &2}), n + length(part)}
+      end)
+
+    lined = Map.new(globals, &{&1.name, &1.line})
+
+    %{
+      config
+      | globals: globals,
+        instances: instances,
+        connections: connections,
+        warnings:
+          Enum.map(config.warnings, fn warning ->
+            [name] = Regex.run(~r/\A`([^`]+)`/, warning.message, capture: :all_but_first)
+            %{warning | line: Map.fetch!(lined, name)}
+          end)
+    }
+  end
+
+  # A configuration new!/1 accepts: one to three motors, each wired whole, its points
+  # located or not, its fixed values given or not, a snapshot of the first two contactors
+  # or none, and a spare global or none, the warnings' two kinds; its globals and its
+  # connections in a seeded order.
+  defp generated(programs) do
+    count = Enum.random(1..3)
+    snapshot? = Enum.random([true, false])
+
+    globals =
+      [%Global{name: "go", type: :bool, at: "panel.i.0"}] ++
+        Enum.flat_map(1..count, fn i ->
+          [
+            %Global{name: "k#{i}", type: :bool, at: Enum.random([nil, "panel.q.#{i}"])},
+            %Global{
+              name: "lamp_#{i}",
+              type: :bool,
+              at: Enum.random(["panel.q.1#{i}", "Lamps.q.#{i}.0"])
+            },
+            sp(i, Enum.random([:located, :fixed, :plain])),
+            %Global{name: "tt_#{i}", type: :bool, initial: Enum.random([nil, 0, 1])}
+          ]
+        end) ++
+        Enum.random([[], [%Global{name: "spare", type: :dint, initial: 7}]]) ++
+        snapshots(snapshot?)
+
+    instances =
+      for(i <- 1..count, do: %Instance{name: "m#{i}", type: "motor"}) ++
+        snapshot_instances(snapshot?)
+
+    connections =
+      Enum.flat_map(1..count, fn i ->
+        [
+          {"start", "go"},
+          {"stop", Enum.random([0, 1])},
+          {"overtemp", "tt_#{i}"},
+          {"reset", 0},
+          {"motor", "k#{i}"},
+          {"run_lamp", "lamp_#{i}"},
+          {"speed_sp", "sp_#{i}"}
+        ]
+        |> Enum.map(fn {member, to} -> %Connection{instance: "m#{i}", member: member, to: to} end)
+      end) ++ snapshot_wires(snapshot?, count)
+
+    Configuration.new!(
+      name: "plant",
+      programs: Map.values(programs),
+      globals: Enum.shuffle(globals),
+      instances: instances,
+      connections: Enum.shuffle(connections)
+    )
+  end
+
+  defp sp(i, :located), do: %Global{name: "sp_#{i}", type: :dint, at: "drive.q.#{i}.0"}
+  defp sp(i, :fixed), do: %Global{name: "sp_#{i}", type: :dint, initial: 1200 + i}
+  defp sp(i, :plain), do: %Global{name: "sp_#{i}", type: :dint}
+
+  defp snapshot_instances(false), do: []
+  defp snapshot_instances(true), do: [%Instance{name: "snap", type: "snapshot"}]
+
+  defp snapshots(false), do: []
+
+  defp snapshots(true),
+    do: [%Global{name: "a_was", type: :bool}, %Global{name: "b_was", type: :bool}]
+
+  defp snapshot_wires(false, _count), do: []
+
+  defp snapshot_wires(true, count),
+    do:
+      Enum.map(
+        [{"a", "k1"}, {"b", "k#{count}"}, {"a_was", "a_was"}, {"b_was", "b_was"}],
+        fn {member, to} -> %Connection{instance: "snap", member: member, to: to} end
+      )
+
+  # A configuration as a file holds it: its lists merged in a seeded order, each list's own
+  # order kept, every element on a line of its own, with up to two empty lines before it.
+  defp interleaved(config) do
+    parts = [
+      globals: config.globals,
+      instances: config.instances,
+      connections: config.connections
+    ]
+
+    order =
+      Enum.shuffle(
+        Enum.flat_map(parts, fn {part, list} -> List.duplicate(part, length(list)) end)
+      )
+
+    {lined, _rest, _line} =
+      Enum.reduce(order, {%{globals: [], instances: [], connections: []}, Map.new(parts), 0}, fn
+        part, {lined, rest, line} ->
+          [element | more] = Map.fetch!(rest, part)
+          line = line + Enum.random(1..3)
+
+          {Map.update!(lined, part, &[%{element | line: line} | &1]), Map.put(rest, part, more),
+           line}
+      end)
+
+    %{
+      config
+      | globals: Enum.reverse(lined.globals),
+        instances: Enum.reverse(lined.instances),
+        connections: Enum.reverse(lined.connections)
+    }
+  end
+
+  # A canonical text written another way, each of its lines on the same line: keywords in
+  # any case, words spaced and indented, a comment after a line or on an empty one, and a
+  # line ended by LF, CRLF or a lone CR. `expected` is the text print/1 gives for it, the
+  # canonical text up to its last element, its empty lines empty.
+  defp written(canonical) do
+    lines = String.split(canonical, "\n")
+
+    {written, _ending} =
+      Enum.map_reduce(lines, "\n", fn line, before ->
+        text = rewritten(line)
+        ending = ended(before, text, Enum.random(["\n", "\r\n", "\r"]))
+        {text <> ending, ending}
+      end)
+
+    {Enum.join(written), canonical}
+  end
+
+  # A lone CR, then an empty line ended by LF, would be one CRLF, one line end of two.
+  defp ended("\r", "", "\n"), do: "\r\n"
+  defp ended(_before, _text, ending), do: ending
+
+  defp rewritten(""), do: Enum.random(["", "  ", "// a comment", "\t// another"])
+
+  defp rewritten(line) do
+    words = line |> String.split(" ") |> Enum.map(&recased/1)
+    indent = Enum.random(["", "  ", "\t"])
+    gap = Enum.random([" ", "  ", "\t"])
+    indent <> Enum.join(words, gap) <> Enum.random(["", " // a note", "\t//x"])
+  end
+
+  # A keyword in another case; a name, a location or a number as it is.
+  defp recased(word) when word in ["var_global", "program", "at", "bool", "dint"],
+    do: Enum.random([word, String.upcase(word), String.capitalize(word)])
+
+  defp recased(word), do: word
+
   describe "compile/3's host mistakes" do
     # What no configuration text holds is the host's, raised as check/1 raises it.
     test "a source that is not a binary, a name that is not one, programs that are not a " <>
@@ -2351,6 +2678,84 @@ defmodule Logex.ConfigurationTest do
              ]
     end
 
+    # The words of an entry no configuration line can say, as Text.entries!/1 gives them.
+    @unsaid [
+              "an entry is a %Logex.Configuration.Global{}, %Logex.Configuration.Instance{} " <>
+                "or %Logex.Configuration.Connection{}, with its struct's keys",
+              "a line is a positive integer, or nil for an entry built in Elixir",
+              "a global's type is :bool or :dint",
+              "a `program` line names an instance and its program type, and no task, so an " <>
+                "instance's task is nil",
+              "a name lexes as one name token",
+              "a connection's instance has no `.`: its first `.` begins the member",
+              "a connection is to a global, by its name, or to a constant",
+              "a global's name is not `at`, `bool` or `dint`, in any case: a line reads that " <>
+                "word as its keyword",
+              "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"
+            ]
+            |> Enum.map(&Regex.escape/1)
+            |> Enum.join("|")
+
+    # Every message an ArgumentError of the text's functions or of compile/3 carries, a
+    # line each, each pinned whole by a test above or in configuration_text_test.exs.
+    @pinned [
+      ~r/\ALogex\.Configuration\.Text\.read\/1 takes source text as a binary, got: /,
+      ~r/\ALogex\.Configuration\.Text\.print\/1 takes a %Logex\.Configuration\{\} or a list of entries, got: /,
+      ~r/\Aa configuration's (tasks|globals|instances|connections) must be a list of its elements, got: /,
+      ~r/\Aentries must be a list, got: /,
+      Regex.compile!("\\Anot an entry a configuration file can say: (#{@unsaid}), got: "),
+      ~r/\Anot an entry a configuration file can say: lines are nil for entries built in Elixir, or rise from entry to entry, one entry a line, and (this one comes after line \d+|no line is nil beside one that is not), got: /,
+      ~r/\ALogex\.Configuration\.compile\/3 takes source text as a binary, got: /,
+      ~r/\Aa configuration needs a name, as in name: "plant"\z/,
+      ~r/\A.+ cannot name a (configuration|program): a name is a letter or `_`, then letters, digits or `_`\z/,
+      ~r/\Aprograms must be a map of program names to %Logex\.Program\{\}, got(: | a list: Logex\.Configuration\.new!\/1 takes a list and keys it by name\z)/,
+      ~r/\Athe program under .+ is (named .+\z|not a %Logex\.Program\{\} from Logex\.compile\/2, got: )/,
+      ~r/ is a function block type, which runs inside a program: an instance is of a %Logex\.Program\{\}\z/
+    ]
+
+    # Words a seeded edit puts into a source: every line's keywords in other cases, a later
+    # item's words, names, paths and locations good and bad, numbers in and out of range,
+    # the delimiters, and a few that do not lex.
+    @vocabulary ~w(var_global VAR_GLOBAL program Program at AT bool Dint task with single
+                   m m2 m.start m.stop m.motor m.sp m.fault m.t1 m.t1.pre m.x.y m2.start pb
+                   pb2 k sp seal Seal x.y panel.i.0 panel.I.0 panel.q.00 Panel.q.1 panel.q.0
+                   drive.q.1.0 0 1 7 2147483647 2147483648 99999999999 \( | \) //) ++
+                  ["\t", "\r", "\r\n", "%", "é", <<255>>]
+
+    # The text's functions and compile/3, each argument junk in turn, sources among them
+    # written from good ones by seeded edits. A source is always read and compiled to a
+    # result, never raised on; a host's junk is refused with an ArgumentError whose every
+    # line is one of `@pinned`, never another exception, nor a BIF's own ArgumentError.
+    test "nothing but a diagnostic or a pinned ArgumentError escapes the text or compile/3",
+         %{seal: seal} do
+      :rand.seed(:exsss, {2026, 10, 46})
+      programs = %{"seal" => seal}
+      config = Configuration.new!(base(seal))
+      {:ok, lined} = compiled(@base, programs)
+      sources = [@base, @broken, "m.start pb\nprogram m seal\nvar_global pb bool at panel.i.0"]
+
+      outcomes =
+        for _ <- 1..1500,
+            source = edited(Enum.random(sources), Enum.random(0..4)),
+            call <- [
+              {:total, fn -> Text.read(source) end},
+              {:total, fn -> compiled(source, programs) end},
+              {:host, fn -> Text.read(junk()) end},
+              {:host, fn -> Text.print(junk_entries(lined)) end},
+              {:host, fn -> Text.entries!(junk_entries(config)) end},
+              {:host, fn -> Text.print(junk_configuration(Enum.random([config, lined]))) end},
+              {:host, fn -> Configuration.compile(junk(), source, programs) end},
+              {:host, fn -> Configuration.compile("plant", junk(), programs) end},
+              {:host, fn -> Configuration.compile("plant", source, junk_programs(seal)) end}
+            ] do
+          escaped(call)
+        end
+
+      # Every kind of outcome is reached: the property is not vacuous.
+      for kind <- [:read, :configuration, :diagnostics, :printed, :taken, :refused],
+          do: assert(kind in outcomes, "no #{kind}")
+    end
+
     # 3,000 draws of new!/1 on a configuration spoiled in its fields, each accepted one
     # handed to `accepted`: the number refused.
     defp spoiled_new(seal, accepted) do
@@ -2371,6 +2776,155 @@ defmodule Logex.ConfigurationTest do
     end
 
     defp junk, do: Enum.at(@junk, :rand.uniform(length(@junk)) - 1)
+
+    # A call's outcome, or the pinned ArgumentError it raised; a total call raises nothing.
+    defp escaped({:total, call}), do: outcome(call.())
+
+    defp escaped({:host, call}) do
+      outcome(call.())
+    rescue
+      error in ArgumentError ->
+        for line <- String.split(error.message, "\n"),
+            do: assert(Enum.any?(@pinned, &Regex.match?(&1, line)), "not pinned: #{line}")
+
+        :refused
+    end
+
+    defp outcome({:ok, entries}) when is_list(entries), do: read!(entries)
+
+    defp outcome({:error, [%Diagnostic{} | _] = diagnostics, entries}) when is_list(entries) do
+      diagnosed!(diagnostics)
+      :diagnostics
+    end
+
+    defp outcome({:ok, %Configuration{} = config}) do
+      assert Configuration.check(config) == []
+      :configuration
+    end
+
+    defp outcome({:error, [%Diagnostic{} | _] = diagnostics}) do
+      diagnosed!(diagnostics)
+      :diagnostics
+    end
+
+    # What print/1 prints reads back with no diagnostic.
+    defp outcome(text) when is_binary(text) do
+      assert {:ok, _entries} = Text.read(text)
+      :printed
+    end
+
+    defp outcome([_ | _]), do: :taken
+    defp outcome([]), do: :taken
+
+    defp read!(entries) do
+      assert Text.entries!(entries) == entries
+      :read
+    end
+
+    defp diagnosed!(diagnostics) do
+      for %Diagnostic{stage: stage, line: line, message: message} <- diagnostics do
+        assert stage in [:lex, :configure] and is_binary(message)
+        assert line == nil or (is_integer(line) and line > 0)
+      end
+    end
+
+    # A source as a list of lines of words, edited `n` times: a word replaced, put in or
+    # taken out, a line doubled, dropped or moved, or two lines joined.
+    defp edited(source, n) do
+      source
+      |> String.split("\n")
+      |> Enum.map(&String.split(&1, " "))
+      |> edit(n)
+      |> Enum.map_join("\n", &Enum.join(&1, " "))
+    end
+
+    defp edit(lines, 0), do: lines
+    defp edit([], n), do: edit([[]], n - 1)
+
+    defp edit(lines, n) do
+      i = rnd(length(lines))
+      line = Enum.at(lines, i)
+      word = Enum.random(@vocabulary)
+
+      lines
+      |> edit_line(Enum.random(1..7), i, line, word)
+      |> edit(n - 1)
+    end
+
+    defp edit_line(lines, 1, i, line, word),
+      do: List.replace_at(lines, i, List.replace_at(line, rnd(length(line) + 1), word))
+
+    defp edit_line(lines, 2, i, line, word),
+      do: List.replace_at(lines, i, List.insert_at(line, rnd(length(line) + 1), word))
+
+    defp edit_line(lines, 3, i, line, _word),
+      do: List.replace_at(lines, i, List.delete_at(line, rnd(length(line) + 1)))
+
+    defp edit_line(lines, 4, i, line, _word), do: List.insert_at(lines, i, line)
+    defp edit_line(lines, 5, i, _line, _word), do: List.delete_at(lines, i)
+
+    defp edit_line(lines, 6, i, line, _word),
+      do: List.insert_at(List.delete_at(lines, i), rnd(length(lines)), line)
+
+    defp edit_line(lines, 7, i, line, _word),
+      do: List.replace_at(List.delete_at(lines, i), i, line ++ Enum.at(lines, i + 1, []))
+
+    # Junk for what print/1 is given, but no integer a line could be, which print/1 would
+    # place faithfully, 2147483648 empty lines down.
+    defp printable_junk, do: Enum.random(@junk -- [2_147_483_648])
+
+    # Entries a configuration's elements spoil: one field made junk or dropped, a junk
+    # entry added, an improper tail, or junk whole.
+    defp junk_entries(config),
+      do: spoiled_entries(config.globals ++ config.instances ++ config.connections)
+
+    defp spoiled_entries([]), do: [printable_junk()]
+
+    defp spoiled_entries(entries) do
+      i = rnd(length(entries))
+      entry = Enum.at(entries, i)
+      field = Enum.random(Map.keys(entry))
+
+      Enum.random([
+        List.replace_at(entries, i, Map.put(entry, field, printable_junk())),
+        List.replace_at(entries, i, Map.delete(entry, field)),
+        List.insert_at(entries, i, printable_junk()),
+        entries ++ printable_junk(),
+        Enum.reverse(entries),
+        entries,
+        printable_junk()
+      ])
+    end
+
+    # A configuration spoiled where print/1 reads it: a part junk, spoiled or dropped, or
+    # a field it does not print made junk.
+    defp junk_configuration(config) do
+      part = Enum.random([:tasks, :globals, :instances, :connections])
+
+      Enum.random([
+        Map.put(config, part, printable_junk()),
+        Map.put(config, part, spoiled_entries(Map.fetch!(config, part))),
+        Map.delete(config, part),
+        Map.put(config, Enum.random([:name, :file, :programs, :warnings]), printable_junk()),
+        config
+      ])
+    end
+
+    # Programs as a host might mistake them: junk whole, under a junk key or holding junk,
+    # a list, a program under another's name, one built by hand, or a block type.
+    defp junk_programs(seal),
+      do:
+        Enum.random([
+          junk(),
+          %{"seal" => junk()},
+          %{junk() => seal},
+          [seal],
+          %{"seal" => seal, "motor" => seal},
+          %{"seal" => %{seal | name: "a b"}},
+          %{"seal" => %{seal | tags: nil}},
+          %{"ton" => Logex.FbType.ton(), "seal" => seal},
+          %{"seal" => seal}
+        ])
 
     # A whole field made junk, one field of one element, or a junk element added.
     defp spoil(fields, 1) do
@@ -2571,6 +3125,109 @@ defmodule Logex.ConfigurationTest do
     test "check/1 stays linear in the configuration's size", %{seal: seal} do
       ratio = reductions_to_check(2000, seal) / reductions_to_check(500, seal)
       assert ratio < 6, "4x the instances took #{Float.round(ratio, 1)}x the reductions"
+    end
+  end
+
+  # Every pass M2-2 adds over a configuration file's text has a large input here
+  # (CONTRIBUTING.md, "Test a pass over the program for growth"): the reader, over good
+  # lines and broken ones, each broken line a placeholder; the printer, merging lists
+  # whose lines interleave; and compile/3, whose check takes the placeholders and the
+  # names refused for their `.`, their uses silent. No line asks for a did-you-mean,
+  # whose cost is quadratic by design (`docs/organisation.md` §4.10). Counted in
+  # reductions, the least of three counts.
+  describe "growth of a configuration file (M2-2)" do
+    # A conveyor of every line kind, keywords in any case, a comment and an empty line.
+    defp conveyor(i),
+      do: [
+        "// conveyor #{i}",
+        "VAR_GLOBAL pb_#{i} BOOL AT panel.i.#{i}",
+        "var_global k_#{i} bool at panel.q.#{i}",
+        "var_global sp_#{i} dint at Drive_#{i}.q.0.#{i}",
+        "  var_global tt_#{i} bool 1   // a fixed value",
+        "var_global spare_#{i} dint 7",
+        "",
+        "program m#{i} motor",
+        "  m#{i}.start    pb_#{i}",
+        "  m#{i}.stop     0",
+        "  m#{i}.overtemp tt_#{i}",
+        "  m#{i}.reset    pb_#{i}",
+        "  m#{i}.motor    k_#{i}",
+        "  m#{i}.speed_sp sp_#{i}"
+      ]
+
+    # One of each way a line breaks and is still read for what it names, and globals
+    # refused for their `.`, which connections name: names whose uses are silent.
+    defp broken(i),
+      do: [
+        "var_global bp_#{i} bool at panel.i.1#{i}",
+        "var_global g.x_#{i} bool",
+        "var_global g.y_#{i} bool",
+        "var_global g.z_#{i} dint",
+        "program b#{i}",
+        "b#{i}.start g.x_#{i}",
+        "b#{i}.stop ( 0 )",
+        "var_global bk_#{i} bool at",
+        "b#{i}.motor bk_#{i}",
+        "program c#{i} motor",
+        "c#{i}.start g.x_#{i}",
+        "c#{i}.stop bp_#{i} extra",
+        "c#{i}.overtemp",
+        "c#{i}.reset g.y_#{i}",
+        "c#{i}.speed_sp g.z_#{i}"
+      ]
+
+    defp source(n, kinds),
+      do: Enum.join(Enum.flat_map(1..n, fn i -> Enum.flat_map(kinds, & &1.(i)) end), "\r\n")
+
+    defp reductions(fun) do
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          fun.()
+          {:reductions, later} = Process.info(self(), :reductions)
+          later - before
+        end
+      )
+    end
+
+    test "reading a configuration file stays linear in its lines, broken ones among them" do
+      read = fn n ->
+        text = source(n, [&conveyor/1, &broken/1])
+        reductions(fn -> {:error, [_ | _], [_ | _]} = Text.read(text) end)
+      end
+
+      # 4.20x to 4.59x over 44 runs of the suite, 12 of them three suites at once; the
+      # bound a fifth above the highest.
+      ratio = read.(800) / read.(200)
+      assert ratio < 5.6, "4x the lines took #{Float.round(ratio, 2)}x the reductions"
+    end
+
+    test "printing a configuration stays linear in its elements, its lists interleaved" do
+      programs = plant_programs()
+
+      print = fn n ->
+        {:ok, config} = compiled(source(n, [&conveyor/1]), programs)
+        reductions(fn -> Text.print(config) end)
+      end
+
+      # 4.01x to 4.06x over 44 runs of the suite, 12 of them three suites at once; the
+      # bound a fifth above the highest.
+      ratio = print.(800) / print.(200)
+      assert ratio < 5.0, "4x the elements took #{Float.round(ratio, 2)}x the reductions"
+    end
+
+    test "compile/3 stays linear in a file's instances, broken lines among them" do
+      programs = plant_programs()
+
+      compile = fn n ->
+        text = source(n, [&conveyor/1, &broken/1])
+        reductions(fn -> {:error, [_ | _]} = compiled(text, programs) end)
+      end
+
+      # 4.25x to 4.95x over 44 runs of the suite, 12 of them three suites at once; the
+      # bound a fifth above the highest.
+      ratio = compile.(1000) / compile.(250)
+      assert ratio < 6.0, "4x the instances took #{Float.round(ratio, 2)}x the reductions"
     end
   end
 end
