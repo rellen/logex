@@ -1747,9 +1747,10 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   changed `single`, or an event task's `interval` added or removed, is refused. OE-2 adds
   the generation counter that detects an edit outside the contract; Milestone 2 does not
   reserve it. Until OE-2 lands, a configured plant is not edited. **OE-2 decides** three
-  questions Milestone 2 leaves it, none of which an M2 commit depends on. *(The first two
-  were decided on 2026-10-04 as recommended, `docs/organisation.md` decisions 43 and 44;
-  the third stays OE-2's.)*
+  questions Milestone 2 leaves it, none of which an M2 commit depends on. *(All three
+  were decided on 2026-10-04 as recommended, `docs/organisation.md` decisions 43, 44 and
+  45; how OE-2 reports the write into a shared global when a `var` becomes a
+  `var_external` stays OE-2's.)*
   - an instance whose type an edit changes: recommended as a remove plus an add, the old
     instance pruned and the new one started by `Runtime.instance/1`, over a refusal,
     since instances may be added and removed while running and state is keyed by name;

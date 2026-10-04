@@ -1219,9 +1219,9 @@ and 32). A resource's own state lives in the opaque `%Logex.Runtime{}`, which no
 builds, so a piece of it needs no entry check. Instead each piece gets a value from
 `start/1` and a rule for a cycle, for `restart/2` and for OE-2's switch. A global's one
 rule is `Logex.Configuration.initial/1`, its initial value or 0. Inside a resource each
-`%Logex.Instance{}` keeps OE-1's rules unchanged. Where a cell reads "OE-2 decides", the
-design pass recommended an answer and left the choice to OE-2's design pass; no Milestone
-2 commit depends on it.
+`%Logex.Instance{}` keeps OE-1's rules unchanged. Three cells the design pass left to
+OE-2 were decided on 2026-10-04 as it recommended (decisions 43–45); OE-2 builds them, and
+no Milestone 2 commit depends on them.
 
 | Piece | `start/1` | A cycle | `restart/2` | OE-2: kept | OE-2: added | OE-2: removed |
 |---|---|---|---|---|---|---|
@@ -1235,7 +1235,7 @@ design pass recommended an answer and left the choice to OE-2's design pass; no 
 | an instance's task | — | — | — | a change refused (decision 19) | — | — |
 | a task's `next_due` | 0, anchored at start | advances by whole intervals | the kept `now`, so due at the next cycle | kept; a changed interval gives `min(next_due, now + new interval)` (decision 40) | refused until verified (decision 19) | refused until verified |
 | a task's overlap count | 0 | adds `missed` | 0 | kept | — | — |
-| a `var_external` (M2-4) | none held; a lone instance's tag starts at 0 | merged in before its instance's scan, split off after | none held | **OE-2 decides**: recommended, the switch merges each global in by the running program's externals and splits it off by the candidate's, so the value kept is the one decision 25 keeps | binds to its global by name | — |
+| a `var_external` (M2-4) | none held; a lone instance's tag starts at 0 | merged in before its instance's scan, split off after | none held | the switch merges each global in by the running program's externals and splits it off by the candidate's, so the value kept is the one decision 25 keeps (decision 45) | binds to its global by name | — |
 | an event task's last sample (M2-6) | 0, so a trigger already 1 fires | sampled once a cycle | 0 | kept, the edit's exception, so a switch fires no event; a changed `single`, or an `interval` added or removed, refused | refused until verified (decision 19) | refused until verified |
 
 **The data path (decisions 24 and 28).** What the text cannot say is refused where data
@@ -1848,9 +1848,9 @@ The first fourteen were taken as recommended on 2026-09-28. Decisions 15–29 we
 others as recommended. Decisions 21–29 are OE-1's design (§4.9), and the work cites them
 as E1–E9. Decisions 30–40 are Milestone 2's design (§4.10), taken on 2026-10-02: all as
 recommended but 35, the configuration file's extension, where the maintainer chose
-`.logex`, outside the options offered. Decisions 41–44 were taken on 2026-10-04, after
+`.logex`, outside the options offered. Decisions 41–45 were taken on 2026-10-04, after
 M2-1 landed: 41 outside the options recommended, the others as recommended, 42 with no
-preference stated. All forty-four are kept with their options so the reasons stay with
+preference stated. All forty-five are kept with their options so the reasons stay with
 them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
@@ -2271,6 +2271,22 @@ to OE-2.
     `{:initial_changed, name, {old, new}}`, its running value kept, as decision 29 reports
     a tag's; or say nothing. *Recommend reporting it,* one rule for two kinds of state,
     which extends decision 29 to globals. Adopted.
+45. **How an edit's switch sees a configured instance's `var_external`s (OE-2),** when
+    the two programs declare different ones (the running program reads `estop` through
+    `var_external`, the candidate declares `estop` as a `var`):
+    - the switch merges each global into the instance's state by the running program's
+      externals before `Logex.Edit`'s per-instance switch, and splits it off by the
+      candidate's after, so a tag both declare keeps its value whatever its section, as
+      decision 25 keeps it, and the global itself is untouched;
+    - only the candidate's externals both ways, so a `var_external` the candidate turns
+      into a `var` is never merged in and starts at its initial value, against decision
+      25;
+    - or an edit that adds or removes a `var_external` on a configured instance refused,
+      stricter than a tag's section change at the top level.
+
+    *Recommend the running program's in, the candidate's out.* It keeps decision 25's one
+    rule for a section change and leaves the global alone. How OE-2 reports the write into
+    a shared global when a `var` becomes a `var_external` stays OE-2's to design. Adopted.
 
 ---
 
