@@ -1101,6 +1101,10 @@ defmodule Logex.RuntimeTest do
                [:__struct__, :connections, :file, :globals, :instances, :name, :programs] ++
                  [:tasks, :warnings]
 
+      # M2-2: a configuration file's text, read and printed back.
+      assert Enum.sort(Logex.Configuration.Text.__info__(:functions)) ==
+               [entries!: 1, keywords: 0, print: 1, read: 1]
+
       for {module, keys} <- [
             {Logex.Configuration.Task, [:interval, :line, :name, :priority]},
             {Logex.Configuration.Global, [:at, :initial, :line, :name, :type]},

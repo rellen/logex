@@ -11,7 +11,8 @@ defmodule Logex.Diagnostic do
     (the declarations, instructions and tags, `Logex.Compiler.instructionize/2`),
     `:edit` (a candidate refused beside the running program, `Logex.Edit.accept/3`, OE-1)
     or `:configure` (a configuration's tasks, globals, instances and connections,
-    `Logex.Configuration.check/1`, M2-1).
+    `Logex.Configuration.check/1`, M2-1, and a configuration file's line that cannot be
+    read, `Logex.Configuration.Text.read/1`, M2-2).
   - `line` is nil only for a `:file` problem that no line holds, such as an unreadable
     file, for an `:edit` problem with a tag declared from Elixir, which has no line, and
     for a `:configure` problem with an element built from Elixir, or with the
