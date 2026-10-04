@@ -1,21 +1,23 @@
 # Program organisation: the IEC software model, in logex's dialect
 
-**Status: decided; the Milestone-1 changes in §6.1 landed with M1-3, M1-5 and M1-6.
-How a running controller is changed, §4.9, was decided on 2026-10-01, and its first step,
-OE-1's edit of one program instance, was designed there (decisions 21–29) and landed as
+**Status: decided; the Milestone-1 changes in §6.1 landed with M1-3, M1-5 and M1-6. How a
+running controller is changed, §4.9, was decided on 2026-10-01, and its first step, OE-1's
+edit of one program instance, was designed there (decisions 21–29) and landed as
 `Logex.Edit` the same day. Milestone 2 was designed on 2026-10-02 (§4.10, decisions
-30–40), and its first item, M2-1, landed the same day: configurations with periodic
-tasks, globals at I/O points and connections, built from Elixir data
-(`Logex.Configuration`) and run as one resource (`Logex.Runtime.start/1` and `cycle/3`).
-The rest of the organisation, the configuration file, shared globals, event tasks and
-function blocks, is not yet implemented.** On 2026-09-28 the maintainer adopted the
-direction in §1 (IEC's software model, in logex's dialect: the hierarchy, task-style
-execution and I/O mapping), deferred routines, and took decisions 1–14 in §7 as
-recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1
-changes, and §3's Milestone 2 the §6.2 items. The syntax below is decided, but each new
-word still gets its `docs/naming.md` stanza before its code lands, and a stanza may still
-change a spelling. It was written against `37b7932`; the rationale stays here, and the
-plan of record is `PLAN.md`.
+30–40), and its first item, M2-1, landed the same day: configurations with periodic tasks,
+globals at I/O points and connections, built from Elixir data (`Logex.Configuration`) and
+run as one resource (`Logex.Runtime.start/1` and `cycle/3`). User function blocks, M2-5,
+landed on 2026-10-04: a block's file, its instances run with `cal`, the blocks
+`Logex.compile_file/1` loads from beside a program, and the online edit of a program that
+holds them, by path (§4.3 and §4.10). The rest of the organisation, the configuration
+file, shared globals and event tasks, is not yet implemented.** On 2026-09-28 the
+maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
+hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
+1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
+the §6.1 changes, and §3's Milestone 2 the §6.2 items. The syntax below is decided, but
+each new word still gets its `docs/naming.md` stanza before its code lands, and a stanza
+may still change a spelling. It was written against `37b7932`; the rationale stays here,
+and the plan of record is `PLAN.md`.
 
 ## 1. Why this document, and the direction
 
@@ -209,7 +211,7 @@ CONTROLLER                                   CONFIGURATION (+ one implicit RESOU
 | connections (Table 49 8b/9b) | `m1.start pb_start_1`, `m1.motor k1` | copied in and out per scan | M2-2 |
 | TASK, periodic | `task fast interval 10 priority 1` | per task: next due time | M2-3 |
 | VAR_EXTERNAL | `var_external estop bool` in a `.ld` | the configuration's global | M2-4 |
-| FUNCTION_BLOCK type and instance | a file headed `function_block seal`; `var s1 seal`, `cal s1 …` | nested: `m1.s1.run` | M2-5 |
+| FUNCTION_BLOCK type and instance | a file headed `function_block seal`; `var s1 seal`, `cal s1 …` | nested: `m1.s1.run` | M2-5 (landed) |
 | TASK, event | `task trip single estop priority 0` | per task: last SINGLE value | M2-6 |
 | access path | `m1.t1.acc`, read by `Logex.Runtime.get/2` | — | M1-6, M2 |
 
@@ -353,6 +355,28 @@ undoes the rule that mnemonics are reserved and never tags (`PLAN.md` §5).
 **Recursion is a diagnostic.** Ed 2 §2.5, p.45: *"Program organization units shall not be
 recursive"*. Ed 3 makes it *"Implementer specific"* (§6.6.1.1, p.58). logex forbids a
 cycle among FB types, which fits a model where one instance is one nested map.
+
+**As landed (M2-5, 2026-10-04; §4.10 gives its rules, `PLAN.md` M2-5 its commits).**
+- *A block's file* compiles to `{:ok, %Logex.FbType{}}`. Its members are its
+  declarations, each with a role: `:input`, `:output`, or `:local` for its own `var`, an
+  instance it holds included. Its `body` is the `%Logex.Program{}` of its rungs, named
+  after the block. `Logex.FbType.user?/1` holds exactly for a type a compile could give,
+  its body checked by `Logex.Compiler.lowered?/1`, the definition of a compiled body, so
+  a type edited by hand is an `ArgumentError` where it is given.
+- *Getting a block.* A source is given its blocks in `Logex.compile/2`'s `types:`, or
+  `Logex.compile_file/1` finds each type word that could name one as `<word>.ld` beside
+  the file that names it, compiles it first, once a call, and hands back its warnings
+  after the program's own, each with its block's file (decision 34). One compile holds
+  one version of each block name. A member that holds an instance of a block has the type
+  `{:block, name}`, and the holder's body holds that type once.
+- *Members* (decision 33): an instance's inputs and outputs are read anywhere, its own
+  `var`s are named only inside its body, and nothing outside it writes any of its
+  members.
+- *Recursion* is refused at any depth: in a block's own file, through a type given, and
+  through a chain of files the loader follows, at the line that closes the chain, which
+  the message names.
+- *The motor above* needs M2-4's `var_external`. With `estop` declared a `var_input`
+  instead, and `seal.ld` beside it, it compiles with no warning and runs as described.
 
 ### 4.4 The configuration
 
@@ -502,7 +526,8 @@ M2-4.)*
   core does no file I/O.
 - A convenience loader resolves `motor` to `motor.ld` beside the `.logex`. *(Milestone
   2's design: through the one loader M2-5 lands for function blocks, decision 34, with one
-  memo for the whole configuration.)*
+  memo for the whole configuration. M2-5 landed it on 2026-10-04, inside
+  `Logex.compile_file/1`, one memo a call.)*
 - A constructor built from Elixir data runs the same checks, as `Tag.new!/4` does for
   M1-3. *(Milestone 2's design: `Logex.Configuration.new!/1` raises every problem at once,
   a line each, where `Tag.new!/4` raises the first; §4.10, M2-1.)*
@@ -778,8 +803,8 @@ what it means, and each wrong reading gets a diagnostic that names it:
 
 | Reading | Where it is legal | Example |
 |---|---|---|
-| member of an instance or bit of a word | a `.ld` body | `t1.acc`, `s1.run`, `word.3` (members landed with M1-6; a bit is refused until bit access lands) |
-| instance path | a `.logex` connection line; `Runtime.get/2` | `m1.start`, `m1.t1.acc` |
+| member of an instance or bit of a word | a `.ld` body | `t1.acc`, `s1.run`, `word.3` (a timer's members landed with M1-6, a function block's with M2-5; a bit is refused until bit access lands) |
+| instance path | a `.logex` connection line; `Runtime.get/2` | `m1.start`, `m1.t1.acc`, `m1.s2.run` |
 | location | only after `at` in a `.logex` | `panel.i.0` |
 
 A dotted name in a body that is not a declared member, such as `m2.fault` inside
@@ -791,7 +816,7 @@ warns that `.` in the lexer is safe only while there are no float literals.
 | File kind | Reserved (in any case) |
 |---|---|
 | `.ld` program | the mnemonics (`cal` and `ton` among them); `var var_input var_output bool dint` (M1-3); `var_external` (M2-4) |
-| `.ld` function block | as a program, plus `function_block` (M2-5) |
+| `.ld` function block | as a program, plus `function_block` (M2-5, landed) |
 | configuration (`.logex`) | `task interval single priority program with var_global at bool dint`; later `var_config` |
 
 A `var_external` name must be legal in both kinds, because it is declared again as a
@@ -886,7 +911,10 @@ whether its switch is atomic at a scan boundary; Beremiz states that its hot swa
 OE-1's design, below, gives the rules in full. It refines three of these rows: which
 one-shots are blocked, a timer whose `ton` stops or returns, and a value a plain swap
 left. It also adds three: a tag's section, a changed initial value, and the inputs a
-switch makes live or leaves unread.
+switch makes live or leaves unread. *(Since M2-5, landed 2026-10-04, these rules hold
+inside a function block instance too, member by member and by path, `s1.edge`
+(decisions 31 and 32). A block's var_inputs are an exception to the inputs rule: its
+`cal` copies them in, so a switch reports none of them as `:input` or `:unread`.)*
 
 Left open for the design pass of `PLAN.md` OE-1, and settled by it:
 - which `ons` storage bits are armed, and whether an existing `ons` whose condition the
@@ -932,13 +960,15 @@ these changes:
   2026-10-02 by decision 31: M2-5 brings the migration, and a member whose type changes
   is refused, as a tag's is, not initialised. The members that match by name and type
   are copied, by path; a member added starts at its initial value. That copy is what
-  Beremiz's hot swap states; the CODESYS help pages read do not say it.)*
+  Beremiz's hot swap states; the CODESYS help pages read do not say it. Landed with M2-5,
+  2026-10-04, for the edit of one program instance.)*
 
 Allowed while running: rungs; adding and removing tags, instances, globals and
 connections; a tag's section, its value kept (decision 25); and a task's interval and
 priority, which the conventional family lets logic write while it runs. *(A changed
 interval makes the task next due at `min(next_due, now + new interval)`: decision 40.
-From M2-5, a function block's body and members, by decision 31.)*
+From M2-5, a function block's body and members, by decision 31, which landed with it on
+2026-10-04.)*
 
 **What Milestone 2 must keep, so that this needs no rework** (`PLAN.md` M2-1). *(Checked
 against M2-1 as it landed, 2026-10-02: each item it can meet, it meets, as marked.)*
@@ -1008,7 +1038,8 @@ Logex.Edit.stage(edit)   :: :accepted | :testing | :untested
   instance's switches. A switch and a prune are separate functions of one plan, that
   record and one state, so OE-2 can build one plan per program type and call them once for
   each instance (fix F5). In OE-1 each instance takes its own edit. A report names a tag;
-  from OE-2 it names an `instance.tag` path.
+  from OE-2 it names an `instance.tag` path. *(Since M2-5 a member inside a function
+  block instance is named by its path in the program instance, `{:added, "s1.edge", 0}`.)*
 
 *The stages.* Every step is taken between two scans.
 
@@ -1030,18 +1061,22 @@ boundary.
   inequality, whether bool and dint, a tag and a timer, or one function block schema and
   another. *(Changed 2026-10-02 by decision 31: from M2-5 a user function block's type,
   for the edit, is its name and its members' kinds, so a changed body or an added or
-  dropped member is no type change; a member whose kind changes is refused by its path.
-  A timer's schema is compared as before.)* Each is cited at the candidate's declaration
-  line, in line order, a tag declared from Elixir (which has no line) last:
-  ``line 7: `speed_sp` is a dint in the
-  running program and a bool in the candidate: a tag's type changes only with a
-  restart``. A section change is not a type change (decision 25), and neither is a
-  changed initial value (decision 29). A warning in the candidate does not stop it.
-  An `:edit` diagnostic carries no file, because a `%Logex.Program{}` keeps none: a
-  candidate from `Logex.compile_file/1` is cited as `line 7: …` without its path. The gap
-  is documented, and Milestone 2's configuration edit must close it (fix F15). *(Milestone
-  2's design gives fix F15 to M2-5, the first item that meets it: `%Logex.Program{}`
-  gains a `file`, §4.10.)*
+  dropped member is no type change; a member whose kind changes is refused by its path. A
+  timer's schema is compared as before. Landed with M2-5, a member cited by its path at
+  the line of the instance that holds it, as `Logex.Edit`'s moduledoc says: with
+  `var s1 seal` on line 10, ``line 10: `s1.edge` is a bool in the running program and a
+  dint in the candidate: a member's type changes only with a restart``.)* Each is cited at
+  the candidate's declaration line, in line order, a tag declared from Elixir (which has
+  no line) last: ``line 7: `speed_sp` is a dint in the running program and a bool in the
+  candidate: a tag's type changes only with a restart``. A section change is not a type
+  change (decision 25), and neither is a changed initial value (decision 29). A warning in
+  the candidate does not stop it. An `:edit` diagnostic carries no file, because a
+  `%Logex.Program{}` keeps none: a candidate from `Logex.compile_file/1` is cited as
+  `line 7: …` without its path. The gap is documented, and Milestone 2's configuration
+  edit must close it (fix F15). *(Milestone 2's design gives fix F15 to M2-5, the first
+  item that meets it: `%Logex.Program{}` gains a `file`, §4.10. Landed with M2-5: a
+  candidate from `compile_file/1` carries its path as its `file`, and every `:edit`
+  diagnostic carries the candidate's.)*
 - **A host mistake** raises `ArgumentError`, and a test pins each message:
   - something other than a program, at accept: the runtime's own message;
   - a candidate with another name: ``the candidate is `pump`, but the running program is
@@ -1089,7 +1124,7 @@ rules, in order:
 | `.pre`, a `ton` stopped or restored (decision 23) | A timer T runs no `ton` on keeps its `.pre` frozen. A timer T runs and F did not takes T's preset outright | `{:preset, t, {pre, p1}}` where it moves |
 | `.dn` (fix F6) | After any move of the `.pre` of a timer T runs: with `.dn` 1 and `.acc` below the new preset, `.dn` drops at the next scan with its rung true, unless at least preset − acc ms have passed. With `.en` 1, `.dn` 0 and `.acc` at or past the preset, `.dn` rises at that scan. A negative `.acc` counts as 0, as `ton` counts it. No latch is added | `{:dn_drops, t, {acc, preset}}`, `{:dn_rises, t, {acc, preset}}` |
 | Resume undone (fix F11) | Where this edit's last switch resumed a timer and no scan has run since (`switched`), a `last` still at `now` goes back to the one that switch found, before the rule below, so a test and an untest with no scan between leave the original's timers as they were. A resume an earlier edit's last switch made is not given back | `{:resume_undone, t, ms}` |
-| Resume | A timer T runs and F did not, timing when last run (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes `now`, so the time no `ton` ran it is not caught up. Every `ton` stamps `last` at every scan, so within the contract a `last` before `now` says F did not run it, and the switch reads no more. *(Changed 2026-10-02 by Milestone 2's design, §4.10, M2-5: a false `cal` freezes a timer inside a block, so a `last` before `now` no longer says F did not run it. The basis becomes F's text not running the timer, and F being the program that last scanned. The top level behaves as before.)* | `{:resumed, t, ms}` |
+| Resume | A timer T runs and F did not, timing when last run (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes `now`, so the time no `ton` ran it is not caught up. Every `ton` stamps `last` at every scan, so within the contract a `last` before `now` says F did not run it, and the switch reads no more. *(Changed 2026-10-02 by Milestone 2's design, §4.10, M2-5: a false `cal` freezes a timer inside a block, so a `last` before `now` no longer says F did not run it. The basis becomes F's text not running the timer, and F being the program that last scanned. The top level behaves as before. Landed with M2-5, which `edit_test.exs` and OE-1's contract walk confirm unchanged at the top level.)* | `{:resumed, t, ms}` |
 | One-shots (decision 21) | Blocks an `ons` for the next scan: below | `{:ons_blocked, b, v}` |
 | Held outputs (decision 20) | Records each output no logic drives any more: below | `{:held, o, v}` |
 | Initial values (decision 29) | A bool or dint both programs declare, of one type, whose initial value (as `Program.initial_env/1` gives it) differs keeps its running value; the new one applies when a restart next starts it. Not reported where a rule above started it, nor for a var_input of the program started, whose value a restart keeps | `{:initial_changed, n, {old, new}}` |
@@ -1104,7 +1139,8 @@ writes its bit. A scan empties the list, and so does a restart. *(Changed 2026-1
 decision 32: from M2-5 a scan keeps listed each bit inside a function block instance whose
 body it did not run, under a false `cal` or none, and a switch after it lists that bit
 again where the program it starts still has the `ons`. At the top level every rung runs,
-so a scan still empties the list there.)* A switch lists:
+so a scan still empties the list there. Landed with M2-5, 2026-10-04: a `cal` records
+that its body ran, and the scan takes the record out.)* A switch lists:
 - each `ons` of T that is new, or whose rung differs with line numbers ignored, against
   the program that last scanned;
 - each `ons` of T whose storage bit that program wrote through anything but an identical
@@ -1214,8 +1250,9 @@ instance already holds around the new piece:
 - M2-6 will add an event task's trigger.
 
 *Milestone 2's state* (designed 2026-10-02, §4.10; M2-1's pieces landed with it on
-2026-10-02, and `Logex.Runtime`'s moduledoc gives their rules as built; the rest have
-not). From M2-5 a function
+2026-10-02, and `Logex.Runtime`'s moduledoc gives their rules as built, and M2-5's on
+2026-10-04, whose rules `Logex.Program.initial_env/1`, `Logex.Instance` and
+`Logex.Edit` give; the rest have not). From M2-5 a function
 block instance is state of the program instance that holds it: `Program.initial_env/1`
 starts it, recursively; an energised `cal` runs it and a false one leaves it alone;
 `restart/3` starts it again; and a switch moves it member by member, by path (decisions 31
@@ -1283,8 +1320,12 @@ before any scan linear in the blocks still pending (fix F2). *(Restated 2026-10-
 decision 32: a bit inside a function block is named by its path, so the scan right after
 a switch is linear in the block list's bytes, and quadratic in the depth of nesting with a
 one-shot at every level. At the top level, where a bit's name is one name, nothing
-changes.)* Each figure moves by about 10% from run to run, with garbage collection, so
-each is the range of the runs that
+changes. As landed with M2-5, `function_block_test.exs` pins it in the block list's
+bytes, which grow 16x for 4x the depth of a chain: a switch and the scan after it are
+bound to 1.3x that growth, and measured 5.1x and 10.0x; the scan right after a switch at
+16x the instances took 16.2x to 16.4x the reductions, and a second edit's steps at 16x
+the pending nested bits 16.4x to 16.8x, each bound 24.)* Each figure moves by about 10%
+from run to run, with garbage collection, so each is the range of the runs that
 measured it on 1.20.4, not a limit: 48 runs of the four tests printing their own ratios,
 after the review of the OE-1 fixes, and up to 63 more in the check of those fixes; a
 mutant's, 10 to 25 runs: 4x the tags takes 4.3x to 4.6x the reductions (bound 6); 16x
@@ -1343,6 +1384,11 @@ F3, the held values of F4) and still costs less than one scan.
 - `runtime_test.exs`: the exact public surface, `Logex.Edit`'s and `Logex.Parser`'s
   included, the fields of `%Logex.Instance{}` and `%Logex.Scan{}`, and the messages of the
   block list and of `switched`.
+- *(M2-5, landed 2026-10-04.)* `function_block_test.exs` holds a test per rule of the
+  edit of a program that holds function blocks, by path (decisions 31 and 32), among them
+  a block frozen by a false `cal` across a switch, and its growth tests;
+  `api_contract_test.exs` adds an edit walk over programs that hold blocks two deep, with
+  a one-shot oracle on every scan, from the programs' text.
 
 **Known limits, documented.**
 - A one-shot block left pending by an earlier edit stays wherever the program started has
@@ -1351,7 +1397,9 @@ F3, the held values of F4) and still costs less than one scan.
 - A restart during test puts `.pre` at the candidate's preset. Where logic had set `.pre`
   to exactly that value before the test, the untest that follows gives back logic's value,
   where a restart of the original would give the original's preset.
-- An `:edit` diagnostic carries no file (above).
+- An `:edit` diagnostic carries no file (above). *(Closed by M2-5's fix F15: a
+  candidate from `Logex.compile_file/1` carries its path, and so does each of its `:edit`
+  diagnostics; one from `Logex.compile/2` still has none.)*
 - An edit's record starts empty. A new edit whose first test comes with no scan since an
   earlier edit's last switch knows no point's value yet, so it reports only the held
   outputs its candidate still shows; and it knows neither the `.pre` nor the `last` that
@@ -1360,8 +1408,8 @@ F3, the held values of F4) and still costs less than one scan.
 
 ### 4.10 Milestone 2's design (designed 2026-10-02)
 
-**Designed 2026-10-02; M2-1 landed the same day (`PLAN.md` M2-1), and nothing after it
-has.** A design pass spiked Milestone 2 in three
+**Designed 2026-10-02; M2-1 landed the same day (`PLAN.md` M2-1), and M2-5 on
+2026-10-04 (`PLAN.md` M2-5); nothing else has.** A design pass spiked Milestone 2 in three
 tracks on copies of `47319f7`, on Elixir 1.20.4 / OTP 28: the scheduler from Elixir data
 (M2-1); user function blocks (M2-5); and the configuration file, shared globals and event
 tasks (M2-2, M2-3, M2-4, M2-6). Each track was reviewed for correctness and for fit with
@@ -1468,7 +1516,19 @@ any value that is not the struct is.)*
 - *Done-when.* "Cycled every 10 ms from 0 to 990 ms" replaces "cycled for one simulated
   second", so that the counts are exact: 100, 34 and 100 runs.
 
-**M2-5 · User function blocks** (after M2-1: decision 30).
+**M2-5 · User function blocks** (after M2-1: decision 30). *(Landed 2026-10-04, as these
+rules say, in seven commits, the excusal of a declaration whose type is unknown the sixth
+and the documents the seventh (`PLAN.md` M2-5). Readings the landing made, each in its
+commit and pinned: a user block's instance is "an instance of `seal`" in every message,
+with no article chosen by the name's first letter, while the built-in timer stays "a
+ton", and the one block-type message says "through `ton`" for it; `get/2` tells a block's
+own `var` it is "a `var` of `seal`, hidden outside it"; a switch reports none of a
+block's var_inputs as `:input` or `:unread`, since `cal` copies them in, and reports a
+block's var_output whose initial value changed as `:initial_changed` by its path;
+`compile_file/1` hands back the program's own warnings first, then each loaded block's in
+the order compiled, and a block's own file only its own; a broken block's file stops the
+file that names it, but every block that file names is still loaded, so each broken one
+is reported; and a directory with a block's name "cannot be read".)*
 - *A block's file.* Its header, `function_block <name>`, is the file's first rung:
   comments and blank lines may come before it, and the name matches the file's.
   `function_block` is recognised in any case and names no block, but a block's own name is
@@ -1479,7 +1539,10 @@ any value that is not the struct is.)*
   loader): ``` `seal` is a function block type, which runs inside a program through `cal`:
   an instance is of a %Logex.Program{}```, with the configuration's prefix ``the program
   under `<key>` is`` where a key and a name differ. Until M2-5 lands, M2-1 gives interim
-  words without `cal`.
+  words without `cal`. *(Landed: `Logex.Declarations.not_a_program/1` gives it, at the
+  runtime, `accept/3`, `check/1` and `new!/1`; for the built-in timer it says "through
+  `ton`". `compile/3` and the configuration's loader are M2-2's, which is to give it
+  there.)*
 - *Types given.* `Logex.compile/2` takes `types:` (decision 34), and its options message
   names it. A block's name is matched exactly, as a tag's is. One compile holds one
   version of each block name, across the types given, the types they hold and the types of
@@ -1496,7 +1559,10 @@ any value that is not the struct is.)*
 - *Declarations.* Members declared from Elixir come first in `cal`'s operand order, by
   name, then the declaration lines in order. The uses of a declaration whose type is
   unknown are excused, as a recursive declaration's are, so a misspelled block name gives
-  one message; this lands in its own commit, after M2-5.
+  one message; this lands in its own commit, after M2-5. *(Landed as M2-5's sixth commit,
+  before its documents: a line given the unknown-type message, or refused as recursive,
+  excuses every use of its own name, as written; a line refused for another reason
+  excuses nothing.)*
 - *`cal`.* Its `@instructions` entry is the marker `{:cal, :block}`, so that table still
   reserves it and the naming test still sees it, and its signature is the block's, built
   per compile. `cal` is reserved in every `.ld`, in any case. One `cal` runs an instance:
@@ -1510,7 +1576,8 @@ any value that is not the struct is.)*
   on the first scan fires its one-shot the first time it runs, as `PLAN.md` M2-5's note
   from M1-6 says.
 - *Walks.* M2-5 adds one `cal` clause to each IR walk it meets. B5's one walk comes with
-  M2-4.
+  M2-4. *(Landed as one lookup the walks share, `Logex.Compiler.signature/2`, an
+  instruction's slots given its program's tag table, a `cal`'s its block's.)*
 - *The edit, by path* (decisions 31 and 32). A block's type, for the edit, is its name
   and its members' kinds: its body may change, members may be added or dropped, and a
   member whose kind changes is refused by its path. Inside an instance both programs
@@ -1534,12 +1601,17 @@ any value that is not the struct is.)*
   `file`, which `compile_file/1` sets and `Logex.Edit`'s diagnostics carry. Two
   conventions are stated together: a block file's diagnostics carry that file in `file`;
   a configuration's diagnostic stays in the configuration's file and names a program
-  type's file and line in its text, as in `on line 8 of motor.ld`.
+  type's file and line in its text, as in `on line 8 of motor.ld`. *(Landed:
+  `compile_file/1` sets `file` on a program and on a block's body, and every `:edit`
+  diagnostic carries the candidate's. The configuration's half of the conventions lands
+  with M2-2.)*
 - *A landed message changes:* "only an instance of a function block has members" replaces
   "only a timer has members".
 - *Naming.* The `function_block` and `cal` stanzas call the conventional family's
   reusable blocks "user-defined instructions", not by the family's own term.
-- *Done-when* as decided, its `m1.s2.run` read through M2-1's `get/2`.
+- *Done-when* as decided, its `m1.s2.run` read through M2-1's `get/2`. *(Landed:
+  `end_to_end_test.exs` asserts `Logex.Runtime.get(rt, "m1.s2.run") == {:ok, 1}` through
+  a configuration, from text and from files on disk through `compile_file/1`.)*
 
 **M2-2 · The configuration file, task-less.**
 - *The file* is a configuration file (`.logex`, decision 35), read by a recursive descent
@@ -1689,7 +1761,7 @@ any value that is not the struct is.)*
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays |
 | IEC textual paste-compatibility (`END_*` blocks, `:=`, `;`) | not adopted | logex is a dialect (`PLAN.md` §5) |
-| Online edit (a new type, instances keep their state) | **OE-1 landed 2026-10-01** (§4.9): the staged edit of one program instance, `Logex.Edit`; OE-2, a configuration's, after Milestone 2, so a configured plant is not edited until OE-2; M2-5 brings the edit of a program that holds function blocks (decisions 31 and 32) | Instance state stays keyed by declared tag name, which is what lets an edit move it by name. A *plain swap*, a recompile of the same name scanned over a kept instance with no edit, stays in the contract (decision 26) and does what it did before OE-1, since a state's values are not checked each scan: the instance keeps its values until a restart. So it keeps its old `.pre` under a changed preset; a tag the recompile adds reads 0, not its initial value, so an added timer starts at a `.pre` of 0 and is done at its first true scan; a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output; and an `ons` it adds fires on its first scan if its condition is already true (`end_to_end_test.exs` pins all but the type change). A restart puts the values right, keeping only the var_inputs whose values fit their types. `Logex.Edit` moves the state by rule instead: a switch moves `.pre` where it still holds the old preset, starts what is added at its initial value, at the first test restarts a value that does not fit its type, and blocks an added or changed `ons` for one scan; accept refuses a type change. |
+| Online edit (a new type, instances keep their state) | **OE-1 landed 2026-10-01** (§4.9): the staged edit of one program instance, `Logex.Edit`; OE-2, a configuration's, after Milestone 2, so a configured plant is not edited until OE-2; the edit of a program that holds function blocks (decisions 31 and 32) landed with M2-5 on 2026-10-04 | Instance state stays keyed by declared tag name, which is what lets an edit move it by name. A *plain swap*, a recompile of the same name scanned over a kept instance with no edit, stays in the contract (decision 26) and does what it did before OE-1, since a state's values are not checked each scan: the instance keeps its values until a restart. So it keeps its old `.pre` under a changed preset; a tag the recompile adds reads 0, not its initial value, so an added timer starts at a `.pre` of 0 and is done at its first true scan; a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output; and an `ons` it adds fires on its first scan if its condition is already true (`end_to_end_test.exs` pins all but the type change). A restart puts the values right, keeping only the var_inputs whose values fit their types. `Logex.Edit` moves the state by rule instead: a switch moves `.pre` where it still holds the old preset, starts what is added at its initial value, at the first test restarts a value that does not fit its type, and blocks an added or changed `ons` for one scan; accept refuses a type change. |
 
 ---
 
@@ -1849,7 +1921,7 @@ each again from source; §4.10.)* Each rule is checked by reverting it (CLAUDE.m
   through `var_external` stops both in the same cycle; a `var_external` with no matching
   global, or of another type, is a located diagnostic.*
 
-**M2-5 · User function blocks.**
+**M2-5 · User function blocks.** *(Landed 2026-10-04; `PLAN.md` M2-5.)*
 - Needs M1-6 and B5 only, so it may move ahead of M2-1. *(Ordered 2026-10-02 by decision
   30: after M2-1, before M2-2. It also brings the edit of a program that holds blocks, by
   path, decisions 31 and 32, and the loader, decision 34.)*

@@ -5,21 +5,22 @@ text into a named, stateless value, and runs it as instances, one scan at a time
 time the host injects. No dependencies and no generated code: the lexer and parser are
 written by hand, and the whole thing is twenty-one small modules.
 
-**Stage: early, and honest about it.** Fourteen instructions, among them an on-delay
+**Stage: early, and honest about it.** Fifteen instructions, among them an on-delay
 timer, a one-shot and six comparisons, parallel branches to arbitrary nesting depth,
 latch/unlatch that holds across scans, power flow that resets per rung, a typed tag table
-that every tag is declared in, a public API (`Logex.compile/2`,
-`Logex.compile_file/1` and `Logex.Runtime`), an online edit that changes a running
-instance's program without a restart (`Logex.Edit`), a scheduler that runs instances of
-several programs as one configuration on periodic tasks, wired to input and output points
-(`Logex.Configuration`), and a printer that turns an AST back into source so a routine
-round-trips — all of that works and is tested end to end, and a program with mistakes in
-it gets every one reported with its line rather than an exception, a misspelt tag
-included. What does not exist yet: counters, the other timers, math, the configuration
-file, which will hold a configuration as text (a configuration is built from Elixir data
-for now), shared globals, event tasks and function blocks of your own. `PLAN.md` is a
-full review of the codebase and says precisely what is missing, in what order it gets
-fixed, and why.
+that every tag is declared in, function blocks of your own, each written once in a file of
+its own, instantiated as often as needed and run with `cal`, a public API
+(`Logex.compile/2`, `Logex.compile_file/1` and `Logex.Runtime`), an online edit that
+changes a running instance's program, its function blocks included, without a restart
+(`Logex.Edit`), a scheduler that runs instances of several programs as one configuration
+on periodic tasks, wired to input and output points (`Logex.Configuration`), and a
+printer that turns an AST back into source so a routine round-trips — all of that works
+and is tested end to end, and a program with mistakes in it gets every one reported with
+its line rather than an exception, a misspelt tag included. What does not exist yet:
+counters, the other timers, math, the configuration file, which will hold a configuration
+as text (a configuration is built from Elixir data for now), shared globals and event
+tasks. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
+what order it gets fixed, and why.
 
 ## The dialect
 
@@ -29,25 +30,36 @@ become an importer.**
 Source syntax today:
 
 - declaration lines before the first rung, one tag each: `<section> <name> <type>
-  [<initial>]`, the section `var`, `var_input` or `var_output`, the type `bool`, `dint`
-  or `ton`, as in `var_output speed_sp dint 1200`. Every tag a rung uses must be
-  declared. A `var_input` is supplied from outside and no instruction may write it; a tag
-  with no initial value starts at 0. A timer, `var t1 ton`, is declared only with `var`
-  and with no initial value: its preset is the number on the `ton` that runs it
+  [<initial>]`, the section `var`, `var_input` or `var_output`, the type `bool`, `dint`,
+  `ton` or a function block's name, as in `var_output speed_sp dint 1200`. Every tag a
+  rung uses must be declared. A `var_input` is supplied from outside and no instruction
+  may write it; a tag with no initial value starts at 0. A timer, `var t1 ton`, is
+  declared only with `var` and with no initial value: its preset is the number on the
+  `ton` that runs it. So is an instance of a function block, `var s1 seal`
 - mnemonics, sections and types in any case (`xic`, `XIC`, `VAR_INPUT`), and reserved: no
-  tag may be named after one, in any case, so `ote`, `Ote` and `bool` are never tags; tags
-  are case-sensitive (`aa` and `AA` are two tags)
+  tag may be named after one, in any case, so `ote`, `Ote`, `cal` and `bool` are never
+  tags; tags are case-sensitive (`aa` and `AA` are two tags). A function block's name is
+  matched exactly, as a tag's is, and is not reserved
 - operands separated by spaces — and a number must be followed by one: `move 1bst aa` is an
   error naming `1bst`, not the number `1` and a tag `bst`
 - no operand parentheses, no terminator
 - `//` starts a comment, which runs to the end of its line
 - a name may have `.` parts: `t1.dn` is the member `dn` of the timer `t1`. A timer's
   members are `.pre` and `.acc` (dint, which logic may write) and `.dn`, `.tt` and `.en`
-  (bool, which only its `ton` sets), read anywhere; members are case-sensitive, and a
+  (bool, which only its `ton` sets), read anywhere. A function block instance's inputs
+  and outputs, `s1.run`, are read anywhere too; its own `var`s are named only inside it,
+  and nothing outside it writes any of its members. Members are case-sensitive, and a
   dotted name that is not a declared member is an error. `word.3`, bit access, is
   refused for now. No tag is declared with a `.`
 - a newline ends a rung: LF, CRLF or a lone CR
 - `(` … `|` … `)` open, separate and close a parallel branch group
+- a file whose first rung is `function_block seal`, comments and blank lines allowed
+  before it, is a function block type, `seal`, named as its file is: its declarations
+  are its members and its rungs its body. `Logex.compile/2` returns it as a
+  `%Logex.FbType{}`. A program given it in `types:`, or compiled by
+  `Logex.compile_file/1` with `seal.ld` beside it, declares instances of it and runs each
+  with `cal`. In a block's file `function_block` is reserved, in any case. A block holds
+  no instance of itself, at any depth
 
 The *vocabulary* is a conventional ladder mnemonic set. The *branch delimiters used to be
 too*, and are no longer — which is worth stating plainly, because the survey that found the
@@ -78,11 +90,12 @@ syntax (`I:003/4`, `T4:5/DN`).
 Being a dialect is a licence to choose names, not a licence to choose them carelessly. So
 every new instruction is surveyed before it is written: what does IEC 61131-3 call this,
 what do the major vendor toolchains call it, and what should logex call it in that light?
-The survey lives in [`docs/naming.md`](docs/naming.md), one stanza per mnemonic or
-declaration word, and `test/logex/naming_test.exs` fails if an instruction or a
-declaration word reaches the compiler without one. The rule it applies, in order: if IEC names the operation, take the IEC
-name; if IEC supplies only a graphical element, take the clearest vendor mnemonic and say
-which; never invent a readable word for a thing that already has a standard name.
+The survey lives in [`docs/naming.md`](docs/naming.md), one stanza per mnemonic,
+declaration word or word that heads a file, `function_block`, and
+`test/logex/naming_test.exs` fails if any of them reaches the compiler without one. The
+rule it applies, in order: if IEC names the operation, take the IEC name; if IEC supplies
+only a graphical element, take the clearest vendor mnemonic and say which; never invent a
+readable word for a thing that already has a standard name.
 
 Two findings from that survey are worth stating up front, because they explain why the
 rule has two tiers. IEC 61131-3 defines ladder contacts and coils as *graphical symbols*
@@ -106,6 +119,7 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
 | `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two dints, each a tag, a member or a literal | compare — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`; none on a false rung. Two literals are a warning |
 | `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
+| `cal s1 a b q` | an instance of a function block, then a value for each of its var_inputs (a tag, a member or a literal of its type) and a tag for each of its var_outputs, which it writes, so not a `var_input`, in the block's declaration order | runs the instance: rung power is its EN, and passes on. True: copies `a` and `b` in, runs the block's rungs over the instance's state and copies its outputs out to `q`. False: copies nothing in or out and runs nothing, so the instance and `q` are frozen; a timer inside catches up when the block next runs. One `cal` runs an instance, and a `ton` is run by its `ton`, never by `cal` |
 | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
 
 Each instruction's operands are checked against this table and against their tags'
@@ -140,8 +154,9 @@ Milestone 2) and will change the source language:
   configuration file (`.logex`) that instantiates `.ld` programs, wires them to I/O points
   and globals, and schedules them on tasks, in text (the configuration it reads, and its
   scheduler, landed with M2-1, built from Elixir data); `var_external` for shared globals;
-  event tasks; function blocks called with `cal`. Each new word still gets its
-  `docs/naming.md` stanza, which may change a spelling.
+  event tasks. Each new word still gets its `docs/naming.md` stanza, which may change a
+  spelling. Function blocks called with `cal` have landed (M2-5, "A function block",
+  below).
 
 - **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
 - **The other timers, counters and math** arrive as `tof tp rto res`, `ctu ctd`, `add sub
@@ -294,6 +309,113 @@ and `xic go ton t1 3000 ote lamp` is refused:
 
 ```
 delay.ld: line 8: `ote lamp` follows `ton t1` on its path: what passes on after a `ton` is not settled, so a `ton` ends its path; read the timer with `xic t1.dn` on a rung below
+```
+
+### A function block
+
+`seal.ld` — the seal-in of `motor.ld`'s first rung, written once as a function block. Its
+first rung, `function_block seal`, says what kind of file it is and names the block, as
+the file is named; its declarations are the block's members, and its rungs its body:
+
+```
+// A seal-in: `run` holds itself in from `start` until `stop`.
+function_block seal
+var_input start bool
+var_input stop bool
+var_output run bool
+
+( xic start | xic run ) xio stop ote run
+```
+
+`belts.ld` — three conveyors, each sealed in by an instance of its own, `s1` to `s3`, with
+one stop button. The third runs only while `auto` is on:
+
+```
+var_input start_1 bool
+var_input start_2 bool
+var_input start_3 bool
+var_input stop bool
+var_input auto bool
+var_output belt_1 bool
+var_output belt_2 bool
+var_output belt_3 bool
+var_output all_run bool
+var s1 seal
+var s2 seal
+var s3 seal
+
+cal s1 start_1 stop belt_1
+cal s2 start_2 stop belt_2
+xic auto cal s3 start_3 stop belt_3
+xic s1.run xic s2.run xic s3.run ote all_run
+```
+
+`cal s1 start_1 stop belt_1` runs `s1`: its operands fill the block's var_inputs, then its
+var_outputs, in the order the block declares them, and rung power is the instance's EN.
+`s1.run` reads an output from outside the block.
+
+`belts.exs` — `Logex.compile_file/1` finds `seal.ld` beside `belts.ld`, since `seal` is no
+type logex has, and compiles it first. Each scan prints the outputs and `s3`'s state:
+
+```elixir
+{:ok, belts} = Logex.compile_file("belts.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(belts, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(belts, state, 10)
+  IO.puts("#{label}  #{inspect(outputs)}  s3=#{inspect(state.env["s3"])}")
+  state
+end
+
+Logex.Runtime.instance(belts)
+|> scan.("start 1, auto  ", %{"start_1" => 1, "auto" => 1})
+|> scan.("start 2 and 3  ", %{"start_1" => 0, "start_2" => 1, "start_3" => 1})
+|> scan.("released       ", %{"start_2" => 0, "start_3" => 0})
+|> scan.("auto off, stop ", %{"auto" => 0, "stop" => 1})
+|> scan.("auto on        ", %{"auto" => 1})
+```
+
+```
+$ mix run belts.exs
+start 1, auto    %{"all_run" => 0, "belt_1" => 1, "belt_2" => 0, "belt_3" => 0}  s3=%{"run" => 0, "start" => 0, "stop" => 0}
+start 2 and 3    %{"all_run" => 1, "belt_1" => 1, "belt_2" => 1, "belt_3" => 1}  s3=%{"run" => 1, "start" => 1, "stop" => 0}
+released         %{"all_run" => 1, "belt_1" => 1, "belt_2" => 1, "belt_3" => 1}  s3=%{"run" => 1, "start" => 0, "stop" => 0}
+auto off, stop   %{"all_run" => 0, "belt_1" => 0, "belt_2" => 0, "belt_3" => 1}  s3=%{"run" => 1, "start" => 0, "stop" => 0}
+auto on          %{"all_run" => 0, "belt_1" => 0, "belt_2" => 0, "belt_3" => 0}  s3=%{"run" => 0, "start" => 0, "stop" => 1}
+```
+
+- Each instance is a seal-in of its own. Its state is a map of the block's members,
+  nested in the program instance's under the instance's name, `state.env["s3"]`.
+- When `auto` falls, `cal s3` has a false EN: the block's rungs do not run, and nothing is
+  copied in or out, so `s3` and `belt_3` are frozen. Belt 3 runs on through the stop that
+  drops the other two, and `s3` never reads `stop`. Once `auto` is back, `s3` runs, reads
+  `stop` and drops out. That is IEC's rule for a false EN
+  ([`docs/organisation.md`](docs/organisation.md) §4.3), and why a stop that must always
+  work goes into the block, not in front of its `cal`.
+- From Elixir, `Logex.compile/2` takes the block as a type:
+  `Logex.compile(File.read!("seal.ld"), name: "seal")` gives `{:ok, %Logex.FbType{}}`,
+  and `Logex.compile(File.read!("belts.ld"), name: "belts", types: [seal])` the program.
+- In a configuration, `Logex.Runtime.get(rt, "m1.s2.run")` reads `s2`'s output in the
+  instance `m1`, as `{:ok, 1}` while belt 2 runs. A block's own `var`s are hidden from
+  outside it, and nothing outside it writes any of its members.
+
+`compile_file/1` hands back the warnings of the blocks it loads after the program's own,
+each with its block's file as the loader found it beside the program. Had `seal.ld`
+declared a `var spare bool` on its line 6 that no rung uses,
+`Enum.map(belts.warnings, &Logex.Diagnostic.format/1)` would be
+``["./seal.ld: line 6: warning: `spare` is declared but no rung uses it"]``. `compile/2`,
+whose caller compiled the block, gives only the program's own.
+
+Each mistake is located in the file that holds it. A misspelt type, `var s3 sael`, is one
+message: the uses of a declaration whose type is unknown are not reported again. A write
+to a block's member from outside it, a rung `xic auto ote s1.run` on line 18, is refused.
+And a block that holds an instance of itself, `var inner seal` on line 6 of `seal.ld`, is
+refused in its own file, and the program that names it is compiled no further:
+
+```
+belts.ld: line 12: unknown type `sael`: logex has `bool`, `dint` and `ton`, and the function block `seal` — did you mean `seal`?
+belts.ld: line 18: `ote` writes `s1.run`, but `s1` is an instance of `seal`, whose members only its body writes
+./seal.ld: line 6: `seal` cannot hold an instance of `seal`: a function block never holds an instance of itself
 ```
 
 ## A configuration
@@ -572,9 +694,24 @@ change one. Had `motor_v2.ld` kept `run_lamp` as `var_output run_lamp dint`, on 
 line 7: `run_lamp` is a bool in the running program and a dint in the candidate: a tag's type changes only with a restart
 ```
 
-The diagnostic names no file, because a `%Logex.Program{}` keeps none, a gap Milestone 2
-must close. A section change and a changed initial value are not type changes: the value
-is kept, and the report says what changed.
+The diagnostic names no file because `v2` came from `Logex.compile/2`, which reads none.
+A candidate from `Logex.compile_file/1` keeps its path as its `file`, and the diagnostic
+names it: compiled from `v2/motor.ld`, the same candidate gives
+`` v2/motor.ld: line 7: `run_lamp` is a bool in the running program … ``. A section
+change and a changed initial value are not type changes: the value is kept, and the
+report says what changed.
+
+A program that holds function blocks is edited the same way, its blocks with it
+(decisions 31 and 32 in [`docs/organisation.md`](docs/organisation.md) §7). A block's
+body may change, and members may be added or dropped: each instance's state moves member
+by member, by its path, and a member whose type changes is refused at accept, by its
+path, as a tag's is. Had `seal.ld` been edited to start a belt only on the press of
+`start`, not while it is held, with a `var edge bool` and the rung
+`( xic start ons edge | xic run ) xio stop ote run`, a test of `belts` compiled again
+with it, taken while `auto` is off, would report `{:added, "s1.edge", 0}` and `{:ons_blocked, "s1.edge", 0}`,
+and the same for `s2` and `s3`. The one-shot in `s3`, whose `cal` is frozen, stays
+blocked until a scan runs the block's body, once `auto` is back: a `start_3` held through
+the edit does not start belt 3 then, and its next press does.
 
 During an edit the host scans, sets inputs and restarts through `Logex.Edit.running/1`,
 and sends only that program's var_inputs. It resends each input a step reports as
@@ -584,8 +721,14 @@ not know.
 
 A program built as data rather than text, through `Logex.Compiler.instructionize/2` and
 `Logex.Tag.new!/4`, is refused with an `ArgumentError` where no text could say it, as a
-negative literal or a timer's preset given from Elixir. So every program an edit takes
-could be written as a `.ld` file.
+negative literal, a timer's preset given from Elixir, or a function block type edited by
+hand and given in `types:`. So every program an edit takes could be written as a `.ld`
+file, and every block it holds as a block's file. A block type given where a program goes,
+to the runtime, to `accept/3` or in a configuration's `programs`, raises one message:
+
+```
+`seal` is a function block type, which runs inside a program through `cal`: an instance is of a %Logex.Program{}
+```
 
 An edit takes one lone instance. An instance a configuration runs is not edited until
 OE-2, which edits a running configuration: a `%Logex.Runtime{}` is opaque, and changes
@@ -619,11 +762,11 @@ mix format
 ## Documents
 
 - `PLAN.md` — the codebase review and the ordered plan of work
-- [`docs/naming.md`](docs/naming.md) — the IEC and vendor naming survey, one stanza per mnemonic or declaration word
+- [`docs/naming.md`](docs/naming.md) — the IEC and vendor naming survey, one stanza per mnemonic, declaration word or word that heads a file
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
 - `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
 - `CLAUDE.md` — commands and conventions for anyone (or anything) editing the code
-- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, and configurations with periodic tasks, from Elixir data, with M2-1; the rest of Milestone 2 is designed)
+- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, and function blocks, their online edit included, with M2-5; the rest of Milestone 2 is designed)
 - [`docs/defladder.md`](docs/defladder.md) — a study of an Elixir-embedded `defladder` DSL: what Nx's `defn` does, an executed spike, and a recommendation (proposed, not adopted)
 
 ## License

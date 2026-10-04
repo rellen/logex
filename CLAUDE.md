@@ -178,21 +178,23 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   seam, but no further; the other two hand-type one stage's input and cannot see a seam at
   all.
 - `README.md` — what logex is, the dialect stance, the instruction table and worked
-  examples, among them a configuration built from Elixir and run by the scheduler, and a
-  running program changed by `Logex.Edit`. **Any change to the language stales it:** a
+  examples, among them a function block loaded from beside the program that runs it, a
+  configuration built from Elixir and run by the scheduler, and a running program changed
+  by `Logex.Edit`, its blocks included. **Any change to the language stales it:** a
   new instruction adds a row and may clear a "Settled, not yet landed" bullet; a syntax
   change touches the syntax list, the instruction table and the examples (whose output is
-  real — re-run it). So does a change to a configuration's checks or a cycle's rules,
-  through "A configuration", and to an edit's rules or report, through "Changing a
-  running program". Nothing tests this.
+  real — re-run it). So does a change to a block's rules or the loader, through "A
+  function block", to a configuration's checks or a cycle's rules, through "A
+  configuration", and to an edit's rules or report, through "Changing a running program".
+  Nothing tests this.
 - `CONTRIBUTING.md` — working practices, each one traced to something that broke
 - `PLAN.md` — reviewed findings and the ordered plan of work
 - `docs/naming.md` — the IEC and vendor name survey, one stanza per mnemonic, declaration
   word or word that heads a file; append-only
 - `docs/organisation.md` — where logex is heading above one program: IEC's configuration,
   tasks, program instances and I/O mapping, in logex's dialect. Decided (PLAN §5; the
-  work is PLAN's M1-3, M1-5, M1-6, OE-1, Milestone 2 and OE-2; OE-1 and M2-1 have landed,
-  and Milestone 2 was designed on 2026-10-02, §4.10 and decisions 30–40). Read it
+  work is PLAN's M1-3, M1-5, M1-6, OE-1, Milestone 2 and OE-2; OE-1, M2-1 and M2-5 have
+  landed, and Milestone 2 was designed on 2026-10-02, §4.10 and decisions 30–40). Read it
   before designing anything that names a program, schedules one, binds I/O, or changes a
   running controller (§4.9, online edit, decided 2026-10-01).
 - `docs/instruction-sets.md` — reference: IEC's LD elements and standard library by table number,

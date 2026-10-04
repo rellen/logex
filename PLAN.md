@@ -16,9 +16,9 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
-§1, §3·M1-1 to M1-6, §3's OE-1 and §3's M2-1 have been brought current. Milestone 2 was
-designed on 2026-10-02 (§3), and its first item, M2-1, landed the same day; the rest of
-Milestone 2 and OE-2 are still forward work.
+§1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1 and §3's M2-5 have been brought current.
+Milestone 2 was designed on 2026-10-02 (§3), its first item, M2-1, landed the same day,
+and M2-5 on 2026-10-04; the rest of Milestone 2 and OE-2 are still forward work.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -76,6 +76,12 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   instances and their connections, checked by one validator, and `Logex.Runtime` runs it
   as one resource, a cycle at a time on the injected clock, by priority, with missed
   periods counted and reported.
+- User function blocks (M2-5): a file headed `function_block seal` compiles to a
+  `%Logex.FbType{}`, which `Logex.compile/2` takes in `types:` and `Logex.compile_file/1`
+  loads from beside the file that names it; a program declares instances, `var s1 seal`,
+  runs each with `cal`, rung power its EN, and reads its outputs, `s1.run`, anywhere.
+  Blocks nest, a block never holds itself, and an online edit moves a block's members by
+  path.
 
 These were each verified directly:
 
@@ -950,8 +956,8 @@ design:
   `Logex.Compiler.tokenize/1` and `parse/1` keep their own error shapes, for the golden
   record. *(Milestone 2's design, 2026-10-02: from M2-5, `compile/2` also takes `types:`,
   a function block's file compiles to `{:ok, %Logex.FbType{}}`, and `compile_file/1`
-  loads the blocks a program names from beside its file; `docs/organisation.md` decision
-  34.)*
+  loads the blocks a program names from beside its file; `docs/organisation.md`
+  decision 34. Landed with M2-5, which also gave `%Logex.Program{}` a `file`, fix F15.)*
 - **One diagnostic.** `%Logex.Diagnostic{stage:, line:, message:, file:, column:,
   severity:}`: `stage` is `:file | :lex | :parse | :validate`, and `severity` is `:error`
   or `:warning`. `severity` goes beyond the decided three fields on purpose, in the same one
@@ -1316,7 +1322,7 @@ one (owed below). The scheduler's and the function blocks' spikes, merged, pass 
 582 tests on Elixir 1.20.4. The maintainer took decisions 30–40 as recommended but 35,
 the configuration file's extension, choosing `.logex`, outside the options offered; the
 pass's routine choices, the rules of §4.10, were all taken as recommended. M2-1 landed
-on 2026-10-02 (below); nothing after it has.
+on 2026-10-02 and M2-5 on 2026-10-04 (below); nothing else has.
 
 **The order (decision 30):** the design record, then M2-1, M2-5, M2-2, M2-3, M2-4 and
 M2-6.
@@ -1332,8 +1338,8 @@ M2-6.
   The walk lands before the first check that reads a program's writes or timers.
 
 Each commit lands green under the full gate, with its mutation rows in its message, every
-rule it adds reverted alone. Only M2-1's commits were built as a gated series; M2-5's and
-the configuration file's must be built that way before they land.
+rule it adds reverted alone. M2-1's and M2-5's commits were built as gated series; the
+configuration file's must be built that way before they land.
 
 - **M2-1 · The scheduler, from Elixir data, no syntax.** `%Logex.Configuration{}`,
   `Logex.Runtime.start/cycle/next_due_in/get`, periodic and task-less instances,
@@ -1554,6 +1560,55 @@ the configuration file's must be built that way before they land.
   The spike holds the first five, not cut into commits. Fix F15, the `get/2` assertion,
   the one message in `check/1` and the warnings of decision 34 are not built. A separate
   commit after M2-5 excuses the uses of a declaration whose type is unknown.
+
+  **Status: DONE — landed 2026-10-04**, as seven commits: the first five of its landing
+  order, then the excusal the record put after M2-5, then the documents. (1) The survey,
+  `4db37b1`; (2) one lookup of an instruction's slots for the walks,
+  `Logex.Compiler.signature/2`, with no change in behaviour, `e8a55b6`; (3) blocks and
+  `cal`, `969a5a4`; (4) the edit by path, `a87edcc`; (5) the loader, `2c3c609`; (6) the
+  uses of a declaration whose type is unknown excused, so a misspelled block name is one
+  message, `776a810`; (7) the documents, the commit after it, among them the README's "A
+  function block", whose output is a real run. 643 tests pass on Elixir 1.20.4 (8 of them
+  doctests), up from 529. The messages of (1) to (6) record their mutation tables, every
+  rule each adds reverted alone in its own tree and the full suite judged by exit code:
+  214 rules (2, 3, 125, 46, 30 and 8), every one red. (2) also traced every call the suite
+  makes to `Logex`, `Logex.Runtime`, `Logex.Edit`, `instructionize` and
+  `Logex.Warnings.of/2`, under the old code and the new, and the two digests are one. (3)
+  and (4) are to land in one push: (3)'s edit refuses any change to a block.
+
+  The landing built what the spike did not: fix F15, a `file` on `%Logex.Program{}` that
+  `compile_file/1` sets, on a block's body too, and that every `:edit` diagnostic carries;
+  one message for a block type given where a program goes,
+  `Logex.Declarations.not_a_program/1`'s, from the runtime, `Logex.Edit.accept/3` and
+  `Logex.Configuration`'s `check/1` and `new!/1`, in place of M2-1's interim words
+  (`Configuration.compile/3` and the configuration's loader, which M2-2 lands, are the
+  entry points left); the Done-when reading
+  `Logex.Runtime.get(rt, "m1.s2.run") == {:ok, 1}` through a configuration, from text and
+  from files on disk; decision 34's warnings handed back by `compile_file/1`; a test for
+  every check inside `Logex.Compiler.lowered?/1`, so the owed rising-lines check below is
+  closed; and "an instance of `outer`" for a user block's instance, so the owed "a outer"
+  below is too. (6) is new besides: the spike kept M1-3's report of each use of a
+  misspelled type's tag.
+
+  Readings the landing made, each stated in its commit and pinned: a user block's name
+  takes no article, "an instance of `seal`", since one chosen by its first letter gets
+  "user" and "hour" wrong, while the built-in timer stays "a ton", and the block-type
+  message says "through `ton`" for it; `get/2` calls a block's own `var` "a `var` of
+  `seal`, hidden outside it"; a switch never reports a block's var_inputs as `:input` or
+  `:unread`, since `cal` copies them in, and reports a block's var_output whose initial
+  value changed as `:initial_changed` by its path; `compile_file/1` hands back the
+  program's own warnings first, then each block's in the order compiled, and a block's
+  own file only its own; a broken block's file stops the file that names it, but every
+  block that file names is still loaded, so each broken one is reported; and a directory
+  with a block's name "cannot be read". It reserves `cal` in every `.ld`, in any case,
+  and `function_block` in a block's file; no test, `lib/` file or fixture names a tag
+  either. Growth is pinned in reductions: a type given is checked once a compile, not
+  once an instance (16 instances cost 1.05x one); a switch and the scan after it grow
+  with the block list's bytes, bound 1.3x their growth; the scan right after a switch at
+  16x the instances took 16.2x to 16.4x, and a second edit's steps at 16x the pending
+  nested bits 16.4x to 16.8x, each bound 24. The edit walk over blocks in
+  `api_contract_test.exs` passed with its full reach under seeds 1 to 30 besides its own,
+  the rarest of what it asserts it reaches at least 6 times a run.
 - **M2-6 · Event tasks.** `task <n> single <g> [interval <ms>] priority <p>`, fired by a
   rising edge, and in the first cycle if the trigger is already true; with `interval` too,
   it runs periodically only while the trigger is 0, plus a run on each edge (IEC rule 2). *Done when* an event task triggered
@@ -1601,22 +1656,31 @@ diagnostic naming its file and line.
 - **The seams between M2-5 and the configuration file** are planned, not built: the
   configuration spike has no `cal`. Each commit at a seam checks it on the composed tree:
   a `cal`'s outputs among a program's writes, a block's `ton` among its timers, a block's
-  file on a `program` line, a block's `var_external`, and one loader.
+  file on a `program` line, a block's `var_external`, and one loader. *(M2-5 has landed,
+  so each is now checked against its code: the walks read a `cal`'s slots through
+  `Logex.Compiler.signature/2`, the loader is `Logex.compile_file/1`'s private `load/3`,
+  which M2-2 is to open for one memo per configuration, and the one block-type message is
+  `Logex.Declarations.not_a_program/1`.)*
 - **Two run-time pieces were not spiked:** M2-4's one copy of a global, and M2-6's edges
   with `single` and `interval`. Their rules are the design's text alone. A test of the
   event task's tie-break is owed: an event task and a late periodic task of one priority,
   both writing one global, asserting which write lands.
 - **The untested rising-lines check.** M2-5 checks that a block's body given in `types:`
   is one a compile gives, its rungs among them on rising lines, each on one line, after
-  its declarations. Reverted alone, that line check left the function blocks' spike
-  green, and three more calls in the same check (to the compiler's `shared_bits/2`,
-  `calls/1` and `path/2`) have no revert at all. Each gets a test that fails when it is
-  reverted, or the check goes.
-- **Messages.** M1-6's member messages put "a" before a type's name, which reads "a
-  outer" for a block so named. M2-1's `get/2` follows them for a function block instance
+  its declarations. Reverted alone, that line check left the function blocks' spike green,
+  and three more calls in the same check (to the compiler's `shared_bits/2`, `calls/1` and
+  `path/2`) have no revert at all. Each gets a test that fails when it is reverted, or the
+  check goes. *(Closed by M2-5's third commit, `969a5a4`: each check inside
+  `Logex.Compiler.lowered?/1`, those four among them, has a test that fails when it alone
+  is reverted.)*
+- **Messages.** M1-6's member messages put "a" before a type's name, which reads "a outer"
+  for a block so named. M2-1's `get/2` follows them for a function block instance
   ("`m1.t1` is a ton", "is not a member of `m1.t1`, a ton") and owes the same. Its
   messages that named an instance's program that way now say "a program instance of
-  `motor`".
+  `motor`". *(Closed by M2-5's third commit, `969a5a4`: every message that names a user
+  block's instance, the compiler's, the runtime's, `get/2`'s and the edit's, says "an
+  instance of `outer`", through `Logex.Declarations.instance_of/1`; the built-in timer is
+  still "a ton".)*
 - **Costs to keep in view.** Every compile checks each block type it is given at full
   depth: 2,486 reductions for a small block against 244 before, and 138,358,875 for a
   chain of 400 files built one at a time. A refusal of many bad keys is quadratic in its
@@ -1625,7 +1689,11 @@ diagnostic naming its file and line.
   pays it. Three of the suite's existing growth tests in reductions, `logex_test.exs`'s
   "compiling stays linear in the program's size" and two of `edit_test.exs`'s F16 tests,
   failed now and then under a load average near 40 while the spikes ran, and pass run
-  alone; a CI runner that shares cores could see that.
+  alone; a CI runner that shares cores could see that. *(As M2-5 landed, the full-depth
+  check of each type given stands, as §4.10 decided, and runs once a compile, however many
+  instances declare the type, which a growth test pins. The three growth tests failed now
+  and then again while M2-5's mutation rows ran three copies at a time, and passed in
+  every gate.)*
 
 ### Online edit — decided 2026-10-01
 
@@ -1751,7 +1819,8 @@ first, lands green, and pins every rule with a test that fails when the rule is 
 
   *From Milestone 2's design (2026-10-02; `docs/organisation.md` §4.9, "One rule for new
   state", and §4.10).* M2-5 brings the edit of a function block's members, by path
-  (decision 31), so OE-2 refuses them no longer; a block type changed for the whole
+  (decision 31), so OE-2 refuses them no longer *(landed with M2-5, 2026-10-04, for the
+  edit of one program instance)*; a block type changed for the whole
   configuration changes each program type that holds it, by that type's own plan. A
   changed interval makes the task next due at `min(next_due, now + new interval)`
   (decision 40). An event task's trigger keeps its last sample across a switch, and a
@@ -1944,7 +2013,10 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   2026-10-02: the part Milestone 2 needs, one walk of a program's IR in place of the
   compiler's, `Logex.Warnings`' and `Logex.Edit`'s, answering which tags a program writes
   and which timers it runs, knowing `cal` and reaching block bodies, lands as M2-4's first
-  commit. Until then M2-5 adds a `cal` clause to each walk; §3.)*
+  commit. Until then M2-5 adds a `cal` clause to each walk; §3.)* *(M2-5 landed so: its
+  second commit gave the two walks one lookup of an instruction's slots,
+  `Logex.Compiler.signature/2`, and its third taught that lookup `cal`, whose slots are
+  its block's.)*
 
 - **B6 · Project metadata.** No `@spec`/`@moduledoc` on `Logex.Compiler`; no
   `description`/`package`/`licenses` in `mix.exs` despite a full Apache-2.0 `LICENSE`;
@@ -2350,4 +2422,5 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
 6. **Surface syntax: comments, negative literals, structured addressing.** See §5.
 7. **Program organisation: configurations, tasks, program instances, I/O mapping.**
    Decided in §5; Milestone 2 (§3), designed 2026-10-02, its first item, M2-1, landed the
-   same day; the model in `docs/organisation.md`.
+   same day, and M2-5, user function blocks, on 2026-10-04; the model in
+   `docs/organisation.md`.
