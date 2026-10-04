@@ -562,7 +562,7 @@ defmodule Logex.ValidationTest do
     test "Logex.Declarations.split/2 gives its diagnostics in line order" do
       {:ok, tokens, _} = Compiler.tokenize("var a bool\nvar a bool\nvar b int")
       {:ok, {:routine, {:rungs, rungs}}} = Compiler.parse(tokens)
-      {_tags, [], diagnostics} = Logex.Declarations.split(rungs)
+      {_tags, [], diagnostics, _untyped} = Logex.Declarations.split(rungs)
       assert Enum.map(diagnostics, & &1.line) == [2, 3]
     end
   end
@@ -660,9 +660,63 @@ defmodule Logex.ValidationTest do
     end
 
     test "a program whose declarations were all wrong is not told it declares nothing" do
+      # Since M2-5 `a`'s own use is excused, as the use of a line refused for its type.
       assert source_errors("var a int\nxic a ote a") == [
+               "line 1: unknown type `int`: logex has `bool`, `dint` and `ton`"
+             ]
+
+      assert source_errors("var a int\nxic a ote b") == [
                "line 1: unknown type `int`: logex has `bool`, `dint` and `ton`",
-               "line 2: `a` is not declared"
+               "line 2: `b` is not declared"
+             ]
+    end
+  end
+
+  # One mistake, one message (M2-5, docs/organisation.md §4.10 "Declarations"): a line
+  # refused for its type word declares nothing, and its name's uses are not each reported
+  # as undeclared, as a recursive declaration's are not, so a misspelled block name gives
+  # one message.
+  describe "a declaration whose type is unknown (M2-5)" do
+    test "excuses its name's uses, wherever and however they are made" do
+      assert source_errors(
+               "var a int\nvar t1 timer\nvar c int 5\nvar d foo bar\nvar b bool\n" <>
+                 "xic a ote b\nxic b ote a\n( xic c | xio d ) ote b\n" <>
+                 "xic b ton t1 500\nxic t1.dn ote b\nxic b ote e\nvar e ints\nxic e ote b"
+             ) == [
+               "line 1: unknown type `int`: logex has `bool`, `dint` and `ton`",
+               "line 2: unknown type `timer`: logex has `bool`, `dint` and `ton`",
+               "line 3: unknown type `int`: logex has `bool`, `dint` and `ton`",
+               "line 4: unknown type `foo`: logex has `bool`, `dint` and `ton`",
+               "line 12: `var` after the first rung (line 6): declarations come first",
+               "line 12: unknown type `ints`: logex has `bool`, `dint` and `ton`"
+             ]
+    end
+
+    test "excuses its own name only, as written" do
+      assert source_errors("var a int\nvar b bool\nxic A ote b\nxic a ote b") == [
+               "line 1: unknown type `int`: logex has `bool`, `dint` and `ton`",
+               "line 3: `A` is not declared"
+             ]
+    end
+
+    test "a line refused for anything but its type word excuses nothing" do
+      assert source_errors(
+               "var p q bool\nvar retain r bool\nvar c bool 2\nvar d\nvar x bool\n" <>
+                 "xic p ote x\nxic q ote x\nxic r ote x\nxic retain ote x\n" <>
+                 "xic c ote x\nxic d ote x"
+             ) == [
+               "line 1: `var` declares one tag: found `p` and `q` before the type",
+               "line 2: `retain` is not supported yet: a warm restart, like a cold one, " <>
+                 "starts every tag at its initial value but the var_inputs whose values fit " <>
+                 "their types",
+               "line 3: `c` is a bool: its initial value must be 0 or 1, found `2`",
+               "line 4: `d` needs a type: `var d bool` or `var d dint`",
+               "line 6: `p` is not declared",
+               "line 7: `q` is not declared",
+               "line 8: `r` is not declared",
+               "line 9: `retain` is not declared",
+               "line 10: `c` is not declared",
+               "line 11: `d` is not declared"
              ]
     end
   end
@@ -1047,7 +1101,9 @@ defmodule Logex.ValidationTest do
         rungs
       end
 
-      {tags, [], [_, _]} = Logex.Declarations.split(rungs.("var_input t1 ton\nvar t2 ton 5"))
+      {tags, [], [_, _], _untyped} =
+        Logex.Declarations.split(rungs.("var_input t1 ton\nvar t2 ton 5"))
+
       ton = Logex.FbType.ton()
       assert %Logex.Tag{type: ^ton, section: :var, initial: nil, line: 1} = tags["t1"]
       assert %Logex.Tag{type: ^ton, section: :var, initial: nil, line: 2} = tags["t2"]

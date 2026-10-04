@@ -89,6 +89,9 @@ defmodule Logex.Compiler do
   a number), the words after it are skipped up to the next instruction or branch group, so
   its would-be operands are not each reported as unknown instructions too. An instruction's
   operands stop early at an instruction or a branch group, which is then lowered as usual.
+  So too a declaration line refused for its type word, one no compile knows or a block
+  that would hold the block being compiled, declares nothing, and its name's uses are not
+  each reported as undeclared (M2-5): a misspelled block name is one message.
 
   The routine is checked first, against `Logex.Parser.well_formed!/1`: a tree that
   `Logex.Parser.parse/1` could not have produced, such as an empty group, a negative
@@ -100,9 +103,8 @@ defmodule Logex.Compiler do
     library = library!(types)
     {kind, rungs, heading} = file_kind(rungs)
     marks = marked(kind, library)
-    {tags, logic, declaring} = Declarations.split(rungs, declared, marks)
+    {tags, logic, declaring, untyped} = Declarations.split(rungs, declared, marks)
     holds_itself!(kind, declared)
-    excused = excused(kind, rungs, marks)
     Enum.reduce(blocks(tags), {library, :tags}, &one_version!/2)
     known = {tags, folded(tags)}
     {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, known))
@@ -112,7 +114,7 @@ defmodule Logex.Compiler do
     {tags, timing} = presets(instructions, tags)
     calls = calls(instructions)
     paths = Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end)
-    found = Enum.reject(Enum.reverse(lowering), &excused?(&1, excused))
+    found = Enum.reject(Enum.reverse(lowering), &excused?(&1, untyped))
     errors = declaring ++ undeclared(found, tags, note?) ++ shared ++ timing
     lowered(kind, rungs, tags, heading ++ header_tags(kind, tags) ++ errors ++ calls ++ paths)
   end
@@ -334,23 +336,12 @@ defmodule Logex.Compiler do
     {found, Map.put(seen, held, found)}
   end
 
-  # One mistake, one message: a declaration refused as recursive declares nothing, and its
-  # uses are excused rather than each reported as undeclared.
-  # Only a block's own file marks a type recursive.
-  defp excused(:program, _rungs, _marks), do: %{}
-
-  defp excused(_block, rungs, marks),
-    do:
-      for(
-        {:rung, [{:name, _, section}, {:name, _, tag}, {:name, _, word} | _]} <- rungs,
-        Declarations.reserved(section) == :section,
-        match?({:recursive, _}, Map.get(marks, word)),
-        into: %{},
-        do: {tag, true}
-      )
-
-  defp excused?({:undeclared, _line, name, _slot}, excused), do: is_map_key(excused, name)
-  defp excused?(_diagnostic, _excused), do: false
+  # One mistake, one message: a declaration refused for its type word, one no compile knows
+  # or one that would hold the block being compiled, declares nothing, and its uses are
+  # excused rather than each reported as undeclared (Logex.Declarations.split/3), so a
+  # misspelled block name gives one message (M2-5).
+  defp excused?({:undeclared, _line, name, _slot}, untyped), do: MapSet.member?(untyped, name)
+  defp excused?(_diagnostic, _untyped), do: false
 
   # The blocks a compile is given: a list of user types, each one Logex.compile/2 gave, and
   # no two of one name. A host mistake otherwise. By name, for the declaration lines.

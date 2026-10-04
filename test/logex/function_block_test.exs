@@ -609,6 +609,29 @@ defmodule Logex.FunctionBlockTest do
              ]
     end
 
+    # The same rule for a block name no compile knows (docs/organisation.md §4.10
+    # "Declarations"): misspelled, or not given, its instance's `cal` and members are not
+    # each reported as undeclared, in a program or in a block's file.
+    test "a misspelled block name gives one message, its instance's uses none" do
+      program =
+        "var_input a bool\nvar_output q bool\nvar s1 sael\nxic a ote q\n" <>
+          "cal s1 a a q\nxic s1.run ote q"
+
+      assert errors(program, [block!(@seal)]) == [
+               "line 3: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
+                 "and the function block `seal` — did you mean `seal`?"
+             ]
+
+      assert errors(String.replace(program, "sael", "seal")) == [
+               "line 3: unknown type `seal`: logex has `bool`, `dint` and `ton`"
+             ]
+
+      assert errors("function_block m\n" <> program, [block!(@seal)], "m") == [
+               "line 4: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
+                 "and the function block `seal` — did you mean `seal`?"
+             ]
+    end
+
     # A type given can hold the block being compiled only when it was compiled against an
     # older version of it: refused at the declaration, naming the chain.
     test "a type given that holds the block's own name, at any depth" do

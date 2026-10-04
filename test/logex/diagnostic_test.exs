@@ -15,8 +15,9 @@ defmodule Logex.DiagnosticTest do
     {:ok, ast} = Compiler.parse(tokens)
     {:error, diagnostics} = Compiler.instructionize(ast)
 
-    # the unknown type, the unknown instruction, and `b` and `a` undeclared
-    assert length(diagnostics) == 4
+    # the unknown type, the unknown instruction, and `b` undeclared: `a`'s use is excused,
+    # as the use of a line refused for its type (M2-5)
+    assert length(diagnostics) == 3
 
     for diagnostic <- diagnostics do
       assert %Logex.Diagnostic{stage: :validate, severity: :error, file: nil, column: nil} =

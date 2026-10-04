@@ -151,12 +151,20 @@ defmodule Logex.Declarations do
 
   @doc """
   Splits parsed rungs into a tag table and the rungs of logic:
-  `{tags, logic_rungs, diagnostics}`, the diagnostics in line order.
+  `{tags, logic_rungs, diagnostics, untyped}`, the diagnostics in line order.
 
   `declared` are tags built in Elixir with `Logex.Tag.new!/4`. Each is checked again by
   `validate!/1` and they enter the table first; anything invalid among them, a clash
   included, raises `ArgumentError`. A declaration after the first rung is reported and
   still declared, so its tag is not also reported as undeclared wherever it is used.
+
+  `untyped` is the `MapSet` of the names declared by a line refused for its type word
+  alone (M2-5): a word that names no type this compile knows, or a function block that
+  would hold the block being compiled. Such a line declares nothing, and
+  `Logex.Compiler` excuses its name's uses rather than report each as undeclared: one
+  mistake, one message, so a misspelled block name gives the unknown type alone. A line
+  refused for anything else, such as two names before its type, `retain` or a bad
+  initial value, excuses nothing.
   """
   def split(rungs, declared \\ [], types \\ %{})
 
@@ -165,9 +173,11 @@ defmodule Logex.Declarations do
     {late, logic} = Enum.split_with(rest, &declaration?/1)
     first = first_line(logic)
     late = Enum.map(late, &late(&1, first))
-    {tags, diagnostics} = Enum.flat_map_reduce(leading ++ late, [], &declare(&1, &2, types))
+    {entries, diagnostics} = Enum.flat_map_reduce(leading ++ late, [], &declare(&1, &2, types))
+    {untyped, tags} = Enum.split_with(entries, &match?({:untyped, _name}, &1))
     {table, diagnostics} = table(Enum.map(declared, &validate!/1), tags, diagnostics)
-    {table, logic, Enum.sort_by(Enum.reverse(diagnostics), & &1.line)}
+    sorted = Enum.sort_by(Enum.reverse(diagnostics), & &1.line)
+    {table, logic, sorted, MapSet.new(untyped, fn {:untyped, name} -> name end)}
   end
 
   def split(_rungs, declared, _types),
@@ -232,6 +242,11 @@ defmodule Logex.Declarations do
   defp declared({:error, message}, _section, line, diagnostics, _types),
     do: {[], [diagnostic(line, message) | diagnostics]}
 
+  # M2-5: a line whose type word names no type declares nothing, and its name is marked so
+  # that its uses are excused (split/3).
+  defp declared({:untyped, name, message}, _section, line, diagnostics, _types),
+    do: {[{:untyped, name}], [diagnostic(line, message) | diagnostics]}
+
   defp declared({:error, message, tag}, _section, line, diagnostics, _types),
     do: {recovered(%{tag | line: line}), [diagnostic(line, message) | diagnostics]}
 
@@ -283,11 +298,13 @@ defmodule Logex.Declarations do
   defp salvaged(shaped, _type, _name), do: shaped
 
   defp typed(nil, name, type, tail, {kw, types}),
-    do: {:error, untyped(String.downcase(name), name, type, tail, {kw, types})}
+    do: untyped(String.downcase(name), name, type, tail, {kw, types})
 
   # M2-5: a function block never holds an instance of itself, at any depth (Ed 2 §2.5,
-  # docs/organisation.md §4.3). Logex.Compiler marks the types that would.
-  defp typed({:recursive, chain}, _name, _word, _tail, _kw), do: {:error, recursive(chain)}
+  # docs/organisation.md §4.3). Logex.Compiler marks the types that would. The line's name
+  # is marked too, as an unknown type's is.
+  defp typed({:recursive, chain}, name, _word, _tail, _kw),
+    do: {:untyped, name, recursive(chain)}
 
   defp typed(type, name, _word, [], _kw), do: {:ok, name, type, nil}
   defp typed(type, name, _word, [{:int_lit, _, v}], _kw), do: {:ok, name, type, v}
@@ -340,22 +357,25 @@ defmodule Logex.Declarations do
   # here, because a tag name is never followed by a second name.
   defp untyped("retain", _name, _type, _tail, _kw),
     do:
-      "`retain` is not supported yet: a warm restart, like a cold one, starts every tag " <>
-        "at its initial value but the var_inputs whose values fit their types"
+      {:error,
+       "`retain` is not supported yet: a warm restart, like a cold one, starts every tag " <>
+         "at its initial value but the var_inputs whose values fit their types"}
 
   defp untyped(_key, name, type, tail, {kw, types}),
     do: unknown_type(Enum.any?(tail, &type_word?(&1, types)), name, type, {kw, types})
 
   defp unknown_type(true, name, type, {kw, _types}),
-    do: "`#{kw}` declares one tag: found `#{name}` and `#{type}` before the type"
+    do: {:error, "`#{kw}` declares one tag: found `#{name}` and `#{type}` before the type"}
 
   # M2-5: the function blocks this compile was given are named too, where it was given any,
-  # with a did-you-mean among them, since a block's name is matched exactly.
-  defp unknown_type(false, _name, type, {_kw, types}) do
-    blocks = Enum.sort(for {name, %FbType{}} <- types, do: name)
+  # with a did-you-mean among them, since a block's name is matched exactly; and the line's
+  # name is marked, so that its uses are excused (split/3).
+  defp unknown_type(false, name, type, {_kw, types}) do
+    blocks = Enum.sort(for {block, %FbType{}} <- types, do: block)
 
-    "unknown type `#{type}`: logex has `bool`, `dint` and `ton`" <>
-      given(Enum.map(blocks, &"`#{&1}`")) <> suggest(type, blocks, & &1, "type names")
+    {:untyped, name,
+     "unknown type `#{type}`: logex has `bool`, `dint` and `ton`" <>
+       given(Enum.map(blocks, &"`#{&1}`")) <> suggest(type, blocks, & &1, "type names")}
   end
 
   defp given([]), do: ""

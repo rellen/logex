@@ -1784,12 +1784,10 @@ defmodule Logex.EndToEndTest do
 
       unknown = write.("unknown.ld", String.replace(@three_seals, "var s3 seal", "var s3 sael"))
 
-      # As for any unknown type since M1-3, the line declares nothing, so s3's use is
-      # reported too, until a commit after M2-5 excuses it.
+      # The line declares nothing, and s3's use is excused: one mistake, one message.
       assert formatted.(Logex.compile_file(unknown)) == [
                "#{unknown}: line 12: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
-                 "and the function block `seal` — did you mean `seal`?",
-               "#{unknown}: line 16: `s3` is not declared"
+                 "and the function block `seal` — did you mean `seal`?"
              ]
 
       wired = write.("wired.ld", String.replace(@three_seals, "cal s1 a1", "cal a1 a1"))

@@ -91,9 +91,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `{:error, [%Logex.Diagnostic{}]}`. Since M2-5 `instructionize/3` takes the function
   block types a routine may hold, each checked at full depth, one version per name; a
   routine headed `function_block <name>` gives `{:ok, %Logex.FbType{}}`; a block never
-  holds itself, at any depth; `cal` is checked formal by formal, and one `cal` runs an
-  instance. `lowered?/1` is the definition of a compiled body, which a type given must
-  have, as `well_formed!/1` is of a parse tree. The stage functions stay public for the
+  holds itself, at any depth; a declaration refused for its type word, unknown or
+  recursive, has its uses excused, so a misspelled block name is one message; `cal` is
+  checked formal by formal, and one `cal` runs an instance. `lowered?/1` is the
+  definition of a compiled body, which a type given must have, as `well_formed!/1` is of
+  a parse tree. The stage functions stay public for the
   golden record, the Elixir-side declarer and the naming test, and `signature/2` (M2-5)
   for the walks: an IR instruction's slots, its mnemonic's signature from
   `instructions/0`, or for a `cal` its block's, given the program's tag table, and none
