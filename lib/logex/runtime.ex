@@ -135,8 +135,10 @@ defmodule Logex.Runtime do
   `Logex.Edit` moves a state to a new program by rule instead: it starts what is added,
   restarts a value that does not fit its type, refuses a type change, moves a timer's
   `.pre` to a changed preset where logic left it alone, resumes a timer it gives back
-  its `ton` from the switch, and blocks for one scan each one-shot it adds or changes,
-  where a plain swap's first scan can fire one whose condition was already true.
+  its `ton` from the switch, and blocks each one-shot it adds or changes until a scan runs
+  it, the next scan at the top level, where a plain swap's first scan can fire one whose
+  condition was already true; inside a function block's instance it does each of these by
+  the member's path (M2-5).
   `restart/3` starts every tag again but the `var_input`s whose values fit their types,
   and empties `ons_blocked`. A `%Logex.Program{}`, `%Logex.Instance{}` or `%Logex.Edit{}` built or
   edited by hand is outside this contract; one that holds a block type whose body was
@@ -1148,9 +1150,9 @@ defmodule Logex.Runtime do
   # whatever the storage bit holds: the conventional ONS's "set to true to prevent an
   # invalid trigger during the first scan", read from the scan rather than set by a
   # prescan (PLAN.md M1-6, decision 3). One whose bit is in `scan.ons_blocked` passes none
-  # in the same way, for the one scan after an online edit's switch (OE-1): it still
-  # writes its bit, which the edit never does, so no rung that reads the bit sees a write
-  # that no logic made.
+  # in the same way, on the scan after an online edit's switch that runs it (OE-1,
+  # decision 32): it still writes its bit, which the edit never does, so no rung that
+  # reads the bit sees a write that no logic made.
   defp evaluate({:ons, _, [storage]}, {true, env}, %Scan{first: first, ons_blocked: blocked}) do
     {not first and not blocked?(storage, blocked) and not closed?(read(env, storage)),
      write(env, storage, 1)}

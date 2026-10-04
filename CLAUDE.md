@@ -63,13 +63,19 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `Logex.Program.initial_env/1` is a tag's
 - `lib/logex/edit.ex` — a staged edit of one program instance (OE-1, `docs/organisation.md`
   §4.9): `accept/3` (refusing a type change as `:edit` diagnostics, in the candidate's
-  `file` (fix F15), with a forecast; since M2-5 any change to a function block an instance
-  holds is one),
+  `file` (fix F15), with a forecast),
   `test/2`, `untest/2`, `assemble/2`, `cancel/2`, `running/1` and `stage/1`, each step
   returning a report. Accept builds a plan per direction from the two programs; a switch
   and a prune are per-instance functions of a plan, the edit's record and the state,
-  private until OE-2 calls them. Its moduledoc gives every rule, report kind and host
-  mistake; §4.9 the reasons
+  private until OE-2 calls them. Since M2-5 (decisions 31 and 32) a function block's type,
+  for the edit, is its name and its members' kinds: a member whose kind changes is refused
+  by its path, and a switch moves an instance member by member, by path, `p.count`, a
+  plan built once per block type; an `ons` inside an instance is blocked where any rung of
+  its chain, from the program's `cal` rung down to the body's, changed, a `cal` keyed by
+  the formals its operands fill, and stays listed until a scan runs it; a timer inside
+  meets the timer rules by its path, resumed only where the program stopped does not run
+  it and last scanned. Its moduledoc gives every rule, report kind and host mistake; §4.9
+  the reasons
 - `lib/logex/compiler.ex` — the stages: `tokenize/1` and `parse/1` delegate to the two
   modules below; `instructionize/2` first checks its routine against
   `Logex.Parser.well_formed!/1` and raises `ArgumentError` on a tree no text could say
@@ -132,7 +138,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `lib/logex/diagnostic.ex` — `%Logex.Diagnostic{stage:, line:, message:, file:, column:,
   severity:}`, the one error and warning type of every stage, and `format/1` for the
   `motor.ld: line 3, column 5: …` form
-- Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`; `validation_test.exs` holds every diagnostic and warning `instructionize/2` gives, driven from source. `test/logex_test.exs` pins `Logex` (and walks Milestone 1's done sentence), `runtime_test.exs` every message the runtime raises and the exact public surface, `edit_test.exs` every message, diagnostic and rule of `Logex.Edit`, `configuration_test.exs` every diagnostic and host mistake of `Logex.Configuration`, as whole lists from data, `scheduler_test.exs` a test at least per rule of a cycle, `function_block_test.exs` every diagnostic, host mistake and rule of M2-5's user function blocks, from source, and `api_contract_test.exs` a seeded property over the host contract, which since M1-6 checks every accepted scan against an oracle for `ton` and `ons` and makes every accepted call twice, and since OE-1 walks online edits too, and since M2-1 configurations run as resources, against a model that scans each instance through `call/4` alone
+- Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`; `validation_test.exs` holds every diagnostic and warning `instructionize/2` gives, driven from source. `test/logex_test.exs` pins `Logex` (and walks Milestone 1's done sentence), `runtime_test.exs` every message the runtime raises and the exact public surface, `edit_test.exs` every message, diagnostic and rule of `Logex.Edit`, `configuration_test.exs` every diagnostic and host mistake of `Logex.Configuration`, as whole lists from data, `scheduler_test.exs` a test at least per rule of a cycle, `function_block_test.exs` every diagnostic, host mistake and rule of M2-5's user function blocks, from source, an online edit of a program that holds them among them, with its growth tests in the block list's bytes (decision 32), and `api_contract_test.exs` a seeded property over the host contract, which since M1-6 checks every accepted scan against an oracle for `ton` and `ons` and makes every accepted call twice, and since OE-1 walks online edits too, and since M2-1 configurations run as resources, against a model that scans each instance through `call/4` alone, and since M2-5 online edits of programs that hold blocks, two deep, with a one-shot oracle on every scan from the programs' text
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a

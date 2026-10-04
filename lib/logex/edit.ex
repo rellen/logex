@@ -34,14 +34,8 @@ defmodule Logex.Edit do
   is not a type change, and a warning in the candidate does not stop it. Its forecast is
   the report a test taken now would give; a test taken later reads the state as it is
   then. An `:edit` diagnostic cites the candidate's file, its `file`, which
-  `Logex.compile_file/1` sets, and none for a candidate compiled from text (fix F15).
-
-  A function block's instance (M2-5) is a tag whose type is the block's whole type, its
-  body included, so accept refuses any change to the block an instance both programs
-  declare holds, as `` `s1` is an instance of `seal`, which the candidate changes ``, and
-  an instance of one block that becomes another's as a type change. An instance of a block
-  both programs hold unchanged moves whole, as any tag does, and the outputs a `cal`
-  writes are writes, for the held outputs below.
+  `Logex.compile_file/1` sets, and none for a candidate compiled from text (fix F15). A
+  user function block's type, for the edit, is its name and its members' kinds (below).
 
   **A switch**, `test/2` or `untest/2`, moves the state from the program it stops to the
   one it starts. It prunes nothing, and never touches `now` or `first`, so no switch makes
@@ -89,10 +83,11 @@ defmodule Logex.Edit do
     scan has run since (`switched`), a `last` still at `now` goes back to the one that
     switch found, so a test and an untest with no scan between leave the original's
     timers as they were. A resume an earlier edit's last switch made is not given back;
-  - *resume:* a timer the program started runs, timing when it last ran (`.en` 1) and not
-    run since (its `last` before `now`, which within the contract means the program
-    stopped did not run it), resumes from the switch: its `last` becomes `now`, so the
-    time no `ton` ran it is not caught up.
+  - *resume:* a timer the program started runs and the program stopped does not, timing
+    when it last ran (`.en` 1, its `last` before `now`), resumes from the switch, where the
+    program stopped is the one that last scanned (as for one-shots, below): its `last`
+    becomes `now`, so the time no `ton` ran it is not caught up. Where the program started
+    last scanned, a test and an untest with no scan between, it left the timer as it is.
 
   Each move of `.pre` is reported as `:preset`. A `.pre` that stays, on a timer the
   program started runs, is reported as `:preset_kept` where it is not that program's
@@ -104,13 +99,15 @@ defmodule Logex.Edit do
 
   **One-shots** (decision 21, fixes F2, F3 and F7). No switch writes a storage bit: a bit
   armed by writing 1 would echo into any rung that reads it. A switch lists bits in the
-  instance's `ons_blocked` instead, and the next scan blocks each one's `ons`, as a first
-  scan blocks every `ons` (`Logex.Instance`): it passes no power, and still writes its
-  bit. Against the program that last scanned, a switch lists each `ons` of the program it
-  starts that is not in an identical rung there, line numbers ignored, or whose bit that
-  program also writes through another instruction: an `ons` the edit adds, one whose rung
-  it changes, and one whose bit may not hold the power the `ons` last received. An
-  untouched `ons` is not listed, and keeps a real edge on the switch scan.
+  instance's `ons_blocked` instead, and the next scan that runs each one's `ons` blocks it,
+  as a first scan blocks every `ons` (`Logex.Instance`): it passes no power, and still
+  writes its bit. At the top level that is the next scan; inside a function block's
+  instance, the next whose `cal` runs its body (decision 32). Against the program that last
+  scanned, a switch lists each `ons` of the program it starts that is not in an identical
+  rung there, line numbers ignored, or whose bit that program also writes through another
+  instruction: an `ons` the edit adds, one whose rung it changes, and one whose bit may not
+  hold the power the `ons` last received. An untouched `ons` is not listed, and keeps a real
+  edge on the switch scan.
   - The program that last scanned is the one the switch stops where a scan has run since
     the last switch (`Logex.Instance`'s `switched` is false), and otherwise the one this
     edit recorded at that switch.
@@ -146,8 +143,8 @@ defmodule Logex.Edit do
 
   **Assemble** (from test) and **cancel** (after an untest) are not switches: each prunes
   the state to the tags of the program it keeps and reports its held outputs, and blocks
-  no one-shot, so one the last switch blocked stays blocked for the next scan. Cancel from
-  accept changes nothing and reports `[]`.
+  no one-shot, so one the last switch blocked stays blocked until a scan runs it. Cancel
+  from accept changes nothing and reports `[]`.
 
   **The report** is a list of `{kind, name, detail}`, sorted, with at most one entry per
   kind and name. The kinds are an open set, which a host must tolerate:
@@ -163,7 +160,7 @@ defmodule Logex.Edit do
   | `:dn_drops`, `:dn_rises` | `{acc, pre}`, as `ton` counts them, a negative `.acc` as 0 | a switch |
   | `:resumed` | the milliseconds not caught up: `last` moves on by that many, to `now` | a switch |
   | `:resume_undone` | the milliseconds of the resume this edit's last switch made: `last` moves back by that many | a switch |
-  | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan | a switch |
+  | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan that runs it | a switch |
   | `:held` | for an output the next program shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |
   | `:pruned` | the value it had | assemble, cancel |
 
@@ -172,11 +169,48 @@ defmodule Logex.Edit do
   bits of its `:ons_blocked` entries, in order, as the block list a switch leaves, and
   `switched`, which a switch sets. The other kinds state facts and forecasts.
 
+  **Function blocks** (M2-5, decisions 31 and 32). An instance of a user function block
+  keeps its type while the block keeps its name and every member both versions declare
+  keeps its kind, at any depth: an edit may change the block's body, its members' order and
+  roles, and add or drop members. A member whose kind changes is refused, cited by its path
+  at the line of the instance that holds it: ``line 4: `p.edge` is a bool in the running
+  program and a dint in the candidate: a member's type changes only with a restart``; a
+  block renamed is a type change of the instance, ``… is an instance of `pulse` in the
+  running program and an instance of `latch` in the candidate …``. Inside an instance both
+  programs declare, a switch moves each member as it moves a tag, by its path, `p.count`:
+  one the state lacks starts at its initial value; at the first test, one the candidate's
+  version adds, or whose value does not fit, starts so too; a kept bool or dint whose
+  initial value changed keeps its value and is reported; a timer meets the timer rules;
+  and an instance it holds is moved in turn. A member only the stopped program's version
+  declares is kept until assemble or cancel prunes it, by its path. This is the nested
+  migration `docs/organisation.md` §4.9 gives M2-5.
+  - An `ons` inside an instance a `cal` runs is a one-shot of the program, its bit named by
+    its path, `p.edge`, its rung the chain of rungs from the program's rung that runs the
+    outermost instance down to the body's rung that holds it; a change to any of them, a
+    `cal`'s operands included, or the formals they fill, as when the block's inputs are
+    reordered, blocks it. It stays blocked until a scan runs it (decision 32): a scan whose
+    `cal` of its instance is false keeps it listed (`Logex.Instance`), and a switch taken
+    after such a scan lists it again where the program it starts has that `ons`, as it
+    does a block an earlier edit left pending (F2).
+  - A timer inside an instance is resumed only where the program started runs it and the
+    one stopped does not, read from the stopped program's text: a `cal` of the instance,
+    on a rung of each program down to it, and a `ton` in the body; and only where the
+    program stopped is the one that last scanned. A timer frozen by a false `cal` both
+    programs run is not, and catches up when its block next runs (decision 8). A timer, or
+    an instance, only the program stopped declares is kept, and a `.pre` or a resume the
+    edit's last switch moved is given back by its path (fixes F1 and F11).
+  - An output a `cal` writes is driven by the program, as one any instruction writes is.
+  - Cost (decision 32): a bit inside an instance is named by its path, so a switch, and the
+    scan right after it, are linear in the block list's bytes, not in its one-shots: with a
+    one-shot at every level of a chain of blocks, quadratic in the depth. At the top level,
+    where a bit's name is one name, nothing changes.
+
   **One edit per instance** (fix F5). At accept the edit builds two plans, original to
   candidate and back, from the two programs alone, so a plan cannot go stale; a switch and
   a prune are each a function of one plan, the edit's record of one instance, and its
   state. OE-2's configuration edit builds the plans once per program type and calls those
-  once per instance; here each instance takes its own edit. A report names a tag.
+  once per instance; here each instance takes its own edit. A report names a tag, or a
+  member inside an instance by its path.
 
   **Host mistakes** raise `ArgumentError`, each with a message a test pins: something
   other than a program at accept, with the runtime's own message; a candidate with
@@ -196,6 +230,7 @@ defmodule Logex.Edit do
   """
 
   alias Logex.{Compiler, Declarations, Diagnostic, FbType, Instance, Program, Runtime, Tag}
+  alias Logex.FbType.Member
 
   @enforce_keys [:original, :candidate, :stage, :plans, :record]
   defstruct [:original, :candidate, :stage, :plans, :record]
@@ -365,33 +400,56 @@ defmodule Logex.Edit do
 
   # §4.9: a tag's type, a function block's members included, changes only with a restart.
   # In line order, a tag declared from Elixir (line nil, after every number) last, by name.
-  # Each is cited in the candidate's file, where it has one (fix F15).
-  #
-  # M2-5: a user function block's type is the whole of it, its body included, so any change
-  # to the block an instance holds is refused here, whatever the block keeps of its name.
+  # M2-5: an instance of a user block keeps its type while the block keeps its name and
+  # every member both versions declare keeps its kind, at any depth: the block's body, and a
+  # member it adds or drops, change with an edit, the state moving by member name (the
+  # nested migration, §4.9; decision 31). A member whose kind changes is cited by its path,
+  # at the line of the instance that holds it. Each is cited in the candidate's file, where
+  # it has one (fix F15).
   defp retyped(%Program{tags: running}, %Program{tags: candidate, file: file}) do
     retyped =
       for {name, %Tag{type: type, line: line}} <- candidate,
           {:ok, %Tag{type: was}} <- [Map.fetch(running, name)],
-          was != type,
-          do: {{line, name}, retyped(name, {file, line}, was, type)}
+          {path, from, to} <- changes(was, type, name),
+          do: {{line, name, path}, retyped(path, {file, line}, from, to)}
 
     for {_at, diagnostic} <- Enum.sort_by(retyped, &elem(&1, 0)), do: diagnostic
   end
 
-  defp retyped(name, {file, line}, was, type),
-    do: %Diagnostic{stage: :edit, file: file, line: line, message: changed(name, was, type)}
+  defp changes(same, same, _path), do: []
 
-  defp changed(tag, %FbType{name: b, body: %Program{}}, %FbType{name: b, body: %Program{}}),
-    do:
-      "`#{tag}` is an instance of `#{b}`, which the candidate changes: a function block " <>
-        "changes only with a restart"
+  defp changes(
+         %FbType{name: name, body: %Program{}} = was,
+         %FbType{name: name, body: %Program{}} = type,
+         path
+       ),
+       do:
+         for(
+           %Member{name: member} = to <- type.members,
+           %Member{} = from <- [member_named(was, member)],
+           change <-
+             changes(FbType.type_of(was, from), FbType.type_of(type, to), path <> "." <> member),
+           do: change
+         )
 
-  defp changed(name, was, type),
-    do:
-      "`#{name}` is #{word(was)} in the running program and #{word(type)} in the " <>
-        "candidate: a tag's type changes only with a restart"
+  defp changes(was, type, path), do: [{path, was, type}]
 
+  defp member_named(%FbType{members: members}, name), do: Enum.find(members, &(&1.name == name))
+
+  defp retyped(path, {file, line}, was, type),
+    do: %Diagnostic{
+      stage: :edit,
+      file: file,
+      line: line,
+      message:
+        "`#{path}` is #{word(was)} in the running program and #{word(type)} in the " <>
+          "candidate: #{whose(String.contains?(path, "."))} type changes only with a restart"
+    }
+
+  defp whose(false), do: "a tag's"
+  defp whose(true), do: "a member's"
+
+  # A user block's name is any name, so it takes no article of its own (M2-5).
   defp word(%FbType{} = type), do: Declarations.instance_of(type)
   defp word(type), do: "a #{type}"
 
@@ -412,7 +470,7 @@ defmodule Logex.Edit do
   end
 
   defp facts(%Program{tags: tags} = program) do
-    {writes, ons} = rungs(program)
+    {writes, ons, called, bodies} = rungs(program)
 
     %{
       tags: tags,
@@ -421,9 +479,23 @@ defmodule Logex.Edit do
       outputs: section(tags, :var_output),
       writes: writes,
       ons: ons,
-      ons_rungs: Map.new(ons, fn {rung, _bits} -> {rung, true} end),
-      ons_bits: for({_rung, bits} <- ons, bit <- bits, into: %{}, do: {bit, true}),
-      timers: for({name, %Tag{type: %FbType{}} = tag} <- tags, into: %{}, do: {name, preset(tag)})
+      ons_rungs: Map.new(ons, fn {key, _bits} -> {key, true} end),
+      ons_bits: for({_key, bits} <- ons, bit <- bits, into: %{}, do: {bit, true}),
+      timers:
+        for(
+          {name, %Tag{type: %FbType{body: nil}} = tag} <- tags,
+          into: %{},
+          do: {name, preset(tag)}
+        ),
+      # M2-5: each instance of a user block, with its type and whether a `cal` runs it; and
+      # what each block type's body writes and runs, by the type's name.
+      blocks:
+        for(
+          {name, %Tag{type: %FbType{body: %Program{}} = type}} <- tags,
+          into: %{},
+          do: {name, {type, is_map_key(called, name)}}
+        ),
+      bodies: bodies
     }
   end
 
@@ -456,7 +528,8 @@ defmodule Logex.Edit do
       shows: to.outputs,
       left: for(name <- Map.keys(watched), is_map_key(from.outputs, name), do: name),
       changed: changed(from, to),
-      timers: timers(from, to)
+      timers: timers(from, to),
+      nested: nested(from, to)
     }
 
   # Each timer either program declares, with the preset of the `ton` that runs it in the
@@ -495,6 +568,10 @@ defmodule Logex.Edit do
         do: {name, Map.fetch!(from.initial, name), Map.fetch!(to.initial, name)}
       )
 
+  # M2-5: an instance of a user block fits by being a map: which members it holds is the
+  # nested migration's to settle, member by member (below).
+  defp fit(%Tag{type: %FbType{body: %Program{}}}), do: :block
+
   defp fit(%Tag{type: %FbType{} = type}),
     do: {:members, Enum.sort(Map.keys(FbType.initial(type)))}
 
@@ -502,36 +579,120 @@ defmodule Logex.Edit do
 
   # What a program's rungs write and where its one-shots are, in one walk, into every group
   # however deep, accumulating rather than copying: how many times each name is written
-  # through a write operand, an `ons` storage bit included; and, for each rung that holds
-  # an `ons`, the rung with its line numbers taken out, beside the storage bits of its
-  # `ons`. A rung is stripped once and compared once, however many `ons` it holds. Each
-  # instruction's slots are its own, from Logex.Compiler.signature/2 given the program's
-  # tag table, the one lookup (M2-5).
+  # through a write operand, an `ons` storage bit and a `cal`'s output included; and, for
+  # each rung that holds an `ons`, the rung with its line numbers taken out, beside the
+  # storage bits of its `ons`. A rung is stripped once and compared once, however many
+  # `ons` it holds. Each instruction's slots are its own, from Logex.Compiler.signature/2
+  # given the tag table of the routine that holds it, the one lookup (M2-5).
+  #
+  # M2-5: an `ons` inside an instance a `cal` runs is a one-shot of the program's too, its
+  # bit named by its path, `s1.edge`, and its rung the chain of rungs down to it, each with
+  # its line numbers taken out: the body's rung that holds it, the rung of the body above
+  # that `cal`s its instance, and so on up to the program's rung that `cal`s the outermost,
+  # so a change to any of them, a `cal`'s operands included, makes it a changed one-shot
+  # (decision 21, by path). Its bit is written as many times as its block's body writes
+  # it. Each block type's body is read once, however many instances run it, and the walk
+  # down is linear in the instances.
   defp rungs(%Program{rungs: rungs, tags: tags}) do
-    Enum.reduce(rungs, {%{}, []}, fn {:rung, elements}, {writes, ons} ->
-      {writes, bits} = written(elements, {writes, []}, tags)
-      {writes, oned(bits, elements, ons)}
+    bodies = bodies(tags, %{})
+
+    Enum.reduce(rungs, {%{}, [], %{}, bodies}, fn {:rung, elements}, {writes, ons, called, _} ->
+      {writes, bits, cals} = written(elements, {writes, [], []}, tags)
+      chain = chain(bits, cals, {elements, tags})
+
+      {writes, ons} =
+        Enum.reduce(cals, {writes, oned(bits, chain, ons)}, &inside(&1, chain, &2, bodies))
+
+      {writes, ons, runs(cals, called), bodies}
     end)
   end
 
-  defp oned([], _elements, ons), do: ons
-  defp oned(bits, elements, ons), do: [{stripped(elements), bits} | ons]
+  defp chain([], [], _elements), do: nil
+  defp chain(_bits, _cals, {elements, tags}), do: [stripped(elements, tags)]
+
+  defp oned([], _key, ons), do: ons
+  defp oned(bits, key, ons), do: [{key, bits} | ons]
+
+  defp runs(cals, called),
+    do: Enum.reduce(cals, called, fn {name, _type}, set -> Map.put(set, name, true) end)
+
+  # Every user block type a program holds, at any depth, by name: the rungs of its body
+  # that hold an `ons` or a `cal`, each stripped, with the bits and the instances, what the
+  # body writes, and the instances it runs.
+  defp bodies(tags, bodies),
+    do:
+      Enum.reduce(tags, bodies, fn
+        {_name, %Tag{type: %FbType{name: name, body: %Program{} = body}}}, bodies
+        when not is_map_key(bodies, name) ->
+          bodies = bodies(body.tags, Map.put(bodies, name, nil))
+          Map.put(bodies, name, body(body))
+
+        _tag, bodies ->
+          bodies
+      end)
+
+  defp body(%Program{rungs: rungs, tags: tags}) do
+    {writes, held, called} =
+      Enum.reduce(rungs, {%{}, [], %{}}, fn {:rung, elements}, {writes, held, called} ->
+        {writes, bits, cals} = written(elements, {writes, [], []}, tags)
+        {writes, held(bits, cals, {elements, tags}, held), runs(cals, called)}
+      end)
+
+    %{rungs: Enum.reverse(held), writes: writes, called: called}
+  end
+
+  defp held([], [], _elements, held), do: held
+
+  defp held(bits, cals, {elements, tags}, held),
+    do: [{stripped(elements, tags), bits, cals} | held]
+
+  # One instance a `cal` runs, `prefix` its path, under the chain of rungs that runs it.
+  defp inside({instance, %FbType{name: type}}, chain, acc, bodies),
+    do: inside(Map.fetch!(bodies, type), instance, chain, acc, bodies)
+
+  defp inside(%{rungs: rungs, writes: counts}, prefix, chain, acc, bodies),
+    do:
+      Enum.reduce(rungs, acc, fn {stripped, bits, cals}, {writes, ons} ->
+        chain = [stripped | chain]
+        paths = Enum.map(bits, &(prefix <> "." <> &1))
+        writes = Enum.reduce(bits, writes, &Map.put(&2, prefix <> "." <> &1, Map.get(counts, &1)))
+        ons = oned(paths, {prefix, chain}, ons)
+
+        Enum.reduce(cals, {writes, ons}, fn {name, type}, acc ->
+          inside({prefix <> "." <> name, type}, chain, acc, bodies)
+        end)
+      end)
 
   defp written([], acc, _tags), do: acc
 
   defp written([{:branches, legs} | rest], acc, tags),
     do: written(rest, Enum.reduce(legs, acc, &written(&1, &2, tags)), tags)
 
-  defp written([{:ons, _line, [{:name, _, bit}]} | rest], {writes, bits}, tags),
-    do: written(rest, {count(writes, bit), [bit | bits]}, tags)
+  defp written([{:ons, _line, [{:name, _, bit}]} | rest], {writes, bits, cals}, tags),
+    do: written(rest, {count(writes, bit), [bit | bits], cals}, tags)
 
-  defp written([{_symbol, _line, operands} = instruction | rest], {writes, bits}, tags),
+  defp written([{_symbol, _line, operands} = instruction | rest], {writes, bits, cals}, tags),
     do:
       written(
         rest,
-        {wrote(Compiler.signature(instruction, tags), operands, writes), bits},
+        {wrote(Compiler.signature(instruction, tags), operands, writes), bits,
+         calling(instruction, tags, cals)},
         tags
       )
+
+  # M2-5: the instances a rung's `cal`s run, each with its type. A `cal` of an instance its
+  # table does not hold as a user block's, which only a body built by hand can have, runs
+  # nothing (Logex.Runtime), and so runs nothing here either; its signature/2 slots are none,
+  # so it writes nothing.
+  defp calling({:cal, _line, [{:name, _, instance} | _]}, tags, cals),
+    do: block_call(Map.get(tags, instance), instance, cals)
+
+  defp calling(_instruction, _tags, cals), do: cals
+
+  defp block_call(%Tag{type: %FbType{body: %Program{}} = type}, instance, cals),
+    do: [{instance, type} | cals]
+
+  defp block_call(_not_a_block, _instance, cals), do: cals
 
   defp wrote([{:write, _type} | signature], [{:name, _, name} | operands], acc),
     do: wrote(signature, operands, count(acc, name))
@@ -543,18 +704,176 @@ defmodule Logex.Edit do
 
   # A rung as the text says it, line numbers taken out: a rung moved or renumbered is the
   # same rung (decision 21).
-  defp stripped(elements), do: Enum.map(elements, &bare/1)
+  #
+  # M2-5: a `cal` is stripped with the formals its operands fill, its block's members in
+  # `cal`'s order, so an edit that reorders a block's inputs, which the text of the rung
+  # does not show, changes the rung as an edit of its operands would (decision 21).
+  defp stripped(elements, tags), do: Enum.map(elements, &bare(&1, tags))
 
-  defp bare({:branches, legs}), do: {:branches, Enum.map(legs, &stripped/1)}
-  defp bare({symbol, _line, operands}), do: {symbol, Enum.map(operands, &operand/1)}
+  defp bare({:branches, legs}, tags), do: {:branches, Enum.map(legs, &stripped(&1, tags))}
+
+  defp bare({:cal, _line, [{:name, _, instance} | _] = operands}, tags),
+    do: {:cal, Enum.map(operands, &operand/1), formals(Map.get(tags, instance))}
+
+  defp bare({symbol, _line, operands}, _tags), do: {symbol, Enum.map(operands, &operand/1)}
+
+  defp formals(%Tag{type: %FbType{body: %Program{}} = type}),
+    do: for({_slot, %Member{name: name}} <- tl(FbType.signature(type)), do: name)
+
+  defp formals(_not_a_block), do: nil
 
   defp operand({kind, _line, value}), do: {kind, value}
 
+  # ---- M2-5: the state inside a user block's instances, across a switch -----------------
+
+  # For each instance of a user block the program started declares, a plan of its members,
+  # from the two versions of its type: the nested migration of §4.9, copying the members
+  # both declare and starting the rest. Built per type, not per instance: an instance's plan
+  # depends on its type, the other program's version of it, and whether each program runs
+  # it, so a program of many instances of one block plans that block once, and the plan is
+  # linear in the types and their members.
+  #
+  # An instance only the program stopped declares is kept, unused, until a prune, and its
+  # plan holds only the timers inside it, whose `.pre` and `last` the edit's last switch
+  # may have moved, to give back (fixes F1 and F11), as `timers/2` holds a timer only one
+  # program declares.
+  defp nested(from, to) do
+    {plans, memo} =
+      Enum.map_reduce(to.blocks, %{}, fn {name, {type, run}}, memo ->
+        {was, ran} = before(Map.get(from.blocks, name), type)
+        {plan, memo} = member_plan(was, type, {ran, run}, {from.bodies, to.bodies}, memo)
+        {{name, plan}, memo}
+      end)
+
+    {gone, _memo} =
+      Enum.flat_map_reduce(from.blocks, memo, fn
+        {name, _block}, memo when is_map_key(to.blocks, name) ->
+          {[], memo}
+
+        {name, {type, _ran}}, memo ->
+          {plan, memo} = gone_plan(Map.fetch(memo, {:gone, type.name}), type, memo)
+          {[{name, plan}], memo}
+      end)
+
+    plans ++ gone
+  end
+
+  # The other program's version of an instance's type, where it holds one of that name.
+  defp before({%FbType{name: name} = was, ran}, %FbType{name: name}), do: {was, ran}
+  defp before(_none, _type), do: {nil, false}
+
+  defp member_plan(was, type, runs, bodies, memo) do
+    key = {type.name, was != nil, runs}
+    planned(Map.fetch(memo, key), key, {was, type, runs, bodies}, memo)
+  end
+
+  defp planned({:ok, plan}, _key, _types, memo), do: {plan, memo}
+
+  defp planned(:error, key, {was, type, runs, bodies}, memo) do
+    {members, memo} =
+      Enum.map_reduce(
+        type.members,
+        memo,
+        &member(%{&1 | type: FbType.type_of(type, &1)}, was, {type, runs, bodies}, &2)
+      )
+
+    names = Map.new(type.members, &{&1.name, true})
+    {gone, memo} = gone(was, names, memo)
+    plan = %{members: members ++ gone, names: names}
+    {plan, Map.put(memo, key, plan)}
+  end
+
+  # The timers only the stopped program's version of a block declares, at any depth, which
+  # the program started does not run: their `.pre` and `last` are still this edit's to give
+  # back (fix F1, F11), as `timers/2` covers a timer only one program declares at the top
+  # level. Planned once per type.
+  defp gone(nil, _names, memo), do: {[], memo}
+
+  defp gone(%FbType{members: members} = type, names, memo),
+    do:
+      members
+      |> Enum.reject(&is_map_key(names, &1.name))
+      |> Enum.flat_map_reduce(memo, &gone_member(&1, FbType.type_of(type, &1), &2))
+
+  defp gone_member(%Member{name: name}, %FbType{body: nil}, memo),
+    do: {[{:timer_gone, name}], memo}
+
+  defp gone_member(%Member{name: name}, %FbType{} = type, memo) do
+    {plan, memo} = gone_plan(Map.fetch(memo, {:gone, type.name}), type, memo)
+    {[{:block_gone, name, plan}], memo}
+  end
+
+  defp gone_member(_leaf, _type, memo), do: {[], memo}
+
+  defp gone_plan({:ok, plan}, _type, memo), do: {plan, memo}
+
+  defp gone_plan(:error, type, memo) do
+    {members, memo} = gone(type, %{}, memo)
+    plan = %{members: members}
+    {plan, Map.put(memo, {:gone, type.name}, plan)}
+  end
+
+  defp member(%Member{name: name} = member, was, context, memo),
+    do: member(member, before_member(was, name), context, memo, name)
+
+  defp before_member(nil, _name), do: nil
+  defp before_member(was, name), do: resolved(was, member_named(was, name))
+
+  # A member with its type itself, a user block's taken from the body (Logex.FbType).
+  defp resolved(_type, nil), do: nil
+  defp resolved(type, member), do: %{member | type: FbType.type_of(type, member)}
+
+  defp member(%Member{type: type, initial: initial}, old, _context, memo, name)
+       when type in [:bool, :dint],
+       do: {{:leaf, name, type, initial, old_initial(old), old != nil}, memo}
+
+  defp member(
+         %Member{type: %FbType{body: nil} = type, initial: initial},
+         old,
+         context,
+         memo,
+         name
+       ) do
+    {_type, {ran, run}, _bodies} = context
+    start = FbType.initial(type, initial)
+    keys = Enum.sort(Map.keys(start))
+    {{:timer, name, keys, start, runs_ton(ran, old), runs_ton(run, initial), old != nil}, memo}
+  end
+
+  defp member(%Member{type: %FbType{} = type, initial: initial}, old, context, memo, name) do
+    {owner, {ran, run}, {before_bodies, bodies}} = context
+    was = old_type(old)
+    ran = ran and called?(before_bodies, owner.name, name)
+    run = run and called?(bodies, owner.name, name)
+    {plan, memo} = member_plan(was, type, {ran, run}, {before_bodies, bodies}, memo)
+    {{:block, name, {type, initial}, old != nil, plan}, memo}
+  end
+
+  defp old_initial(nil), do: nil
+  defp old_initial(%Member{initial: initial}), do: initial
+
+  defp old_type(nil), do: nil
+  defp old_type(%Member{type: type}), do: type
+
+  # The preset of the `ton` that runs a timer inside a block, as the compiler gives its
+  # member (Logex.Compiler), where the program runs the block; nil where it does not, or no
+  # `ton` of the body runs the timer.
+  defp runs_ton(false, _member_or_initial), do: nil
+  defp runs_ton(true, nil), do: nil
+  defp runs_ton(true, %Member{initial: initial}), do: runs_ton(true, initial)
+  defp runs_ton(true, %{} = initial), do: Map.get(initial, "pre")
+
+  # Whether a block's body, in one program's version of it, has a `cal` of an instance it
+  # holds. It is asked only of a version the program holds: of the program started's own,
+  # and of the stopped program's where it runs the instance, and so holds a version of that
+  # name, since accept refuses an instance or member whose block is renamed.
+  defp called?(bodies, type, name), do: is_map_key(Map.fetch!(bodies, type).called, name)
+
   # Decision 21 and fix F7: the storage bits of the `ons` of `to` that a switch from `from`,
-  # the program that last scanned, blocks for one scan. Each is blocked unless `from` has
-  # that `ons` in an identical rung, line numbers ignored, and writes its bit through
-  # nothing else: an `ons` that `to` adds, one whose rung it changes, and one whose bit
-  # `from` also writes through another instruction, which may leave the bit at a value
+  # the program that last scanned, blocks until a scan runs each. Each is blocked unless
+  # `from` has that `ons` in an identical rung, line numbers ignored, and writes its bit
+  # through nothing else: an `ons` that `to` adds, one whose rung it changes, and one whose
+  # bit `from` also writes through another instruction, which may leave the bit at a value
   # that is not the power the `ons` last received.
   defp blocks(from, to),
     do:
@@ -578,8 +897,17 @@ defmodule Logex.Edit do
 
     fresh = Map.take(plan.initial, started)
     env = Map.merge(env, fresh)
-    {inputs, added} = Enum.split_with(started, &is_map_key(plan.inputs, &1))
     scanned = scanned(record.scanned, state, plan)
+    clock = {now, state.switched, elem(scanned, 0) == plan.stops}
+
+    {env, inside, pre} =
+      Enum.reduce(
+        plan.nested,
+        {env, [], %{}},
+        &migrate(&1, fresh, {first_test?, record.pre, clock}, &2)
+      )
+
+    {inputs, added} = Enum.split_with(started, &is_map_key(plan.inputs, &1))
     blocked = blocked(scanned, plan)
 
     report =
@@ -591,15 +919,134 @@ defmodule Logex.Edit do
           not is_map_key(fresh, name),
           do: {:initial_changed, name, {old, new}}
         ) ++
-        for(bit <- blocked, do: {:ons_blocked, bit, Map.fetch!(env, bit)}) ++
+        for(bit <- blocked, do: {:ons_blocked, bit, bit_at(env, bit)}) ++
         holding(plan, shown, env)
 
     {env, timed, pre} =
-      Enum.reduce(plan.timers, {env, [], %{}}, &timed(&1, record.pre, {now, state.switched}, &2))
+      Enum.reduce(plan.timers, {env, [], pre}, fn {name, from, to}, acc ->
+        timed({name, name, from, to}, record.pre, clock, acc)
+      end)
 
     {%{state | env: env, switched: true, ons_blocked: blocked},
-     %{record | shown: shown, pre: pre, scanned: scanned}, Enum.sort(timed ++ report)}
+     %{record | shown: shown, pre: pre, scanned: scanned}, Enum.sort(timed ++ inside ++ report)}
   end
+
+  # A storage bit's value, a bit inside an instance found by its path (M2-5).
+  defp bit_at(env, bit), do: path_at(env, String.split(bit, "."))
+
+  defp path_at(value, []), do: value
+  defp path_at(%{} = map, [key | path]), do: path_at(Map.get(map, key, 0), path)
+  defp path_at(_not_a_map, _path), do: 0
+
+  # M2-5, the nested migration (§4.9): inside each instance of a user block both programs
+  # declare, kept as a map and not started whole above, each member the program started
+  # declares moves by the rules a tag does: one the state lacks starts at its initial value;
+  # at the first test, one the candidate's version of the block adds, or whose value does
+  # not fit its type, starts so too; a kept bool or dint whose initial value changed keeps
+  # its value and is reported; a timer meets the timer rules; and an instance it holds is
+  # migrated in turn. A member only the stopped program's version declares is kept, unused,
+  # until assemble or cancel prunes it. Each is reported by its path, `s1.count`.
+  defp migrate({name, plan}, fresh, rules, {env, reports, pre}) do
+    migrate_in(
+      Map.get(env, name),
+      is_map_key(fresh, name),
+      {name, plan},
+      rules,
+      {env, reports, pre}
+    )
+  end
+
+  defp migrate_in(%{} = map, false, {name, plan}, rules, {env, reports, pre}) do
+    {map, reports, pre} = members(plan, map, name, rules, {reports, pre})
+    {Map.put(env, name, map), reports, pre}
+  end
+
+  defp migrate_in(_started_or_not_a_map, _fresh?, _plan, _rules, acc), do: acc
+
+  defp members(plan, map, prefix, rules, {reports, pre}),
+    do: Enum.reduce(plan.members, {map, reports, pre}, &moved_member(&1, prefix, rules, &2))
+
+  defp moved_member({:leaf, name, type, initial, old, kept?}, prefix, {first?, _, _}, acc) do
+    path = prefix <> "." <> name
+
+    starts?(Map.fetch(elem(acc, 0), name), not kept?, type, first?)
+    |> started(name, path, initial, acc)
+    |> initial_changed({kept?, old, initial}, path)
+  end
+
+  defp moved_member({:timer, name, keys, initial, from, to, kept?}, prefix, rules, acc) do
+    {first?, undo, clock} = rules
+    {map, reports, pre} = acc
+    path = prefix <> "." <> name
+
+    timer_moved(
+      starts?(Map.fetch(map, name), not kept?, {:members, keys}, first?),
+      {name, path, initial, from, to},
+      {undo, clock},
+      {map, reports, pre}
+    )
+  end
+
+  defp moved_member({:block, name, initial, kept?, plan}, prefix, rules, {map, reports, pre}) do
+    {first?, _undo, _clock} = rules
+    path = prefix <> "." <> name
+
+    block_moved(
+      starts?(Map.fetch(map, name), not kept?, :block, first?),
+      {name, path, initial, plan},
+      rules,
+      {map, reports, pre}
+    )
+  end
+
+  # A timer only the stopped program's version declares: kept, unused, and its `.pre` and
+  # `last` given back where this edit's last switch moved them.
+  defp moved_member({:timer_gone, name}, prefix, {_first?, undo, clock}, acc),
+    do: timed({name, prefix <> "." <> name, nil, nil}, undo, clock, acc)
+
+  defp moved_member({:block_gone, name, plan}, prefix, rules, {map, reports, pre}),
+    do:
+      block_kept(
+        Map.get(map, name),
+        {name, prefix <> "." <> name, plan},
+        rules,
+        {map, reports, pre}
+      )
+
+  defp started(true, name, path, initial, {map, reports, pre}),
+    do: {:started, {Map.put(map, name, initial), [{:added, path, initial} | reports], pre}}
+
+  defp started(false, _name, _path, _initial, acc), do: {:kept, acc}
+
+  defp initial_changed({:started, acc}, _initials, _path), do: acc
+
+  defp initial_changed({:kept, {map, reports, pre}}, {true, old, new}, path) when old != new,
+    do: {map, [{:initial_changed, path, {old, new}} | reports], pre}
+
+  defp initial_changed({:kept, acc}, _initials, _path), do: acc
+
+  defp timer_moved(true, {name, path, initial, _from, _to}, _clocks, {map, reports, pre}),
+    do: {Map.put(map, name, initial), [{:added, path, initial} | reports], pre}
+
+  defp timer_moved(false, {name, path, _initial, from, to}, {undo, clock}, acc),
+    do: timed({name, path, from, to}, undo, clock, acc)
+
+  # A block's initial state is built only where one starts: built for every member it would
+  # make the plan quadratic in the depth of nesting.
+  defp block_moved(true, {name, path, {type, overrides}, _plan}, _rules, {map, reports, pre}) do
+    initial = FbType.initial(type, overrides)
+    {Map.put(map, name, initial), [{:added, path, initial} | reports], pre}
+  end
+
+  defp block_moved(false, {name, path, _initial, plan}, rules, {map, reports, pre}),
+    do: block_kept(Map.get(map, name), {name, path, plan}, rules, {map, reports, pre})
+
+  defp block_kept(%{} = inner, {name, path, plan}, rules, {map, reports, pre}) do
+    {inner, reports, pre} = members(plan, inner, path, rules, {reports, pre})
+    {Map.put(map, name, inner), reports, pre}
+  end
+
+  defp block_kept(_not_a_map, _plan, _rules, acc), do: acc
 
   # Whether a switch starts a tag at its initial value: one the state lacks, always; and at
   # the first test, one the candidate adds, over what a plain swap left, or one whose value
@@ -613,12 +1060,16 @@ defmodule Logex.Edit do
 
   # Which program left the storage bits, the one each `ons` would read them from, and the
   # bits still blocked against it. A scan since the last switch (`switched` false): the
-  # program stopped, with nothing pending, since a scan empties the list. No scan since,
-  # and that switch this edit's: what it recorded, so a test and an untest with no scan
+  # program stopped, with what the scan left pending, which is nothing at the top level,
+  # since every rung runs, but a bit inside an instance whose body no scan has run since it
+  # was listed (M2-5): its bit is still the one an older rung wrote. No scan since, and
+  # that switch this edit's: what it recorded, so a test and an untest with no scan
   # between lose no real edge (F3). No scan since an earlier edit's switch, whose program
   # this edit cannot know: the program stopped is taken for it, with the earlier edit's
   # blocks still pending (F2).
-  defp scanned(_known, %Instance{switched: false}, plan), do: {plan.stops, []}
+  defp scanned(_known, %Instance{switched: false, ons_blocked: pending}, plan),
+    do: {plan.stops, pending}
+
   defp scanned(nil, %Instance{ons_blocked: pending}, plan), do: {plan.stops, pending}
   defp scanned(known, _state, _plan), do: known
 
@@ -638,6 +1089,7 @@ defmodule Logex.Edit do
   # leave one that lacks some: where the program swapped out held a bool under the name,
   # a program that writes `t1.pre` and runs no `ton` on it leaves `%{"pre" => 40}`, which
   # the timer rules, reading `.acc`, `.dn` and `.en`, could not take.
+  defp fits?(:block, value), do: is_map(value)
   defp fits?({:members, keys}, %{} = timer), do: Enum.sort(Map.keys(timer)) == keys
   defp fits?({:members, _keys}, _not_a_timer), do: false
   defp fits?(type, value), do: Declarations.fits?(type, value)
@@ -651,22 +1103,25 @@ defmodule Logex.Edit do
   # and the record keeps the `.pre` left, the one found, and the `last` a resume found.
   # A map a plain swap left with `.pre` but not every member is one no `ton` of either
   # program runs (below), so the rules that read the others never reach it.
-  defp timed({name, _from, _to} = timer, undo, clock, {env, _report, _left} = acc),
-    do: timer(Map.get(env, name), timer, Map.get(undo, name), clock, acc)
+  # `key` is the timer's name in the map it lives in, and `name` how the record and the
+  # report name it: a top-level timer's name, or its path inside an instance (M2-5).
+  defp timed({key, name, _from, _to} = timer, undo, clock, {env, _report, _left} = acc),
+    do: timer(Map.get(env, key), timer, Map.get(undo, name), clock, acc)
 
   defp timer(
          %{"pre" => pre} = value,
-         {name, from, to},
+         {key, name, from, to},
          undo,
-         {now, switched},
+         {now, switched, stopped_last?},
          {env, report, left}
        ) do
     {value, undone} = undone(value, undo, switched, now, name)
     target = target(undo, pre, from, to)
-    {value, resumed, found} = resumed(to, %{value | "pre" => target}, name, now)
 
-    {Map.put(env, name, value),
-     moved(name, pre, target, to, value) ++ undone ++ resumed ++ report,
+    {value, resumed, found} =
+      resumed({from, to, stopped_last?}, %{value | "pre" => target}, name, now)
+
+    {Map.put(env, key, value), moved(name, pre, target, to, value) ++ undone ++ resumed ++ report,
      Map.put(left, name, {target, pre, found})}
   end
 
@@ -713,17 +1168,22 @@ defmodule Logex.Edit do
   defp done(0, 1, acc, pre, name) when acc >= pre, do: [{:dn_rises, name, {acc, pre}}]
   defp done(_dn, _en, _acc, _pre, _name), do: []
 
-  # A timer the program started runs, timing when it last ran and not run since: its `last`
-  # is before `now`, which within the contract means the program stopped did not run it,
-  # since every `ton` stamps `last` at every scan. It resumes from the switch, so the time
-  # no `ton` ran it is not caught up (§4.9's Resume rule). The `last` it found where it
-  # resumes is returned too, for the next switch to give back (F11).
-  defp resumed(nil, timer, _name, _now), do: {timer, [], nil}
+  # A timer the program started runs and the program stopped does not, timing when it last
+  # ran (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes
+  # `now`, so the time no `ton` ran it is not caught up (§4.9's Resume rule, decision 23).
+  # The `last` it found is returned too, for the next switch to give back (F11). M2-5: a
+  # timer both programs run is never resumed. At the top level its `last` is `now` anyway,
+  # since a `ton` stamps it at every scan; inside a block whose `cal` was false it is
+  # earlier, and the timer catches up when the block next runs, as decision 8 wants. And
+  # "the program stopped did not run it" is asked of the program that last scanned, as
+  # the one-shots' rule asks it (F3): where that is the program started, a test and an
+  # untest with no scan between, the program started left the timer as it is, frozen or
+  # not, and no resume is due.
+  defp resumed({nil, to, true}, %{"en" => 1, "last" => last} = timer, name, now)
+       when to != nil and last < now,
+       do: {%{timer | "last" => now}, [{:resumed, name, now - last}], last}
 
-  defp resumed(_to, %{"en" => 1, "last" => last} = timer, name, now) when last < now,
-    do: {%{timer | "last" => now}, [{:resumed, name, now - last}], last}
-
-  defp resumed(_to, timer, _name, _now), do: {timer, [], nil}
+  defp resumed(_presets, timer, _name, _now), do: {timer, [], nil}
 
   # A resume undone: where this edit's last switch resumed the timer and no scan has run
   # since (`switched`), its `last`, still that switch's `now`, goes back to the one it
@@ -771,6 +1231,43 @@ defmodule Logex.Edit do
   defp prune(plan, record, %Instance{env: env} = state) do
     {kept, gone} = Map.split_with(env, fn {name, _value} -> is_map_key(plan.keep, name) end)
     pruned = for {name, value} <- gone, do: {:pruned, name, value}
-    {%{state | env: kept}, Enum.sort(holding(plan, record.shown, env) ++ pruned)}
+    {kept, inside} = Enum.reduce(plan.nested, {kept, []}, &prune_in/2)
+    {%{state | env: kept}, Enum.sort(holding(plan, record.shown, env) ++ pruned ++ inside)}
   end
+
+  # M2-5: inside each instance of a user block the program kept declares, the members its
+  # version of the block does not declare, at any depth, each reported by its path.
+  defp prune_in({name, plan}, {env, reports}),
+    do: pruned_in(Map.get(env, name), {name, plan}, {env, reports})
+
+  defp pruned_in(%{} = map, {name, plan}, {env, reports}) do
+    {map, reports} = prune_members(plan, map, name, reports)
+    {Map.put(env, name, map), reports}
+  end
+
+  defp pruned_in(_not_a_map, _plan, acc), do: acc
+
+  defp prune_members(plan, map, prefix, reports) do
+    {kept, gone} = Map.split_with(map, fn {name, _value} -> is_map_key(plan.names, name) end)
+
+    reports =
+      Enum.reduce(gone, reports, fn {name, v}, acc ->
+        [{:pruned, prefix <> "." <> name, v} | acc]
+      end)
+
+    Enum.reduce(plan.members, {kept, reports}, fn
+      {:block, name, _initial, _kept?, inner}, {kept, reports} ->
+        nested_prune(Map.get(kept, name), {name, prefix <> "." <> name, inner}, {kept, reports})
+
+      _member, acc ->
+        acc
+    end)
+  end
+
+  defp nested_prune(%{} = inner, {name, path, plan}, {map, reports}) do
+    {inner, reports} = prune_members(plan, inner, path, reports)
+    {Map.put(map, name, inner), reports}
+  end
+
+  defp nested_prune(_not_a_map, _plan, acc), do: acc
 end

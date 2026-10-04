@@ -60,6 +60,18 @@ defmodule Logex.ApiContractTest do
   refused whether the mistake is the host's or one a text could make, and every accepted
   call is made twice and gives the same result. Its reach covers every refusal and what
   the scheduler must be seen to do.
+
+  M2-5: a fifth walk takes online edits of programs that hold user function blocks, a
+  block inside a block among them, drawn from versions that change a block's body, add
+  and drop its members and timers, and change a member's kind, which accept refuses. Its
+  oracles: the writes each report lists, applied by path, rebuild the state; a switch
+  leaves every member of the program it starts present at every depth, and a prune none
+  but the kept program's; a test then an untest with no scan between gives back every
+  value neither switch started, a timer's `last` included, found from the reports' starts
+  alone; and on any scan that runs a one-shot one or two levels down, whose chain of rungs,
+  from the program's `cal` to the body's `ons` rung, differs in its text from the one it
+  last ran under, the one-shot passes no power: on the scan right after a switch, or on a
+  later one, where its instance's `cal` was false until then (decision 32).
   """
   use ExUnit.Case, async: true
 
@@ -2113,4 +2125,376 @@ defmodule Logex.ApiContractTest do
 
       :refused
   end
+
+  # ---- M2-5: the walk with online edits of programs that hold blocks --------------------
+
+  # Versions of a block `blk`, of a block `wrap` that holds one, and programs that hold
+  # either, drawn so that two programs share their names: a body changed in its `ons` rung,
+  # a member added with an initial value that changes, a member whose kind changes, and a
+  # timer added, dropped or given one of three presets; `wrap` runs its `blk` always, under
+  # a condition, under a one-shot of its own, or not at all; a program runs `x` under a
+  # condition or not, holds a `wrap`, or a second `blk` it runs or does not.
+  @fb_blk [
+    "var e bool\nxic go ons e ote p",
+    "var e bool\nxio go ons e ote p",
+    "var e bool\nvar n dint 2\nxic go ons e ote p\nxic go move 3 n",
+    "var e dint\nxic go move 1 e\nxic go ote p",
+    "var t1 ton\nxic go ton t1 50\nxic t1.dn ote p",
+    "var t1 ton\nxic go ton t1 80\nxic t1.dn ote p",
+    "var e bool\nvar t1 ton\nxic go ons e ote p\nxic go ton t1 50",
+    "var e bool\nvar n dint 5\nxic go ons e ote p\nxic go move 3 n",
+    "var e bool\nvar t1 ton\nxic go ons e ote p\nxic t1.dn ote p",
+    "var t1 ton\nxic go ton t1 20\nxic t1.dn ote p"
+  ]
+
+  @fb_wrap [
+    "cal inner a q",
+    "xic a cal inner a q",
+    "var k bool\nxic a ons k cal inner a q",
+    "xic a ote q"
+  ]
+
+  @fb_head "var_input g bool\nvar_input h bool\nvar_input en bool\nvar_output p bool\nvar_output q bool\n"
+
+  @fb_programs [
+    "var x blk\nxic en cal x g p",
+    "var x blk\nvar w wrap\nxic en cal x g p\ncal w h q",
+    "var x blk\nvar w wrap\ncal x g p\ncal w h q",
+    "var x blk\nvar w wrap\nxic g ote p\ncal w h q",
+    "var w wrap\nxic g ote p\nxic en cal w h q",
+    "var x blk\nvar w wrap\nvar y blk\nxic en cal x g p\nxic en cal w h q\ncal y h q",
+    "var x blk\nvar y blk\nvar w wrap\nxic en cal x g p\ncal w g q"
+  ]
+
+  # What the walk must see happen, and its oracles check, at least once each: every switch
+  # and prune, a report kind by a path inside an instance, a refused member kind change, a
+  # round trip, and a scan right after a switch where an `ons` whose chain of rungs changed
+  # ran, one and two levels down.
+  @fb_reach [
+    :test,
+    :untest,
+    :assemble,
+    :cancel,
+    :refused,
+    :round_trip,
+    :round_trip_timer,
+    :ons_x_changed_ran,
+    :ons_inner_changed_ran,
+    :ons_x_changed_late,
+    :ons_inner_changed_late,
+    {:nested, :added},
+    {:nested, :dn_drops},
+    {:nested, :dn_rises},
+    {:nested, :initial_changed},
+    {:nested, :ons_blocked},
+    {:nested, :preset},
+    {:nested, :pruned},
+    {:nested, :resume_undone},
+    {:nested, :resumed}
+  ]
+
+  # Under which chain of rungs each one-shot last ran, none known yet (below).
+  @fb_unknown %{x: :any, inner: :any}
+
+  defp fb_programs do
+    for {b, bi} <- Enum.with_index(@fb_blk),
+        {wr, wi} <- Enum.with_index(@fb_wrap),
+        {pr, pi} <- Enum.with_index(@fb_programs),
+        {:ok, blk} =
+          Logex.compile("function_block blk\nvar_input go bool\nvar_output p bool\n" <> b,
+            name: "blk"
+          ),
+        {:ok, wrap} =
+          Logex.compile(
+            "function_block wrap\nvar_input a bool\nvar_output q bool\nvar inner blk\n" <> wr,
+            name: "wrap",
+            types: [blk]
+          ),
+        {:ok, program} <- [Logex.compile(@fb_head <> pr, name: "m", types: [blk, wrap])],
+        do: {{bi, wi, pi}, program}
+  end
+
+  # Its reach holds at this seed and at each of the seeds 1 to 30 in its place. Its rarest
+  # atoms, a one-shot two levels down checked on a later scan, a nested `:dn_rises` and a
+  # nested `:resume_undone`, came 6 to 18, 7 to 24 and 8 to 30 times a run over those 31.
+  # Drawn as the design pass drew them, 800 walks, two presets, steps mostly past both,
+  # and a candidate drawn mostly with the running block's version, a nested `:dn_rises`
+  # came one to four times a run, and three seeds of the 30 missed it.
+  test "an online edit of a program that holds blocks: each report's writes rebuild the " <>
+         "state by path, a switch leaves every member present, a prune leaves no other, a " <>
+         "round trip gives every value back, and no one-shot fires on a changed chain" do
+    :rand.seed(:exsss, {2026, 10, 2})
+    programs = fb_programs()
+
+    for _ <- 1..1600 do
+      {key, program} = pick(programs)
+      w = %{p: program, s: Runtime.instance(program), e: nil, key: key, c: nil, last: key}
+      fb_walk(Map.merge(w, %{round: nil, after: false, wrote: @fb_unknown}), programs, 100)
+    end
+
+    assert Process.get(:fb_reach, MapSet.new()) == MapSet.new(@fb_reach)
+  end
+
+  defp fb_walk(w, _programs, 0), do: w
+
+  defp fb_walk(w, programs, n),
+    do:
+      fb_walk(
+        fb_op(pick(~w(scan scan scan accept test untest assemble cancel restart)a), w, programs),
+        programs,
+        n - 1
+      )
+
+  defp fb_running(%{e: nil, p: p}), do: p
+  defp fb_running(%{e: edit}), do: Edit.running(edit)
+
+  defp fb_key(%{e: nil, key: key}), do: key
+  defp fb_key(%{e: edit, key: key, c: c}), do: fb_key(Edit.stage(edit), key, c)
+  defp fb_key(:testing, _key, c), do: c
+  defp fb_key(_stage, key, _c), do: key
+
+  defp fb_op(:scan, w, _programs) do
+    program = fb_running(w)
+
+    inputs =
+      for {name, %Tag{section: :var_input}} <- program.tags,
+          :rand.uniform(3) == 1,
+          into: %{},
+          do: {name, pick([0, 1])}
+
+    # Inputs change one time in three and time moves in steps of up to 60 ms, often short,
+    # so a timer inside a block is done, or timing between two presets, when an edit moves
+    # its `.pre`.
+    {_outputs, later} =
+      Runtime.scan(
+        program,
+        Runtime.put_inputs(program, w.s, inputs),
+        pick([0, 10, 10, 20, 30, 60])
+      )
+
+    wrote = fb_pulses!(w, fb_key(w), later)
+    %{w | s: later, round: nil, after: false, last: fb_key(w), wrote: wrote}
+  end
+
+  defp fb_op(:restart, w, _programs) do
+    s = Runtime.restart(fb_running(w), w.s, pick([:cold, :warm]))
+    %{w | s: s, round: nil, wrote: @fb_unknown}
+  end
+
+  # A candidate is, a third of the time each, any program, one with the running block's
+  # version, or the running one with only its block's version drawn again.
+  defp fb_op(:accept, %{e: nil, key: {b, wr, pr}} = w, programs) do
+    same_block = for {{^b, _, _}, _} = entry <- programs, do: entry
+    same_rest = for {{_, ^wr, ^pr}, _} = entry <- programs, do: entry
+    {key, candidate} = pick(pick([programs, same_block, same_rest]))
+    fb_accepted(Edit.accept(w.p, candidate, w.s), key, w)
+  end
+
+  defp fb_op(:test, w, _programs) when w.e != nil do
+    fb_switch(Edit.stage(w.e) in [:accepted, :untested], :test, w)
+  end
+
+  defp fb_op(:untest, w, _programs) when w.e != nil do
+    fb_switch(Edit.stage(w.e) == :testing, :untest, w)
+  end
+
+  defp fb_op(:assemble, w, _programs) when w.e != nil,
+    do: fb_prune(Edit.stage(w.e) == :testing, :assemble, w)
+
+  defp fb_op(:cancel, w, _programs) when w.e != nil,
+    do: fb_prune(Edit.stage(w.e) in [:accepted, :untested], :cancel, w)
+
+  defp fb_op(_op, w, _programs), do: w
+
+  defp fb_accepted({:ok, edit, _forecast}, key, w), do: %{w | e: edit, c: key, round: nil}
+
+  defp fb_accepted({:error, diagnostics}, _key, w) do
+    assert Enum.all?(diagnostics, &match?(%Diagnostic{stage: :edit}, &1))
+    fb_reach(:refused)
+    w
+  end
+
+  defp fb_switch(false, _step, w), do: w
+
+  defp fb_switch(true, step, w) do
+    stage = Edit.stage(w.e)
+    {edit, later, report} = apply(Edit, step, [w.e, w.s])
+    fb_rebuilt!(step, w.s, later, report)
+    assert Enum.sort(names(report, :ons_blocked)) == Enum.sort(later.ons_blocked)
+    started = Program.initial_env(Edit.running(edit))
+    assert fb_missing(fb_leaves(started), later.env) == []
+    fb_round!(step, stage, w.round, later, report)
+    round = fb_round(step, w.s, report)
+    %{w | e: edit, s: later, round: round, after: true}
+  end
+
+  defp fb_prune(false, _step, w), do: w
+
+  defp fb_prune(true, step, w) do
+    {kept, later, report} = apply(Edit, step, [w.e, w.s])
+    fb_rebuilt!(step, w.s, later, report)
+    assert fb_missing(fb_leaves(later.env), Program.initial_env(kept)) == []
+    key = fb_kept(step, w)
+    %{w | e: nil, p: kept, s: later, key: key, round: nil}
+  end
+
+  defp fb_kept(:assemble, w), do: w.c
+  defp fb_kept(:cancel, w), do: w.key
+
+  # The writes a report lists, applied by path to the state before its step.
+  defp fb_rebuilt!(step, before, later, report) do
+    fb_reach(step)
+    for {kind, name, _} <- report, String.contains?(name, "."), do: fb_reach({:nested, kind})
+    assert Enum.reduce(report, before.env, &fb_write/2) == later.env
+  end
+
+  defp fb_path(name), do: String.split(name, ".")
+
+  defp fb_write({kind, name, value}, env) when kind in [:added, :input],
+    do: put_in(env, Enum.map(fb_path(name), &Access.key(&1, %{})), value)
+
+  defp fb_write({:preset, name, {_from, to}}, env), do: put_in(env, fb_path(name) ++ ["pre"], to)
+
+  defp fb_write({:resumed, name, gap}, env),
+    do: update_in(env, fb_path(name) ++ ["last"], &(&1 + gap))
+
+  defp fb_write({:resume_undone, name, gap}, env),
+    do: update_in(env, fb_path(name) ++ ["last"], &(&1 - gap))
+
+  defp fb_write({:pruned, name, _value}, env) do
+    {parent, [leaf]} = Enum.split(fb_path(name), -1)
+    fb_drop(parent, leaf, env)
+  end
+
+  defp fb_write(_fact, env), do: env
+
+  defp fb_drop([], leaf, env), do: Map.delete(env, leaf)
+  defp fb_drop(parent, leaf, env), do: update_in(env, parent, &Map.delete(&1, leaf))
+
+  defp fb_leaves(map, prefix \\ []),
+    do:
+      Enum.flat_map(map, fn
+        {key, %{} = inner} -> fb_leaves(inner, prefix ++ [key])
+        {key, value} -> [{prefix ++ [key], value}]
+      end)
+
+  defp fb_missing(leaves, env), do: for({path, _} <- leaves, get_in(env, path) == nil, do: path)
+
+  # A test then an untest with no scan between leaves every value as it was, but for what
+  # either switch started, found from the reports' starts alone: a timer included.
+  defp fb_round(:test, before, report), do: {before, report}
+  defp fb_round(:untest, _before, _report), do: nil
+
+  defp fb_round!(:untest, :testing, {before, tested}, later, untested) do
+    started =
+      for {kind, name, _} <- tested ++ untested, kind in [:added, :input], do: fb_path(name)
+
+    changed =
+      for {path, value} <- fb_leaves(before.env),
+          not Enum.any?(started, &List.starts_with?(path, &1)),
+          get_in(later.env, path) != value,
+          do: {path, value}
+
+    assert changed == []
+    fb_reach(:round_trip)
+
+    timer? = Enum.any?(fb_leaves(before.env), fn {path, _} -> List.last(path) == "last" end)
+    fb_reach(:round_trip_timer, timer?)
+  end
+
+  defp fb_round!(_step, _stage, _round, _later, _report), do: :ok
+
+  # Decision 21's oracle, from the programs' text alone: a one-shot of `blk` that runs
+  # under a chain of rungs, from the program's `cal` down to the body's `ons` rung, other
+  # than the one it last ran under passes no power; and `blk`'s output, where only that
+  # rung writes it, is then 0. The chain is each rung's text: the `ons` rung of each
+  # version, or none. Under which chain each one-shot last ran is known from the walk
+  # alone: none after a start or a restart, whose first run fires (PLAN M2-5, `first` is
+  # the program's), and unknown where a `wrap` runs its `blk` under a one-shot of its own.
+  # It fails where a block is used up by a scan whose `cal` was false (a pulse after it).
+  @fb_ons_text %{
+    0 => "xic go ons e ote p",
+    1 => "xio go ons e ote p",
+    2 => "xic go ons e ote p",
+    6 => "xic go ons e ote p",
+    7 => "xic go ons e ote p",
+    8 => "xic go ons e ote p"
+  }
+
+  # The versions whose output only the `ons` rung writes.
+  @fb_observable [0, 1, 2, 6, 7]
+
+  defp fb_pulses!(%{s: %Instance{first: true}, wrote: wrote}, {_b, wr, pr} = key, later),
+    do: %{
+      x: fb_ran(fb_x_ran(pr, later.env), fb_x_chain(key), wrote.x),
+      inner: fb_ran(fb_inner_ran(wr, pr, later.env), fb_inner_chain(key), wrote.inner)
+    }
+
+  defp fb_pulses!(%{wrote: wrote, after: switched}, {b, wr, pr} = key, later) do
+    body = b in @fb_observable
+    x_ran = fb_x_ran(pr, later.env)
+    x_chain = fb_x_chain(key)
+    late = fb_late(switched, :ons_x_changed_late)
+
+    fb_pulse!(
+      [:ons_x_changed_ran | late],
+      body && x_ran == true,
+      wrote.x not in [:any, x_chain],
+      later.env["x"]
+    )
+
+    inner_ran = fb_inner_ran(wr, pr, later.env)
+    inner_chain = fb_inner_chain(key)
+    late = fb_late(switched, :ons_inner_changed_late)
+
+    fb_pulse!(
+      [:ons_inner_changed_ran | late],
+      body && inner_ran == true,
+      wrote.inner not in [:any, inner_chain],
+      later.env["w"]["inner"]
+    )
+
+    %{x: fb_ran(x_ran, x_chain, wrote.x), inner: fb_ran(inner_ran, inner_chain, wrote.inner)}
+  end
+
+  # A pulse checked on a later scan than the one right after a switch, its `cal` false on
+  # those between.
+  defp fb_late(true, _atom), do: []
+  defp fb_late(false, atom), do: [atom]
+
+  # Whether each instance's body ran: true, false, or :unknown where it ran under a
+  # one-shot of `wrap`'s own.
+  defp fb_x_ran(pr, env), do: pr == 2 or (pr in [0, 1, 5, 6] and env["en"] == 1)
+
+  defp fb_inner_ran(wr, pr, env) when wr in [0, 1],
+    do: fb_wrap_ran(pr, env) and (wr == 0 or env["w"]["a"] == 1)
+
+  defp fb_inner_ran(2, pr, env), do: fb_wrap_ran(pr, env) and :unknown
+  defp fb_inner_ran(_wr, _pr, _env), do: false
+
+  defp fb_ran(true, chain, _wrote), do: chain
+  defp fb_ran(false, _chain, wrote), do: wrote
+  defp fb_ran(:unknown, _chain, _wrote), do: :any
+
+  defp fb_wrap_ran(pr, _env) when pr in [1, 2, 3, 6], do: true
+  defp fb_wrap_ran(pr, env) when pr in [4, 5], do: env["en"] == 1
+  defp fb_wrap_ran(_pr, _env), do: false
+
+  defp fb_pulse!(atoms, ran, true, %{"p" => p}) when ran in [true] do
+    assert p == 0
+    Enum.each(atoms, &fb_reach/1)
+  end
+
+  defp fb_pulse!(_atom, _ran, _changed, _instance), do: :ok
+
+  defp fb_x_chain({b, _wr, pr}),
+    do: {Enum.at(~w(xen xen bare none xnone xen xen), pr), Map.get(@fb_ons_text, b)}
+
+  defp fb_inner_chain({b, wr, pr}),
+    do: {Enum.at(~w(none h h h en en g), pr), Enum.at(@fb_wrap, wr), Map.get(@fb_ons_text, b)}
+
+  defp fb_reach(atom), do: reached(:fb_reach, atom)
+
+  defp fb_reach(atom, true), do: fb_reach(atom)
+  defp fb_reach(_atom, false), do: :ok
 end

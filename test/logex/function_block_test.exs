@@ -6,8 +6,10 @@ defmodule Logex.FunctionBlockTest do
   `Logex.compile/2`'s `types:`; `cal` runs one, rung power its EN, nothing copied on a
   false EN (decision 12). Every diagnostic list here is asserted whole, from source. The
   Done-when is `end_to_end_test.exs`'s, through a configuration and `Logex.Runtime.get/2`.
-  An online edit of a program that holds blocks is here too: an instance moves whole, and
-  any change to its block is refused.
+  An online edit of a program that holds blocks is here too (decisions 31 and 32): state
+  moves member by member, by path, and the one-shots and timers inside an instance meet
+  the rules of `Logex.Edit` by path (§4.9), a one-shot staying blocked until a scan runs
+  it.
   """
   use ExUnit.Case, async: true
 
@@ -1035,8 +1037,14 @@ defmodule Logex.FunctionBlockTest do
 
       {outputs, state} = step(hand, Runtime.instance(hand), %{"a1" => 1, "en3" => 1}, 0)
       assert outputs["k1"] == 1
-      assert {:ok, _edit, _forecast} = Edit.accept(hand, hand, state)
-      assert {:error, [_, _, _]} = Edit.accept(hand, motor, state)
+
+      # Its body is no part of the block's type for the edit (decision 31), so an edit to the
+      # program the compiler gives, and back, takes every step.
+      for candidate <- [hand, motor] do
+        assert {:ok, edit, _forecast} = Edit.accept(hand, candidate, state)
+        {edit, tested, _report} = Edit.test(edit, state)
+        assert {_edit, %Instance{}, _report} = Edit.untest(edit, tested)
+      end
     end
 
     test "an instance a plain swap left as no map runs from an empty one: nothing escapes" do
@@ -1356,54 +1364,488 @@ defmodule Logex.FunctionBlockTest do
     end
   end
 
-  describe "an online edit of a program that holds blocks" do
-    defp accepted(running, candidate, state),
-      do: Edit.accept(running, candidate, state)
+  describe "an online edit of a program that holds blocks (decisions 31 and 32)" do
+    defp pulse(extra \\ "", decl \\ ""),
+      do:
+        block!("""
+        function_block pulse
+        var_input go bool
+        var_output q bool
+        var edge bool
+        var t1 ton
+        #{decl}
+        xic go ons edge ote q
+        xic go ton t1 100
+        #{extra}
+        """)
+
+    defp runs(pulse, rungs \\ "xic en cal p a y"),
+      do: program!(String.replace(@runs_pulse, "xic en cal p a y", rungs), [pulse])
+
+    defp running(program, steps), do: drive(program, Runtime.instance(program), steps)
+
+    defp accept!(running, candidate, state) do
+      {:ok, edit, _forecast} = Edit.accept(running, candidate, state)
+      edit
+    end
 
     test "an instance of a block both programs hold unchanged moves whole" do
-      pulse = block!(@pulse)
-      v1 = program!(@runs_pulse, [pulse])
-      v2 = program!(String.replace(@runs_pulse, "xic en cal p a y", "xio en cal p a y"), [pulse])
-      {_, state} = drive(v1, Runtime.instance(v1), [{0, %{"a" => 1, "en" => 1}}, {30, %{}}])
-      assert {:ok, edit, []} = accepted(v1, v2, state)
-      {edit, tested, []} = Edit.test(edit, state)
+      pulse = pulse()
+      v1 = runs(pulse)
+
+      v2 =
+        program!(String.replace(@runs_pulse, "var p pulse", "var p pulse\nvar k bool"), [pulse])
+
+      {_, state} = running(v1, [{0, %{"a" => 1, "en" => 1}}, {30, %{}}])
+      assert {:ok, edit, [{:added, "k", 0}]} = Edit.accept(v1, v2, state)
+      {edit, tested, [{:added, "k", 0}]} = Edit.test(edit, state)
       assert tested.env["p"] == state.env["p"]
       assert {^v2, _state, []} = Edit.assemble(edit, tested)
     end
 
-    test "any change to a block an instance holds is refused, and a block renamed is a " <>
-           "type change" do
-      v1 = program!(@runs_pulse, [block!(@pulse)])
-      changed = block!(String.replace(@pulse, "xic go ons edge ote q", "xio go ons edge ote q"))
-      v2 = program!(@runs_pulse, [changed])
-      state = Runtime.instance(v1)
+    test "the block's body is not its type: an edit may change it" do
+      v1 = runs(pulse())
+      v2 = runs(pulse("xic q otl edge"))
+      {_, state} = running(v1, [{0, %{"a" => 1, "en" => 1}}])
+      assert {:ok, _edit, []} = Edit.accept(v1, v2, state)
+    end
 
-      assert {:error, [diagnostic]} = accepted(v1, v2, state)
+    test "a member whose kind changes is refused, by its path; a block renamed is a type change" do
+      v1 = runs(pulse())
+      v2 = runs(pulse("xic go move 1 n", "var n dint"))
+
+      changed =
+        runs(
+          block!("""
+          function_block pulse
+          var_input go bool
+          var_output q bool
+          var edge dint
+          var e bool
+          var t1 ton
+
+          xic go ons e ote q
+          xic go ton t1 100
+          xic go move 1 edge
+          """)
+        )
+
+      {_, state} = running(v1, [{0, %{}}])
+      assert {:ok, _, _} = Edit.accept(v1, v2, state)
+
+      assert {:error, [diagnostic]} = Edit.accept(v1, changed, state)
 
       assert Diagnostic.format(diagnostic) ==
-               "line 4: `p` is an instance of `pulse`, which the candidate changes: a function " <>
-                 "block changes only with a restart"
+               "line 4: `p.edge` is a bool in the running program and a dint in the candidate: " <>
+                 "a member's type changes only with a restart"
+
+      # A member holding an instance of one block in the running program and of another in
+      # the candidate: a block's name takes no article.
+      inner = block!("function_block inner\nvar_input go bool\nvar_output q bool\nxic go ote q")
+      other = block!("function_block other\nvar_input go bool\nvar_output q bool\nxic go ote q")
+
+      mid = fn type ->
+        block!(
+          "function_block mid\nvar_input go bool\nvar_output q bool\nvar k #{type}\n" <>
+            "cal k go q",
+          [type |> then(&%{"inner" => inner, "other" => other}[&1])]
+        )
+      end
+
+      holds = fn type ->
+        program!("var_input go bool\nvar_output q bool\nvar w mid\ncal w go q", [mid.(type)])
+      end
+
+      {_, held} = running(holds.("inner"), [{0, %{}}])
+      assert {:error, [diagnostic]} = Edit.accept(holds.("inner"), holds.("other"), held)
+
+      assert Diagnostic.format(diagnostic) ==
+               "line 3: `w.k` is an instance of `inner` in the running program and an " <>
+                 "instance of `other` in the candidate: a member's type changes only with a restart"
 
       latch = block!(String.replace(@pulse, "function_block pulse", "function_block latch"))
-      v3 = program!(String.replace(@runs_pulse, "var p pulse", "var p latch"), [latch])
-
-      assert {:error, [diagnostic]} = accepted(v1, v3, state)
+      renamed = program!(String.replace(@runs_pulse, "var p pulse", "var p latch"), [latch])
+      assert {:error, [diagnostic]} = Edit.accept(v1, renamed, state)
 
       assert Diagnostic.format(diagnostic) ==
                "line 4: `p` is an instance of `pulse` in the running program and an instance " <>
                  "of `latch` in the candidate: a tag's type changes only with a restart"
 
-      v4 =
+      timer =
         program!(
           "var_input a bool\nvar_input en bool\nvar_output y bool\nvar p ton\nxic en ton p 5",
           []
         )
 
-      assert {:error, [diagnostic]} = accepted(v1, v4, state)
+      assert {:error, [diagnostic]} = Edit.accept(v1, timer, state)
 
       assert Diagnostic.format(diagnostic) ==
                "line 4: `p` is an instance of `pulse` in the running program and a ton in the " <>
                  "candidate: a tag's type changes only with a restart"
+    end
+
+    test "a member the block adds starts at its initial value in the instance, and one it " <>
+           "drops is kept until assemble prunes it, each by its path" do
+      v1 = runs(pulse("", "var old dint 4"))
+      v2 = runs(pulse("", "var count dint 7"))
+      {_, state} = running(v1, [{0, %{"a" => 1, "en" => 1}}])
+
+      {edit, state, report} = Edit.test(accept!(v1, v2, state), state)
+      assert report == [{:added, "p.count", 7}]
+      assert %{"old" => 4, "count" => 7} = state.env["p"]
+
+      # The test pruned nothing, so the original finds its member again.
+      {edit, state, report} = Edit.untest(edit, state)
+      assert report == []
+      assert state.env["p"]["old"] == 4
+      {edit, state, _} = Edit.test(edit, state)
+      {_, state, report} = Edit.assemble(edit, state)
+      assert report == [{:pruned, "p.old", 4}]
+      refute Map.has_key?(state.env["p"], "old")
+    end
+
+    test "a kept member whose initial value changed keeps its value, and is reported" do
+      v1 = runs(pulse("", "var n dint 5"))
+      v2 = runs(pulse("", "var n dint 6"))
+      {_, state} = running(v1, [{0, %{}}])
+
+      assert {_, state, [{:initial_changed, "p.n", {5, 6}}]} =
+               Edit.test(accept!(v1, v2, state), state)
+
+      assert state.env["p"]["n"] == 5
+    end
+
+    test "an ons in a block's rung the edit changes is blocked by its path, in every " <>
+           "instance, and a top-level bit of the same name is not" do
+      body = fn condition ->
+        block!(
+          "function_block pulse\nvar_input go bool\nvar_output q bool\nvar edge bool\n" <>
+            "#{condition} ons edge ote q"
+        )
+      end
+
+      program = fn pulse ->
+        program!(
+          "var_input a bool\nvar_output y1 bool\nvar_output y2 bool\nvar_output z bool\n" <>
+            "var edge bool\nvar p1 pulse\nvar p2 pulse\n" <>
+            "cal p1 a y1\ncal p2 a y2\nxic a ons edge ote z",
+          [pulse]
+        )
+      end
+
+      v1 = program.(body.("xic go"))
+      v2 = program.(body.("xic go xic go"))
+      {_, state} = running(v1, [{0, %{"a" => 0}}])
+
+      {_edit, state, report} = Edit.test(accept!(v1, v2, state), state)
+      assert report == [{:ons_blocked, "p1.edge", 0}, {:ons_blocked, "p2.edge", 0}]
+      assert state.ons_blocked == ["p1.edge", "p2.edge"]
+
+      # The rising edge on the switch scan passes in neither block, and does at the top.
+      {outputs, state} = step(v2, state, %{"a" => 1})
+      assert outputs == %{"y1" => 0, "y2" => 0, "z" => 1}
+      assert state.ons_blocked == []
+      assert get_in(state.env, ["p1", "edge"]) == 1
+    end
+
+    test "a nested block an earlier edit left pending survives a second edit before any " <>
+           "scan (F2)" do
+      v1 = runs(pulse())
+      v2 = runs(block!(String.replace(@pulse, "xic go ons edge", "xic go xic go ons edge")))
+
+      v3 =
+        program!(
+          String.replace(@runs_pulse, "var_output y bool", "var_output y bool\nvar k bool"),
+          [v2.tags["p"].type]
+        )
+
+      {_, state} = running(v1, [{0, %{"a" => 0, "en" => 1}}])
+      {edit, state, [{:ons_blocked, "p.edge", 0}]} = Edit.test(accept!(v1, v2, state), state)
+      {^v2, state, _} = Edit.assemble(edit, state)
+
+      {_edit, state, report} = Edit.test(accept!(v2, v3, state), state)
+      assert report == [{:added, "k", 0}, {:ons_blocked, "p.edge", 0}]
+      {outputs, _state} = step(v3, state, %{"a" => 1})
+      assert outputs == %{"y" => 0}
+    end
+
+    # A block on a one-shot inside an instance whose `cal` is false on the switch scan is
+    # not used up unseen: it holds until a scan runs the instance's body, or the `ons` would
+    # compare its changed rung against the bit the old rung wrote, and pulse (decision 21).
+    defp frozen_edit do
+      blk = fn condition ->
+        block!(
+          "function_block blk\nvar_input a bool\nvar_output q bool\nvar e bool\n" <>
+            "#{condition} a ons e ote q"
+        )
+      end
+
+      source =
+        "var_input a bool\nvar_input en bool\nvar_output q bool\nvar x blk\nxic en cal x a q"
+
+      {program!(source, [blk.("xio")]), program!(source, [blk.("xic")]), source}
+    end
+
+    test "a one-shot blocked inside an instance whose cal is false stays blocked until a " <>
+           "scan runs the instance's body" do
+      {v1, v2, _source} = frozen_edit()
+      {_, state} = running(v1, [{0, %{"a" => 1, "en" => 1}}, {10, %{}}, {10, %{"en" => 0}}])
+
+      {_edit, state, report} = Edit.test(accept!(v1, v2, state), state)
+      assert report == [{:ons_blocked, "x.e", 0}]
+
+      {outputs, state} = step(v2, state, %{}, 10)
+      assert outputs == %{"q" => 0}
+      assert state.ons_blocked == ["x.e"]
+
+      {outputs, state} = step(v2, state, %{"en" => 1}, 10)
+      assert outputs == %{"q" => 0}
+      assert state.ons_blocked == []
+
+      # The candidate alone, from the same inputs, never sees an edge on `a` either.
+      {outputs, _state} =
+        running(v2, [
+          {0, %{"a" => 1, "en" => 1}},
+          {10, %{}},
+          {10, %{"en" => 0}},
+          {10, %{"en" => 1}}
+        ])
+
+      assert outputs == %{"q" => 0}
+    end
+
+    test "a one-shot still blocked after a scan stays blocked through the next edit's switch" do
+      {v1, v2, source} = frozen_edit()
+
+      v3 =
+        program!(String.replace(source, "var x blk", "var x blk\nvar k bool"), [v2.tags["x"].type])
+
+      {_, state} = running(v1, [{0, %{"a" => 1, "en" => 1}}, {10, %{}}, {10, %{"en" => 0}}])
+      {edit, state, _report} = Edit.test(accept!(v1, v2, state), state)
+      {^v2, state, _report} = Edit.assemble(edit, state)
+      {_outputs, state} = step(v2, state, %{}, 10)
+      assert state.ons_blocked == ["x.e"]
+
+      # v3 runs `x` from the rung v2 does, so only what is still pending blocks it.
+      {_edit, state, report} = Edit.test(accept!(v2, v3, state), state)
+      assert report == [{:added, "k", 0}, {:ons_blocked, "x.e", 0}]
+      {outputs, _state} = step(v3, state, %{"en" => 1}, 10)
+      assert outputs == %{"q" => 0}
+    end
+
+    # A block's inputs reordered: `cal x i1 i2 q` reads the same, but now fills `a` from
+    # `i2`, so the `ons` that reads `a` is under a changed rung, as an edit of the operands
+    # would make it.
+    test "an edit that reorders a block's inputs blocks the one-shots it runs, as an edit " <>
+           "of the cal's operands does" do
+      blk = fn first, second ->
+        block!(
+          "function_block blk\nvar_input #{first} bool\nvar_input #{second} bool\n" <>
+            "var_output q bool\nvar e bool\nxic a ons e ote q"
+        )
+      end
+
+      source = "var_input i1 bool\nvar_input i2 bool\nvar_output q bool\nvar x blk\ncal x i1 i2 q"
+      v1 = program!(source, [blk.("a", "b")])
+      v2 = program!(source, [blk.("b", "a")])
+
+      swapped =
+        program!(String.replace(source, "cal x i1 i2 q", "cal x i2 i1 q"), [blk.("a", "b")])
+
+      {_, state} = running(v1, [{0, %{"i1" => 0, "i2" => 1}}, {10, %{}}])
+
+      for candidate <- [v2, swapped] do
+        {_edit, later, report} = Edit.test(accept!(v1, candidate, state), state)
+        assert report == [{:ons_blocked, "x.e", 0}]
+        assert {%{"q" => 0}, _} = step(candidate, later, %{}, 10)
+      end
+    end
+
+    test "an ons in a block run from a rung the edit changes is blocked; one under " <>
+           "unchanged rungs keeps its real edge" do
+      pulse = pulse()
+      v1 = runs(pulse)
+      v2 = runs(pulse, "xic en xic en cal p a y")
+      v3 = runs(pulse, "xic en cal p a y\nxic a ote y")
+      {_, state} = running(v1, [{0, %{"a" => 0, "en" => 1}}])
+
+      {_edit, _state, report} = Edit.test(accept!(v1, v2, state), state)
+      assert report == [{:ons_blocked, "p.edge", 0}]
+
+      {_edit, state, report} = Edit.test(accept!(v1, v3, state), state)
+      assert report == []
+      {outputs, _state} = step(v3, state, %{"a" => 1})
+      assert outputs == %{"y" => 1}
+    end
+
+    test "an instance the edit adds starts whole, its one-shots blocked for the switch scan" do
+      pulse = pulse()
+      v1 = runs(pulse)
+
+      v2 =
+        program!(
+          """
+          var_input a bool
+          var_input en bool
+          var_output y bool
+          var_output y2 bool
+          var p pulse
+          var p2 pulse
+
+          xic en cal p a y
+          cal p2 a y2
+          """,
+          [pulse]
+        )
+
+      {_, state} = running(v1, [{0, %{"a" => 1, "en" => 1}}])
+      {_edit, state, report} = Edit.test(accept!(v1, v2, state), state)
+
+      assert [{:added, "p2", added}, {:added, "y2", 0}, {:ons_blocked, "p2.edge", 0}] = report
+      assert added == FbType.initial(pulse)
+      {outputs, _state} = step(v2, state, %{})
+      assert outputs["y2"] == 0
+    end
+
+    test "a timer in a frozen block is not resumed by a switch, and catches up (decision 8); " <>
+           "one whose cal the candidate restores resumes from the switch (decision 23)" do
+      pulse = pulse()
+      v1 = runs(pulse)
+      v2 = runs(pulse, "xic en cal p a y\nxic a ote y")
+
+      {_, state} =
+        running(v1, [{0, %{"a" => 1, "en" => 1}}, {30, %{}}, {10, %{"en" => 0}}, {100, %{}}])
+
+      assert %{"acc" => 30, "en" => 1, "last" => 30} = state.env["p"]["t1"]
+
+      # Both programs run the timer, frozen by its EN: no resume.
+      {_edit, state, report} = Edit.test(accept!(v1, v2, state), state)
+      assert report == []
+      {_, state} = step(v2, state, %{"en" => 1})
+      assert %{"acc" => 100, "dn" => 1} = state.env["p"]["t1"]
+
+      # The candidate drops the cal, so no program runs the timer; a later one restores it.
+      dropped = runs(pulse, "xic a ote y")
+      {_, state} = running(v1, [{0, %{"a" => 1, "en" => 1}}, {30, %{}}])
+      {edit, state, _} = Edit.test(accept!(v1, dropped, state), state)
+      {_, state, _} = Edit.assemble(edit, state)
+      {_, state} = drive(dropped, state, [{100, %{}}])
+      # The cal's rung is added again, so the one-shot under it is blocked too.
+      {_edit, state, report} = Edit.test(accept!(dropped, v1, state), state)
+      assert report == [{:ons_blocked, "p.edge", 1}, {:resumed, "p.t1", 100}]
+      {_, state} = step(v1, state, %{}, 10)
+      assert %{"acc" => 40} = state.env["p"]["t1"]
+    end
+
+    test "a timer inside a block meets the preset rules by its path" do
+      v1 = runs(pulse())
+      v2 = runs(block!(String.replace(@pulse, "ton t1 100", "ton t1 250")))
+      {_, state} = running(v1, [{0, %{"a" => 1, "en" => 1}}, {120, %{}}])
+      assert %{"pre" => 100, "dn" => 1} = state.env["p"]["t1"]
+
+      {edit, state, report} = Edit.test(accept!(v1, v2, state), state)
+      assert report == [{:dn_drops, "p.t1", {100, 250}}, {:preset, "p.t1", {100, 250}}]
+      assert state.env["p"]["t1"]["pre"] == 250
+      {_edit, state, report} = Edit.untest(edit, state)
+      assert report == [{:preset, "p.t1", {250, 100}}]
+      assert state.env["p"]["t1"]["pre"] == 100
+    end
+
+    test "at the first test a member whose value does not fit its type starts again " <>
+           "(decision 26), by its path" do
+      seal = block!(@seal)
+
+      holder = fn decl, rungs ->
+        block!(
+          "function_block pulse\nvar_input go bool\nvar_output q bool\n#{decl}\n" <>
+            "xic go ote q\n#{rungs}",
+          [seal]
+        )
+      end
+
+      with_dints =
+        runs(
+          holder.(
+            "var n dint\nvar k dint\nvar s dint",
+            "xic go move 7 n\nxic go move 3 k\nxic go move 2 s"
+          )
+        )
+
+      with_kinds =
+        runs(
+          holder.(
+            "var n bool\nvar k ton\nvar s seal\nvar r bool",
+            "xic go otl n\nxic go ton k 40\ncal s go go r"
+          )
+        )
+
+      {_, state} = running(with_dints, [{0, %{"a" => 1, "en" => 1}}])
+      assert %{"n" => 7, "k" => 3, "s" => 2} = state.env["p"]
+
+      # A plain swap keeps the 7, the 3 and the 2 under a bool, a timer and an instance of
+      # a block its program declares, while no cal runs the body.
+      {_, state} = step(with_kinds, state, %{"en" => 0})
+      assert %{"n" => 7, "k" => 3, "s" => 2} = state.env["p"]
+
+      {_edit, state, report} = Edit.test(accept!(with_kinds, with_kinds, state), state)
+      timer = FbType.initial(FbType.ton(), %{"pre" => 40})
+      held = FbType.initial(seal)
+
+      assert report == [
+               {:added, "p.k", timer},
+               {:added, "p.n", 0},
+               {:added, "p.r", 0},
+               {:added, "p.s", held}
+             ]
+
+      assert %{"n" => 0, "k" => ^timer, "s" => ^held} = state.env["p"]
+    end
+
+    test "at the first test a member the candidate's version adds starts at its initial " <>
+           "value over what a plain swap left, by its path" do
+      with_c = runs(pulse("xic go move 9 c", "var c dint"))
+      without = runs(pulse())
+      added = runs(pulse("xic go move 3 c", "var c dint 7"))
+      {_, state} = running(with_c, [{0, %{"a" => 1, "en" => 1}}])
+
+      # A plain swap to a version that declares no `c` keeps the 9 under it.
+      {_, state} = step(without, state, %{})
+      assert state.env["p"]["c"] == 9
+
+      {edit, state, report} = Edit.test(accept!(without, added, state), state)
+      assert report == [{:added, "p.c", 7}]
+      assert state.env["p"]["c"] == 7
+
+      # A later test keeps it, as logic left it.
+      {_, state} = step(added, state, %{})
+      {edit, state, []} = Edit.untest(edit, state)
+      assert {_edit, %Instance{env: %{"p" => %{"c" => 3}}}, []} = Edit.test(edit, state)
+    end
+
+    test "an ons inside a block whose body also writes its storage bit another way is " <>
+           "blocked, though its chain is unchanged (fix F7, by path)" do
+      pulse = block!(@pulse <> "xio go otu edge\n")
+      v1 = runs(pulse)
+
+      v2 =
+        program!(String.replace(@runs_pulse, "var p pulse", "var p pulse\nvar k bool"), [pulse])
+
+      {_, state} = running(v1, [{0, %{"a" => 1, "en" => 1}}, {10, %{}}])
+      assert state.env["p"]["edge"] == 1
+
+      {_edit, _state, report} = Edit.test(accept!(v1, v2, state), state)
+      assert report == [{:added, "k", 0}, {:ons_blocked, "p.edge", 1}]
+
+      # Written by its ons alone, the same bit is not blocked.
+      v1 = runs(block!(@pulse))
+
+      v2 =
+        program!(String.replace(@runs_pulse, "var p pulse", "var p pulse\nvar k bool"), [
+          block!(@pulse)
+        ])
+
+      {_, state} = running(v1, [{0, %{"a" => 1, "en" => 1}}, {10, %{}}])
+      assert {_edit, _state, [{:added, "k", 0}]} = Edit.test(accept!(v1, v2, state), state)
     end
 
     test "an output only a cal drove is held where the candidate drives it no more" do
@@ -1415,8 +1857,276 @@ defmodule Logex.FunctionBlockTest do
           seal
         ])
 
-      {_, state} = step(v1, Runtime.instance(v1), %{"a" => 1}, 0)
-      assert {:ok, _edit, [{:added, "k", 0}, {:held, "q", 1}]} = accepted(v1, v2, state)
+      {_, state} = running(v1, [{0, %{"a" => 1}}])
+      assert {:ok, _edit, [{:added, "k", 0}, {:held, "q", 1}]} = Edit.accept(v1, v2, state)
+    end
+  end
+
+  describe "an online edit, at depth and across a round trip" do
+    # One scan at an absolute time, `now`, so a test can freeze a block and come back to it.
+    defp at(program, state, now, inputs \\ %{}),
+      do: Runtime.call(program, state, inputs, %Scan{now: now, first: state.first})
+
+    @blk_timed """
+    function_block blk
+    var_input go bool
+    var_output p bool
+    var t1 ton
+    xic go ton t1 50
+    xic t1.dn ote p
+    """
+
+    @blk_plain """
+    function_block blk
+    var_input go bool
+    var_output p bool
+    xic go ote p
+    """
+
+    @runs_blk "var_input en bool\nvar_input g bool\nvar_output p bool\nvar x blk\nxic en cal x g p\n"
+
+    @pulse_go """
+    function_block pulse
+    var_input go bool
+    var_output fired bool
+    var edge bool
+    xic go ons edge ote fired
+    """
+
+    defp wrap(pulse),
+      do:
+        block!(
+          "function_block wrap\nvar_input go bool\nvar_output q bool\nvar p pulse\ncal p go q",
+          [pulse]
+        )
+
+    test "a test and an untest with no scan between leave a timer a false EN froze as it " <>
+           "was: the program that last scanned ran it, so no resume is due" do
+      timed = program!(@runs_blk, [block!(@blk_timed)])
+      plain = program!(@runs_blk, [block!(@blk_plain)])
+      {_, state} = at(timed, Runtime.instance(timed), 0, %{"en" => 1, "g" => 1})
+      {_, state} = at(timed, state, 10)
+      {_, state} = at(timed, state, 20, %{"en" => 0})
+      {_, state} = at(timed, state, 30)
+      assert %{"acc" => 10, "en" => 1, "last" => 10} = state.env["x"]["t1"]
+
+      {edit, tested, report} = Edit.test(accept!(timed, plain, state), state)
+      assert report == []
+      {_edit, untested, report} = Edit.untest(edit, tested)
+      assert report == []
+      assert untested.env["x"]["t1"] == state.env["x"]["t1"]
+
+      # Its EN back, it catches up as if no edit had been made (decision 8).
+      {_, untested} = at(timed, untested, 40, %{"en" => 1})
+      {_, unedited} = at(timed, state, 40, %{"en" => 1})
+      assert %{"acc" => 40} = untested.env["x"]["t1"]
+      assert untested.env["x"]["t1"] == unedited.env["x"]["t1"]
+    end
+
+    test "an untest gives back a resume its test made of a timer only the candidate's " <>
+           "version of a block declares (fix F11, by path)" do
+      timed = program!(@runs_blk, [block!(@blk_timed)])
+      plain = program!(@runs_blk, [block!(@blk_plain)])
+      {_, state} = at(plain, Runtime.instance(plain), 0, %{"en" => 1, "g" => 1})
+      edit = accept!(plain, timed, state)
+      {edit, state, _} = Edit.test(edit, state)
+      {_, state} = at(timed, state, 10)
+      {edit, state, []} = Edit.untest(edit, state)
+      {_, state} = at(plain, state, 40)
+      assert %{"en" => 1, "last" => 10} = state.env["x"]["t1"]
+
+      {edit, state, report} = Edit.test(edit, state)
+      assert report == [{:resumed, "x.t1", 30}]
+      {_edit, state, report} = Edit.untest(edit, state)
+      assert report == [{:resume_undone, "x.t1", 30}]
+      assert state.env["x"]["t1"]["last"] == 10
+    end
+
+    test "an untest gives back a resume its test made inside an instance only the candidate " <>
+           "declares (fix F11, by path)" do
+      timed = block!(@blk_timed)
+      head = "var_input en bool\nvar_input g bool\nvar_output p bool\n"
+      plain = program!(head <> "xic g ote p", [timed])
+      added = program!(head <> "var y blk\ncal y g p", [timed])
+      {_, state} = at(plain, Runtime.instance(plain), 0, %{"g" => 1})
+      edit = accept!(plain, added, state)
+      {edit, state, _} = Edit.test(edit, state)
+      {_, state} = at(added, state, 10)
+      {edit, state, []} = Edit.untest(edit, state)
+      {_, state} = at(plain, state, 40)
+      assert %{"en" => 1, "last" => 10} = state.env["y"]["t1"]
+
+      {edit, state, report} = Edit.test(edit, state)
+      assert report == [{:resumed, "y.t1", 30}]
+      {_edit, state, report} = Edit.untest(edit, state)
+      assert report == [{:resume_undone, "y.t1", 30}]
+      assert state.env["y"]["t1"]["last"] == 10
+    end
+
+    test "a blocked bit inside an instance is reported with its value, by its path" do
+      pulse = block!(@pulse_go)
+      src = "var_input go bool\nvar_input en bool\nvar_output fired bool\nvar p pulse\n"
+      a = program!(src <> "cal p go fired", [pulse])
+      b = program!(src <> "xic en cal p go fired", [pulse])
+      {_, state} = at(a, Runtime.instance(a), 10, %{"go" => 1, "en" => 1})
+      assert state.env["p"]["edge"] == 1
+      {_edit, _state, report} = Edit.test(accept!(a, b, state), state)
+      assert report == [{:ons_blocked, "p.edge", 1}]
+    end
+
+    test "an instance of a block that holds a block, added with its cal, blocks the one-shot " <>
+           "two levels down for the switch scan (decision 21)" do
+      wrap = wrap(block!(@pulse_go))
+      a = program!("var_input go bool\nvar_output q bool\nvar w1 wrap\nxic go ote q", [wrap])
+      b = program!("var_input go bool\nvar_output q bool\nvar w1 wrap\ncal w1 go q", [wrap])
+      {_, state} = at(a, Runtime.instance(a), 10, %{"go" => 1})
+      {_, state} = at(a, state, 20)
+      {edit, state, report} = Edit.test(accept!(a, b, state), state)
+      assert report == [{:ons_blocked, "w1.p.edge", 0}]
+      {outputs, _state} = at(Edit.running(edit), state, 30)
+      assert outputs == %{"q" => 0}
+    end
+
+    test "at the first test an instance a plain swap left as no map starts again whole " <>
+           "(decision 26)" do
+      seal = block!(@seal)
+
+      a =
+        program!(
+          "var_input go bool\nvar_output q bool\nvar z bool\nxic go ote z\nxic z ote q",
+          []
+        )
+
+      b = program!("var_input go bool\nvar_output q bool\nvar z seal\nxic go ote q", [seal])
+
+      c =
+        program!(
+          "var_input go bool\nvar_input st bool\nvar_output q bool\nvar z seal\ncal z go st q",
+          [seal]
+        )
+
+      {_, state} = at(a, Runtime.instance(a), 10, %{"go" => 1})
+      {_, state} = at(b, state, 20)
+      assert state.env["z"] == 1
+      {_edit, state, report} = Edit.test(accept!(b, c, state), state)
+      assert report == [{:added, "z", FbType.initial(seal)}, {:input, "st", 0}]
+      assert state.env["z"] == FbType.initial(seal)
+    end
+
+    test "assemble prunes a member at any depth, inside an instance an instance holds" do
+      old_pulse =
+        block!(String.replace(@pulse_go, "var edge bool", "var edge bool\nvar old dint 4"))
+
+      src = "var_input go bool\nvar_output q bool\nvar w1 wrap\ncal w1 go q"
+      a = program!(src, [wrap(old_pulse)])
+      b = program!(src, [wrap(block!(@pulse_go))])
+      {_, state} = at(a, Runtime.instance(a), 10, %{"go" => 1})
+      {edit, state, _} = Edit.test(accept!(a, b, state), state)
+      assert state.env["w1"]["p"]["old"] == 4
+      {_program, state, report} = Edit.assemble(edit, state)
+      assert report == [{:pruned, "w1.p.old", 4}]
+      refute is_map_key(state.env["w1"]["p"], "old")
+    end
+
+    # A state built by hand is outside the contract (Logex.Instance): a switch and a prune
+    # of one that holds no map where an instance goes, at the top or inside one, and one
+    # whose block list names a bit under such a value, raise nothing.
+    test "a state built by hand with no map where an instance goes takes every step: " <>
+           "nothing escapes" do
+      old_pulse =
+        block!(String.replace(@pulse_go, "var edge bool", "var edge bool\nvar old dint 4"))
+
+      a =
+        program!("var_input go bool\nvar_output q bool\nvar w1 wrap\ncal w1 go q", [
+          wrap(old_pulse)
+        ])
+
+      b =
+        program!(
+          "var_input go bool\nvar_output q bool\nvar k bool\nvar w1 wrap\ncal w1 go q",
+          [wrap(block!(@pulse_go))]
+        )
+
+      {_, state} = at(a, Runtime.instance(a), 10, %{"go" => 1})
+      {edit, tested, _report} = Edit.test(accept!(a, b, state), state)
+
+      for hand <- [
+            %{tested | env: put_in(tested.env, ["w1", "p"], 5)},
+            %{tested | env: Map.put(tested.env, "w1", 5)},
+            %{
+              tested
+              | env: put_in(tested.env, ["w1", "p"], 5),
+                switched: false,
+                ons_blocked: ["w1.p.edge"]
+            }
+          ] do
+        {edit, untested, _report} = Edit.untest(edit, hand)
+        {edit, retested, _report} = Edit.test(edit, untested)
+        assert {^b, %Instance{}, _report} = Edit.assemble(edit, retested)
+      end
+    end
+
+    test "a timer whose cal a block's body drops and a later edit restores resumes from the " <>
+           "switch, by its path (decision 23)" do
+      delay =
+        block!(
+          "function_block delay\nvar_input go bool\nvar_output done bool\nvar t1 ton\n" <>
+            "xic go ton t1 50\nxic t1.dn ote done"
+        )
+
+      pair = fn rungs ->
+        block!(
+          "function_block pair\nvar_input go bool\nvar_output q bool\nvar_output r bool\n" <>
+            "var db delay\n#{rungs}",
+          [delay]
+        )
+      end
+
+      src = "var_input go bool\nvar_output q bool\nvar_output r bool\nvar w pair\ncal w go q r"
+      runs = program!(src, [pair.("xic go ote q\ncal db go r")])
+      drops = program!(src, [pair.("xic go ote q\nxic go ote r")])
+      {_, state} = at(runs, Runtime.instance(runs), 10, %{"go" => 1})
+      {_, state} = at(runs, state, 20)
+      {edit, state, _report} = Edit.test(accept!(runs, drops, state), state)
+      {^drops, state, _report} = Edit.assemble(edit, state)
+      {_, state} = at(drops, state, 50)
+      assert %{"acc" => 10, "en" => 1, "last" => 20} = state.env["w"]["db"]["t1"]
+
+      # The body that drops the cal ran the timer no more: it resumes, and is not caught up.
+      {edit, state, report} = Edit.test(accept!(drops, runs, state), state)
+      assert report == [{:resumed, "w.db.t1", 30}]
+      {_, state} = at(Edit.running(edit), state, 60)
+      assert state.env["w"]["db"]["t1"]["acc"] == 20
+    end
+
+    test "a timer in an instance no cal runs keeps its .pre frozen, beside one of the same " <>
+           "block that a cal runs, in a program or in a block's body (decision 23)" do
+      delay = fn preset ->
+        block!(
+          "function_block delay\nvar_input go bool\nvar_output done bool\nvar t1 ton\n" <>
+            "xic go ton t1 #{preset}\nxic t1.dn ote done"
+        )
+      end
+
+      pair = fn delay ->
+        block!(
+          "function_block pair\nvar_input go bool\nvar_output q bool\nvar da delay\n" <>
+            "var db delay\ncal da go q",
+          [delay]
+        )
+      end
+
+      src =
+        "var_input go bool\nvar_output q bool\nvar_output r bool\nvar da delay\nvar db delay\n" <>
+          "var w pair\ncal da go q\ncal w go r"
+
+      a = program!(src, [delay.(30), pair.(delay.(30))])
+      b = program!(src, [delay.(50), pair.(delay.(50))])
+      {_, state} = at(a, Runtime.instance(a), 10, %{"go" => 1})
+      {_edit, state, report} = Edit.test(accept!(a, b, state), state)
+      assert report == [{:preset, "da.t1", {30, 50}}, {:preset, "w.da.t1", {30, 50}}]
+      assert {state.env["da"]["t1"]["pre"], state.env["db"]["t1"]["pre"]} == {50, 30}
+      assert {state.env["w"]["da"]["t1"]["pre"], state.env["w"]["db"]["t1"]["pre"]} == {50, 30}
     end
   end
 
@@ -1693,73 +2403,120 @@ defmodule Logex.FunctionBlockTest do
       assert ratio < 2.5, "twice the depth took #{Float.round(ratio, 1)}x the words"
     end
 
-    # A one-shot at every level of a chain n deep, each listed: n paths of up to n parts,
-    # so the list itself grows as the square of the depth (decision 32). The scan that runs
-    # them stays linear in the length of the list, its names' bytes: 4x the depth, 16x the
-    # bytes, about 16x the reductions.
-    test "the scan of a blocked chain stays linear in the length of the block list" do
-      at = fn n ->
-        deepest =
-          "function_block c#{n}\nvar_input go bool\nvar_output q bool\nvar e bool\n" <>
-            "xic go ons e ote q"
+    # A one-shot at every level of a chain n deep, each blocked by an edit of the program's
+    # `cal` rung, which is on every one's chain: n paths of up to n parts, so the block list
+    # grows as the square of the depth, and so do the edit's reports and the keys its plan
+    # compares (decision 32). The switch, accept and test, and the scan right after it stay
+    # linear in the length of the list, its names' bytes: 4x the depth, 16x the bytes, about
+    # 16x the reductions each. In the depth they are quadratic, as the list is; at the top
+    # level, where a bit's name is one name, linear in the one-shots (edit_test.exs).
+    defp blocked_chain(n) do
+      deepest =
+        "function_block c#{n}\nvar_input go bool\nvar_output q bool\nvar e bool\n" <>
+          "xic go ons e ote q"
 
-        top =
-          Enum.reduce((n - 1)..1//-1, block!(deepest), fn k, inner ->
-            block!(
-              "function_block c#{k}\nvar_input go bool\nvar_output q bool\nvar e bool\n" <>
-                "var inner c#{k + 1}\nxic go ons e ote q\ncal inner go q",
-              [inner]
-            )
-          end)
+      top =
+        Enum.reduce((n - 1)..1//-1, block!(deepest), fn k, inner ->
+          block!(
+            "function_block c#{k}\nvar_input go bool\nvar_output q bool\nvar e bool\n" <>
+              "var inner c#{k + 1}\nxic go ons e ote q\ncal inner go q",
+            [inner]
+          )
+        end)
 
-        v = program!("var_input a bool\nvar_output y bool\nvar p c1\ncal p a y", [top])
-        {_, state} = step(v, Runtime.instance(v), %{"a" => 0}, 0)
-        bits = for k <- 1..n, do: Enum.join(["p" | List.duplicate("inner", k - 1)] ++ ["e"], ".")
-        state = Runtime.put_inputs(v, %{state | ons_blocked: bits}, %{"a" => 1})
-        {{%{"y" => 0}, %Instance{ons_blocked: []}}, _} = {Runtime.scan(v, state, 10), nil}
-        bytes = bits |> Enum.map(&byte_size/1) |> Enum.sum()
-        {bytes, reductions(fn -> Runtime.scan(v, state, 10) end)}
+      head = "var_input a bool\nvar_input g bool\nvar_output y bool\nvar p c1\n"
+      v1 = program!(head <> "cal p a y", [top])
+      v2 = program!(head <> "xic g cal p a y", [top])
+      {_, state} = step(v1, Runtime.instance(v1), %{"a" => 0, "g" => 1}, 0)
+
+      switch = fn ->
+        {:ok, edit, _forecast} = Edit.accept(v1, v2, state)
+        Edit.test(edit, state)
       end
 
-      {small, s} = at.(50)
-      {large, l} = at.(200)
-      bytes = large / small
-      ratio = l / s
+      {_edit, switched, report} = switch.()
+      assert length(switched.ons_blocked) == n and length(report) == n
+      bytes = switched.ons_blocked |> Enum.map(&byte_size/1) |> Enum.sum()
+      switched = Runtime.put_inputs(v2, switched, %{"a" => 1})
+      {{%{"y" => 0}, %Instance{ons_blocked: []}}, _} = {Runtime.scan(v2, switched, 10), nil}
 
-      assert ratio < bytes * 1.3,
-             "#{Float.round(bytes, 1)}x the bytes took #{Float.round(ratio, 1)}x"
+      {bytes, reductions(switch), reductions(fn -> Runtime.scan(v2, switched, 10) end)}
+    end
+
+    test "a switch, and the scan after it, stay linear in the length of the block list" do
+      {small, switch_s, scan_s} = blocked_chain(50)
+      {large, switch_l, scan_l} = blocked_chain(200)
+      bytes = large / small
+
+      for {what, ratio} <- [switch: switch_l / switch_s, scan: scan_l / scan_s] do
+        assert ratio < bytes * 1.3,
+               "#{Float.round(bytes, 1)}x the bytes took #{Float.round(ratio, 1)}x for #{what}"
+      end
     end
   end
 
   describe "growth in the instances" do
-    # n instances of one block, each run by a rung of its own, the one-shot in every one
-    # listed: the scan looks each bit up in a tree built once.
-    defp blocked_scan(n) do
+    # n instances of one block, each run by a rung of its own, and an edit of the block's
+    # one-shot rung, which blocks the one-shot in every instance: the scan right after the
+    # switch looks each bit up in a tree built once.
+    defp pulses(n, condition, extra \\ "") do
       pulse =
         block!(
           "function_block pulse\nvar_input go bool\nvar_output q bool\nvar edge bool\n" <>
-            "xic go ons edge ote q"
+            "#{condition} ons edge ote q"
         )
 
-      v =
-        program!(
-          "var_input a bool\nvar_output y bool\n" <>
-            Enum.map_join(1..n, "\n", &"var p#{&1} pulse") <>
-            "\n" <> Enum.map_join(1..n, "\n", &"cal p#{&1} a y"),
-          [pulse]
-        )
+      program!(
+        "var_input a bool\nvar_output y bool\n#{extra}" <>
+          Enum.map_join(1..n, "\n", &"var p#{&1} pulse") <>
+          "\n" <> Enum.map_join(1..n, "\n", &"cal p#{&1} a y"),
+        [pulse]
+      )
+    end
 
-      {_, state} = step(v, Runtime.instance(v), %{"a" => 0}, 0)
-      bits = for k <- 1..n, do: "p#{k}.edge"
-      state = Runtime.put_inputs(v, %{state | ons_blocked: bits}, %{"a" => 1})
-      reductions(fn -> {%{"y" => 0}, _} = Runtime.scan(v, state, 10) end)
+    defp blocked_scan(n) do
+      v1 = pulses(n, "xic go")
+      v2 = pulses(n, "xic go xic go")
+      {_, state} = step(v1, Runtime.instance(v1), %{"a" => 0}, 0)
+      {_edit, state, _report} = Edit.test(accept!(v1, v2, state), state)
+      assert length(state.ons_blocked) == n
+      state = Runtime.put_inputs(v2, state, %{"a" => 1})
+      reductions(fn -> {%{"y" => 0}, _} = Runtime.scan(v2, state, 10) end)
     end
 
     # At 250 and 4,000 instances, 16x; the bound is the one the top-level test has, a
     # third above.
-    test "the scan stays linear in the nested one-shots it blocks" do
+    test "the scan after a switch stays linear in the nested one-shots it blocks" do
       ratio = blocked_scan(4000) / blocked_scan(250)
       assert ratio < 24, "16x the one-shots took #{Float.round(ratio, 1)}x the reductions"
+    end
+
+    # The first edit changes every instance's one-shot rung and is kept with no scan after,
+    # so its n blocks are still pending; the second changes only a rung no chain holds, so
+    # only the pending path keeps the blocks (fix F2), each bit a path.
+    defp reductions_to_second_edit(n) do
+      v1 = pulses(n, "xic go")
+      v2 = pulses(n, "xic go xic go")
+      v3 = pulses(n, "xic go xic go", "var k bool\n")
+      {_, state} = step(v1, Runtime.instance(v1), %{"a" => 0}, 0)
+      {edit, state, _} = Edit.test(accept!(v1, v2, state), state)
+      {^v2, state, _} = Edit.assemble(edit, state)
+      assert length(state.ons_blocked) == n
+
+      reductions(fn ->
+        {:ok, edit, _} = Edit.accept(v2, v3, state)
+        {edit, s, report} = Edit.test(edit, state)
+        {edit, s, _} = Edit.untest(edit, s)
+        {edit, s, _} = Edit.test(edit, s)
+        {_, _, _} = Edit.assemble(edit, s)
+        assert for({:ons_blocked, bit, _} <- report, do: bit) == state.ons_blocked
+      end)
+    end
+
+    # The top-level test's bound, at its sizes.
+    test "a second edit before any scan stays linear in the nested bits still pending (F2)" do
+      ratio = reductions_to_second_edit(4000) / reductions_to_second_edit(250)
+      assert ratio < 24, "16x the pending bits took #{Float.round(ratio, 1)}x the reductions"
     end
   end
 
