@@ -726,7 +726,9 @@ defmodule Logex.RuntimeTest do
 
       config = %{plant(motor) | instances: [], connections: []}
 
-      raises("a configuration runs at least one program instance", fn -> Runtime.start(config) end)
+      raises("this configuration declares no `program`: it would run nothing", fn ->
+        Runtime.start(config)
+      end)
     end
 
     test "every call takes a runtime from start/1, checked first", %{motor: motor} do
@@ -1093,9 +1095,17 @@ defmodule Logex.RuntimeTest do
                  start: 1
                ]
 
-      # M2-1: the configuration, its one validator and its constructor from Elixir.
-      assert Enum.sort(Logex.Configuration.__info__(:functions)) ==
-               [__struct__: 0, __struct__: 1, check: 1, initial: 1, location: 1, new!: 1]
+      # M2-1: the configuration, its one validator and its constructor from Elixir; M2-2:
+      # its compile from a configuration file's text.
+      assert Enum.sort(Logex.Configuration.__info__(:functions)) == [
+               __struct__: 0,
+               __struct__: 1,
+               check: 1,
+               compile: 3,
+               initial: 1,
+               location: 1,
+               new!: 1
+             ]
 
       assert Enum.sort(Map.keys(Logex.Configuration.__struct__())) ==
                [:__struct__, :connections, :file, :globals, :instances, :name, :programs] ++

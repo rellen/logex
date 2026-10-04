@@ -415,7 +415,7 @@ next due in: 5
 m1.fault: 1
 task `fast`: a priority is 0, the highest, to 65535, found -1
 program instance `m2`: there is no task `slwo` — did you mean `slow`?
-`pb_stop_1` is an input point: `m2.motor` cannot drive it
+`pb_stop_1` is an input point: `m2.motor`, a var_output, cannot drive it
 ```
 
 - Every task is due in the first cycle, and after it `m1` runs every 10 ms and `m2` every

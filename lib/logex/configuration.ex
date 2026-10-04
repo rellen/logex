@@ -2,7 +2,8 @@ defmodule Logex.Configuration do
   @moduledoc """
   A configuration: the program types it runs, its tasks, its globals, its program
   instances and the connections that wire them (M2-1, `docs/organisation.md` §4.4). A
-  value, plain data, which `Logex.Runtime.start/1` runs as one resource.
+  value, plain data, which `Logex.Runtime.start/1` runs as one resource, built in Elixir
+  or written in a configuration file (`.logex`, M2-2, read by `Logex.Configuration.Text`).
 
   - `programs` maps each program type's name to its `%Logex.Program{}`.
   - `tasks`, `globals`, `instances` and `connections` are lists, in declaration order, of
@@ -12,31 +13,49 @@ defmodule Logex.Configuration do
   - `name` is the configuration's own name, which it must have. `file` is the file it was
     read from, or nil for one built from Elixir; each element's `line` likewise, and
     `new!/1` refuses an element that brings one.
-  - `warnings` are `%Logex.Diagnostic{severity: :warning}`. No check gives one yet, so it
-    is empty.
+  - `warnings` are `%Logex.Diagnostic{severity: :warning}`, in line order: what runs, but
+    is likely a slip. They stop nothing, and `new!/1` and `compile/3` give them.
 
   Every way of writing a configuration ends in `check/1`, the one validator: `new!/1`,
-  from Elixir, raises one `ArgumentError` listing every problem it finds, a line each, and
+  from Elixir, raises one `ArgumentError` listing every problem it finds, a line each;
+  `compile/3`, from a configuration file's text, returns them; and
   `Logex.Runtime.start/1` checks again. A mistake a configuration's text could also make
   is a `%Logex.Diagnostic{}` at stage `:configure`, cited at its element's line, which is
-  how a reader of the text will cite it. Its rules:
+  how a reader of the text cites it, and worded as the configuration file says it,
+  whether the element came from the text or from Elixir: one message a rule
+  (`docs/organisation.md` §4.10). Its rules:
 
-  - every name of a task, global or program instance is a name, as a tag's is, and no two
-    of them are the same or differ only in case: one namespace, in which the first in
-    line order keeps a name. A program type is named in type position only, so an
-    instance may share its type's name;
+  - every name of a task, global or program instance is a name, as a tag's is, with no
+    `.` parts, which are kept for a path and a location, and no configuration file's
+    keyword (`Logex.Configuration.Text.keywords/0`) in any case; and no two of them are
+    the same or differ only in case: one namespace, in which the first in line order keeps
+    a name. A name refused for its `.` or as a keyword is reported once, and nothing that
+    names it is reported again (decision 42), as nothing that names a configuration
+    file's broken line is; a duplicate or a case twin is not recovered so, and a use of
+    its name finds the element that kept it, as on a `.ld` declaration line. A program
+    type is named in type position only, so an instance may share its type's name;
   - a task's interval is 1 to 2147483647 ms, and its priority 0, the highest, to 65535
     (decision 37);
   - a global's initial value fits its type, and a located global takes none; a location
     is `<device>.i.<address>` for an input point or `<device>.q.<address>` for an output
     point, its device a name, its address one or more whole numbers with no leading zero,
-    the leftmost the highest level; and one address holds one global;
-  - a program instance names a program and, if it has one, a task;
+    the leftmost the highest level, and one written another way is told its one spelling;
+    one address holds one global, and no two devices' names differ only in case. A global
+    refused for its name has its location checked, but takes no address;
+  - a program instance names a program type given, by a name that is no keyword, and, if
+    it has one, a task;
   - a connection names a var_input or a var_output of an instance. A var_input is
     connected once, to a global of its type or a constant that fits it; a var_output to a
     global of its type, never an input point, and one connection at most drives a
-    global. Every var_input is connected (decision 7);
+    global. Every var_input is connected (decision 7), and an instance that leaves any
+    unconnected is told them all in one diagnostic. Where an instance or a global is
+    wanted, a name with `.` parts is told the reading it has (`docs/organisation.md`
+    §4.7): a location, written only after `at`; an instance's member, since instances
+    share a value only through a global; or a member of what is no instance;
   - a configuration runs at least one program instance.
+
+  Its warnings: a global nothing uses, and an output point that something reads and
+  nothing drives, which stays at 0.
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -60,7 +79,7 @@ defmodule Logex.Configuration do
   """
 
   alias Logex.{Declarations, Diagnostic, FbType, Program, Tag}
-  alias Logex.Configuration.{Connection, Global, Instance}
+  alias Logex.Configuration.{Connection, Global, Instance, Text}
 
   defstruct name: nil,
             file: nil,
@@ -165,11 +184,12 @@ defmodule Logex.Configuration do
   A configuration built from Elixir: `name:`, which it needs, `programs:` (a list of
   `%Logex.Program{}`), `tasks:`, `globals:`, `instances:` and `connections:`, each a list
   of its element struct with no `line`, the rest optional. Checked by `check/1`: the
-  configuration, or one `ArgumentError` with every problem, a line each: its own, then the
-  host's mistakes `check/1` raises, then `check/1`'s diagnostics, formatted. Those are the
-  diagnostics of the configuration with each mistaken field left out, never read as
-  another value, so one may follow from a mistake: a var_input whose one connection the
-  host gave a bad instance or member is also not connected.
+  configuration, with its warnings in `warnings`, or one `ArgumentError` with every
+  problem, a line each: its own, then the host's mistakes `check/1` raises, then
+  `check/1`'s diagnostics, formatted. Those are the diagnostics of the configuration with
+  each mistaken field left out, never read as another value, so one may follow from a
+  mistake: a var_input whose one connection the host gave a bad instance or member is also
+  not connected.
   """
   def new!(fields) when is_list(fields), do: built(keyword?(fields), fields)
 
@@ -202,13 +222,13 @@ defmodule Logex.Configuration do
       connections: connections
     }
 
-    {mistakes, diagnostics} = problems(config)
+    {mistakes, diagnostics, warnings} = problems(config, [])
 
     raised(
       fields(fields) ++
         problems ++
         Enum.reverse(lined) ++ mistakes ++ Enum.map(diagnostics, &Diagnostic.format/1),
-      config
+      %{config | warnings: warnings}
     )
   end
 
@@ -318,9 +338,71 @@ defmodule Logex.Configuration do
   defp proper(not_a_list, _each, acc, other), do: other.(not_a_list, acc)
 
   @doc """
+  A configuration from a configuration file's text (`.logex`, `docs/organisation.md`
+  §4.4): `{:ok, configuration}`, with its warnings in `warnings`, or `{:error,
+  diagnostics}` with every mistake in line order, one with no line last. The pure seam:
+  `name` is the configuration's, which its text never says, and `programs` are the
+  program types its `program` lines may name, a map of each type's name to its
+  `%Logex.Program{}`, as in `%{"motor" => motor}`. Nothing here reads a file.
+
+  `source` is read by `Logex.Configuration.Text.read/1`, whose diagnostic for a line it
+  cannot read comes first on its line, then checked by `check/1`'s rules, in the same
+  words as a configuration from Elixir: what a broken line names is declared by it, so
+  nothing that names it is reported again. A lex error stops it and is the only
+  diagnostic. A source that is not a binary, a name that is not one, and programs
+  `check/1` would refuse are the host's mistakes, raised as one `ArgumentError`, as
+  `check/1` raises them.
+  """
+  def compile(name, source, programs) when is_binary(source) do
+    {_programs, mistakes} = programs(programs)
+    checked(configuration_name(name) ++ mistakes, [])
+    compiled(Text.read(source), name, programs)
+  end
+
+  def compile(_name, source, _programs),
+    do:
+      raise(
+        ArgumentError,
+        "Logex.Configuration.compile/3 takes source text as a binary, got: #{inspect(source)}"
+      )
+
+  defp compiled({:error, [%Diagnostic{stage: :lex}] = lexed, []}, _name, _programs),
+    do: {:error, lexed}
+
+  defp compiled({:ok, entries}, name, programs), do: read_in(entries, [], name, programs)
+
+  defp compiled({:error, unread, entries}, name, programs),
+    do: read_in(entries, unread, name, programs)
+
+  # The elements a text reads, and what its broken lines declare, checked as one.
+  defp read_in(entries, unread, name, programs) do
+    {declared, elements} = Enum.split_with(entries, &match?({:declared, _line, _named}, &1))
+
+    config = %__MODULE__{
+      name: name,
+      programs: programs,
+      globals: for(%Global{} = global <- elements, do: global),
+      instances: for(%Instance{} = instance <- elements, do: instance),
+      connections: for(%Connection{} = connection <- elements, do: connection)
+    }
+
+    {mistakes, diagnostics, warnings} = problems(config, declared)
+
+    read_back(
+      checked(mistakes, Enum.sort_by(unread ++ diagnostics, &line_order/1)),
+      config,
+      warnings
+    )
+  end
+
+  defp read_back([], config, warnings), do: {:ok, %{config | warnings: warnings}}
+  defp read_back(diagnostics, _config, _warnings), do: {:error, diagnostics}
+
+  @doc """
   The one validator: every problem with `config`, a `%Logex.Diagnostic{}` at stage
   `:configure` each, cited at its element's line in the configuration's `file`, in line
-  order, a problem with no line last. `[]` for a configuration that runs.
+  order, a problem with no line last. `[]` for a configuration that runs, whatever its
+  warnings, which are no problem: `new!/1` and `compile/3` give them.
 
   A configuration no configuration text can say, the host's mistake, raises one
   `ArgumentError` instead, each such mistake a line of its message (decision 36; the
@@ -329,7 +411,7 @@ defmodule Logex.Configuration do
   def check(config), do: checking(is_struct(config, __MODULE__) and whole?(config), config)
 
   defp checking(true, config) do
-    {mistakes, diagnostics} = problems(config)
+    {mistakes, diagnostics, _warnings} = problems(config, [])
     checked(mistakes, diagnostics)
   end
 
@@ -339,15 +421,17 @@ defmodule Logex.Configuration do
   defp checked([], diagnostics), do: diagnostics
   defp checked(mistakes, _diagnostics), do: raise(ArgumentError, Enum.join(mistakes, "\n"))
 
-  # Every problem with a configuration, of two kinds: the host's mistakes, which no
-  # configuration text can make, each a line of an ArgumentError's message; and the
-  # diagnostics, each a mistake a text could make too. A field that is a host's mistake is
-  # left out of every diagnostic, never reported twice, and never read as another value: a
-  # bad name is not recovered, as on a `.ld` declaration line. So new!/1, which gives both
-  # kinds, may follow a mistake with a diagnostic of what is then missing: a var_input
-  # whose one connection names its instance as an atom is not connected, and an instance
-  # whose task is named by an atom names no task. check/1 raises the mistakes alone.
-  defp problems(config) do
+  # Every problem with a configuration, of two kinds, and its warnings: the host's
+  # mistakes, which no configuration text can make, each a line of an ArgumentError's
+  # message; the diagnostics, each a mistake a text could make too; and the warnings,
+  # which stop nothing. A field that is a host's mistake is left out of every diagnostic,
+  # never reported twice, and never read as another value: a bad name is not recovered, as
+  # on a `.ld` declaration line. So new!/1, which gives both kinds, may follow a mistake
+  # with a diagnostic of what is then missing: a var_input whose one connection names its
+  # instance as an atom is not connected, and an instance whose task is named by an atom
+  # names no task. check/1 raises the mistakes alone. `declared` are what a configuration
+  # file's broken lines name, which only compile/3 gives.
+  defp problems(config, declared) do
     {file, m_file} = file(config.file)
     {programs, m_programs} = programs(config.programs)
 
@@ -362,50 +446,51 @@ defmodule Logex.Configuration do
         configuration_name(config.name) ++
         m_programs ++ Enum.concat(Enum.reverse(m_parts)) ++ lines(Enum.reverse(lined))
 
-    {mistakes, diagnostics(config, {file, programs}, {tasks, globals, instances, connections})}
+    {diagnostics, warnings} =
+      diagnostics(config, {file, programs}, {tasks, globals, instances, connections}, declared)
+
+    {mistakes, diagnostics, warnings}
   end
 
-  defp diagnostics(config, {file, programs}, {tasks, globals, instances, connections}) do
-    # Every instance declared under a name, whether or not it keeps the name: the
-    # connections of one that cannot run are not checked, and only a name is suggested.
-    declared =
-      for %Instance{name: name} <- instances,
-          Declarations.name?(name),
-          into: MapSet.new(),
-          do: name
-
-    # An element whose name no text can say is the host's mistake, and stays out of every
-    # diagnostic. One whose name is refused here, a duplicate, a case twin or a name with
-    # `.` parts, has every other field checked, as a `.ld` declaration line does: only its
-    # name is not kept, so a use of the name finds the element that kept it, or none.
+  # An element whose name no text can say is the host's mistake, and stays out of every
+  # diagnostic. One whose name is refused here, a duplicate, a case twin, a name with `.`
+  # parts or a keyword, has every other field checked, as a `.ld` declaration line does:
+  # only its name is not kept. What a configuration file's broken line names, a
+  # placeholder from Logex.Configuration.Text.read/1, takes its name as an element does,
+  # and nothing that names it is reported again; a broken connection connects its
+  # var_input.
+  defp diagnostics(config, {file, programs}, parts, declared) do
+    {tasks, globals, instances, connections} = parts
+    {wired, named} = Enum.split_with(declared, &match?({:declared, _, %{kind: :connection}}, &1))
     [tasks, globals, instances] = Enum.map([tasks, globals, instances], &worded/1)
-    {named, d_names} = namespace(tasks ++ globals ++ instances)
-    tasks_by_name = for %Logex.Configuration.Task{} = t <- named, into: %{}, do: {t.name, t}
-    globals_by_name = for %Global{} = global <- named, into: %{}, do: {global.name, global}
-    runnable = runnable(named, programs)
+    space = namespace(tasks, globals, instances, named)
+    {points, d_points} = located(globals, space.kept)
+    world = world(space, points, programs)
+    {wiring, d_wiring} = wiring(Enum.sort_by(connections, &line_key/1), world, wired)
 
-    d_wiring =
-      wiring(Enum.sort_by(connections, &line_key/1), {runnable, declared}, globals_by_name)
+    diagnostics =
+      [
+        space.problems,
+        Enum.flat_map(tasks, &task/1),
+        Enum.flat_map(globals, &global/1),
+        d_points,
+        runs(instances, {programs, given(config.programs)}, space),
+        d_wiring,
+        unconnected(instances, space.kept, world, wiring.inputs),
+        empty(config.instances, named)
+      ]
+      |> Enum.concat()
+      |> Enum.sort_by(&line_order/1)
+      |> Enum.map_reduce(MapSet.new(), &listed_once/2)
+      |> elem(0)
 
-    [
-      d_names,
-      Enum.flat_map(tasks, &task/1),
-      Enum.flat_map(globals, &global/1),
-      located(Enum.sort_by(globals, &line_key/1)),
-      runs(instances, {programs, given(config.programs)}, tasks_by_name),
-      d_wiring,
-      empty(config.instances)
-    ]
-    |> Enum.concat()
-    |> Enum.sort_by(&line_order/1)
-    |> Enum.map_reduce(MapSet.new(), &listed_once/2)
-    |> elem(0)
-    |> Enum.map(&%{&1 | file: file})
+    {Enum.map(diagnostics, &%{&1 | file: file}),
+     Enum.map(warnings(globals, wiring), &%{&1 | file: file})}
   end
 
   # Each list of names a diagnostic would end with is given once, by the first diagnostic
-  # in line order that needs it, so that n connections to unknown globals among n globals
-  # make n short diagnostics, not n lists of n names. A diagnostic that needs a list holds
+  # in line order that needs it, so that n instances of unknown program types among n
+  # types make n short diagnostics, not n lists of n names. A diagnostic that needs a list holds
   # `{message, key, list}` until here, `key` naming the list and `list` making it.
   defp listed_once(%Diagnostic{message: {message, key, list}} = d, listed),
     do: once_listed(MapSet.member?(listed, key), d, message, {key, list}, listed)
@@ -641,6 +726,12 @@ defmodule Logex.Configuration do
   defp global_at(%Global{at: nil}), do: []
   defp global_at(%Global{at: at} = global), do: of_word(word?(at), not_a_location(global))
 
+  defp not_a_location(global),
+    do:
+      "global #{label(global.name)} is at #{label(global.at)}, which is not a location: " <>
+        "a location is a device, `i` for an input or `q` for an output, then an " <>
+        "address, as in `panel.i.0` or `panel.q.3`"
+
   defp instance_task(nil, _instance), do: []
 
   defp instance_task(task, instance),
@@ -768,60 +859,112 @@ defmodule Logex.Configuration do
   # mistake, refused already.
   defp worded(elements), do: Enum.filter(elements, &word?(&1.name))
 
-  # One namespace for tasks, globals and program instances (decided here, not in IEC): the
-  # first to take a name keeps it, in line order, and a case-only twin is refused as tags'
-  # are, since a name differing only in case would be read as the same one. A program type
-  # is named in type position only, so `program motor motor` is not a clash. A name with
-  # `.` parts, which a line can hold, is no name.
-  defp namespace(elements) do
-    {named, _folded, problems} =
-      elements
-      |> Enum.sort_by(&line_key/1)
-      |> Enum.reduce({[], %{}, []}, &take_name/2)
+  # One namespace for tasks, globals and program instances (decided here, not in IEC), and
+  # for the names a configuration file's broken lines declare: the first to take a name
+  # keeps it, in line order, and a case-only twin is refused as tags' are, since a name
+  # differing only in case would be read as the same one. A program type is named in type
+  # position only, so `program motor motor` is not a clash. A name with `.` parts, which a
+  # line can hold, or a configuration file's keyword, in any case, names nothing: it is
+  # refused once, and nothing that names it is reported again (decision 42), as nothing
+  # that names a broken line's name is. A duplicate or a twin is not recovered so: a use of
+  # its name finds the element that kept it, as on a `.ld` declaration line.
+  #
+  # `names` holds each name kept, `{kind, line, element}`, a placeholder's element
+  # `:declared`; `silent` the names whose uses are not reported; `kept` each element that
+  # keeps its name, as `{kind, index in its list}`, since two elements may be equal.
+  defp namespace(tasks, globals, instances, declared) do
+    {names, _folded, silent, kept, problems} =
+      [
+        Enum.with_index(tasks, &{{:task, &2}, &1}),
+        Enum.with_index(globals, &{{:global, &2}, &1}),
+        Enum.with_index(instances, &{{:instance, &2}, &1}),
+        Enum.map(declared, &{:declared, &1})
+      ]
+      |> Enum.concat()
+      |> Enum.sort_by(fn {_ref, element} -> line_key(element) end)
+      |> Enum.reduce({%{}, %{}, MapSet.new(), MapSet.new(), []}, &take_name/2)
 
-    {Enum.reverse(named), Enum.reverse(problems)}
+    %{names: names, silent: silent, kept: kept, problems: Enum.reverse(problems)}
   end
 
+  defp line_key({:declared, line, _named}), do: {0, line}
   defp line_key(%{line: nil}), do: {1, 0}
   defp line_key(%{line: line}), do: {0, line}
 
-  defp take_name(%{name: name} = element, acc),
-    do: name_shaped(Declarations.name?(name), element, acc)
-
-  defp name_shaped(true, %{name: name} = element, {named, folded, problems}) do
-    key = String.downcase(name)
-    taken(Map.get(folded, key), element, key, {named, folded, problems})
+  defp take_name({ref, element}, acc) do
+    {kind, name, line} = held(element)
+    refusal = refusal(String.contains?(name, "."), reserved?(name), name, kind)
+    take(refusal, {ref, kind, name, line, stored(ref, element)}, acc)
   end
 
-  defp name_shaped(false, element, {named, folded, problems}),
-    do: {named, folded, [diagnostic(element.line, cannot_name(element)) | problems]}
+  defp stored(:declared, _placeholder), do: :declared
+  defp stored(_ref, element), do: element
 
-  defp taken(nil, element, key, {named, folded, problems}),
-    do: {[element | named], Map.put(folded, key, element), problems}
+  defp held(%Logex.Configuration.Task{name: name, line: line}), do: {:task, name, line}
+  defp held(%Global{name: name, line: line}), do: {:global, name, line}
+  defp held(%Instance{name: name, line: line}), do: {:instance, name, line}
+  defp held({:declared, line, %{kind: kind, name: name}}), do: {kind, name, line}
 
-  defp taken(%{name: name} = first, %{name: name} = element, _key, {named, folded, problems}),
+  defp refusal(true, _reserved, name, kind),
     do:
-      {named, folded,
-       [
-         diagnostic(
-           element.line,
-           "`#{name}` is already the name of a #{kind(first)}#{where(first)}: " <>
-             "tasks, globals and program instances share one namespace"
-         )
-         | problems
-       ]}
+      "`#{name}` cannot name #{a(kind)}: `.` is kept for a path, as in `m1.start`, and a " <>
+        "location, as in `panel.i.0`"
 
-  defp taken(first, element, _key, {named, folded, problems}),
+  defp refusal(false, true, name, kind), do: "`#{name}` is a keyword and cannot name #{a(kind)}"
+  defp refusal(false, false, _name, _kind), do: nil
+
+  defp take(nil, {_ref, _kind, name, _line, _element} = held, {_, folded, _, _, _} = acc),
+    do: clash(Map.get(folded, String.downcase(name)), held, acc)
+
+  defp take(
+         message,
+         {_ref, _kind, name, line, _element},
+         {names, folded, silent, kept, problems}
+       ),
+       do: {names, folded, MapSet.put(silent, name), kept, [diagnostic(line, message) | problems]}
+
+  defp clash(
+         nil,
+         {ref, kind, name, line, element} = held,
+         {names, folded, silent, kept, problems}
+       ) do
+    {silent, kept} = keeps(ref, name, silent, kept)
+    names = Map.put(names, name, {kind, line, element})
+    {names, Map.put(folded, String.downcase(name), held), silent, kept, problems}
+  end
+
+  defp clash({_ref, first, name, first_line, _}, {_, _kind, name, line, _}, acc),
+    do: refused(acc, line, "`#{name}` is declared twice: " <> first_as(first_line, first))
+
+  defp clash({_ref, first, twin, first_line, _}, {_, _kind, name, line, _}, acc),
     do:
-      {named, folded,
-       [
-         diagnostic(
-           element.line,
-           "`#{element.name}` and the #{kind(first)} `#{first.name}`#{where(first)} differ " <>
-             "only in case: names are case-sensitive, so these would be two names"
-         )
-         | problems
-       ]}
+      refused(
+        acc,
+        line,
+        "`#{name}` and `#{twin}`#{at_line(first_line)} differ only in case: names are " <>
+          "case-sensitive, so these would be two (`#{twin}` is #{a(first)})"
+      )
+
+  defp refused({names, folded, silent, kept, problems}, line, message),
+    do: {names, folded, silent, kept, [diagnostic(line, message) | problems]}
+
+  # A placeholder's name is declared by a broken line, reported there: nothing that names
+  # it is reported again.
+  defp keeps(:declared, name, silent, kept), do: {MapSet.put(silent, name), kept}
+  defp keeps(ref, _name, silent, kept), do: {silent, MapSet.put(kept, ref)}
+
+  defp first_as(nil, kind), do: "the first is #{a(kind)}"
+  defp first_as(line, kind), do: "first on line #{line}, as #{a(kind)}"
+
+  defp at_line(nil), do: ""
+  defp at_line(line), do: " (line #{line})"
+
+  defp a(:task), do: "a task"
+  defp a(:global), do: "a global"
+  defp a(:instance), do: "an instance"
+
+  # A configuration file's keyword, in any case, which names nothing in one (§4.8).
+  defp reserved?(word), do: String.downcase(word) in Text.keywords()
 
   defp task(%Logex.Configuration.Task{} = task),
     do: interval(task) ++ priority(task)
@@ -862,8 +1005,8 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "global `#{name}` is an input point: its value comes from outside, " <>
-          "so it takes no initial value"
+        "`#{name}` is an input point: its value comes from the input image, so it takes no " <>
+          "initial value"
       )
     ]
 
@@ -871,13 +1014,13 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "global `#{name}` is an output point: it starts at 0 and takes its value from the " <>
-          "instance that drives it, so it takes no initial value"
+        "`#{name}` is an output point: it takes no initial value, and is 0 until its " <>
+          "driver writes it"
       )
     ]
 
   defp initial(%Global{type: type, name: name, initial: v, line: line}, _location),
-    do: fit(Declarations.fits?(type, v), type, v, "global `#{name}`", line)
+    do: fit(Declarations.fits?(type, v), type, v, "`#{name}`", line)
 
   defp fit(true, _type, _v, _what, _line), do: []
 
@@ -933,90 +1076,170 @@ defmodule Logex.Configuration do
   """
   def location(at), do: located_word(word?(at), at)
 
-  defp located_word(true, at), do: address(String.split(at, "."))
+  defp located_word(true, at), do: one_spelling(spelled(at))
   defp located_word(false, _at), do: :error
 
-  defp address([device, io | fields]) when io in ["i", "q"] and fields != [],
-    do: numbers(fields, [], device, io)
+  defp one_spelling({:ok, address}), do: {:ok, address}
+  defp one_spelling(_other), do: :error
 
-  defp address(_parts), do: :error
+  # A location's parts, read so that one written another way than its one spelling is
+  # told that spelling: `{:ok, address}` as written, `{:respell, address}` with `I` or `Q`
+  # for `i` or `q`, or a field with a leading zero, and `:error` for no location. `at` is
+  # one name token, so its first part is a name and its others names or digits.
+  defp spelled(at), do: spelled_parts(String.split(at, "."), at)
 
-  defp numbers([], numbers, device, io), do: {:ok, {device, io, Enum.reverse(numbers)}}
+  defp spelled_parts([device, io | fields], at) when io in ["i", "q", "I", "Q"] and fields != [],
+    do: numbered(Enum.all?(fields, &digits?/1), {device, String.downcase(io), fields}, at)
 
-  defp numbers([field | rest], numbers, device, io),
-    do: number(Integer.parse(field), field, rest, numbers, device, io)
+  defp spelled_parts(_parts, _at), do: :error
 
-  # A field is digits with no leading zero, so each address has one spelling, and two
-  # globals at one address have the same string.
-  defp number({n, ""}, <<digit, _::binary>>, rest, numbers, device, io) when digit in ?1..?9,
-    do: numbers(rest, [n | numbers], device, io)
+  defp numbered(false, _parts, _at), do: :error
 
-  defp number({0, ""}, "0", rest, numbers, device, io),
-    do: numbers(rest, [0 | numbers], device, io)
-
-  defp number(_parsed, _field, _rest, _numbers, _device, _io), do: :error
-
-  # A diagnostic for each location that is not one, and each address a second global
-  # takes. A location the lexer does not read as one token is the host's mistake, refused
-  # already.
-  defp located(globals) do
-    {_by_address, problems} =
-      Enum.reduce(globals, {%{}, []}, fn global, acc -> at(global, location(global.at), acc) end)
-
-    Enum.reverse(problems)
+  defp numbered(true, {device, io, fields}, at) do
+    address = {device, io, Enum.map(fields, &String.to_integer/1)}
+    as_written(spelling(address) == at, address)
   end
 
-  defp at(%Global{at: nil}, _location, acc), do: acc
+  defp as_written(true, address), do: {:ok, address}
+  defp as_written(false, address), do: {:respell, address}
 
-  defp at(%Global{at: at} = global, :error, acc), do: not_located(word?(at), global, acc)
+  defp digits?(field), do: String.match?(field, ~r/\A[0-9]+\z/)
 
-  defp at(%Global{} = global, {:ok, address}, {taken, problems}),
-    do: address_taken(Map.get(taken, address), global, address, {taken, problems})
+  # A location in its one spelling.
+  defp spelling({device, io, fields}),
+    do: Enum.join([device, io | Enum.map(fields, &Integer.to_string/1)], ".")
 
-  defp not_located(true, global, {taken, problems}),
-    do: {taken, [diagnostic(global.line, not_a_location(global)) | problems]}
+  # Each location a global is at, refused where it is no location or is not written in
+  # its one spelling. A global that keeps its name takes its address, where no other
+  # global holds it and no other device's name differs from its device's only in case,
+  # which would make two devices of what is likely one; a global refused for its name has
+  # its location checked, but takes nothing: one mistake, one message. A location the
+  # lexer does not read as one token is the host's mistake, refused already.
+  defp located(globals, kept) do
+    {points, _devices, problems} =
+      globals
+      |> Enum.with_index()
+      |> Enum.sort_by(fn {global, _index} -> line_key(global) end)
+      |> Enum.reduce({%{}, %{}, []}, fn {global, index}, acc ->
+        at(word?(global.at), global, MapSet.member?(kept, {:global, index}), acc)
+      end)
 
-  defp not_located(false, _global, acc), do: acc
+    {points, Enum.reverse(problems)}
+  end
 
-  defp not_a_location(global),
+  defp at(false, _global, _keeps, acc), do: acc
+  defp at(true, global, keeps, acc), do: at_spelled(spelled(global.at), global, keeps, acc)
+
+  defp at_spelled(:error, global, _keeps, acc),
     do:
-      "global #{label(global.name)} is at #{label(global.at)}, which is not a location: " <>
-        "a location is a device, `i` for an input or `q` for an output, then an " <>
-        "address, as in `panel.i.0` or `panel.q.3`"
+      noted(
+        acc,
+        global.line,
+        "`#{global.at}` is not a location: a location is a device, `i` or `q`, and an " <>
+          "address, as in `panel.i.0`"
+      )
 
-  defp address_taken(nil, global, address, {taken, problems}),
-    do: {Map.put(taken, address, global), problems}
-
-  defp address_taken(first, global, _address, {taken, problems}),
+  defp at_spelled({:respell, address}, global, _keeps, acc),
     do:
-      {taken,
-       [
-         diagnostic(
-           global.line,
-           "global `#{global.name}` is at `#{global.at}`, the address of global " <>
-             "`#{first.name}`#{where(first)}: one address holds one global"
-         )
-         | problems
-       ]}
+      noted(
+        acc,
+        global.line,
+        "`#{global.at}` is not a location as written: a location's `i` or `q` is lowercase " <>
+          "and its address has no leading zero, so it is written `#{spelling(address)}`"
+      )
 
-  # The instances that can run, each with its program, by the name each keeps.
-  defp runnable(named, programs),
+  defp at_spelled({:ok, _address}, _global, false, acc), do: acc
+
+  defp at_spelled({:ok, {device, _io, _fields} = address}, global, true, {_, devices, _} = acc),
+    do: device(Map.get(devices, String.downcase(device)), address, global, acc)
+
+  defp device(nil, {device, _io, _fields} = address, global, {points, devices, problems}),
+    do:
+      address(
+        Map.get(points, address),
+        address,
+        global,
+        {points, Map.put(devices, String.downcase(device), {device, global}), problems}
+      )
+
+  defp device({device, _first}, {device, _io, _fields} = address, global, acc),
+    do: address(Map.get(elem(acc, 0), address), address, global, acc)
+
+  defp device({other, first}, {device, _io, _fields}, global, acc),
+    do:
+      noted(
+        acc,
+        global.line,
+        "the device `#{device}` and the device `#{other}` of `#{first.name}`#{where(first)} " <>
+          "differ only in case: device names are case-sensitive, so these would be two devices"
+      )
+
+  defp address(nil, address, global, {points, devices, problems}),
+    do: {Map.put(points, address, global), devices, problems}
+
+  defp address(first, _address, global, acc),
+    do:
+      noted(
+        acc,
+        global.line,
+        "`#{global.name}` is at `#{global.at}`, where `#{first.name}` already is" <>
+          "#{where(first)}: a location holds one global"
+      )
+
+  defp noted({points, devices, problems}, line, message),
+    do: {points, devices, [diagnostic(line, message) | problems]}
+
+  # What the connections are checked against: the names, those not to report, the
+  # globals at each address, and each instance that can run with its program, by name.
+  defp world(space, points, programs),
+    do: %{
+      names: space.names,
+      silent: space.silent,
+      points: points,
+      runnable: runnable(space.names, programs),
+      instances: names_of(space.names, :instance),
+      globals: names_of(space.names, :global)
+    }
+
+  defp names_of(names, kind), do: Enum.sort(for {name, {^kind, _line, _}} <- names, do: name)
+
+  # The instances that keep their names and can run, each with its program: its type a
+  # name that is no keyword, of a program given.
+  defp runnable(names, programs),
     do:
       for(
-        %Instance{type: type} = instance <- named,
+        {name, {:instance, _line, %Instance{type: type} = instance}} <- names,
+        Declarations.name?(type) and not reserved?(type),
         {:ok, program} <- [Map.fetch(programs, type)],
         into: %{},
-        do: {instance.name, {instance, program}}
+        do: {name, {instance, program}}
       )
 
   # What is wrong with each instance's type, then its task.
-  defp runs(instances, programs, tasks),
-    do: Enum.flat_map(instances, &(of_type(word?(&1.type), &1, programs) ++ on_task(&1, tasks)))
+  defp runs(instances, programs, space),
+    do: Enum.flat_map(instances, &(of_type(word?(&1.type), &1, programs) ++ on_task(&1, space)))
 
   # A type the lexer does not read as one name is the host's mistake, refused already.
   defp of_type(false, _instance, _programs), do: []
 
-  defp of_type(true, instance, {programs, given}),
+  defp of_type(true, %Instance{type: type} = instance, programs),
+    do: type_named(String.contains?(type, "."), reserved?(type), instance, programs)
+
+  defp type_named(true, _reserved, instance, _programs),
+    do: [
+      diagnostic(
+        instance.line,
+        "`#{instance.type}` cannot name a program type: a type is named by its file, " <>
+          "`motor.ld` for `motor`, and " <> rule()
+      )
+    ]
+
+  defp type_named(false, true, instance, _programs),
+    do: [
+      diagnostic(instance.line, "`#{instance.type}` is a keyword and cannot name a program type")
+    ]
+
+  defp type_named(false, false, instance, {programs, given}),
     do: typed(Map.has_key?(programs, instance.type), instance, {programs, given})
 
   defp typed(true, _instance, _programs), do: []
@@ -1030,55 +1253,62 @@ defmodule Logex.Configuration do
 
   defp unknown_type(false, instance, programs) do
     names = Enum.sort(Map.keys(programs))
+    unknown = "unknown program type `#{instance.type}`"
 
-    message =
-      hint(
-        "program instance `#{instance.name}`: there is no program `#{instance.type}`",
-        Declarations.suggest(instance.type, names, & &1, "names"),
-        names,
-        "programs"
+    [
+      diagnostic(
+        instance.line,
+        types_hint(
+          unknown,
+          Declarations.suggest(instance.type, names, & &1, "program types"),
+          names
+        )
       )
-
-    [diagnostic(instance.line, message)]
+    ]
   end
 
-  defp on_task(%Instance{task: nil}, _tasks), do: []
+  defp types_hint(message, "", []), do: message <> ": no program types were given"
 
-  defp on_task(%Instance{task: task} = instance, tasks),
-    do: task_word(word?(task), instance, tasks)
+  defp types_hint(message, "", names),
+    do: {message, :types, fn -> ": the types given are " <> listed(names) end}
 
-  defp task_word(true, instance, tasks),
-    do: task_known(Map.has_key?(tasks, instance.task), instance, tasks)
+  defp types_hint(message, suggestion, _names), do: message <> suggestion
 
-  defp task_word(false, _instance, _tasks), do: []
+  # An instance's task: one the configuration declares, unless its name was refused, which
+  # is reported once.
+  defp on_task(%Instance{task: nil}, _space), do: []
 
-  defp task_known(true, _instance, _tasks), do: []
+  defp on_task(%Instance{task: task} = instance, space),
+    do: task_word(word?(task), instance, space)
 
-  defp task_known(false, instance, tasks) do
-    names = Enum.sort(Map.keys(tasks))
+  # A task the lexer does not read as one name is the host's mistake, refused already.
+  defp task_word(false, _instance, _space), do: []
+
+  defp task_word(true, %Instance{task: task} = instance, space),
+    do: task_held(MapSet.member?(space.silent, task), Map.get(space.names, task), instance, space)
+
+  defp task_held(true, _held, _instance, _space), do: []
+  defp task_held(false, {:task, _line, _ref}, _instance, _space), do: []
+
+  defp task_held(false, _held, instance, space) do
+    names = names_of(space.names, :task)
 
     message =
       hint(
         "program instance `#{instance.name}`: there is no task `#{instance.task}`",
         Declarations.suggest(instance.task, names, & &1, "names"),
-        names,
-        "tasks"
+        names
       )
 
     [diagnostic(instance.line, message)]
   end
 
-  defp hint(message, "", [], noun), do: message <> ": this configuration has no #{singular(noun)}"
+  defp hint(message, "", []), do: message <> ": this configuration has no task"
 
-  defp hint(message, "", names, noun),
-    do: {message, noun, fn -> ": the #{noun} are " <> listed(names) end}
+  defp hint(message, "", names),
+    do: {message, :tasks, fn -> ": the tasks are " <> listed(names) end}
 
-  defp hint(message, suggestion, _names, _noun), do: message <> suggestion
-
-  defp singular("programs"), do: "program"
-  defp singular("tasks"), do: "task"
-  defp singular("program instances"), do: "program instance"
-  defp singular("globals"), do: "global"
+  defp hint(message, suggestion, _names), do: message <> suggestion
 
   defp listed(names) do
     quoted = Enum.map(names, &"`#{&1}`")
@@ -1088,65 +1318,127 @@ defmodule Logex.Configuration do
   defp listing([], last), do: last
   defp listing(rest, last), do: Enum.join(rest, ", ") <> " and " <> last
 
-  # The connections, each checked against its instance's program and the globals, then
-  # every var_input checked to be connected (decision 7). One problem is reported per
-  # connection, the first; a var_input with a connection that names it, whatever its other
-  # end, counts as connected, and a global as driven only by a good one, so one mistake is
-  # one message. A connection whose instance or member is the host's mistake is refused
-  # already, and names no var_input: a bad name is not recovered.
-  defp wiring(connections, {runnable, _declared} = instances, globals) do
-    {inputs, _driven, problems} =
-      Enum.reduce(connections, {%{}, %{}, []}, &connect(&1, &2, instances, globals))
+  # The connections, in line order, each checked against its instance's program and the
+  # globals. One problem is reported per connection, the first; a var_input with a
+  # connection that names it, whatever its other end, counts as connected, and a global as
+  # driven only by a good one, so one mistake is one message. A connection whose instance
+  # or member is the host's mistake is refused already, and names no var_input: a bad name
+  # is not recovered. A broken connection line, `wired`, connects its var_input, so a
+  # later connection to it is not a second source, though its own source is checked.
+  #
+  # The wiring: each var_input connected, `{instance, member}` to its first connection or
+  # `:broken`; each global driven, to its driver; and each global a connection names.
+  defp wiring(connections, world, wired) do
+    inputs =
+      Map.new(wired, fn {:declared, _line, %{instance: instance, member: member}} ->
+        {{instance, member}, :broken}
+      end)
 
-    Enum.reverse(problems) ++ unconnected(runnable, inputs)
+    {wiring, problems} =
+      Enum.reduce(
+        connections,
+        {%{inputs: inputs, driven: %{}, used: MapSet.new()}, []},
+        &connect(&1, &2, world)
+      )
+
+    {wiring, Enum.reverse(problems)}
   end
 
-  defp connect(%Connection{} = connection, acc, instances, globals),
-    do: connect_ends(ends?(connection), connection, acc, instances, globals)
+  defp connect(%Connection{} = connection, acc, world),
+    do: connect_ends(ends?(connection), connection, acc, world)
 
-  # An instance that is declared but cannot run, its program unknown, has its own
-  # diagnostic, and its connections are not checked.
-  defp connect_ends(true, connection, acc, {runnable, declared}, globals),
+  defp connect_ends(false, _connection, acc, _world), do: acc
+
+  defp connect_ends(true, connection, acc, world),
+    do: on_instance(instance_of(connection, world), connection, acc, world)
+
+  # The instance a connection begins with: one that can run; one that cannot, its type
+  # unknown, whose connections are not checked; or a name that names no instance.
+  defp instance_of(%Connection{instance: name} = connection, world),
     do:
-      of_instance(
-        Map.fetch(runnable, connection.instance),
-        MapSet.member?(declared, connection.instance),
+      instance_held(
+        MapSet.member?(world.silent, name),
+        Map.get(world.names, name),
+        connection,
+        world
+      )
+
+  defp instance_held(true, _held, _connection, _world), do: :skip
+
+  defp instance_held(false, {:instance, _line, _ref}, connection, world),
+    do: running(Map.fetch(world.runnable, connection.instance))
+
+  defp instance_held(false, {kind, line, _ref}, connection, _world),
+    do: {:error, "`#{connection.instance}` is #{a(kind)}#{at_line(line)}, not an instance"}
+
+  # A connection line that begins with a location reads it as an instance's member, so
+  # where no instance has that name, the message names the location reading (§4.7).
+  defp instance_held(false, nil, connection, world),
+    do: no_instance(spelled("#{connection.instance}.#{connection.member}"), connection, world)
+
+  defp running({:ok, {instance, program}}), do: {:ok, instance, program}
+  defp running(:error), do: :skip
+
+  defp no_instance(:error, connection, world),
+    do: {:error, no_named(:instance, connection.instance, world, nil)}
+
+  defp no_instance(_location, connection, _world),
+    do:
+      {:error,
+       "`#{connection.instance}.#{connection.member}` is a location, written only after `at` " <>
+         "on a `var_global` line: a connection begins with an instance's var_input or " <>
+         "var_output, as in `m1.start`"}
+
+  # A name declared nowhere: a keyword, which names nothing in a configuration file, so
+  # no message advises declaring one; a near name; or how to declare it.
+  defp no_named(kind, name, world, type),
+    do: unnamed(reserved?(name), kind, name, world, type)
+
+  defp unnamed(true, kind, name, _world, _type),
+    do:
+      "no #{noun(kind)} `#{name}`: `#{name}` is a keyword of a configuration file, and " <>
+        "nothing in one is named so"
+
+  defp unnamed(false, kind, name, world, type),
+    do: declare(Declarations.suggest(name, known(world, kind), & &1, "names"), kind, name, type)
+
+  defp declare("", :global, name, type),
+    do: "no global `#{name}`: declare it, as in `var_global #{name} #{type}`"
+
+  defp declare("", :instance, name, _type),
+    do: "no instance `#{name}`: declare it, as in `program #{name} motor`"
+
+  defp declare(suggestion, kind, name, _type), do: "no #{noun(kind)} `#{name}`" <> suggestion
+
+  defp noun(:global), do: "global"
+  defp noun(:instance), do: "instance"
+
+  defp known(world, :global), do: world.globals
+  defp known(world, :instance), do: world.instances
+
+  defp on_instance(:skip, _connection, acc, _world), do: acc
+
+  defp on_instance({:error, message}, connection, acc, _world),
+    do: problem(acc, connection, message)
+
+  defp on_instance({:ok, instance, program}, connection, acc, world),
+    do:
+      of_member(
+        Map.fetch(program.tags, connection.member),
+        instance,
+        program,
         connection,
         acc,
-        {declared, globals}
+        world
       )
 
-  defp connect_ends(false, _connection, acc, _instances, _globals), do: acc
+  defp of_member({:ok, %Tag{section: :var_input} = tag}, _i, _p, connection, acc, world),
+    do: input(connection, tag, acc, world)
 
-  defp of_instance({:ok, {_instance, program}}, true, connection, acc, {_declared, globals}),
-    do: of_member(member_of(program, connection.member), program, connection, acc, globals)
+  defp of_member({:ok, %Tag{section: :var_output} = tag}, _i, _p, connection, acc, world),
+    do: output(other_end(connection.to), connection, tag, acc, world)
 
-  defp of_instance(:error, true, _connection, acc, _known), do: acc
-
-  defp of_instance(:error, false, connection, {inputs, driven, problems}, {declared, _globals}) do
-    names = Enum.sort(MapSet.to_list(declared))
-
-    message =
-      hint(
-        "`#{connection.instance}.#{connection.member}`: there is no program instance " <>
-          "`#{connection.instance}`",
-        Declarations.suggest(connection.instance, names, & &1, "names"),
-        names,
-        "program instances"
-      )
-
-    {inputs, driven, [diagnostic(connection.line, message) | problems]}
-  end
-
-  defp member_of(%Program{tags: tags}, member), do: Map.fetch(tags, member)
-
-  defp of_member({:ok, %Tag{section: :var_input} = tag}, _program, connection, acc, globals),
-    do: input(connection, tag, acc, globals)
-
-  defp of_member({:ok, %Tag{section: :var_output} = tag}, _program, connection, acc, globals),
-    do: output(other_end(connection.to), connection, tag, acc, globals)
-
-  defp of_member({:ok, %Tag{section: section}}, program, connection, acc, _globals),
+  defp of_member({:ok, %Tag{section: section}}, _instance, program, connection, acc, _world),
     do:
       problem(
         acc,
@@ -1155,10 +1447,10 @@ defmodule Logex.Configuration do
           "(declared `#{section}`): only a var_input or var_output connects"
       )
 
-  defp of_member({:ok, _not_a_tag}, program, connection, acc, _globals),
+  defp of_member({:ok, _not_a_tag}, _instance, program, connection, acc, _world),
     do: problem(acc, connection, declares_no(connection, program))
 
-  defp of_member(:error, program, connection, acc, _globals),
+  defp of_member(:error, _instance, program, connection, acc, _world),
     do: unknown_member(String.contains?(connection.member, "."), program, connection, acc)
 
   defp unknown_member(true, _program, connection, acc),
@@ -1166,13 +1458,12 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` goes too deep: a connection names a " <>
-          "var_input or var_output of a program instance, as in `#{connection.instance}.start`"
+        "`#{connection.instance}.#{connection.member}` goes too deep: a connection names an " <>
+          "instance's var_input or var_output, as in `#{connection.instance}.start`"
       )
 
   defp unknown_member(false, program, connection, acc) do
     names = for {name, %Tag{section: s}} <- program.tags, s in [:var_input, :var_output], do: name
-
     names = Enum.sort(names)
 
     problem(
@@ -1180,7 +1471,7 @@ defmodule Logex.Configuration do
       connection,
       connects(
         declares_no(connection, program),
-        Declarations.suggest(connection.member, names),
+        Declarations.suggest(connection.member, names, & &1, "members"),
         names,
         program.name
       )
@@ -1189,8 +1480,7 @@ defmodule Logex.Configuration do
 
   defp declares_no(connection, program),
     do:
-      "`#{connection.instance}` is a program instance of `#{program.name}`, which declares " <>
-        "no `#{connection.member}`"
+      "`#{connection.instance}` is a `#{program.name}`, which declares no `#{connection.member}`"
 
   defp connects(message, "", [], _type), do: message <> ": it has no var_input or var_output"
 
@@ -1201,44 +1491,49 @@ defmodule Logex.Configuration do
 
   defp connects(message, suggestion, _names, _type), do: message <> suggestion
 
-  defp problem({inputs, driven, problems}, connection, message),
-    do: {inputs, driven, [diagnostic(connection.line, message) | problems]}
+  defp problem({wiring, problems}, connection, message),
+    do: {wiring, [diagnostic(connection.line, message) | problems]}
 
   # A var_input: connected once, to a global of its type or a constant that fits it.
-  defp input(connection, tag, {inputs, driven, problems}, globals) do
+  defp input(connection, tag, {wiring, problems}, world) do
     key = {connection.instance, tag.name}
-
-    once(
-      Map.get(inputs, key),
-      connection,
-      tag,
-      {Map.put_new(inputs, key, connection), driven, problems},
-      globals
-    )
+    sourced(Map.get(wiring.inputs, key), key, connection, tag, {wiring, problems}, world)
   end
 
-  defp once(nil, connection, tag, acc, globals),
-    do: source(other_end(connection.to), connection, tag, acc, globals)
+  defp sourced(nil, key, connection, tag, {wiring, problems}, world),
+    do:
+      source(
+        other_end(connection.to),
+        connection,
+        tag,
+        {%{wiring | inputs: Map.put(wiring.inputs, key, connection)}, problems},
+        world
+      )
 
-  defp once(first, connection, _tag, acc, _globals),
+  # Its first connection is a broken line, reported there: this one is no second source,
+  # but its own source is checked.
+  defp sourced(:broken, _key, connection, tag, acc, world),
+    do: source(other_end(connection.to), connection, tag, acc, world)
+
+  defp sourced(first, _key, connection, _tag, acc, _world),
     do:
       problem(
         acc,
         connection,
         "`#{connection.instance}.#{connection.member}` is already connected, to " <>
-          "#{end_label(first.to)}#{where(first)}: a var_input is connected once"
+          "#{end_label(first.to)}#{where(first)}: a var_input has one source"
       )
 
-  defp end_label(to) when is_binary(to), do: "`#{to}`"
+  defp end_label(to) when is_binary(to) or is_integer(to), do: "`#{to}`"
   defp end_label(to), do: inspect(to)
 
-  defp source(:global, connection, tag, acc, globals),
-    do: of_global(Map.fetch(globals, connection.to), connection, tag, acc, globals)
+  defp source(:global, connection, tag, acc, world),
+    do: read_global(global_of(connection.to, tag.type, world), connection, tag, acc)
 
-  defp source(:constant, %Connection{to: to} = connection, %Tag{type: type} = tag, acc, _globals),
+  defp source(:constant, %Connection{to: to} = connection, %Tag{type: type} = tag, acc, _world),
     do: constant(Declarations.fits?(type, to), connection, tag, acc)
 
-  defp source(:junk, _connection, _tag, acc, _globals), do: acc
+  defp source(:junk, _connection, _tag, acc, _world), do: acc
 
   defp constant(true, _connection, _tag, acc), do: acc
 
@@ -1261,28 +1556,20 @@ defmodule Logex.Configuration do
       )
 
   # A global whose type is the host's mistake is refused already: one mistake, one message.
-  defp of_global({:ok, %Global{type: type}}, _connection, _tag, acc, _globals)
+  defp read_global({:ok, %Global{type: type} = global}, _connection, _tag, acc)
        when type not in [:bool, :dint],
-       do: acc
+       do: used(acc, global)
 
-  defp of_global({:ok, global}, connection, tag, acc, _globals),
-    do: same_type(global.type == tag.type, global, connection, tag, acc)
+  defp read_global({:ok, global}, connection, tag, acc),
+    do: same_type(global.type == tag.type, global, connection, tag, used(acc, global))
 
-  defp of_global(:error, connection, _tag, acc, globals) do
-    names = Enum.sort(Map.keys(globals))
+  defp read_global({:error, message}, connection, _tag, acc),
+    do: problem(acc, connection, message)
 
-    problem(
-      acc,
-      connection,
-      hint(
-        "`#{connection.instance}.#{connection.member}` is connected to `#{connection.to}`, " <>
-          "which is not a global",
-        Declarations.suggest(connection.to, names, & &1, "names"),
-        names,
-        "globals"
-      )
-    )
-  end
+  defp read_global(:skip, _connection, _tag, acc), do: acc
+
+  defp used({wiring, problems}, global),
+    do: {%{wiring | used: MapSet.put(wiring.used, global.name)}, problems}
 
   defp same_type(true, _global, _connection, _tag, acc), do: acc
 
@@ -1298,31 +1585,110 @@ defmodule Logex.Configuration do
   defp type_word(%Logex.FbType{name: name}), do: name
   defp type_word(type), do: to_string(type)
 
+  # What a name where a global is wanted reads as: a global; nothing to report, its name
+  # refused already; or a mistake, each reading named (§4.7). `type` is the member's, for
+  # the advice to declare one.
+  defp global_of(name, type, world),
+    do:
+      reading(MapSet.member?(world.silent, name), String.contains?(name, "."), name, type, world)
+
+  defp reading(true, _dotted, _name, _type, _world), do: :skip
+
+  defp reading(false, false, name, type, world),
+    do: global_held(Map.get(world.names, name), name, type, world)
+
+  defp reading(false, true, name, type, world), do: dotted(spelled(name), name, type, world)
+
+  defp global_held({:global, _line, %Global{} = global}, _name, _type, _world),
+    do: {:ok, global}
+
+  defp global_held({kind, line, _ref}, name, _type, _world),
+    do: {:error, "`#{name}` is #{a(kind)}#{at_line(line)}, not a global"}
+
+  defp global_held(nil, name, type, world), do: {:error, no_named(:global, name, world, type)}
+
+  # A name with `.` parts: a location a global is at reads as that location first, written
+  # another way or not, whatever its device is called, since a device may share an
+  # instance's name; then an instance's member; then a location no global is at; then a
+  # member of what is no instance.
+  defp dotted(:error, name, type, world), do: member_of(name, :error, type, world)
+
+  defp dotted({_written, address} = location, name, type, world),
+    do: at_point(Map.get(world.points, address), location, name, type, world)
+
+  defp at_point(nil, location, name, type, world), do: member_of(name, location, type, world)
+
+  defp at_point(global, _location, name, _type, _world),
+    do:
+      {:error,
+       "`#{name}` is a location, written only after `at` on a `var_global` line: name the " <>
+         "global at it, `#{global.name}`#{where(global)}"}
+
+  defp member_of(name, location, type, world) do
+    [first | _rest] = String.split(name, ".")
+
+    member_held(
+      MapSet.member?(world.silent, first),
+      Map.get(world.names, first),
+      location,
+      {name, first, type},
+      world
+    )
+  end
+
+  defp member_held(true, _held, _location, _named, _world), do: :skip
+
+  # No program-to-program connection (§5): instances share a value through a global.
+  defp member_held(false, {:instance, _line, _ref}, _location, {name, _first, _type}, _world),
+    do:
+      {:error,
+       "`#{name}` is an instance's member: instances share a value only through a global, " <>
+         "which one drives and the other reads"}
+
+  # A raw location in a connection (§4.5: not adopted), its advice in its one spelling.
+  defp member_held(false, _held, {_written, address}, {name, _first, type}, _world),
+    do:
+      {:error,
+       "`#{name}` is a location, written only after `at` on a `var_global` line: declare a " <>
+         "global at it, as in `var_global point #{type} at #{spelling(address)}`, and name that"}
+
+  defp member_held(false, {kind, line, _ref}, :error, {name, first, _type}, _world),
+    do:
+      {:error,
+       "`#{name}` names a member of `#{first}`, but `#{first}` is #{a(kind)}#{at_line(line)}, " <>
+         "not an instance"}
+
+  defp member_held(false, nil, :error, {name, first, _type}, world),
+    do:
+      {:error,
+       "`#{name}` names a member of an instance, and there is no instance `#{first}`" <>
+         Declarations.suggest(first, world.instances, & &1, "names")}
+
   # A var_output: to a global of its type, never an input point, and the only connection
   # that drives that global.
-  defp output(:global, connection, tag, acc, globals),
-    do: sink(Map.fetch(globals, connection.to), connection, tag, acc, globals)
+  defp output(:global, connection, tag, acc, world),
+    do: sink(global_of(connection.to, tag.type, world), connection, tag, acc)
 
-  defp output(:constant, connection, _tag, acc, _globals),
+  defp output(:constant, connection, _tag, acc, _world),
     do:
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` is a var_output: it drives a global, " <>
-          "and a constant cannot be driven"
+        "`#{connection.instance}.#{connection.member}` is a var_output, which drives a " <>
+          "global: it cannot drive the constant `#{connection.to}`"
       )
 
-  defp output(:junk, _connection, _tag, acc, _globals), do: acc
+  defp output(:junk, _connection, _tag, acc, _world), do: acc
 
-  defp sink(:error, connection, tag, acc, globals),
-    do: of_global(:error, connection, tag, acc, globals)
-
-  defp sink({:ok, %Global{type: type}}, _connection, _tag, acc, _globals)
+  defp sink({:ok, %Global{type: type} = global}, _connection, _tag, acc)
        when type not in [:bool, :dint],
-       do: acc
+       do: used(acc, global)
 
-  defp sink({:ok, global}, connection, tag, acc, _globals),
-    do: drives(location(global.at), global, connection, tag, acc)
+  defp sink({:ok, global}, connection, tag, acc),
+    do: drives(location(global.at), global, connection, tag, used(acc, global))
+
+  defp sink({:error, message}, connection, _tag, acc), do: problem(acc, connection, message)
+  defp sink(:skip, _connection, _tag, acc), do: acc
 
   defp drives({:ok, {_device, "i", _address}}, global, connection, _tag, acc),
     do:
@@ -1330,7 +1696,7 @@ defmodule Logex.Configuration do
         acc,
         connection,
         "`#{global.name}` is an input point#{where(global)}: " <>
-          "`#{connection.instance}.#{connection.member}` cannot drive it"
+          "`#{connection.instance}.#{connection.member}`, a var_output, cannot drive it"
       )
 
   defp drives(_location, global, connection, tag, acc),
@@ -1339,11 +1705,11 @@ defmodule Logex.Configuration do
   defp typed_sink(false, global, connection, tag, acc),
     do: same_type(false, global, connection, tag, acc)
 
-  defp typed_sink(true, global, connection, _tag, {inputs, driven, problems}),
-    do: driver(Map.get(driven, global.name), global, connection, {inputs, driven, problems})
+  defp typed_sink(true, global, connection, _tag, {wiring, _problems} = acc),
+    do: driver(Map.get(wiring.driven, global.name), global, connection, acc)
 
-  defp driver(nil, global, connection, {inputs, driven, problems}),
-    do: {inputs, Map.put(driven, global.name, connection), problems}
+  defp driver(nil, global, connection, {wiring, problems}),
+    do: {%{wiring | driven: Map.put(wiring.driven, global.name, connection)}, problems}
 
   defp driver(first, global, connection, acc),
     do:
@@ -1351,26 +1717,53 @@ defmodule Logex.Configuration do
         acc,
         connection,
         "`#{global.name}` is already driven by `#{first.instance}.#{first.member}`" <>
-          "#{where(first)}: one connection drives a global"
+          "#{where(first)}"
       )
 
-  # Decision 7: every var_input is connected, to a global or a constant, cited at its
-  # instance, in the program's declaration order.
-  defp unconnected(runnable, inputs) do
-    runnable
-    |> Map.values()
-    |> Enum.sort_by(fn {instance, _program} -> instance.name end)
-    |> Enum.flat_map(fn {instance, program} ->
-      for %Tag{section: :var_input, name: name} <- declared(program),
-          not Map.has_key?(inputs, {instance.name, name}),
-          do:
-            diagnostic(
-              instance.line,
-              "`#{instance.name}.#{name}` is not connected: every var_input is connected, " <>
-                "to a global or a constant"
-            )
+  # Decision 7: every var_input is connected, to a global, a point or a constant. An
+  # instance that leaves any unconnected is told them all, in the program's declaration
+  # order, in one diagnostic at its line.
+  defp unconnected(instances, kept, world, inputs) do
+    instances
+    |> Enum.with_index()
+    |> Enum.filter(fn {_instance, index} -> MapSet.member?(kept, {:instance, index}) end)
+    |> Enum.flat_map(fn {instance, _index} ->
+      left(Map.fetch(world.runnable, instance.name), inputs)
     end)
   end
+
+  defp left(:error, _inputs), do: []
+
+  defp left({:ok, {instance, program}}, inputs),
+    do:
+      leaves(
+        for(
+          %Tag{section: :var_input, name: name} <- declared(program),
+          not Map.has_key?(inputs, {instance.name, name}),
+          do: name
+        ),
+        instance
+      )
+
+  defp leaves([], _instance), do: []
+
+  defp leaves([one], instance),
+    do: [
+      diagnostic(
+        instance.line,
+        "`#{instance.name}` leaves its var_input `#{one}` unconnected: connect it to a " <>
+          "global, a point or a constant, as in `#{instance.name}.#{one} 0`"
+      )
+    ]
+
+  defp leaves([first | _rest] = names, instance),
+    do: [
+      diagnostic(
+        instance.line,
+        "`#{instance.name}` leaves its var_inputs #{listed(names)} unconnected: connect " <>
+          "each to a global, a point or a constant, as in `#{instance.name}.#{first} 0`"
+      )
+    ]
 
   defp declared(%Program{tags: tags}),
     do:
@@ -1379,6 +1772,51 @@ defmodule Logex.Configuration do
       |> Enum.filter(&match?(%Tag{}, &1))
       |> Enum.sort_by(&{line_key(&1), &1.name})
 
-  defp empty([]), do: [diagnostic(nil, "a configuration runs at least one program instance")]
-  defp empty(_instances), do: []
+  # IEC requires one program at least (Ed 2 Annex B.1.7; Ed 3 Annex A). A broken
+  # `program` line counts, as it was reported already.
+  defp empty([], named),
+    do: no_program(Enum.any?(named, &match?({:declared, _line, %{kind: :instance}}, &1)))
+
+  defp empty(_instances, _named), do: []
+
+  defp no_program(true), do: []
+
+  defp no_program(false),
+    do: [diagnostic(nil, "this configuration declares no `program`: it would run nothing")]
+
+  # The warnings, which stop nothing: a global nothing uses, and an output point that
+  # something reads and nothing drives, which stays at 0. An output point nothing uses is
+  # told it is unused only. A configuration that gives them has no mistake, so every global
+  # keeps its name, and every output point its address.
+  defp warnings(globals, wiring) do
+    globals
+    |> Enum.flat_map(&doubt(MapSet.member?(wiring.used, &1.name), &1, wiring))
+    |> Enum.sort_by(&line_order/1)
+  end
+
+  defp doubt(false, global, _wiring),
+    do: [warning(global.line, "`#{global.name}` is declared but nothing uses it")]
+
+  defp doubt(true, global, wiring),
+    do:
+      undriven(
+        output_point?(location(global.at)) and not Map.has_key?(wiring.driven, global.name),
+        global
+      )
+
+  defp output_point?({:ok, {_device, "q", _fields}}), do: true
+  defp output_point?(_location), do: false
+
+  defp undriven(false, _global), do: []
+
+  defp undriven(true, global),
+    do: [
+      warning(
+        global.line,
+        "`#{global.name}` is an output point, but nothing drives it: it stays at 0"
+      )
+    ]
+
+  defp warning(line, message),
+    do: %Diagnostic{stage: :configure, line: line, message: message, severity: :warning}
 end

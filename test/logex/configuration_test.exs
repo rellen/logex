@@ -1,11 +1,14 @@
 defmodule Logex.ConfigurationTest do
   @moduledoc """
-  `Logex.Configuration` (M2-1): the one validator, `check/1`, and the constructor from
-  Elixir, `new!/1`. Every problem is pinned as a whole list, in its order: `new!/1` raises
-  one `ArgumentError` whose message is every problem, a line each; `check/1` gives a
-  mistake a configuration's text could also make as a diagnostic, at its element's line in
-  the configuration's file, which is how a reader of the text will cite it, and raises a
-  mistake no text can make, the host's, as one `ArgumentError` (decision 36).
+  `Logex.Configuration` (M2-1, M2-2): the one validator, `check/1`, the constructor from
+  Elixir, `new!/1`, and `compile/3`, from a configuration file's text. Every problem is
+  pinned as a whole list, in its order: `new!/1` raises one `ArgumentError` whose message
+  is every problem, a line each; `check/1` gives a mistake a configuration's text could
+  also make as a diagnostic, at its element's line in the configuration's file, which is
+  how a reader of the text will cite it, and raises a mistake no text can make, the
+  host's, as one `ArgumentError` (decision 36); and `compile/3` gives the same
+  diagnostics, in the same words, for a configuration file's text. Every check pinned
+  from data is pinned again from source, but a task's, whose lines M2-3 reads.
   """
   use ExUnit.Case, async: true
 
@@ -73,11 +76,17 @@ defmodule Logex.ConfigurationTest do
   defp opaque(value), do: Process.get(:__opaque_to_the_type_checker__, value)
 
   describe "a configuration that runs" do
+    # Its warnings stop nothing, and are no problem to check/1.
     test "is built, and check/1 finds nothing in it", %{seal: seal} do
       config = Configuration.new!(base(seal))
-      assert %Configuration{name: "plant", file: nil, warnings: []} = config
+      assert %Configuration{name: "plant", file: nil} = config
       assert config.programs == %{"seal" => seal}
       assert Configuration.check(config) == []
+
+      assert Enum.map(config.warnings, &Diagnostic.format/1) == [
+               "warning: `pb2` is declared but nothing uses it",
+               "warning: `sp` is declared but nothing uses it"
+             ]
     end
 
     test "an instance may share its program's name: types are named apart", %{seal: seal} do
@@ -150,7 +159,7 @@ defmodule Logex.ConfigurationTest do
 
       assert refused(Keyword.put(base(seal), :programs, 7)) == [
                "programs: must be a list of %Logex.Program{} from Logex.compile/2, got: 7",
-               "program instance `m`: there is no program `seal`: this configuration has no program"
+               "unknown program type `seal`: no program types were given"
              ]
     end
 
@@ -273,7 +282,7 @@ defmodule Logex.ConfigurationTest do
                "tasks must be a list of %Logex.Configuration.Task{}, got: :x",
                "globals must be a list of %Logex.Configuration.Global{}, got: " <>
                  inspect([pb | :tail]),
-               "`m.motor` is connected to `k`, which is not a global: the globals are `pb`"
+               "no global `k`: declare it, as in `var_global k bool`"
              ]
 
       assert refused(
@@ -509,7 +518,8 @@ defmodule Logex.ConfigurationTest do
 
   describe "lists of names" do
     # Each list a diagnostic would end with is given once, by the first diagnostic in line
-    # order that needs it: n refusals against n names are n diagnostics, not n lists.
+    # order that needs it: n refusals against n names are n diagnostics, not n lists. An
+    # unknown global or instance is told how to declare it, and lists nothing.
     test "each list is given once, by the first diagnostic in line order", %{seal: seal} do
       config = %Configuration{
         name: "plant",
@@ -547,19 +557,17 @@ defmodule Logex.ConfigurationTest do
       }
 
       assert formatted(config) == [
-               "line 5: program instance `x1`: there is no program `aaa`: the programs are `seal`",
-               "line 6: program instance `x2`: there is no program `zzz`",
+               "line 5: unknown program type `aaa`: the types given are `seal`",
+               "line 6: unknown program type `zzz`",
                "line 7: program instance `x3`: there is no task `qq`: the tasks are `fast`",
                "line 8: program instance `x4`: there is no task `ww`",
-               "line 11: `m.sp` is connected to `aa`, which is not a global: the globals are " <>
-                 "`k` and `pb`",
-               "line 12: `m.motor` is connected to `zz`, which is not a global",
-               "line 13: `m` is a program instance of `seal`, which declares no `qq`: its " <>
-                 "var_inputs and var_outputs are `motor`, `sp`, `start` and `stop`",
-               "line 14: `m` is a program instance of `seal`, which declares no `ww`",
-               "line 15: `qq.start`: there is no program instance `qq`: the program instances " <>
-                 "are `m`, `x1`, `x2`, `x3` and `x4`",
-               "line 16: `ww.start`: there is no program instance `ww`"
+               "line 11: no global `aa`: declare it, as in `var_global aa dint`",
+               "line 12: no global `zz`: declare it, as in `var_global zz bool`",
+               "line 13: `m` is a `seal`, which declares no `qq`: its var_inputs and " <>
+                 "var_outputs are `motor`, `sp`, `start` and `stop`",
+               "line 14: `m` is a `seal`, which declares no `ww`",
+               "line 15: no instance `qq`: declare it, as in `program qq motor`",
+               "line 16: no instance `ww`: declare it, as in `program ww motor`"
              ]
     end
   end
@@ -582,20 +590,22 @@ defmodule Logex.ConfigurationTest do
           instances: [%Instance{name: "m", type: "seal"}, %Instance{name: "seal", type: "seal"}]
         )
 
-      # The instance `m` loses its name to the task, so its connections are not checked
-      # against it: one mistake, one message.
+      # The instance `m` loses its name to the task, which keeps it: a duplicate is not
+      # recovered, so each use of the name is checked against the task, as on a `.ld`
+      # declaration line. A name with `.` parts is refused for them.
       assert refused(fields) == [
                ":t cannot name a task: a name is a letter or `_`, then letters, digits or `_`",
                ~s|"a b" cannot name a task: a name is a letter or `_`, then letters, digits or `_`|,
-               ~s|"a.b" cannot name a task: a name is a letter or `_`, then letters, digits or `_`|,
-               "`pb` and the task `PB` differ only in case: names are case-sensitive, " <>
-                 "so these would be two names",
-               "`m` is already the name of a task: tasks, globals and program instances share " <>
-                 "one namespace",
-               "`seal.start` is not connected: every var_input is connected, to a global or a " <>
-                 "constant",
-               "`seal.stop` is not connected: every var_input is connected, to a global or a " <>
-                 "constant"
+               "`a.b` cannot name a task: `.` is kept for a path, as in `m1.start`, and a " <>
+                 "location, as in `panel.i.0`",
+               "`pb` and `PB` differ only in case: names are case-sensitive, so these would be " <>
+                 "two (`PB` is a task)",
+               "`m` is declared twice: the first is a task",
+               "`m` is a task, not an instance",
+               "`m` is a task, not an instance",
+               "`m` is a task, not an instance",
+               "`seal` leaves its var_inputs `start` and `stop` unconnected: connect each to a " <>
+                 "global, a point or a constant, as in `seal.start 0`"
              ]
     end
 
@@ -629,8 +639,8 @@ defmodule Logex.ConfigurationTest do
                  "or `_`",
                ~s|"n//x" cannot name a program instance: a name is a letter or `_`, then | <>
                  "letters, digits or `_`",
-               ~s|"p.q" cannot name a program instance: a name is a letter or `_`, then | <>
-                 "letters, digits or `_`"
+               "`p.q` cannot name an instance: `.` is kept for a path, as in `m1.start`, and a " <>
+                 "location, as in `panel.i.0`"
              ]
     end
   end
@@ -701,17 +711,18 @@ defmodule Logex.ConfigurationTest do
                "global `l` has the initial value `-1`, which is negative: no line can say one " <>
                  "until a negative literal lexes",
                "global `n` has type nil: a global is :bool or :dint",
-               "global `b` is a bool: its initial value must be 0 or 1, found `2`",
-               "global `c` is a dint: `2147483648` does not fit in 32 bits",
-               "global `f` is an input point: its value comes from outside, so it takes no " <>
+               "`b` is a bool: its initial value must be 0 or 1, found `2`",
+               "`c` is a dint: `2147483648` does not fit in 32 bits",
+               "`f` is an input point: its value comes from the input image, so it takes no " <>
                  "initial value",
-               "global `h` is an output point: it starts at 0 and takes its value from the " <>
-                 "instance that drives it, so it takes no initial value"
+               "`h` is an output point: it takes no initial value, and is 0 until its driver " <>
+                 "writes it"
              ]
     end
 
-    # A location the lexer reads as one token is a diagnostic when it is no location; one
-    # it does not, or that is not a string, no line can say.
+    # A location the lexer reads as one token is a diagnostic when it is no location, and
+    # one written another way than its one spelling is told that spelling; one the lexer
+    # does not read as one token, or that is not a string, no line can say.
     test "a location is a device, i or q, and an address, and one address holds one global",
          %{seal: seal} do
       ats = [
@@ -738,18 +749,26 @@ defmodule Logex.ConfigurationTest do
         "a location is a device, `i` for an input or `q` for an output, then an address, " <>
           "as in `panel.i.0` or `panel.q.3`"
 
+      no =
+        "is not a location: a location is a device, `i` or `q`, and an address, as in " <>
+          "`panel.i.0`"
+
+      as_written =
+        "is not a location as written: a location's `i` or `q` is lowercase and its address " <>
+          "has no leading zero, so it is written"
+
       assert refused(Keyword.put(base(seal), :globals, base(seal)[:globals] ++ globals)) == [
                "global `l4` is at `panel.i.0x`, which is not a location: " <> rule,
                "global `l5` is at 5, which is not a location: " <> rule,
                "global `l14` is at `panel. i.2`, which is not a location: " <> rule,
-               "global `l0` is at `panel.x.0`, which is not a location: " <> rule,
-               "global `l1` is at `panel.i`, which is not a location: " <> rule,
-               "global `l2` is at `rack.slot.i.0`, which is not a location: " <> rule,
-               "global `l3` is at `panel.Q.0`, which is not a location: " <> rule,
-               "global `l6` is at `panel.i.0.x`, which is not a location: " <> rule,
-               "global `l7` is at `panel.i.00`, which is not a location: " <> rule,
-               "global `l9` is at `panel.q.1.02`, which is not a location: " <> rule,
-               "global `l10` is at `panel.q.0`, the address of global `k`: one address holds one global"
+               "`panel.x.0` " <> no,
+               "`panel.i` " <> no,
+               "`rack.slot.i.0` " <> no,
+               "`panel.Q.0` " <> as_written <> " `panel.q.0`",
+               "`panel.i.0.x` " <> no,
+               "`panel.i.00` " <> as_written <> " `panel.i.0`",
+               "`panel.q.1.02` " <> as_written <> " `panel.q.1.2`",
+               "`l10` is at `panel.q.0`, where `k` already is: a location holds one global"
              ]
     end
 
@@ -781,12 +800,13 @@ defmodule Logex.ConfigurationTest do
                ~s|program instance `d`: its type is a program's name, found "se al"|,
                "program instance `e`: its task is a task's name, or nil for none, found :fast",
                ~s|program instance `f`: its task is a task's name, or nil for none, found "fa st"|,
-               "program instance `a`: there is no program `Seal` — did you mean `seal`? " <>
-                 "(names are case-sensitive)",
-               "program instance `b`: there is no program `zzz`: the programs are `seal`",
-               "program instance `f`: there is no program `seal.x` — did you mean `seal`?",
-               "`e.start` is not connected: every var_input is connected, to a global or a constant",
-               "`e.stop` is not connected: every var_input is connected, to a global or a constant"
+               "unknown program type `Seal` — did you mean `seal`? (program types are " <>
+                 "case-sensitive)",
+               "unknown program type `zzz`: the types given are `seal`",
+               "`seal.x` cannot name a program type: a type is named by its file, `motor.ld` " <>
+                 "for `motor`, and a name is a letter or `_`, then letters, digits or `_`",
+               "`e` leaves its var_inputs `start` and `stop` unconnected: connect each to a " <>
+                 "global, a point or a constant, as in `e.start 0`"
              ]
 
       fields =
@@ -821,7 +841,7 @@ defmodule Logex.ConfigurationTest do
 
     test "at least one", %{seal: seal} do
       assert refused(name: "plant", programs: [seal]) == [
-               "a configuration runs at least one program instance"
+               "this configuration declares no `program`: it would run nothing"
              ]
     end
   end
@@ -858,18 +878,17 @@ defmodule Logex.ConfigurationTest do
                  ~s|in `m1.start`, found "m" and "st art"|,
                ~s|a connection's instance is a name, and with its member makes one path, as | <>
                  ~s|in `m1.start`, found "m" and :start|,
-               "program instance `u`: there is no program `zzz`: the programs are `seal`",
-               "`q.start`: there is no program instance `q`: the program instances are `m` and `u`",
-               "`m` is a program instance of `seal`, which declares no `strt` — did you mean " <>
-                 "`start`?",
-               "`m.t1.pre` goes too deep: a connection names a var_input or var_output of a " <>
-                 "program instance, as in `m.start`",
+               "unknown program type `zzz`: the types given are `seal`",
+               "no instance `q`: declare it, as in `program q motor`",
+               "`m` is a `seal`, which declares no `strt` — did you mean `start`?",
+               "`m.t1.pre` goes too deep: a connection names an instance's var_input or " <>
+                 "var_output, as in `m.start`",
                "`m.fault` is internal to `seal` (declared `var`): only a var_input or var_output " <>
                  "connects",
                "`m.t1` is internal to `seal` (declared `var`): only a var_input or var_output " <>
                  "connects",
-               "`m` is a program instance of `seal`, which declares no `zz`: its var_inputs " <>
-                 "and var_outputs are `motor`, `sp`, `start` and `stop`"
+               "`m` is a `seal`, which declares no `zz`: its var_inputs and var_outputs are " <>
+                 "`motor`, `sp`, `start` and `stop`"
              ]
     end
 
@@ -887,10 +906,10 @@ defmodule Logex.ConfigurationTest do
       assert refused(Keyword.put(base(seal), :connections, connections)) == [
                "`m.start` is connected to -1: a connection's other end is a global, by name, " <>
                  "or a constant of 0 or more",
-               "`m.start` is connected to `pbb`, which is not a global — did you mean `pb`?",
+               "no global `pbb` — did you mean `pb`?",
                "`m.stop` is a bool, but `sp` is a dint",
-               "`m.stop` is already connected, to `sp`: a var_input is connected once",
-               "`m.start` is already connected, to `pbb`: a var_input is connected once"
+               "`m.stop` is already connected, to `sp`: a var_input has one source",
+               "`m.start` is already connected, to `pbb`: a var_input has one source"
              ]
 
       # A var_input whose one connection has a bad other end counts as connected: one
@@ -930,9 +949,9 @@ defmodule Logex.ConfigurationTest do
       config = Configuration.new!(base(seal))
 
       assert Enum.map(Configuration.check(%{config | connections: again}), & &1.message) == [
-               "`m.start` is already connected, to 0: a var_input is connected once",
-               "`m.stop` is connected to `m.motor`, which is not a global: the globals are " <>
-                 "`k`, `pb`, `pb2` and `sp`"
+               "`m.start` is already connected, to `0`: a var_input has one source",
+               "`m.motor` is an instance's member: instances share a value only through a " <>
+                 "global, which one drives and the other reads"
              ]
     end
 
@@ -986,11 +1005,12 @@ defmodule Logex.ConfigurationTest do
                  "a constant of 0 or more",
                "`m.sp` is connected to -3: a connection's other end is a global, by name, or " <>
                  "a constant of 0 or more",
-               "`m.motor` is a var_output: it drives a global, and a constant cannot be driven",
-               "`m.motor` is connected to `kk`, which is not a global — did you mean `k`?",
-               "`pb` is an input point: `m.motor` cannot drive it",
+               "`m.motor` is a var_output, which drives a global: it cannot drive the constant " <>
+                 "`1`",
+               "no global `kk` — did you mean `k`?",
+               "`pb` is an input point: `m.motor`, a var_output, cannot drive it",
                "`m.motor` is a bool, but `sp` is a dint",
-               "`k` is already driven by `m.motor`: one connection drives a global"
+               "`k` is already driven by `m.motor`"
              ]
 
       # A var_output refused for its type drives nothing, so the one that then drives its
@@ -1007,6 +1027,7 @@ defmodule Logex.ConfigurationTest do
              ]
     end
 
+    # One diagnostic an instance, at its line, naming every var_input it leaves.
     test "every var_input is connected (decision 7), cited at its instance", %{seal: seal} do
       assert refused(
                name: "plant",
@@ -1014,8 +1035,19 @@ defmodule Logex.ConfigurationTest do
                instances: [%Instance{name: "m", type: "seal"}]
              ) ==
                [
-                 "`m.start` is not connected: every var_input is connected, to a global or a constant",
-                 "`m.stop` is not connected: every var_input is connected, to a global or a constant"
+                 "`m` leaves its var_inputs `start` and `stop` unconnected: connect each to a " <>
+                   "global, a point or a constant, as in `m.start 0`"
+               ]
+
+      assert refused(
+               name: "plant",
+               programs: [seal],
+               instances: [%Instance{name: "m", type: "seal"}],
+               connections: [%Connection{instance: "m", member: "stop", to: 0}]
+             ) ==
+               [
+                 "`m` leaves its var_input `start` unconnected: connect it to a global, a point " <>
+                   "or a constant, as in `m.start 0`"
                ]
 
       # In the order the program declares them, which is not the order of their names.
@@ -1032,8 +1064,8 @@ defmodule Logex.ConfigurationTest do
                instances: [%Instance{name: "z", type: "zig"}]
              ) ==
                [
-                 "`z.zeta` is not connected: every var_input is connected, to a global or a constant",
-                 "`z.alpha` is not connected: every var_input is connected, to a global or a constant"
+                 "`z` leaves its var_inputs `zeta` and `alpha` unconnected: connect each to a " <>
+                   "global, a point or a constant, as in `z.zeta 0`"
                ]
     end
 
@@ -1053,7 +1085,8 @@ defmodule Logex.ConfigurationTest do
                  ~s|in `m1.start`, found "m" and :start|,
                "`m.stop` is connected to -1: a connection's other end is a global, by name, or " <>
                  "a constant of 0 or more",
-               "`m.start` is not connected: every var_input is connected, to a global or a constant"
+               "`m` leaves its var_input `start` unconnected: connect it to a global, a point " <>
+                 "or a constant, as in `m.start 0`"
              ]
     end
   end
@@ -1088,15 +1121,15 @@ defmodule Logex.ConfigurationTest do
 
       assert formatted(config) == [
                "plant.logex: line 2: task `fast`: an interval is 1 to 2147483647 ms, found 0",
-               "plant.logex: line 4: global `k` is at `panel.i.0`, the address of global `pb` " <>
-                 "(line 3): one address holds one global",
-               "plant.logex: line 6: `m.stop` is not connected: every var_input is connected, " <>
-                 "to a global or a constant",
+               "plant.logex: line 4: `k` is at `panel.i.0`, where `pb` already is (line 3): a " <>
+                 "location holds one global",
+               "plant.logex: line 6: `m` leaves its var_input `stop` unconnected: connect it to " <>
+                 "a global, a point or a constant, as in `m.stop 0`",
                "plant.logex: line 7: `m.start` is already connected, to `pb` (line 5): a " <>
-                 "var_input is connected once",
-               "plant.logex: line 8: `k` is an input point (line 4): `m.motor` cannot drive it",
-               "plant.logex: line 10: `fast` is already the name of a task (line 2): tasks, " <>
-                 "globals and program instances share one namespace"
+                 "var_input has one source",
+               "plant.logex: line 8: `k` is an input point (line 4): `m.motor`, a var_output, " <>
+                 "cannot drive it",
+               "plant.logex: line 10: `fast` is declared twice: first on line 2, as a task"
              ]
     end
   end
@@ -1122,8 +1155,7 @@ defmodule Logex.ConfigurationTest do
       }
 
       assert formatted(config) == [
-               "plant.logex: line 9: `m` is already the name of a program instance (line 6): " <>
-                 "tasks, globals and program instances share one namespace"
+               "plant.logex: line 9: `m` is declared twice: first on line 6, as an instance"
              ]
     end
   end
@@ -1158,25 +1190,20 @@ defmodule Logex.ConfigurationTest do
       }
 
       assert formatted(config) == [
-               "plant.logex: line 2: `T` and the task `t` (line 1) differ only in case: names " <>
-                 "are case-sensitive, so these would be two names",
+               "plant.logex: line 2: `T` and `t` (line 1) differ only in case: names are " <>
+                 "case-sensitive, so these would be two (`t` is a task)",
                "plant.logex: line 2: task `T`: an interval is 1 to 2147483647 ms, found 0",
                "plant.logex: line 2: task `T`: a priority is 0, the highest, to 65535, found 70000",
-               ~s|plant.logex: line 3: "u.v" cannot name a task: a name is a letter or `_`, | <>
-                 "then letters, digits or `_`",
+               "plant.logex: line 3: `u.v` cannot name a task: `.` is kept for a path, as in " <>
+                 "`m1.start`, and a location, as in `panel.i.0`",
                "plant.logex: line 3: task `u.v`: an interval is 1 to 2147483647 ms, found nil",
                "plant.logex: line 3: task `u.v`: a priority is 0, the highest, to 65535, found nil",
-               "plant.logex: line 5: `g` is already the name of a global (line 4): tasks, " <>
-                 "globals and program instances share one namespace",
-               "plant.logex: line 5: global `g` is a bool: its initial value must be 0 or 1, " <>
-                 "found `7`",
-               "plant.logex: line 5: global `g` is at `nowhere`, which is not a location: a " <>
-                 "location is a device, `i` for an input or `q` for an output, then an " <>
-                 "address, as in `panel.i.0` or `panel.q.3`",
-               "plant.logex: line 7: `m` is already the name of a program instance (line 6): " <>
-                 "tasks, globals and program instances share one namespace",
-               "plant.logex: line 7: program instance `m`: there is no program `zzz`: the " <>
-                 "programs are `seal`",
+               "plant.logex: line 5: `g` is declared twice: first on line 4, as a global",
+               "plant.logex: line 5: `g` is a bool: its initial value must be 0 or 1, found `7`",
+               "plant.logex: line 5: `nowhere` is not a location: a location is a device, `i` " <>
+                 "or `q`, and an address, as in `panel.i.0`",
+               "plant.logex: line 7: `m` is declared twice: first on line 6, as an instance",
+               "plant.logex: line 7: unknown program type `zzz`: the types given are `seal`",
                "plant.logex: line 7: program instance `m`: there is no task `qqq`: the tasks " <>
                  "are `t`"
              ]
@@ -1207,12 +1234,1033 @@ defmodule Logex.ConfigurationTest do
       }
 
       assert formatted(config) == [
-               "plant.logex: line 2: `pb` is already the name of a global (line 1): tasks, " <>
-                 "globals and program instances share one namespace",
-               "plant.logex: line 4: `k` is already the name of a global (line 3): tasks, " <>
-                 "globals and program instances share one namespace",
+               "plant.logex: line 2: `pb` is declared twice: first on line 1, as a global",
+               "plant.logex: line 4: `k` is declared twice: first on line 3, as a global",
                "plant.logex: line 9: `m.sp` is a dint, but `pb` is a bool (line 1)"
              ]
+    end
+  end
+
+  # M2-2: a configuration file's text, compiled against program types given as data.
+
+  # `base/1` as a configuration file says it, one element a line.
+  @base """
+  var_global pb bool at panel.i.0
+  var_global pb2 bool at panel.i.1
+  var_global k bool at panel.q.0
+  var_global sp dint
+  program m seal
+  m.start pb
+  m.stop 0
+  m.motor k
+  """
+
+  # The §4.2 motor, which `docs/organisation.md` §4.4's plant and its receipt run.
+  @motor """
+  var_input start bool
+  var_input stop bool
+  var_input overtemp bool
+  var_input reset bool
+  var_output motor bool
+  var_output run_lamp bool
+  var_output speed_sp dint 1200
+  var fault bool
+
+  ( xic start | xic motor ) xio stop ote motor
+  xic motor ote run_lamp
+  xic overtemp otl fault
+  xic reset otu fault
+  xic fault move 0 speed_sp
+  """
+
+  @snapshot """
+  var_input a bool
+  var_input b bool
+  var_output a_was bool
+  var_output b_was bool
+
+  xic a ote a_was
+  xic b ote b_was
+  """
+
+  # The receipt's broken source (`docs/organisation.md` §4.4), one mistake on each of
+  # lines 7, 9, 11, 12, 14, 15 and 16 and every other line right, as the design pass wrote
+  # it: its line 6 declares a task, and line 9's mistake is the task its instance names.
+  @broken """
+  // broken: seven mistakes, one a line
+  var_global pb bool at panel.i.0
+  var_global k bool at panel.q.0
+  var_global lamp bool at panel.q.1
+  var_global x bool
+  task fast interval 10 priority 1
+  progam m0 motor
+  var_global st bool at panel.i.1
+  program m1 motor with medium
+  m1.start pb
+  m1.strat pb
+  m1.motor pb
+  m1.run_lamp k
+  m1.motor k
+  m1.fault x
+  m1.speed_sp k
+  m1.stop st
+  m1.overtemp 0
+  m1.reset 0
+  """
+
+  defp plant_programs do
+    {:ok, motor} = Logex.compile(@motor, name: "motor")
+    {:ok, snapshot} = Logex.compile(@snapshot, name: "snapshot")
+    %{"motor" => motor, "snapshot" => snapshot}
+  end
+
+  defp compiled(source, programs), do: Configuration.compile("plant", source, programs)
+
+  # Every diagnostic compile/3 gives for `source`, formatted.
+  defp errors(source, programs) do
+    assert {:error, diagnostics} = compiled(source, programs)
+    Enum.map(diagnostics, &Diagnostic.format/1)
+  end
+
+  # The warnings of a configuration compile/3 accepts, formatted.
+  defp warned(source, programs) do
+    assert {:ok, %Configuration{warnings: warnings}} = compiled(source, programs)
+    Enum.map(warnings, &Diagnostic.format/1)
+  end
+
+  # `docs/organisation.md` §4.4's plant, cut from the document, its task lines and each
+  # `with` blanked, so every line keeps its number: M2-2's words.
+  defp taskless_plant do
+    [_before, rest] =
+      String.split(File.read!("docs/organisation.md"), "```\n// plant.", parts: 2)
+
+    [block, _after] = String.split("// plant." <> rest, "```", parts: 2)
+
+    block
+    |> String.replace(~r/^task .*$/m, "")
+    |> String.replace(~r/ with \w+$/m, "")
+  end
+
+  describe "compile/3 (M2-2): a configuration file's text, checked by check/1's rules" do
+    # The plant's motor is the §4.3 form, whose `estop` is a var_external, which M2-4
+    # brings: run against the §4.2 motor, `estop` is a global nothing uses.
+    test "§4.4's plant, in M2-2's words, compiles, starts and cycles" do
+      programs = plant_programs()
+      assert {:ok, plant} = compiled(taskless_plant(), programs)
+
+      assert %Configuration{name: "plant", file: nil, tasks: []} = plant
+      assert plant.programs == programs
+
+      assert Enum.map(plant.instances, &{&1.name, &1.type, &1.task, &1.line}) ==
+               [{"m1", "motor", nil, 23}, {"m2", "motor", nil, 32}, {"snap", "snapshot", nil, 41}]
+
+      assert length(plant.globals) == 16 and length(plant.connections) == 18
+
+      assert Enum.map(plant.warnings, &Diagnostic.format/1) == [
+               "line 6: warning: `estop` is declared but nothing uses it"
+             ]
+
+      assert Configuration.check(plant) == []
+      runtime = Logex.Runtime.start(plant)
+      {runtime, outputs, _events} = Logex.Runtime.cycle(runtime, 10, %{"pb_start_1" => 1})
+      assert %{"k1" => 1, "k2" => 0, "sp_1" => 1200} = outputs
+      assert Logex.Runtime.get!(runtime, "m1.motor") == 1
+    end
+
+    # Six of the receipt's seven, word for word as M2-2's checks give them, with the task
+    # its line 6 declares and line 9's `with` left out, so every line keeps its number.
+    # Line 9's, an instance's unknown task, lands with M2-3, which reads `task` and `with`.
+    test "gives the receipt's diagnostics for its broken source, one a line" do
+      taskless =
+        @broken
+        |> String.replace("task fast interval 10 priority 1", "// a task line, M2-3's")
+        |> String.replace(" with medium", "")
+
+      assert errors(taskless, plant_programs()) == [
+               "line 7, column 1: unknown configuration line `progam` — did you mean `program`?",
+               "line 11: `m1` is a `motor`, which declares no `strat` — did you mean `start`?",
+               "line 12: `pb` is an input point (line 2): `m1.motor`, a var_output, cannot drive " <>
+                 "it",
+               "line 14: `k` is already driven by `m1.run_lamp` (line 13)",
+               "line 15: `m1.fault` is internal to `motor` (declared `var`): only a var_input or " <>
+                 "var_output connects",
+               "line 16: `m1.speed_sp` is a dint, but `k` is a bool (line 3)"
+             ]
+    end
+
+    # As written, its task line and its `with` are words no M2-2 line reads. The broken
+    # `program` line still declares `m1`, so nothing that names `m1` is reported again.
+    test "the receipt's source as written is refused where it names a task, its broken " <>
+           "instance's connections silent" do
+      assert errors(@broken, plant_programs()) == [
+               "line 6, column 1: unknown configuration line `task`: a line starts with " <>
+                 "`var_global` or `program`, or is a connection, as in `m1.start pb_start_1`",
+               "line 7, column 1: unknown configuration line `progam` — did you mean `program`?",
+               "line 9, column 18: unexpected `with` after `program m1 motor`"
+             ]
+    end
+
+    test "a diagnostic is at stage :configure, in no file, and a line's reading comes " <>
+           "before its checks" do
+      source = "var_global program\nprogram m snapshot\nm.a 0\nm.b 0"
+      assert {:error, [read, checked]} = compiled(source, plant_programs())
+
+      assert %Diagnostic{stage: :configure, line: 1, column: 1, file: nil, severity: :error} =
+               read
+
+      assert %Diagnostic{stage: :configure, line: 1, column: nil, file: nil} = checked
+
+      assert Enum.map([read, checked], &Diagnostic.format/1) == [
+               "line 1, column 1: `program` needs a type: `var_global program bool` or " <>
+                 "`var_global program dint`",
+               "line 1: `program` is a keyword and cannot name a global"
+             ]
+    end
+
+    test "a lex error stops it and is the only diagnostic" do
+      assert compiled("program m1 motor\nvar_global a bool at %ix0.0\nm1.zz 7", plant_programs()) ==
+               {:error,
+                [
+                  %Diagnostic{
+                    stage: :lex,
+                    line: 2,
+                    column: 22,
+                    message: ~s(illegal character "%")
+                  }
+                ]}
+    end
+
+    # Its warnings are the ones its configuration built from Elixir gets, and stop
+    # nothing; a configuration with a mistake carries none.
+    test "what it accepts, check/1 accepts and start/1 runs; what it refuses carries no " <>
+           "warning",
+         %{seal: seal} do
+      assert {:ok, config} = compiled(@base, %{"seal" => seal})
+      assert Configuration.check(config) == []
+      assert %Logex.Runtime{} = Logex.Runtime.start(config)
+
+      assert Enum.map(config.warnings, &Diagnostic.format/1) == [
+               "line 2: warning: `pb2` is declared but nothing uses it",
+               "line 4: warning: `sp` is declared but nothing uses it"
+             ]
+
+      assert errors(@base <> "m.stop 1\n", %{"seal" => seal}) == [
+               "line 9: `m.stop` is already connected, to `0` (line 7): a var_input has one source"
+             ]
+    end
+  end
+
+  # Every check M2-1 pins from data, again as a whole list from source, in the same words
+  # (`docs/organisation.md` §4.10). A task's checks wait for M2-3, which reads task lines,
+  # and a host's mistake is no text's.
+  describe "every check from data, again from source" do
+    test "a configuration that runs", %{seal: seal} do
+      programs = %{"seal" => seal}
+
+      assert {:ok, _} =
+               compiled(
+                 String.replace(@base, "program m seal", "program seal seal")
+                 |> String.replace(~r/^m\./m, "seal."),
+                 programs
+               )
+
+      assert warned(
+               @base <>
+                 "var_global k2 bool at panel.q.1\nprogram m2 seal\nm.motor k2\nm2.start k\n" <>
+                 "m2.stop pb2\nm.sp sp\n",
+               programs
+             ) == []
+    end
+
+    test "each list of names is given once, by the first diagnostic in line order",
+         %{seal: seal} do
+      source = """
+      var_global pb bool at panel.i.0
+      var_global k bool at panel.q.0
+      program m seal
+      program x1 aaa
+      program x2 zzz
+      m.start pb
+      m.stop 0
+      m.sp aa
+      m.motor zz
+      m.qq 0
+      m.ww 0
+      qq.start 0
+      ww.start 0
+      """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 4: unknown program type `aaa`: the types given are `seal`",
+               "line 5: unknown program type `zzz`",
+               "line 8: no global `aa`: declare it, as in `var_global aa dint`",
+               "line 9: no global `zz`: declare it, as in `var_global zz bool`",
+               "line 10: `m` is a `seal`, which declares no `qq`: its var_inputs and " <>
+                 "var_outputs are `motor`, `sp`, `start` and `stop`",
+               "line 11: `m` is a `seal`, which declares no `ww`",
+               "line 12: no instance `qq`: declare it, as in `program qq motor`",
+               "line 13: no instance `ww`: declare it, as in `program ww motor`"
+             ]
+    end
+
+    # The instance `m` loses its name to the global, which keeps it: each use of the name
+    # is checked against the global.
+    test "globals and instances share one namespace, case-only twins refused, and a name " <>
+           "has no `.`",
+         %{seal: seal} do
+      source = """
+      var_global pb bool at panel.i.0
+      var_global k bool at panel.q.0
+      var_global m bool
+      program m seal
+      var_global a.b bool
+      program PB seal
+      program seal seal
+      m.start pb
+      m.stop 0
+      m.motor k
+      seal.start 0
+      """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 4: `m` is declared twice: first on line 3, as a global",
+               "line 5: `a.b` cannot name a global: `.` is kept for a path, as in `m1.start`, " <>
+                 "and a location, as in `panel.i.0`",
+               "line 6: `PB` and `pb` (line 1) differ only in case: names are case-sensitive, " <>
+                 "so these would be two (`pb` is a global)",
+               "line 7: `seal` leaves its var_input `stop` unconnected: connect it to a global, " <>
+                 "a point or a constant, as in `seal.stop 0`",
+               "line 8: `m` is a global (line 3), not an instance",
+               "line 9: `m` is a global (line 3), not an instance",
+               "line 10: `m` is a global (line 3), not an instance"
+             ]
+    end
+
+    test "an element whose name is refused still has its other fields checked", %{seal: seal} do
+      source = """
+      var_global g bool
+      var_global g bool 7 at nowhere
+      program m seal
+      program m zzz
+      m.start 0
+      m.stop 0
+      """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 2: `g` is declared twice: first on line 1, as a global",
+               "line 2: `g` is a bool: its initial value must be 0 or 1, found `7`",
+               "line 2: `nowhere` is not a location: a location is a device, `i` or `q`, and " <>
+                 "an address, as in `panel.i.0`",
+               "line 4: `m` is declared twice: first on line 3, as an instance",
+               "line 4: unknown program type `zzz`: the types given are `seal`"
+             ]
+    end
+
+    test "a use of a refused name finds the element that kept it", %{seal: seal} do
+      source = """
+      var_global pb bool
+      var_global pb dint
+      var_global k bool
+      var_global k bool at panel.i.0
+      program m seal
+      m.start pb
+      m.stop 0
+      m.motor k
+      m.sp pb
+      """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 2: `pb` is declared twice: first on line 1, as a global",
+               "line 4: `k` is declared twice: first on line 3, as a global",
+               "line 9: `m.sp` is a dint, but `pb` is a bool (line 1)"
+             ]
+    end
+
+    test "a global's initial value fits its type, and a located global takes none",
+         %{seal: seal} do
+      source =
+        @base <>
+          """
+          var_global b bool 2
+          var_global c dint 2147483648
+          var_global f bool 1 at panel.i.5
+          var_global h dint 7 at drive.q.0
+          var_global i bool 1
+          var_global j dint 2147483647
+          """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 9: `b` is a bool: its initial value must be 0 or 1, found `2`",
+               "line 10: `c` is a dint: `2147483648` does not fit in 32 bits",
+               "line 11: `f` is an input point: its value comes from the input image, so it " <>
+                 "takes no initial value",
+               "line 12: `h` is an output point: it takes no initial value, and is 0 until its " <>
+                 "driver writes it"
+             ]
+    end
+
+    test "a location is a device, i or q, and an address in its one spelling, one address " <>
+           "a global",
+         %{seal: seal} do
+      source =
+        @base <>
+          """
+          var_global l0 bool at panel.x.0
+          var_global l1 bool at panel.i
+          var_global l2 bool at rack.slot.i.0
+          var_global l3 bool at panel.Q.0
+          var_global l6 bool at panel.i.0.x
+          var_global l7 bool at panel.i.00
+          var_global l8 bool at panel.q.1.2
+          var_global l9 bool at panel.q.1.02
+          var_global l10 bool at panel.q.0
+          var_global l11 bool at panel.q.0.1
+          var_global l12 bool at panel.i.1.0
+          var_global l13 bool at panel.i.10
+          """
+
+      no =
+        "is not a location: a location is a device, `i` or `q`, and an address, as in " <>
+          "`panel.i.0`"
+
+      as_written =
+        "is not a location as written: a location's `i` or `q` is lowercase and its address " <>
+          "has no leading zero, so it is written"
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 9: `panel.x.0` " <> no,
+               "line 10: `panel.i` " <> no,
+               "line 11: `rack.slot.i.0` " <> no,
+               "line 12: `panel.Q.0` " <> as_written <> " `panel.q.0`",
+               "line 13: `panel.i.0.x` " <> no,
+               "line 14: `panel.i.00` " <> as_written <> " `panel.i.0`",
+               "line 16: `panel.q.1.02` " <> as_written <> " `panel.q.1.2`",
+               "line 17: `l10` is at `panel.q.0`, where `k` already is (line 3): a location " <>
+                 "holds one global"
+             ]
+    end
+
+    test "an instance names a program type given", %{seal: seal} do
+      source = """
+      program m seal
+      program a Seal
+      program b zzz
+      program f seal.x
+      """
+
+      tied = for x <- ~w(m a b f), member <- ~w(start stop), do: "#{x}.#{member} 0"
+
+      assert errors(source <> Enum.join(tied, "\n"), %{"seal" => seal}) == [
+               "line 2: unknown program type `Seal` — did you mean `seal`? (program types are " <>
+                 "case-sensitive)",
+               "line 3: unknown program type `zzz`: the types given are `seal`",
+               "line 4: `seal.x` cannot name a program type: a type is named by its file, " <>
+                 "`motor.ld` for `motor`, and a name is a letter or `_`, then letters, digits " <>
+                 "or `_`"
+             ]
+
+      assert errors("program m seal\nm.start 0\nm.stop 0", %{}) == [
+               "line 1: unknown program type `seal`: no program types were given"
+             ]
+    end
+
+    test "a configuration runs at least one program instance" do
+      for source <- ["var_global a bool", "", "// nothing\n"] do
+        assert errors(source, plant_programs()) == [
+                 "this configuration declares no `program`: it would run nothing"
+               ]
+      end
+    end
+
+    test "a connection names a var_input or var_output of a declared instance", %{seal: seal} do
+      source =
+        @base <>
+          """
+          program u zzz
+          q.start pb
+          u.start pb
+          m.strt pb
+          m.t1.pre sp
+          m.fault pb
+          m.t1 pb
+          m.zz pb
+          """
+
+      # `u` cannot run, its program unknown, so its own connection is not checked.
+      assert errors(source, %{"seal" => seal}) == [
+               "line 9: unknown program type `zzz`: the types given are `seal`",
+               "line 10: no instance `q`: declare it, as in `program q motor`",
+               "line 12: `m` is a `seal`, which declares no `strt` — did you mean `start`?",
+               "line 13: `m.t1.pre` goes too deep: a connection names an instance's var_input " <>
+                 "or var_output, as in `m.start`",
+               "line 14: `m.fault` is internal to `seal` (declared `var`): only a var_input or " <>
+                 "var_output connects",
+               "line 15: `m.t1` is internal to `seal` (declared `var`): only a var_input or " <>
+                 "var_output connects",
+               "line 16: `m` is a `seal`, which declares no `zz`: its var_inputs and " <>
+                 "var_outputs are `motor`, `sp`, `start` and `stop`"
+             ]
+    end
+
+    test "a var_input has one source, a global of its type or a constant that fits",
+         %{seal: seal} do
+      source = """
+      var_global pb bool at panel.i.0
+      var_global pb2 bool at panel.i.1
+      var_global k bool at panel.q.0
+      var_global sp dint
+      program m seal
+      m.start pbb
+      m.stop sp
+      m.stop 1
+      m.motor k
+      """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 6: no global `pbb` — did you mean `pb`?",
+               "line 7: `m.stop` is a bool, but `sp` is a dint (line 4)",
+               "line 8: `m.stop` is already connected, to `sp` (line 7): a var_input has one " <>
+                 "source"
+             ]
+
+      assert errors(String.replace(@base, "m.start pb", "m.start 2"), %{"seal" => seal}) == [
+               "line 6: `m.start` is a bool: only 0 or 1 fit, found `2`"
+             ]
+
+      {:ok, dints} =
+        Logex.compile("var_input a dint\nvar_output q dint\nmove a q", name: "dints")
+
+      dint = fn to -> "var_global n dint\nprogram d dints\nd.a #{to}\nd.q n" end
+      assert {:ok, _} = compiled(dint.(2_147_483_647), %{"dints" => dints})
+
+      assert errors(dint.(2_147_483_648), %{"dints" => dints}) == [
+               "line 3: `d.a` is a dint: `2147483648` does not fit in 32 bits"
+             ]
+    end
+
+    test "a var_output drives a global of its type, never an input point, and is the one " <>
+           "connection that drives it",
+         %{seal: seal} do
+      source = """
+      var_global pb bool at panel.i.0
+      var_global pb2 bool at panel.i.1
+      var_global k bool at panel.q.0
+      var_global sp dint
+      program m seal
+      program m2 seal
+      m.start pb
+      m.stop 0
+      m2.start k
+      m2.stop pb2
+      m.motor 1
+      m.motor kk
+      m.motor pb
+      m.motor sp
+      m.motor k
+      m2.motor k
+      """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 11: `m.motor` is a var_output, which drives a global: it cannot drive the " <>
+                 "constant `1`",
+               "line 12: no global `kk` — did you mean `k`?",
+               "line 13: `pb` is an input point (line 1): `m.motor`, a var_output, cannot drive " <>
+                 "it",
+               "line 14: `m.motor` is a bool, but `sp` is a dint (line 4)",
+               "line 16: `k` is already driven by `m.motor` (line 15)"
+             ]
+
+      # A var_output refused for its type drives nothing.
+      mistyped = "var_global k bool\nprogram m seal\nm.start 0\nm.stop 0\nm.sp k\nm.motor k"
+
+      assert errors(mistyped, %{"seal" => seal}) == [
+               "line 5: `m.sp` is a dint, but `k` is a bool (line 1)"
+             ]
+    end
+
+    # One diagnostic an instance, at its `program` line, naming every var_input it leaves,
+    # in the order its program declares them.
+    test "every var_input is connected (decision 7), cited at its instance's line",
+         %{seal: seal} do
+      {:ok, zig} =
+        Logex.compile(
+          "var_input zeta bool\nvar_input alpha bool\nvar_output o bool\nxic zeta xic alpha ote o",
+          name: "zig"
+        )
+
+      source = "program m seal\nprogram n seal\nn.stop 0\nprogram z zig\n"
+
+      assert errors(source, %{"seal" => seal, "zig" => zig}) == [
+               "line 1: `m` leaves its var_inputs `start` and `stop` unconnected: connect each " <>
+                 "to a global, a point or a constant, as in `m.start 0`",
+               "line 2: `n` leaves its var_input `start` unconnected: connect it to a global, a " <>
+                 "point or a constant, as in `n.start 0`",
+               "line 4: `z` leaves its var_inputs `zeta` and `alpha` unconnected: connect each " <>
+                 "to a global, a point or a constant, as in `z.zeta 0`"
+             ]
+
+      # A duplicate keeps no name, so only the instance that keeps it is told.
+      assert errors("program m seal\nprogram m seal\n", %{"seal" => seal}) == [
+               "line 1: `m` leaves its var_inputs `start` and `stop` unconnected: connect each " <>
+                 "to a global, a point or a constant, as in `m.start 0`",
+               "line 2: `m` is declared twice: first on line 1, as an instance"
+             ]
+    end
+
+    # Lines come in any order a file gives them, and the problems in line order, each at
+    # its own line; a message that names another element gives that element's line.
+    test "each problem is cited at its line, in line order", %{seal: seal} do
+      source = """
+      m.start pb
+      var_global pb bool at panel.i.0
+      var_global k bool at panel.i.0
+      program m seal
+      m.start pb
+      m.motor k
+      var_global m2 bool
+      program m2 seal
+      """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 3: `k` is at `panel.i.0`, where `pb` already is (line 2): a location holds " <>
+                 "one global",
+               "line 4: `m` leaves its var_input `stop` unconnected: connect it to a global, a " <>
+                 "point or a constant, as in `m.stop 0`",
+               "line 5: `m.start` is already connected, to `pb` (line 1): a var_input has one " <>
+                 "source",
+               "line 6: `k` is an input point (line 3): `m.motor`, a var_output, cannot drive it",
+               "line 8: `m2` is declared twice: first on line 7, as a global"
+             ]
+    end
+  end
+
+  describe "what a configuration file names (M2-2)" do
+    # A keyword names nothing in a configuration file (§4.8): no global, instance or task
+    # is named so, in any case, nor a program type; and no message advises declaring one.
+    # From Elixir as from the text, where a line can say it.
+    test "a configuration file's keyword names nothing, and nothing is told to declare one",
+         %{seal: seal} do
+      source = """
+      var_global program bool
+      program var_global seal
+      program DINT seal
+      program m At
+      program n seal
+      n.start bool
+      n.stop 0
+      n.motor Program
+      program.start 0
+      at.start 0
+      """
+
+      assert errors(source, %{"seal" => seal, "At" => %{seal | name: "At"}}) == [
+               "line 1: `program` is a keyword and cannot name a global",
+               "line 2: `var_global` is a keyword and cannot name an instance",
+               "line 3: `DINT` is a keyword and cannot name an instance",
+               "line 4: `At` is a keyword and cannot name a program type",
+               "line 6: no global `bool`: `bool` is a keyword of a configuration file, and " <>
+                 "nothing in one is named so",
+               "line 8: no global `Program`: `Program` is a keyword of a configuration file, " <>
+                 "and nothing in one is named so",
+               "line 10: no instance `at`: `at` is a keyword of a configuration file, and " <>
+                 "nothing in one is named so"
+             ]
+
+      fields =
+        Keyword.merge(base(seal),
+          tasks: [task("At", 10, 0)],
+          globals: base(seal)[:globals] ++ [%Global{name: "bool", type: :bool}],
+          instances: [
+            %Instance{name: "m", type: "seal"},
+            %Instance{name: "program", type: "seal"}
+          ]
+        )
+
+      assert refused(fields) == [
+               "`At` is a keyword and cannot name a task",
+               "`bool` is a keyword and cannot name a global",
+               "`program` is a keyword and cannot name an instance"
+             ]
+    end
+
+    # Decision 42: a name refused for its `.` or as a keyword is refused once, at its
+    # declaration, and nothing that names it is reported again, so a connection to it, an
+    # instance of it, or a member of it is silent; nor is that instance's var_input
+    # unconnected. A name M2-3's task lines will say is refused so from Elixir already.
+    test "a name refused for its `.` or as a keyword is reported once, its uses silent",
+         %{seal: seal} do
+      source = """
+      var_global a.b bool
+      program program seal
+      program m seal
+      m.start a.b
+      m.stop 0
+      program.start 0
+      m.motor a.b
+      m.motor program.motor
+      """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 1: `a.b` cannot name a global: `.` is kept for a path, as in `m1.start`, " <>
+                 "and a location, as in `panel.i.0`",
+               "line 2: `program` is a keyword and cannot name an instance"
+             ]
+
+      fields =
+        Keyword.merge(base(seal),
+          tasks: [task("u.v", 10, 0)],
+          instances: [%Instance{name: "m", type: "seal", task: "u.v"}]
+        )
+
+      assert refused(fields) == [
+               "`u.v` cannot name a task: `.` is kept for a path, as in `m1.start`, and a " <>
+                 "location, as in `panel.i.0`"
+             ]
+    end
+
+    # What a line that cannot be read names is declared by it: nothing that names it is
+    # reported again, a broken connection connects its var_input, a later connection to
+    # that var_input is no second source but has its own source checked, and a broken
+    # `program` line is a program the configuration declares.
+    test "a broken line declares what it names", %{seal: seal} do
+      source = """
+      var_global estop
+      program m1 seal fast
+      m1.start estop
+      program m2 seal
+      m2.start estop
+      m2.stop
+      m2.stop pbx
+      m2.motor estop
+      program m3 seal
+      m3.start 0 1
+      m3.stop 0
+      """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 1, column 1: `estop` needs a type: `var_global estop bool` or " <>
+                 "`var_global estop dint`",
+               "line 2, column 17: unexpected `fast` after `program m1 seal`",
+               "line 6, column 1: `m2.stop` needs a global or a constant to connect, as in " <>
+                 "`m2.stop pb_start_1`",
+               "line 7: no global `pbx`: declare it, as in `var_global pbx bool`",
+               "line 10, column 12: unexpected `1` after `m3.start 0`"
+             ]
+
+      assert errors("program m1 seal )", %{"seal" => seal}) == [
+               "line 1, column 17: a configuration line cannot hold `)`"
+             ]
+
+      # A line that names nothing declares nothing.
+      assert errors("var_global dInT", %{"seal" => seal}) == [
+               "line 1, column 12: `var_global` needs a name before `dInT`, as in " <>
+                 "`var_global estop bool`",
+               "this configuration declares no `program`: it would run nothing"
+             ]
+
+      # A broken line's name passes the name checks too: a keyword is refused as one.
+      assert errors("program at seal x", %{"seal" => seal}) == [
+               "line 1, column 17: unexpected `x` after `program at seal`",
+               "line 1: `at` is a keyword and cannot name an instance"
+             ]
+    end
+
+    # Each wrong reading of a dotted name is named (§4.7): a location is written only after
+    # `at`, its advice in its one spelling, and one a global is at reads as that location
+    # first, whatever its device is called; instances share a value only through a global;
+    # and a member of what is no instance says what it is.
+    test "a dotted name where a global or an instance is wanted is told its reading",
+         %{seal: seal} do
+      source = """
+      var_global pb bool at panel.i.0
+      var_global k1 bool at panel.q.0
+      var_global g bool at m.i.1
+      var_global sp dint
+      program m seal
+      program m2 seal
+      m.start panel.i.0
+      m.stop panel.I.0
+      m2.start panel.i.9
+      m2.stop m.i.1
+      m2.motor m.q.0
+      m.motor panel.q.00
+      m.sp drive.q.4
+      panel.q.0 1
+      m2.sp pb.x
+      m2.motor zz.y
+      m.motor m_.motor
+      """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 7: `panel.i.0` is a location, written only after `at` on a `var_global` " <>
+                 "line: name the global at it, `pb` (line 1)",
+               "line 8: `panel.I.0` is a location, written only after `at` on a `var_global` " <>
+                 "line: name the global at it, `pb` (line 1)",
+               "line 9: `panel.i.9` is a location, written only after `at` on a `var_global` " <>
+                 "line: declare a global at it, as in `var_global point bool at panel.i.9`, and " <>
+                 "name that",
+               "line 10: `m.i.1` is a location, written only after `at` on a `var_global` " <>
+                 "line: name the global at it, `g` (line 3)",
+               "line 11: `m.q.0` is an instance's member: instances share a value only through " <>
+                 "a global, which one drives and the other reads",
+               "line 12: `panel.q.00` is a location, written only after `at` on a " <>
+                 "`var_global` line: name the global at it, `k1` (line 2)",
+               "line 13: `drive.q.4` is a location, written only after `at` on a `var_global` " <>
+                 "line: declare a global at it, as in `var_global point dint at drive.q.4`, " <>
+                 "and name that",
+               "line 14: `panel.q.0` is a location, written only after `at` on a `var_global` " <>
+                 "line: a connection begins with an instance's var_input or var_output, as in " <>
+                 "`m1.start`",
+               "line 15: `pb.x` names a member of `pb`, but `pb` is a global (line 1), not an " <>
+                 "instance",
+               "line 16: `zz.y` names a member of an instance, and there is no instance `zz`",
+               "line 17: `m_.motor` names a member of an instance, and there is no instance " <>
+                 "`m_` — did you mean `m`?"
+             ]
+
+      # From Elixir, the same readings in the same words.
+      fields =
+        Keyword.put(base(seal), :connections, [
+          %Connection{instance: "m", member: "start", to: "panel.i.1"},
+          %Connection{instance: "m", member: "stop", to: "panel.i.7"},
+          %Connection{instance: "m", member: "motor", to: "m.sp"},
+          %Connection{instance: "panel", member: "q.0", to: 1}
+        ])
+
+      assert refused(fields) == [
+               "`panel.i.1` is a location, written only after `at` on a `var_global` line: " <>
+                 "name the global at it, `pb2`",
+               "`panel.i.7` is a location, written only after `at` on a `var_global` line: " <>
+                 "declare a global at it, as in `var_global point bool at panel.i.7`, and name " <>
+                 "that",
+               "`m.sp` is an instance's member: instances share a value only through a global, " <>
+                 "which one drives and the other reads",
+               "`panel.q.0` is a location, written only after `at` on a `var_global` line: a " <>
+                 "connection begins with an instance's var_input or var_output, as in `m1.start`"
+             ]
+    end
+
+    test "a name of another kind where a global or an instance is wanted says what it is",
+         %{seal: seal} do
+      source = @base <> "program n seal\nn.start m\nn.stop 0\nk.start 0\n"
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 10: `m` is an instance (line 5), not a global",
+               "line 12: `k` is a global (line 3), not an instance"
+             ]
+
+      fields =
+        Keyword.merge(base(seal),
+          tasks: [task("fast", 10, 0)],
+          connections:
+            base(seal)[:connections] ++ [%Connection{instance: "m", member: "sp", to: "fast"}]
+        )
+
+      assert refused(fields) == ["`fast` is a task, not a global"]
+    end
+
+    # One device under two spellings is likely one device mistyped, as two names that
+    # differ only in case are; the first spelling, in line order, keeps the device.
+    test "two device names that differ only in case are refused", %{seal: seal} do
+      source = @base <> "var_global pb3 bool at Panel.i.2\nvar_global pb4 bool at panel.i.3\n"
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 9: the device `Panel` and the device `panel` of `pb` (line 1) differ only " <>
+                 "in case: device names are case-sensitive, so these would be two devices"
+             ]
+
+      fields =
+        Keyword.put(base(seal), :globals, [
+          %Global{name: "pb", type: :bool, at: "panel.i.0"},
+          %Global{name: "k", type: :bool, at: "PANEL.q.0"},
+          %Global{name: "x", type: :bool, at: "Panel.i.0"}
+        ])
+
+      assert refused(fields) == [
+               "the device `PANEL` and the device `panel` of `pb` differ only in case: device " <>
+                 "names are case-sensitive, so these would be two devices",
+               "the device `Panel` and the device `panel` of `pb` differ only in case: device " <>
+                 "names are case-sensitive, so these would be two devices"
+             ]
+    end
+
+    # One mistake, one message: a global refused for its name has its location checked,
+    # but holds no address another global is then refused for.
+    test "a refused global does not take its location", %{seal: seal} do
+      source = """
+      var_global a bool at panel.i.0
+      var_global a bool at panel.i.1
+      var_global b bool at panel.i.1
+      var_global at bool at panel.i.2
+      var_global c bool at panel.i.2
+      var_global Program bool at rack.i.3
+      var_global d bool at RACK.i.4
+      program m seal
+      m.start a
+      m.stop b
+      """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 2: `a` is declared twice: first on line 1, as a global",
+               "line 4, column 12: `var_global` needs a name before `at`, as in " <>
+                 "`var_global estop bool`",
+               "line 6: `Program` is a keyword and cannot name a global"
+             ]
+    end
+  end
+
+  describe "a did-you-mean (M2-2)" do
+    # A name, a program type and a member are case-sensitive, and a near one that differs
+    # only in case says which it is.
+    test "a case-only did-you-mean says what is case-sensitive", %{seal: seal} do
+      source = """
+      var_global Pb bool at panel.i.0
+      program m2 seal
+      m2.Start Pb
+      m2.stop pb
+      M2.start 0
+      program m3 Seal
+      """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 2: `m2` leaves its var_input `start` unconnected: connect it to a global, " <>
+                 "a point or a constant, as in `m2.start 0`",
+               "line 3: `m2` is a `seal`, which declares no `Start` — did you mean `start`? " <>
+                 "(members are case-sensitive)",
+               "line 4: no global `pb` — did you mean `Pb`? (names are case-sensitive)",
+               "line 5: no instance `M2` — did you mean `m2`? (names are case-sensitive)",
+               "line 6: unknown program type `Seal` — did you mean `seal`? (program types are " <>
+                 "case-sensitive)"
+             ]
+    end
+  end
+
+  describe "warnings (M2-2), which stop nothing" do
+    # A use is a connection's source or sink. An output point nothing uses is unused only;
+    # one that something reads and nothing drives stays at 0.
+    test "a global nothing uses, and an output point something reads and nothing drives",
+         %{seal: seal} do
+      source =
+        @base <>
+          """
+          var_global spare bool at panel.i.9
+          var_global k3 bool at panel.q.3
+          var_global k4 bool at panel.q.4
+          var_global note dint 5
+          program m2 seal
+          m2.start k3
+          m2.stop 0
+          """
+
+      assert warned(source, %{"seal" => seal}) == [
+               "line 2: warning: `pb2` is declared but nothing uses it",
+               "line 4: warning: `sp` is declared but nothing uses it",
+               "line 9: warning: `spare` is declared but nothing uses it",
+               "line 10: warning: `k3` is an output point, but nothing drives it: it stays at 0",
+               "line 11: warning: `k4` is declared but nothing uses it",
+               "line 12: warning: `note` is declared but nothing uses it"
+             ]
+
+      assert {:ok, %Configuration{warnings: [warning | _]}} = compiled(source, %{"seal" => seal})
+      assert %Diagnostic{stage: :configure, severity: :warning, line: 2, file: nil} = warning
+
+      # From Elixir, the same warnings, with no line.
+      fields =
+        Keyword.merge(base(seal),
+          globals: base(seal)[:globals] ++ [%Global{name: "k3", type: :bool, at: "panel.q.3"}],
+          instances: [%Instance{name: "m", type: "seal"}, %Instance{name: "m2", type: "seal"}],
+          connections:
+            base(seal)[:connections] ++
+              [
+                %Connection{instance: "m2", member: "start", to: "k3"},
+                %Connection{instance: "m2", member: "stop", to: 0},
+                %Connection{instance: "m2", member: "sp", to: "sp"}
+              ]
+        )
+
+      assert %Configuration{warnings: warnings} = Configuration.new!(fields)
+
+      assert Enum.map(warnings, &Diagnostic.format/1) == [
+               "warning: `pb2` is declared but nothing uses it",
+               "warning: `k3` is an output point, but nothing drives it: it stays at 0"
+             ]
+    end
+  end
+
+  describe "one message a rule (M2-2)" do
+    # The same configuration from the text and from Elixir: each diagnostic in the same
+    # words, but for the line a message cites, which an element from Elixir has none of.
+    test "the elements a text reads, built in Elixir, meet the same checks in the same words" do
+      source =
+        @broken
+        |> String.replace("task fast interval 10 priority 1\n", "")
+        |> String.replace("progam m0 motor\n", "")
+        |> String.replace(" with medium", "")
+
+      {:ok, entries} = Configuration.Text.read(source)
+      unlined = Enum.map(entries, &%{&1 | line: nil})
+
+      fields = [
+        name: "plant",
+        programs: Map.values(plant_programs()),
+        globals: for(%Global{} = g <- unlined, do: g),
+        instances: for(%Instance{} = i <- unlined, do: i),
+        connections: for(%Connection{} = c <- unlined, do: c)
+      ]
+
+      {:error, from_text} = compiled(source, plant_programs())
+      assert length(from_text) == 5
+
+      assert refused(fields) ==
+               Enum.map(from_text, &String.replace(&1.message, ~r/ \(line \d+\)/, ""))
+    end
+  end
+
+  describe "compile/3's host mistakes" do
+    # What no configuration text holds is the host's, raised as check/1 raises it.
+    test "a source that is not a binary, a name that is not one, programs that are not a " <>
+           "map of programs",
+         %{seal: seal} do
+      assert_raise ArgumentError,
+                   "Logex.Configuration.compile/3 takes source text as a binary, got: " <>
+                     ~s(~c"program m seal"),
+                   fn -> Configuration.compile("plant", opaque(~c"program m seal"), %{}) end
+
+      for {name, message} <- [
+            {nil, ~s|a configuration needs a name, as in name: "plant"|},
+            {:plant,
+             ":plant cannot name a configuration: a name is a letter or `_`, then letters, " <>
+               "digits or `_`"},
+            {"plant.logex",
+             ~s|"plant.logex" cannot name a configuration: a name is a letter or `_`, then | <>
+               "letters, digits or `_`"}
+          ],
+          do:
+            assert_raise(ArgumentError, message, fn ->
+              Configuration.compile(opaque(name), "program m seal", %{"seal" => seal})
+            end)
+
+      for {programs, message} <- [
+            {[seal],
+             "programs must be a map of program names to %Logex.Program{}, got a list: " <>
+               "Logex.Configuration.new!/1 takes a list and keys it by name"},
+            {:seal, "programs must be a map of program names to %Logex.Program{}, got: :seal"},
+            {%{"motor" => seal}, "the program under `motor` is named `seal`"},
+            {%{"ton" => Logex.FbType.ton()},
+             "`ton` is a function block type, which runs inside a program: an instance is of " <>
+               "a %Logex.Program{}"}
+          ],
+          do:
+            assert_raise(ArgumentError, message, fn ->
+              Configuration.compile("plant", "program m seal", opaque(programs))
+            end)
+
+      # Every mistake, a line each, the name's first; and before the source is read.
+      assert_raise ArgumentError,
+                   ~s|"a b" cannot name a configuration: a name is a letter or `_`, then | <>
+                     "letters, digits or `_`\nprograms must be a map of program names to " <>
+                     "%Logex.Program{}, got: 7",
+                   fn -> Configuration.compile("a b", "%", opaque(7)) end
     end
   end
 
@@ -1297,9 +2345,9 @@ defmodule Logex.ConfigurationTest do
                "global `k` has type %{}: a global is :bool or :dint",
                "{:x} cannot name a program instance: a name is a letter or `_`, then letters, " <>
                  "digits or `_`",
-               ~s|"y.z" cannot name a program instance: a name is a letter or `_`, then | <>
-                 "letters, digits or `_`",
-               "`q.start`: there is no program instance `q`: the program instances are `m`"
+               "`y.z` cannot name an instance: `.` is kept for a path, as in `m1.start`, and a " <>
+                 "location, as in `panel.i.0`",
+               "no instance `q`: declare it, as in `program q motor`"
              ]
     end
 

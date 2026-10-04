@@ -3,16 +3,18 @@ defmodule Logex.Diagnostic do
   One problem found in a program or a configuration: what it is, where it is, and which
   stage found it.
 
-  `Logex.compile/2`, `Logex.compile_file/1` and `Logex.Configuration.check/1` return a
-  list of these rather than raising, and a compiled `%Logex.Program{}` carries its warnings
-  as these too. A rung never spans lines, so the line alone names the rung.
+  `Logex.compile/2`, `Logex.compile_file/1`, `Logex.Configuration.check/1` and
+  `Logex.Configuration.compile/3` return a list of these rather than raising, and a
+  compiled `%Logex.Program{}` and a `%Logex.Configuration{}` carry their warnings as these
+  too. A rung never spans lines, so the line alone names the rung.
 
   - `stage` is `:file` (reading the file, or its name), `:lex`, `:parse`, `:validate`
     (the declarations, instructions and tags, `Logex.Compiler.instructionize/2`),
     `:edit` (a candidate refused beside the running program, `Logex.Edit.accept/3`, OE-1)
     or `:configure` (a configuration's tasks, globals, instances and connections,
     `Logex.Configuration.check/1`, M2-1, and a configuration file's line that cannot be
-    read, `Logex.Configuration.Text.read/1`, M2-2).
+    read, `Logex.Configuration.Text.read/1`, M2-2, both of which
+    `Logex.Configuration.compile/3` gives).
   - `line` is nil only for a `:file` problem that no line holds, such as an unreadable
     file, for an `:edit` problem with a tag declared from Elixir, which has no line, and
     for a `:configure` problem with an element built from Elixir, or with the
