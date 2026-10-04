@@ -299,8 +299,15 @@ defmodule Logex.ApiContractTest do
     Enum.join(declarations ++ mistakes, "\n")
   end
 
+  # Its draws are sized from the rate of its rarest diagnostics, "goes too deep", "is
+  # already run by the `ton`" and "is already the storage bit of the `ons`", each given for
+  # about one source in 120 over the seeds {n, 77, 7}, n from 1 to 60. At 600 sources a
+  # run, 4 of the 260 seeds {n, 77, 7}, n to 60, and {n, 1, 1} and {7, n, 2026}, n to 100,
+  # missed one. At 2,000 each is expected more than 15 times a run, and the reach holds at
+  # this seed and, in its place, at each of {n, 77, 7}, {n, 1, 1} and {7, n, 2026}, n from
+  # 1 to 100, every fragment given for 7 sources a run or more.
   test "compile/2 never raises for any source, and its diagnostics are in line order" do
-    results = for _ <- 1..600, do: Logex.compile(source(), name: "p")
+    results = for _ <- 1..2000, do: Logex.compile(source(), name: "p")
 
     reached =
       for result <- results, into: MapSet.new() do
@@ -332,6 +339,13 @@ defmodule Logex.ApiContractTest do
     end
   end
 
+  # Its draws are sized from the rate of its rarest behaviour, a clamped timer, seen in
+  # about one program in nine over the seeds {n, 77, 7}, n from 1 to 60. At 40 programs a
+  # run, 4 of the 260 seeds {n, 77, 7}, n to 60, and {n, 1, 1} and {7, n, 2026}, n to 100,
+  # missed one atom: a clamped timer, a negative preset or the "scan.ons_blocked" refusal.
+  # At 150 a clamped timer is expected more than 15 times a run, and the reach holds at
+  # this seed and, in its place, at each of {n, 77, 7}, {n, 1, 1} and {7, n, 2026}, n from
+  # 1 to 100, every atom reached by 5 programs a run or more.
   test "the runtime refuses every host mistake with a documented ArgumentError, accepts " <>
          "every call without one, and nothing else escapes" do
     programs =
@@ -340,9 +354,9 @@ defmodule Logex.ApiContractTest do
         {:ok, program} -> [program]
         {:error, _} -> []
       end)
-      |> Enum.take(40)
+      |> Enum.take(150)
 
-    assert length(programs) == 40
+    assert length(programs) == 150
     assert Enum.any?(programs, &match?(%{tags: %{"sp" => %Tag{section: :var_input}}}, &1))
     assert Enum.any?(programs, &match?(%{tags: %{"t1" => %Tag{type: %Logex.FbType{}}}}, &1))
     assert Enum.any?(programs, &String.contains?(&1.source, "move 0 t1.acc"))
@@ -1588,6 +1602,12 @@ defmodule Logex.ApiContractTest do
   # The one global with an initial value, which a restart puts back.
   @initials %{"n0" => 7}
 
+  # Its draws are sized from the rate of its rarest atom, `:due_time_order`, seen in about
+  # one configuration in 26 over the seeds {n, 77, 7}, n from 1 to 60. At 150
+  # configurations a run, 1 of the 260 seeds {n, 77, 7}, n to 60, and {n, 1, 1} and
+  # {7, n, 2026}, n to 100, missed it. At 400 it is expected more than 15 times a run, and
+  # the reach holds at this seed and, in its place, at each of {n, 77, 7}, {n, 1, 1} and
+  # {7, n, 2026}, n from 1 to 100, every atom reached by 7 configurations a run or more.
   test "a resource refuses every host mistake with a documented ArgumentError, accepts " <>
          "every call without one, and runs as its rules say" do
     programs =
@@ -1598,7 +1618,7 @@ defmodule Logex.ApiContractTest do
 
     :rand.seed(:exsss, {2026, 10, 2})
 
-    for _ <- 1..150 do
+    for _ <- 1..400 do
       config = configuration(programs)
       model = model(config)
       runtime = Runtime.start(config)

@@ -178,7 +178,15 @@ reached none of the cases they decide, so deleting any of them, from the walk or
 `lib/`, left the walk green. Give each condition of a restated rule a reach atom for the
 case it decides, and measure the reach under seeds the draw was not tuned on: the walk's
 draw, weighted until its reach held under 25 seeds, still missed an atom at 4 of the
-seeds 1 to 60, all outside those 25, until it took 400 walks instead of 200.
+seeds 1 to 60, all outside those 25, until it took 400 walks instead of 200. One family
+of seeds is one sample too: the compile, runtime and resource walks of
+`api_contract_test.exs` each held their reach under their own seed, yet at 600 sources,
+40 programs and 150 configurations they missed an atom in 9 of 780 runs under the seeds
+`{n, 77, 7}`, `{n, 1, 1}` and `{7, n, 2026}`. Size a walk's draws from its rarest atom's
+rate per draw, read over one family, so that the atom is expected 15 times a run or more,
+and then hold the reach under 60 seeds or more drawn from more than one family the draws
+were not sized on. Those three now take 2,000, 150 and 400, and each holds under 100
+seeds of each of the three families.
 
 A property that restates a rule cannot catch that rule's defect. OE-1's edit walk checks
 every report entry against its rule, restated from the two programs' text. The
