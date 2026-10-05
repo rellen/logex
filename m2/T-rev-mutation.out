@@ -1,0 +1,128 @@
+M4: exit 2; Result: 505/508 passed (6/6 doctests, 499/502 tests); a var_external's name is legal in a configuration file
+M3: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a var_external takes no initial value
+M1: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); compile_file takes only .ld
+M2: exit 2; Result: 494/508 passed (6/6 doctests, 488/502 tests); var_external is a section row
+M7: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); each task input once
+M8: exit 2; Result: 505/508 passed (6/6 doctests, 499/502 tests); one driver per sink
+M5: exit 2; Result: 505/508 passed (6/6 doctests, 499/502 tests); the reader refuses ( | )
+M6: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a task's inputs in IEC's order
+M10b: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a var_output's global agrees in type
+M9: exit 2; Result: 504/508 passed (6/6 doctests, 498/502 tests); nothing drives an input point by connection
+M11: exit 2; Result: 502/508 passed (6/6 doctests, 496/502 tests); every var_input connected (decision 7)
+M10a: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a var_input's global agrees in type
+M14: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a task has a priority
+M12: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a var_input has one source
+M15: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a task has an interval or a trigger
+M13: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); an interval is at least 1
+M18: exit 2; Result: 505/508 passed (6/6 doctests, 499/502 tests); a name is declared once, one namespace
+M16: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a location's address is integers
+M19: exit 2; Result: 503/508 passed (6/6 doctests, 497/502 tests); a keyword names nothing in a configuration
+M17: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); one global a location
+M22: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); nothing writes an input point through var_external
+M20: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a task's single is a bool
+M21: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a var_external agrees in type with its global
+M23: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); two var_external writers warn
+M24: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a ton under an event task warns
+M26: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); an instance is found by name in one step (growth)
+M25: exit 2; Result: 503/508 passed (6/6 doctests, 497/502 tests); an unused global warns
+M27: exit 2; Result: 504/508 passed (6/6 doctests, 498/502 tests); a configuration has a program
+M30: exit 2; Result: 502/508 passed (6/6 doctests, 496/502 tests); a broken line declares its name
+M28: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); an input point takes no initial value
+M29: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a constant fits its var_input
+M31: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); keywords in any case
+M34: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); diagnostics in line order, unlined last
+M32: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); the loader takes only .lxcf
+M33: exit 2; Result: 504/508 passed (6/6 doctests, 498/502 tests); unconnected var_inputs in declaration order
+M35: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a broken connection counts as connected
+M38: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a task that runs nothing warns
+M36: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a var_external writer and a connection driver warn
+M37: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); an output point nothing drives warns
+M39: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); an unreadable type file is the configuration's, at its line
+M42: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); an output point takes no initial value
+M40: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); an entry's name lexes as one name (data path)
+M41: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); the printer writes a task's inputs in IEC's order
+M43: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a var_external with no global is a diagnostic
+M45: exit 2; Result: 4/5 passed; a configuration keyword is surveyed (naming.md)
+J1: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a check's diagnostic is at stage :configure
+M44: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); compile_file points a configuration's file to its loader
+J14: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); W2 only for an output point something reads
+J3: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a connection may come before its program line
+J2: exit 2; Result: 505/508 passed (6/6 doctests, 499/502 tests); a global a var_external binds counts as used (W1)
+J20: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a task's single counts as a use of its global (W1)
+J8: exit 2; Result: 505/508 passed (6/6 doctests, 499/502 tests); a dotted name whose first part is an instance is its member (R41)
+J4: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a type's var_external mistakes are cited once a type
+J9: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); two names differing only in case are refused
+J5: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); the loader compiles each type once
+J16: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); an interval is at most 2147483647 ms
+J17: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a priority is at most 2147483647
+J11: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a var_output never drives a constant
+J13: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); compile_file takes exactly .ld, not .LD
+J21: exit 2; Result: 504/508 passed (6/6 doctests, 498/502 tests); a name of the wrong kind says what it is
+J18: exit 2; Result: 503/508 passed (6/6 doctests, 497/502 tests); a broken line's name enters the namespace
+N1: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a location where a global is wanted is named as one
+J19: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a type word or `at` in a global's name place is a missing name
+N4: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); lines rise from entry to entry
+N5: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); no nil line beside a line
+N2: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a location that begins a connection is named as one
+N3: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a member of a declared non-instance says what the name is
+N8: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); the printer puts a lined entry on its line
+N9: exit 2; Result: 505/508 passed (6/6 doctests, 499/502 tests); Text.read refuses a non-binary with ArgumentError
+N6: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a connection's instance has no `.`
+N7: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a member is checked as the text reads it, joined to its instance
+N12: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); the loader's missing type is an unknown type, not a file error
+N13: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); the loader suggests among the program files beside it
+N10: exit 2; Result: 505/508 passed (6/6 doctests, 499/502 tests); Text.keyword? refuses a non-string with ArgumentError
+N11: exit 2; Result: 504/508 passed (6/6 doctests, 498/502 tests); Text.print checks its entries first
+N16: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a name's case-only hint says names
+N17: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a type's case-only hint says program types
+N14: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); no message advises declaring a keyword
+N15: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a refused global takes no location
+N20: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); an address field has no leading zero (one spelling)
+N21: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); the loader names the type's file in a message citing its line
+N18: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a member's case-only hint says members
+N19: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a connection after a broken one still has its source checked
+N24: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); new!/3 raises every problem, not the first
+N25: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); new!/3 refuses a line on an entry from Elixir
+N22: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); the loader passes each type's file to the checks
+N23: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); W6 covers a task with single and interval
+N28: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); new!/3 checks with the same checks (warnings ride)
+X1: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a type's own diagnostics come after the configuration's (R5)
+N26: exit 2; Result: 505/508 passed (6/6 doctests, 499/502 tests); a location's i or q is lowercase
+N27: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); compile_file names a bare .ld as no program
+X4: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); an unknown line has a did-you-mean among the line keywords (R7)
+X5: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a keyword that belongs on a line names that line (R8)
+X2: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a failed type's instances are not checked further (R5, C6)
+X3: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a configuration's file name is shaped like a name (R6)
+X9: exit 2; Result: 501/508 passed (6/6 doctests, 495/502 tests); `with` names a declared task (R21)
+X8: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a keyword cannot name a program type (R16)
+X7: exit 2; Result: 505/508 passed (6/6 doctests, 499/502 tests); a name has no `.` (R14)
+X6: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); words after a connection's source are refused (R12, T34)
+X13: exit 2; Result: 505/508 passed (6/6 doctests, 499/502 tests); a var is internal: it does not connect (R31)
+X12: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a connection names no path deeper than one member (R30)
+X11: exit 2; Result: 505/508 passed (6/6 doctests, 499/502 tests); a program line's type is one of the types given (R27)
+X10: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); an unlocated global's initial value fits its type (R22)
+X16: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a var_external is no function block instance (R42, V2)
+P1: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); entries!/1 refuses an improper list with its pinned message (rf-T-correct-1)
+X15: exit 2; Result: 503/508 passed (6/6 doctests, 497/502 tests); a var_input may read an output point back (R34)
+X14: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a var_external does not connect (R31)
+P3b: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); no task's single is a task input word (rf-T-correct-3)
+P3c: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); no global is named by a type word or `at` (rf-T-correct-3)
+P3a: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); no task is named by a task input word (rf-T-correct-3)
+P2: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a line broken by a delimiter declares what its words name (rf-T-correct-2)
+P5a: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); Logex.compile_file names an empty path (rf-T-correct-5)
+P5b: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); Logex.compile_file names a directory (rf-T-correct-5)
+P4: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a dotted name after `with` is told a task's name has no `.` (rf-T-correct-4)
+P3d: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); no program type is `with` (rf-T-correct-3)
+P5e: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); the loader names a directory (rf-T-correct-5)
+P5f: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); the loader reads a dotfile as all extension (rf-T-correct-5)
+P5c: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); Logex.compile_file reads a dotfile as all extension (rf-T-correct-5)
+P7: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a location's advice is in its one spelling (rf-T-correct-7)
+P5d: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); the loader names an empty path (rf-T-correct-5)
+P8: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a name refused as a keyword or for its `.` is not reported again where it is used (rf-T-correct-8)
+P5g: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); the loader says a bare .lxcf names no configuration (rf-T-correct-5)
+P13: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a block type given as a program has its own message (X13)
+P6: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); an event task's interval 0 is told to leave interval out (rf-T-correct-6)
+X17: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a broken line's name passes the name checks (R52)
+P10: exit 2; Result: 506/508 passed (6/6 doctests, 500/502 tests); a declared location reads first, whatever its device is called (rf-T-correct-10)
+P11: exit 2; Result: 507/508 passed (6/6 doctests, 501/502 tests); a location in a .ld rung is named as one (TF-11)
+done

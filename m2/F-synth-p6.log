@@ -1,0 +1,7 @@
+read, no cal: ["line 1: warning: `s2` is a seal, but no `cal` runs it: it never runs, and its members stay at their initial values",
+ "line 2: warning: `a` is declared but no rung uses it"]
+ton read, no ton (M1-6): ["line 1: warning: `t2` is a ton, but no `ton` runs it: it never times",
+ "line 2: warning: `a` is declared but no rung uses it"]
+cal output onto an ons bit: ["line 6: warning: `cal` writes `e`, the storage bit of the `ons` on line 5: the one-shot then fires on the wrong scans"]
+cal in a leg: ["line 6: warning: `z` already has an `ote` in this rung: the last one in the scan decides it"]
+reductions per scan: 3 cals, inline: {695, 348}

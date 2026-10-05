@@ -1,0 +1,3587 @@
+diff --git a/lib/logex/configuration.ex b/lib/logex/configuration.ex
+new file mode 100644
+index 0000000..93e4119
+--- /dev/null
++++ b/lib/logex/configuration.ex
+@@ -0,0 +1,816 @@
++defmodule Logex.Configuration do
++  @moduledoc """
++  A configuration with one resource (M2-1, `docs/organisation.md` §4.4 and §4.6): the
++  program types it runs, its periodic tasks, its globals (located or not), the program
++  instances it runs, and the connections that copy each instance's var_inputs in and its
++  var_outputs out. It is plain data, held in declaration order, and stateless:
++  `Logex.Runtime.start/1` makes a running resource of it.
++
++      Logex.Configuration.new!(
++        name: "line",
++        programs: [motor],
++        tasks: [%{name: "fast", interval: 10, priority: 1}],
++        globals: [
++          %{name: "pb_start", type: :bool, at: "panel.i.0"},
++          %{name: "pb_stop", type: :bool, at: "panel.i.1"},
++          %{name: "k1", type: :bool, at: "panel.q.0"}
++        ],
++        instances: [%{name: "m1", type: "motor", task: "fast"}],
++        connections: [
++          %{member: "m1.start", to: "pb_start"},
++          %{member: "m1.stop", to: "pb_stop"},
++          %{member: "m1.motor", to: "k1"}
++        ]
++      )
++
++  Each element says what one line of a configuration file will say (§4.4):
++
++  - a task, its `name`, `interval` in ms and `priority`, 0 the highest;
++  - a global, its `name`, `type` (`:bool` or `:dint`), an `initial` value and a location,
++    `at`, which makes it a point: `"panel.i.0"` an input point and `"panel.q.0"` an output
++    point, a device, `i` or `q`, then one or more address fields;
++  - an instance, its `name`, its program's name as `type`, and its `task`, nil for an
++    instance that runs once in every cycle;
++  - a connection, an instance's var_input or var_output as `member`, `"m1.start"`, and the
++    global or, for a var_input, the constant at its other end as `to`.
++
++  **One validator.** `new!/1` builds a configuration from Elixir and refuses it with every
++  problem `check/1` finds, in one `ArgumentError`, a problem a line. `check/1` is the one
++  validator: for `new!/1`, for `Logex.Runtime.start/1`, which checks again, and for the
++  configuration file's reader, which gives each problem the line of the element it
++  cites. It refuses what no configuration line can say: a name that is not one name, a
++  negative number, a location that is not one. It checks that:
++
++  - every name is one name; globals, instances and tasks share one namespace, in which no
++    two names differ only in case; program types have a namespace of their own;
++  - a task's interval is 1 to 2147483647 ms and its priority 0 to 2147483647;
++  - a global is a bool or a dint, its initial value fits it, an input point takes none,
++    and no two globals share a location;
++  - an instance's program is one of the configuration's, its task one of its tasks, and
++    the configuration runs at least one instance;
++  - a connection joins a var_input to a global or a constant, or a var_output to a global,
++    of the same type, and never a `var`; a var_input has one source, a global one driver,
++    and nothing drives an input point;
++  - every var_input of every instance is connected (decision 7).
++
++  A configuration built or edited by hand is outside the contract, and
++  `Logex.Runtime.start/1` checks it again.
++  """
++
++  alias Logex.{Declarations, FbType, Program, Tag}
++
++  @enforce_keys [:name, :programs, :tasks, :globals, :instances, :connections]
++  defstruct [:name, :programs, :tasks, :globals, :instances, :connections]
++
++  @type line :: pos_integer | nil
++  @type task :: %{name: String.t(), interval: pos_integer, priority: non_neg_integer, line: line}
++  @type global :: %{
++          name: String.t(),
++          type: :bool | :dint,
++          initial: non_neg_integer | nil,
++          at: String.t() | nil,
++          line: line
++        }
++  @type instance :: %{name: String.t(), type: String.t(), task: String.t() | nil, line: line}
++  @type connection :: %{member: String.t(), to: String.t() | non_neg_integer, line: line}
++  @type t :: %__MODULE__{
++          name: String.t(),
++          programs: %{String.t() => Program.t()},
++          tasks: [task],
++          globals: [global],
++          instances: [instance],
++          connections: [connection]
++        }
++
++  @parts [:name, :programs, :tasks, :globals, :instances, :connections]
++
++  # Each element's keys: the required ones, then the optional ones.
++  @keys %{
++    tasks: {[:name, :interval, :priority], []},
++    globals: {[:name, :type], [:initial, :at]},
++    instances: {[:name, :type], [:task]},
++    connections: {[:member, :to], []}
++  }
++  @kind %{tasks: "task", globals: "global", instances: "instance", connections: "connection"}
++  @example %{
++    tasks: ~s|%{name: "fast", interval: 10, priority: 1}|,
++    globals: ~s|%{name: "k1", type: :bool, at: "panel.q.0"}|,
++    instances: ~s|%{name: "m1", type: "motor", task: "fast"}|,
++    connections: ~s|%{member: "m1.start", to: "pb_start"}|
++  }
++
++  # Every integer a configuration holds is a dint, as a tag's is (IEC 61131-3 Ed 2 Table
++  # 10), and no line can say a negative one until a negative literal lexes.
++  @dint_max 2_147_483_647
++
++  @doc """
++  A configuration from Elixir data, checked by `check/1`: the configuration, or one
++  `ArgumentError` whose message is every problem, a line each. `fields` is a keyword list
++  of `name:`, a string shaped like a name, and the lists `programs:` (compiled by
++  `Logex.compile/2`, each under its own name), `tasks:`, `globals:`, `instances:` and
++  `connections:`, any left out for none. An element is a map of the keys the moduledoc
++  gives, an optional one left out for nil; one from Elixir has no line.
++  """
++  def new!(fields) when is_list(fields) do
++    config = fields |> keyword!() |> built()
++    raised(check(config), config)
++  end
++
++  def new!(fields), do: raise(ArgumentError, "#{takes()}, got: #{inspect(fields)}")
++
++  defp takes,
++    do:
++      "Logex.Configuration.new!/1 takes a keyword list of name:, programs:, tasks:, " <>
++        "globals:, instances: and connections:"
++
++  defp raised([], config), do: config
++
++  defp raised(problems, _config),
++    do: raise(ArgumentError, Enum.map_join(problems, "\n", &format/1))
++
++  defp format({nil, message}), do: message
++  defp format({line, message}), do: "line #{line}: #{message}"
++
++  # The keyword list's own shape: each part at most once, and no other key.
++  defp keyword!(fields) do
++    pairs? = Enum.all?(fields, &match?({key, _} when is_atom(key), &1))
++    shaped!(pairs?, fields)
++  end
++
++  defp shaped!(false, fields), do: raise(ArgumentError, "#{takes()}, got: #{inspect(fields)}")
++
++  defp shaped!(true, fields) do
++    keys = Keyword.keys(fields)
++    unknown = Enum.reject(keys, &(&1 in @parts))
++    twice = keys -- Enum.uniq(keys)
++    once!(unknown, twice, fields)
++  end
++
++  defp once!([key | _], _twice, _fields),
++    do: raise(ArgumentError, "#{takes()}: `#{key}:` is not one of them")
++
++  defp once!([], [key | _], _fields),
++    do: raise(ArgumentError, "#{takes()}: `#{key}:` is given twice")
++
++  defp once!([], [], fields), do: fields
++
++  # The struct, each part as given but for the elements' own shape: check/1 judges every
++  # value, so a junk one is a problem it lists, never an exception here.
++  defp built(fields),
++    do: %__MODULE__{
++      name: Keyword.get(fields, :name),
++      programs: programs(Keyword.get(fields, :programs, [])),
++      tasks: from_elixir(:tasks, Keyword.get(fields, :tasks, [])),
++      globals: from_elixir(:globals, Keyword.get(fields, :globals, [])),
++      instances: from_elixir(:instances, Keyword.get(fields, :instances, [])),
++      connections: from_elixir(:connections, Keyword.get(fields, :connections, []))
++    }
++
++  # Programs come as a list, each kept under its own name, so no key can differ from its
++  # program's name. What is not a named program, or a second of one name, is kept aside
++  # under a key no name has, `{:at, n}`, for check/1 to report.
++  defp programs(list) when is_list(list) do
++    {map, _n} =
++      Enum.reduce(list, {%{}, 0}, fn program, {map, n} -> {placed(program, map, n), n + 1} end)
++
++    map
++  end
++
++  defp programs(other), do: %{{:at, 0} => {:not_a_list, other}}
++
++  defp placed(%Program{name: name} = program, map, _n)
++       when is_binary(name) and not is_map_key(map, name),
++       do: Map.put(map, name, program)
++
++  defp placed(other, map, n), do: Map.put(map, {:at, n}, other)
++
++  # An element from Elixir has no line: one that brings one is kept whole, for check/1 to
++  # refuse, since a line is what marks an element read from a file.
++  defp from_elixir(part, list) when is_list(list), do: Enum.map(list, &without_line(part, &1))
++  defp from_elixir(_part, other), do: other
++
++  defp without_line(part, %{line: _} = map) when not is_struct(map),
++    do: {:line_from_elixir, part, map}
++
++  defp without_line(part, element), do: normal(part, element)
++
++  @doc """
++  Every problem with `config`, as `{line, message}`: the name's, then each program's, each
++  task's, each global's, each instance's, each name's that clashes with another, each
++  connection's, and each var_input's left unconnected, each in its part's order. `line` is
++  the line of the element the problem cites, nil for one from Elixir. A configuration with
++  none is one `Logex.Runtime.start/1` runs.
++  """
++  def check(%__MODULE__{} = config) do
++    tasks = normals(:tasks, config.tasks)
++    globals = normals(:globals, config.globals)
++    instances = normals(:instances, config.instances)
++    connections = normals(:connections, config.connections)
++    programs = usable(config.programs)
++    task_names = names_of(tasks)
++
++    Enum.flat_map(
++      [
++        configuration_name(config.name),
++        program_problems(config.programs),
++        each(:tasks, tasks, &task_problems/1),
++        each(:globals, globals, &global_problems/1),
++        shared_points(elements(globals)),
++        each(:instances, instances, &instance_problems(&1, programs, task_names)),
++        none_run(instances),
++        clashes(namespace(elements(tasks), elements(globals), elements(instances))),
++        each(:connections, connections, fn _connection -> [] end),
++        wiring(
++          elements(connections),
++          elements(instances),
++          programs,
++          {elements(globals), task_names}
++        )
++      ],
++      & &1
++    )
++  end
++
++  def check(other),
++    do:
++      raise(
++        ArgumentError,
++        "expected a %Logex.Configuration{} from Logex.Configuration.new!/1, got: " <>
++          inspect(other)
++      )
++
++  # ---- the shape of each part and element -------------------------------------------
++
++  # A part as check/1 reads it: `{:not_a_list, other}`, or each element made normal, a
++  # map of every key of its part, or a mark of what is wrong with it.
++  defp normals(_part, {:not_a_list, _other} = marked), do: marked
++  defp normals(part, list) when is_list(list), do: Enum.map(list, &normal(part, &1))
++  defp normals(_part, other), do: {:not_a_list, other}
++
++  defp normal(_part, {:line_from_elixir, _part2, _map} = marked), do: marked
++  defp normal(_part, {:not_an_element, _other} = marked), do: marked
++  defp normal(_part, {:extra_keys, _keys, _map} = marked), do: marked
++
++  defp normal(part, %{} = map) when not is_struct(map) do
++    {required, optional} = Map.fetch!(@keys, part)
++    allowed = [:line | required ++ optional]
++    extra = map |> Map.keys() |> Enum.reject(&(&1 in allowed))
++    normal_keys(extra, Map.merge(Map.from_keys(allowed, nil), map), map)
++  end
++
++  defp normal(_part, other), do: {:not_an_element, other}
++
++  defp normal_keys([], element, _map), do: element
++  defp normal_keys(extra, _element, map), do: {:extra_keys, Enum.sort(extra), map}
++
++  defp elements({:not_a_list, _other}), do: []
++  defp elements(list), do: Enum.filter(list, &(is_map(&1) and not is_struct(&1)))
++
++  defp each(part, {:not_a_list, other}, _problems),
++    do: [{nil, "#{part}: must be a list, as in [#{@example[part]}], got: #{inspect(other)}"}]
++
++  defp each(part, list, problems), do: Enum.flat_map(list, &element_problems(part, &1, problems))
++
++  defp element_problems(part, {:line_from_elixir, _part, map}, _problems),
++    do: [{nil, "#{article(@kind[part])} from Elixir has no line, got: #{inspect(map)}"}]
++
++  defp element_problems(part, {:not_an_element, other}, _problems),
++    do: [
++      {nil,
++       "#{part}: #{inspect(other)} is not #{article(@kind[part])}: " <>
++         "#{article(@kind[part])} is a map, " <>
++         "as in #{@example[part]}"}
++    ]
++
++  defp element_problems(part, {:extra_keys, keys, map}, _problems) do
++    {required, optional} = Map.fetch!(@keys, part)
++
++    [
++      {nil,
++       "#{@kind[part]} #{inspect(map)} has #{keys_text(keys)}: #{article(@kind[part])} has " <>
++         keys_text(required ++ optional)}
++    ]
++  end
++
++  defp element_problems(part, element, problems) do
++    {required, _optional} = Map.fetch!(@keys, part)
++
++    missing =
++      for key <- required, element[key] == nil do
++        {element.line,
++         "#{@kind[part]} #{inspect(Map.delete(element, :line))} has no #{key}:, " <>
++           "as in #{@example[part]}"}
++      end
++
++    missing ++ problems.(element)
++  end
++
++  defp keys_text(keys), do: keys |> Enum.map(&"#{&1}:") |> listed()
++
++  # ---- the name and the programs ------------------------------------------------------
++
++  defp configuration_name(nil), do: [{nil, ~s|a configuration needs a name, as in name: "plant"|}]
++  defp configuration_name(name), do: named(name, "a configuration", nil)
++
++  defp named(nil, _what, _line), do: []
++
++  defp named(name, what, line),
++    do: shape(is_binary(name) and Declarations.name?(name), name, what, line)
++
++  defp shape(true, _name, _what, _line), do: []
++
++  defp shape(false, name, what, line),
++    do: [{line, "#{inspect(name)} cannot name #{what}: #{rule()}"}]
++
++  defp rule, do: "a name is a letter or `_`, then letters, digits or `_`"
++
++  # The tasks an instance may name, or `:unknown` where the part is not a list, whose
++  # problem is reported once: an instance that names a task is then not reported too.
++  defp names_of({:not_a_list, _other}), do: :unknown
++  defp names_of(list), do: for(%{name: name} <- elements(list), is_binary(name), do: name)
++
++  # The programs check/1 can look into, each well-formed under its own name, or `:unknown`
++  # where the part is not a list, as for the tasks.
++  defp usable(%{{:at, 0} => {:not_a_list, _}}), do: :unknown
++
++  defp usable(%{} = programs) when not is_struct(programs),
++    do:
++      for(
++        {name, %Program{name: name, tags: tags, rungs: rungs} = program} <- programs,
++        is_binary(name) and is_map(tags) and is_list(rungs),
++        into: %{},
++        do: {name, program}
++      )
++
++  defp usable(_programs), do: :unknown
++
++  defp program_problems(%{} = programs) when not is_struct(programs),
++    do: programs |> Enum.sort_by(&program_order/1) |> Enum.flat_map(&program_problem/1)
++
++  defp program_problems(other), do: [{nil, not_programs(other)}]
++
++  defp not_programs(other),
++    do: "programs: must be a list of programs from Logex.compile/2, got: #{inspect(other)}"
++
++  defp program_order({{:at, n}, _}), do: {0, n}
++  defp program_order({name, _}), do: {1, name}
++
++  defp program_problem({{:at, _n}, {:not_a_list, other}}), do: [{nil, not_programs(other)}]
++
++  defp program_problem({{:at, _n}, %Program{name: name}}) when is_binary(name),
++    do: [{nil, "two programs are named `#{name}`: a configuration names each program type once"}]
++
++  defp program_problem({{:at, _n}, %Program{}}),
++    do: [{nil, "a program in a configuration needs a name: compile it with Logex.compile/2"}]
++
++  defp program_problem({{:at, _n}, other}),
++    do: [{nil, "programs: #{inspect(other)} is not a %Logex.Program{} from Logex.compile/2"}]
++
++  defp program_problem({name, %Program{name: name, tags: tags, rungs: rungs}})
++       when is_map(tags) and is_list(rungs),
++       do: []
++
++  defp program_problem({name, other}),
++    do: [
++      {nil,
++       "programs: #{inspect(name)} is not a %Logex.Program{} from Logex.compile/2: #{inspect(other)}"}
++    ]
++
++  # ---- tasks ----------------------------------------------------------------------------
++
++  defp task_problems(%{name: name, interval: interval, priority: priority, line: line}),
++    do:
++      named(name, "a task", line) ++
++        interval(name, interval, line) ++ priority(name, priority, line)
++
++  defp interval(_name, nil, _line), do: []
++  defp interval(_name, ms, _line) when is_integer(ms) and ms in 1..@dint_max//1, do: []
++
++  defp interval(name, ms, line),
++    do: [{line, "task #{label(name)}: its interval is 1 to #{@dint_max} ms, got: #{inspect(ms)}"}]
++
++  defp priority(_name, nil, _line), do: []
++  defp priority(_name, p, _line) when is_integer(p) and p in 0..@dint_max//1, do: []
++
++  defp priority(name, p, line),
++    do: [
++      {line,
++       "task #{label(name)}: its priority is 0, the highest, to #{@dint_max}, got: #{inspect(p)}"}
++    ]
++
++  # ---- globals --------------------------------------------------------------------------
++
++  defp global_problems(%{name: name, type: type, at: at, line: line} = global),
++    do:
++      named(name, "a global", line) ++
++        global_type(name, type, line) ++
++        location_problem(name, at, location(at), line) ++
++        initial(global, location(at) == {:ok, :input}, line)
++
++  defp global_type(_name, type, _line) when type in [nil, :bool, :dint], do: []
++
++  defp global_type(name, type, line),
++    do: [{line, "global #{label(name)}: its type is :bool or :dint, got: #{inspect(type)}"}]
++
++  defp location_problem(_name, nil, _found, _line), do: []
++  defp location_problem(_name, _at, {:ok, _kind}, _line), do: []
++
++  defp location_problem(name, at, :error, line),
++    do: [
++      {line,
++       "global #{label(name)}: a location is a device, `i` or `q`, then one or more " <>
++         ~s|address fields, as in "panel.q.0", got: #{inspect(at)}|}
++    ]
++
++  @doc """
++  What a location names: `{:ok, :input}` for an input point, `"<device>.i.<field>…"`,
++  `{:ok, :output}` for an output point, `"<device>.q.<field>…"`, or `:error`. The device
++  is one name, and each address field a whole number written without a leading zero, so
++  that one point has one spelling.
++  """
++  def location(at) when is_binary(at), do: address(String.split(at, "."))
++  def location(_at), do: :error
++
++  defp address([device, kind, field | fields]),
++    do: point(Declarations.name?(device) and Enum.all?([field | fields], &field?/1), kind)
++
++  defp address(_parts), do: :error
++
++  defp field?("0"), do: true
++  defp field?(field), do: String.match?(field, ~r/\A[1-9][0-9]*\z/)
++
++  defp point(true, "i"), do: {:ok, :input}
++  defp point(true, "q"), do: {:ok, :output}
++  defp point(_valid, _kind), do: :error
++
++  defp initial(%{initial: nil}, _input?, _line), do: []
++
++  defp initial(%{name: name}, true, line),
++    do: [
++      {line,
++       "#{label(name)} is an input point: its value comes from outside, so it takes no " <>
++         "initial value"}
++    ]
++
++  defp initial(%{name: name, initial: v}, false, line) when not is_integer(v),
++    do: [
++      {line, "global #{label(name)}: its initial value must be an integer, got: #{inspect(v)}"}
++    ]
++
++  defp initial(%{name: name, type: type, initial: v}, false, line) when type in [:bool, :dint],
++    do: at_line(fit(type, v, "#{label(name)} is a #{type}: its initial value"), line)
++
++  defp initial(_global, false, _line), do: []
++
++  # One rule for a value against its type, for a global's initial value and a constant.
++  defp fit(_type, v, subject) when v < 0,
++    do: [
++      "#{subject} `#{v}` is negative, which no configuration line can say until a negative " <>
++        "literal lexes"
++    ]
++
++  defp fit(type, v, subject), do: fits(Declarations.fits?(type, v), type, v, subject)
++
++  defp fits(true, _type, _v, _subject), do: []
++  defp fits(false, :bool, v, subject), do: ["#{subject} must be 0 or 1, found `#{v}`"]
++  defp fits(false, :dint, v, subject), do: ["#{subject} `#{v}` does not fit in 32 bits"]
++
++  defp at_line(messages, line), do: Enum.map(messages, &{line, &1})
++
++  # Two globals at one location would be two images of one point.
++  defp shared_points(globals) do
++    {problems, _seen} =
++      Enum.flat_map_reduce(globals, %{}, fn global, seen -> shared_point(global, seen) end)
++
++    problems
++  end
++
++  defp shared_point(%{at: at, name: name, line: line}, seen) when is_binary(at),
++    do: first_at(Map.get(seen, at), at, name, line, seen)
++
++  defp shared_point(_global, seen), do: {[], seen}
++
++  defp first_at(nil, at, name, _line, seen), do: {[], Map.put(seen, at, name)}
++
++  defp first_at(first, at, name, line, seen),
++    do:
++      {[
++         {line,
++          "#{label(name)} is at `#{at}`, where #{label(first)} already is: a point has one global"}
++       ], seen}
++
++  # ---- instances ------------------------------------------------------------------------
++
++  defp instance_problems(%{name: name, type: type, task: task, line: line}, programs, tasks),
++    do:
++      named(name, "an instance", line) ++
++        program_of(name, type, programs, line) ++ task_of(name, task, tasks, line)
++
++  defp program_of(_name, nil, _programs, _line), do: []
++  defp program_of(_name, _type, :unknown, _line), do: []
++  defp program_of(_name, type, programs, _line) when is_map_key(programs, type), do: []
++
++  defp program_of(name, type, programs, line) when is_binary(type),
++    do: [
++      {line,
++       "#{label(name)} is an instance of `#{type}`, but no program is named `#{type}`" <>
++         among(type, Map.keys(programs), "programs")}
++    ]
++
++  defp program_of(name, type, _programs, line),
++    do: [
++      {line,
++       "instance #{label(name)}: its type is the name of one of the configuration's " <>
++         "programs, got: #{inspect(type)}"}
++    ]
++
++  defp task_of(_name, nil, _tasks, _line), do: []
++  defp task_of(_name, task, :unknown, _line) when is_binary(task), do: []
++
++  defp task_of(name, task, tasks, line) when is_binary(task),
++    do: known_task(task in tasks, name, task, tasks, line)
++
++  defp task_of(name, task, _tasks, line),
++    do: [
++      {line,
++       "instance #{label(name)}: its task is the name of a task, or nil for none, got: " <>
++         inspect(task)}
++    ]
++
++  defp known_task(true, _name, _task, _tasks, _line), do: []
++
++  defp known_task(false, name, task, tasks, line),
++    do: [
++      {line,
++       "#{label(name)} runs under `#{task}`, but no task is named `#{task}`" <>
++         among(task, tasks, "tasks")}
++    ]
++
++  # IEC 61131-3 requires at least one program in a configuration (Ed 2 Annex B.1.7).
++  defp none_run([]), do: [{nil, "a configuration runs at least one instance, got: instances: []"}]
++  defp none_run(_instances), do: []
++
++  # ---- one namespace --------------------------------------------------------------------
++
++  # Globals, then instances, then tasks, each `{name, kind, line}` in declaration order.
++  defp namespace(tasks, globals, instances),
++    do:
++      for(
++        {list, kind} <- [{globals, "global"}, {instances, "instance"}, {tasks, "task"}],
++        %{name: name, line: line} <- list,
++        is_binary(name) and Declarations.name?(name),
++        do: {name, kind, line}
++      )
++
++  defp clashes(names) do
++    {problems, _seen} =
++      Enum.flat_map_reduce(names, %{}, fn {name, kind, line}, seen ->
++        key = String.downcase(name)
++        {clash(Map.get(seen, key), name, kind, line), Map.put_new(seen, key, {name, kind})}
++      end)
++
++    problems
++  end
++
++  defp clash(nil, _name, _kind, _line), do: []
++
++  defp clash({name, first}, name, kind, line),
++    do: [
++      {line,
++       "`#{name}` names #{article(first)} and #{article(kind)}: globals, instances and tasks " <>
++         "share one namespace"}
++    ]
++
++  defp clash({other, first}, name, kind, line),
++    do: [
++      {line,
++       "the #{kind} `#{name}` and the #{first} `#{other}` differ only in case: names are " <>
++         "case-sensitive, so these would be two names"}
++    ]
++
++  # ---- connections ----------------------------------------------------------------------
++
++  # Each connection against the instances, their programs and the globals, then each
++  # var_input of each instance that no connection names (decision 7), the instances in
++  # declaration order and each one's var_inputs in its program's. A var_input a connection
++  # names counts as connected, whatever is wrong with its other end, which is reported.
++  defp wiring(connections, instances, programs, {globals, tasks}) do
++    by_name =
++      for %{name: name, type: type} <- instances,
++          is_binary(name),
++          into: %{},
++          do: {name, program_named(programs, type)}
++
++    world = %{
++      instances: by_name,
++      globals: for(%{name: name} = g <- globals, is_binary(name), into: %{}, do: {name, g}),
++      kinds: kinds(instances, tasks)
++    }
++
++    {problems, {sources, _sinks}} =
++      Enum.flat_map_reduce(connections, {%{}, %{}}, &connection(&1, &2, world))
++
++    problems ++ unconnected(instances, programs, sources)
++  end
++
++  defp program_named(:unknown, _type), do: nil
++  defp program_named(programs, type), do: Map.get(programs, type)
++
++  # What else a name in a connection's other end may be, for the message.
++  defp kinds(instances, tasks),
++    do:
++      Map.merge(
++        for(%{name: n} <- instances, is_binary(n), into: %{}, do: {n, "an instance"}),
++        for(n <- List.wrap(tasks), is_binary(n), into: %{}, do: {n, "a task"})
++      )
++
++  defp connection(%{member: nil}, seen, _world), do: {[], seen}
++  defp connection(%{to: nil}, seen, _world), do: {[], seen}
++
++  defp connection(%{member: member, line: line} = c, seen, world) when is_binary(member) do
++    {messages, seen} = ended(target(String.split(member, "."), world), c, seen, world)
++    {Enum.map(messages, &{line, &1}), seen}
++  end
++
++  defp connection(%{member: member, line: line}, seen, _world),
++    do: {[{line, "connection #{inspect(member)}: #{member_rule()}"}], seen}
++
++  defp member_rule,
++    do: ~s|a member is an instance and one of its var_inputs or var_outputs, as in "m1.start"|
++
++  # What a member names: a tag of an instance's program, or why none.
++  defp target([instance, var], %{instances: instances}),
++    do: in_instance(Map.fetch(instances, instance), instance, var, Map.keys(instances))
++
++  defp target(_parts, _world), do: :not_a_member
++
++  defp in_instance({:ok, nil}, _instance, _var, _names), do: :program_unknown
++  defp in_instance({:ok, program}, instance, var, _names), do: {:tag, instance, program, var}
++  defp in_instance(:error, instance, _var, names), do: {:no_instance, instance, names}
++
++  defp ended(:program_unknown, _c, seen, _world), do: {[], seen}
++
++  defp ended(:not_a_member, %{member: member}, seen, _world),
++    do: {["connection #{inspect(member)}: #{member_rule()}"], seen}
++
++  defp ended({:no_instance, instance, names}, %{member: member}, seen, _world),
++    do:
++      {[
++         "connection `#{member}`: no instance is named `#{instance}`" <>
++           among(instance, names, "instances")
++       ], seen}
++
++  defp ended({:tag, instance, program, var}, c, seen, world),
++    do: tag_end(Map.get(program.tags, var), {instance, program, var}, c, seen, world)
++
++  defp tag_end(nil, {instance, program, var}, _c, seen, _world),
++    do:
++      {[
++         "`#{instance}` is a `#{program.name}`, which declares no `#{var}`" <>
++           Declarations.suggest(var, Map.keys(program.tags))
++       ], seen}
++
++  defp tag_end(%Tag{section: :var} = tag, {_instance, program, _var}, c, seen, _world),
++    do:
++      {[
++         "`#{c.member}` is internal to `#{program.name}` (declared `var`#{on(tag)}): only a " <>
++           "var_input or var_output connects"
++       ], seen}
++
++  defp tag_end(%Tag{section: :var_input} = tag, _where, %{member: member, to: to}, seen, world),
++    do: sourced(input_end(tag, member, to, world), member, to, seen)
++
++  defp tag_end(%Tag{section: :var_output} = tag, _where, %{member: member, to: to}, seen, world),
++    do: output_end(tag, member, to, seen, world)
++
++  defp on(%Tag{line: nil}), do: ""
++  defp on(%Tag{line: line}), do: " on line #{line}"
++
++  # A var_input's other end: a constant that fits it, or a global of its type.
++  defp input_end(%Tag{type: type}, member, to, _world) when is_integer(to),
++    do: fit(type, to, "`#{member}` is a #{type}: the constant")
++
++  defp input_end(tag, member, to, world) when is_binary(to),
++    do: global_of(Map.fetch(world.globals, to), tag, member, to, world)
++
++  defp input_end(_tag, member, to, _world), do: [junk_end(member, to)]
++
++  # A var_output's other end: a global of its type, not an input point, driven by it alone.
++  defp output_end(_tag, member, to, seen, _world) when is_integer(to),
++    do:
++      {[
++         "`#{member}` is a var_output: it drives a global, so it cannot be connected to the " <>
++           "constant `#{to}`"
++       ], seen}
++
++  defp output_end(tag, member, to, seen, world) when is_binary(to),
++    do:
++      sunk(
++        global_of(Map.fetch(world.globals, to), tag, member, to, world),
++        member,
++        to,
++        seen,
++        world
++      )
++
++  defp output_end(_tag, member, to, seen, _world), do: {[junk_end(member, to)], seen}
++
++  defp junk_end(member, to),
++    do:
++      "`#{member}` is connected to #{inspect(to)}: the other end of a connection is a global " <>
++        "or, for a var_input, a constant"
++
++  defp global_of(:error, _tag, member, to, %{kinds: kinds, globals: globals}),
++    do: [no_global(Map.get(kinds, to), member, to, Map.keys(globals))]
++
++  defp global_of({:ok, %{type: type}}, _tag, _member, _to, _world)
++       when type not in [:bool, :dint],
++       do: []
++
++  defp global_of({:ok, %{type: type}}, %Tag{type: own}, member, to, _world) when type != own,
++    do: ["`#{member}` is a #{type_word(own)}, but `#{to}` is a #{type}"]
++
++  defp global_of({:ok, _global}, _tag, _member, _to, _world), do: []
++
++  defp no_global(nil, member, to, names),
++    do:
++      "`#{member}` is connected to `#{to}`, but no global is named `#{to}`" <>
++        Declarations.suggest(to, names, & &1, "names")
++
++  defp no_global(kind, member, to, _names),
++    do: "`#{member}` is connected to `#{to}`, which is #{kind}, not a global"
++
++  defp type_word(%FbType{name: name}), do: name
++  defp type_word(type), do: to_string(type)
++
++  # A var_input has one source.
++  defp sourced(problems, member, to, {sources, sinks}),
++    do: once(Map.get(sources, member), problems, member, to, {sources, sinks})
++
++  defp once(nil, problems, member, to, {sources, sinks}),
++    do: {problems, {Map.put(sources, member, to), sinks}}
++
++  defp once(first, problems, member, _to, seen),
++    do:
++      {problems ++
++         ["`#{member}` is already connected, to #{shown(first)}: a var_input has one source"],
++       seen}
++
++  defp shown(constant) when is_integer(constant), do: "the constant `#{constant}`"
++  defp shown(global) when is_binary(global), do: "`#{global}`"
++  defp shown(other), do: inspect(other)
++
++  # A global has one driver, and nothing drives an input point. Only a var_output whose
++  # other end is a global of its type gets this far.
++  defp sunk([_ | _] = problems, _member, _to, seen, _world), do: {problems, seen}
++
++  defp sunk([], member, to, seen, %{globals: globals}),
++    do: drives(location(Map.fetch!(globals, to).at) == {:ok, :input}, member, to, seen)
++
++  defp drives(true, member, to, seen),
++    do: {["`#{to}` is an input point: `#{member}` cannot drive it"], seen}
++
++  defp drives(false, member, to, {sources, sinks}),
++    do: driven(Map.get(sinks, to), member, to, {sources, sinks})
++
++  defp driven(nil, member, to, {sources, sinks}), do: {[], {sources, Map.put(sinks, to, member)}}
++  defp driven(first, _member, to, seen), do: {["`#{to}` is already driven by `#{first}`"], seen}
++
++  # Decision 7: every var_input is connected.
++  defp unconnected(_instances, :unknown, _sources), do: []
++
++  defp unconnected(instances, programs, sources),
++    do:
++      for(
++        %{name: name, type: type, line: line} <- instances,
++        is_binary(name),
++        %Program{tags: tags} <- [Map.get(programs, type)],
++        %Tag{section: :var_input, name: var} <- by_line(tags),
++        not is_map_key(sources, "#{name}.#{var}"),
++        do:
++          {line,
++           "`#{name}.#{var}` is not connected: every var_input is connected, to a global or " <>
++             "a constant"}
++      )
++
++  # A program's tags in declaration order: those from Elixir, which have no line, first.
++  defp by_line(tags), do: Enum.sort_by(Map.values(tags), &{&1.line || 0, &1.name})
++
++  # ---- words ----------------------------------------------------------------------------
++
++  defp among(name, names, kind),
++    do: hint(Declarations.suggest(name, names, & &1, "names"), Enum.sort(names), kind)
++
++  defp hint("", [], kind), do: ": this configuration has no #{kind}"
++  defp hint("", names, kind), do: ": the #{kind} are " <> listed(Enum.map(names, &"`#{&1}`"))
++  defp hint(suggestion, _names, _kind), do: suggestion
++
++  defp article("instance"), do: "an instance"
++  defp article(kind), do: "a #{kind}"
++
++  defp listed([one]), do: one
++  defp listed(names), do: Enum.join(Enum.drop(names, -1), ", ") <> " and " <> List.last(names)
++
++  defp label(name) when is_binary(name), do: "`#{name}`"
++  defp label(name), do: inspect(name)
++end
+diff --git a/lib/logex/program.ex b/lib/logex/program.ex
+index d744324..c8c7c49 100644
+--- a/lib/logex/program.ex
++++ b/lib/logex/program.ex
+@@ -29,8 +29,8 @@ defmodule Logex.Program do
+ 
+   The one rule for a new piece of state (`docs/organisation.md` §4.9):
+   `Logex.Runtime.instance/1` and `restart/3` start every tag by it, an online edit's
+-  switch (`Logex.Edit`) starts each tag it adds by it, and M2-1's `start/1` will start
+-  every instance by it. The edit's exceptions, for state an instance already holds around
++  switch (`Logex.Edit`) starts each tag it adds by it, and `Logex.Runtime.start/1` starts
++  every instance of a configuration by it, through `instance/1` (M2-1). The edit's exceptions, for state an instance already holds around
+   the new piece: `first` stays false; an `ons` the edit adds or changes is blocked for one
+   scan by the instance's `ons_blocked`, where a new instance relies on `first`; a
+   var_input a switch starts or makes live is reported, since its value is the host's; at
+diff --git a/lib/logex/runtime.ex b/lib/logex/runtime.ex
+index d93fadb..b32b87a 100644
+--- a/lib/logex/runtime.ex
++++ b/lib/logex/runtime.ex
+@@ -11,6 +11,31 @@ defmodule Logex.Runtime do
+   - `restart/3` starts an instance again, keeping its clock and the inputs that fit their
+     types.
+ 
++  A configuration runs as one resource (M2-1, `docs/organisation.md` §4.6): `start/1`
++  makes a `%Logex.Runtime{}` of a `%Logex.Configuration{}`, and `cycle/3` steps it, each
++  due instance scanned through `call/4`. `next_due_in/1` says when the next periodic task
++  is due, `get/2` reads a global, a tag or a member by its path, `overlaps/1` gives each
++  task's count of missed periods, and `restart/2` starts the resource again. The struct
++  is opaque and plain data: a host keeps it, and changes it only through these functions.
++
++  **A host's loop.** Only the host reads a clock. A runner sleeps `next_due_in/1`
++  milliseconds, or less when it paces task-less instances or watches for an input to
++  change, then reads its devices into an input map, calls `cycle/3` with the time that
++  really passed and that map, and writes the outputs it gets back to its devices:
++
++      rt = Logex.Runtime.start(config)
++      # loop: sleep, then
++      {rt, outputs, events} = Logex.Runtime.cycle(rt, elapsed_ms, inputs)
++
++  `start/1` leaves every task due, so `next_due_in/1` is 0 and the first cycle runs at
++  once; a first cycle a whole interval later reports the run it missed as an overlap.
++  The inputs are only input points, by name, each with a value that fits its type; they
++  merge into the input image, so a host sends what changed. The outputs are every output
++  point, every cycle. The events, `{:overlap, task, missed}` and `{:ran, task | :none,
++  instance, now}`, are an open set: a host ignores a kind it does not know. A cycle is a
++  pure function of its arguments, so the same calls give the same outputs and events on
++  every run.
++
+   A running instance takes a changed program through `Logex.Edit` (OE-1,
+   `docs/organisation.md` §4.9): accept, test, untest, assemble or cancel, each between two
+   scans, its state moved by name. An instance carries two fields for it
+@@ -40,7 +65,8 @@ defmodule Logex.Runtime do
+   where a plain swap's first scan can fire one whose condition was already true.
+   `restart/3` starts every tag again but the `var_input`s whose values fit their types,
+   and empties `ons_blocked`. A `%Logex.Program{}`, `%Logex.Instance{}` or `%Logex.Edit{}` built or
+-  edited by hand is outside this contract.
++  edited by hand is outside this contract, and so is a `%Logex.Runtime{}`; `start/1` checks
++  a configuration again, as `Logex.Configuration.new!/1` does.
+ 
+   **During an edit** the host scans, sets inputs and restarts through
+   `Logex.Edit.running/1`; scanning the other program is outside this contract. The edit
+@@ -52,7 +78,18 @@ defmodule Logex.Runtime do
+     sending each one it reports as `{:unread, name, value}`.
+   """
+ 
+-  alias Logex.{Declarations, FbType, Instance, Program, Scan, Tag}
++  alias Logex.{Configuration, Declarations, FbType, Instance, Program, Scan, Tag}
++
++  # A resource (M2-1): plain data only, every piece of state keyed by name
++  # (docs/organisation.md §4.9, "What Milestone 2 must keep"). `config`, the configuration;
++  # `now`; `globals`, one value per global, the input points' being the input image;
++  # `instances`, one `%Logex.Instance{}` per instance, held flat by name; `tasks`, each
++  # task's `next_due` and `overlaps` by name; and `plan`, what start/1 works out once from
++  # the configuration alone, which a cycle only reads.
++  @enforce_keys [:config, :now, :globals, :instances, :tasks, :plan]
++  defstruct [:config, :now, :globals, :instances, :tasks, :plan]
++
++  @opaque t :: %__MODULE__{}
+ 
+   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
+ 
+@@ -133,6 +170,434 @@ defmodule Logex.Runtime do
+   defp mode!(mode),
+     do: raise(ArgumentError, "restart takes :cold or :warm, got: #{inspect(mode)}")
+ 
++  # ---- A resource: a configuration running (M2-1, docs/organisation.md §4.6) ------------
++
++  @doc """
++  A resource running `config`: `now` at 0, every global at its initial value (an input
++  point at 0), each instance made by `instance/1`, and every task due, so the first
++  `cycle/3` runs every one of them. The configuration is checked again, as
++  `Logex.Configuration.new!/1` checks it.
++  """
++  def start(%Configuration{} = config) do
++    configured!(Configuration.check(config))
++
++    %__MODULE__{
++      config: config,
++      now: 0,
++      globals: Map.new(config.globals, &{&1.name, initial(&1)}),
++      instances:
++        Map.new(config.instances, &{&1.name, instance(Map.fetch!(config.programs, &1.type))}),
++      tasks: Map.new(config.tasks, &{&1.name, %{next_due: 0, overlaps: 0}}),
++      plan: plan(config)
++    }
++  end
++
++  def start(other),
++    do:
++      raise(
++        ArgumentError,
++        "expected a %Logex.Configuration{} from Logex.Configuration.new!/1, got: " <>
++          inspect(other)
++      )
++
++  defp configured!([]), do: :ok
++
++  defp configured!(problems),
++    do: raise(ArgumentError, Enum.map_join(problems, "\n", &problem_line/1))
++
++  defp problem_line({nil, message}), do: message
++  defp problem_line({line, message}), do: "line #{line}: #{message}"
++
++  defp initial(%{initial: nil}), do: 0
++  defp initial(%{initial: value}), do: value
++
++  # What a cycle reads and never changes: each task in declaration order with its
++  # instances in theirs, the task-less instances, each instance's connections, and the
++  # input and output points.
++  defp plan(%Configuration{} = config) do
++    members = Enum.group_by(config.instances, & &1.task, & &1.name)
++
++    %{
++      tasks:
++        config.tasks
++        |> Enum.with_index()
++        |> Enum.map(fn {task, index} ->
++          {task.name, task.priority, task.interval, index, Map.get(members, task.name, [])}
++        end),
++      taskless: Map.get(members, nil, []),
++      wiring: wiring(config),
++      inputs:
++        for(g <- config.globals, point(g) == {:ok, :input}, into: %{}, do: {g.name, g.type}),
++      outputs: for(g <- config.globals, point(g) == {:ok, :output}, do: g.name)
++    }
++  end
++
++  defp point(%{at: at}), do: Configuration.location(at)
++
++  # Each instance's program, its var_inputs with their sources, and its var_outputs with
++  # their sinks, in the connections' order.
++  defp wiring(%Configuration{instances: instances, connections: connections, programs: programs}) do
++    by_instance =
++      Enum.group_by(connections, &(&1.member |> String.split(".") |> hd()), fn c ->
++        [_instance, var] = String.split(c.member, ".")
++        {var, c.to}
++      end)
++
++    Map.new(instances, fn %{name: name, type: type} ->
++      %Program{tags: tags} = Map.fetch!(programs, type)
++
++      {ins, outs} =
++        Enum.split_with(Map.get(by_instance, name, []), fn {var, _} ->
++          tags[var].section == :var_input
++        end)
++
++      {name, {type, ins, outs}}
++    end)
++  end
++
++  @doc """
++  One cycle of the resource, `elapsed_ms` after the last (`docs/organisation.md` §4.6):
++
++  1. `now` advances by `elapsed_ms`;
++  2. `inputs`, keyed by input point name, are merged into the input image, so a host sends
++     only what changed, and every scan of the cycle sees the same sample;
++  3. the periodic tasks due, each whose `next_due` is at or before `now`, are worked out
++     once; a task due more than once since it last ran runs once, adds the periods it
++     missed to its overlap count and gives `{:overlap, task, missed}`, and its `next_due`
++     moves past `now` by whole intervals, so its phase never drifts;
++  4. the due tasks run by priority, 0 first, then the earlier due time, then declaration
++     order, each one's instances in declaration order, and then every task-less instance,
++     once; each scan copies its connected var_inputs in, runs its program through
++     `call/4` at `now`, and copies its connected var_outputs out to their globals, so an
++     instance sees what an earlier one wrote in the same cycle and never what a later one
++     writes;
++  5. the outputs, every output point by name, come back once, after every scan.
++
++  It returns `{runtime, outputs, events}`: the overlaps, in the order their tasks run,
++  then `{:ran, task, instance, now}` for each scan in the order it ran, `task` being
++  `:none` for a task-less instance. The events are an open set: a host ignores a kind it
++  does not know.
++  """
++  def cycle(runtime, elapsed_ms, inputs) do
++    rt = runtime!(runtime)
++    now = rt.now + elapsed!(elapsed_ms)
++    globals = image!(rt, inputs)
++    {due, tasks, overlaps} = due(rt, now)
++
++    {globals, instances, ran} =
++      Enum.reduce(runs(due, rt.plan), {globals, rt.instances, []}, &scan_in(&1, &2, rt, now))
++
++    rt = %{rt | now: now, globals: globals, instances: instances, tasks: tasks}
++    {rt, Map.new(rt.plan.outputs, &{&1, Map.fetch!(globals, &1)}), overlaps ++ Enum.reverse(ran)}
++  end
++
++  # Step 3: the due tasks in the order they run, each task's state moved on, and the
++  # overlaps they report. Each tuple sorts by priority, then due time, then declaration.
++  defp due(%__MODULE__{plan: %{tasks: periodic}, tasks: tasks}, now) do
++    due =
++      for {name, priority, interval, index, members} <- periodic,
++          %{next_due: next} <- [Map.fetch!(tasks, name)],
++          next <= now,
++          do: {priority, next, index, name, interval, members}
++
++    due = Enum.sort(due)
++
++    {tasks, overlaps} =
++      Enum.reduce(due, {tasks, []}, fn {_priority, next, _index, name, interval, _}, acc ->
++        missed(div(now - next, interval), next, name, interval, acc)
++      end)
++
++    {due, tasks, Enum.reverse(overlaps)}
++  end
++
++  defp missed(missed, next, name, interval, {tasks, overlaps}) do
++    tasks =
++      Map.update!(tasks, name, fn %{overlaps: count} ->
++        %{next_due: next + (missed + 1) * interval, overlaps: count + missed}
++      end)
++
++    {tasks, overlap(missed, name) ++ overlaps}
++  end
++
++  defp overlap(0, _name), do: []
++  defp overlap(missed, name), do: [{:overlap, name, missed}]
++
++  defp runs(due, %{taskless: taskless}),
++    do:
++      Enum.flat_map(due, fn {_, _, _, name, _, members} -> Enum.map(members, &{name, &1}) end) ++
++        Enum.map(taskless, &{:none, &1})
++
++  # One scan of one instance in a cycle: copy in, run, copy out.
++  defp scan_in({task, name}, {globals, instances, ran}, %__MODULE__{} = rt, now) do
++    {type, ins, outs} = Map.fetch!(rt.plan.wiring, name)
++    %Instance{first: first} = state = Map.fetch!(instances, name)
++    inputs = Map.new(ins, fn {var, from} -> {var, source(from, globals)} end)
++
++    {outputs, state} =
++      call(Map.fetch!(rt.config.programs, type), state, inputs, %Scan{now: now, first: first})
++
++    globals = Enum.reduce(outs, globals, fn {var, sink}, g -> Map.put(g, sink, outputs[var]) end)
++    {globals, Map.put(instances, name, state), [{:ran, task, name, now} | ran]}
++  end
++
++  defp source(constant, _globals) when is_integer(constant), do: constant
++  defp source(global, globals), do: Map.fetch!(globals, global)
++
++  @doc """
++  How long, in ms, until the next periodic task is due: what a runner sleeps on before its
++  next `cycle/3`. 0 when one is due now, as every task is after `start/1`, and `:infinity`
++  with no periodic task. A task-less instance runs in every cycle, whenever the runner
++  cycles, so it is not counted: the runner paces it (§4.6).
++  """
++  def next_due_in(runtime) do
++    rt = runtime!(runtime)
++
++    soonest(
++      for {name, _, _, _, _} <- rt.plan.tasks, do: Map.fetch!(rt.tasks, name).next_due - rt.now
++    )
++  end
++
++  defp soonest([]), do: :infinity
++  defp soonest(waits), do: Enum.min(waits)
++
++  @doc """
++  Each task's overlap count, by name: the periods it missed since the resource started or
++  restarted, the sum of the `{:overlap, task, missed}` events it gave.
++  """
++  def overlaps(runtime) do
++    rt = runtime!(runtime)
++    Map.new(rt.tasks, fn {name, %{overlaps: count}} -> {name, count} end)
++  end
++
++  @doc """
++  The value an access path names, the resource left out (§4.6): a global, `"k1"`; a tag
++  of an instance, `"m1.motor"`, of any section; or a member of a function block instance
++  that a program may name, `"m1.t1.acc"`. An internal member, a whole instance and
++  anything else the configuration does not declare is a host mistake.
++  """
++  def get(runtime, path) do
++    rt = runtime!(runtime)
++    reached!(rt, path!(path), path)
++  end
++
++  defp path!(path) when is_binary(path), do: parts(String.split(path, "."), path)
++  defp path!(path), do: raise(ArgumentError, "#{path_rule()}, got: #{inspect(path)}")
++
++  defp path_rule, do: ~s|a path is names joined by `.`, as in "m1.t1.acc"|
++
++  defp parts(parts, path), do: named_parts(Enum.all?(parts, &Declarations.name?/1), parts, path)
++
++  defp named_parts(true, parts, _path), do: parts
++
++  defp named_parts(false, _parts, path),
++    do: raise(ArgumentError, "#{path_rule()}, got: #{inspect(path)}")
++
++  defp reached!(%__MODULE__{globals: globals, instances: instances} = rt, [head | rest], path),
++    do: headed(Map.fetch(globals, head), Map.fetch(instances, head), rt, head, rest, path)
++
++  defp headed({:ok, value}, _instance, _rt, _head, [], _path), do: value
++
++  defp headed({:ok, _value}, _instance, rt, head, _rest, path),
++    do:
++      raise(
++        ArgumentError,
++        "`#{head}` is a #{global_type(rt, head)} global: it has no members, so `#{path}` names nothing"
++      )
++
++  defp headed(:error, {:ok, state}, rt, head, rest, _path), do: in_instance(rt, head, state, rest)
++
++  defp headed(:error, :error, rt, head, _rest, _path),
++    do:
++      raise(
++        ArgumentError,
++        "no global or instance is named `#{head}`" <>
++          Declarations.suggest(
++            head,
++            Map.keys(rt.globals) ++ Map.keys(rt.instances),
++            & &1,
++            "names"
++          )
++      )
++
++  defp global_type(rt, name), do: Enum.find(rt.config.globals, &(&1.name == name)).type
++
++  defp in_instance(rt, name, %Instance{type: type}, []),
++    do:
++      raise(
++        ArgumentError,
++        "`#{name}` is an instance of `#{type}`: name one of its tags, as in " <>
++          "`#{name}.#{rt.config.programs[type].tags |> Map.keys() |> Enum.min()}`"
++      )
++
++  defp in_instance(rt, name, %Instance{type: type, env: env}, [tag | deeper]) do
++    %Program{tags: tags} = Map.fetch!(rt.config.programs, type)
++
++    tagged(
++      Map.get(tags, tag),
++      Map.get(env, tag, 0),
++      "#{name}.#{tag}",
++      deeper,
++      {name, type, tags, tag}
++    )
++  end
++
++  defp tagged(nil, _value, _shown, _deeper, {name, type, tags, tag}),
++    do:
++      raise(
++        ArgumentError,
++        "`#{name}` is an instance of `#{type}`, which declares no `#{tag}`" <>
++          Declarations.suggest(tag, Map.keys(tags))
++      )
++
++  defp tagged(%Tag{type: type}, value, shown, deeper, _where),
++    do: member_value(type, value, shown, deeper)
++
++  # A path past a tag walks its members, at any depth (M2-5's blocks nest), and stops at
++  # a value: a whole instance is not one.
++  defp member_value(%FbType{} = type, _value, shown, []),
++    do:
++      raise(
++        ArgumentError,
++        "`#{shown}` is a #{type.name}: name one of its members, as in " <>
++          "`#{shown}.#{hd(FbType.public(type)).name}`"
++      )
++
++  defp member_value(%FbType{} = type, value, shown, [part | deeper]),
++    do: in_member(FbType.member(type, part), as_map(value), shown, part, deeper, type)
++
++  defp member_value(_elementary, value, _shown, []), do: value
++
++  defp member_value(type, _value, shown, [part | _deeper]),
++    do:
++      raise(
++        ArgumentError,
++        "`#{shown}` is a #{type}: it has no members, so `#{shown}.#{part}` names nothing"
++      )
++
++  defp in_member({:ok, member}, value, shown, part, deeper, _type),
++    do: member_value(member.type, Map.get(value, part, 0), "#{shown}.#{part}", deeper)
++
++  defp in_member(:error, _value, shown, part, _deeper, type),
++    do:
++      raise(
++        ArgumentError,
++        "`#{part}` is not a member of `#{shown}`, a #{type.name}: its members are " <>
++          listed(Enum.map(FbType.public(type), &"`#{&1.name}`"))
++      )
++
++  defp listed(names), do: Enum.join(Enum.drop(names, -1), ", ") <> " and " <> List.last(names)
++
++  @doc """
++  Starts the resource again (`:warm` is `:cold` until `retain` exists): it is then as
++  `start/1` left it, but for the clock and the input image, which it keeps. Every global
++  but an input point goes back to its initial value, each instance through `restart/3`,
++  every task is due at the next cycle, and every overlap count is 0.
++  """
++  def restart(runtime, mode) do
++    rt = runtime!(runtime)
++    mode!(mode)
++
++    %{
++      rt
++      | globals: Map.new(rt.config.globals, &{&1.name, restarted(&1, rt)}),
++        instances:
++          Map.new(rt.instances, fn {name, %Instance{type: type} = state} ->
++            {name, restart(Map.fetch!(rt.config.programs, type), state, mode)}
++          end),
++        tasks: Map.new(rt.tasks, fn {name, _} -> {name, %{next_due: rt.now, overlaps: 0}} end)
++    }
++  end
++
++  defp restarted(%{name: name} = global, %__MODULE__{plan: %{inputs: inputs}, globals: globals})
++       when is_map_key(inputs, name),
++       do: Map.get(globals, global.name)
++
++  defp restarted(global, _rt), do: initial(global)
++
++  defp runtime!(%__MODULE__{} = rt), do: rt
++
++  defp runtime!(other),
++    do:
++      raise(
++        ArgumentError,
++        "expected a %Logex.Runtime{} from Logex.Runtime.start/1, got: #{inspect(other)}"
++      )
++
++  # Step 2: every input problem, a line each in key order, or the image with the inputs
++  # merged into it. Only an input point is set, with a value that fits its type, as
++  # call/4 sets only a var_input.
++  defp image!(%__MODULE__{globals: globals} = rt, inputs)
++       when is_map(inputs) and not is_struct(inputs) do
++    problems =
++      for {key, value} <- Enum.sort(inputs), problem = point_problem(key, value, rt), do: problem
++
++    imaged(problems, globals, inputs)
++  end
++
++  defp image!(_rt, inputs),
++    do:
++      raise(
++        ArgumentError,
++        ~s|inputs must be a map of input point names to values, as in %{"pb_start" => 1}, | <>
++          "got: #{inspect(inputs)}"
++      )
++
++  defp imaged([], globals, inputs), do: Map.merge(globals, inputs)
++  defp imaged(problems, _globals, _inputs), do: raise(ArgumentError, Enum.join(problems, "\n"))
++
++  defp point_problem(key, _value, _rt) when not is_binary(key),
++    do:
++      "input #{inspect(key)} is not a point name: a configuration's inputs are keyed by " <>
++        ~s|input point name, as a string, as in %{"pb_start" => 1}|
++
++  defp point_problem(key, value, %__MODULE__{plan: %{inputs: inputs}})
++       when is_map_key(inputs, key),
++       do: fit(%Tag{name: key, type: Map.fetch!(inputs, key), section: :var_input}, value)
++
++  defp point_problem(key, _value, rt),
++    do: not_a_point(Enum.find(rt.config.globals, &(&1.name == key)), key, rt)
++
++  defp not_a_point(%{at: nil}, key, _rt),
++    do:
++      "input `#{key}` is a global with no location, not an input point: only an input point " <>
++        "is set from outside"
++
++  defp not_a_point(%{at: at}, key, _rt),
++    do:
++      "input `#{key}` is an output point (at #{at}), not an input point: only an input point " <>
++        "is set from outside"
++
++  defp not_a_point(nil, key, rt) do
++    [head | rest] = String.split(key, ".")
++    other_name(Map.has_key?(rt.instances, head), rest, key, rt)
++  end
++
++  defp other_name(true, [], key, _rt),
++    do:
++      "input #{label(key)} is a program instance, not an input point: only an input point is set from outside"
++
++  defp other_name(true, _rest, key, _rt),
++    do:
++      "input #{label(key)} reaches into the instance `#{hd(String.split(key, "."))}`: only an " <>
++        "input point is set from outside"
++
++  defp other_name(false, [], key, %__MODULE__{tasks: tasks}) when is_map_key(tasks, key),
++    do: "input `#{key}` is a task, not an input point: only an input point is set from outside"
++
++  defp other_name(false, _rest, key, rt) do
++    points = Enum.sort(Map.keys(rt.plan.inputs))
++
++    "input #{label(key)} is not declared" <>
++      points_hint(Declarations.suggest(key, points, & &1, "names"), points)
++  end
++
++  defp points_hint("", []), do: ": this configuration has no input point"
++
++  defp points_hint("", points),
++    do: ": the input points are " <> Enum.map_join(points, ", ", &"`#{&1}`")
++
++  defp points_hint(suggestion, _points), do: suggestion
++
+   # The evaluator's scan is the host's `now` and `first` with the instance's block list,
+   # which holds for this one scan (OE-1), made a map once here so that each `ons` looks its
+   # bit up: a walk of the list made the scan after a switch quadratic in the one-shots it
+diff --git a/test/logex/api_contract_test.exs b/test/logex/api_contract_test.exs
+index 2d033a4..5ade8d4 100644
+--- a/test/logex/api_contract_test.exs
++++ b/test/logex/api_contract_test.exs
+@@ -1476,4 +1476,736 @@ defmodule Logex.ApiContractTest do
+   defp edit_reach(name, true), do: reached(:edit_reach, name)
+ 
+   defp edit_reach(_name, false), do: :ok
++
++  # ---- M2-1: the walk over a configuration -----------------------------------------------
++  #
++  # Random configurations from one vocabulary, cycled by random host calls. Every host
++  # mistake is refused with a documented message and every call without one is accepted,
++  # made twice and gives the same result. An oracle scheduler, written from
++  # docs/organisation.md §4.6's text, predicts every cycle's outputs and events, every
++  # value get/2 reads, next_due_in/1 and the overlap counts. It keeps no next due time:
++  # a task with interval P is due in a cycle when one of its due times, the anchor (start
++  # or the last restart) plus a whole number of P, falls in the time since the previous
++  # cycle, and it missed one period for each further due time there. Its scans go through
++  # Logex.Runtime.call/4, the per-instance step, which the scheduler is defined by. The
++  # order of the due tasks is the one thing it restates, so scheduler_test.exs has a
++  # worked test of each key of it.
++
++  @walk_programs %{
++    "relay" => """
++    var_input a bool
++    var_input b bool
++    var_input k dint
++    var_output q bool
++    var_output n dint
++    var s bool
++    var t1 ton
++
++    ( xic a | xic q ) xio b ote q
++    xic a ons s move k n
++    xic t1.dn move 0 n
++    xic q ton t1 25
++    """,
++    "pass" => """
++    var_input x bool
++    var_output y bool
++    var_output z dint
++
++    xic x ote y
++    xic x move 5 z
++    xio x move 9 z
++    """
++  }
++
++  # The input points every walk's configuration has, and the unlocated globals any
++  # instance may read and one var_output may drive, so instances share values.
++  @walk_inputs [{"i0", :bool}, {"i1", :bool}, {"i2", :bool}, {"d0", :dint}]
++  @walk_shared [{"s0", :bool}, {"s1", :bool}, {"sd", :dint}]
++
++  # The documented refusals of the resource's API, by a fragment each.
++  @walk_refusals [
++    "expected a %Logex.Runtime{}",
++    "elapsed_ms must be",
++    "inputs must be a map",
++    "is not a point name",
++    "not an input point",
++    "reaches into the instance",
++    "is not declared",
++    "only 0 or 1 fit",
++    "its value must be an integer",
++    "does not fit in 32 bits",
++    "a path is names joined",
++    "no global or instance is named",
++    "global: it has no members",
++    "name one of its tags",
++    "which declares no",
++    "name one of its members",
++    "is not a member of",
++    ": it has no members, so",
++    "restart takes"
++  ]
++
++  # What the oracle must see happen, at least once each.
++  @walk_reach [
++    :ran_task,
++    :ran_none,
++    :overlap,
++    :first_cycle_overlap,
++    :idle_cycle,
++    :priority_order,
++    :due_time_order,
++    :declaration_order,
++    :saw_earlier_write,
++    :restart,
++    :infinity,
++    :next_due
++  ]
++
++  defp walk_programs,
++    do:
++      Map.new(@walk_programs, fn {name, src} ->
++        {name, elem(Logex.compile(src, name: name), 1)}
++      end)
++
++  # A configuration drawn at random, always valid: 0 to 3 tasks, 1 to 5 instances, each
++  # var_input from an input point, a shared global, a constant or a global another
++  # instance drives, and each var_output to none, one or two sinks.
++  defp walk_config(programs), do: Logex.Configuration.new!(walk_config_fields(programs))
++
++  defp walk_config_fields(programs) do
++    # Task names in random order, so declaration order and name order differ.
++    tasks =
++      for name <- Enum.take(Enum.shuffle(~w(t1 t2 t3)), :rand.uniform(4) - 1) do
++        %{name: name, interval: pick([1, 3, 5, 10, 10, 30]), priority: pick([0, 1, 1, 2])}
++      end
++
++    instances =
++      for i <- 1..:rand.uniform(5) do
++        %{
++          name: "m#{i}",
++          type: pick(Map.keys(programs)),
++          task: pick([nil | Enum.map(tasks, & &1.name)])
++        }
++      end
++
++    {connections, made} =
++      Enum.flat_map_reduce(instances, %{driven: MapSet.new(), new: []}, fn inst, made ->
++        tags = programs[inst.type].tags |> Map.values() |> Enum.sort_by(& &1.line)
++        Enum.flat_map_reduce(tags, made, &walk_wire(inst.name, &1, &2))
++      end)
++
++    walk_fields(programs, tasks, instances, connections, made)
++  end
++
++  defp walk_fields(programs, tasks, instances, connections, made) do
++    [
++      name: "walk",
++      programs: Map.values(programs),
++      tasks: tasks,
++      globals:
++        Enum.with_index(@walk_inputs, fn {n, t}, i -> %{name: n, type: t, at: "io.i.#{i}"} end) ++
++          for({n, t} <- @walk_shared, do: %{name: n, type: t}) ++ Enum.reverse(made.new),
++      instances: instances,
++      connections: connections
++    ]
++  end
++
++  defp walk_wire(inst, %Tag{section: :var_input, name: var, type: type}, made) do
++    sources =
++      for({n, ^type} <- @walk_inputs ++ @walk_shared, do: n) ++
++        for(%{name: n, type: ^type} <- made.new, do: n)
++
++    to = pick(sources ++ [pick(walk_constants(type))])
++    {[%{member: "#{inst}.#{var}", to: to}], made}
++  end
++
++  defp walk_wire(inst, %Tag{section: :var_output, name: var, type: type}, made) do
++    Enum.flat_map_reduce(1..pick([0, 1, 1, 2])//1, made, fn _, made ->
++      shared = for {n, ^type} <- @walk_shared, n not in made.driven, do: n
++      walk_sink(pick([:shared, :point, :global]), shared, "#{inst}.#{var}", type, made)
++    end)
++  end
++
++  defp walk_wire(_inst, _tag, made), do: {[], made}
++
++  defp walk_sink(:shared, [_ | _] = shared, member, _type, made) do
++    to = pick(shared)
++    {[%{member: member, to: to}], %{made | driven: MapSet.put(made.driven, to)}}
++  end
++
++  defp walk_sink(kind, _shared, member, type, made) do
++    n = length(made.new)
++    global = walk_global(kind, n, type)
++    {[%{member: member, to: global.name}], %{made | new: [global | made.new]}}
++  end
++
++  defp walk_global(:point, n, type), do: %{name: "o#{n}", type: type, at: "io.q.#{n}"}
++  defp walk_global(_kind, n, type), do: %{name: "g#{n}", type: type}
++
++  defp walk_constants(:bool), do: [0, 1]
++  defp walk_constants(:dint), do: [0, 5, 3000]
++
++  test "a resource refuses every host mistake with a documented ArgumentError, accepts " <>
++         "every call without one, and does what an oracle scheduler written from §4.6 says" do
++    programs = walk_programs()
++
++    for _ <- 1..300 do
++      config = walk_config(programs)
++      rt = Logex.Runtime.start(config)
++      oracle = oracle_start(config)
++      walk_resource(rt, oracle, 40)
++    end
++
++    assert Process.get(:walk_refused, MapSet.new()) == MapSet.new(@walk_refusals)
++    assert Process.get(:walk_reach, MapSet.new()) == MapSet.new(@walk_reach)
++  end
++
++  defp walk_resource(_rt, _oracle, 0), do: :ok
++
++  defp walk_resource(rt, oracle, n) do
++    {mistake?, call, check} = resource_operation(:rand.uniform(9), rt, oracle)
++
++    case walk_attempt(call) do
++      {:ok, result} ->
++        refute mistake?, "a host mistake was accepted"
++        {rt, oracle} = check.(result)
++        walk_resource(rt, oracle, n - 1)
++
++      :refused ->
++        assert mistake?, "a call without a host mistake was refused"
++        walk_resource(rt, oracle, n - 1)
++    end
++  end
++
++  # Each operation: whether it is a host mistake by the contract's own words, the call,
++  # and a check of an accepted result, which gives the runtime and the oracle back.
++  defp resource_operation(op, rt, oracle) when op in 1..4 do
++    elapsed = pick([0, 0, 1, 2, 3, 5, 10, 29, 30, 31, 100, 1000] ++ [-1, 1.5, nil])
++    inputs = walk_inputs(oracle)
++    mistake? = not (is_integer(elapsed) and elapsed >= 0) or bad_point_inputs?(inputs)
++
++    {mistake?, fn -> Logex.Runtime.cycle(rt, elapsed, inputs) end,
++     fn {rt, outputs, events} ->
++       {oracle, expected_outputs, expected_events} = oracle_cycle(oracle, elapsed, inputs)
++       assert {outputs, events} == {expected_outputs, expected_events}
++       check_reads(rt, oracle)
++       {rt, oracle}
++     end}
++  end
++
++  defp resource_operation(5, rt, oracle) do
++    good = good_paths(oracle)
++    path = pick(good ++ bad_paths(oracle))
++
++    {path not in good, fn -> Logex.Runtime.get(rt, path) end,
++     fn value ->
++       assert value == oracle_read(oracle, path)
++       {rt, oracle}
++     end}
++  end
++
++  defp resource_operation(6, rt, oracle) do
++    {false, fn -> {Logex.Runtime.next_due_in(rt), Logex.Runtime.overlaps(rt)} end,
++     fn {due_in, overlaps} ->
++       assert due_in == oracle_due_in(oracle)
++       assert overlaps == oracle.overlaps
++       walk_reached(due_kind(due_in))
++       {rt, oracle}
++     end}
++  end
++
++  defp resource_operation(7, rt, oracle) do
++    mode = pick([:cold, :warm, :cold, :hot])
++
++    {mode == :hot, fn -> Logex.Runtime.restart(rt, mode) end,
++     fn rt ->
++       oracle = oracle_restart(oracle, mode)
++       walk_reached(:restart)
++       check_reads(rt, oracle)
++       {rt, oracle}
++     end}
++  end
++
++  # Something other than a runtime, to any function.
++  defp resource_operation(_op, rt, oracle) do
++    junk = pick([nil, %{}, :rt, oracle.config, [rt]])
++
++    call =
++      pick([
++        fn -> Logex.Runtime.cycle(junk, 0, %{}) end,
++        fn -> Logex.Runtime.next_due_in(junk) end,
++        fn -> Logex.Runtime.overlaps(junk) end,
++        fn -> Logex.Runtime.get(junk, "i0") end,
++        fn -> Logex.Runtime.restart(junk, :cold) end
++      ])
++
++    {true, call, fn _ -> {rt, oracle} end}
++  end
++
++  defp due_kind(:infinity), do: :infinity
++  defp due_kind(_ms), do: :next_due
++
++  # Now and then not a map at all; otherwise a few keys, two in three of them input points,
++  # most with values that fit, so most cycles are accepted.
++  defp walk_inputs(oracle), do: walk_inputs(:rand.uniform(12), oracle)
++
++  defp walk_inputs(1, _oracle), do: pick([nil, [], %Scan{now: 0, first: true}])
++
++  defp walk_inputs(_, oracle) do
++    points = for {n, t} <- @walk_inputs, do: {n, t}
++
++    Map.new(1..:rand.uniform(3)//1, fn _ ->
++      case :rand.uniform(3) do
++        3 -> {pick(walk_bad_keys(oracle)), pick([0, 1])}
++        _ -> walk_point_value(pick(points))
++      end
++    end)
++  end
++
++  defp walk_point_value({name, :bool}), do: {name, pick([0, 1, 0, 1, 0, 1, 2])}
++
++  defp walk_point_value({name, :dint}),
++    do: {name, pick([0, 7, 2_147_483_647, 2_147_483_648, 1.0])}
++
++  defp walk_bad_keys(oracle),
++    do:
++      ["s0", "zz", "I0", :i0, "m1.a", "m1"] ++
++        Enum.map(oracle.config.tasks, & &1.name) ++
++        for(%{name: n, at: "io.q." <> _} <- oracle.config.globals, do: n)
++
++  # The contract's own words: only an input point, a bool 0 or 1, a dint in 32 bits.
++  defp bad_point_inputs?(inputs) when not is_map(inputs) or is_struct(inputs), do: true
++
++  defp bad_point_inputs?(inputs),
++    do:
++      Enum.any?(inputs, fn {key, value} ->
++        case List.keyfind(@walk_inputs, key, 0) do
++          {_, :bool} -> value not in [0, 1]
++          {_, :dint} -> not (is_integer(value) and value in -2_147_483_648..2_147_483_647//1)
++          nil -> true
++        end
++      end)
++
++  # Every path a host may read, from the configuration and the programs' text.
++  defp good_paths(oracle) do
++    globals = for %{name: n} <- oracle.config.globals, do: n
++
++    tags =
++      for %{name: inst, type: type} <- oracle.config.instances,
++          {tag, %Tag{type: t}} <- oracle.config.programs[type].tags,
++          path <- tag_paths("#{inst}.#{tag}", t),
++          do: path
++
++    globals ++ tags
++  end
++
++  defp tag_paths(path, %Logex.FbType{}), do: for(m <- ~w(pre acc dn tt en), do: "#{path}.#{m}")
++  defp tag_paths(path, _type), do: [path]
++
++  defp bad_paths(oracle) do
++    [first | _] = oracle.config.instances
++
++    ["zz", "i0.x", first.name, "#{first.name}.zz", "#{first.name}.a.x", "#{first.name}.x.x"] ++
++      ["#{first.name}.t1", "#{first.name}.t1.last", "#{first.name}.t1.acc.x", "m1..a", :m1, ""]
++  end
++
++  # Records the refusal's kind; an accepted call is made twice and must give the same
++  # result, since nothing in the runtime reads a clock or any state but its arguments.
++  defp walk_attempt(fun) do
++    result = fun.()
++    assert fun.() == result, "the same call gave two results"
++    {:ok, result}
++  rescue
++    error in ArgumentError ->
++      for line <- String.split(error.message, "\n") do
++        kind = Enum.find(@walk_refusals, &String.contains?(line, &1))
++        assert kind, "undocumented refusal: #{line}"
++        reached(:walk_refused, kind)
++      end
++
++      :refused
++  end
++
++  defp walk_reached(name), do: reached(:walk_reach, name)
++
++  # ---- the oracle -------------------------------------------------------------------------
++
++  defp oracle_start(config) do
++    %{
++      config: config,
++      now: 0,
++      anchor: 0,
++      prev: nil,
++      globals: Map.new(config.globals, &{&1.name, &1.initial || 0}),
++      states:
++        Map.new(config.instances, &{&1.name, Logex.Runtime.instance(config.programs[&1.type])}),
++      overlaps: Map.new(config.tasks, &{&1.name, 0})
++    }
++  end
++
++  # How many of a task's due times, anchor + k * interval, fall in the cycle's window: since
++  # the previous cycle, or from the anchor in the first cycle after it; and the first one.
++  defp dues(%{anchor: anchor, prev: prev}, interval, now) do
++    upto = fn t -> if t < anchor, do: 0, else: div(t - anchor, interval) + 1 end
++
++    case prev do
++      nil -> {upto.(now), anchor}
++      prev -> {upto.(now) - upto.(prev), anchor + upto.(prev) * interval}
++    end
++  end
++
++  # A cycle as §4.6 defines it: `{oracle, outputs, events}`.
++  defp oracle_cycle(oracle, elapsed, inputs) do
++    now = oracle.now + elapsed
++    config = oracle.config
++
++    due =
++      Enum.sort(
++        for {task, index} <- Enum.with_index(config.tasks),
++            {count, first} = dues(oracle, task.interval, now),
++            count > 0,
++            do: {task.priority, first, index, task.name, count - 1}
++      )
++
++    order_reach(due)
++    overlaps = for {_, _, _, name, missed} <- due, missed > 0, do: {:overlap, name, missed}
++    first_cycle_reach(oracle.prev, overlaps)
++
++    runs =
++      for(
++        {_, _, _, name, _} <- due,
++        %{name: inst, task: ^name} <- config.instances,
++        do: {name, inst}
++      ) ++
++        for %{name: inst, task: nil} <- config.instances, do: {:none, inst}
++
++    sample = Map.merge(oracle.globals, inputs)
++
++    {globals, states, ran} =
++      Enum.reduce(runs, {sample, oracle.states, []}, fn {task, inst}, {globals, states, ran} ->
++        {globals, state} = oracle_scan(config, inst, states[inst], globals, sample, now)
++        walk_reached(ran_kind(task))
++        {globals, Map.put(states, inst, state), [{:ran, task, inst, now} | ran]}
++      end)
++
++    for [] <- [runs], do: walk_reached(:idle_cycle)
++    for [_ | _] <- [overlaps], do: walk_reached(:overlap)
++
++    oracle = %{
++      oracle
++      | now: now,
++        prev: now,
++        globals: globals,
++        states: states,
++        overlaps:
++          Enum.reduce(due, oracle.overlaps, fn {_, _, _, name, missed}, acc ->
++            Map.update!(acc, name, &(&1 + missed))
++          end)
++    }
++
++    outputs = for %{name: n, at: "io.q." <> _} <- config.globals, into: %{}, do: {n, globals[n]}
++    {oracle, outputs, overlaps ++ Enum.reverse(ran)}
++  end
++
++  defp ran_kind(:none), do: :ran_none
++  defp ran_kind(_task), do: :ran_task
++
++  defp first_cycle_reach(nil, [_ | _]), do: walk_reached(:first_cycle_overlap)
++  defp first_cycle_reach(_prev, _overlaps), do: :ok
++
++  # Which key of the order decided something: priority or due time against declaration
++  # order, and declaration order against name order.
++  defp order_reach(due) do
++    for {p1, d1, i1, _, _} = a <- due, {p2, d2, i2, _, _} = b <- due, a < b do
++      cond do
++        p1 < p2 and i1 > i2 -> walk_reached(:priority_order)
++        p1 == p2 and d1 < d2 and i1 > i2 -> walk_reached(:due_time_order)
++        p1 == p2 and d1 == d2 and elem(a, 3) > elem(b, 3) -> walk_reached(:declaration_order)
++        true -> :ok
++      end
++    end
++  end
++
++  # One scan as §4.6 defines it: the connected var_inputs copied in from the globals as
++  # they stand, call/4 at the cycle's time, the connected var_outputs copied out.
++  defp oracle_scan(config, inst, state, globals, sample, now) do
++    program = config.programs[Enum.find(config.instances, &(&1.name == inst)).type]
++
++    mine =
++      for c <- config.connections, [^inst, var] <- [String.split(c.member, ".")], do: {var, c.to}
++
++    inputs =
++      for {var, to} <- mine, program.tags[var].section == :var_input, into: %{} do
++        value = if is_integer(to), do: to, else: globals[to]
++        if is_binary(to) and globals[to] != sample[to], do: walk_reached(:saw_earlier_write)
++        {var, value}
++      end
++
++    {outputs, state} =
++      Logex.Runtime.call(program, state, inputs, %Scan{now: now, first: state.first})
++
++    globals =
++      Enum.reduce(mine, globals, fn {var, to}, g ->
++        if program.tags[var].section == :var_output, do: Map.put(g, to, outputs[var]), else: g
++      end)
++
++    {globals, state}
++  end
++
++  defp oracle_restart(oracle, mode) do
++    points = for {n, _} <- @walk_inputs, do: n
++
++    %{
++      oracle
++      | anchor: oracle.now,
++        prev: nil,
++        overlaps: Map.new(oracle.overlaps, fn {n, _} -> {n, 0} end),
++        globals:
++          Map.new(oracle.config.globals, fn g ->
++            {g.name, if(g.name in points, do: oracle.globals[g.name], else: g.initial || 0)}
++          end),
++        states:
++          Map.new(oracle.states, fn {n, s} ->
++            {n, Logex.Runtime.restart(oracle.config.programs[s.type], s, mode)}
++          end)
++    }
++  end
++
++  defp oracle_due_in(%{config: %{tasks: []}}), do: :infinity
++
++  defp oracle_due_in(oracle) do
++    Enum.min(
++      for task <- oracle.config.tasks do
++        case oracle.prev do
++          nil ->
++            oracle.anchor - oracle.now
++
++          _ ->
++            oracle.anchor + (div(oracle.now - oracle.anchor, task.interval) + 1) * task.interval -
++              oracle.now
++        end
++      end
++    )
++  end
++
++  defp oracle_read(oracle, path) do
++    case String.split(path, ".") do
++      [global] -> oracle.globals[global]
++      [inst, tag] -> oracle.states[inst].env[tag]
++      [inst, tag, member] -> oracle.states[inst].env[tag][member]
++    end
++  end
++
++  # After a cycle or a restart, every path a host may read reads what the oracle holds.
++  defp check_reads(rt, oracle) do
++    for path <- good_paths(oracle),
++        do: assert(Logex.Runtime.get(rt, path) == oracle_read(oracle, path), path)
++  end
++
++  # ---- M2-1: the constructor, given what a host may get wrong ---------------------------
++
++  # Every kind of problem check/1 reports, by a pattern each: the walk below must reach
++  # every one, and every line of every refusal must be one of them.
++  @configuration_problems [
++    ~r/^Logex\.Configuration\.new!\/1 takes a keyword list/,
++    ~r/^a configuration needs a name/,
++    ~r/cannot name a configuration/,
++    ~r/^programs: must be a list/,
++    ~r/is not a %Logex\.Program\{\} from/,
++    ~r/^a program in a configuration needs a name/,
++    ~r/^two programs are named/,
++    ~r/^\w+: must be a list, as in/,
++    ~r/ is a map, as in /,
++    ~r/ from Elixir has no line/,
++    ~r/^(task|global|instance|connection) %\{.*\} has [a-z_:, ]+: an? \w+ has /,
++    ~r/^(task|global|instance|connection) %\{.*\} has no \w+:, as in/,
++    ~r/cannot name (a task|a global|an instance)/,
++    ~r/its interval is 1 to/,
++    ~r/its priority is 0/,
++    ~r/its type is :bool or :dint/,
++    ~r/a location is a device/,
++    ~r/is an input point: its value comes from outside/,
++    ~r/its initial value must be an integer/,
++    ~r/its initial value must be 0 or 1/,
++    ~r/does not fit in 32 bits/,
++    ~r/is negative, which no configuration line/,
++    ~r/a point has one global/,
++    ~r/is an instance of `.*`, but no program is named/,
++    ~r/its type is the name of one of the configuration's programs/,
++    ~r/runs under `.*`, but no task is named/,
++    ~r/its task is the name of a task, or nil/,
++    ~r/a configuration runs at least one instance/,
++    ~r/: globals, instances and tasks share one namespace/,
++    ~r/differ only in case/,
++    ~r/^connection .*: a member is an instance/,
++    ~r/^connection `.*`: no instance is named/,
++    ~r/which declares no/,
++    ~r/is internal to `/,
++    ~r/the constant must be 0 or 1/,
++    ~r/cannot be connected to the constant/,
++    ~r/the other end of a connection is a global/,
++    ~r/but no global is named/,
++    ~r/which is an? \w+, not a global/,
++    ~r/is a (bool|dint), but `.*` is a (bool|dint)/,
++    ~r/is already connected, to/,
++    ~r/is an input point: `.*` cannot drive it/,
++    ~r/is already driven by/,
++    ~r/is not connected: every var_input is connected/
++  ]
++
++  test "new!/1 refuses broken data with every problem, a documented line each, and " <>
++         "nothing else escapes; what it accepts starts and cycles" do
++    programs = walk_programs()
++
++    for _ <- 1..1500 do
++      fields =
++        Enum.reduce(1..:rand.uniform(3), walk_config_fields(programs), fn _, f ->
++          broken(f, programs)
++        end)
++
++      try do
++        config = Logex.Configuration.new!(fields)
++        {_rt, outputs, _events} = Logex.Runtime.cycle(Logex.Runtime.start(config), 0, %{})
++        assert is_map(outputs)
++        reached(:constructor, :accepted)
++      rescue
++        error in ArgumentError ->
++          for line <- String.split(error.message, "\n") do
++            kind = Enum.find(@configuration_problems, &Regex.match?(&1, line))
++            assert kind, "undocumented problem: #{line}"
++            reached(:constructor, Regex.source(kind))
++          end
++      end
++    end
++
++    assert Process.get(:constructor) ==
++             MapSet.new([:accepted | Enum.map(@configuration_problems, &Regex.source/1)])
++  end
++
++  # One thing a host may get wrong, at random.
++  defp broken(fields, programs), do: broken_list(Keyword.keyword?(fields), fields, programs)
++
++  defp broken_list(true, fields, programs), do: broken(:rand.uniform(10), fields, programs)
++  defp broken_list(false, fields, _programs), do: fields
++
++  defp broken(1, fields, programs) do
++    {:ok, unnamed} =
++      Logex.Compiler.instructionize(
++        elem(Logex.Compiler.parse(elem(Logex.Compiler.tokenize("var a bool"), 1)), 1)
++      )
++
++    pick([
++      fn -> pick([:x, [1], fields ++ [task: []], fields ++ [name: "w"]]) end,
++      fn -> Keyword.delete(fields, :name) end,
++      fn -> Keyword.put(fields, :name, pick(["a b", :w, 5])) end,
++      fn -> Keyword.put(fields, :programs, pick([5, %{}])) end,
++      fn ->
++        Keyword.update!(
++          fields,
++          :programs,
++          &appended(&1, pick([:junk, unnamed, hd(Map.values(programs))]))
++        )
++      end,
++      fn -> Keyword.put(fields, :instances, []) end,
++      fn -> Keyword.put(fields, pick([:tasks, :globals, :instances, :connections]), 5) end
++    ]).()
++  end
++
++  defp broken(2, fields, _programs) do
++    part = pick([:tasks, :globals, :instances, :connections])
++
++    element =
++      pick([
++        :junk,
++        %{name: "x", line: 3},
++        %{name: "x", with: 1},
++        Map.new(Enum.take([{:name, "nx"}, {:interval, 5}, {:member, "m1.zz"}], :rand.uniform(2)))
++      ])
++
++    Keyword.update(fields, part, [element], &appended(&1, element))
++  end
++
++  # A field of an element made wrong, or a name made to clash.
++  defp broken(n, fields, _programs) when n in 3..6 do
++    part = pick([:tasks, :globals, :instances, :connections, :connections])
++
++    case Keyword.get(fields, part) do
++      [_ | _] = list ->
++        i = :rand.uniform(length(list)) - 1
++        Keyword.put(fields, part, List.update_at(list, i, &broken_field(part, &1, fields)))
++
++      _ ->
++        fields
++    end
++  end
++
++  # A connection more or one fewer.
++  defp broken(7, fields, _programs) do
++    case Keyword.get(fields, :connections) do
++      [_ | _] = list ->
++        Keyword.put(
++          fields,
++          :connections,
++          pick([list ++ [pick(list)], tl(list), Enum.drop(list, -1)])
++        )
++
++      _ ->
++        fields
++    end
++  end
++
++  defp broken(_n, fields, _programs), do: fields
++
++  defp appended(list, element) when is_list(list), do: list ++ [element]
++  defp appended(other, _element), do: other
++
++  defp broken_field(:tasks, task, _fields) when is_map(task),
++    do:
++      pick([
++        fn -> Map.put(task, :interval, pick([0, -1, 1.5, 2_147_483_648])) end,
++        fn -> Map.put(task, :priority, pick([-1, 1.5, 2_147_483_648])) end,
++        fn -> Map.put(task, :name, pick(["a b", 5, "S0", "i0", "m1"])) end,
++        fn -> Map.delete(task, :priority) end
++      ]).()
++
++  defp broken_field(:globals, global, fields) when is_map(global),
++    do:
++      pick([
++        fn -> Map.put(global, :type, pick([:int, nil])) end,
++        fn -> Map.put(global, :initial, pick([2, -1, 1.0, 2_147_483_648])) end,
++        fn -> Map.put(global, :at, pick(["p.x.0", "p.i.00", "io.i.0", "io.q.0", 5])) end,
++        fn -> Map.put(global, :name, pick(["k.1", "m1", "I0", "s0"] ++ task_names(fields))) end,
++        fn -> Map.delete(global, :type) end
++      ]).()
++
++  defp broken_field(:instances, instance, fields) when is_map(instance),
++    do:
++      pick([
++        fn -> Map.put(instance, :type, pick(["motr", :relay])) end,
++        fn -> Map.put(instance, :task, pick(["zz", :t2])) end,
++        fn -> Map.put(instance, :name, pick([5, "i0", "M1"] ++ task_names(fields))) end
++      ]).()
++
++  defp broken_field(:connections, connection, fields) when is_map(connection),
++    do:
++      pick([
++        fn ->
++          Map.put(connection, :member, pick(["m1", "zz.a", "m1.zz", "m1.s", "m1.t1", :m1]))
++        end,
++        fn ->
++          Map.put(
++            connection,
++            :to,
++            pick(
++              [1.0, 2, -1, 2_147_483_648, "zz", "m1", "i0", "d0", "s0", 1] ++ task_names(fields)
++            )
++          )
++        end,
++        fn -> Map.delete(connection, :to) end
++      ]).()
++
++  defp broken_field(_part, element, _fields), do: element
++
++  defp task_names(fields),
++    do: for(%{name: n} <- List.wrap(Keyword.get(fields, :tasks)), is_binary(n), do: n)
+ end
+diff --git a/test/logex/configuration_test.exs b/test/logex/configuration_test.exs
+new file mode 100644
+index 0000000..e85add1
+--- /dev/null
++++ b/test/logex/configuration_test.exs
+@@ -0,0 +1,519 @@
++defmodule Logex.ConfigurationTest do
++  @moduledoc """
++  M2-1: `Logex.Configuration`, a configuration built from Elixir data, and `check/1`, the
++  one validator its constructor, `Logex.Runtime.start/1` and the configuration file's
++  reader share. Every problem is pinned whole: `new!/1` raises one `ArgumentError` whose
++  message is every problem, a line each, and each test asserts that whole list.
++  """
++  use ExUnit.Case, async: true
++
++  alias Logex.Configuration
++
++  @motor """
++  var_input start bool
++  var_input stop bool
++  var_input sp_in dint
++  var_output motor bool
++  var_output speed_sp dint 1200
++  var fault bool
++  var t1 ton
++
++  ( xic start | xic motor ) xio stop ote motor
++  xic fault move 0 speed_sp
++  xic motor move sp_in speed_sp
++  xic motor ton t1 50
++  """
++
++  setup do
++    {:ok, motor} = Logex.compile(@motor, name: "motor")
++    %{motor: motor, base: base(motor)}
++  end
++
++  # A configuration with every kind of element, which new!/1 accepts: two tasks, input and
++  # output points, unlocated globals, an instance on a task and a task-less one, a
++  # constant tie-off, and `m2` reading `m1`'s output point back.
++  defp base(motor),
++    do: [
++      name: "plant",
++      programs: [motor],
++      tasks: [
++        %{name: "fast", interval: 10, priority: 1},
++        %{name: "slow", interval: 50, priority: 2}
++      ],
++      globals: [
++        %{name: "pb_start", type: :bool, at: "panel.i.0"},
++        %{name: "pb_stop", type: :bool, at: "panel.i.1"},
++        %{name: "sp", type: :dint, at: "drive.i.0"},
++        %{name: "k1", type: :bool, at: "panel.q.0"},
++        %{name: "k2", type: :bool, at: "panel.q.1", initial: 1},
++        %{name: "sp_out", type: :dint, initial: 7},
++        %{name: "spare", type: :bool}
++      ],
++      instances: [
++        %{name: "m1", type: "motor", task: "fast"},
++        %{name: "m2", type: "motor"}
++      ],
++      connections: [
++        %{member: "m1.start", to: "pb_start"},
++        %{member: "m1.stop", to: "pb_stop"},
++        %{member: "m1.sp_in", to: "sp"},
++        %{member: "m1.motor", to: "k1"},
++        %{member: "m1.speed_sp", to: "sp_out"},
++        %{member: "m2.start", to: "k1"},
++        %{member: "m2.stop", to: 0},
++        %{member: "m2.sp_in", to: 900},
++        %{member: "m2.motor", to: "k2"}
++      ]
++    ]
++
++  # The problems new!/1 raises, a line each, or [] when it accepts.
++  defp problems(fields) do
++    Configuration.new!(opaque(fields))
++    []
++  rescue
++    error in ArgumentError -> String.split(error.message, "\n")
++  end
++
++  # Hides a deliberately wrong argument from the type checker (runtime_test.exs).
++  defp opaque(value), do: Process.get(:__opaque_to_the_type_checker__, value)
++
++  defp put(fields, part, list), do: Keyword.put(fields, part, list)
++  defp add(fields, part, element), do: Keyword.update!(fields, part, &(&1 ++ [element]))
++
++  defp replace(fields, part, name_key, name, element),
++    do:
++      Keyword.update!(fields, part, fn list ->
++        Enum.map(list, &if(Map.get(&1, name_key) == name, do: element, else: &1))
++      end)
++
++  describe "new!/1" do
++    test "builds the configuration: each part in declaration order, every element with " <>
++           "every key of its part and no line, and the programs by name",
++         %{base: base, motor: motor} do
++      config = Configuration.new!(base)
++      assert config.name == "plant"
++      assert config.programs == %{"motor" => motor}
++      assert Enum.map(config.tasks, & &1.name) == ~w(fast slow)
++      assert hd(config.tasks) == %{name: "fast", interval: 10, priority: 1, line: nil}
++
++      assert Enum.at(config.globals, 0) ==
++               %{name: "pb_start", type: :bool, initial: nil, at: "panel.i.0", line: nil}
++
++      assert Enum.at(config.globals, 6) ==
++               %{name: "spare", type: :bool, initial: nil, at: nil, line: nil}
++
++      assert Enum.at(config.instances, 1) == %{name: "m2", type: "motor", task: nil, line: nil}
++
++      assert Enum.map(config.connections, & &1.member) ==
++               Enum.map(base[:connections], & &1.member)
++
++      assert Enum.at(config.connections, 6) == %{member: "m2.stop", to: 0, line: nil}
++      assert Configuration.check(config) == []
++    end
++
++    test "takes a keyword list of its six parts, each at most once", %{base: base} do
++      takes =
++        "Logex.Configuration.new!/1 takes a keyword list of name:, programs:, tasks:, " <>
++          "globals:, instances: and connections:"
++
++      assert problems(:x) == ["#{takes}, got: :x"]
++      assert problems([1]) == ["#{takes}, got: [1]"]
++      assert problems(base ++ [task: []]) == ["#{takes}: `task:` is not one of them"]
++      assert problems(base ++ [name: "x"]) == ["#{takes}: `name:` is given twice"]
++    end
++
++    test "needs a name shaped like a name", %{base: base} do
++      assert problems(Keyword.delete(base, :name)) ==
++               [~s|a configuration needs a name, as in name: "plant"|]
++
++      assert problems(put(base, :name, "plant 2")) ==
++               [
++                 ~s|"plant 2" cannot name a configuration: a name is a letter or `_`, then | <>
++                   "letters, digits or `_`"
++               ]
++
++      assert problems(put(base, :name, :plant)) ==
++               [
++                 ":plant cannot name a configuration: a name is a letter or `_`, then letters, " <>
++                   "digits or `_`"
++               ]
++    end
++
++    test "takes its programs as a list of named programs, one of each name", %{
++      base: base,
++      motor: motor
++    } do
++      {:ok, unnamed} =
++        Logex.Compiler.instructionize(
++          elem(
++            Logex.Compiler.parse(elem(Logex.Compiler.tokenize("var a bool\nxic a ote a"), 1)),
++            1
++          )
++        )
++
++      assert problems(put(base, :programs, %{"motor" => motor})) ==
++               [
++                 ~s|programs: must be a list of programs from Logex.compile/2, got: %{"motor" => | <>
++                   "#{inspect(motor)}}"
++               ]
++
++      assert problems(put(base, :programs, [motor, :junk, unnamed, motor])) == [
++               "programs: :junk is not a %Logex.Program{} from Logex.compile/2",
++               "a program in a configuration needs a name: compile it with Logex.compile/2",
++               "two programs are named `motor`: a configuration names each program type once"
++             ]
++    end
++
++    # A part that is not a list is reported once: what names into it is not reported too.
++    test "takes each other part as a list of maps of its keys", %{base: base} do
++      assert problems(put(base, :tasks, 5)) == [
++               ~s|tasks: must be a list, as in [%{name: "fast", interval: 10, priority: 1}], | <>
++                 "got: 5"
++             ]
++
++      assert problems(add(base, :globals, {"g", :bool})) == [
++               ~s|globals: {"g", :bool} is not a global: a global is a map, as in | <>
++                 ~s|%{name: "k1", type: :bool, at: "panel.q.0"}|
++             ]
++
++      assert problems(add(base, :instances, %{name: "m3", type: "motor", with: "fast"})) == [
++               ~s|instance %{name: "m3", type: "motor", with: "fast"} has with:: an instance | <>
++                 "has name:, type: and task:"
++             ]
++
++      assert problems(add(base, :connections, %{member: "m2.stop"})) == [
++               ~s|connection %{member: "m2.stop", to: nil} has no to:, as in | <>
++                 ~s|%{member: "m1.start", to: "pb_start"}|
++             ]
++
++      assert problems(add(base, :tasks, %{interval: 5, priority: 0})) == [
++               "task %{name: nil, priority: 0, interval: 5} has no name:, as in " <>
++                 ~s|%{name: "fast", interval: 10, priority: 1}|
++             ]
++    end
++
++    # A line is what marks an element read from a file, as it marks a tag (Logex.Tag).
++    test "refuses an element from Elixir that brings a line", %{base: base} do
++      assert problems(add(base, :globals, %{name: "g", type: :bool, line: 3})) ==
++               [~s|a global from Elixir has no line, got: %{line: 3, name: "g", type: :bool}|]
++    end
++  end
++
++  describe "check/1, element by element" do
++    test "every name is one name", %{base: base} do
++      assert problems(
++               base
++               |> add(:globals, %{name: "k.3", type: :bool})
++               |> add(:tasks, %{name: "a b", interval: 5, priority: 0})
++               |> add(:instances, %{name: 5, type: "motor"})
++             ) == [
++               ~s|"a b" cannot name a task: a name is a letter or `_`, then letters, digits or `_`|,
++               ~s|"k.3" cannot name a global: a name is a letter or `_`, then letters, digits or `_`|,
++               "5 cannot name an instance: a name is a letter or `_`, then letters, digits or `_`"
++             ]
++    end
++
++    test "a task's interval is 1 to 2147483647 ms", %{base: base} do
++      for ms <- [1, 2_147_483_647] do
++        assert problems(add(base, :tasks, %{name: "t", interval: ms, priority: 0})) == []
++      end
++
++      for ms <- [0, -1, 1.5, 2_147_483_648, "10"] do
++        assert problems(add(base, :tasks, %{name: "t", interval: ms, priority: 0})) ==
++                 ["task `t`: its interval is 1 to 2147483647 ms, got: #{inspect(ms)}"]
++      end
++    end
++
++    test "a task's priority is 0 to 2147483647, 0 the highest", %{base: base} do
++      for p <- [0, 2_147_483_647] do
++        assert problems(add(base, :tasks, %{name: "t", interval: 5, priority: p})) == []
++      end
++
++      for p <- [-1, 1.5, 2_147_483_648] do
++        assert problems(add(base, :tasks, %{name: "t", interval: 5, priority: p})) ==
++                 ["task `t`: its priority is 0, the highest, to 2147483647, got: #{inspect(p)}"]
++      end
++    end
++
++    test "a global is a bool or a dint, and its initial value fits it", %{base: base} do
++      assert problems(
++               base
++               |> add(:globals, %{name: "a", type: :int})
++               |> add(:globals, %{name: "b", type: :bool, initial: 2})
++               |> add(:globals, %{name: "c", type: :dint, initial: 2_147_483_648})
++               |> add(:globals, %{name: "d", type: :dint, initial: -1})
++               |> add(:globals, %{name: "e", type: :dint, initial: 1.0})
++               |> add(:globals, %{name: "f", type: :dint, initial: 2_147_483_647})
++             ) == [
++               "global `a`: its type is :bool or :dint, got: :int",
++               "`b` is a bool: its initial value must be 0 or 1, found `2`",
++               "`c` is a dint: its initial value `2147483648` does not fit in 32 bits",
++               "`d` is a dint: its initial value `-1` is negative, which no configuration line " <>
++                 "can say until a negative literal lexes",
++               "global `e`: its initial value must be an integer, got: 1.0"
++             ]
++    end
++
++    test "an input point takes no initial value; an output point may", %{base: base} do
++      assert problems(add(base, :globals, %{name: "pb", type: :bool, at: "p.i.3", initial: 0})) ==
++               [
++                 "`pb` is an input point: its value comes from outside, so it takes no " <>
++                   "initial value"
++               ]
++
++      assert problems(add(base, :globals, %{name: "q", type: :dint, at: "p.q.3", initial: 5})) ==
++               []
++    end
++
++    test "a location is a device, i or q, then one or more address fields" do
++      for at <- ~w(panel.i.0 panel.i.10 rack_1.i.0.7 _p.i.3) do
++        assert Configuration.location(at) == {:ok, :input}
++      end
++
++      assert Configuration.location("panel.q.2.0") == {:ok, :output}
++
++      for at <-
++            ["panel.x.0", "panel.Q.0", "panel.i", "panel.i.01", "panel.i.a", "1p.i.0"] ++
++              ["rack.slot.i.0", "panel.i.0.", "panel", "", :x, nil] do
++        assert Configuration.location(at) == :error, inspect(at)
++      end
++    end
++
++    test "a global's location is checked, and no two globals share one", %{base: base} do
++      assert problems(
++               base
++               |> add(:globals, %{name: "a", type: :bool, at: "panel.x.0"})
++               |> add(:globals, %{name: "b", type: :bool, at: "panel.q.0"})
++               |> add(:globals, %{name: "c", type: :bool, at: "panel.i.00"})
++             ) == [
++               "global `a`: a location is a device, `i` or `q`, then one or more address " <>
++                 ~s|fields, as in "panel.q.0", got: "panel.x.0"|,
++               "global `c`: a location is a device, `i` or `q`, then one or more address " <>
++                 ~s|fields, as in "panel.q.0", got: "panel.i.00"|,
++               "`b` is at `panel.q.0`, where `k1` already is: a point has one global"
++             ]
++    end
++
++    test "an instance's program and task are the configuration's", %{base: base} do
++      assert problems(
++               base
++               |> add(:instances, %{name: "m3", type: "motr", task: "fats"})
++               |> add(:instances, %{name: "m4", type: "pump", task: "medium"})
++               |> add(:instances, %{name: "m5", type: :motor, task: :fast})
++             ) == [
++               "`m3` is an instance of `motr`, but no program is named `motr` — did you mean `motor`?",
++               "`m3` runs under `fats`, but no task is named `fats` — did you mean `fast`?",
++               "`m4` is an instance of `pump`, but no program is named `pump`: the programs are `motor`",
++               "`m4` runs under `medium`, but no task is named `medium`: the tasks are `fast` and `slow`",
++               "instance `m5`: its type is the name of one of the configuration's programs, got: :motor",
++               "instance `m5`: its task is the name of a task, or nil for none, got: :fast"
++             ]
++    end
++
++    # IEC 61131-3 Ed 2 Annex B.1.7: a configuration has at least one program.
++    test "a configuration runs at least one instance", %{motor: motor} do
++      assert problems(name: "empty", programs: [motor]) ==
++               ["a configuration runs at least one instance, got: instances: []"]
++    end
++
++    test "globals, instances and tasks share one namespace, in which no two names differ " <>
++           "only in case; program types have their own",
++         %{base: base} do
++      assert problems(
++               base
++               |> add(:globals, %{name: "m1", type: :bool})
++               |> add(:tasks, %{name: "K1", interval: 5, priority: 0})
++               |> add(:instances, %{name: "fast", type: "motor"})
++               |> add(:connections, %{member: "fast.start", to: 0})
++               |> add(:connections, %{member: "fast.stop", to: 0})
++               |> add(:connections, %{member: "fast.sp_in", to: 0})
++             ) == [
++               "`m1` names a global and an instance: globals, instances and tasks share one namespace",
++               "`fast` names an instance and a task: globals, instances and tasks share one namespace",
++               "the task `K1` and the global `k1` differ only in case: names are case-sensitive, " <>
++                 "so these would be two names"
++             ]
++
++      motor_too = replace(base, :instances, :name, "m2", %{name: "motor", type: "motor"})
++
++      motor_too =
++        Keyword.update!(motor_too, :connections, fn cs ->
++          Enum.map(cs, &%{&1 | member: String.replace(&1.member, "m2.", "motor.")})
++        end)
++
++      assert problems(motor_too) == []
++    end
++  end
++
++  describe "check/1, connections" do
++    test "a member is an instance and one of its tags", %{base: base} do
++      assert problems(
++               base
++               |> add(:connections, %{member: "m1", to: "k1"})
++               |> add(:connections, %{member: "m1.t1.pre", to: "k1"})
++               |> add(:connections, %{member: :m1, to: "k1"})
++               |> add(:connections, %{member: "m3.start", to: "k1"})
++               |> add(:connections, %{member: "m1.strat", to: "k1"})
++             ) == [
++               ~s|connection "m1": a member is an instance and one of its var_inputs or | <>
++                 ~s|var_outputs, as in "m1.start"|,
++               ~s|connection "m1.t1.pre": a member is an instance and one of its var_inputs | <>
++                 ~s|or var_outputs, as in "m1.start"|,
++               ~s|connection :m1: a member is an instance and one of its var_inputs or | <>
++                 ~s|var_outputs, as in "m1.start"|,
++               "connection `m3.start`: no instance is named `m3`: the instances are `m1` and `m2`",
++               "`m1` is a `motor`, which declares no `strat` — did you mean `start`?"
++             ]
++    end
++
++    test "only a var_input or a var_output connects", %{base: base} do
++      assert problems(
++               base
++               |> add(:connections, %{member: "m1.fault", to: "spare"})
++               |> add(:connections, %{member: "m1.t1", to: "spare"})
++             ) == [
++               "`m1.fault` is internal to `motor` (declared `var` on line 6): only a var_input " <>
++                 "or var_output connects",
++               "`m1.t1` is internal to `motor` (declared `var` on line 7): only a var_input or " <>
++                 "var_output connects"
++             ]
++    end
++
++    test "a var_input's constant fits it; a var_output takes no constant", %{base: base} do
++      tie = fn c -> replace(base, :connections, :member, "m2.stop", c) end
++
++      assert problems(tie.(%{member: "m2.stop", to: 1})) == []
++
++      assert problems(tie.(%{member: "m2.stop", to: 2})) ==
++               ["`m2.stop` is a bool: the constant must be 0 or 1, found `2`"]
++
++      assert problems(
++               replace(base, :connections, :member, "m2.sp_in", %{member: "m2.sp_in", to: -4})
++             ) ==
++               [
++                 "`m2.sp_in` is a dint: the constant `-4` is negative, which no configuration " <>
++                   "line can say until a negative literal lexes"
++               ]
++
++      assert problems(
++               replace(base, :connections, :member, "m2.sp_in", %{
++                 member: "m2.sp_in",
++                 to: 2_147_483_648
++               })
++             ) == ["`m2.sp_in` is a dint: the constant `2147483648` does not fit in 32 bits"]
++
++      assert problems(add(base, :connections, %{member: "m2.speed_sp", to: 0})) ==
++               [
++                 "`m2.speed_sp` is a var_output: it drives a global, so it cannot be connected " <>
++                   "to the constant `0`"
++               ]
++
++      assert problems(tie.(%{member: "m2.stop", to: 1.0})) == [
++               "`m2.stop` is connected to 1.0: the other end of a connection is a global or, " <>
++                 "for a var_input, a constant"
++             ]
++    end
++
++    test "the other end is a declared global of the member's type", %{base: base} do
++      assert problems(
++               base
++               |> replace(:connections, :member, "m2.stop", %{member: "m2.stop", to: "pb_stp"})
++               |> add(:connections, %{member: "m2.speed_sp", to: "fast"})
++               |> add(:connections, %{member: "m1.motor", to: "m2"})
++               |> replace(:connections, :member, "m2.sp_in", %{member: "m2.sp_in", to: "spare"})
++             ) == [
++               "`m2.stop` is connected to `pb_stp`, but no global is named `pb_stp` — did you " <>
++                 "mean `pb_stop`?",
++               "`m2.sp_in` is a dint, but `spare` is a bool",
++               "`m2.speed_sp` is connected to `fast`, which is a task, not a global",
++               "`m1.motor` is connected to `m2`, which is an instance, not a global"
++             ]
++    end
++
++    test "a var_input has one source", %{base: base} do
++      assert problems(add(base, :connections, %{member: "m1.start", to: 1})) ==
++               ["`m1.start` is already connected, to `pb_start`: a var_input has one source"]
++
++      assert problems(add(base, :connections, %{member: "m2.stop", to: "pb_stop"})) ==
++               ["`m2.stop` is already connected, to the constant `0`: a var_input has one source"]
++    end
++
++    test "a global has one driver, and nothing drives an input point", %{base: base} do
++      assert problems(
++               base
++               |> add(:connections, %{member: "m2.motor", to: "k1"})
++               |> add(:connections, %{member: "m2.motor", to: "pb_start"})
++               |> add(:connections, %{member: "m1.motor", to: "k1"})
++             ) == [
++               "`k1` is already driven by `m1.motor`",
++               "`pb_start` is an input point: `m2.motor` cannot drive it",
++               "`k1` is already driven by `m1.motor`"
++             ]
++    end
++
++    test "a var_output may drive several globals, and an output point may be read back",
++         %{base: base} do
++      assert problems(add(base, :connections, %{member: "m1.motor", to: "spare"})) == []
++      assert Enum.any?(base[:connections], &(&1 == %{member: "m2.start", to: "k1"}))
++    end
++
++    # Decision 7: relaxing it later breaks nothing, tightening it later breaks plants.
++    test "every var_input is connected: each instance's in declaration order, the instances " <>
++           "in theirs",
++         %{base: base} do
++      cut = fn fields, member ->
++        Keyword.update!(fields, :connections, &Enum.reject(&1, fn c -> c.member == member end))
++      end
++
++      assert problems(
++               base
++               |> add(:instances, %{name: "a0", type: "motor", task: "slow"})
++               |> cut.("m2.stop")
++               |> cut.("m1.sp_in")
++             ) == [
++               "`m1.sp_in` is not connected: every var_input is connected, to a global or a constant",
++               "`m2.stop` is not connected: every var_input is connected, to a global or a constant",
++               "`a0.start` is not connected: every var_input is connected, to a global or a constant",
++               "`a0.stop` is not connected: every var_input is connected, to a global or a constant",
++               "`a0.sp_in` is not connected: every var_input is connected, to a global or a constant"
++             ]
++    end
++  end
++
++  describe "check/1, the whole" do
++    test "is [] for what new!/1 builds, and refuses what is not a configuration", %{base: base} do
++      assert Configuration.check(Configuration.new!(base)) == []
++
++      assert_raise ArgumentError,
++                   "expected a %Logex.Configuration{} from Logex.Configuration.new!/1, got: :x",
++                   fn -> Configuration.check(opaque(:x)) end
++    end
++
++    test "lists the problems by part: the name, programs, tasks, globals, instances, " <>
++           "names, connections, then the var_inputs left unconnected",
++         %{base: base, motor: motor} do
++      assert problems(
++               base
++               |> put(:name, "a b")
++               |> put(:programs, [motor, motor])
++               |> add(:connections, %{member: "m9.x", to: 0})
++               |> add(:instances, %{name: "m3", type: "motor", task: "none"})
++               |> add(:globals, %{name: "m3", type: :int})
++               |> add(:tasks, %{name: "t", interval: 0, priority: 0})
++             ) == [
++               ~s|"a b" cannot name a configuration: a name is a letter or `_`, then letters, | <>
++                 "digits or `_`",
++               "two programs are named `motor`: a configuration names each program type once",
++               "task `t`: its interval is 1 to 2147483647 ms, got: 0",
++               "global `m3`: its type is :bool or :dint, got: :int",
++               "`m3` runs under `none`, but no task is named `none`: the tasks are `fast`, " <>
++                 "`slow` and `t`",
++               "`m3` names a global and an instance: globals, instances and tasks share one namespace",
++               "connection `m9.x`: no instance is named `m9`: the instances are `m1`, `m2` and `m3`",
++               "`m3.start` is not connected: every var_input is connected, to a global or a constant",
++               "`m3.stop` is not connected: every var_input is connected, to a global or a constant",
++               "`m3.sp_in` is not connected: every var_input is connected, to a global or a constant"
++             ]
++    end
++  end
++end
+diff --git a/test/logex/end_to_end_test.exs b/test/logex/end_to_end_test.exs
+index 6c3bb68..4d4b6b2 100644
+--- a/test/logex/end_to_end_test.exs
++++ b/test/logex/end_to_end_test.exs
+@@ -1368,4 +1368,267 @@ defmodule Logex.EndToEndTest do
+                    fn -> Logex.Tag.new!("speed_sp", :dint, :var_output, -1) end
+     end
+   end
++
++  # ---- M2-1: a configuration built in Elixir, run by the scheduler ---------------------
++
++  describe "a configuration from Elixir data (M2-1)" do
++    alias Logex.{Configuration, Runtime}
++
++    # One program type whose scans show the scheduler: `seen` comes in from a global and
++    # goes out again as `echo`, so a chain of instances shows the order they ran in; and
++    # `busy` is how long `go` has been true by the instance's own timer, so its outputs
++    # show the time it last ran.
++    @stamp """
++    var_input go bool
++    var_input seen bool
++    var_output echo bool
++    var_output busy dint
++    var t1 ton
++
++    xic seen ote echo
++    xic go ton t1 100000
++    xic go move t1.acc busy
++    """
++
++    @readme_motor """
++    var_input start bool
++    var_input stop bool
++    var_input overtemp bool
++    var_input reset bool
++    var_output motor bool
++    var_output run_lamp bool
++    var_output speed_sp dint 1200
++    var fault bool
++
++    ( xic start | xic motor ) xio stop ote motor
++    xic motor ote run_lamp
++    xic overtemp otl fault
++    xic reset otu fault
++    xic fault move 0 speed_sp
++    """
++
++    # PLAN.md M2-3's motor: the README's, plus a timer.
++    @m23_motor """
++    var_input start bool
++    var_input stop bool
++    var_input overtemp bool
++    var_input reset bool
++    var_output motor bool
++    var_output run_lamp bool
++    var_output speed_sp dint 1200
++    var_output running_ms dint
++    var fault bool
++    var t1 ton
++
++    ( xic start | xic motor ) xio stop ote motor
++    xic motor ote run_lamp
++    xic overtemp otl fault
++    xic reset otu fault
++    xic fault move 0 speed_sp
++    xic motor ton t1 5000
++    xic motor move t1.acc running_ms
++    """
++
++    @readme_steps [
++      %{"start" => 1},
++      %{"start" => 0},
++      %{"overtemp" => 1},
++      %{"stop" => 1},
++      %{"stop" => 0, "overtemp" => 0},
++      %{"reset" => 1},
++      %{"reset" => 0, "start" => 1}
++    ]
++
++    # A 10 ms task declared first at priority 2, a 30 ms task at priority 1, and a
++    # task-less instance: `b` (30 ms) passes the input point on to `a` (10 ms), and `a` to
++    # `c`, whose echo is the output point `out`. Priority, not declaration, puts `b` first.
++    defp plant do
++      {:ok, stamp} = Logex.compile(@stamp, name: "stamp")
++
++      Configuration.new!(
++        name: "plant",
++        programs: [stamp],
++        tasks: [
++          %{name: "fast", interval: 10, priority: 2},
++          %{name: "slow", interval: 30, priority: 1}
++        ],
++        globals: [
++          %{name: "in", type: :bool, at: "panel.i.0"},
++          %{name: "g1", type: :bool},
++          %{name: "g2", type: :bool},
++          %{name: "out", type: :bool, at: "panel.q.0"},
++          %{name: "busy_a", type: :dint, at: "panel.q.1"},
++          %{name: "busy_b", type: :dint, at: "panel.q.2"},
++          %{name: "busy_c", type: :dint, at: "panel.q.3"}
++        ],
++        instances: [
++          %{name: "a", type: "stamp", task: "fast"},
++          %{name: "b", type: "stamp", task: "slow"},
++          %{name: "c", type: "stamp"}
++        ],
++        connections: [
++          %{member: "a.go", to: 1},
++          %{member: "a.seen", to: "g1"},
++          %{member: "a.echo", to: "g2"},
++          %{member: "a.busy", to: "busy_a"},
++          %{member: "b.go", to: 1},
++          %{member: "b.seen", to: "in"},
++          %{member: "b.echo", to: "g1"},
++          %{member: "b.busy", to: "busy_b"},
++          %{member: "c.go", to: 1},
++          %{member: "c.seen", to: "g2"},
++          %{member: "c.echo", to: "out"},
++          %{member: "c.busy", to: "busy_c"}
++        ]
++      )
++    end
++
++    # Cycles a runtime through `{elapsed_ms, inputs}` steps: `{trace, runtime}`, each trace
++    # entry `{now, outputs, events}`. The plant's task-less `c` runs in every cycle, so its
++    # event gives the cycle's time.
++    defp cycled(rt, steps),
++      do:
++        Enum.map_reduce(steps, rt, fn {elapsed, inputs}, rt ->
++          {rt, outputs, events} = Runtime.cycle(rt, elapsed, inputs)
++          [{:ran, :none, "c", now}] = Enum.take(events, -1)
++          {{now, outputs, events}, rt}
++        end)
++
++    defp ran(trace, instance),
++      do: for({_now, _out, events} <- trace, {:ran, _, ^instance, now} <- events, do: now)
++
++    defp first_high(trace, point),
++      do: Enum.find_value(trace, fn {now, outputs, _} -> outputs[point] == 1 && now end)
++
++    # PLAN.md M2-1's Done-when, first part. One simulated second is the cycles at 0, 10,
++    # ..., 990 ms, the half-open second M2-3's counts read too (100 runs every 10 ms, 20
++    # every 50 ms), its first cycle at 0 ms, as next_due_in/1 asks after start/1.
++    test "Done-when: a 10 ms task, a 30 ms task and a task-less instance, cycled for one " <>
++           "simulated second by an injected clock, run each instance exactly as often as " <>
++           "its task dictates, in priority order" do
++      rt = Runtime.start(plant())
++      assert Runtime.next_due_in(rt) == 0
++
++      input = fn t -> %{"in" => Enum.count([600], &(t >= &1))} end
++      {trace, rt} = cycled(rt, [{0, input.(0)} | for(t <- 10..990//10, do: {10, input.(t)})])
++
++      assert ran(trace, "a") == Enum.to_list(0..990//10)
++      assert ran(trace, "b") == Enum.to_list(0..990//30)
++      assert ran(trace, "c") == Enum.to_list(0..990//10)
++      assert Enum.map(~w(a b c), &length(ran(trace, &1))) == [100, 34, 100]
++
++      # In every cycle the 30 ms task, priority 1, runs before the 10 ms one, priority 2,
++      # though declared after it, and the task-less instance runs last; nothing overlaps.
++      for {now, _outputs, events} <- trace do
++        slow = for 0 <- [rem(now, 30)], do: {:ran, "slow", "b", now}
++        assert events == slow ++ [{:ran, "fast", "a", now}, {:ran, :none, "c", now}], "#{now} ms"
++      end
++
++      # The order has its effect: the input rises at 600 ms, when `b` runs, and reaches
++      # `out` through `b`, `a` and `c` in that one cycle, each seeing what the one before
++      # it wrote. Run fast-first, it would reach `out` 10 ms later.
++      assert first_high(trace, "out") == 600
++
++      # Each instance's timer counts the time between its own scans: at 980 ms `b` last
++      # ran at 960.
++      assert {980, %{"busy_a" => 980, "busy_b" => 960, "busy_c" => 980}, _} =
++               List.keyfind(trace, 980, 0)
++
++      assert Runtime.overlaps(rt) == %{"fast" => 0, "slow" => 0}
++      assert Runtime.next_due_in(rt) == 10
++    end
++
++    # PLAN.md M2-1's Done-when, second part: the host is 25 ms late once. The 10 ms task,
++    # due at 110 ms, runs once at 135 ms and reports the two periods it missed, its runs
++    # due at 110 and 120 coalesced with 130's; the 30 ms task, due at 120, runs at 135 and
++    # misses none. Neither loses its phase: afterwards each runs at the multiples of its
++    # interval.
++    test "Done-when: a late cycle yields one {:overlap, ...} and no lost phase" do
++      {early, rt} = cycled(Runtime.start(plant()), [{0, %{}} | List.duplicate({10, %{}}, 10)])
++      assert for({_, _, events} <- early, {:overlap, _, _} = e <- events, do: e) == []
++
++      {[{135, _outputs, late}], rt} = cycled(rt, [{35, %{}}])
++
++      assert late == [
++               {:overlap, "fast", 2},
++               {:ran, "slow", "b", 135},
++               {:ran, "fast", "a", 135},
++               {:ran, :none, "c", 135}
++             ]
++
++      assert Runtime.next_due_in(rt) == 5
++
++      {after_it, rt} = cycled(rt, List.duplicate({5, %{}}, 33))
++      assert for({_, _, events} <- after_it, {:overlap, _, _} = e <- events, do: e) == []
++      assert ran(after_it, "a") == Enum.to_list(140..300//10)
++      assert ran(after_it, "b") == Enum.to_list(150..300//30)
++      assert ran(after_it, "c") == Enum.to_list(140..300//5)
++      assert Runtime.overlaps(rt) == %{"fast" => 2, "slow" => 0}
++    end
++
++    # The program as a one-instance configuration: one task-less instance, its var_inputs
++    # connected to input points and its var_outputs to output points of the same names,
++    # so the two output maps compare whole.
++    defp one_instance(program) do
++      points =
++        for %Logex.Tag{name: name, type: type, section: section, line: line} <-
++              Map.values(program.tags),
++            section in [:var_input, :var_output],
++            do: %{name: name, type: type, at: "panel.#{point_kind(section)}.#{line}"}
++
++      Configuration.new!(
++        name: "lone",
++        programs: [program],
++        globals: points,
++        instances: [%{name: "m1", type: program.name}],
++        connections: for(%{name: name} <- points, do: %{member: "m1.#{name}", to: name})
++      )
++    end
++
++    defp point_kind(:var_input), do: "i"
++    defp point_kind(:var_output), do: "q"
++
++    # Each step through put_inputs/3 and scan/3 on one side, and cycle/3 with the same
++    # inputs on the other: the same outputs, and the same latched `fault`.
++    defp agree(motor, state, rt, steps, elapsed) do
++      steps
++      |> Enum.with_index()
++      |> Enum.reduce({state, rt}, fn {inputs, i}, {state, rt} ->
++        step = elapsed * min(i, 1)
++        state = Logex.Runtime.put_inputs(motor, state, inputs)
++        {outputs, state} = Logex.Runtime.scan(motor, state, step)
++        {rt, through_configuration, _events} = Runtime.cycle(rt, step, inputs)
++        assert through_configuration == outputs, "step #{i}"
++        assert Runtime.get(rt, "m1.fault") == state.env["fault"], "step #{i}"
++        {state, rt}
++      end)
++    end
++
++    # PLAN.md M2-1's Done-when, third part: the README program gives identical outputs
++    # through scan/2 and through a one-instance configuration, step by step, its latched
++    # `fault` too, and again after a restart of each, which keeps the inputs in both
++    # (docs/organisation.md §4.6, on restart/3).
++    test "Done-when: the README program gives identical outputs through scan/2 and through " <>
++           "a one-instance configuration" do
++      {:ok, motor} = Logex.compile(@readme_motor, name: "motor")
++      rt = Runtime.start(one_instance(motor))
++      state = Logex.Runtime.instance(motor)
++      {state, rt} = agree(motor, state, rt, @readme_steps, 0)
++
++      state = Logex.Runtime.restart(motor, state, :cold)
++      rt = Runtime.restart(rt, :cold)
++      agree(motor, state, rt, Enum.reverse(@readme_steps), 0)
++    end
++
++    # And through scan/3 with time: the M2-3 motor's timer counts the same time.
++    test "the M2-3 motor gives identical outputs through scan/3 and through a one-instance " <>
++           "configuration, its timer counting the same time" do
++      {:ok, motor} = Logex.compile(@m23_motor, name: "motor")
++      rt = Runtime.start(one_instance(motor))
++      state = Logex.Runtime.instance(motor)
++      steps = [%{"start" => 1}, %{"start" => 0} | List.duplicate(%{}, 40)]
++      {state, rt} = agree(motor, state, rt, steps, 130)
++      assert {state.env["t1"]["acc"], Runtime.get(rt, "m1.t1.acc")} == {5000, 5000}
++    end
++  end
+ end
+diff --git a/test/logex/runtime_test.exs b/test/logex/runtime_test.exs
+index 0f88999..9532b2e 100644
+--- a/test/logex/runtime_test.exs
++++ b/test/logex/runtime_test.exs
+@@ -685,12 +685,220 @@ defmodule Logex.RuntimeTest do
+     end
+   end
+ 
++  # M2-1: a resource's host mistakes. Each raises ArgumentError with the message pinned
++  # here, and the checks run in order: the runtime, then the elapsed time, then the inputs.
++  describe "a resource's host mistakes (M2-1)" do
++    alias Logex.Configuration
++
++    setup %{motor: motor} do
++      config =
++        Configuration.new!(
++          name: "line",
++          programs: [motor],
++          tasks: [%{name: "fast", interval: 10, priority: 1}],
++          globals: [
++            %{name: "pb_start", type: :bool, at: "panel.i.0"},
++            %{name: "pb_stop", type: :bool, at: "panel.i.1"},
++            %{name: "sp", type: :dint, at: "drive.i.0"},
++            %{name: "k1", type: :bool, at: "panel.q.0"},
++            %{name: "sp_out", type: :dint},
++            %{name: "spare", type: :bool}
++          ],
++          instances: [%{name: "m1", type: "motor", task: "fast"}],
++          connections: [
++            %{member: "m1.start", to: "pb_start"},
++            %{member: "m1.stop", to: "pb_stop"},
++            %{member: "m1.sp_in", to: "sp"},
++            %{member: "m1.motor", to: "k1"},
++            %{member: "m1.speed_sp", to: "sp_out"}
++          ]
++        )
++
++      %{config: config, rt: Runtime.start(config)}
++    end
++
++    test "start/1 takes a configuration, and checks it again" do
++      raises(
++        "expected a %Logex.Configuration{} from Logex.Configuration.new!/1, got: %{}",
++        fn -> Runtime.start(opaque(%{})) end
++      )
++    end
++
++    test "start/1 refuses a configuration edited by hand, as new!/1 would", %{config: config} do
++      edited = %{config | tasks: [%{name: "fast", interval: 0, priority: 1, line: nil}]}
++
++      raises("task `fast`: its interval is 1 to 2147483647 ms, got: 0", fn ->
++        Runtime.start(edited)
++      end)
++    end
++
++    test "every function but start/1 takes a runtime from start/1", %{config: config} do
++      message = "expected a %Logex.Runtime{} from Logex.Runtime.start/1, got: "
++
++      for {call, got} <- [
++            {fn -> Runtime.cycle(opaque(config), 0, %{}) end, inspect(config)},
++            {fn -> Runtime.next_due_in(opaque(nil)) end, "nil"},
++            {fn -> Runtime.overlaps(opaque(:rt)) end, ":rt"},
++            {fn -> Runtime.get(opaque(%{}), "k1") end, "%{}"},
++            {fn -> Runtime.restart(opaque([]), :cold) end, "[]"}
++          ] do
++        raises(message <> got, call)
++      end
++    end
++
++    test "cycle/3 checks the runtime, then the elapsed time, then the inputs", %{rt: rt} do
++      raises("expected a %Logex.Runtime{} from Logex.Runtime.start/1, got: nil", fn ->
++        Runtime.cycle(opaque(nil), -1, opaque(:x))
++      end)
++
++      for bad <- [-1, 1.5, nil] do
++        raises(
++          "elapsed_ms must be a non-negative integer of milliseconds, got: #{inspect(bad)}",
++          fn ->
++            Runtime.cycle(rt, opaque(bad), opaque(:x))
++          end
++        )
++      end
++
++      raises(
++        ~s|inputs must be a map of input point names to values, as in %{"pb_start" => 1}, | <>
++          "got: [1]",
++        fn -> Runtime.cycle(rt, 0, opaque([1])) end
++      )
++    end
++
++    test "cycle/3 sets only an input point, with a value that fits its type: every problem " <>
++           "in one raise, a line each, in key order",
++         %{rt: rt} do
++      inputs = %{
++        :start => 1,
++        "pb_start" => 2,
++        "pb_strt" => 1,
++        "zz" => 0,
++        "k1" => 1,
++        "spare" => 1,
++        "m1" => 1,
++        "m1.start" => 1,
++        "fast" => 1,
++        "sp" => 1.0,
++        "sp_out" => 1
++      }
++
++      raises(
++        Enum.join(
++          [
++            "input :start is not a point name: a configuration's inputs are keyed by input " <>
++              ~s|point name, as a string, as in %{"pb_start" => 1}|,
++            "input `fast` is a task, not an input point: only an input point is set from outside",
++            "input `k1` is an output point (at panel.q.0), not an input point: only an input " <>
++              "point is set from outside",
++            "input `m1` is a program instance, not an input point: only an input point is set " <>
++              "from outside",
++            "input `m1.start` reaches into the instance `m1`: only an input point is set from " <>
++              "outside",
++            "input `pb_start` is a bool: only 0 or 1 fit, found 2",
++            "input `pb_strt` is not declared — did you mean `pb_start`?",
++            "input `sp` is a dint: its value must be an integer, found 1.0",
++            "input `sp_out` is a global with no location, not an input point: only an input " <>
++              "point is set from outside",
++            "input `spare` is a global with no location, not an input point: only an input " <>
++              "point is set from outside",
++            "input `zz` is not declared: the input points are `pb_start`, `pb_stop`, `sp`"
++          ],
++          "\n"
++        ),
++        fn -> Runtime.cycle(rt, 0, inputs) end
++      )
++
++      raises("input `sp` is a dint: 2147483648 does not fit in 32 bits", fn ->
++        Runtime.cycle(rt, 0, %{"sp" => 2_147_483_648})
++      end)
++    end
++
++    # More than 32 keys, so a map no longer iterates in key order (CONTRIBUTING.md).
++    test "cycle/3 lists the input problems in key order however many there are", %{rt: rt} do
++      keys = for i <- 40..1//-1, do: "zz#{i}"
++      error = assert_raise ArgumentError, fn -> Runtime.cycle(rt, 0, Map.from_keys(keys, 0)) end
++      named = for line <- String.split(error.message, "\n"), do: hd(String.split(line, " is"))
++      assert named == Enum.map(Enum.sort(keys), &"input `#{&1}`")
++    end
++
++    test "a configuration with no input point says so", %{motor: motor} do
++      config =
++        Configuration.new!(
++          name: "tied",
++          programs: [motor],
++          instances: [%{name: "m1", type: "motor"}],
++          connections: [
++            %{member: "m1.start", to: 0},
++            %{member: "m1.stop", to: 0},
++            %{member: "m1.sp_in", to: 5}
++          ]
++        )
++
++      raises("input `pb` is not declared: this configuration has no input point", fn ->
++        Runtime.cycle(Runtime.start(config), 0, %{"pb" => 1})
++      end)
++    end
++
++    test "get/2 takes a path that names a global, a tag or a member", %{rt: rt} do
++      for {path, message} <- [
++            {:k1, ~s|a path is names joined by `.`, as in "m1.t1.acc", got: :k1|},
++            {"m1..x", ~s|a path is names joined by `.`, as in "m1.t1.acc", got: "m1..x"|},
++            {"", ~s|a path is names joined by `.`, as in "m1.t1.acc", got: ""|},
++            {"pb_strt", "no global or instance is named `pb_strt` — did you mean `pb_start`?"},
++            {"zz", "no global or instance is named `zz`"},
++            {"M1",
++             "no global or instance is named `M1` — did you mean `m1`? (names are case-sensitive)"},
++            {"k1.x", "`k1` is a bool global: it has no members, so `k1.x` names nothing"},
++            {"m1", "`m1` is an instance of `motor`: name one of its tags, as in `m1.fault`"},
++            {"m1.strat",
++             "`m1` is an instance of `motor`, which declares no `strat` — did you mean `start`?"},
++            {"m1.motor.x",
++             "`m1.motor` is a bool: it has no members, so `m1.motor.x` names nothing"}
++          ] do
++        raises(message, fn -> Runtime.get(rt, opaque(path)) end)
++      end
++    end
++
++    test "restart/2 takes :cold or :warm, after the runtime", %{rt: rt} do
++      raises("restart takes :cold or :warm, got: :hot", fn ->
++        Runtime.restart(rt, opaque(:hot))
++      end)
++
++      raises("expected a %Logex.Runtime{} from Logex.Runtime.start/1, got: nil", fn ->
++        Runtime.restart(opaque(nil), opaque(:hot))
++      end)
++    end
++  end
++
+   describe "the public surface (B5)" do
+     test "is exactly this: every evaluate clause is private, in Logex.Runtime" do
+       assert Enum.sort(Logex.__info__(:functions)) == [compile: 2, compile_file: 1]
+ 
+-      assert Enum.sort(Runtime.__info__(:functions)) ==
+-               [call: 4, instance: 1, put_inputs: 3, restart: 3, scan: 2, scan: 3]
++      # M2-1 adds the resource: its struct, opaque, and the five functions that run it.
++      assert Enum.sort(Runtime.__info__(:functions)) == [
++               __struct__: 0,
++               __struct__: 1,
++               call: 4,
++               cycle: 3,
++               get: 2,
++               instance: 1,
++               next_due_in: 1,
++               overlaps: 1,
++               put_inputs: 3,
++               restart: 2,
++               restart: 3,
++               scan: 2,
++               scan: 3,
++               start: 1
++             ]
++
++      assert Enum.sort(Logex.Configuration.__info__(:functions)) ==
++               [__struct__: 0, __struct__: 1, check: 1, location: 1, new!: 1]
++
++      assert Enum.sort(Map.keys(Logex.Configuration.__struct__())) ==
++               [:__struct__, :connections, :globals, :instances, :name, :programs, :tasks]
+ 
+       assert Enum.sort(Logex.Compiler.__info__(:functions)) ==
+                [instructionize: 1, instructionize: 2, instructions: 0, parse: 1, tokenize: 1]
+diff --git a/test/logex/scheduler_test.exs b/test/logex/scheduler_test.exs
+new file mode 100644
+index 0000000..3d77a53
+--- /dev/null
++++ b/test/logex/scheduler_test.exs
+@@ -0,0 +1,478 @@
++defmodule Logex.SchedulerTest do
++  @moduledoc """
++  M2-1: a resource running a configuration (`docs/organisation.md` §4.6), each rule of a
++  cycle with a worked test, through the public API only: `Logex.Runtime.start/1`,
++  `cycle/3`, `next_due_in/1`, `overlaps/1`, `get/2` and `restart/2`. The seeded walk in
++  `api_contract_test.exs` checks the same rules against an oracle written from §4.6's
++  text; these tests are the worked cases a shared misreading would pass there.
++  """
++  use ExUnit.Case, async: true
++
++  alias Logex.{Configuration, Runtime}
++
++  # `x` in, `y` out, and a one-shot on `x` that moves 7 into `n`, so a first scan shows.
++  @relay """
++  var_input x bool
++  var_output y bool
++  var_output n dint
++  var s bool
++
++  xic x ote y
++  xic x ons s move 7 n
++  """
++
++  setup do
++    {:ok, relay} = Logex.compile(@relay, name: "relay")
++    %{relay: relay}
++  end
++
++  # Instances of `relay`, each `{name, task, source}`: its `x` from `source`, a global or a
++  # constant, its `y` to the output point `<name>_y` and its `n` to the global `<name>_n`.
++  # Every global `source` names is an input point unless `globals` declares it.
++  defp line(relay, tasks, instances, globals \\ []) do
++    declared = MapSet.new(globals, & &1.name)
++
++    inputs =
++      for {_, _, source} <- instances,
++          is_binary(source),
++          source not in declared,
++          uniq: true,
++          do: source
++
++    Configuration.new!(
++      name: "line",
++      programs: [relay],
++      tasks: tasks,
++      globals:
++        Enum.with_index(inputs, &%{name: &1, type: :bool, at: "panel.i.#{&2}"}) ++
++          globals ++
++          Enum.flat_map(Enum.with_index(instances), fn {{name, _, _}, i} ->
++            [
++              %{name: "#{name}_y", type: :bool, at: "panel.q.#{i}"},
++              %{name: "#{name}_n", type: :dint}
++            ]
++          end),
++      instances: for({name, task, _} <- instances, do: %{name: name, type: "relay", task: task}),
++      connections:
++        Enum.flat_map(instances, fn {name, _, source} ->
++          [
++            %{member: "#{name}.x", to: source},
++            %{member: "#{name}.y", to: "#{name}_y"},
++            %{member: "#{name}.n", to: "#{name}_n"}
++          ]
++        end)
++    )
++  end
++
++  defp task(name, interval, priority), do: %{name: name, interval: interval, priority: priority}
++
++  # Cycles through `{elapsed_ms, inputs}` steps: `{[{outputs, events}], runtime}`.
++  defp cycles(rt, steps),
++    do:
++      Enum.map_reduce(steps, rt, fn {elapsed, inputs}, rt ->
++        {rt, outputs, events} = Runtime.cycle(rt, elapsed, inputs)
++        {{outputs, events}, rt}
++      end)
++
++  defp ran(events), do: for({:ran, task, instance, _now} <- events, do: {task, instance})
++
++  describe "start/1" do
++    test "every task is due in the first cycle, even after no time at all", %{relay: relay} do
++      rt =
++        Runtime.start(
++          line(relay, [task("t5", 5, 0), task("t50", 50, 1)], [{"a", "t5", 1}, {"b", "t50", 1}])
++        )
++
++      assert Runtime.next_due_in(rt) == 0
++      {_rt, _outputs, events} = Runtime.cycle(rt, 0, %{})
++      assert events == [{:ran, "t5", "a", 0}, {:ran, "t50", "b", 0}]
++    end
++
++    # Fix F14: start/1 builds each instance as Runtime.instance/1 does, so its tags start
++    # at their initial values and its first scan is a first scan: the one-shot on an input
++    # already true does not fire, and fires on the next rise.
++    test "builds each instance through Runtime.instance/1: initial values, and a first scan " <>
++           "that holds every one-shot back",
++         %{relay: relay} do
++      rt = Runtime.start(line(relay, [], [{"a", nil, "pb"}]))
++
++      assert for(tag <- ~w(x y n s), do: Runtime.get(rt, "a.#{tag}")) ==
++               for(tag <- ~w(x y n s), do: Logex.Program.initial_env(relay)[tag])
++
++      {[{first, _}], rt} = cycles(rt, [{0, %{"pb" => 1}}])
++      assert {first, Runtime.get(rt, "a_n")} == {%{"a_y" => 1}, 0}
++      {_, rt} = cycles(rt, [{0, %{"pb" => 1}}])
++      assert Runtime.get(rt, "a_n") == 0
++      {_, rt} = cycles(rt, [{0, %{"pb" => 0}}, {0, %{"pb" => 1}}])
++      assert Runtime.get(rt, "a_n") == 7
++    end
++  end
++
++  describe "cycle/3, time and the input image" do
++    test "now advances by the elapsed time, and each scan runs at it", %{relay: relay} do
++      rt = Runtime.start(line(relay, [], [{"a", nil, 1}]))
++      {[{_, e1}, {_, e2}, {_, e3}], _rt} = cycles(rt, [{0, %{}}, {7, %{}}, {1000, %{}}])
++
++      assert [e1, e2, e3] == [
++               [{:ran, :none, "a", 0}],
++               [{:ran, :none, "a", 7}],
++               [{:ran, :none, "a", 1007}]
++             ]
++    end
++
++    test "the inputs merge into a persistent image: a host sends only what changed", %{
++      relay: relay
++    } do
++      rt = Runtime.start(line(relay, [], [{"a", nil, "pa"}, {"b", nil, "pb"}]))
++
++      {trace, rt} =
++        cycles(rt, [{0, %{"pa" => 1}}, {0, %{}}, {0, %{"pb" => 1}}, {0, %{"pa" => 0}}])
++
++      assert Enum.map(trace, &elem(&1, 0)) == [
++               %{"a_y" => 1, "b_y" => 0},
++               %{"a_y" => 1, "b_y" => 0},
++               %{"a_y" => 1, "b_y" => 1},
++               %{"a_y" => 0, "b_y" => 1}
++             ]
++
++      assert {Runtime.get(rt, "pa"), Runtime.get(rt, "pb")} == {0, 1}
++    end
++  end
++
++  describe "cycle/3, which tasks are due" do
++    # §4.6: next_due anchored at start, advanced by whole intervals after a run, so the
++    # phase never drifts. Stepped at 3 ms, a 10 ms task runs at the first cycle at or past
++    # each multiple of 10.
++    test "a periodic task runs at the first cycle at or past each multiple of its interval",
++         %{relay: relay} do
++      rt = Runtime.start(line(relay, [task("t", 10, 0)], [{"a", "t", 1}]))
++      {trace, _rt} = cycles(rt, [{0, %{}} | List.duplicate({3, %{}}, 20)])
++      times = for {_, events} <- trace, {:ran, "t", "a", now} <- events, do: now
++      assert times == [0, 12, 21, 30, 42, 51, 60]
++    end
++
++    # §4.6 "Missed periods are reported, not replayed": one run, `missed` added to the count,
++    # `{:overlap, task, missed}`, and next_due past now with the phase kept.
++    test "a task due more than once since it last ran runs once and reports the periods it " <>
++           "missed, keeping its phase",
++         %{relay: relay} do
++      rt = Runtime.start(line(relay, [task("t", 10, 0)], [{"a", "t", 1}]))
++      {_, rt} = cycles(rt, [{0, %{}}])
++      {rt, _outputs, events} = Runtime.cycle(rt, 47, %{})
++      assert events == [{:overlap, "t", 3}, {:ran, "t", "a", 47}]
++      assert Runtime.overlaps(rt) == %{"t" => 3}
++      assert Runtime.next_due_in(rt) == 3
++
++      {rt, _outputs, events} = Runtime.cycle(rt, 3, %{})
++      assert events == [{:ran, "t", "a", 50}]
++      {_rt, _outputs, events} = Runtime.cycle(rt, 9, %{})
++      assert events == []
++    end
++
++    # Anchored at start: a first cycle a whole interval after start/1 has missed the run
++    # due at 0, so it reports it. That is the rule, not a spurious overlap: the host asked
++    # to cycle at once (next_due_in/1 is 0) and did not.
++    test "a first cycle a whole interval after start reports the period it missed", %{
++      relay: relay
++    } do
++      rt = Runtime.start(line(relay, [task("t", 10, 0)], [{"a", "t", 1}]))
++      {_rt, _outputs, events} = Runtime.cycle(rt, 10, %{})
++      assert events == [{:overlap, "t", 1}, {:ran, "t", "a", 10}]
++
++      {_rt, _outputs, events} = Runtime.cycle(rt, 9, %{})
++      assert events == [{:ran, "t", "a", 9}]
++    end
++
++    test "a task with no instance keeps its phase and its overlap count", %{relay: relay} do
++      rt = Runtime.start(line(relay, [task("idle", 10, 0)], [{"a", nil, 1}]))
++      {rt, _outputs, events} = Runtime.cycle(rt, 25, %{})
++      assert events == [{:overlap, "idle", 2}, {:ran, :none, "a", 25}]
++      assert Runtime.next_due_in(rt) == 5
++    end
++  end
++
++  describe "cycle/3, the order of the scans" do
++    test "due tasks run by priority, 0 first, whatever their declaration order", %{relay: relay} do
++      rt =
++        Runtime.start(
++          line(relay, [task("low", 10, 5), task("high", 10, 0), task("mid", 10, 2)], [
++            {"l", "low", 1},
++            {"h", "high", 1},
++            {"m", "mid", 1}
++          ])
++        )
++
++      {_rt, _outputs, events} = Runtime.cycle(rt, 0, %{})
++      assert ran(events) == [{"high", "h"}, {"mid", "m"}, {"low", "l"}]
++    end
++
++    # Rule 3a: at one priority, the longest waiting runs first, and declaration order
++    # breaks a tie, the tasks declared out of name order so that name order cannot pass.
++    # At 45 ms both are late: `c`'s run has been due since 30, `b`'s and `a`'s since 40,
++    # so `c` runs first though declared second.
++    test "at one priority the earlier due time runs first, then declaration order", %{
++      relay: relay
++    } do
++      rt =
++        Runtime.start(
++          line(relay, [task("b", 20, 1), task("c", 30, 1), task("a", 20, 1)], [
++            {"ia", "a", 1},
++            {"ib", "b", 1},
++            {"ic", "c", 1}
++          ])
++        )
++
++      {rt, _outputs, events} = Runtime.cycle(rt, 0, %{})
++      assert ran(events) == [{"b", "ib"}, {"c", "ic"}, {"a", "ia"}]
++      {rt, _outputs, events} = Runtime.cycle(rt, 25, %{})
++      assert ran(events) == [{"b", "ib"}, {"a", "ia"}]
++      {_rt, _outputs, events} = Runtime.cycle(rt, 20, %{})
++      assert ran(events) == [{"c", "ic"}, {"b", "ib"}, {"a", "ia"}]
++    end
++
++    # More than 32 instances, so a map of them no longer iterates in name order
++    # (CONTRIBUTING.md): declaration order is a list, kept.
++    test "a task's instances run in declaration order, and the task-less ones last, once " <>
++           "each, in theirs",
++         %{relay: relay} do
++      names = for i <- 40..1//-1, do: "i#{i}"
++      tasked = for name <- names, do: {name, "t", 1}
++      free = for name <- ["z9", "a1", "m5"], do: {name, nil, 1}
++      rt = Runtime.start(line(relay, [task("t", 10, 0)], tasked ++ free))
++
++      {[{_, first}, {_, second}], _rt} = cycles(rt, [{0, %{}}, {0, %{}}])
++      assert ran(first) == Enum.map(names, &{"t", &1}) ++ Enum.map(~w(z9 a1 m5), &{:none, &1})
++      assert ran(second) == Enum.map(~w(z9 a1 m5), &{:none, &1})
++    end
++
++    # §4.6: an instance sees any global an earlier instance wrote in the same cycle, and
++    # never one a later instance writes.
++    test "an instance sees what an earlier one wrote in the same cycle, and not what a later " <>
++           "one writes",
++         %{relay: relay} do
++      config =
++        line(
++          relay,
++          [task("t", 10, 0)],
++          [{"first", "t", "g_late"}, {"second", "t", "pb"}, {"third", "t", "g_early"}],
++          [%{name: "g_late", type: :bool}, %{name: "g_early", type: :bool}]
++        )
++
++      # `second` drives `g_early`, which `third` reads, and `g_late`, which `first` reads.
++      config = %{
++        config
++        | connections:
++            config.connections ++
++              [
++                %{member: "second.y", to: "g_early", line: nil},
++                %{member: "second.y", to: "g_late", line: nil}
++              ]
++      }
++
++      rt = Runtime.start(config)
++      {rt, outputs, _events} = Runtime.cycle(rt, 0, %{"pb" => 1})
++      assert outputs == %{"first_y" => 0, "second_y" => 1, "third_y" => 1}
++      {_rt, outputs, _events} = Runtime.cycle(rt, 10, %{})
++      assert outputs == %{"first_y" => 1, "second_y" => 1, "third_y" => 1}
++    end
++  end
++
++  describe "cycle/3, copy-in, copy-out and the outputs" do
++    test "a var_input reads its global or its constant, and a var_output drives every global " <>
++           "it is connected to",
++         %{relay: relay} do
++      config =
++        line(relay, [], [{"a", nil, 1}, {"b", nil, "g"}], [%{name: "g", type: :bool}])
++
++      config = %{
++        config
++        | connections: config.connections ++ [%{member: "a.y", to: "g", line: nil}]
++      }
++
++      {_rt, outputs, _events} = Runtime.cycle(Runtime.start(config), 0, %{})
++      assert outputs == %{"a_y" => 1, "b_y" => 1}
++    end
++
++    test "the outputs are every output point, each cycle, whether or not anything ran", %{
++      relay: relay
++    } do
++      rt =
++        Runtime.start(
++          line(relay, [task("t", 10, 0)], [{"a", "t", "pb"}], [
++            %{name: "lamp", type: :bool, at: "panel.q.9", initial: 1},
++            %{name: "memo", type: :dint, initial: 3}
++          ])
++        )
++
++      {rt, outputs, _events} = Runtime.cycle(rt, 0, %{"pb" => 1})
++      assert outputs == %{"a_y" => 1, "lamp" => 1}
++      {_rt, outputs, events} = Runtime.cycle(rt, 1, %{"pb" => 0})
++      assert {outputs, events} == {%{"a_y" => 1, "lamp" => 1}, []}
++    end
++  end
++
++  describe "next_due_in/1" do
++    test "is the time to the soonest periodic task, ignoring task-less instances, and " <>
++           ":infinity with no periodic task",
++         %{relay: relay} do
++      rt = Runtime.start(line(relay, [task("a", 30, 0), task("b", 20, 0)], [{"x", nil, 1}]))
++      {rt, _, _} = Runtime.cycle(rt, 0, %{})
++      assert Runtime.next_due_in(rt) == 20
++      {rt, _, _} = Runtime.cycle(rt, 13, %{})
++      assert Runtime.next_due_in(rt) == 7
++      {rt, _, _} = Runtime.cycle(rt, 7, %{})
++      assert Runtime.next_due_in(rt) == 10
++
++      lone = Runtime.start(line(relay, [], [{"x", nil, 1}]))
++      assert Runtime.next_due_in(lone) == :infinity
++      {lone, _, _} = Runtime.cycle(lone, 5, %{})
++      assert Runtime.next_due_in(lone) == :infinity
++    end
++  end
++
++  describe "get/2" do
++    test "reads a global, a tag of any section, and a member a program may name" do
++      {:ok, timed} =
++        Logex.compile(
++          "var_input go bool\nvar_output d bool\nvar t1 ton\nxic go ton t1 20\nxic t1.dn ote d",
++          name: "timed"
++        )
++
++      config =
++        Configuration.new!(
++          name: "c",
++          programs: [timed],
++          globals: [
++            %{name: "go", type: :bool, at: "p.i.0"},
++            %{name: "memo", type: :dint, initial: 4}
++          ],
++          instances: [%{name: "m1", type: "timed"}],
++          connections: [%{member: "m1.go", to: "go"}]
++        )
++
++      rt = Runtime.start(config)
++      {rt, _, _} = Runtime.cycle(rt, 0, %{"go" => 1})
++      {rt, _, _} = Runtime.cycle(rt, 25, %{})
++
++      assert Enum.map(
++               ~w(go memo m1.go m1.d m1.t1.pre m1.t1.acc m1.t1.dn m1.t1.tt m1.t1.en),
++               &Runtime.get(rt, &1)
++             ) ==
++               [1, 4, 1, 1, 20, 20, 1, 0, 1]
++
++      assert_raise ArgumentError,
++                   "`last` is not a member of `m1.t1`, a ton: its members are `pre`, `acc`, " <>
++                     "`dn`, `tt` and `en`",
++                   fn -> Runtime.get(rt, "m1.t1.last") end
++
++      assert_raise ArgumentError,
++                   "`m1.t1` is a ton: name one of its members, as in `m1.t1.pre`",
++                   fn -> Runtime.get(rt, "m1.t1") end
++
++      assert_raise ArgumentError,
++                   "`m1.t1.acc` is a dint: it has no members, so `m1.t1.acc.x` names nothing",
++                   fn -> Runtime.get(rt, "m1.t1.acc.x") end
++    end
++  end
++
++  describe "restart/2" do
++    # As start/1 left it, but for the clock and the input image: every other global at its
++    # initial value, each instance restarted (a first scan again), every task due at the
++    # next cycle and every overlap count 0.
++    test "starts the resource again, keeping the clock and the input image", %{relay: relay} do
++      config =
++        line(relay, [task("t", 10, 0)], [{"a", "t", "pb"}], [
++          %{name: "memo", type: :dint, initial: 4}
++        ])
++
++      config = %{
++        config
++        | connections: config.connections ++ [%{member: "a.n", to: "memo", line: nil}]
++      }
++
++      rt = Runtime.start(config)
++      {_, rt} = cycles(rt, [{0, %{"pb" => 0}}, {10, %{"pb" => 1}}, {35, %{}}])
++      assert {Runtime.get(rt, "memo"), Runtime.overlaps(rt)} == {7, %{"t" => 2}}
++
++      rt = Runtime.restart(rt, :warm)
++      assert Runtime.get(rt, "pb") == 1
++      assert Runtime.get(rt, "memo") == 4
++      assert Runtime.get(rt, "a_n") == 0
++      assert Runtime.overlaps(rt) == %{"t" => 0}
++      assert Runtime.next_due_in(rt) == 0
++
++      # The next cycle, at elapsed 0, runs the task at the kept clock, 45 ms. The instance's
++      # one-shot is held back on its first scan though `pb` is still 1, so `n` stays at its
++      # initial 0, which the scan copies out over `memo`'s 4.
++      {rt, outputs, events} = Runtime.cycle(rt, 0, %{})
++      assert events == [{:ran, "t", "a", 45}]
++      assert {outputs, Runtime.get(rt, "memo")} == {%{"a_y" => 1}, 0}
++      assert Runtime.next_due_in(rt) == 10
++    end
++  end
++
++  # ---- growth -------------------------------------------------------------------------
++
++  # A cycle is linear in what it runs: counted in reductions rather than time, as
++  # logex_test.exs counts a compile, and the least of three counts. `n` instances under
++  # one task, each wired to two globals and an input point shared by all, and as many
++  # task-less ones; every one of them runs in the counted cycle.
++  defp reductions_to_cycle(relay, n) do
++    rt =
++      Runtime.start(
++        line(
++          relay,
++          [task("t", 10, 0)],
++          for(i <- 1..n, do: {"a#{i}", "t", "pb"}) ++ for(i <- 1..n, do: {"b#{i}", nil, "pb"})
++        )
++      )
++
++    count(fn -> Runtime.cycle(rt, 10, %{"pb" => 1}) end)
++  end
++
++  # `n` tasks of one instance each, all due and late in the counted cycle, at priorities
++  # and due times that differ, so the order sorts on every key.
++  defp reductions_to_cycle_tasks(relay, n) do
++    tasks = for i <- 1..n, do: task("t#{i}", 10 + rem(i, 7), rem(i, 5))
++    rt = Runtime.start(line(relay, tasks, for(i <- 1..n, do: {"a#{i}", "t#{i}", "pb"})))
++    {rt, _, _} = Runtime.cycle(rt, 0, %{})
++    count(fn -> Runtime.cycle(rt, 31, %{"pb" => 1}) end)
++  end
++
++  defp reductions_to_start(relay, n) do
++    count(fn ->
++      Runtime.start(line(relay, [task("t", 10, 0)], for(i <- 1..n, do: {"a#{i}", "t", "p#{i}"})))
++    end)
++  end
++
++  defp count(fun) do
++    Enum.min(
++      for _ <- 1..3 do
++        {:reductions, before} = Process.info(self(), :reductions)
++        fun.()
++        {:reductions, later} = Process.info(self(), :reductions)
++        later - before
++      end
++    )
++  end
++
++  describe "growth" do
++    # At 16x, not 4x, because `++` is charged few reductions for what it copies
++    # (CONTRIBUTING.md): events appended one scan at a time grew 4.4x for 4x the instances,
++    # within a 4x bound, and 25.6x for 16x, where a linear cycle grows 16.1x to 16.3x.
++    test "a cycle stays linear in the instances it runs", %{relay: relay} do
++      ratio = reductions_to_cycle(relay, 1600) / reductions_to_cycle(relay, 100)
++      assert ratio < 19.5, "16x the instances took #{Float.round(ratio, 2)}x the reductions"
++    end
++
++    test "a cycle stays linear in the tasks due", %{relay: relay} do
++      ratio = reductions_to_cycle_tasks(relay, 400) / reductions_to_cycle_tasks(relay, 100)
++      assert ratio < 5.5, "4x the tasks took #{Float.round(ratio, 2)}x the reductions"
++    end
++
++    test "new!/1 and start/1 stay linear in the configuration's size", %{relay: relay} do
++      ratio = reductions_to_start(relay, 400) / reductions_to_start(relay, 100)
++      assert ratio < 5.5, "4x the configuration took #{Float.round(ratio, 2)}x the reductions"
++    end
++  end
++end

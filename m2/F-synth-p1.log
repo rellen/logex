@@ -1,0 +1,114 @@
+     warning: variable "s" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+     │
+ 195 │ {o, s} = P.step(pp, s, %{})
+     │     ~
+     │
+     └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p1.exs:195:5
+
+    warning: variable "o" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+    │
+ 78 │ {o, s} = P.step(prog, s, %{"g1" => 1}, 0)
+    │  ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p1.exs:78:2
+
+     warning: variable "o" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+     │
+ 177 │ {o, s} = P.step(tp, s, %{"en" => 1, "go" => 1}, 0)
+     │  ~
+     │
+     └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p1.exs:177:2
+
+    warning: variable "o" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+    │
+ 98 │ {o, s} = P.step(prog3, s, %{"x" => 1}, 0)
+    │  ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p1.exs:98:2
+
+     warning: variable "s" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+     │
+ 200 │ {o, s} = P.step(pp, s, %{})
+     │     ~
+     │
+     └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p1.exs:200:5
+
+== P2 false EN: nothing in, nothing out; ENO is EN
+en=1 a=1: {%{"eno" => 1, "q" => 1}, %{"run" => 1, "start" => 1, "stop" => 0}}
+en=0 b=1 (frozen; inputs not copied): {%{"eno" => 0, "q" => 1}, %{"run" => 1, "start" => 1, "stop" => 0}}
+en=1 (sees stop): {%{"eno" => 1, "q" => 0}, %{"run" => 0, "start" => 0, "stop" => 1}}
+== P3 nesting: two outers each holding a seal
+outer members: [{"go", :input}, {"halt", :input}, {"out", :output}, {"inner", :local}]
+initial env: %{"a" => %{"go" => 0, "halt" => 0, "inner" => %{"run" => 0, "start" => 0, "stop" => 0}, "out" => 0}, "b" => %{"go" => 0, "halt" => 0, "inner" => %{"run" => 0, "start" => 0, "stop" => 0}, "out" => 0}, "g1" => 0, "g2" => 0, "h" => 0, "o1" => 0, "o2" => 0, "r" => 0}
+after g1 pulse: {%{"o1" => 1, "o2" => 0, "r" => 1}, %{"a" => %{"go" => 0, "halt" => 0, "inner" => %{"run" => 1, "start" => 0, "stop" => 0}, "out" => 1}, "b" => %{"go" => 0, "halt" => 0, "inner" => %{"run" => 0, "start" => 0, "stop" => 0}, "out" => 0}, "g1" => 0, "g2" => 0, "h" => 0, "o1" => 1, "o2" => 0, "r" => 1}}
+== P3b three deep
+3 deep after pulse: {%{"y" => 1}, %{"m1" => %{"o" => %{"go" => 0, "halt" => 0, "inner" => %{"run" => 1, "start" => 0, "stop" => 0}, "out" => 1}, "x" => 0, "y" => 1}, "x" => 0, "y" => 1}}
+== P4 recursion
+direct: {:error, ["line 3: `a` cannot hold an instance of `a`: a function block never holds an instance of itself"]}
+indirect a->b->a: {:error, ["line 4: `a` cannot hold an instance of `b` (a → b → a): a function block never holds an instance of itself, at any depth"]}
+indirect, types holds both a0 and b: {:error, ["line 4: `a` cannot hold an instance of `b` (a → b → a): a function block never holds an instance of itself, at any depth"]}
+== P5 unknown type, cascade
+unknown: {:error, ["line 3: unknown type `sael`: logex has `bool`, `dint` and `ton`, and the function block `seal` — did you mean `seal`?", "line 4: `s1` is not declared"]}
+== P6 cal of a non-instance
+bool: {:error, ["line 3: `cal` runs an instance of a function block, but `x` is a bool (declared on line 1)"]}
+dint: {:error, ["line 3: `cal` runs an instance of a function block, but `x` is a dint (declared on line 1)"]}
+undeclared: {:error, ["line 3: `nope` is not declared"]}
+literal: {:error, ["line 2: `cal` expects an instance of a function block, found `5`"]}
+member: {:error, ["line 5: `cal` runs an instance of a function block, named whole: found `s1.run`"]}
+none: {:error, ["line 2: `cal` expects an instance of a function block, found none"]}
+ton: {:error, ["line 4: `cal` runs an instance of a user function block, but `t1` is a ton (declared on line 1), which `ton t1` and its preset run"]}
+var_input instance: {:error, ["line 1: `s1` is a seal: an instance is the program's own, declared with `var`, as in `var s1 seal`, not with `var_input`", "line 3: operand 3 of `cal s1` is `run` (var_output bool), which it writes: `a` is a var_input (declared on line 2), and logic must not write an input"]}
+ton on user instance: {:error, ["line 5: `ton` runs a ton, but `s1` is a seal (declared on line 1)"]}
+== P12 second cal; arity; formals
+second cal: {:error, ["line 5: `s1` is already run by the `cal` on line 4: one `cal` runs an instance"]}
+short: {:error, ["line 4: `cal s1` expects 3 operands after its instance, `start` (var_input bool), then `stop` (var_input bool), then `run` (var_output bool): found 2"]}
+long: {:error, ["line 4: unknown instruction `q`"]}
+literal out: {:error, ["line 3: operand 3 of `cal s1` is `run` (var_output bool), which it writes: found `1`"]}
+input as out: {:error, ["line 3: operand 3 of `cal s1` is `run` (var_output bool), which it writes: `a` is a var_input (declared on line 2), and logic must not write an input"]}
+dint to bool: {:error, ["line 5: operand 1 of `cal s1` is `start` (var_input bool), but `n` is a dint"]}
+literal 1 in: {:ok, %Logex.Program{rungs: [rung: [{:cal, 3, [{:name, 3, "s1"}, {:int_lit, 3, 1}, {:int_lit, 3, 0}, {:name, 3, "q"}]}]], tags: %{"q" => %Logex.Tag{name: "q", type: :bool, section: :var_output, initial: nil, line: 2}, "s1" => %Logex.Tag{name: "s1", type: %Logex.FbType{name: "seal", members: [%Logex.FbType.Member{name: "start", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: "stop", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: "run", type: :bool, role: :output, write: false, initial: 0}], body: %Logex.Program{rungs: [rung: [{:branches, [[{:xic, 6, [{:name, 6, "start"}]}], [{:xic, 6, [{:name, 6, "run"}]}]]}, {:xio, 6, [{:name, 6, "stop"}]}, {:ote, 6, [{:name, 6, "run"}]}]], tags: %{"run" => %Logex.Tag{name: "run", type: :bool, section: :var_output, initial: nil, line: 4}, "start" => %Logex.Tag{name: "start", type: :bool, section: :var_input, initial: nil, line: 2}, "stop" => %Logex.Tag{name: "stop", type: :bool, section: :var_input, initial: nil, line: 3}}, name: "seal", source: "function_block seal\nvar_input start bool\nvar_input stop bool\nvar_output run bool\n\n( xic start | xic run ) xio stop ote run\n", warnings: []}}, section: :var, initial: nil, line: 1}}, name: "m", source: "var s1 seal\nvar_output q bool\ncal s1 1 0 q\n", warnings: []}}
+literal 2 in: {:error, ["line 3: operand 1 of `cal s1` is `start` (var_input bool): only 0 or 1 fit, found `2`"]}
+== P16 positional order when outputs are declared first
+formals by signature: ["a", "b", "q", "n"]
+mixd run: %{"n" => 7, "q" => 1}
+== P8 members from outside
+read output: {:ok, %Logex.Program{rungs: [rung: [{:cal, 4, [{:name, 4, "l"}, {:name, 4, "a"}, {:name, 4, "y"}]}], rung: [{:xic, 5, [{:member, 5, ["l", "q"]}]}, {:ote, 5, [{:name, 5, "y"}]}]], tags: %{"a" => %Logex.Tag{name: "a", type: :bool, section: :var_input, initial: nil, line: 2}, "l" => %Logex.Tag{name: "l", type: %Logex.FbType{name: "latch", members: [%Logex.FbType.Member{name: "set", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: "q", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "held", type: :bool, role: :local, write: false, initial: 0}, %Logex.FbType.Member{name: "n", type: :dint, role: :local, write: false, initial: 0}, %Logex.FbType.Member{name: "t1", type: %Logex.FbType{name: "ton", members: [%Logex.FbType.Member{name: "pre", type: :dint, role: :input, write: true, initial: 0}, %Logex.FbType.Member{name: "acc", type: :dint, role: :output, write: true, initial: 0}, %Logex.FbType.Member{name: "dn", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "tt", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "en", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "last", type: :clock, role: :internal, write: false, initial: 0}], body: nil}, role: :local, write: false, initial: %{"pre" => 250}}], body: %Logex.Program{rungs: [rung: [{:xic, 8, [{:name, 8, "set"}]}, {:otl, 8, [{:name, 8, "held"}]}], rung: [{:xic, 9, [{:name, 9, "held"}]}, {:ote, 9, [{:name, 9, "q"}]}], rung: [{:xic, 10, [{:name, 10, "held"}]}, {:ton, 10, [{:name, 10, "t1"}, {:int_lit, 10, 250}]}]], tags: %{"held" => %Logex.Tag{name: "held", type: :bool, section: :var, initial: nil, line: 4}, "n" => %Logex.Tag{name: "n", type: :dint, section: :var, initial: nil, line: 5}, "q" => %Logex.Tag{name: "q", type: :bool, section: :var_output, initial: nil, line: 3}, "set" => %Logex.Tag{name: "set", type: :bool, section: :var_input, initial: nil, line: 2}, "t1" => %Logex.Tag{name: "t1", type: %Logex.FbType{name: "ton", members: [%Logex.FbType.Member{name: "pre", type: :dint, role: :input, write: true, initial: 0}, %Logex.FbType.Member{name: "acc", type: :dint, role: :output, write: true, initial: 0}, %Logex.FbType.Member{name: "dn", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "tt", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "en", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "last", type: :clock, role: :internal, write: false, initial: 0}], body: nil}, section: :var, initial: %{"pre" => 250}, line: 6}}, name: "latch", source: "function_block latch\nvar_input set bool\nvar_output q bool\nvar held bool\nvar n dint\nvar t1 ton\n\nxic set otl held\nxic held ote q\nxic held ton t1 250\n", warnings: [%Logex.Diagnostic{stage: :validate, line: 5, message: "`n` is declared but no rung uses it", file: nil, column: nil, severity: :warning}]}}, section: :var, initial: nil, line: 1}, "y" => %Logex.Tag{name: "y", type: :bool, section: :var_output, initial: nil, line: 3}}, name: "m", source: "var l latch\nvar_input a bool\nvar_output y bool\ncal l a y\nxic l.q ote y\n", warnings: []}}
+read input: {:ok, %Logex.Program{rungs: [rung: [{:cal, 5, [{:name, 5, "l"}, {:name, 5, "a"}, {:name, 5, "y"}]}], rung: [{:xic, 6, [{:member, 6, ["l", "set"]}]}, {:ote, 6, [{:name, 6, "z"}]}]], tags: %{"a" => %Logex.Tag{name: "a", type: :bool, section: :var_input, initial: nil, line: 2}, "l" => %Logex.Tag{name: "l", type: %Logex.FbType{name: "latch", members: [%Logex.FbType.Member{name: "set", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: "q", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "held", type: :bool, role: :local, write: false, initial: 0}, %Logex.FbType.Member{name: "n", type: :dint, role: :local, write: false, initial: 0}, %Logex.FbType.Member{name: "t1", type: %Logex.FbType{name: "ton", members: [%Logex.FbType.Member{name: "pre", type: :dint, role: :input, write: true, initial: 0}, %Logex.FbType.Member{name: "acc", type: :dint, role: :output, write: true, initial: 0}, %Logex.FbType.Member{name: "dn", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "tt", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "en", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "last", type: :clock, role: :internal, write: false, initial: 0}], body: nil}, role: :local, write: false, initial: %{"pre" => 250}}], body: %Logex.Program{rungs: [rung: [{:xic, 8, [{:name, 8, "set"}]}, {:otl, 8, [{:name, 8, "held"}]}], rung: [{:xic, 9, [{:name, 9, "held"}]}, {:ote, 9, [{:name, 9, "q"}]}], rung: [{:xic, 10, [{:name, 10, "held"}]}, {:ton, 10, [{:name, 10, "t1"}, {:int_lit, 10, 250}]}]], tags: %{"held" => %Logex.Tag{name: "held", type: :bool, section: :var, initial: nil, line: 4}, "n" => %Logex.Tag{name: "n", type: :dint, section: :var, initial: nil, line: 5}, "q" => %Logex.Tag{name: "q", type: :bool, section: :var_output, initial: nil, line: 3}, "set" => %Logex.Tag{name: "set", type: :bool, section: :var_input, initial: nil, line: 2}, "t1" => %Logex.Tag{name: "t1", type: %Logex.FbType{name: "ton", members: [%Logex.FbType.Member{name: "pre", type: :dint, role: :input, write: true, initial: 0}, %Logex.FbType.Member{name: "acc", type: :dint, role: :output, write: true, initial: 0}, %Logex.FbType.Member{name: "dn", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "tt", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "en", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "last", type: :clock, role: :internal, write: false, initial: 0}], body: nil}, section: :var, initial: %{"pre" => 250}, line: 6}}, name: "latch", source: "function_block latch\nvar_input set bool\nvar_output q bool\nvar held bool\nvar n dint\nvar t1 ton\n\nxic set otl held\nxic held ote q\nxic held ton t1 250\n", warnings: [%Logex.Diagnostic{stage: :validate, line: 5, message: "`n` is declared but no rung uses it", file: nil, column: nil, severity: :warning}]}}, section: :var, initial: nil, line: 1}, "y" => %Logex.Tag{name: "y", type: :bool, section: :var_output, initial: nil, line: 3}, "z" => %Logex.Tag{name: "z", type: :bool, section: :var_output, initial: nil, line: 4}}, name: "m", source: "var l latch\nvar_input a bool\nvar_output y bool\nvar_output z bool\ncal l a y\nxic l.set ote z\n", warnings: []}}
+read local: {:error, ["line 5: `l.held` is not a member of `l`, a latch: its members are `set` and `q`"]}
+read nested timer: {:error, ["line 5: `l.t1.dn` is not a member of `l`, a latch: its members are `set` and `q`"]}
+write output: {:error, ["line 5: `ote` writes `l.q`, but no member of a latch is written from outside it: its body writes them"]}
+write input: {:error, ["line 5: `otl` writes `l.set`, but no member of a latch is written from outside it: its body writes them"]}
+move to local: {:error, ["line 5: `l.n` is not a member of `l`, a latch: its members are `set` and `q`"]}
+ons on member: {:error, ["line 5: `ons` writes `l.q`, but no member of a latch is written from outside it: its body writes them"]}
+cal output into another instance: {:error, ["line 6: operand 2 of `cal m` is `q` (var_output bool), which it writes: no member of a latch is written from outside it: its body writes them"]}
+cal output into timer pre (dint): {:ok, %Logex.Program{rungs: [rung: [{:xic, 5, [{:name, 5, "a"}]}, {:ton, 5, [{:name, 5, "t1"}, {:int_lit, 5, 100}]}], rung: [{:cal, 6, [{:name, 6, "x"}, {:name, 6, "a"}, {:int_lit, 6, 7}, {:name, 6, "q"}, {:member, 6, ["t1", "pre"]}]}]], tags: %{"a" => %Logex.Tag{name: "a", type: :bool, section: :var_input, initial: nil, line: 3}, "q" => %Logex.Tag{name: "q", type: :bool, section: :var_output, initial: nil, line: 4}, "t1" => %Logex.Tag{name: "t1", type: %Logex.FbType{name: "ton", members: [%Logex.FbType.Member{name: "pre", type: :dint, role: :input, write: true, initial: 0}, %Logex.FbType.Member{name: "acc", type: :dint, role: :output, write: true, initial: 0}, %Logex.FbType.Member{name: "dn", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "tt", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "en", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "last", type: :clock, role: :internal, write: false, initial: 0}], body: nil}, section: :var, initial: %{"pre" => 100}, line: 1}, "x" => %Logex.Tag{name: "x", type: %Logex.FbType{name: "mixd", members: [%Logex.FbType.Member{name: "q", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "a", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: "n", type: :dint, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "b", type: :dint, role: :input, write: false, initial: 0}], body: %Logex.Program{rungs: [rung: [{:xic, 6, [{:name, 6, "a"}]}, {:move, 6, [{:name, 6, "b"}, {:name, 6, "n"}]}], rung: [{:xic, 7, [{:name, 7, "a"}]}, {:ote, 7, [{:name, 7, "q"}]}]], tags: %{"a" => %Logex.Tag{name: "a", type: :bool, section: :var_input, initial: nil, line: 3}, "b" => %Logex.Tag{name: "b", type: :dint, section: :var_input, initial: nil, line: 5}, "n" => %Logex.Tag{name: "n", type: :dint, section: :var_output, initial: nil, line: 4}, "q" => %Logex.Tag{name: "q", type: :bool, section: :var_output, initial: nil, line: 2}}, name: "mixd", source: "function_block mixd\nvar_output q bool\nvar_input a bool\nvar_output n dint\nvar_input b dint\nxic a move b n\nxic a ote q\n", warnings: []}}, section: :var, initial: nil, line: 2}}, name: "m", source: "var t1 ton\nvar x mixd\nvar_input a bool\nvar_output q bool\nxic a ton t1 100\ncal x a 7 q t1.pre\n", warnings: []}}
+== P9 timer in a block: freeze and catch up, preset from the body
+tb member t1 initial: %{"pre" => 100}
+t=10 timing: {%{"d" => 0}, %{"acc" => 10, "dn" => 0, "en" => 1, "last" => 10, "pre" => 100, "tt" => 1}}
+t=20 frozen: {%{"d" => 0}, %{"acc" => 10, "dn" => 0, "en" => 1, "last" => 10, "pre" => 100, "tt" => 1}}
+t=200 frozen: {%{"d" => 0}, %{"acc" => 10, "dn" => 0, "en" => 1, "last" => 10, "pre" => 100, "tt" => 1}}
+t=210 runs again: caught up: {%{"d" => 1}, %{"acc" => 100, "dn" => 1, "en" => 1, "last" => 210, "pre" => 100, "tt" => 0}}
+== P15 first: block frozen on the first scan fires its ons on first run
+scan1 en=0 go=1: %{"p" => 0}
+scan2 en=1 (fires on first run): %{"p" => 1}
+scan3: %{"p" => 0}
+first scan en=1 go=1 (held back): %{"p" => 0}
+second (no edge): %{"p" => 0}
+== P13 warnings
+uncalled instance: ["line 1: warning: `s2` is declared but no rung uses it"]
+cal output only driver: []
+cal and ote same tag: []
+block with unused var warns in body: ["line 4: warning: `z` is declared but no rung uses it"]
+== P17 header
+comment first: :ok
+mismatch: {:error, ["line 1: this function block is `seal`, but it is compiled as `latch`: a block is named after its file"]}
+header in program: {:error, ["line 4: `function_block` heads a function block's file, as its first line"]}
+two headers: {:error, ["line 2: `function_block` heads a function block's file, as its first line", "line 3: `var_input` after the first rung (line 2): declarations come first", "line 4: `var_output` after the first rung (line 2): declarations come first"]}
+mnemonic name: {:error, ["line 1: `move` is an instruction and cannot name a function block"]}
+upper keyword: :ok
+tag named function_block in block: {:error, ["line 2: `function_block` heads a function block's file and cannot name a tag in one"]}
+tag named function_block in program: :ok
+tag named cal: {:error, ["line 1: `cal` is an instruction and cannot name a tag", "line 3: `xic` expects 1 operand (a tag), found none before the instruction `cal`", "line 3: `cal` expects an instance of a function block, found none before the instruction `ote`"]}
+block with no body rungs: {:ok, %Logex.FbType{name: "e", members: [%Logex.FbType.Member{name: "a", type: :bool, role: :input, write: false, initial: 0}], body: %Logex.Program{rungs: [], tags: %{"a" => %Logex.Tag{name: "a", type: :bool, section: :var_input, initial: nil, line: 2}}, name: "e", source: "function_block e\nvar_input a bool\n", warnings: [%Logex.Diagnostic{stage: :validate, line: 2, message: "`a` is declared but no rung uses it", file: nil, column: nil, severity: :warning}]}}}
+block named like a builtin ton: {:error, ["line 1: `ton` is an instruction and cannot name a function block"]}
+Runtime.instance(block): {ArgumentError, "`seal` is a function block type, which runs inside a program through `cal`: an instance is of a %Logex.Program{}"}

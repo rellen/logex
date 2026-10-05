@@ -1,0 +1,15 @@
+seed 1: walks 300, steps 9000, accepted 1379, refused 0
+escapes 0, rebuild mismatches 0, duplicate entries 0, forecast mismatches 0
+report kinds reached: [:added, :dn_drops, :dn_rises, :held, :initial_changed, :ons_blocked, :preset, :pruned, :resume_undone, :resumed]
+seed 2: walks 300, steps 9000, accepted 1411, refused 0
+escapes 0, rebuild mismatches 0, duplicate entries 0, forecast mismatches 0
+report kinds reached: [:added, :dn_drops, :dn_rises, :held, :initial_changed, :ons_blocked, :preset, :pruned, :resume_undone, :resumed]
+seed 3: walks 300, steps 9000, accepted 1407, refused 0
+escapes 0, rebuild mismatches 0, duplicate entries 0, forecast mismatches 0
+report kinds reached: [:added, :dn_drops, :dn_rises, :held, :initial_changed, :ons_blocked, :preset, :pruned, :resume_undone, :resumed]
+seed 11: walks 300, steps 9000, accepted 382, refused 2169
+escapes 0, rebuild mismatches 0, duplicate entries 0, forecast mismatches 0
+report kinds reached: [:added, :dn_drops, :held, :initial_changed, :ons_blocked, :preset, :preset_kept, :pruned, :resume_undone, :resumed]
+seed 12: walks 300, steps 9000, accepted 328, refused 2341
+escapes 0, rebuild mismatches 0, duplicate entries 0, forecast mismatches 0
+report kinds reached: [:added, :dn_drops, :held, :initial_changed, :ons_blocked, :preset, :preset_kept, :pruned, :resume_undone, :resumed]

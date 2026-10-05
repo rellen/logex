@@ -1,0 +1,5 @@
+1,2c1
+< reductions per scan: 3 cals, inline: {683, 348}
+< exit 0
+---
+> reductions per scan: 3 cals, inline: {695, 348}

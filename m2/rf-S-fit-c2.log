@@ -1,0 +1,80 @@
+Compiling 16 files (.ex)
+Generated logex app
+Running ExUnit with seed: 578040, max_cases: 8
+
+.......
+
+  1) test nothing escapes check/1 and new!/1 give a diagnostic or an ArgumentError, never anything else (Logex.ConfigurationTest)
+     test/logex/configuration_test.exs:629
+     ** (UndefinedFunctionError) function Logex.Runtime.start/1 is undefined or private. Did you mean:
+
+         * restart/3
+
+     code: for _ <- 1..3000, reduce: 0 do
+     stacktrace:
+       (logex 0.1.0) Logex.Runtime.start(%Logex.Configuration{name: "plant", file: nil, programs: %{"seal" => %Logex.Program{rungs: [rung: [{:branches, [[{:xic, 7, [{:name, 7, "start"}]}], [{:xic, 7, [{:name, 7, "motor"}]}]]}, {:xio, 7, [{:name, 7, "stop"}]}, {:ote, 7, [{:name, 7, "motor"}]}], rung: [{:xic, 8, [{:name, 8, "motor"}]}, {:ton, 8, [{:name, 8, "t1"}, {:int_lit, 8, 100}]}], rung: [{:xic, 9, [{:name, 9, "fault"}]}, {:move, 9, [{:int_lit, 9, 5}, {:name, 9, "sp"}]}]], tags: %{"fault" => %Logex.Tag{name: "fault", type: :bool, section: :var, initial: nil, line: 5}, "motor" => %Logex.Tag{name: "motor", type: :bool, section: :var_output, initial: nil, line: 3}, "sp" => %Logex.Tag{name: "sp", type: :dint, section: :var_output, initial: nil, line: 4}, "start" => %Logex.Tag{name: "start", type: :bool, section: :var_input, initial: nil, line: 1}, "stop" => %Logex.Tag{name: "stop", type: :bool, section: :var_input, initial: nil, line: 2}, "t1" => %Logex.Tag{name: "t1", type: %Logex.FbType{name: "ton", members: [%Logex.FbType.Member{name: "pre", type: :dint, role: :input, write: true, initial: 0}, %Logex.FbType.Member{name: "acc", type: :dint, role: :output, write: true, initial: 0}, %Logex.FbType.Member{name: "dn", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "tt", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "en", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "last", type: :clock, role: :internal, write: false, initial: 0}]}, section: :var, initial: %{"pre" => 100}, line: 6}}, name: "seal", source: "var_input start bool\nvar_input stop bool\nvar_output motor bool\nvar_output sp dint\nvar fault bool\nvar t1 ton\n( xic start | xic motor ) xio stop ote motor\nxic motor ton t1 100\nxic fault move 5 sp\n", warnings: []}}, tasks: [%Logex.Configuration.Task{name: "fast", interval: 10, priority: 0, line: nil}], globals: [%Logex.Configuration.Global{name: "pb", type: :bool, initial: nil, at: "panel.i.0", line: nil}, %Logex.Configuration.Global{name: "seal", type: :bool, initial: nil, at: "panel.i.1", line: nil}, %Logex.Configuration.Global{name: "k", type: :bool, initial: nil, at: "panel.q.0", line: nil}, %Logex.Configuration.Global{name: "sp", type: :dint, initial: nil, at: nil, line: nil}], instances: [%Logex.Configuration.Instance{name: "m", type: "seal", task: nil, ...}], ...})
+       test/logex/configuration_test.exs:641: anonymous fn/3 in Logex.ConfigurationTest."test nothing escapes check/1 and new!/1 give a diagnostic or an ArgumentError, never anything else"/1
+       (elixir 1.20.4) lib/enum.ex:4659: Enum.reduce_range/5
+       test/logex/configuration_test.exs:635: (test)
+
+...........
+
+  2) test lines and the file each problem is cited at its line, in its file, in line order (Logex.ConfigurationTest)
+     test/logex/configuration_test.exs:551
+     Expected exception ArgumentError but got UndefinedFunctionError (function Logex.Runtime.start/1 is undefined or private)
+     code: error = assert_raise ArgumentError, fn -> Logex.Runtime.start(config) end
+     stacktrace:
+       (logex 0.1.0) Logex.Runtime.start(%Logex.Configuration{name: "plant", file: "plant.lcf", programs: %{"seal" => %Logex.Program{rungs: [rung: [{:branches, [[{:xic, 7, [{:name, 7, "start"}]}], [{:xic, 7, [{:name, 7, "motor"}]}]]}, {:xio, 7, [{:name, 7, "stop"}]}, {:ote, 7, [{:name, 7, "motor"}]}], rung: [{:xic, 8, [{:name, 8, "motor"}]}, {:ton, 8, [{:name, 8, "t1"}, {:int_lit, 8, 100}]}], rung: [{:xic, 9, [{:name, 9, "fault"}]}, {:move, 9, [{:int_lit, 9, 5}, {:name, 9, "sp"}]}]], tags: %{"fault" => %Logex.Tag{name: "fault", type: :bool, section: :var, initial: nil, line: 5}, "motor" => %Logex.Tag{name: "motor", type: :bool, section: :var_output, initial: nil, line: 3}, "sp" => %Logex.Tag{name: "sp", type: :dint, section: :var_output, initial: nil, line: 4}, "start" => %Logex.Tag{name: "start", type: :bool, section: :var_input, initial: nil, line: 1}, "stop" => %Logex.Tag{name: "stop", type: :bool, section: :var_input, initial: nil, line: 2}, "t1" => %Logex.Tag{name: "t1", type: %Logex.FbType{name: "ton", members: [%Logex.FbType.Member{name: "pre", type: :dint, role: :input, write: true, initial: 0}, %Logex.FbType.Member{name: "acc", type: :dint, role: :output, write: true, initial: 0}, %Logex.FbType.Member{name: "dn", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "tt", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "en", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "last", type: :clock, role: :internal, write: false, initial: 0}]}, section: :var, initial: %{"pre" => 100}, line: 6}}, name: "seal", source: "var_input start bool\nvar_input stop bool\nvar_output motor bool\nvar_output sp dint\nvar fault bool\nvar t1 ton\n( xic start | xic motor ) xio stop ote motor\nxic motor ton t1 100\nxic fault move 5 sp\n", warnings: []}}, tasks: [%Logex.Configuration.Task{name: "fast", interval: 0, priority: 1, line: 2}], globals: [%Logex.Configuration.Global{name: "pb", type: :bool, initial: nil, at: "panel.i.0", line: 3}, %Logex.Configuration.Global{name: "k", type: :bool, initial: nil, at: "panel.i.0", line: 4}], instances: [%Logex.Configuration.Instance{name: "m", type: "seal", task: "fast", line: 6}, %Logex.Configuration.Instance{name: "fast", type: "seal", task: nil, line: 9}], connections: [%Logex.Configuration.Connection{instance: "m", member: "start", to: "pb", line: 7}, ...], ...})
+       test/logex/configuration_test.exs:589: (test)
+
+     warning: Logex.Runtime.start/1 is undefined or private. Did you mean:
+
+         * restart/3
+
+     │
+ 239 │       error = assert_raise ArgumentError, fn -> Logex.Runtime.start(config) end
+     │                                                               ~
+     │
+     └─ test/logex/configuration_test.exs:239:63: Logex.ConfigurationTest."test check/1 a configuration's file is a name, or nil"/1
+     └─ test/logex/configuration_test.exs:589:63: Logex.ConfigurationTest."test lines and the file each problem is cited at its line, in its file, in line order"/1
+     └─ test/logex/configuration_test.exs:641:39: Logex.ConfigurationTest."test nothing escapes check/1 and new!/1 give a diagnostic or an ArgumentError, never anything else"/1
+     └─ test/logex/configuration_test.exs:685:37: Logex.ConfigurationTest."test nothing escapes start/1 refuses a configuration spoiled by hand, raising nothing else"/1
+
+     warning: Logex.Runtime.cycle/3 is undefined or private
+     │
+ 642 │               {_runtime, _outputs, _events} = Logex.Runtime.cycle(runtime, 10, %{})
+     │                                                             ~
+     │
+     └─ test/logex/configuration_test.exs:642:61: Logex.ConfigurationTest."test nothing escapes check/1 and new!/1 give a diagnostic or an ArgumentError, never anything else"/1
+     └─ test/logex/configuration_test.exs:686:59: Logex.ConfigurationTest."test nothing escapes start/1 refuses a configuration spoiled by hand, raising nothing else"/1
+
+..
+
+  3) test check/1 a configuration's file is a name, or nil (Logex.ConfigurationTest)
+     test/logex/configuration_test.exs:231
+     Expected exception ArgumentError but got UndefinedFunctionError (function Logex.Runtime.start/1 is undefined or private)
+     code: error = assert_raise ArgumentError, fn -> Logex.Runtime.start(config) end
+     stacktrace:
+       (logex 0.1.0) Logex.Runtime.start(%Logex.Configuration{name: "plant", file: %{}, programs: %{"seal" => %Logex.Program{rungs: [rung: [{:branches, [[{:xic, 7, [{:name, 7, "start"}]}], [{:xic, 7, [{:name, 7, "motor"}]}]]}, {:xio, 7, [{:name, 7, "stop"}]}, {:ote, 7, [{:name, 7, "motor"}]}], rung: [{:xic, 8, [{:name, 8, "motor"}]}, {:ton, 8, [{:name, 8, "t1"}, {:int_lit, 8, 100}]}], rung: [{:xic, 9, [{:name, 9, "fault"}]}, {:move, 9, [{:int_lit, 9, 5}, {:name, 9, "sp"}]}]], tags: %{"fault" => %Logex.Tag{name: "fault", type: :bool, section: :var, initial: nil, line: 5}, "motor" => %Logex.Tag{name: "motor", type: :bool, section: :var_output, initial: nil, line: 3}, "sp" => %Logex.Tag{name: "sp", type: :dint, section: :var_output, initial: nil, line: 4}, "start" => %Logex.Tag{name: "start", type: :bool, section: :var_input, initial: nil, line: 1}, "stop" => %Logex.Tag{name: "stop", type: :bool, section: :var_input, initial: nil, line: 2}, "t1" => %Logex.Tag{name: "t1", type: %Logex.FbType{name: "ton", members: [%Logex.FbType.Member{name: "pre", type: :dint, role: :input, write: true, initial: 0}, %Logex.FbType.Member{name: "acc", type: :dint, role: :output, write: true, initial: 0}, %Logex.FbType.Member{name: "dn", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "tt", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "en", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "last", type: :clock, role: :internal, write: false, initial: 0}]}, section: :var, initial: %{"pre" => 100}, line: 6}}, name: "seal", source: "var_input start bool\nvar_input stop bool\nvar_output motor bool\nvar_output sp dint\nvar fault bool\nvar t1 ton\n( xic start | xic motor ) xio stop ote motor\nxic motor ton t1 100\nxic fault move 5 sp\n", warnings: []}}, tasks: [%Logex.Configuration.Task{name: "t", interval: 0, priority: 0, line: nil}], globals: [%Logex.Configuration.Global{name: "pb", type: :bool, initial: nil, at: "panel.i.0", line: nil}, %Logex.Configuration.Global{name: "pb2", type: :bool, initial: nil, at: "panel.i.1", line: nil}, %Logex.Configuration.Global{name: "k", type: :bool, initial: nil, at: "panel.q.0", line: nil}, %Logex.Configuration.Global{name: "sp", type: :dint, initial: nil, at: nil, line: nil}], instances: [%Logex.Configuration.Instance{name: "m", type: "seal", task: nil, ...}], ...})
+       test/logex/configuration_test.exs:239: (test)
+
+.......
+
+  4) test nothing escapes start/1 refuses a configuration spoiled by hand, raising nothing else (Logex.ConfigurationTest)
+     test/logex/configuration_test.exs:675
+     ** (UndefinedFunctionError) function Logex.Runtime.start/1 is undefined or private. Did you mean:
+
+         * restart/3
+
+     code: for _ <- 1..2000 do
+     stacktrace:
+       (logex 0.1.0) Logex.Runtime.start(%Logex.Configuration{name: "plant", file: nil, programs: %{"seal" => %Logex.Program{rungs: [rung: [{:branches, [[{:xic, 7, [{:name, 7, "start"}]}], [{:xic, 7, [{:name, 7, "motor"}]}]]}, {:xio, 7, [{:name, 7, "stop"}]}, {:ote, 7, [{:name, 7, "motor"}]}], rung: [{:xic, 8, [{:name, 8, "motor"}]}, {:ton, 8, [{:name, 8, "t1"}, {:int_lit, 8, 100}]}], rung: [{:xic, 9, [{:name, 9, "fault"}]}, {:move, 9, [{:int_lit, 9, 5}, {:name, 9, "sp"}]}]], tags: %{"fault" => %Logex.Tag{name: "fault", type: :bool, section: :var, initial: nil, line: 5}, "motor" => %Logex.Tag{name: "motor", type: :bool, section: :var_output, initial: nil, line: 3}, "sp" => %Logex.Tag{name: "sp", type: :dint, section: :var_output, initial: nil, line: 4}, "start" => %Logex.Tag{name: "start", type: :bool, section: :var_input, initial: nil, line: 1}, "stop" => %Logex.Tag{name: "stop", type: :bool, section: :var_input, initial: nil, line: 2}, "t1" => %Logex.Tag{name: "t1", type: %Logex.FbType{name: "ton", members: [%Logex.FbType.Member{name: "pre", type: :dint, role: :input, write: true, initial: 0}, %Logex.FbType.Member{name: "acc", type: :dint, role: :output, write: true, initial: 0}, %Logex.FbType.Member{name: "dn", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "tt", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "en", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "last", type: :clock, role: :internal, write: false, initial: 0}]}, section: :var, initial: %{"pre" => 100}, line: 6}}, name: "seal", source: "var_input start bool\nvar_input stop bool\nvar_output motor bool\nvar_output sp dint\nvar fault bool\nvar t1 ton\n( xic start | xic motor ) xio stop ote motor\nxic motor ton t1 100\nxic fault move 5 sp\n", warnings: []}}, tasks: [%Logex.Configuration.Task{name: {:t}, interval: 10, priority: 0, line: nil}, nil], globals: [%Logex.Configuration.Global{name: "pb", type: :bool, initial: nil, at: "panel.i.0", line: nil}, %Logex.Configuration.Global{name: "pb2", type: :bool, initial: nil, at: "panel.i.1", line: nil}, %Logex.Configuration.Global{name: "k", type: :bool, initial: nil, at: "panel.q.0", line: nil}, %Logex.Configuration.Global{name: "sp", type: :dint, initial: nil, at: nil, line: nil}], instances: [%Logex.Configuration.Instance{name: "m", ...}], ...})
+       test/logex/configuration_test.exs:685: anonymous fn/2 in Logex.ConfigurationTest."test nothing escapes start/1 refuses a configuration spoiled by hand, raising nothing else"/1
+       (elixir 1.20.4) lib/enum.ex:4636: Enum.map/2
+       test/logex/configuration_test.exs:681: (test)
+
+.
+Finished in 0.4 seconds (0.4s async, 0.00s sync)
+
+Result: 28/32 passed (1/1 doctest, 27/31 tests)
+Failed: 4 tests

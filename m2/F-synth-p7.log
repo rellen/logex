@@ -1,0 +1,6 @@
+body reads a nested instance's output: {:ok, Logex.FbType}
+body writes its own var_input: {:error, ["line 4: `ote` writes `g`, a var_input (declared on line 2): logic must not write an input"]}
+block var_output with an initial value: {:ok, Logex.FbType}
+block var_input with an initial value: {:error, ["line 2: `g` is a var_input: its value comes from outside, so it takes no initial value", "line 4: `g` is not declared"]}
+recursion through a tag from Elixir: {:raised, ArgumentError, "`y` holds an instance of `a`, the function block being compiled: a function block never holds an instance of itself, at any depth"}
+17 deep compiles: {:ok, Logex.Program}

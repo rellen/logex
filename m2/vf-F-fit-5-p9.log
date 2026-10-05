@@ -1,0 +1,5 @@
+get m1.s2.run before: 0
+get m1.s2.run after pb: 1
+get m1.s2.inner: ArgumentError: `m1.s2.inner` is not a member of `m1.s2`, a seal: its members are `start`, `stop` and `run`
+get m1.s2.start: 1
+get m1.s2: ArgumentError: `m1.s2` is a seal: an access path names one of its members, as in `m1.s2.run`

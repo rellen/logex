@@ -1,0 +1,614 @@
+diff --git a/lib/logex/compiler.ex b/lib/logex/compiler.ex
+index 89c733a..1cb8152 100644
+--- a/lib/logex/compiler.ex
++++ b/lib/logex/compiler.ex
+@@ -258,7 +258,14 @@ defmodule Logex.Compiler do
+   defp declares_nothing?({:routine, {:rungs, rungs}}, logic), do: length(rungs) == length(logic)
+ 
+   defp lowered(rungs, tags, []),
+-    do: {:ok, %Program{rungs: rungs, tags: tags, warnings: Logex.Warnings.of(rungs, tags)}}
++    do:
++      {:ok,
++       %Program{
++         rungs: rungs,
++         tags: tags,
++         warnings: Logex.Warnings.of(rungs, tags),
++         outputs: for({name, %Tag{section: :var_output}} <- tags, do: name)
++       }}
+ 
+   # A declaration after the first rung is reported where it stands, so the two lists are
+   # merged by line. The sort is stable: within a line, the order each list gave is kept.
+diff --git a/lib/logex/program.ex b/lib/logex/program.ex
+index d744324..a548b9e 100644
+--- a/lib/logex/program.ex
++++ b/lib/logex/program.ex
+@@ -13,7 +13,7 @@ defmodule Logex.Program do
+   """
+ 
+   @enforce_keys [:rungs, :tags]
+-  defstruct [:rungs, :tags, name: nil, source: nil, warnings: []]
++  defstruct [:rungs, :tags, name: nil, source: nil, warnings: [], outputs: nil]
+ 
+   @type t :: %__MODULE__{
+           rungs: [{:rung, list}],
+diff --git a/lib/logex/runtime.ex b/lib/logex/runtime.ex
+index d93fadb..c26a289 100644
+--- a/lib/logex/runtime.ex
++++ b/lib/logex/runtime.ex
+@@ -151,6 +151,11 @@ defmodule Logex.Runtime do
+   end
+ 
+   # A var_output a hand-built env leaves out reads 0, as a contact reads it (M1-4).
++  # SPIKE (inv-readiness): the compiler lists the var_outputs once, so a scan does not walk
++  # the whole tag table; a program built by hand has none listed and is walked as before.
++  defp outputs(%Program{outputs: names}, env) when is_list(names),
++    do: Map.new(names, fn name -> {name, Map.get(env, name, 0)} end)
++
+   defp outputs(%Program{tags: tags}, env),
+     do:
+       for(
+diff --git a/probe/call_cost.exs b/probe/call_cost.exs
+new file mode 100644
+index 0000000..8e57e06
+--- /dev/null
++++ b/probe/call_cost.exs
+@@ -0,0 +1,98 @@
++# Probe 2: the cost of one call/4 of the README motor, in reductions (least of N), as a
++# baseline for M2-1's scheduler; and how that cost splits.
++alias Logex.{Runtime, Scan}
++
++motor_src = """
++var_input start bool
++var_input stop bool
++var_input overtemp bool
++var_input reset bool
++var_output motor bool
++var_output run_lamp bool
++var_output speed_sp dint 1200
++var fault bool
++
++( xic start | xic motor ) xio stop ote motor
++xic motor ote run_lamp
++xic overtemp otl fault
++xic reset otu fault
++xic fault move 0 speed_sp
++"""
++
++{:ok, motor} = Logex.compile(motor_src, name: "motor")
++state0 = Runtime.instance(motor)
++{_, state} = Runtime.call(motor, state0, %{"start" => 1}, %Scan{now: 0, first: true})
++
++measure = fn label, f ->
++  # warm
++  for _ <- 1..50, do: f.()
++  counts =
++    for _ <- 1..200 do
++      {:reductions, a} = Process.info(self(), :reductions)
++      f.()
++      {:reductions, b} = Process.info(self(), :reductions)
++      b - a
++    end
++  sorted = Enum.sort(counts)
++  IO.puts(
++    String.pad_trailing(label, 58) <>
++      "min #{hd(sorted)}  median #{Enum.at(sorted, 100)}  max #{List.last(sorted)}"
++  )
++  hd(sorted)
++end
++
++IO.puts("== README motor, 8 tags, 5 rungs ==")
++measure.("call/4, no inputs", fn -> Runtime.call(motor, state, %{}, %Scan{now: 10, first: false}) end)
++measure.("call/4, 4 inputs (copy-in of every var_input)", fn ->
++  Runtime.call(motor, state, %{"start" => 0, "stop" => 0, "overtemp" => 0, "reset" => 0}, %Scan{now: 10, first: false})
++end)
++measure.("call/4, 1 input", fn -> Runtime.call(motor, state, %{"start" => 0}, %Scan{now: 10, first: false}) end)
++measure.("scan/3 (sugar), 10 ms", fn -> Runtime.scan(motor, state, 10) end)
++measure.("put_inputs/3, 4 inputs", fn ->
++  Runtime.put_inputs(motor, state, %{"start" => 0, "stop" => 0, "overtemp" => 0, "reset" => 0})
++end)
++measure.("put_inputs/3, no inputs (= the checks alone)", fn -> Runtime.put_inputs(motor, state, %{}) end)
++measure.("instance/1", fn -> Runtime.instance(motor) end)
++measure.("restart/3", fn -> Runtime.restart(motor, state, :cold) end)
++measure.("Logex.compile/2 of the motor", fn -> Logex.compile(motor_src, name: "motor") end)
++
++# How a call/4 scales with what a scheduler holds: N copies of the motor's tags in one
++# program (so N x tags, N x rungs), to see whether per-scan cost is in rungs or in tags.
++big = fn n ->
++  decl =
++    Enum.map_join(1..n, "\n", fn i ->
++      "var_input start#{i} bool\nvar_input stop#{i} bool\nvar_input overtemp#{i} bool\n" <>
++        "var_input reset#{i} bool\nvar_output motor#{i} bool\nvar_output run_lamp#{i} bool\n" <>
++        "var_output speed_sp#{i} dint 1200\nvar fault#{i} bool"
++    end)
++
++  rungs =
++    Enum.map_join(1..n, "\n", fn i ->
++      "( xic start#{i} | xic motor#{i} ) xio stop#{i} ote motor#{i}\nxic motor#{i} ote run_lamp#{i}\n" <>
++        "xic overtemp#{i} otl fault#{i}\nxic reset#{i} otu fault#{i}\nxic fault#{i} move 0 speed_sp#{i}"
++    end)
++
++  {:ok, p} = Logex.compile(decl <> "\n" <> rungs, name: "big")
++  p
++end
++
++IO.puts("\n== N motors in one program (8N tags, 5N rungs) ==")
++for n <- [1, 10, 100] do
++  p = big.(n)
++  s = Runtime.instance(p)
++  {_, s} = Runtime.call(p, s, %{}, %Scan{now: 0, first: true})
++  measure.("call/4, N=#{n}, no inputs", fn -> Runtime.call(p, s, %{}, %Scan{now: 10, first: false}) end)
++end
++
++# N instances of the motor, each called once, as a scheduler's cycle would: the cost of a
++# cycle is the sum of the calls, nothing shared.
++IO.puts("\n== N instances of the motor, one call/4 each (a cycle by hand) ==")
++for n <- [1, 10, 100] do
++  states = Map.new(1..n, fn i -> {"m#{i}", state} end)
++  measure.("N=#{n} instances, call/4 each, 1 input each", fn ->
++    Enum.reduce(states, {%{}, %{}}, fn {name, s}, {outs, acc} ->
++      {o, s} = Runtime.call(motor, s, %{"start" => 0}, %Scan{now: 10, first: false})
++      {Map.put(outs, name, o), Map.put(acc, name, s)}
++    end)
++  end)
++end
+diff --git a/probe/call_cost2.exs b/probe/call_cost2.exs
+new file mode 100644
+index 0000000..d2e1f0e
+--- /dev/null
++++ b/probe/call_cost2.exs
+@@ -0,0 +1,144 @@
++# Probe 2b: as call_cost.exs, but every measured call is in a compiled module, so no
++# interpreted closure body is counted.
++defmodule Probe do
++  alias Logex.{Runtime, Scan}
++
++  @motor """
++  var_input start bool
++  var_input stop bool
++  var_input overtemp bool
++  var_input reset bool
++  var_output motor bool
++  var_output run_lamp bool
++  var_output speed_sp dint 1200
++  var fault bool
++
++  ( xic start | xic motor ) xio stop ote motor
++  xic motor ote run_lamp
++  xic overtemp otl fault
++  xic reset otu fault
++  xic fault move 0 speed_sp
++  """
++
++  def motor, do: @motor
++
++  def count(f) do
++    for _ <- 1..50, do: f.()
++
++    counts =
++      for _ <- 1..200 do
++        {:reductions, a} = Process.info(self(), :reductions)
++        f.()
++        {:reductions, b} = Process.info(self(), :reductions)
++        b - a
++      end
++
++    Enum.min(counts)
++  end
++
++  # The empty measurement: what count/1 charges for calling a fun that does nothing.
++  def nothing, do: :ok
++
++  def call0(p, s), do: Runtime.call(p, s, %{}, %Scan{now: 10, first: false})
++  def call1(p, s), do: Runtime.call(p, s, %{"start" => 0}, %Scan{now: 10, first: false})
++
++  def call4(p, s),
++    do:
++      Runtime.call(
++        p,
++        s,
++        %{"start" => 0, "stop" => 0, "overtemp" => 0, "reset" => 0},
++        %Scan{now: 10, first: false}
++      )
++
++  def scan3(p, s), do: Runtime.scan(p, s, 10)
++  def put0(p, s), do: Runtime.put_inputs(p, s, %{})
++
++  def put4(p, s),
++    do: Runtime.put_inputs(p, s, %{"start" => 0, "stop" => 0, "overtemp" => 0, "reset" => 0})
++
++  def inst(p), do: Runtime.instance(p)
++  def restart(p, s), do: Runtime.restart(p, s, :cold)
++  def compile, do: Logex.compile(@motor, name: "motor")
++
++  def cycle(p, states) do
++    Enum.reduce(states, {%{}, %{}}, fn {name, s}, {outs, acc} ->
++      {o, s} = Runtime.call(p, s, %{"start" => 0}, %Scan{now: 10, first: false})
++      {Map.put(outs, name, o), Map.put(acc, name, s)}
++    end)
++  end
++
++  def big(n) do
++    decl =
++      Enum.map_join(1..n, "\n", fn i ->
++        "var_input start#{i} bool\nvar_input stop#{i} bool\nvar_input overtemp#{i} bool\n" <>
++          "var_input reset#{i} bool\nvar_output motor#{i} bool\nvar_output run_lamp#{i} bool\n" <>
++          "var_output speed_sp#{i} dint 1200\nvar fault#{i} bool"
++      end)
++
++    rungs =
++      Enum.map_join(1..n, "\n", fn i ->
++        "( xic start#{i} | xic motor#{i} ) xio stop#{i} ote motor#{i}\nxic motor#{i} ote run_lamp#{i}\n" <>
++          "xic overtemp#{i} otl fault#{i}\nxic reset#{i} otu fault#{i}\nxic fault#{i} move 0 speed_sp#{i}"
++      end)
++
++    {:ok, p} = Logex.compile(decl <> "\n" <> rungs, name: "big")
++    p
++  end
++
++  # A program with many tags but one rung: does a scan cost grow with the tag table?
++  def wide(n) do
++    decl = Enum.map_join(1..n, "\n", fn i -> "var_output o#{i} bool\nvar v#{i} dint" end)
++    {:ok, p} = Logex.compile("var_input a bool\n" <> decl <> "\nxic a ote o1", name: "wide")
++    p
++  end
++
++  def run do
++    alias Logex.Runtime
++    base = count(&nothing/0)
++    {:ok, p} = compile()
++    s0 = Runtime.instance(p)
++    {_, s} = Runtime.call(p, s0, %{"start" => 1}, %Scan{now: 0, first: true})
++
++    row = fn label, f ->
++      IO.puts(String.pad_trailing(label, 52) <> "#{count(f) - base}")
++    end
++
++    IO.puts("count/1 overhead subtracted: #{base}")
++    IO.puts("== README motor, 8 tags (4 var_input, 3 var_output, 1 var), 5 rungs ==")
++    row.("call/4, no inputs", fn -> call0(p, s) end)
++    row.("call/4, 1 input", fn -> call1(p, s) end)
++    row.("call/4, 4 inputs", fn -> call4(p, s) end)
++    row.("scan/3, 10 ms", fn -> scan3(p, s) end)
++    row.("put_inputs/3, no inputs (the checks alone)", fn -> put0(p, s) end)
++    row.("put_inputs/3, 4 inputs", fn -> put4(p, s) end)
++    row.("instance/1", fn -> inst(p) end)
++    row.("restart/3", fn -> restart(p, s) end)
++    row.("Logex.compile/2", fn -> compile() end)
++
++    IO.puts("\n== N motors in one program (8N tags, 5N rungs), call/4 no inputs ==")
++
++    for n <- [1, 10, 100] do
++      q = big(n)
++      {_, t} = Runtime.call(q, Runtime.instance(q), %{}, %Scan{now: 0, first: true})
++      row.("N=#{n}", fn -> call0(q, t) end)
++    end
++
++    IO.puts("\n== one rung, 1 + 2N tags (N var_output, N var), call/4 no inputs ==")
++
++    for n <- [10, 100, 1000] do
++      q = wide(n)
++      {_, t} = Runtime.call(q, Runtime.instance(q), %{}, %Scan{now: 0, first: true})
++      row.("N=#{n}", fn -> call0(q, t) end)
++    end
++
++    IO.puts("\n== N instances of the motor, one call/4 each with 1 input ==")
++
++    for n <- [1, 10, 100] do
++      states = Map.new(1..n, fn i -> {"m#{i}", s} end)
++      row.("N=#{n}", fn -> cycle(p, states) end)
++    end
++  end
++end
++
++Probe.run()
+diff --git a/probe/call_cost2_mod.exs b/probe/call_cost2_mod.exs
+new file mode 100644
+index 0000000..8fb8134
+--- /dev/null
++++ b/probe/call_cost2_mod.exs
+@@ -0,0 +1,143 @@
++# Probe 2b: as call_cost.exs, but every measured call is in a compiled module, so no
++# interpreted closure body is counted.
++defmodule Probe do
++  alias Logex.{Runtime, Scan}
++
++  @motor """
++  var_input start bool
++  var_input stop bool
++  var_input overtemp bool
++  var_input reset bool
++  var_output motor bool
++  var_output run_lamp bool
++  var_output speed_sp dint 1200
++  var fault bool
++
++  ( xic start | xic motor ) xio stop ote motor
++  xic motor ote run_lamp
++  xic overtemp otl fault
++  xic reset otu fault
++  xic fault move 0 speed_sp
++  """
++
++  def motor, do: @motor
++
++  def count(f) do
++    for _ <- 1..50, do: f.()
++
++    counts =
++      for _ <- 1..200 do
++        {:reductions, a} = Process.info(self(), :reductions)
++        f.()
++        {:reductions, b} = Process.info(self(), :reductions)
++        b - a
++      end
++
++    Enum.min(counts)
++  end
++
++  # The empty measurement: what count/1 charges for calling a fun that does nothing.
++  def nothing, do: :ok
++
++  def call0(p, s), do: Runtime.call(p, s, %{}, %Scan{now: 10, first: false})
++  def call1(p, s), do: Runtime.call(p, s, %{"start" => 0}, %Scan{now: 10, first: false})
++
++  def call4(p, s),
++    do:
++      Runtime.call(
++        p,
++        s,
++        %{"start" => 0, "stop" => 0, "overtemp" => 0, "reset" => 0},
++        %Scan{now: 10, first: false}
++      )
++
++  def scan3(p, s), do: Runtime.scan(p, s, 10)
++  def put0(p, s), do: Runtime.put_inputs(p, s, %{})
++
++  def put4(p, s),
++    do: Runtime.put_inputs(p, s, %{"start" => 0, "stop" => 0, "overtemp" => 0, "reset" => 0})
++
++  def inst(p), do: Runtime.instance(p)
++  def restart(p, s), do: Runtime.restart(p, s, :cold)
++  def compile, do: Logex.compile(@motor, name: "motor")
++
++  def cycle(p, states) do
++    Enum.reduce(states, {%{}, %{}}, fn {name, s}, {outs, acc} ->
++      {o, s} = Runtime.call(p, s, %{"start" => 0}, %Scan{now: 10, first: false})
++      {Map.put(outs, name, o), Map.put(acc, name, s)}
++    end)
++  end
++
++  def big(n) do
++    decl =
++      Enum.map_join(1..n, "\n", fn i ->
++        "var_input start#{i} bool\nvar_input stop#{i} bool\nvar_input overtemp#{i} bool\n" <>
++          "var_input reset#{i} bool\nvar_output motor#{i} bool\nvar_output run_lamp#{i} bool\n" <>
++          "var_output speed_sp#{i} dint 1200\nvar fault#{i} bool"
++      end)
++
++    rungs =
++      Enum.map_join(1..n, "\n", fn i ->
++        "( xic start#{i} | xic motor#{i} ) xio stop#{i} ote motor#{i}\nxic motor#{i} ote run_lamp#{i}\n" <>
++          "xic overtemp#{i} otl fault#{i}\nxic reset#{i} otu fault#{i}\nxic fault#{i} move 0 speed_sp#{i}"
++      end)
++
++    {:ok, p} = Logex.compile(decl <> "\n" <> rungs, name: "big")
++    p
++  end
++
++  # A program with many tags but one rung: does a scan cost grow with the tag table?
++  def wide(n) do
++    decl = Enum.map_join(1..n, "\n", fn i -> "var_output o#{i} bool\nvar v#{i} dint" end)
++    {:ok, p} = Logex.compile("var_input a bool\n" <> decl <> "\nxic a ote o1", name: "wide")
++    p
++  end
++
++  def run do
++    alias Logex.Runtime
++    base = count(&nothing/0)
++    {:ok, p} = compile()
++    s0 = Runtime.instance(p)
++    {_, s} = Runtime.call(p, s0, %{"start" => 1}, %Scan{now: 0, first: true})
++
++    row = fn label, f ->
++      IO.puts(String.pad_trailing(label, 52) <> "#{count(f) - base}")
++    end
++
++    IO.puts("count/1 overhead subtracted: #{base}")
++    IO.puts("== README motor, 8 tags (4 var_input, 3 var_output, 1 var), 5 rungs ==")
++    row.("call/4, no inputs", fn -> call0(p, s) end)
++    row.("call/4, 1 input", fn -> call1(p, s) end)
++    row.("call/4, 4 inputs", fn -> call4(p, s) end)
++    row.("scan/3, 10 ms", fn -> scan3(p, s) end)
++    row.("put_inputs/3, no inputs (the checks alone)", fn -> put0(p, s) end)
++    row.("put_inputs/3, 4 inputs", fn -> put4(p, s) end)
++    row.("instance/1", fn -> inst(p) end)
++    row.("restart/3", fn -> restart(p, s) end)
++    row.("Logex.compile/2", fn -> compile() end)
++
++    IO.puts("\n== N motors in one program (8N tags, 5N rungs), call/4 no inputs ==")
++
++    for n <- [1, 10, 100] do
++      q = big(n)
++      {_, t} = Runtime.call(q, Runtime.instance(q), %{}, %Scan{now: 0, first: true})
++      row.("N=#{n}", fn -> call0(q, t) end)
++    end
++
++    IO.puts("\n== one rung, 1 + 2N tags (N var_output, N var), call/4 no inputs ==")
++
++    for n <- [10, 100, 1000] do
++      q = wide(n)
++      {_, t} = Runtime.call(q, Runtime.instance(q), %{}, %Scan{now: 0, first: true})
++      row.("N=#{n}", fn -> call0(q, t) end)
++    end
++
++    IO.puts("\n== N instances of the motor, one call/4 each with 1 input ==")
++
++    for n <- [1, 10, 100] do
++      states = Map.new(1..n, fn i -> {"m#{i}", s} end)
++      row.("N=#{n}", fn -> cycle(p, states) end)
++    end
++  end
++end
++
+diff --git a/probe/call_cost3.exs b/probe/call_cost3.exs
+new file mode 100644
+index 0000000..6b90b32
+--- /dev/null
++++ b/probe/call_cost3.exs
+@@ -0,0 +1,46 @@
++# Probe 2c: is a scan's cost in the whole tag table? One rung, one var_output, N plain vars.
++defmodule Probe3 do
++  alias Logex.{Runtime, Scan}
++
++  def count(f) do
++    for _ <- 1..50, do: f.()
++
++    Enum.min(
++      for _ <- 1..200 do
++        {:reductions, a} = Process.info(self(), :reductions)
++        f.()
++        {:reductions, b} = Process.info(self(), :reductions)
++        b - a
++      end
++    )
++  end
++
++  def call0(p, s), do: Runtime.call(p, s, %{}, %Scan{now: 10, first: false})
++
++  def vars(n) do
++    decl = Enum.map_join(1..n, "\n", fn i -> "var v#{i} dint" end)
++    {:ok, p} = Logex.compile("var_input a bool\nvar_output o bool\n" <> decl <> "\nxic a ote o", name: "vars")
++    p
++  end
++
++  def time_us(f, n) do
++    for _ <- 1..1000, do: f.()
++    {us, _} = :timer.tc(fn -> for _ <- 1..n, do: f.() end)
++    us / n
++  end
++
++  def run do
++    for n <- [10, 100, 1000, 10000] do
++      p = vars(n)
++      {_, s} = Runtime.call(p, Runtime.instance(p), %{}, %Scan{now: 0, first: true})
++      IO.puts("one rung, 1 var_output, #{n} vars: call/4 #{count(fn -> call0(p, s) end)} reductions")
++    end
++
++    {:ok, m} = Logex.compile(Probe.motor(), name: "motor")
++    {_, s} = Runtime.call(m, Runtime.instance(m), %{"start" => 1}, %Scan{now: 0, first: true})
++    IO.puts("README motor call/4, wall time: #{Float.round(time_us(fn -> call0(m, s) end, 100_000), 2)} us (mean of 100,000)")
++  end
++end
++
++Code.require_file("probe/call_cost2_mod.exs")
++Probe3.run()
+diff --git a/probe/lcf_tokens.exs b/probe/lcf_tokens.exs
+new file mode 100644
+index 0000000..b1fe19f
+--- /dev/null
++++ b/probe/lcf_tokens.exs
+@@ -0,0 +1,40 @@
++# Probe 1: can today's lexer tokenise .lcf lines, and what does the parser make of them?
++lines = [
++  "task fast interval 10 priority 1",
++  "var_global k1 bool at panel.q.0",
++  "program m1 motor with fast",
++  "m1.start pb_start_1",
++  "m2.reset 0",
++  "function_block seal",
++  "cal s1 a b q",
++  # extras
++  "task trip single estop priority 0",
++  "var_global sp_1 dint at drive.q.0",
++  "  m1.speed_sp sp_1",
++  "var_global estop bool at panel.i.7",
++  "at %ix0.0",
++  "m1.t1.acc",
++  "var_config m2.speed_sp 900",
++  "a.1b"
++]
++
++for line <- lines do
++  IO.puts("#{inspect(line)}")
++  IO.puts("  tokenize: #{inspect(Logex.Compiler.tokenize(line))}")
++  case Logex.Compiler.tokenize(line) do
++    {:ok, tokens, _} -> IO.puts("  parse:    #{inspect(Logex.Compiler.parse(tokens))}")
++    _ -> :ok
++  end
++end
++
++plant = """
++// plant.lcf
++task fast interval 10 priority 1
++var_global k1 bool at panel.q.0
++program m1 motor with fast
++  m1.start    pb_start_1
++  m2.reset    0
++"""
++{:ok, toks, end_line} = Logex.Compiler.tokenize(plant)
++IO.puts("\nwhole file: #{length(toks)} tokens, end line #{end_line}")
++IO.inspect(Logex.Compiler.parse(toks), label: "whole file parse", limit: :infinity)
+diff --git a/probe/m2_words.exs b/probe/m2_words.exs
+new file mode 100644
+index 0000000..7bb7d40
+--- /dev/null
++++ b/probe/m2_words.exs
+@@ -0,0 +1,58 @@
++# Probe 3: what today's compiler says to M2's words, and where a file name goes.
++defmodule Probe4 do
++  def count(f) do
++    for _ <- 1..20, do: f.()
++    Enum.min(for _ <- 1..100 do
++      {:reductions, a} = Process.info(self(), :reductions)
++      f.()
++      {:reductions, b} = Process.info(self(), :reductions)
++      b - a
++    end)
++  end
++  def outs(tags), do: for({name, %Logex.Tag{section: :var_output}} <- tags, into: %{}, do: {name, 0})
++end
++
++show = fn label, src ->
++  IO.puts("-- #{label}")
++  case Logex.compile(src, name: "probe") do
++    {:ok, p} -> IO.puts("   ok; warnings: #{inspect(Enum.map(p.warnings, &Logex.Diagnostic.format/1))}")
++    {:error, ds} -> Enum.each(ds, &IO.puts("   " <> Logex.Diagnostic.format(&1)))
++  end
++end
++
++show.("cal on a bool", "var_input a bool\nvar_input b bool\nvar_output q bool\nvar s1 bool\ncal s1 a b q")
++show.("function_block header", "function_block seal\nvar_input start bool\nvar_output run bool\nxic start ote run")
++show.("var_external", "var_external estop bool\nvar_output q bool\nxic estop ote q")
++show.("var s1 seal", "var s1 seal\nvar_output q bool\nxic s1.run ote q")
++show.("var_global in .ld", "var_global k1 bool\nvar_output q bool\nxic k1 ote q")
++show.("task as a tag", "var_input task bool\nvar_output with bool\nxic task ote with")
++show.("program as a tag", "var_input program bool\nvar_output at bool\nxic program ote at")
++show.("a .lcf body as .ld", "task fast interval 10 priority 1\nprogram m1 motor with fast\nm1.start pb_start_1")
++
++dir = Path.join(System.tmp_dir!(), "logex-probe-#{System.unique_integer([:positive])}")
++File.mkdir_p!(dir)
++for {file, src} <- [{"seal.txt", "var_input a bool\nvar_output q bool\nxic a ote q"},
++                    {"plant.lcf", "var_input a bool\nvar_output q bool\nxic a ote q"},
++                    {"motor.ld", "var_input a bool\nvar_output q bool\nxic a ote qq"},
++                    {"m.v2.ld", "var_input a bool\nvar_output q bool\nxic a ote q"}] do
++  path = Path.join(dir, file)
++  File.write!(path, src)
++  IO.puts("-- compile_file #{file}")
++  case Logex.compile_file(path) do
++    {:ok, p} -> IO.puts("   ok: name #{inspect(p.name)}; Program keys #{inspect(Map.keys(Map.from_struct(p)))}")
++    {:error, ds} -> Enum.each(ds, &IO.puts("   file=#{inspect(&1.file)} " <> &1.message))
++  end
++end
++
++# F15: an :edit diagnostic from a candidate read from a file carries no file.
++File.write!(Path.join(dir, "motor.ld"), "var_input a bool\nvar_output q bool\nxic a ote q")
++File.write!(Path.join(dir, "motor2.ld"), "var_input a bool\nvar_output q dint\nxic a move 1 q")
++{:ok, run} = Logex.compile_file(Path.join(dir, "motor.ld"))
++{:ok, cand} = Logex.compile(File.read!(Path.join(dir, "motor2.ld")), name: "motor")
++{:error, [d]} = Logex.Edit.accept(run, cand, Logex.Runtime.instance(run))
++IO.puts("-- F15: :edit diagnostic file=#{inspect(d.file)} formats as #{inspect(Logex.Diagnostic.format(d))}")
++
++# Is a scan's per-tag cost the outputs comprehension?
++tags = Map.new(1..10000, fn i -> {"v#{i}", %Logex.Tag{name: "v#{i}", type: :dint, section: :var}} end)
++IO.puts("-- outputs comprehension alone over 10,000 tags: #{Probe4.count(fn -> Probe4.outs(tags) end)} reductions")
++File.rm_rf!(dir)

@@ -1,0 +1,38 @@
+diff --git a/README.md b/README.md
+index f3fa861..c64c6ea 100644
+--- a/README.md
++++ b/README.md
+@@ -44,6 +44,12 @@ Source syntax today:
+   refused for now. No tag is declared with a `.`
+ - a newline ends a rung: LF, CRLF or a lone CR
+ - `(` … `|` … `)` open, separate and close a parallel branch group
++- a file whose first line is `function_block seal` is a function block type, `seal`,
++  named as its file is: its declarations are its members, its rungs its body, and
++  `Logex.compile/2` returns it as a `%Logex.FbType{}`. A program given it in `types:`
++  declares an instance, `var s1 seal`, runs it with `cal`, and reads its inputs and
++  outputs, `s1.run`, anywhere; the block's own `var`s are named only inside it, and logic
++  outside writes none of its members. A block holds no instance of itself, at any depth
+ 
+ The *vocabulary* is a conventional ladder mnemonic set. The *branch delimiters used to be
+ too*, and are no longer — which is worth stating plainly, because the survey that found the
+@@ -102,6 +108,7 @@ necessarily a dialect; the point of surveying is to know what you are diverging
+ | `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
+ | `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two dints, each a tag, a member or a literal | compare — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`; none on a false rung. Two literals are a warning |
+ | `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
++| `cal s1 a b q` | an instance of a user function block, then its var_inputs' values and its var_outputs' tags, in declaration order | runs the instance: rung power is its EN. True: copies `a` and `b` in, runs the block's rungs over the instance's state, copies its outputs out to `q`, and passes power on. False: copies nothing in or out and runs nothing, so the instance and `q` are frozen, a timer in it catching up when it next runs. One `cal` runs an instance |
+ | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
+ 
+ Each instruction's operands are checked against this table and against their tags'
+@@ -134,9 +141,9 @@ These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5 and
+ Milestone 2) and will change the source language:
+ - **Program organisation** ([`docs/organisation.md`](docs/organisation.md)): a
+   configuration file that instantiates `.ld` programs, wires them to I/O points and
+-  globals, and schedules them on tasks; `var_external` for shared globals; function blocks
+-  called with `cal`. Each new word still gets its `docs/naming.md` stanza, which may change
+-  a spelling.
++  globals, and schedules them on tasks; `var_external` for shared globals. Each new word
++  still gets its `docs/naming.md` stanza, which may change a spelling. Function blocks
++  called with `cal` have landed (M2-5).
+ 
+ - **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
+ - **The other timers, counters and math** arrive as `tof tp rto res`, `ctu ctd`, `add sub

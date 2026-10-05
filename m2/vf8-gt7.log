@@ -1,0 +1,23 @@
+Compiling 1 file (.ex)
+Running ExUnit with seed: 350451, max_cases: 8
+
+...............................................
+
+  1) test a resource's host contract (M2-1), the rest get/2 names a block's member as its example: an output, else any, else none (Logex.RuntimeTest)
+     test/logex/runtime_test.exs:896
+     Wrong message for ArgumentError
+     expected:
+       "`m.p.zz` is not a member of `m.p`, a probe_fb: it has no member a path can name"
+     actual:
+       "construction of binary failed: segment 3 of type 'binary': expected a binary but got: nil"
+     code: for {members, example, members_are} <- [
+     stacktrace:
+       test/logex/runtime_test.exs:924: anonymous fn/3 in Logex.RuntimeTest."test a resource's host contract (M2-1), the rest get/2 names a block's member as its example: an output, else any, else none"/1
+       (elixir 1.20.4) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/logex/runtime_test.exs:901: (test)
+
+....................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+Finished in 7.6 seconds (7.6s async, 0.04s sync)
+
+Result: 499/500 passed (7/7 doctests, 492/493 tests)
+Failed: 1 test

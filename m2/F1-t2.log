@@ -1,0 +1,24 @@
+Compiling 4 files (.ex)
+Running ExUnit with seed: 202867, max_cases: 8
+
+.........................................................................................................................................................................................................................................................................................................................................................
+
+  1) test every implemented instruction has been surveyed (Logex.NamingTest)
+     test/logex/naming_test.exs:35
+     These instructions are in @instructions but have no stanza in docs/naming.md:
+
+         cal
+
+     Survey the name before shipping it — see the recipe in CLAUDE.md. Copy the
+     template from the "Adding a stanza" section of docs/naming.md, fill every
+     dialect row, and mark anything you could not check `unverified`.
+
+     code: assert MapSet.equal?(unsurveyed, MapSet.new()), """
+     stacktrace:
+       test/logex/naming_test.exs:39: (test)
+
+....................................................................................
+Finished in 6.9 seconds (6.9s async, 0.03s sync)
+
+Result: 429/430 passed (6/6 doctests, 423/424 tests)
+Failed: 1 test

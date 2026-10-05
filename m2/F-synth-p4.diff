@@ -1,0 +1,9 @@
+10,13c10,12
+< instructionize/3 block with an Elixir-declared input: {:ok, [{"q", :output}, {"a", :input}]}
+<   ... then used in types:: {:raised, ArgumentError, "types must be function block types from Logex.compile/2, got: %Logex.FbType{name: \"blk\", members: [%Logex.FbType.Member{name: \"q\", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: \"a\", ty"}
+<   ... user?/1: false
+< exit 0
+---
+> instructionize/3 block with an Elixir-declared input: {:ok, [{"a", :input}, {"q", :output}]}
+>   ... then used in types:: {:ok, Logex.Program}
+>   ... user?/1: true

@@ -1,0 +1,5 @@
+run 1: depth scan 15.48 compile 13.24 edit 15.34; blocked 16.16
+run 2: depth scan 15.54 compile 13.27 edit 15.51; blocked 16.19
+run 3: depth scan 15.31 compile 13.34 edit 16.28; blocked 16.17
+run 4: depth scan 15.37 compile 13.43 edit 16.35; blocked 16.14
+run 5: depth scan 15.31 compile 13.38 edit 16.54; blocked 16.17

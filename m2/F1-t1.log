@@ -1,0 +1,190 @@
+Compiling 8 files (.ex)
+Compiling 1 file (.ex)
+Running ExUnit with seed: 723013, max_cases: 8
+
+.....................................................
+
+  1) test call/4 a state that is not an instance of this program raises (Logex.RuntimeTest)
+     test/logex/runtime_test.exs:152
+     Wrong message for ArgumentError
+     expected:
+       "state.env must be a map of tag names to values, got: %Logex.Scan{now: 0, first: true, ons_blocked: []}"
+     actual:
+       "state.env must be a map of tag names to values, got: %Logex.Scan{now: 0, first: true, ons_blocked: [], tags: nil}"
+     code: for {state, message} <- [
+     stacktrace:
+       test/logex/runtime_test.exs:200: anonymous fn/3 in Logex.RuntimeTest."test call/4 a state that is not an instance of this program raises"/1
+       (elixir 1.20.4) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/logex/runtime_test.exs:172: (test)
+
+..................
+
+  2) test the public surface (B5) is exactly this: every evaluate clause is private, in Logex.Runtime (Logex.RuntimeTest)
+     test/logex/runtime_test.exs:689
+     Assertion with == failed
+     code:  assert Enum.sort(Logex.__info__(:functions)) == [compile: 2, compile_file: 1]
+     left:  [compile: 2, compile_file: 1, compile_file: 2]
+     right: [compile: 2, compile_file: 1]
+     stacktrace:
+       test/logex/runtime_test.exs:690: (test)
+
+.............................................
+
+  3) test tags declared from Elixir (M1-3) are checked again as they enter the table, however they were built (Logex.ValidationTest)
+     test/logex/validation_test.exs:1772
+     Wrong message for ArgumentError
+     expected:
+       "unknown type :real: logex has :bool, :dint and Logex.FbType.ton()"
+     actual:
+       "unknown type :real: logex has :bool, :dint, Logex.FbType.ton() and the function blocks Logex.compile/2 returns"
+     code: for {declared, message} <- [
+     stacktrace:
+       test/logex/validation_test.exs:1809: anonymous fn/2 in Logex.ValidationTest."test tags declared from Elixir (M1-3) are checked again as they enter the table, however they were built"/1
+       (elixir 1.20.4) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/logex/validation_test.exs:1773: (test)
+
+..........
+
+  4) test members (M1-6) a bit of a member is bit access, as a bit of a tag is, and a bool has none (Logex.ValidationTest)
+     test/logex/validation_test.exs:1616
+     Assertion with == failed
+     code:  assert source_errors(@timer <> "move d.3.x d\nmove d.3.4 d\nxic a.0.1 ote a\nxic a.b.1 ote a") == [
+              "line 4: `d.3.x` goes too deep: `d` is a dint, which has no members",
+              "line 5: `d.3.4` goes too deep: `d` is a dint, which has no members",
+              "line 6: `a.0.1` goes too deep: `a` is a bool, which has no members",
+              "line 7: `a.b.1` names a member of `a`, but `a` is a bool (declared on " <>
+                "line 2): only a timer has members"
+            ]
+     left:  ["line 4: `d.3.x` goes too deep: `d` is a dint, which has no members",
+             "line 5: `d.3.4` goes too deep: `d` is a dint, which has no members",
+             "line 6: `a.0.1` goes too deep: `a` is a bool, which has no members",
+             "line 7: `a.b.1` names a member of `a`, but `a` is a bool (declared on line 2): only an instance of a function block has members"]
+     right: ["line 4: `d.3.x` goes too deep: `d` is a dint, which has no members",
+             "line 5: `d.3.4` goes too deep: `d` is a dint, which has no members",
+             "line 6: `a.0.1` goes too deep: `a` is a bool, which has no members",
+             "line 7: `a.b.1` names a member of `a`, but `a` is a bool (declared on line 2): only a timer has members"]
+     stacktrace:
+       test/logex/validation_test.exs:1629: (test)
+
+..........................................
+
+  5) test tags declared from Elixir (M1-3) raise ArgumentError for every rule they break, whatever the argument (Logex.ValidationTest)
+     test/logex/validation_test.exs:1737
+     Wrong message for ArgumentError
+     expected:
+       "unknown type :int: logex has :bool, :dint and Logex.FbType.ton()"
+     actual:
+       "unknown type :int: logex has :bool, :dint, Logex.FbType.ton() and the function blocks Logex.compile/2 returns"
+     code: for {args, message} <- [
+     stacktrace:
+       test/logex/validation_test.exs:1768: anonymous fn/2 in Logex.ValidationTest."test tags declared from Elixir (M1-3) raise ArgumentError for every rule they break, whatever the argument"/1
+       (elixir 1.20.4) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/logex/validation_test.exs:1738: (test)
+
+...................
+
+  6) test members (M1-6) of a timer declared from Elixir, cited without a line (Logex.ValidationTest)
+     test/logex/validation_test.exs:1686
+     Assertion with == failed
+     code:  assert source_errors("xic t1 ote a\nxic a.dn ote a", declared) == [
+              "line 1: `xic` reads a bool, but `t1` is a ton: name one of its members, " <> "as in `t1.dn`",
+              "line 2: `a.dn` names a member of `a`, but `a` is a bool: only a timer has members"
+            ]
+     left:  ["line 1: `xic` reads a bool, but `t1` is a ton: name one of its members, as in `t1.dn`",
+             "line 2: `a.dn` names a member of `a`, but `a` is a bool: only an instance of a function block has members"]
+     right: ["line 1: `xic` reads a bool, but `t1` is a ton: name one of its members, as in `t1.dn`",
+             "line 2: `a.dn` names a member of `a`, but `a` is a bool: only a timer has members"]
+     stacktrace:
+       test/logex/validation_test.exs:1689: (test)
+
+....
+
+  7) test members (M1-6) a dotted name on a tag that is not an instance, or past a member, is named (Logex.ValidationTest)
+     test/logex/validation_test.exs:1601
+     Assertion with == failed
+     code:  assert source_errors(
+              @timer <> "xic a.b ote a\nxic d.3 ote a\nmove t1.acc.x d\nxic a.dn.x ote a\nxic t1.dn.x ote a"
+            ) == [
+              "line 4: `a.b` names a member of `a`, but `a` is a bool (declared on line 2): " <>
+                "only a timer has members",
+              "line 5: `d.3` names a bit of `d`, a dint: bit access is not supported yet",
+              "line 6: `t1.acc.x` goes too deep: `t1.acc` is a dint, which has no members",
+              "line 7: `a.dn.x` names a member of `a`, but `a` is a bool (declared on line 2): " <>
+                "only a timer has members",
+              "line 8: `t1.dn.x` goes too deep: `t1.dn` is a bool, which has no members"
+            ]
+     left:  ["line 4: `a.b` names a member of `a`, but `a` is a bool (declared on line 2): only an instance of a function block has members",
+             "line 5: `d.3` names a bit of `d`, a dint: bit access is not supported yet",
+             "line 6: `t1.acc.x` goes too deep: `t1.acc` is a dint, which has no members",
+             "line 7: `a.dn.x` names a member of `a`, but `a` is a bool (declared on line 2): only an instance of a function block has members",
+             "line 8: `t1.dn.x` goes too deep: `t1.dn` is a bool, which has no members"]
+     right: ["line 4: `a.b` names a member of `a`, but `a` is a bool (declared on line 2): only a timer has members",
+             "line 5: `d.3` names a bit of `d`, a dint: bit access is not supported yet",
+             "line 6: `t1.acc.x` goes too deep: `t1.acc` is a dint, which has no members",
+             "line 7: `a.dn.x` names a member of `a`, but `a` is a bool (declared on line 2): only a timer has members",
+             "line 8: `t1.dn.x` goes too deep: `t1.dn` is a bool, which has no members"]
+     stacktrace:
+       test/logex/validation_test.exs:1602: (test)
+
+............
+
+  8) test timers declared (M1-6) from Elixir, a timer is a tag whose type is Logex.FbType.ton(), checked alike (Logex.ValidationTest)
+     test/logex/validation_test.exs:1120
+     Wrong message for ArgumentError
+     expected:
+       "unknown type :ton: logex has :bool, :dint and Logex.FbType.ton()"
+     actual:
+       "unknown type :ton: logex has :bool, :dint, Logex.FbType.ton() and the function blocks Logex.compile/2 returns"
+     code: for {args, message} <- [
+     stacktrace:
+       test/logex/validation_test.exs:1157: anonymous fn/2 in Logex.ValidationTest."test timers declared (M1-6) from Elixir, a timer is a tag whose type is Logex.FbType.ton(), checked alike"/1
+       (elixir 1.20.4) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/logex/validation_test.exs:1124: (test)
+
+..................................
+
+  9) test compile/2 never raises for any source, and its diagnostics are in line order (Logex.ApiContractTest)
+     test/logex/api_contract_test.exs:280
+     no source reached the message containing "only a timer has members"
+     code: for {fragment, messages} <-
+     stacktrace:
+       test/logex/api_contract_test.exs:308: anonymous fn/2 in Logex.ApiContractTest."test compile/2 never raises for any source, and its diagnostics are in line order"/1
+       (elixir 1.20.4) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/logex/api_contract_test.exs:306: (test)
+
+.........
+
+ 10) test compile/2 raises ArgumentError when the call breaks its contract, never for the source (LogexTest)
+     test/logex_test.exs:116
+     Wrong message for ArgumentError
+     expected:
+       "Logex.compile/2 takes a name and no other option, as in Logex.compile(source, name: \"motor\"), got: []"
+     actual:
+       "Logex.compile/2 takes a name and, for function blocks, types, as in Logex.compile(source, name: \"motor\", types: [seal]), got: []"
+     code: for {call, message} <- [
+     stacktrace:
+       test/logex_test.exs:140: anonymous fn/2 in LogexTest."test compile/2 raises ArgumentError when the call breaks its contract, never for the source"/1
+       (elixir 1.20.4) lib/enum.ex:2622: Enum."-reduce/3-lists^foldl/2-0-"/3
+       test/logex_test.exs:117: (test)
+
+...........................................................................................
+
+ 11) test every implemented instruction has been surveyed (Logex.NamingTest)
+     test/logex/naming_test.exs:35
+     These instructions are in @instructions but have no stanza in docs/naming.md:
+
+         cal
+
+     Survey the name before shipping it — see the recipe in CLAUDE.md. Copy the
+     template from the "Adding a stanza" section of docs/naming.md, fill every
+     dialect row, and mark anything you could not check `unverified`.
+
+     code: assert MapSet.equal?(unsurveyed, MapSet.new()), """
+     stacktrace:
+       test/logex/naming_test.exs:39: (test)
+
+..................................................................................
+Finished in 6.2 seconds (6.1s async, 0.03s sync)
+
+Result: 419/430 passed (6/6 doctests, 413/424 tests)
+Failed: 11 tests

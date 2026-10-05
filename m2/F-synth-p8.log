@@ -1,0 +1,14 @@
+plain swap dint -> seal instance: {%{"q" => 1}, %{"q" => 1},
+ %{
+   "run" => 1,
+   "start" => 1,
+   "stop" => 0,
+   "t1" => %{
+     "acc" => 0,
+     "dn" => 1,
+     "en" => 1,
+     "last" => 70,
+     "pre" => 0,
+     "tt" => 0
+   }
+ }}

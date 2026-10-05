@@ -1,0 +1,14 @@
+12,14c12,14
+< direct: {:error, ["line 3: `a` cannot hold an instance of `a`: a function block never holds an instance of itself", "line 4: `x` is not declared"]}
+< indirect a->b->a: {:error, ["line 4: `a` cannot hold an instance of `b` (a → b → a): a function block never holds an instance of itself, at any depth", "line 5: `y` is not declared"]}
+< indirect, types holds both a0 and b: {:error, ["line 4: `a` cannot hold an instance of `b` (a → b → a): a function block never holds an instance of itself, at any depth", "line 5: `y` is not declared"]}
+---
+> direct: {:error, ["line 3: `a` cannot hold an instance of `a`: a function block never holds an instance of itself"]}
+> indirect a->b->a: {:error, ["line 4: `a` cannot hold an instance of `b` (a → b → a): a function block never holds an instance of itself, at any depth"]}
+> indirect, types holds both a0 and b: {:error, ["line 4: `a` cannot hold an instance of `b` (a → b → a): a function block never holds an instance of itself, at any depth"]}
+16c16
+< unknown: {:error, ["line 3: unknown type `sael`: logex has `bool`, `dint` and `ton`, and the function block `seal`", "line 4: `s1` is not declared"]}
+---
+> unknown: {:error, ["line 3: unknown type `sael`: logex has `bool`, `dint` and `ton`, and the function block `seal` — did you mean `seal`?", "line 4: `s1` is not declared"]}
+70a71
+> Runtime.instance(block): {ArgumentError, "`seal` is a function block type, which runs inside a program through `cal`: an instance is of a %Logex.Program{}"}

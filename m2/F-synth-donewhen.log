@@ -1,0 +1,6 @@
+  * test user function blocks (M2-5) PLAN M2-5's Done-when: a seal-in written once as a block, run three times (20.3ms) [L#1419]
+Result: 1 passed, 78 excluded
+  * test PLAN M2-5's Done-when a false EN freezes only its own instance, and the tags its outputs name (17.6ms) [L#105]
+  * test PLAN M2-5's Done-when a recursive type, an unknown function block type and a cal of a non-instance are each a located diagnostic (1.1ms) [L#122]
+  * test PLAN M2-5's Done-when a seal-in written once as a block and instantiated three times behaves as three independent seal-ins, and m1.s2.run reads one of them (0.2ms) [L#82]
+Result: 3 passed, 53 excluded

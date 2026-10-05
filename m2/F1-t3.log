@@ -1,0 +1,15 @@
+Running ExUnit with seed: 533149, max_cases: 8
+
+    warning: unused alias Member
+    │
+ 12 │   alias Logex.FbType.Member
+    │   ~
+    │
+    └─ test/logex/function_block_test.exs:12:3
+
+....................................
+Finished in 0.3 seconds (0.3s async, 0.00s sync)
+
+Result: 36 passed
+
+ERROR! Test suite aborted after successful execution due to warnings while using the --warnings-as-errors option

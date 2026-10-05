@@ -1,0 +1,492 @@
+[
+ {
+  "id": "FS-Q1",
+  "item": "M2-5 Done-when (inventory C1; F1-Q1, F2-Q12)",
+  "question": "PLAN M2-5's Done-when says `m1.s2.run` reads one of the seal-ins, but `get/2` is M2-1's. How is it asserted if M2-5 lands first?",
+  "options": [
+   {
+    "label": "(a) Reword it for M2-5 and assert `get(rt, \"m1.s2.run\")` in M2-1's acceptance (the spike)",
+    "consequence": "The test reads `s2.run` of the instance it names `m1`, by a rung (`xic s2.run`) and from its state; one PLAN sentence and org:1407-1410 change."
+   },
+   {
+    "label": "(b) Land M2-1 first",
+    "consequence": "M2-5 waits for a scheduler it does not need; the Done-when stays as written."
+   },
+   {
+    "label": "(c) Add a per-instance read now, which M2-1's `get/2` delegates to",
+    "consequence": "A public function lands ahead of its scheduler and must be reconciled with `get(rt, path)`."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "The spike shows M2-5 needs nothing from M2-1, and both tests already read it this way.",
+  "decide_before": "the commit that lands blocks and cal (\u00a78 step 3)"
+ },
+ {
+  "id": "FS-Q2",
+  "item": "M2-5 online edit / OE-2 (org:858-869; F1-Q2, F1-Q3, F2-Q2)",
+  "question": "What may change in a block type while a program that holds it runs?",
+  "options": [
+   {
+    "label": "(a) Nothing: refuse any change to a block type, ignoring line numbers (F1)",
+    "consequence": "Editing a block's logic needs a restart, as the conventional family edits its user-defined instructions offline only. Replace R46-R63's edit code with F1's FB-38 to FB-41 (+151 lines in edit.ex); OE-2 brings the migration, and org:866 and PLAN:1491-1493 are reworded."
+   },
+   {
+    "label": "(b) The body only",
+    "consequence": "Needs the path-keyed one-shot and timer rules (R54-R63) without the member migration (R48-R53)."
+   },
+   {
+    "label": "(c) The full nested migration in M2-5, as org:866 assigns (the spike)",
+    "consequence": "About +542 −53 lines in edit.ex with its moduledoc; 12 edit tests, 8 depth tests, 2 growth tests and a seeded walk; 21 of the 72 reverts are its rules, all red. Matches Beremiz's hot swap (copy leaves by path and type) and CODESYS's code-only replacement."
+   }
+  ],
+  "recommendation": "(c)",
+  "why": "The documents already give it to M2-5; both judges' walks and this pass's walk found no rebuild, prune or one-shot failure after the two timer fixes; it leaves OE-2 configuration-level work.",
+  "decide_before": "the edit commit (\u00a78 step 4)"
+ },
+ {
+  "id": "FS-Q3",
+  "item": "follow-up to M1-3 (F1-Q11)",
+  "question": "Should the uses of a declaration with an unknown type stop being reported as 'not declared', as a recursive one's now are?",
+  "options": [
+   {
+    "label": "(a) Keep M1-3's cascade (the spike)",
+    "consequence": "A misspelled block name gives one extra line per use (the end-to-end test pins `line 18: `s3` is not declared`)."
+   },
+   {
+    "label": "(b) Excuse those uses too",
+    "consequence": "One mistake, one message; some M1-3 and M1-6 pins change."
+   }
+  ],
+  "recommendation": "(b), as a separate commit after M2-5",
+  "why": "A misspelled block name is now the likeliest unknown type.",
+  "decide_before": "nothing in M2-5"
+ },
+ {
+  "id": "FS-Q4",
+  "item": "M2-5 runtime (inventory C11; F1-Q12, F2-Q1)",
+  "question": "How does the private evaluator reach a block's body, given CLAUDE.md:134's 'the scan is the same for every instruction of one call'?",
+  "options": [
+   {
+    "label": "(a) `Scan.tags`, runtime-filled; `cal` hands its body the scan narrowed to its instance (the spike)",
+    "consequence": "The convention becomes 'of one routine run'; one pinned `Scan` key and one host check; linear in depth."
+   },
+   {
+    "label": "(b) Expand each `cal` at compile time into the body with absolute paths",
+    "consequence": "The scan is unchanged, but each operand at depth k walks k maps: a chain of n blocks scans in O(n^2), and the IR grows with instances."
+   },
+   {
+    "label": "(c) A private frame struct as `evaluate/3`'s third argument",
+    "consequence": "The convention changes for every clause, not one."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "The smallest departure that stays linear; F1 and F2 reached it independently.",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q5",
+  "item": "M2-5 online edit, decision 21 (F2-Q3)",
+  "question": "Which rung changes make a one-shot inside a block 'changed', blocked for one scan?",
+  "options": [
+   {
+    "label": "(a) Any rung on its chain: the program's `cal` rung, each body's `cal` rung, the body's `ons` rung (the spike)",
+    "consequence": "A changed EN condition or `cal` operand blocks the one-shots under it, at any depth; at worst one real edge is lost, decision 21's accepted cost."
+   },
+   {
+    "label": "(b) The body's rung only",
+    "consequence": "A changed calling rung leaves the bit compared against a condition it never saw: the false pulse decision 21 prevents (JF2 J4, K6)."
+   },
+   {
+    "label": "(c) Every one-shot inside an instance whose type changed",
+    "consequence": "Cruder; loses real edges where nothing on the chain changed."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "Decision 21 restated for a chain of rungs; the walk's independent oracle checks it one and two levels down.",
+  "decide_before": "\u00a78 step 4"
+ },
+ {
+  "id": "FS-Q6",
+  "item": "M2-5 online edit, decision 23 (inventory C9; F1-Q10, F2-Q4)",
+  "question": "How does the Resume rule decide that 'F did not run' a timer inside a block, which a false `cal` can freeze?",
+  "options": [
+   {
+    "label": "(a) F's text does not run it, and F is the program that last scanned (the spike)",
+    "consequence": "A frozen timer both programs run catches up (decision 8); one whose `cal` an edit restores resumes (decision 23, org:838-842); a test then an untest with no scan between leaves a frozen timer as it was (fix F11). Top level unchanged; org:1004's justification sentence is reworded."
+   },
+   {
+    "label": "(b) F2's: F's text only",
+    "consequence": "An untest at once after a test resumes a timer the original froze by a false EN: decision 8's catch-up lost (JF1 defect 1)."
+   },
+   {
+    "label": "(c) OE-1's inference, 'a `last` before `now`'",
+    "consequence": "Any switch resumes a timer frozen by a false `cal`, losing its frozen time."
+   },
+   {
+    "label": "(d) F1's: no Resume inside blocks; a restored `cal` catches up the whole gap",
+    "consequence": "The hazard org:838-842 settled returns inside blocks."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "It computes what decision 23 says ('T runs and F did not') about the program that actually ran last, as fix F3 already does for one-shots.",
+  "decide_before": "\u00a78 step 4"
+ },
+ {
+  "id": "FS-Q7",
+  "item": "M2-5 members (research IEC-11; decision 9; F1-Q4, F2-Q5)",
+  "question": "May logic outside a block read its var_inputs? IEC forbids it (Ed 2 Table 32, Ed 3 Figure 13).",
+  "options": [
+   {
+    "label": "(a) Inputs and outputs readable, as decision 9 and org:328 say (the spike)",
+    "consequence": "`s1.start` can be read; a timer's `.pre` is already read this way."
+   },
+   {
+    "label": "(b) Outputs only, as IEC",
+    "consequence": "Reversible later; an explicit change of decision 9; `public/1` needs a rule by type."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "Decided, and harmless: a positional `cal` passes every input from a tag the caller already holds.",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q8",
+  "item": "M2-5 members (PLAN:1352; inventory C3; F1-Q5, F2-Q6)",
+  "question": "Which of a user block's members may logic outside it write?",
+  "options": [
+   {
+    "label": "(a) None (the spike)",
+    "consequence": "Reversible: allowing some later breaks no program."
+   },
+   {
+    "label": "(b) Inputs, effective at the next call (IEC Ed 3)",
+    "consequence": "Useful only while frozen, since a positional `cal` overwrites every input; the edit and warning rules must count those writes."
+   },
+   {
+    "label": "(c) Inputs and outputs (the conventional family, by inference)",
+    "consequence": "A body reading its own output, as a seal-in does, sees foreign writes."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "Reversible and simplest to reason about; consistent with IEC for outputs.",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q9",
+  "item": "M2-5 members / M2-1 get/2 (fb_type.ex:21-24; F1-Q17, F2-Q7)",
+  "question": "Are a block's own `var`s, instances it holds included, visible from outside?",
+  "options": [
+   {
+    "label": "(a) Hidden (the spike)",
+    "consequence": "No path from outside goes deeper than one member; M2-1's `get/2` reaches at most `inst.tag.member`."
+   },
+   {
+    "label": "(b) Readable",
+    "consequence": "Internals become part of `get/2`'s contract; the compiler needs member lookup at any depth."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "IEC Ed 3's PRIVATE default and the conventional family's local tags; reversible; a debug read can be a separate API that is not logic.",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q10",
+  "item": "M2-5 first (PLAN:1351-1352; F1-Q9, F2-Q8)",
+  "question": "Inside a block, is `first` the program instance's, as decided?",
+  "options": [
+   {
+    "label": "(a) The program instance's (the spike)",
+    "consequence": "A block frozen on the first scan fires its one-shot the first time it runs, as the conventional family documents for its own blocks."
+   },
+   {
+    "label": "(b) A first-run bit per instance",
+    "consequence": "New instance state with CLAUDE.md's three rules, and a change to the decided note."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "Decided, documented in the `cal` stanza, tested (R41).",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q11",
+  "item": "M2-5 cal (F1-Q8, F2-Q9)",
+  "question": "May one instance be run by two `cal`s?",
+  "options": [
+   {
+    "label": "(a) No, refused like a second `ton` (the spike)",
+    "consequence": "Reversible; the edit names one calling chain per nested one-shot and timer."
+   },
+   {
+    "label": "(b) Yes, as IEC allows",
+    "consequence": "Inputs replaced halfway through a scan, timers and one-shots stepped twice, and each nested bit has several chains whose identity needs a new rule."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "No arrangement of two positional calls is safe, and the choice is reversible.",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q12",
+  "item": "M2-5 library / M2-2 loader (inventory Q5.5, C22; F1-Q6, F2-Q10)",
+  "question": "How does a library of block types reach the compiler and `compile_file`?",
+  "options": [
+   {
+    "label": "(a) `types:` on `compile/2`, and `compile_file/1` loading `<word>.ld` beside the file that names it (the spike)",
+    "consequence": "M2-2's `.lcf` loader reuses the rule and the function; `compile_file/1` compiles a program that holds a block; a cycle of files is located."
+   },
+   {
+    "label": "(b) `types:` only, on `compile/2` and a `compile_file/2`; the loader waits for M2-2 (F1)",
+    "consequence": "Until M2-2, `compile_file` of a program that uses a block reports an unknown type; M2-2 designs the loader."
+   },
+   {
+    "label": "(c) `types:` as a map keyed by name",
+    "consequence": "Each name stored twice; a key disagreeing with its type's name is a new host mistake."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "One loader, designed once; the Done-when then runs from files on disk with no host glue.",
+  "decide_before": "the loader commit (\u00a78 step 5)"
+ },
+ {
+  "id": "FS-Q13",
+  "item": "M2-5 API (F2-Q11)",
+  "question": "What does compiling a block's file return?",
+  "options": [
+   {
+    "label": "(a) `{:ok, %FbType{}}`, its body a `%Program{}` named after it (the spike, F1 too)",
+    "consequence": "A file is a POU type, and the block type is decision 9's schema; every program entry point refuses a block type with its own message (R8, R9)."
+   },
+   {
+    "label": "(b) `{:ok, %Program{kind: :function_block}}`",
+    "consequence": "The type is built at use; every program-consuming API must refuse a block by its kind."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "It reuses the schema M1-6 defined.",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q14",
+  "item": "M2-5 library (F2-Q13)",
+  "question": "May one compile hold two versions of a block of one name?",
+  "options": [
+   {
+    "label": "(a) No: one version per name across the types given, the types they hold, and tags declared from Elixir (the spike)",
+    "consequence": "A host compiles each block against the same types; the runtime and the edit look types up by name."
+   },
+   {
+    "label": "(b) Yes",
+    "consequence": "Needs a type identity beyond the name in the runtime's lookups and the edit's plans."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "Names are the identity everywhere else in logex.",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q15",
+  "item": "M2-5 loader (F2-Q14)",
+  "question": "When a block's file has mistakes, is the file that names it compiled further?",
+  "options": [
+   {
+    "label": "(a) Stop, and report the block's mistakes with its file (the spike)",
+    "consequence": "The dependent file's own mistakes appear once the block compiles."
+   },
+   {
+    "label": "(b) Continue, the type marked broken",
+    "consequence": "Every mistake in every file at once, as the Milestone 2 done sentence's 'every mistake' may want; another marker type in Declarations."
+   }
+  ],
+  "recommendation": "(a) for M2-5, revisited with M2-2's loader",
+  "why": "Simple, and precedented: a lex or parse error already stops a compile.",
+  "decide_before": "\u00a78 step 5"
+ },
+ {
+  "id": "FS-Q16",
+  "item": "Milestone 2 order (decision 1; F1-Q14, F2-Q15)",
+  "question": "Should M2-5 land before M2-1?",
+  "options": [
+   {
+    "label": "(a) M2-5 first, with FS-Q1 (a)",
+    "consequence": "Settles the nested state shape, `get/2`'s reach and the `.ld` and Edit changes while OE-1 is fresh, before M2-1's `start/1` and OE-2 build on them."
+   },
+   {
+    "label": "(b) M2-1 first, decision 1's default",
+    "consequence": "The Done-when is asserted through `get/2` as written; M2-1 defines `get/2` before the members it reads are settled."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "The spike shows M2-5 self-contained on today's main.",
+  "decide_before": "the first Milestone 2 commit"
+ },
+ {
+  "id": "FS-Q17",
+  "item": "M2-5 online edit, decision 29 (F2-Q16)",
+  "question": "Is a block member's changed initial value an allowed edit?",
+  "options": [
+   {
+    "label": "(a) Yes: keep the running value, report `:initial_changed` by path (the spike)",
+    "consequence": "Decision 29, applied by path."
+   },
+   {
+    "label": "(b) No: the initial value is part of the type",
+    "consequence": "Changing a member's default needs a restart."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "Consistent with decision 29 at the top level.",
+  "decide_before": "\u00a78 step 4"
+ },
+ {
+  "id": "FS-Q18",
+  "item": "M2-5 cal / CLAUDE.md step 2 (inventory Q5.9; F2-Q17)",
+  "question": "How is `cal` represented in `@instructions`?",
+  "options": [
+   {
+    "label": "(a) `\"cal\" => {:cal, :block}`, a marker meaning the signature is the block's (the spike)",
+    "consequence": "Reserved and surveyed like any mnemonic; CLAUDE.md step 2 notes the exception (in the spike)."
+   },
+   {
+    "label": "(b) A separate list of signature-less mnemonics",
+    "consequence": "`mnemonic?/1`, `reserved/1` and `naming_test` each read a second table."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "One source of truth for reserved mnemonics.",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q19",
+  "item": "M2-5 names (PLAN:732-734; inventory Q5.6, C30; F2-Q18)",
+  "question": "May a tag be named like a block the compile is given (`var seal seal`)?",
+  "options": [
+   {
+    "label": "(a) Yes: a block's name is not reserved (the spike)",
+    "consequence": "A lone `var seal` reads 'needs a tag name before the type `seal`' where a library holds `seal`."
+   },
+   {
+    "label": "(b) No",
+    "consequence": "A block's name becomes reserved per compile, against PLAN:732-734."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "Decided.",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q20",
+  "item": "M2-5 names (F1-Q7)",
+  "question": "Is a block's name matched exactly, or in any case?",
+  "options": [
+   {
+    "label": "(a) Exactly, like a tag (the spike)",
+    "consequence": "`var s1 Seal` is an unknown type with '\u2014 did you mean `seal`? (type names are case-sensitive)'; on a case-insensitive file system the loader may still find `Seal.ld` (unverified)."
+   },
+   {
+    "label": "(b) In any case, like `ton`",
+    "consequence": "Unlike tags; two blocks differing in case must then be refused; IEC's case rule for identifiers is unverified here."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "A block's name is a file name, and tags set the precedent.",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q21",
+  "item": "M2-5, decision 4 (org:1461; F1-Q16)",
+  "question": "Must `function_block <name>` be literally line 1, or the first rung?",
+  "options": [
+   {
+    "label": "(a) The first rung: comments and blank lines may come before it (the spike)",
+    "consequence": "A file may start with a licence comment; decision 4's record is reworded."
+   },
+   {
+    "label": "(b) Literally line 1",
+    "consequence": "A file with a heading comment is refused; needs a check the lexer does not make today."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "The lexer drops comments before the parser sees any line; nothing is lost.",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q22",
+  "item": "M2-5 data path, decision 28 (org:779; F1-Q13; JF2 D2b)",
+  "question": "How exactly must a type given in `types:` or to `Tag.new!/4` be what `Logex.compile/2` gives?",
+  "options": [
+   {
+    "label": "(a) `user?/1` checks its members against its body's tags, at any depth, and the runtime and the edit are total on a body edited by hand (the spike)",
+    "consequence": "Hand-edited members are refused (JF2 H4, H5); a hand-edited body rung passes, runs nothing and raises nothing (H6, H7), but what it computes is unspecified."
+   },
+   {
+    "label": "(b) Also recompile `body.source` with the types the body holds and compare",
+    "consequence": "Exact for a type with source; one compile per type per compile; a type from `instructionize/3` has no source and must be refused or trusted."
+   },
+   {
+    "label": "(c) Also check the body's IR structurally (each `cal` a user instance of its table, each operand a declared tag)",
+    "consequence": "A second validator beside the compiler, which the data API's one-validator rule (org:775-779) argues against."
+   }
+  ],
+  "recommendation": "(a) now, (b) when M2-2's loader makes `source` universal",
+  "why": "(a) closes what a host can say about members, which is what `cal` and the edit read; the body's rungs are trusted as a `%Program{}`'s are (runtime.ex:42-43).",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q23",
+  "item": "M2-5 / B5 (readiness \u00a74.1; F1-Q15)",
+  "question": "Should the three IR walks (compiler, Warnings, Edit) be merged into one module before M2-5?",
+  "options": [
+   {
+    "label": "(a) Land M2-5 as spiked: one `cal` signature clause each in Warnings and Edit",
+    "consequence": "Three walks remain."
+   },
+   {
+    "label": "(b) Extract first",
+    "consequence": "One walk, one signature function, one public write set; M2-5 waits for it."
+   }
+  ],
+  "recommendation": "(a) for M2-5, (b) before M2-4",
+  "why": "M2-4 needs a public 'which tags a program writes'; M2-5 does not.",
+  "decide_before": "\u00a78 step 2"
+ },
+ {
+  "id": "FS-Q24",
+  "item": "M2-5 data path (JF1 defect 4)",
+  "question": "Where do members declared from Elixir go in a block's positional `cal` order, given that a tag table keeps no list order?",
+  "options": [
+   {
+    "label": "(a) First, by name, then the source's in line order (the spike)",
+    "consequence": "`of/1` re-derives the order, so `user?/1` accepts the type; a host passing [b, a] gets `cal` formals a, b."
+   },
+   {
+    "label": "(b) First, in the order given (F1)",
+    "consequence": "Needs the order kept outside the tag table, which `of/1` cannot then re-derive."
+   },
+   {
+    "label": "(c) Refuse a tag from Elixir in a block's compile",
+    "consequence": "The data API cannot build a block from Elixir, against org:775-779's one model."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "Deterministic, re-derivable, and it keeps one model for text and data.",
+  "decide_before": "\u00a78 step 3"
+ },
+ {
+  "id": "FS-Q25",
+  "item": "docs/naming.md (JF1 F1 defect 5)",
+  "question": "How do the new stanzas name the conventional family's user-defined instructions?",
+  "options": [
+   {
+    "label": "(a) 'user-defined instruction', and 'the family's manual for its user-defined instructions' (the spike)",
+    "consequence": "Follows the design pass's naming rule; differs from naming.md:403,418,433, which spell out the family's own term."
+   },
+   {
+    "label": "(b) The family's own term, spelled out, as naming.md already does",
+    "consequence": "Consistent with the file; against the pass's rule for new text."
+   }
+  ],
+  "recommendation": "(a)",
+  "why": "New text should follow the rule; the older stanzas are append-only and stay.",
+  "decide_before": "\u00a78 step 1"
+ }
+]

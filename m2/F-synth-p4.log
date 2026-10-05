@@ -1,0 +1,33 @@
+members edited by hand: run write: true, then `ote s1.run` from outside: {:raised, ArgumentError, "types must be function block types from Logex.compile/2, got: %Logex.FbType{name: \"seal\", members: [%Logex.FbType.Member{name: \"start\", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: \"st"}
+members reordered by hand (cal's formals follow members): {:raised, ArgumentError, "types must be function block types from Logex.compile/2, got: %Logex.FbType{name: \"seal\", members: [%Logex.FbType.Member{name: \"run\", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: \"sto"}
+a :clock internal member added by hand: {:raised, ArgumentError, "types must be function block types from Logex.compile/2, got: %Logex.FbType{name: \"seal\", members: [%Logex.FbType.Member{name: \"start\", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: \"st"}
+Tag.new!/4 with a user type: {:ok, "s1", "seal"}
+Tag.new!/4 with a hand-edited type: {:raised, ArgumentError, "unknown function block type \"seal\": logex has Logex.FbType.ton() and the types Logex.compile/2 gives for a function block's file"}
+types: not a list: {:raised, ArgumentError, "types must be a list of function block types from Logex.compile/2, got: %Logex.FbType{name: \"seal\", members: [%Logex.FbType.Member{name: \"start\", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member"}
+types: holds a program: {:raised, ArgumentError, "types must be function block types from Logex.compile/2, got: %Logex.Program{rungs: [rung: [{:xic, 3, [{:name, 3, \"a\"}]}, {:ote, 3, [{:name, 3, \"q\"}]}]], tags: %{\"a\" => %Logex.Tag{name: \"a\", type: :bool, section: :var_in"}
+types: holds ton: {:raised, ArgumentError, "types must be function block types from Logex.compile/2, got: %Logex.FbType{name: \"ton\", members: [%Logex.FbType.Member{name: \"pre\", type: :dint, role: :input, write: true, initial: 0}, %Logex.FbType.Member{name: \"acc\", "}
+types: two of one name: {:raised, ArgumentError, "types holds two function blocks named `seal`: one name, one type"}
+instructionize/3 block with an Elixir-declared input: {:ok, [{"a", :input}, {"q", :output}]}
+  ... then used in types:: {:ok, Logex.Program}
+  ... user?/1: true
+    warning: unused alias Lexer
+    │
+  2 │ alias Logex.{Runtime, Diagnostic, FbType, Tag, Compiler, Lexer, Parser}
+    │ ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p4.exs:2:1
+
+    warning: unused alias Parser
+    │
+  2 │ alias Logex.{Runtime, Diagnostic, FbType, Tag, Compiler, Lexer, Parser}
+    │ ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p4.exs:2:1
+
+    warning: unused alias Runtime
+    │
+  2 │ alias Logex.{Runtime, Diagnostic, FbType, Tag, Compiler, Lexer, Parser}
+    │ ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p4.exs:2:1
+

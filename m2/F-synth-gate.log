@@ -1,0 +1,21 @@
+== gate run 1
+format exit 0
+compile exit 0
+test compile exit 0
+Result: 489 passed (6 doctests, 483 tests)
+test exit 0
+GATE 0
+== gate run 2
+format exit 0
+compile exit 0
+test compile exit 0
+Result: 489 passed (6 doctests, 483 tests)
+test exit 0
+GATE 0
+== gate run 3
+format exit 0
+compile exit 0
+test compile exit 0
+Result: 489 passed (6 doctests, 483 tests)
+test exit 0
+GATE 0

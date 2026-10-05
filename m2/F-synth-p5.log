@@ -1,0 +1,8 @@
+program using seal.ld beside it: {:ok, Logex.Program, "plant"}
+cycle of files: {:error, ["<dir>/cb.ld: line 3: `cb` cannot hold an instance of `ca` (cb → ca → cb): a function block never holds an instance of itself, at any depth"]}
+a broken block file: {:error, ["<dir>/bad.ld: line 3: `ote` writes `i`, a var_input (declared on line 2): logic must not write an input"]}
+a program file named as a type: {:error, ["<dir>/usepump.ld: line 2: `pump` is a program (pump.ld), not a function block: only a function block's file gives a type for `var`"]}
+self-named type in a program: {:error, ["<dir>/selfp.ld: line 2: unknown type `selfp`: logex has `bool`, `dint` and `ton`"]}
+missing file: {:error, ["<dir>/miss.ld: line 2: unknown type `nothere`: logex has `bool`, `dint` and `ton`"]}
+header names another block than its file: {:error, ["<dir>/mis.ld: line 1: this function block is `other`, but it is compiled as `mis`: a block is named after its file"]}
+block file compiled alone: {:ok, Logex.FbType, "seal"}

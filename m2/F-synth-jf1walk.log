@@ -1,0 +1,3 @@
+programs compiled: 216
+failures: 0
+reach: [{:accepted, 489}, {:assemble, 152}, {:cancel, 303}, {:refused, 128}, {:round_trip, 52}, {:switch_scan_changed_chain, 99}, {:switch_scan_changed_ran, 59}, {:switch_scan_observable, 137}, {:test, 302}, {:untest, 140}, {{:added, :nested}, 289}, {{:added, :top}, 128}, {{:held, :top}, 85}, {{:initial_changed, :nested}, 18}, {{:ons_blocked, :nested}, 393}, {{:preset, :nested}, 41}, {{:pruned, :nested}, 138}, {{:pruned, :top}, 59}, {{:resume_undone, :nested}, 1}, {{:resumed, :nested}, 6}]

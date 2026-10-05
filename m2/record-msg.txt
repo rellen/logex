@@ -1,0 +1,72 @@
+Record Milestone 2's design, as decided
+
+Documents only: no file in lib/ or test/ changes. This is the first
+commit of Milestone 2's plan, so later commits can cite what is
+decided.
+
+A design pass spiked Milestone 2 in three tracks on copies of 47319f7:
+the scheduler from Elixir data (M2-1); user function blocks (M2-5);
+and the configuration file, shared globals and event tasks (M2-2,
+M2-3, M2-4, M2-6). Each track was reviewed for correctness and for
+fit with docs/organisation.md, then revised. The maintainer answered
+the eleven questions it left open on 2026-10-02.
+
+docs/organisation.md:
+- §7 gains decisions 30 to 40, each with its options, the
+  recommendation and the choice. All went as recommended but 35:
+  the configuration file's extension is `.logex`, the maintainer's
+  own choice, which a check found free (no registry entry, no
+  language or MIME type, no file in Sourcegraph's public index).
+  - 30: the order M2-1, M2-5, M2-2, M2-3, M2-4, M2-6.
+  - 31: a function block type's body and members may change under
+    an edit, migrated by path; a member's type change is refused.
+  - 32: an edit blocks a one-shot inside a block until a scan runs
+    it; the scan after a switch is linear in the block list's bytes.
+  - 33: a block's inputs and outputs are read from outside, its own
+    vars hidden, and no member written from outside.
+  - 34: compile_file/1 loads a block's file from beside the program,
+    and hands back the loaded blocks' warnings.
+  - 36: a host mistake no text can say raises ArgumentError in the
+    configuration validator.
+  - 37: a task's priority is 0 to 65535, IEC's UINT.
+  - 38: Runtime.restart/2 and overlaps/1 join the decided API.
+  - 39: a task with single and interval keeps its anchored phase;
+    periods under a high trigger are skipped and not counted.
+  - 40: when OE-2 changes an interval, next_due becomes
+    min(next_due, now + new interval).
+- New §4.10, "Milestone 2's design": the pass's routine choices,
+  taken as recommended, as rules grouped by item.
+- §4.9's "One rule for new state" gains Milestone 2's state, with the
+  three cells OE-2 decides.
+- Decided text the new decisions change is annotated where it
+  stands, not rewritten: decisions 1, 3, 4, 9, 11 and 21, §4.3's
+  member rule, §4.4's checks and warnings, §4.6's API block, §4.9's
+  one-shot, Resume and configuration-edit text, §6.2's placement of
+  the §4.4 checks.
+- Every `.lcf` becomes `.logex`, but in decision 3's own text, which
+  decision 35 annotates.
+- §5 and §8 gain the rows and sources the design uses.
+
+PLAN.md: Milestone 2 is marked designed, with the order and why; each
+item's scope and Done-when brought to the design, M2-1's and M2-3's
+now "cycled every 10 ms from 0 to 990 ms"; each item's commits; what
+is owed (the port of the configuration file's checks into the one
+validator, the two run-time pieces no spike built, an unpinned check);
+and OE-2's list of what it decides.
+
+README.md names the extension; CLAUDE.md points at §4.10 and
+decisions 30-40.
+
+The draft was reviewed for faithfulness to the answers, consistency
+across the four documents, and its facts and sources; 14 findings
+were confirmed by a second reviewer and fixed.
+
+Gate, by exit code (Elixir 1.20.4, OTP 28):
+- mix format --check-formatted: 0
+- mix compile --force --warnings-as-errors: 0
+- MIX_ENV=test mix compile --force --warnings-as-errors: 0
+- mix test --warnings-as-errors: 0 (430 passed; the labels test reads
+  §7's decisions 1 to 40 and fixes F1 to F16)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014xkYDGU3foa6GtikDf5Ub7

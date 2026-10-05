@@ -1,0 +1,299 @@
+M1 | compile_file takes only .ld | lib/logex.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: LogexTest: compile_file/1 only a .ld file is a program's, named for its basename less .ld
+M2 | var_external is a section row | lib/logex/declarations.ex | exit 2 | Result: 485/499 passed (6/6 doctests, 479/493 tests)
+    failed: Logex.ConfigurationTest: growth compiling a configuration stays linear in its instances
+    failed: Logex.ConfigurationTest: M2-4: var_external binds a program to a global by name a var_external has a global of its name and type, checked once a type
+    failed: Logex.ConfigurationTest: M2-4: var_external binds a program to a global by name nothing writes an input point through a var_external
+    failed: Logex.ConfigurationTest: messages name what they are about the loader names a type's own file where a message cites a line of it
+    failed: Logex.ConfigurationTest: M2-2's done-when, as far as the text goes (spike) the plant as docs/organisation.md §4.4 prints it reads to the same entries
+    ... and 9 more
+M3 | a var_external takes no initial value | lib/logex/declarations.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ValidationTest: var_external (M2-4): a tag a configuration's global supplies takes no initial value, no instance, and no name a configuration file reserves
+    failed: Logex.ValidationTest: var_external (M2-4): a tag a configuration's global supplies from Elixir, the same rules
+M4 | a var_external's name is legal in a configuration file | lib/logex/declarations.ex | exit 2 | Result: 496/499 passed (6/6 doctests, 490/493 tests)
+    failed: Logex.ConfigurationTest: reserved words, by file kind (§4.8) and none in a program, but where a var_external's name must be legal in both
+    failed: Logex.ValidationTest: var_external (M2-4): a tag a configuration's global supplies from Elixir, the same rules
+    failed: Logex.ValidationTest: var_external (M2-4): a tag a configuration's global supplies takes no initial value, no instance, and no name a configuration file reserves
+M5 | the reader refuses ( | ) | lib/logex/configuration/text.ex | exit 2 | Result: 496/499 passed (6/6 doctests, 490/493 tests) | 4x the instances took 5.2x the reductions
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a branch delimiter has no place in a configuration
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say nothing but ArgumentError escapes the text or the constructor, whatever it is given
+    failed: Logex.ConfigurationTest: growth compiling a configuration stays linear in its instances
+M6 | a task's inputs in IEC's order | lib/logex/configuration/text.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a task line: a name, then single, interval and priority, once each, in that order
+M7 | each task input once | lib/logex/configuration/text.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a task line: a name, then single, interval and priority, once each, in that order
+M8 | one driver per sink | lib/logex/configuration.ex | exit 2 | Result: 496/499 passed (6/6 doctests, 490/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a var_output drives globals, never an input point, one driver a sink
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say the entries read from text and built in Elixir meet the same checks
+    failed: Logex.ConfigurationTest: M2-2's done-when, as far as the text goes (spike) gives the receipt's seven diagnostics for a broken source, one a line
+M9 | nothing drives an input point by connection | lib/logex/configuration.ex | exit 2 | Result: 495/499 passed (6/6 doctests, 489/493 tests)
+    failed: Logex.ConfigurationTest: M2-2's done-when, as far as the text goes (spike) gives the receipt's seven diagnostics for a broken source, one a line
+    failed: Logex.ConfigurationTest: M2-2's done-when, as far as the text goes (spike) a mis-wired, unknown, undriven-input or mistyped connection names its file and line
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say the entries read from text and built in Elixir meet the same checks
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a var_output drives globals, never an input point, one driver a sink
+M10a | a var_input's global agrees in type | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: M2-2's done-when, as far as the text goes (spike) a mis-wired, unknown, undriven-input or mistyped connection names its file and line
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a var_input has one source, a global or a constant of its type
+M10b | a var_output's global agrees in type | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: M2-2's done-when, as far as the text goes (spike) gives the receipt's seven diagnostics for a broken source, one a line
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a var_output drives globals, never an input point, one driver a sink
+M11 | every var_input connected (decision 7) | lib/logex/configuration.ex | exit 2 | Result: 493/499 passed (6/6 doctests, 487/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say new!/3 is the Elixir face: the configuration, or one ArgumentError with every problem
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike every var_input is connected (decision 7), cited at its instance's line
+    failed: Logex.ConfigurationTest: messages name what they are about a case-only did-you-mean says what is case-sensitive
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say a member the text can say, the data path takes: `m1.0` is member `0`
+    failed: Logex.ConfigurationTest: M2-2's done-when, as far as the text goes (spike) a mis-wired, unknown, undriven-input or mistyped connection names its file and line
+    ... and 1 more
+M12 | a var_input has one source | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a var_input has one source, a global or a constant of its type
+    failed: Logex.ConfigurationTest: messages name what they are about no message advises declaring a keyword
+M13 | an interval is at least 1 | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a task has a priority, an interval of 1 ms or more or a trigger, in range
+M14 | a task has a priority | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a task has a priority, an interval of 1 ms or more or a trigger, in range
+M15 | a task has an interval or a trigger | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a task has a priority, an interval of 1 ms or more or a trigger, in range
+M16 | a location's address is integers | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a location is a device, `i` or `q`, and an address; one global a location
+M17 | one global a location | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a location is a device, `i` or `q`, and an address; one global a location
+M18 | a name is declared once, one namespace | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a name is not a keyword, has no `.`, and is declared once, in one namespace
+    failed: Logex.ConfigurationTest: messages name what they are about a refused global does not take its location
+M19 | a keyword names nothing in a configuration | lib/logex/configuration.ex | exit 2 | Result: 493/499 passed (6/6 doctests, 487/493 tests) | 4x the instances took 5.18x the reductions
+    failed: LogexTest: compile/2 compiling stays linear in the program's size
+    failed: Logex.ConfigurationTest: growth compiling a configuration stays linear in its instances
+    failed: Logex.ConfigurationTest: reserved words, by file kind (§4.8) every keyword is reserved in a configuration file, in any case
+    failed: Logex.ConfigurationTest: messages name what they are about a refused global does not take its location
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a name is not a keyword, has no `.`, and is declared once, in one namespace
+    ... and 1 more
+M20 | a task's single is a bool | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a task's single is a bool global
+M21 | a var_external agrees in type with its global | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: M2-4: var_external binds a program to a global by name a var_external has a global of its name and type, checked once a type
+    failed: Logex.ConfigurationTest: messages name what they are about the loader names a type's own file where a message cites a line of it
+M22 | nothing writes an input point through var_external | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: M2-4: var_external binds a program to a global by name nothing writes an input point through a var_external
+    failed: Logex.ConfigurationTest: messages name what they are about the loader names a type's own file where a message cites a line of it
+M23 | two var_external writers warn | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: M2-4: var_external binds a program to a global by name two writers of one global, or a writer and a connection, are a warning
+M24 | a ton under an event task warns | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: warnings, which stop nothing M2-6: a ton in a program only an event task runs times across events
+    failed: Logex.ConfigurationTest: messages name what they are about the loader names a type's own file where a message cites a line of it
+M25 | an unused global warns | lib/logex/configuration.ex | exit 2 | Result: 493/499 passed (6/6 doctests, 487/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say new!/3 is the Elixir face: the configuration, or one ArgumentError with every problem
+    failed: Logex.ConfigurationTest: warnings, which stop nothing a global nothing uses, an output point nothing drives, a task that runs nothing
+    failed: Logex.ConfigurationTest: warnings, which stop nothing a check's diagnostic is at stage :configure, a warning too
+    failed: Logex.ConfigurationTest: warnings, which stop nothing an output point nothing uses is unused, not undriven; a trigger is a use
+    failed: Logex.ConfigurationTest: the loader stamps the file on every warning
+    ... and 1 more
+M26 | an instance is found by name in one step (growth) | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests) | 4x the instances took 11.59x the reductions
+    failed: Logex.ConfigurationTest: growth compiling a configuration stays linear in its instances
+M27 | a configuration has a program | lib/logex/configuration.ex | exit 2 | Result: 494/499 passed (6/6 doctests, 488/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a configuration has a program
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a branch delimiter has no place in a configuration
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a task line: a name, then single, interval and priority, once each, in that order
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a global line: a name, a type, then an initial value or a location
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a line starts with a keyword or is a connection
+M28 | an input point takes no initial value | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a global's initial value fits its type, and a located one takes none
+M29 | a constant fits its var_input | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a var_input has one source, a global or a constant of its type
+M30 | a broken line declares its name | lib/logex/configuration/text.ex | exit 2 | Result: 495/499 passed (6/6 doctests, 489/493 tests)
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a program line: an instance, its type, then `with` and a task
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a broken line's name is declared, so nothing that names it is reported again
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token reading gives every broken line and what could be read
+    failed: Logex.ConfigurationTest: messages name what they are about a broken line's name passes the name checks too: a keyword is refused as one
+M31 | keywords in any case | lib/logex/configuration/text.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token keywords are matched in any case, and names are not folded
+M32 | the loader takes only .lxcf | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the loader takes only a configuration's file, and says what a .ld is
+M33 | unconnected var_inputs in declaration order | lib/logex/configuration.ex | exit 2 | Result: 495/499 passed (6/6 doctests, 489/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say new!/3 is the Elixir face: the configuration, or one ArgumentError with every problem
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say a member the text can say, the data path takes: `m1.0` is member `0`
+    failed: Logex.ConfigurationTest: messages name what they are about a case-only did-you-mean says what is case-sensitive
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike every var_input is connected (decision 7), cited at its instance's line
+M34 | diagnostics in line order, unlined last | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: the loader a type's own mistakes come after the configuration's, each in its file
+    failed: Logex.ConfigurationTest: the loader a file that cannot be read, or whose name cannot name a configuration
+M35 | a broken connection counts as connected | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a broken connection still connects its var_input, so it is not reported unconnected
+M36 | a var_external writer and a connection driver warn | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: M2-4: var_external binds a program to a global by name two writers of one global, or a writer and a connection, are a warning
+    failed: Logex.EditTest: growth (F16) accept and its steps stay linear in the program's size
+M37 | an output point nothing drives warns | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: warnings, which stop nothing a global nothing uses, an output point nothing drives, a task that runs nothing
+M38 | a task that runs nothing warns | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: warnings, which stop nothing a global nothing uses, an output point nothing drives, a task that runs nothing
+M39 | an unreadable type file is the configuration's, at its line | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the loader a type with no file is an unknown type, at the line that first names it, with a did-you-mean among the program files beside it
+M40 | an entry's name lexes as one name (data path) | lib/logex/configuration/text.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say an entry no line can say raises ArgumentError
+M41 | the printer writes a task's inputs in IEC's order | lib/logex/configuration/text.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say every configuration the constructor accepts prints to text that reads back to it
+M42 | an output point takes no initial value | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a global's initial value fits its type, and a located one takes none
+M43 | a var_external with no global is a diagnostic | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: M2-4: var_external binds a program to a global by name a var_external has a global of its name and type, checked once a type
+M44 | compile_file points a configuration's file to its loader | lib/logex.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: LogexTest: compile_file/1 only a .ld file is a program's, named for its basename less .ld
+M45 | a configuration keyword is surveyed (naming.md) | docs/naming.md | exit 2 | Result: 4/5 passed
+    failed: Logex.NamingTest: every keyword of a configuration file has been surveyed
+J1 | a check's diagnostic is at stage :configure | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: warnings, which stop nothing a check's diagnostic is at stage :configure, a warning too
+J14 | W2 only for an output point something reads | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: warnings, which stop nothing an output point nothing uses is unused, not undriven; a trigger is a use
+J20 | a task's single counts as a use of its global (W1) | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: warnings, which stop nothing an output point nothing uses is unused, not undriven; a trigger is a use
+J2 | a global a var_external binds counts as used (W1) | lib/logex/configuration.ex | exit 2 | Result: 496/499 passed (6/6 doctests, 490/493 tests)
+    failed: Logex.ConfigurationTest: messages name what they are about the loader names a type's own file where a message cites a line of it
+    failed: Logex.ConfigurationTest: M2-4: var_external binds a program to a global by name nothing writes an input point through a var_external
+    failed: Logex.ConfigurationTest: M2-4: var_external binds a program to a global by name two writers of one global, or a writer and a connection, are a warning
+J3 | a connection may come before its program line | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say every configuration the constructor accepts prints to text that reads back to it
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a connection names a declared instance's var_input or var_output
+J4 | a type's var_external mistakes are cited once a type | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: M2-4: var_external binds a program to a global by name a var_external has a global of its name and type, checked once a type
+J5 | the loader compiles each type once | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the loader a type with no file is an unknown type, at the line that first names it, with a did-you-mean among the program files beside it
+J8 | a dotted name whose first part is an instance is its member (R41) | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a task's single is a bool global
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a var_input has one source, a global or a constant of its type
+J9 | two names differing only in case are refused | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a name is not a keyword, has no `.`, and is declared once, in one namespace
+J11 | a var_output never drives a constant | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a var_output drives globals, never an input point, one driver a sink
+J13 | compile_file takes exactly .ld, not .LD | lib/logex.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: LogexTest: compile_file/1 only a .ld file is a program's, named for its basename less .ld
+J16 | an interval is at most 2147483647 ms | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a task has a priority, an interval of 1 ms or more or a trigger, in range
+J17 | a priority is at most 2147483647 | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a task has a priority, an interval of 1 ms or more or a trigger, in range
+J18 | a broken line's name enters the namespace | lib/logex/configuration.ex | exit 2 | Result: 496/499 passed (6/6 doctests, 490/493 tests)
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a program line: an instance, its type, then `with` and a task
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a broken line's name is declared, so nothing that names it is reported again
+    failed: Logex.ConfigurationTest: messages name what they are about a broken line's name passes the name checks too: a keyword is refused as one
+J19 | a type word or `at` in a global's name place is a missing name | lib/logex/configuration/text.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a global line: a name, a type, then an initial value or a location
+J21 | a name of the wrong kind says what it is | lib/logex/configuration.ex | exit 2 | Result: 495/499 passed (6/6 doctests, 489/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a connection names a declared instance's var_input or var_output
+    failed: Logex.ConfigurationTest: M2-4: var_external binds a program to a global by name a var_external has a global of its name and type, checked once a type
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike `with` names a declared task, before or after its line
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a task's single is a bool global
+N1 | a location where a global is wanted is named as one | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the readings of `.` (§4.7): each wrong one named a location is written only after `at`: in a connection or a `single` it is named
+N2 | a location that begins a connection is named as one | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the readings of `.` (§4.7): each wrong one named a location is written only after `at`: in a connection or a `single` it is named
+N3 | a member of a declared non-instance says what the name is | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the readings of `.` (§4.7): each wrong one named a member of something that is not an instance, or of no instance, says so
+N4 | lines rise from entry to entry | lib/logex/configuration/text.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say lines are nil from Elixir, or rise one entry a line, as the text gives them
+N5 | no nil line beside a line | lib/logex/configuration/text.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say lines are nil from Elixir, or rise one entry a line, as the text gives them
+N6 | a connection's instance has no `.` | lib/logex/configuration/text.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say an entry no line can say raises ArgumentError
+N7 | a member is checked as the text reads it, joined to its instance | lib/logex/configuration/text.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say a member the text can say, the data path takes: `m1.0` is member `0`
+N8 | the printer puts a lined entry on its line | lib/logex/configuration/text.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say every configuration the constructor accepts prints to text that reads back to it
+N9 | Text.read refuses a non-binary with ArgumentError | lib/logex/configuration/text.ex | exit 2 | Result: 496/499 passed (6/6 doctests, 490/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say nothing but ArgumentError escapes the text or the constructor, whatever it is given
+    failed: Logex.RuntimeTest: the public surface (B5) is exactly this: every evaluate clause is private, in Logex.Runtime
+    failed: Logex.ConfigurationTest: host mistakes every public function of the text and the constructor refuses a host mistake
+N10 | Text.keyword? refuses a non-string with ArgumentError | lib/logex/configuration/text.ex | exit 2 | Result: 496/499 passed (6/6 doctests, 490/493 tests)
+    failed: Logex.RuntimeTest: the public surface (B5) is exactly this: every evaluate clause is private, in Logex.Runtime
+    failed: Logex.ConfigurationTest: host mistakes every public function of the text and the constructor refuses a host mistake
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say nothing but ArgumentError escapes the text or the constructor, whatever it is given
+N11 | Text.print checks its entries first | lib/logex/configuration/text.ex | exit 2 | Result: 495/499 passed (6/6 doctests, 489/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say an entry no line can say raises ArgumentError
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say lines are nil from Elixir, or rise one entry a line, as the text gives them
+    failed: Logex.ConfigurationTest: host mistakes every public function of the text and the constructor refuses a host mistake
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say nothing but ArgumentError escapes the text or the constructor, whatever it is given
+N12 | the loader's missing type is an unknown type, not a file error | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the loader a type with no file is an unknown type, at the line that first names it, with a did-you-mean among the program files beside it
+N13 | the loader suggests among the program files beside it | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the loader a type with no file is an unknown type, at the line that first names it, with a did-you-mean among the program files beside it
+N14 | no message advises declaring a keyword | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: messages name what they are about no message advises declaring a keyword
+N15 | a refused global takes no location | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: messages name what they are about a refused global does not take its location
+N16 | a name's case-only hint says names | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: messages name what they are about a case-only did-you-mean says what is case-sensitive
+N17 | a type's case-only hint says program types | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: messages name what they are about a case-only did-you-mean says what is case-sensitive
+N18 | a member's case-only hint says members | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: messages name what they are about a case-only did-you-mean says what is case-sensitive
+N19 | a connection after a broken one still has its source checked | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: messages name what they are about a connection after a broken one to the same var_input still has its source checked
+N20 | an address field has no leading zero (one spelling) | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a location is a device, `i` or `q`, and an address; one global a location
+N21 | the loader names the type's file in a message citing its line | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: messages name what they are about the loader names a type's own file where a message cites a line of it
+N22 | the loader passes each type's file to the checks | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: messages name what they are about the loader names a type's own file where a message cites a line of it
+N23 | W6 covers a task with single and interval | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: warnings, which stop nothing M2-6: a ton in a program only an event task runs times across events
+N24 | new!/3 raises every problem, not the first | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say new!/3 is the Elixir face: the configuration, or one ArgumentError with every problem
+N25 | new!/3 refuses a line on an entry from Elixir | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say new!/3 is the Elixir face: the configuration, or one ArgumentError with every problem
+N26 | a location's i or q is lowercase | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: the readings of `.` (§4.7): each wrong one named a location is written only after `at`: in a connection or a `single` it is named
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a location is a device, `i` or `q`, and an address; one global a location
+N27 | compile_file names a bare .ld as no program | lib/logex.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: LogexTest: compile_file/1 only a .ld file is a program's, named for its basename less .ld
+N28 | new!/3 checks with the same checks (warnings ride) | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say new!/3 is the Elixir face: the configuration, or one ArgumentError with every problem
+X1 | a type's own diagnostics come after the configuration's (R5) | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the loader a type's own mistakes come after the configuration's, each in its file
+X2 | a failed type's instances are not checked further (R5, C6) | lib/logex/configuration.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: the loader a type's own mistakes come after the configuration's, each in its file
+    failed: Logex.ConfigurationTest: the loader a type with no file is an unknown type, at the line that first names it, with a did-you-mean among the program files beside it
+X3 | a configuration's file name is shaped like a name (R6) | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the loader a file that cannot be read, or whose name cannot name a configuration
+X4 | an unknown line has a did-you-mean among the line keywords (R7) | lib/logex/configuration/text.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: M2-2's done-when, as far as the text goes (spike) gives the receipt's seven diagnostics for a broken source, one a line
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a line starts with a keyword or is a connection
+X5 | a keyword that belongs on a line names that line (R8) | lib/logex/configuration/text.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a keyword that belongs on a line cannot start one
+X6 | words after a connection's source are refused (R12, T34) | lib/logex/configuration/text.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ConfigurationTest: reading a line (M2-2, M2-3, M2-6): its grammar, at its token a connection line: a member, then one global or constant
+    failed: Logex.ConfigurationTest: messages name what they are about a connection after a broken one to the same var_input still has its source checked
+X7 | a name has no `.` (R14) | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a name is not a keyword, has no `.`, and is declared once, in one namespace
+X8 | a keyword cannot name a program type (R16) | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a program line names a type given, by a name that is not a keyword
+X9 | `with` names a declared task (R21) | lib/logex/configuration.ex | exit 2 | Result: 493/499 passed (6/6 doctests, 487/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike `with` names a declared task, before or after its line
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say the entries read from text and built in Elixir meet the same checks
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say new!/3 is the Elixir face: the configuration, or one ArgumentError with every problem
+    failed: Logex.ConfigurationTest: M2-2's done-when, as far as the text goes (spike) gives the receipt's seven diagnostics for a broken source, one a line
+    failed: Logex.ConfigurationTest: messages name what they are about a case-only did-you-mean says what is case-sensitive
+    ... and 1 more
+X10 | an unlocated global's initial value fits its type (R22) | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a global's initial value fits its type, and a located one takes none
+X11 | a program line's type is one of the types given (R27) | lib/logex/configuration.ex | exit 2 | Result: 496/499 passed (6/6 doctests, 490/493 tests)
+    failed: Logex.ConfigurationTest: warnings, which stop nothing a check's diagnostic is at stage :configure, a warning too
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a program line names a type given, by a name that is not a keyword
+    failed: Logex.ConfigurationTest: messages name what they are about a case-only did-you-mean says what is case-sensitive
+X12 | a connection names no path deeper than one member (R30) | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a connection names a declared instance's var_input or var_output
+X13 | a var is internal: it does not connect (R31) | lib/logex/configuration.ex | exit 2 | Result: 496/499 passed (6/6 doctests, 490/493 tests)
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a connection names a declared instance's var_input or var_output
+    failed: Logex.ConfigurationTest: M2-2's done-when, as far as the text goes (spike) gives the receipt's seven diagnostics for a broken source, one a line
+    failed: Logex.ConfigurationTest: the data path: one constructor, refusing what the text cannot say the entries read from text and built in Elixir meet the same checks
+X14 | a var_external does not connect (R31) | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: M2-4: var_external binds a program to a global by name a connection does not reach a var_external
+X15 | a var_input may read an output point back (R34) | lib/logex/configuration.ex | exit 2 | Result: 494/499 passed (6/6 doctests, 488/493 tests)
+    failed: Logex.ConfigurationTest: M2-2's done-when, as far as the text goes (spike) the plant as docs/organisation.md §4.4 prints it reads to the same entries
+    failed: Logex.ConfigurationTest: warnings, which stop nothing a global nothing uses, an output point nothing drives, a task that runs nothing
+    failed: Logex.ConfigurationTest: growth compiling a configuration stays linear in its instances
+    failed: Logex.ConfigurationTest: the checks, from the text and from Elixir alike a var_input reads any global: an input point, an output point read back, or neither
+    failed: Logex.ConfigurationTest: M2-2's done-when, as far as the text goes (spike) loads the plant from disk, each type from its file beside it
+X16 | a var_external is no function block instance (R42, V2) | lib/logex/declarations.ex | exit 2 | Result: 497/499 passed (6/6 doctests, 491/493 tests)
+    failed: Logex.ValidationTest: var_external (M2-4): a tag a configuration's global supplies takes no initial value, no instance, and no name a configuration file reserves
+    failed: Logex.ValidationTest: var_external (M2-4): a tag a configuration's global supplies from Elixir, the same rules
+X17 | a broken line's name passes the name checks (R52) | lib/logex/configuration.ex | exit 2 | Result: 498/499 passed (6/6 doctests, 492/493 tests)
+    failed: Logex.ConfigurationTest: messages name what they are about a broken line's name passes the name checks too: a keyword is refused as one
+
+107 mutants; red 107; green []; not applied []

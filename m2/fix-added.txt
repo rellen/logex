@@ -1,0 +1,877 @@
++  work is PLAN's M1-3, M1-5, M1-6, OE-1, Milestone 2 and OE-2; OE-1 has landed, and
++  Milestone 2 was designed on 2026-10-02, §4.10 and decisions 30–40). Read it
++still forward work; Milestone 2 was designed on 2026-10-02 (§3).
++instance, have landed since; the next unstarted work is Milestone 2, designed on
++2026-10-02.
++  record. *(Milestone 2's design, 2026-10-02: from M2-5, `compile/2` also takes `types:`,
++  a function block's file compiles to `{:ok, %Logex.FbType{}}`, and `compile_file/1`
++  loads the blocks a program names from beside its file; `docs/organisation.md` decision
++  34.)*
++  type's name is never spelled in a `.ld` body, so the `.logex` words wait for M2-2.
++rule is reverted. M2-5 needs only M1-6 and B5, so it may move ahead of M2-1. *(Ordered
++2026-10-02 by decision 30, below: M2-5 lands after M2-1.)*
++
++**Designed 2026-10-02** (`docs/organisation.md` §4.10, "Milestone 2's design", and its §7
++decisions 30–40; "decision N" in this section is that §7's). A design pass spiked
++Milestone 2 in three tracks on copies of `47319f7`: the scheduler (M2-1); user function
++blocks (M2-5); and the configuration file, shared globals and event tasks (M2-2, M2-3,
++M2-4, M2-6). Each track was reviewed for correctness and for fit, then revised, and each
++reverted every rule it adds alone under its full suite: 113 rules in the scheduler's
++spike, 88 in the function blocks' and 127 in the configuration file's, every one red but
++one (owed below). The scheduler's and the function blocks' spikes, merged, pass together:
++582 tests on Elixir 1.20.4. The maintainer took decisions 30–40 as recommended but 35,
++the configuration file's extension, choosing `.logex`, outside the options offered; the
++pass's routine choices, the rules of §4.10, were all taken as recommended. None of it has
++landed.
++
++**The order (decision 30):** the design record, then M2-1, M2-5, M2-2, M2-3, M2-4 and
++M2-6.
++- **M2-1 first**, decision 1's default. M2-5's Done-when then stands as written: its
++  `m1.s2.run` is read through M2-1's `get/2`.
++- **M2-5 before M2-2,** so the configuration file's reader, its loader and the IR walk
++  are written against `cal` from their first commit. In the other order a hand merge of
++  the spikes failed at four seams: a walk of a program's writes that raised on `cal`, a
++  loader that put a function block type among the programs, a block's `var_external` that
++  raised `FunctionClauseError`, and two loaders.
++- **Then the text items in turn:** M2-3's task lines build on M2-2's reader, M2-4's checks
++  on the IR walk that is its first commit, and M2-6's event tasks on M2-3's task lines.
++  The walk lands before the first check that reads a program's writes or timers.
++
++Each commit lands green under the full gate, with its mutation rows in its message, every
++rule it adds reverted alone. Only M2-1's commits were built as a gated series; M2-5's and
++the configuration file's must be built that way before they land.
++  ms task, a 30 ms task and a task-less instance, cycled every 10 ms from 0 to 990 ms by an
++  *(Worded 2026-10-02: "cycled every 10 ms from 0 to 990 ms" was "cycled for one
++  simulated second", which did not say how the clock is stepped. The counts are 100, 34
++  and 100 runs.)*
++
++  *Designed 2026-10-02* (`docs/organisation.md` §4.10, M2-1). The scope widens twice,
++  each annotated where it was decided: every `docs/organisation.md` §4.4 check that M2-1's
++  data can express, over tasks, globals, located points, instances and connections, lands
++  here in `Logex.Configuration.check/1`, pinned from data, where M2-2 had them; and
++  `restart/2` and `overlaps/1` join §4.6's API (decision 38). A host mistake no text can
++  say raises `ArgumentError` (decision 36), and a priority is 0 to 65535 (decision 37).
++  `CLAUDE.md`'s rule for new state extends to `%Logex.Runtime{}`. A configured plant is
++  not edited until OE-2: `Logex.Edit` edits a lone instance, and `%Logex.Runtime{}`
++  changes only through the API. It lands as:
++  1. `Logex.Configuration` and the `:configure` stage: the element structs, `check/1`,
++     `new!/1`, `location/1` and `initial/1`;
++  2. the resource with periodic tasks: `%Logex.Runtime{}`, `start/1`, `cycle/3`,
++     `next_due_in/1`, `overlaps/1` and `get/2`;
++  3. `restart/2`;
++  4. the contract walk over a configuration, in `api_contract_test.exs`;
++  5. the Done-when end to end, with the walks of the README's examples;
++  6. the documents, among them the README's "Changing a running program", which says that
++     a configured plant is not edited until OE-2.
++
++  The first five are built as a gated series on copies of `47319f7`: 466, 504, 509, 510
++  and 514 tests, from 430, each commit's rules red in its own tree. The second's prose
++  names `restart/2` early and is trimmed when it lands.
++- **M2-2 · The configuration file, task-less.** A separate `.logex` file (the extension
++  was a placeholder until decision 35 chose it on 2026-10-02): `var_global`, plain and
++  located (`at panel.q.0`), `program <inst> <type>`, arrow-free connections (`m1.start
++
++  *Designed 2026-10-02* (§4.10, M2-2). Two departures from the scope above, each annotated
++  where it was decided: the §4.4 checks M2-1's data can express land with M2-1, and M2-2
++  asserts each again as a whole diagnostic list from source; and the loader is M2-5's, one
++  memo per configuration. The file is read by a recursive descent over `Logex.Lexer`'s
++  tokens and printed back with an exact round trip. It reserves `program var_global at`
++  in the configuration file. It lands as:
++  1. the `program`, `var_global` and `at` stanzas;
++  2. `compile_file/1` takes only `.ld`, as a gate in front of M2-5's loader;
++  3. `Logex.Configuration.Text`: the reader, the text's own definition of what a line can
++     say, and the printer; it reserves the words, and each message that names a word
++     lands with it;
++  4. the configuration file's checks as rows of M2-1's `check/1`, in the file's words,
++     with one diagnostic per instance for its unconnected var_inputs;
++     `Configuration.compile/3`; every M2-1 check asserted again from source; the
++     public-surface pin of `Logex.Configuration` rewritten once;
++  5. the configuration's loader, through M2-5's with one memo per configuration, refusing
++     a block's file on a `program` line;
++  6. the round trip, totality and growth;
++  7. a location in a `.ld` rung named as one;
++  8. the Done-when on M2-1's `cycle/3`, and the documents.
++
++  The fourth is the largest piece no spike built (owed, below).
++  `var_external` or `cal`, which arrive with M2-4 and M2-5), cycled every 10 ms from 0 to
++  990 ms, runs `m1` 100 times and `m2` 20 times, and each instance's `t1` times against
++  the one clock. *(Worded 2026-10-02: "cycled every 10 ms from 0 to 990 ms" was "driven
++  for one simulated second".)*
++  *(M1-6: that motor compiles without a warning and times. Say how the
++
++  *Designed 2026-10-02* (§4.10, M2-3). A priority is 0 to 65535 (decision 37), and the
++  item's documents state decision 40's rule for an interval OE-2 changes. It reserves
++  `task interval priority with`, and lands as: (1) the `task`, `interval`, `priority` and
++  `with` stanzas; (2) task lines and `with` turned on, with the warning for a task that
++  runs no instance; (3) the Done-when, on M2-1's scheduler, and the documents. The reader
++  is spiked.
++
++  *Designed 2026-10-02* (§4.10, M2-4). One copy of each global: the scheduler merges each
++  `var_external`'s global into its instance's state before `call/4` and splits it off
++  after. A function block's file refuses `var_external`, a deliberate, reversible
++  departure from IEC. The two-writer warnings ride on the configuration's `warnings`. It
++  lands as: (1) B5's one IR walk, with public functions for which tags a program writes
++  and which timers it runs, knowing `cal` and reaching block bodies, and no change in
++  behaviour; (2) `var_external`: its stanza, the section and its `.ld` rules, and its
++  refusal in a block's file with a located diagnostic; (3) the binding checks and the two
++  writer warnings, from the walk, into M2-1's `check/1`; (4) one copy of a global at run
++  time, the Done-when and the documents. The walk, the block-file refusal and the
++  run-time copy are not spiked.
++  matching the file name; *(its first rung since 2026-10-02: comments and blank lines may
++  come before it, §4.10)*
++  `cal` on a built-in type should be refused.)* *(Answered 2026-10-02: no member of a user
++  block is written from outside it, by decision 33, and `cal` of a `ton` is refused,
++  naming the `ton` that runs it; the other notes stand as written.)*
++
++  *Designed 2026-10-02* (§4.10, M2-5). It lands after M2-1 (decision 30), so its
++  Done-when stands as written and its own test reads `get(rt, "m1.s2.run")`. The scope
++  above leaves out three things the design gives it, each annotated where it was decided:
++  the nested migration that `docs/organisation.md` §4.9 and OE-2 below assign to it, so a
++  program that holds blocks may change while it runs, by path (decision 31), a one-shot
++  inside a block blocked until a scan runs it (decision 32); the loader, ahead of M2-2,
++  `compile_file/1` finding `<word>.ld` beside the file and handing back the loaded blocks'
++  warnings (decision 34); and `types:` on `Logex.compile/2`, a block's file compiling to
++  `{:ok, %Logex.FbType{}}`. Fix F15 lands here: `%Logex.Program{}` gains a `file`. It
++  lands as:
++  1. the survey: the `function_block` and `cal` stanzas, and
++     `Logex.Declarations.kinds/0` with its naming test;
++  2. the IR walks learn a signature per instruction, with no change in behaviour;
++  3. blocks and `cal`, reserving `cal` in every `.ld`, in any case, and `function_block`
++     in a block's file; fix F15; the Done-when, through `get/2`; one message for a block
++     type given where a program goes, at every entry point, M2-1's `check/1` included;
++  4. the edit by path (decisions 31 and 32), in one push with the third, whose edit refuses
++     every change to a block;
++  5. the loader (decision 34);
++  6. the documents.
++
++  The spike holds the first five, not cut into commits. Fix F15, the `get/2` assertion,
++  the one message in `check/1` and the warnings of decision 34 are not built. A separate
++  commit after M2-5 excuses the uses of a declaration whose type is unknown.
++  *Designed 2026-10-02* (§4.10, M2-6). `single` with `interval` is decision 39; an event
++  task's due time, for the tie-break, is the cycle's `now`; a restart sets a trigger's
++  last sample to 0, and an edit keeps it. The warning for a `ton` in a program an event
++  task runs, on the configuration's `warnings`, covers a task with `interval` too and a
++  `ton` inside a block. It reserves `single`, and lands as: (1) `single`: its stanza, its
++  task lines, the warning from the walk, and `single` on `Logex.Configuration.Task`; (2)
++  edges at run time, the Done-when and the documents. The reader and the checks are
++  spiked; the edges at run time are not.
++
++decision 14). *(Since 2026-10-02 a priority is 0 to 65535, decision 37, and an event
++task's due time, for the tie-break, is the cycle's `now`.)*
++**Owed, from the design (2026-10-02).**
++- **The port of the configuration checks into one validator.** The configuration
++  spike's checks stand in a validator of their own, which cannot be merged with M2-1's:
++  both add `lib/logex/configuration.ex`. M2-2's fourth commit ports them into M2-1's
++  `check/1` as rows, rewrites the public-surface pin once, and asserts every M2-1 check
++  again from source. Two device names that differ only in case are refused there, the one
++  check M2-1's data can express that M2-1 does not land; no spike built it.
++- **The seams between M2-5 and the configuration file** are planned, not built: the
++  configuration spike has no `cal`. Each commit at a seam checks it on the composed tree:
++  a `cal`'s outputs among a program's writes, a block's `ton` among its timers, a block's
++  file on a `program` line, a block's `var_external`, and one loader.
++- **Two run-time pieces were not spiked:** M2-4's one copy of a global, and M2-6's edges
++  with `single` and `interval`. Their rules are the design's text alone. A test of the
++  event task's tie-break is owed: an event task and a late periodic task of one priority,
++  both writing one global, asserting which write lands.
++- **The untested rising-lines check.** M2-5 checks that a block's body given in `types:`
++  is one a compile gives, its rungs among them on rising lines, each on one line, after
++  its declarations. Reverted alone, that line check left the function blocks' spike
++  green, and three more calls in the same check (to the compiler's `shared_bits/2`,
++  `calls/1` and `path/2`) have no revert at all. Each gets a test that fails when it is
++  reverted, or the check goes.
++- **Messages.** M1-6's member messages put "a" before a type's name, which reads "a
++  outer" for a block so named.
++- **Costs to keep in view.** Every compile checks each block type it is given at full
++  depth: 2,486 reductions for a small block against 244 before, and 138,358,875 for a
++  chain of 400 files built one at a time. A refusal of many bad keys is quadratic in its
++  keys and the names, and so is the configuration file's check of a source with many
++  mistaken names, from the same did-you-mean pass as the `.ld` compiler's; only a mistake
++  pays it. Three of the suite's existing growth tests in reductions, `logex_test.exs`'s
++  "compiling stays linear in the program's size" and two of `edit_test.exs`'s F16 tests,
++  failed now and then under a load average near 40 while the spikes ran, and pass run
++  alone; a CI runner that shares cores could see that.
++
++  *From Milestone 2's design (2026-10-02; `docs/organisation.md` §4.9, "One rule for new
++  state", and §4.10).* M2-5 brings the edit of a function block's members, by path
++  (decision 31), so OE-2 refuses them no longer; a block type changed for the whole
++  configuration changes each program type that holds it, by that type's own plan. A
++  changed interval makes the task next due at `min(next_due, now + new interval)`
++  (decision 40). An event task's trigger keeps its last sample across a switch, and a
++  changed `single`, or an event task's `interval` added or removed, is refused. OE-2 adds
++  the generation counter that detects an edit outside the contract; Milestone 2 does not
++  reserve it. Until OE-2 lands, a configured plant is not edited. **OE-2 decides** three
++  questions Milestone 2 leaves it, none of which an M2 commit depends on:
++  - an instance whose type an edit changes: recommended as a remove plus an add, the old
++    instance pruned and the new one started by `Runtime.instance/1`, over a refusal,
++    since instances may be added and removed while running and state is keyed by name;
++  - a kept global whose initial value changed: recommended reported, as decision 29
++    reports a tag's, one rule for two kinds of state; since that extends decision 29, it
++    is the maintainer's call;
++  - how a switch sees an instance's `var_external`s: recommended, the configuration's
++    switch merges each global into the instance's state by the running program's
++    externals before `Logex.Edit`'s per-instance switch, and splits it off by the
++    candidate's after, so the value kept is the one decision 25 keeps. How OE-2 reports
++    the write into a shared global when a `var` becomes a `var_external` is OE-2's to
++    design.
++
++  added `Logex.FbType`, whose surface the same test pins.* *(Milestone 2's design,
++  2026-10-02: the part Milestone 2 needs, one walk of a program's IR in place of the
++  compiler's, `Logex.Warnings`' and `Logex.Edit`'s, answering which tags a program writes
++  and which timers it runs, knowing `cal` and reaching block bodies, lands as M2-4's first
++  commit. Until then M2-5 adds a `cal` clause to each walk; §3.)*
++  Their saved form is `.ld` and `.logex` text, which printers write, and a data API refuses
++  preemption. Milestone 2 was designed on 2026-10-02 (§3), adding the document's
++  decisions 30–40, all taken as recommended but the configuration file's extension,
++  `.logex`, the maintainer's own choice. **Routines are deferred by decision** —
++  subroutines that share their
++   Decided in §5; Milestone 2 (§3), designed 2026-10-02; the model in
++   `docs/organisation.md`.
++  configuration file (`.logex`) that instantiates `.ld` programs, wires them to I/O points
++  and globals, and schedules them on tasks; `var_external` for shared globals; function
++  blocks called with `cal`. Each new word still gets its `docs/naming.md` stanza, which may
++  change a spelling.
++and landed as `Logex.Edit` the same day. Milestone 2 was designed on 2026-10-02 (§4.10,
++decisions 30–40), and none of it has landed.** On 2026-09-28 the maintainer adopted the
++  - the *add-on instructions manual* (Sept 2025);
++| CONFIGURATION, single resource | one configuration file, `.logex` (decision 35) | globals, instances, task clocks | M2-1, M2-2 |
++**A function block type** is a `.ld` file whose first line names its kind *(its first
++rung, since 2026-10-02: comments and blank lines may come before it; §4.10, M2-5)*:
++  signatures of user FB types are built per compile. *(Milestone 2's design: `cal`'s own
++  entry in `@instructions` is a marker, `{:cal, :block}`, so the table still reserves it;
++  §4.10, M2-5.)*
++  *(Changed 2026-10-02 by decision 33 for a user function block: its inputs and outputs
++  are read anywhere, its own `var`s are hidden, and nothing outside it writes any of its
++  members. `.pre` and `.acc` are a timer's.)*
++`plant.logex` has two instances of one type on two periodic tasks, an event task, located
++// plant.logex -- two conveyors, one program type (motor.ld)
++| `task <n> interval <ms> priority <p>` | `TASK n (INTERVAL := t#<ms>ms, PRIORITY := p)` | PRIORITY is mandatory in IEC's grammar: `'PRIORITY' ':=' integer ')'` (Ed 2 Annex B.1.7, p.158; Ed 3 Annex A, p.226). So logex requires it. 0 is the highest. *(Bounded 2026-10-02 by decision 37: 0 to 65535, IEC's UINT)* |
++**Checks.** All are decided. Each is marked as IEC's or logex's. *(Milestone 2's design
++lands every check M2-1's data can express with M2-1, pinned from data, and M2-2 asserts
++each again from source; §4.10.)*
++  `warnings:` channel. *(logex. IEC forbids neither.)* *(Milestone 2's design carries
++  this warning on the configuration's own `warnings`, `%Logex.Configuration{}.warnings`:
++  a program's `warnings` sees one program, never two instances. §4.10, M2-4.)*
++  value, so an unconnected one would read 0 forever. *(Milestone 2's design pass found one,
++  by inference from two clauses: a program's declaration and usage are a function
++  block's (Ed 2 §2.5.3, p.83), and an unconnected function block input keeps its
++  initialised value (Ed 2 §2.5.2, p.67). For logex's var_input, which has no initial
++  value, that is 0 forever, this rule's reason, so the rule stands.)*
++  logex refuses the ambiguous case. *(Milestone 2's design bounds an interval at
++  2147483647 ms, §4.10, and a priority at 65535, decision 37.)*
++broken source, each line exact, pinned by no test. *(Milestone 2's design rewords four of
++them: a line-shape mistake gains its column, and an em dash where it had `--`, as the
++`.ld` compiler's did-you-means have; a did-you-mean where a name is near; the member's
++section named; and no "declare it first", since names resolve over the whole file. The
++words that land are the ones M2-2's tests pin, §4.10.)*
++knows each operand's write access. *(Milestone 2's design: which tags a program writes
++is a public function over its IR, B5's one walk, not a field of `%Logex.Program{}`; §4.10,
++M2-4.)*
++- A convenience loader resolves `motor` to `motor.ld` beside the `.logex`. *(Milestone
++  2's design: through the one loader M2-5 lands for function blocks, decision 34, with one
++  memo for the whole configuration.)*
++  M1-3. *(Milestone 2's design: `Logex.Configuration.new!/1` raises every problem at once,
++  a line each, where `Tag.new!/4` raises the first; §4.10, M2-1.)*
++     *(An interval OE-2 changes moves `next_due` to `min(next_due, now + new interval)`,
++     decision 40. Where the new interval brings `next_due` forward, the phase is then the
++     switch's; otherwise the runs step by the new interval from the kept `next_due`.)*
++     makes the task due. *(Its due time, for the tie-break in step 4, is the cycle's
++     `now`; with `interval` too, decision 39 applies. §4.10, M2-6.)*
++  warning waits for event tasks, M2-6.)* *(Milestone 2's design carries it on the
++  configuration's `warnings`, not a program's, since only the configuration knows which
++  task runs an instance; §4.10, M2-6.)*
++*(Milestone 2's design adds two functions to this block, by decision 38:
++`Logex.Runtime.restart(rt, :cold | :warm) :: rt`, which restarts every instance through
++`restart/3` and keeps the clock and the input image, and `Logex.Runtime.overlaps(rt) ::
++%{task => non_neg_integer}`. Decision 37 bounds a task's priority at 0 to 65535.)*
++
++| instance path | a `.logex` connection line; `Runtime.get/2` | `m1.start`, `m1.t1.acc` |
++| location | only after `at` in a `.logex` | `panel.i.0` |
++| configuration (`.logex`) | `task interval single priority program with var_global at bool dint`; later `var_config` |
++named `task` or `with` appears in a `.logex` only inside the qualified token `m1.task`.
++**`var_external` is refused in a function block's file** (Milestone 2's design, §4.10,
++M2-4). This departs from IEC, which allows it: Ed 2 Table 33 lists *"VAR_EXTERNAL
++declarations within function block type declarations"* (features 10a and 10b), and the
++grammars of both editions allow it in a function block. The departure is deliberate and
++reversible. A block's body runs over its own instance's state, which holds no global, so
++a block takes a global through a var_input operand instead. Binding it through the
++program instance that holds the block would need a write path out of a body.
++
++`.ld` and `.logex`, which printers write. Every way of writing a controller (the text, a
++   error goes no further; a warning does not stop it. *(Changed 2026-10-02 by Milestone
++   2's design, §4.10: a configured plant is not edited until OE-2, which comes after
++   Milestone 2, so the whole configuration is a candidate from OE-2.)*
++Every switch happens between two scans, and from M2-1 between two cycles. *(Changed
++2026-10-02 by Milestone 2's design, §4.10: a configured plant is not edited until OE-2, so
++a switch between two cycles is OE-2's.)* The conventional family's documents do not say
++whether its switch is atomic at a scan boundary; Beremiz states that its hot swap happens
++"between two cycles, never inside one". Each step returns a report.
++*(Changed 2026-10-02 by Milestone 2's design, §4.10: a configured plant is not edited
++until OE-2, so the output points are reported from OE-2, as "One rule for new state"
++below says.)*
++  members that match by name and type, as CODESYS does, and initialise the rest. *(Changed
++  2026-10-02 by decision 31: M2-5 brings the migration, and a member whose type changes
++  is refused, as a tag's is, not initialised. The members that match by name and type
++  are copied, by path; a member added starts at its initial value. That copy is what
++  Beremiz's hot swap states; the CODESYS help pages read do not say it.)*
++priority, which the conventional family lets logic write while it runs. *(A changed
++interval makes the task next due at `min(next_due, now + new interval)`: decision 40.
++From M2-5, a function block's body and members, by decision 31.)*
++- one checked constructor, which the configuration file's reader feeds;
++  another. *(Changed 2026-10-02 by decision 31: from M2-5 a user function block's type,
++  for the edit, is its name and its members' kinds, so a changed body or an added or
++  dropped member is no type change; a member whose kind changes is refused by its path.
++  A timer's schema is compared as before.)* Each is cited at the candidate's declaration
++  line, in line order, a tag declared from Elixir (which has no line) last:
++  ``line 7: `speed_sp` is a dint in the
++  is documented, and Milestone 2's configuration edit must close it (fix F15). *(Milestone
++  2's design gives fix F15 to M2-5, the first item that meets it: `%Logex.Program{}`
++  gains a `file`, §4.10.)*
++| Resume | A timer T runs and F did not, timing when last run (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes `now`, so the time no `ton` ran it is not caught up. Every `ton` stamps `last` at every scan, so within the contract a `last` before `now` says F did not run it, and the switch reads no more. *(Changed 2026-10-02 by Milestone 2's design, §4.10, M2-5: a false `cal` freezes a timer inside a block, so a `last` before `now` no longer says F did not run it. The basis becomes F's text not running the timer, and F being the program that last scanned. The top level behaves as before.)* | `{:resumed, t, ms}` |
++writes its bit. A scan empties the list, and so does a restart. *(Changed 2026-10-02 by
++decision 32: from M2-5 a scan keeps listed each bit inside a function block instance whose
++body it did not run, under a false `cal` or none, and a switch after it lists that bit
++again where the program it starts still has the `ons`. At the top level every rung runs,
++so a scan still empties the list there.)* A switch lists:
++*Milestone 2's state* (designed 2026-10-02, §4.10; not landed). From M2-5 a function
++block instance is state of the program instance that holds it: `Program.initial_env/1`
++starts it, recursively; an energised `cal` runs it and a false one leaves it alone;
++`restart/3` starts it again; and a switch moves it member by member, by path (decisions 31
++and 32). A resource's own state lives in the opaque `%Logex.Runtime{}`, which no host
++builds, so a piece of it needs no entry check. Instead each piece gets a value from
++`start/1` and a rule for a cycle, for `restart/2` and for OE-2's switch. A global's one
++rule is `Logex.Configuration.initial/1`, its initial value or 0. Inside a resource each
++`%Logex.Instance{}` keeps OE-1's rules unchanged. Where a cell reads "OE-2 decides", the
++design pass recommended an answer and left the choice to OE-2's design pass; no Milestone
++2 commit depends on it.
++
++| Piece | `start/1` | A cycle | `restart/2` | OE-2: kept | OE-2: added | OE-2: removed |
++|---|---|---|---|---|---|---|
++| `now` | 0 | advances by `elapsed_ms` | kept | never touched | — | — |
++| an input point's value, the input image | 0 | the inputs merged in | kept, as `restart/3` keeps var_inputs | kept | refused: located I/O | refused |
++| an output point's value | 0 | its driver's copy-out | 0 | kept; held and reported where nothing drives it any more (decision 20) | refused | refused |
++| an unlocated global's value | `Configuration.initial/1` | copy-out, and writes through `var_external` | `Configuration.initial/1` | kept. **OE-2 decides** whether a changed initial value is reported as decision 29 reports a tag's: recommended, as one rule for two kinds of state, but it extends decision 29 | `Configuration.initial/1` | kept unused at test, pruned at assemble |
++| a global's type or location | — | — | — | a change refused at accept | — | — |
++| a program instance | `Runtime.instance/1` (fix F14) | its `call/4` | `restart/3` | moved by OE-1's per-instance switch, one plan per program type (fix F5) | `Runtime.instance/1` | kept at test, pruned at assemble; each global it drove is held and reported |
++| an instance's type | — | — | — | **OE-2 decides**: a remove plus an add, recommended over a refusal, since instances may be added and removed while running and state is keyed by name | — | — |
++| an instance's task | — | — | — | a change refused (decision 19) | — | — |
++| a task's `next_due` | 0, anchored at start | advances by whole intervals | the kept `now`, so due at the next cycle | kept; a changed interval gives `min(next_due, now + new interval)` (decision 40) | refused until verified (decision 19) | refused until verified |
++| a task's overlap count | 0 | adds `missed` | 0 | kept | — | — |
++| a `var_external` (M2-4) | none held; a lone instance's tag starts at 0 | merged in before its instance's scan, split off after | none held | **OE-2 decides**: recommended, the switch merges each global in by the running program's externals and splits it off by the candidate's, so the value kept is the one decision 25 keeps | binds to its global by name | — |
++| an event task's last sample (M2-6) | 0, so a trigger already 1 fires | sampled once a cycle | 0 | kept, the edit's exception, so a switch fires no event; a changed `single`, or an `interval` added or removed, refused | refused until verified (decision 19) | refused until verified |
++
++before any scan linear in the blocks still pending (fix F2). *(Restated 2026-10-02 by
++decision 32: a bit inside a function block is named by its path, so the scan right after
++a switch is linear in the block list's bytes, and quadratic in the depth of nesting with a
++one-shot at every level. At the top level, where a bit's name is one name, nothing
++changes.)* Each figure moves by about 10% from run to run, with garbage collection, so
++each is the range of the runs that
++### 4.10 Milestone 2's design (designed 2026-10-02)
++
++**Designed 2026-10-02; none of it has landed.** A design pass spiked Milestone 2 in three
++tracks on copies of `47319f7`, on Elixir 1.20.4 / OTP 28: the scheduler from Elixir data
++(M2-1); user function blocks (M2-5); and the configuration file, shared globals and event
++tasks (M2-2, M2-3, M2-4, M2-6). Each track was reviewed for correctness and for fit with
++this document and the host contract, then revised. Merged, the scheduler's and the
++function blocks' spikes pass the full gate together. Decisions 30–40 (§7) are what the
++pass left to the maintainer. The rules below are its routine choices, taken as
++recommended on 2026-10-02, grouped by item in the order they land. Where a rule changes
++decided text above, that text is annotated where it stands. `PLAN.md` §3's Milestone 2
++gives the commits and what is owed. The spikes are not in the repository: their figures
++are receipts, and pin nothing.
++
++**Throughout.**
++- **The order** is decision 30's: M2-1, M2-5, M2-2, M2-3, M2-4, M2-6.
++- **One stage** for a configuration's problems, `:configure`, which M2-1 adds to
++  `%Logex.Diagnostic{}`.
++- **Each item reserves its own words** in the configuration file (`.logex`): M2-2
++  `program var_global at` (`bool` and `dint` are reserved already), M2-3 `task interval
++  priority with`, and M2-6 `single`. Elixir data does not refuse a word before its item
++  lands, and a message that names a word lands with that word, so no message offers a line
++  the reader still refuses.
++- **One message per rule.** Where Elixir data and the configuration file meet one rule,
++  the message is in the configuration file's words, since the text is the saved form.
++- **A configured plant is not edited until OE-2.** This is forced: OE-2 comes after
++  Milestone 2, and `%Logex.Runtime{}` is opaque and changes only through the API (§4.9).
++  `Logex.Edit` still edits a lone instance.
++
++**M2-1 · The scheduler, from Elixir data.**
++- *The §4.4 checks land here.* Every check M2-1's data can express, over tasks, globals,
++  located points, program instances and connections, lands with M2-1 in
++  `Logex.Configuration.check/1`, the one validator, pinned by whole diagnostic lists from
++  data. M2-2 asserts each again as a whole list from source, and adds what only the text
++  has.
++- *The constructor.* `Logex.Configuration.new!/1` takes a keyword list (`name:`,
++  `programs:`, `tasks:`, `globals:`, `instances:`, `connections:`) and raises every
++  problem in one `ArgumentError`, a line each. `programs:` is a list given to `new!/1`,
++  and a map by name in the struct. Each element is a struct of its kind, among them
++  `Logex.Configuration.Task`, a name kept although it shadows Elixir's `Task` where a host
++  aliases it.
++- *The configuration.* It must have a name, and one with no program instance is refused.
++  Tasks, globals and program instances share one namespace: a name that differs from
++  another only in case is refused, and the first in line order keeps a name. A program
++  type is named only in type position, so `program motor motor` is no clash.
++- *Points.* A location is a device of one name, `i` or `q` in lowercase, then one or more
++  whole-number fields with no leading zero, so each point has one spelling. One address
++  holds one global. An output point takes no initial value, as an input point takes none.
++  The case of device names is the one check over points that lands later, with M2-2's
++  port of the checks (below).
++- *Lines.* The elements' lines are all nil, as from Elixir, or strictly rising, so the
++  data path refuses an order no file gives and the printer's round trip is exact. A line
++  on an element from Elixir is refused for that element, as in ``task `t1` from Elixir has
++  no line, got: 3``, before the rising rule is checked. Both are host mistakes, raised
++  (decision 36).
++- *Tasks.* An interval is 1 to 2147483647 ms, and a priority 0 to 65535, 0 the highest
++  (decision 37). Every phase is anchored at 0, `start/1`'s `now`, so a first cycle that
++  advances the clock reports the periods it spans, as §4.6's "anchored at start" says.
++- *Warnings.* `%Logex.Configuration{}` has a `warnings` field, which lands empty with
++  M2-1. M2-2 is the first to fill it, then M2-3, M2-4 and M2-6, each with its own below.
++  A warning for a global something reads and nothing writes waits for `var_config`: until
++  then an unlocated global used as a fixed parameter is legitimate.
++- *Starting.* `start/1` runs `check/1` again, and builds each instance through
++  `Runtime.instance/1` (fix F14). `%Logex.Runtime{}` is defined in `Logex.Runtime`, as
++  `%Logex.Edit{}` is in `Logex.Edit`.
++- *Reading.* `get/2` reads a global, any declared tag of an instance, a `var` included,
++  or a public member of a function block instance. It never reads an internal member, an
++  instance whole, a task or the configuration, and a path that names one of those is told
++  which it names. How deep it reaches is decision 33's. `next_due_in/1` counts periodic
++  tasks only, not task-less instances, which a runner paces itself. An
++  `{:overlap, task, missed}` event comes just before its task's scans.
++- *Restarting* (decision 38). `restart/2` restarts each instance through `restart/3`,
++  keeps the clock and the input image, puts every other global back to its initial value
++  and every overlap count to 0, and makes every task due at the next cycle. There is no
++  restart of one instance inside a resource.
++- *New state.* CLAUDE.md's rule for new state in an instance extends to
++  `%Logex.Runtime{}`: each piece gets a value from `start/1` and a rule for a cycle, for
++  `restart/2` and for OE-2's switch, with the edit's exceptions listed. A global's one
++  rule is `Logex.Configuration.initial/1`, its initial value or 0, beside
++  `Logex.Program.initial_env/1` for a tag, and `Logex.Runtime`'s moduledoc holds the rest
++  in a one-rule section. §4.9's "One rule for new state" lists the pieces. OE-2 adds the
++  generation counter; M2-1 does not reserve it.
++- *Not taken.* No `outputs` field on `%Logex.Program{}`, which would spare each scan its
++  walk of the tags. Revisit it with the runner.
++- *Cost.* A cycle and `next_due_in/1` are linear in the tasks declared, whatever is due;
++  a queue by due time is the runner's to add if it is ever wanted. A refusal of many bad
++  keys against many names takes time quadratic in the two, from its did-you-mean pass, as
++  the `.ld` compiler's refusals already do. That is accepted and documented, since only a
++  host's own mistake pays it. Its message is linear in its problems, because each list of
++  names is given once.
++- *A landed message changes.* `put_inputs/3` and `call/4`, refusing several undeclared
++  keys, list the var_inputs once, on the first line that needs them, as every runtime
++  refusal then does. The test that pins that order past 32 keys is rewritten.
++- *Done-when.* "Cycled every 10 ms from 0 to 990 ms" replaces "cycled for one simulated
++  second", so that the counts are exact: 100, 34 and 100 runs.
++
++**M2-5 · User function blocks** (after M2-1: decision 30).
++- *A block's file.* Its header, `function_block <name>`, is the file's first rung:
++  comments and blank lines may come before it, and the name matches the file's.
++  `function_block` is recognised in any case and names no block, but a block's own name is
++  not reserved, so `var seal seal` is legal. A block's file compiles to
++  `{:ok, %Logex.FbType{}}`, whose body is a `%Logex.Program{}` named after the block.
++- *One message for a block type given where a program goes,* at every entry point (the
++  runtime, `Logex.Edit.accept/3`, M2-1's `check/1` and `new!/1`, `compile/3` and the
++  loader): ``` `seal` is a function block type, which runs inside a program through `cal`:
++  an instance is of a %Logex.Program{}```, with the configuration's prefix ``the program
++  under `<key>` is`` where a key and a name differ. Until M2-5 lands, M2-1 gives interim
++  words without `cal`.
++- *Types given.* `Logex.compile/2` takes `types:` (decision 34), and its options message
++  names it. A block's name is matched exactly, as a tag's is. One compile holds one
++  version of each block name, across the types given, the types they hold and the types of
++  tags declared from Elixir; two versions that differ only in their warnings are one.
++  Every compile checks each type it is given at full depth, and exactly: its members are
++  those its body declares, and its body's rungs lower again through the compiler's own
++  checks to themselves, so a hand-edited type is an `ArgumentError` where it is given,
++  never in the runtime or an edit. That is forced by decision 28 and by §4.9's "the data
++  API refuses anything the text cannot say". No mark of an earlier check is trusted, so a
++  chain of N blocks built one at a time costs O(N²).
++- *Held types.* A member that holds an instance names its type, `{:block, name}`, and the
++  holder's body's tag table holds that type once, so a type copied flat is linear in its
++  depth. A member's type gains that form.
++- *Declarations.* Members declared from Elixir come first in `cal`'s operand order, by
++  name, then the declaration lines in order. The uses of a declaration whose type is
++  unknown are excused, as a recursive declaration's are, so a misspelled block name gives
++  one message; this lands in its own commit, after M2-5.
++- *`cal`.* Its `@instructions` entry is the marker `{:cal, :block}`, so that table still
++  reserves it and the naming test still sees it, and its signature is the block's, built
++  per compile. `cal` is reserved in every `.ld`, in any case. One `cal` runs an instance:
++  a second is refused at its line, citing the first.
++- *Members:* decision 33.
++- *Running a block.* The runtime fills a new `tags` field of `%Logex.Scan{}`, which a
++  host may not fill, and `cal` hands its body the scan narrowed to its instance: the
++  block's tag table and its own part of the blocked one-shots, with the program
++  instance's `now` and `first`. So the scan is the same for every instruction of one
++  routine run, not of one call. Since `first` is the program instance's, a block frozen
++  on the first scan fires its one-shot the first time it runs, as `PLAN.md` M2-5's note
++  from M1-6 says.
++- *Walks.* M2-5 adds one `cal` clause to each IR walk it meets. B5's one walk comes with
++  M2-4.
++- *The edit, by path* (decisions 31 and 32). A block's type, for the edit, is its name
++  and its members' kinds: its body may change, members may be added or dropped, and a
++  member whose kind changes is refused by its path. Inside an instance both programs
++  declare, each member moves by OE-1's rules, by path: a member the state lacks starts at
++  its initial value, `{:added, "p.count", 7}`; a kept one whose initial value changed is
++  reported as `:initial_changed`, decision 29 applied by path; assemble and cancel prune
++  by path. Two rules are forced:
++  - an `ons` inside a block is blocked where any rung on its chain, from the program's
++    `cal` rung down to the body's `ons` rung, is new or changed, each `cal` keyed by its
++    operands and the formals they fill. A calling rung is on that `ons`'s path, and
++    comparing the body's rung alone gives the false pulse decision 21 prevents;
++  - a timer inside a block resumes only where the program the switch stops does not run
++    it, read from that program's text, and is the program that last scanned, as fix F3
++    asks for one-shots. A timer both programs run that a false `cal` froze catches up when
++    the block next runs (decision 8). At the top level this is what "a `last` before
++    `now`" said, so OE-1's behaviour is unchanged.
++- *Loading* (decision 34). The loader stops at a broken block file and reports its
++  mistakes with its file; the file that names it is compiled no further, as a lex or
++  parse error already stops a compile.
++- *Fix F15* goes to M2-5, the first item that meets it: `%Logex.Program{}` gains a
++  `file`, which `compile_file/1` sets and `Logex.Edit`'s diagnostics carry. Two
++  conventions are stated together: a block file's diagnostics carry that file in `file`;
++  a configuration's diagnostic stays in the configuration's file and names a program
++  type's file and line in its text, as in `on line 8 of motor.ld`.
++- *A landed message changes:* "only an instance of a function block has members" replaces
++  "only a timer has members".
++- *Naming.* The `function_block` and `cal` stanzas call the conventional family's
++  reusable blocks "user-defined instructions", not by the family's own term.
++- *Done-when* as decided, its `m1.s2.run` read through M2-1's `get/2`.
++
++**M2-2 · The configuration file, task-less.**
++- *The file* is a configuration file (`.logex`, decision 35), read by a recursive descent
++  over `Logex.Lexer`'s tokens: a line-shape mistake has a column, and the `.ld` grammar,
++  its golden record and the printer's shapes are untouched. A line ends at LF, CRLF or a
++  lone CR, as the lexer gives it.
++- *The seam* is `Logex.Configuration.compile(name, source, programs)`, as §4.4 decided,
++  beside M2-1's `new!/1`. M2-2 lands a printer from a configuration to its text, with an
++  exact round trip: an entry with a line is printed on that line.
++- *The checks.* The configuration file's own checks become rows of M2-1's `check/1`, in
++  the file's words, rule by rule, and every M2-1 check is asserted again as a whole list
++  from source. An unconnected var_input gives one diagnostic per instance, listing its
++  members. Two device names that differ only in case are refused, as two names that
++  differ only in case are; this lands with the port of the checks, the one check M2-1's
++  data can express that M2-1 does not land, and no spike built it.
++- *Citing a program type.* A program type's mistake, such as a `var_external` with no
++  global, is cited once a type, at its first instance's `program` line, with the type's
++  `.ld` file named in the text.
++- *Names.* Names resolve over the whole file, so a connection may come before its
++  `program` line: the decided plant names `estop` before it declares it. A name refused
++  as a keyword or for its `.` is reported once, and nothing that names it is reported
++  again. A duplicate or a case twin is not recovered that way: its later uses are checked
++  against the first declaration, as on a `.ld` declaration line.
++- *Loading.* `Logex.compile_file/1` takes only a `.ld` path, exactly, as a gate in front
++  of M2-5's loader. The configuration's loader resolves each program type through that
++  loader, with one memo for the whole configuration, so a block two program types hold is
++  read and compiled once; a `program` line that names a block's file gets the one
++  block-type message, as a located diagnostic.
++- *Warnings:* a global nothing uses; an output point that something reads and nothing
++  drives.
++- *A location in a `.ld` rung,* an operand shaped like one whose first part is not
++  declared, is named as a location (§4.7).
++- *Cost.* The configuration file's checks pay what M2-1's refusals pay: a source with many
++  mistaken names against many declared ones takes time quadratic in the two, from the same
++  did-you-mean pass, as the `.ld` compiler's refusals already do. That is accepted and
++  documented, since only a mistake in the source pays it.
++
++**M2-3 · Periodic tasks in text.**
++- `task <n> interval <ms> priority <p>` and `with`. A task's inputs come in IEC's order,
++  `single`, `interval`, `priority`, each once. A priority is 0 to 65535 (decision 37),
++  and the `priority` stanza says that one vendor family numbers the other way.
++- *Warning:* a task that runs no instance.
++- *Done-when.* "Cycled every 10 ms from 0 to 990 ms" replaces "driven for one simulated
++  second".
++- Its documents state decision 40's rule, which OE-2 builds.
++
++**M2-4 · Shared globals.**
++- *One IR walk first.* B5's one walk of a program's IR lands as M2-4's first commit,
++  before any check that reads a program's writes or timers. It answers "which tags a
++  program writes" and "which timers it runs" as public functions over the IR, not as a
++  field of `%Logex.Program{}` that a hand-built program could get wrong. It knows `cal`,
++  counting a `cal`'s output operands as writes, and reaches block bodies.
++- *One copy of each global.* The scheduler merges each `var_external`'s global into its
++  instance's env before `call/4`, and splits it off after. `call/4` is unchanged, and
++  between scans the only copy is the resource's. A program run alone keeps a
++  `var_external` as its own tag, at 0, which its host cannot set. `get/2` reads
++  `m1.estop` as the global.
++- *Checks.* Each instantiated type's `var_external` has a global of its name and type,
++  checked once a type, and nothing writes an input point through a `var_external`.
++  Warnings: two instances that write one global through `var_external`; and an instance
++  that writes through `var_external` a global a connection drives, a warning by §4.4's
++  rule, since only the IR shows it.
++- *In a block's file,* `var_external` is refused with a located diagnostic. That departs
++  from IEC, which allows it, deliberately and reversibly (§4.8): a block takes a global
++  through a var_input operand.
++
++**M2-6 · Event tasks.**
++- *`single` with `interval`:* decision 39. A task with `single` alone never overlaps.
++- *The tie-break.* An event task's due time, for the earlier-due-time tie-break, is the
++  cycle's `now`, since §4.6 step 3 makes it due on the edge seen in this cycle. A late
++  periodic task of the same priority therefore runs before it, and one due exactly at
++  `now` ties and falls to declaration order. A test is owed: an event task and a late
++  periodic task of one priority, both writing one global, asserting which write lands.
++- *The trigger across a restart and an edit.* A restart sets an event task's last sample
++  to 0, so a trigger already 1 fires again; an edit keeps it, so a switch fires no event.
++  Changing a task's `single`, or adding or removing an event task's `interval`, is
++  refused while running.
++- *Warning:* a `ton` in a program an event task runs, whether the task has `single` alone
++  or with `interval`, a `ton` inside a block the program's `cal`s run included (§4.6's
++  caveat).
++
++| Wall-clock runner, `Logex.IO` adapters, watchdog | target, after Milestone 2 | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10) |
++| Restarting one program instance inside a resource | not adopted (Milestone 2's design, §4.10) | `restart/2` restarts the whole resource (decision 38). Restarting one instance would be another rule for the input image and the tasks, for a need no decided text states |
++| `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
++| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3` |
++| Online edit (a new type, instances keep their state) | **OE-1 landed 2026-10-01** (§4.9): the staged edit of one program instance, `Logex.Edit`; OE-2, a configuration's, after Milestone 2, so a configured plant is not edited until OE-2; M2-5 brings the edit of a program that holds function blocks (decisions 31 and 32) | Instance state stays keyed by declared tag name, which is what lets an edit move it by name. A *plain swap*, a recompile of the same name scanned over a kept instance with no edit, stays in the contract (decision 26) and does what it did before OE-1, since a state's values are not checked each scan: the instance keeps its values until a restart. So it keeps its old `.pre` under a changed preset; a tag the recompile adds reads 0, not its initial value, so an added timer starts at a `.pre` of 0 and is done at its first true scan; a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output; and an `ons` it adds fires on its first scan if its condition is already true (`end_to_end_test.exs` pins all but the type change). A restart puts the values right, keeping only the var_inputs whose values fit their types. `Logex.Edit` moves the state by rule instead: a switch moves `.pre` where it still holds the old preset, starts what is added at its initial value, at the first test restarts a value that does not fit its type, and blocks an added or changed `ons` for one scan; accept refuses a type change. |
++7. **Fix B8 (a lone CR) before any `.logex` exists.** It would bite configuration files
++*(Designed 2026-10-02: §4.10 gives each item's rules, and `PLAN.md` §3 the order,
++decision 30, and each item's commits. The notes below mark where the design changes this
++section.)*
++
++asserts whole diagnostic lists from source, like `validation_test.exs`. *(M2-1 has no
++source, so it pins the §4.4 checks it lands by whole lists from data, and M2-2 asserts
++each again from source; §4.10.)* Each rule is checked by reverting it (CLAUDE.md; PLAN
++§2·M0-4). For example:
++- *(Designed 2026-10-02: also every §4.4 check its data can express, moved here from
++  M2-2, and `restart/2` and `overlaps/1`, decision 38.)*
++  `scan/2` and through a one-instance configuration.* *(Worded 2026-10-02: "cycled every
++  10 ms from 0 to 990 ms" in place of "cycled for one simulated second".)*
++- `.logex` lines: `var_global` (plain and located at `<dev>.i|q.<n>`), `program <inst>
++- The §4.4 checks, and `Configuration.compile/3` with a loader. *(Designed 2026-10-02:
++  the checks land with M2-1, on data, and M2-2 asserts each again from source and ports
++  its own into M2-1's `check/1`; the loader is M2-5's, decision 34.)*
++- Reserves `program var_global at bool dint` in `.logex`.
++- Reserves `task interval priority with` in `.logex`.
++- *(Designed 2026-10-02: a priority is 0 to 65535, decision 37; the acceptance is
++  "cycled every 10 ms from 0 to 990 ms"; and its documents state decision 40.)*
++- Needs M1-6 and B5 only, so it may move ahead of M2-1. *(Ordered 2026-10-02 by decision
++  30: after M2-1, before M2-2. It also brings the edit of a program that holds blocks, by
++  path, decisions 31 and 32, and the loader, decision 34.)*
++- `single`, with the §4.6 edge rules, and `single` combined with `interval` *(decision
++  39)*.
++- Reserves `single` in `.logex`.
++as E1–E9. Decisions 30–40 are Milestone 2's design (§4.10), taken on 2026-10-02: all as
++recommended but 35, the configuration file's extension, where the maintainer chose
++`.logex`, outside the options offered. All forty are kept with their options so the
++reasons stay with them.
++   earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
++   M2-2, M2-3, M2-4, M2-6.)*
++   before M2-2, because a rename later is a migration. *(Chosen 2026-10-02 by decision 35:
++   `.logex`. The placeholder was found to clash with four other tools.)*
++   IEC's word, and it keeps one extension for POUs. *(Changed 2026-10-02 by Milestone 2's
++   design, §4.10, M2-5: the header is the file's first rung, so comments and blank lines
++   may come before it. The lexer drops them before the parser sees a line.)*
++   entries. Decide before M2-2, or configuration files (`.logex`) will have two spellings.
++   only to `.pre` and `.acc`, as the conventional family allows (from memory).* *(For a
++   user function block, decision 33 narrows "reads anywhere": its inputs and outputs are
++   read anywhere, its own `var`s are hidden, and nothing outside it writes any of its
++   members. A timer's rule is unchanged.)*
++    *Recommend all four.* *(Decision 37 bounds PRIORITY at 0 to 65535, IEC's UINT;
++    decision 39 settles SINGLE with INTERVAL; and Milestone 2's design gives an event task
++    the cycle's `now` as its due time for the tie-break, §4.10, M2-6.)*
++    edit never touched. Adopted: an untouched `ons` behaves normally. *(Changed 2026-10-02
++    by decision 32: "for that one scan" becomes "until a scan runs it". At the top level
++    every rung runs, so nothing changes there; inside a function block a false `cal`
++    leaves its `ons` unrun.)*
++**Milestone 2's design, decided 2026-10-02.** A design pass spiked Milestone 2 in three
++tracks on copies of `47319f7`: the scheduler (M2-1); user function blocks (M2-5); and the
++configuration file, shared globals and event tasks (M2-2, M2-3, M2-4, M2-6). Each track was
++reviewed for correctness and for fit with this document, then revised. Decisions 30–40 are
++what the pass left to the maintainer. Its routine choices, all taken as recommended, are
++the rules in §4.10.
++
++30. **Milestone 2's order:**
++    - M2-1 first, then M2-5, then M2-2, M2-3, M2-4 and M2-6;
++    - or M2-5 first, then M2-1, as decision 1 allows.
++
++    *Recommend M2-1 first.* It is decision 1's default, and it keeps M2-5's Done-when as
++    written: M2-5's own test reads `m1.s2.run` through M2-1's `get/2`, which the two
++    spikes, merged, answer with `{:ok, 1}`. With M2-5 before M2-2, the configuration
++    file's reader, its loader and the IR walk are written against `cal` from their first
++    commit. In the other order a hand merge of the spikes failed at four seams: the
++    configuration's walk of what a program writes raised on `cal`; its loader put a
++    function block type among the programs; a block's `var_external` raised
++    `FunctionClauseError`; and there were two loaders. M2-5 first would settle the nested
++    state and the edit's changes while OE-1 is fresh, at the cost of rewording its
++    Done-when. The code does not choose: the two spikes conflict in the same three files in
++    either order, and their union passes. Adopted.
++31. **What may change in a function block type while a program that holds it runs
++    (M2-5):**
++    - nothing: any change to a block type is refused, line numbers ignored, and editing
++      a block needs a restart, as the conventional family edits its user-defined
++      instructions offline only; the nested migration waits for OE-2;
++    - the body only, with the one-shot and timer rules applied by path, and no member
++      migration;
++    - the full nested migration, which §4.9 gives to M2-5: the body may change and
++      members may be added or dropped, each instance migrated member by member, by path,
++      under OE-1's rules; a member whose type changes is refused, as a tag's is;
++    - or the same migration, with a member whose type changes started at its initial
++      value and reported `:added`, reading §4.9's "initialise the rest" literally.
++
++    *Recommend the full migration, a member's type change refused.* The documents give
++    the migration to M2-5, and the spike's walks found no rebuild, prune or one-shot
++    failure once the reviews' fixes were in. Refusing keeps one rule for a type change at
++    every depth; starting the member again would restart a value inside a running block
++    without a restart. Beremiz's hot swap also copies values by path and type. The cost is
++    that `Logex.Edit` roughly doubles. Adopted: a block's type, for the edit, is its name
++    and its members' kinds.
++32. **How long an edit blocks a one-shot inside a function block (M2-5):**
++    - until a scan runs its `ons`: a scan keeps in the instance's block list each bit
++      inside an instance whose body it did not run, under a false `cal` or none, and a
++      switch after such a scan lists it again where the program it starts still has that
++      `ons`;
++    - or the next scan, as at the top level.
++
++    And what §4.9's cost rule then says, since a bit inside a block is named by its path:
++    the scan right after a switch is linear in the block list's bytes, and so quadratic in
++    the depth of nesting; or the instance's block list becomes a tree, linear in the
++    one-shots.
++
++    *Recommend until a scan runs it, with the cost restated in bytes.* With the next scan,
++    a frozen block uses its block up unseen, and its `ons` then compares a changed rung
++    against the bit the old rung wrote: the false pulse decision 21 exists to prevent. A
++    tree would reshape a field the host sees, for a cost only absurd depths show: at the
++    conventional family's 16 levels a path is at most the 16 levels' instance names and
++    the bit's own. Adopted.
++33. **What a user function block shows outside it (M2-5):**
++    - its inputs: read anywhere, as decision 9 and §4.3 say; or not, as IEC forbids
++      (Ed 2 Table 32, Ed 3 Figure 13), so only its outputs are read;
++    - its own `var`s, the instances it holds included: hidden, so no path from outside
++      goes deeper than one member and `Runtime.get/2` owes no growth test in depth; or
++      readable, and part of `get/2`'s contract;
++    - writes from outside: none; or to its inputs, taking effect at the next call, as IEC
++      Ed 3 allows; or to its inputs and outputs, as the conventional family does, by
++      inference.
++
++    *Recommend inputs and outputs read, its `var`s hidden, nothing written.* A positional
++    `cal` passes every input from a tag the caller already holds, so reading one is
++    harmless. Hidden `var`s are IEC Ed 3's PRIVATE default and the conventional family's
++    local tags. A written input is overwritten by the next `cal`, so it matters only while
++    the block is frozen, and a written output is seen by a body that reads its own output,
++    as a seal-in does. Each can be relaxed later without breaking a program. Adopted.
++34. **How a program gets its function blocks from files, and their warnings (M2-5):**
++    - `Logex.compile/2` takes `types:`, and `Logex.compile_file/1` loads `<word>.ld`
++      beside the file that names a type word, compiling each once a call; a loaded
++      block's warnings stay in its type;
++    - the same loader, with `compile_file/1` handing back each loaded block's warnings
++      among the program's, once a call, each stamped with its block's file, while
++      `compile/2`, whose host compiled each block, gives only the program's;
++    - or `types:` only, on `compile/2` and a `compile_file/2`, the loader waiting for
++      M2-2.
++
++    *Recommend the loader, with the blocks' warnings handed back.* One loader is designed
++    once, and M2-2's configuration loader goes through it; the Done-when then runs from
++    files on disk. A program's `warnings` is the host's one warning channel (M1-5), so a
++    block loaded on the host's behalf reports there. Adopted. No spike built the warnings
++    handed back.
++35. **The configuration file's extension**, decision 3's placeholder (M2-2):
++    - `.lxcf`, "logex configuration file": no file found on GitHub, and no entry in
++      fileinfo.com, filext.com, file-extension.info or GitHub Linguist;
++    - `.ldcfg` or `.ldcf`, which pairs with `.ld`: no use found, but "ld" is the GNU
++      linker's name, so it may read as a linker's configuration;
++    - or keep `.lcf`, which CodeWarrior's linker command files, CudaText, Loon and Archicad
++      already use, in 5,264 files on GitHub.
++
++    *Recommended `.lxcf`.* The maintainer chose `.logex`, none of the options offered. A
++    check on 2026-10-02 found it free. fileinfo.com, filext.com, file-extension.info and
++    solvusoft.com have no page for it, where each has one for the placeholder; GitHub
++    Linguist, Vim 9.1, freedesktop's shared-mime-info, the VS Code Marketplace and Open
++    VSX give it no language or type; and Sourcegraph's index of public code holds no
++    `*.logex` file and no quoted `".logex"`, against 532 files of the placeholder's in 93
++    repositories. About a dozen other things are called logex (logging libraries, an
++    Ethereum client, an installer plug-in, a logic tutor, companies), and none has a file
++    type; the name is free on Hex. GitHub's own code search was not used; two registries
++    refused the requests, and a third lists neither extension, the placeholder included,
++    so proves nothing. Two costs are recorded. A file named only `.logex`
++    reads as logex's own settings file, so the loader's refusal of a bare dotfile reads
++    "`.logex` names no configuration", and the name is no longer free for a settings file.
++    And a `*.log*` glob matches `plant.logex`, though no `github/gitignore` template
++    ignores it by name. Prose says "a configuration file (`.logex`)", since "a logex file"
++    could also mean a `.ld` program.
++36. **A host mistake no text can say, in the configuration validator (M2-1):** a
++    configuration's name that is not a string, a function block type among its programs,
++    lines that do not rise, a list that is not proper.
++    - `Logex.Configuration.check/1` raises `ArgumentError`, as `instructionize/2` raises
++      on a tree no text could say (decision 28);
++    - or it returns a `:configure` diagnostic with no line, so that `check/1` is total over
++      the struct's fields.
++
++    *Recommend raising.* A mistake in the source is a diagnostic and a host's mistake an
++    `ArgumentError` (CLAUDE.md); none of these is in a configuration file's text, and a
++    raise keeps it out of the diagnostics a user reads for the file. `new!/1` and
++    `start/1` raise `check/1`'s problems either way. Adopted.
++37. **A task's priority bound (M2-1, M2-3):**
++    - 0 to 2147483647, a dint's range;
++    - 0 to 65535, IEC's own: both editions type PRIORITY as UINT, Ed 2 in its Table 50
++      (p.116) and Ed 3 in its Table 63 (p.182), and Table 10's note d makes a UINT 0 to
++      2^16 − 1 (Ed 2 p.31, Ed 3 p.32). Only the grammars differ, Ed 2's `integer` and Ed
++      3's `Unsigned_Int`, and neither bounds it;
++    - or 0 to 31, one vendor's (CODESYS's help).
++
++    *Recommend 0 to 65535.* Decision 7's reasoning is to start strict where relaxing later
++    breaks no plant. The case for a dint's range was that any tighter bound is one
++    vendor's number, which holds for 0 to 31 but not for IEC's own type. 0 stays the
++    highest. Adopted.
++38. **`restart/2` and `overlaps/1`, beyond §4.6's API (M2-1):**
++    - both: `Runtime.restart(rt, :cold | :warm)` restarts every instance through
++      `restart/3`, keeping the clock and the input image, so `scan/2` with `restart/3`
++      and a one-instance configuration agree across a restart with nothing resent; and
++      `Runtime.overlaps(rt)` gives each task's overlap count by name;
++    - neither: `start/1` is the cold restart, the host resending its whole input image,
++      and an overlap count is read from the events alone;
++    - or both deferred, to the runner or to OE-2.
++
++    *Recommend both.* A resource keeps each task's overlap count, and a host has no other
++    way to read it; and without `restart/2` a host restarting a plant must rebuild and
++    resend its input image. Adopted.
++39. **A task with both `single` and `interval` (M2-6):**
++    - the phase anchored at start: at most one run a cycle; due on an edge, or when the
++      trigger samples 0 and a periodic due time has come; while the trigger is 1, a
++      periodic due time that comes is skipped, not counted as an overlap, and the next is
++      on the same phase; an edge run does not move the phase;
++    - the phase re-anchored when the trigger falls;
++    - or the periods under a high trigger counted as overlaps.
++
++    *Recommend the anchored phase, its periods under a high trigger skipped and not
++    counted.* §4.6's periodic phase never drifts, and rule 2 suspends periodic runs while
++    SINGLE is 1 rather than counting them missed. There is no free-software precedent:
++    MatIEC ignores INTERVAL when SINGLE is given, and Beremiz's editor cannot express
++    both. Adopted.
++40. **A task's next due time when OE-2 changes its interval (M2-3 states it; OE-2 builds
++    it):**
++    - `min(next_due, now + new interval)`: a shorter interval takes effect within one new
++      period, and a longer one runs once more on the old phase; no run is added at the
++      switch. Where the new interval brings `next_due` forward, the phase is then the
++      switch's, and otherwise the runs step by the new interval from the kept `next_due`,
++      so in neither case is it the anchor's;
++    - `next_due` kept, the next run stepping by the new interval: no run is added or lost,
++      but a shortened interval waits out the old period; in a probe a 60000 ms task cut
++      to 10 ms at 20 ms ran no time in the next 1000 ms, where the first option ran it 100
++      times;
++    - the next multiple of the new interval from the anchor, which keeps the anchored
++      phase but needs the anchor kept beside `next_due`, a new piece of state;
++    - or the phase re-anchored at the switch, which adds a run or leaves a gap.
++
++    *Recommend `min(next_due, now + new interval)`.* It bounds the wait by the new
++    interval, adds no run and adds no state. §4.6's "the phase never drifts" describes
++    steady running, and no decided text fixes `next_due` across an interval change.
++    Adopted.
++
++  - For Milestone 2's design (§4.10, decisions 30–40): Ed 2 §2.5.2 (Table 32) and
++    Table 33 with Annex B.1.5.2, Table 10 note d (p.31) and Table 50 (p.116); Ed 3
++    Table 10 note d (p.32), §6.6.3.2 rule 11 (p.100, PRIVATE the default), §6.6.3.4.2
++    with its Figure 13 (p.108) and Table 63 (p.182).
++- For Milestone 2's design: the add-on instructions manual, Sept 2025, p.21 (instructions
++  nested up to 16 levels deep, decision 32; the design considerations reference says the
++  same on p.15), p.23 (local tags not reachable from outside, decision 33) and p.79 (a
++  parameter read or written from outside logic, decision 33).
++- Beremiz `editors/ResourceEditor.py`, the task editor, whose Interval cell is editable
++  only when a task's triggering is cyclic and whose Single cell only when it is an
++  interrupt (decision 39), at `5e3a749`.
++
++**CODESYS, for Milestone 2's design.**
++- Its online help, "Object: Task", read on 2026-10-02: a priority of 0 to 31, 0 the
++  highest (decision 37).
++  - any rule for an unconnected program input *(found since by inference, §4.4)*;
++- **The configuration file's extension:** settled by decision 35, `.logex`, checked on
++  2026-10-02 against the extension registries, GitHub Linguist, editors, MIME tables,
++  marketplaces and Sourcegraph's index of public code, and found free. Not checked:
++  GitHub's own code search, and two registries that refused the requests (a third lists
++  neither extension, the placeholder included). The placeholder it replaces clashed with
++  four tools.

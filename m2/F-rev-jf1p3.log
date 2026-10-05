@@ -1,0 +1,21 @@
+== top level: test resumes a timer the original does not declare; untest at once
+test 1: [{:added, "t1", %{"acc" => 0, "dn" => 0, "en" => 0, "last" => 0, "pre" => 50, "tt" => 0}}, {:held, "p", 1}]
+untest 1: []
+t1 frozen in the original: %{"acc" => 0, "dn" => 0, "en" => 1, "last" => 10, "pre" => 50, "tt" => 1}
+test 2: [{:held, "p", 1}, {:resumed, "t1", 30}]
+untest 2 at once (F11: gives the resume back): [{:resume_undone, "t1", 30}]
+t1 after the round trip: %{"acc" => 0, "dn" => 0, "en" => 1, "last" => 10, "pre" => 50, "tt" => 1}
+== nested, A: the original freezes x.t1 by a false EN; test to a block with no t1, untest at once
+x.t1 frozen at now=30: %{"acc" => 10, "dn" => 0, "en" => 1, "last" => 10, "pre" => 50, "tt" => 1}
+test: []
+untest at once: []
+x.t1 after the round trip (was last 10): %{"acc" => 10, "dn" => 0, "en" => 1, "last" => 10, "pre" => 50, "tt" => 1}
+EN back at now=40: decision 8 catches up to acc 40: %{"acc" => 40, "dn" => 0, "en" => 1, "last" => 40, "pre" => 50, "tt" => 1}
+the same scan with no edit at all: %{"acc" => 40, "dn" => 0, "en" => 1, "last" => 40, "pre" => 50, "tt" => 1}
+== nested, B: test resumes x.t1, which the original's block does not declare; untest at once
+test 1: [{:added, "x.t1", %{"acc" => 0, "dn" => 0, "en" => 0, "last" => 0, "pre" => 50, "tt" => 0}}]
+untest 1: []
+x.t1 kept, unused, in the original: %{"acc" => 0, "dn" => 0, "en" => 1, "last" => 10, "pre" => 50, "tt" => 1}
+test 2: [{:resumed, "x.t1", 30}]
+untest 2 at once (F11 would give the resume back): [{:resume_undone, "x.t1", 30}]
+x.t1 after the round trip: %{"acc" => 0, "dn" => 0, "en" => 1, "last" => 10, "pre" => 50, "tt" => 1}

@@ -1,0 +1,3289 @@
+diff --git a/README.md b/README.md
+index f3fa861..c64c6ea 100644
+--- a/README.md
++++ b/README.md
+@@ -44,6 +44,12 @@ Source syntax today:
+   refused for now. No tag is declared with a `.`
+ - a newline ends a rung: LF, CRLF or a lone CR
+ - `(` … `|` … `)` open, separate and close a parallel branch group
++- a file whose first line is `function_block seal` is a function block type, `seal`,
++  named as its file is: its declarations are its members, its rungs its body, and
++  `Logex.compile/2` returns it as a `%Logex.FbType{}`. A program given it in `types:`
++  declares an instance, `var s1 seal`, runs it with `cal`, and reads its inputs and
++  outputs, `s1.run`, anywhere; the block's own `var`s are named only inside it, and logic
++  outside writes none of its members. A block holds no instance of itself, at any depth
+ 
+ The *vocabulary* is a conventional ladder mnemonic set. The *branch delimiters used to be
+ too*, and are no longer — which is worth stating plainly, because the survey that found the
+@@ -102,6 +108,7 @@ necessarily a dialect; the point of surveying is to know what you are diverging
+ | `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
+ | `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two dints, each a tag, a member or a literal | compare — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`; none on a false rung. Two literals are a warning |
+ | `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
++| `cal s1 a b q` | an instance of a user function block, then its var_inputs' values and its var_outputs' tags, in declaration order | runs the instance: rung power is its EN. True: copies `a` and `b` in, runs the block's rungs over the instance's state, copies its outputs out to `q`, and passes power on. False: copies nothing in or out and runs nothing, so the instance and `q` are frozen, a timer in it catching up when it next runs. One `cal` runs an instance |
+ | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
+ 
+ Each instruction's operands are checked against this table and against their tags'
+@@ -134,9 +141,9 @@ These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5 and
+ Milestone 2) and will change the source language:
+ - **Program organisation** ([`docs/organisation.md`](docs/organisation.md)): a
+   configuration file that instantiates `.ld` programs, wires them to I/O points and
+-  globals, and schedules them on tasks; `var_external` for shared globals; function blocks
+-  called with `cal`. Each new word still gets its `docs/naming.md` stanza, which may change
+-  a spelling.
++  globals, and schedules them on tasks; `var_external` for shared globals. Each new word
++  still gets its `docs/naming.md` stanza, which may change a spelling. Function blocks
++  called with `cal` have landed (M2-5).
+ 
+ - **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
+ - **The other timers, counters and math** arrive as `tof tp rto res`, `ctu ctd`, `add sub
+diff --git a/docs/naming.md b/docs/naming.md
+index 42cac02..89937be 100644
+--- a/docs/naming.md
++++ b/docs/naming.md
+@@ -588,3 +588,33 @@ words of `PLAN.md` M1-3's declaration lines, surveyed before their code.
+ **Chosen:** `ge`
+ **Why:** Rule 1, as `eq`, with the operand order of `lt`.
+ **Checked:** 2026-09-30, as `eq`.
++
++### `function_block` — a function block's file: its first line, and its kind
++
++| Dialect | Name there | Notes |
++|---|---|---|
++| logex | `function_block seal`, a `.ld` file's first line | The file is a function block type, named on that line as its file is named: `seal.ld` holds `seal`. Its declarations are its members, in order: each `var_input` an input, each `var_output` an output, each `var` its own, an instance it holds included, which only its body names. Its rungs are its body. No `end_function_block`: the file ends it. `Logex.compile/2` returns it as a `%Logex.FbType{}`, which a program's compile takes in `types:`, and an instance of it is declared as `var s1 seal` and run by `cal`. The word is reserved in a function block's file, and recognised in any case on any file's first line only. A block's name is spelled as a type word in the files that hold it, so it may be no reserved word, and it is matched exactly. No block holds an instance of itself, at any depth. |
++| IEC 61131-3 | **FUNCTION_BLOCK** … END_FUNCTION_BLOCK | Ed 2:2003 §2.5.2.2 rule 1, p.69: *"The delimiting keywords for declaration of function blocks shall be FUNCTION_BLOCK...END_FUNCTION_BLOCK"*; Table 33, p.71. Ed 3:2013 §6.6.3.2 rule 1, p.99: *"The keyword FUNCTION_BLOCK, followed by an identifier specifying the name of the function block being declared"*; Table 40 feature 1, p.100. Ed 3 lets inputs be initialised (rule 8), declares instances in every section but VAR_TEMP (rule 17), and makes a VAR PRIVATE unless declared PUBLIC (rule 11). Recursion: Ed 2 §2.5, p.45, *"Program organization units shall not be recursive"*; Ed 3 §6.6.1.1, p.58, *"Implementer specific"*. Ed 2 Table C.2 lists FUNCTION_BLOCK among its keywords. |
++| Conventional | an **add-on instruction** definition | Input, Output and InOut parameters, and local tags that *"are not accessible programmatically"* from outside (add-on-instructions manual, Sept 2025, p.23); nested up to 16 levels (p.21); an existing one is edited offline only (design-considerations reference, Sept 2025, p.65). Whether one may hold an instance of itself, and the keyword of its text export: `unverified`. |
++| Siemens STEP 7 / TIA Portal LAD | **FB**, a function block, with an instance data block per instance | Its SCL source keyword: `unverified` here. |
++| CODESYS | **FUNCTION_BLOCK** … END_FUNCTION_BLOCK, a POU object | `unverified` for this stanza: no CODESYS page on the declaration was read. |
++| Mitsubishi GX Works | **FB**, a function block POU | `unverified`. |
++
++**Chosen:** `function_block`
++**Why:** Rule 1: IEC's keyword, lowercased, as `var_input` takes VAR_INPUT. A first line rather than a second extension says the file's kind (`docs/organisation.md` §4.3 and decision 4) and keeps one extension for every POU. `end_function_block` is dropped as `end_var` was: one file is one block, so nothing needs closing. The name on the line must match the file's because state is keyed by name (`docs/organisation.md` §4.1): two names for one block would let a file be renamed under a running instance. Its members follow IEC's sections; the departures are logex's earlier ones: no initial value on an input (`var_input`), and an instance only in `var` (`ton`). A block's own `var` is hidden from outside, IEC Ed 3's PRIVATE default and the conventional family's local tags, so from outside an instance has no member deeper than one `.`. Recursion is refused as Ed 2 refuses it, which Ed 3 leaves to the implementer: one instance is one nested map. The word is reserved by file kind (`docs/organisation.md` §4.8), so a program keeps a tag named `function_block`; a program's file can never begin with it, since no instruction is so named.
++**Checked:** 2026-10-02. IEC 61131-3:2003 §2.5 p.45, §2.5.2.2 p.69, Table 33 p.71 and Table C.2, and IEC 61131-3:2013 §6.6.1.1 p.58, §6.6.3.2 pp.99–100 and Table 40 p.100, read directly; the conventional family's add-on-instructions manual (Sept 2025) pp.21 and 23 and design-considerations reference (Sept 2025) p.65. The Siemens, CODESYS and Mitsubishi rows were not checked for this stanza.
++
++### `cal` — run an instance of a user function block
++
++| Dialect | Name there | Notes |
++|---|---|---|
++| logex | `var s1 seal`; `xic ready cal s1 start halt motor` | Runs `s1`, an instance of the user function block `seal`. The operands are positional: `seal`'s var_inputs, then its var_outputs, each in declaration order, IL's non-formal call. Rung power is the instance's EN, and the power `cal` passes on is its ENO, which no block can reset, so it is EN. Energised, each input operand is copied into its input, the block's rungs run over the instance's state, and each output is copied out to its operand. De-energised, nothing is copied in, the body does not run, and nothing is written out: the instance is frozen, and so is every tag its outputs name. A timer inside it keeps `.en` and `last` and catches up when it next runs; a one-shot inside it never sees the rung go false. A body runs on its program instance's clock and first scan, so an `ons` in a block first run after the first scan can fire on that run. One `cal` runs an instance; `cal` runs no built-in timer, which `ton t1 5000` runs. |
++| IEC 61131-3 | **CAL**, with the C and N modifiers (IL) | Ed 2:2003 §3.2.3 and Table 52 feature 19, pp.125–126; Table 53 feature 1a, p.127, the non-formal call `CAL CMD_TMR(%IX5, T#300ms, OUT, ELAPSED)`. Ed 2's text on p.126 calls feature 1a the formal list and 1b the non-formal, the reverse of its table; logex follows the table, which Ed 3 confirms. The conditional call: *"All assignments in an argument list of a conditional function block invocation shall only be performed together with the invocation, if the condition is true"* (Ed 2 §3.2.3, p.126; Ed 3 §7.2.4.3, p.198). Ed 3: Table 68 feature 21, p.197, and Table 69 feature 1a, p.199. Ed 3 §7.2.1, p.195, marks IL deprecated, and Ed 4 removed it. ST calls an instance by its name (Ed 2 Table 56 item 2, p.132, as `docs/organisation.md` §4.3 quotes it); LD draws a block with EN and ENO (Ed 2 §2.5.2.1a), p.68; Ed 3 §6.6.1.5, pp.63–64). EN and ENO are keywords in Ed 2 Table C.2, and logex has no word for either. |
++| Conventional | an **add-on instruction**, by its own name on the rung; **JSR** for a routine | On a false rung it *"Does not execute any logic for the Add-On Instruction and does not write any outputs. Input parameters are passed values."* (add-on-instructions manual, Sept 2025, p.43); a one-shot inside one *"will not detect the rung-in transition to the false state"* (p.20). JSR "Jump to Subroutine" calls a routine, which IEC and logex do not have (the Program control table above). |
++| Siemens STEP 7 / TIA Portal LAD | an FB box with its instance data block; classic `---( CALL )`, CALL_FB | As the Program control table above; not checked again for this stanza. |
++| CODESYS | IL **CAL**; in LD and FBD a box with EN and ENO | *"When the EN input has the value FALSE at the time of the POU call, the operations defined in the POU are not executed. … The ENO output has the same value as the EN input."* (help, *FBD/LD/IL Element: Box with EN/ENO*, read 2026-10-02). Whether it copies inputs in, or outputs out, on a false EN: `unverified`. |
++| Mitsubishi GX Works | CALL(P), FCALL, ECALL, EFCALL | As the Program control table above; how a function block instance is called: `unverified`. |
++
++**Chosen:** `cal`, which supersedes the Program control table's `cal <routine>` row: logex has no routines (`docs/organisation.md` §5), and `cal` runs a function block instance.
++**Why:** Rule 1, with its basis stated: IEC has three spellings of the call and `CAL` is the only word among them, and it rests on Ed 2 and Ed 3's IL, which Ed 4 removed (`docs/organisation.md` §4.3). ST's form, the instance's name as the call, would put a tag where an instruction starts, so the words that start an instruction would depend on each file's declarations; that undoes the rule that mnemonics are reserved and never tags. The positional operands are IL's non-formal call: the arity and type errors name the formal, and two swapped bool operands still compile, the price of the form. Rung power has two meanings, on purpose: on `ton` it is the timer's IN, and a false rung resets the timer, the conventional model; on `cal` it is the instance's EN, IEC's. What a false EN does is the implementer's to state under Ed 3 (§6.6.1.5 rule 4: outputs on a false ENO are *"Implementer specific"*), and logex states it: nothing in, nothing out, IEC Ed 3's "external implementation" (EXAMPLES 2 and 4, p.64) and IL's conditional call; MatIEC copies inputs in and the frozen outputs out (its "internal implementation", EXAMPLE 1 and 3), and the conventional family copies inputs in. One `cal` per instance, as one `ton` per timer: IEC lets an instance be called twice in a scan, which would run its body twice with its inputs replaced halfway, so logex refuses the second, which allowing later breaks no program. `cal` passes on the power it receives, so anything may follow it on its path.
++**Checked:** 2026-10-02. IEC 61131-3:2003 §2.5.2.1a) p.68, §3.2.3 and Tables 52 and 53, pp.125–127, Table C.2; IEC 61131-3:2013 §6.6.1.5 pp.63–64, §7.2.1 p.195, §7.2.4.3 p.198, Tables 68 and 69, pp.197–199, read directly; the conventional family's add-on-instructions manual (Sept 2025) pp.20 and 43; CODESYS help, *FBD/LD/IL Element: Box with EN/ENO*; MatIEC at `3a41303`, `stage4/generate_c/generate_c.cc` and `generate_c_st.cc` (`fb_invocation_c`). The Siemens and Mitsubishi rows are the Program control table's.
+diff --git a/lib/logex.ex b/lib/logex.ex
+index a39ebac..262caf7 100644
+--- a/lib/logex.ex
++++ b/lib/logex.ex
+@@ -36,7 +36,7 @@ defmodule Logex do
+       "line 2: unknown instruction `xyz`"
+   """
+ 
+-  alias Logex.{Compiler, Diagnostic, Program}
++  alias Logex.{Compiler, Declarations, Diagnostic, FbType, Program}
+ 
+   @doc """
+   Compiles `source` into a program named `name`: `{:ok, %Logex.Program{}}`, or
+@@ -46,6 +46,12 @@ defmodule Logex do
+   A name is required, because a configuration refers to a program type by its name. It is
+   a letter or `_`, then letters, digits or `_`. A call that breaks this contract raises
+   `ArgumentError`; nothing in the source does.
++
++  **Function blocks (M2-5).** A source whose first line is `function_block <name>` is a
++  function block type, and compiles to `{:ok, %Logex.FbType{}}`; its first line must name
++  it as `name` does, which `compile_file/1` takes from the file. `types:` gives the user
++  function blocks the source may declare instances of, as in `var s1 seal`: a list of the
++  `%Logex.FbType{}`s this function returned for them.
+   """
+   def compile(source, options)
+ 
+@@ -56,22 +62,32 @@ defmodule Logex do
+         "Logex.compile/2 takes source text as a binary, got: #{inspect(source)}"
+       )
+ 
+-  def compile(source, name: name) when is_binary(name),
+-    do: named(name_problem(name), name, source)
++  def compile(source, options) when is_list(options),
++    do: compile_with(Enum.sort(options), source, options)
++
++  def compile(_source, options), do: options!(options)
++
++  defp compile_with([name: name], source, _options),
++    do: compile_with([name: name, types: []], source, nil)
+ 
+-  def compile(_source, name: name),
++  defp compile_with([name: name, types: types], source, _options) when is_binary(name),
++    do: named(name_problem(name), name, source, types)
++
++  defp compile_with([name: name, types: _types], _source, _options),
+     do: raise(ArgumentError, "a program's name is a string, got: #{inspect(name)}")
+ 
+-  def compile(_source, options),
++  defp compile_with(_sorted, _source, options), do: options!(options)
++
++  defp options!(options),
+     do:
+       raise(
+         ArgumentError,
+-        "Logex.compile/2 takes a name and no other option, as in " <>
+-          ~s|Logex.compile(source, name: "motor"), got: #{inspect(options)}|
++        "Logex.compile/2 takes a name and, for function blocks, types, as in " <>
++          ~s|Logex.compile(source, name: "motor", types: [seal]), got: #{inspect(options)}|
+       )
+ 
+-  defp named(nil, name, source), do: compiled(source, name)
+-  defp named(problem, _name, _source), do: raise(ArgumentError, problem)
++  defp named(nil, name, source, types), do: compiled(source, name, types)
++  defp named(problem, _name, _source, _types), do: raise(ArgumentError, problem)
+ 
+   @doc """
+   Reads and compiles the file at `path`, naming the program after the file:
+@@ -80,33 +96,54 @@ defmodule Logex do
+   A file that cannot be read, or whose name cannot name a program, is a `:file`
+   diagnostic, not an exception. After a refused name the source is still compiled, so its
+   own mistakes are listed too.
++
++  A file headed `function_block <name>` compiles to its `%Logex.FbType{}`, the name on
++  that line matching the file's (M2-5). `types:` is `compile/2`'s: the user function
++  blocks the file may declare instances of, compiled first.
+   """
+-  def compile_file(path) when is_binary(path), do: in_file(read(File.read(path), path), path)
++  def compile_file(path, options \\ [])
++
++  def compile_file(path, options) when is_binary(path),
++    do: in_file(read(File.read(path), path, file_types!(options)), path)
+ 
+-  def compile_file(path),
++  def compile_file(path, _options),
+     do:
+       raise(ArgumentError, "Logex.compile_file/1 takes a path as a binary, got: #{inspect(path)}")
+ 
+-  defp read({:error, reason}, _path),
++  defp file_types!([]), do: []
++  defp file_types!(types: types), do: types
++
++  defp file_types!(options),
++    do:
++      raise(
++        ArgumentError,
++        "Logex.compile_file/2 takes types and no other option, as in " <>
++          ~s|Logex.compile_file("motor.ld", types: [seal]), got: #{inspect(options)}|
++      )
++
++  defp read({:error, reason}, _path, _types),
+     do: {:error, [file_problem("cannot be read: #{:file.format_error(reason)}")]}
+ 
+-  defp read({:ok, source}, path) do
++  defp read({:ok, source}, path, types) do
+     name = Path.rootname(Path.basename(path))
+-    from_file(name_problem(name), name, source)
++    from_file(name_problem(name), name, source, types)
+   end
+ 
+-  defp from_file(nil, name, source), do: compiled(source, name)
++  defp from_file(nil, name, source, types), do: compiled(source, name, types)
+ 
+-  defp from_file(problem, _name, source),
+-    do: {:error, [file_problem(problem <> " (rename the file)") | mistakes(source)]}
++  defp from_file(problem, _name, source, types),
++    do: {:error, [file_problem(problem <> " (rename the file)") | mistakes(source, types)]}
+ 
+-  defp mistakes(source), do: mistakes_in(compiled(source, nil))
++  defp mistakes(source, types), do: mistakes_in(compiled(source, nil, types))
+ 
+   defp mistakes_in({:ok, _program}), do: []
+   defp mistakes_in({:error, diagnostics}), do: diagnostics
+ 
+   defp file_problem(message), do: %Diagnostic{stage: :file, line: nil, message: message}
+ 
++  defp in_file({:ok, %FbType{body: body} = type}, path),
++    do: {:ok, %{type | body: elem(in_file({:ok, body}, path), 1)}}
++
+   defp in_file({:ok, program}, path),
+     do: {:ok, %{program | warnings: Enum.map(program.warnings, &%{&1 | file: path})}}
+ 
+@@ -124,23 +161,52 @@ defmodule Logex do
+       "#{inspect(name)} cannot name a program: a name is a letter or `_`, " <>
+         "then letters, digits or `_`"
+ 
+-  defp compiled(source, name), do: lexed(Compiler.tokenize(source), source, name)
++  defp compiled(source, name, types), do: lexed(Compiler.tokenize(source), source, {name, types})
+ 
+-  defp lexed({:ok, tokens, _end_line}, source, name),
+-    do: parsed(Compiler.parse(tokens), source, name)
++  defp lexed({:ok, tokens, _end_line}, source, named),
++    do: parsed(Compiler.parse(tokens), source, named)
+ 
+-  defp lexed({:error, {{line, column}, module, reason}, _line}, _source, _name),
++  defp lexed({:error, {{line, column}, module, reason}, _line}, _source, _named),
+     do: {:error, [front_end(:lex, line, column, module.format_error(reason))]}
+ 
+-  defp parsed({:ok, ast}, source, name), do: lowered(Compiler.instructionize(ast), source, name)
++  defp parsed({:ok, {:routine, {:rungs, rungs}} = ast}, source, {name, types}),
++    do:
++      lowered(
++        Compiler.instructionize(ast, [], types),
++        headed(Declarations.header(rungs), name),
++        source,
++        name
++      )
+ 
+-  defp parsed({:error, {{line, column}, module, reason}}, _source, _name),
++  defp parsed({:error, {{line, column}, module, reason}}, _source, _named),
+     do: {:error, [front_end(:parse, line, column, module.format_error(reason))]}
+ 
+-  defp lowered({:ok, %Program{} = program}, source, name),
++  # M2-5: a block's first line names it as its file does (docs/organisation.md decision
++  # 4), so `name`, from `compile/2` or the file, must be the name on that line. A header
++  # with no name, or with more than one word, is the compiler's to report.
++  defp headed({line, [{:name, _, header}]}, name) when header != name and name != nil,
++    do: [
++      %Diagnostic{
++        stage: :validate,
++        line: line,
++        message:
++          "`function_block #{header}` names this block `#{header}`, but it is compiled as " <>
++            "`#{name}`: a function block's first line names it as its file does"
++      }
++    ]
++
++  defp headed(_header, _name), do: []
++
++  defp lowered({:ok, %Program{} = program}, [], source, name),
+     do: {:ok, %{program | name: name, source: source}}
+ 
+-  defp lowered({:error, diagnostics}, _source, _name), do: {:error, diagnostics}
++  defp lowered({:ok, %FbType{body: body} = type}, [], source, name),
++    do: {:ok, %{type | body: %{body | name: name, source: source}}}
++
++  defp lowered({:ok, _compiled}, mismatch, _source, _name), do: {:error, mismatch}
++
++  defp lowered({:error, diagnostics}, mismatch, _source, _name),
++    do: {:error, Enum.sort_by(mismatch ++ diagnostics, & &1.line)}
+ 
+   defp front_end(stage, line, column, message),
+     do: %Diagnostic{stage: stage, line: line, column: column, message: message}
+diff --git a/lib/logex/compiler.ex b/lib/logex/compiler.ex
+index 89c733a..2809071 100644
+--- a/lib/logex/compiler.ex
++++ b/lib/logex/compiler.ex
+@@ -13,7 +13,9 @@ defmodule Logex.Compiler do
+   # which IEC's MOVE takes (`IN : ANY` -> `OUT : ANY`, docs/naming.md). A tag here may be
+   # a member of an instance, `t1.acc`, which has the type its schema gives it (M1-6).
+   # Mnemonics are matched case-insensitively and are reserved: no tag may be named after
+-  # one, in any case.
++  # one, in any case. M2-5 adds `cal`, whose `{:instance, :block}` slot is an instance of a
++  # user function block: the rest of its signature is that block's (`Logex.FbType.signature/1`),
++  # built per compile from the instance's type, so this table stays the built-in mnemonics.
+   @instructions %{
+     "xic" => {:xic, [{:read, :bool}]},
+     "xio" => {:xio, [{:read, :bool}]},
+@@ -28,7 +30,8 @@ defmodule Logex.Compiler do
+     "gt" => {:gt, [{:value, :dint}, {:value, :dint}]},
+     "le" => {:le, [{:value, :dint}, {:value, :dint}]},
+     "ge" => {:ge, [{:value, :dint}, {:value, :dint}]},
+-    "ton" => {:ton, [{:instance, "ton"}, {:preset, :dint}]}
++    "ton" => {:ton, [{:instance, "ton"}, {:preset, :dint}]},
++    "cal" => {:cal, [{:instance, :block}]}
+   }
+ 
+   @doc """
+@@ -57,20 +60,288 @@ defmodule Logex.Compiler do
+   The routine is checked first, against `Logex.Parser.well_formed!/1`: a tree that
+   `Logex.Parser.parse/1` could not have produced, such as an empty group, a negative
+   literal or a rung over two lines, raises `ArgumentError`, a host mistake, since no
+-  source text says it and no diagnostic could cite it (OE-1). Then `declared`.
++  source text says it and no diagnostic could cite it (OE-1). Then `declared`, then
++  `types`.
++
++  **Function blocks (M2-5).** `types` is a list of the user function block types this
++  routine may declare instances of, each a `%Logex.FbType{}` that `Logex.compile/2`
++  returned; anything else, or two of one name, raises `ArgumentError`. A routine whose
++  first rung is `function_block <name>` is a function block's body: it compiles to
++  `{:ok, %Logex.FbType{}}`, named by that line, with a member for each declaration, in
++  order, and the compiled body as its `body`. It may not hold an instance of its own
++  type, at any depth.
+   """
+-  def instructionize(routine, declared \\ []) do
++  def instructionize(routine, declared \\ [], types \\ []) do
+     {:routine, {:rungs, rungs}} = Logex.Parser.well_formed!(routine)
+-    {tags, logic, declaring} = Declarations.split(rungs, declared)
++    library = library!(types)
++    {block, body, heading} = kind(Declarations.header(rungs), rungs)
++    {tags, logic, declaring} = Declarations.split(body, declared, own(block, library))
++    {tags, excused, recursive} = recursion(block, tags)
+     known = {tags, folded(tags)}
+     {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, known))
+-    note? = map_size(tags) == 0 and declares_nothing?(routine, logic)
++    note? = map_size(tags) == 0 and length(body) == length(logic)
+     instructions = instructions(rungs)
+     shared = shared_bits(instructions, tags)
+     {tags, timing} = presets(instructions, tags)
++    calls = second_calls(instructions, tags)
+     paths = Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end)
+-    errors = declaring ++ undeclared(Enum.reverse(lowering), tags, note?) ++ shared ++ timing
+-    lowered(rungs, tags, errors ++ paths)
++    reserved = reserved_in(block, tags)
++    found = undeclared(Enum.reverse(lowering), tags, note?, excused)
++    errors = heading ++ declaring ++ recursive ++ reserved ++ found ++ shared ++ timing ++ calls
++    as_type(block, declared, lowered(rungs, tags, errors ++ paths))
++  end
++
++  # ---- function blocks (M2-5) ------------------------------------------------------------
++
++  # The function blocks a compile is given, by name: each one Logex.compile/2 returned for a
++  # file headed `function_block <name>`, and no two with one name, in any case, since a
++  # block's name is matched exactly and two that differ only in case would be two types.
++  defp library!(types) when is_list(types),
++    do: Enum.reduce(types, %{}, fn type, library -> given!(block!(type), library) end)
++
++  defp library!(types),
++    do:
++      raise(
++        ArgumentError,
++        "types must be a list of function block types from Logex.compile/2, " <>
++          "got: #{inspect(types)}"
++      )
++
++  defp block!(%FbType{name: name, members: members, body: %Program{}} = type)
++       when is_binary(name) and is_list(members),
++       do: named_block!(Declarations.name?(name) and Declarations.reserved(name) == nil, type)
++
++  defp block!(other), do: not_a_block!(other)
++
++  defp named_block!(true, type), do: type
++  defp named_block!(false, type), do: not_a_block!(type)
++
++  defp not_a_block!(other),
++    do:
++      raise(
++        ArgumentError,
++        "types holds #{inspect(other)}, which is not a function block type " <>
++          "from Logex.compile/2"
++      )
++
++  defp given!(%FbType{name: name} = type, library),
++    do:
++      twin!(
++        Enum.find(Map.keys(library), &(String.downcase(&1) == String.downcase(name))),
++        type,
++        library
++      )
++
++  defp twin!(nil, %FbType{name: name} = type, library), do: Map.put(library, name, type)
++
++  defp twin!(name, %FbType{name: name}, _library),
++    do: raise(ArgumentError, "types holds two function blocks named `#{name}`")
++
++  defp twin!(first, %FbType{name: name}, _library),
++    do:
++      raise(
++        ArgumentError,
++        "types holds `#{first}` and `#{name}`, which differ only in case: " <>
++          "a function block's name is matched exactly, so these would be two types"
++      )
++
++  # A routine is a program's, or a function block's whose first rung is its header, which
++  # is neither a declaration nor logic and is taken off before either is read. A header
++  # that cannot name a block is reported, and the body is still compiled for its own
++  # mistakes, as a program after a refused file name is (Logex.compile_file/1).
++  defp kind(nil, rungs), do: {nil, rungs, []}
++
++  defp kind({line, operands}, [_header | rungs]), do: heading(header(operands), line, rungs)
++
++  defp heading({:ok, name}, _line, rungs), do: {{:block, name}, rungs, []}
++
++  defp heading({:error, message}, line, rungs),
++    do: {{:block, nil}, rungs, [diagnostic(line, message)]}
++
++  defp header([]),
++    do: {:error, "`function_block` needs the block's name, as in `function_block seal`"}
++
++  defp header([{:name, _, name}]), do: block_name(Declarations.reserved(name), name)
++
++  defp header([{:int_lit, _, value} | _]),
++    do: {:error, "expected the block's name after `function_block`, found `#{value}`"}
++
++  defp header([{:branches, _} | _]),
++    do: {:error, "a function block's first line cannot hold a branch group"}
++
++  defp header([{:name, _, name}, extra | _]),
++    do: {:error, "unexpected #{shown_element(extra)} after `function_block #{name}`"}
++
++  defp shown_element({:name, _, word}), do: "`#{word}`"
++  defp shown_element({:int_lit, _, value}), do: "`#{value}`"
++  defp shown_element({:branches, _}), do: "a branch group"
++
++  # A block's name is spelled as a type word in the files that hold it, so unlike a
++  # program's it can be no reserved word, the header's own included.
++  defp block_name(nil, name), do: plain_block_name(String.contains?(name, "."), name)
++
++  defp block_name(:mnemonic, name),
++    do: {:error, "`#{name}` is an instruction and cannot name a function block"}
++
++  defp block_name(:type, name),
++    do: {:error, "`#{name}` is a type and cannot name a function block"}
++
++  defp block_name(:section, name),
++    do: {:error, "`#{name}` is a keyword and cannot name a function block"}
++
++  defp plain_block_name(true, name),
++    do: {:error, "`#{name}` cannot name a function block: `.` is kept for a member"}
++
++  defp plain_block_name(false, name),
++    do: header_word(String.downcase(name) == Declarations.header_word(), name)
++
++  defp header_word(true, name),
++    do: {:error, "`#{name}` is a keyword and cannot name a function block"}
++
++  defp header_word(false, name), do: {:ok, name}
++
++  # A block's own name is a type word in its own file, so that an instance of itself is
++  # found and refused as one, not as an unknown type: the library's block of that name,
++  # if given one, or a stand-in.
++  defp own({:block, name}, library) when is_binary(name),
++    do:
++      Map.put_new(library, name, %FbType{
++        name: name,
++        members: [],
++        body: %Program{rungs: [], tags: %{}}
++      })
++
++  defp own(_kind, library), do: library
++
++  # IEC Ed 2 §2.5: "Program organization units shall not be recursive". A block may hold
++  # no instance of its own type, at any depth, by name, since a type is known by its name.
++  # Each such declaration is reported at its line, and is then excused: taken out of the
++  # table and never reported as undeclared, so its uses add no second message.
++  defp recursion({:block, name}, tags) when is_binary(name) do
++    found =
++      for {tag_name, %Tag{type: %FbType{} = type} = tag} <- tags,
++          path = holds(type, name),
++          do: {tag_name, tag, path}
++
++    names = Enum.map(found, &elem(&1, 0))
++    {Map.drop(tags, names), MapSet.new(names), Enum.map(found, &recursive(&1, name))}
++  end
++
++  defp recursion(_kind, tags), do: {tags, MapSet.new(), []}
++
++  # The path of members from an instance of `type` to an instance of the type named `name`,
++  # or nil: `[]` where `type` is it.
++  defp holds(%FbType{name: name}, name), do: []
++  defp holds(%FbType{members: members}, name), do: Enum.find_value(members, &held(&1, name))
++
++  defp held(%Member{name: member, type: %FbType{} = type}, name),
++    do: within(holds(type, name), member)
++
++  defp held(_member, _name), do: nil
++
++  defp within(nil, _member), do: nil
++  defp within(path, member), do: [member | path]
++
++  defp recursive({name, %Tag{line: nil}, _path}, block),
++    do:
++      raise(
++        ArgumentError,
++        "`#{name}` holds an instance of `#{block}`, the function block being compiled: " <>
++          "a function block cannot hold an instance of itself"
++      )
++
++  defp recursive({name, %Tag{line: line}, []}, block),
++    do:
++      diagnostic(
++        line,
++        "`#{name}` is a #{block}, the function block this file declares: " <>
++          "a function block cannot hold an instance of itself"
++      )
++
++  defp recursive({name, %Tag{type: type, line: line}, path}, block),
++    do:
++      diagnostic(
++        line,
++        "`#{name}` is a #{type.name}, and `#{Enum.join([name | path], ".")}` is a #{block}, " <>
++          "the function block this file declares: a function block cannot hold an instance " <>
++          "of itself, at any depth"
++      )
++
++  # `function_block` is reserved in a function block's file only (docs/organisation.md
++  # §4.8): a program may still have a tag of that name.
++  defp reserved_in({:block, _name}, tags),
++    do:
++      for(
++        {name, %Tag{line: line}} <- tags,
++        String.downcase(name) == Declarations.header_word(),
++        do: reserved_tag(line, name)
++      )
++
++  defp reserved_in(_kind, _tags), do: []
++
++  defp reserved_tag(nil, name),
++    do:
++      raise(
++        ArgumentError,
++        "`#{name}` is a keyword in a function block's file and cannot name a tag"
++      )
++
++  defp reserved_tag(line, name),
++    do:
++      diagnostic(line, "`#{name}` is a keyword in a function block's file and cannot name a tag")
++
++  # A compiled block is its type: a member for each declaration, the tags from Elixir first
++  # in the order given, then the source's in line order, so that `cal`'s positional
++  # operands follow the text.
++  defp as_type(nil, _declared, result), do: result
++  defp as_type({:block, _}, _declared, {:error, _} = result), do: result
++
++  defp as_type({:block, name}, declared, {:ok, %Program{tags: tags} = body}) do
++    elixir = Enum.map(declared, & &1.name)
++    source = for {_, %Tag{line: line} = tag} <- tags, line != nil, do: tag
++    order = elixir ++ Enum.map(Enum.sort_by(source, & &1.line), & &1.name)
++
++    {:ok,
++     %FbType{name: name, members: Enum.map(order, &member(Map.fetch!(tags, &1))), body: body}}
++  end
++
++  defp member(%Tag{name: name, type: type, section: section} = tag),
++    do: %Member{name: name, type: type, role: role(section), initial: start(tag)}
++
++  defp role(:var_input), do: :input
++  defp role(:var_output), do: :output
++  defp role(:var), do: :local
++
++  defp start(%Tag{type: %FbType{}, initial: nil}), do: %{}
++  defp start(%Tag{initial: nil}), do: 0
++  defp start(%Tag{initial: initial}), do: initial
++
++  # One `cal` runs an instance, as one `ton` runs a timer: with every input passed at
++  # each call, a second would run the instance twice in a scan, its inputs replaced
++  # halfway and its one-shots and timers stepped twice. A second is an error at its own
++  # line, citing the first. A `cal` of anything but a user block's instance was reported
++  # already, and was lowered to nothing.
++  defp second_calls(instructions, tags) do
++    {_first, diagnostics} =
++      Enum.reduce(instructions, {%{}, []}, &second_call(&1, &2, tags))
++
++    Enum.reverse(diagnostics)
++  end
++
++  defp second_call({:cal, line, [{:name, _, instance} | _]}, {first, diagnostics}, _tags),
++    do: called_by(Map.fetch(first, instance), {instance, line}, {first, diagnostics})
++
++  defp second_call(_instruction, acc, _tags), do: acc
++
++  defp called_by(:error, {instance, line}, {first, diagnostics}),
++    do: {Map.put(first, instance, line), diagnostics}
++
++  defp called_by({:ok, first_line}, {instance, line}, {first, diagnostics}) do
++    message =
++      "`#{instance}` is already run by the `cal` #{where(first_line, line)}: " <>
++        "one `cal` runs an instance"
++
++    {first, [diagnostic(line, message) | diagnostics]}
+   end
+ 
+   # M1-6: one `ons` uses a storage bit. A second `ons` on one bit is an error at its own
+@@ -132,8 +403,13 @@ defmodule Logex.Compiler do
+     do:
+       run_by(Map.fetch(run, timer), Map.get(tags, timer), {timer, line, pre}, {run, diagnostics})
+ 
+-  defp run_by(:error, %Tag{type: %FbType{}}, {timer, line, pre}, {run, diagnostics}),
+-    do: {Map.put(run, timer, {line, pre}), diagnostics}
++  defp run_by(
++         :error,
++         %Tag{type: %FbType{name: "ton", body: nil}},
++         {timer, line, pre},
++         {run, diagnostics}
++       ),
++       do: {Map.put(run, timer, {line, pre}), diagnostics}
+ 
+   defp run_by({:ok, {first, _}}, %Tag{}, {timer, line, _pre}, {run, diagnostics}) do
+     message =
+@@ -254,9 +530,6 @@ defmodule Logex.Compiler do
+   defp where(line, line), do: "in this rung"
+   defp where(first, _line), do: "on line #{first}"
+ 
+-  # No declaration line at all, as opposed to declarations that were all wrong.
+-  defp declares_nothing?({:routine, {:rungs, rungs}}, logic), do: length(rungs) == length(logic)
+-
+   defp lowered(rungs, tags, []),
+     do: {:ok, %Program{rungs: rungs, tags: tags, warnings: Logex.Warnings.of(rungs, tags)}}
+ 
+@@ -291,6 +564,16 @@ defmodule Logex.Compiler do
+     lower(skip_operands(rest), ir, [found | diagnostics], known)
+   end
+ 
++  # M2-5: `cal s1 …` takes the instance first, then as many operands as its type has
++  # formals, each checked against its formal, which a message names. A `cal` of anything
++  # else is reported, its would-be operands skipped, and nothing is lowered.
++  defp lower_word({:ok, {:cal, signature}}, _key, at, {rest, ir, diagnostics, known}) do
++    {operands, rest} = take_operands(rest, 1, [])
++    diagnostics = check_count(signature, operands, rest, at, diagnostics)
++    diagnostics = check_kinds(signature, operands, at, diagnostics)
++    called(operands, at, {rest, ir, diagnostics, known})
++  end
++
+   defp lower_word(
+          {:ok, {symbol, signature}},
+          _key,
+@@ -311,6 +594,179 @@ defmodule Logex.Compiler do
+     lower(skip_operands(rest), ir, [unknown | diagnostics], known)
+   end
+ 
++  defp called([{:name, _, name} = instance], at, {rest, ir, diagnostics, {tags, _} = known}),
++    do: callee(lookup(name, tags), instance, at, {rest, ir, diagnostics, known})
++
++  defp called(_none_or_literal, _at, {rest, ir, diagnostics, known}),
++    do: lower(skip_operands(rest), ir, diagnostics, known)
++
++  defp callee(
++         {:ok, %Tag{type: %FbType{body: %Program{}} = type}},
++         {:name, _, name} = instance,
++         {line, word},
++         {rest, ir, diagnostics, {tags, _} = known}
++       ) do
++    formals = FbType.formals(type)
++    {operands, rest} = take_operands(rest, length(formals), [])
++    call = {line, "#{word} #{name}", type}
++    diagnostics = arity(formals, operands, rest, call, diagnostics)
++
++    diagnostics =
++      formals
++      |> Enum.zip(operands)
++      |> Enum.with_index(1)
++      |> Enum.reduce(diagnostics, fn {{formal, operand}, n}, acc ->
++        formal(formal, operand, {n, call}, tags, acc)
++      end)
++
++    lowered = {:cal, line, [instance | Enum.map(operands, &operand/1)]}
++    lower(rest, [lowered | ir], diagnostics, known)
++  end
++
++  defp callee(found, {:name, _, name} = instance, at, {rest, ir, diagnostics, known}) do
++    diagnostics =
++      resolve(Declarations.reserved(name), found, {:instance, :block}, instance, at, diagnostics)
++
++    lower(skip_operands(rest), ir, diagnostics, known)
++  end
++
++  defp arity(formals, operands, _rest, _call, diagnostics)
++       when length(operands) == length(formals),
++       do: diagnostics
++
++  defp arity(formals, operands, rest, {line, call, type}, diagnostics) do
++    message =
++      "`#{call}` expects #{operand_count(length(formals))} after the instance, a " <>
++        "#{type.name}'s #{listed(Enum.map(formals, &formal_shown/1))}, " <>
++        "found #{found(length(operands))}" <> stopped_at(rest)
++
++    [diagnostic(line, message) | diagnostics]
++  end
++
++  defp formal_shown(member), do: "`#{member.name}` (#{section_of(member)} #{member.type})"
++
++  defp section_of(%Member{role: :input}), do: "var_input"
++  defp section_of(%Member{role: :output}), do: "var_output"
++
++  # One operand against its formal (docs/organisation.md §4.3): every message names the
++  # formal, ``operand 2 of `cal s1` is `stop` (var_input bool)``. An input takes a value of
++  # its type, a literal that fits included; an output is written to a tag or a member logic
++  # may write, of its type, never a var_input.
++  defp formal(formal, {:int_lit, _, value}, at, _tags, diagnostics),
++    do: literal_formal(formal, value, at, diagnostics)
++
++  defp formal(formal, {:name, _, name} = operand, at, tags, diagnostics),
++    do:
++      formal_resolve(
++        Declarations.reserved(name),
++        lookup(name, tags),
++        formal,
++        operand,
++        at,
++        diagnostics
++      )
++
++  defp literal_formal(%Member{role: :input, type: type} = formal, value, at, diagnostics),
++    do: formal_fits(Declarations.fits?(type, value), formal, value, at, diagnostics)
++
++  defp literal_formal(%Member{role: :output} = formal, value, at, diagnostics),
++    do: [
++      formal_diagnostic(at, formal, ": an output is written to a tag, found `#{value}`")
++      | diagnostics
++    ]
++
++  defp formal_fits(true, _formal, _value, _at, diagnostics), do: diagnostics
++
++  defp formal_fits(false, %Member{type: :bool} = formal, value, at, diagnostics),
++    do: [formal_diagnostic(at, formal, ": only 0 or 1 fit, found `#{value}`") | diagnostics]
++
++  defp formal_fits(false, %Member{type: :dint} = formal, value, at, diagnostics),
++    do: [formal_diagnostic(at, formal, ": `#{value}` does not fit in 32 bits") | diagnostics]
++
++  defp formal_resolve(:type, _, formal, {:name, _, name}, at, diagnostics),
++    do: [formal_diagnostic(at, formal, ", but found the type `#{name}`") | diagnostics]
++
++  defp formal_resolve(:section, _, formal, {:name, _, name}, at, diagnostics),
++    do: [formal_diagnostic(at, formal, ", but found the keyword `#{name}`") | diagnostics]
++
++  defp formal_resolve(nil, {:ok, %Tag{type: %FbType{} = type} = tag}, formal, _, at, diagnostics) do
++    example = example(fitting(access_of(formal), formal.type, type), tag)
++    detail = ", but `#{tag.name}` is a #{type.name}#{declared(tag)}#{example}"
++    [formal_diagnostic(at, formal, detail) | diagnostics]
++  end
++
++  defp formal_resolve(nil, {:ok, %Tag{} = tag}, formal, _, at, diagnostics),
++    do:
++      diagnostics
++      |> formal_type(formal, tag.type, "`#{tag.name}` is a #{tag.type}#{declared(tag)}", at)
++      |> formal_access(formal, tag, at)
++
++  defp formal_resolve(nil, {:member, tag, member}, formal, {:name, _, name}, at, diagnostics),
++    do:
++      diagnostics
++      |> formal_type(formal, member.type, "`#{name}` is a #{member.type}", at)
++      |> formal_write(formal, tag, name, member, at)
++
++  defp formal_resolve(reserved, found, formal, operand, {_n, {line, _call, _type}}, diagnostics),
++    do:
++      resolve(
++        reserved,
++        found,
++        {access_of(formal), formal.type},
++        operand,
++        {line, "cal"},
++        diagnostics
++      )
++
++  defp access_of(%Member{role: :input}), do: :value
++  defp access_of(%Member{role: :output}), do: :write
++
++  defp formal_type(diagnostics, %Member{type: type}, type, _shown, _at), do: diagnostics
++
++  defp formal_type(diagnostics, formal, _type, shown, at),
++    do: [formal_diagnostic(at, formal, ", but #{shown}") | diagnostics]
++
++  defp formal_access(
++         diagnostics,
++         %Member{role: :output} = formal,
++         %Tag{section: :var_input} = tag,
++         at
++       ) do
++    detail =
++      ", which writes `#{tag.name}`, a var_input#{declared(tag)}: logic must not write an input"
++
++    [formal_diagnostic(at, formal, detail) | diagnostics]
++  end
++
++  defp formal_access(diagnostics, _formal, _tag, _at), do: diagnostics
++
++  defp formal_write(
++         diagnostics,
++         %Member{role: :output} = formal,
++         tag,
++         name,
++         %Member{write: false},
++         at
++       ),
++       do: [
++         formal_diagnostic(at, formal, ", which writes `#{name}`, but #{outside(tag)}")
++         | diagnostics
++       ]
++
++  defp formal_write(diagnostics, _formal, _tag, _name, _member, _at), do: diagnostics
++
++  defp formal_diagnostic({n, {line, call, _type}}, formal, detail),
++    do: diagnostic(line, "operand #{n} of `#{call}` is #{formal_shown(formal)}" <> detail)
++
++  # What logic outside an instance may write of it: a timer's `.pre` and `.acc`, and none of
++  # a user block's members, whose inputs its `cal` gives it and whose outputs it sets.
++  defp outside(%Tag{type: %FbType{body: %Program{}} = type}),
++    do: "logic outside a #{type.name} writes none of its members: its `cal` sets them"
++
++  defp outside(%Tag{type: type}),
++    do:
++      "logic may write only #{listed(Enum.map(FbType.writable(type), &"`.#{&1.name}`"))} of a #{type.name}"
++
+   # M1-6: a member is lowered to its path, so the runtime reads and writes it without
+   # splitting its name again: `t1.acc` becomes `{:member, line, ["t1", "acc"]}`. A dotted
+   # name that resolves to nothing has a diagnostic, and a program with one never runs.
+@@ -332,6 +788,10 @@ defmodule Logex.Compiler do
+   defp unknown("mov", word),
+     do: "unknown instruction `#{word}` — did you mean `move`? (renamed to its IEC name)"
+ 
++  # M2-5: the header is a file's first line only.
++  defp unknown("function_block", word),
++    do: "`#{word}` heads a function block's file, on its first line only"
++
+   defp unknown(key, word), do: unknown_word(Declarations.reserved(key), word)
+ 
+   # A declaration is a line of its own, recognised only as a rung's first word.
+@@ -380,6 +840,7 @@ defmodule Logex.Compiler do
+   defp kind({:read, _type}), do: "a tag"
+   defp kind({:write, _type}), do: "a tag"
+   defp kind({:value, _type}), do: "a value"
++  defp kind({:instance, :block}), do: "a function block"
+   defp kind({:instance, type}), do: "a #{type}"
+   defp kind({:preset, _type}), do: "a preset"
+ 
+@@ -533,7 +994,13 @@ defmodule Logex.Compiler do
+   defp in_type({:ok, member}, tag, _part, []), do: {:member, tag, member}
+   defp in_type({:ok, member}, tag, _part, [next]), do: past(Integer.parse(next), tag, member)
+   defp in_type({:ok, member}, tag, _part, _deeper), do: {:too_deep, tag, member}
+-  defp in_type(:error, tag, part, _deeper), do: {:unknown_member, tag, part}
++
++  defp in_type(:error, tag, part, _deeper),
++    do: hidden(Enum.any?(tag.type.members, &(&1.name == part and &1.role == :local)), tag, part)
++
++  # M2-5: a user block's own `var`, an instance it holds included, is named inside it only.
++  defp hidden(true, tag, part), do: {:local_member, tag, part}
++  defp hidden(false, tag, part), do: {:unknown_member, tag, part}
+ 
+   # `t1.acc.3` is bit access of a member, as `d.3` is of a tag; `t1.acc.3.x` goes too deep,
+   # as it will when bit access lands.
+@@ -565,6 +1032,32 @@ defmodule Logex.Compiler do
+     [diagnostic(line, message) | diagnostics]
+   end
+ 
++  # M2-5: `cal` runs a user block; a built-in one runs by its own instruction.
++  defp resolve(
++         nil,
++         {:ok, %Tag{type: %FbType{body: nil} = type} = tag},
++         {:instance, :block},
++         {:name, line, _},
++         {_, word},
++         diagnostics
++       ) do
++    message =
++      "`#{word}` runs a user function block, but `#{tag.name}` is a #{type.name}" <>
++        "#{declared(tag)}, which its own instruction runs, as in `#{type.name} #{tag.name} 5000`"
++
++    [diagnostic(line, message) | diagnostics]
++  end
++
++  defp resolve(nil, {:local_member, tag, part}, _slot, {:name, line, name}, _at, diagnostics) do
++    names = Enum.map(FbType.public(tag.type), &"`#{&1.name}`")
++
++    message =
++      "`#{name}` names `#{part}`, internal to `#{tag.name}`, a #{tag.type.name}: " <>
++        "outside it, " <> named_outside(names)
++
++    [diagnostic(line, message) | diagnostics]
++  end
++
+   # An instance is named whole only where an instruction runs it; anywhere else, by one of
+   # its members, which the message suggests when one would fit the slot.
+   defp resolve(nil, {:ok, %Tag{type: %FbType{name: type}}}, {:instance, type}, _, _, diagnostics),
+@@ -633,9 +1126,13 @@ defmodule Logex.Compiler do
+     [diagnostic(line, message) | diagnostics]
+   end
+ 
++  defp members("", []), do: ": it has no inputs or outputs to name"
+   defp members("", names), do: ": its members are " <> listed(Enum.map(names, &"`#{&1}`"))
+   defp members(suggestion, _names), do: suggestion
+ 
++  defp named_outside([]), do: "it has no inputs or outputs to name"
++  defp named_outside(names), do: "only its inputs and outputs may be named: " <> listed(names)
++
+   defp listed([one]), do: one
+   defp listed(names), do: Enum.join(Enum.drop(names, -1), ", ") <> " and " <> List.last(names)
+ 
+@@ -649,7 +1146,7 @@ defmodule Logex.Compiler do
+   defp no_members(_not_a_bit, name, tag),
+     do:
+       "`#{name}` names a member of `#{tag.name}`, but `#{tag.name}` is a #{tag.type}" <>
+-        "#{declared(tag)}: only a timer has members"
++        "#{declared(tag)}: only an instance of a function block has members"
+ 
+   # Bit access, when it lands, reaches a bit of a word; a bool is one bit, and has none.
+   defp bit(name, word, :bool), do: "`#{name}` names a bit of `#{word}`, a bool, which has no bits"
+@@ -680,10 +1177,16 @@ defmodule Logex.Compiler do
+ 
+   defp check_member_type(diagnostics, {access, type}, name, member, {line, word}),
+     do: [
+-      diagnostic(line, "`#{word}` #{verb(access)} a #{type}, but `#{name}` is a #{member.type}")
++      diagnostic(
++        line,
++        "`#{word}` #{verb(access)} #{a_kind(type)}, but `#{name}` is a #{member.type}"
++      )
+       | diagnostics
+     ]
+ 
++  defp a_kind(:block), do: "a function block"
++  defp a_kind(type), do: "a #{type}"
++
+   # Decision 4: members are read anywhere, and logic writes only those its type allows.
+   defp check_member_write(
+          diagnostics,
+@@ -692,14 +1195,8 @@ defmodule Logex.Compiler do
+          name,
+          %Member{write: false},
+          {line, word}
+-       ) do
+-    writable = listed(Enum.map(FbType.writable(tag.type), &"`.#{&1.name}`"))
+-
+-    message =
+-      "`#{word}` writes `#{name}`, but logic may write only #{writable} of a #{tag.type.name}"
+-
+-    [diagnostic(line, message) | diagnostics]
+-  end
++       ),
++       do: [diagnostic(line, "`#{word}` writes `#{name}`, but #{outside(tag)}") | diagnostics]
+ 
+   defp check_member_write(diagnostics, _slot, _tag, _name, _member, _at), do: diagnostics
+ 
+@@ -708,7 +1205,7 @@ defmodule Logex.Compiler do
+ 
+   defp check_type(diagnostics, access, type, tag, {line, word}) do
+     message =
+-      "`#{word}` #{verb(access)} a #{type}, but `#{tag.name}` is a #{tag.type}#{declared(tag)}"
++      "`#{word}` #{verb(access)} #{a_kind(type)}, but `#{tag.name}` is a #{tag.type}#{declared(tag)}"
+ 
+     [diagnostic(line, message) | diagnostics]
+   end
+@@ -776,7 +1273,9 @@ defmodule Logex.Compiler do
+   # An undeclared tag is reported once, at its first use, with the nearest declared name. A
+   # program with no declaration line -- one written before M1-3 -- is told how to declare,
+   # in its first report only.
+-  defp undeclared(found, tags, note?) do
++  # M2-5: a declaration refused as recursive is excused, so its uses add no second message.
++  defp undeclared(found, tags, note?, excused) do
++    found = Enum.reject(found, &excused?(&1, excused))
+     runs = Map.new(for {:undeclared, _, name, {:instance, _} = slot} <- found, do: {name, slot})
+     acc = {MapSet.new(), note?}
+     {diagnostics, _} = Enum.flat_map_reduce(found, acc, &report(&1, &2, {tags, runs}))
+@@ -803,8 +1302,15 @@ defmodule Logex.Compiler do
+     {[diagnostic(line, message)], {MapSet.put(seen, name), note? and slot == :member}}
+   end
+ 
++  defp excused?({:undeclared, _line, name, _slot}, excused), do: MapSet.member?(excused, name)
++  defp excused?(_diagnostic, _excused), do: false
++
+   defp how(false, _slot, _name), do: ""
+   defp how(true, :member, _name), do: ""
++
++  defp how(true, {:instance, :block}, name),
++    do: note("`var #{name}` and the name of its function block")
++
+   defp how(true, {:instance, type}, name), do: note("`var #{name} #{type}`")
+   defp how(true, _slot, name), do: note("`var #{name} bool` or `var #{name} dint`")
+ 
+diff --git a/lib/logex/declarations.ex b/lib/logex/declarations.ex
+index 515b363..e1ebfb3 100644
+--- a/lib/logex/declarations.ex
++++ b/lib/logex/declarations.ex
+@@ -10,7 +10,13 @@ defmodule Logex.Declarations do
+   The section and type words are data, in `@sections` and `@types`, and a function block
+   type's word is `Logex.FbType.builtins/0`'s: a new section or type is a row there and a
+   stanza in `docs/naming.md`, not a second declaration parser. An instance of a function
+-  block, `var t1 ton` (M1-6), is declared with `var` and takes no initial value.
++  block, `var t1 ton` (M1-6), is declared with `var` and takes no initial value; so is
++  one of a user function block, `var s1 seal` (M2-5), whose type word is the name of a
++  block given to the compile, matched exactly, and not reserved.
++
++  A function block's file starts with `function_block <name>` (M2-5,
++  `docs/organisation.md` §4.3 and decision 4): `header/1` finds that line, the first
++  rung, which is neither a declaration nor logic.
+   """
+ 
+   alias Logex.{Diagnostic, FbType, Tag}
+@@ -27,14 +33,40 @@ defmodule Logex.Declarations do
+   # A preset is a dint number of milliseconds, and never negative (docs/naming.md, `ton`).
+   @preset 0..2_147_483_647
+ 
++  @header "function_block"
++
+   @doc "The section and type words, lowercase. Each is reserved, in any case."
+   def keywords, do: Map.keys(@sections) ++ Map.keys(@types) ++ Map.keys(FbType.builtins())
+ 
+-  # A type word names an elementary type or a function block type, in any case.
+-  defp type_word(word), do: type_of(String.downcase(word))
++  @doc """
++  The word that heads a function block's file, lowercase (M2-5). It is reserved in a
++  function block's file only (`docs/organisation.md` §4.8), and recognised in any case as
++  the first word of the first rung of any file.
++  """
++  def header_word, do: @header
++
++  @doc """
++  The header of a function block's file: `{line, operands}` when the first rung starts
++  with `function_block`, in any case, `operands` being the elements after it; nil for a
++  program.
++  """
++  def header([{:rung, [{:name, line, word} | operands]} | _]),
++    do: headed(String.downcase(word) == @header, line, operands)
+ 
+-  defp type_of(key) when is_map_key(@types, key), do: Map.fetch!(@types, key)
+-  defp type_of(key), do: FbType.builtin(key)
++  def header(_rungs), do: nil
++
++  defp headed(true, line, operands), do: {line, operands}
++  defp headed(false, _line, _operands), do: nil
++
++  # A type word names an elementary type or a built-in function block type, in any case,
++  # or a user function block given to the compile, `library`, by its exact name (M2-5).
++  defp type_word(word, library), do: type_of(String.downcase(word), word, library)
++
++  defp type_of(key, _word, _library) when is_map_key(@types, key), do: Map.fetch!(@types, key)
++  defp type_of(key, word, library), do: builtin_or(FbType.builtin(key), word, library)
++
++  defp builtin_or(nil, word, library), do: Map.get(library, word)
++  defp builtin_or(type, _word, _library), do: type
+ 
+   @doc "What a word is reserved as, in any case: `:mnemonic`, `:section`, `:type` or nil."
+   def reserved(word) do
+@@ -107,20 +139,21 @@ defmodule Logex.Declarations do
+   `validate!/1` and they enter the table first; anything invalid among them, a clash
+   included, raises `ArgumentError`. A declaration after the first rung is reported and
+   still declared, so its tag is not also reported as undeclared wherever it is used.
++  `library` is the user function blocks the compile was given, by name (M2-5).
+   """
+-  def split(rungs, declared \\ [])
++  def split(rungs, declared \\ [], library \\ %{})
+ 
+-  def split(rungs, declared) when is_list(declared) do
++  def split(rungs, declared, library) when is_list(declared) do
+     {leading, rest} = Enum.split_while(rungs, &declaration?/1)
+     {late, logic} = Enum.split_with(rest, &declaration?/1)
+     first = first_line(logic)
+     late = Enum.map(late, &late(&1, first))
+-    {tags, diagnostics} = Enum.flat_map_reduce(leading ++ late, [], &declare/2)
++    {tags, diagnostics} = Enum.flat_map_reduce(leading ++ late, [], &declare(&1, &2, library))
+     {table, diagnostics} = table(Enum.map(declared, &validate!/1), tags, diagnostics)
+     {table, logic, Enum.sort_by(Enum.reverse(diagnostics), & &1.line)}
+   end
+ 
+-  def split(_rungs, declared),
++  def split(_rungs, declared, _library),
+     do: raise(ArgumentError, "declared must be a list of %Logex.Tag{}, got: #{inspect(declared)}")
+ 
+   @doc """
+@@ -164,11 +197,12 @@ defmodule Logex.Declarations do
+   defp line_in([{_, line, _} | _]), do: line
+   defp line_in([]), do: nil
+ 
+-  defp declare({:late, rung, late}, diagnostics), do: declare(rung, [late | diagnostics])
++  defp declare({:late, rung, late}, diagnostics, library),
++    do: declare(rung, [late | diagnostics], library)
+ 
+-  defp declare({:rung, [{:name, line, keyword} | rest]}, diagnostics) do
++  defp declare({:rung, [{:name, line, keyword} | rest]}, diagnostics, library) do
+     section = Map.fetch!(@sections, String.downcase(keyword))
+-    declared(shape(rest, keyword), section, line, diagnostics)
++    declared(shape(rest, keyword, library), section, line, diagnostics)
+   end
+ 
+   defp declared({:ok, name, type, initial}, section, line, diagnostics) do
+@@ -201,25 +235,27 @@ defmodule Logex.Declarations do
+   defp recover(_problems, _tag), do: []
+ 
+   # The shape of a declaration line, before its meaning is checked.
+-  defp shape([], kw),
++  defp shape([], kw, _library),
+     do: {:error, "`#{kw}` needs a tag name and a type, as in `#{kw} fault bool`"}
+ 
+-  defp shape([{:branches, _} | _], _kw), do: {:error, "a declaration cannot hold a branch group"}
++  defp shape([{:branches, _} | _], _kw, _library),
++    do: {:error, "a declaration cannot hold a branch group"}
+ 
+-  defp shape([{:int_lit, _, v} | _], kw),
++  defp shape([{:int_lit, _, v} | _], kw, _library),
+     do: {:error, "expected a tag name after `#{kw}`, found `#{v}`"}
+ 
+-  defp shape([{:name, _, name}], kw), do: {:error, short(one(name), name, nil, kw)}
++  defp shape([{:name, _, name}], kw, library),
++    do: {:error, short(one(name, library), name, nil, kw)}
+ 
+-  defp shape([{:name, _, name}, {:int_lit, _, v} | _], kw),
+-    do: {:error, short(one(name), name, v, kw)}
++  defp shape([{:name, _, name}, {:int_lit, _, v} | _], kw, library),
++    do: {:error, short(one(name, library), name, v, kw)}
+ 
+-  defp shape([{:name, _, _}, {:branches, _} | _], _kw),
++  defp shape([{:name, _, _}, {:branches, _} | _], _kw, _library),
+     do: {:error, "a declaration cannot hold a branch group"}
+ 
+-  defp shape([{:name, _, name}, {:name, _, word} | tail], kw) do
+-    type = type_word(word)
+-    salvaged(typed(type, name, word, tail, kw), type, name)
++  defp shape([{:name, _, name}, {:name, _, word} | tail], kw, library) do
++    type = type_word(word, library)
++    salvaged(typed(type, name, word, {tail, library}, kw), type, name)
+   end
+ 
+   # `var t1 ton 5 6`: the name and the type word came before the mistake (M1-6).
+@@ -228,28 +264,28 @@ defmodule Logex.Declarations do
+ 
+   defp salvaged(shaped, _type, _name), do: shaped
+ 
+-  defp typed(nil, name, type, tail, kw),
+-    do: {:error, untyped(String.downcase(name), name, type, tail, kw)}
++  defp typed(nil, name, type, {tail, library}, kw),
++    do: {:error, untyped(String.downcase(name), name, type, {tail, library}, kw)}
+ 
+-  defp typed(type, name, _word, [], _kw), do: {:ok, name, type, nil}
+-  defp typed(type, name, _word, [{:int_lit, _, v}], _kw), do: {:ok, name, type, v}
++  defp typed(type, name, _word, {[], _library}, _kw), do: {:ok, name, type, nil}
++  defp typed(type, name, _word, {[{:int_lit, _, v}], _library}, _kw), do: {:ok, name, type, v}
+ 
+-  defp typed(_type, _name, _word, [{:branches, _} | _], _kw),
++  defp typed(_type, _name, _word, {[{:branches, _} | _], _library}, _kw),
+     do: {:error, "a declaration cannot hold a branch group"}
+ 
+-  defp typed(_type, _name, _word, [{:int_lit, _, _}, {:branches, _} | _], _kw),
++  defp typed(_type, _name, _word, {[{:int_lit, _, _}, {:branches, _} | _], _library}, _kw),
+     do: {:error, "a declaration cannot hold a branch group"}
+ 
+-  defp typed(_type, name, _word, [{:int_lit, _, _}, extra | _], _kw),
++  defp typed(_type, name, _word, {[{:int_lit, _, _}, extra | _], _library}, _kw),
+     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
+ 
+-  defp typed(_type, name, _word, [extra | _], _kw),
++  defp typed(_type, name, _word, {[extra | _], _library}, _kw),
+     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
+ 
+   # The one word after a section: a type word first, since `ton` is a mnemonic too (M1-6).
+-  defp one(word), do: one(type_word(word), word)
+-  defp one(nil, word), do: reserved(word)
+-  defp one(type, _word), do: {:type, type}
++  defp one(word, library), do: one_of(type_word(word, library), word)
++  defp one_of(nil, word), do: reserved(word)
++  defp one_of(type, _word), do: {:type, type}
+ 
+   # A line with one word after its section: a tag with no type, or a type with no tag.
+   defp short({:type, type}, word, _v, kw),
+@@ -284,17 +320,31 @@ defmodule Logex.Declarations do
+       "`retain` is not supported yet: a warm restart, like a cold one, starts every tag " <>
+         "at its initial value but the var_inputs whose values fit their types"
+ 
+-  defp untyped(_key, name, type, tail, kw),
+-    do: unknown_type(Enum.any?(tail, &type_word?/1), name, type, kw)
++  defp untyped(_key, name, type, {tail, library}, kw),
++    do: unknown_type(Enum.any?(tail, &type_word?(&1, library)), name, type, {kw, library})
+ 
+-  defp unknown_type(true, name, type, kw),
++  defp unknown_type(true, name, type, {kw, _library}),
+     do: "`#{kw}` declares one tag: found `#{name}` and `#{type}` before the type"
+ 
+-  defp unknown_type(false, _name, type, _kw),
+-    do: "unknown type `#{type}`: logex has `bool`, `dint` and `ton`"
++  # M2-5: the user function blocks given to the compile are named too, with a did-you-mean
++  # among them, since a block's name is matched exactly.
++  defp unknown_type(false, _name, type, {_kw, library}) do
++    blocks = Enum.sort(Map.keys(library))
+ 
+-  defp type_word?({:name, _, word}), do: type_word(word) != nil
+-  defp type_word?(_element), do: false
++    "unknown type `#{type}`: logex has `bool`, `dint` and `ton`" <>
++      given(Enum.map(blocks, &"`#{&1}`")) <> suggest(type, blocks, & &1, "type names")
++  end
++
++  defp given([]), do: ""
++  defp given([one]), do: ", and the function block #{one}"
++
++  defp given(blocks),
++    do:
++      ", and the function blocks " <>
++        Enum.join(Enum.drop(blocks, -1), ", ") <> " and " <> List.last(blocks)
++
++  defp type_word?({:name, _, word}, library), do: type_word(word, library) != nil
++  defp type_word?(_element, _library), do: false
+ 
+   defp example(%FbType{name: name}), do: String.first(name) <> "1"
+   defp example(_elementary), do: "fault"
+@@ -344,14 +394,23 @@ defmodule Logex.Declarations do
+   defp type(type) when type in @type_atoms, do: []
+ 
+   defp type(type),
+-    do: ["unknown type #{inspect(type)}: logex has :bool, :dint and Logex.FbType.ton()"]
++    do: [
++      "unknown type #{inspect(type)}: logex has :bool, :dint, Logex.FbType.ton() " <>
++        "and the function blocks Logex.compile/2 returns"
++    ]
+ 
+-  # Only a built-in function block type, exactly as Logex.FbType gives it, until M2-5. A
++  # A built-in function block type, exactly as Logex.FbType gives it, or since M2-5 a user
++  # one, which carries the body it was compiled from: one Logex.compile/2 returned. A
+   # hand-built one may hold anything, and is refused, never looked up by a name that is not
+-  # a string.
+-  defp fb_type(%FbType{name: name} = type) when is_binary(name),
++  # a string; a user one is checked as far as its name, and is otherwise outside the
++  # contract, as a hand-built %Logex.Program{} is.
++  defp fb_type(%FbType{name: name, body: nil} = type) when is_binary(name),
+     do: known(FbType.builtin(name) == type, type)
+ 
++  defp fb_type(%FbType{name: name, members: members, body: %Logex.Program{}} = type)
++       when is_binary(name) and is_list(members),
++       do: known(name?(name) and reserved(name) == nil, type)
++
+   defp fb_type(type), do: known(false, type)
+ 
+   # An instance of a type that is not logex's is not looked into: its members may be junk.
+@@ -361,7 +420,10 @@ defmodule Logex.Declarations do
+   defp known(true, _type), do: []
+ 
+   defp known(false, type),
+-    do: ["unknown function block type #{inspect(type.name)}: logex has Logex.FbType.ton()"]
++    do: [
++      "unknown function block type #{inspect(type.name)}: logex has Logex.FbType.ton() " <>
++        "and the function blocks Logex.compile/2 returns"
++    ]
+ 
+   # M1-6: an instance is the program's own state. It is not supplied from outside, and the
+   # host reads none as an output, so the outputs of a scan of the program's own state stay
+@@ -378,6 +440,14 @@ defmodule Logex.Declarations do
+ 
+   defp instance(%Tag{initial: nil}), do: []
+ 
++  # M2-5: a user block's instance starts where its type says, every member at the value
++  # its own declaration gives it.
++  defp instance(%Tag{name: name, type: %FbType{body: %Logex.Program{}}} = tag),
++    do: [
++      "#{label(name)} is a #{tag.type.name}: an instance starts where its type says, " <>
++        "and takes no initial value on its declaration"
++    ]
++
+   defp instance(%Tag{name: name} = tag),
+     do: [
+       "#{label(name)} is a #{tag.type.name}: its preset is the number on its `ton` " <>
+diff --git a/lib/logex/edit.ex b/lib/logex/edit.ex
+index 62d1bd2..63258e2 100644
+--- a/lib/logex/edit.ex
++++ b/lib/logex/edit.ex
+@@ -155,7 +155,7 @@ defmodule Logex.Edit do
+   | `:dn_drops`, `:dn_rises` | `{acc, pre}`, as `ton` counts them, a negative `.acc` as 0 | a switch |
+   | `:resumed` | the milliseconds not caught up: `last` moves on by that many, to `now` | a switch |
+   | `:resume_undone` | the milliseconds of the resume this edit's last switch made: `last` moves back by that many | a switch |
+-  | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan | a switch |
++  | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan; a bit inside an instance is named by its path, `s1.edge` | a switch |
+   | `:held` | for an output the next program shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |
+   | `:pruned` | the value it had | assemble, cancel |
+ 
+@@ -164,6 +164,20 @@ defmodule Logex.Edit do
+   bits of its `:ons_blocked` entries, in order, as the block list a switch leaves, and
+   `switched`, which a switch sets. The other kinds state facts and forecasts.
+ 
++  **Function blocks** (M2-5). A `cal` drives its output operands, so an output only a
++  `cal` drove is held where the program started drives it no more. The type of a user
++  block's instance is the block: its name, its members and its body, its line numbers
++  aside, and accept refuses any change to it as a type change, until a nested migration
++  moves an instance's state from one block type to another (`docs/organisation.md` §4.9).
++  An instance the candidate adds starts at its block's initial values; at the first test
++  an instance fits by its member keys, and so must every instance it holds. Each `ons` in
++  an instance's block, through every `cal` there, is the one-shot of the rung that `cal`s
++  the instance, named by its path, `s1.edge`: a switch blocks it where that rung is added
++  or changed, so an added instance's one-shots never fire on the switch scan, and an
++  untouched `cal` keeps a real edge. No timer rule reaches a timer inside a block: its
++  block's type cannot change, so neither can its preset, and while its `cal` does not run
++  it is frozen and catches up when it next does (decision 8).
++
+   **One edit per instance** (fix F5). At accept the edit builds two plans, original to
+   candidate and back, from the two programs alone, so a plan cannot go stale; a switch and
+   a prune are each a function of one plan, the edit's record of one instance, and its
+@@ -188,6 +202,7 @@ defmodule Logex.Edit do
+   """
+ 
+   alias Logex.{Compiler, Declarations, Diagnostic, FbType, Instance, Program, Runtime, Tag}
++  alias Logex.FbType.Member
+ 
+   @enforce_keys [:original, :candidate, :stage, :plans, :record]
+   defstruct [:original, :candidate, :stage, :plans, :record]
+@@ -309,6 +324,14 @@ defmodule Logex.Edit do
+   # The runtime's own message for a non-program.
+   defp program!(%Program{tags: tags, rungs: rungs}) when is_map(tags) and is_list(rungs), do: :ok
+ 
++  defp program!(%FbType{name: name}),
++    do:
++      raise(
++        ArgumentError,
++        "#{named(name)} is a function block type, which runs inside a program through `cal`: " <>
++          "an instance is of a %Logex.Program{}"
++      )
++
+   defp program!(other),
+     do:
+       raise(
+@@ -354,16 +377,28 @@ defmodule Logex.Edit do
+ 
+   # §4.9: a tag's type, a function block's members included, changes only with a restart.
+   # In line order, a tag declared from Elixir (line nil, after every number) last, by name.
++  # M2-5: a user function block's type is its name, its members and its body, its lines
++  # aside, and any change to it is refused, until the nested migration §4.9 names moves an
++  # instance's state from one block type to another.
+   defp retyped(%Program{tags: running}, %Program{tags: candidate}) do
+     retyped =
+       for {name, %Tag{type: type, line: line}} <- candidate,
+           {:ok, %Tag{type: was}} <- [Map.fetch(running, name)],
+-          was != type,
++          identity(was) != identity(type),
+           do: {{line, name}, retyped(name, line, was, type)}
+ 
+     for {_at, diagnostic} <- Enum.sort_by(retyped, &elem(&1, 0)), do: diagnostic
+   end
+ 
++  defp retyped(name, line, %FbType{name: block}, %FbType{name: block}),
++    do: %Diagnostic{
++      stage: :edit,
++      line: line,
++      message:
++        "`#{name}` is a #{block} in the running program and a changed #{block} in the " <>
++          "candidate: a function block's members and body change only with a restart"
++    }
++
+   defp retyped(name, line, was, type),
+     do: %Diagnostic{
+       stage: :edit,
+@@ -373,6 +408,25 @@ defmodule Logex.Edit do
+           "candidate: a tag's type changes only with a restart"
+     }
+ 
++  defp identity(%FbType{name: name, members: members, body: body}),
++    do: {name, Enum.map(members, &member_identity/1), body_identity(body)}
++
++  defp identity(type), do: type
++
++  defp member_identity(%Member{
++         name: name,
++         type: type,
++         role: role,
++         write: write,
++         initial: initial
++       }),
++       do: {name, identity(type), role, write, initial}
++
++  defp body_identity(nil), do: nil
++
++  defp body_identity(%Program{rungs: rungs}),
++    do: Enum.map(rungs, fn {:rung, elements} -> stripped(elements) end)
++
+   defp word(%FbType{name: name}), do: name
+   defp word(type), do: Atom.to_string(type)
+ 
+@@ -404,7 +458,12 @@ defmodule Logex.Edit do
+       ons: ons,
+       ons_rungs: Map.new(ons, fn {rung, _bits} -> {rung, true} end),
+       ons_bits: for({_rung, bits} <- ons, bit <- bits, into: %{}, do: {bit, true}),
+-      timers: for({name, %Tag{type: %FbType{}} = tag} <- tags, into: %{}, do: {name, preset(tag)})
++      timers:
++        for(
++          {name, %Tag{type: %FbType{body: nil}} = tag} <- tags,
++          into: %{},
++          do: {name, preset(tag)}
++        )
+     }
+   end
+ 
+@@ -476,21 +535,29 @@ defmodule Logex.Edit do
+         do: {name, Map.fetch!(from.initial, name), Map.fetch!(to.initial, name)}
+       )
+ 
+-  defp fit(%Tag{type: %FbType{} = type}),
+-    do: {:members, Enum.sort(Map.keys(FbType.initial(type)))}
+-
++  defp fit(%Tag{type: %FbType{} = type}), do: {:members, keys(type)}
+   defp fit(%Tag{type: type}), do: type
+ 
++  # An instance's member keys, and an instance it holds by its own (M2-5).
++  defp keys(%FbType{members: members}),
++    do: Enum.sort(for %Member{name: name, type: type} <- members, do: {name, nested(type)})
++
++  defp nested(%FbType{} = type), do: keys(type)
++  defp nested(_scalar), do: nil
++
+   # What a program's rungs write and where its one-shots are, in one walk, into every group
+   # however deep, accumulating rather than copying: how many times each name is written
+   # through a write operand, an `ons` storage bit included; and, for each rung that holds
+   # an `ons`, the rung with its line numbers taken out, beside the storage bits of its
+   # `ons`. A rung is stripped once and compared once, however many `ons` it holds.
+-  defp rungs(%Program{rungs: rungs}) do
++  # M2-5: a `cal` writes its output operands, and the `ons` inside its instance's block,
++  # through every `cal` there too, are the rung's one-shots, each by its dotted path, so
++  # that a switch blocks them where the `cal`'s rung is new or changed.
++  defp rungs(%Program{rungs: rungs, tags: tags}) do
+     signatures = Map.new(Compiler.instructions(), fn {_word, {symbol, sig}} -> {symbol, sig} end)
+ 
+     Enum.reduce(rungs, {%{}, []}, fn {:rung, elements}, {writes, ons} ->
+-      {writes, bits} = written(elements, {writes, []}, signatures)
++      {writes, bits} = written(elements, {writes, []}, {signatures, tags})
+       {writes, oned(bits, elements, ons)}
+     end)
+   end
+@@ -498,16 +565,47 @@ defmodule Logex.Edit do
+   defp oned([], _elements, ons), do: ons
+   defp oned(bits, elements, ons), do: [{stripped(elements), bits} | ons]
+ 
+-  defp written([], acc, _signatures), do: acc
++  defp written([], acc, _context), do: acc
++
++  defp written([{:branches, legs} | rest], acc, context),
++    do: written(rest, Enum.reduce(legs, acc, &written(&1, &2, context)), context)
++
++  defp written([{:ons, _line, [{:name, _, bit}]} | rest], {writes, bits}, context),
++    do: written(rest, {count(writes, bit), [bit | bits]}, context)
++
++  defp written(
++         [{:cal, _line, [{:name, _, instance} | _] = operands} | rest],
++         {writes, bits},
++         {_signatures, tags} = context
++       ) do
++    %Tag{type: type} = Map.fetch!(tags, instance)
++    paths = one_shots(type, instance, [])
++    writes = Enum.reduce(paths, wrote(FbType.signature(type), operands, writes), &count(&2, &1))
++    written(rest, {writes, paths ++ bits}, context)
++  end
++
++  defp written([{symbol, _line, operands} | rest], {writes, bits}, {signatures, _tags} = context),
++    do: written(rest, {wrote(Map.fetch!(signatures, symbol), operands, writes), bits}, context)
+ 
+-  defp written([{:branches, legs} | rest], acc, signatures),
+-    do: written(rest, Enum.reduce(legs, acc, &written(&1, &2, signatures)), signatures)
++  # The storage bits of every `ons` an instance's block runs, by dotted path, through every
++  # `cal` in it, gathered newest first.
++  defp one_shots(%FbType{body: %Program{rungs: rungs, tags: tags}}, prefix, found),
++    do:
++      Enum.reduce(rungs, found, fn {:rung, elements}, found ->
++        shots(elements, {prefix, tags}, found)
++      end)
++
++  defp shots(elements, at, found), do: Enum.reduce(elements, found, &shot(&1, at, &2))
++
++  defp shot({:branches, legs}, at, found), do: Enum.reduce(legs, found, &shots(&1, at, &2))
+ 
+-  defp written([{:ons, _line, [{:name, _, bit}]} | rest], {writes, bits}, signatures),
+-    do: written(rest, {count(writes, bit), [bit | bits]}, signatures)
++  defp shot({:ons, _, [{:name, _, bit}]}, {prefix, _tags}, found),
++    do: ["#{prefix}.#{bit}" | found]
+ 
+-  defp written([{symbol, _line, operands} | rest], {writes, bits}, signatures),
+-    do: written(rest, {wrote(Map.fetch!(signatures, symbol), operands, writes), bits}, signatures)
++  defp shot({:cal, _, [{:name, _, inner} | _]}, {prefix, tags}, found),
++    do: one_shots(Map.fetch!(tags, inner).type, "#{prefix}.#{inner}", found)
++
++  defp shot(_instruction, _at, found), do: found
+ 
+   defp wrote([{:write, _type} | signature], [{:name, _, name} | operands], acc),
+     do: wrote(signature, operands, count(acc, name))
+@@ -567,7 +665,7 @@ defmodule Logex.Edit do
+           not is_map_key(fresh, name),
+           do: {:initial_changed, name, {old, new}}
+         ) ++
+-        for(bit <- blocked, do: {:ons_blocked, bit, Map.fetch!(env, bit)}) ++
++        for(bit <- blocked, do: {:ons_blocked, bit, value_at(env, bit)}) ++
+         holding(plan, shown, env)
+ 
+     {env, timed, pre} =
+@@ -610,14 +708,29 @@ defmodule Logex.Edit do
+   defp own(stops, %{stops: stops, blocks: blocks}), do: blocks
+   defp own(_started, _plan), do: []
+ 
++  # A storage bit's value, by its name or a path through instances (M2-5).
++  defp value_at(env, bit), do: walk(env, :binary.split(bit, ".", [:global]))
++
++  defp walk(value, []), do: value
++  defp walk(%{} = map, [key | path]), do: walk(Map.get(map, key, 0), path)
++  defp walk(_not_a_map, _path), do: 0
++
+   # A timer fits by its member keys (decision 26): a map with none missing. A plain swap can
+   # leave one that lacks some: where the program swapped out held a bool under the name,
+   # a program that writes `t1.pre` and runs no `ton` on it leaves `%{"pre" => 40}`, which
+-  # the timer rules, reading `.acc`, `.dn` and `.en`, could not take.
+-  defp fits?({:members, keys}, %{} = timer), do: Enum.sort(Map.keys(timer)) == keys
+-  defp fits?({:members, _keys}, _not_a_timer), do: false
++  # the timer rules, reading `.acc`, `.dn` and `.en`, could not take. An instance of a user
++  # block fits so too, and so must every instance it holds (M2-5).
++  defp fits?({:members, keys}, %{} = instance),
++    do:
++      Enum.sort(Map.keys(instance)) == Enum.map(keys, &elem(&1, 0)) and
++        Enum.all?(keys, &held_fits?(&1, instance))
++
++  defp fits?({:members, _keys}, _not_an_instance), do: false
+   defp fits?(type, value), do: Declarations.fits?(type, value)
+ 
++  defp held_fits?({_name, nil}, _instance), do: true
++  defp held_fits?({name, keys}, instance), do: fits?({:members, keys}, Map.get(instance, name))
++
+   # ---- a timer across a switch (decision 23; fixes F1 and F6) -----------------------------
+ 
+   # One timer either program declares, `from` and `to` the presets of the `ton`s that run
+diff --git a/lib/logex/fb_type.ex b/lib/logex/fb_type.ex
+index 4356d4c..fb82b0d 100644
+--- a/lib/logex/fb_type.ex
++++ b/lib/logex/fb_type.ex
+@@ -9,19 +9,24 @@ defmodule Logex.FbType do
+ 
+   - `:input`, a value the block is given (IEC's VAR_INPUT);
+   - `:output`, a value the block sets (VAR_OUTPUT);
++  - `:local`, a user block's own `var` (IEC's VAR), an instance it holds included: in the
++    state, but named only inside the block (M2-5);
+   - `:internal`, a built-in block's bookkeeping: in the state, but no name in a program
+     reaches it.
+ 
+-  Every member but an internal one may be read from outside, anywhere an operand of its
+-  type may go. `write: true` marks the members logic outside the block may also write: of
+-  a `ton`, `.pre` and `.acc` (decision 4). `initial` is the member's value in a new
+-  instance; for a member whose type is itself a `%Logex.FbType{}`, it is a map of that
+-  nested instance's own initial values, by member name.
+-
+-  M1-6 has one type, the built-in `ton`. A user function block (M2-5) is this struct too,
+-  with its var_inputs, var_outputs and vars as members (its vars take a fourth role,
+-  `:local`, which `public/1` leaves out until M2-5 says who may read one), and a nested
+-  instance is a member whose type is another `%Logex.FbType{}`.
++  Every input and output may be read from outside, anywhere an operand of its type may
++  go; a local or internal member may not be named from outside. `write: true` marks the
++  members logic outside the block may also write: of a `ton`, `.pre` and `.acc` (decision
++  4); of a user block, none, since its inputs come from the `cal` that runs it and its
++  outputs from its own logic. `initial` is the member's value in a new instance; for a
++  member whose type is itself a `%Logex.FbType{}`, it is a map of that nested instance's
++  own initial values, by member name.
++
++  `body` is nil for a built-in type, which the runtime implements, and for a user
++  function block (M2-5) the `%Logex.Program{}` compiled from its file: its rungs, its tag
++  table and its warnings. `Logex.compile/2` returns such a type for a file whose first line
++  is `function_block <name>`, with a member for each of its declarations, in declaration
++  order.
+   """
+ 
+   defmodule Member do
+@@ -32,16 +37,20 @@ defmodule Logex.FbType do
+     @type t :: %__MODULE__{
+             name: String.t(),
+             type: :bool | :dint | :clock | Logex.FbType.t(),
+-            role: :input | :output | :internal,
++            role: :input | :output | :local | :internal,
+             write: boolean,
+             initial: integer | %{String.t() => integer}
+           }
+   end
+ 
+   @enforce_keys [:name, :members]
+-  defstruct [:name, :members]
++  defstruct [:name, :members, body: nil]
+ 
+-  @type t :: %__MODULE__{name: String.t(), members: [Member.t()]}
++  @type t :: %__MODULE__{
++          name: String.t(),
++          members: [Member.t()],
++          body: Logex.Program.t() | nil
++        }
+ 
+   # The on-delay timer (docs/naming.md, `ton`): the conventional TIMER's members,
+   # lowercased. `.pre` plays IEC's PT, `.acc` its ET and `.dn` its Q, by an inference
+@@ -91,11 +100,30 @@ defmodule Logex.FbType do
+ 
+   @doc """
+   The members a program may name, in the type's order: its inputs and outputs, an
+-  allowlist, so an internal member is not among them, nor will M2-5's `:local` one be.
++  allowlist, so an internal member is not among them, nor is a user block's `:local` one.
+   """
+   def public(%__MODULE__{members: members}),
+     do: Enum.filter(members, &(&1.role in [:input, :output]))
+ 
+   @doc "The members logic outside the block may write, in the type's order."
+   def writable(%__MODULE__{} = type), do: Enum.filter(public(type), & &1.write)
++
++  @doc """
++  The formal operands of a `cal` of a user block (M2-5), in position: its inputs, then its
++  outputs, each in declaration order. This is IL's non-formal CAL, Ed 2 Table 53 feature
++  1a (`docs/organisation.md` §4.3).
++  """
++  def formals(%__MODULE__{members: members}),
++    do: Enum.filter(members, &(&1.role == :input)) ++ Enum.filter(members, &(&1.role == :output))
++
++  @doc """
++  The operand signature of a `cal` of an instance of this user block, as
++  `Logex.Compiler.instructions/0` gives one: the instance, then a value of each input's
++  type and a tag written with each output, in the order of `formals/1`.
++  """
++  def signature(%__MODULE__{name: name} = type),
++    do: [{:instance, name} | Enum.map(formals(type), &slot/1)]
++
++  defp slot(%Member{role: :input, type: type}), do: {:value, type}
++  defp slot(%Member{role: :output, type: type}), do: {:write, type}
+ end
+diff --git a/lib/logex/runtime.ex b/lib/logex/runtime.ex
+index d93fadb..0a67473 100644
+--- a/lib/logex/runtime.ex
++++ b/lib/logex/runtime.ex
+@@ -26,7 +26,9 @@ defmodule Logex.Runtime do
+   into the instance, so a host sends only what changed. Outputs are every `var_output`.
+   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
+   `first`; its `ons_blocked` is the runtime's, which `call/4` fills in with a map of the
+-  bits the instance's list names, so a host leaves it out. A state is matched to its program
++  bits the instance's list names, so a host leaves it out, and its `tags` is the runtime's
++  too (M2-5). A `%Logex.FbType{}` is not a program: a function block runs inside one,
++  through `cal`. A state is matched to its program
+   by name, and its values are not checked each scan. Scanning a recompile of the same name
+   over a kept instance, a *plain swap*, stays in this contract: the instance keeps its
+   values until `restart/3`, so a tag the recompile adds reads 0, an added timer starting at
+@@ -53,6 +55,7 @@ defmodule Logex.Runtime do
+   """
+ 
+   alias Logex.{Declarations, FbType, Instance, Program, Scan, Tag}
++  alias Logex.FbType.Member
+ 
+   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
+ 
+@@ -140,16 +143,26 @@ defmodule Logex.Runtime do
+   # the host.
+   defp run(
+          %Instance{env: env, ons_blocked: blocked} = state,
+-         %Program{rungs: rungs} = program,
++         %Program{rungs: rungs, tags: tags} = program,
+          %Scan{now: now, first: first}
+        ) do
+-    scan = %Scan{now: now, first: first, ons_blocked: Map.from_keys(blocked, true)}
++    scan = %Scan{now: now, first: first, ons_blocked: tree(blocked), tags: tags}
+     env = Enum.reduce(rungs, env, &rung(&1, &2, scan))
+ 
+     {outputs(program, env),
+      %{state | env: env, now: now, first: false, ons_blocked: [], switched: false}}
+   end
+ 
++  # The block list as a tree, built once a scan: a bit to `true`, and a path through
++  # instances, `s1.edge` (M2-5), to the tree of each, so that a `cal` hands its body its
++  # own and each `ons` looks one key up.
++  defp tree(paths), do: Enum.reduce(paths, %{}, &grow(&2, :binary.split(&1, ".", [:global])))
++
++  defp grow(tree, [bit]), do: Map.put(tree, bit, true)
++
++  defp grow(tree, [instance | path]),
++    do: Map.put(tree, instance, grow(as_map(Map.get(tree, instance)), path))
++
+   # A var_output a hand-built env leaves out reads 0, as a contact reads it (M1-4).
+   defp outputs(%Program{tags: tags}, env),
+     do:
+@@ -162,6 +175,15 @@ defmodule Logex.Runtime do
+   # The arguments, checked in order: program, state, the state's owner, scan, inputs.
+   defp program!(%Program{tags: tags, rungs: rungs}) when is_map(tags) and is_list(rungs), do: :ok
+ 
++  # M2-5: what Logex.compile/2 returns for a function block's file.
++  defp program!(%FbType{name: name}),
++    do:
++      raise(
++        ArgumentError,
++        "#{named(name)} is a function block type, which runs inside a program through `cal`: " <>
++          "an instance is of a %Logex.Program{}"
++      )
++
+   defp program!(other),
+     do:
+       raise(
+@@ -232,6 +254,14 @@ defmodule Logex.Runtime do
+           "got: #{inspect(blocked)}"
+       )
+ 
++  defp scan!(%Scan{tags: tags}, _state) when tags != nil,
++    do:
++      raise(
++        ArgumentError,
++        "scan.tags is the runtime's, taken from the program: a host leaves it out, " <>
++          "got: #{inspect(tags)}"
++      )
++
+   defp scan!(%Scan{now: now}, %Instance{now: last}) when now < last,
+     do:
+       raise(
+@@ -476,13 +506,61 @@ defmodule Logex.Runtime do
+     {false, write(env, timer, reset(as_map(read(env, timer)), now))}
+   end
+ 
++  # M2-5: a `cal` runs its instance's block (docs/organisation.md §4.3). Rung power is its
++  # EN and the power it passes on its ENO, which no block can reset. Energised, each input
++  # operand is copied into its formal, the body runs over the instance's state with the
++  # scan narrowed to it, and each output formal is copied out to its operand. De-energised,
++  # nothing is copied in or out and the body does not run (decision 12): the instance is
++  # frozen, and so is every tag its outputs name, its timers keeping `.en` and `last`, so
++  # one that was timing catches up when it next runs (decision 8).
++  defp evaluate(
++         {:cal, _, [{:name, _, instance} | operands]},
++         {true, env},
++         %Scan{tags: tags} = scan
++       ) do
++    {true, called(Map.get(tags, instance), instance, operands, env, scan)}
++  end
++
++  defp evaluate({:cal, _, _}, {false, env}, _scan) do
++    {false, env}
++  end
++
+   # The block list names storage bits, and a storage bit is a declared bool, always a
+   # `{:name, _, bit}`: no member is a bool that logic may write (a ton's `pre` and `acc`
+-  # are dints). An `ons` on a member, which only a program built by hand can hold, is never
+-  # blocked. M2-5, whose function blocks may have such a member, decides how one is named.
+-  defp blocked?({:name, _, bit}, blocked), do: is_map_key(blocked, bit)
++  # are dints, and a user block's members are written by nothing outside it). An `ons` on
++  # a member, which only a program built by hand can hold, is never blocked. A bit inside
++  # an instance is blocked through the tree its `cal` handed the body (M2-5).
++  defp blocked?({:name, _, bit}, blocked), do: match?(%{^bit => true}, blocked)
+   defp blocked?({:member, _, _path}, _blocked), do: false
+ 
++  # A program built by hand may name an instance its table lacks, or one of another type:
++  # nothing runs, as nothing runs for a hand-built env a `ton` finds no timer in.
++  defp called(
++         %Tag{type: %FbType{body: %Program{rungs: rungs, tags: tags}} = type},
++         instance,
++         operands,
++         env,
++         %Scan{ons_blocked: blocked} = scan
++       ) do
++    pairs = Enum.zip(FbType.formals(type), operands)
++    state = Enum.reduce(pairs, as_map(Map.get(env, instance)), &copy_in(&1, &2, env))
++    inner = %{scan | tags: tags, ons_blocked: as_map(Map.get(blocked, instance))}
++    state = Enum.reduce(rungs, state, &rung(&1, &2, inner))
++    Enum.reduce(pairs, Map.put(env, instance, state), &copy_out(&1, &2, state))
++  end
++
++  defp called(_not_a_block, _instance, _operands, env, _scan), do: env
++
++  defp copy_in({%Member{role: :input, name: name}, operand}, state, env),
++    do: Map.put(state, name, read(env, operand))
++
++  defp copy_in(_output, state, _env), do: state
++
++  defp copy_out({%Member{role: :output, name: name}, operand}, env, state),
++    do: write(env, operand, Map.get(state, name, 0))
++
++  defp copy_out(_input, env, _state), do: env
++
+   # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is
+   # complementary by construction, as `xic` and `xio` are (M1-4). Erlang's term order is
+   # total, so a comparison of whatever a hand-built env holds never raises.
+diff --git a/lib/logex/scan.ex b/lib/logex/scan.ex
+index 52d6058..bb539ee 100644
+--- a/lib/logex/scan.ex
++++ b/lib/logex/scan.ex
+@@ -13,14 +13,28 @@ defmodule Logex.Scan do
+   `ons_blocked`, a list, and gives the evaluator a map of those bits, each to `true`, so
+   each `ons` looks its bit up rather than walking the list; a host builds a scan with
+   `now` and `first` only, leaving the field `[]`, and one that fills it in is refused.
++  Since M2-5 the list may name a storage bit inside an instance of a function block by its
++  dotted path, `s1.edge`, and the map is a tree: each bit to `true`, each instance to the
++  tree of its own.
++
++  `tags` is the runtime's too (M2-5): the tag table of the program, or of the function
++  block, whose rungs run, where a `cal` finds its instance's type and so its body. A host
++  leaves it nil, and one that fills it in is refused.
++
++  A `cal` hands its block's body the scan narrowed to its instance: the block's `tags` and
++  the instance's own tree of blocked bits. `now` and `first` are the call's, so a body is
++  on the program instance's clock and first scan.
+   """
+ 
+   @enforce_keys [:now, :first]
+-  defstruct [:now, :first, ons_blocked: []]
++  defstruct [:now, :first, ons_blocked: [], tags: nil]
++
++  @type tree :: %{optional(String.t()) => true | tree}
+ 
+   @type t :: %__MODULE__{
+           now: non_neg_integer,
+           first: boolean,
+-          ons_blocked: [] | %{optional(String.t()) => true}
++          ons_blocked: [] | tree,
++          tags: %{String.t() => Logex.Tag.t()} | nil
+         }
+ end
+diff --git a/lib/logex/warnings.ex b/lib/logex/warnings.ex
+index 72d9c34..442ab26 100644
+--- a/lib/logex/warnings.ex
++++ b/lib/logex/warnings.ex
+@@ -9,7 +9,11 @@ defmodule Logex.Warnings do
+   - an `ons` storage bit that another instruction writes (M1-6): the one-shot then fires
+     on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`);
+   - a comparison of two literals (M1-6): its result never changes;
+-  - a timer no `ton` runs (M1-6): it never times.
++  - a timer no `ton` runs (M1-6): it never times;
++  - an instance of a user function block no `cal` runs (M2-5): it never runs.
++
++  A `cal`'s operands are uses with its block's signature (`Logex.FbType.signature/1`): an
++  output operand is written, so a var_output a `cal` drives is no undriven output.
+ 
+   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
+   """
+@@ -20,7 +24,7 @@ defmodule Logex.Warnings do
+   def of(rungs, tags) do
+     signatures = Map.new(Compiler.instructions(), fn {_word, {symbol, sig}} -> {symbol, sig} end)
+     instructions = instructions(rungs)
+-    uses = Enum.flat_map(instructions, &uses(&1, signatures))
++    uses = Enum.flat_map(instructions, &uses(&1, signature(&1, signatures, tags)))
+     # Grouped once, so the pass stays linear in the program's size.
+     accesses =
+       Enum.group_by(uses, fn {_, name, _, _} -> name end, fn {access, _, _, _} -> access end)
+@@ -53,12 +57,19 @@ defmodule Logex.Warnings do
+   defp gathered({:branches, legs}, gathered), do: Enum.reduce(legs, gathered, &gather/2)
+   defp gathered(instruction, gathered), do: [instruction | gathered]
+ 
++  # An instruction's operand signature: a built-in's from the table, and a `cal`'s from
++  # its instance's block (M2-5), since a program that compiled runs a `cal` only on one.
++  defp signature({:cal, _, [{:name, _, instance} | _]}, _signatures, tags),
++    do: FbType.signature(Map.fetch!(tags, instance).type)
++
++  defp signature({symbol, _, _}, signatures, _tags), do: Map.fetch!(signatures, symbol)
++
+   # Each tag operand of an instruction, as {access, name, line, symbol}. A member is a use
+   # of its instance, `t1.dn` of `t1`, with its slot's access (M1-6).
+-  defp uses({symbol, line, operands}, signatures),
++  defp uses({symbol, line, operands}, signature),
+     do:
+       for(
+-        {{access, _type}, operand} <- Enum.zip(Map.fetch!(signatures, symbol), operands),
++        {{access, _type}, operand} <- Enum.zip(signature, operands),
+         name = tag_of(operand),
+         do: {access, name, line, symbol}
+       )
+@@ -72,16 +83,22 @@ defmodule Logex.Warnings do
+ 
+   defp about(%Tag{section: :var_output} = tag, accesses), do: unwritten(:write in accesses, tag)
+ 
+-  defp about(%Tag{type: %FbType{name: "ton"}} = tag, accesses),
++  defp about(%Tag{type: %FbType{}} = tag, accesses),
+     do: unrun(:instance in accesses, tag)
+ 
+   defp about(_tag, _accesses), do: []
+ 
+   defp unrun(true, _tag), do: []
+ 
+-  defp unrun(false, tag),
++  defp unrun(false, %Tag{type: %FbType{body: nil}} = tag),
+     do: [warning(tag.line, "`#{tag.name}` is a ton, but no `ton` runs it: it never times")]
+ 
++  # M2-5: a user block's instance runs only through `cal`.
++  defp unrun(false, %Tag{type: type} = tag),
++    do: [
++      warning(tag.line, "`#{tag.name}` is a #{type.name}, but no `cal` runs it: it never runs")
++    ]
++
+   defp unwritten(true, _tag), do: []
+ 
+   defp unwritten(false, tag),
+diff --git a/test/logex/api_contract_test.exs b/test/logex/api_contract_test.exs
+index 2d033a4..2d65b5a 100644
+--- a/test/logex/api_contract_test.exs
++++ b/test/logex/api_contract_test.exs
+@@ -105,7 +105,7 @@ defmodule Logex.ApiContractTest do
+     "is already run by the `ton`",
+     "but logic may write only",
+     "is not a member of",
+-    "only a timer has members",
++    "only an instance of a function block has members",
+     "bit access is not supported yet",
+     "goes too deep",
+     "name one of its members",
+@@ -159,6 +159,7 @@ defmodule Logex.ApiContractTest do
+     "input ",
+     "inputs must be",
+     "scan.ons_blocked",
++    "scan.tags",
+     "scan.",
+     "state.",
+     "time went backwards",
+@@ -399,6 +400,7 @@ defmodule Logex.ApiContractTest do
+       pick([
+         %Scan{now: state.now, first: state.first},
+         %Scan{now: state.now, first: state.first, ons_blocked: ["s1"]},
++        %Scan{now: state.now, first: state.first, tags: %{}},
+         0,
+         nil
+       ])
+diff --git a/test/logex/edit_test.exs b/test/logex/edit_test.exs
+index d197883..0ae27a8 100644
+--- a/test/logex/edit_test.exs
++++ b/test/logex/edit_test.exs
+@@ -1538,6 +1538,165 @@ defmodule Logex.EditTest do
+     end
+   end
+ 
++  describe "function blocks (M2-5)" do
++    @seal """
++    function_block seal
++    var_input start bool
++    var_input stop bool
++    var_output run bool
++
++    ( xic start | xic run ) xio stop ote run
++    """
++
++    @pulse """
++    function_block pulse
++    var_input go bool
++    var_output fired bool
++    var edge bool
++
++    xic go ons edge ote fired
++    """
++
++    defp fb!(src, name, types \\ []) do
++      {:ok, type} = Logex.compile(src, name: name, types: types)
++      type
++    end
++
++    defp with!(src, types) do
++      {:ok, program} = Logex.compile(src, name: "m", types: types)
++      program
++    end
++
++    test "a function block type is not a program" do
++      seal = fb!(@seal, "seal")
++      v1 = with!("var_input a bool\nvar_output o bool\nvar s1 seal\ncal s1 a a o\n", [seal])
++
++      raises(
++        "`seal` is a function block type, which runs inside a program through `cal`: " <>
++          "an instance is of a %Logex.Program{}",
++        fn -> Edit.accept(v1, opaque(seal), Runtime.instance(v1)) end
++      )
++    end
++
++    test "an output a cal drove is held where the candidate drives it no more" do
++      seal = fb!(@seal, "seal")
++      decl = "var_input a bool\nvar_input b bool\nvar_output o bool\nvar s1 seal\n"
++      v1 = with!(decl <> "cal s1 a b o\n", [seal])
++      v2 = with!(decl <> "var z bool\nxic a xic b ote z\nxic s1.run ote z\n", [seal])
++      {_, state} = run(v1, [{0, %{"a" => 1}}, {10, %{"a" => 0}}])
++      assert state.env["o"] == 1
++
++      {:ok, edit, forecast} = Edit.accept(v1, v2, state)
++      assert {:held, "o", 1} in forecast
++      {_edit, _state, report} = Edit.test(edit, state)
++      assert report == [{:added, "z", 0}, {:held, "o", 1}]
++    end
++
++    test "a changed block type is refused at accept, and one only its lines moved is not" do
++      seal = fb!(@seal, "seal")
++
++      changed =
++        fb!(String.replace(@seal, "( xic start | xic run ) xio stop", "xic start"), "seal")
++
++      initial = fb!(String.replace(@seal, "var_output run bool", "var_output run bool 1"), "seal")
++      moved = fb!(String.replace(@seal, "var_input start", "// start\nvar_input start"), "seal")
++      src = "var_input a bool\nvar_input b bool\nvar_output o bool\nvar s1 seal\ncal s1 a b o\n"
++      v1 = with!(src, [seal])
++      state = Runtime.instance(v1)
++
++      for type <- [changed, initial] do
++        assert {:error, [diagnostic]} = Edit.accept(v1, with!(src, [type]), state)
++
++        assert Diagnostic.format(diagnostic) ==
++                 "line 4: `s1` is a seal in the running program and a changed seal in the " <>
++                   "candidate: a function block's members and body change only with a restart"
++      end
++
++      assert moved.body.source != seal.body.source
++      assert {:ok, _edit, []} = Edit.accept(v1, with!(src, [moved]), state)
++    end
++
++    test "an instance the candidate adds starts, and the one-shots in it are blocked" do
++      pulse = fb!(@pulse, "pulse")
++      decl = "var_input go bool\nvar_output fired bool\nvar_output top bool\nvar edge bool\n"
++      v1 = with!(decl <> "xic go ons edge ote top\nxic go ote fired\n", [pulse])
++      v2 = with!(decl <> "var p pulse\nxic go ons edge ote top\ncal p go fired\n", [pulse])
++      {_, state} = run(v1, [{0, %{}}, {10, %{"go" => 1}}])
++      assert state.env["edge"] == 1
++
++      {_edit, state, report} = Edit.test(accept!(v1, v2, state), state)
++
++      assert report == [
++               {:added, "p", %{"edge" => 0, "fired" => 0, "go" => 0}},
++               {:ons_blocked, "p.edge", 0}
++             ]
++
++      assert state.ons_blocked == ["p.edge"]
++      assert {%{"fired" => 0, "top" => 0}, state} = Runtime.scan(v2, state, 10)
++      assert {%{"fired" => 0}, _} = Runtime.scan(v2, state, 10)
++    end
++
++    test "an untouched cal keeps a real edge on the switch scan; a changed one is blocked" do
++      pulse = fb!(@pulse, "pulse")
++      decl = "var_input go bool\nvar_input go2 bool\nvar_output fired bool\nvar p pulse\n"
++      v1 = with!(decl <> "cal p go fired\n", [pulse])
++
++      kept = with!(decl <> "var go3 bool\ncal p go fired\nxic go2 ote go3\n", [pulse])
++
++      changed = with!(decl <> "cal p go2 fired\n", [pulse])
++      {_, state} = run(v1, [{0, %{}}, {10, %{}}])
++
++      {_edit, kept_state, report} = Edit.test(accept!(v1, kept, state), state)
++      assert report == [{:added, "go3", 0}]
++      kept_state = Runtime.put_inputs(kept, kept_state, %{"go" => 1})
++      assert {%{"fired" => 1}, _} = Runtime.scan(kept, kept_state, 10)
++
++      {_edit, changed_state, report} = Edit.test(accept!(v1, changed, state), state)
++      assert report == [{:ons_blocked, "p.edge", 0}]
++      changed_state = Runtime.put_inputs(changed, changed_state, %{"go2" => 1})
++      assert {%{"fired" => 0}, _} = Runtime.scan(changed, changed_state, 10)
++    end
++
++    test "at the first test an instance fits by its member keys, an instance it holds included" do
++      seal = fb!(@seal, "seal")
++
++      seal2 =
++        fb!(
++          String.replace(@seal, "var_output run bool", "var_output run bool\nvar n dint"),
++          "seal"
++        )
++
++      pair =
++        &fb!(
++          "function_block pair\nvar_input a bool\nvar_output q bool\nvar x seal\nxic a cal x a 0 q\n",
++          "pair",
++          [&1]
++        )
++
++      src =
++        "var_input en bool\nvar_input a bool\nvar_output q bool\nvar p pair\nxic en cal p a q\n"
++
++      v1 = with!(src, [pair.(seal)])
++      v2 = with!(src, [pair.(seal2)])
++      {_, state} = run(v1, [{0, %{"en" => 1, "a" => 1}}])
++
++      # A plain swap scanned with the block frozen leaves `p.x` without `n`.
++      {_, state} = drive(v2, state, [{10, %{"en" => 0}}])
++      refute Map.has_key?(state.env["p"]["x"], "n")
++
++      candidate =
++        with!(
++          String.replace(src, "var p pair\n", "var p pair\nvar spare bool\n") <>
++            "xic spare ote spare\n",
++          [pair.(seal2)]
++        )
++
++      {_edit, state, report} = Edit.test(accept!(v2, candidate, state), state)
++      assert {:added, "p", %{"x" => %{"n" => 0}}} = List.keyfind(report, "p", 1)
++      assert state.env["p"]["x"]["n"] == 0
++    end
++  end
++
+   describe "the labels this work cites" do
+     @root Path.expand("../..", __DIR__)
+ 
+diff --git a/test/logex/end_to_end_test.exs b/test/logex/end_to_end_test.exs
+index 6c3bb68..9e4f79f 100644
+--- a/test/logex/end_to_end_test.exs
++++ b/test/logex/end_to_end_test.exs
+@@ -1368,4 +1368,117 @@ defmodule Logex.EndToEndTest do
+                    fn -> Logex.Tag.new!("speed_sp", :dint, :var_output, -1) end
+     end
+   end
++
++  describe "user function blocks (M2-5)" do
++    # PLAN.md M2-5's Done-when, through the public API alone: files on disk compiled by
++    # Logex.compile_file/2, one instance of the program scanned by Logex.Runtime.call/4.
++    # Until M2-1 there is no configuration, so `m1` is the instance itself, and its
++    # `m1.s2.run` is read two ways: by a rung of the program, `xic s2.run`, and from the
++    # instance's state by that path. M2-1's `get/2` reads it as written.
++    @seal """
++    function_block seal
++    var_input start bool
++    var_input stop bool
++    var_output run bool
++
++    ( xic start | xic run ) xio stop ote run
++    """
++
++    @plant """
++    var_input start_1 bool
++    var_input stop_1 bool
++    var_input start_2 bool
++    var_input stop_2 bool
++    var_input start_3 bool
++    var_input stop_3 bool
++    var_input enable_3 bool
++    var_output run_1 bool
++    var_output run_2 bool
++    var_output run_3 bool
++    var_output lamp_2 bool
++    var s1 seal
++    var s2 seal
++    var s3 seal
++
++    cal s1 start_1 stop_1 run_1
++    cal s2 start_2 stop_2 run_2
++    xic enable_3 cal s3 start_3 stop_3 run_3
++    xic s2.run ote lamp_2
++    """
++
++    defp write(dir, name, text) do
++      path = Path.join(dir, name)
++      File.write!(path, text)
++      path
++    end
++
++    defp messages({:error, diagnostics}), do: Enum.map(diagnostics, &Logex.Diagnostic.format/1)
++
++    @tag :tmp_dir
++    test "PLAN M2-5's Done-when: a seal-in written once as a block, run three times", %{
++      tmp_dir: dir
++    } do
++      {:ok, seal} = Logex.compile_file(write(dir, "seal.ld", @seal))
++      {:ok, plant} = Logex.compile_file(write(dir, "plant.ld", @plant), types: [seal])
++      m1 = Logex.Runtime.instance(plant)
++
++      steps = [
++        # Each seal-in seals in from its own start button and drops out at its own stop.
++        {%{"enable_3" => 1, "start_1" => 1}, {1, 0, 0}},
++        {%{"start_1" => 0}, {1, 0, 0}},
++        {%{"start_2" => 1}, {1, 1, 0}},
++        {%{"start_2" => 0, "start_3" => 1}, {1, 1, 1}},
++        {%{"start_3" => 0, "stop_1" => 1}, {0, 1, 1}},
++        # A false EN freezes `s3` alone: its stop is not seen, and `run_3` holds, while
++        # `s1` and `s2` answer their buttons in the same scans.
++        {%{"stop_1" => 0, "enable_3" => 0, "stop_3" => 1}, {0, 1, 1}},
++        {%{"stop_2" => 1, "start_1" => 1}, {1, 0, 1}},
++        {%{"stop_2" => 0, "start_1" => 0, "start_2" => 1}, {1, 1, 1}},
++        # Its EN back, `s3` sees its stop.
++        {%{"enable_3" => 1}, {1, 1, 0}}
++      ]
++
++      m1 =
++        Enum.reduce(steps, m1, fn {inputs, {r1, r2, r3}}, m1 ->
++          scan = %Logex.Scan{now: m1.now + 10, first: m1.first}
++          {outputs, m1} = Logex.Runtime.call(plant, m1, inputs, scan)
++
++          assert %{"run_1" => ^r1, "run_2" => ^r2, "run_3" => ^r3} = outputs, inspect(inputs)
++
++          # `m1.s2.run` reads one of them.
++          assert outputs["lamp_2"] == r2
++          assert get_in(m1.env, ["s2", "run"]) == r2
++          m1
++        end)
++
++      assert Enum.map(~w(s1 s2 s3), &m1.env[&1]["run"]) == [1, 1, 0]
++
++      # A recursive type, an unknown function block type and a `cal` of a non-instance are
++      # each a located diagnostic, naming its file and line.
++      loop = write(dir, "loop.ld", "function_block loop\nvar_input a bool\nvar x loop\ncal x a\n")
++
++      assert messages(Logex.compile_file(loop)) == [
++               "#{loop}: line 3: `x` is a loop, the function block this file declares: " <>
++                 "a function block cannot hold an instance of itself"
++             ]
++
++      unknown = write(dir, "unknown.ld", String.replace(@plant, "var s3 seal", "var s3 sael"))
++
++      # As for any unknown type since M1-3, the line declares nothing, so `s3`'s use is
++      # reported too.
++      assert messages(Logex.compile_file(unknown, types: [seal])) == [
++               "#{unknown}: line 14: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
++                 "and the function block `seal` — did you mean `seal`?",
++               "#{unknown}: line 18: `s3` is not declared"
++             ]
++
++      not_instance =
++        write(dir, "wired.ld", String.replace(@plant, "cal s1 start_1", "cal start_1 start_1"))
++
++      assert messages(Logex.compile_file(not_instance, types: [seal])) == [
++               "#{not_instance}: line 16: `cal` runs a function block, but `start_1` is a " <>
++                 "bool (declared on line 1)"
++             ]
++    end
++  end
+ end
+diff --git a/test/logex/function_block_test.exs b/test/logex/function_block_test.exs
+new file mode 100644
+index 0000000..665bced
+--- /dev/null
++++ b/test/logex/function_block_test.exs
+@@ -0,0 +1,831 @@
++defmodule Logex.FunctionBlockTest do
++  @moduledoc """
++  M2-5: user function blocks (`docs/organisation.md` §4.3). A `.ld` file headed
++  `function_block <name>` compiles to its `%Logex.FbType{}`, a program given it in
++  `types:` declares instances of it, `var s1 seal`, and runs each with `cal`, rung power
++  as EN and nothing copied on a false EN (decision 12). Every program here comes from
++  source, and every diagnostic case asserts the whole list.
++  """
++  use ExUnit.Case, async: true
++
++  alias Logex.{Diagnostic, FbType, Instance, Runtime, Scan, Tag}
++
++  @seal """
++  function_block seal
++  var_input start bool
++  var_input stop bool
++  var_output run bool
++
++  ( xic start | xic run ) xio stop ote run
++  """
++
++  # A block that holds a one-shot and a counter of its pulses, for the first-scan and
++  # online-edit cases.
++  @pulse """
++  function_block pulse
++  var_input go bool
++  var_output fired bool
++  var edge bool
++  var count dint
++
++  xic go ons edge ote fired
++  xic fired move 1 count
++  """
++
++  # A block that holds a timer, for the frozen-timer case.
++  @delay """
++  function_block delay
++  var_input go bool
++  var_output done bool
++  var t1 ton
++
++  xic go ton t1 100
++  xic t1.dn ote done
++  """
++
++  defp block(source, name, types \\ []) do
++    {:ok, %FbType{} = type} = Logex.compile(source, name: name, types: types)
++    type
++  end
++
++  defp seal, do: block(@seal, "seal")
++
++  defp program(source, types) do
++    {:ok, program} = Logex.compile(source, name: "p", types: types)
++    program
++  end
++
++  defp errors(source, types \\ nil, name \\ "p") do
++    {:error, diagnostics} = Logex.compile(source, name: name, types: types || [seal()])
++    Enum.map(diagnostics, &Diagnostic.format/1)
++  end
++
++  # Through the compiler alone, which names no block: a header's own mistakes, with no
++  # name to match.
++  defp compiled_errors(source, types \\ []) do
++    {:ok, tokens, _} = Logex.Compiler.tokenize(source)
++    {:ok, tree} = Logex.Compiler.parse(tokens)
++    {:error, diagnostics} = Logex.Compiler.instructionize(tree, [], types)
++    Enum.map(diagnostics, &Diagnostic.format/1)
++  end
++
++  defp warnings(source, types) do
++    Enum.map(program(source, types).warnings, &Diagnostic.format/1)
++  end
++
++  # Each step's inputs, scanned 10 ms after the last; the outputs of every scan.
++  defp drive(program, steps, state \\ nil) do
++    {outputs, _state} = driven(program, steps, state)
++    outputs
++  end
++
++  defp driven(program, steps, state) do
++    Enum.map_reduce(steps, state || Runtime.instance(program), fn inputs, state ->
++      Runtime.call(program, state, inputs, %Scan{now: state.now + 10, first: state.first})
++    end)
++  end
++
++  describe "a function block's file" do
++    test "is headed by its name, and compiles to its type, a member per declaration" do
++      type = seal()
++
++      assert %FbType{name: "seal", body: %Logex.Program{name: "seal", source: @seal}} = type
++
++      assert Enum.map(type.members, &{&1.name, &1.role, &1.type, &1.write, &1.initial}) == [
++               {"start", :input, :bool, false, 0},
++               {"stop", :input, :bool, false, 0},
++               {"run", :output, :bool, false, 0}
++             ]
++
++      assert FbType.signature(type) ==
++               [{:instance, "seal"}, {:value, :bool}, {:value, :bool}, {:write, :bool}]
++    end
++
++    test "its members follow the text, inputs then outputs as cal's operands, vars local" do
++      type =
++        block(
++          """
++          function_block mixed
++          var_output q dint 7
++          var n dint 3
++          var_input a bool
++          var t1 ton
++          var s seal
++          var_input b dint
++          var flag bool
++
++          xic a ton t1 250
++          xic a cal s a a flag
++          move b q
++          """,
++          "mixed",
++          [seal()]
++        )
++
++      assert Enum.map(type.members, &{&1.name, &1.role}) == [
++               {"q", :output},
++               {"n", :local},
++               {"a", :input},
++               {"t1", :local},
++               {"s", :local},
++               {"b", :input},
++               {"flag", :local}
++             ]
++
++      assert Enum.map(FbType.formals(type), & &1.name) == ["a", "b", "q"]
++
++      # A member starts where its declaration says: a timer at the preset on its `ton`.
++      assert %{"q" => 7, "n" => 3, "t1" => %{"pre" => 250, "acc" => 0}, "s" => %{"run" => 0}} =
++               FbType.initial(type)
++    end
++
++    test "its header is the first rung: blank lines and comments may come before it" do
++      assert %FbType{name: "seal"} = block("// a seal-in\n\n" <> @seal, "seal")
++
++      assert errors("// a seal-in\n" <> @seal, [], "seel") == [
++               "line 2: `function_block seal` names this block `seal`, but it is compiled as " <>
++                 "`seel`: a function block's first line names it as its file does"
++             ]
++    end
++
++    test "the keyword is matched in any case" do
++      assert %FbType{name: "seal"} =
++               block(String.replace(@seal, "function_block", "FUNCTION_BLOCK"), "seal")
++    end
++
++    test "its first line names it as the file does" do
++      assert errors(@seal, [], "seel") == [
++               "line 1: `function_block seal` names this block `seal`, but it is compiled as " <>
++                 "`seel`: a function block's first line names it as its file does"
++             ]
++    end
++
++    @tag :tmp_dir
++    test "from a file, the name is the file's", %{tmp_dir: dir} do
++      path = Path.join(dir, "seal.ld")
++      File.write!(path, @seal)
++      assert {:ok, %FbType{name: "seal"}} = Logex.compile_file(path)
++
++      wrong = Path.join(dir, "latch.ld")
++      File.write!(wrong, @seal)
++      assert {:error, [diagnostic]} = Logex.compile_file(wrong)
++
++      assert Diagnostic.format(diagnostic) ==
++               "#{wrong}: line 1: `function_block seal` names this block `seal`, but it is " <>
++                 "compiled as `latch`: a function block's first line names it as its file does"
++
++      # A block's warnings carry the file, as a program's do.
++      unused = Path.join(dir, "idle.ld")
++
++      File.write!(
++        unused,
++        "function_block idle\nvar_input a bool\nvar_output b bool\nxic b ote b\n"
++      )
++
++      assert {:ok, %FbType{body: %{warnings: [warning]}}} = Logex.compile_file(unused)
++      assert warning.file == unused
++
++      user = Path.join(dir, "user.ld")
++      File.write!(user, "var_input a bool\nvar_output b bool\nvar s1 seal\ncal s1 a a b\n")
++      assert {:ok, %Logex.Program{name: "user"}} = Logex.compile_file(user, types: [seal()])
++    end
++
++    test "a header that cannot name a block is reported, and the body still compiled" do
++      body = "\nvar_input a bool\nxic a ote zz\n"
++
++      for {header, message} <- [
++            {"function_block",
++             "`function_block` needs the block's name, as in `function_block seal`"},
++            {"function_block 5", "expected the block's name after `function_block`, found `5`"},
++            {"function_block a b", "unexpected `b` after `function_block a`"},
++            {"function_block a ( xic b )", "unexpected a branch group after `function_block a`"},
++            {"function_block ( xic b )",
++             "a function block's first line cannot hold a branch group"},
++            {"function_block move", "`move` is an instruction and cannot name a function block"},
++            {"function_block CAL", "`CAL` is an instruction and cannot name a function block"},
++            {"function_block bool", "`bool` is a type and cannot name a function block"},
++            {"function_block ton", "`ton` is an instruction and cannot name a function block"},
++            {"function_block var", "`var` is a keyword and cannot name a function block"},
++            {"function_block Function_Block",
++             "`Function_Block` is a keyword and cannot name a function block"},
++            {"function_block a.b", "`a.b` cannot name a function block: `.` is kept for a member"}
++          ] do
++        assert compiled_errors(header <> body) == [
++                 "line 1: " <> message,
++                 "line 3: `zz` is not declared"
++               ],
++               header
++      end
++    end
++
++    test "`function_block` heads a file on its first line only, in a block or a program" do
++      assert errors("var_input a bool\nfunction_block seal\nxic a ote a2\n", []) == [
++               "line 2: `function_block` heads a function block's file, on its first line only",
++               "line 3: `a2` is not declared — did you mean `a`?"
++             ]
++
++      assert errors(@seal <> "FUNCTION_BLOCK x\n", [], "seal") == [
++               "line 7: `FUNCTION_BLOCK` heads a function block's file, on its first line only"
++             ]
++    end
++
++    test "`function_block` is reserved in a block's file, and not in a program's" do
++      assert errors(
++               "function_block b\nvar function_block bool\nxic function_block ote function_block\n",
++               [],
++               "b"
++             ) ==
++               [
++                 "line 2: `function_block` is a keyword in a function block's file and cannot name a tag"
++               ]
++
++      assert %Logex.Program{} =
++               program("var Function_Block bool\nxic Function_Block ote Function_Block\n", [])
++
++      assert_raise ArgumentError,
++                   "`function_block` is a keyword in a function block's file and cannot name a tag",
++                   fn ->
++                     {:ok, tokens, _} = Logex.Compiler.tokenize("function_block b\nxic x ote x\n")
++                     {:ok, tree} = Logex.Compiler.parse(tokens)
++
++                     Logex.Compiler.instructionize(tree, [
++                       Tag.new!("function_block", :bool),
++                       Tag.new!("x", :bool)
++                     ])
++                   end
++    end
++  end
++
++  describe "types: the blocks a compile is given" do
++    test "are function block types Logex.compile/2 returned, none twice, in any case" do
++      ton = FbType.ton()
++      bare = %FbType{name: "seal", members: []}
++      reserved = %{seal() | name: "move"}
++
++      for {types, message} <- [
++            {:seal,
++             "types must be a list of function block types from Logex.compile/2, got: :seal"},
++            {[:seal],
++             "types holds :seal, which is not a function block type from Logex.compile/2"},
++            {[ton],
++             "types holds #{inspect(ton)}, which is not a function block type from Logex.compile/2"},
++            {[bare],
++             "types holds #{inspect(bare)}, which is not a function block type from Logex.compile/2"},
++            {[reserved],
++             "types holds #{inspect(reserved)}, which is not a function block type from Logex.compile/2"},
++            {[seal(), seal()], "types holds two function blocks named `seal`"},
++            {[seal(), %{seal() | name: "Seal"}],
++             "types holds `seal` and `Seal`, which differ only in case: a function block's name " <>
++               "is matched exactly, so these would be two types"}
++          ] do
++        assert_raise ArgumentError, message, fn ->
++          Logex.compile("xic a ote a", name: "p", types: types)
++        end
++      end
++    end
++
++    test "a block is named exactly, and an unknown type names the blocks given" do
++      assert errors("var s1 sael\n") == [
++               "line 1: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
++                 "and the function block `seal` — did you mean `seal`?"
++             ]
++
++      assert errors("var s1 Seal\n") == [
++               "line 1: unknown type `Seal`: logex has `bool`, `dint` and `ton`, and the " <>
++                 "function block `seal` — did you mean `seal`? (type names are case-sensitive)"
++             ]
++
++      latch = block(String.replace(@seal, "seal", "latch"), "latch")
++
++      assert errors("var s1 zzz\n", [latch, seal()]) == [
++               "line 1: unknown type `zzz`: logex has `bool`, `dint` and `ton`, " <>
++                 "and the function blocks `latch` and `seal`"
++             ]
++
++      # With none given, the message is M1-3's.
++      assert errors("var s1 seal\n", []) == [
++               "line 1: unknown type `seal`: logex has `bool`, `dint` and `ton`"
++             ]
++    end
++
++    test "a block's name is not reserved: a tag may share it" do
++      assert %Logex.Program{} =
++               program(
++                 "var_input a bool\nvar_output seal bool\nvar s1 seal\ncal s1 a a seal\n",
++                 [seal()]
++               )
++
++      assert errors("var seal\n") == [
++               "line 1: `var` needs a tag name before the type `seal`, as in `var s1 seal`"
++             ]
++    end
++
++    test "an instance is declared with var, and takes no initial value" do
++      assert errors("var_input s1 seal\nvar s2 seal 1\ncal s1 0 0 s1\n") == [
++               "line 1: `s1` is a seal: an instance is the program's own, declared with `var`, " <>
++                 "as in `var s1 seal`, not with `var_input`",
++               "line 2: `s2` is a seal: an instance starts where its type says, and takes no " <>
++                 "initial value on its declaration",
++               "line 3: operand 3 of `cal s1` is `run` (var_output bool), but `s1` is a seal " <>
++                 "(declared on line 1)"
++             ]
++    end
++
++    test "from Elixir, an instance's type is one Logex.compile/2 returned" do
++      tag = Tag.new!("s1", seal())
++      assert tag.type == seal()
++
++      hand = %FbType{name: "seal", members: [], body: nil}
++
++      assert_raise ArgumentError,
++                   ~s|unknown function block type "seal": logex has Logex.FbType.ton() | <>
++                     "and the function blocks Logex.compile/2 returns",
++                   fn -> Tag.new!("s1", hand) end
++
++      assert_raise ArgumentError,
++                   "`s1` is a seal: an instance starts where its type says, and takes no " <>
++                     "initial value on its declaration",
++                   fn -> Tag.new!("s1", seal(), :var, 1) end
++    end
++  end
++
++  describe "recursion" do
++    test "a block holding an instance of itself is a located diagnostic, said once" do
++      assert errors(
++               "function_block loop\nvar_input a bool\nvar_output q bool\nvar x loop\n" <>
++                 "cal x a q\nxic x.q ote q\n",
++               [],
++               "loop"
++             ) == [
++               "line 4: `x` is a loop, the function block this file declares: a function " <>
++                 "block cannot hold an instance of itself"
++             ]
++    end
++
++    test "and at any depth, through a block it was given" do
++      inner =
++        block("function_block loop\nvar_input a bool\nvar_output q bool\nxic a ote q\n", "loop")
++
++      outer =
++        block(
++          "function_block wrap\nvar_input a bool\nvar_output q bool\nvar l loop\ncal l a q\n",
++          "wrap",
++          [inner]
++        )
++
++      assert errors(
++               "function_block loop\nvar_input a bool\nvar_output q bool\nvar w wrap\ncal w a q\n",
++               [outer],
++               "loop"
++             ) == [
++               "line 4: `w` is a wrap, and `w.l` is a loop, the function block this file " <>
++                 "declares: a function block cannot hold an instance of itself, at any depth"
++             ]
++    end
++
++    test "from Elixir it raises" do
++      {:ok, tokens, _} = Logex.Compiler.tokenize("function_block seal\nxic a ote a\n")
++      {:ok, tree} = Logex.Compiler.parse(tokens)
++
++      assert_raise ArgumentError,
++                   "`x` holds an instance of `seal`, the function block being compiled: " <>
++                     "a function block cannot hold an instance of itself",
++                   fn ->
++                     Logex.Compiler.instructionize(tree, [
++                       Tag.new!("a", :bool),
++                       Tag.new!("x", seal())
++                     ])
++                   end
++    end
++  end
++
++  describe "cal" do
++    @decl "var_input a bool\nvar_input b bool\nvar_output o bool\nvar n dint\nvar t1 ton\nvar s1 seal\n"
++
++    test "runs only a declared instance of a user function block" do
++      assert errors(@decl <> "cal\n") == [
++               "line 7: `cal` expects 1 operand (a function block), found none"
++             ]
++
++      assert errors(@decl <> "cal 5 a b o\n") == [
++               "line 7: `cal` expects a function block, found `5`"
++             ]
++
++      assert errors(@decl <> "cal a a b o\n") == [
++               "line 7: `cal` runs a function block, but `a` is a bool (declared on line 1)"
++             ]
++
++      assert errors(@decl <> "cal t1 a\nxic a ton t1 10\n") == [
++               "line 7: `cal` runs a user function block, but `t1` is a ton (declared on line 5), " <>
++                 "which its own instruction runs, as in `ton t1 5000`"
++             ]
++
++      assert errors(@decl <> "cal s1.run a b o\n") == [
++               "line 7: `cal` runs a function block, but `s1.run` is a bool"
++             ]
++
++      assert errors(@decl <> "cal s9 a b o\ncal s1 a b o\n") == ["line 7: `s9` is not declared"]
++
++      assert errors("cal s1 a b o\n") == [
++               "line 1: `s1` is not declared (this program declares no tags: each is now " <>
++                 "declared before the first rung, as `var s1` and the name of its function block)"
++             ]
++
++      # A ton on a user block's instance is told so by M1-6's message.
++      assert errors(@decl <> "cal s1 a b o\nxic a ton s1 10\n") == [
++               "line 8: `ton` runs a ton, but `s1` is a seal (declared on line 6)"
++             ]
++    end
++
++    test "takes as many operands as its block has formals, and names them when short" do
++      assert errors(@decl <> "cal s1 a b\n") == [
++               "line 7: `cal s1` expects 3 operands after the instance, a seal's `start` " <>
++                 "(var_input bool), `stop` (var_input bool) and `run` (var_output bool), found 2"
++             ]
++
++      assert errors(@decl <> "cal s1 a ote o\n") == [
++               "line 7: `cal s1` expects 3 operands after the instance, a seal's `start` " <>
++                 "(var_input bool), `stop` (var_input bool) and `run` (var_output bool), found 1 " <>
++                 "before the instruction `ote`"
++             ]
++
++      # One too many is where the next instruction starts, as for any instruction.
++      assert errors(@decl <> "cal s1 a b o a\n") == ["line 7: unknown instruction `a`"]
++    end
++
++    test "checks each operand against its formal, which every message names" do
++      assert errors(@decl <> "cal s1 n 5 a\n") == [
++               "line 7: operand 1 of `cal s1` is `start` (var_input bool), but `n` is a dint " <>
++                 "(declared on line 4)",
++               "line 7: operand 2 of `cal s1` is `stop` (var_input bool): only 0 or 1 fit, found `5`",
++               "line 7: operand 3 of `cal s1` is `run` (var_output bool), which writes `a`, a " <>
++                 "var_input (declared on line 1): logic must not write an input"
++             ]
++
++      assert errors(@decl <> "cal s1 t1 bool 1\n") == [
++               "line 7: operand 1 of `cal s1` is `start` (var_input bool), but `t1` is a ton " <>
++                 "(declared on line 5): name one of its members, as in `t1.dn`",
++               "line 7: operand 2 of `cal s1` is `stop` (var_input bool), but found the type `bool`",
++               "line 7: operand 3 of `cal s1` is `run` (var_output bool): an output is written " <>
++                 "to a tag, found `1`"
++             ]
++
++      assert errors(@decl <> "cal s1 t1.acc var t1.dn\nxic a ton t1 10\n") == [
++               "line 7: operand 1 of `cal s1` is `start` (var_input bool), but `t1.acc` is a dint",
++               "line 7: operand 2 of `cal s1` is `stop` (var_input bool), but found the keyword `var`",
++               "line 7: operand 3 of `cal s1` is `run` (var_output bool), which writes `t1.dn`, " <>
++                 "but logic may write only `.pre` and `.acc` of a ton"
++             ]
++
++      assert errors(@decl <> "var s2 seal\ncal s1 s2.zz b s2.run\ncal s2 a b o\n") == [
++               "line 8: `s2.zz` is not a member of `s2`, a seal: its members are `start`, `stop` " <>
++                 "and `run`",
++               "line 8: operand 3 of `cal s1` is `run` (var_output bool), which writes `s2.run`, " <>
++                 "but logic outside a seal writes none of its members: its `cal` sets them"
++             ]
++
++      dints = block("function_block add\nvar_input x dint\nvar_output y dint\nmove x y\n", "add")
++
++      assert errors("var_output o dint\nvar s add\ncal s 2147483648 o\n", [dints]) == [
++               "line 3: operand 1 of `cal s` is `x` (var_input dint): `2147483648` does not fit in 32 bits"
++             ]
++    end
++
++    test "an operand may be a literal, a member or an undeclared name, reported once" do
++      assert %Logex.Program{} =
++               program(
++                 @decl <> "var s2 seal\ncal s1 1 s2.run o\ncal s2 a b o\nxic a ton t1 5\n",
++                 [seal()]
++               )
++
++      assert errors(@decl <> "cal s1 zz b zz\n") == ["line 7: `zz` is not declared"]
++    end
++
++    test "one cal runs an instance" do
++      assert errors(@decl <> "cal s1 a b o\nxic a cal s1 a b o\n( cal s1 a b o | xic b )\n") == [
++               "line 8: `s1` is already run by the `cal` on line 7: one `cal` runs an instance",
++               "line 9: `s1` is already run by the `cal` on line 7: one `cal` runs an instance"
++             ]
++
++      assert errors(@decl <> "cal s1 a b o cal s1 a b o\n") == [
++               "line 7: `s1` is already run by the `cal` in this rung: one `cal` runs an instance"
++             ]
++    end
++
++    test "passes on the power it receives, so anything may follow it" do
++      program = program(@decl <> "var_output lamp bool\nxic a cal s1 b 0 o ote lamp\n", [seal()])
++
++      assert [%{"lamp" => 0, "o" => 0}, %{"lamp" => 1, "o" => 0}, %{"lamp" => 1, "o" => 1}] =
++               drive(program, [%{}, %{"a" => 1}, %{"b" => 1}])
++    end
++  end
++
++  describe "members from outside an instance" do
++    test "its inputs and outputs are read; its own vars are named only inside it" do
++      counter =
++        block(
++          "function_block counter\nvar_input go bool\nvar_output q bool\nvar n dint\nvar t ton\n" <>
++            "xic go ton t 10\nxic t.dn move 1 n\nge n 1 ote q\n",
++          "counter"
++        )
++
++      assert %Logex.Program{} =
++               program(
++                 "var_input a bool\nvar_output o bool\nvar c counter\ncal c a o\n" <>
++                   "xic c.go xic c.q ote o\n",
++                 [counter]
++               )
++
++      assert errors(
++               "var_input a bool\nvar_output o bool\nvar_output m dint\nvar c counter\ncal c a o\n" <>
++                 "ge c.n 1 ote o\nmove c.t.acc m\n",
++               [counter]
++             ) == [
++               "line 6: `c.n` names `n`, internal to `c`, a counter: outside it, only its inputs " <>
++                 "and outputs may be named: `go` and `q`",
++               "line 7: `c.t.acc` names `t`, internal to `c`, a counter: outside it, only its " <>
++                 "inputs and outputs may be named: `go` and `q`"
++             ]
++
++      bare = block("function_block bare\nvar n bool\nxic n ote n\n", "bare")
++
++      assert errors("var_output o bool\nvar b bare\ncal b\nxic b.n ote o\nxic b.zz ote o\n", [
++               bare
++             ]) == [
++               "line 4: `b.n` names `n`, internal to `b`, a bare: outside it, it has no inputs or " <>
++                 "outputs to name",
++               "line 5: `b.zz` is not a member of `b`, a bare: it has no inputs or outputs to name"
++             ]
++    end
++
++    test "logic outside writes none of them" do
++      assert errors(
++               "var_input a bool\nvar_output o bool\nvar s1 seal\ncal s1 a a o\note s1.run\nmove 1 s1.start\n"
++             ) ==
++               [
++                 "line 5: `ote` writes `s1.run`, but logic outside a seal writes none of its " <>
++                   "members: its `cal` sets them",
++                 "line 6: `move` writes `s1.start`, but logic outside a seal writes none of its " <>
++                   "members: its `cal` sets them"
++               ]
++    end
++
++    test "only an instance of a function block has members" do
++      assert errors("var a bool\nxic a.dn ote a\n", []) == [
++               "line 2: `a.dn` names a member of `a`, but `a` is a bool (declared on line 1): " <>
++                 "only an instance of a function block has members"
++             ]
++    end
++  end
++
++  describe "a cal at run time" do
++    test "copies its inputs in, runs the block over its own state, and copies its outputs out" do
++      program =
++        program(
++          "var_input a bool\nvar_input b bool\nvar_output o bool\nvar s1 seal\ncal s1 a b o\n",
++          [seal()]
++        )
++
++      {outputs, state} = driven(program, [%{"a" => 1}, %{"a" => 0}, %{"b" => 1}], nil)
++      assert Enum.map(outputs, & &1["o"]) == [1, 1, 0]
++      assert state.env["s1"] == %{"start" => 0, "stop" => 1, "run" => 0}
++    end
++
++    test "on a false EN copies nothing in, runs nothing and writes nothing out (decision 12)" do
++      program =
++        program(
++          "var_input en bool\nvar_input a bool\nvar_input b bool\nvar_input set bool\n" <>
++            "var_output o bool\nvar s1 seal\nxic set otl o\nxic en cal s1 a b o\n",
++          [seal()]
++        )
++
++      {outputs, state} =
++        driven(
++          program,
++          [
++            %{"en" => 1, "a" => 1},
++            %{"en" => 0, "a" => 0, "b" => 1},
++            %{"set" => 1},
++            %{"set" => 0, "en" => 1}
++          ],
++          nil
++        )
++
++      # Frozen, the block keeps its last inputs and its output; the `otl` above it holds `o`
++      # where a cal writing its frozen output would have put `run` back.
++      assert Enum.map(outputs, & &1["o"]) == [1, 1, 1, 0]
++      assert state.env["s1"] == %{"start" => 0, "stop" => 1, "run" => 0}
++    end
++
++    test "a timer inside a frozen block keeps .en and last, and catches up (decision 8)" do
++      program =
++        program(
++          "var_input en bool\nvar_input go bool\nvar_output done bool\nvar d delay\n" <>
++            "xic en cal d go done\n",
++          [block(@delay, "delay")]
++        )
++
++      state = Runtime.instance(program)
++
++      at = fn state, now, inputs ->
++        Runtime.call(program, state, inputs, %Scan{now: now, first: state.first})
++      end
++
++      {_, state} = at.(state, 0, %{"en" => 1, "go" => 1})
++      {_, state} = at.(state, 10, %{"en" => 0})
++      assert %{"en" => 1, "last" => 0, "acc" => 0} = state.env["d"]["t1"]
++      {_, state} = at.(state, 60, %{})
++      assert %{"en" => 1, "last" => 0, "acc" => 0} = state.env["d"]["t1"]
++      {outputs, state} = at.(state, 200, %{"en" => 1})
++      assert %{"acc" => 100, "dn" => 1, "last" => 200} = state.env["d"]["t1"]
++      assert outputs["done"] == 1
++    end
++
++    test "a block runs on its program instance's first scan, so a block first run later can fire" do
++      program =
++        program(
++          "var_input en bool\nvar_input go bool\nvar_output fired bool\nvar p pulse\n" <>
++            "xic en cal p go fired\n",
++          [block(@pulse, "pulse")]
++        )
++
++      # Run on the first scan with its condition true, its one-shot is held, as every `ons`.
++      assert Enum.map(drive(program, [%{"en" => 1, "go" => 1}, %{}]), & &1["fired"]) == [0, 0]
++
++      # Frozen on the first scan, it fires the first time it runs.
++      assert Enum.map(drive(program, [%{"go" => 1}, %{"en" => 1}, %{}]), & &1["fired"]) == [
++               0,
++               1,
++               0
++             ]
++    end
++
++    test "blocks nest, each instance holding its own state" do
++      pair =
++        block(
++          "function_block pair\nvar_input a bool\nvar_input b bool\nvar_input stop bool\n" <>
++            "var_output qa bool\nvar_output qb bool\nvar x seal\nvar y seal\n" <>
++            "cal x a stop qa\ncal y b stop qb\n",
++          "pair",
++          [seal()]
++        )
++
++      program =
++        program(
++          """
++          var_input a bool
++          var_input b bool
++          var_input stop bool
++          var_output qa bool
++          var_output qb bool
++          var_output qa2 bool
++          var_output qb2 bool
++          var p1 pair
++          var p2 pair
++
++          cal p1 a b stop qa qb
++          cal p2 b a stop qa2 qb2
++          """,
++          [pair]
++        )
++
++      {_, state} = driven(program, [%{"a" => 1}, %{"a" => 0}], nil)
++      assert state.env["p1"]["x"]["run"] == 1
++      assert state.env["p1"]["y"]["run"] == 0
++      assert state.env["p2"]["x"]["run"] == 0
++      assert state.env["p2"]["y"]["run"] == 1
++    end
++
++    test "a one-shot inside an instance is blocked by its path, and only by it" do
++      program =
++        program(
++          "var_input go bool\nvar_output fired bool\nvar_output top bool\nvar edge bool\n" <>
++            "var p pulse\ncal p go fired\nxic go ons edge ote top\n",
++          [block(@pulse, "pulse")]
++        )
++
++      {_, state} = driven(program, [%{}], nil)
++
++      for {blocked, expected} <- [
++            {["p.edge"], %{"fired" => 0, "top" => 1}},
++            {["edge"], %{"fired" => 1, "top" => 0}},
++            {["edge", "p.edge"], %{"fired" => 0, "top" => 0}}
++          ] do
++        state = %{state | ons_blocked: blocked}
++
++        assert {^expected, %Instance{ons_blocked: []}} =
++                 Runtime.call(program, state, %{"go" => 1}, %Scan{now: 20, first: false})
++      end
++    end
++
++    test "a hand-built env without the instance runs the block from nothing" do
++      program =
++        program("var_input a bool\nvar_output o bool\nvar s1 seal\ncal s1 a 0 o\n", [seal()])
++
++      state = %Instance{type: "p", env: %{"s1" => 7}, now: 0, first: true}
++
++      assert {%{"o" => 1}, %Instance{env: %{"s1" => %{"run" => 1}}}} =
++               Runtime.call(program, state, %{"a" => 1}, %Scan{now: 0, first: true})
++    end
++  end
++
++  describe "the host contract" do
++    test "a function block type is not a program" do
++      assert_raise ArgumentError,
++                   "`seal` is a function block type, which runs inside a program through `cal`: " <>
++                     "an instance is of a %Logex.Program{}",
++                   fn -> Runtime.instance(seal()) end
++    end
++
++    test "a scan's tags are the runtime's" do
++      program = program("var_input a bool\nvar_output o bool\nxic a ote o\n", [])
++      state = Runtime.instance(program)
++
++      assert_raise ArgumentError,
++                   "scan.tags is the runtime's, taken from the program: a host leaves it out, got: %{}",
++                   fn ->
++                     Runtime.call(program, state, %{}, %Scan{now: 0, first: true, tags: %{}})
++                   end
++    end
++  end
++
++  describe "warnings" do
++    test "an instance no cal runs never runs" do
++      assert warnings(
++               "var_input a bool\nvar_output o bool\nvar_output p bool\nvar s1 seal\n" <>
++                 "var s2 seal\ncal s1 a a o\nxic s2.run ote p\n",
++               [seal()]
++             ) ==
++               ["line 5: warning: `s2` is a seal, but no `cal` runs it: it never runs"]
++    end
++
++    test "a cal's operands are uses: an output it writes is written" do
++      assert warnings("var_input a bool\nvar_output o bool\nvar s1 seal\ncal s1 a a o\n", [seal()]) ==
++               []
++
++      assert warnings(
++               "var_input a bool\nvar_output o bool\nvar e bool\nvar s1 seal\nxic a ons e ote o\ncal s1 a a e\n",
++               [seal()]
++             ) == [
++               "line 6: warning: `cal` writes `e`, the storage bit of the `ons` on line 5: the " <>
++                 "one-shot then fires on the wrong scans"
++             ]
++    end
++  end
++
++  describe "growth in the depth of nesting" do
++    # A chain of blocks, each holding and calling the one below it, a one-shot at the
++    # bottom: every walk into a block reaches every level. At 100 and 400 levels, over 40
++    # runs, a scan grew 3.96x to 4.09x, compiling the next block 2.23x (its recursion check
++    # walks the chain; the rest of the compile is fixed), and an accept and a test 3.70x to
++    # 3.91x. Each bound is a fifth or more above the highest.
++    defp chain(depth) do
++      Enum.reduce(0..(depth - 1), [], fn k, below ->
++        {:ok, type} = Logex.compile(link(k), name: "b#{k}", types: Enum.take(below, 1))
++        [type | below]
++      end)
++    end
++
++    defp link(0),
++      do:
++        "function_block b0\nvar_input a bool\nvar_output q bool\nvar e bool\nxic a ons e ote q\n"
++
++    defp link(k),
++      do:
++        "function_block b#{k}\nvar_input a bool\nvar_output q bool\nvar x b#{k - 1}\ncal x a q\n"
++
++    defp least(fun) do
++      Enum.min(
++        for _ <- 1..3 do
++          {:reductions, before} = Process.info(self(), :reductions)
++          fun.()
++          {:reductions, later} = Process.info(self(), :reductions)
++          later - before
++        end
++      )
++    end
++
++    defp costs(depth) do
++      [top | _] = chain(depth)
++      source = "var_input a bool\nvar_output q bool\nvar top #{top.name}\n"
++      original = program(source <> "cal top a q\n", [top])
++      candidate = program(source <> "var z bool\ncal top a q\nxic a ote z\n", [top])
++      {_, state} = driven(original, [%{}], nil)
++
++      {least(fn -> Runtime.call(original, state, %{"a" => 1}, %Scan{now: 20, first: false}) end),
++       least(fn -> Logex.compile(link(depth), name: "b#{depth}", types: [top]) end),
++       least(fn ->
++         {:ok, edit, _} = Logex.Edit.accept(original, candidate, state)
++         Logex.Edit.test(edit, state)
++       end)}
++    end
++
++    test "a scan, compiling a block and an edit stay linear in it" do
++      {scan, compile, edit} = costs(100)
++      {scan4, compile4, edit4} = costs(400)
++      assert scan4 / scan < 5, "4x the depth took #{Float.round(scan4 / scan, 2)}x to scan"
++      assert compile4 / compile < 2.8, "#{Float.round(compile4 / compile, 2)}x to compile"
++      assert edit4 / edit < 4.8, "#{Float.round(edit4 / edit, 2)}x to accept and test"
++    end
++  end
++end
+diff --git a/test/logex/naming_test.exs b/test/logex/naming_test.exs
+index 663fd60..27c1eaa 100644
+--- a/test/logex/naming_test.exs
++++ b/test/logex/naming_test.exs
+@@ -60,6 +60,11 @@ defmodule Logex.NamingTest do
+     """
+   end
+ 
++  test "the word that heads a function block's file has been surveyed (M2-5)" do
++    assert Logex.Declarations.header_word() in surveyed_mnemonics(),
++           "`#{Logex.Declarations.header_word()}` heads a function block's file but has no stanza"
++  end
++
+   test "the check is one-way: a surveyed but unimplemented mnemonic is allowed" do
+     # Surveying an instruction long before building it is the point, so this
+     # direction must never fail. Asserted against a synthetic survey rather than
+diff --git a/test/logex/runtime_test.exs b/test/logex/runtime_test.exs
+index 0f88999..bfd6faa 100644
+--- a/test/logex/runtime_test.exs
++++ b/test/logex/runtime_test.exs
+@@ -174,7 +174,7 @@ defmodule Logex.RuntimeTest do
+             {%{s | env: nil}, "state.env must be a map of tag names to values, got: nil"},
+             {%{s | env: %Scan{now: 0, first: true}},
+              "state.env must be a map of tag names to values, " <>
+-               "got: %Logex.Scan{now: 0, first: true, ons_blocked: []}"},
++               "got: %Logex.Scan{now: 0, first: true, ons_blocked: [], tags: nil}"},
+             {%{s | now: nil},
+              "state.now must be a non-negative integer of milliseconds, got: nil"},
+             {%{s | now: -5}, "state.now must be a non-negative integer of milliseconds, got: -5"},
+@@ -687,20 +687,32 @@ defmodule Logex.RuntimeTest do
+ 
+   describe "the public surface (B5)" do
+     test "is exactly this: every evaluate clause is private, in Logex.Runtime" do
+-      assert Enum.sort(Logex.__info__(:functions)) == [compile: 2, compile_file: 1]
++      assert Enum.sort(Logex.__info__(:functions)) == [
++               compile: 2,
++               compile_file: 1,
++               compile_file: 2
++             ]
+ 
+       assert Enum.sort(Runtime.__info__(:functions)) ==
+                [call: 4, instance: 1, put_inputs: 3, restart: 3, scan: 2, scan: 3]
+ 
+       assert Enum.sort(Logex.Compiler.__info__(:functions)) ==
+-               [instructionize: 1, instructionize: 2, instructions: 0, parse: 1, tokenize: 1]
++               [
++                 instructionize: 1,
++                 instructionize: 2,
++                 instructionize: 3,
++                 instructions: 0,
++                 parse: 1,
++                 tokenize: 1
++               ]
+ 
+       # The two structs a host holds and builds; OE-1 gave both `ons_blocked`, and the
+       # instance `switched`.
+       assert Enum.sort(Map.keys(Instance.__struct__())) ==
+                [:__struct__, :env, :first, :now, :ons_blocked, :switched, :type]
+ 
+-      assert Enum.sort(Map.keys(Scan.__struct__())) == [:__struct__, :first, :now, :ons_blocked]
++      assert Enum.sort(Map.keys(Scan.__struct__())) ==
++               [:__struct__, :first, :now, :ons_blocked, :tags]
+ 
+       # OE-1: the staged edit of one instance, whose struct is opaque.
+       assert Enum.sort(Logex.Edit.__info__(:functions)) == [
+@@ -724,10 +736,12 @@ defmodule Logex.RuntimeTest do
+                __struct__: 1,
+                builtin: 1,
+                builtins: 0,
++               formals: 1,
+                initial: 1,
+                initial: 2,
+                member: 2,
+                public: 1,
++               signature: 1,
+                ton: 0,
+                writable: 1
+              ]
+diff --git a/test/logex/validation_test.exs b/test/logex/validation_test.exs
+index bbbd3de..57cb78a 100644
+--- a/test/logex/validation_test.exs
++++ b/test/logex/validation_test.exs
+@@ -1122,7 +1122,9 @@ defmodule Logex.ValidationTest do
+       assert %Logex.Tag{name: "t1", type: ^ton, section: :var} = Logex.Tag.new!("t1", ton)
+ 
+       for {args, message} <- [
+-            {["t1", :ton], "unknown type :ton: logex has :bool, :dint and Logex.FbType.ton()"},
++            {["t1", :ton],
++             "unknown type :ton: logex has :bool, :dint, Logex.FbType.ton() " <>
++               "and the function blocks Logex.compile/2 returns"},
+             {["t1", ton, :var_input],
+              "`t1` is a ton: an instance is the program's own, declared with `var`, " <>
+                "as in `var t1 ton`, not with `var_input`"},
+@@ -1131,25 +1133,33 @@ defmodule Logex.ValidationTest do
+              "`t1` is a ton: its preset is the number on its `ton` instruction, " <>
+                "as in `ton t1 5000`, not an initial value on its declaration"},
+             {["t1", %{ton | name: "tof"}],
+-             ~s|unknown function block type "tof": logex has Logex.FbType.ton()|},
++             ~s|unknown function block type "tof": logex has Logex.FbType.ton() | <>
++               "and the function blocks Logex.compile/2 returns"},
+             {["t1", %{ton | members: []}],
+-             ~s|unknown function block type "ton": logex has Logex.FbType.ton()|},
++             ~s|unknown function block type "ton": logex has Logex.FbType.ton() | <>
++               "and the function blocks Logex.compile/2 returns"},
+             # A hand-built schema may hold anything, and is refused, never looked up by it.
+             {["t1", %{ton | name: nil}],
+-             "unknown function block type nil: logex has Logex.FbType.ton()"},
++             "unknown function block type nil: logex has Logex.FbType.ton() " <>
++               "and the function blocks Logex.compile/2 returns"},
+             {["t1", %{ton | name: 5}, :var_input],
+-             "unknown function block type 5: logex has Logex.FbType.ton()"},
++             "unknown function block type 5: logex has Logex.FbType.ton() " <>
++               "and the function blocks Logex.compile/2 returns"},
+             # Nor is it looked into, where a name that cannot be printed would escape.
+             {["t1", %{ton | name: %{}}, :var_input],
+-             "unknown function block type %{}: logex has Logex.FbType.ton()"},
++             "unknown function block type %{}: logex has Logex.FbType.ton() " <>
++               "and the function blocks Logex.compile/2 returns"},
+             {["t1", %{ton | name: {:a}}, :var, 5],
+-             "unknown function block type {:a}: logex has Logex.FbType.ton()"},
++             "unknown function block type {:a}: logex has Logex.FbType.ton() " <>
++               "and the function blocks Logex.compile/2 returns"},
+             # Whatever an unknown schema's members hold, and a struct is never taken for a
+             # map of inputs.
+             {["t1", %{ton | members: :junk}, :var, %{"acc" => 1}],
+-             ~s|unknown function block type "ton": logex has Logex.FbType.ton()|},
++             ~s|unknown function block type "ton": logex has Logex.FbType.ton() | <>
++               "and the function blocks Logex.compile/2 returns"},
+             {["t1", %{ton | members: [1]}, :var, %{"acc" => 1}],
+-             ~s|unknown function block type "ton": logex has Logex.FbType.ton()|},
++             ~s|unknown function block type "ton": logex has Logex.FbType.ton() | <>
++               "and the function blocks Logex.compile/2 returns"},
+             {["t1", ton, :var, %Logex.Scan{now: 0, first: true}],
+              "`t1` is a ton: its preset is the number on its `ton` instruction, " <>
+                "as in `ton t1 5000`, not an initial value on its declaration"}
+@@ -1604,11 +1614,11 @@ xic a ton t1 7") == [
+                  "xic a.b ote a\nxic d.3 ote a\nmove t1.acc.x d\nxic a.dn.x ote a\nxic t1.dn.x ote a"
+              ) == [
+                "line 4: `a.b` names a member of `a`, but `a` is a bool (declared on line 2): " <>
+-                 "only a timer has members",
++                 "only an instance of a function block has members",
+                "line 5: `d.3` names a bit of `d`, a dint: bit access is not supported yet",
+                "line 6: `t1.acc.x` goes too deep: `t1.acc` is a dint, which has no members",
+                "line 7: `a.dn.x` names a member of `a`, but `a` is a bool (declared on line 2): " <>
+-                 "only a timer has members",
++                 "only an instance of a function block has members",
+                "line 8: `t1.dn.x` goes too deep: `t1.dn` is a bool, which has no members"
+              ]
+     end
+@@ -1634,7 +1644,7 @@ xic a ton t1 7") == [
+                  "line 5: `d.3.4` goes too deep: `d` is a dint, which has no members",
+                  "line 6: `a.0.1` goes too deep: `a` is a bool, which has no members",
+                  "line 7: `a.b.1` names a member of `a`, but `a` is a bool (declared on " <>
+-                   "line 2): only a timer has members"
++                   "line 2): only an instance of a function block has members"
+                ]
+     end
+ 
+@@ -1689,7 +1699,7 @@ xic a ton t1 7") == [
+       assert source_errors("xic t1 ote a\nxic a.dn ote a", declared) == [
+                "line 1: `xic` reads a bool, but `t1` is a ton: name one of its members, " <>
+                  "as in `t1.dn`",
+-               "line 2: `a.dn` names a member of `a`, but `a` is a bool: only a timer has members"
++               "line 2: `a.dn` names a member of `a`, but `a` is a bool: only an instance of a function block has members"
+              ]
+ 
+       assert {:ok, _} = source_compile("xic t1.dn ote a", declared)
+@@ -1737,7 +1747,9 @@ xic a ton t1 7") == [
+     test "raise ArgumentError for every rule they break, whatever the argument" do
+       for {args, message} <- [
+             {["x", :bool, :input], "unknown section :input"},
+-            {["x", :int], "unknown type :int: logex has :bool, :dint and Logex.FbType.ton()"},
++            {["x", :int],
++             "unknown type :int: logex has :bool, :dint, Logex.FbType.ton() " <>
++               "and the function blocks Logex.compile/2 returns"},
+             {["ote", :int], "`ote` is an instruction and cannot name a tag"},
+             {[{:a}, :bool, :var_input, 1], "{:a} is not a tag name"},
+             # 0 is the default, and still not the program's to give.
+@@ -1757,7 +1769,8 @@ xic a ton t1 7") == [
+             {["x", :bool, :var, -1],
+              "`x` is a bool: its initial value must be 0 or 1, found `-1`"},
+             {["x", :int, :var, 5],
+-             "unknown type :int: logex has :bool, :dint and Logex.FbType.ton()"},
++             "unknown type :int: logex has :bool, :dint, Logex.FbType.ton() " <>
++               "and the function blocks Logex.compile/2 returns"},
+             {[" a", :bool], ~s(" a" is not a tag name)},
+             {["t1.dn", :bool],
+              "`t1.dn` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`"},
+@@ -1772,7 +1785,8 @@ xic a ton t1 7") == [
+     test "are checked again as they enter the table, however they were built" do
+       for {declared, message} <- [
+             {[%Logex.Tag{name: "a", type: :real, section: :var}],
+-             "unknown type :real: logex has :bool, :dint and Logex.FbType.ton()"},
++             "unknown type :real: logex has :bool, :dint, Logex.FbType.ton() " <>
++               "and the function blocks Logex.compile/2 returns"},
+             {[%Logex.Tag{name: "a", type: :bool, section: :var, initial: 7}],
+              "`a` is a bool: its initial value must be 0 or 1, found `7`"},
+             {[%Logex.Tag{name: "a", type: :dint, section: :var, initial: -7}],
+@@ -1789,7 +1803,8 @@ xic a ton t1 7") == [
+              "`a` is a ton: its preset is the number on its `ton` instruction, " <>
+                "as in `ton a 5000`, not an initial value on its declaration"},
+             {[%Logex.Tag{name: "a", type: %Logex.FbType{name: nil, members: nil}, section: :var}],
+-             "unknown function block type nil: logex has Logex.FbType.ton()"},
++             "unknown function block type nil: logex has Logex.FbType.ton() " <>
++               "and the function blocks Logex.compile/2 returns"},
+             {[
+                %Logex.Tag{
+                  name: "a",
+@@ -1797,7 +1812,9 @@ xic a ton t1 7") == [
+                  section: :var,
+                  initial: %{"acc" => 1}
+                }
+-             ], ~s|unknown function block type "ton": logex has Logex.FbType.ton()|},
++             ],
++             ~s|unknown function block type "ton": logex has Logex.FbType.ton() | <>
++               "and the function blocks Logex.compile/2 returns"},
+             # A line marks a tag declared in source, which the warnings would then cite.
+             {[%Logex.Tag{name: "a", type: :bool, section: :var, line: 2}],
+              "a tag declared from Elixir has no line, got: 2"},
+diff --git a/test/logex_test.exs b/test/logex_test.exs
+index e03ace6..d942573 100644
+--- a/test/logex_test.exs
++++ b/test/logex_test.exs
+@@ -131,16 +131,26 @@ defmodule LogexTest do
+              ~s("" cannot name a program: a name is a letter or `_`, ) <>
+                "then letters, digits or `_`"},
+             {fn -> Logex.compile(@seal, []) end,
+-             "Logex.compile/2 takes a name and no other option, as in " <>
+-               ~s|Logex.compile(source, name: "motor"), got: []|},
++             "Logex.compile/2 takes a name and, for function blocks, types, as in " <>
++               ~s|Logex.compile(source, name: "motor", types: [seal]), got: []|},
+             {fn -> Logex.compile(@seal, name: "p", file: "x") end,
+-             "Logex.compile/2 takes a name and no other option, as in " <>
+-               ~s|Logex.compile(source, name: "motor"), got: [name: "p", file: "x"]|}
++             "Logex.compile/2 takes a name and, for function blocks, types, as in " <>
++               ~s|Logex.compile(source, name: "motor", types: [seal]), | <>
++               ~s|got: [name: "p", file: "x"]|}
+           ] do
+         assert_raise ArgumentError, message, call
+       end
+     end
+ 
++    test "takes types beside the name, in either order (M2-5)" do
++      assert {:ok, %Logex.Program{name: "p"}} = Logex.compile(@seal, types: [], name: "p")
++      assert {:ok, %Logex.Program{name: "p"}} = Logex.compile(@seal, name: "p", types: [])
++
++      assert_raise ArgumentError, "a program's name is a string, got: :p", fn ->
++        Logex.compile(@seal, types: [], name: :p)
++      end
++    end
++
+     # Counted in reductions rather than time, so the bound holds on any machine. At 500
+     # and 2,000 tags a linear compile grows about 4x; a pass that walks every use for
+     # every tag, as the warnings first did, grows about 14x.
+@@ -284,6 +294,16 @@ defmodule LogexTest do
+       assert {:ok, %Logex.Program{name: "move"}} = Logex.compile_file(path)
+     end
+ 
++    test "takes types, and no other option (M2-5)", %{tmp_dir: dir} do
++      path = write(dir, "seal.ld", @seal)
++      assert {:ok, %Logex.Program{name: "seal"}} = Logex.compile_file(path, types: [])
++
++      assert_raise ArgumentError,
++                   "Logex.compile_file/2 takes types and no other option, as in " <>
++                     ~s|Logex.compile_file("motor.ld", types: [seal]), got: [name: "x"]|,
++                   fn -> Logex.compile_file(path, name: "x") end
++    end
++
+     test "raises ArgumentError for a path that is not a binary" do
+       assert_raise ArgumentError,
+                    ~s(Logex.compile_file/1 takes a path as a binary, got: ~c"m.ld"),

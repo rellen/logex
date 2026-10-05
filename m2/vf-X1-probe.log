@@ -1,0 +1,26 @@
+pump.ld: {Logex.Program, [rung: [{:cal, 5, [{:name, 5, ...}, ...]}]]}
+latch.ld: Logex.FbType
+one.lxcf (program with cal): {:raised, Protocol.UndefinedError,
+ "protocol Enumerable not implemented for Atom. This protocol is implemented for: Date.Range, File.Stream, Function, GenEvent.Stream, HashDict, HashSet, IO.Stream",
+ ["(elixir 1.20.4) lib/enum.ex:5: Enumerable.impl_for!/1",
+  "(elixir 1.20.4) lib/enum.ex:184: Enumerable.reduce/3",
+  "(stdlib 7.3.0.2) lists.erl:2641: :lists.foreach_1/2",
+  "(elixir 1.20.4) lib/stream/reducers.ex:78: Stream.Reducers.do_zip_enum/4"]}
+two.lxcf (program line names block): {:raised, FunctionClauseError,
+ "no function clause matching in Logex.Configuration.instructions/1",
+ ["(logex 0.1.0) lib/logex/configuration.ex:1368: Logex.Configuration.instructions(%Logex.FbType{name: \"latch\", members: [%Logex.FbType.Member{name: \"set\", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: \"rst\", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: \"out\", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Me" <> ...,
+  "(logex 0.1.0) lib/logex/configuration.ex:1358: Logex.Configuration.writes/1",
+  "(logex 0.1.0) lib/logex/configuration.ex:486: Logex.Configuration.analysed/3",
+  "(logex 0.1.0) lib/logex/configuration.ex:453: Logex.Configuration.declare/2"]}
+three.lxcf (event task, ton inside block): {:raised, Protocol.UndefinedError,
+ "protocol Enumerable not implemented for Atom. This protocol is implemented for: Date.Range, File.Stream, Function, GenEvent.Stream, HashDict, HashSet, IO.Stream",
+ ["(elixir 1.20.4) lib/enum.ex:5: Enumerable.impl_for!/1",
+  "(elixir 1.20.4) lib/enum.ex:184: Enumerable.reduce/3",
+  "(stdlib 7.3.0.2) lists.erl:2641: :lists.foreach_1/2",
+  "(elixir 1.20.4) lib/stream/reducers.ex:78: Stream.Reducers.do_zip_enum/4"]}
+compile/3 with pump: {:raised, Protocol.UndefinedError,
+ "protocol Enumerable not implemented for Atom. This protocol is implemented for: Date.Range, File.Stream, Function, GenEvent.Stream, HashDict, HashSet, IO.Stream",
+ ["(elixir 1.20.4) lib/enum.ex:5: Enumerable.impl_for!/1",
+  "(elixir 1.20.4) lib/enum.ex:184: Enumerable.reduce/3",
+  "(stdlib 7.3.0.2) lists.erl:2641: :lists.foreach_1/2",
+  "(elixir 1.20.4) lib/stream/reducers.ex:78: Stream.Reducers.do_zip_enum/4"]}

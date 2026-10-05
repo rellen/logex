@@ -1,0 +1,10 @@
+programs compiled: 216
+failures: 0
+reach: [{:accepted, 234}, {:assemble, 79}, {:cancel, 131}, {:refused, 51}, {:round_trip, 25}, {:switch_scan_changed_chain, 53}, {:switch_scan_changed_ran, 36}, {:switch_scan_observable, 75}, {:test, 158}, {:untest, 68}, {{:added, :nested}, 139}, {{:added, :top}, 64}, {{:held, :top}, 45}, {{:initial_changed, :nested}, 14}, {{:ons_blocked, :nested}, 202}, {{:preset, :nested}, 23}, {{:pruned, :nested}, 70}, {{:pruned, :top}, 33}, {{:resumed, :nested}, 2}]
+    warning: unused alias Diagnostic
+    │
+  7 │ alias Logex.{Runtime, Edit, Diagnostic, Program}
+    │ ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/walk.exs:7:1
+

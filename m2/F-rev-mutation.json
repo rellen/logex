@@ -1,0 +1,1208 @@
+[
+ {
+  "id": "R1",
+  "rule": "the header word is recognised in any case",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.EditTest :: growth (F16) a second edit before any scan stays linear in the bits still pending (F2)",
+   "Logex.FunctionBlockTest :: a function block's file its header is its first rung: comments and blank lines may come before it"
+  ]
+ },
+ {
+  "id": "R2",
+  "rule": "a var is a :local member",
+  "file": "lib/logex/fb_type.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: a function block's file a var is local: in the state, named only inside the block"
+  ]
+ },
+ {
+  "id": "R3",
+  "rule": "a block is named after its file",
+  "file": "lib/logex.ex",
+  "exit": 2,
+  "result": "Result: 494/498 passed (6/6 doctests, 488/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "LogexTest :: compile/2 compiling stays linear in the program's size",
+   "Logex.EditTest :: growth (F16) accept and its steps stay linear in the program's size",
+   "Logex.FunctionBlockTest :: a function block's file its first line names it as it is compiled, and as its file is named",
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a program's file is no type, and a block's first line must match its file's name"
+  ]
+ },
+ {
+  "id": "R4",
+  "rule": "a block's name is no reserved word",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: a function block's file its first line names it as it is compiled, and as its file is named"
+  ]
+ },
+ {
+  "id": "R5",
+  "rule": "function_block names no block (org \u00a74.8)",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: a function block's file its first line names it as it is compiled, and as its file is named"
+  ]
+ },
+ {
+  "id": "R6",
+  "rule": "function_block names no tag in a block's file",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 432/498 passed (6/6 doctests, 426/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a nested block an earlier edit left pending survives a second edit before any scan (F2)",
+   "Logex.FunctionBlockTest :: running a block ENO is the power out: what follows a cal sees its EN",
+   "Logex.FunctionBlockTest :: the host contract, over sources that use blocks compile/2 never raises, its diagnostics are in line order and it reaches every M2-5 diagnostic; every program it gives scans without raising",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a blocked bit inside an instance is reported with its value, by its path",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an ons in a block's rung the edit changes is blocked by its path, in every instance, and a top-level bit of the same name is not",
+   "Logex.FunctionBlockTest :: an instance's state is a %Logex.Instance{} whose env nests by path",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot still blocked after a scan stays blocked through the next edit's switch",
+   "Logex.FunctionBlockTest :: a function block's file function_block is reserved in a block's file only, and heads it",
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a file with a refused name finds its blocks beside it all the same",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks at the first test a member whose value does not fit its type starts again (decision 26), by its path",
+   "Logex.FunctionBlockTest :: running a block an env built by hand under the scan's own key runs: nothing escapes",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an untest gives back a resume its test made of a timer only the candidate's version of a block declares (fix F11, by path)",
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a program's file is no type, and a block's first line must match its file's name",
+   "Logex.FunctionBlockTest :: growth in the size of a term the scan after a switch stays linear in the length of the block list",
+   "Logex.FunctionBlockTest :: running a block a timer inside a frozen block keeps .en and its last run, and catches up",
+   "Logex.FunctionBlockTest :: running a block an instance a plain swap left as no map runs from an empty one: nothing escapes",
+   "Logex.FunctionBlockTest :: running a block a program built by hand whose block runs an instance its table lacks runs nothing, and an edit takes it: nothing escapes",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an instance of a block that holds a block, added with its cal, blocks the one-shot two levels down for the switch scan (decision 21)",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an instance the edit adds starts whole, its one-shots blocked for the switch scan",
+   "Logex.FunctionBlockTest :: cal a type error names the formal the operand fills",
+   "Logex.FunctionBlockTest :: the types a compile is given from Elixir, an instance of a user block is a tag whose type is the block's",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a test and an untest with no scan between leave a timer a false EN froze as it was: the program that last scanned ran it, so no resume is due",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an ons in a block run from a rung the edit changes is blocked; one under unchanged rungs keeps its real edge",
+   "Logex.FunctionBlockTest :: the types a compile is given each must be one Logex.compile/2 gave, no two of one name",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a timer inside a block meets the preset rules by its path",
+   "Logex.FunctionBlockTest :: recursion a type given that holds the block's own name, at any depth",
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a recursive type, an unknown function block type and a cal of a non-instance are each a located diagnostic",
+   "Logex.FunctionBlockTest :: warnings an instance no cal runs, saying cal",
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a seal-in written once as a block and instantiated three times behaves as three independent seal-ins, and m1.s2.run reads one of them",
+   "Logex.FunctionBlockTest :: growth in the depth of nesting a scan, a compile and an edit each stay linear",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a member whose kind changes is refused, by its path; a block renamed is a type change",
+   "Logex.FunctionBlockTest :: growth in the instances the scan after a switch stays linear in the nested one-shots it blocks",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a timer in a frozen block is not resumed by a switch, and catches up (decision 8); one whose cal the candidate restores resumes from the switch (decision 23)",
+   "Logex.FunctionBlockTest :: a function block's file its header is its first rung: comments and blank lines may come before it",
+   "Logex.FunctionBlockTest :: growth in the size of a term a program copied flat stays linear in the depth of nesting",
+   "Logex.FunctionBlockTest :: cal an arity error names every formal, in order",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip assemble prunes a member at any depth, inside an instance an instance holds",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a kept member whose initial value changed keeps its value, and is reported",
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it compile_file/1 compiles it first, once, and the program holds its type",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a member the block adds starts at its initial value in the instance, and one it drops is kept until assemble prunes it, each by its path",
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a mistake in it is reported with its file, and stops the file that names it",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an output only a cal drove is held where the candidate drives it no more",
+   "Logex.FunctionBlockTest :: a function block's file its first line names it as it is compiled, and as its file is named",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks the block's body is not its type: an edit may change it",
+   "Logex.FunctionBlockTest :: warnings a cal's outputs are written: a var_output only a cal drives is driven",
+   "Logex.FunctionBlockTest :: running a block blocks nest: an instance inside an instance is a map inside a map",
+   "Logex.FunctionBlockTest :: a function block's file a var is local: in the state, named only inside the block",
+   "Logex.FunctionBlockTest :: the types a compile is given a type whose body was edited by hand is refused where it is given",
+   "Logex.FunctionBlockTest :: the types a compile is given a block compiled from its file, and from its text, is one version",
+   "Logex.FunctionBlockTest :: a function block's file a block is not a program: the runtime and the edit refuse its type",
+   "Logex.FunctionBlockTest :: cal is reserved, a mnemonic: no tag may be named cal",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot blocked inside an instance whose cal is false stays blocked until a scan runs the instance's body",
+   "Logex.FunctionBlockTest :: warnings a block's body is warned about as a program is, in its own type",
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a false EN freezes only its own instance, and the tags its outputs name",
+   "Logex.FunctionBlockTest :: members a block's inputs and outputs are read anywhere, and written by no logic outside it",
+   "Logex.FunctionBlockTest :: cal runs only an instance of a user block, and one cal runs it",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an edit that reorders a block's inputs blocks the one-shots it runs, as an edit of the cal's operands does",
+   "Logex.FunctionBlockTest :: a function block's file compiles to its type: its members in declaration order, its body a program",
+   "Logex.FunctionBlockTest :: the types a compile is given a type holds one version of each block, the one given under its name",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip at the first test an instance a plain swap left as no map starts again whole (decision 26)",
+   "Logex.FunctionBlockTest :: running a block first is the program instance's: an ons in a block frozen on the first scan fires when the block first runs",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an untest gives back a resume its test made inside an instance only the candidate declares (fix F11, by path)",
+   "Logex.FunctionBlockTest :: running a block the scan's tag table is the runtime's",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a timer in an instance no cal runs keeps its .pre frozen, beside one of the same block that a cal runs (decision 23)",
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.EndToEndTest :: user function blocks (M2-5) PLAN M2-5's Done-when: a seal-in written once as a block, run three times"
+  ]
+ },
+ {
+  "id": "R7",
+  "rule": "function_block outside the first line has its own message",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: a function block's file function_block is reserved in a block's file only, and heads it",
+   "Logex.FunctionBlockTest :: the host contract, over sources that use blocks compile/2 never raises, its diagnostics are in line order and it reaches every M2-5 diagnostic; every program it gives scans without raising"
+  ]
+ },
+ {
+  "id": "R8",
+  "rule": "the runtime refuses a block type with its own message",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: a function block's file a block is not a program: the runtime and the edit refuse its type"
+  ]
+ },
+ {
+  "id": "R9",
+  "rule": "the edit refuses a block type with its own message",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: a function block's file a block is not a program: the runtime and the edit refuse its type"
+  ]
+ },
+ {
+  "id": "R10",
+  "rule": "members follow declaration order, those from Elixir first",
+  "file": "lib/logex/fb_type.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given from Elixir, an instance of a user block is a tag whose type is the block's"
+  ]
+ },
+ {
+  "id": "R11",
+  "rule": "types: holds only types user?/1 accepts",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given a type whose body was edited by hand is refused where it is given",
+   "Logex.FunctionBlockTest :: the types a compile is given each must be one Logex.compile/2 gave, no two of one name"
+  ]
+ },
+ {
+  "id": "R12",
+  "rule": "user?/1 is what of/1 gives for its body",
+  "file": "lib/logex/fb_type.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given each must be one Logex.compile/2 gave, no two of one name"
+  ]
+ },
+ {
+  "id": "R13",
+  "rule": "user?/1 refuses a name no block could have",
+  "file": "lib/logex/fb_type.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: a function block's file its first line names it as it is compiled, and as its file is named"
+  ]
+ },
+ {
+  "id": "R14",
+  "rule": "user?/1 accepts a member declared from Elixir",
+  "file": "lib/logex/fb_type.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given from Elixir, an instance of a user block is a tag whose type is the block's"
+  ]
+ },
+ {
+  "id": "R15",
+  "rule": "types: holds no two blocks of one name",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given each must be one Logex.compile/2 gave, no two of one name"
+  ]
+ },
+ {
+  "id": "R16",
+  "rule": "one version of each block name, in the types given",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given a type holds one version of each block, the one given under its name"
+  ]
+ },
+ {
+  "id": "R17",
+  "rule": "the unknown-type message suggests a block given",
+  "file": "lib/logex/declarations.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a recursive type, an unknown function block type and a cal of a non-instance are each a located diagnostic",
+   "Logex.EndToEndTest :: user function blocks (M2-5) PLAN M2-5's Done-when: a seal-in written once as a block, run three times"
+  ]
+ },
+ {
+  "id": "R18",
+  "rule": "an instance of a user block takes no initial value (Elixir)",
+  "file": "lib/logex/declarations.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given from Elixir, an instance of a user block is a tag whose type is the block's"
+  ]
+ },
+ {
+  "id": "R19",
+  "rule": "a block never holds an instance of itself",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 495/498 passed (6/6 doctests, 489/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a recursive type, an unknown function block type and a cal of a non-instance are each a located diagnostic",
+   "Logex.FunctionBlockTest :: the host contract, over sources that use blocks compile/2 never raises, its diagnostics are in line order and it reaches every M2-5 diagnostic; every program it gives scans without raising",
+   "Logex.EndToEndTest :: user function blocks (M2-5) PLAN M2-5's Done-when: a seal-in written once as a block, run three times"
+  ]
+ },
+ {
+  "id": "R20",
+  "rule": "nor of a type given that holds it, at any depth",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: recursion a type given that holds the block's own name, at any depth"
+  ]
+ },
+ {
+  "id": "R21",
+  "rule": "nor through a tag declared from Elixir (ArgumentError)",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: recursion a type given that holds the block's own name, at any depth"
+  ]
+ },
+ {
+  "id": "R22",
+  "rule": "a recursive declaration's uses are excused: one message",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a recursive type, an unknown function block type and a cal of a non-instance are each a located diagnostic",
+   "Logex.EndToEndTest :: user function blocks (M2-5) PLAN M2-5's Done-when: a seal-in written once as a block, run three times"
+  ]
+ },
+ {
+  "id": "R23",
+  "rule": "cal on a ton is refused, naming ton",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the host contract, over sources that use blocks compile/2 never raises, its diagnostics are in line order and it reaches every M2-5 diagnostic; every program it gives scans without raising",
+   "Logex.FunctionBlockTest :: cal runs only an instance of a user block, and one cal runs it"
+  ]
+ },
+ {
+  "id": "R24",
+  "rule": "cal on a bool or a dint is refused",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 495/498 passed (6/6 doctests, 489/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the host contract, over sources that use blocks compile/2 never raises, its diagnostics are in line order and it reaches every M2-5 diagnostic; every program it gives scans without raising",
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a recursive type, an unknown function block type and a cal of a non-instance are each a located diagnostic",
+   "Logex.EndToEndTest :: user function blocks (M2-5) PLAN M2-5's Done-when: a seal-in written once as a block, run three times"
+  ]
+ },
+ {
+  "id": "R25",
+  "rule": "an arity error names every formal",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 495/498 passed (6/6 doctests, 489/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a file with a refused name finds its blocks beside it all the same",
+   "Logex.FunctionBlockTest :: cal an arity error names every formal, in order",
+   "Logex.FunctionBlockTest :: the host contract, over sources that use blocks compile/2 never raises, its diagnostics are in line order and it reaches every M2-5 diagnostic; every program it gives scans without raising"
+  ]
+ },
+ {
+  "id": "R26",
+  "rule": "an operand of the wrong type names its formal",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: cal a type error names the formal the operand fills"
+  ]
+ },
+ {
+  "id": "R27",
+  "rule": "a var_input where cal writes is refused",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: cal a type error names the formal the operand fills"
+  ]
+ },
+ {
+  "id": "R28",
+  "rule": "a member logic may not write, where cal writes, is refused",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: cal a type error names the formal the operand fills"
+  ]
+ },
+ {
+  "id": "R29",
+  "rule": "a literal that does not fit an input is refused",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: the host contract, over sources that use blocks compile/2 never raises, its diagnostics are in line order and it reaches every M2-5 diagnostic; every program it gives scans without raising",
+   "Logex.FunctionBlockTest :: cal a type error names the formal the operand fills"
+  ]
+ },
+ {
+  "id": "R30",
+  "rule": "one cal runs an instance",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: cal runs only an instance of a user block, and one cal runs it",
+   "Logex.FunctionBlockTest :: the host contract, over sources that use blocks compile/2 never raises, its diagnostics are in line order and it reaches every M2-5 diagnostic; every program it gives scans without raising"
+  ]
+ },
+ {
+  "id": "R31",
+  "rule": "a block's inputs and outputs are read anywhere",
+  "file": "lib/logex/fb_type.ex",
+  "exit": 2,
+  "result": "Result: 456/498 passed (6/6 doctests, 450/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.ApiContractTest :: the runtime refuses every host mistake with a documented ArgumentError, accepts every call without one, and nothing else escapes",
+   "Logex.FunctionBlockTest :: members a block's inputs and outputs are read anywhere, and written by no logic outside it",
+   "Logex.FunctionBlockTest :: a function block's file a var is local: in the state, named only inside the block",
+   "Logex.RuntimeTest :: Logex.FbType (M1-6) the ton's members, and which a program may name and write",
+   "Logex.FunctionBlockTest :: cal a type error names the formal the operand fills",
+   "Logex.FunctionBlockTest :: a function block's file compiles to its type: its members in declaration order, its body a program",
+   "Logex.RuntimeTest :: a timer in an instance (M1-6) restart puts it back at its initial state, and keeps the input image",
+   "Logex.EditTest :: a timer's .pre across a switch (decision 23, fix F1) a later test gives a timer the original runs no ton on the .pre it had under the candidate (F1)",
+   "Logex.RuntimeTest :: a timer in an instance (M1-6) a member is not an input: the host sets none, nor the instance whole",
+   "Logex.RuntimeTest :: a timer in an instance (M1-6) is a map of its members in state.env, every key a string, and never an output",
+   "Logex.ValidationTest :: members (M1-6) take their type from the schema, as a tag takes its declaration's",
+   "Logex.ValidationTest :: members (M1-6) an instance named whole is refused, with a member suggested where one fits",
+   "Logex.ValidationTest :: members (M1-6) are typed, read anywhere, and written only where logic may: .pre and .acc",
+   "Logex.ValidationTest :: members (M1-6) a write to .dn, .tt or .en is one diagnostic, by every instruction that writes",
+   "Logex.ValidationTest :: members (M1-6) an unknown member gets the member it is near, matched on its own name, or the list",
+   "LogexTest :: compile/2 compiling stays linear in the program's size",
+   "Logex.EditTest :: a timer's .pre across a switch (decision 23, fix F1) a ton the switch restores, where logic changed the frozen .pre, takes its preset outright",
+   "Logex.EditTest :: state moves by name a kept timer fits, whatever values logic gave its members",
+   "Logex.EditTest :: a timer's .pre across a switch (decision 23, fix F1) a timer whose ton the candidate removes keeps its .pre frozen (decision 23)",
+   "Logex.EditTest :: a timer's .pre across a switch (decision 23, fix F1) untest gives back exactly the .pre its test found, where the test moved none (F1)",
+   "Logex.EditTest :: a timer's .pre across a switch (decision 23, fix F1) is kept where logic changed it, as the test finds it and not as accept did (decision 27)",
+   "Logex.EditTest :: a timer's .pre across a switch (decision 23, fix F1) untest gives back the .pre of a timer the candidate drops, though logic changed it",
+   "Logex.EditTest :: state moves by name a timer's map that a plain swap left without all its members does not fit",
+   "Logex.EditTest :: a timer's .pre across a switch (decision 23, fix F1) a .pre logic changed since the last switch is not given back: the preset rules apply instead",
+   "Logex.EditTest :: a timer's .pre across a switch (decision 23, fix F1) follows the new preset where it still holds the old one, and untest gives it back",
+   "Logex.EndToEndTest :: ton (M1-6) a negative .acc written by logic counts from 0",
+   "Logex.EndToEndTest :: ton (M1-6) times from the first scan that sees its rung true, and is done at its preset",
+   "Logex.EndToEndTest :: ton (M1-6) a preset raised after it is done resumes the count: .dn is .acc against .pre on every true scan",
+   "Logex.EndToEndTest :: ton (M1-6) decision 6: two instances of one program, scanned every 10 ms and every 50 ms, reach the preset at the same logical time",
+   "Logex.EndToEndTest :: ton (M1-6) a member written below the ton takes effect at the next scan: its invariants hold right after the ton runs, not at the end of every scan",
+   "Logex.EndToEndTest :: ton (M1-6) a move into .acc is counted from, while the rung stays true",
+   "Logex.EndToEndTest :: ton (M1-6) its preset is where .pre starts: a move into .pre holds, the ton never rewrites it, and a restart puts it back",
+   "Logex.EndToEndTest :: ton (M1-6) a preset lowered below .acc is done at the next true scan, .acc brought down to it",
+   "Logex.EndToEndTest :: members (M1-6) a move into .pre or .acc holds from scan to scan, and a rung reads what an earlier rung of the scan wrote",
+   "Logex.EndToEndTest :: ton (M1-6) a false rung resets it, and it starts again from 0 at the next true one",
+   "Logex.EndToEndTest :: ton (M1-6) the increment is the time that passed, not a nominal interval: stepped at 10, 25, 30 or 7 ms, it is done at the first scan at or after 5000 ms",
+   "Logex.EndToEndTest :: ton (M1-6) however long the gap between scans, .acc comes to the preset and no further",
+   "Logex.EndToEndTest :: members on an env the host builds (M1-6) a write into a timer that is not a map makes one",
+   "Logex.EndToEndTest :: ton (M1-6) keeps the time of its last run in state.env, energised or not, and nothing a host could set",
+   "Logex.EndToEndTest :: ton (M1-6) decision 6's condition: a preset of 1030 ms is done at 1030 ms on 10 ms scans and at 1050 ms on 50 ms scans, .acc 1030 in both",
+   "Logex.EndToEndTest :: ton (M1-6) a negative preset times as 0: done at the first true scan, .acc 0, .pre as written",
+   "Logex.EndToEndTest :: ton (M1-6) a false rung resets a done timer too"
+  ]
+ },
+ {
+  "id": "R32",
+  "rule": "a block's own var is hidden from outside",
+  "file": "lib/logex/fb_type.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: a function block's file a var is local: in the state, named only inside the block",
+   "Logex.FunctionBlockTest :: the host contract, over sources that use blocks compile/2 never raises, its diagnostics are in line order and it reaches every M2-5 diagnostic; every program it gives scans without raising"
+  ]
+ },
+ {
+  "id": "R33",
+  "rule": "no member of a user block is written from outside",
+  "file": "lib/logex/fb_type.ex",
+  "exit": 2,
+  "result": "Result: 494/498 passed (6/6 doctests, 488/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.EditTest :: growth (F16) accept and its steps stay linear in the program's size",
+   "Logex.FunctionBlockTest :: a function block's file compiles to its type: its members in declaration order, its body a program",
+   "Logex.FunctionBlockTest :: the host contract, over sources that use blocks compile/2 never raises, its diagnostics are in line order and it reaches every M2-5 diagnostic; every program it gives scans without raising",
+   "Logex.FunctionBlockTest :: members a block's inputs and outputs are read anywhere, and written by no logic outside it"
+  ]
+ },
+ {
+  "id": "R34",
+  "rule": "an instance no cal runs is warned about, saying cal",
+  "file": "lib/logex/warnings.ex",
+  "exit": 2,
+  "result": "Result: 495/498 passed (6/6 doctests, 489/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "LogexTest :: compile/2 compiling stays linear in the program's size",
+   "Logex.FunctionBlockTest :: the host contract, over sources that use blocks compile/2 never raises, its diagnostics are in line order and it reaches every M2-5 diagnostic; every program it gives scans without raising",
+   "Logex.FunctionBlockTest :: warnings an instance no cal runs, saying cal"
+  ]
+ },
+ {
+  "id": "R35",
+  "rule": "a cal's operands are uses with its block's signature (warnings)",
+  "file": "lib/logex/warnings.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: warnings a cal's outputs are written: a var_output only a cal drives is driven",
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a seal-in written once as a block and instantiated three times behaves as three independent seal-ins, and m1.s2.run reads one of them"
+  ]
+ },
+ {
+  "id": "R36",
+  "rule": "a block's body is warned about, in its type",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 489/498 passed (6/6 doctests, 483/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: recursion a type given that holds the block's own name, at any depth",
+   "Logex.FunctionBlockTest :: the types a compile is given a block compiled from its file, and from its text, is one version",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a member the block adds starts at its initial value in the instance, and one it drops is kept until assemble prunes it, each by its path",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a kept member whose initial value changed keeps its value, and is reported",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an edit that reorders a block's inputs blocks the one-shots it runs, as an edit of the cal's operands does",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks the block's body is not its type: an edit may change it",
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip assemble prunes a member at any depth, inside an instance an instance holds",
+   "Logex.FunctionBlockTest :: warnings a block's body is warned about as a program is, in its own type"
+  ]
+ },
+ {
+  "id": "R37",
+  "rule": "a false EN runs nothing (decision 12)",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 487/498 passed (6/6 doctests, 481/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a false EN freezes only its own instance, and the tags its outputs name",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a timer in a frozen block is not resumed by a switch, and catches up (decision 8); one whose cal the candidate restores resumes from the switch (decision 23)",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a test and an untest with no scan between leave a timer a false EN froze as it was: the program that last scanned ran it, so no resume is due",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks at the first test a member whose value does not fit its type starts again (decision 26), by its path",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot blocked inside an instance whose cal is false stays blocked until a scan runs the instance's body",
+   "Logex.FunctionBlockTest :: running a block first is the program instance's: an ons in a block frozen on the first scan fires when the block first runs",
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.FunctionBlockTest :: running a block an env built by hand under the scan's own key runs: nothing escapes",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot still blocked after a scan stays blocked through the next edit's switch",
+   "Logex.FunctionBlockTest :: running a block a timer inside a frozen block keeps .en and its last run, and catches up",
+   "Logex.EndToEndTest :: user function blocks (M2-5) PLAN M2-5's Done-when: a seal-in written once as a block, run three times"
+  ]
+ },
+ {
+  "id": "R38",
+  "rule": "the inputs are copied in",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 477/498 passed (6/6 doctests, 471/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an untest gives back a resume its test made inside an instance only the candidate declares (fix F11, by path)",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot still blocked after a scan stays blocked through the next edit's switch",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a test and an untest with no scan between leave a timer a false EN froze as it was: the program that last scanned ran it, so no resume is due",
+   "Logex.FunctionBlockTest :: running a block first is the program instance's: an ons in a block frozen on the first scan fires when the block first runs",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks at the first test a member whose value does not fit its type starts again (decision 26), by its path",
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a seal-in written once as a block and instantiated three times behaves as three independent seal-ins, and m1.s2.run reads one of them",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot blocked inside an instance whose cal is false stays blocked until a scan runs the instance's body",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a blocked bit inside an instance is reported with its value, by its path",
+   "Logex.FunctionBlockTest :: running a block a program built by hand whose block runs an instance its table lacks runs nothing, and an edit takes it: nothing escapes",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an untest gives back a resume its test made of a timer only the candidate's version of a block declares (fix F11, by path)",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an output only a cal drove is held where the candidate drives it no more",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an ons in a block's rung the edit changes is blocked by its path, in every instance, and a top-level bit of the same name is not",
+   "Logex.FunctionBlockTest :: running a block a timer inside a frozen block keeps .en and its last run, and catches up",
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a timer inside a block meets the preset rules by its path",
+   "Logex.FunctionBlockTest :: running a block blocks nest: an instance inside an instance is a map inside a map",
+   "Logex.FunctionBlockTest :: the types a compile is given from Elixir, an instance of a user block is a tag whose type is the block's",
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a false EN freezes only its own instance, and the tags its outputs name",
+   "Logex.FunctionBlockTest :: running a block an instance a plain swap left as no map runs from an empty one: nothing escapes",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a timer in a frozen block is not resumed by a switch, and catches up (decision 8); one whose cal the candidate restores resumes from the switch (decision 23)",
+   "Logex.EndToEndTest :: user function blocks (M2-5) PLAN M2-5's Done-when: a seal-in written once as a block, run three times"
+  ]
+ },
+ {
+  "id": "R39",
+  "rule": "the outputs are copied out",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 488/498 passed (6/6 doctests, 482/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: running a block an instance a plain swap left as no map runs from an empty one: nothing escapes",
+   "Logex.FunctionBlockTest :: running a block first is the program instance's: an ons in a block frozen on the first scan fires when the block first runs",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an output only a cal drove is held where the candidate drives it no more",
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a seal-in written once as a block and instantiated three times behaves as three independent seal-ins, and m1.s2.run reads one of them",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an instance of a block that holds a block, added with its cal, blocks the one-shot two levels down for the switch scan (decision 21)",
+   "Logex.FunctionBlockTest :: the types a compile is given from Elixir, an instance of a user block is a tag whose type is the block's",
+   "Logex.FunctionBlockTest :: running a block blocks nest: an instance inside an instance is a map inside a map",
+   "Logex.FunctionBlockTest :: running a block a program built by hand whose block runs an instance its table lacks runs nothing, and an edit takes it: nothing escapes",
+   "Logex.FunctionBlockTest :: PLAN M2-5's Done-when a false EN freezes only its own instance, and the tags its outputs name",
+   "Logex.EndToEndTest :: user function blocks (M2-5) PLAN M2-5's Done-when: a seal-in written once as a block, run three times"
+  ]
+ },
+ {
+  "id": "R40",
+  "rule": "ENO is EN",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: running a block ENO is the power out: what follows a cal sees its EN"
+  ]
+ },
+ {
+  "id": "R41",
+  "rule": "first is the program instance's inside a body",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: running a block first is the program instance's: an ons in a block frozen on the first scan fires when the block first runs"
+  ]
+ },
+ {
+  "id": "R42",
+  "rule": "the body sees only its own instance's blocked bits",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 488/498 passed (6/6 doctests, 482/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an ons in a block's rung the edit changes is blocked by its path, in every instance, and a top-level bit of the same name is not",
+   "Logex.FunctionBlockTest :: growth in the instances the scan after a switch stays linear in the nested one-shots it blocks",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an instance of a block that holds a block, added with its cal, blocks the one-shot two levels down for the switch scan (decision 21)",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot still blocked after a scan stays blocked through the next edit's switch",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an edit that reorders a block's inputs blocks the one-shots it runs, as an edit of the cal's operands does",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot blocked inside an instance whose cal is false stays blocked until a scan runs the instance's body",
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.EditTest :: growth (F16) accept and its steps stay linear in the program's size",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an instance the edit adds starts whole, its one-shots blocked for the switch scan",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a nested block an earlier edit left pending survives a second edit before any scan (F2)"
+  ]
+ },
+ {
+  "id": "R43",
+  "rule": "scan.tags is the runtime's",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: running a block the scan's tag table is the runtime's"
+  ]
+ },
+ {
+  "id": "R44",
+  "rule": "an instance left as no map runs from an empty one",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: running a block an instance a plain swap left as no map runs from an empty one: nothing escapes"
+  ]
+ },
+ {
+  "id": "R45",
+  "rule": "a hand-built cal of no block runs nothing",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: running a block a program built by hand whose block runs an instance its table lacks runs nothing, and an edit takes it: nothing escapes"
+  ]
+ },
+ {
+  "id": "R46",
+  "rule": "a block's body is not its type: an edit may change it",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 481/498 passed (6/6 doctests, 475/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a kept member whose initial value changed keeps its value, and is reported",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks the block's body is not its type: an edit may change it",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot blocked inside an instance whose cal is false stays blocked until a scan runs the instance's body",
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an edit that reorders a block's inputs blocks the one-shots it runs, as an edit of the cal's operands does",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a timer inside a block meets the preset rules by its path",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an ons in a block's rung the edit changes is blocked by its path, in every instance, and a top-level bit of the same name is not",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot still blocked after a scan stays blocked through the next edit's switch",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a member the block adds starts at its initial value in the instance, and one it drops is kept until assemble prunes it, each by its path",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a nested block an earlier edit left pending survives a second edit before any scan (F2)",
+   "Logex.FunctionBlockTest :: running a block a program built by hand whose block runs an instance its table lacks runs nothing, and an edit takes it: nothing escapes",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a timer in an instance no cal runs keeps its .pre frozen, beside one of the same block that a cal runs (decision 23)",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an untest gives back a resume its test made of a timer only the candidate's version of a block declares (fix F11, by path)",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip assemble prunes a member at any depth, inside an instance an instance holds",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a member whose kind changes is refused, by its path; a block renamed is a type change",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a test and an untest with no scan between leave a timer a false EN froze as it was: the program that last scanned ran it, so no resume is due",
+   "Logex.FunctionBlockTest :: growth in the instances the scan after a switch stays linear in the nested one-shots it blocks"
+  ]
+ },
+ {
+  "id": "R47",
+  "rule": "a member's kind change is cited as a member's",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a member whose kind changes is refused, by its path; a block renamed is a type change"
+  ]
+ },
+ {
+  "id": "R48",
+  "rule": "the nested migration starts a member the state lacks or the candidate adds",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 495/498 passed (6/6 doctests, 489/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a member the block adds starts at its initial value in the instance, and one it drops is kept until assemble prunes it, each by its path",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks at the first test a member whose value does not fit its type starts again (decision 26), by its path",
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain"
+  ]
+ },
+ {
+  "id": "R49",
+  "rule": "at the first test a nested member that does not fit starts again (decision 26)",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks at the first test a member whose value does not fit its type starts again (decision 26), by its path"
+  ]
+ },
+ {
+  "id": "R50",
+  "rule": "at the first test an instance that is not a map starts again whole",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip at the first test an instance a plain swap left as no map starts again whole (decision 26)"
+  ]
+ },
+ {
+  "id": "R51",
+  "rule": "a kept member whose initial value changed is reported",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a kept member whose initial value changed keeps its value, and is reported"
+  ]
+ },
+ {
+  "id": "R52",
+  "rule": "assemble and cancel prune a block's dropped members",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 495/498 passed (6/6 doctests, 489/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a member the block adds starts at its initial value in the instance, and one it drops is kept until assemble prunes it, each by its path",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip assemble prunes a member at any depth, inside an instance an instance holds",
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain"
+  ]
+ },
+ {
+  "id": "R53",
+  "rule": "prune reaches an instance an instance holds",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip assemble prunes a member at any depth, inside an instance an instance holds"
+  ]
+ },
+ {
+  "id": "R54",
+  "rule": "a nested one-shot's chain includes the rung that cals its instance",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 493/498 passed (6/6 doctests, 487/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an ons in a block run from a rung the edit changes is blocked; one under unchanged rungs keeps its real edge",
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.FunctionBlockTest :: growth in the size of a term the scan after a switch stays linear in the length of the block list",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a blocked bit inside an instance is reported with its value, by its path",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an edit that reorders a block's inputs blocks the one-shots it runs, as an edit of the cal's operands does"
+  ]
+ },
+ {
+  "id": "R55",
+  "rule": "a one-shot two levels down belongs to the chain too",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 495/498 passed (6/6 doctests, 489/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an instance of a block that holds a block, added with its cal, blocks the one-shot two levels down for the switch scan (decision 21)",
+   "Logex.FunctionBlockTest :: growth in the size of a term the scan after a switch stays linear in the length of the block list"
+  ]
+ },
+ {
+  "id": "R56",
+  "rule": "a blocked bit inside an instance is reported with its value, by path",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a timer in a frozen block is not resumed by a switch, and catches up (decision 8); one whose cal the candidate restores resumes from the switch (decision 23)",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a blocked bit inside an instance is reported with its value, by its path"
+  ]
+ },
+ {
+  "id": "R57",
+  "rule": "a nested block an earlier edit left pending is kept (F2)",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a nested block an earlier edit left pending survives a second edit before any scan (F2)",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot still blocked after a scan stays blocked through the next edit's switch"
+  ]
+ },
+ {
+  "id": "R58",
+  "rule": "a timer inside a block meets the preset rules by its path",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 492/498 passed (6/6 doctests, 486/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a timer inside a block meets the preset rules by its path",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a timer in an instance no cal runs keeps its .pre frozen, beside one of the same block that a cal runs (decision 23)",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a timer in a frozen block is not resumed by a switch, and catches up (decision 8); one whose cal the candidate restores resumes from the switch (decision 23)",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an untest gives back a resume its test made of a timer only the candidate's version of a block declares (fix F11, by path)",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an untest gives back a resume its test made inside an instance only the candidate declares (fix F11, by path)"
+  ]
+ },
+ {
+  "id": "R59",
+  "rule": "a nested plan is per whether each program runs the instance (decision 23)",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a timer in an instance no cal runs keeps its .pre frozen, beside one of the same block that a cal runs (decision 23)"
+  ]
+ },
+ {
+  "id": "R60",
+  "rule": "a timer both programs run is not resumed (decision 8)",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a timer in a frozen block is not resumed by a switch, and catches up (decision 8); one whose cal the candidate restores resumes from the switch (decision 23)",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks at the first test a member whose value does not fit its type starts again (decision 26), by its path"
+  ]
+ },
+ {
+  "id": "R61",
+  "rule": "resume only where the program stopped last scanned",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip a test and an untest with no scan between leave a timer a false EN froze as it was: the program that last scanned ran it, so no resume is due"
+  ]
+ },
+ {
+  "id": "R62",
+  "rule": "an undo by path reaches a timer only the stopped version declares (F1, F11)",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an untest gives back a resume its test made of a timer only the candidate's version of a block declares (fix F11, by path)"
+  ]
+ },
+ {
+  "id": "R63",
+  "rule": "an undo by path reaches an instance only the stopped program declares",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an untest gives back a resume its test made inside an instance only the candidate declares (fix F11, by path)"
+  ]
+ },
+ {
+  "id": "R64",
+  "rule": "an output only a cal drove is held (decision 20)",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 493/498 passed (6/6 doctests, 487/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a timer in a frozen block is not resumed by a switch, and catches up (decision 8); one whose cal the candidate restores resumes from the switch (decision 23)",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an instance of a block that holds a block, added with its cal, blocks the one-shot two levels down for the switch scan (decision 21)",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip at the first test an instance a plain swap left as no map starts again whole (decision 26)",
+   "Logex.FunctionBlockTest :: the online edit, at depth and across a round trip an untest gives back a resume its test made inside an instance only the candidate declares (fix F11, by path)",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an output only a cal drove is held where the candidate drives it no more"
+  ]
+ },
+ {
+  "id": "R65",
+  "rule": "a hand-built cal of no block writes nothing in the edit's walk",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: running a block a program built by hand whose block runs an instance its table lacks runs nothing, and an edit takes it: nothing escapes"
+  ]
+ },
+ {
+  "id": "R66",
+  "rule": "the nested plan builds a block's initial state only where one starts (growth)",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: growth in the depth of nesting a scan, a compile and an edit each stay linear"
+  ]
+ },
+ {
+  "id": "R67",
+  "rule": "compile_file finds a block's file beside the file that names it",
+  "file": "lib/logex.ex",
+  "exit": 2,
+  "result": "Result: 491/498 passed (6/6 doctests, 485/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it compile_file/1 compiles it first, once, and the program holds its type",
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a file with a refused name finds its blocks beside it all the same",
+   "Logex.FunctionBlockTest :: the types a compile is given a block compiled from its file, and from its text, is one version",
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a mistake in it is reported with its file, and stops the file that names it",
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a program's file is no type, and a block's first line must match its file's name",
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a chain of files that holds itself is located in the file that closes it",
+   "Logex.EndToEndTest :: user function blocks (M2-5) PLAN M2-5's Done-when: a seal-in written once as a block, run three times"
+  ]
+ },
+ {
+  "id": "R68",
+  "rule": "a mistake in a block's file is reported with its file",
+  "file": "lib/logex.ex",
+  "exit": 2,
+  "result": "Result: 495/498 passed (6/6 doctests, 489/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a chain of files that holds itself is located in the file that closes it",
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a mistake in it is reported with its file, and stops the file that names it",
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a program's file is no type, and a block's first line must match its file's name"
+  ]
+ },
+ {
+  "id": "R69",
+  "rule": "a program's file is no type, before any cycle is looked for",
+  "file": "lib/logex.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a program's file is no type, and a block's first line must match its file's name"
+  ]
+ },
+ {
+  "id": "R70",
+  "rule": "a dotted type word names no file",
+  "file": "lib/logex.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a program's file is no type, and a block's first line must match its file's name"
+  ]
+ },
+ {
+  "id": "R71",
+  "rule": "the function_block stanza is in docs/naming.md",
+  "file": "docs/naming.md",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.NamingTest :: every word that heads a file of another kind has been surveyed (M2-5)"
+  ]
+ },
+ {
+  "id": "R72",
+  "rule": "the cal stanza is in docs/naming.md",
+  "file": "docs/naming.md",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.NamingTest :: every implemented instruction has been surveyed"
+  ]
+ },
+ {
+  "id": "R78",
+  "rule": "a scan keeps the blocked bits of an instance whose body it did not run",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 494/498 passed (6/6 doctests, 488/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: running a block an env built by hand under the scan's own key runs: nothing escapes",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot still blocked after a scan stays blocked through the next edit's switch",
+   "Logex.ApiContractTest :: an online edit of a program that holds blocks: each report's writes rebuild the state by path, a switch leaves every member present, a prune leaves no other, a round trip gives every value back, and no one-shot fires on a changed chain",
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot blocked inside an instance whose cal is false stays blocked until a scan runs the instance's body"
+  ]
+ },
+ {
+  "id": "R79",
+  "rule": "a switch after a scan carries the bits the scan left blocked",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a one-shot still blocked after a scan stays blocked through the next edit's switch"
+  ]
+ },
+ {
+  "id": "R80",
+  "rule": "a member holding a user block names its type, held once in the body",
+  "file": "lib/logex/fb_type.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: growth in the size of a term a program copied flat stays linear in the depth of nesting"
+  ]
+ },
+ {
+  "id": "R81",
+  "rule": "a cal in a chain is keyed by the formals its operands fill",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks an edit that reorders a block's inputs blocks the one-shots it runs, as an edit of the cal's operands does"
+  ]
+ },
+ {
+  "id": "R82",
+  "rule": "two versions of a block that differ only in their warnings are one",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given a block compiled from its file, and from its text, is one version"
+  ]
+ },
+ {
+  "id": "R83",
+  "rule": "a second version found through a tag from Elixir names the tag",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given a type holds one version of each block, the one given under its name"
+  ]
+ },
+ {
+  "id": "R84",
+  "rule": "an edit names a user block type with no article",
+  "file": "lib/logex/edit.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the online edit of a program that holds blocks a member whose kind changes is refused, by its path; a block renamed is a type change"
+  ]
+ },
+ {
+  "id": "R85",
+  "rule": "a type given has a body a compile gives (lowered?/1)",
+  "file": "lib/logex/fb_type.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given a type whose body was edited by hand is refused where it is given",
+   "Logex.FunctionBlockTest :: running a block a program built by hand whose block runs an instance its table lacks runs nothing, and an edit takes it: nothing escapes"
+  ]
+ },
+ {
+  "id": "R86",
+  "rule": "each rung of a body lowers again to itself",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 496/498 passed (6/6 doctests, 490/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: running a block a program built by hand whose block runs an instance its table lacks runs nothing, and an edit takes it: nothing escapes",
+   "Logex.FunctionBlockTest :: the types a compile is given a type whose body was edited by hand is refused where it is given"
+  ]
+ },
+ {
+  "id": "R87",
+  "rule": "a body's rungs are on rising lines, each on one, after the declarations",
+  "file": "lib/logex/compiler.ex",
+  "exit": 0,
+  "result": "Result: 498 passed (6 doctests, 492 tests)",
+  "compile_warning": false,
+  "failed": []
+ },
+ {
+  "id": "R88",
+  "rule": "a body's warnings are the ones its rungs give",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given a type whose body was edited by hand is refused where it is given"
+  ]
+ },
+ {
+  "id": "R89",
+  "rule": "a body's tags are named as a declaration line can name them",
+  "file": "lib/logex/fb_type.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given a type whose body was edited by hand is refused where it is given"
+  ]
+ },
+ {
+  "id": "R90",
+  "rule": "a body's timer has the preset on the ton that runs it",
+  "file": "lib/logex/compiler.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: the types a compile is given a type whose body was edited by hand is refused where it is given"
+  ]
+ },
+ {
+  "id": "R91",
+  "rule": "a file with a refused name is compiled with the blocks beside it",
+  "file": "lib/logex.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": true,
+  "failed": [
+   "Logex.FunctionBlockTest :: a block's file found beside the file that names it a file with a refused name finds its blocks beside it all the same"
+  ]
+ },
+ {
+  "id": "R92",
+  "rule": "a scan's record of which instances ran is a map whatever a hand-built env held (cal)",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: running a block an env built by hand under the scan's own key runs: nothing escapes"
+  ]
+ },
+ {
+  "id": "R93",
+  "rule": "a scan's record of which instances ran is a map whatever a hand-built env held (taken out)",
+  "file": "lib/logex/runtime.ex",
+  "exit": 2,
+  "result": "Result: 497/498 passed (6/6 doctests, 491/492 tests)",
+  "compile_warning": false,
+  "failed": [
+   "Logex.FunctionBlockTest :: running a block an env built by hand under the scan's own key runs: nothing escapes"
+  ]
+ }
+]

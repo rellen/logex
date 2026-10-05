@@ -1,0 +1,22 @@
+Running ExUnit with seed: 738236, max_cases: 8
+
+............................................................................
+
+  1) test user function blocks (M2-5) PLAN M2-5's Done-when: a seal-in written once as a block, run three times (Logex.EndToEndTest)
+     test/logex/end_to_end_test.exs:1418
+     Assertion with == failed
+     code:  assert messages(Logex.compile_file(unknown, types: [seal])) == [
+              "#{unknown}: line 14: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
+                "and the function block `seal` — did you mean `seal`?"
+            ]
+     left:  ["/tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/F1-work/tmp/Logex.EndToEndTest/test-user-function-blocks-(M2-5)-PLAN-M2-5's-Done-when--a-seal-in-written-once-as-a-block,-run-three-times-9334318e/unknown.ld: line 14: unknown type `sael`: logex has `bool`, `dint` and `ton`, and the function block `seal` — did you mean `seal`?",
+             "/tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/F1-work/tmp/Logex.EndToEndTest/test-user-function-blocks-(M2-5)-PLAN-M2-5's-Done-when--a-seal-in-written-once-as-a-block,-run-three-times-9334318e/unknown.ld: line 18: `s3` is not declared"]
+     right: ["/tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/F1-work/tmp/Logex.EndToEndTest/test-user-function-blocks-(M2-5)-PLAN-M2-5's-Done-when--a-seal-in-written-once-as-a-block,-run-three-times-9334318e/unknown.ld: line 14: unknown type `sael`: logex has `bool`, `dint` and `ton`, and the function block `seal` — did you mean `seal`?"]
+     stacktrace:
+       test/logex/end_to_end_test.exs:1467: (test)
+
+..
+Finished in 0.7 seconds (0.00s async, 0.7s sync)
+
+Result: 78/79 passed
+Failed: 1 test

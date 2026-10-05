@@ -1,0 +1,121 @@
+    warning: variable "e" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+    │
+ 94 │     {e, s, rep} = Edit.test(e, s)
+    │      ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p2.exs:94:6
+
+    warning: variable "s" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+    │
+ 96 │     {o, s} = P.step(b, s, %{})
+    │         ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p2.exs:96:9
+
+    warning: variable "e" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+    │
+ 46 │ {e, s2, rep} = Edit.untest(e, s1)
+    │  ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p2.exs:46:2
+
+    warning: variable "e" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+    │
+ 58 │ {e, s, rep} = Edit.test(e, s)
+    │  ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p2.exs:58:2
+
+    warning: variable "e" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+    │
+ 71 │ {e, s, rep} = Edit.test(e, s)
+    │  ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p2.exs:71:2
+
+     warning: variable "e" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+     │
+ 131 │ {e, s, rep} = Edit.test(e, s)
+     │  ~
+     │
+     └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p2.exs:131:2
+
+     warning: variable "e" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+     │
+ 165 │ {e, s, rep} = Edit.test(e, s)
+     │  ~
+     │
+     └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p2.exs:165:2
+
+     warning: variable "s" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+     │
+ 167 │ {o, s} = P.step(b, s, %{"g" => 1})
+     │     ~
+     │
+     └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p2.exs:167:5
+
+    warning: variable "s" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+    │
+ 60 │ {o, s} = P.step(b, s, %{})
+    │     ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p2.exs:60:5
+
+     warning: variable "e" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+     │
+ 113 │ {:ok, e, f} = P.accept(a, b, s)
+     │       ~
+     │
+     └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p2.exs:113:7
+
+     warning: variable "e" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+     │
+ 146 │ {e, s, rep} = Edit.test(e, s)
+     │  ~
+     │
+     └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p2.exs:146:2
+
+    warning: variable "s" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+    │
+ 73 │ {o, s} = P.step(b, s, %{})
+    │     ~
+    │
+    └─ /tmp/claude-0/-home-user-logex/f07aea59-53a1-5b8d-b560-6e6d2e330709/scratchpad/m2/JF1-probe/p2.exs:73:5
+
+== E1 unchanged program with a block
+accept same: {:ok, %Logex.Edit{original: %Logex.Program{rungs: [rung: [{:cal, 4, [{:name, 4, "x"}, {:name, 4, "g"}, {:name, 4, "p"}]}]], tags: %{"g" => %Logex.Tag{name: "g", type: :bool, section: :var_input, initial: nil, line: 1}, "p" => %Logex.Tag{name: "p", type: :bool, section: :var_output, initial: nil, line: 2}, "x" => %Logex.Tag{name: "x", type: %Logex.FbType{name: "pulse", members: [%Logex.FbType.Member{name: "go", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: "p", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "e", type: :bool, role: :local, write: false, initial: 0}], body: %Logex.Program{rungs: [rung: [{:xic, 6, [{:name, 6, "go"}]}, {:ons, 6, [{:name, 6, "e"}]}, {:ote, 6, [{:name, 6, "p"}]}]], tags: %{"e" => %Logex.Tag{name: "e", type: :bool, section: :var, initial: nil, line: 4}, "go" => %Logex.Tag{name: "go", type: :bool, section: :var_input, initial: nil, line: 2}, "p" => %Logex.Tag{name: "p", type: :bool, section: :var_output, initial: nil, line: 3}}, name: "pulse", source: "function_block pulse\nvar_input go bool\nvar_output p bool\nvar e bool\n\nxic go ons e ote p\n", warnings: []}}, section: :var, initial: nil, line: 3}}, name: "m", source: "var_input g bool\nvar_output p bool\nvar x pulse\ncal x g p\n", warnings: []}, candidate: %Logex.Program{rungs: [rung: [{:cal, 4, [{:name, 4, "x"}, {:name, 4, "g"}, {:name, 4, "p"}]}]], tags: %{"g" => %Logex.Tag{name: "g", type: :bool, section: :var_input, initial: nil, line: 1}, "p" => %Logex.Tag{name: "p", type: :bool, section: :var_output, initial: nil, line: 2}, "x" => %Logex.Tag{name: "x", type: %Logex.FbType{name: "pulse", members: [%Logex.FbType.Member{name: "go", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: "p", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "e", type: :bool, role: :local, write: false, initial: 0}], body: %Logex.Program{rungs: [rung: [{:xic, 6, [{:name, 6, "go"}]}, {:ons, 6, [{:name, 6, "e"}]}, {:ote, 6, [{:name, 6, "p"}]}]], tags: %{"e" => %Logex.Tag{name: "e", type: :bool, section: :var, initial: nil, line: 4}, "go" => %Logex.Tag{name: "go", type: :bool, section: :var_input, initial: nil, line: 2}, "p" => %Logex.Tag{name: "p", type: :bool, section: :var_output, initial: nil, line: 3}}, name: "pulse", source: "function_block pulse\nvar_input go bool\nvar_output p bool\nvar e bool\n\nxic go ons e ote p\n", warnings: []}}, section: :var, initial: nil, line: 3}}, name: "m", source: "var_input g bool\nvar_output p bool\nvar x pulse\ncal x g p\n", warnings: []}, stage: :accepted, plans: %{test: %{blocks: [], initial: %{"g" => 0, "p" => 0, "x" => %{"e" => 0, "go" => 0, "p" => 0}}, keep: %{"g" => %Logex.Tag{name: "g", type: :bool, section: :var_input, initial: nil, line: 1}, "p" => %Logex.Tag{name: "p", type: :bool, section: :var_output, initial: nil, line: 2}, "x" => %Logex.Tag{name: "x", type: %Logex.FbType{name: "pulse", members: [%Logex.FbType.Member{name: "go", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: "p", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "e", type: :bool, role: :local, write: false, initial: 0}], body: %Logex.Program{rungs: [rung: [{:xic, 6, [{:name, 6, "go"}]}, {:ons, 6, [{:name, 6, "e"}]}, {:ote, 6, [{:name, 6, "p"}]}]], tags: %{"e" => %Logex.Tag{name: "e", type: :bool, section: :var, initial: nil, line: 4}, "go" => %Logex.Tag{name: "go", type: :bool, section: :var_input, initial: nil, line: 2}, "p" => %Logex.Tag{name: "p", type: :bool, section: :var_output, initial: nil, line: 3}}, name: "pulse", source: "function_block pulse\nvar_input go bool\nvar_output p bool\nvar e bool\n\nxic go ons e ote p\n", warnings: []}}, section: :var, initial: nil, line: 3}}, left: [], changed: [], live: [], inputs: %{"g" => true}, ons: %{"x.e" => true}, timers: [], held: [], nested: [{"x", %{names: %{"e" => true, "go" => true, "p" => true}, members: [{:leaf, "go", :bool, 0, 0, true}, {:leaf, "p", :bool, 0, 0, true}, {:leaf, "e", :bool, 0, 0, true}]}}], stops: :original, shows: %{"p" => true}, starts: [{"g", false, :bool}, {"p", false, :bool}, {"x", false, :block}], unread: []}, untest: %{blocks: [], initial: %{"g" => 0, "p" => 0, "x" => %{"e" => 0, "go" => 0, "p" => 0}}, keep: %{"g" => %Logex.Tag{name: "g", type: :bool, section: :var_input, initial: nil, line: 1}, "p" => %Logex.Tag{name: "p", type: :bool, section: :var_output, initial: nil, line: 2}, "x" => %Logex.Tag{name: "x", type: %Logex.FbType{name: "pulse", members: [%Logex.FbType.Member{name: "go", type: :bool, role: :input, write: false, initial: 0}, %Logex.FbType.Member{name: "p", type: :bool, role: :output, write: false, initial: 0}, %Logex.FbType.Member{name: "e", type: :bool, role: :local, write: false, initial: 0}], body: %Logex.Program{rungs: [rung: [{:xic, 6, [{:name, 6, "go"}]}, {:ons, 6, [{:name, 6, "e"}]}, {:ote, 6, [{:name, 6, "p"}]}]], tags: %{"e" => %Logex.Tag{name: "e", type: :bool, section: :var, initial: nil, line: 4}, "go" => %Logex.Tag{name: "go", type: :bool, section: :var_input, initial: nil, line: 2}, "p" => %Logex.Tag{name: "p", type: :bool, section: :var_output, initial: nil, line: 3}}, name: "pulse", source: "function_block pulse\nvar_input go bool\nvar_output p bool\nvar e bool\n\nxic go ons e ote p\n", warnings: []}}, section: :var, initial: nil, line: 3}}, left: [], changed: [], live: [], inputs: %{"g" => true}, ons: %{"x.e" => true}, timers: [], held: [], nested: [{"x", %{names: %{"e" => true, "go" => true, "p" => true}, members: [{:leaf, "go", :bool, 0, 0, true}, {:leaf, "p", :bool, 0, 0, true}, {:leaf, "e", :bool, 0, 0, true}]}}], stops: :candidate, shows: %{"p" => true}, starts: [{"g", false, :bool}, {"p", false, :bool}, {"x", false, :block}], unread: []}}, record: %{pre: %{}, shown: %{}, scanned: nil}}, []}
+test report: []
+untest report; state same: {[], true}
+== E2 candidate adds an instance and its cal; its ons must not fire on the switch scan
+a: g rises, x pulses: %{"p" => 1, "p2" => 0}
+forecast: [{:added, "y", %{"e" => 0, "go" => 0, "p" => 0}}, {:ons_blocked, "y.e", 0}]
+test report: {[{:added, "y", %{"e" => 0, "go" => 0, "p" => 0}}, {:ons_blocked, "y.e", 0}], ["y.e"]}
+switch scan (g held 1): p2 must be 0: %{"p" => 0, "p2" => 0}
+== E3 candidate changes only the EN of the rung that cals an instance
+x.e after x frozen while g rose: %{"e" => 0, "go" => 0, "p" => 0}
+test report: {[{:ons_blocked, "x.e", 0}], ["x.e"]}
+switch scan: x now runs with g=1 and e=0 -> pulse unless blocked: %{"p" => 0}
+== E4 candidate changes only a block's body
+accept body change: {:ok, [{:ons_blocked, "x.e", 0}]}
+test report: {[{:ons_blocked, "x.e", 0}], ["x.e"]}
+switch scan: new body `xio go ons e`, g=0, e=0 -> fires unless blocked: %{"p" => 0}
+== E4b candidate changes only a comment in the block's file
+accept comment-only/line-moved change: {:ok, []}
+== E5 output only a cal drove, candidate drops the cal
+q before: %{"q" => 1}
+forecast: [{:held, "q", 1}]
+== E6 timer inside a block: the candidate removes its cal, a later edit restores it
+timing at 30: %{"acc" => 30, "dn" => 0, "en" => 1, "last" => 30, "pre" => 100, "tt" => 1}
+test, assemble reports: {[], []}
+after 500 ms with no cal: %{"acc" => 30, "dn" => 0, "en" => 1, "last" => 30, "pre" => 100, "tt" => 1}
+restore cal: test report: [{:resumed, "x.t1", 500}]
+first scan after restore: done?: {%{"d" => 0}, %{"acc" => 40, "dn" => 0, "en" => 1, "last" => 540, "pre" => 100, "tt" => 1}}
+== E6b timer inside a block frozen by a false EN, an unrelated edit happens
+frozen at 90: %{"acc" => 30, "dn" => 0, "en" => 1, "last" => 30, "pre" => 100, "tt" => 1}
+unrelated edit: test report (must not resume a frozen timer, decision 8): []
+EN back at 100: caught up?: {%{"d" => 1, "z" => 1}, %{"acc" => 100, "dn" => 1, "en" => 1, "last" => 100, "pre" => 100, "tt" => 0}}
+== E8 block member kind change
+accept kind change: {:error, ["line 3: `x.e` is a bool in the running program and a dint in the candidate: a member's type changes only with a restart"]}
+== E9 program bit e and block bit e: the candidate changes only the program's ons rung
+test report; blocked list: {[{:ons_blocked, "e", 1}], ["e"]}
+switch scan: g rises -> x.e is a real edge, p must be 1: %{"p" => 1, "q" => 0}

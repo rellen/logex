@@ -1,0 +1,6 @@
+5c5
+< recursion through a tag from Elixir: {:ok, Logex.FbType}
+---
+> recursion through a tag from Elixir: {:raised, ArgumentError, "`y` holds an instance of `a`, the function block being compiled: a function block never holds an instance of itself, at any depth"}
+7d6
+< exit 0
