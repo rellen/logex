@@ -1112,6 +1112,8 @@ defmodule Logex.RuntimeTest do
       # M2-5: an instruction's slots, the one lookup of Logex.Warnings and Logex.Edit;
       # instructionize/3, which takes the function blocks a routine may declare instances
       # of; and lowered?/1, the definition of a compiled body, which a type given must have.
+      # Decision 54: recompiled/3, a block's body from its source text over the types it
+      # names, trusted, which Logex.FbType.check/2 asks a type given to be.
       assert Enum.sort(Logex.Compiler.__info__(:functions)) == [
                instructionize: 1,
                instructionize: 2,
@@ -1119,6 +1121,7 @@ defmodule Logex.RuntimeTest do
                instructions: 0,
                lowered?: 1,
                parse: 1,
+               recompiled: 3,
                signature: 2,
                tokenize: 1
              ]

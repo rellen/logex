@@ -1688,6 +1688,32 @@ configuration file's must be built that way before they land.
   many instances hold it. A program's own tags no longer hold each type itself, so the
   tests that read a program's types read its `blocks`. 665 tests pass on Elixir 1.20.4
   (8 of them doctests), up from 661.
+
+  The maintainer answered the second the same day: a type given is to be the one its
+  source text compiles to, decision 54, which the commit after `1a16b1d` builds.
+  `Logex.FbType.user?/1` compiles again each type a value holds, the outermost and every
+  type in its one table, once a call, each before any type that names it, as a block of
+  its name over the types it names as the table holds them, trusted and not checked again
+  (`Logex.Compiler.recompiled/3`), and asks that the result be the type given, its members
+  and its body's name, rungs, tag table and warnings, with the file the body was read
+  from, none or a path to a file named after the block, which stamps each warning;
+  `Logex.FbType.check/2` compiles a type that the tables of several types given share
+  once. So a rung edited into another that text could say, a tag table edited into one
+  declaration lines could give, a source text edited with its body left as it was, and a
+  file that is no such path are each an `ArgumentError` where the type is given, §4.10's
+  "a hand-edited type is an `ArgumentError` where it is given" holding exactly; a source
+  text that gives the same body, a comment more, is the type a compile gives for it. A
+  compile given one block of 50 and 200 rungs took 70,113 and 275,398 reductions, where
+  it took 58,806 and 231,598, and given a chain of 50 and 200 types 113,959 and 446,194,
+  where it took 87,334 and 340,188: a growth test pins both linear. Two consequences are
+  the maintainer's to confirm. A type with no source text, which only
+  `Logex.Compiler.instructionize/3` gives, has none to compile again and is refused where
+  it is given, so a block whose members are declared from Elixir is no longer a type a
+  compile takes, as M2-5's third commit had it, though §4.10 still orders such members
+  first. And `user?/1` no longer calls `Logex.Compiler.lowered?/1`, which a body equal to
+  its text's compile satisfies, so nothing in `lib/` calls it; it is kept, public and
+  tested, as the definition of a compiled body the record names. 670 tests pass on
+  Elixir 1.20.4 (8 of them doctests), up from 665.
 - **M2-6 · Event tasks.** `task <n> single <g> [interval <ms>] priority <p>`, fired by a
   rising edge, and in the first cycle if the trigger is already true; with `interval` too,
   it runs periodically only while the trigger is 0, plus a run on each edge (IEC rule 2). *Done when* an event task triggered

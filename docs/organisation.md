@@ -368,7 +368,11 @@ cycle among FB types, which fits a model where one instance is one nested map.
   a body's source text again, so a rung edited into another that text could say, the
   text left as it was, passes as a version of its own, which only a compile that also
   holds the genuine one refuses, by `Logex.FbType.same?/2`. Whether `user?/1` is to
-  compile the source again is left to the maintainer, `PLAN.md` M2-5.)*
+  compile the source again is left to the maintainer, `PLAN.md` M2-5.)* *(Since decision
+  54, 2026-10-05: `user?/1` compiles each body's source text again and asks that it give
+  the body given, so it holds exactly for a type `Logex.compile/2` gives for a block's
+  text, and a type edited by hand is an `ArgumentError` where it is given, whether or not
+  text could say what it holds.)*
 - *Getting a block.* A source is given its blocks in `Logex.compile/2`'s `types:`, or
   `Logex.compile_file/1` finds each type word that could name one as `<word>.ld` beside
   the file that names it, compiles it first, once a call, and hands back its warnings
@@ -1588,7 +1592,27 @@ is reported; and a directory with a block's name "cannot be read".)*
   maintainer, `PLAN.md` M2-5. Since decision 53, a type's one table holds each type
   once, so `user?/1` checks each once a call, and a compile given several types checks a
   type their tables share once, over the same types it names
-  (`Logex.FbType.check/2`), so that it stays linear in the distinct types.)*
+  (`Logex.FbType.check/2`), so that it stays linear in the distinct types.)* *(Changed
+  2026-10-05 by decision 54: "a hand-edited type is an `ArgumentError` where it is given"
+  holds exactly. Each type a compile is given, and each type its one table holds, is
+  compiled again from its body's source text, once a compile, as a block of its name,
+  over the types its instances name as the table holds them, each compiled again before
+  any type that names it, trusted and not checked again
+  (`Logex.Compiler.recompiled/3`), and must be exactly what that compile gives: its
+  members, and its body's name, rungs, tag table and warnings. The one thing the text
+  cannot give is the file a body was read from, which is kept: none, or a path to a file
+  named after the block, which stamps each warning. So a rung edited into another that
+  text could say, a tag table edited into one declaration lines could give, a source text
+  edited with its body left as it was, or a file that is no such path, is refused where
+  it is given; a source text that gives that very body, a comment more, is the type a
+  compile gives for it. A type with no source text, which only
+  `Logex.Compiler.instructionize/3` gives, a block whose members are declared from Elixir
+  among them, has none to compile again, and is refused where it is given too, as
+  `Logex.compile/2`'s doc asked of a type given. The shape check is gone from `user?/1`:
+  `Logex.Compiler.lowered?/1` stays the definition of a compiled body, which a type
+  given has, but nothing calls it on the way in. A compile given a type took 1.19x the
+  reductions it took before for one block of 200 rungs, and 1.31x for a chain of 200
+  types; both stay linear.)*
 - *Held types.* A member that holds an instance names its type, `{:block, name}`, and the
   holder's body's tag table holds that type once, so a type copied flat is linear in its
   depth. A member's type gains that form. *(As landed, after M2-5's review found the type
@@ -1625,7 +1649,10 @@ is reported; and a directory with a block's name "cannot be read".)*
   before its documents, a departure from "after M2-5" made so that the documents commit
   describes it with the rest: a line given the unknown-type message, or refused as
   recursive, excuses every use of its own name, as written; a line refused for another
-  reason excuses nothing.)*
+  reason excuses nothing.)* *(Since decision 54, a block whose members are declared from
+  Elixir, which only `Logex.Compiler.instructionize/3` gives, has no source text to
+  compile again, and is no type a compile or `Logex.Tag.new!/4` takes: the order above
+  holds for its members, but only a block's text gives a type to declare instances of.)*
 - *`cal`.* Its `@instructions` entry is the marker `{:cal, :block}`, so that table still
   reserves it and the naming test still sees it, and its signature is the block's, built
   per compile. `cal` is reserved in every `.ld`, in any case. One `cal` runs an instance:
@@ -2039,9 +2066,9 @@ recommended but 35, the configuration file's extension, where the maintainer cho
 M2-1 landed: 41 outside the options recommended, the others as recommended, 42 with no
 preference stated. Decisions 46–52 were taken the same day, all as recommended, from two
 throwaway spikes of the run-time pieces no design spike had built, one copy of a global
-(M2-4) and event tasks (M2-6). Decision 53 was taken on 2026-10-05, as recommended, from
-the check of M2-5's fixes. All fifty-three are kept with their options so the reasons stay
-with them.
+(M2-4) and event tasks (M2-6). Decisions 53–54 were taken on 2026-10-05, as recommended,
+from the check of M2-5's fixes. All fifty-four are kept with their options so the reasons
+stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -2574,6 +2601,26 @@ did not answer. Their answers are annotated in §4.10 where they stand.
     type a compile gives stays whole, a value a host can give to a compile or send to
     another process as one term, which the third gives up, and the cost of a copy follows
     what the type is, not how its holders are drawn. Adopted.
+54. **Whether a type given is the one its source text gives (M2-5).** §4.10's "Types
+    given" says a hand-edited type is an `ArgumentError` where it is given. As built,
+    `Logex.FbType.user?/1` checked a type's shape, its body one a compile gives over its
+    tag table (`Logex.Compiler.lowered?/1`), and never compiled the body's source text
+    again. So it took a rung edited into another that text could say, the text left as it
+    was, a source text or file edited, or a key added to a tag: each a version of its own,
+    which only a compile that also held the genuine type refused, by the one-version check.
+    - The shape, as built, its documents saying what it checks;
+    - compile each body's source text again through `Logex.compile/2`, given the types it
+      holds, so that each of those is checked again in turn: a type is then compiled again
+      once for each path of holders down to it, as 2 to the power of the depth in decision
+      53's diamond;
+    - or compile each body's source text again once a compile, over the types it names as
+      the one table holds them (decision 53), trusted as checked, each before any type
+      that names it, and ask that it give the body given, the file it was read from aside.
+
+    *Recommend the third.* "A hand-edited type is an `ArgumentError` where it is given"
+    then holds exactly, in the spirit of decision 28's full entry check, and a type is
+    compiled again once a compile, however many types and paths hold it, so a compile given
+    a type stays linear in the text of the types it holds, as the shape check was. Adopted.
 
 ---
 

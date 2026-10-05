@@ -106,9 +106,16 @@ defmodule Logex.Compiler do
     {library, held} = library!(types)
     {kind, rungs, heading} = file_kind(rungs)
     marks = marked(kind, library, held)
-    {tags, logic, declaring, untyped} = Declarations.split(rungs, declared, marks)
+    {tags, _logic, _declaring, _untyped} = split = Declarations.split(rungs, declared, marks)
     holds_itself!(kind, declared)
     {held, _walked, :tags} = Enum.reduce(blocks(tags), {held, %{}, :tags}, &one_version!/2)
+    {rungs, tags, diagnostics} = lowering(routine, {kind, heading}, split)
+    lowered(kind, rungs, {tags, held}, diagnostics)
+  end
+
+  # The rungs lowered over the tag table, each timer given its preset, and every
+  # diagnostic, a compile's and a recompile's alike (recompiled/3).
+  defp lowering(routine, {kind, heading}, {tags, logic, declaring, untyped}) do
     known = {scope(tags), folded(tags)}
     {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, known))
     note? = map_size(tags) == 0 and declares_nothing?(routine, logic)
@@ -119,9 +126,57 @@ defmodule Logex.Compiler do
     paths = Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end)
     found = Enum.reject(Enum.reverse(lowering), &excused?(&1, untyped))
     errors = declaring ++ undeclared(found, tags, note?) ++ shared ++ timing
-    diagnostics = heading ++ header_tags(kind, tags) ++ errors ++ calls ++ paths
-    lowered(kind, rungs, {tags, held}, diagnostics)
+    {rungs, tags, heading ++ header_tags(kind, tags) ++ errors ++ calls ++ paths}
   end
+
+  @doc """
+  The body a function block's source text compiles to (decision 54): `{:ok, body}`, the
+  `%Logex.Program{}` `Logex.compile/2` gives as the type's `body` for `source` under the
+  name `name`, as an outermost type's table holds it (`Logex.FbType.held/1`), or `:error`
+  where the text is no such block's, does not lex or parse, or gives any diagnostic.
+  `held` are the user block types its declaration lines may name, by name, each as it
+  reads inside the table that holds it (`Logex.FbType.within/2`).
+
+  Those types are trusted, as checked already: none is checked, marked for recursion or
+  compared with another version, and no table is built, so each instance's tag names its
+  type and `blocks` is empty. A type whose text names one `held` lacks, its own name among
+  them, gives the diagnostic a compile gives for an unknown type. `source` and `file` are
+  nil, and so is each warning's file: they are the caller's to give. It is how
+  `Logex.FbType.check/2` asks that each type a compile is given be the one its source
+  gives, once a type, in time linear in the source and the members of the types it names.
+  """
+  def recompiled(source, name, held) when is_binary(source) and is_map(held),
+    do: retokenized(tokenize(source), name, held)
+
+  def recompiled(_source, _name, _held), do: :error
+
+  defp retokenized({:ok, tokens, _end_line}, name, held), do: reparsed(parse(tokens), name, held)
+  defp retokenized(_error, _name, _held), do: :error
+
+  defp reparsed({:ok, {:routine, {:rungs, rungs}} = routine}, name, held) do
+    {kind, rungs, heading} = file_kind(rungs)
+
+    {rungs, tags, diagnostics} =
+      lowering(routine, {kind, heading}, Declarations.split(rungs, [], held))
+
+    rebuilt(kind, name, {rungs, tags}, diagnostics)
+  end
+
+  defp reparsed(_error, _name, _held), do: :error
+
+  defp rebuilt({:block, name}, name, {rungs, tags}, []) do
+    {named, _reached} = Enum.map_reduce(tags, [], &naming/2)
+
+    {:ok,
+     %Program{
+       name: name,
+       rungs: rungs,
+       tags: Map.new(named),
+       warnings: Logex.Warnings.of(rungs, tags)
+     }}
+  end
+
+  defp rebuilt(_kind, _name, _lowered, _diagnostics), do: :error
 
   @doc """
   Whether `body`'s rungs, tags and warnings are exactly what `instructionize/3` gives for
@@ -134,17 +189,19 @@ defmodule Logex.Compiler do
   tag naming a type its `blocks` does not hold, or an entry that is no `%Logex.Tag{}`,
   makes it no compiled body.
 
-  It is the definition of a compiled body, which `Logex.FbType.user?/1` checks for a type
-  given to a compile or to `Logex.Tag.new!/4`, as `Logex.Parser.well_formed!/1` is of a
-  parse tree: what a type given cannot hold, no runtime or edit step meets. It expects
-  that table checked already, every tag under its own name and every instance's type,
-  once each held type is given, the built-in `ton` or a type the table of a type
-  `Logex.FbType.user?/1` takes holds, its members what `Logex.FbType.of/1` gives, which
-  `user?/1` checks first. Over such a table it is total, `true` or `false`
-  and never an exception, and so it is for a value that is no `%Logex.Program{}`, or
-  whose rungs, tags, blocks or warnings are no list, map, map and list, or whose tags
-  are a struct. A direct call given another table, such as a tag under a key that is no
-  string or an instance whose type's members are no list of members, may raise.
+  It is the definition of a compiled body, as `Logex.Parser.well_formed!/1` is of a parse
+  tree, which every type given to a compile or to `Logex.Tag.new!/4` has. Until decision
+  54 it was the check `Logex.FbType.user?/1` made of a type's body; that check now asks
+  more, that the body be the one its own source text compiles to (`recompiled/3`), which
+  implies this, so nothing calls it on the way in. It expects its tag table checked
+  already, every tag under its own name and every instance's type, once each held type is
+  given, the built-in `ton` or a type the table of a type `Logex.FbType.user?/1` takes
+  holds, its members what `Logex.FbType.of/1` gives. Over such a table it is total, `true`
+  or `false` and never an exception, and so it is for a value that is no
+  `%Logex.Program{}`, or whose rungs, tags, blocks or warnings are no list, map, map and
+  list, or whose tags are a struct. A direct call given another table, such as a tag under
+  a key that is no string or an instance whose type's members are no list of members, may
+  raise.
   """
   def lowered?(%Program{rungs: rungs, tags: tags, blocks: blocks, warnings: warnings} = body)
       when is_list(rungs) and is_map(tags) and not is_struct(tags) and is_map(blocks) and

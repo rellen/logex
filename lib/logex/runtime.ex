@@ -144,8 +144,8 @@ defmodule Logex.Runtime do
   edited by hand is outside this contract; one that holds a block type whose body was
   edited by hand still runs without raising, since a `cal` of an instance its table lacks,
   or whose type it names and does not hold, runs nothing, but a type given to
-  `Logex.compile/2` or `Logex.Tag.new!/4` cannot be one
-  (`Logex.Compiler.lowered?/1`).
+  `Logex.compile/2` or `Logex.Tag.new!/4` cannot be one: it is the one its source text
+  compiles to (`Logex.FbType.user?/1`, decision 54).
 
   **During an edit** the host scans, sets inputs and restarts through
   `Logex.Edit.running/1`; scanning the other program is outside this contract. The edit

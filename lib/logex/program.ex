@@ -5,10 +5,13 @@ defmodule Logex.Program do
 
   - `name` is set by `Logex.compile/2` and `Logex.compile_file/1`; it is nil only for a
     program built by `Logex.Compiler.instructionize/2` directly, or by hand.
-  - `source` is the text it was compiled from, when it came through `Logex.compile*`.
+  - `source` is the text it was compiled from, when it came through `Logex.compile*`. A
+    block's body must be the one its text compiles to, wherever the block's type is given
+    (decision 54; `Logex.FbType.user?/1`), so it is compiled again from this text.
   - `file` is the path `Logex.compile_file/1` read it from, and nil for a program from
     text (fix F15): a diagnostic about it that cites a line, such as an online edit's
-    (`Logex.Edit`), cites that file too.
+    (`Logex.Edit`), cites that file too. A block's body read from a file keeps the path,
+    a file named after the block, and each of its warnings carries it.
   - `rungs` are the lowered rungs. Declaration lines are rungs in the parse AST, but never
     here.
   - `tags` is the tag table, keyed by tag name.

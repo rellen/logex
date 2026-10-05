@@ -36,13 +36,13 @@ defmodule Logex.FbType do
 
   `body` is nil for the built-in `ton`. For a user function block (M2-5) it is the block's
   compiled body, a `%Logex.Program{}` named after the block, whose tags are its members,
-  whose `blocks` holds the types of the instances it declares at any depth, and whose rungs
-  `cal` runs over an instance's map. `of/1` builds the type from it, and is the definition
-  of a user type: one is valid exactly when it is what `of/1` gives for its body, its body
-  holds each type its instances reach at any depth, and no other, each under its own name
-  with no table of its own, every type it holds is what `of/1` gives for its body in turn,
-  each body is one a compile gives (`Logex.Compiler.lowered?/1`), and no type holds an
-  instance of a type of its own name, at any depth.
+  whose `blocks` holds the types of the instances it declares at any depth, whose rungs
+  `cal` runs over an instance's map, and whose `source` is the block's text. `of/1` builds
+  the type from it. A user type is valid exactly when it is the one its text compiles to
+  (decision 54; `user?/1`): `of/1` of the body `Logex.compile/2` gives for its `source`, a
+  block of its name, the file it was read from aside, and every type its table holds the
+  one its own text compiles to in turn, each under its own name, with no table of its own,
+  and none holding an instance of a type of its own name, at any depth.
   """
 
   alias Logex.{Program, Tag}
@@ -224,65 +224,60 @@ defmodule Logex.FbType do
   def same?(_one, _other), do: false
 
   @doc """
-  Whether `type` has the shape of a user function block type `Logex.compile/2` gives:
-  what `of/1` gives for its body; its body's `blocks` the one table of the types it holds
-  (decision 53), each user block type its instances reach at any depth, once, under its
-  own name, held with no table of its own (`held/1`), and no other; each type in it what
-  `of/1` gives for its body in turn; every instance at any depth naming its type,
-  `{:block, name}`, and every timer holding the built-in `ton`; each body's rungs, tags
-  and warnings what a compile gives over that table (`Logex.Compiler.lowered?/1`); and no
-  type in it holding an instance of a type of its own name, at any depth. So a type whose
-  body was edited by hand into one no compile gives over its tag table, a rung no text
-  lowers to, a tag's line, section or initial value no declaration gives, or a warning its
-  rungs do not give, is refused where it is given, and so is a table that lacks a type, holds
-  one no instance reaches, or holds one with a table of its own. It never compiles a
-  body's source text again, so it does not ask that a body be the one its text gives: a
-  rung edited into another that text could say, the text left as it was, a source text or
-  file changed, or a key added to a tag, still passes, as a version of its own, which a
-  compile that holds the genuine one too refuses (`same?/2` compares source and rungs).
-  Total: a hand-built value of any shape is `false`, never an exception. The table holds
-  each type once, so each is checked once, however many paths of holders reach it, and the
-  check is linear in the types a value holds, but every call checks them all again.
+  Whether `type` is a user function block type `Logex.compile/2` gives (decision 54): one
+  whose body is the one its own source text compiles to. Each type the value holds, the
+  outermost and every type in its body's `blocks`, is compiled again from its body's
+  `source`, as a block of its name, over the types its instances name, as the table holds
+  them (`Logex.Compiler.recompiled/3`), and must be exactly what that compile gives: its
+  members, and its body's name, rungs, tag table and warnings, with the file its body
+  keeps, which no text gives: nil, or a path to a file named after the block, as
+  `Logex.compile_file/1` reads one, which stamps each warning with it. The table must be
+  the one a compile holds (decision 53): each user block type the instances reach at any
+  depth, once, under the name they give it, and no other, none reaching itself. Each is
+  compiled again before any type that names it, since a body is lowered over the members
+  of the types it names.
+
+  So a type edited by hand is refused where it is given, whether or not text could say
+  what it holds: a rung edited into another that text could say, the text left as it
+  was; a tag, a member or a warning edited, added or dropped; a source text edited, the
+  body left as it was; a file that is no such path; or a table that lacks a type, holds
+  one no instance reaches, or holds one with a table of its own. A type with no source text,
+  which only `Logex.Compiler.instructionize/3` gives, has none to compile again, and is
+  refused too. Total: a hand-built value of any shape is `false`, never an exception. The
+  table holds each type once, so each is compiled again once a call, however many paths
+  of holders reach it, and the check is linear in the source text of the types a value
+  holds, but every call compiles them all again (`check/2`).
   """
   def user?(type), do: check(type, %{}) != :error
 
   @doc """
-  `user?/1` for one of several types a compile is given (decision 53): `{:ok, checked}`
-  where `type` has the shape `user?/1` asks, or `:error`. `checked` is what the calls
-  before it in the same compile checked, `%{}` for the first, so a type the table holds
-  that an earlier type's table held too, the same term over the same types it names, is
-  not checked again: a compile given types that share what they hold checks each shared
-  type once, and stays linear in the distinct types. Every type given is still walked,
-  and checked at full depth where it holds anything new.
+  `user?/1` for one of several types a compile is given (decisions 53 and 54):
+  `{:ok, checked}` where `type` is one `user?/1` takes, or `:error`. `checked` is what the
+  calls before it in the same compile checked, `%{}` for the first, so a type the table
+  holds that an earlier type's table held too, the same term over the same types it names,
+  is not compiled again: a compile given types that share what they hold compiles each
+  shared type's source once, and stays linear in the distinct types. Every type given is
+  still walked, and compiled again at full depth where it holds anything new.
   """
-  def check(
-        %__MODULE__{name: name, body: %Program{name: name, tags: tags, blocks: blocks}} = type,
-        checked
-      )
-      when is_binary(name) and is_map(tags) and not is_struct(tags) and is_map(blocks) and
-             not is_struct(blocks) and is_map(checked),
-      do: walked(Logex.Declarations.block_name?(name) and reaches?(type, blocks), type, checked)
+  def check(%__MODULE__{body: %Program{tags: tags, blocks: blocks}} = type, checked)
+      when is_map(tags) and not is_struct(tags) and is_map(blocks) and is_map(checked),
+      do: walked(reaches(type, blocks), type, checked)
 
   def check(_type, _checked), do: :error
 
-  # Each type of the value, the outermost in its held form and every one its table holds,
-  # with the types it names: shaped, then lowered over the table, each unless the same
-  # type over the same types was checked already.
-  defp walked(false, _type, _checked), do: :error
+  # Each type of the value, every one its table holds, a type before any that names it,
+  # then the outermost in its held form, each with the types it names: compiled again over
+  # them, unless the same type over the same types was checked already.
+  defp walked(:error, _type, _checked), do: :error
 
-  defp walked(true, %__MODULE__{body: %Program{blocks: blocks}} = type, checked) do
+  defp walked({:ok, order}, %__MODULE__{body: %Program{blocks: blocks}} = type, checked) do
     fresh =
-      for held <- [held(type) | Map.values(blocks)],
+      for held <- Enum.map(order, &Map.fetch!(blocks, &1)) ++ [held(type)],
           key = {held, Enum.map(named(held), &Map.fetch!(blocks, &1))},
           key not in Map.get(checked, held.name, []),
           do: key
 
-    built(
-      Enum.all?(fresh, &shaped?(elem(&1, 0))) and
-        Enum.all?(fresh, &Logex.Compiler.lowered?(within(elem(&1, 0), blocks).body)),
-      fresh,
-      checked
-    )
+    built(Enum.all?(fresh, &compiles?(&1, blocks)), fresh, checked)
   end
 
   defp built(false, _fresh, _checked), do: :error
@@ -294,16 +289,43 @@ defmodule Logex.FbType do
          Map.update(checked, held.name, [key], &[key | &1])
        end)}
 
-  # Whether the table holds exactly the types `type` reaches through it (decision 53): a
-  # walk down from `type`, each type entered once, however many paths reach it, and each
-  # one held under its own name with no table of its own. A type reached again on the path
+  # Decision 54: a held type is the one its source text compiles to over the types it
+  # names, read inside the table, its body keeping the file it was read from: none, or a
+  # path to a file named after the block, as Logex.compile_file/1 names one.
+  defp compiles?({%__MODULE__{name: name, body: %Program{source: source}} = held, named}, blocks),
+    do:
+      recompiled(
+        Logex.Compiler.recompiled(source, name, Map.new(named, &{&1.name, within(&1, blocks)})),
+        held
+      )
+
+  defp recompiled(
+         {:ok, body},
+         %__MODULE__{name: name, body: %Program{source: source, file: file}} = held
+       ),
+       do: read_from?(file, name) and of(%{filed(body, file) | source: source}) == held
+
+  defp recompiled(:error, _held), do: false
+
+  defp read_from?(nil, _name), do: true
+  defp read_from?(file, name) when is_binary(file), do: Path.rootname(Path.basename(file)) == name
+  defp read_from?(_file, _name), do: false
+
+  defp filed(%Program{warnings: warnings} = body, file),
+    do: %{body | file: file, warnings: Enum.map(warnings, &%{&1 | file: file})}
+
+  # The names in the table, a type before every type that names it, where the table holds
+  # exactly the types `type` reaches through it (decision 53): a walk down from `type`,
+  # each type entered once, however many paths reach it. A type reached again on the path
   # down to it would hold itself, and a type no walk reaches makes the table hold one too
   # many.
-  defp reaches?(type, blocks),
-    do: exact?(reach(named(type), %{type.name => true}, blocks, {:ok, %{}}), blocks)
+  defp reaches(type, blocks),
+    do: exact(reach(named(type), %{type.name => true}, blocks, {:ok, %{}, []}), blocks)
 
-  defp exact?({:ok, reached}, blocks), do: map_size(reached) == map_size(blocks)
-  defp exact?(:error, _blocks), do: false
+  defp exact({:ok, reached, order}, blocks) when map_size(reached) == map_size(blocks),
+    do: {:ok, Enum.reverse(order)}
+
+  defp exact(_reached, _blocks), do: :error
 
   # The names of the user block types a body's instances are of, as its tags name them.
   defp named(%__MODULE__{body: %Program{tags: tags}}),
@@ -317,76 +339,31 @@ defmodule Logex.FbType do
 
   defp visit(_name, _path, _blocks, :error), do: :error
   defp visit(name, path, _blocks, _ok) when is_map_key(path, name), do: :error
-  defp visit(name, _path, _blocks, {:ok, reached} = ok) when is_map_key(reached, name), do: ok
 
-  defp visit(name, path, blocks, {:ok, reached}),
-    do: entered(Map.fetch(blocks, name), name, path, {blocks, reached})
+  defp visit(name, _path, _blocks, {:ok, reached, _order} = ok) when is_map_key(reached, name),
+    do: ok
 
-  defp entered(
-         {:ok,
-          %__MODULE__{name: name, body: %Program{name: name, tags: tags, blocks: own}} = type},
-         name,
-         path,
-         {blocks, reached}
-       )
-       when is_map(tags) and not is_struct(tags) and is_map(own) and map_size(own) == 0,
-       do: descend(Logex.Declarations.block_name?(name), type, path, {blocks, reached})
+  defp visit(name, path, blocks, {:ok, reached, order}),
+    do: entered(Map.fetch(blocks, name), name, path, {blocks, reached, order})
+
+  defp entered({:ok, %__MODULE__{body: %Program{tags: tags}} = type}, name, path, table)
+       when is_map(tags) and not is_struct(tags),
+       do: descend(type, name, path, table)
 
   defp entered(_not_held, _name, _path, _table), do: :error
 
-  defp descend(false, _type, _path, _table), do: :error
-
-  defp descend(true, %__MODULE__{name: name} = type, path, {blocks, reached}),
-    do: reach(named(type), Map.put(path, name, true), blocks, {:ok, Map.put(reached, name, true)})
-
-  # One type of the value, the outermost or one its table holds: a tag per name that a
-  # declaration gives, each instance of a user block naming its type (declared?/1), each
-  # timer the built-in `ton` itself, and the type what `of/1` gives for its body. Every
-  # type is shaped before any body is lowered, since a body is lowered over the members of
-  # the types it names.
-  defp shaped?(%__MODULE__{body: body} = type),
+  defp descend(type, name, path, {blocks, reached, order}),
     do:
-      Enum.all?(body.tags, &declared?/1) and Enum.all?(body.tags, &timer?/1) and
-        of(body) == type
+      finished(
+        reach(
+          named(type),
+          Map.put(path, name, true),
+          blocks,
+          {:ok, Map.put(reached, name, true), order}
+        ),
+        name
+      )
 
-  defp timer?({_name, %Tag{type: %__MODULE__{body: nil} = type}}), do: type == ton()
-  defp timer?(_tag), do: true
-
-  # What a compiled body's tag table holds: a tag per name, with a line, or none for a tag
-  # declared from Elixir (Logex.Tag.new!/4), a section, and an
-  # initial value a declaration line could give, or for a timer the preset the compiler
-  # gives it (Logex.Compiler). An instance of a user block names its type, which the
-  # outermost type's table holds (reaches?/2). A timer's type is looked at by timer?/1.
-  defp declared?({name, %Tag{name: name, line: line, section: section} = tag})
-       when ((is_integer(line) and line > 0) or is_nil(line)) and
-              section in [:var, :var_input, :var_output],
-       do: tag_name?(name) and starts?(tag)
-
-  defp declared?(_entry), do: false
-
-  # A name a declaration line can give in a block's file: no reserved word, no `.`, and not
-  # the word that heads the file (Logex.Declarations.check/1 holds the first two).
-  defp tag_name?(name),
-    do:
-      Logex.Declarations.check(%Tag{name: name, type: :bool, section: :var}) == [] and
-        String.downcase(name) not in Logex.Declarations.kinds()
-
-  defp starts?(%Tag{type: type, initial: nil}) when type in [:bool, :dint], do: true
-
-  defp starts?(%Tag{type: type, initial: initial, section: section})
-       when type in [:bool, :dint] and section != :var_input and is_integer(initial),
-       do: Logex.Declarations.fits?(type, initial) and initial >= 0
-
-  defp starts?(%Tag{type: %__MODULE__{body: nil}, initial: nil, section: :var}), do: true
-  defp starts?(%Tag{type: {:block, _held}, initial: nil, section: :var}), do: true
-
-  defp starts?(%Tag{
-         type: %__MODULE__{body: nil},
-         initial: %{"pre" => pre} = preset,
-         section: :var
-       })
-       when map_size(preset) == 1,
-       do: Logex.Declarations.preset?(pre)
-
-  defp starts?(_tag), do: false
+  defp finished({:ok, reached, order}, name), do: {:ok, reached, [name | order]}
+  defp finished(:error, _name), do: :error
 end
