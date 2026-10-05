@@ -15,19 +15,26 @@ defmodule Logex.Runtime do
 
   **A configuration** (M2-1, `docs/organisation.md` §4.6). `start/1` makes the resource at
   time 0: every global at its initial value, every program instance as `instance/1` makes
-  it, and every task due at once. A *cycle* is one step of the resource, `cycle/3`, and a
+  it, every task with an interval due at once, and every trigger's last sample 0. A
+  *cycle* is one step of the resource, `cycle/3`, and a
   *scan* one execution of one instance, `call/4`. Each cycle, in order:
 
   1. `now` advances by `elapsed_ms`.
   2. `inputs`, keyed by input-point name, merge into the input points, which keep their
      values between cycles: a host sends only what changed, and every scan of the cycle
      sees the one sample.
-  3. A periodic task is due when its next due time has come. Every task's phase is
-     anchored at 0, `start/1`'s `now`, so a first cycle that advances the clock reports
-     the periods it spans. Due tasks run by priority, 0 first, then the earlier due time,
-     then the order the configuration declares them; each runs its instances in the
-     configuration's order, and the task-less instances run last, once each, in every
-     cycle.
+  3. Each task's `single`, if it has one, is sampled once, before any scan, so a trigger
+     logic writes takes effect in the next cycle. A periodic task is due when its next
+     due time has come. Every task's phase is anchored at 0, `start/1`'s `now`, so a first
+     cycle that advances the clock reports the periods it spans. An event task is due
+     when its trigger samples 1 and sampled 0 last, a trigger already 1 in the first
+     cycle counting, its due time the cycle's `now`. A task with both runs at most once a
+     cycle: on an edge, or while its trigger samples 0 and a due time has come; a due time
+     that comes while it samples 1 is skipped, not counted, the next on the same phase,
+     and an edge run does not move the phase (decision 39). Due tasks run by priority, 0
+     first, then the earlier due time, then the order the configuration declares them;
+     each runs its instances in the configuration's order, and the task-less instances run
+     last, once each, in every cycle.
   4. A scan copies each connected var_input in, from its global or constant, runs the
      instance through `call/4`, and copies each connected var_output out to its global, so
      an instance sees what an earlier one wrote in the same cycle and never what a later
@@ -70,8 +77,10 @@ defmodule Logex.Runtime do
 
   What it may rely on:
 
-  1. The first cycle runs at once: `next_due_in/1` is 0 after `start/1` and after
-     `restart/2`, and a first cycle a whole interval later reports the run it missed.
+  1. The first cycle runs at once, after `start/1` and after `restart/2`, whatever
+     `next_due_in/1` says: it is 0 then only where a task has an interval, and an event
+     task whose trigger is already 1 fires in that cycle. A first cycle a whole interval
+     later reports the run it missed.
   2. Late is reported, never replayed: a task runs once however late, and keeps its phase.
   3. Inputs are a delta: only input points, each with a value that fits its type, merged
      into the image, every problem with one call in one raise, in key order. The image
@@ -97,7 +106,11 @@ defmodule Logex.Runtime do
     kept clock by `restart/2`. No edit adds or removes a task while it runs (decision 19),
     so no edit starts one by this rule. A task an edit keeps keeps its overlap count and
     its due time, except that an interval the edit changes makes it next due at
-    `min(next_due, now + new interval)` (decision 40).
+    `min(next_due, now + new interval)` (decision 40);
+  - a task's `single` has a last sample, 0 at `start/1` and by `restart/2`, so a trigger
+    already 1 fires in the next cycle, and sampled once a cycle; an edit keeps it, so a
+    switch fires no event, and refuses a changed `single`, or an `interval` added to or
+    removed from a task with one (decision 19).
 
   Until OE-2, a program instance inside a resource is not edited: `Logex.Edit` takes one
   lone instance, which `instance/1` made, and the resource holds its instances itself, as
@@ -221,7 +234,8 @@ defmodule Logex.Runtime do
   @doc """
   A resource running `config`, at time 0 before its first cycle: every global at its
   initial value, 0 where it has none; every program instance as `instance/1` makes it;
-  every task due at once, with no overlap counted. `config` is checked again
+  every task with an interval due at once, every trigger's last sample 0, and no overlap
+  counted. `config` is checked again
   (`Logex.Configuration.check/1`), and one with a problem raises `ArgumentError` listing
   every one.
   """
@@ -234,7 +248,7 @@ defmodule Logex.Runtime do
       globals: Map.new(config.globals, &{&1.name, Configuration.initial(&1)}),
       instances:
         Map.new(config.instances, &{&1.name, instance(Map.fetch!(config.programs, &1.type))}),
-      tasks: Map.new(config.tasks, &{&1.name, task_state(0)}),
+      tasks: Map.new(config.tasks, &{&1.name, task_state(&1, 0)}),
       wiring: wiring(config)
     }
   end
@@ -254,7 +268,8 @@ defmodule Logex.Runtime do
     %__MODULE__{now: now} = runtime = runtime!(runtime)
     elapsed = elapsed!(elapsed_ms)
     runtime = %{runtime | now: now + elapsed, globals: image!(runtime, inputs)}
-    {runtime, events} = Enum.reduce(due(runtime), {runtime, []}, &run_task/2)
+    {runtime, due} = sampled(runtime)
+    {runtime, events} = Enum.reduce(due, {runtime, []}, &run_task/2)
 
     {runtime, events} =
       Enum.reduce(runtime.wiring.taskless, {runtime, events}, &scanned(&1, :none, &2))
@@ -270,7 +285,10 @@ defmodule Logex.Runtime do
   """
   def next_due_in(runtime) do
     %__MODULE__{now: now, tasks: tasks} = runtime!(runtime)
-    tasks |> Map.values() |> Enum.map(& &1.next_due) |> Enum.min(fn -> nil end) |> due_in(now)
+
+    for(%{next_due: next} <- Map.values(tasks), next != nil, do: next)
+    |> Enum.min(fn -> nil end)
+    |> due_in(now)
   end
 
   defp due_in(nil, _now), do: :infinity
@@ -279,8 +297,9 @@ defmodule Logex.Runtime do
   @doc """
   Starts the resource again (`:warm` is `:cold` until `retain` exists). It is then as
   `start/1` left it, but for its clock and its input image, which it keeps: every other
-  global back at its initial value, each instance through `restart/3`, every task due at
-  the next cycle, and every overlap count 0. Keeping the input image is what keeps
+  global back at its initial value, each instance through `restart/3`, every task with an
+  interval due at the next cycle, every trigger's last sample 0, so a trigger already 1
+  fires in it, and every overlap count 0. Keeping the input image is what keeps
   `scan/2` with `restart/3` and a one-instance configuration in agreement across a
   restart, with nothing for the host to send again (decision 38). There is no restart of
   one instance inside a resource.
@@ -296,7 +315,7 @@ defmodule Logex.Runtime do
           Map.new(runtime.instances, fn {name, state} ->
             {name, restart(Map.fetch!(config.programs, state.type), state, mode)}
           end),
-        tasks: Map.new(runtime.tasks, fn {name, _state} -> {name, task_state(now)} end)
+        tasks: Map.new(config.tasks, &{&1.name, task_state(&1, now)})
     }
   end
 
@@ -306,7 +325,15 @@ defmodule Logex.Runtime do
   defp input_kept(true, global, runtime), do: Map.fetch!(runtime.globals, global.name)
   defp input_kept(false, global, _runtime), do: Configuration.initial(global)
 
-  defp task_state(due), do: %{next_due: due, overlaps: 0}
+  # A task's state: its next periodic due time, nil for an event task with no interval;
+  # its overlap count; and, for a task with a `single`, the trigger's last sample, 0 at
+  # start/1 and restart/2, so a trigger already 1 fires in the next cycle.
+  defp task_state(%Configuration.Task{single: nil}, due), do: %{next_due: due, overlaps: 0}
+
+  defp task_state(%Configuration.Task{interval: nil}, _due),
+    do: %{next_due: nil, overlaps: 0, last: 0}
+
+  defp task_state(%Configuration.Task{}, due), do: %{next_due: due, overlaps: 0, last: 0}
 
   @doc "Each task's overlap count, by name: the periods it missed since `start/1` or `restart/2`."
   def overlaps(runtime) do
@@ -631,7 +658,8 @@ defmodule Logex.Runtime do
         config.tasks
         |> Enum.with_index()
         |> Enum.map(fn {task, index} ->
-          {task.name, task.interval, task.priority, index, Map.get(by_task, task.name, [])}
+          {task.name, {task.single, task.interval}, task.priority, index,
+           Map.get(by_task, task.name, [])}
         end),
       taskless: Map.get(by_task, nil, []),
       types: types,
@@ -775,28 +803,83 @@ defmodule Logex.Runtime do
   defp kind_of(:error, false, true), do: :configuration
   defp kind_of(:error, false, false), do: :none
 
-  # The due tasks, in the order they run: priority, then the earlier due time, then the
-  # order the configuration declares them.
-  defp due(%__MODULE__{now: now, tasks: states, wiring: %{tasks: tasks}}) do
-    for(
-      {name, _interval, priority, index, _instances} = task <- tasks,
-      %{next_due: next} = Map.fetch!(states, name),
-      next <= now,
-      do: {{priority, next, index}, task}
-    )
-    |> Enum.sort_by(&elem(&1, 0))
-    |> Enum.map(&elem(&1, 1))
+  # Step 3: each trigger sampled once, after the input image is merged and before any
+  # scan, so a trigger logic writes takes effect in the next cycle; and the due tasks, in
+  # the order they run: priority, then the earlier due time, then the order the
+  # configuration declares them. An event task's due time is the cycle's `now`, the edge
+  # being seen in this cycle. A periodic due time a task with a `single` skips while its
+  # trigger samples 1 moves its next due time past `now`, on its phase, and is not counted
+  # (decision 39).
+  defp sampled(%__MODULE__{now: now, globals: globals, wiring: %{tasks: tasks}} = runtime) do
+    {due, states} =
+      Enum.flat_map_reduce(tasks, runtime.tasks, fn {name, {single, interval}, priority, index,
+                                                     _instances} = task,
+                                                    states ->
+        state = Map.fetch!(states, name)
+        sample = sample(single, globals)
+        {plan, state} = plan({single, interval}, sample, state, now)
+        due = for at <- plan, do: {{priority, at, index}, put_elem(task, 1, interval)}
+        {due, Map.put(states, name, state)}
+      end)
+
+    {%{runtime | tasks: states}, due |> Enum.sort_by(&elem(&1, 0)) |> Enum.map(&elem(&1, 1))}
   end
 
+  defp sample(nil, _globals), do: nil
+  defp sample(single, globals), do: Map.fetch!(globals, single)
+
+  # What a task does this cycle: `{[due time], state}` when it runs, `{[], state}` when
+  # not. Its last sample is kept here, before any scan.
+  defp plan({nil, _interval}, nil, %{next_due: next} = state, now) when next <= now,
+    do: {[next], state}
+
+  defp plan({nil, _interval}, nil, state, _now), do: {[], state}
+
+  defp plan({_single, nil}, sample, %{last: last} = state, now),
+    do: {edge(last, sample, now), %{state | last: sample}}
+
+  defp plan({_single, interval}, sample, %{last: last, next_due: next} = state, now),
+    do: both(edge(last, sample, now), sample, next, interval, %{state | last: sample}, now)
+
+  defp edge(0, 1, now), do: [now]
+  defp edge(_last, _sample, _now), do: []
+
+  # Decision 39: one run a cycle at most; on an edge, or while the trigger samples 0 and
+  # a periodic due time has come. A due time that comes while it samples 1 is skipped and
+  # not counted, its next on the same phase; an edge run does not move the phase.
+  defp both([now], _sample, next, interval, state, now),
+    do: {[now], %{state | next_due: skipped(next, interval, now)}}
+
+  defp both([], 1, next, interval, state, now),
+    do: {[], %{state | next_due: skipped(next, interval, now)}}
+
+  defp both([], 0, next, _interval, state, now) when next <= now, do: {[next], state}
+  defp both([], 0, _next, _interval, state, _now), do: {[], state}
+
+  defp skipped(next, interval, now) when next <= now,
+    do: next + (div(now - next, interval) + 1) * interval
+
+  defp skipped(next, _interval, _now), do: next
+
   # A due task runs once, however many periods have passed: the ones it missed are counted
-  # and reported, and its next due time moves past `now` by whole intervals.
+  # and reported, and its next due time moves past `now` by whole intervals. An event
+  # task with no interval, or one run on its edge, has none to move: it never overlaps.
   defp run_task({name, interval, _priority, _index, instances}, {runtime, events}) do
-    %{next_due: next, overlaps: overlaps} = state = Map.fetch!(runtime.tasks, name)
-    missed = div(runtime.now - next, interval)
-    state = %{state | next_due: next + (missed + 1) * interval, overlaps: overlaps + missed}
+    state = Map.fetch!(runtime.tasks, name)
+    {missed, state} = periods(interval, state, runtime.now)
     runtime = %{runtime | tasks: Map.put(runtime.tasks, name, state)}
     Enum.reduce(instances, {runtime, overlap(missed, name) ++ events}, &scanned(&1, name, &2))
   end
+
+  defp periods(nil, state, _now), do: {0, state}
+
+  defp periods(interval, %{next_due: next, overlaps: overlaps} = state, now) when next <= now do
+    missed = div(now - next, interval)
+    {missed, %{state | next_due: next + (missed + 1) * interval, overlaps: overlaps + missed}}
+  end
+
+  # An edge run of a task with an interval: its due time was moved past `now` already.
+  defp periods(_interval, state, _now), do: {0, state}
 
   defp overlap(0, _task), do: []
   defp overlap(missed, task), do: [{:overlap, task, missed}]

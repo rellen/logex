@@ -654,7 +654,8 @@ defmodule Logex.ConfigurationTest do
                "task `a`: a priority is 0, the highest, to 65535, found 65536",
                "task `b`: an interval is 1 to 2147483647 ms, found 2147483648",
                "task `b`: a priority is 0, the highest, to 65535, found 2147483648",
-               "task `c`: an interval is 1 to 2147483647 ms, found nil",
+               "task `c` needs an interval, as in `task c interval 10 priority 1`, or a " <>
+                 "trigger, as in `task c single estop priority 0`",
                "task `c`: a priority is 0, the highest, to 65535, found nil"
              ]
     end
@@ -1164,7 +1165,9 @@ defmodule Logex.ConfigurationTest do
                "plant.logex: line 2: task `T`: a priority is 0, the highest, to 65535, found 70000",
                ~s|plant.logex: line 3: "u.v" cannot name a task: a name is a letter or `_`, | <>
                  "then letters, digits or `_`",
-               "plant.logex: line 3: task `u.v`: an interval is 1 to 2147483647 ms, found nil",
+               "plant.logex: line 3: task `u.v` needs an interval, as in " <>
+                 "`task u.v interval 10 priority 1`, or a trigger, as in " <>
+                 "`task u.v single estop priority 0`",
                "plant.logex: line 3: task `u.v`: a priority is 0, the highest, to 65535, found nil",
                "plant.logex: line 5: `g` is already the name of a global (line 4): tasks, " <>
                  "globals and program instances share one namespace",

@@ -25,8 +25,8 @@ defmodule Logex.Configuration do
     of them are the same or differ only in case: one namespace, in which the first in
     line order keeps a name. A program type is named in type position only, so an
     instance may share its type's name;
-  - a task's interval is 1 to 2147483647 ms, and its priority 0, the highest, to 65535
-    (decision 37);
+  - a task has an interval, a `single` or both; its interval is 1 to 2147483647 ms, its
+    `single` a bool global, and its priority 0, the highest, to 65535 (decision 37);
   - a global's initial value fits its type, and a located global takes none; a location
     is `<device>.i.<address>` for an input point or `<device>.q.<address>` for an output
     point, its device a name, its address one or more whole numbers with no leading zero,
@@ -84,16 +84,18 @@ defmodule Logex.Configuration do
 
   defmodule Task do
     @moduledoc """
-    A periodic task: `name`, `interval` in ms and `priority`, 0 the highest, to 65535.
-    Its instances run once in every cycle in which it is due, every `interval` ms from the
-    start, in the order of the configuration's `instances` (`Logex.Runtime`).
+    A task: `name`, `priority`, 0 the highest, to 65535, and what makes it due, an
+    `interval` in ms, a `single`, the name of a bool global whose rising edge makes it due
+    (an event task), or both (decision 39). Its instances run once in every cycle in which
+    it is due, in the order of the configuration's `instances` (`Logex.Runtime`).
     """
-    @enforce_keys [:name, :interval, :priority]
-    defstruct [:name, :interval, :priority, line: nil]
+    @enforce_keys [:name, :priority]
+    defstruct [:name, :priority, single: nil, interval: nil, line: nil]
 
     @type t :: %__MODULE__{
             name: String.t(),
-            interval: pos_integer,
+            single: String.t() | nil,
+            interval: pos_integer | nil,
             priority: 0..65_535,
             line: pos_integer | nil
           }
@@ -389,7 +391,7 @@ defmodule Logex.Configuration do
 
     [
       d_names,
-      Enum.flat_map(tasks, &task/1),
+      Enum.flat_map(tasks, &task(&1, globals_by_name, named)),
       Enum.flat_map(globals, &global/1),
       located(Enum.sort_by(globals, &line_key/1)),
       runs(instances, {programs, given(config.programs)}, tasks_by_name),
@@ -585,6 +587,7 @@ defmodule Logex.Configuration do
   defp said(%Logex.Configuration.Task{name: name} = task),
     do:
       named(task) ++
+        task_single(task.single, task) ++
         counted(task.interval, interval_rule(name)) ++ counted(task.priority, priority_rule(name))
 
   defp said(%Global{} = global),
@@ -640,6 +643,16 @@ defmodule Logex.Configuration do
 
   defp global_at(%Global{at: nil}), do: []
   defp global_at(%Global{at: at} = global), do: of_word(word?(at), not_a_location(global))
+
+  defp task_single(nil, _task), do: []
+
+  defp task_single(single, task),
+    do:
+      of_word(
+        word?(single),
+        "#{describe(task)}: its `single` is a global's name, or nil for none, " <>
+          "found #{inspect(single)}"
+      )
 
   defp instance_task(nil, _instance), do: []
 
@@ -823,8 +836,33 @@ defmodule Logex.Configuration do
          | problems
        ]}
 
-  defp task(%Logex.Configuration.Task{} = task),
-    do: interval(task) ++ priority(task)
+  defp task(%Logex.Configuration.Task{} = task, globals, named),
+    do: interval(task) ++ priority(task) ++ trigger(task, globals, named)
+
+  # A task is due on its interval, on the edges of its `single`, or both (org §4.4).
+  defp interval(%{single: nil, interval: nil, name: name, line: line}),
+    do: [
+      diagnostic(
+        line,
+        "task `#{name}` needs an interval, as in `task #{name} interval 10 priority 1`, " <>
+          "or a trigger, as in `task #{name} single estop priority 0`"
+      )
+    ]
+
+  defp interval(%{single: single, interval: nil}) when single != nil, do: []
+
+  # IEC reads an interval of 0 as no periodic scheduling (rule 2): an event task is
+  # declared without one.
+  defp interval(%{single: single, interval: 0, name: name, line: line, priority: p})
+       when is_binary(single),
+       do: [
+         diagnostic(
+           line,
+           interval_rule(name) <>
+             ", found 0: a task that runs only on the edges of its `single` is declared " <>
+             "without one, as in `task #{name} single #{single} priority #{priority_shown(p)}`"
+         )
+       ]
 
   # An interval or a priority a line can hold, an integer of 0 or more or none, is a
   # diagnostic outside its range; anything else was the host's mistake.
@@ -845,6 +883,61 @@ defmodule Logex.Configuration do
        do: [diagnostic(line, priority_rule(name) <> ", found #{inspect(priority)}")]
 
   defp priority(_task), do: []
+
+  defp priority_shown(p) when is_integer(p) and p in @priority, do: p
+  defp priority_shown(_p), do: 0
+
+  # A task's `single` names a bool global (org §4.4 "Events", a logex restriction). One
+  # the lexer does not read as one name is the host's mistake, refused already.
+  defp trigger(%{single: nil}, _globals, _named), do: []
+
+  defp trigger(%{single: single} = task, globals, named),
+    do: trigger_word(word?(single), task, globals, named)
+
+  defp trigger_word(false, _task, _globals, _named), do: []
+
+  defp trigger_word(true, task, globals, named),
+    do: trigger_global(Map.fetch(globals, task.single), task, globals, named)
+
+  defp trigger_global({:ok, %Global{type: :bool}}, _task, _globals, _named), do: []
+
+  defp trigger_global({:ok, %Global{type: :dint} = global}, task, _globals, _named),
+    do: [
+      diagnostic(
+        task.line,
+        "task `#{task.name}`: its `single` `#{global.name}` is a dint#{where(global)}: " <>
+          "a task's `single` is a bool global"
+      )
+    ]
+
+  defp trigger_global({:ok, _global}, _task, _globals, _named), do: []
+
+  defp trigger_global(:error, task, globals, named),
+    do: not_a_trigger(Enum.find(named, &(&1.name == task.single)), task, globals)
+
+  defp not_a_trigger(nil, task, globals) do
+    names = for {name, %Global{type: :bool}} <- globals, do: name
+    names = Enum.sort(names)
+
+    message =
+      hint(
+        "task `#{task.name}`: its `single` `#{task.single}` is not a global",
+        Declarations.suggest(task.single, names, & &1, "names"),
+        names,
+        "bool globals"
+      )
+
+    [diagnostic(task.line, message)]
+  end
+
+  defp not_a_trigger(other, task, _globals),
+    do: [
+      diagnostic(
+        task.line,
+        "task `#{task.name}`: its `single` `#{task.single}` is a #{kind(other)}" <>
+          "#{where(other)}, not a global: a task's `single` is a bool global"
+      )
+    ]
 
   defp global(%Global{type: type} = global) when type in [:bool, :dint],
     do: initial(global, location(global.at))
@@ -1079,6 +1172,7 @@ defmodule Logex.Configuration do
   defp singular("tasks"), do: "task"
   defp singular("program instances"), do: "program instance"
   defp singular("globals"), do: "global"
+  defp singular("bool globals"), do: "bool global"
 
   defp listed(names) do
     quoted = Enum.map(names, &"`#{&1}`")

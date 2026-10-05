@@ -39,8 +39,8 @@ defmodule Logex.Program do
   starts here over what a plain swap left; and a kept bool or dint whose initial value
   changed keeps its value until a restart, and is reported as `:initial_changed`, except
   one the switch starts here, at its new initial value, and a var_input of the program
-  started, whose value a restart keeps: neither is so reported. M2-6 will add an event
-  task's trigger.
+  started, whose value a restart keeps: neither is so reported. An event task's trigger
+  is the resource's, its rule in `Logex.Runtime`'s.
   """
   def initial_env(%__MODULE__{tags: tags}),
     do: Map.new(tags, fn {name, tag} -> {name, start(tag)} end)

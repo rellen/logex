@@ -1102,7 +1102,7 @@ defmodule Logex.RuntimeTest do
                  [:tasks, :warnings]
 
       for {module, keys} <- [
-            {Logex.Configuration.Task, [:interval, :line, :name, :priority]},
+            {Logex.Configuration.Task, [:interval, :line, :name, :priority, :single]},
             {Logex.Configuration.Global, [:at, :initial, :line, :name, :type]},
             {Logex.Configuration.Instance, [:line, :name, :task, :type]},
             {Logex.Configuration.Connection, [:instance, :line, :member, :to]}
