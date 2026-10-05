@@ -116,8 +116,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   initial value on an instance, and a negative one (OE-1)
 - `lib/logex/tag.ex` — `%Logex.Tag{}`, whose type is `:bool`, `:dint` or, for an instance
   of a function block such as `var t1 ton` or `var s1 seal`, the `%Logex.FbType{}` itself,
-  one `Logex.FbType.user?/1` accepts for a user block, except in a block's compiled body,
-  where an instance of a user block names its type, `{:block, name}`; and `new!/4`,
+  one `Logex.FbType.user?/1` accepts for a user block, except in a compiled program or
+  block's body, where an instance of a user block names its type, `{:block, name}`, which
+  the program's or the outermost type's one table holds (decision 53); and `new!/4`,
   which declares a tag from Elixir. Since OE-1 it takes no timer preset (the
   `%{"pre" => ms}` M1-6 allowed: a preset is the number on the `ton` that runs the
   timer) and no negative initial value
@@ -129,20 +130,26 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   state, a map keyed by member name; `member/2` and `public/1`, which give only the inputs
   and outputs. Since M2-5 `of/1` builds a user type from its body, `signature/1` is
   `cal`'s operands, `user?/1` says whether a value has the shape of a type a compile
-  gives (it never compiles a body's source text again),
+  gives (it never compiles a body's source text again), and `check/2` is `user?/1` across
+  the types one compile is given, a type their tables share checked once;
   `same?/2` whether two are one version of a block (warnings, and the file a body was
-  read from, aside), the one definition a compile's one-version check shares, and a
+  read from, aside), the one definition a compile's one-version check uses, and a
   member holding an instance of a user block has the type `{:block, name}`, as the
-  instance's tag in the body has, the type itself held once, in the body's `blocks`, where
-  `type_of/2` finds it
+  instance's tag in the body has. Since decision 53 the type a compile gives holds every
+  user block type below it, at any depth, once, in one table, its body's `blocks`, each
+  held with no table of its own (`held/1`), so a type copied flat grows with the number of
+  distinct types it holds, whatever the shape; `type_of/2` finds a member's type there,
+  read inside the table (`within/2`), so the types below it are found in turn
 - `lib/logex/program.ex` — `%Logex.Program{name:, source:, file:, rungs:, tags:,
   blocks:, warnings:}`, a program type, named and stateless, with `initial_env/1` for an
   instance's first env; `file` is the path `compile_file/1` read it from (fix F15);
-  `blocks`, empty except in a block's body, holds each user block type the body's instances
-  are of once, by name (M2-5, §4.10 "Held types"), and `typed_tags/1` gives the body's
-  table with each instance's type itself, the table the compiler and the walks read, and
-  that `initial_env/1`, the runtime's `get/2` and input check and `Logex.Edit` read, so a
-  body run as a program reads each instance it holds as a compile does
+  `blocks` is the one table of the user block types a program, or a block's body, holds:
+  every type its instances reach, at any depth, once, by name, each held with no table of
+  its own, every instance's tag at any depth naming its type (decision 53, §4.10 "Held
+  types"); and `typed_tags/1` gives the tag table with each instance's type itself, read
+  inside the table, the table the compiler and the walks read, and that `initial_env/1`,
+  the runtime's `get/2` and input check and `Logex.Edit` read, so a body run as a program
+  reads each instance it holds as a compile does
 - `lib/logex/lexer.ex` / `lib/logex/parser.ex` — the front end, written by hand: binary
   pattern matching, and recursive descent (the parser's moduledoc gives the grammar and
   which function parses each production). `Logex.Parser.well_formed!/1` is the definition
@@ -213,7 +220,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 
 ## Conventions
 
-- `evaluate/3` clauses, private in `Logex.Runtime`, take `(instruction, {power_flow_bool, env_map}, %Logex.Scan{})` and return `{new_power_flow_bool, new_env_map}`. The scan is read-only and the same for every instruction of one routine run, a program's rungs or one run of a block's body: a clause that needs the time reads `scan.now`, one that needs the first scan reads `scan.first`, and every other clause ignores it as `_scan` (M1-6). `ons` reads `scan.first` and `scan.ons_blocked`, the storage bits whose `ons` passes no power on this one scan, which `call/4` builds from the instance's `ons_blocked` list as a tree of those bits, each to `true` and each instance holding one to a tree of its own, so that each `ons` looks its bit up rather than walking the list, emptying the instance's list after the scan but for the bits inside an instance whose body did not run (OE-1, decision 32); a host never fills it in. `cal` (M2-5) reads `scan.tags`, the routine's tag table, and `scan.blocks`, the block types it holds, which `call/4` fills from the program, and runs its block's body with the scan narrowed to its instance, `tags` and `blocks` the body's and `ons_blocked` the instance's own tree, `now` and `first` unchanged; a clause that looks a tag up in `scan.tags` uses the routine's table. No test calls the evaluator: a test runs a program through `Logex.Runtime.call/4`, on a hand-built `%Logex.Instance{}` when it needs a particular env
+- `evaluate/3` clauses, private in `Logex.Runtime`, take `(instruction, {power_flow_bool, env_map}, %Logex.Scan{})` and return `{new_power_flow_bool, new_env_map}`. The scan is read-only and the same for every instruction of one routine run, a program's rungs or one run of a block's body: a clause that needs the time reads `scan.now`, one that needs the first scan reads `scan.first`, and every other clause ignores it as `_scan` (M1-6). `ons` reads `scan.first` and `scan.ons_blocked`, the storage bits whose `ons` passes no power on this one scan, which `call/4` builds from the instance's `ons_blocked` list as a tree of those bits, each to `true` and each instance holding one to a tree of its own, so that each `ons` looks its bit up rather than walking the list, emptying the instance's list after the scan but for the bits inside an instance whose body did not run (OE-1, decision 32); a host never fills it in. `cal` (M2-5) reads `scan.tags`, the routine's tag table, and `scan.blocks`, the program's one table of block types (decision 53), which `call/4` fills from the program, and runs its block's body with the scan narrowed to its instance, `tags` the body's and `ons_blocked` the instance's own tree, `now`, `first` and `blocks` unchanged; a clause that looks a tag up in `scan.tags` uses the routine's table. No test calls the evaluator: a test runs a program through `Logex.Runtime.call/4`, on a hand-built `%Logex.Instance{}` when it needs a particular env
 - A mistake in the source is a `%Logex.Diagnostic{}`, returned; a mistake by the host is an `ArgumentError`, raised, whose message a test pins. Nothing else may escape the public API (`api_contract_test.exs`)
 - An operand in the AST is `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. `Logex.Parser.well_formed!/1` states the whole tree `parse/1` can produce, and `instructionize/2` raises `ArgumentError` on any other (OE-1): every line a positive integer, every element of a rung on its one line, each rung on a line after the last, a name that lexes as one name token, a literal of 0 or more, a rung of one element or more and a group of one leg or more. A test that builds a tree by hand builds one of those. The lexer's tokens carry `{line, column}`; the parser keeps only the line, because the suite pins that shape. An instruction in the IR is `{symbol, line, operands}`, carrying its mnemonic's line; a `{:branches, legs}` node carries no line of its own. In the IR, and only there, a member of an instance is `{:member, line, path}`, `t1.acc` becoming `{:member, 3, ["t1", "acc"]}` (M1-6): the runtime's `read/2` and `write/3` take it as they take a tag, and anything that walks IR operands must handle it. A walk that reads what an instruction's operands do looks its slots up through `Logex.Compiler.signature/2`, given the program's tag table, never in a table of its own (M2-5), as `Logex.Warnings` and `Logex.Edit` do: a `cal`'s slots are its block's, so the outputs it fills are writes
 - New instructions, step 1 — **survey the name before writing any code**: add a

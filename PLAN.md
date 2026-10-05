@@ -1565,8 +1565,10 @@ configuration file's must be built that way before they land.
   order, then the excusal the record put after M2-5, then the documents, a departure from
   the record's order made so that the documents describe the excusal with the rest; an
   eighth that fixes what a review of the seven confirmed, `4fc8587`; a ninth that holds
-  each block type once per body, `9ff76f6`; and a tenth, the commit after `4230f65`, that
-  fixes what a check of the eighth, the ninth and `4230f65` confirmed (below). `4230f65`,
+  each block type once per body, `9ff76f6`; a tenth, the commit after `4230f65`, that
+  fixes what a check of the eighth, the ninth and `4230f65` confirmed (below); and an
+  eleventh, the commit after `4d006d6`, that holds each block type once per outermost type,
+  decision 53 (below). `4230f65`,
   which gives three older walks more draws, is not part of M2-5. (1) The survey,
   `4db37b1`; (2) one lookup of an instruction's slots for the walks,
   `Logex.Compiler.signature/2`, with no change in behaviour, `e8a55b6`; (3) blocks and
@@ -1665,6 +1667,27 @@ configuration file's must be built that way before they land.
   refuses: is `user?/1` to compile a body's source text again and ask that it give that
   body, so that §4.10's "a hand-edited type is an `ArgumentError` where it is given" holds
   for it?
+
+  The maintainer answered the first on 2026-10-05: each block type is held once per
+  outermost type, decision 53, which the commit after `4d006d6` builds. The type a compile
+  gives, and a program, hold every user block type their instances reach, at any depth,
+  once, in one table, `blocks`, each held with no table of its own
+  (`Logex.FbType.held/1`), and every instance's tag at any depth, a program's own among
+  them, names its type, which `Logex.FbType.type_of/2` and `Logex.Program.typed_tags/1`
+  give read inside the table (`Logex.FbType.within/2`); a `cal` hands its body the
+  program's table, and the edit reads each type's body once from it. In the diamond of
+  two types a level, each holding both of the level below, a type copied flat took 4,645
+  and 9,313 words at 6 and 12 levels, where it took 36,405 and 2,354,805, and 18,678 and
+  37,411 bytes as `term_to_binary/1`, where it took 147,620 and 9,546,257. With w types at
+  a level sharing a chain of 16 below them, a program given the w types took 5,216 and
+  8,984 words at w of 4 and 16, where it took 16,854 and 67,158, and a compile given them
+  46,607 and 112,240 reductions, where it took 115,510 and 458,709: a compile now checks a
+  type the tables of the types given share once, over the same types it names
+  (`Logex.FbType.check/2`). Growth tests pin the diamond and the width, in words, bytes
+  and reductions, and a compile's one-version check walking a type's table once however
+  many instances hold it. A program's own tags no longer hold each type itself, so the
+  tests that read a program's types read its `blocks`. 665 tests pass on Elixir 1.20.4
+  (8 of them doctests), up from 661.
 - **M2-6 · Event tasks.** `task <n> single <g> [interval <ms>] priority <p>`, fired by a
   rising edge, and in the first cycle if the trigger is already true; with `interval` too,
   it runs periodically only while the trigger is 0, plus a run on each edge (IEC rule 2). *Done when* an event task triggered

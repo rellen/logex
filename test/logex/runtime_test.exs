@@ -1133,8 +1133,9 @@ defmodule Logex.RuntimeTest do
       assert Enum.sort(Map.keys(Scan.__struct__())) ==
                [:__struct__, :blocks, :first, :now, :ons_blocked, :tags]
 
-      # M2-5 (fix F15): a program keeps the file it was read from; a block's body holds
-      # each block type its instances are of once, in `blocks`.
+      # M2-5 (fix F15): a program keeps the file it was read from; a program, and a block's
+      # body, hold the block types their instances reach in one table, `blocks` (decision
+      # 53).
       assert Enum.sort(Map.keys(Logex.Program.__struct__())) ==
                [:__struct__, :blocks, :file, :name, :rungs, :source, :tags, :warnings]
 
@@ -1156,12 +1157,16 @@ defmodule Logex.RuntimeTest do
                [format_error: 1, parse: 1, well_formed!: 1]
 
       # M2-5: same?/2, the one definition of one version of a block, which a compile's
-      # one-version check and user?/1 share.
+      # one-version check uses. Decision 53: held/1 and within/2, a type as the one table
+      # holds it and as it reads inside the table, and check/2, user?/1 across the types a
+      # compile is given.
       assert Enum.sort(Logex.FbType.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,
                builtin: 1,
                builtins: 0,
+               check: 2,
+               held: 1,
                initial: 1,
                initial: 2,
                member: 2,
@@ -1172,6 +1177,7 @@ defmodule Logex.RuntimeTest do
                ton: 0,
                type_of: 2,
                user?: 1,
+               within: 2,
                writable: 1
              ]
     end

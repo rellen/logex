@@ -90,8 +90,12 @@ defmodule Logex.InstructionizeTest do
       cal s1 a 0 h
       """
 
-      assert {:ok, %Logex.Program{rungs: rungs, tags: tags}} =
+      assert {:ok, %Logex.Program{rungs: rungs} = program} =
                Logex.compile(source, name: "every", types: [seal])
+
+      # The program's instance names its type, which its one table holds (decision 53):
+      # the slots are read over the table with each type itself.
+      tags = Logex.Program.typed_tags(program)
 
       table =
         Map.new(Logex.Compiler.instructions(), fn {_word, {symbol, signature}} ->

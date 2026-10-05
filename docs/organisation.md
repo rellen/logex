@@ -374,7 +374,9 @@ cycle among FB types, which fits a model where one instance is one nested map.
   the file that names it, compiles it first, once a call, and hands back its warnings
   after the program's own, each with its block's file (decision 34). One compile holds
   one version of each block name. A member that holds an instance of a block has the type
-  `{:block, name}`, and the holder's body holds that type once.
+  `{:block, name}`, and the holder's body holds that type once. *(Since decision 53,
+  2026-10-05: the outermost type, and a program, hold every type below them once, in one
+  table, and every instance at any depth names its type.)*
 - *Members* (decision 33): an instance's inputs and outputs are read anywhere, its own
   `var`s are named only inside its body, and nothing outside it writes any of its
   members.
@@ -1583,7 +1585,10 @@ is reported; and a directory with a block's name "cannot be read".)*
   `user?/1` checks the shape `Logex.Compiler.lowered?/1` defines and never compiles the
   source again; it is a version of its own, which the one-version check refuses beside the
   genuine one. Whether `user?/1` is to compile the source again is left to the
-  maintainer, `PLAN.md` M2-5.)*
+  maintainer, `PLAN.md` M2-5. Since decision 53, a type's one table holds each type
+  once, so `user?/1` checks each once a call, and a compile given several types checks a
+  type their tables share once, over the same types it names
+  (`Logex.FbType.check/2`), so that it stays linear in the distinct types.)*
 - *Held types.* A member that holds an instance names its type, `{:block, name}`, and the
   holder's body's tag table holds that type once, so a type copied flat is linear in its
   depth. A member's type gains that form. *(As landed, after M2-5's review found the type
@@ -1595,14 +1600,24 @@ is reported; and a directory with a block's name "cannot be read".)*
   type copied flat then grows linearly in its depth, however many instances of the type
   below each level declares, as `function_block_test.exs` pins, wherever each type is
   reached through one holder. A type reached through more, as when each level has two
-  types and each holds both of the level below, is written out once per path of holders,
-  so copied flat it still grows as 2 to the power of the depth, as an instance's state
-  does: 36,405 words at 6 levels and 2,354,805 at 12, against an instance's state of
-  176,118. "Linear in its depth" holds for the first shape only. Holding each type once
-  per outermost type would hold it for both, and is left to the maintainer, `PLAN.md`
-  M2-5. A program's own tags hold each type itself, as `Logex.Tag.new!/4` gives it. A
-  block's compiled body run as a program is read through `typed_tags/1` too, by the
-  runtime, `get/2` and an edit, as a compile reads it.)*
+  types and each holds both of the level below, was written out once per path of
+  holders, so copied flat it still grew as 2 to the power of the depth, as an instance's
+  state does: 36,405 words at 6 levels and 2,354,805 at 12, against an instance's state
+  of 176,118. "Linear in its depth" held for the first shape only. A block's compiled body
+  run as a program is read through `typed_tags/1` too, by the runtime, `get/2` and an
+  edit, as a compile reads it.)* *(Changed 2026-10-05 by decision 53: each type is held
+  once per outermost type. The type a compile gives, and a program, hold every user block
+  type their instances reach, at any depth, once, by name, in one table, `blocks`, each
+  held with no table of its own (`Logex.FbType.held/1`), and every instance's tag at any
+  depth, a program's own among them, names its type. A type copied flat then grows with
+  the number of distinct types it holds, whatever the shape: 4,645 words at 6 levels of
+  that diamond and 9,313 at 12. A type read inside the table, by
+  `Logex.FbType.type_of/2` and `Logex.Program.typed_tags/1`, is given the table
+  (`Logex.FbType.within/2`), so that the types below it are found there, and a `cal`
+  hands its body the program's table. The built-in `ton` is in no table: each timer's tag
+  holds it. A program's own tags no longer hold each type itself: a host reads a
+  program's types in its `blocks`, and gives a compile the types a compile gave it, since
+  a held type that holds instances carries no table of its own.)*
 - *Declarations.* Members declared from Elixir come first in `cal`'s operand order, by
   name, then the declaration lines in order. The uses of a declaration whose type is
   unknown are excused, as a recursive declaration's are, so a misspelled block name gives
@@ -1623,7 +1638,8 @@ is reported; and a directory with a block's name "cannot be read".)*
   routine run, not of one call. Since `first` is the program instance's, a block frozen
   on the first scan fires its one-shot the first time it runs, as `PLAN.md` M2-5's note
   from M1-6 says. *(Since the held types above landed, the scan also carries the routine's
-  `blocks`, which a host may not fill either, and `cal` narrows both to its block's.)*
+  `blocks`, which a host may not fill either, and `cal` narrows both to its block's. Since
+  decision 53, `blocks` is the program's one table, which `cal` hands its body whole.)*
 - *Walks.* M2-5 adds one `cal` clause to each IR walk it meets. B5's one walk comes with
   M2-4. *(Landed as one lookup the walks share, `Logex.Compiler.signature/2`, an
   instruction's slots given its program's tag table, a `cal`'s its block's.)*
@@ -2023,8 +2039,9 @@ recommended but 35, the configuration file's extension, where the maintainer cho
 M2-1 landed: 41 outside the options recommended, the others as recommended, 42 with no
 preference stated. Decisions 46–52 were taken the same day, all as recommended, from two
 throwaway spikes of the run-time pieces no design spike had built, one copy of a global
-(M2-4) and event tasks (M2-6). All fifty-two are kept with their options so the reasons
-stay with them.
+(M2-4) and event tasks (M2-6). Decision 53 was taken on 2026-10-05, as recommended, from
+the check of M2-5's fixes. All fifty-three are kept with their options so the reasons stay
+with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -2532,6 +2549,31 @@ in the places below. Their routine answers are §4.10's rules under M2-4 and M2-
     it is skipped, since the image held 1 until this cycle's merge. *Recommend it runs:*
     one rule for every source of trigger, since only the sample is known both for a
     trigger written by logic and for an input point. Adopted.
+
+**From the check of M2-5's fixes, decided 2026-10-05.** A check of the commits that fixed
+what the review of M2-5 confirmed, each finding reproduced, left questions the record
+did not answer. Their answers are annotated in §4.10 where they stand.
+
+53. **How often a compiled type holds a block type (M2-5).** §4.10's "Held types" records
+    each type held once per body: a body's `blocks` holds the type of each instance it
+    declares, and that type holds its own body's in turn. Where each type is reached
+    through one holder, a type copied flat is linear in its depth. Where it is reached
+    through two holders at every level, as when each level has two types and each holds
+    both of the level below, a copy that keeps no sharing (`:erlang.term_to_binary/1`, or
+    a message to another process) writes it out once per path of holders: 36,405 words at
+    6 levels and 2,354,805 at 12, against an instance's state of 176,118.
+    - Once per body, as built, its documents saying that a flat copy is linear only where
+      each type has one holder;
+    - once per outermost type: one table of block types on the outermost compiled type,
+      and on a program, every instance at any depth naming its type, so that a flat copy
+      grows with the number of distinct types whatever the shape;
+    - or no type held at all: a type names the types it holds, and the runtime, an edit
+      and a configuration resolve each name through a library given beside the program.
+
+    *Recommend once per outermost type.* It goes beyond §4.10's "once per body", but every
+    type a compile gives stays whole, a value a host can give to a compile or send to
+    another process as one term, which the third gives up, and the cost of a copy follows
+    what the type is, not how its holders are drawn. Adopted.
 
 ---
 

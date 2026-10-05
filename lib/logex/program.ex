@@ -12,12 +12,14 @@ defmodule Logex.Program do
   - `rungs` are the lowered rungs. Declaration lines are rungs in the parse AST, but never
     here.
   - `tags` is the tag table, keyed by tag name.
-  - `blocks` is empty except in a user function block's compiled body (M2-5): there it
-    holds each user block type the body declares instances of, once, by name, and each
-    such instance's tag names its type, `{:block, name}` (`docs/organisation.md` §4.10,
-    "Held types"). So a type holds each type it nests once, however many instances of it
-    its body declares. A program's own tags hold each type itself, as `Logex.Tag.new!/4`
-    gives it, and `typed_tags/1` gives a body's table so.
+  - `blocks` is the one table of the user block types the program holds (decision 53):
+    every type its instances are of, at any depth, once, by name, each held with no table
+    of its own (`Logex.FbType.held/1`), and every instance's tag, at any depth, names its
+    type, `{:block, name}` (`docs/organisation.md` §4.10, "Held types"). A block's compiled
+    body, the outermost type's, holds the table of that type so. So a program or a type
+    copied flat grows with the number of distinct types it holds, whatever the shape of
+    its nesting, and `typed_tags/1` gives the tag table with each type itself. The
+    built-in `ton` is in no table: each timer's tag holds it.
   - `warnings` are `%Logex.Diagnostic{severity: :warning}`, in line order. From
     `Logex.compile_file/1` the warnings of each block it loaded beside the file follow,
     each with its block's file (decision 34); a block's body holds only its own.
@@ -41,9 +43,10 @@ defmodule Logex.Program do
   every instance of a function block a map of its members at theirs (M1-6).
 
   An instance of a user function block (M2-5) starts as its type says, every member at its
-  initial value and every instance it holds at its own, at any depth (`Logex.FbType`). A
-  block's compiled body, which runs as a program too, is read through `typed_tags/1`, so
-  each instance whose type its `blocks` holds starts so as well.
+  initial value and every instance it holds at its own, at any depth (`Logex.FbType`). The
+  tags are read through `typed_tags/1`, since each instance's tag names its type, which
+  the program's `blocks` holds (decision 53), and so are a block's compiled body's, which
+  runs as a program too.
 
   The one rule for a new piece of state (`docs/organisation.md` §4.9):
   `Logex.Runtime.instance/1` and `restart/3` start every tag by it, an online edit's
@@ -74,22 +77,25 @@ defmodule Logex.Program do
   defp start(%Logex.Tag{initial: initial}), do: initial
 
   @doc """
-  The tag table with each instance's type itself: in a block's compiled body, every tag
-  that names a type its `blocks` holds, `{:block, name}`, given that type, and every other
-  tag as it is (M2-5). It is the table a compile works over, which the walks that read an
-  instruction's slots in a body (`Logex.Compiler.signature/2`, `Logex.Warnings.of/2`) take.
-  Its tags share each type, so it costs one entry per tag, and no copy of a type. A name
-  `blocks` lacks, or `blocks` that are no map, which only a program built by hand can
-  give, is left as it is.
+  The tag table with each instance's type itself: every tag that names a type the table
+  `blocks` holds, `{:block, name}`, given that type as it reads inside the program
+  (`Logex.FbType.within/2`), and every other tag as it is (M2-5, decision 53). It is the
+  table a compile works over, which the walks that read an instruction's slots
+  (`Logex.Compiler.signature/2`, `Logex.Warnings.of/2`), the runtime and an edit take.
+  Its tags share each type and the one table, so it costs one entry per tag, and no copy of
+  a type. A name `blocks` lacks, or `blocks` that are no map, which only a program built
+  by hand can give, is left as it is.
   """
   def typed_tags(%__MODULE__{tags: tags, blocks: blocks}),
     do: Map.new(tags, fn {name, tag} -> {name, typed(tag, blocks)} end)
 
   defp typed(%Logex.Tag{type: {:block, name}} = tag, blocks) when is_map(blocks),
-    do: held(Map.fetch(blocks, name), tag)
+    do: held(Map.fetch(blocks, name), tag, blocks)
 
   defp typed(tag, _blocks), do: tag
 
-  defp held({:ok, type}, tag), do: %{tag | type: type}
-  defp held(:error, tag), do: tag
+  defp held({:ok, %Logex.FbType{body: %__MODULE__{}} = type}, tag, blocks),
+    do: %{tag | type: Logex.FbType.within(type, blocks)}
+
+  defp held(_not_held, tag, _blocks), do: tag
 end

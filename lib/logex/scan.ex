@@ -20,13 +20,13 @@ defmodule Logex.Scan do
     instances whose bodies did not run (`Logex.Instance`).
   - `tags` (M2-5) is the tag table of the routine running, so that `cal` finds the type of
     the instance it runs, and the body of that type.
-  - `blocks` (M2-5) is the block types the routine running holds, by name, where a `cal`
-    finds the type a body's instance names, `{:block, name}` (`Logex.Program`'s `blocks`).
+  - `blocks` (M2-5) is the program's one table of block types, by name, where a `cal`
+    finds the type an instance names, `{:block, name}`, at any depth (`Logex.Program`'s
+    `blocks`, decision 53).
 
-  A `cal` runs its block's body with this scan narrowed to its instance: `tags` and
-  `blocks` the body's own and `ons_blocked` the instance's own tree, `now` and `first`
-  unchanged. So every instruction of one routine, a program's rungs or one run of a body,
-  sees one scan.
+  A `cal` runs its block's body with this scan narrowed to its instance: `tags` the body's
+  own and `ons_blocked` the instance's own tree, `now`, `first` and `blocks` unchanged. So
+  every instruction of one routine, a program's rungs or one run of a body, sees one scan.
   """
 
   @enforce_keys [:now, :first]

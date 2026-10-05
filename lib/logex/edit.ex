@@ -608,7 +608,7 @@ defmodule Logex.Edit do
   # it. Each block type's body is read once, however many instances run it, and the walk
   # down is linear in the instances.
   defp rungs(rungs, tags) do
-    bodies = bodies(for({_, %Tag{type: %FbType{body: %Program{}} = type}} <- tags, do: type), %{})
+    bodies = bodies(instances(tags), %{})
 
     Enum.reduce(rungs, {%{}, [], %{}, bodies}, fn {:rung, elements}, {writes, ons, called, _} ->
       {writes, bits, cals} = written(elements, {writes, [], []}, tags)
@@ -632,22 +632,26 @@ defmodule Logex.Edit do
 
   # Every user block type a program holds, at any depth, by name: the rungs of its body
   # that hold an `ons` or a `cal`, each stripped, with the bits and the instances, what the
-  # body writes, and the instances it runs. A body holds each type its instances are of
-  # once, and its walk reads its tags with each instance's type itself.
+  # body writes, and the instances it runs. Each type is read once, however many instances
+  # and paths reach it, and its walk reads its tags with each instance's type itself, as it
+  # reads inside the program's one table (decision 53).
   defp bodies(types, bodies),
     do:
       Enum.reduce(types, bodies, fn
         %FbType{name: name, body: %Program{} = body}, bodies when not is_map_key(bodies, name) ->
-          bodies = bodies(Map.values(body.blocks), Map.put(bodies, name, nil))
-          Map.put(bodies, name, body(body))
+          tags = Program.typed_tags(body)
+          bodies = bodies(instances(tags), Map.put(bodies, name, nil))
+          Map.put(bodies, name, body(body, tags))
 
         _known, bodies ->
           bodies
       end)
 
-  defp body(%Program{rungs: rungs} = body) do
-    tags = Program.typed_tags(body)
+  # The types of a table's instances of user blocks, as it gives them.
+  defp instances(tags),
+    do: for({_, %Tag{type: %FbType{body: %Program{}} = type}} <- tags, do: type)
 
+  defp body(%Program{rungs: rungs}, tags) do
     {writes, held, called} =
       Enum.reduce(rungs, {%{}, [], %{}}, fn {:rung, elements}, {writes, held, called} ->
         {writes, bits, cals} = written(elements, {writes, [], []}, tags)

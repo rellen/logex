@@ -51,8 +51,11 @@ defmodule Logex do
   `types` are the function blocks the source may declare instances of, `var s1 seal`
   (decision 34): each a `%Logex.FbType{}` this function gave for a block's source, no two
   of one name. Each is checked again, at full depth, so a type edited by hand into one no
-  compile gives is refused here (`Logex.FbType.user?/1`, whose doc says what it checks).
-  The options come in either order, and `types` defaults to none.
+  compile gives is refused here (`Logex.FbType.user?/1`, whose doc says what it checks),
+  a type the tables of several of them share checked once (`Logex.FbType.check/2`). The
+  program, or the block's type, holds every type its instances reach, at any depth, once,
+  in one table, its `blocks`, and each instance's tag names its type (decision 53). The
+  options come in either order, and `types` defaults to none.
 
   A name is required, because a configuration refers to a program type by its name. It is
   a letter or `_`, then letters, digits or `_`. A call that breaks this contract raises

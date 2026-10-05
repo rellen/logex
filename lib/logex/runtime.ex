@@ -388,8 +388,8 @@ defmodule Logex.Runtime do
   # bit up: a walk of the list made the scan after a switch quadratic in the one-shots it
   # blocks. A bit inside a function block instance is named by its path, `s1.edge`, and the
   # tree holds it under its instance, so a `cal` hands its body only that instance's own
-  # (M2-5); and the program's tag table, where a `cal` finds its instance's type, with the
-  # block types it holds. A scan is what clears `switched`: the state then holds what this
+  # (M2-5); and the program's tag table, where a `cal` finds its instance's type, named,
+  # with the program's one table of block types, where it finds the type (decision 53). A scan is what clears `switched`: the state then holds what this
   # program gave the host.
   #
   # M2-5: a bit is blocked until its `ons` runs. A bit of the program's own rungs runs on
@@ -983,8 +983,8 @@ defmodule Logex.Runtime do
   defp tag_example([first | _], head), do: ", as in `#{head}.#{first}`"
   defp tag_example([], _head), do: ", and it declares none"
 
-  # A program's tag, with its instance's type itself: a block's compiled body, which runs
-  # as a program too, names each type its `blocks` holds (M2-5).
+  # A program's tag, with its instance's type itself: a program, and a block's compiled body,
+  # which runs as a program too, name each type their `blocks` hold (decision 53).
   defp tag_of(%Program{tags: tags, blocks: blocks}, name),
     do: fetched(Map.fetch(tags, name), blocks)
 
@@ -1215,10 +1215,10 @@ defmodule Logex.Runtime do
   # M2-5: `cal` runs an instance of a user function block (docs/organisation.md §4.3).
   # Rung power is its EN, and its ENO is the power out. Energised, each var_input operand
   # is read into the instance, the block's body runs over the instance's own map, with the
-  # scan narrowed to it (its type's tag table and block types, and its own tree of blocked
-  # one-shots, `now` and `first` the program's), and each var_output is written to its
-  # operand. In a body, an instance's tag names its type, `{:block, name}`, which the
-  # scan's `blocks` holds.
+  # scan narrowed to it (its type's tag table and its own tree of blocked one-shots, `now`,
+  # `first` and the block types the program's), and each var_output is written to its
+  # operand. An instance's tag names its type, `{:block, name}`, which the scan's `blocks`
+  # holds: the program's one table, which holds every type at any depth (decision 53).
   # De-energised, nothing (decision 12): nothing is copied in, the body does not run and
   # nothing is written out, so the instance and every tag its outputs name keep their
   # values. A timer inside keeps its `.en` and `last` and catches up when the block next
@@ -1244,9 +1244,9 @@ defmodule Logex.Runtime do
   defp blocked?({:name, _, bit}, blocked), do: is_map_key(blocked, bit)
   defp blocked?({:member, _, _path}, _blocked), do: false
 
-  # The type of an instance a `cal` runs: its tag's own, or in a body, the one its tag names.
-  # A name the routine's blocks lack, which only a program built by hand can give, is no
-  # type, and nothing runs.
+  # The type of an instance a `cal` runs: the one its tag names, or a tag's own in a program
+  # built by hand. A name the program's blocks lack, which only a program built by hand can
+  # give, is no type, and nothing runs.
   defp typed(%Tag{type: {:block, name}} = tag, %{} = blocks),
     do: %{tag | type: Map.get(blocks, name)}
 
@@ -1256,7 +1256,7 @@ defmodule Logex.Runtime do
   # hand may name one its table lacks, or one of another type: nothing runs, as nothing runs
   # for a hand-built env a `ton` finds no timer in.
   defp called(
-         %Tag{type: %FbType{body: %Program{rungs: rungs, tags: own, blocks: held}} = type},
+         %Tag{type: %FbType{body: %Program{rungs: rungs, tags: own}} = type},
          instance,
          operands,
          env,
@@ -1266,7 +1266,7 @@ defmodule Logex.Runtime do
     slots = Enum.zip(formals, operands)
     state = Enum.reduce(slots, as_map(Map.get(env, instance)), &copy_in(&1, &2, env))
     inner = as_map(Map.get(blocked, instance))
-    body = %{scan | tags: own, blocks: held, ons_blocked: inner}
+    body = %{scan | tags: own, ons_blocked: inner}
     {state, env} = ran(instance, Enum.reduce(rungs, state, &rung(&1, &2, body)), env)
     Enum.reduce(slots, Map.put(env, instance, state), &copy_out(&1, &2, state))
   end

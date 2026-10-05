@@ -10,10 +10,11 @@ defmodule Logex.Tag do
   a tag from Elixir carries none (`new!/4`). `line` is its declaration's line in the
   source, or nil for a tag declared from Elixir with `new!/4`.
 
-  In a user function block's compiled body (M2-5), an instance of a user block names its
-  type, `{:block, name}`, which the body holds once in its `blocks`
-  (`Logex.Program.typed_tags/1` gives the table with each type itself); a program's tags,
-  and a tag from Elixir, hold the type itself.
+  In a compiled program, and in a user function block's compiled body (M2-5), an instance
+  of a user block names its type, `{:block, name}`, which the program's or the outermost
+  type's one table holds, once, in its `blocks` (decision 53;
+  `Logex.Program.typed_tags/1` gives the tag table with each type itself); a tag from
+  Elixir holds the type itself, as `Logex.compile/2` gives it.
   """
 
   @enforce_keys [:name, :type, :section]

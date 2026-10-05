@@ -60,8 +60,9 @@ defmodule Logex.Compiler do
   The slots are per instruction, given `tags`, the tag table of the program that holds it,
   so that an instruction's slots may depend on what its operands name: a `cal`'s are its
   instance's type's, `Logex.FbType.signature/1`'s, the instance first and then a slot per
-  formal, so a var_output it fills is written. In a block's body, whose instances name
-  their types, the table is `Logex.Program.typed_tags/1`'s, each instance's type itself.
+  formal, so a var_output it fills is written. In a compiled program or body, whose
+  instances name their types (decision 53), the table is `Logex.Program.typed_tags/1`'s,
+  each instance's type itself.
   Total: an instruction no mnemonic gives, a `cal` of anything that is no user block's
   instance in `tags`, or anything else that is not an instruction, which only a program
   built by hand can hold, has none.
@@ -104,10 +105,10 @@ defmodule Logex.Compiler do
     {:routine, {:rungs, rungs}} = Logex.Parser.well_formed!(routine)
     {library, held} = library!(types)
     {kind, rungs, heading} = file_kind(rungs)
-    marks = marked(kind, library)
+    marks = marked(kind, library, held)
     {tags, logic, declaring, untyped} = Declarations.split(rungs, declared, marks)
     holds_itself!(kind, declared)
-    Enum.reduce(blocks(tags), {held, :tags}, &one_version!/2)
+    {held, _walked, :tags} = Enum.reduce(blocks(tags), {held, %{}, :tags}, &one_version!/2)
     known = {scope(tags), folded(tags)}
     {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, known))
     note? = map_size(tags) == 0 and declares_nothing?(routine, logic)
@@ -118,7 +119,8 @@ defmodule Logex.Compiler do
     paths = Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end)
     found = Enum.reject(Enum.reverse(lowering), &excused?(&1, untyped))
     errors = declaring ++ undeclared(found, tags, note?) ++ shared ++ timing
-    lowered(kind, rungs, tags, heading ++ header_tags(kind, tags) ++ errors ++ calls ++ paths)
+    diagnostics = heading ++ header_tags(kind, tags) ++ errors ++ calls ++ paths
+    lowered(kind, rungs, {tags, held}, diagnostics)
   end
 
   @doc """
@@ -136,8 +138,9 @@ defmodule Logex.Compiler do
   given to a compile or to `Logex.Tag.new!/4`, as `Logex.Parser.well_formed!/1` is of a
   parse tree: what a type given cannot hold, no runtime or edit step meets. It expects
   that table checked already, every tag under its own name and every instance's type,
-  once each held type is given, the built-in `ton` or a type `Logex.FbType.user?/1`
-  takes, which `user?/1` checks first. Over such a table it is total, `true` or `false`
+  once each held type is given, the built-in `ton` or a type the table of a type
+  `Logex.FbType.user?/1` takes holds, its members what `Logex.FbType.of/1` gives, which
+  `user?/1` checks first. Over such a table it is total, `true` or `false`
   and never an exception, and so it is for a value that is no `%Logex.Program{}`, or
   whose rungs, tags, blocks or warnings are no list, map, map and list, or whose tags
   are a struct. A direct call given another table, such as a tag under a key that is no
@@ -326,19 +329,19 @@ defmodule Logex.Compiler do
     do: diagnostic(line, "`#{name}` heads a function block's file and cannot name a tag in one")
 
   # Recursion through a tag declared from Elixir, which no line can cite: a host mistake.
-  # Each type is searched once, however many instances hold it.
-  defp holds_itself!({:block, name}, declared) when is_binary(name) do
-    Enum.reduce(declared, %{}, fn
-      %Tag{name: tag, type: %FbType{} = type}, seen -> itself!(holds(type, name, seen), tag, name)
-      _tag, seen -> seen
-    end)
-
-    :ok
-  end
+  # A type holds every type below it in its one table (decision 53), so whether it holds
+  # the block being compiled, at any depth, is one lookup.
+  defp holds_itself!({:block, name}, declared) when is_binary(name),
+    do: Enum.each(declared, &itself!(&1, name))
 
   defp holds_itself!(_kind, _declared), do: :ok
 
-  defp itself!({true, _seen}, tag, name),
+  defp itself!(%Tag{name: tag, type: %FbType{} = type}, name),
+    do: held_by!(holds?(type, name), tag, name)
+
+  defp itself!(_tag, _name), do: :ok
+
+  defp held_by!(true, tag, name),
     do:
       raise(
         ArgumentError,
@@ -346,22 +349,12 @@ defmodule Logex.Compiler do
           "a function block never holds an instance of itself, at any depth"
       )
 
-  defp itself!({false, seen}, _tag, _name), do: seen
+  defp held_by!(false, _tag, _name), do: :ok
 
-  # Whether `type`, or a type it holds at any depth, is named `name`: `{held?, seen}`, the
-  # types searched so far each to whether it does.
-  defp holds(%FbType{name: name}, name, seen), do: {true, seen}
-  defp holds(%FbType{name: held}, _name, seen) when is_map_key(seen, held), do: {seen[held], seen}
-
-  defp holds(%FbType{name: held} = type, name, seen) do
-    {found, seen} =
-      Enum.reduce(nested(type), {false, Map.put(seen, held, false)}, fn
-        _inner, {true, seen} -> {true, seen}
-        inner, {false, seen} -> holds(inner, name, seen)
-      end)
-
-    {found, Map.put(seen, held, found)}
-  end
+  # Whether `type` is, or holds at any depth, a type named `name`.
+  defp holds?(%FbType{name: name}, name), do: true
+  defp holds?(%FbType{body: %Program{blocks: blocks}}, name), do: is_map_key(blocks, name)
+  defp holds?(%FbType{body: nil}, _name), do: false
 
   # One mistake, one message: a declaration refused for its type word, one no compile knows
   # or one that would hold the block being compiled, declares nothing, and its uses are
@@ -371,17 +364,25 @@ defmodule Logex.Compiler do
   defp excused?(_diagnostic, _untyped), do: false
 
   # The blocks a compile is given: a proper list of user types, each one Logex.compile/2
-  # gave, and no two of one name. A host mistake otherwise. `{library, held}`: the types by
-  # name, for the declaration lines, and every block they hold at any depth by name, the
-  # one version of each, which the tags declared from Elixir are then checked against.
+  # gave, and no two of one name, each type their tables share checked once
+  # (Logex.FbType.check/2). A host mistake otherwise. `{library, held}`: the types by
+  # name, for the declaration lines, and every block they are or hold at any depth by name,
+  # in its held form, the one version of each, which the tags declared from Elixir are then
+  # checked against, and from which a compiled program or body takes its table.
   defp library!(types) when is_list(types), do: listed!(proper?(types, &any?/1), types)
   defp library!(types), do: listed!(false, types)
 
   defp listed!(true, types) do
-    library =
-      Enum.reduce(types, %{}, fn type, library -> given!(FbType.user?(type), type, library) end)
+    {library, _checked} =
+      Enum.reduce(types, {%{}, %{}}, fn type, {library, checked} ->
+        given!(FbType.check(type, checked), type, library)
+      end)
 
-    {held, :types} = Enum.reduce(Map.values(library), {library, :types}, &one_version!/2)
+    seen = Map.new(library, fn {name, type} -> {name, FbType.held(type)} end)
+
+    {held, _walked, :types} =
+      Enum.reduce(Map.values(library), {seen, %{}, :types}, &one_version!/2)
+
     {library, held}
   end
 
@@ -393,14 +394,15 @@ defmodule Logex.Compiler do
           inspect(types)
       )
 
-  defp given!(true, %FbType{name: name} = type, library) when not is_map_key(library, name),
-    do: Map.put(library, name, type)
+  defp given!({:ok, checked}, %FbType{name: name} = type, library)
+       when not is_map_key(library, name),
+       do: {Map.put(library, name, type), checked}
 
-  defp given!(true, %FbType{name: name}, _library),
+  defp given!({:ok, _checked}, %FbType{name: name}, _library),
     do:
       raise(ArgumentError, "types holds two function blocks named `#{name}`: one name, one type")
 
-  defp given!(false, type, _library),
+  defp given!(:error, type, _library),
     do:
       raise(
         ArgumentError,
@@ -410,19 +412,33 @@ defmodule Logex.Compiler do
   defp blocks(tags), do: for({_, %Tag{type: %FbType{body: %Program{}} = type}} <- tags, do: type)
 
   # Every block a given type holds, at any depth, is the one given under its name where one
-  # is: a program holds one type of each name, which the edit's rules (Logex.Edit) and the
-  # runtime's lookups by name rely on. Each type is walked once.
-  # `from` says where the types walked came from, `:types` or `:tags`, for the message.
-  defp one_version!(%FbType{name: name} = type, {seen, from}) do
-    same = FbType.same?(Map.get(seen, name, type), type)
-    seen = versions!(same, name, Map.put(seen, name, type), from)
-    Enum.reduce(nested(type), {seen, from}, &held_version!/2)
-  end
+  # is, and one version with every other of its name: a program holds one type of each
+  # name, in its one table (decision 53), which the edit's rules (Logex.Edit) and the
+  # runtime's lookups by name rely on. A type and each type its table holds are compared in
+  # their held forms, one name at a time, and a type walked once is not walked again,
+  # however many tags hold it. `from` says where the types walked came from, `:types` or
+  # `:tags`, for the message.
+  defp one_version!(%FbType{name: name} = type, {_seen, walked, _from} = acc)
+       when is_map_key(walked, name) and :erlang.map_get(name, walked) === type,
+       do: acc
 
-  defp held_version!(%FbType{name: name} = type, {seen, from}) when is_map_key(seen, name),
-    do: {versions!(FbType.same?(Map.fetch!(seen, name), type), name, seen, from), from}
+  defp one_version!(
+         %FbType{name: name, body: %Program{blocks: blocks}} = type,
+         {seen, walked, from}
+       ),
+       do:
+         Enum.reduce(
+           [FbType.held(type) | Map.values(blocks)],
+           {seen, Map.put(walked, name, type), from},
+           &held_version!/2
+         )
 
-  defp held_version!(type, acc), do: one_version!(type, acc)
+  defp held_version!(%FbType{name: name} = type, {seen, walked, from})
+       when is_map_key(seen, name),
+       do: {versions!(FbType.same?(Map.fetch!(seen, name), type), name, seen, from), walked, from}
+
+  defp held_version!(%FbType{name: name} = type, {seen, walked, from}),
+    do: {Map.put(seen, name, type), walked, from}
 
   defp versions!(true, _name, seen, _from), do: seen
 
@@ -449,10 +465,11 @@ defmodule Logex.Compiler do
   # and every type given that holds an instance of a type of that name at any depth, is
   # marked `{:recursive, chain}`, and a declaration of one is refused at its line. Each type
   # is searched once, however many hold it, so the marking is linear in the types.
-  defp marked(:program, library), do: library
+  defp marked(:program, library, _held), do: library
 
-  defp marked({:block, name}, library) do
-    {chains, _seen} = Enum.reduce(library, {%{}, %{}}, fn {_, t}, acc -> chain(t, name, acc) end)
+  defp marked({:block, name}, library, held) do
+    {chains, _seen} =
+      Enum.reduce(library, {%{}, %{}}, fn {_, t}, acc -> chain(t, name, held, acc) end)
 
     marks =
       for {held, [_ | _] = chain} <- chains, into: %{}, do: {held, {:recursive, [name | chain]}}
@@ -461,23 +478,27 @@ defmodule Logex.Compiler do
   end
 
   # The chain from `type` down to a type named `name`, `[type.name, …, name]`, or nil.
-  defp chain(%FbType{name: name}, name, {chains, seen}),
+  defp chain(%FbType{name: name}, name, _held, {chains, seen}),
     do: {Map.put(chains, name, [name]), Map.put(seen, name, true)}
 
-  defp chain(%FbType{name: held} = type, name, {chains, seen}) when not is_map_key(seen, held) do
-    {chains, seen} =
-      Enum.reduce(nested(type), {chains, Map.put(seen, held, true)}, &chain(&1, name, &2))
+  defp chain(%FbType{name: own} = type, name, held, {chains, seen})
+       when not is_map_key(seen, own) do
+    inner = nested(type, held)
 
-    {Map.put(chains, held, down(held, Enum.find_value(nested(type), &Map.get(chains, &1.name)))),
-     seen}
+    {chains, seen} =
+      Enum.reduce(inner, {chains, Map.put(seen, own, true)}, &chain(&1, name, held, &2))
+
+    {Map.put(chains, own, down(own, Enum.find_value(inner, &Map.get(chains, &1.name)))), seen}
   end
 
-  defp chain(_seen, _name, acc), do: acc
+  defp chain(_seen, _name, _held, acc), do: acc
 
-  # The user block types a type holds, each once, from its body (Logex.FbType).
-  defp nested(%FbType{body: %Program{blocks: blocks}}), do: Map.values(blocks)
+  # The user block types a type's instances are of, each once, by name, from the one
+  # version of each the compile holds (decision 53).
+  defp nested(%FbType{body: %Program{tags: tags}}, held),
+    do: Map.values(for {_, %Tag{type: {:block, type}}} <- tags, into: %{}, do: {type, held[type]})
 
-  defp nested(%FbType{body: nil}), do: []
+  defp nested(%FbType{body: nil}, _held), do: []
 
   defp down(_held, nil), do: nil
   defp down(held, chain), do: [held | chain]
@@ -677,20 +698,26 @@ defmodule Logex.Compiler do
   # No declaration line at all, as opposed to declarations that were all wrong.
   defp declares_nothing?({:routine, {:rungs, rungs}}, logic), do: length(rungs) == length(logic)
 
-  defp lowered(:program, rungs, tags, []),
-    do: {:ok, %Program{rungs: rungs, tags: tags, warnings: Logex.Warnings.of(rungs, tags)}}
+  # A compiled program, and a block's file's type, whose body is the program of its rungs,
+  # hold the user block types their instances are of in one table, `blocks`, each type
+  # once at any depth, and each instance's tag, at any depth, names its type (decision 53;
+  # docs/organisation.md §4.10, "Held types"): a type held in every instance's tag would
+  # grow, copied flat, as the width to the power of the depth, and one table per body as
+  # the paths to a type. The warnings are of the table with each type itself.
+  defp lowered(:program, rungs, {tags, held}, []) do
+    {named, blocks} = hold(tags, held)
 
-  # M2-5: a block's file compiles to its type, whose body is the program of its rungs. The
-  # body holds each user block type its instances are of once, in `blocks`, and each
-  # instance's tag names it (docs/organisation.md §4.10, "Held types"): a type held in every
-  # instance's tag would grow, copied flat, as the width to the power of the depth.
-  defp lowered({:block, name}, rungs, tags, []) do
-    {held, blocks} = Enum.reduce(tags, {%{}, %{}}, &hold/2)
+    {:ok,
+     %Program{rungs: rungs, tags: named, blocks: blocks, warnings: Logex.Warnings.of(rungs, tags)}}
+  end
+
+  defp lowered({:block, name}, rungs, {tags, held}, []) do
+    {named, blocks} = hold(tags, held)
 
     body = %Program{
       name: name,
       rungs: rungs,
-      tags: held,
+      tags: named,
       blocks: blocks,
       warnings: Logex.Warnings.of(rungs, tags)
     }
@@ -703,15 +730,34 @@ defmodule Logex.Compiler do
   defp lowered(_kind, _rungs, _tags, diagnostics),
     do: {:error, Enum.sort_by(diagnostics, & &1.line)}
 
-  # A tag of an instance of a user block names its type, which the body holds by name: one
-  # version of each name, as the compile's one-version check holds.
-  defp hold(
-         {name, %Tag{type: %FbType{name: type, body: %Program{}} = held} = tag},
-         {tags, blocks}
-       ),
-       do: {Map.put(tags, name, %{tag | type: {:block, type}}), Map.put(blocks, type, held)}
+  # The tags, each instance of a user block naming its type, and the table: every type the
+  # instances reach, at any depth, once, by name, the one version of it the compile holds,
+  # in its held form. A walk down from the tags, each type entered once, however many paths
+  # reach it, so it is linear in the types and their tags.
+  defp hold(tags, held) do
+    {named, reached} = Enum.map_reduce(tags, [], &naming/2)
+    {Map.new(named), table(reached, held, %{})}
+  end
 
-  defp hold({name, tag}, {tags, blocks}), do: {Map.put(tags, name, tag), blocks}
+  defp naming({name, %Tag{type: %FbType{name: type, body: %Program{}}} = tag}, reached),
+    do: {{name, %{tag | type: {:block, type}}}, [type | reached]}
+
+  defp naming(entry, reached), do: {entry, reached}
+
+  defp table([], _held, table), do: table
+
+  defp table([name | names], held, table) when is_map_key(table, name),
+    do: table(names, held, table)
+
+  defp table([name | names], held, table) do
+    %FbType{body: %Program{tags: tags}} = type = Map.fetch!(held, name)
+
+    table(
+      for({_, %Tag{type: {:block, inner}}} <- tags, do: inner) ++ names,
+      held,
+      Map.put(table, name, type)
+    )
+  end
 
   # M2-5: one `cal` runs an instance, as one `ton` runs a timer: a second is an error at its
   # own line, citing the first. Two would run the body twice a scan, and the edit's rules
