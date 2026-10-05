@@ -144,20 +144,25 @@ defmodule LogexTest do
 
     # Counted in reductions rather than time, so the bound holds on any machine. At 500
     # and 2,000 tags a linear compile grows about 4x; a pass that walks every use for
-    # every tag, as the warnings first did, grows about 14x.
+    # every tag, as the warnings first did, grows about 14x. Over 96 runs of the suite on
+    # Elixir 1.20.4, 32 alone, 32 two at once and 32 four at once, it grew 4.34x to 5.64x,
+    # the highest four at once; alone, 4.34x to 4.92x. The bound is a fifth above the
+    # highest, where 6, the bound it had, failed now and then with suites running at once.
     test "compiling stays linear in the program's size" do
       ratio = reductions_to_compile(2000) / reductions_to_compile(500)
-      assert ratio < 6, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
+      assert ratio < 6.8, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
     end
 
     # And in its depth. At 500 and 8,000 levels a linear compile grows about 16x. A walk
     # that copies what it found in a group at every level, as the instruction and warning
     # walks first did, grows 20x or more, since `++` is charged few reductions for what it
     # copies; the path pass, which copied its diagnostics so, grew about 140x, and finding
-    # the first rung's line again for each declaration after it about 180x.
+    # the first rung's line again for each declaration after it about 180x. Over the same
+    # 96 runs it grew 15.72x to 16.38x; the bound is a fifth above the highest, and the
+    # copying walks give 50x to 61x in this test (CONTRIBUTING.md).
     test "compiling stays linear in the depth of nesting" do
       ratio = reductions_to_nest(8000) / reductions_to_nest(500)
-      assert ratio < 18.5, "16x the depth took #{Float.round(ratio, 1)}x the reductions"
+      assert ratio < 19.7, "16x the depth took #{Float.round(ratio, 1)}x the reductions"
     end
 
     test "a name is checked for shape only: a word reserved in .ld files is a good name" do

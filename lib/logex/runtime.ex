@@ -141,11 +141,11 @@ defmodule Logex.Runtime do
   the member's path (M2-5).
   `restart/3` starts every tag again but the `var_input`s whose values fit their types,
   and empties `ons_blocked`. A `%Logex.Program{}`, `%Logex.Instance{}` or `%Logex.Edit{}` built or
-  edited by hand is outside this contract; one that holds a block type whose body was
-  edited by hand still runs without raising, since a `cal` of an instance its table lacks,
-  or whose type it names and does not hold, runs nothing, but a type given to
-  `Logex.compile/2` or `Logex.Tag.new!/4` cannot be one: it is the one its source text
-  compiles to (`Logex.FbType.user?/1`, decision 54).
+  edited by hand is outside this contract, and so is one that holds a block type whose body
+  was edited by hand, which may raise: a body whose rungs are no IR does. Only a `cal` of
+  an instance its table lacks, or whose type it names and does not hold, is defined: it
+  runs nothing. A type given to `Logex.compile/2` or `Logex.Tag.new!/4` cannot be one: it
+  is the one its source text compiles to (`Logex.FbType.user?/1`, decision 54).
 
   **During an edit** the host scans, sets inputs and restarts through
   `Logex.Edit.running/1`; scanning the other program is outside this contract. The edit

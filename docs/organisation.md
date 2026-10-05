@@ -1332,10 +1332,20 @@ accept and a switch with them: at 4 and 10 levels the program took 2,789 and 5,7
 copied flat, its state 1,478 and 94,214, accept of the program against itself 20,263 and
 748,898 reductions, accept of a change to the deepest timer's preset 23,782 and 1,001,698
 with a forecast of 16 and 1,024 entries, and the switch 2,906 and 180,351. With one
-instance per level, or no blocks, nothing changes.)* Two tests in reductions keep accept
-and every step linear (fix F16; CONTRIBUTING.md, "Test a pass over the program for
-growth"): accept, test, untest, test and assemble at 500 and 2,000 of each tag, and at 500
-and 8,000 levels of nesting.
+instance per level, or no blocks, nothing changes.)* *(After the check of decisions 53 and
+54: an edit, `%Logex.Edit{}`, copied flat, as a message to another process or by
+`:erlang.term_to_binary/1`, grows with the instances its two programs nest, as its state
+does. Its plans hold each block type as the program's one table holds it, and read it
+inside that table only where a switch starts a block (§4.10, "Held types"). Decision 53
+had them keep each type read inside the table, which a flat copy wrote out once per
+instance and member planned: with w types at a level sharing a chain of 16 below them, an
+edit of a program given them against itself took 715,694 and 4,443,950 words at w of 4
+and 16, where before decision 53 it took 338,954 and 1,354,346, and now takes 62,576 and
+202,544; in decision 53's diamond, 222,016 and 6,743,744 at 4 and 8 levels, now 35,504
+and 412,752. In memory, where its types share the one table, an edit was linear and
+still is.)* Two tests in reductions keep accept and every step linear (fix F16;
+CONTRIBUTING.md, "Test a pass over the program for growth"): accept, test, untest, test
+and assemble at 500 and 2,000 of each tag, and at 500 and 8,000 levels of nesting.
 The spike needed them: its first plan of held outputs was quadratic, and accept took 2.4
 s at 2,000 rungs until a probe found it. Two more, from the review of OE-1, keep the
 scan right after a switch linear in the one-shots it blocks, and a second edit taken
@@ -1612,7 +1622,16 @@ is reported; and a directory with a block's name "cannot be read".)*
   `Logex.Compiler.lowered?/1` stays the definition of a compiled body, which a type
   given has, but nothing calls it on the way in. A compile given a type took 1.19x the
   reductions it took before for one block of 200 rungs, and 1.31x for a chain of 200
-  types; both stay linear.)*
+  types; both stay linear.)* *(Corrected after the check of decisions 53 and 54: "each
+  distinct type is checked once a compile, an instance declared from Elixir included"
+  held for the types given, whose checks share one memo (`Logex.FbType.check/2`), but each
+  tag declared from Elixir checked its type with a memo of its own, so a type the tables
+  of several tags' types shared was compiled again for each: 68 compiles again for tags of
+  4 types sharing a chain of 16, 20 distinct types. The tags now share the compile's memo,
+  after the types given, so the sentence, and decision 54's "once a compile, however many
+  types and paths hold it", hold for them too: 20 compiles again. A tag's type that is,
+  by value, the type given under its name, or the one a tag before it held, is known
+  without a check; `Logex.Tag.new!/4`, a call of its own, checks its type again.)*
 - *Held types.* A member that holds an instance names its type, `{:block, name}`, and the
   holder's body's tag table holds that type once, so a type copied flat is linear in its
   depth. A member's type gains that form. *(As landed, after M2-5's review found the type
@@ -1641,7 +1660,11 @@ is reported; and a directory with a block's name "cannot be read".)*
   hands its body the program's table. The built-in `ton` is in no table: each timer's tag
   holds it. A program's own tags no longer hold each type itself: a host reads a
   program's types in its `blocks`, and gives a compile the types a compile gave it, since
-  a held type that holds instances carries no table of its own.)*
+  a held type that holds instances carries no table of its own.)* *(After the check of
+  decisions 53 and 54: a type read inside the table carries the whole table, shared in
+  memory, so a value that keeps types so read, rather than reading them where it needs
+  them, is written out once per type kept by a copy that keeps no sharing. An edit's
+  plans kept them so, until that check; §4.9's "Cost" records it.)*
 - *Declarations.* Members declared from Elixir come first in `cal`'s operand order, by
   name, then the declaration lines in order. The uses of a declaration whose type is
   unknown are excused, as a recursive declaration's are, so a misspelled block name gives

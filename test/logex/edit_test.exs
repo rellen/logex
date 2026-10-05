@@ -1422,10 +1422,13 @@ defmodule Logex.EditTest do
     # every tag grows about 16x. Every timer's preset changes, so each switch moves every
     # `.pre`, and the untest and second test give each back from the record; and every
     # program has two `ons` per input, one whose rung the candidate changes, which each
-    # test blocks, and one it leaves alone.
+    # test blocks, and one it leaves alone. Over 96 runs of the suite on Elixir 1.20.4, 32
+    # alone, 32 two at once and 32 four at once, it grew 4.45x to 6.06x, the highest four
+    # at once; alone, 4.45x to 4.83x. The bound is a fifth above the highest, where 6, the
+    # bound it had, failed now and then with suites running at once.
     test "accept and its steps stay linear in the program's size" do
       ratio = reductions_to_edit(edited(2000)) / reductions_to_edit(edited(500))
-      assert ratio < 6, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
+      assert ratio < 7.3, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
     end
 
     defp deep(depth) do
@@ -1439,10 +1442,11 @@ defmodule Logex.EditTest do
     end
 
     # At 500 and 8,000 levels a linear walk grows about 16x; one that copies what it found
-    # in a group at every level grows 20x or more (CONTRIBUTING.md).
+    # in a group at every level grows 20x or more (CONTRIBUTING.md). Over the same 96 runs
+    # it grew 15.27x to 15.78x; the bound is a fifth above the highest.
     test "accept stays linear in the depth of nesting" do
       ratio = reductions_to_edit(deep(8000)) / reductions_to_edit(deep(500))
-      assert ratio < 18.5, "16x the depth took #{Float.round(ratio, 1)}x the reductions"
+      assert ratio < 19, "16x the depth took #{Float.round(ratio, 1)}x the reductions"
     end
 
     # A program of n rungs on `go`, edited to one whose every rung gains a one-shot, all of
@@ -1477,12 +1481,14 @@ defmodule Logex.EditTest do
     # At 500 and 8,000 one-shots a scan that looks each blocked bit up grows 16.4x to 17.9x
     # over 78 runs on Elixir 1.20.4; one that walks the block list for every `ons`, as the
     # scan did before the review of OE-1, grows 65.4x to 65.8x over 25. The figure moves by
-    # about 10% from run to run, with garbage collection, so the bound is a third above the
-    # highest run, where 18.5, the bound this test landed with, was 3% above it, and still
-    # a third of the walk's lowest.
+    # about 10% from run to run, with garbage collection, and more with suites running at
+    # once: over 96 runs of the suite, 32 alone, 32 two at once and 32 four at once, it
+    # grew 15.96x to 20.27x, the highest four at once; alone, 15.96x to 17.21x. The bound
+    # is a fifth above the highest, where 18.5, the bound this test landed with, was 3%
+    # above the highest of the 78, and still well below the walk's lowest.
     test "the scan after a switch stays linear in the one-shots it blocks" do
       ratio = reductions_to_scan_blocked(8000) / reductions_to_scan_blocked(500)
-      assert ratio < 24, "16x the one-shots took #{Float.round(ratio, 1)}x the reductions"
+      assert ratio < 24.4, "16x the one-shots took #{Float.round(ratio, 1)}x the reductions"
     end
 
     # Three versions of n one-shots: the first edit changes every `ons` rung and is kept
@@ -1529,12 +1535,14 @@ defmodule Logex.EditTest do
     # 111 runs on Elixir 1.20.4, its sort being n log n. A filter that walks a list of the
     # one-shots, built once, for every bit grows 36.5x to 38.3x over 25, the lowest of the
     # quadratic filters measured; one that builds that list again for every bit, 108x to
-    # 121x. The bound is a third above the highest run, and the list walk's lowest is half
-    # as much again as the bound. At 500 and 2,000 the two quadratic filters grow 5.1x and
-    # 6.8x, too near a linear switch's 4x.
+    # 121x. Over 96 runs of the suite, 32 alone, 32 two at once and 32 four at once, it
+    # grew 17.15x to 23.32x, the highest four at once; alone, 17.38x to 18.36x. The bound
+    # is a fifth above the highest, and the list walk's lowest is 1.3 times the bound. At
+    # 500 and 2,000 the two quadratic filters grow 5.1x and 6.8x, too near a linear
+    # switch's 4x.
     test "a second edit before any scan stays linear in the bits still pending (F2)" do
       ratio = reductions_to_second_edit(pending(8000)) / reductions_to_second_edit(pending(500))
-      assert ratio < 24, "16x the pending bits took #{Float.round(ratio, 1)}x the reductions"
+      assert ratio < 28, "16x the pending bits took #{Float.round(ratio, 1)}x the reductions"
     end
   end
 

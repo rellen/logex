@@ -300,8 +300,8 @@ choice, not an oversight to fix.
   against 0.3 s — with every warning right and the suite green for seven commits.
   `b8a9bd8` groups the uses once. Compile two sizes and compare reductions
   (`Process.info(self(), :reductions)`), not time, so the bound holds on any machine:
-  "compiling stays linear in the program's size" in `logex_test.exs` sees 4.2x for 4x the
-  tags since M1-6, and saw 14.2x. A new pass over rungs or tags must be reached by that test's
+  "compiling stays linear in the program's size" in `logex_test.exs` sees 4.3x to 4.9x for 4x
+  the tags alone, and saw 14.2x. A new pass over rungs or tags must be reached by that test's
   program, or get a test like it. **Growth in depth is a second axis**: M1-6's path pass
   copied what it found in a group at every level of nesting, so a rung 8,000 groups deep
   took 2.9 s, and the size test, which never nests, stayed green. "compiling stays linear
@@ -321,12 +321,18 @@ choice, not an oversight to fix.
   set from a few runs can sit on the figure: after the review of the OE-1 fixes, 48 runs
   put one bound only 3% above the highest of them. Read a new test's figure over 30 runs
   or more, in a copy that prints it, quote the range, and set the bound a fifth or more
-  above its top. **A
+  above its top. Read it with suites running at once too: a busy machine raises a figure
+  more than a run alone shows, and bounds set from runs alone failed now and then while
+  mutation rows ran beside the suite. The edit's size test in `edit_test.exs`, 4.45x to
+  4.83x alone, reached 6.06x with four suites at once, over its bound of 6. That bound,
+  and every other growth bound less than a fifth above the highest of such runs, is now a
+  fifth above the highest of 96, 32 alone, 32 two at once and 32 four at once. **A
   pass that is not a compile needs a growth test of its own**:
   OE-1's spike planned its held outputs quadratically, and accept took 2.4 s at 2,000
   rungs until a probe timed it. `edit_test.exs`'s "growth (F16)" runs accept and every
-  step at two sizes and two depths, and sees 4.4x for 4x the tags and about 14.5x for 16x
-  the depth. That was not every pass the edit added: the scan right after a switch looked
+  step at two sizes and two depths, and sees 4.4x to 4.8x for 4x the tags alone and 15.3x
+  to 15.8x for 16x the depth. That was not every pass the edit added: the scan right after
+  a switch looked
   each `ons` up in the block list by walking it, so 16x the blocked one-shots cost 65x,
   and a second edit before any scan could filter the pending blocks quadratically with
   the suite green, since the growth tests above always edit a scanned state, where none

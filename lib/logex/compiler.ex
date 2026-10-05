@@ -103,10 +103,13 @@ defmodule Logex.Compiler do
   """
   def instructionize(routine, declared \\ [], types \\ []) do
     {:routine, {:rungs, rungs}} = Logex.Parser.well_formed!(routine)
-    {library, held} = library!(types)
+    {library, held, checked} = library!(types)
     {kind, rungs, heading} = file_kind(rungs)
     marks = marked(kind, library, held)
-    {tags, _logic, _declaring, _untyped} = split = Declarations.split(rungs, declared, marks)
+
+    {tags, _logic, _declaring, _untyped} =
+      split = Declarations.split(rungs, declared, marks, checked)
+
     holds_itself!(kind, declared)
     {held, _walked, :tags} = Enum.reduce(blocks(tags), {held, %{}, :tags}, &one_version!/2)
     {rungs, tags, diagnostics} = lowering(routine, {kind, heading}, split)
@@ -422,15 +425,17 @@ defmodule Logex.Compiler do
 
   # The blocks a compile is given: a proper list of user types, each one Logex.compile/2
   # gave, and no two of one name, each type their tables share checked once
-  # (Logex.FbType.check/2). A host mistake otherwise. `{library, held}`: the types by
-  # name, for the declaration lines, and every block they are or hold at any depth by name,
+  # (Logex.FbType.check/2). A host mistake otherwise. `{library, held, checked}`: the types
+  # by name, for the declaration lines; every block they are or hold at any depth by name,
   # in its held form, the one version of each, which the tags declared from Elixir are then
-  # checked against, and from which a compiled program or body takes its table.
+  # checked against, and from which a compiled program or body takes its table; and what
+  # the check compiled again, so that the tags declared from Elixir compile again no type
+  # it did (Logex.Declarations.split/4).
   defp library!(types) when is_list(types), do: listed!(proper?(types, &any?/1), types)
   defp library!(types), do: listed!(false, types)
 
   defp listed!(true, types) do
-    {library, _checked} =
+    {library, checked} =
       Enum.reduce(types, {%{}, %{}}, fn type, {library, checked} ->
         given!(FbType.check(type, checked), type, library)
       end)
@@ -440,7 +445,7 @@ defmodule Logex.Compiler do
     {held, _walked, :types} =
       Enum.reduce(Map.values(library), {seen, %{}, :types}, &one_version!/2)
 
-    {library, held}
+    {library, held, checked}
   end
 
   defp listed!(false, types),

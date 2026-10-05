@@ -157,7 +157,11 @@ defmodule Logex.Declarations do
   `validate!/1` and they enter the table first; anything invalid among them, a clash
   included, raises `ArgumentError`. A function block type is checked once a call, however
   many of them hold it: one given in `types` is known by being the one given, and another
-  is known once a tag before it held that very type. A declaration after the first rung is
+  is known once a tag before it held that very type, by value. Another is the one its
+  source text compiles to (`Logex.FbType.check/2`, decision 54), and each type its table
+  shares with the types checked before it is compiled again no more: `checked` is what
+  `Logex.FbType.check/2` checked of the types this compile was given, `%{}` for none, and
+  each tag's check adds to it. A declaration after the first rung is
   reported and still declared, so its tag is not also reported as undeclared wherever it
   is used.
 
@@ -169,22 +173,22 @@ defmodule Logex.Declarations do
   refused for anything else, such as two names before its type, `retain` or a bad
   initial value, excuses nothing.
   """
-  def split(rungs, declared \\ [], types \\ %{})
+  def split(rungs, declared \\ [], types \\ %{}, checked \\ %{})
 
-  def split(rungs, declared, types) when is_list(declared) do
+  def split(rungs, declared, types, checked) when is_list(declared) do
     {leading, rest} = Enum.split_while(rungs, &declaration?/1)
     {late, logic} = Enum.split_with(rest, &declaration?/1)
     first = first_line(logic)
     late = Enum.map(late, &late(&1, first))
     {entries, diagnostics} = Enum.flat_map_reduce(leading ++ late, [], &declare(&1, &2, types))
     {untyped, tags} = Enum.split_with(entries, &match?({:untyped, _name}, &1))
-    {declared, _types} = Enum.map_reduce(declared, types, &validate!/2)
+    {declared, _known} = Enum.map_reduce(declared, {types, checked}, &validate!/2)
     {table, diagnostics} = table(declared, tags, diagnostics)
     sorted = Enum.sort_by(Enum.reverse(diagnostics), & &1.line)
     {table, logic, sorted, MapSet.new(untyped, fn {:untyped, name} -> name end)}
   end
 
-  def split(_rungs, declared, _types),
+  def split(_rungs, declared, _types, _checked),
     do: raise(ArgumentError, "declared must be a list of %Logex.Tag{}, got: #{inspect(declared)}")
 
   @doc """
@@ -204,13 +208,17 @@ defmodule Logex.Declarations do
   defp validated([], tag), do: tag
   defp validated([message | _], _tag), do: raise(ArgumentError, message)
 
-  # validate!/1 for split/3, given the types known: a type given, or one a tag before held,
-  # is not checked again for each instance of it (M2-5).
-  defp validate!(%Tag{line: nil, type: %FbType{name: name} = type} = tag, types)
-       when is_binary(name),
-       do: {validated(check(tag, types), tag), Map.put(types, name, type)}
+  # validate!/1 for split/4, given the types known and what this compile has checked: a
+  # type given, or one a tag before held, is not checked again for each instance of it, and
+  # a type the table of another holds, given or a tag's, is not compiled again (M2-5,
+  # decision 54).
+  defp validate!(%Tag{line: nil, type: %FbType{name: name} = type} = tag, {types, checked})
+       when is_binary(name) do
+    {messages, checked} = check(tag, types, checked)
+    {validated(messages, tag), {Map.put(types, name, type), checked}}
+  end
 
-  defp validate!(tag, types), do: {validate!(tag), types}
+  defp validate!(tag, known), do: {validate!(tag), known}
 
   defp declaration?({:rung, [{:name, _, word} | _]}), do: reserved(word) == :section
   defp declaration?(_rung), do: false
@@ -248,7 +256,8 @@ defmodule Logex.Declarations do
   # known by being the one given under its name, not checked again for every instance.
   defp declared({:ok, name, type, initial}, section, line, diagnostics, types) do
     tag = %Tag{name: name, type: type, section: section, initial: initial, line: line}
-    checked(check(tag, types), tag, line, diagnostics)
+    {messages, _checked} = check(tag, types, %{})
+    checked(messages, tag, line, diagnostics)
   end
 
   defp declared({:error, message}, _section, line, diagnostics, _types),
@@ -428,16 +437,18 @@ defmodule Logex.Declarations do
   A compiled timer carries its preset as an initial value (`Logex.Compiler`), which no
   declaration may give, so this refuses it too.
   """
-  def check(%Tag{} = tag), do: check(tag, %{})
-
-  defp check(%Tag{type: %FbType{} = type} = tag, types) do
-    known = fb_type(type, types)
-    name(tag.name) ++ known ++ section(tag.section) ++ looked_into(known, tag)
+  def check(%Tag{} = tag) do
+    {messages, _checked} = check(tag, %{}, %{})
+    messages
   end
 
-  defp check(%Tag{} = tag, _types) do
-    name(tag.name) ++ type(tag.type) ++ section(tag.section) ++ initial(tag)
+  defp check(%Tag{type: %FbType{} = type} = tag, types, checked) do
+    {known, checked} = fb_type(type, types, checked)
+    {name(tag.name) ++ known ++ section(tag.section) ++ looked_into(known, tag), checked}
   end
+
+  defp check(%Tag{} = tag, _types, checked),
+    do: {name(tag.name) ++ type(tag.type) ++ section(tag.section) ++ initial(tag), checked}
 
   defp name(name) when is_binary(name), do: name(reserved(name), name, Logex.Lexer.tokenize(name))
   defp name(name), do: ["#{inspect(name)} is not a tag name"]
@@ -464,16 +475,24 @@ defmodule Logex.Declarations do
     do: ["unknown type #{inspect(type)}: logex has :bool, :dint and Logex.FbType.ton()"]
 
   # A built-in function block type, exactly as Logex.FbType gives it; one this compile was
-  # given, by being that one; or since M2-5 any user type `Logex.compile/2` could have
-  # given (`Logex.FbType.user?/1`). A hand-built one may hold anything, and is refused,
-  # never looked up by a name that is not a string.
-  defp fb_type(%FbType{name: name, body: nil} = type, _types) when is_binary(name),
-    do: known(FbType.builtin(name) == type, type)
+  # given, or a tag before held, by being that one, by value; or since M2-5 any user type
+  # `Logex.compile/2` could have given, the one its source text compiles to
+  # (`Logex.FbType.check/2`, decision 54), each type its table shares with the types this
+  # compile checked before it compiled again no more. A hand-built one may hold anything,
+  # and is refused, never looked up by a name that is not a string.
+  defp fb_type(%FbType{name: name, body: nil} = type, _types, checked) when is_binary(name),
+    do: {known(FbType.builtin(name) == type, type), checked}
 
-  defp fb_type(%FbType{name: name} = type, types) when is_binary(name),
-    do: known(Map.get(types, name) == type or FbType.user?(type), type)
+  defp fb_type(%FbType{name: name} = type, types, checked) when is_binary(name),
+    do: given(Map.get(types, name) == type, type, checked)
 
-  defp fb_type(type, _types), do: known(false, type)
+  defp fb_type(type, _types, checked), do: {known(false, type), checked}
+
+  defp given(true, type, checked), do: {known(true, type), checked}
+  defp given(false, type, checked), do: user(FbType.check(type, checked), type, checked)
+
+  defp user({:ok, checked}, type, _checked), do: {known(true, type), checked}
+  defp user(:error, type, checked), do: {known(false, type), checked}
 
   # An instance of a type that is not logex's is not looked into: its members may be junk.
   defp looked_into([], tag), do: instance(tag)

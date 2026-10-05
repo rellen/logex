@@ -487,6 +487,7 @@ defmodule Logex.Edit do
 
     %{
       tags: tags,
+      table: program.blocks,
       initial: Program.initial_env(program),
       inputs: section(tags, :var_input),
       outputs: section(tags, :var_output),
@@ -532,7 +533,8 @@ defmodule Logex.Edit do
       blocks: blocks(from, to),
       ons: to.ons_bits,
       initial: to.initial,
-      keep: to.tags,
+      table: to.table,
+      keep: Map.new(to.tags, fn {name, _tag} -> {name, true} end),
       starts: for({name, tag} <- to.tags, do: {name, not is_map_key(from.tags, name), fit(tag)}),
       inputs: to.inputs,
       live: for(name <- Map.keys(to.inputs), not is_map_key(from.inputs, name), do: name),
@@ -865,7 +867,7 @@ defmodule Logex.Edit do
     ran = ran and called?(before_bodies, owner.name, name)
     run = run and called?(bodies, owner.name, name)
     {plan, memo} = member_plan(was, type, {ran, run}, {before_bodies, bodies}, memo)
-    {{:block, name, {type, initial}, old != nil, plan}, memo}
+    {{:block, name, {FbType.held(type), initial}, old != nil, plan}, memo}
   end
 
   defp old_initial(nil), do: nil
@@ -923,7 +925,7 @@ defmodule Logex.Edit do
       Enum.reduce(
         plan.nested,
         {env, [], %{}},
-        &migrate(&1, fresh, {first_test?, record.pre, clock}, &2)
+        &migrate(&1, fresh, {first_test?, record.pre, clock, plan.table}, &2)
       )
 
     {inputs, added} = Enum.split_with(started, &is_map_key(plan.inputs, &1))
@@ -985,7 +987,7 @@ defmodule Logex.Edit do
   defp members(plan, map, prefix, rules, {reports, pre}),
     do: Enum.reduce(plan.members, {map, reports, pre}, &moved_member(&1, prefix, rules, &2))
 
-  defp moved_member({:leaf, name, type, initial, old, kept?}, prefix, {first?, _, _}, acc) do
+  defp moved_member({:leaf, name, type, initial, old, kept?}, prefix, {first?, _, _, _}, acc) do
     path = prefix <> "." <> name
 
     starts?(Map.fetch(elem(acc, 0), name), not kept?, type, first?)
@@ -994,7 +996,7 @@ defmodule Logex.Edit do
   end
 
   defp moved_member({:timer, name, keys, initial, from, to, kept?}, prefix, rules, acc) do
-    {first?, undo, clock} = rules
+    {first?, undo, clock, _table} = rules
     {map, reports, pre} = acc
     path = prefix <> "." <> name
 
@@ -1007,7 +1009,7 @@ defmodule Logex.Edit do
   end
 
   defp moved_member({:block, name, initial, kept?, plan}, prefix, rules, {map, reports, pre}) do
-    {first?, _undo, _clock} = rules
+    {first?, _undo, _clock, _table} = rules
     path = prefix <> "." <> name
 
     block_moved(
@@ -1020,7 +1022,7 @@ defmodule Logex.Edit do
 
   # A timer only the stopped program's version declares: kept, unused, and its `.pre` and
   # `last` given back where this edit's last switch moved them.
-  defp moved_member({:timer_gone, name}, prefix, {_first?, undo, clock}, acc),
+  defp moved_member({:timer_gone, name}, prefix, {_first?, undo, clock, _table}, acc),
     do: timed({name, prefix <> "." <> name, nil, nil}, undo, clock, acc)
 
   defp moved_member({:block_gone, name, plan}, prefix, rules, {map, reports, pre}),
@@ -1051,9 +1053,13 @@ defmodule Logex.Edit do
     do: timed({name, path, from, to}, undo, clock, acc)
 
   # A block's initial state is built only where one starts: built for every member it would
-  # make the plan quadratic in the depth of nesting.
-  defp block_moved(true, {name, path, {type, overrides}, _plan}, _rules, {map, reports, pre}) do
-    initial = FbType.initial(type, overrides)
+  # make the plan quadratic in the depth of nesting. The plan holds the block's type as the
+  # program's table holds it, which it reads inside that table (decision 53): a type read
+  # inside it carries the whole table, which a copy of the edit that keeps no sharing would
+  # write out once per member planned.
+  defp block_moved(true, {name, path, {type, overrides}, _plan}, rules, {map, reports, pre}) do
+    {_first?, _undo, _clock, table} = rules
+    initial = FbType.initial(FbType.within(type, table), overrides)
     {Map.put(map, name, initial), [{:added, path, initial} | reports], pre}
   end
 

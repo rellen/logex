@@ -1565,11 +1565,14 @@ configuration file's must be built that way before they land.
   order, then the excusal the record put after M2-5, then the documents, a departure from
   the record's order made so that the documents describe the excusal with the rest; an
   eighth that fixes what a review of the seven confirmed, `4fc8587`; a ninth that holds
-  each block type once per body, `9ff76f6`; a tenth, the commit after `4230f65`, that
-  fixes what a check of the eighth, the ninth and `4230f65` confirmed (below); and an
-  eleventh, the commit after `4d006d6`, that holds each block type once per outermost type,
-  decision 53 (below). `4230f65`,
-  which gives three older walks more draws, is not part of M2-5. (1) The survey,
+  each block type once per body, `9ff76f6`; a tenth that fixes what a check of the
+  eighth, the ninth and `4230f65` confirmed, `4d006d6` (below); an eleventh that holds
+  each block type once per outermost type, decision 53, `1a16b1d` (below); a twelfth that
+  compiles each type given again from its source text, decision 54, `dafb5a0` (below);
+  and a thirteenth, the commit after `0183bf2`, that fixes what a check of the eleventh
+  and the twelfth confirmed (below). `4230f65`, which gives three older walks more draws,
+  and `0183bf2`, which corrects this plan's note on M2-4's and M2-6's run time, are not
+  part of M2-5. (1) The survey,
   `4db37b1`; (2) one lookup of an instruction's slots for the walks,
   `Logex.Compiler.signature/2`, with no change in behaviour, `e8a55b6`; (3) blocks and
   `cal`, `969a5a4`; (4) the edit by path, `a87edcc`; (5) the loader, `2c3c609`; (6) the
@@ -1644,7 +1647,7 @@ configuration file's must be built that way before they land.
   sources, 150 programs and 400 configurations a run, up from 600, 40 and 150.
 
   A check of `4fc8587`, `9ff76f6` and `4230f65` confirmed 15 findings, 11 once the four
-  found twice are merged, and the commit after `4230f65` fixes them, but for the two
+  found twice are merged, and `4d006d6` fixes them, but for the two
   questions below. A block's compiled body run as a program started each instance it holds
   at 0 and ran it wrong, and `get/2` and `Logex.Edit.accept/3` raised errors that are no
   `ArgumentError` on it: the runtime, `get/2` and the edit now read a program's tags
@@ -1669,7 +1672,7 @@ configuration file's must be built that way before they land.
   for it?
 
   The maintainer answered the first on 2026-10-05: each block type is held once per
-  outermost type, decision 53, which the commit after `4d006d6` builds. The type a compile
+  outermost type, decision 53, which `1a16b1d` builds. The type a compile
   gives, and a program, hold every user block type their instances reach, at any depth,
   once, in one table, `blocks`, each held with no table of its own
   (`Logex.FbType.held/1`), and every instance's tag at any depth, a program's own among
@@ -1690,7 +1693,7 @@ configuration file's must be built that way before they land.
   (8 of them doctests), up from 661.
 
   The maintainer answered the second the same day: a type given is to be the one its
-  source text compiles to, decision 54, which the commit after `1a16b1d` builds.
+  source text compiles to, decision 54, which `dafb5a0` builds.
   `Logex.FbType.user?/1` compiles again each type a value holds, the outermost and every
   type in its one table, once a call, each before any type that names it, as a block of
   its name over the types it names as the table holds them, trusted and not checked again
@@ -1714,6 +1717,32 @@ configuration file's must be built that way before they land.
   its text's compile satisfies, so nothing in `lib/` calls it; it is kept, public and
   tested, as the definition of a compiled body the record names. 670 tests pass on
   Elixir 1.20.4 (8 of them doctests), up from 665.
+
+  A check of `1a16b1d`, `dafb5a0` and `0183bf2` confirmed 21 findings, 17 once the four
+  found twice are merged, and the commit after `0183bf2` fixes them all. Two were in the
+  code. Each tag declared from Elixir checked its type with a memo of its own, so a type
+  the tables of several tags' types shared was compiled again for each, against decision
+  54's "once a compile": the tags now share the compile's memo, after the types given
+  (`Logex.Declarations.split/4`), and tags of 4 types sharing a chain of 16 compile 20
+  types again, not 68. And an edit's plans kept each block type read inside the program's
+  table, so an edit copied flat wrote the table out once per instance and member planned,
+  4,443,950 words with 16 types at a level sharing a chain of 16: the plans keep each type
+  as the table holds it, and an edit copied flat grows with the instances its programs
+  nest, 202,544 words there (§4.9, "Cost"). Tests now pin what had none: a tag built by
+  hand of a type edited in its warnings or its file, given beside the genuine type; a
+  held instance's initial value in `Logex.Compiler.lowered?/1`; a block's file of any
+  extension, or none; two tags of two versions of one block; two types given whose tables
+  disagree, whichever the source declares; a tag of an older version of the block itself;
+  a table holding an older version of its outermost type; the version a program's table
+  holds where one is given; and the check's memo keeping every version of what a type
+  names. The M2-5 compile walk takes 7,500 sources, up from 3,000, sized from its rarest
+  atom, and its reach held under 300 seeds of three families it was not sized on. Every
+  growth figure was read again over 96 runs of the suite, 32 alone, 32 two at once and 32
+  four at once, and each bound less than a fifth above the highest raised to a fifth
+  above it, the size tests of `logex_test.exs` and `edit_test.exs` among them. Documents
+  that claimed more than the code does are narrowed: a program holding a hand-edited block
+  body may raise in the runtime. 675 tests pass on Elixir 1.20.4 (8 of them doctests), up
+  from 670.
 - **M2-6 · Event tasks.** `task <n> single <g> [interval <ms>] priority <p>`, fired by a
   rising edge, and in the first cycle if the trigger is already true; with `interval` too,
   it runs periodically only while the trigger is 0, plus a run on each edge (IEC rule 2). *Done when* an event task triggered
@@ -1809,7 +1838,11 @@ diagnostic naming its file and line.
   instances declare the type, which a growth test pins: for instances declared from Elixir
   only since the review's fix, before which each checked it again. The three growth tests
   failed now and then again while M2-5's mutation rows ran three copies at a time, and
-  passed in every gate.)*
+  passed in every gate. After the check of decisions 53 and 54 every growth bound was read
+  over 96 runs, 32 alone, 32 two at once and 32 four at once, and set a fifth or more
+  above the highest, so that each of the 96 passes, four suites at once among them,
+  where the edit's size test reached 6.06x against its old bound of 6; a load like the
+  spikes' may still raise one past its bound.)*
 
 ### Online edit — decided 2026-10-01
 

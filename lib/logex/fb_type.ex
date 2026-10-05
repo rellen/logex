@@ -251,13 +251,16 @@ defmodule Logex.FbType do
   def user?(type), do: check(type, %{}) != :error
 
   @doc """
-  `user?/1` for one of several types a compile is given (decisions 53 and 54):
-  `{:ok, checked}` where `type` is one `user?/1` takes, or `:error`. `checked` is what the
-  calls before it in the same compile checked, `%{}` for the first, so a type the table
-  holds that an earlier type's table held too, the same term over the same types it names,
-  is not compiled again: a compile given types that share what they hold compiles each
-  shared type's source once, and stays linear in the distinct types. Every type given is
-  still walked, and compiled again at full depth where it holds anything new.
+  `user?/1` for one of several types a compile is given, or holds through its tags
+  declared from Elixir (decisions 53 and 54): `{:ok, checked}` where `type` is one
+  `user?/1` takes, or `:error`. `checked` is what the calls before it in the same compile
+  checked, `%{}` for the first: each type compiled again, under every version of the types
+  it names that it was compiled again over. So a type the table holds that an earlier
+  type's table held too, the same term over the same types it names, is not compiled
+  again: a compile given types, or tags, that share what they hold compiles each shared
+  type's source once, and stays linear in the distinct types (`Logex.Declarations.split/4`
+  shares it with the tags). Every type given is still walked, and compiled again at full
+  depth where it holds anything new.
   """
   def check(%__MODULE__{body: %Program{tags: tags, blocks: blocks}} = type, checked)
       when is_map(tags) and not is_struct(tags) and is_map(blocks) and is_map(checked),

@@ -645,6 +645,16 @@ defmodule Logex.FunctionBlockTest do
       b = block!(over.("b", "a"), [leaf.("a")])
       mutual = %{"a" => FbType.held(a), "b" => FbType.held(b)}
 
+      # A table that holds an older version of the outermost type, its entries reaching no
+      # cycle among themselves: `a` holds `c`, which holds `b`, which holds an older `a`,
+      # each the one its text compiles to over the next, so only the walk down from the
+      # outermost refuses it.
+      old_b = block!(over.("b", "a"), [leaf.("a")])
+      old_c = block!(over.("c", "b"), [old_b])
+      {:ok, own} = Logex.Compiler.recompiled(over.("a", "c"), "a", %{"c" => old_c})
+      own = %{own | source: over.("a", "c")}
+      own_table = Map.put(old_c.body.blocks, "c", FbType.held(old_c))
+
       for edited <- [
             FbType.of(%{body | tags: Map.update!(body.tags, "t", &%{&1 | type: seal})}),
             FbType.of(%{body | blocks: Map.put(body.blocks, "pulse", block!(@pulse))}),
@@ -658,6 +668,7 @@ defmodule Logex.FunctionBlockTest do
             FbType.of(%{top | blocks: %{top.blocks | "seal" => %{seal | members: [:junk]}}}),
             FbType.of(%{top | blocks: %{top.blocks | "seal" => looped}}),
             FbType.of(%{a.body | blocks: mutual}),
+            FbType.of(%{own | blocks: own_table}),
             FbType.of(%{
               top
               | blocks: %{top.blocks | "holder" => put_in(held_holder.body.tags, opaque(nil))}
@@ -777,6 +788,35 @@ defmodule Logex.FunctionBlockTest do
           Tag.new!("s", new)
         ])
       end)
+
+      # Two tags of one block name, each holding its own version of it.
+      raises(tagged, fn ->
+        Logex.Compiler.instructionize(ast("var_input i bool"), [
+          Tag.new!("s0", old),
+          Tag.new!("s1", new)
+        ])
+      end)
+
+      # Two types given whose tables hold two versions of `seal`, each walked whether the
+      # source declares neither holder, one or both, in either order.
+      holding = fn name, seal ->
+        block!(
+          "function_block #{name}\nvar_input go bool\nvar_output o bool\nvar s seal\n" <>
+            "cal s go go o",
+          [seal]
+        )
+      end
+
+      x = holding.("x", old)
+      y = holding.("y", new)
+
+      for {source, types} <- [
+            {"var_input a bool", [x, y]},
+            {"var i x", [x, y]},
+            {"var j y", [x, y]},
+            {"var i x\nvar j y", [y, x]}
+          ],
+          do: raises(message, fn -> Logex.compile(source, name: "m", types: types) end)
     end
 
     # Two copies of one block differ only in their warnings, and in the file its body
@@ -802,9 +842,14 @@ defmodule Logex.FunctionBlockTest do
           [from_text]
         )
 
+      # The program's table holds the version given under the name, not the one `outer`
+      # holds, so a tag of `seal` reads the file it was read from.
       for seal <- [from_file, other_spelling] do
-        assert {:ok, %Logex.Program{}} =
+        assert {:ok, %Logex.Program{} = program} =
                  Logex.compile("var o outer\nvar s seal", name: "m", types: [seal, outer])
+
+        assert program.blocks["seal"] == FbType.held(seal)
+        assert Logex.Program.typed_tags(program)["s"].type.body.file == seal.body.file
       end
 
       # At any depth: two versions of `outer`, each holding its own copy of `seal`.
@@ -1095,12 +1140,64 @@ defmodule Logex.FunctionBlockTest do
       refute FbType.user?(%{unused | body: %{stamped | file: nil}})
     end
 
-    test "the check and the compile again are total" do
+    test "check/2 given a memo that is no map, and recompiled/3 given types that are no " <>
+           "map, give :error" do
       seal = block!(@seal)
       assert FbType.check(seal, opaque(:checked)) == :error
       assert Logex.Compiler.recompiled(@seal, "seal", opaque(:held)) == :error
       assert {:ok, body} = Logex.Compiler.recompiled(@seal, "seal", %{})
       assert FbType.of(%{body | source: @seal}) == seal
+    end
+
+    # So too a type a tag declared from Elixir holds, the tag built by hand and not through
+    # Logex.Tag.new!/4, which would refuse it first: such a type is known by being the one
+    # given under its name, or the one a tag before it held, by value, and otherwise is
+    # compiled again. A warning added and a file that is no path named after the block are
+    # edits a version does not compare (Logex.FbType.same?/2), so it is by value, not by
+    # name, that the type given is known.
+    test "a tag built by hand of an edited type is refused beside the type given" do
+      seal = block!(@seal)
+      routine = ast("var_input a bool\nvar_output q bool\ncal s1 a a q")
+      made_up = %Diagnostic{stage: :validate, severity: :warning, line: 6, message: "made up"}
+
+      message =
+        "unknown function block type \"seal\": logex has Logex.FbType.ton() and the types " <>
+          "Logex.compile/2 gives for a function block's file"
+
+      for edited <- [
+            %{seal | body: %{seal.body | warnings: [made_up]}},
+            %{seal | body: %{seal.body | file: "other.ld"}}
+          ] do
+        assert FbType.same?(seal, edited)
+        tag = %Tag{name: "s1", type: edited, section: :var}
+        raises(message, fn -> Logex.Compiler.instructionize(routine, [tag], [seal]) end)
+
+        raises(message, fn ->
+          Logex.Compiler.instructionize(routine, [Tag.new!("s0", seal), tag])
+        end)
+      end
+    end
+
+    # The file is the one field no text gives: Logex.compile_file/1 names a block after its
+    # file's base name less its last extension, whatever the extension, or none, and the
+    # type it gives keeps that path, with every warning stamped with it, which a compile
+    # and Logex.Tag.new!/4 take.
+    @tag :tmp_dir
+    test "a type read from a block's file of any extension, or none, is one a compile takes",
+         %{tmp_dir: dir} do
+      warned = String.replace(@seal, "var_output run bool\n", "var_output run bool\nvar n bool\n")
+      source = "var_input a bool\nvar_output q bool\nvar s seal\ncal s a a q"
+
+      for file <- ["seal.ld", "seal.txt", "seal"] do
+        path = Path.join(dir, file)
+        File.write!(path, warned)
+        assert {:ok, %FbType{} = seal} = Logex.compile_file(path)
+        assert seal.body.file == path
+        assert [%Diagnostic{file: ^path}] = seal.body.warnings
+        assert FbType.user?(seal)
+        assert %Tag{} = Tag.new!("s", seal)
+        assert {:ok, %Logex.Program{}} = Logex.compile(source, name: "m", types: [seal])
+      end
     end
 
     # Each edit, one the shape check took, refused as a type given to a compile and to
@@ -1190,7 +1287,8 @@ defmodule Logex.FunctionBlockTest do
       # Through a tag declared from Elixir, which no line can cite: a host mistake.
       ast = ast("function_block a\nvar_output q bool\nvar_input i bool\ncal y i q")
 
-      for held <- [b, c] do
+      # An older version of the block itself, and each type that holds one.
+      for held <- [old_a, b, c] do
         raises(
           "`y` holds an instance of `a`, the function block being compiled: " <>
             "a function block never holds an instance of itself, at any depth",
@@ -1845,10 +1943,13 @@ defmodule Logex.FunctionBlockTest do
       holder = body(@holder, [block!(@seal)])
       assert Logex.Compiler.lowered?(holder)
 
+      # And a held instance takes no initial value, as none declared by a line does: its
+      # members start where its type says.
       for junk <- [
             %{holder | blocks: %{}},
             %{holder | blocks: opaque(nil)},
-            %{body(@two) | tags: Map.put(body(@two).tags, "go", :junk)}
+            %{body(@two) | tags: Map.put(body(@two).tags, "go", :junk)},
+            %{holder | tags: Map.update!(holder.tags, "s", &%{&1 | initial: %{}})}
           ],
           do: refute(Logex.Compiler.lowered?(junk))
     end
@@ -3436,9 +3537,11 @@ defmodule Logex.FunctionBlockTest do
       %{top: top, v1: v1, v2: v2, state: state}
     end
 
-    # At 50 and 800 levels, 16x the depth. The bound is a fifth above the highest the
-    # design pass measured; an edit whose plan built each nested block's whole initial
-    # state at every level grew about 160x.
+    # At 50 and 800 levels, 16x the depth. Over 96 runs of the suite on Elixir 1.20.4, 32
+    # alone, 32 two at once and 32 four at once, the scan took 15.78x, the compile 15.53x
+    # and the edit 16.33x to 17.19x, the highest four at once. The bound is a fifth above
+    # the highest; an edit whose plan built each nested block's whole initial state at
+    # every level grew about 160x.
     test "a scan, a compile and an edit each stay linear" do
       s = at_depth(50)
       d = at_depth(800)
@@ -3462,7 +3565,7 @@ defmodule Logex.FunctionBlockTest do
           ] do
         ratio = reductions(fn -> fun.(d) end) / reductions(fn -> fun.(s) end)
 
-        assert ratio < 20.5,
+        assert ratio < 20.7,
                "16x the depth took #{Float.round(ratio, 1)}x the reductions for #{what}"
       end
     end
@@ -3492,9 +3595,9 @@ defmodule Logex.FunctionBlockTest do
     # Decision 53: a type holds every type below it in one table, which a compile's
     # one-version check walks once, however many instances hold the type, so the cost of
     # each instance does not grow with the types its type holds. 255 more instances of a
-    # chain 200 deep cost 1.00x what 255 more of one 50 deep cost, in each of 25 runs of the
-    # suite; with the table walked again for each instance, 1.74x. The bound is a fifth
-    # above.
+    # chain 200 deep cost 1.01x what 255 more of one 50 deep cost, in each of 96 runs of the
+    # suite, 32 alone, 32 two at once and 32 four at once; with the table walked again for
+    # each instance, 1.74x. The bound is a fifth above.
     test "a compile walks a type's table once, however many instances hold it" do
       extra = fn depth ->
         top = chain(depth)
@@ -3513,7 +3616,7 @@ defmodule Logex.FunctionBlockTest do
 
       ratio = extra.(200) / extra.(50)
 
-      assert ratio < 1.21,
+      assert ratio < 1.22,
              "255 more instances took #{Float.round(ratio, 2)}x the reductions at 4x the depth"
     end
 
@@ -3580,7 +3683,8 @@ defmodule Logex.FunctionBlockTest do
     # the one table holds it once (decision 53), so it, and a compile given the type, stay
     # linear in the types. At 6 and 12 levels, twice the depth took 2.01x and 1.94x the
     # reductions in each of 25 runs of the suite; since decision 54, which compiles each
-    # type's text again, 2.00x and 1.96x. Each bound is a fifth above.
+    # type's text again, 2.01x and 1.96x, in each of 96 runs of the suite, 32 alone, 32 two
+    # at once and 32 four at once. Each bound is a fifth above.
     test "a type reached through many paths is checked once" do
       measured =
         for d <- [6, 12], into: %{} do
@@ -3592,7 +3696,7 @@ defmodule Logex.FunctionBlockTest do
             reductions(fn -> {:ok, _} = Logex.compile(source, name: "m", types: [type]) end)}}
         end
 
-      for {what, index, bound} <- [{"user?/1", 0, 2.41}, {"a compile given it", 1, 2.35}] do
+      for {what, index, bound} <- [{"user?/1", 0, 2.42}, {"a compile given it", 1, 2.35}] do
         ratio = elem(measured[12], index) / elem(measured[6], index)
 
         assert ratio < bound,
@@ -3605,7 +3709,7 @@ defmodule Logex.FunctionBlockTest do
     # each type out once, however many paths of holders reach it, and the type, and a
     # program given it, grow with the types they hold: 2(d + 1), 14 and 26 at 6 and 12
     # levels. Twice the depth took 2.01x the type's words, 2.00x its bytes, and 1.97x the
-    # program's words and bytes, in each of 25 runs of the suite. Held once per body, each
+    # program's words and bytes, in each of 96 runs of the suite. Held once per body, each
     # type was written out once per path: twice the depth took 64.7x the words and 64.7x
     # the bytes, 2,354,805 words at 12 levels. Each bound is a fifth above.
     test "a type reached through many paths is held once: copied flat, it grows with its " <>
@@ -3681,8 +3785,10 @@ defmodule Logex.FunctionBlockTest do
     # (Logex.FbType.check/2). At w = 4 and 16, 4x the width, 20 and 32 types below `f`,
     # `f` took 1.77x the words, the program 1.72x, a compile given `f` 1.78x the
     # reductions and one given the `w` types 2.41x, in each of 25 runs of the suite; since
-    # decision 54, which compiles each type's text again, the two compiles took 1.75x and
-    # 2.11x. Held once per body, each of the `w` held its own copy of the chain: `f` took
+    # decision 54, which compiles each type's text again, the two compiles took 1.76x and
+    # 2.11x, and `f` and the program 1.77x and 1.72x, in each of 96 runs of the suite, 32
+    # alone, 32 two at once and 32 four at once. Held once per body, each of the `w` held
+    # its own copy of the chain: `f` took
     # 3.97x the words, the program 3.98x, and the compile given the `w` types, each checked
     # whole, 3.97x the reductions. Each bound is a fifth above.
     test "types at a level that share the types below them: copied flat, and compiled, " <>
@@ -3713,11 +3819,132 @@ defmodule Logex.FunctionBlockTest do
       for {what, index, bound} <- [
             {"the words of `f`", 0, 2.12},
             {"the words of a program given the types", 1, 2.07},
-            {"the reductions of a compile given `f`", 2, 2.11},
-            {"the reductions of a compile given the types", 3, 2.53}
+            {"the reductions of a compile given `f`", 2, 2.12},
+            {"the reductions of a compile given the types", 3, 2.54}
           ] do
         ratio = Enum.at(measured[16], index) / Enum.at(measured[4], index)
         assert ratio < bound, "4x the width took #{Float.round(ratio, 2)}x #{what}"
+      end
+    end
+
+    # Decision 54: a type is compiled again once a compile, however many types and paths
+    # hold it, the types of tags declared from Elixir among them: each tag's type is checked
+    # with what the compile checked before it (Logex.FbType.check/2), the types given
+    # included, so a compile of tags of the `w` types compiles the chain they share once.
+    # At w = 4 and 16, 4x the width, 20 and 32 types, it took 2.05x the reductions; given
+    # `t1` as well, a compile took 1.00x the reductions of one given none, in each of 96
+    # runs of the suite, 32 alone, 32 two at once and 32 four at once. With each tag's type
+    # checked afresh, as before, the chain was compiled again for each of the `w`: 3.97x;
+    # with the tags sharing a memo that the types given do not, given `t1`, 1.63x. Each
+    # bound is a fifth above.
+    test "tags declared from Elixir of types that share the types below them: a compile " <>
+           "compiles each distinct type once" do
+      chain = shared_chain()
+
+      measured =
+        for w <- [4, 16], into: %{} do
+          level = level(w, chain)
+          tags = for {type, i} <- Enum.with_index(level, 1), do: Tag.new!("p#{i}", type)
+
+          routine =
+            ast(
+              "var_input a bool\nvar_output y bool\n" <>
+                Enum.map_join(1..w, "\n", &"cal p#{&1} a y")
+            )
+
+          compile = fn types ->
+            reductions(fn -> {:ok, _} = Logex.Compiler.instructionize(routine, tags, types) end)
+          end
+
+          {w, [compile.([]), compile.([hd(level)])]}
+        end
+
+      ratio = Enum.at(measured[16], 0) / Enum.at(measured[4], 0)
+      assert ratio < 2.47, "4x the width took #{Float.round(ratio, 2)}x the reductions"
+
+      ratio = Enum.at(measured[4], 1) / Enum.at(measured[4], 0)
+
+      assert ratio < 1.21,
+             "given `t1` too, a compile took #{Float.round(ratio, 2)}x the reductions"
+    end
+
+    # Logex.FbType.check/2's memo keeps every version of what a type names that it was
+    # compiled again over, not the last one alone: given `t1`, `t2` and `t3`, each holding
+    # `c1` over the leaf `c2`, compiled from its text for `t1` and `t3` and from its file for
+    # `t2`, which a version does not tell apart, `c2` and `c1` are compiled again once over
+    # each, and not a third time for `t3`. A compile given all three took 1.06x to 1.07x
+    # the reductions of one given `t1` and `t2`, over 96 runs of the suite, 32 alone, 32
+    # two at once and 32 four at once; with the memo keeping one version a name, 1.49x.
+    # The bound is a fifth above the highest.
+    @tag :tmp_dir
+    test "a type compiled again over two versions of what it names is not compiled again " <>
+           "over either",
+         %{tmp_dir: dir} do
+      rungs = "var n dint\n" <> String.duplicate("xic a move 1 n\n", 10)
+      leaf = "function_block c2\nvar_input a bool\nvar_output q bool\n" <> rungs <> "xic a ote q"
+      File.write!(Path.join(dir, "c2.ld"), leaf)
+      {:ok, from_file} = Logex.compile_file(Path.join(dir, "c2.ld"))
+
+      [t1, t2, t3] =
+        for {i, c2} <- [{1, block!(leaf)}, {2, from_file}, {3, block!(leaf)}] do
+          c1 =
+            block!(
+              "function_block c1\nvar_input a bool\nvar_output q bool\nvar inner c2\n" <>
+                rungs <> "cal inner a q",
+              [c2]
+            )
+
+          block!(
+            "function_block t#{i}\nvar_input a bool\nvar_output q bool\nvar inner c1\n" <>
+              "cal inner a q",
+            [c1]
+          )
+        end
+
+      compile = fn types ->
+        reductions(fn ->
+          {:ok, _} = Logex.compile("var_input a bool", name: "m", types: types)
+        end)
+      end
+
+      ratio = compile.([t1, t2, t3]) / compile.([t1, t2])
+      assert ratio < 1.29, "a third type took #{Float.round(ratio, 2)}x the reductions"
+    end
+
+    # Decision 53's reason, for an edit: the plans of an edit hold each block type as the
+    # program's one table holds it, and read it inside that table only where a block starts
+    # (Logex.Edit), so an edit copied flat (a message to another process, term_to_binary/1)
+    # grows with the instances its two programs nest, as its state does, and not with the
+    # table once per instance and member planned. Accepting a program given the `w` types
+    # against itself, at w = 4 and 16, 4x the width, the edit took 3.24x the words and
+    # 3.17x the bytes, 202,544 words at w = 16, in each of 96 runs of the suite; with each
+    # type read inside the table, as decision 53 first had it, 6.21x the words and 6.23x the
+    # bytes, 4,443,950 words at w = 16. Each bound is a fifth above.
+    test "an edit copied flat grows with the instances its programs nest" do
+      chain = shared_chain()
+
+      measured =
+        for w <- [4, 16], into: %{} do
+          level = level(w, chain)
+
+          program =
+            program!(
+              "var_input a bool\nvar_output y bool\n" <>
+                Enum.map_join(1..w, "", &"var p#{&1} t#{&1}\n") <>
+                Enum.map_join(1..w, "", &"cal p#{&1} a y\n"),
+              level
+            )
+
+          {:ok, edit, _} = Edit.accept(program, program, Runtime.instance(program))
+          {w, [:erts_debug.flat_size(edit), byte_size(:erlang.term_to_binary(edit))]}
+        end
+
+      for {what, index, bound} <- [
+            {"the words", 0, 3.89},
+            {"the bytes", 1, 3.81}
+          ] do
+        ratio = Enum.at(measured[16], index) / Enum.at(measured[4], index)
+        assert ratio < bound, "4x the width took #{Float.round(ratio, 2)}x #{what} of an edit"
       end
     end
   end
@@ -3797,8 +4024,9 @@ defmodule Logex.FunctionBlockTest do
   describe "growth in a block's body" do
     # Accept reads each block type's body once, however many instances run it, so at 100
     # instances, 4x the rungs of the block's body cost little more: 50 and 200 rungs took
-    # 1.12x the reductions in every run; with the body read again for each instance,
-    # 3.34x. The bound is a fifth above.
+    # 1.11x to 1.12x the reductions over 96 runs of the suite, 32 alone, 32 two at once and
+    # 32 four at once; with the body read again for each instance, 3.34x. The bound is a
+    # fifth above the highest.
     test "accept reads a block's body once, however many instances run it" do
       accept = fn r ->
         big =
@@ -3832,7 +4060,8 @@ defmodule Logex.FunctionBlockTest do
     # 3.91x the reductions and one given the chain 3.92x, the highest of 25 runs of the
     # suite, every run alike: 70,113 and 275,398 given `wide`, 113,959 and 446,194 given the
     # chain, where before decision 54 they took 58,806 and 231,598, and 87,334 and 340,188.
-    # Each bound is a fifth above.
+    # Over 96 runs of the suite, 32 alone, 32 two at once and 32 four at once, 3.88x to
+    # 3.90x and 3.91x to 3.92x. Each bound is a fifth above the highest.
     test "a compile given a type compiles each type's text again once: linear in the text " <>
            "and in the types" do
       measured =
@@ -3899,8 +4128,9 @@ defmodule Logex.FunctionBlockTest do
     # (Logex.FbType.user?/1), and took 1.81x and 1.86x the reductions for twice the depth,
     # 1.36x and 1.40x for twice the width, as it did with the type held in each tag, whose
     # copies shared it; since decision 54, which compiles each type's text again, 1.82x and
-    # 1.89x, and 1.35x and 1.40x. Each bound is a fifth above the highest of 25 runs of the
-    # suite, every run alike.
+    # 1.89x, and 1.35x and 1.40x, the highest of 25 runs of the suite, every run alike, and
+    # 1.83x and 1.88x, and 1.36x and 1.39x, in each of 96 more, 32 alone, 32 two at once
+    # and 32 four at once. Each bound is a fifth above the highest.
     test "a type copied flat, and a compile given it, stay linear in the width and the depth" do
       measured =
         for w <- [1, 2], d <- [6, 12], into: %{} do
@@ -4120,10 +4350,16 @@ defmodule Logex.FunctionBlockTest do
 
     test "compile/2 never raises, its diagnostics are in line order and it reaches every " <>
            "M2-5 diagnostic; every program it gives scans without raising" do
-      # The seed is fixed, so a failure reproduces, as in api_contract_test.exs.
+      # The seed is fixed, so a failure reproduces, as in api_contract_test.exs. The draws
+      # are sized from the rarest atom, the warning for an instance no `cal` runs, which
+      # only a source that compiles reaches: 7.3 a run at 3,000 sources under the seeds
+      # {n, 2026, 10}, n = 1 to 20, so 7,500, where it took 17.2. At 3,000 the program
+      # count fell to 40 and 39 under two of the seeds {n, 4093, 59}. At 7,500 every atom
+      # was reached 7 times or more, and 107 programs or more compiled, under each of the
+      # seeds {n, 4093, 59}, {n, 77, 7} and {7, n, 2026}, n = 1 to 100 (CONTRIBUTING.md).
       :rand.seed(:exsss, {2026, 10, 2})
       types = [block!(@seal), block!(@pulse)]
-      sources = for _ <- 1..3000, do: soup()
+      sources = for _ <- 1..7500, do: soup()
       results = Enum.map(sources, &Logex.compile(&1, name: "m", types: types))
 
       for {:error, diagnostics} <- results do
