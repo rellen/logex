@@ -439,6 +439,21 @@ words of `PLAN.md` M1-3's declaration lines, surveyed before their code.
 **Why:** Rule 1, IEC's word lowercased. Reading an output inside the program is allowed, because ladder's commonest idiom, the seal-in, reads its own coil. IEC's table does not forbid the read. TIA's "may only be written" is the one rule that points the other way, and whether it is enforced is `unverified`.
 **Checked:** 2026-09-28. Sources: IEC 61131-3:2003 §2.4.3 Table 16a, and IEC 61131-3:2013 §6.5.2.1 Figure 7, both read directly; the conventional family's program-parameters and add-on-instructions manuals; TIA V21 (11/2025); CODESYS Development System help V3.5.22.0; Mitsubishi SH(NA)-081264ENG-AR.
 
+### `var_external` — declare a tag a configuration's global supplies
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var_external estop bool` | A declaration line of a `.ld` file: a bool or a dint that the configuration supplies from its `var_global` of the same name and type, read and written directly during a scan. It takes no initial value, and since it is declared again as a `var_global` its name may not be a configuration file's keyword either. Logic may write it, unless its global is an input point. |
+| IEC 61131-3 | **VAR_EXTERNAL** … END_VAR | Ed 2 Table 16a (p.39): *"Supplied by configuration via VAR_GLOBAL (2.7.1) Can be modified within organization unit"*; §2.4.3 (p.40): *"The type of a variable declared in a VAR_EXTERNAL block shall agree with the type declared in the VAR_GLOBAL block"*; p.43: *"Initial values cannot be given in VAR_EXTERNAL declarations."* Ed 3 §6.5.2.2 (p.51) the same, with a NOTE that an external modified by another contained element *"may lead to unanticipated behaviors"*. Ed 2 Table 33 (pp.71–72) features 10a and 10b, *"VAR_EXTERNAL declarations within function block type declarations"*, and the grammar's `other_var_declarations` (Annex B.1.5.2, p.155) allow it in a function block too, as Ed 3's `Func_Var_Decls` does (Annex A). Ed 2 Table C.2 lists VAR_EXTERNAL. |
+| Conventional | none | A controller-scope tag is reached without a declaration (import/export reference, ch.8). |
+| Siemens STEP 7 / TIA Portal LAD | none: a block names a PLC tag or a global DB's tag directly | *"FBs and FCs have three different interface types: In, InOut and Out."* (Siemens *Programming Guideline for S7-1200/S7-1500*, Entry ID 81318674, V1.5, 03/2017, §3.3, p.59); *"All blocks in the user program can access global DBs."* (§3.2.7, p.52). |
+| CODESYS | **VAR_EXTERNAL** | *"If the global variable does not exist, then an error message is printed."*; *"CODESYS does not require you to declare a global variable as external in order to use it in a POU. The keyword exists only for maintaining compliance with IEC 61131-3."*; *"Initialization is not permitted."* (*Variable: VAR_EXTERNAL*, help read 2026-10-02). |
+| Mitsubishi GX Works | none: a function block uses a global label as an external variable | *"Function blocks can use external variables (global label) and public variables."* (Mitsubishi *MELSEC iQ-R Programming Manual (Program Design)*, SH(NA)-081265ENG-R, §3.3, p.21). The classes that page lists are VAR_INPUT, VAR_OUTPUT, VAR_OUTPUT_RETAIN, VAR_IN_OUT, VAR, VAR_CONSTANT, VAR_RETAIN, VAR_PUBLIC and VAR_PUBLIC_RETAIN; none is VAR_EXTERNAL. |
+
+**Chosen:** `var_external`
+**Why:** Rule 1, IEC's keyword lowercased. logex requires it where CODESYS, Siemens, Mitsubishi and the conventional family do not, because a file is its POU's scope and there is no controller scope (`docs/organisation.md` §5): a program says by name which globals it reaches, so a configuration can check them.
+**Checked:** 2026-10-02. IEC 61131-3:2003 §2.4.3, Table 16a and Table C.2, and IEC 61131-3:2013 §6.5.2.2, read directly; the conventional family's import/export reference; IEC 61131-3:2003 Table 33 and Annex B.1.5.2, and IEC 61131-3:2013 Annex A; CODESYS online help, *Variable: VAR_EXTERNAL*; Siemens *Programming Guideline for S7-1200/S7-1500*, Entry ID 81318674, V1.5, 03/2017; Mitsubishi *MELSEC iQ-R Programming Manual (Program Design)*, SH(NA)-081265ENG-R.
+
 ### `bool` — the Boolean type
 
 | Dialect | Name there | Notes |

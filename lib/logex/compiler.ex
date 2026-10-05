@@ -40,6 +40,28 @@ defmodule Logex.Compiler do
   def instructions, do: @instructions
 
   @doc """
+  The tags a program's logic writes, each to the line of its first write in rung order:
+  every operand in a `:write` slot, and every instance an `:instance` slot runs, a member
+  written counting as a write of its instance. (Spike: B5's one walk lands this as M2-4's
+  first commit, knowing `cal`.)
+  """
+  def writes(%Program{rungs: rungs}) do
+    signatures = Map.new(@instructions, fn {_word, {symbol, sig}} -> {symbol, sig} end)
+
+    for {symbol, line, operands} <- instructions(rungs),
+        {{access, _type}, operand} <- Enum.zip(Map.fetch!(signatures, symbol), operands),
+        access == :write or access == :instance,
+        name = written(operand),
+        reduce: %{} do
+      found -> Map.put_new(found, name, line)
+    end
+  end
+
+  defp written({:name, _, name}), do: name
+  defp written({:member, _, [instance | _]}), do: instance
+  defp written({:int_lit, _, _}), do: nil
+
+  @doc """
   Lowers a parse AST to a `%Logex.Program{}`: its leading declaration lines become the tag
   table (`Logex.Declarations`), and every other rung is lowered to the IR, each instruction
   checked against its operand signature.

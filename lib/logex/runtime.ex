@@ -227,15 +227,18 @@ defmodule Logex.Runtime do
   """
   def start(%Configuration{} = config) do
     configured!(Configuration.check(config))
+    wiring = wiring(config)
 
     %__MODULE__{
       config: config,
       now: 0,
       globals: Map.new(config.globals, &{&1.name, Configuration.initial(&1)}),
       instances:
-        Map.new(config.instances, &{&1.name, instance(Map.fetch!(config.programs, &1.type))}),
+        Map.new(config.instances, fn %{name: name, type: type} ->
+          {name, detached(instance(Map.fetch!(config.programs, type)), wiring, name)}
+        end),
       tasks: Map.new(config.tasks, &{&1.name, task_state(0)}),
-      wiring: wiring(config)
+      wiring: wiring
     }
   end
 
@@ -294,7 +297,12 @@ defmodule Logex.Runtime do
       | globals: Map.new(config.globals, &{&1.name, restarted(&1, runtime)}),
         instances:
           Map.new(runtime.instances, fn {name, state} ->
-            {name, restart(Map.fetch!(config.programs, state.type), state, mode)}
+            {name,
+             detached(
+               restart(Map.fetch!(config.programs, state.type), state, mode),
+               runtime.wiring,
+               name
+             )}
           end),
         tasks: Map.new(runtime.tasks, fn {name, _state} -> {name, task_state(now)} end)
     }
@@ -307,6 +315,12 @@ defmodule Logex.Runtime do
   defp input_kept(false, global, _runtime), do: Configuration.initial(global)
 
   defp task_state(due), do: %{next_due: due, overlaps: 0}
+
+  # M2-4 (spike): one copy of each global. Between scans an instance's env holds none of its
+  # var_externals, which instance/1 and restart/3 start at 0 as any tag: the resource's
+  # global is the only copy.
+  defp detached(%Instance{env: env} = state, wiring, name),
+    do: %{state | env: Map.drop(env, Map.fetch!(wiring.externals, name))}
 
   @doc "Each task's overlap count, by name: the periods it missed since `start/1` or `restart/2`."
   def overlaps(runtime) do
@@ -639,9 +653,16 @@ defmodule Logex.Runtime do
       copy_out: grouped(config.instances, Map.get(sections, :var_output, [])),
       inputs: Map.new(for {global, {:ok, {_, "i", _}}} <- points, do: {global.name, global.type}),
       outputs: for({global, {:ok, {_, "q", _}}} <- points, do: global.name),
-      globals: Map.new(config.globals, &{&1.name, &1})
+      globals: Map.new(config.globals, &{&1.name, &1}),
+      externals:
+        Map.new(config.instances, fn %{name: name, type: type} ->
+          {name, externals_of(Map.fetch!(config.programs, type))}
+        end)
     }
   end
+
+  defp externals_of(%Program{tags: tags}),
+    do: for({name, %Tag{section: :var_external}} <- tags, do: name)
 
   defp section(config, types, connection) do
     %Tag{section: section} =
@@ -815,7 +836,14 @@ defmodule Logex.Runtime do
         {member, value(to, globals)}
       end)
 
+    # M2-4 (spike): each var_external's global merged into the env before the scan, and
+    # split off after, into the global, before the copy-out: a write through a var_external
+    # is made during the scan, and a connection's copy-out after it.
+    externals = Map.fetch!(wiring.externals, name)
+    state = %{state | env: Map.merge(state.env, Map.take(globals, externals))}
     {outputs, state} = call(program, state, inputs, %Scan{now: now, first: first})
+    globals = Map.merge(globals, Map.take(state.env, externals))
+    state = %{state | env: Map.drop(state.env, externals)}
 
     globals =
       Enum.reduce(Map.fetch!(wiring.copy_out, name), globals, fn {member, global}, globals ->
@@ -862,9 +890,11 @@ defmodule Logex.Runtime do
           example_tag(Map.fetch!(runtime.config.programs, type), head)
       )
 
+  # M2-4 (spike): a var_external reads its global, the one copy.
   defp at_path(:error, {:ok, type}, {head, [tag | members], path}, runtime) do
     program = Map.fetch!(runtime.config.programs, type)
-    env = Map.fetch!(runtime.instances, head).env
+    externals = Map.fetch!(runtime.wiring.externals, head)
+    env = Map.merge(Map.fetch!(runtime.instances, head).env, Map.take(runtime.globals, externals))
     in_program(Map.fetch(program.tags, tag), {head, tag, members, path}, program, env)
   end
 

@@ -16,7 +16,7 @@ defmodule Logex.Tag do
   @type t :: %__MODULE__{
           name: String.t(),
           type: :bool | :dint | Logex.FbType.t(),
-          section: :var | :var_input | :var_output,
+          section: :var | :var_input | :var_output | :var_external,
           initial: integer | %{String.t() => integer} | nil,
           line: pos_integer | nil
         }

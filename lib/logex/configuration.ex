@@ -238,7 +238,7 @@ defmodule Logex.Configuration do
 
   defp unline_whole(_whole, item, {items, lined}), do: {[item | items], lined}
 
-  defp raised([], config), do: config
+  defp raised([], config), do: %{config | warnings: warned(config)}
   defp raised(problems, _config), do: raise(ArgumentError, Enum.join(problems, "\n"))
 
   # Each field once, and none but the six.
@@ -394,6 +394,7 @@ defmodule Logex.Configuration do
       located(Enum.sort_by(globals, &line_key/1)),
       runs(instances, {programs, given(config.programs)}, tasks_by_name),
       d_wiring,
+      externals(instances, runnable, globals_by_name),
       empty(config.instances)
     ]
     |> Enum.concat()
@@ -1378,6 +1379,115 @@ defmodule Logex.Configuration do
       |> Map.values()
       |> Enum.filter(&match?(%Tag{}, &1))
       |> Enum.sort_by(&{line_key(&1), &1.name})
+
+  # M2-4 (spike): each instantiated type's var_externals bind to globals by name and type
+  # (Ed 2 §2.4.3), checked once a type, at its first instance in line order; and nothing
+  # writes an input point through one (docs/organisation.md §4.4).
+  defp externals(instances, runnable, globals) do
+    instances
+    |> Enum.sort_by(&line_key/1)
+    |> Enum.flat_map(fn instance ->
+      case Map.fetch(runnable, instance.name) do
+        {:ok, {^instance, program}} -> [{instance, program}]
+        _ -> []
+      end
+    end)
+    |> Enum.uniq_by(fn {instance, _program} -> instance.type end)
+    |> Enum.flat_map(fn {instance, program} ->
+      writes = Logex.Compiler.writes(program)
+
+      for %Tag{section: :var_external} = tag <- declared(program),
+          message = binding(Map.fetch(globals, tag.name), tag, program, {writes, globals}),
+          do: diagnostic(instance.line, "program instance `#{instance.name}`: " <> message)
+    end)
+  end
+
+  defp binding(:error, tag, program, {_writes, globals}),
+    do:
+      "#{declares(program, tag)}, but there is no global `#{tag.name}`" <>
+        Declarations.suggest(tag.name, Enum.sort(Map.keys(globals)), & &1, "names")
+
+  defp binding({:ok, %Global{type: type}}, _tag, _program, _writes)
+       when type not in [:bool, :dint],
+       do: nil
+
+  defp binding({:ok, %Global{type: type} = global}, %Tag{type: type} = tag, program, {writes, _}),
+    do: written_point(location(global.at), Map.get(writes, tag.name), global, program)
+
+  defp binding({:ok, global}, tag, program, _writes),
+    do: "#{declares(program, tag)}, but `#{global.name}` is a #{global.type}#{where(global)}"
+
+  defp written_point({:ok, {_device, "i", _address}}, line, global, program)
+       when is_integer(line),
+       do:
+         "`#{program.name}` writes its var_external `#{global.name}` (line #{line}), but " <>
+           "`#{global.name}` is an input point#{where(global)}: nothing writes an input point"
+
+  defp written_point(_location, _line, _global, _program), do: nil
+
+  defp declares(program, tag),
+    do:
+      "`#{program.name}` declares `var_external #{tag.name} #{tag.type}`" <>
+        if(tag.line, do: " (line #{tag.line})", else: "")
+
+  # M2-4 (spike): the configuration's own warnings, from each program's IR: two instances
+  # that write one global through var_external, and an instance that writes, through
+  # var_external, a global a connection drives. Each is cited at the writing instance.
+  defp warned(%__MODULE__{} = config) do
+    writers =
+      for instance <- config.instances,
+          program = Map.get(config.programs, instance.type),
+          program != nil,
+          {name, line} <- Enum.sort(Logex.Compiler.writes(program)),
+          match?(%Tag{section: :var_external}, Map.get(program.tags, name)),
+          do: {name, instance, line}
+
+    drivers =
+      for %Connection{to: to} = c <- config.connections,
+          is_binary(to),
+          program = Map.get(config.programs, type_of(config, c.instance)),
+          program != nil,
+          match?(%Tag{section: :var_output}, Map.get(program.tags, c.member)),
+          into: %{},
+          do: {to, c}
+
+    by_global = Enum.group_by(writers, &elem(&1, 0), &elem(&1, 1))
+
+    twice =
+      for {global, [first | later]} <- Enum.sort(by_global),
+          instance <- later,
+          do: %Diagnostic{
+            stage: :configure,
+            severity: :warning,
+            line: instance.line,
+            message:
+              "`#{instance.name}` writes `#{global}` through its var_external, as " <>
+                "`#{first.name}` does#{where(first)}: of two writers in one cycle, the one " <>
+                "that runs later wins"
+          }
+
+    driven =
+      for {global, instances} <- Enum.sort(by_global),
+          {:ok, c} <- [Map.fetch(drivers, global)],
+          instance <- instances,
+          do: %Diagnostic{
+            stage: :configure,
+            severity: :warning,
+            line: instance.line,
+            message:
+              "`#{instance.name}` writes `#{global}` through its var_external, and " <>
+                "`#{c.instance}.#{c.member}` drives it#{where(c)}: " <>
+                driven_rule(c.instance == instance.name)
+          }
+
+    Enum.sort_by(twice ++ driven, &line_order/1)
+  end
+
+  defp driven_rule(true), do: "its own copy-out, after the scan, wins"
+  defp driven_rule(false), do: "of the two in one cycle, the one that runs later wins"
+
+  defp type_of(config, name),
+    do: Enum.find_value(config.instances, fn i -> i.name == name and i.type end)
 
   defp empty([]), do: [diagnostic(nil, "a configuration runs at least one program instance")]
   defp empty(_instances), do: []

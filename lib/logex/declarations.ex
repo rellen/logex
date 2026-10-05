@@ -5,17 +5,27 @@ defmodule Logex.Declarations do
   is a section keyword, and every one comes before the first rung of logic.
 
       <section> <name> <type> [<initial>]     section: var | var_input | var_output
+                                                       | var_external
                                               type:    bool | dint | ton
 
   The section and type words are data, in `@sections` and `@types`, and a function block
   type's word is `Logex.FbType.builtins/0`'s: a new section or type is a row there and a
   stanza in `docs/naming.md`, not a second declaration parser. An instance of a function
   block, `var t1 ton` (M1-6), is declared with `var` and takes no initial value.
+
+  A `var_external` (M2-4) is a bool or a dint that a configuration supplies by name, from
+  its global of the same name and type (Ed 2 §2.4.3). Logic reads and writes it; it takes
+  no initial value. Run alone, its program keeps it as a tag of its own, at 0.
   """
 
   alias Logex.{Diagnostic, FbType, Tag}
 
-  @sections %{"var" => :var, "var_input" => :var_input, "var_output" => :var_output}
+  @sections %{
+    "var" => :var,
+    "var_input" => :var_input,
+    "var_output" => :var_output,
+    "var_external" => :var_external
+  }
   @types %{"bool" => :bool, "dint" => :dint}
 
   @section_atoms Map.values(@sections)
@@ -370,7 +380,7 @@ defmodule Logex.Declarations do
   # nothing else: OE-1 withdrew the `%{"pre" => ms}` a tag from Elixir could carry, since a
   # `ton` silently replaced it and, with none, no text could give that `.pre`.
   defp instance(%Tag{section: section, name: name} = tag)
-       when section in [:var_input, :var_output],
+       when section in [:var_input, :var_output, :var_external],
        do: [
          "#{label(name)} is a #{tag.type.name}: an instance is the program's own, declared " <>
            "with `var`, as in `var #{display(name)} #{tag.type.name}`, not with `#{section}`"
@@ -397,6 +407,13 @@ defmodule Logex.Declarations do
   defp initial(%Tag{section: :var_input, name: name}),
     do: [
       "#{label(name)} is a var_input: its value comes from outside, so it takes no initial value"
+    ]
+
+  # Ed 2 §2.4.3, p.43: "Initial values cannot be given in VAR_EXTERNAL declarations."
+  defp initial(%Tag{section: :var_external, name: name}),
+    do: [
+      "#{label(name)} is a var_external: its value is the configuration's global of that " <>
+        "name, so it takes no initial value"
     ]
 
   defp initial(%Tag{name: name, initial: v}) when not is_integer(v),
