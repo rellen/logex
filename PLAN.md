@@ -1766,10 +1766,17 @@ diagnostic naming its file and line.
   `Logex.Compiler.signature/2`, the loader is `Logex.compile_file/1`'s private `load/3`,
   which M2-2 is to open for one memo per configuration, and the one block-type message is
   `Logex.Declarations.not_a_program/1`.)*
-- **Two run-time pieces were not spiked:** M2-4's one copy of a global, and M2-6's edges
-  with `single` and `interval`. Their rules are the design's text alone. A test of the
-  event task's tie-break is owed: an event task and a late periodic task of one priority,
-  both writing one global, asserting which write lands.
+- **Two run-time pieces were not spiked by the design:** M2-4's one copy of a global, and
+  M2-6's edges with `single` and `interval`. Their rules were the design's text alone. A
+  test of the event task's tie-break is owed: an event task and a late periodic task of
+  one priority, both writing one global, asserting which write lands. *(Both were spiked
+  on 2026-10-04, as M2-4 and M2-6 above record: throwaway spikes on `025199a` built the
+  run-time copy and the edges at run time, each against an independent model, every rule
+  red when reverted, and decisions 46–52 and `docs/organisation.md` §4.10's rules under
+  M2-4 and M2-6 settled what they found. The tie-break test is still owed, and §4.10 now
+  says how it is written: in both forms, two writers of one global through
+  `var_external` in `end_to_end_test.exs`, once M2-4 has landed, and, beside the rule
+  tests, one instance writing a global that another copies to an output point.)*
 - **The untested rising-lines check.** M2-5 checks that a block's body given in `types:`
   is one a compile gives, its rungs among them on rising lines, each on one line, after
   its declarations. Reverted alone, that line check left the function blocks' spike green,
