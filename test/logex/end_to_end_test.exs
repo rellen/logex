@@ -1958,4 +1958,199 @@ defmodule Logex.EndToEndTest do
       end
     end
   end
+
+  describe "a configuration file on disk (M2-2)" do
+    @describetag :tmp_dir
+
+    # One program type, a seal-in whose run lamp lights 30 ms after it seals in: two
+    # pieces of state, the seal and its timer.
+    @motor_ld """
+    var_input start bool
+    var_input stop bool
+    var_output motor bool
+    var_output run_lamp bool
+    var t1 ton
+
+    ( xic start | xic motor ) xio stop ote motor
+    xic motor ton t1 30
+    xic t1.dn ote run_lamp
+    """
+
+    # Two instances of it, task-less, wired to different points.
+    @plant_logex """
+    // plant.logex -- two conveyors, one program type (motor.ld)
+    var_global pb_start_1 bool at panel.i.0
+    var_global pb_stop_1  bool at panel.i.1
+    var_global pb_start_2 bool at panel.i.2
+    var_global pb_stop_2  bool at panel.i.3
+    var_global k1         bool at panel.q.0
+    var_global k2         bool at panel.q.1
+    var_global lamp_1     bool at panel.q.2
+    var_global lamp_2     bool at panel.q.3
+
+    program m1 motor
+      m1.start    pb_start_1
+      m1.stop     pb_stop_1
+      m1.motor    k1
+      m1.run_lamp lamp_1
+
+    program m2 motor
+      m2.start    pb_start_2
+      m2.stop     pb_stop_2
+      m2.motor    k2
+      m2.run_lamp lamp_2
+    """
+
+    defp on_disk(dir, files) do
+      for {name, text} <- files, into: %{} do
+        path = Path.join(dir, name)
+        File.write!(path, text)
+        {name, path}
+      end
+    end
+
+    # The input image at `now`: each button pressed for one window, so each instance seals
+    # in, runs and is stopped at its own times. The host sends the whole image each cycle.
+    defp image(now),
+      do: %{
+        "pb_start_1" => pressed(now, 20, 40),
+        "pb_stop_1" => pressed(now, 300, 310),
+        "pb_start_2" => pressed(now, 150, 160),
+        "pb_stop_2" => pressed(now, 420, 450)
+      }
+
+    defp pressed(now, from, to) when now >= from and now < to, do: 1
+    defp pressed(_now, _from, _to), do: 0
+
+    # An oracle for one seal-in instance that knows nothing of logex: it seals in on start,
+    # drops on stop, and lights its lamp once it has been sealed in for 30 ms, its timer
+    # starting on the scan that seals it in.
+    defp oracle({start, stop}, now, {motor, since}) do
+      sealed = (start == 1 or motor == 1) and stop == 0
+      since = since(sealed, motor == 1, since, now)
+      {sealed, since, lamp(sealed, since, now)}
+    end
+
+    defp since(false, _was, _since, _now), do: nil
+    defp since(true, true, since, _now), do: since
+    defp since(true, false, _since, now), do: now
+
+    defp lamp(true, since, now) when now - since >= 30, do: 1
+    defp lamp(_sealed, _since, _now), do: 0
+
+    # The first cycle starts the clock; each after it is 10 ms on.
+    defp elapsed(0), do: 0
+    defp elapsed(_now), do: 10
+
+    defp bit(true), do: 1
+    defp bit(false), do: 0
+
+    # PLAN.md M2-2's Done-when: two instances of one `.ld` program type, wired in a
+    # configuration file to different input and output points, run for N cycles from one
+    # input image and keep independent state. Both files are on disk, and the
+    # configuration's loader reads the program type beside the configuration.
+    test "two instances of one .ld program type, wired in a configuration file, run N " <>
+           "cycles from one input image and keep independent state",
+         %{tmp_dir: dir} do
+      %{"plant.logex" => plant} =
+        on_disk(dir, [{"motor.ld", @motor_ld}, {"plant.logex", @plant_logex}])
+
+      {:ok, config} = Logex.Configuration.compile_file(plant)
+      assert {config.name, config.file, Map.keys(config.programs)} == {"plant", plant, ["motor"]}
+      assert config.warnings == [] and config.programs["motor"].warnings == []
+
+      runtime = Logex.Runtime.start(config)
+      models = %{"m1" => {0, nil}, "m2" => {0, nil}}
+      points = %{"m1" => {"pb_start_1", "pb_stop_1"}, "m2" => {"pb_start_2", "pb_stop_2"}}
+      outs = %{"m1" => {"k1", "lamp_1"}, "m2" => {"k2", "lamp_2"}}
+
+      # N = 60 cycles, every 10 ms from 0 to 590 ms, each from the one image of that time.
+      {runtime, _models, seen} =
+        for now <- 0..590//10, reduce: {runtime, models, []} do
+          {runtime, models, seen} ->
+            inputs = image(now)
+            {runtime, outputs, _events} = Logex.Runtime.cycle(runtime, elapsed(now), inputs)
+
+            {models, expected} =
+              Enum.reduce(["m1", "m2"], {models, %{}}, fn m, {models, expected} ->
+                {start, stop} = points[m]
+                {sealed, since, lamp} = oracle({inputs[start], inputs[stop]}, now, models[m])
+                {k, l} = outs[m]
+
+                {Map.put(models, m, {bit(sealed), since}),
+                 Map.merge(expected, %{k => bit(sealed), l => lamp})}
+              end)
+
+            assert outputs == expected, "at #{now} ms"
+            {runtime, models, [{now, outputs} | seen]}
+        end
+
+      # Each instance's state is its own: at 160 ms `m2` has just sealed in, its lamp dark
+      # while `m1`'s is lit; by 200 ms both lamps are lit; at 300 ms `m1` is stopped while
+      # `m2` runs on; by 590 ms both have been stopped, each timer reset.
+      assert {200, %{"k1" => 1, "lamp_1" => 1, "k2" => 1, "lamp_2" => 1}} in seen
+      assert {160, %{"k1" => 1, "lamp_1" => 1, "k2" => 1, "lamp_2" => 0}} in seen
+      assert {300, %{"k1" => 0, "lamp_1" => 0, "k2" => 1, "lamp_2" => 1}} in seen
+      assert Logex.Runtime.get!(runtime, "m1.t1.acc") == 0
+      assert Logex.Runtime.get!(runtime, "m2.t1.acc") == 0
+      assert Logex.Runtime.get!(runtime, "m2.motor") == 0
+
+      # And the same plant, one instance held, keeps the other's state: stopping `m1`
+      # alone leaves `m2` sealed in.
+      {runtime, outputs, _} =
+        Logex.Runtime.cycle(runtime, 10, %{"pb_start_1" => 1, "pb_start_2" => 1})
+
+      assert {outputs["k1"], outputs["k2"]} == {1, 1}
+
+      {_runtime, outputs, _} =
+        Logex.Runtime.cycle(runtime, 10, %{"pb_start_1" => 0, "pb_start_2" => 0, "pb_stop_1" => 1})
+
+      assert {outputs["k1"], outputs["k2"]} == {0, 1}
+    end
+
+    # The Done-when's second half: a mis-wired, unknown, undriven-input or mistyped
+    # connection is a located diagnostic naming its file and line.
+    test "a mis-wired, unknown, undriven-input or mistyped connection is a located " <>
+           "diagnostic naming its file and line",
+         %{tmp_dir: dir} do
+      %{"wired.logex" => wired} =
+        on_disk(dir, [
+          {"motor.ld", @motor_ld},
+          {"wired.logex",
+           """
+           var_global pb_1 bool at panel.i.0
+           var_global pb_2 bool at panel.i.1
+           var_global k1   bool at panel.q.0
+           var_global sp   dint
+           program m1 motor
+           m1.start pb_1
+           m1.stop  pb_2
+           m1.motor pb_1
+           m1.strat pb_2
+           program m2 motor
+           m2.start sp
+           m2.motor k9
+           m2.run_lamp k1
+           """}
+        ])
+
+      assert {:error, diagnostics} = Logex.Configuration.compile_file(wired)
+
+      assert Enum.map(diagnostics, &Logex.Diagnostic.format/1) == [
+               # mis-wired: a var_output driving an input point
+               "#{wired}: line 8: `pb_1` is an input point (line 1): `m1.motor`, a " <>
+                 "var_output, cannot drive it",
+               # unknown: a member the program type does not declare
+               "#{wired}: line 9: `m1` is a `motor`, which declares no `strat` — did you " <>
+                 "mean `start`?",
+               # undriven input: a var_input left unconnected
+               "#{wired}: line 10: `m2` leaves its var_input `stop` unconnected: connect " <>
+                 "it to a global, a point or a constant, as in `m2.stop 0`",
+               # mistyped: a bool var_input connected to a dint
+               "#{wired}: line 11: `m2.start` is a bool, but `sp` is a dint (line 4)",
+               # unknown: a global the file does not declare
+               "#{wired}: line 12: no global `k9`: declare it, as in `var_global k9 bool`"
+             ]
+    end
+  end
 end
