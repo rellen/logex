@@ -113,11 +113,11 @@ defmodule Logex.Compiler do
     holds_itself!(kind, declared)
     {held, _walked, :tags} = Enum.reduce(blocks(tags), {held, %{}, :tags}, &one_version!/2)
     {rungs, tags, diagnostics} = lowering(routine, {kind, heading}, split)
-    lowered(kind, rungs, {tags, held}, diagnostics)
+    lowered(kind, rungs, {tags, held}, diagnostics, routine)
   end
 
   # The rungs lowered over the tag table, each timer given its preset, and every
-  # diagnostic, a compile's and a recompile's alike (recompiled/3).
+  # diagnostic, a compile's and a recompile's alike (recompiled/4).
   defp lowering(routine, {kind, heading}, {tags, logic, declaring, untyped}) do
     known = {scope(tags), folded(tags)}
     {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, known))
@@ -143,29 +143,39 @@ defmodule Logex.Compiler do
   Those types are trusted, as checked already: none is checked, marked for recursion or
   compared with another version, and no table is built, so each instance's tag names its
   type and `blocks` is empty. A type whose text names one `held` lacks, its own name among
-  them, gives the diagnostic a compile gives for an unknown type. `source` and `file` are
-  nil, and so is each warning's file: they are the caller's to give. It is how
+  them, gives the diagnostic a compile gives for an unknown type. `declared` are the
+  block's members declared from Elixir, which a block `instructionize/3` built keeps no
+  text for; a tag among them no host could give is `:error`. `source` and `file` are nil,
+  and so is each warning's file: they are the caller's to give. It is how
   `Logex.FbType.check/2` asks that each type a compile is given be the one its source
   gives, once a type, in time linear in the source and the members of the types it names.
   """
-  def recompiled(source, name, held) when is_binary(source) and is_map(held),
-    do: retokenized(tokenize(source), name, held)
+  def recompiled(source, name, held, declared \\ [])
 
-  def recompiled(_source, _name, _held), do: :error
+  def recompiled(source, name, held, declared)
+      when is_binary(source) and is_map(held) and is_list(declared),
+      do: retokenized(tokenize(source), name, {held, declared})
 
-  defp retokenized({:ok, tokens, _end_line}, name, held), do: reparsed(parse(tokens), name, held)
-  defp retokenized(_error, _name, _held), do: :error
+  def recompiled(_source, _name, _held, _declared), do: :error
 
-  defp reparsed({:ok, {:routine, {:rungs, rungs}} = routine}, name, held) do
+  defp retokenized({:ok, tokens, _end_line}, name, given),
+    do: reparsed(parse(tokens), name, given)
+
+  defp retokenized(_error, _name, _given), do: :error
+
+  defp reparsed({:ok, {:routine, {:rungs, rungs}} = routine}, name, {held, declared}) do
     {kind, rungs, heading} = file_kind(rungs)
 
     {rungs, tags, diagnostics} =
-      lowering(routine, {kind, heading}, Declarations.split(rungs, [], held))
+      lowering(routine, {kind, heading}, Declarations.split(rungs, declared, held))
 
     rebuilt(kind, name, {rungs, tags}, diagnostics)
+  rescue
+    # A tag declared from Elixir that no host could have given: no such body.
+    ArgumentError -> :error
   end
 
-  defp reparsed(_error, _name, _held), do: :error
+  defp reparsed(_error, _name, _given), do: :error
 
   defp rebuilt({:block, name}, name, {rungs, tags}, []) do
     {named, _reached} = Enum.map_reduce(tags, [], &naming/2)
@@ -195,7 +205,7 @@ defmodule Logex.Compiler do
   It is the definition of a compiled body, as `Logex.Parser.well_formed!/1` is of a parse
   tree, which every type given to a compile or to `Logex.Tag.new!/4` has. Until decision
   54 it was the check `Logex.FbType.user?/1` made of a type's body; that check now asks
-  more, that the body be the one its own source text compiles to (`recompiled/3`), which
+  more, that the body be the one its own source text compiles to (`recompiled/4`), which
   implies this, so nothing calls it on the way in. It expects its tag table checked
   already, every tag under its own name and every instance's type, once each held type is
   given, the built-in `ton` or a type the table of a type `Logex.FbType.user?/1` takes
@@ -766,18 +776,19 @@ defmodule Logex.Compiler do
   # docs/organisation.md §4.10, "Held types"): a type held in every instance's tag would
   # grow, copied flat, as the width to the power of the depth, and one table per body as
   # the paths to a type. The warnings are of the table with each type itself.
-  defp lowered(:program, rungs, {tags, held}, []) do
+  defp lowered(:program, rungs, {tags, held}, [], _routine) do
     {named, blocks} = hold(tags, held)
 
     {:ok,
      %Program{rungs: rungs, tags: named, blocks: blocks, warnings: Logex.Warnings.of(rungs, tags)}}
   end
 
-  defp lowered({:block, name}, rungs, {tags, held}, []) do
+  defp lowered({:block, name}, rungs, {tags, held}, [], routine) do
     {named, blocks} = hold(tags, held)
 
     body = %Program{
       name: name,
+      source: printed(routine),
       rungs: rungs,
       tags: named,
       blocks: blocks,
@@ -789,8 +800,28 @@ defmodule Logex.Compiler do
 
   # A declaration after the first rung is reported where it stands, so the two lists are
   # merged by line. The sort is stable: within a line, the order each list gave is kept.
-  defp lowered(_kind, _rungs, _tags, diagnostics),
+  defp lowered(_kind, _rungs, _tags, diagnostics, _routine),
     do: {:error, Enum.sort_by(diagnostics, & &1.line)}
+
+  # A block built here from a parse tree, its members perhaps declared from Elixir, keeps a
+  # source text that compiles again to its body (decision 54): each rung printed on the
+  # line it was parsed from, so every line the body carries is the text's. Logex.compile/2
+  # puts the text it was given in its place. The members declared from Elixir are not
+  # printed, which would give them lines: a recompile is handed them again (recompiled/4).
+  defp printed({:routine, {:rungs, rungs}}) do
+    {lines, _line} =
+      Enum.map_reduce(rungs, 1, fn rung, at ->
+        line = rung_line(rung)
+        {String.duplicate("\n", line - at) <> Logex.Printer.print(rung), line}
+      end)
+
+    Enum.join(lines)
+  end
+
+  defp rung_line({:rung, elements}), do: element_line(elements)
+
+  defp element_line([{:branches, [leg | _legs]} | _elements]), do: element_line(leg)
+  defp element_line([{_kind, line, _value} | _elements]), do: line
 
   # The tags, each instance of a user block naming its type, and the table: every type the
   # instances reach, at any depth, once, by name, the one version of it the compile holds,

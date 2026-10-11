@@ -228,7 +228,7 @@ defmodule Logex.FbType do
   whose body is the one its own source text compiles to. Each type the value holds, the
   outermost and every type in its body's `blocks`, is compiled again from its body's
   `source`, as a block of its name, over the types its instances name, as the table holds
-  them (`Logex.Compiler.recompiled/3`), and must be exactly what that compile gives: its
+  them (`Logex.Compiler.recompiled/4`), and must be exactly what that compile gives: its
   members, and its body's name, rungs, tag table and warnings, with the file its body
   keeps, which no text gives: nil, or a path to a file named after the block, as
   `Logex.compile_file/1` reads one, which stamps each warning with it. The table must be
@@ -241,9 +241,12 @@ defmodule Logex.FbType do
   what it holds: a rung edited into another that text could say, the text left as it
   was; a tag, a member or a warning edited, added or dropped; a source text edited, the
   body left as it was; a file that is no such path; or a table that lacks a type, holds
-  one no instance reaches, or holds one with a table of its own. A type with no source text,
-  which only `Logex.Compiler.instructionize/3` gives, has none to compile again, and is
-  refused too. Total: a hand-built value of any shape is `false`, never an exception. The
+  one no instance reaches, or holds one with a table of its own. A block that
+  `Logex.Compiler.instructionize/3` builds from a parse tree keeps a source text that
+  gives its rungs on their lines, its members declared from Elixir not in it: those, the
+  tags with no line, are handed to the recompile again, so such a type is one a compile
+  takes, and a member from Elixir edited by hand is refused like any other tag. A type
+  with no source text at all is refused. Total: a hand-built value of any shape is `false`, never an exception. The
   table holds each type once, so each is compiled again once a call, however many paths
   of holders reach it, and the check is linear in the source text of the types a value
   holds, but every call compiles them all again (`check/2`).
@@ -295,12 +298,22 @@ defmodule Logex.FbType do
   # Decision 54: a held type is the one its source text compiles to over the types it
   # names, read inside the table, its body keeping the file it was read from: none, or a
   # path to a file named after the block, as Logex.compile_file/1 names one.
+  # The members declared from Elixir, which have no line, are handed to the recompile again,
+  # since a block built by Logex.Compiler.instructionize/3 from them keeps no text for them.
   defp compiles?({%__MODULE__{name: name, body: %Program{source: source}} = held, named}, blocks),
     do:
       recompiled(
-        Logex.Compiler.recompiled(source, name, Map.new(named, &{&1.name, within(&1, blocks)})),
+        Logex.Compiler.recompiled(
+          source,
+          name,
+          Map.new(named, &{&1.name, within(&1, blocks)}),
+          from_elixir(within(held, blocks))
+        ),
         held
       )
+
+  defp from_elixir(%__MODULE__{body: body}),
+    do: for({_name, %Tag{line: nil} = tag} <- Program.typed_tags(body), do: tag)
 
   defp recompiled(
          {:ok, body},

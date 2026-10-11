@@ -992,18 +992,46 @@ defmodule Logex.FunctionBlockTest do
       assert program.tags["s1"].type == {:block, "seal"} and program.blocks == %{"seal" => seal}
 
       # A block's member declared from Elixir has no line: it comes first in cal's order,
-      # those from Elixir by name. Such a type, which instructionize/3 gives, has no source
-      # text, so none to compile again, and since decision 54 it is no type a compile takes.
-      ast = ast("function_block blk\nvar_output q bool\nxic a ote q")
+      # those from Elixir by name. Such a type, which instructionize/3 gives, keeps a source
+      # text with each rung on the line it was parsed from, its Elixir members not printed,
+      # and a recompile handed them again gives its body, so a compile takes it (decision
+      # 54). Blank lines in the text keep the rungs on lines the printing must reproduce.
+      ast = ast("function_block blk\n\nvar_output q bool\n\n\nxic a ote q")
       declared = [Tag.new!("b", :bool, :var_input), Tag.new!("a", :bool, :var_input)]
       assert {:ok, %FbType{} = blk} = Logex.Compiler.instructionize(ast, declared)
       assert Enum.map(blk.members, & &1.name) == ["a", "b", "q"]
-      assert blk.body.source == nil
-      refute FbType.user?(blk)
+      assert blk.body.source == "function_block blk\n\nvar_output q bool\n\n\nxic a ote q"
+      assert FbType.user?(blk)
+
+      assert {:ok, %Logex.Program{} = m} =
+               Logex.compile("var_input x bool\nvar_output y bool\nvar k blk\ncal k x x y",
+                 name: "m",
+                 types: [blk]
+               )
+
+      assert m.blocks == %{"blk" => FbType.held(blk)}
+
+      # Edited by hand, it is refused where it is given: a member declared from Elixir
+      # given another section, so the recompile handed it gives another body; and a source
+      # text with a rung moved to another line.
+      edited = %{blk.body.tags["b"] | section: :var_output}
+      refute FbType.user?(%{blk | body: %{blk.body | tags: %{blk.body.tags | "b" => edited}}})
+
+      refute FbType.user?(%{
+               blk
+               | body: %{blk.body | source: "function_block blk\nvar_output q bool\nxic a ote q"}
+             })
+
+      # A member from Elixir edited into one no host could give is refused, not raised.
+      negative = %{blk.body.tags["b"] | initial: -1}
+      refute FbType.user?(%{blk | body: %{blk.body | tags: %{blk.body.tags | "b" => negative}}})
 
       raises(
-        "types must be function block types from Logex.compile/2, got: #{inspect(blk)}",
-        fn -> Logex.compile("var k blk", name: "m", types: [blk]) end
+        "types must be function block types from Logex.compile/2, got: " <>
+          inspect(%{blk | body: %{blk.body | source: nil}}),
+        fn ->
+          Logex.compile("var k blk", name: "m", types: [%{blk | body: %{blk.body | source: nil}}])
+        end
       )
 
       raises(

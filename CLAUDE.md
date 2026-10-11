@@ -95,7 +95,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   recursive, has its uses excused, so a misspelled block name is one message; `cal` is
   checked formal by formal, and one `cal` runs an instance. `lowered?/1` is the
   definition of a compiled body, which a type given has, as `well_formed!/1` is of a
-  parse tree, and `recompiled/3` (decision 54) a block's body from its source text over
+  parse tree, and `recompiled/4` (decision 54) a block's body from its source text over
   the types it names, trusted, which a type given must be. The stage functions stay
   public for the golden record, the Elixir-side declarer and the naming test, and
   `signature/2` (M2-5) for the walks: an IR instruction's slots, its mnemonic's signature

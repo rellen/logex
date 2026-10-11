@@ -1608,17 +1608,19 @@ is reported; and a directory with a block's name "cannot be read".)*
   compiled again from its body's source text, once a compile, as a block of its name,
   over the types its instances name as the table holds them, each compiled again before
   any type that names it, trusted and not checked again
-  (`Logex.Compiler.recompiled/3`), and must be exactly what that compile gives: its
+  (`Logex.Compiler.recompiled/4`), and must be exactly what that compile gives: its
   members, and its body's name, rungs, tag table and warnings. The one thing the text
   cannot give is the file a body was read from, which is kept: none, or a path to a file
   named after the block, which stamps each warning. So a rung edited into another that
   text could say, a tag table edited into one declaration lines could give, a source text
   edited with its body left as it was, or a file that is no such path, is refused where
   it is given; a source text that gives that very body, a comment more, is the type a
-  compile gives for it. A type with no source text, which only
-  `Logex.Compiler.instructionize/3` gives, a block whose members are declared from Elixir
-  among them, has none to compile again, and is refused where it is given too, as
-  `Logex.compile/2`'s doc asked of a type given. The shape check is gone from `user?/1`:
+  compile gives for it. *(Changed 2026-10-11 by the maintainer's answer: a block that
+  `Logex.Compiler.instructionize/3` builds, its members perhaps declared from Elixir,
+  keeps a source text with each rung printed on the line it was parsed from, and its
+  members from Elixir, the tags with no line, are handed to the recompile again, so it is
+  a type a compile takes, as M2-5's third commit had it. A type with no source text at
+  all is refused where it is given.)* The shape check is gone from `user?/1`:
   `Logex.Compiler.lowered?/1` stays the definition of a compiled body, which a type
   given has, but nothing calls it on the way in. A compile given a type took 1.19x the
   reductions it took before for one block of 200 rungs, and 1.31x for a chain of 200
@@ -1672,10 +1674,10 @@ is reported; and a directory with a block's name "cannot be read".)*
   before its documents, a departure from "after M2-5" made so that the documents commit
   describes it with the rest: a line given the unknown-type message, or refused as
   recursive, excuses every use of its own name, as written; a line refused for another
-  reason excuses nothing.)* *(Since decision 54, a block whose members are declared from
-  Elixir, which only `Logex.Compiler.instructionize/3` gives, has no source text to
-  compile again, and is no type a compile or `Logex.Tag.new!/4` takes: the order above
-  holds for its members, but only a block's text gives a type to declare instances of.)*
+  reason excuses nothing.)* *(Since decision 54 such a block is compiled again from the
+  text `Logex.Compiler.instructionize/3` keeps for it, its members from Elixir handed to
+  the recompile, so it stays a type a compile and `Logex.Tag.new!/4` take; this order
+  holds for its members there too.)*
 - *`cal`.* Its `@instructions` entry is the marker `{:cal, :block}`, so that table still
   reserves it and the naming test still sees it, and its signature is the block's, built
   per compile. `cal` is reserved in every `.ld`, in any case. One `cal` runs an instance:

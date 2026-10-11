@@ -1122,6 +1122,7 @@ defmodule Logex.RuntimeTest do
                lowered?: 1,
                parse: 1,
                recompiled: 3,
+               recompiled: 4,
                signature: 2,
                tokenize: 1
              ]
