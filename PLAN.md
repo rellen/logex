@@ -16,9 +16,10 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
-§1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1 and §3's M2-5 have been brought current.
-Milestone 2 was designed on 2026-10-02 (§3), its first item, M2-1, landed the same day,
-and M2-5 on 2026-10-04; the rest of Milestone 2 and OE-2 are still forward work.
+§1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5 and §3's M2-2 and M2-3 have been
+brought current. Milestone 2 was designed on 2026-10-02 (§3), its first item, M2-1,
+landed the same day, M2-5 on 2026-10-04, and M2-2 and M2-3 on 2026-10-11; the rest of
+Milestone 2 and OE-2 are still forward work.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -82,6 +83,13 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   runs each with `cal`, rung power its EN, and reads its outputs, `s1.run`, anywhere.
   Blocks nest, a block never holds itself, and an online edit moves a block's members by
   path.
+- A configuration file (M2-2, M2-3): `plant.logex` declares periodic tasks, globals at
+  input and output points or not, program instances and arrow-free connections, and
+  `Logex.Configuration.compile_file/1` reads it, loads each program type from its `.ld`
+  file beside it, and checks it with M2-1's one validator, every mistake a diagnostic at
+  its file and line in the configuration file's words; `Logex.Configuration.Text` prints
+  a configuration back to its text, exactly. `Logex.compile_file/1` takes a `.ld` file
+  only.
 
 These were each verified directly:
 
@@ -968,6 +976,8 @@ design:
   a `:file` diagnostic, and the source is still compiled. Names are checked for shape only:
   reserved words are scoped by file kind (`docs/organisation.md` decision 10), and a program
   type's name is never spelled in a `.ld` body, so the `.logex` words wait for M2-2.
+  *(Landed with M2-2 and M2-3: they are reserved in a configuration file only, and
+  `compile_file/1` now takes a `.ld` file only.)*
 - **Warnings**, only when the program compiles, never for a tag declared from Elixir: a tag
   declared but used by no rung; a `var_output` no rung writes ("it stays at" its initial
   value); a second `ote` on one tag.
@@ -1322,7 +1332,8 @@ one (owed below). The scheduler's and the function blocks' spikes, merged, pass 
 582 tests on Elixir 1.20.4. The maintainer took decisions 30–40 as recommended but 35,
 the configuration file's extension, choosing `.logex`, outside the options offered; the
 pass's routine choices, the rules of §4.10, were all taken as recommended. M2-1 landed
-on 2026-10-02 and M2-5 on 2026-10-04 (below); nothing else has.
+on 2026-10-02, M2-5 on 2026-10-04, and M2-2 and M2-3 on 2026-10-11 (below); nothing else
+has.
 
 **The order (decision 30):** the design record, then M2-1, M2-5, M2-2, M2-3, M2-4 and
 M2-6.
@@ -1454,6 +1465,7 @@ configuration file's must be built that way before they land.
   `Logex.compile_file/1` refuses anything but `.ld` with a `:file` diagnostic. Until
   then it names a program after its basename less the last extension, whatever that is,
   and `test/logex_test.exs` pins that; its `seal.txt` assertion flips with this item.
+  *(Flipped with it, 2026-10-11: `seal.txt` is a `:file` diagnostic.)*
 
   *Designed 2026-10-02* (§4.10, M2-2). Two departures from the scope above, each annotated
   where it was decided: the §4.4 checks M2-1's data can express land with M2-1, and M2-2
@@ -1477,6 +1489,50 @@ configuration file's must be built that way before they land.
   8. the Done-when on M2-1's `cycle/3`, and the documents.
 
   The fourth is the largest piece no spike built (owed, below).
+
+  **Status: DONE — landed 2026-10-11**, as nine commits, gated alone, each with its
+  mutation table in its message, every rule it adds reverted alone and the full suite
+  judged by exit code. The first five were built on `025199a`, before M2-5, and rebased
+  onto `732c0b6`, the last three after M2-3's commits, a departure from the record's order
+  made because they need M2-5's loader: (1) the survey, `8006dd8` (the record's 1); (2) the
+  reader and printer, `Logex.Configuration.Text`, `2177ef6` (3); (3) the checks as rows of
+  `check/1`, with `Configuration.compile/3`, `2dbb30f` (4); (4) the round trip, totality
+  and growth, `c3ec5cb` (6); (5) a location in a rung, `2eb0852` (7); then, after M2-3's,
+  (6) `compile_file/1` takes only `.ld`, `250926a` (2); (7) the configuration's loader,
+  `f963271` (5); (8) the Done-when from files on disk, `82a587e` (8); (9) the documents,
+  the commit after it (8). 770 tests pass on Elixir 1.20.4 (8 of them doctests), up from
+  675 on `732c0b6`. The mutation tables of (1) to (5) were run before the rebase, on
+  `025199a`, 154 rules (9, 55, 59, 20 and 11), every one red; (5)'s eleven were run again
+  on the rebased tree, since M2-5 changed the compiler's lookup most, and all are red.
+  (6) and (7) add 29 rules (6 and 23), every one red on their own trees; (8) adds none
+  and reverted twelve the Done-when relies on, every one red. The rebase kept both sides
+  of every conflict: M2-5's `function_block` words beside the configuration file's in
+  `docs/naming.md`, `naming_test.exs` and `CLAUDE.md`, M2-5's describes in
+  `end_to_end_test.exs`, and M2-5's one block-type message, which `compile/3` raises and
+  whose words the totality property now pins, a user block's among them.
+
+  Readings the landing made, each stated in its commit and pinned:
+  - the loader is `Logex.Configuration.compile_file/1`, beside `compile/3` as
+    `Logex.compile_file/1` is beside `compile/2`, and M2-5's private loader is opened as
+    `Logex.compile_files/1`, several `.ld` files through one memo; so the public-surface
+    pins of `Logex` and of `Logex.Configuration` are each rewritten again, where the
+    record's fourth item rewrote Configuration's once;
+  - the configuration is named after its file, `plant.logex` being `plant`; a bare
+    `.logex` "names no configuration" (decision 35), and any other extension, a file
+    that cannot be read and a name that is none are `:file` diagnostics, the text still
+    compiled after a refused name; `compile_file/1` tells a `.logex` file whose it is;
+  - a `program` line's type that gives no program type is cited once, at its first
+    instance's line, its other instances silent: a missing `<type>.ld` as an unknown
+    program type, with a did-you-mean among the `.ld` files beside the configuration; a
+    block's file with the one block-type message; a file that does not compile by name,
+    its own diagnostics after the configuration's, each with its own file and line;
+  - a program type's warnings stay in its program, a block's handed back once a
+    configuration, by the first program type that loads it; the configuration's own stay
+    in its `warnings`;
+  - a type that is no name, or a keyword, is not looked for.
+  Growth: the reader, the printer and `compile/3`, read over 44 runs, 4.20x to 4.59x,
+  4.01x to 4.06x and 4.25x to 4.95x for 4x the input, bounds 5.6, 5.0 and 6.0; the
+  loader, over 36, 4.007x to 4.025x for 4x the program types, bound 4.9.
 - **M2-3 · Periodic tasks in text.** `task <n> interval <ms> priority <p>` and `with`.
   *Done when* the plant of `docs/organisation.md` §4.4 without its event task, its `motor`
   the §4.2 one plus `var t1 ton` and a rung `xic motor ton t1 5000` (so no `estop`,
@@ -1496,6 +1552,19 @@ configuration file's must be built that way before they land.
   `with` stanzas; (2) task lines and `with` turned on, with the warning for a task that
   runs no instance; (3) the Done-when, on M2-1's scheduler, and the documents. The reader
   is spiked.
+
+  **Status: DONE — landed 2026-10-11**, as three commits between M2-2's fifth and sixth,
+  built on `025199a` and rebased onto `732c0b6` without a conflict but in the Done-when's
+  test file, with the documents in M2-2's last commit: (1) the survey, `058ae8f`; (2)
+  task lines and `with`, the warning for a task that runs no instance, and the §4.4
+  receipt's seven diagnostics word for word, `0277087`; (3) the Done-when, `7b68b77`:
+  §4.4's plant without its event task, read by `Configuration.compile/3`, cycled every 10
+  ms from 0 to 990 ms, runs `m1` 100 times and `m2` 20 times, and each `t1` times against
+  the one clock, the inputs timed as the record asks. (2)'s 51 rules and the 21 the
+  Done-when relies on, reverted on `025199a` before the rebase, are every one red.
+  Decision 40's rule for an interval OE-2 changes, `min(next_due, now + new interval)`,
+  is stated in the `interval` stanza of `docs/naming.md` and in `Logex.Runtime`'s
+  one-rule section; nothing builds it before OE-2.
 - **M2-4 · Shared globals.** `var_external` in `.ld`; type agreement (Ed 2 §2.4.3); no
   writes to an input point; a two-writer warning. *Done when* an e-stop declared once as
   a `var_global` and read by two instances through `var_external` stops both in the same
@@ -1592,7 +1661,7 @@ configuration file's must be built that way before they land.
   `Logex.Declarations.not_a_program/1`'s, from the runtime, `Logex.Edit.accept/3` and
   `Logex.Configuration`'s `check/1` and `new!/1`, in place of M2-1's interim words
   (`Configuration.compile/3` and the configuration's loader, which M2-2 lands, are the
-  entry points left); the Done-when reading
+  entry points left; *landed with M2-2, which gives it at both*); the Done-when reading
   `Logex.Runtime.get(rt, "m1.s2.run") == {:ok, 1}` through a configuration, from text and
   from files on disk; decision 34's warnings handed back by `compile_file/1`; a test for
   every check inside `Logex.Compiler.lowered?/1`, so the owed rising-lines check below is
@@ -1786,7 +1855,8 @@ diagnostic naming its file and line.
   both add `lib/logex/configuration.ex`. M2-2's fourth commit ports them into M2-1's
   `check/1` as rows, rewrites the public-surface pin once, and asserts every M2-1 check
   again from source. Two device names that differ only in case are refused there, the one
-  check M2-1's data can express that M2-1 does not land; no spike built it.
+  check M2-1's data can express that M2-1 does not land; no spike built it. *(Closed by
+  M2-2's third commit, `2dbb30f`, the device names' case among its rows.)*
 - **The seams between M2-5 and the configuration file** are planned, not built: the
   configuration spike has no `cal`. Each commit at a seam checks it on the composed tree:
   a `cal`'s outputs among a program's writes, a block's `ton` among its timers, a block's
@@ -1794,7 +1864,11 @@ diagnostic naming its file and line.
   so each is now checked against its code: the walks read a `cal`'s slots through
   `Logex.Compiler.signature/2`, the loader is `Logex.compile_file/1`'s private `load/3`,
   which M2-2 is to open for one memo per configuration, and the one block-type message is
-  `Logex.Declarations.not_a_program/1`.)*
+  `Logex.Declarations.not_a_program/1`.)* *(Two of the five are closed by M2-2: one
+  loader, `Logex.compile_files/1`, which the configuration's loader goes through, and a
+  block's file on a `program` line, given the one block-type message. The other three,
+  a `cal`'s outputs among a program's writes, a block's `ton` among its timers and a
+  block's `var_external`, are M2-4's.)*
 - **Two run-time pieces were not spiked by the design:** M2-4's one copy of a global, and
   M2-6's edges with `single` and `interval`. Their rules were the design's text alone. A
   test of the event task's tie-break is owed: an event task and a late periodic task of

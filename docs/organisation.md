@@ -523,6 +523,20 @@ line 15: `m1.fault` is internal to `motor` (declared `var`): only a var_input or
 line 16: `m1.speed_sp` is a dint, but `k` is a bool (line 3)
 ```
 
+*(Landed with M2-2 and M2-3, 2026-10-11: the broken source, written out in
+`configuration_test.exs`, gives exactly seven diagnostics, one on each of those lines, and
+the test pins them word for word, each at `:configure`:)*
+
+```
+line 7, column 1: unknown configuration line `progam` — did you mean `program`?
+line 9: no task `medium`: declare it with a `task` line, as in `task medium interval 10 priority 1`
+line 11: `m1` is a `motor`, which declares no `strat` — did you mean `start`?
+line 12: `pb` is an input point (line 2): `m1.motor`, a var_output, cannot drive it
+line 14: `k` is already driven by `m1.run_lamp` (line 13)
+line 15: `m1.fault` is internal to `motor` (declared `var`): only a var_input or var_output connects
+line 16: `m1.speed_sp` is a dint, but `k` is a bool (line 3)
+```
+
 **Globals shared by name.** `var_external estop bool` in `motor.ld` binds to the
 configuration's `var_global estop bool` (Ed 2 §2.4.3). During a scan it reads and writes
 the global directly. Use it for what every instance shares, such as an e-stop. Per-instance
@@ -539,7 +553,9 @@ M2-4.)*
 - A convenience loader resolves `motor` to `motor.ld` beside the `.logex`. *(Milestone
   2's design: through the one loader M2-5 lands for function blocks, decision 34, with one
   memo for the whole configuration. M2-5 landed it on 2026-10-04, inside
-  `Logex.compile_file/1`, one memo a call.)*
+  `Logex.compile_file/1`, one memo a call. M2-2 landed the configuration's on 2026-10-11,
+  `Logex.Configuration.compile_file/1`, through `Logex.compile_files/1`, that loader over
+  several files with one memo.)*
 - A constructor built from Elixir data runs the same checks, as `Tag.new!/4` does for
   M1-3. *(Milestone 2's design: `Logex.Configuration.new!/1` raises every problem at once,
   a line each, where `Tag.new!/4` raises the first; §4.10, M2-1.)*
@@ -997,8 +1013,8 @@ against M2-1 as it landed, 2026-10-02: each item it can meet, it meets, as marke
   `Logex.Runtime`'s one-rule section for the clock, an instance and a task; an event
   task's trigger is M2-6's)*
 - one checked constructor, which the configuration file's reader feeds; *(met:
-  `Logex.Configuration.check/1`, which `new!/1` and `start/1` run; M2-2's reader is to
-  feed it)*
+  `Logex.Configuration.check/1`, which `new!/1` and `start/1` run; M2-2's reader feeds
+  it, through `compile/3`, since 2026-10-11)*
 - `start/1` builds each instance through the same constructor as `Runtime.instance/1`,
   so an instance's `first`, its one-shot block list and any field it gains later cannot
   drift between the two (OE-1; fix F14 in §7); *(met)*
@@ -1441,8 +1457,9 @@ F3, the held values of F4) and still costs less than one scan.
 
 ### 4.10 Milestone 2's design (designed 2026-10-02)
 
-**Designed 2026-10-02; M2-1 landed the same day (`PLAN.md` M2-1), and M2-5 on
-2026-10-04 (`PLAN.md` M2-5); nothing else has.** A design pass spiked Milestone 2 in three
+**Designed 2026-10-02; M2-1 landed the same day (`PLAN.md` M2-1), M2-5 on 2026-10-04
+(`PLAN.md` M2-5), and M2-2 and M2-3 on 2026-10-11 (`PLAN.md` M2-2 and M2-3); nothing else
+has.** A design pass spiked Milestone 2 in three
 tracks on copies of `47319f7`, on Elixir 1.20.4 / OTP 28: the scheduler from Elixir data
 (M2-1); user function blocks (M2-5); and the configuration file, shared globals and event
 tasks (M2-2, M2-3, M2-4, M2-6). Each track was reviewed for correctness and for fit with
@@ -1501,7 +1518,7 @@ any value that is not the struct is.)*
   whole-number fields with no leading zero, so each point has one spelling. One address
   holds one global. An output point takes no initial value, as an input point takes none.
   The case of device names is the one check over points that lands later, with M2-2's
-  port of the checks (below).
+  port of the checks (below). *(Landed with it, 2026-10-11.)*
 - *Lines.* The elements' lines are all nil, as from Elixir, or strictly rising, so the
   data path refuses an order no file gives and the printer's round trip is exact. A line
   on an element from Elixir is refused for that element, as in ``task `t1` from Elixir has
@@ -1574,8 +1591,10 @@ is reported; and a directory with a block's name "cannot be read".)*
   under `<key>` is`` where a key and a name differ. Until M2-5 lands, M2-1 gives interim
   words without `cal`. *(Landed: `Logex.Declarations.not_a_program/1` gives it, at the
   runtime, `accept/3`, `check/1` and `new!/1`; for the built-in timer it says "through
-  `ton`". `compile/3` and the configuration's loader are M2-2's, which is to give it
-  there.)*
+  `ton`". `compile/3` and the configuration's loader are M2-2's, which give it there:
+  `compile/3` raises it for a block type among its programs, and
+  `Logex.Configuration.compile_file/1` gives it as a located diagnostic at a `program`
+  line that names a block's file, since 2026-10-11.)*
 - *Types given.* `Logex.compile/2` takes `types:` (decision 34), and its options message
   names it. A block's name is matched exactly, as a tag's is. One compile holds one
   version of each block name, across the types given, the types they hold and the types of
@@ -1730,7 +1749,9 @@ is reported; and a directory with a block's name "cannot be read".)*
   `end_to_end_test.exs` asserts `Logex.Runtime.get(rt, "m1.s2.run") == {:ok, 1}` through
   a configuration, from text and from files on disk through `compile_file/1`.)*
 
-**M2-2 · The configuration file, task-less.**
+**M2-2 · The configuration file, task-less.** *(Landed 2026-10-11, as these rules;
+`PLAN.md` M2-2 gives the commits and the readings the landing made: the loader is
+`Logex.Configuration.compile_file/1`, through `Logex.compile_files/1`.)*
 - *The file* is a configuration file (`.logex`, decision 35), read by a recursive descent
   over `Logex.Lexer`'s tokens: a line-shape mistake has a column, and the `.ld` grammar,
   its golden record and the printer's shapes are untouched. A line ends at LF, CRLF or a
@@ -1766,14 +1787,18 @@ is reported; and a directory with a block's name "cannot be read".)*
   did-you-mean pass, as the `.ld` compiler's refusals already do. That is accepted and
   documented, since only a mistake in the source pays it.
 
-**M2-3 · Periodic tasks in text.**
+**M2-3 · Periodic tasks in text.** *(Landed 2026-10-11, as these rules; `PLAN.md`
+M2-3.)*
 - `task <n> interval <ms> priority <p>` and `with`. A task's inputs come in IEC's order,
   `single`, `interval`, `priority`, each once. A priority is 0 to 65535 (decision 37),
   and the `priority` stanza says that one vendor family numbers the other way.
 - *Warning:* a task that runs no instance.
 - *Done-when.* "Cycled every 10 ms from 0 to 990 ms" replaces "driven for one simulated
   second".
-- Its documents state decision 40's rule, which OE-2 builds.
+- Its documents state decision 40's rule, which OE-2 builds. *(They do: an interval OE-2
+  changes makes its task next due at `min(next_due, now + new interval)`, in the
+  `interval` stanza of `docs/naming.md` and in `Logex.Runtime`'s one-rule section, and
+  nothing builds it before OE-2.)*
 
 **M2-4 · Shared globals.**
 - *One IR walk first.* B5's one walk of a program's IR lands as M2-4's first commit,
@@ -2006,12 +2031,13 @@ each again from source; §4.10.)* Each rule is checked by reverting it (CLAUDE.m
   `scan/2` and through a one-instance configuration.* *(Worded 2026-10-02: "cycled every
   10 ms from 0 to 990 ms" in place of "cycled for one simulated second".)*
 
-**M2-2 · The configuration file, task-less.**
+**M2-2 · The configuration file, task-less.** *(Landed 2026-10-11; `PLAN.md` M2-2.)*
 - `.logex` lines: `var_global` (plain and located at `<dev>.i|q.<n>`), `program <inst>
   <type>`, and connections.
 - The §4.4 checks, and `Configuration.compile/3` with a loader. *(Designed 2026-10-02:
   the checks land with M2-1, on data, and M2-2 asserts each again from source and ports
-  its own into M2-1's `check/1`; the loader is M2-5's, decision 34.)*
+  its own into M2-1's `check/1`; the loader is M2-5's, decision 34. Landed: the loader is
+  `Logex.Configuration.compile_file/1`.)*
 - Reserves `program var_global at bool dint` in `.logex`.
 - Adds `configuration_test.exs`. *(M2-1 added it on 2026-10-02, pinning every check from
   data; M2-2 asserts each again from source.)*
@@ -2020,7 +2046,7 @@ each again from source; §4.10.)* Each rule is checked by reverting it (CLAUDE.m
   independent state; a mis-wired, unknown, undriven-input or mistyped connection is a
   located diagnostic naming its file and line.*
 
-**M2-3 · Periodic tasks in text.**
+**M2-3 · Periodic tasks in text.** *(Landed 2026-10-11; `PLAN.md` M2-3.)*
 - `task … interval … priority`, and `with`.
 - Reserves `task interval priority with` in `.logex`.
 - *(Designed 2026-10-02: a priority is 0 to 65535, decision 37; the acceptance is
@@ -2503,7 +2529,7 @@ to OE-2.
     compiler excuses the uses of a recursive declaration; or report each use too, as M2-1
     does, "`m.start` is connected to `a.b`, which is not a global". *Recommend once.* The
     maintainer stated no preference, so the recommendation stands. It lands with M2-2's
-    port of the checks; until then M2-1 reports each use.
+    port of the checks; until then M2-1 reports each use. *(Landed 2026-10-11.)*
 43. **An instance whose program type an edit changes (OE-2):** a remove plus an add, the
     old instance pruned and the new one started by `Runtime.instance/1`, both reported;
     or a refusal, as a tag's type change is refused. *Recommend the remove plus an add,*

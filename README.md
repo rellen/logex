@@ -3,7 +3,7 @@
 A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
 text into a named, stateless value, and runs it as instances, one scan at a time, with the
 time the host injects. No dependencies and no generated code: the lexer and parser are
-written by hand, and the whole thing is twenty-one small modules.
+written by hand, and the whole thing is twenty-two small modules.
 
 **Stage: early, and honest about it.** Fifteen instructions, among them an on-delay
 timer, a one-shot and six comparisons, parallel branches to arbitrary nesting depth,
@@ -13,13 +13,13 @@ its own, instantiated as often as needed and run with `cal`, a public API
 (`Logex.compile/2`, `Logex.compile_file/1` and `Logex.Runtime`), an online edit that
 changes a running instance's program, its function blocks included, without a restart
 (`Logex.Edit`), a scheduler that runs instances of several programs as one configuration
-on periodic tasks, wired to input and output points (`Logex.Configuration`), and a
-printer that turns an AST back into source so a routine round-trips — all of that works
-and is tested end to end, and a program with mistakes in it gets every one reported with
-its line rather than an exception, a misspelt tag included. What does not exist yet:
-counters, the other timers, math, the configuration file, which will hold a configuration
-as text (a configuration is built from Elixir data for now), shared globals and event
-tasks. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
+on periodic tasks, wired to input and output points (`Logex.Configuration`), written as a
+configuration file (`.logex`) that names its `.ld` program types or built from Elixir
+data, and a printer that turns an AST back into source so a routine round-trips, as a
+configuration file does too — all of that works and is tested end to end, and a program
+or a configuration with mistakes in it gets every one reported with its file and line
+rather than an exception, a misspelt tag included. What does not exist yet: counters, the
+other timers, math, shared globals and event tasks. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
 what order it gets fixed, and why.
 
 ## The dialect
@@ -60,6 +60,28 @@ Source syntax today:
   `Logex.compile_file/1` with `seal.ld` beside it, declares instances of it and runs each
   with `cal`. In a block's file `function_block` is reserved, in any case. A block holds
   no instance of itself, at any depth
+- `Logex.compile_file/1` takes a `.ld` file only, exactly: any other name is a `:file`
+  diagnostic
+
+A configuration file (`.logex`, "A configuration", below) has lines of its own, one
+element each, its keywords in any case, `//` comments, and a line ending as a `.ld`
+file's does:
+
+- `task <name> interval <ms> priority <p>`: a periodic task, every 1 to 2147483647 ms,
+  at a priority of 0, the highest, to 65535, its inputs in that order
+- `var_global <name> <type> [<initial>]`, a `bool` or a `dint`, and `var_global <name>
+  <type> at <device>.i.<n>` or `… at <device>.q.<n>`, an input or an output point, which
+  takes no initial value: the `var_global … at` lines are the plant's I/O list
+- `program <instance> <type> [with <task>]`: an instance of the program type in
+  `<type>.ld` beside the file, on a task or, without `with`, run in every cycle after the
+  tasks
+- `<instance>.<member> <global or constant>`: a connection, with no arrow, since the
+  member's section fixes its direction. Every `var_input` is connected once, to a global
+  of its type or a constant; a `var_output` drives a global of its type, never an input
+  point, and one connection at most drives a global. Names resolve over the whole file
+- `task interval priority with program var_global at bool dint` are reserved in a
+  configuration file, in any case, and nowhere else: a `.ld` program may still have a tag
+  called `task`
 
 The *vocabulary* is a conventional ladder mnemonic set. The *branch delimiters used to be
 too*, and are no longer — which is worth stating plainly, because the survey that found the
@@ -91,7 +113,8 @@ Being a dialect is a licence to choose names, not a licence to choose them carel
 every new instruction is surveyed before it is written: what does IEC 61131-3 call this,
 what do the major vendor toolchains call it, and what should logex call it in that light?
 The survey lives in [`docs/naming.md`](docs/naming.md), one stanza per mnemonic,
-declaration word or word that heads a file, `function_block`, and
+declaration word, word that heads a file, `function_block`, or configuration file's word,
+and
 `test/logex/naming_test.exs` fails if any of them reaches the compiler without one. The
 rule it applies, in order: if IEC names the operation, take the IEC name; if IEC supplies
 only a graphical element, take the clearest vendor mnemonic and say which; never invent a
@@ -150,13 +173,12 @@ totality is a guarantee, not a feature to write programs against (`PLAN.md` §5)
 
 These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5 and §3's
 Milestone 2) and will change the source language:
-- **Program organisation** ([`docs/organisation.md`](docs/organisation.md)): a
-  configuration file (`.logex`) that instantiates `.ld` programs, wires them to I/O points
-  and globals, and schedules them on tasks, in text (the configuration it reads, and its
-  scheduler, landed with M2-1, built from Elixir data); `var_external` for shared globals;
-  event tasks. Each new word still gets its `docs/naming.md` stanza, which may change a
-  spelling. Function blocks called with `cal` have landed (M2-5, "A function block",
-  below).
+- **Program organisation** ([`docs/organisation.md`](docs/organisation.md)):
+  `var_external` for a global every instance shares, such as an e-stop; event tasks,
+  `task <name> single <global> priority <p>`. Each new word still gets its
+  `docs/naming.md` stanza, which may change a spelling. The scheduler (M2-1), function
+  blocks called with `cal` (M2-5) and the configuration file with its periodic tasks
+  (M2-2 and M2-3) have landed ("A function block" and "A configuration", below).
 
 - **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
 - **The other timers, counters and math** arrive as `tof tp rto res`, `ctu ctd`, `add sub
@@ -423,13 +445,128 @@ belts.ld: line 18: `ote` writes `s1.run`, but `s1` is an instance of `seal`, who
 A configuration runs instances of one or more programs as one resource: each instance on a
 periodic task or on none, its `var_input`s and `var_output`s connected to globals, and the
 globals located at the host's input and output points or not
-([`docs/organisation.md`](docs/organisation.md) §4.4 to §4.6). Until the configuration
-file lands, one is built from Elixir data with `Logex.Configuration.new!/1`, which checks
-it and raises every problem at once. `Logex.Runtime.start/1` makes the resource, and
-`cycle/3` steps it by the milliseconds the host says have passed, with the input points
-that changed, returning every output point and what ran.
+([`docs/organisation.md`](docs/organisation.md) §4.4 to §4.6). It is written as a
+configuration file (`.logex`), which `Logex.Configuration.compile_file/1` reads, loading
+each program type from the `.ld` file beside it, or built from Elixir data with
+`Logex.Configuration.new!/1`. Either way one validator checks it, in the configuration
+file's words. `Logex.Runtime.start/1` makes the resource, and `cycle/3` steps it by the
+milliseconds the host says have passed, with the input points that changed, returning
+every output point and what ran.
 
-`plant.exs` — two instances of `motor.ld`, `m1` on a 10 ms task and `m2` on a 50 ms one,
+### A configuration file
+
+`plant.logex` — two instances of `motor.ld`, above, `m1` on a 10 ms task and `m2` on a
+50 ms one, each wired to its own buttons, contactor and speed setpoint; `m2`'s `overtemp`
+and `reset` are tied to 0. Every global located `at` a point is the plant's I/O list:
+
+```
+// plant.logex -- two conveyors, one program type (motor.ld)
+task fast interval 10 priority 1
+task slow interval 50 priority 2
+
+var_global pb_start_1 bool at panel.i.0
+var_global pb_stop_1  bool at panel.i.1
+var_global tt_1       bool at panel.i.2
+var_global pb_start_2 bool at panel.i.3
+var_global pb_stop_2  bool at panel.i.4
+var_global pb_reset   bool at panel.i.5
+var_global k1         bool at panel.q.0
+var_global k2         bool at panel.q.1
+var_global sp_1       dint at drive.q.0
+var_global sp_2       dint at drive.q.1
+
+program m1 motor with fast
+  m1.start    pb_start_1
+  m1.stop     pb_stop_1
+  m1.overtemp tt_1
+  m1.reset    pb_reset
+  m1.motor    k1
+  m1.speed_sp sp_1
+
+program m2 motor with slow
+  m2.start    pb_start_2
+  m2.stop     pb_stop_2
+  m2.overtemp 0
+  m2.reset    0
+  m2.motor    k2
+  m2.speed_sp sp_2
+```
+
+`broken.logex`, beside it, has a mistake on four of its lines:
+
+```
+task fast interval 10 priority 1
+var_global pb_start_1 bool at panel.i.0
+var_global pb_stop_1  bool at panel.i.1
+var_global k1         bool at panel.q.0
+var_global sp_1       dint at drive.q.0
+program m1 motor with fsat
+  m1.start    pb_start_1
+  m1.stop     pb_stop_1
+  m1.motor    pb_stop_1
+  m1.speed_sp k1
+program m2 pump
+```
+
+`load.exs` loads the plant, cycles it and loads the broken file:
+
+```elixir
+{:ok, plant} = Logex.Configuration.compile_file("plant.logex")
+
+print = fn
+  nil, _now, _outputs, _events -> :ok
+  label, now, out, events -> IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  k1=#{out["k1"]} k2=#{out["k2"]}  #{inspect(events)}")
+end
+
+cycle = fn {rt, now}, elapsed, inputs, label ->
+  {rt, outputs, events} = Logex.Runtime.cycle(rt, elapsed, inputs)
+  print.(label, now + elapsed, outputs, events)
+  {rt, now + elapsed}
+end
+
+{Logex.Runtime.start(plant), 0}
+|> cycle.(0, %{}, "idle         ")
+|> cycle.(10, %{"pb_start_1" => 1, "pb_start_2" => 1}, "both started ")
+|> cycle.(10, %{}, nil)
+|> cycle.(10, %{}, nil)
+|> cycle.(10, %{}, nil)
+|> cycle.(10, %{}, "held to 50 ms")
+|> cycle.(10, %{"pb_start_1" => 0, "pb_start_2" => 0}, "released     ")
+
+{:error, diagnostics} = Logex.Configuration.compile_file("broken.logex")
+Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
+```
+
+```
+$ mix run load.exs
+t= 0  idle           k1=0 k2=0  [{:ran, "fast", "m1", 0}, {:ran, "slow", "m2", 0}]
+t=10  both started   k1=1 k2=0  [{:ran, "fast", "m1", 10}]
+t=50  held to 50 ms  k1=1 k2=1  [{:ran, "fast", "m1", 50}, {:ran, "slow", "m2", 50}]
+t=60  released       k1=1 k2=1  [{:ran, "fast", "m1", 60}]
+broken.logex: line 6: no task `fsat` — did you mean `fast`?
+broken.logex: line 6: `m1` leaves its var_inputs `overtemp` and `reset` unconnected: connect each to a global, a point or a constant, as in `m1.overtemp 0`
+broken.logex: line 9: `pb_stop_1` is an input point (line 3): `m1.motor`, a var_output, cannot drive it
+broken.logex: line 10: `m1.speed_sp` is a dint, but `k1` is a bool (line 4)
+broken.logex: line 11: unknown program type `pump`: there is no `pump.ld` beside `broken.logex`
+```
+
+- The plant is named after its file, and `motor` is compiled from `motor.ld` once, however
+  many instances it has; a function block that several program types hold is compiled
+  once too. A `.ld` file a `program` line names that is a function block's, or that does
+  not compile, is cited at the line of its first instance, the `.ld` file's own mistakes
+  after the configuration's, each with its own file and line.
+- Every task is due in the first cycle. `m2` sees its start button only when it next runs,
+  at 50 ms, so it starts then, and holds itself in after the button is released.
+- Every mistake is a diagnostic at its line, naming the file, in line order, and the
+  configuration file's words are the same from Elixir data: an instance's unconnected
+  `var_input`s are one diagnostic, at its `program` line.
+- `Logex.Configuration.compile/3` is the same compile from text, with the program types
+  given as data and no file read. `Logex.Configuration.Text.print/1` prints a
+  configuration back to its text, which compiles back to the very configuration.
+
+### From Elixir data
+
+`plant.exs` — the same plant built as Elixir data, two instances of `motor.ld`, `m1` on a 10 ms task and `m2` on a 50 ms one,
 each wired to its own buttons, contactor and speed setpoint; `m2`'s `overtemp` and `reset`
 are tied to 0. It then builds the same plant with three mistakes in it:
 
@@ -762,11 +899,11 @@ mix format
 ## Documents
 
 - `PLAN.md` — the codebase review and the ordered plan of work
-- [`docs/naming.md`](docs/naming.md) — the IEC and vendor naming survey, one stanza per mnemonic, declaration word or word that heads a file
+- [`docs/naming.md`](docs/naming.md) — the IEC and vendor naming survey, one stanza per mnemonic, declaration word, word that heads a file or configuration file's word
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
 - `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
 - `CLAUDE.md` — commands and conventions for anyone (or anything) editing the code
-- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, and function blocks, their online edit included, with M2-5; the rest of Milestone 2 is designed)
+- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, and the configuration file with its periodic tasks with M2-2 and M2-3; the rest of Milestone 2 is designed)
 - [`docs/defladder.md`](docs/defladder.md) — a study of an Elixir-embedded `defladder` DSL: what Nx's `defn` does, an executed spike, and a recommendation (proposed, not adopted)
 
 ## License
