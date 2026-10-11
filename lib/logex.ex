@@ -114,18 +114,45 @@ defmodule Logex do
   hands back no other. `compile/2`, whose host compiled each block, gives only the
   program's.
 
+  `path` is a `.ld` file's, exactly, since the extension says what kind of file it is
+  (M2-2): any other, `seal.txt`, `seal.LD` or `seal` among them, is a `:file`
+  diagnostic, and nothing is read. A file named only `.ld` is one whose name names no
+  program, below.
+
   A file that cannot be read, or whose name cannot name a program, is a `:file`
   diagnostic, not an exception. After a refused name the source is still compiled, with
   the blocks beside it, so its own mistakes are listed too.
   """
-  def compile_file(path) when is_binary(path) do
-    {result, {_results, loaded}} = load(path, {%{}, []}, {%{}, []})
-    handed_back(result, loaded)
-  end
+  def compile_file(path) when is_binary(path),
+    do: of_kind(Path.extname(path), Path.basename(path), path)
 
   def compile_file(path),
     do:
       raise(ArgumentError, "Logex.compile_file/1 takes a path as a binary, got: #{inspect(path)}")
+
+  # The gate in front of the loader: the extension says what a file is, so only a `.ld`
+  # file is read. A file named only `.ld` has no extension to Elixir, and is a `.ld` file
+  # whose name names nothing, which the loader says.
+  defp of_kind(".ld", _basename, path), do: loaded(path)
+  defp of_kind("", ".ld", path), do: loaded(path)
+
+  defp of_kind(_extension, basename, path),
+    do:
+      {:error,
+       [
+         %{
+           file_problem(
+             "`#{basename}` is not a `.ld` file: Logex.compile_file/1 compiles a program " <>
+               "or a function block from its `.ld` file"
+           )
+           | file: path
+         }
+       ]}
+
+  defp loaded(path) do
+    {result, {_results, loaded}} = load(path, {%{}, []}, {%{}, []})
+    handed_back(result, loaded)
+  end
 
   # `held` are the names of the files being loaded, as a set and as a list, innermost
   # first, so a cycle is found in one lookup and named only when there is one. The second

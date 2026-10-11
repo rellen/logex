@@ -203,8 +203,12 @@ defmodule LogexTest do
                "#{missing}: cannot be read: no such file or directory"
              ]
 
-      assert formatted(Logex.compile_file(dir)) == [
-               "#{dir}: cannot be read: illegal operation on a directory"
+      # A directory named as a `.ld` file passes the gate, and cannot be read.
+      folder = Path.join(dir, "folder.ld")
+      File.mkdir!(folder)
+
+      assert formatted(Logex.compile_file(folder)) == [
+               "#{folder}: cannot be read: illegal operation on a directory"
              ]
     end
 
@@ -273,16 +277,48 @@ defmodule LogexTest do
              ]
     end
 
-    # The rule the code has, pinned: the basename less its last extension, whatever it is.
-    # No document chooses between that and `.ld` only; if one does, the first line flips.
-    test "the name is the basename less its last extension", %{tmp_dir: dir} do
+    # The name is the basename less its `.ld`. PLAN M2-2 (decided 2026-09-30): the
+    # extension says what kind of file it is, so compile_file/1 takes only `.ld`, exactly,
+    # where it once named a program after its basename less any last extension. This test
+    # held `seal.txt` to that rule, and flips with the item.
+    test "the name is the basename less its `.ld`", %{tmp_dir: dir} do
       assert {:ok, %Logex.Program{name: "seal"}} =
-               Logex.compile_file(write(dir, "seal.txt", @seal))
-
-      assert {:ok, %Logex.Program{name: "seal"}} = Logex.compile_file(write(dir, "seal", @seal))
+               Logex.compile_file(write(dir, "seal.ld", @seal))
 
       assert {:error, [%Diagnostic{stage: :file, message: ~s("seal.v2" cannot name) <> _}]} =
                Logex.compile_file(write(dir, "seal.v2.ld", @seal))
+    end
+
+    test "takes only a `.ld` file, exactly: any other is a :file diagnostic, and nothing is " <>
+           "read",
+         %{tmp_dir: dir} do
+      for file <- ["seal.txt", "seal", "seal.LD", "seal.Ld", "seal.ld.bak", "seal.ldx"] do
+        path = write(dir, file, @seal)
+
+        assert {:error, [%Diagnostic{stage: :file, line: nil, file: ^path}]} =
+                 Logex.compile_file(path)
+
+        assert formatted(Logex.compile_file(path)) == [
+                 "#{path}: `#{file}` is not a `.ld` file: Logex.compile_file/1 compiles a " <>
+                   "program or a function block from its `.ld` file"
+               ]
+      end
+
+      # Nothing is read: a file that is not there is told its kind, not that it is missing.
+      missing = Path.join(dir, "missing.txt")
+
+      assert formatted(Logex.compile_file(missing)) == [
+               "#{missing}: `missing.txt` is not a `.ld` file: Logex.compile_file/1 " <>
+                 "compiles a program or a function block from its `.ld` file"
+             ]
+
+      # A file named only `.ld` is a `.ld` file whose name names no program.
+      bare = write(dir, ".ld", @seal)
+
+      assert formatted(Logex.compile_file(bare)) == [
+               ~s(#{bare}: "" cannot name a program: a name is a letter or `_`, then ) <>
+                 "letters, digits or `_` (rename the file)"
+             ]
     end
 
     test "a file named after a word reserved in .ld files compiles", %{tmp_dir: dir} do

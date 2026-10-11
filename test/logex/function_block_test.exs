@@ -1207,16 +1207,15 @@ defmodule Logex.FunctionBlockTest do
     end
 
     # The file is the one field no text gives: Logex.compile_file/1 names a block after its
-    # file's base name less its last extension, whatever the extension, or none, and the
-    # type it gives keeps that path, with every warning stamped with it, which a compile
-    # and Logex.Tag.new!/4 take.
+    # file's base name less its `.ld`, the one extension it takes (M2-2), and the type it
+    # gives keeps that path, with every warning stamped with it, which a compile and
+    # Logex.Tag.new!/4 take.
     @tag :tmp_dir
-    test "a type read from a block's file of any extension, or none, is one a compile takes",
-         %{tmp_dir: dir} do
+    test "a type read from a block's file is one a compile takes", %{tmp_dir: dir} do
       warned = String.replace(@seal, "var_output run bool\n", "var_output run bool\nvar n bool\n")
       source = "var_input a bool\nvar_output q bool\nvar s seal\ncal s a a q"
 
-      for file <- ["seal.ld", "seal.txt", "seal"] do
+      for file <- ["seal.ld"] do
         path = Path.join(dir, file)
         File.write!(path, warned)
         assert {:ok, %FbType{} = seal} = Logex.compile_file(path)
