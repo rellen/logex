@@ -19,7 +19,8 @@ defmodule Logex.Configuration do
 
   Every way of writing a configuration ends in `check/1`, the one validator: `new!/1`,
   from Elixir, raises one `ArgumentError` listing every problem it finds, a line each;
-  `compile/3`, from a configuration file's text, returns them; and
+  `compile/3`, from a configuration file's text, returns them, and `compile_file/1` from
+  the file on disk, its program types loaded from beside it (M2-2); and
   `Logex.Runtime.start/1` checks again. A mistake a configuration's text could also make
   is a `%Logex.Diagnostic{}` at stage `:configure`, cited at its element's line, which is
   how a reader of the text cites it, and worded as the configuration file says it,
@@ -225,7 +226,7 @@ defmodule Logex.Configuration do
       connections: connections
     }
 
-    {mistakes, diagnostics, warnings} = problems(config, [])
+    {mistakes, diagnostics, warnings} = problems(config, [], MapSet.new())
 
     raised(
       fields(fields) ++
@@ -364,7 +365,7 @@ defmodule Logex.Configuration do
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)
     checked(configuration_name(name) ++ mistakes, [])
-    compiled(Text.read(source), name, programs)
+    compiled(Text.read(source), name, programs, {nil, [], MapSet.new()})
   end
 
   def compile(_name, source, _programs),
@@ -374,20 +375,182 @@ defmodule Logex.Configuration do
         "Logex.Configuration.compile/3 takes source text as a binary, got: #{inspect(source)}"
       )
 
-  defp compiled({:error, [%Diagnostic{stage: :lex}] = lexed, []}, _name, _programs),
-    do: {:error, lexed}
+  @doc """
+  A configuration from its configuration file on disk (`.logex`, decision 35), its program
+  types loaded from beside it (`docs/organisation.md` §4.4, "Loading"): `{:ok,
+  configuration}` or `{:error, diagnostics}`, as `compile/3` gives them. The
+  configuration is named after the file, `plant.logex` being `plant`, its `file` is
+  `path`, and every diagnostic its text gives carries `path` too.
 
-  defp compiled({:ok, entries}, name, programs), do: read_in(entries, [], name, programs)
+  Each program type a `program` line names, `motor`, is `motor.ld` beside the file,
+  compiled by `Logex.compile_files/1` in the order the types are first named: one memo for
+  the configuration, so a function block several program types hold is read and compiled
+  once, and its warnings are handed back once, by the program type that first loads it. A
+  program type's warnings stay in its program, the configuration's own in its `warnings`.
+  A name on a `program` line that gives no program type is cited once, at the line of
+  its first instance, and no instance of it is reported again:
 
-  defp compiled({:error, unread, entries}, name, programs),
-    do: read_in(entries, unread, name, programs)
+  - with no `motor.ld` beside the file, it is an unknown program type, with a
+    did-you-mean among the `.ld` files beside it;
+  - a function block's file gets the one message for a block type where a program goes
+    (`Logex.Declarations.not_a_program/1`);
+  - a file that does not compile is cited by name, and its own diagnostics, each with its
+    file and line, follow the configuration's, a type's in the order the types are named.
+
+  A path that is not a `.logex` file, one named only `.logex`, a file that cannot be
+  read, or a name that cannot name a configuration is a `:file` diagnostic, and only after
+  a refused name is the file still compiled, so that its own mistakes are listed too. A
+  path that is not a binary is the host's mistake, raised as `ArgumentError`.
+  """
+  def compile_file(path) when is_binary(path),
+    do: configuration_file(Path.extname(path), Path.basename(path), path)
+
+  def compile_file(path),
+    do:
+      raise(
+        ArgumentError,
+        "Logex.Configuration.compile_file/1 takes a path as a binary, got: #{inspect(path)}"
+      )
+
+  # The extension says what a file is (decision 35), and a file named only `.logex` reads
+  # as logex's own settings, which no configuration is.
+  defp configuration_file(".logex", _basename, path), do: source_file(File.read(path), path)
+
+  defp configuration_file("", ".logex", path),
+    do:
+      {:error,
+       [
+         file_problem(
+           path,
+           "`.logex` names no configuration: a configuration file is named after its " <>
+             "configuration, as `plant.logex` is `plant`"
+         )
+       ]}
+
+  defp configuration_file(_extension, basename, path),
+    do:
+      {:error,
+       [
+         file_problem(
+           path,
+           "`#{basename}` is not a configuration file: Logex.Configuration.compile_file/1 " <>
+             "loads a configuration from its `.logex` file"
+         )
+       ]}
+
+  defp source_file({:error, reason}, path),
+    do: {:error, [file_problem(path, "cannot be read: #{:file.format_error(reason)}")]}
+
+  defp source_file({:ok, source}, path) do
+    name = Path.rootname(Path.basename(path))
+    named_file(configuration_name(name), name, source, path)
+  end
+
+  defp named_file([], name, source, path), do: loaded_file(name, source, path)
+
+  # A refused name is the file's, not the host's: the source is still compiled, under a
+  # name that is one, so its own mistakes follow the name's.
+  defp named_file([problem], _name, source, path),
+    do:
+      {:error,
+       [
+         file_problem(path, problem <> " (rename the file)")
+         | mistakes_of(loaded_file("configuration", source, path))
+       ]}
+
+  defp mistakes_of({:ok, _config}), do: []
+  defp mistakes_of({:error, diagnostics}), do: diagnostics
+
+  defp file_problem(path, message),
+    do: %Diagnostic{stage: :file, line: nil, message: message, file: path}
+
+  # The program types the `program` lines name, each loaded once from beside the file,
+  # through one memo, and what is cited at the line of each one's first instance.
+  defp loaded_file(name, source, path) do
+    read = Text.read(source)
+    types = program_types(read)
+    file = &Path.join(Path.dirname(path), &1 <> ".ld")
+    {found, missing} = Enum.split_with(types, fn {type, _line} -> File.exists?(file.(type)) end)
+    results = Logex.compile_files(Enum.map(found, fn {type, _line} -> file.(type) end))
+
+    {programs, cited, theirs} =
+      found
+      |> Enum.zip(results)
+      |> Enum.reduce({%{}, [], []}, &type_loaded/2)
+
+    beside = beside(File.ls(Path.dirname(path)))
+    absent = Enum.map(missing, &absent(&1, Path.basename(path), beside))
+
+    uncited =
+      for {type, _line} <- types, not Map.has_key?(programs, type), into: MapSet.new(), do: type
+
+    loaded = {path, Enum.reverse(cited, absent), uncited}
+    with_theirs(compiled(read, name, programs, loaded), Enum.reverse(theirs))
+  end
+
+  # Each type a `program` line names that could be a file's, once, at its first line: one
+  # that is no name, or a keyword, is check/1's to refuse, and is not looked for.
+  defp program_types({:ok, entries}), do: program_types({:error, [], entries})
+
+  defp program_types({:error, _diagnostics, entries}),
+    do:
+      for(
+        %Instance{type: type, line: line} <- entries,
+        Declarations.name?(type) and not reserved?(type),
+        do: {type, line}
+      )
+      |> Enum.uniq_by(&elem(&1, 0))
+
+  defp type_loaded({{type, _line}, {:ok, %Program{} = program}}, {programs, cited, theirs}),
+    do: {Map.put(programs, type, program), cited, theirs}
+
+  defp type_loaded({{type, line}, {:ok, %FbType{} = block}}, {programs, cited, theirs}),
+    do:
+      {programs, [diagnostic(line, "`#{type}` is " <> Declarations.not_a_program(block)) | cited],
+       theirs}
+
+  defp type_loaded({{type, line}, {:error, diagnostics}}, {programs, cited, theirs}) do
+    message = "program type `#{type}` does not compile: its mistakes are cited in `#{type}.ld`"
+    {programs, [diagnostic(line, message) | cited], Enum.reverse(diagnostics, theirs)}
+  end
+
+  # The program types a did-you-mean may offer: the `.ld` files beside the configuration.
+  defp beside({:ok, files}),
+    do: for(file <- files, Path.extname(file) == ".ld", do: Path.rootname(file))
+
+  defp beside({:error, _reason}), do: []
+
+  defp absent({type, line}, beside, names),
+    do:
+      diagnostic(
+        line,
+        "unknown program type `#{type}`: there is no `#{type}.ld` beside `#{beside}`" <>
+          Declarations.suggest(type, Enum.sort(names), & &1, "program types")
+      )
+
+  defp with_theirs({:error, diagnostics}, theirs), do: {:error, diagnostics ++ theirs}
+  defp with_theirs({:ok, _config} = compiled, []), do: compiled
+
+  # `loaded` is what compile_file/1 adds: the file, the diagnostics its loader cites at
+  # `program` lines, and the program types they cite, whose instances are not reported
+  # again. compile/3 adds nothing.
+  defp compiled({:error, [%Diagnostic{stage: :lex}] = lexed, []}, _name, _programs, {file, _, _}),
+    do: {:error, Enum.map(lexed, &%{&1 | file: file})}
+
+  defp compiled({:ok, entries}, name, programs, loaded),
+    do: read_in(entries, [], name, programs, loaded)
+
+  defp compiled({:error, unread, entries}, name, programs, loaded),
+    do: read_in(entries, unread, name, programs, loaded)
 
   # The elements a text reads, and what its broken lines declare, checked as one.
-  defp read_in(entries, unread, name, programs) do
+  defp read_in(entries, unread, name, programs, {file, cited, types}) do
     {declared, elements} = Enum.split_with(entries, &match?({:declared, _line, _named}, &1))
+    unread = Enum.map(unread ++ cited, &%{&1 | file: file})
 
     config = %__MODULE__{
       name: name,
+      file: file,
       programs: programs,
       tasks: for(%Logex.Configuration.Task{} = task <- elements, do: task),
       globals: for(%Global{} = global <- elements, do: global),
@@ -395,7 +558,7 @@ defmodule Logex.Configuration do
       connections: for(%Connection{} = connection <- elements, do: connection)
     }
 
-    {mistakes, diagnostics, warnings} = problems(config, declared)
+    {mistakes, diagnostics, warnings} = problems(config, declared, types)
 
     read_back(
       checked(mistakes, Enum.sort_by(unread ++ diagnostics, &line_order/1)),
@@ -420,7 +583,7 @@ defmodule Logex.Configuration do
   def check(config), do: checking(is_struct(config, __MODULE__) and whole?(config), config)
 
   defp checking(true, config) do
-    {mistakes, diagnostics, _warnings} = problems(config, [])
+    {mistakes, diagnostics, _warnings} = problems(config, [], MapSet.new())
     checked(mistakes, diagnostics)
   end
 
@@ -439,8 +602,10 @@ defmodule Logex.Configuration do
   # with a diagnostic of what is then missing: a var_input whose one connection names its
   # instance as an atom is not connected, and an instance whose task is named by an atom
   # names no task. check/1 raises the mistakes alone. `declared` are what a configuration
-  # file's broken lines name, which only compile/3 gives.
-  defp problems(config, declared) do
+  # file's broken lines name, which only compile/3 gives, and `cited` the program types
+  # compile_file/1's loader cited at a `program` line, whose instances are not reported
+  # again.
+  defp problems(config, declared, cited) do
     {file, m_file} = file(config.file)
     {programs, m_programs} = programs(config.programs)
 
@@ -456,7 +621,12 @@ defmodule Logex.Configuration do
         m_programs ++ Enum.concat(Enum.reverse(m_parts)) ++ lines(Enum.reverse(lined))
 
     {diagnostics, warnings} =
-      diagnostics(config, {file, programs}, {tasks, globals, instances, connections}, declared)
+      diagnostics(
+        config,
+        {file, programs, cited},
+        {tasks, globals, instances, connections},
+        declared
+      )
 
     {mistakes, diagnostics, warnings}
   end
@@ -468,7 +638,7 @@ defmodule Logex.Configuration do
   # placeholder from Logex.Configuration.Text.read/1, takes its name as an element does,
   # and nothing that names it is reported again; a broken connection connects its
   # var_input.
-  defp diagnostics(config, {file, programs}, parts, declared) do
+  defp diagnostics(config, {file, programs, cited}, parts, declared) do
     {tasks, globals, instances, connections} = parts
     {wired, named} = Enum.split_with(declared, &match?({:declared, _, %{kind: :connection}}, &1))
     [tasks, globals, instances] = Enum.map([tasks, globals, instances], &worded/1)
@@ -483,7 +653,7 @@ defmodule Logex.Configuration do
         Enum.flat_map(tasks, &task/1),
         Enum.flat_map(globals, &global/1),
         d_points,
-        runs(instances, {programs, given(config.programs)}, world),
+        runs(instances, {programs, MapSet.union(given(config.programs), cited)}, world),
         d_wiring,
         unconnected(instances, space.kept, world, wiring.inputs),
         empty(config.instances, named)

@@ -116,42 +116,91 @@ defmodule Logex do
 
   `path` is a `.ld` file's, exactly, since the extension says what kind of file it is
   (M2-2): any other, `seal.txt`, `seal.LD` or `seal` among them, is a `:file`
-  diagnostic, and nothing is read. A file named only `.ld` is one whose name names no
-  program, below.
+  diagnostic, and nothing is read; a configuration file (`.logex`) is told that
+  `Logex.Configuration.compile_file/1` loads it. A file named only `.ld` is one whose name
+  names no program, below.
 
   A file that cannot be read, or whose name cannot name a program, is a `:file`
   diagnostic, not an exception. After a refused name the source is still compiled, with
   the blocks beside it, so its own mistakes are listed too.
   """
-  def compile_file(path) when is_binary(path),
-    do: of_kind(Path.extname(path), Path.basename(path), path)
+  def compile_file(path) when is_binary(path) do
+    {result, _results} = of_kind(Path.extname(path), Path.basename(path), path, %{})
+    result
+  end
 
   def compile_file(path),
     do:
       raise(ArgumentError, "Logex.compile_file/1 takes a path as a binary, got: #{inspect(path)}")
 
+  @doc """
+  Compiles each of `paths` as `compile_file/1` compiles it, in one call: a result a path,
+  in their order. One memo serves the call (decision 34, M2-2), so a block that several of
+  the files hold, at any depth, is read and compiled once, and its warnings are handed
+  back once, among those of the first file in `paths` that loads it. A path given twice
+  gives its one result twice. `Logex.Configuration.compile_file/1` loads a
+  configuration's program types through it.
+
+  `paths` that is not a proper list of binaries is the host's mistake, raised as
+  `ArgumentError` before any file is read.
+  """
+  def compile_files(paths) do
+    paths!(paths, paths)
+    {results, _memo} = Enum.map_reduce(paths, {%{}, %{}}, &compiled_once/2)
+    results
+  end
+
+  defp paths!([], _paths), do: :ok
+  defp paths!([path | rest], paths) when is_binary(path), do: paths!(rest, paths)
+
+  defp paths!(_not_paths, paths),
+    do:
+      raise(
+        ArgumentError,
+        "Logex.compile_files/1 takes a list of paths as binaries, got: #{inspect(paths)}"
+      )
+
+  # `done` is each path's result, as given back; `memo` the loader's results by path, one
+  # for the call.
+  defp compiled_once(path, {done, memo}), do: once(Map.fetch(done, path), path, {done, memo})
+
+  defp once({:ok, result}, _path, acc), do: {result, acc}
+
+  defp once(:error, path, {done, memo}) do
+    {result, memo} = of_kind(Path.extname(path), Path.basename(path), path, memo)
+    {result, {Map.put(done, path, result), memo}}
+  end
+
   # The gate in front of the loader: the extension says what a file is, so only a `.ld`
   # file is read. A file named only `.ld` has no extension to Elixir, and is a `.ld` file
   # whose name names nothing, which the loader says.
-  defp of_kind(".ld", _basename, path), do: loaded(path)
-  defp of_kind("", ".ld", path), do: loaded(path)
+  defp of_kind(".ld", _basename, path, memo), do: loaded(path, memo)
+  defp of_kind("", ".ld", path, memo), do: loaded(path, memo)
 
-  defp of_kind(_extension, basename, path),
+  defp of_kind(".logex", basename, path, memo),
     do:
-      {:error,
-       [
-         %{
-           file_problem(
-             "`#{basename}` is not a `.ld` file: Logex.compile_file/1 compiles a program " <>
-               "or a function block from its `.ld` file"
-           )
-           | file: path
-         }
-       ]}
+      {not_ld(
+         path,
+         "`#{basename}` is a configuration file (`.logex`), which " <>
+           "Logex.Configuration.compile_file/1 loads"
+       ), memo}
 
-  defp loaded(path) do
-    {result, {_results, loaded}} = load(path, {%{}, []}, {%{}, []})
-    handed_back(result, loaded)
+  defp of_kind(_extension, basename, path, memo),
+    do:
+      {not_ld(
+         path,
+         "`#{basename}` is not a `.ld` file: Logex.compile_file/1 compiles a program " <>
+           "or a function block from its `.ld` file"
+       ), memo}
+
+  defp not_ld(path, message), do: {:error, [%{file_problem(message) | file: path}]}
+
+  # The program's warnings are handed back with those of the blocks this load compiled,
+  # its own list, so a block compiled for an earlier file of the call, which the results
+  # hold, is not handed back again.
+  defp loaded(path, results) do
+    {result, {results, loaded}} = load(path, {%{}, []}, {results, []})
+    {handed_back(result, loaded), results}
   end
 
   # `held` are the names of the files being loaded, as a set and as a list, innermost

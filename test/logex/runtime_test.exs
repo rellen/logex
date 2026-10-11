@@ -1073,7 +1073,10 @@ defmodule Logex.RuntimeTest do
 
   describe "the public surface (B5)" do
     test "is exactly this: every evaluate clause is private, in Logex.Runtime" do
-      assert Enum.sort(Logex.__info__(:functions)) == [compile: 2, compile_file: 1]
+      # M2-2: compile_files/1, the loader's one memo over several files, which a
+      # configuration's loader goes through.
+      assert Enum.sort(Logex.__info__(:functions)) ==
+               [compile: 2, compile_file: 1, compile_files: 1]
 
       # M2-1: the scheduler, and its resource, `%Logex.Runtime{}`, opaque as an edit is.
       assert Enum.sort(Runtime.__info__(:functions)) ==
@@ -1096,12 +1099,13 @@ defmodule Logex.RuntimeTest do
                ]
 
       # M2-1: the configuration, its one validator and its constructor from Elixir; M2-2:
-      # its compile from a configuration file's text.
+      # its compile from a configuration file's text, and from its file on disk.
       assert Enum.sort(Logex.Configuration.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,
                check: 1,
                compile: 3,
+               compile_file: 1,
                initial: 1,
                location: 1,
                new!: 1

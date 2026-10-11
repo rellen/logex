@@ -312,6 +312,14 @@ defmodule LogexTest do
                  "compiles a program or a function block from its `.ld` file"
              ]
 
+      # A configuration file is not compile_file/1's, and is told whose it is.
+      plant = write(dir, "plant.logex", "program m seal\n")
+
+      assert formatted(Logex.compile_file(plant)) == [
+               "#{plant}: `plant.logex` is a configuration file (`.logex`), which " <>
+                 "Logex.Configuration.compile_file/1 loads"
+             ]
+
       # A file named only `.ld` is a `.ld` file whose name names no program.
       bare = write(dir, ".ld", @seal)
 
@@ -330,6 +338,62 @@ defmodule LogexTest do
       assert_raise ArgumentError,
                    ~s(Logex.compile_file/1 takes a path as a binary, got: ~c"m.ld"),
                    fn -> Logex.compile_file(~c"m.ld") end
+    end
+  end
+
+  describe "compile_files/1 (M2-2): several files, one memo" do
+    @describetag :tmp_dir
+
+    # A block with a warning, held by two programs.
+    @block """
+    function_block latch
+    var_input set bool
+    var_output q bool
+    var spare bool
+    xic set ote q
+    """
+
+    defp program_holding(dir, name) do
+      path = Path.join(dir, name <> ".ld")
+      File.write!(path, "var_input a bool\nvar_output b bool\nvar l1 latch\ncal l1 a b\n")
+      path
+    end
+
+    test "compiles each as compile_file/1 does, a block they share once, its warnings " <>
+           "handed back once",
+         %{tmp_dir: dir} do
+      latch = Path.join(dir, "latch.ld")
+      File.write!(latch, @block)
+      one = program_holding(dir, "one")
+      two = program_holding(dir, "two")
+      warning = "#{latch}: line 4: warning: `spare` is declared but no rung uses it"
+
+      assert [{:ok, first}, {:ok, second}] = Logex.compile_files([one, two])
+      assert {:ok, first} == Logex.compile_file(one)
+      assert Enum.map(first.warnings, &Diagnostic.format/1) == [warning]
+      assert {:ok, %{second | warnings: [hd(first.warnings)]}} == Logex.compile_file(two)
+      assert second.warnings == []
+
+      # In the other order, the other program hands the warning back.
+      assert [{:ok, %{warnings: [_]}}, {:ok, %{warnings: []}}] = Logex.compile_files([two, one])
+
+      # A path given twice gives its one result twice; each path passes the gate.
+      assert [{:ok, ^first}, {:ok, ^first}] = Logex.compile_files([one, one])
+      text = Path.join(dir, "one.txt")
+
+      assert [{:ok, ^first}, {:error, [%Diagnostic{stage: :file, file: ^text}]}] =
+               Logex.compile_files([one, text])
+
+      assert Logex.compile_files([]) == []
+    end
+
+    test "raises ArgumentError for what is not a proper list of binaries" do
+      for paths <- ["one.ld", [~c"one.ld"], ["one.ld" | "two.ld"], [:one]] do
+        assert_raise ArgumentError,
+                     "Logex.compile_files/1 takes a list of paths as binaries, got: " <>
+                       inspect(paths),
+                     fn -> Logex.compile_files(Process.get(:opaque, paths)) end
+      end
     end
   end
 end

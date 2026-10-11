@@ -2842,6 +2842,392 @@ defmodule Logex.ConfigurationTest do
   defp recased(true, word), do: Enum.random([word, String.upcase(word), String.capitalize(word)])
   defp recased(false, word), do: word
 
+  describe "compile_file/1 (M2-2): a configuration file and its program types, on disk" do
+    @describetag :tmp_dir
+
+    # A seal-in block with a warning, held by two program types, `motor` and `pump`.
+    @seal_ld """
+    function_block seal
+    var_input start bool
+    var_input stop bool
+    var_output run bool
+    var spare bool
+    ( xic start | xic run ) xio stop ote run
+    """
+
+    @motor_ld """
+    var_input start bool
+    var_input stop bool
+    var_output motor bool
+    var s1 seal
+    cal s1 start stop motor
+    """
+
+    @pump_ld """
+    var_input run bool
+    var_input halt bool
+    var_output pump bool
+    var s1 seal
+    cal s1 run halt pump
+    """
+
+    @plant_logex """
+    // two motors and a pump, one seal-in type in each
+    var_global pb_1 bool at panel.i.0
+    var_global pb_2 bool at panel.i.1
+    var_global k1   bool at panel.q.0
+    var_global k2   bool at panel.q.1
+    var_global k3   bool at panel.q.2
+
+    program m1 motor
+    m1.start pb_1
+    m1.stop  pb_2
+    m1.motor k1
+
+    program m2 motor
+    m2.start pb_2
+    m2.stop  pb_1
+    m2.motor k2
+
+    program p pump
+    p.run  pb_1
+    p.halt pb_2
+    p.pump k3
+    """
+
+    defp write(dir, file, text) do
+      path = Path.join(dir, file)
+      File.write!(path, text)
+      path
+    end
+
+    defp plant(dir) do
+      write(dir, "seal.ld", @seal_ld)
+      write(dir, "motor.ld", @motor_ld)
+      write(dir, "pump.ld", @pump_ld)
+      write(dir, "plant.logex", @plant_logex)
+    end
+
+    defp file_errors(path) do
+      assert {:error, diagnostics} = Configuration.compile_file(path)
+      Enum.map(diagnostics, &Diagnostic.format/1)
+    end
+
+    test "is compile/3 over its text and the program types beside it, named after the file",
+         %{tmp_dir: dir} do
+      path = plant(dir)
+      assert {:ok, config} = Configuration.compile_file(path)
+      assert {config.name, config.file} == {"plant", path}
+      assert Enum.sort(Map.keys(config.programs)) == ["motor", "pump"]
+
+      # Each program type as compile_file/1 gives it, the block's warning handed back by
+      # the first that loads it (below).
+      assert {:ok, config.programs["motor"]} == Logex.compile_file(Path.join(dir, "motor.ld"))
+      assert {:ok, pump} = Logex.compile_file(Path.join(dir, "pump.ld"))
+      assert config.programs["pump"] == %{pump | warnings: []}
+
+      # The pure seam gives the same configuration from the same text and programs, but
+      # for the file, which no text says.
+      assert Configuration.compile("plant", @plant_logex, config.programs) ==
+               {:ok, unfiled(config)}
+    end
+
+    # One memo for the configuration (§4.10, "Loading"): `seal.ld`, which both program
+    # types hold, is compiled once, so its warning is handed back once, by `motor`, which
+    # loads it first, and `pump` holds the very type.
+    test "a block several program types hold is compiled once, its warnings handed back once",
+         %{tmp_dir: dir} do
+      path = plant(dir)
+      seal = Path.join(dir, "seal.ld")
+      {:ok, config} = Configuration.compile_file(path)
+      %{"motor" => motor, "pump" => pump} = config.programs
+
+      assert Enum.map(motor.warnings, &Diagnostic.format/1) == [
+               "#{seal}: line 5: warning: `spare` is declared but no rung uses it"
+             ]
+
+      assert pump.warnings == []
+      assert motor.blocks == pump.blocks
+      assert config.warnings == []
+
+      # Each program type alone, as compile_file/1 gives it, hands the warning back.
+      assert {:ok, %{warnings: [_seal]}} = Logex.compile_file(Path.join(dir, "pump.ld"))
+    end
+
+    test "every diagnostic of the file names it, at its line", %{tmp_dir: dir} do
+      plant(dir)
+
+      path =
+        write(dir, "wired.logex", """
+        var_global pb bool at panel.i.0
+        var_global k  bool at panel.q.0
+        var_global sp dint
+        program m1 motor
+        m1.start pb
+        m1.stop  pb
+        m1.motor pb
+        m1.strat k
+        program m2 motor
+        m2.start sp
+        m2.motor k
+        """)
+
+      assert file_errors(path) == [
+               "#{path}: line 7: `pb` is an input point (line 1): `m1.motor`, a var_output, " <>
+                 "cannot drive it",
+               "#{path}: line 8: `m1` is a `motor`, which declares no `strat` — did you " <>
+                 "mean `start`?",
+               "#{path}: line 9: `m2` leaves its var_input `stop` unconnected: connect it " <>
+                 "to a global, a point or a constant, as in `m2.stop 0`",
+               "#{path}: line 10: `m2.start` is a bool, but `sp` is a dint (line 3)"
+             ]
+
+      lexed = write(dir, "lexed.logex", "program m1 motor\nm1.start %\n")
+      assert [%Diagnostic{stage: :lex, line: 2}] = elem(Configuration.compile_file(lexed), 1)
+      assert [lex_error] = file_errors(lexed)
+      assert String.starts_with?(lex_error, "#{lexed}: line 2, column 10: ")
+
+      unread = write(dir, "unread.logex", "program m1 motor\nm1.start ( pb\n")
+
+      assert file_errors(unread) == [
+               "#{unread}: line 1: `m1` leaves its var_input `stop` unconnected: connect it " <>
+                 "to a global, a point or a constant, as in `m1.stop 0`",
+               "#{unread}: line 2, column 10: a configuration line cannot hold `(`"
+             ]
+    end
+
+    # A name on a `program` line that gives no program type is cited once, at its first
+    # instance, and its other instances and their connections are not reported again.
+    test "a missing program type's file is an unknown type, with a did-you-mean",
+         %{tmp_dir: dir} do
+      plant(dir)
+
+      path =
+        write(dir, "missing.logex", """
+        var_global pb bool at panel.i.0
+        program m1 motr
+        m1.start pb
+        program m2 motr
+        m2.strat pb
+        program m3 valve
+        """)
+
+      assert file_errors(path) == [
+               "#{path}: line 2: unknown program type `motr`: there is no `motr.ld` beside " <>
+                 "`missing.logex` — did you mean `motor`?",
+               "#{path}: line 6: unknown program type `valve`: there is no `valve.ld` beside " <>
+                 "`missing.logex`"
+             ]
+    end
+
+    test "a block's file on a `program` line gets the one block-type message, as a located " <>
+           "diagnostic",
+         %{tmp_dir: dir} do
+      plant(dir)
+
+      path =
+        write(dir, "block.logex", """
+        var_global pb bool at panel.i.0
+        program s1 seal
+        s1.start pb
+        program s2 seal
+        """)
+
+      assert file_errors(path) == [
+               "#{path}: line 2: `seal` is a function block type, which runs inside a " <>
+                 "program through `cal`: an instance is of a %Logex.Program{}"
+             ]
+    end
+
+    test "a program type that does not compile is cited once at its first instance, naming " <>
+           "its file, its own diagnostics after",
+         %{tmp_dir: dir} do
+      plant(dir)
+      broken = write(dir, "broken.ld", "var a bool\nxyz a\nxic c ote a\n")
+
+      path =
+        write(dir, "broken.logex", """
+        var_global pb bool at panel.i.0
+        var_global k  bool at panel.q.0
+        program b1 broken
+        b1.a pb
+        program m1 motor
+        m1.start pb
+        m1.stop  pb
+        m1.motor k
+        m1.motor k
+        program b2 broken
+        """)
+
+      assert file_errors(path) == [
+               "#{path}: line 3: program type `broken` does not compile: its mistakes are " <>
+                 "cited in `broken.ld`",
+               "#{path}: line 9: `k` is already driven by `m1.motor` (line 8)",
+               "#{broken}: line 2: unknown instruction `xyz`",
+               "#{broken}: line 3: `c` is not declared"
+             ]
+    end
+
+    # A type that is no name, or a keyword, is check/1's to refuse, and no file is looked
+    # for: a broken file of that name beside the configuration is never read.
+    test "a type that cannot be a file's is not looked for", %{tmp_dir: dir} do
+      plant(dir)
+      write(dir, "var_global.ld", "xyz\n")
+      write(dir, "a.b.ld", "xyz\n")
+      path = write(dir, "named.logex", "program m1 var_global\nprogram m2 a.b\n")
+
+      assert file_errors(path) == [
+               "#{path}: line 1: `var_global` is a keyword and cannot name a program type",
+               "#{path}: line 2: `a.b` cannot name a program type: a type is named by its " <>
+                 "file, `motor.ld` for `motor`, and a name is a letter or `_`, then letters, " <>
+                 "digits or `_`"
+             ]
+    end
+
+    test "its own :file diagnostics: a path that is no `.logex` file, a bare `.logex`, a " <>
+           "file that cannot be read, a name that names no configuration",
+         %{tmp_dir: dir} do
+      plant(dir)
+
+      for file <- ["plant.txt", "plant.LOGEX", "plant", "motor.ld"] do
+        path = Path.join(dir, file)
+
+        assert file_errors(path) == [
+                 "#{path}: `#{file}` is not a configuration file: " <>
+                   "Logex.Configuration.compile_file/1 loads a configuration from its " <>
+                   "`.logex` file"
+               ]
+      end
+
+      bare = write(dir, ".logex", @plant_logex)
+
+      assert [%Diagnostic{stage: :file, line: nil, file: ^bare}] =
+               elem(Configuration.compile_file(bare), 1)
+
+      assert file_errors(bare) == [
+               "#{bare}: `.logex` names no configuration: a configuration file is named " <>
+                 "after its configuration, as `plant.logex` is `plant`"
+             ]
+
+      missing = Path.join(dir, "missing.logex")
+      assert file_errors(missing) == ["#{missing}: cannot be read: no such file or directory"]
+
+      folder = Path.join(dir, "folder.logex")
+      File.mkdir!(folder)
+
+      assert file_errors(folder) == [
+               "#{folder}: cannot be read: illegal operation on a directory"
+             ]
+
+      # A refused name is the file's mistake, and its text is still compiled.
+      renamed = write(dir, "plant-2.logex", "program m1 motor\nm1.strat 0\n")
+
+      assert [%Diagnostic{stage: :file, line: nil, file: ^renamed} | _] =
+               elem(Configuration.compile_file(renamed), 1)
+
+      assert file_errors(renamed) == [
+               ~s(#{renamed}: "plant-2" cannot name a configuration: a name is a letter or ) <>
+                 "`_`, then letters, digits or `_` (rename the file)",
+               "#{renamed}: line 1: `m1` leaves its var_inputs `start` and `stop` " <>
+                 "unconnected: connect each to a global, a point or a constant, as in " <>
+                 "`m1.start 0`",
+               "#{renamed}: line 2: `m1` is a `motor`, which declares no `strat` — did you " <>
+                 "mean `start`?"
+             ]
+
+      good = write(dir, "plant-3.logex", @plant_logex)
+      assert [_name] = file_errors(good)
+    end
+
+    # A seeded property: the texts the totality property below draws, each written to a
+    # configuration file beside `seal.ld`. compile_file/1 never raises; every diagnostic
+    # names a file; and what it accepts is what compile/3 accepts from the same text over
+    # the program type it loaded, but for the file.
+    test "any text in a configuration file gives a result, compile/3's where it is accepted",
+         %{tmp_dir: dir} do
+      :rand.seed(:exsss, {2026, 10, 11})
+      seal_ld = write(dir, "seal.ld", @seal)
+      {:ok, seal} = Logex.compile_file(seal_ld)
+      path = Path.join(dir, "plant.logex")
+
+      outcomes =
+        for _ <- 1..300 do
+          source = edited(Enum.random([@base, @tasked, @broken]), Enum.random(0..4))
+          File.write!(path, source)
+          drawn(Configuration.compile_file(path), source, path, %{"seal" => seal})
+        end
+
+      assert :accepted in outcomes and :refused in outcomes
+    end
+
+    # The loader's passes, over n program types that each hold one shared block: the
+    # types named, their files, one memo across them, each type's blocks handed back, the
+    # citations. Each program is compiled once, so the whole is linear in the types.
+    test "loading stays linear in the program types a file names", %{tmp_dir: dir} do
+      load = fn n ->
+        here = Path.join(dir, "n#{n}")
+        File.mkdir_p!(here)
+        write(here, "seal.ld", @seal_ld)
+
+        text =
+          Enum.map_join(1..n, fn i ->
+            write(
+              here,
+              "t#{i}.ld",
+              "var_input a bool\nvar_output b bool\nvar s1 seal\n" <>
+                "cal s1 a a b\n"
+            )
+
+            "var_global a#{i} bool at panel.i.#{i}\nvar_global b#{i} bool at panel.q.#{i}\n" <>
+              "program m#{i} t#{i}\nm#{i}.a a#{i}\nm#{i}.b b#{i}\n"
+          end)
+
+        path = write(here, "plant.logex", text)
+        growth_reductions(fn -> {:ok, _config} = Configuration.compile_file(path) end)
+      end
+
+      # 4.007x to 4.025x over 36 runs of the suite, 24 of them three suites at once; the
+      # bound a fifth above the highest.
+      ratio = load.(200) / load.(50)
+      assert ratio < 4.9, "4x the program types took #{Float.round(ratio, 2)}x the reductions"
+    end
+
+    test "a path that is not a binary is the host's mistake" do
+      assert_raise ArgumentError,
+                   ~s(Logex.Configuration.compile_file/1 takes a path as a binary, got: ) <>
+                     ~s(~c"plant.logex"),
+                   fn -> Configuration.compile_file(opaque(~c"plant.logex")) end
+    end
+  end
+
+  # The least of three counts of a call's reductions, since a busy VM can raise one.
+  defp growth_reductions(fun) do
+    Enum.min(
+      for _ <- 1..3 do
+        {:reductions, before} = Process.info(self(), :reductions)
+        fun.()
+        {:reductions, later} = Process.info(self(), :reductions)
+        later - before
+      end
+    )
+  end
+
+  # A configuration as compile/3 gives it, which no file names.
+  defp unfiled(config),
+    do: %{config | file: nil, warnings: Enum.map(config.warnings, &%{&1 | file: nil})}
+
+  defp drawn({:ok, config}, source, path, programs) do
+    assert config.file == path
+    assert config.programs in [%{}, programs]
+    assert {:ok, unfiled(config)} == compiled(source, config.programs)
+    :accepted
+  end
+
+  defp drawn({:error, [_ | _] = diagnostics}, _source, _path, _programs) do
+    for diagnostic <- diagnostics, do: assert(is_binary(diagnostic.file))
+    :refused
+  end
+
   describe "compile/3's host mistakes" do
     # What no configuration text holds is the host's, raised as check/1 raises it.
     test "a source that is not a binary, a name that is not one, programs that are not a " <>

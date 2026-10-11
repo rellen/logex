@@ -3,8 +3,9 @@ defmodule Logex.Diagnostic do
   One problem found in a program or a configuration: what it is, where it is, and which
   stage found it.
 
-  `Logex.compile/2`, `Logex.compile_file/1`, `Logex.Configuration.check/1` and
-  `Logex.Configuration.compile/3` return a list of these rather than raising, and a
+  `Logex.compile/2`, `Logex.compile_file/1`, `Logex.compile_files/1`,
+  `Logex.Configuration.check/1`, `Logex.Configuration.compile/3` and
+  `Logex.Configuration.compile_file/1` return a list of these rather than raising, and a
   compiled `%Logex.Program{}` and a `%Logex.Configuration{}` carry their warnings as these
   too. A rung never spans lines, so the line alone names the rung.
 
@@ -14,7 +15,8 @@ defmodule Logex.Diagnostic do
     or `:configure` (a configuration's tasks, globals, instances and connections,
     `Logex.Configuration.check/1`, M2-1, and a configuration file's line that cannot be
     read, `Logex.Configuration.Text.read/1`, M2-2, both of which
-    `Logex.Configuration.compile/3` gives).
+    `Logex.Configuration.compile/3` gives, and a program type that
+    `Logex.Configuration.compile_file/1` cannot load, at its `program` line).
   - `line` is nil only for a `:file` problem that no line holds, such as an unreadable
     file, for an `:edit` problem with a tag declared from Elixir, which has no line, and
     for a `:configure` problem with an element built from Elixir, or with the
@@ -23,7 +25,8 @@ defmodule Logex.Diagnostic do
     `Logex.compile_file/1`, the file each problem was found in, a function block's file it
     loaded beside the one it was given among them (M2-5, decision 34); on a `:configure`
     problem by `Logex.Configuration.check/1` from the configuration's own `file`, nil for
-    one built from Elixir; and on an `:edit` problem from the candidate's `file`, nil for a
+    one built from Elixir, which `Logex.Configuration.compile_file/1` sets to the file it
+    reads, a program type's file on that type's own problems (M2-2); and on an `:edit` problem from the candidate's `file`, nil for a
     candidate compiled from text (fix F15).
   - `severity` is `:error` or `:warning`.
   """
