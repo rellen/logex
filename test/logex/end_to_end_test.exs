@@ -2164,8 +2164,9 @@ defmodule Logex.EndToEndTest do
     alias Logex.Configuration
 
     # docs/organisation.md's text, cut where it stands: §4.4's plant, without its event
-    # task, which M2-6 brings, its `trip` line blanked, so every line keeps its number, and
-    # the snapshot that `trip` runs left with no task; §4.3's seal-in block, and §4.3's
+    # task, its `trip` line blanked, so every line keeps its number, and the snapshot that
+    # `trip` runs left with no task, as M2-4 landed it (M2-6's Done-when below runs the
+    # plant whole); §4.3's seal-in block, and §4.3's
     # motor, written to use it, whose `estop` is a var_external; and §4.4's snapshot.
     defp document, do: File.read!("docs/organisation.md")
 
@@ -2464,6 +2465,91 @@ defmodule Logex.EndToEndTest do
       # At 10 `p` is due exactly at now: the order declared decides.
       assert landed.([event, periodic], 10) == {1, ["e", "p"]}
       assert landed.([periodic, event], 10) == {2, ["p", "e"]}
+    end
+  end
+
+  # PLAN.md M2-6's Done-when from source: §4.4's plant as written, its `trip` task on the
+  # input point `estop` running the snapshot, with §4.3's motor and seal-in block and
+  # §4.4's snapshot, from a configuration file's text and from files on disk. Its edges are
+  # found from the trace of `estop` alone.
+  describe "an event task (M2-6), from source" do
+    @describetag :tmp_dir
+
+    alias Logex.Configuration
+
+    defp whole_plant do
+      [_before, rest] = String.split(document(), "```\n// plant.", parts: 2)
+      [plant, _after] = String.split("// plant." <> rest, "```", parts: 2)
+      assert plant =~ "task trip single estop priority 0"
+      plant
+    end
+
+    # The plant cycled every 10 ms from 0, `estop` at each value of `trace` in turn and
+    # both start buttons pressed in the first cycle: each cycle's runs, as `{task,
+    # instance}`, and the resource at the end.
+    defp tripped_plant(plant, trace) do
+      trace
+      |> Enum.with_index()
+      |> Enum.map_reduce(Logex.Runtime.start(plant), fn {estop, cycle}, runtime ->
+        inputs = Map.merge(started(cycle * 10), %{"estop" => estop})
+        {runtime, _outputs, events} = Logex.Runtime.cycle(runtime, min(cycle, 1) * 10, inputs)
+        {for({:ran, task, instance, _now} <- events, do: {task, instance}), runtime}
+      end)
+    end
+
+    defp rises(trace),
+      do:
+        for(
+          {[before, now], cycle} <- Enum.with_index(Enum.chunk_every([0 | trace], 2, 1, :discard)),
+          before == 0 and now == 1,
+          do: cycle
+        )
+
+    defp the_event_done_when(plant) do
+      assert plant.warnings == []
+
+      for trace <- [[0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1], [1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1]] do
+        {runs, _runtime} = tripped_plant(plant, trace)
+
+        tripped =
+          for {cycle_runs, cycle} <- Enum.with_index(runs), {"trip", _} <- cycle_runs, do: cycle
+
+        # Once per rising edge, and in cycle 1 where `estop` is 1 at once.
+        assert tripped == rises(trace)
+        assert hd(trace) == 0 or 0 in tripped
+
+        for {cycle_runs, cycle} <- Enum.with_index(runs) do
+          # `m1` is due every cycle and `m2` every fifth: `trip`, priority 0, runs `snap`
+          # first in each cycle it runs, before every lower-priority task due in it.
+          due = [{"fast", "m1"}] ++ if(rem(cycle, 5) == 0, do: [{"slow", "m2"}], else: [])
+          expected = if cycle in tripped, do: [{"trip", "snap"} | due], else: due
+          assert cycle_runs == expected, "cycle #{cycle + 1}"
+        end
+      end
+
+      # `snap` reads the contactors as the cycle before the trip left them: both closed by
+      # the start buttons at 0 ms, opened by the e-stop at 20 ms, which `snap` sees first.
+      {_runs, runtime} = tripped_plant(plant, [0, 0, 1])
+      assert Logex.Runtime.get!(runtime, "k1_at_trip") == 1
+      assert Logex.Runtime.get!(runtime, "k2_at_trip") == 1
+      assert Logex.Runtime.get!(runtime, "k1") == 0
+    end
+
+    test "M2-6's Done-when, from a configuration file's text" do
+      {programs, _files} = shared_programs()
+      assert {:ok, plant} = Configuration.compile("plant", whole_plant(), programs)
+      the_event_done_when(plant)
+    end
+
+    test "M2-6's Done-when, from files on disk", %{tmp_dir: dir} do
+      {_programs, files} = shared_programs()
+
+      for {name, text} <-
+            Map.merge(files, %{"snapshot.ld" => @snapshot_ld, "plant.logex" => whole_plant()}),
+          do: File.write!(Path.join(dir, name), text)
+
+      assert {:ok, plant} = Configuration.compile_file(Path.join(dir, "plant.logex"))
+      the_event_done_when(plant)
     end
   end
 end
