@@ -78,8 +78,10 @@ defmodule Logex.Configuration do
   M2-6, each timer a program instance runs that an event task runs, a task with a single
   alone or with an interval too, a timer inside a block its `cal`s run included, by its
   path: a ton times across the task's runs (`docs/organisation.md` §4.6, "Caveats"), at the
-  instance's line, citing the `ton`'s line in its own text, each program type's timers
-  read once (`Logex.Walk.timers/1`).
+  instance's line, citing the `ton`'s line in its own text: its file's, the program's own
+  line where the program was read from none, and a block's line by the block's name where
+  the block was read from none, as in "on line 5 of block `inner`", each program type's timers
+  read once (`Logex.Walk.timers/1`) and cited once, whatever its instances.
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -2382,29 +2384,60 @@ defmodule Logex.Configuration do
 
   defp timers_of({:ok, timers}, _program, memo), do: {timers, memo}
 
+  # Each timer with its citation, built once a program type: the routines down each path
+  # are read through a table of their typed tags, each routine's built once.
   defp timers_of(:error, %Program{name: name} = program, memo) do
-    timers = program |> Walk.timers() |> Enum.sort()
+    {timers, _tables} =
+      program
+      |> Walk.timers()
+      |> Enum.sort()
+      |> Enum.map_reduce(%{}, fn {path, {line, _preset}}, tables ->
+        {holder, tables} = holder(String.split(path, "."), {:program, program}, tables)
+        {{path, cited(line, holder)}, tables}
+      end)
+
     {timers, Map.put(memo, name, timers)}
   end
 
-  defp timer_warning({path, {line, _preset}}, instance, program),
+  defp timer_warning({path, cited}, instance, program),
     do:
       warning(
         instance.line,
         "`#{instance.name}` runs under the event task `#{instance.task}`, and " <>
-          "`#{program.name}` runs the timer `#{path}`" <>
-          in_type(line, holder(String.split(path, "."), program)) <>
+          "`#{program.name}` runs the timer `#{path}`#{cited}" <>
           ": a ton times across the task's runs, and one whose rung is true on two runs " <>
           "in a row counts the whole time between them"
       )
 
-  # The routine whose text holds a timer: the program's, or a block's body down its path.
-  defp holder([_timer], program), do: program
+  # The routine whose text holds a timer: the program's, or a block's body down its path,
+  # each routine's typed tags read once, by the routine (`:program`, or its block's name,
+  # one version a name in a program's table).
+  defp holder([_timer], routine, tables), do: {routine, tables}
 
-  defp holder([instance | rest], program) do
-    %Tag{type: %FbType{body: body}} = Map.fetch!(Program.typed_tags(program), instance)
-    holder(rest, body)
+  defp holder([instance | rest], routine, tables) do
+    {typed, tables} = typed_tags(Map.fetch(tables, key(routine)), routine, tables)
+    %Tag{type: %FbType{body: body}} = Map.fetch!(typed, instance)
+    holder(rest, {:block, body}, tables)
   end
+
+  defp typed_tags({:ok, typed}, _routine, tables), do: {typed, tables}
+
+  defp typed_tags(:error, {_kind, body} = routine, tables) do
+    typed = Program.typed_tags(body)
+    {typed, Map.put(tables, key(routine), typed)}
+  end
+
+  defp key({:program, _program}), do: :program
+  defp key({:block, %Program{name: name}}), do: {:block, name}
+
+  # A block's timer is cited in its block's own text: its file, or, read from no file, the
+  # block by name, since "its line" would read as the program's.
+  defp cited(line, {:program, program}), do: in_type(line, program)
+
+  defp cited(line, {:block, %Program{file: nil, name: name}}),
+    do: " on line #{line} of block `#{name}`"
+
+  defp cited(line, {:block, body}), do: in_type(line, body)
 
   defp idle(true, _task), do: []
   defp idle(false, task), do: [warning(task.line, "task `#{task.name}` runs no instance")]

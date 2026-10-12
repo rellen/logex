@@ -1926,6 +1926,15 @@ configuration file's must be built that way before they land.
   reach held at 300 seeds of three families. Growth bounds are a fifth above the highest
   of 32 runs, half of them beside three full suites or in a full suite.
 
+  Its review's fixes, each a commit after the documents', each green under the full gate
+  and with its mutation table in its message: the ton warning cites each timer once a
+  program type, each routine's typed tags read once, where a timer inside a block read
+  the program's tags once a timer, quadratic in the timers, now pinned by a growth test in
+  reductions with its timers inside blocks; and a block's timer from types read from no
+  file is cited by the block's name, "on line 5 of block `inner`", where "on its line 5"
+  read as the program's line. 862 tests pass on Elixir 1.20.4 (8 of them doctests), up
+  from 860.
+
 The scheduling rules are decided too: PRIORITY on every task, 0 the highest; ties go to
 the earlier due time, then declaration order; no preemption; missed periods coalesced,
 counted and reported; time injected in milliseconds, never read from a clock; reserved

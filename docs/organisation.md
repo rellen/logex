@@ -768,7 +768,7 @@ instructions ref., ONS, p.73). `first` is per instance.
   configuration's `warnings`, not a program's, since only the configuration knows which
   task runs an instance; §4.10, M2-6.)* *(Landed with M2-6: one for each timer of each
   instance an event task runs, a block's by its path, at the instance's line, citing the
-  `ton` in its own text.)*
+  `ton` in its own text, a block's read from no file by the block's name.)*
 - A `now` that goes backwards is an error, never a negative `.acc`. *(Landed with M1-5:
   `Logex.Runtime.call/4` raises `ArgumentError` for a `%Scan{}` earlier than the
   instance's clock, and `scan/3` for a negative elapsed time.)*

@@ -3285,6 +3285,99 @@ defmodule Logex.ConfigurationTest do
       ratio = reductions_to_check(400) / reductions_to_check(100)
       assert ratio < 1.32, "4x the body took #{Float.round(ratio, 2)}x the reductions"
     end
+
+    # From Elixir data, no type has a file: a block's timer is cited by the block's name,
+    # since "its line 5" would read as the program's, whose line 5 holds another `ton`.
+    test "a block's timer from types read from no file is cited by the block's name" do
+      {:ok, inner} =
+        Logex.compile(
+          "function_block inner\nvar_input go bool\nvar_output dn bool\nvar t9 ton\n" <>
+            "xic go ton t9 50\nxic t9.dn ote dn",
+          name: "inner"
+        )
+
+      {:ok, outer} =
+        Logex.compile(
+          "function_block outer\nvar_input go bool\nvar_output dn bool\nvar i1 inner\n" <>
+            "var t8 ton\ncal i1 go dn\nxic go ton t8 70",
+          name: "outer",
+          types: [inner]
+        )
+
+      {:ok, timed} =
+        Logex.compile(
+          "var_input go bool\nvar_output done bool\nvar t1 ton\nvar o1 outer\n" <>
+            "xic go ton t1 100\ncal o1 go done",
+          name: "timed",
+          types: [outer, inner]
+        )
+
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [timed],
+          tasks: [%Configuration.Task{name: "e", single: "go", priority: 0}],
+          globals: [%Global{name: "go", type: :bool, at: "panel.i.0"}],
+          instances: [%Instance{name: "a", type: "timed", task: "e"}],
+          connections: [%Connection{instance: "a", member: "go", to: "go"}]
+        )
+
+      assert Enum.map(config.warnings, & &1.message) == [
+               across("a", "e", "o1.i1.t9", " on line 5 of block `inner`"),
+               across("a", "e", "o1.t8", " on line 7 of block `outer`"),
+               across("a", "e", "t1", " on its line 5")
+             ]
+    end
+
+    # Each timer's citation is built once a program type, each routine's typed tags read
+    # once: a program of n instances of one block, a `ton` in each, under an event task,
+    # costs n, not n timers each reading the program's n tags. 4x the instances took 4.04x
+    # at most over 32 runs on Elixir 1.20.4, 16 alone and 16 beside a full suite, where the
+    # tags read once a timer took 13.5x; the bound, 4.85, a fifth above the highest.
+    defp holding(blocks) do
+      {:ok, blk} =
+        Logex.compile(
+          "function_block blk\nvar_input go bool\nvar_output dn bool\nvar t ton\n" <>
+            "xic go ton t 10\nxic t.dn ote dn",
+          name: "blk"
+        )
+
+      {:ok, program} =
+        Logex.compile(
+          "var_input go bool\nvar_output q bool\n" <>
+            Enum.map_join(1..blocks, fn i -> "var b#{i} blk\n" end) <>
+            Enum.map_join(1..blocks, "\n", fn i -> "cal b#{i} go q" end),
+          name: "held",
+          types: [blk]
+        )
+
+      %Configuration{
+        name: "plant",
+        programs: %{"held" => program},
+        tasks: [%Configuration.Task{name: "e", single: "go", priority: 0}],
+        globals: [%Global{name: "go", type: :bool, at: "panel.i.0"}],
+        instances: [%Instance{name: "x", type: "held", task: "e"}],
+        connections: [%Connection{instance: "x", member: "go", to: "go"}]
+      }
+    end
+
+    defp reductions_to_cite(blocks) do
+      config = holding(blocks)
+
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          [] = Configuration.check(config)
+          {:reductions, later} = Process.info(self(), :reductions)
+          later - before
+        end
+      )
+    end
+
+    test "check/1 cites each timer inside a block once a type, in time linear in the timers" do
+      ratio = reductions_to_cite(400) / reductions_to_cite(100)
+      assert ratio < 4.85, "4x the timers took #{Float.round(ratio, 2)}x the reductions"
+    end
   end
 
   describe "compile_file/1 (M2-2): a configuration file and its program types, on disk" do
