@@ -1173,12 +1173,20 @@ defmodule Logex.RuntimeTest do
                [entries!: 1, keywords: 0, print: 1, read: 1]
 
       for {module, keys} <- [
-            {Logex.Configuration.Task, [:interval, :line, :name, :priority]},
+            {Logex.Configuration.Task, [:interval, :line, :name, :priority, :single]},
             {Logex.Configuration.Global, [:at, :initial, :line, :name, :type]},
             {Logex.Configuration.Instance, [:line, :name, :task, :type]},
             {Logex.Configuration.Connection, [:instance, :line, :member, :to]}
           ],
           do: assert(Enum.sort(Map.keys(Map.from_struct(struct(module)))) == keys)
+
+      # M2-6: a task needs an interval, a single or both, which check/1 says, so a struct
+      # literal enforces its name and its priority only; struct/1 above ignores which.
+      enforced =
+        for %{field: field, required: true} <- Logex.Configuration.Task.__info__(:struct),
+            do: field
+
+      assert Enum.sort(enforced) == [:name, :priority]
 
       # M2-5: an instruction's slots, the one lookup of Logex.Warnings and Logex.Edit;
       # instructionize/3, which takes the function blocks a routine may declare instances

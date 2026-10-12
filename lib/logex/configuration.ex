@@ -36,9 +36,12 @@ defmodule Logex.Configuration do
     file's broken line is; a duplicate or a case twin is not recovered so, and a use of
     its name finds the element that kept it, as on a `.ld` declaration line. A program
     type is named in type position only, so an instance may share its type's name;
-  - a task has an interval, 1 to 2147483647 ms, and a priority, 0, the highest, to 65535
-    (decision 37): IEC reads an interval of 0 as no periodic scheduling, and an instance
-    that runs every cycle is one with no task;
+  - a task has an interval, 1 to 2147483647 ms, a single, or both (M2-6), and a priority,
+    0, the highest, to 65535 (decision 37): IEC reads an interval of 0 as no periodic
+    scheduling, and an instance that runs every cycle is one with no task, an event task
+    one with no interval; a single names a bool global, located or not, whose rising edge
+    makes the task due, read where a global is wanted, as a connection's is, its
+    did-you-mean among the bool globals;
   - a global's initial value fits its type, and a located global takes none; a location
     is `<device>.i.<address>` for an input point or `<device>.q.<address>` for an output
     point, its device a name, its address one or more whole numbers with no leading zero,
@@ -64,9 +67,9 @@ defmodule Logex.Configuration do
     `Logex.Walk.writes/1`'s;
   - a configuration runs at least one program instance.
 
-  Its warnings: a global nothing uses, where an instance's var_external uses its global; an
-  output point that something reads and nothing drives, which stays at 0, where a write
-  through a var_external drives it; a task that runs no instance; and, since M2-4, two
+  Its warnings: a global nothing uses, where an instance's var_external and a task's
+  single use their global; an output point that something reads and nothing drives,
+  which stays at 0, where a write through a var_external drives it; a task that runs no instance; and, since M2-4, two
   instances that write one global through a var_external, and an instance that writes
   through one a global a connection drives (decision 48), each in the words true of it:
   each scan reads what the other last wrote and the later write in a cycle stands; an
@@ -83,8 +86,8 @@ defmodule Logex.Configuration do
   `Map.delete/2` can make one; a line that is not a positive integer or nil; lines that
   are neither all nil, as from Elixir, nor rising in each list, one element a line, as a
   file's are; a name, a location, a type or a task that the lexer does not read as one
-  name token; a number that is not an integer of 0 or more, since a negative literal does
-  not lex yet (`PLAN.md` §5); a global's type that is neither `:bool` nor `:dint`; and a
+  name token; a task's single that is neither nil nor one name token; a number that is not
+  an integer of 0 or more, since a negative literal does not lex yet (`PLAN.md` §5); a global's type that is neither `:bool` nor `:dint`; and a
   connection's instance that is not a name, or with its member makes no one path.
 
   Each list of names a diagnostic ends with is given once, by the first diagnostic in
@@ -119,16 +122,22 @@ defmodule Logex.Configuration do
 
   defmodule Task do
     @moduledoc """
-    A periodic task: `name`, `interval` in ms and `priority`, 0 the highest, to 65535.
-    Its instances run once in every cycle in which it is due, every `interval` ms from the
-    start, in the order of the configuration's `instances` (`Logex.Runtime`).
+    A task: `name`, `priority`, 0 the highest, to 65535, and what makes it due, in IEC's
+    order (Ed 2 §2.7.2): `single`, the name of a bool global whose rising edge makes it
+    due, an event task (M2-6), and `interval` in ms, which makes it due every `interval`
+    ms from the start; one or both, nil for none. Its instances run once in every cycle
+    in which it is due, in the order of the configuration's `instances`; with both, at
+    most once a cycle, on an edge or periodically while its trigger is 0 (decision 39,
+    `Logex.Runtime`). Only `name` and `priority` are enforced, since a task needs either
+    of the other two, which `Logex.Configuration.check/1` says.
     """
-    @enforce_keys [:name, :interval, :priority]
-    defstruct [:name, :interval, :priority, line: nil]
+    @enforce_keys [:name, :priority]
+    defstruct [:name, :single, :interval, :priority, line: nil]
 
     @type t :: %__MODULE__{
             name: String.t(),
-            interval: pos_integer,
+            single: String.t() | nil,
+            interval: pos_integer | nil,
             priority: 0..65_535,
             line: pos_integer | nil
           }
@@ -671,11 +680,12 @@ defmodule Logex.Configuration do
     world = world(space, points, programs)
     {wiring, d_wiring} = wiring(Enum.sort_by(connections, &line_key/1), world, wired)
     externals = externals(instances, world)
+    {d_tasks, triggers} = tasks(tasks, world)
 
     diagnostics =
       [
         space.problems,
-        Enum.flat_map(tasks, &task/1),
+        d_tasks,
         Enum.flat_map(globals, &global/1),
         d_points,
         runs(instances, {programs, MapSet.union(given(config.programs), cited)}, world),
@@ -690,7 +700,10 @@ defmodule Logex.Configuration do
       |> elem(0)
 
     {Enum.map(diagnostics, &%{&1 | file: file}),
-     Enum.map(warnings({tasks, globals, instances}, wiring, externals), &%{&1 | file: file})}
+     Enum.map(
+       warnings({tasks, globals, instances}, wiring, externals, triggers),
+       &%{&1 | file: file}
+     )}
   end
 
   # Each list of names a diagnostic would end with is given once, by the first diagnostic
@@ -870,6 +883,7 @@ defmodule Logex.Configuration do
   defp said(%Logex.Configuration.Task{name: name} = task),
     do:
       named(task) ++
+        trigger_word(task.single, name) ++
         counted(task.interval, interval_rule(name)) ++ counted(task.priority, priority_rule(name))
 
   defp said(%Global{} = global),
@@ -896,6 +910,17 @@ defmodule Logex.Configuration do
 
   defp cannot_name(element),
     do: "#{inspect(element.name)} cannot name a #{kind(element)}: " <> rule()
+
+  # A task's `single` (M2-6) names a global, as one name token, or is nil for none.
+  defp trigger_word(nil, _name), do: []
+
+  defp trigger_word(single, name),
+    do:
+      of_word(
+        word?(single),
+        "task #{label(name)}: a single is a bool global's name, or nil for none, " <>
+          "found #{inspect(single)}"
+      )
 
   defp counted(value, _rule) when value == nil or (is_integer(value) and value >= 0), do: []
   defp counted(value, rule), do: [rule <> ", found #{inspect(value)}"]
@@ -1170,16 +1195,28 @@ defmodule Logex.Configuration do
   # A configuration file's keyword, in any case, which names nothing in one (§4.8).
   defp reserved?(word), do: String.downcase(word) in Text.keywords()
 
-  defp task(%Logex.Configuration.Task{} = task),
-    do: interval(task) ++ priority(task)
+  # Each task's problems, and the globals their triggers use, which M2-2's warning for a
+  # global nothing uses counts (M2-6).
+  defp tasks(tasks, world) do
+    bools = Enum.sort(for {name, {:global, _, %Global{type: :bool}}} <- world.names, do: name)
+    world = Map.put(world, :bools, bools)
+
+    {problems, used} =
+      Enum.map_reduce(tasks, MapSet.new(), fn task, used ->
+        {problems, triggers} = trigger(task, world)
+        {interval(task) ++ priority(task) ++ problems, MapSet.union(used, triggers)}
+      end)
+
+    {Enum.concat(problems), used}
+  end
 
   # An interval or a priority a line can hold, an integer of 0 or more or none, is a
   # diagnostic outside its range, in the configuration file's words; anything else was the
-  # host's mistake.
+  # host's mistake. A task needs an interval, a single or both (M2-6).
   defp interval(%{interval: interval}) when is_integer(interval) and interval in @interval,
     do: []
 
-  defp interval(%{name: name, interval: nil, line: line}),
+  defp interval(%{name: name, single: nil, interval: nil, line: line}),
     do: [
       diagnostic(
         line,
@@ -1188,7 +1225,17 @@ defmodule Logex.Configuration do
     ]
 
   # IEC reads an interval of 0 as no periodic scheduling (rule 2), and MatIEC runs such a
-  # task every tick: an instance that runs every cycle has no task (§4.4, "Tasks").
+  # task every tick: an instance that runs every cycle has no task (§4.4, "Tasks"), and an
+  # event task none at all.
+  defp interval(%{name: name, single: single, interval: 0, line: line}) when single != nil,
+    do: [
+      diagnostic(
+        line,
+        "the interval of `#{name}` is 0: an interval is at least 1 ms, and a task that " <>
+          "runs only on the rising edges of its single is declared without one"
+      )
+    ]
+
   defp interval(%{name: name, interval: 0, line: line}),
     do: [
       diagnostic(
@@ -1232,6 +1279,62 @@ defmodule Logex.Configuration do
        ]
 
   defp priority(_task), do: []
+
+  # A task's single (M2-6) names a bool global, located or not (§4.4, "Events"): a name
+  # where a global is wanted, read as a connection reads one (§4.7), the did-you-mean among
+  # the bool globals, since a dint is never the fix. A name refused already is silent
+  # (decision 42), and one no line can say was the host's mistake. `{problems, used}`: a
+  # global the single names is used, whatever is wrong with it.
+  defp trigger(%{single: single} = task, world) when is_binary(single),
+    do: trigger_of(word?(single), task, world)
+
+  defp trigger(_task, _world), do: {[], MapSet.new()}
+
+  defp trigger_of(false, _task, _world), do: {[], MapSet.new()}
+
+  defp trigger_of(true, task, world),
+    do:
+      triggered(
+        single_reading(
+          MapSet.member?(world.silent, task.single),
+          String.contains?(task.single, "."),
+          task.single,
+          world
+        ),
+        task
+      )
+
+  defp single_reading(true, _dotted, _name, _world), do: :skip
+  defp single_reading(false, true, name, world), do: dotted(spelled(name), name, :bool, world)
+
+  defp single_reading(false, false, name, world),
+    do: single_held(Map.get(world.names, name), name, world)
+
+  defp single_held(nil, name, world), do: {:error, no_trigger(reserved?(name), name, world)}
+  defp single_held(held, name, world), do: global_held(held, name, :bool, world)
+
+  defp no_trigger(true, name, world), do: unnamed(true, :global, name, world, :bool)
+
+  defp no_trigger(false, name, world),
+    do: declare(Declarations.suggest(name, world.bools, & &1, "names"), :global, name, :bool)
+
+  defp triggered({:ok, %Global{name: name, type: :dint} = global}, task),
+    do:
+      {[
+         diagnostic(
+           task.line,
+           "the single of `#{task.name}`, `#{name}`, is a dint#{where(global)}: a single is " <>
+             "a bool global"
+         )
+       ], MapSet.new([name])}
+
+  # A bool global, or one whose type is the host's mistake, refused already.
+  defp triggered({:ok, %Global{name: name}}, _task), do: {[], MapSet.new([name])}
+
+  defp triggered({:error, message}, task),
+    do: {[diagnostic(task.line, "the single of `#{task.name}`: " <> message)], MapSet.new()}
+
+  defp triggered(:skip, _task), do: {[], MapSet.new()}
 
   defp global(%Global{type: type} = global) when type in [:bool, :dint],
     do: initial(global, location(global.at))
@@ -2174,9 +2277,9 @@ defmodule Logex.Configuration do
   # address. M2-4: a var_external of an instantiated type uses its global, and a write
   # through one drives it; and the two writer warnings (decision 48), which only the IR
   # shows (§4.4).
-  defp warnings({tasks, globals, instances}, wiring, externals) do
+  defp warnings({tasks, globals, instances}, wiring, externals, triggers) do
     running = MapSet.new(instances, & &1.task)
-    used = MapSet.union(wiring.used, externals.used)
+    used = wiring.used |> MapSet.union(externals.used) |> MapSet.union(triggers)
 
     (Enum.flat_map(tasks, &idle(MapSet.member?(running, &1.name), &1)) ++
        Enum.flat_map(globals, &doubt(MapSet.member?(used, &1.name), &1, {wiring, externals})) ++

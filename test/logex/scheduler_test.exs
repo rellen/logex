@@ -788,6 +788,440 @@ defmodule Logex.SchedulerTest do
     end
   end
 
+  # M2-6: event tasks, a task's `single` (docs/organisation.md §4.6 step 3; §4.10, M2-6;
+  # decisions 11, 39, 50, 51 and 52). PLAN M2-6's Done-when is in end_to_end_test.exs.
+  defp event(name, single, priority),
+    do: %Configuration.Task{name: name, single: single, priority: priority}
+
+  defp both(name, single, interval, priority),
+    do: %Configuration.Task{name: name, single: single, interval: interval, priority: priority}
+
+  defp points(names, io),
+    do:
+      for(
+        {name, k} <- Enum.with_index(names),
+        do: %Global{name: name, type: :bool, at: "p.#{io}.#{k}"}
+      )
+
+  # Cycles from a fresh start, each `{elapsed, inputs}`: the events of each.
+  defp run(config, steps) do
+    {events, _runtime} =
+      Enum.map_reduce(steps, Runtime.start(config), fn {elapsed, inputs}, runtime ->
+        {runtime, _outputs, events} = Runtime.cycle(runtime, elapsed, inputs)
+        {events, runtime}
+      end)
+
+    events
+  end
+
+  # One task, `task`, on the input point `trig`, its instance `r` copying `x` to `y`.
+  defp one_event(task) do
+    Configuration.new!(
+      name: "plant",
+      programs: [program(@relay, "relay")],
+      tasks: [task],
+      globals: points(~w(trig x), "i") ++ points(~w(y), "q"),
+      instances: [%Instance{name: "r", type: "relay", task: task.name}],
+      connections: wire("r", "x", "y")
+    )
+  end
+
+  describe "an event task's edge (M2-6)" do
+    test "runs once on each rising edge of its trigger, and never while it is held or low" do
+      trace = [0, 1, 1, 0, 1, 0, 0, 1]
+      events = run(one_event(event("e", "trig", 0)), for(v <- trace, do: {10, %{"trig" => v}}))
+      assert Enum.map(events, &length(ran(&1))) == [0, 1, 0, 0, 1, 0, 0, 1]
+      assert for([{:ran, "e", "r", now}] <- events, do: now) == [20, 50, 80]
+    end
+
+    # Decision 11: the last sample starts at 0, MatIEC's reading.
+    test "a trigger already 1 in the first cycle is an edge: an input point the host sets, " <>
+           "or an initial value" do
+      assert ran(hd(run(one_event(event("e", "trig", 0)), [{0, %{"trig" => 1}}]))) ==
+               [{"e", "r", 0}]
+
+      armed =
+        Configuration.new!(
+          name: "plant",
+          programs: [program(@relay, "relay")],
+          tasks: [event("e", "armed", 0)],
+          globals: [%Global{name: "armed", type: :bool, initial: 1}] ++ points(~w(y), "q"),
+          instances: [%Instance{name: "r", type: "relay", task: "e"}],
+          connections: wire("r", 1, "y")
+        )
+
+      # Nothing writes `armed`: it fires once a start, and never again (§4.10, M2-6).
+      assert Enum.map(run(armed, List.duplicate({10, %{}}, 4)), &ran/1) ==
+               [[{"e", "r", 10}], [], [], []]
+    end
+
+    # One sample a cycle (§4.6 step 3): a host that cycles once a change loses no edge.
+    test "a pulse inside one host step is not seen, and an elapsed 0 cycle samples again" do
+      config = one_event(event("e", "trig", 0))
+
+      # 0 → 1, an edge; then 1 → 0 → 1 inside one step, sent as 1 or not at all; then
+      # 0 → 1 → 0 inside one step, sent as 0.
+      steps = [
+        {0, %{"trig" => 1}},
+        {10, %{"trig" => 1}},
+        {10, %{}},
+        {10, %{"trig" => 0}},
+        {10, %{"trig" => 0}}
+      ]
+
+      assert Enum.map(run(config, steps), &length(ran(&1))) == [1, 0, 0, 0, 0]
+
+      steps = [{0, %{"trig" => 1}}, {0, %{"trig" => 0}}, {0, %{"trig" => 1}}]
+      assert Enum.map(run(config, steps), &ran/1) == [[{"e", "r", 0}], [], [{"e", "r", 0}]]
+    end
+
+    # A writer on a higher-priority periodic task runs before the event task would in the
+    # same cycle, and still the event task runs only in the next: every trigger is sampled
+    # after the input merge and before any scan.
+    for {kind, at} <- [{"an unlocated global", nil}, {"an output point", "p.q.9"}] do
+      test "a trigger written by logic, #{kind} a connection drives, fires in the next cycle" do
+        config =
+          Configuration.new!(
+            name: "plant",
+            programs: [program(@relay, "relay")],
+            tasks: [task("fast", 10, 0), event("e", "g", 1)],
+            globals:
+              points(~w(x), "i") ++
+                [%Global{name: "g", type: :bool, at: unquote(at)}] ++ points(~w(y), "q"),
+            instances: [
+              %Instance{name: "w", type: "relay", task: "fast"},
+              %Instance{name: "r", type: "relay", task: "e"}
+            ],
+            connections: wire("w", "x", "g") ++ wire("r", "x", "y")
+          )
+
+        events = run(config, [{0, %{}}, {10, %{"x" => 1}}, {0, %{}}, {10, %{}}])
+
+        assert Enum.map(events, &ran/1) == [
+                 [{"fast", "w", 0}],
+                 # `w` writes g = 1 at 10 ms, before `e` would run: e's sample was 0.
+                 [{"fast", "w", 10}],
+                 # The next cycle, elapsed 0, samples 1: an edge.
+                 [{"e", "r", 10}],
+                 [{"fast", "w", 20}]
+               ]
+      end
+    end
+
+    # The trigger is sampled after the input merge: the inputs a cycle brings are its
+    # sample, not the last cycle's image.
+    test "is sampled from this cycle's inputs" do
+      steps = [{0, %{}}, {10, %{"trig" => 1}}, {10, %{"trig" => 0}}]
+
+      assert Enum.map(run(one_event(event("e", "trig", 0)), steps), &ran/1) ==
+               [[], [{"e", "r", 10}], []]
+    end
+
+    test "never overlaps, has no periodic due time, and overlaps/1 lists it at 0" do
+      runtime = Runtime.start(one_event(event("e", "trig", 0)))
+      assert Runtime.next_due_in(runtime) == :infinity
+      assert Runtime.overlaps(runtime) == %{"e" => 0}
+
+      runtime =
+        Enum.reduce([1, 0, 1, 1, 0], runtime, fn v, runtime ->
+          {runtime, _, _} = Runtime.cycle(runtime, 1_000, %{"trig" => v})
+          runtime
+        end)
+
+      assert Runtime.overlaps(runtime) == %{"e" => 0}
+      assert Runtime.next_due_in(runtime) == :infinity
+    end
+
+    # No new event kind (§4.10, M2-6): an edge is seen in the scans it runs.
+    test "a run is its {:ran, ...} events alone, and one with no instance leaves none" do
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [program(@relay, "relay")],
+          tasks: [event("idle", "trig", 0), event("e", "trig", 1)],
+          globals: points(~w(trig), "i"),
+          instances: [%Instance{name: "r", type: "relay", task: "e"}],
+          connections: [%Connection{instance: "r", member: "in", to: 0}]
+        )
+
+      assert run(config, [{0, %{"trig" => 1}}]) == [[{:ran, "e", "r", 0}]]
+    end
+
+    # §4.6's caveat: a ton's `.acc` counts the time between runs, which only the
+    # configuration's warning says (the configuration file's task lines).
+    test "a ton in its program times across events" do
+      timed =
+        program(
+          "var_input go bool\nvar_output done bool\nvar t1 ton\nxic go ton t1 100\n" <>
+            "xic t1.dn ote done",
+          "timed"
+        )
+
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [timed],
+          tasks: [event("e", "trig", 0)],
+          globals: points(~w(trig), "i") ++ points(~w(done), "q"),
+          instances: [%Instance{name: "t", type: "timed", task: "e"}],
+          connections: [
+            %Connection{instance: "t", member: "go", to: 1},
+            %Connection{instance: "t", member: "done", to: "done"}
+          ]
+        )
+
+      # Runs at 0 and 60 ms count 60 ms, though the timer ran twice; 500 ms with no event,
+      # then one: done at once, by time no scan saw.
+      runtime = Runtime.start(config)
+      {runtime, %{"done" => 0}, _} = Runtime.cycle(runtime, 0, %{"trig" => 1})
+      {runtime, %{"done" => 0}, []} = Runtime.cycle(runtime, 30, %{"trig" => 0})
+      {runtime, %{"done" => 0}, _} = Runtime.cycle(runtime, 30, %{"trig" => 1})
+      assert Runtime.get!(runtime, "t.t1.acc") == 60
+      {runtime, _, []} = Runtime.cycle(runtime, 500, %{"trig" => 0})
+      {runtime, %{"done" => 1}, _} = Runtime.cycle(runtime, 0, %{"trig" => 1})
+      assert Runtime.get!(runtime, "t.t1.acc") == 100
+    end
+  end
+
+  # §4.10, M2-6: an event task's due time, for the earlier-due-time tie-break, is the
+  # cycle's `now`. Its visibility form: `w`, on a periodic task, copies `x` to the global
+  # `g`; `r`, on an event task of the same priority, copies `g` to the output `y`, so `y`
+  # shows which ran first. The form with two writers of one global is end_to_end_test.exs's.
+  describe "the tie-break between an event task and a periodic one (M2-6)" do
+    defp tie(tasks) do
+      Configuration.new!(
+        name: "plant",
+        programs: [program(@relay, "relay")],
+        tasks: tasks,
+        globals:
+          points(~w(trig x), "i") ++ [%Global{name: "g", type: :bool}] ++ points(~w(y), "q"),
+        instances: [
+          %Instance{name: "w", type: "relay", task: "p"},
+          %Instance{name: "r", type: "relay", task: "e"}
+        ],
+        connections: wire("w", "x", "g") ++ wire("r", "g", "y")
+      )
+    end
+
+    defp tie_outputs(config, elapsed) do
+      {runtime, _, _} = Runtime.cycle(Runtime.start(config), 0, %{})
+      {_runtime, outputs, events} = Runtime.cycle(runtime, elapsed, %{"trig" => 1, "x" => 1})
+      {outputs, ran(events)}
+    end
+
+    test "a late periodic task of the same priority runs first, declared after it or not" do
+      for tasks <- [
+            [event("e", "trig", 1), task("p", 10, 1)],
+            [task("p", 10, 1), event("e", "trig", 1)]
+          ] do
+        # p was due at 10, the cycle is at 15: p has waited longer.
+        assert tie_outputs(tie(tasks), 15) == {%{"y" => 1}, [{"p", "w", 15}, {"e", "r", 15}]}
+      end
+    end
+
+    test "a periodic task due exactly at now ties, and falls to the order declared" do
+      assert tie_outputs(tie([event("e", "trig", 1), task("p", 10, 1)]), 10) ==
+               {%{"y" => 0}, [{"e", "r", 10}, {"p", "w", 10}]}
+
+      assert tie_outputs(tie([task("p", 10, 1), event("e", "trig", 1)]), 10) ==
+               {%{"y" => 1}, [{"p", "w", 10}, {"e", "r", 10}]}
+    end
+
+    test "priority comes first" do
+      assert tie_outputs(tie([task("p", 10, 2), event("e", "trig", 1)]), 15) ==
+               {%{"y" => 0}, [{"e", "r", 15}, {"p", "w", 15}]}
+    end
+
+    # With an interval too: an edge run's due time is `now`, even where a periodic due time
+    # came in the same cycle, which decision 39 skips; a periodic run's is its due time.
+    test "a task with single and interval: an edge run is due at now, a periodic run at its " <>
+           "due time" do
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [program(@relay, "relay")],
+          tasks: [task("p", 12, 1), both("c", "trig", 10, 1)],
+          globals: points(~w(trig), "i"),
+          instances: [
+            %Instance{name: "rp", type: "relay", task: "p"},
+            %Instance{name: "rc", type: "relay", task: "c"}
+          ],
+          connections: for(i <- ~w(rp rc), do: %Connection{instance: i, member: "in", to: 0})
+        )
+
+      # At 15, trigger 0: c due at 10 and p at 12, so c, though declared later, has waited
+      # longer. At 30 c samples an edge: its due time 30 was skipped, and the edge run is
+      # due at now, 30, where p, due at 24, has waited longer.
+      steps = [{0, %{}}, {15, %{}}, {15, %{"trig" => 1}}]
+
+      assert Enum.map(run(config, steps), &ran/1) == [
+               [{"p", "rp", 0}, {"c", "rc", 0}],
+               [{"c", "rc", 15}, {"p", "rp", 15}],
+               [{"p", "rp", 30}, {"c", "rc", 30}]
+             ]
+    end
+  end
+
+  describe "decision 39: a task with single and interval (M2-6)" do
+    # Each cycle: how many scans ran, the task's overlap count, and next_due_in/1 after.
+    defp at_times(steps) do
+      steps
+      |> Enum.map_reduce(Runtime.start(one_event(both("b", "trig", 10, 0))), fn
+        {elapsed, inputs}, runtime ->
+          {runtime, _, events} = Runtime.cycle(runtime, elapsed, inputs)
+
+          {{length(ran(events)), Runtime.overlaps(runtime)["b"], Runtime.next_due_in(runtime)},
+           runtime}
+      end)
+      |> elem(0)
+    end
+
+    test "runs periodically while its trigger is 0; a due time under a high trigger is " <>
+           "skipped, not counted, and the next is on the same phase" do
+      steps = [
+        # 0: due, trigger 0: a periodic run.
+        {0, %{}},
+        # 5: an edge: one run.
+        {5, %{"trig" => 1}},
+        # 10, 20, 30: held high, each due time skipped, none counted.
+        {5, %{}},
+        {10, %{}},
+        {10, %{}},
+        # 35: falls; the next due time is 40, on the phase.
+        {5, %{"trig" => 0}},
+        # 40: periodic again.
+        {5, %{}}
+      ]
+
+      assert at_times(steps) == [
+               {1, 0, 10},
+               {1, 0, 5},
+               {0, 0, 10},
+               {0, 0, 10},
+               {0, 0, 10},
+               {0, 0, 5},
+               {1, 0, 10}
+             ]
+    end
+
+    test "an edge run does not move the phase, and an edge and a due time in one cycle are " <>
+           "one run" do
+      steps = [
+        {0, %{}},
+        # 3: an edge run; the phase stays at 10.
+        {3, %{"trig" => 1}},
+        {1, %{"trig" => 0}},
+        # 10: a periodic run, on the phase.
+        {6, %{}},
+        # 20: an edge and a due time: one run, the next due at 30.
+        {10, %{"trig" => 1}}
+      ]
+
+      assert at_times(steps) == [{1, 0, 10}, {1, 0, 7}, {0, 0, 6}, {1, 0, 10}, {1, 0, 10}]
+    end
+
+    test "the trigger falling keeps the phase: the next run is on it, not a period after " <>
+           "the fall" do
+      # 0 periodic; 2 an edge; 7 falls, the next due still 10; 10 periodic.
+      steps = [{0, %{}}, {2, %{"trig" => 1}}, {5, %{"trig" => 0}}, {3, %{}}]
+      assert at_times(steps) == [{1, 0, 10}, {1, 0, 8}, {0, 0, 3}, {1, 0, 10}]
+    end
+
+    # Decision 51: a late host's edge cycle reads by its sample, 1, so the due times since
+    # the last cycle are skipped, not counted; a cycle that samples 0 is a periodic task's,
+    # its missed periods counted.
+    test "a late cycle counts its missed periods only while its trigger samples 0" do
+      steps = [
+        {0, %{}},
+        # 35, trigger 0: one run, 10 and 20 missed, the next due at 40.
+        {35, %{}},
+        # 75, an edge: one run, 40 to 70 skipped, none counted.
+        {40, %{"trig" => 1}},
+        # 115, still 1: nothing runs, nothing counted.
+        {40, %{}}
+      ]
+
+      assert at_times(steps) == [{1, 0, 10}, {1, 2, 5}, {1, 2, 5}, {0, 2, 5}]
+    end
+
+    # Decision 52: a due time that came while the image still held 1 runs in the cycle
+    # that samples 0, since only the sample is known, a late one's missed periods counted
+    # as any late periodic task's are.
+    test "a late cycle that samples 0 runs a due time that came while the image held 1" do
+      steps = [
+        {0, %{}},
+        # 5: an edge; the next due time stays 10.
+        {5, %{"trig" => 1}},
+        # 35 samples 0: 10, 20 and 30 came while the image held 1; 30 runs, 10 and 20 are
+        # counted missed.
+        {30, %{"trig" => 0}}
+      ]
+
+      assert at_times(steps) == [{1, 0, 10}, {1, 0, 5}, {1, 2, 5}]
+    end
+
+    # Decision 50: next_due_in/1 counts a periodic due time, a combined task's among them,
+    # even while its trigger is held 1.
+    test "next_due_in/1 counts its periodic due time, held high or not" do
+      runtime = Runtime.start(one_event(both("b", "trig", 10, 0)))
+      assert Runtime.next_due_in(runtime) == 0
+      {runtime, _, _} = Runtime.cycle(runtime, 4, %{"trig" => 1})
+      assert Runtime.next_due_in(runtime) == 6
+      {runtime, _, []} = Runtime.cycle(runtime, 6, %{})
+      assert Runtime.next_due_in(runtime) == 10
+    end
+  end
+
+  describe "restart/2 and an event task (M2-6)" do
+    # §4.9's table: a restart sets the last sample to 0, so a trigger already 1 fires
+    # again: an input point held through it, since the image is kept, and an unlocated
+    # global back at its initial value 1; with an interval too.
+    test "a trigger already 1 fires again in the next cycle" do
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [program(@relay, "relay")],
+          tasks: [event("held", "trig", 0), event("armed", "a", 1), both("b", "trig", 50, 2)],
+          globals:
+            points(~w(trig x), "i") ++
+              [%Global{name: "a", type: :bool, initial: 1}] ++ points(~w(y), "q"),
+          instances: [
+            %Instance{name: "r1", type: "relay", task: "held"},
+            %Instance{name: "r2", type: "relay", task: "armed"},
+            %Instance{name: "r3", type: "relay", task: "b"}
+          ],
+          connections:
+            wire("r1", "x", "y") ++
+              [
+                %Connection{instance: "r2", member: "in", to: 0},
+                %Connection{instance: "r3", member: "in", to: 0}
+              ]
+        )
+
+      runtime = Runtime.start(config)
+      {runtime, _, events} = Runtime.cycle(runtime, 0, %{"trig" => 1})
+      assert ran(events) == [{"held", "r1", 0}, {"armed", "r2", 0}, {"b", "r3", 0}]
+      {runtime, _, events} = Runtime.cycle(runtime, 7, %{})
+      assert ran(events) == []
+
+      runtime = Runtime.restart(runtime, :cold)
+      {_runtime, _, events} = Runtime.cycle(runtime, 0, %{})
+      assert ran(events) == [{"held", "r1", 7}, {"armed", "r2", 7}, {"b", "r3", 7}]
+    end
+
+    # Decision 50: next_due_in/1 counts periodic due times only, so after start/1 or
+    # restart/2 a configuration of event tasks says :infinity, and a runner cycles at once
+    # whatever it says.
+    test "next_due_in/1 counts no event task alone after start/1 or restart/2" do
+      runtime = Runtime.start(one_event(event("e", "trig", 0)))
+      assert Runtime.next_due_in(runtime) == :infinity
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"trig" => 1})
+      runtime = Runtime.restart(runtime, :cold)
+      assert Runtime.next_due_in(runtime) == :infinity
+      assert {_, _, [{:ran, "e", "r", 0}]} = Runtime.cycle(runtime, 0, %{})
+    end
+  end
+
   describe "growth" do
     # A cycle of n instances, each on a task of its own, all due, each copying an input
     # point in and an output point out. Counted in reductions, the least of three.
@@ -964,6 +1398,51 @@ defmodule Logex.SchedulerTest do
       externals = reductions_to_share(100, 32) / reductions_to_share(100, 8)
       assert instances < 5.04, "4x the instances took #{Float.round(instances, 2)}x"
       assert externals < 4.01, "4x the var_externals took #{Float.round(externals, 2)}x"
+    end
+
+    # M2-6: n tasks with single and interval on one input point, each running one relay,
+    # and one periodic task: a cycle samples and plans every task, and sorts those due,
+    # all of them in a cycle the trigger rises. Over 32 runs on Elixir 1.20.4, 3 of the test
+    # alone, 16 beside three full suites and 13 in a full suite, 4x the tasks took 3.96x
+    # with the trigger at 0 and 4.04x to 4.08x with it rising; the bounds, 4.76 and 4.90,
+    # are a fifth above the highest.
+    defp triggered(n) do
+      Configuration.new!(
+        name: "plant",
+        programs: [program(@relay, "relay")],
+        tasks: [
+          task("p", 10, 0)
+          | for(i <- 1..n, do: both("e#{i}", "trig", 10 + rem(i, 7), rem(i, 5)))
+        ],
+        globals: points(~w(trig), "i"),
+        instances: for(i <- 1..n, do: %Instance{name: "r#{i}", type: "relay", task: "e#{i}"}),
+        connections: for(i <- 1..n, do: %Connection{instance: "r#{i}", member: "in", to: "trig"})
+      )
+    end
+
+    defp reductions_triggered(n, inputs) do
+      {runtime, _, _} = Runtime.cycle(Runtime.start(triggered(n)), 0, %{"trig" => 0})
+
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          _ = Runtime.cycle(runtime, 5, inputs)
+          _ = Runtime.next_due_in(runtime)
+          {:reductions, later} = Process.info(self(), :reductions)
+          later - before
+        end
+      )
+    end
+
+    test "a cycle stays linear in the event tasks declared, whether their trigger rises or not" do
+      quiet =
+        reductions_triggered(2000, %{"trig" => 0}) / reductions_triggered(500, %{"trig" => 0})
+
+      rises =
+        reductions_triggered(2000, %{"trig" => 1}) / reductions_triggered(500, %{"trig" => 1})
+
+      assert quiet < 4.76, "4x the tasks took #{Float.round(quiet, 2)}x, the trigger at 0"
+      assert rises < 4.90, "4x the tasks took #{Float.round(rises, 2)}x, the trigger rising"
     end
 
     test "a cycle stays linear in the number of instances, tasks and connections" do

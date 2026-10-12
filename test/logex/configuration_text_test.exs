@@ -581,6 +581,10 @@ defmodule Logex.Configuration.TextTest do
              "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
             {%{fast | priority: :high},
              "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
+            # M2-6: a task's single is data before a task line takes it, so print/1 never
+            # drops one.
+            {%{fast | single: "estop"},
+             "a task's single is nil: a task line takes `interval` and `priority`"},
             # A keyword a line reads in a task's name place.
             {%{fast | name: "INTERVAL"},
              "a task's name is not `interval` or `priority`, in any case: a line reads that " <>

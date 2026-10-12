@@ -659,8 +659,9 @@ defmodule Logex.Configuration.Text do
   it. A line can say a proper list of:
 
   - a `%Logex.Configuration.Task{}`, its name one name token to the lexer and neither
-    `interval` nor `priority` in any case, which a line reads as that keyword; its
-    interval and its priority each nil or an integer of 0 or more;
+    `interval` nor `priority` in any case, which a line reads as that keyword; no single,
+    which a task line does not take yet (M2-6); its interval and its priority each nil or
+    an integer of 0 or more;
   - a `%Logex.Configuration.Global{}`, its name one name token to the lexer and none of
     `at`, `bool` or `dint` in any case, which a line reads as that keyword; its type
     `:bool` or `:dint`; its initial value nil or an integer of 0 or more; its location nil
@@ -724,6 +725,7 @@ defmodule Logex.Configuration.Text do
        ) do
     name!(name, entry)
     keyword!(name, @input_words, "a task's name", entry)
+    unsaid_single!(entry)
     count!(interval, entry)
     count!(priority, entry)
   end
@@ -747,6 +749,12 @@ defmodule Logex.Configuration.Text do
     path!(instance, member, entry)
     to!(to, entry)
   end
+
+  # M2-6 gives a task a single from Elixir first; no line says one until the reader does.
+  defp unsaid_single!(%Logex.Configuration.Task{single: nil}), do: :ok
+
+  defp unsaid_single!(entry),
+    do: unsaid!("a task's single is nil: a task line takes `interval` and `priority`", entry)
 
   defp type!(type, _entry) when type in [:bool, :dint], do: :ok
   defp type!(_type, entry), do: unsaid!("a global's type is :bool or :dint", entry)

@@ -696,6 +696,147 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  # M2-6: a task's single, its trigger, a bool global (docs/organisation.md §4.4, "Events";
+  # §4.10, M2-6), from Elixir data. The same checks from source are the task lines'.
+  describe "a task's single (M2-6)" do
+    defp event(name, single, priority),
+      do: %Configuration.Task{name: name, single: single, priority: priority}
+
+    defp both(name, single, interval, priority),
+      do: %Configuration.Task{name: name, single: single, interval: interval, priority: priority}
+
+    # Every diagnostic check/1 gives, unformatted, for these tasks and extra globals.
+    defp triggers(seal, tasks, globals \\ [], instances \\ []) do
+      fields = base(seal)
+
+      config = %Configuration{
+        name: "plant",
+        programs: %{"seal" => seal},
+        tasks: tasks,
+        globals: fields[:globals] ++ globals,
+        instances: fields[:instances] ++ instances,
+        connections: fields[:connections]
+      }
+
+      Enum.map(Configuration.check(config), & &1.message)
+    end
+
+    test "a task with a single and no interval, or both, is accepted, and needs no interval",
+         %{seal: seal} do
+      tasks = [event("trip", "pb2", 0), both("parts", "pb2", 1000, 2)]
+      config = Configuration.new!(Keyword.put(base(seal), :tasks, tasks))
+      assert config.tasks == tasks
+      assert Configuration.check(config) == []
+    end
+
+    # A single is a use of its global, so `pb2` is no longer "declared but nothing uses
+    # it"; and an output point it reads that nothing drives stays at 0, so the warning
+    # for that stands.
+    test "a single uses its global, and an undriven output point it reads is still told so",
+         %{seal: seal} do
+      fields =
+        Keyword.merge(base(seal),
+          tasks: [event("trip", "pb2", 0), event("echo", "k2", 1)],
+          globals: base(seal)[:globals] ++ [%Global{name: "k2", type: :bool, at: "panel.q.1"}]
+        )
+
+      assert Enum.map(Configuration.new!(fields).warnings, &Diagnostic.format/1) == [
+               "warning: task `trip` runs no instance",
+               "warning: task `echo` runs no instance",
+               "warning: `sp` is declared but nothing uses it",
+               "warning: `k2` is an output point, but nothing drives it: it stays at 0"
+             ]
+    end
+
+    # IEC reads an interval of 0 as no periodic scheduling: an event task is declared
+    # without one, which the message says, not that an instance runs every cycle.
+    test "an event task's interval of 0 is told to leave it out", %{seal: seal} do
+      assert triggers(seal, [both("t", "pb", 0, 3), task("u", 0, 3)]) == [
+               "the interval of `t` is 0: an interval is at least 1 ms, and a task that runs " <>
+                 "only on the rising edges of its single is declared without one",
+               "the interval of `u` is 0: an interval is at least 1 ms, and an instance that " <>
+                 "runs every cycle is declared without `with`"
+             ]
+    end
+
+    test "a single names a bool global: a dint, another kind of name or no global is told so",
+         %{seal: seal} do
+      tasks = [
+        event("a", "sp", 0),
+        event("b", "pbb", 0),
+        event("c", "spp", 0),
+        event("d", "m", 0),
+        event("e", "a", 0),
+        event("f", "zz", 0),
+        event("g", "Program", 0)
+      ]
+
+      # The did-you-mean is among the bool globals: `spp` is near only the dint `sp`, so
+      # none is offered, and its advice declares a bool.
+      assert triggers(seal, tasks) == [
+               "the single of `a`, `sp`, is a dint: a single is a bool global",
+               "the single of `b`: no global `pbb` — did you mean `pb`?",
+               "the single of `c`: no global `spp`: declare it, as in `var_global spp bool`",
+               "the single of `d`: `m` is an instance, not a global",
+               "the single of `e`: `a` is a task, not a global",
+               "the single of `f`: no global `zz`: declare it, as in `var_global zz bool`",
+               "the single of `g`: no global `Program`: `Program` is a keyword of a " <>
+                 "configuration file, and nothing in one is named so"
+             ]
+    end
+
+    # A name with `.` parts gets the readings a connection's global does (§4.7, M2-2): a
+    # location, written only after `at`, whether a global is at it or not; an instance's
+    # member, since IEC's program output reference is not taken (the deviations table); or
+    # a member of what is no instance.
+    test "a dotted single is told its reading", %{seal: seal} do
+      tasks = [
+        event("a", "panel.i.0", 0),
+        event("b", "panel.i.7", 0),
+        event("c", "m.motor", 0),
+        event("d", "sp.x", 0),
+        event("e", "q.x", 0)
+      ]
+
+      assert triggers(seal, tasks) == [
+               "the single of `a`: `panel.i.0` is a location, written only after `at` on a " <>
+                 "`var_global` line: name the global at it, `pb`",
+               "the single of `b`: `panel.i.7` is a location, written only after `at` on a " <>
+                 "`var_global` line: declare a global at it, as in `var_global point bool at " <>
+                 "panel.i.7`, and name that",
+               "the single of `c`: `m.motor` is an instance's member: instances share a value " <>
+                 "only through a global, which one drives and the other reads",
+               "the single of `d`: `sp.x` names a member of `sp`, but `sp` is a global, not an " <>
+                 "instance",
+               "the single of `e`: `q.x` names a member of an instance, and there is no " <>
+                 "instance `q`"
+             ]
+    end
+
+    # Decision 42: a name refused for its `.` or as a keyword is reported once, and a single
+    # that names it is silent.
+    test "a single that names a refused name is silent", %{seal: seal} do
+      globals = [%Global{name: "with", type: :bool}, %Global{name: "x.y", type: :bool}]
+
+      assert triggers(seal, [event("a", "with", 0), event("b", "x.y", 0)], globals) == [
+               "`with` is a keyword and cannot name a global",
+               "`x.y` cannot name a global: `.` is kept for a path, as in `m1.start`, and a " <>
+                 "location, as in `panel.i.0`"
+             ]
+    end
+
+    # One no line can say is the host's mistake (decision 36), a line of one ArgumentError.
+    test "a single that is not one name token is the host's mistake", %{seal: seal} do
+      tasks = [event("e", 3, 0), event("f", "a b", 0), both("g", :pb, 10, 0)]
+
+      assert refused(Keyword.put(base(seal), :tasks, tasks)) == [
+               "task `e`: a single is a bool global's name, or nil for none, found 3",
+               ~s|task `f`: a single is a bool global's name, or nil for none, found "a b"|,
+               "task `g`: a single is a bool global's name, or nil for none, found :pb"
+             ]
+    end
+  end
+
   describe "a global's initial value" do
     # initial/1 is the one rule for a global's value where nothing has set it; its
     # doctests give its values.
@@ -3475,6 +3616,7 @@ defmodule Logex.ConfigurationTest do
               "a global's type is :bool or :dint",
               "a task's name is not `interval` or `priority`, in any case: a line reads that " <>
                 "word as its keyword",
+              "a task's single is nil: a task line takes `interval` and `priority`",
               "a program's type is not `with`, in any case: a line reads that word as its " <>
                 "keyword",
               "a name lexes as one name token",
