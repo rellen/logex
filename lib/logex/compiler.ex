@@ -1,5 +1,5 @@
 defmodule Logex.Compiler do
-  alias Logex.{Declarations, Diagnostic, FbType, Program, Tag}
+  alias Logex.{Declarations, Diagnostic, FbType, Program, Tag, Walk}
   alias Logex.FbType.Member
 
   defdelegate tokenize(source), to: Logex.Lexer
@@ -53,9 +53,10 @@ defmodule Logex.Compiler do
 
   @doc """
   The slots of an instruction of the IR, `{symbol, line, operands}`: one `{access, type}`
-  per operand, in order, its mnemonic's signature in `instructions/0`. The walks that read
-  a program's IR for what each operand does, `Logex.Warnings` and `Logex.Edit`, look every
-  instruction's slots up here, never in a table of their own (M2-5).
+  per operand, in order, its mnemonic's signature in `instructions/0`. The one walk that
+  reads a program's IR for what each operand does, `Logex.Walk`, which `Logex.Warnings`
+  and `Logex.Edit` read, looks every instruction's slots up here, never in a table of its
+  own (M2-5, M2-4).
 
   The slots are per instruction, given `tags`, the tag table of the program that holds it,
   so that an instruction's slots may depend on what its operands name: a `cal`'s are its
@@ -122,7 +123,7 @@ defmodule Logex.Compiler do
     known = {scope(tags), folded(tags)}
     {rungs, lowering} = Enum.map_reduce(logic, [], &lower_rung(&1, &2, known))
     note? = map_size(tags) == 0 and declares_nothing?(routine, logic)
-    instructions = instructions(rungs)
+    instructions = Walk.instructions(rungs)
     shared = shared_bits(instructions, tags)
     {tags, timing} = presets(instructions, tags)
     calls = calls(instructions)
@@ -235,7 +236,7 @@ defmodule Logex.Compiler do
 
   defp relowered(true, rungs, tags, warnings) do
     known = {scope(tags), folded(tags)}
-    instructions = instructions(rungs)
+    instructions = Walk.instructions(rungs)
     {timed, timing} = presets(instructions, unpreset(tags))
 
     map_size(elem(known, 1)) == map_size(tags) and
@@ -316,8 +317,8 @@ defmodule Logex.Compiler do
     Enum.all?(lines, &match?([_], &1)) and rising?(Enum.sort(declared) ++ Enum.map(lines, &hd/1))
   end
 
-  defp rung_lines({:rung, elements}),
-    do: elements |> gather([]) |> Enum.flat_map(&lines_of/1) |> Enum.uniq()
+  defp rung_lines({:rung, _elements} = rung),
+    do: [rung] |> Walk.instructions() |> Enum.flat_map(&lines_of/1) |> Enum.uniq()
 
   defp lines_of({_symbol, line, operands}), do: [line | Enum.map(operands, &elem(&1, 1))]
 
@@ -749,20 +750,6 @@ defmodule Logex.Compiler do
   # Kept for them, as the test of a rung over two lines can no longer reach it.
   defp line_of({:branches, _legs}, ton_line), do: ton_line
   defp line_of({_symbol, line, _operands}, _ton_line), do: line
-
-  # Every instruction of every rung, in order, the legs of a group, however deeply nested,
-  # included. Gathered newest first and reversed once, so it stays linear in the depth of
-  # nesting too.
-  defp instructions(rungs) do
-    rungs
-    |> Enum.reduce([], fn {:rung, elements}, gathered -> gather(elements, gathered) end)
-    |> Enum.reverse()
-  end
-
-  defp gather(elements, gathered), do: Enum.reduce(elements, gathered, &gathered/2)
-
-  defp gathered({:branches, legs}, gathered), do: Enum.reduce(legs, gathered, &gather/2)
-  defp gathered(instruction, gathered), do: [instruction | gathered]
 
   defp where(line, line), do: "in this rung"
   defp where(first, _line), do: "on line #{first}"

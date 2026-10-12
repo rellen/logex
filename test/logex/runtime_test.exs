@@ -1145,6 +1145,11 @@ defmodule Logex.RuntimeTest do
                tokenize: 1
              ]
 
+      # M2-4: B5's one walk of a program's IR, which the compiler, Logex.Warnings and
+      # Logex.Edit read.
+      assert Enum.sort(Logex.Walk.__info__(:functions)) ==
+               [instructions: 1, timers: 1, uses: 2, writes: 1]
+
       # The two structs a host holds and builds; OE-1 gave both `ons_blocked`, and the
       # instance `switched`.
       assert Enum.sort(Map.keys(Instance.__struct__())) ==

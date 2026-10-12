@@ -230,7 +230,7 @@ defmodule Logex.Edit do
   candidate before any scan (F2), and none against the original.
   """
 
-  alias Logex.{Compiler, Declarations, Diagnostic, FbType, Instance, Program, Runtime, Tag}
+  alias Logex.{Declarations, Diagnostic, FbType, Instance, Program, Runtime, Tag, Walk}
   alias Logex.FbType.Member
 
   @enforce_keys [:original, :candidate, :stage, :plans, :record]
@@ -483,7 +483,8 @@ defmodule Logex.Edit do
   # names each type it holds.
   defp facts(%Program{rungs: rungs} = program) do
     tags = Program.typed_tags(program)
-    {writes, ons, called, bodies} = rungs(rungs, tags)
+    {ons, called, bodies} = rungs(rungs, tags)
+    timers = Walk.timers(program)
 
     %{
       tags: tags,
@@ -491,18 +492,18 @@ defmodule Logex.Edit do
       initial: Program.initial_env(program),
       inputs: section(tags, :var_input),
       outputs: section(tags, :var_output),
-      writes: writes,
+      writes: Map.new(Walk.writes(program), fn {name, lines} -> {name, length(lines)} end),
       ons: ons,
       ons_rungs: Map.new(ons, fn {key, _bits} -> {key, true} end),
       ons_bits: for({_key, bits} <- ons, bit <- bits, into: %{}, do: {bit, true}),
       timers:
         for(
-          {name, %Tag{type: %FbType{body: nil}} = tag} <- tags,
+          {name, %Tag{type: %FbType{body: nil}}} <- tags,
           into: %{},
-          do: {name, preset(tag)}
+          do: {name, preset(Map.get(timers, name))}
         ),
       # M2-5: each instance of a user block, with its type and whether a `cal` runs it; and
-      # what each block type's body writes and runs, by the type's name.
+      # where each block type's body has its one-shots and what it runs, by the type's name.
       blocks:
         for(
           {name, %Tag{type: %FbType{body: %Program{}} = type}} <- tags,
@@ -516,11 +517,10 @@ defmodule Logex.Edit do
   defp section(tags, wanted),
     do: for({name, %Tag{section: ^wanted}} <- tags, into: %{}, do: {name, true})
 
-  # The preset of the `ton` that runs a timer, which the compiler gives the timer as the
-  # `pre` of its initial value (Logex.Compiler), or nil where no `ton` of the program runs
-  # it, and its initial value is none.
-  defp preset(%Tag{initial: %{"pre" => preset}}), do: preset
-  defp preset(%Tag{initial: nil}), do: nil
+  # The preset of the `ton` that runs a timer, Logex.Walk.timers/1's, or nil where no `ton`
+  # of the program runs it.
+  defp preset({_line, preset}), do: preset
+  defp preset(nil), do: nil
 
   # One direction, from the program a switch stops to the one it starts, or a prune keeps.
   # `left` is the watched outputs the program stopped shows: what a switch taken while it
@@ -592,34 +592,28 @@ defmodule Logex.Edit do
 
   defp fit(%Tag{type: type}), do: type
 
-  # What a program's rungs write and where its one-shots are, in one walk, into every group
-  # however deep, accumulating rather than copying: how many times each name is written
-  # through a write operand, an `ons` storage bit and a `cal`'s output included; and, for
-  # each rung that holds an `ons`, the rung with its line numbers taken out, beside the
-  # storage bits of its `ons`. A rung is stripped once and compared once, however many
-  # `ons` it holds. Each instruction's slots are its own, from Logex.Compiler.signature/2
-  # given the tag table of the routine that holds it, each instance's type itself, the one
-  # lookup (M2-5).
+  # Where a program's one-shots are, read from Logex.Walk's instructions of each rung,
+  # every group however deep included: for each rung that holds an `ons`, the rung with its
+  # line numbers taken out, beside the storage bits of its `ons`. A rung is stripped once
+  # and compared once, however many `ons` it holds. How many times each name is written,
+  # a storage bit among them, is Logex.Walk.writes/1's, which reaches into the blocks too
+  # (M2-4).
   #
   # M2-5: an `ons` inside an instance a `cal` runs is a one-shot of the program's too, its
   # bit named by its path, `s1.edge`, and its rung the chain of rungs down to it, each with
   # its line numbers taken out: the body's rung that holds it, the rung of the body above
   # that `cal`s its instance, and so on up to the program's rung that `cal`s the outermost,
   # so a change to any of them, a `cal`'s operands included, makes it a changed one-shot
-  # (decision 21, by path). Its bit is written as many times as its block's body writes
-  # it. Each block type's body is read once, however many instances run it, and the walk
-  # down is linear in the instances.
+  # (decision 21, by path). Each block type's body is read once, however many instances run
+  # it, and the walk down is linear in the instances.
   defp rungs(rungs, tags) do
     bodies = bodies(instances(tags), %{})
 
-    Enum.reduce(rungs, {%{}, [], %{}, bodies}, fn {:rung, elements}, {writes, ons, called, _} ->
-      {writes, bits, cals} = written(elements, {writes, [], []}, tags)
+    Enum.reduce(rungs, {[], %{}, bodies}, fn {:rung, elements} = rung, {ons, called, _} ->
+      {bits, cals} = oned_and_called(rung, tags)
       chain = chain(bits, cals, {elements, tags})
-
-      {writes, ons} =
-        Enum.reduce(cals, {writes, oned(bits, chain, ons)}, &inside(&1, chain, &2, bodies))
-
-      {writes, ons, runs(cals, called), bodies}
+      ons = Enum.reduce(cals, oned(bits, chain, ons), &inside(&1, chain, &2, bodies))
+      {ons, runs(cals, called), bodies}
     end)
   end
 
@@ -633,10 +627,10 @@ defmodule Logex.Edit do
     do: Enum.reduce(cals, called, fn {name, _type}, set -> Map.put(set, name, true) end)
 
   # Every user block type a program holds, at any depth, by name: the rungs of its body
-  # that hold an `ons` or a `cal`, each stripped, with the bits and the instances, what the
-  # body writes, and the instances it runs. Each type is read once, however many instances
-  # and paths reach it, and its walk reads its tags with each instance's type itself, as it
-  # reads inside the program's one table (decision 53).
+  # that hold an `ons` or a `cal`, each stripped, with the bits and the instances, and the
+  # instances it runs. Each type is read once, however many instances and paths reach it,
+  # and its walk reads its tags with each instance's type itself, as it reads inside the
+  # program's one table (decision 53).
   defp bodies(types, bodies),
     do:
       Enum.reduce(types, bodies, fn
@@ -654,13 +648,13 @@ defmodule Logex.Edit do
     do: for({_, %Tag{type: %FbType{body: %Program{}} = type}} <- tags, do: type)
 
   defp body(%Program{rungs: rungs}, tags) do
-    {writes, held, called} =
-      Enum.reduce(rungs, {%{}, [], %{}}, fn {:rung, elements}, {writes, held, called} ->
-        {writes, bits, cals} = written(elements, {writes, [], []}, tags)
-        {writes, held(bits, cals, {elements, tags}, held), runs(cals, called)}
+    {held, called} =
+      Enum.reduce(rungs, {[], %{}}, fn {:rung, elements} = rung, {held, called} ->
+        {bits, cals} = oned_and_called(rung, tags)
+        {held(bits, cals, {elements, tags}, held), runs(cals, called)}
       end)
 
-    %{rungs: Enum.reverse(held), writes: writes, called: called}
+    %{rungs: Enum.reverse(held), called: called}
   end
 
   defp held([], [], _elements, held), do: held
@@ -672,40 +666,30 @@ defmodule Logex.Edit do
   defp inside({instance, %FbType{name: type}}, chain, acc, bodies),
     do: inside(Map.fetch!(bodies, type), instance, chain, acc, bodies)
 
-  defp inside(%{rungs: rungs, writes: counts}, prefix, chain, acc, bodies),
+  defp inside(%{rungs: rungs}, prefix, chain, ons, bodies),
     do:
-      Enum.reduce(rungs, acc, fn {stripped, bits, cals}, {writes, ons} ->
+      Enum.reduce(rungs, ons, fn {stripped, bits, cals}, ons ->
         chain = [stripped | chain]
-        paths = Enum.map(bits, &(prefix <> "." <> &1))
-        writes = Enum.reduce(bits, writes, &Map.put(&2, prefix <> "." <> &1, Map.get(counts, &1)))
-        ons = oned(paths, {prefix, chain}, ons)
+        ons = oned(Enum.map(bits, &(prefix <> "." <> &1)), {prefix, chain}, ons)
 
-        Enum.reduce(cals, {writes, ons}, fn {name, type}, acc ->
-          inside({prefix <> "." <> name, type}, chain, acc, bodies)
+        Enum.reduce(cals, ons, fn {name, type}, ons ->
+          inside({prefix <> "." <> name, type}, chain, ons, bodies)
         end)
       end)
 
-  defp written([], acc, _tags), do: acc
-
-  defp written([{:branches, legs} | rest], acc, tags),
-    do: written(rest, Enum.reduce(legs, acc, &written(&1, &2, tags)), tags)
-
-  defp written([{:ons, _line, [{:name, _, bit}]} | rest], {writes, bits, cals}, tags),
-    do: written(rest, {count(writes, bit), [bit | bits], cals}, tags)
-
-  defp written([{_symbol, _line, operands} = instruction | rest], {writes, bits, cals}, tags),
+  # A rung's `ons` storage bits and the instances its `cal`s run, each newest first, from
+  # Logex.Walk's instructions of the rung.
+  defp oned_and_called(rung, tags),
     do:
-      written(
-        rest,
-        {wrote(Compiler.signature(instruction, tags), operands, writes), bits,
-         calling(instruction, tags, cals)},
-        tags
-      )
+      Enum.reduce(Walk.instructions([rung]), {[], []}, fn
+        {:ons, _line, [{:name, _, bit}]}, {bits, cals} -> {[bit | bits], cals}
+        instruction, {bits, cals} -> {bits, calling(instruction, tags, cals)}
+      end)
 
   # M2-5: the instances a rung's `cal`s run, each with its type. A `cal` of an instance its
   # table does not hold as a user block's, which only a body built by hand can have, runs
   # nothing (Logex.Runtime), and so runs nothing here either; its signature/2 slots are none,
-  # so it writes nothing.
+  # so it writes nothing (Logex.Walk).
   defp calling({:cal, _line, [{:name, _, instance} | _]}, tags, cals),
     do: block_call(Map.get(tags, instance), instance, cals)
 
@@ -715,14 +699,6 @@ defmodule Logex.Edit do
     do: [{instance, type} | cals]
 
   defp block_call(_not_a_block, _instance, cals), do: cals
-
-  defp wrote([{:write, _type} | signature], [{:name, _, name} | operands], acc),
-    do: wrote(signature, operands, count(acc, name))
-
-  defp wrote([_slot | signature], [_operand | operands], acc), do: wrote(signature, operands, acc)
-  defp wrote(_signature, _operands, acc), do: acc
-
-  defp count(writes, name), do: Map.update(writes, name, 1, &(&1 + 1))
 
   # A rung as the text says it, line numbers taken out: a rung moved or renumbered is the
   # same rung (decision 21).

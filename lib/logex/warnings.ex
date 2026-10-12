@@ -15,15 +15,15 @@ defmodule Logex.Warnings do
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
   """
 
-  alias Logex.{Compiler, Diagnostic, FbType, Tag}
+  alias Logex.{Diagnostic, FbType, Tag, Walk}
 
   @doc """
   The warnings for lowered `rungs` checked against the tag table `tags`, each instance's
   type itself: for a block's body, `Logex.Program.typed_tags/1`'s table (M2-5).
   """
   def of(rungs, tags) do
-    instructions = instructions(rungs)
-    uses = Enum.flat_map(instructions, &uses(&1, tags))
+    instructions = Walk.instructions(rungs)
+    uses = Walk.uses(rungs, tags)
     # Grouped once, so the pass stays linear in the program's size.
     accesses =
       Enum.group_by(uses, fn {_, name, _, _} -> name end, fn {access, _, _, _} -> access end)
@@ -41,35 +41,6 @@ defmodule Logex.Warnings do
     |> Kernel.++(Enum.flat_map(instructions, &constant/1))
     |> Enum.sort_by(& &1.line)
   end
-
-  # Every instruction of every rung, in order, the legs of a group, however deeply nested,
-  # included. Gathered newest first and reversed once, so the pass stays linear in the
-  # depth of nesting too.
-  defp instructions(rungs) do
-    rungs
-    |> Enum.reduce([], fn {:rung, elements}, gathered -> gather(elements, gathered) end)
-    |> Enum.reverse()
-  end
-
-  defp gather(elements, gathered), do: Enum.reduce(elements, gathered, &gathered/2)
-
-  defp gathered({:branches, legs}, gathered), do: Enum.reduce(legs, gathered, &gather/2)
-  defp gathered(instruction, gathered), do: [instruction | gathered]
-
-  # Each tag operand of an instruction, as {access, name, line, symbol}. A member is a use
-  # of its instance, `t1.dn` of `t1`, with its slot's access (M1-6). The slots are the
-  # instruction's own, from Logex.Compiler.signature/2, the one lookup (M2-5).
-  defp uses({symbol, line, operands} = instruction, tags),
-    do:
-      for(
-        {{access, _type}, operand} <- Enum.zip(Compiler.signature(instruction, tags), operands),
-        name = tag_of(operand),
-        do: {access, name, line, symbol}
-      )
-
-  defp tag_of({:name, _, name}), do: name
-  defp tag_of({:member, _, [instance | _]}), do: instance
-  defp tag_of({:int_lit, _, _}), do: nil
 
   defp about(%Tag{} = tag, []),
     do: [warning(tag.line, "`#{tag.name}` is declared but no rung uses it")]

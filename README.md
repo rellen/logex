@@ -3,7 +3,7 @@
 A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
 text into a named, stateless value, and runs it as instances, one scan at a time, with the
 time the host injects. No dependencies and no generated code: the lexer and parser are
-written by hand, and the whole thing is twenty-two small modules.
+written by hand, and the whole thing is twenty-three small modules.
 
 **Stage: early, and honest about it.** Fifteen instructions, among them an on-delay timer,
 a one-shot and six comparisons, parallel branches to arbitrary nesting depth,
