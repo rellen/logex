@@ -1,7 +1,9 @@
 defmodule LogexTest do
   @moduledoc """
   M1-5: `Logex.compile/2` and `Logex.compile_file/1`, the public way in. A program comes
-  out named and stateless, or every mistake comes out as a located diagnostic.
+  out named and stateless, or every mistake comes out as a located diagnostic. Milestone
+  1's done sentence and Milestone 2's are each walked here, clause by clause, from files on
+  disk.
   """
   use ExUnit.Case, async: true
 
@@ -13,6 +15,174 @@ defmodule LogexTest do
           "( xic start | xic motor ) xio stop ote motor\n"
 
   defp formatted({:error, diagnostics}), do: Enum.map(diagnostics, &Diagnostic.format/1)
+
+  # Milestone 2's done sentence: §4.3's seal-in block and motor, §4.4's snapshot, and a
+  # plant of §4.4's shape with a periodic task, an event task and a task-less instance.
+  @m2_seal """
+  function_block seal
+  var_input start bool
+  var_input stop bool
+  var_output run bool
+
+  ( xic start | xic run ) xio stop ote run
+  """
+
+  @m2_motor """
+  var_input start bool
+  var_input stop bool
+  var_input overtemp bool
+  var_input reset bool
+  var_output motor bool
+  var_output run_lamp bool
+  var_output speed_sp dint 1200
+  var_output running_ms dint
+  var_external estop bool
+  var fault bool
+  var halt bool
+  var s1 seal
+  var t1 ton
+
+  xic estop otl fault
+  xic overtemp otl fault
+  xic reset otu fault
+  ( xic stop | xic fault ) ote halt
+  cal s1 start halt motor
+  xic motor ote run_lamp
+  xic fault move 0 speed_sp
+  xic motor ton t1 5000
+  xic motor move t1.acc running_ms
+  """
+
+  @m2_snapshot """
+  var_input a bool
+  var_input b bool
+  var_output a_was bool
+  var_output b_was bool
+
+  xic a ote a_was
+  xic b ote b_was
+  """
+
+  @m2_plant """
+  // two conveyors of one motor type, and a snapshot the e-stop's edge runs
+  task fast interval 10 priority 1
+  task trip single estop priority 0
+
+  var_global estop      bool at panel.i.7
+  var_global pb_start_1 bool at panel.i.0
+  var_global pb_stop_1  bool at panel.i.1
+  var_global tt_1       bool at panel.i.2
+  var_global pb_start_2 bool at panel.i.3
+  var_global pb_stop_2  bool at panel.i.4
+  var_global tt_2       bool at panel.i.5
+  var_global pb_reset   bool at panel.i.6
+  var_global k1         bool at panel.q.0
+  var_global k2         bool at panel.q.1
+  var_global lamp_1     bool at panel.q.2
+  var_global lamp_2     bool at panel.q.3
+  var_global sp_1       dint at drive.q.0
+  var_global sp_2       dint at drive.q.1
+  var_global k1_at_trip bool
+  var_global k2_at_trip bool
+
+  program m1 motor with fast
+    m1.start    pb_start_1
+    m1.stop     pb_stop_1
+    m1.overtemp tt_1
+    m1.reset    pb_reset
+    m1.motor    k1
+    m1.run_lamp lamp_1
+    m1.speed_sp sp_1
+
+  program m2 motor
+    m2.start    pb_start_2
+    m2.stop     pb_stop_2
+    m2.overtemp tt_2
+    m2.reset    pb_reset
+    m2.motor    k2
+    m2.run_lamp lamp_2
+    m2.speed_sp sp_2
+
+  program snap snapshot with trip
+    snap.a     k1
+    snap.b     k2
+    snap.a_was k1_at_trip
+    snap.b_was k2_at_trip
+  """
+
+  # One mistake of each kind on each line that has one: scheduling (an interval of 0, a
+  # trigger that is no global, an unknown task), wiring (an input point driven, a member
+  # the type does not declare) and typing (a dint to a bool, a dint trigger), and a program
+  # type whose own file does not compile.
+  @m2_broken """
+  task fast interval 0 priority 1
+  task trip single estp priority 0
+  task pulse single sp priority 2
+  var_global estop bool at panel.i.7
+  var_global k1    bool at panel.q.0
+  var_global sp    dint
+  program m1 motor with fsat
+    m1.start    estop
+    m1.stop     0
+    m1.overtemp 0
+    m1.reset    0
+    m1.motor    estop
+    m1.speed_sp k1
+    m1.strat    0
+  program b bad with trip
+    b.a 0
+  """
+
+  # A seeded trace of N cycles: the elapsed time of each and the inputs it brings, the
+  # start buttons pressed in the first cycle, then the e-stop, the stops and the resets
+  # set at random, so its edges come where they will.
+  defp m2_trace(n) do
+    :rand.seed(:exsss, {2026, 10, 12})
+
+    first = {0, %{"pb_start_1" => 1, "pb_start_2" => 1}}
+
+    rest =
+      for _ <- 2..n do
+        inputs =
+          for point <- ~w(estop pb_start_1 pb_start_2 pb_stop_1 pb_reset),
+              :rand.uniform(4) == 1,
+              into: %{},
+              do: {point, :rand.uniform(2) - 1}
+
+        {Enum.random([0, 5, 10, 10, 25]), inputs}
+      end
+
+    [first | rest]
+  end
+
+  # Each cycle's outputs, its events and the snapshot's two globals, from a fresh start.
+  defp m2_run(config, trace) do
+    {cycles, _runtime} =
+      Enum.map_reduce(trace, Logex.Runtime.start(config), fn {elapsed, inputs}, runtime ->
+        {runtime, outputs, events} = Logex.Runtime.cycle(runtime, elapsed, inputs)
+
+        snapshot =
+          {Logex.Runtime.get!(runtime, "k1_at_trip"), Logex.Runtime.get!(runtime, "k2_at_trip")}
+
+        {{outputs, events, snapshot}, runtime}
+      end)
+
+    cycles
+  end
+
+  # The cycles in which the e-stop's input point rises, from the trace alone.
+  defp m2_rises(trace) do
+    trace
+    |> Enum.map_reduce(0, fn {_elapsed, inputs}, last ->
+      now = Map.get(inputs, "estop", last)
+      {last == 0 and now == 1, now}
+    end)
+    |> elem(0)
+    |> Enum.with_index()
+    |> for_each_true()
+  end
+
+  defp for_each_true(flags), do: for({true, i} <- flags, do: i)
 
   # Each tag has a rung of its own, with a one-shot whose storage bit a second rung also
   # writes, a comparison of two literals, and a timer run by a `ton` whose members are read
@@ -274,6 +444,94 @@ defmodule LogexTest do
 
       assert formatted(Logex.compile_file(broken)) == [
                "#{broken}: line 3: unknown instruction `xyz`"
+             ]
+    end
+
+    # PLAN.md's Milestone 2 done sentence, walked clause by clause, from files on disk
+    # through Logex.Configuration.compile_file/1, as the test above walks Milestone 1's. Its
+    # plant is §4.4's, with §4.3's motor and seal-in block, but for `m2`, which runs under no
+    # task, so that one configuration has a periodic task, an event task and no task.
+    test "Milestone 2's done sentence, as written in PLAN.md", %{tmp_dir: dir} do
+      # A configuration file on disk instantiates one `.ld` program type twice, with a
+      # function block inside it ...
+      write(dir, "seal.ld", @m2_seal)
+      write(dir, "motor.ld", @m2_motor)
+      write(dir, "snapshot.ld", @m2_snapshot)
+      plant = write(dir, "plant.logex", @m2_plant)
+      assert {:ok, config} = Logex.Configuration.compile_file(plant)
+      assert config.warnings == []
+      assert for(i <- config.instances, i.type == "motor", do: i.name) == ["m1", "m2"]
+      assert %Logex.Program{blocks: %{"seal" => %Logex.FbType{}}} = config.programs["motor"]
+
+      # ... wires the instances to declared I/O points and to a shared global ...
+      located = for g <- config.globals, g.at != nil, into: MapSet.new(), do: g.name
+
+      for c <- config.connections,
+          c.instance in ~w(m1 m2),
+          is_binary(c.to),
+          do: assert(c.to in located)
+
+      assert %Logex.Configuration.Global{at: "panel.i.7"} =
+               Enum.find(config.globals, &(&1.name == "estop"))
+
+      assert config.programs["motor"].tags["estop"].section == :var_external
+
+      # ... schedules them under a periodic task, an event task and no task ...
+      assert Enum.map(config.tasks, &{&1.name, &1.single, &1.interval}) ==
+               [{"fast", nil, 10}, {"trip", "estop", nil}]
+
+      assert Enum.map(config.instances, &{&1.name, &1.task}) ==
+               [{"m1", "fast"}, {"m2", nil}, {"snap", "trip"}]
+
+      # ... runs deterministically for N cycles from an injected clock and input image,
+      # with the same outputs on every run ...
+      trace = m2_trace(60)
+      first = m2_run(config, trace)
+      assert {:ok, again} = Logex.Configuration.compile_file(plant)
+      assert m2_run(again, trace) == first
+      assert m2_run(config, trace) == first
+
+      # The run does what the plant says: the start buttons close both contactors, and the
+      # event task runs the snapshot first in each cycle the e-stop rises, and only then,
+      # which records the contactors as the cycle before left them.
+      outputs = for {outputs, _events, _snapshot} <- first, do: outputs
+      events = for {_outputs, events, _snapshot} <- first, do: events
+      assert Map.take(hd(outputs), ~w(k1 k2)) == %{"k1" => 1, "k2" => 1}
+      trips = for {cycle, i} <- Enum.with_index(events), {:ran, "trip", "snap", _} <- cycle, do: i
+      assert [_ | _] = trips
+      assert trips == m2_rises(trace)
+      for i <- trips, do: assert([{:ran, "trip", "snap", _} | _] = Enum.at(events, i))
+
+      for i <- trips do
+        {_outputs, _events, snapshot} = Enum.at(first, i)
+        before = Enum.at([%{"k1" => 0, "k2" => 0} | outputs], i)
+        assert snapshot == {before["k1"], before["k2"]}
+      end
+
+      # ... and reports every wiring, typing or scheduling mistake as a located diagnostic
+      # naming its file and line.
+      bad = write(dir, "bad.ld", "var_input a bool\nvar_output b bool\nxyz a\nxic a ote b")
+      broken = write(dir, "broken.logex", @m2_broken)
+      assert {:error, diagnostics} = Logex.Configuration.compile_file(broken)
+
+      for d <- diagnostics,
+          do: assert(is_binary(d.file) and is_integer(d.line), Diagnostic.format(d))
+
+      assert formatted({:error, diagnostics}) == [
+               "#{broken}: line 1: the interval of `fast` is 0: an interval is at least 1 ms, " <>
+                 "and an instance that runs every cycle is declared without `with`",
+               "#{broken}: line 2: the single of `trip`: no global `estp` — did you mean `estop`?",
+               "#{broken}: line 3: the single of `pulse`, `sp`, is a dint (line 6): a single is " <>
+                 "a bool global",
+               "#{broken}: line 7: no task `fsat` — did you mean `fast`?",
+               "#{broken}: line 12: `estop` is an input point (line 4): `m1.motor`, a " <>
+                 "var_output, cannot drive it",
+               "#{broken}: line 13: `m1.speed_sp` is a dint, but `k1` is a bool (line 5)",
+               "#{broken}: line 14: `m1` is a `motor`, which declares no `strat` — did you mean " <>
+                 "`start`?",
+               "#{broken}: line 15: program type `bad` does not compile: its mistakes follow, " <>
+                 "cited in `bad.ld`",
+               "#{bad}: line 3: unknown instruction `xyz`"
              ]
     end
 
