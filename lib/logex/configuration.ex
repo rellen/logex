@@ -74,7 +74,12 @@ defmodule Logex.Configuration do
   through one a global a connection drives (decision 48), each in the words true of it:
   each scan reads what the other last wrote and the later write in a cycle stands; an
   instance's own connection's copy-out, after the scan, stands (decision 47); or, for a
-  global an `ons` keeps its storage bit in, the one-shot fires on the wrong scans.
+  global an `ons` keeps its storage bit in, the one-shot fires on the wrong scans. Since
+  M2-6, each timer a program instance runs that an event task runs, a task with a single
+  alone or with an interval too, a timer inside a block its `cal`s run included, by its
+  path: a ton times across the task's runs (`docs/organisation.md` §4.6, "Caveats"), at the
+  instance's line, citing the `ton`'s line in its own text, each program type's timers
+  read once (`Logex.Walk.timers/1`).
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -701,9 +706,10 @@ defmodule Logex.Configuration do
 
     {Enum.map(diagnostics, &%{&1 | file: file}),
      Enum.map(
-       warnings({tasks, globals, instances}, wiring, externals, triggers),
+       warnings({tasks, globals, instances}, wiring, externals, triggers) ++ timed(world),
        &%{&1 | file: file}
-     )}
+     )
+     |> Enum.sort_by(&line_order/1)}
   end
 
   # Each list of names a diagnostic would end with is given once, by the first diagnostic
@@ -2350,6 +2356,55 @@ defmodule Logex.Configuration do
 
   defp stands(true, global),
     do: "`#{global}` is the storage bit of an `ons`: the one-shot then fires on the wrong scans"
+
+  # M2-6 (§4.6's caveat; §4.10, M2-6): each timer an instance an event task runs runs,
+  # at any depth, a block's by its path, at the instance's line. A ton counts the time
+  # between two of the task's runs where its rung was true on both, which only the
+  # configuration knows is irregular, whether the task has a single alone or an interval
+  # too. Each program type's timers are read once (Logex.Walk.timers/1), and each warning
+  # cites its `ton` in the text it is in.
+  defp timed(world) do
+    events =
+      for {name, {:task, _line, %Logex.Configuration.Task{single: single}}} <- world.names,
+          is_binary(single),
+          into: MapSet.new(),
+          do: name
+
+    world.runnable
+    |> Map.values()
+    |> Enum.filter(fn {instance, _program} -> MapSet.member?(events, instance.task) end)
+    |> Enum.flat_map_reduce(%{}, fn {instance, program}, memo ->
+      {timers, memo} = timers_of(Map.fetch(memo, program.name), program, memo)
+      {Enum.map(timers, &timer_warning(&1, instance, program)), memo}
+    end)
+    |> elem(0)
+  end
+
+  defp timers_of({:ok, timers}, _program, memo), do: {timers, memo}
+
+  defp timers_of(:error, %Program{name: name} = program, memo) do
+    timers = program |> Walk.timers() |> Enum.sort()
+    {timers, Map.put(memo, name, timers)}
+  end
+
+  defp timer_warning({path, {line, _preset}}, instance, program),
+    do:
+      warning(
+        instance.line,
+        "`#{instance.name}` runs under the event task `#{instance.task}`, and " <>
+          "`#{program.name}` runs the timer `#{path}`" <>
+          in_type(line, holder(String.split(path, "."), program)) <>
+          ": a ton times across the task's runs, and one whose rung is true on two runs " <>
+          "in a row counts the whole time between them"
+      )
+
+  # The routine whose text holds a timer: the program's, or a block's body down its path.
+  defp holder([_timer], program), do: program
+
+  defp holder([instance | rest], program) do
+    %Tag{type: %FbType{body: body}} = Map.fetch!(Program.typed_tags(program), instance)
+    holder(rest, body)
+  end
 
   defp idle(true, _task), do: []
   defp idle(false, task), do: [warning(task.line, "task `#{task.name}` runs no instance")]

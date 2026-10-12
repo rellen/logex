@@ -3100,6 +3100,193 @@ defmodule Logex.ConfigurationTest do
   defp recased(true, word), do: Enum.random([word, String.upcase(word), String.capitalize(word)])
   defp recased(false, word), do: word
 
+  # M2-6 (docs/organisation.md §4.6, "Caveats"; §4.10, M2-6): a ton in a program an event
+  # task runs times across the task's runs, which only the configuration knows, so the
+  # warning is the configuration's, one for each timer of each instance an event task runs,
+  # a task with a single alone or with an interval too, a block's timer at any depth by its
+  # path, at the instance's line, citing the `ton` in the text it is in.
+  describe "a ton under an event task (M2-6), a warning" do
+    @describetag :tmp_dir
+
+    @delay_ld """
+    function_block delay
+    var_input go bool
+    var_output done bool
+    var t1 ton
+    xic go ton t1 100
+    xic t1.dn ote done
+    """
+
+    @outer_ld """
+    function_block outer
+    var_input go bool
+    var_output done bool
+    var d delay
+    cal d go done
+    """
+
+    @timed_ld """
+    var_input go bool
+    var_output done bool
+    var_output late bool
+    var o outer
+    var t9 ton
+    cal o go done
+    xic go ton t9 50
+    xic t9.dn ote late
+    """
+
+    @events_logex """
+    task trip single go priority 0
+    task parts single go interval 100 priority 1
+    task fast interval 10 priority 2
+    var_global go bool at panel.i.0
+    program a timed with trip
+    a.go go
+    program b timed with parts
+    b.go go
+    program c timed with fast
+    c.go go
+    program d timed
+    d.go go
+    """
+
+    defp across(instance, task, timer, cited),
+      do:
+        "`#{instance}` runs under the event task `#{task}`, and `timed` runs the timer " <>
+          "`#{timer}`#{cited}: a ton times across the task's runs, and one whose rung is " <>
+          "true on two runs in a row counts the whole time between them"
+
+    test "each timer of each instance an event task runs, a block's at any depth, from files " <>
+           "on disk",
+         %{tmp_dir: dir} do
+      for {name, text} <- [
+            {"delay.ld", @delay_ld},
+            {"outer.ld", @outer_ld},
+            {"timed.ld", @timed_ld},
+            {"events.logex", @events_logex}
+          ],
+          do: File.write!(Path.join(dir, name), text)
+
+      assert {:ok, config} = Configuration.compile_file(Path.join(dir, "events.logex"))
+
+      file = Path.join(dir, "events.logex")
+
+      assert Enum.map(config.warnings, &Diagnostic.format/1) == [
+               "#{file}: line 5: warning: " <>
+                 across("a", "trip", "o.d.t1", " on line 5 of `delay.ld`"),
+               "#{file}: line 5: warning: " <>
+                 across("a", "trip", "t9", " on line 7 of `timed.ld`"),
+               "#{file}: line 7: warning: " <>
+                 across("b", "parts", "o.d.t1", " on line 5 of `delay.ld`"),
+               "#{file}: line 7: warning: " <>
+                 across("b", "parts", "t9", " on line 7 of `timed.ld`")
+             ]
+    end
+
+    # From text, a type's own lines are "its line N", and from Elixir the element has none;
+    # a periodic task's instance and a task-less one are warned of nothing.
+    test "from text and from Elixir, in the same words", %{seal: seal} do
+      # In line order among the other warnings, a later line's after it.
+      source =
+        "task e single pb2 priority 0\n" <>
+          String.replace(@base, "program m seal", "program m seal with e") <>
+          "var_global spare bool\n"
+
+      assert warned(source, %{"seal" => seal}) == [
+               "line 5: warning: `sp` is declared but nothing uses it",
+               "line 6: warning: `m` runs under the event task `e`, and `seal` runs the timer " <>
+                 "`t1` on its line 8: a ton times across the task's runs, and one whose rung is " <>
+                 "true on two runs in a row counts the whole time between them",
+               "line 10: warning: `spare` is declared but nothing uses it"
+             ]
+
+      fields =
+        Keyword.merge(base(seal),
+          tasks: [%Configuration.Task{name: "e", single: "pb2", interval: 10, priority: 0}],
+          instances: [%Instance{name: "m", type: "seal", task: "e"}]
+        )
+
+      assert Enum.map(Configuration.new!(fields).warnings, & &1.message) == [
+               "`sp` is declared but nothing uses it",
+               "`m` runs under the event task `e`, and `seal` runs the timer `t1` on its line " <>
+                 "8: a ton times across the task's runs, and one whose rung is true on two runs " <>
+                 "in a row counts the whole time between them"
+             ]
+
+      periodic = Keyword.put(fields, :tasks, [task("e", 10, 0)])
+      refute Enum.any?(Configuration.new!(periodic).warnings, &(&1.message =~ "a ton times"))
+    end
+
+    # By path, past the 32 timers a map holds in key order.
+    test "an instance's timers are warned of in the order of their paths" do
+      {:ok, timers} =
+        Logex.compile(
+          "var_input go bool\n" <>
+            Enum.map_join(1..40, fn i -> "var t#{i} ton\n" end) <>
+            Enum.map_join(40..1//-1, "\n", fn i -> "xic go ton t#{i} 10" end),
+          name: "timers"
+        )
+
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [timers],
+          tasks: [%Configuration.Task{name: "e", single: "go", priority: 0}],
+          globals: [%Global{name: "go", type: :bool, at: "panel.i.0"}],
+          instances: [%Instance{name: "x", type: "timers", task: "e"}],
+          connections: [%Connection{instance: "x", member: "go", to: "go"}]
+        )
+
+      paths =
+        for w <- config.warnings,
+            do: hd(Regex.run(~r/the timer `([^`]+)`/, w.message, capture: :all_but_first))
+
+      assert paths == Enum.sort(for i <- 1..40, do: "t#{i}")
+    end
+
+    # Each program type's timers are read once (Logex.Walk.timers/1): n instances of a type
+    # whose body grows, one timer among its rungs, cost the instances and the body once,
+    # not the body once an instance: 4x the body took 1.10x over 32 runs on Elixir 1.20.4,
+    # 16 of the test beside three full suites and 16 in a full suite alone, where the body
+    # read once an instance took 2.99x; the bound, 1.32, a fifth above the highest.
+    defp padded(rungs) do
+      {:ok, program} =
+        Logex.compile(
+          "var_input go bool\nvar_output q bool\nvar t1 ton\nxic go ton t1 10\n" <>
+            Enum.map_join(1..rungs, "\n", fn _ -> "xic go ote q" end),
+          name: "padded"
+        )
+
+      program
+    end
+
+    defp reductions_to_check(rungs) do
+      config = %Configuration{
+        name: "plant",
+        programs: %{"padded" => padded(rungs)},
+        tasks: [%Configuration.Task{name: "e", single: "go", priority: 0}],
+        globals: [%Global{name: "go", type: :bool, at: "panel.i.0"}],
+        instances: for(i <- 1..400, do: %Instance{name: "p#{i}", type: "padded", task: "e"}),
+        connections: for(i <- 1..400, do: %Connection{instance: "p#{i}", member: "go", to: "go"})
+      }
+
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          [] = Configuration.check(config)
+          {:reductions, later} = Process.info(self(), :reductions)
+          later - before
+        end
+      )
+    end
+
+    test "check/1 reads each program type's timers once, whatever its instances" do
+      ratio = reductions_to_check(400) / reductions_to_check(100)
+      assert ratio < 1.32, "4x the body took #{Float.round(ratio, 2)}x the reductions"
+    end
+  end
+
   describe "compile_file/1 (M2-2): a configuration file and its program types, on disk" do
     @describetag :tmp_dir
 
