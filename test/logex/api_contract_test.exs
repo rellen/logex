@@ -2525,4 +2525,358 @@ defmodule Logex.ApiContractTest do
 
   defp fb_reach(atom, true), do: fb_reach(atom)
   defp fb_reach(_atom, false), do: :ok
+
+  # ---- M2-4: globals shared through var_external, against a model of one map ----------
+
+  # Each program type, and what one scan of it does to the globals and its own state, as
+  # Elixir: `{globals, own}` from `{globals, own, inputs, first}`, `inputs` its var_inputs
+  # as copied in. A var_external is the global itself, read and written in place, the
+  # pointer reading of IEC and MatIEC: the model knows nothing of a merge or a split.
+  @ext_types %{
+    "copy" => "var_external i0 bool\nvar_external g0 bool\nxic i0 ote g0",
+    "chain" =>
+      "var_external g0 bool\nvar_external g1 bool\nvar_external q0 bool\nxic g0 ote g1\n" <>
+        "xic g1 ote q0",
+    "latch" =>
+      "var_external i1 bool\nvar_external g1 bool\nvar_external i0 bool\nxic i1 otl g1\n" <>
+        "xic i0 otu g1",
+    "pulse" => "var_external g0 bool\nvar_external q1 bool\nvar s bool\nxic g0 ons s ote q1",
+    "mover" =>
+      "var_external d0 dint\nvar_external n0 dint\nvar_external a0 dint\n" <>
+        "gt d0 10 move d0 n0\nmove n0 a0",
+    "mixed" =>
+      "var_input in bool\nvar_output out bool\nvar_external g0 bool\nxic in ote g0\n" <>
+        "xio g0 ote out"
+  }
+
+  defp ext_run("copy", {gl, own, _in, _first}), do: {Map.put(gl, "g0", gl["i0"]), own}
+
+  defp ext_run("chain", {gl, own, _in, _first}) do
+    gl = Map.put(gl, "g1", gl["g0"])
+    {Map.put(gl, "q0", gl["g1"]), own}
+  end
+
+  defp ext_run("latch", {gl, own, _in, _first}) do
+    gl = ext_when(gl["i1"] == 1, gl, "g1", 1)
+    {ext_when(gl["i0"] == 1, gl, "g1", 0), own}
+  end
+
+  defp ext_run("pulse", {gl, own, _in, first}) do
+    fired = gl["g0"] == 1 and own["s"] == 0 and not first
+    {Map.put(gl, "q1", ext_bit(fired)), %{"s" => gl["g0"]}}
+  end
+
+  defp ext_run("mover", {gl, own, _in, _first}) do
+    gl = ext_when(gl["d0"] > 10, gl, "n0", gl["d0"])
+    {Map.put(gl, "a0", gl["n0"]), own}
+  end
+
+  defp ext_run("mixed", {gl, own, inputs, _first}) do
+    gl = Map.put(gl, "g0", inputs["in"])
+    {gl, Map.put(own, "out", ext_bit(gl["g0"] == 0))}
+  end
+
+  defp ext_when(true, gl, name, value), do: Map.put(gl, name, value)
+  defp ext_when(false, gl, _name, _value), do: gl
+
+  defp ext_bit(true), do: 1
+  defp ext_bit(false), do: 0
+
+  @ext_globals [
+    {"i0", :bool, "panel.i.0", nil},
+    {"i1", :bool, "panel.i.1", nil},
+    {"d0", :dint, "drive.i.0", nil},
+    {"g0", :bool, nil, nil},
+    {"g1", :bool, nil, 1},
+    {"n0", :dint, nil, 7},
+    {"q0", :bool, "panel.q.0", nil},
+    {"q1", :bool, "panel.q.1", nil},
+    {"a0", :dint, "drive.q.0", nil}
+  ]
+
+  @ext_reach ~w(restart saw_earlier_write missed_later_write output_via_external
+                copy_out_over_external pulse_fired dint_moved not_due)a
+
+  # 120 configurations of up to six instances of the types above, 40 steps each: a cycle,
+  # or now and then a restart. After each, every global, every var_external of every
+  # instance read as its instance's path, every tag of its own, and no var_external held
+  # in any instance's state, against the model; and the reach asserted whole: a global
+  # another instance changed earlier in the cycle read through a var_external, a write a
+  # reader earlier in the cycle missed, an output point written through one, a copy-out
+  # over the same scan's write through one, a one-shot fired, a dint moved, a task not due.
+  test "a resource whose programs share globals through var_external runs as a model of " <>
+         "one map of globals says, with one copy of each" do
+    programs =
+      Map.new(@ext_types, fn {name, source} ->
+        {:ok, program} = Logex.compile(source, name: name)
+        {name, program}
+      end)
+
+    :rand.seed(:exsss, {2026, 10, 424})
+
+    for _ <- 1..120 do
+      config = ext_config(programs)
+      ext_walk(config, Runtime.start(config), ext_model(config), 40)
+    end
+
+    assert Process.get(:ext_reach, MapSet.new()) == MapSet.new(@ext_reach)
+  end
+
+  defp ext_reach(name, true), do: reached(:ext_reach, name)
+  defp ext_reach(_name, false), do: :ok
+
+  defp ext_config(programs) do
+    tasks =
+      for name <- Enum.take(Enum.shuffle(~w(fast mid slow)), :rand.uniform(4) - 1),
+          do: %Logex.Configuration.Task{
+            name: name,
+            interval: pick([5, 10, 15, 30]),
+            priority: pick([0, 1, 1, 2])
+          }
+
+    instances =
+      for name <- Enum.take(Enum.shuffle(~w(m1 m2 m3 m4 m5 m6)), :rand.uniform(6)),
+          do: %Logex.Configuration.Instance{
+            name: name,
+            type: pick(Map.keys(@ext_types)),
+            task: pick([nil | Enum.map(tasks, & &1.name)])
+          }
+
+    # A mixed instance copies `in` from a bool global or a constant, and drives `out` into
+    # an unlocated global or an output point no other connection drives.
+    {connections, _sinks} =
+      Enum.flat_map_reduce(instances, ~w(g0 g1 q0 q1), &ext_wire/2)
+
+    used = MapSet.new(instances, & &1.type)
+
+    Logex.Configuration.new!(
+      name: "plant",
+      programs: for({name, p} <- programs, name in used, do: p),
+      tasks: tasks,
+      globals:
+        for(
+          {name, type, at, initial} <- @ext_globals,
+          do: %Logex.Configuration.Global{name: name, type: type, at: at, initial: initial}
+        ),
+      instances: instances,
+      connections: connections
+    )
+  end
+
+  defp ext_wire(%Logex.Configuration.Instance{type: "mixed", name: name}, sinks) do
+    source = %Logex.Configuration.Connection{
+      instance: name,
+      member: "in",
+      to: pick(~w(i0 i1 g0 g1 q0) ++ [0, 1])
+    }
+
+    ext_sink(sinks, source, name)
+  end
+
+  defp ext_wire(_instance, sinks), do: {[], sinks}
+
+  defp ext_sink([], source, _name), do: {[source], []}
+
+  defp ext_sink(sinks, source, name) do
+    sink = pick(sinks)
+
+    {[source, %Logex.Configuration.Connection{instance: name, member: "out", to: sink}],
+     sinks -- [sink]}
+  end
+
+  defp ext_initial(name),
+    do: Enum.find_value(@ext_globals, fn {n, _, _, i} -> n == name and (i || 0) end)
+
+  defp ext_input?(name),
+    do: Enum.any?(@ext_globals, fn {n, _, at, _} -> n == name and at != nil and at =~ ".i." end)
+
+  defp ext_model(config),
+    do: %{
+      now: 0,
+      globals: Map.new(@ext_globals, fn {n, _, _, i} -> {n, i || 0} end),
+      own: Map.new(config.instances, &{&1.name, ext_own(&1.type)}),
+      first: Map.new(config.instances, &{&1.name, true}),
+      next: Map.new(config.tasks, &{&1.name, 0}),
+      writer: %{},
+      read: %{}
+    }
+
+  defp ext_own("pulse"), do: %{"s" => 0}
+  defp ext_own("mixed"), do: %{"out" => 0}
+  defp ext_own(_type), do: %{}
+
+  defp ext_walk(_config, _runtime, _model, 0), do: :ok
+
+  defp ext_walk(config, runtime, model, n) do
+    {runtime, model} = ext_step(:rand.uniform(12), config, runtime, model)
+    ext_check(config, runtime, model)
+    ext_walk(config, runtime, model, n - 1)
+  end
+
+  defp ext_step(1, config, runtime, model) do
+    mode = pick([:cold, :warm])
+
+    model = %{
+      model
+      | globals:
+          Map.new(model.globals, fn {g, v} -> {g, ext_kept(ext_input?(g), v, ext_initial(g))} end),
+        own: Map.new(config.instances, &{&1.name, ext_own(&1.type)}),
+        first: Map.new(config.instances, &{&1.name, true}),
+        next: Map.new(config.tasks, &{&1.name, model.now})
+    }
+
+    ext_reach(:restart, true)
+    {Runtime.restart(runtime, mode), model}
+  end
+
+  defp ext_step(_cycle, config, runtime, model) do
+    elapsed = pick([0, 1, 5, 5, 10, 10, 15, 30, 47])
+
+    inputs =
+      for {name, type, at, _} <- @ext_globals,
+          at != nil and at =~ ".i.",
+          :rand.uniform(2) == 1,
+          into: %{},
+          do: {name, ext_input(type)}
+
+    {runtime, outputs, events} = Runtime.cycle(runtime, elapsed, inputs)
+    {model, ran} = ext_cycle(config, model, elapsed, inputs)
+    assert for({:ran, task, instance, _} <- events, do: {task, instance}) == ran
+
+    assert outputs ==
+             for(
+               {name, _, at, _} <- @ext_globals,
+               at != nil and at =~ ".q.",
+               into: %{},
+               do: {name, model.globals[name]}
+             )
+
+    {runtime, model}
+  end
+
+  defp ext_kept(true, value, _initial), do: value
+  defp ext_kept(false, _value, initial), do: initial
+
+  defp ext_input(:bool), do: pick([0, 1])
+  defp ext_input(:dint), do: pick([0, 5, 11, 40])
+
+  defp ext_cycle(config, model, elapsed, inputs) do
+    now = model.now + elapsed
+    model = %{model | now: now, globals: Map.merge(model.globals, inputs), writer: %{}, read: %{}}
+
+    due =
+      config.tasks
+      |> Enum.with_index()
+      |> Enum.filter(fn {task, _} -> model.next[task.name] <= now end)
+      |> Enum.sort_by(fn {task, index} -> {task.priority, model.next[task.name], index} end)
+      |> Enum.map(&elem(&1, 0))
+
+    ext_reach(:not_due, length(due) < length(config.tasks) and due != [])
+
+    {model, ran} =
+      Enum.reduce(due, {model, []}, fn task, {model, ran} ->
+        periods = div(now - model.next[task.name], task.interval)
+        next = model.next[task.name] + (periods + 1) * task.interval
+        model = %{model | next: Map.put(model.next, task.name, next)}
+
+        Enum.reduce(
+          for(i <- config.instances, i.task == task.name, do: i),
+          {model, ran},
+          &ext_scan(config, &1, task.name, &2)
+        )
+      end)
+
+    {model, ran} =
+      Enum.reduce(
+        for(i <- config.instances, i.task == nil, do: i),
+        {model, ran},
+        &ext_scan(config, &1, :none, &2)
+      )
+
+    {model, Enum.reverse(ran)}
+  end
+
+  defp ext_scan(config, instance, task, {model, ran}) do
+    mine = for c <- config.connections, c.instance == instance.name, do: c
+
+    inputs =
+      for c <- mine,
+          c.member == "in",
+          into: %{},
+          do: {"in", ext_source(c.to, model.globals)}
+
+    {written, own} =
+      ext_run(
+        instance.type,
+        {model.globals, model.own[instance.name], inputs, model.first[instance.name]}
+      )
+
+    globals =
+      for c <- mine, c.member == "out", reduce: written do
+        globals -> Map.put(globals, c.to, own["out"])
+      end
+
+    externals =
+      for {name, %Tag{section: :var_external}} <- config.programs[instance.type].tags,
+          do: name
+
+    changed = for {g, v} <- written, v != model.globals[g], do: g
+    others = for {g, w} <- model.writer, w != instance.name, do: g
+    ext_reach(:saw_earlier_write, Enum.any?(externals, &(&1 in others)))
+
+    ext_reach(
+      :missed_later_write,
+      Enum.any?(changed, &(Map.get(model.read, &1, instance.name) != instance.name))
+    )
+
+    ext_reach(:output_via_external, Enum.any?(changed, &(&1 in ~w(q0 q1 a0))))
+
+    ext_reach(
+      :copy_out_over_external,
+      Enum.any?(
+        mine,
+        &(&1.member == "out" and written[&1.to] != own["out"] and &1.to in externals)
+      )
+    )
+
+    ext_reach(:pulse_fired, instance.type == "pulse" and written["q1"] == 1)
+    ext_reach(:dint_moved, "n0" in changed)
+
+    model = %{
+      model
+      | writer: Enum.reduce(changed, model.writer, &Map.put(&2, &1, instance.name)),
+        read: Enum.reduce(externals, model.read, &Map.put(&2, &1, instance.name))
+    }
+
+    {%{
+       model
+       | globals: globals,
+         own: Map.put(model.own, instance.name, own),
+         first: Map.put(model.first, instance.name, false)
+     }, [{task, instance.name} | ran]}
+  end
+
+  defp ext_source(to, globals) when is_binary(to), do: globals[to]
+  defp ext_source(constant, _globals), do: constant
+
+  # Every global; every var_external of every instance, read as its global; every own
+  # tag; and no var_external in any instance's state, the opaque resource looked into on
+  # purpose (decision 49), since no public call can see a stale copy.
+  defp ext_check(config, runtime, model) do
+    for {name, value} <- model.globals, do: assert(Runtime.get!(runtime, name) == value, name)
+
+    for instance <- config.instances do
+      program = config.programs[instance.type]
+      %Runtime{instances: %{} = states} = runtime
+      %Instance{env: env} = Map.fetch!(states, instance.name)
+
+      for {name, %Tag{section: :var_external}} <- program.tags do
+        assert Runtime.get!(runtime, "#{instance.name}.#{name}") == model.globals[name]
+        refute Map.has_key?(env, name), "#{instance.name} holds #{name}"
+      end
+
+      for {name, value} <- model.own[instance.name],
+          do: assert(Runtime.get!(runtime, "#{instance.name}.#{name}") == value)
+    end
+  end
 end

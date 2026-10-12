@@ -28,10 +28,13 @@ defmodule Logex.Runtime do
      then the order the configuration declares them; each runs its instances in the
      configuration's order, and the task-less instances run last, once each, in every
      cycle.
-  4. A scan copies each connected var_input in, from its global or constant, runs the
-     instance through `call/4`, and copies each connected var_output out to its global, so
-     an instance sees what an earlier one wrote in the same cycle and never what a later
-     one writes.
+  4. A scan copies each connected var_input in, from its global or constant, and each
+     var_external's global into the instance's state (M2-4), runs the instance through
+     `call/4`, splits each var_external off again into its global, and then copies each
+     connected var_output out to its global, so a connection's copy-out lands after a write
+     through a var_external to the same global (decision 47). An instance sees what an
+     earlier one wrote in the same cycle and never what a later one writes, through a
+     connection and through a var_external alike.
   5. A task that ran moves its next due time on by whole intervals past `now`, so its
      phase never drifts. Each period it missed, because the cycle came late, is counted,
      not run again: `{:overlap, task, missed}`, and `overlaps/1` gives each task's count.
@@ -43,7 +46,8 @@ defmodule Logex.Runtime do
   is when a periodic task is next due, which a runner sleeps on: it counts periodic tasks
   only, since task-less instances run in whatever cycle comes, so a runner of only those
   paces its own cycles. `get/2` reads a global, any declared tag of a program instance, a
-  `var` among them, or a public member of a function block instance in one; never an
+  `var` among them and a var_external, which it reads as its global, or a public member of
+  a function block instance in one; never an
   internal member, an instance whole, a task or the configuration, and a path that names
   one of those is told which it names: `get/2` gives `{:ok, value}` or `{:error,
   reason}`, and `get!/2` the value, raising `ArgumentError` with that reason (decision
@@ -93,6 +97,13 @@ defmodule Logex.Runtime do
   - a program instance starts as `instance/1` makes it, every tag by
     `Logex.Program.initial_env/1`, whose doc lists the edit's exceptions, and `restart/2`
     restarts it through `restart/3`;
+  - a var_external (M2-4) holds no state of its own in a resource: there is one copy of
+    each global, the resource's. A cycle merges it into its instance's state for the one
+    scan and splits it off after; `start/1` and `restart/2` drop the 0 that `instance/1`
+    and `restart/3` give it, so between cycles no instance's state holds one. OE-2's switch
+    is to merge each by the running program's var_externals before the instance's switch
+    and split each off by the candidate's after (decision 45), so a tag both declare keeps
+    its value whatever its section and the global is left alone;
   - a task is due at the clock, `now`, with no overlap counted: at 0 by `start/1`, at the
     kept clock by `restart/2`. No edit adds or removes a task while it runs (decision 19),
     so no edit starts one by this rule. A task an edit keeps keeps its overlap count and
@@ -103,6 +114,13 @@ defmodule Logex.Runtime do
   lone instance, which `instance/1` made, and the resource holds its instances itself, as
   its opacity requires. `restart/2` restarts the whole resource; there is no restart of one
   instance inside it.
+
+  A program run alone, through `instance/1`, `call/4` and `scan/2,3`, keeps a
+  var_external as a tag of its own, at 0, which its host cannot set, as no input is but a
+  var_input, and `restart/3` puts back at 0 (M2-4): exactly a one-instance configuration
+  with, for each var_external, an unlocated global of no initial value that no other
+  instance uses. So `scan/2` and a one-instance configuration give identical outputs for
+  such a program too, given those globals.
 
   A user function block's instance (M2-5) is a map in the env, under its name, of its
   members, an instance it holds a map in that; `cal` runs it, rung power its EN, its body
@@ -243,15 +261,18 @@ defmodule Logex.Runtime do
   """
   def start(%Configuration{} = config) do
     configured!(Configuration.check(config))
+    wiring = wiring(config)
 
     %__MODULE__{
       config: config,
       now: 0,
       globals: Map.new(config.globals, &{&1.name, Configuration.initial(&1)}),
       instances:
-        Map.new(config.instances, &{&1.name, instance(Map.fetch!(config.programs, &1.type))}),
+        Map.new(config.instances, fn %{name: name, type: type} ->
+          {name, detached(instance(Map.fetch!(config.programs, type)), wiring, name)}
+        end),
       tasks: Map.new(config.tasks, &{&1.name, task_state(0)}),
-      wiring: wiring(config)
+      wiring: wiring
     }
   end
 
@@ -310,7 +331,8 @@ defmodule Logex.Runtime do
       | globals: Map.new(config.globals, &{&1.name, restarted(&1, runtime)}),
         instances:
           Map.new(runtime.instances, fn {name, state} ->
-            {name, restart(Map.fetch!(config.programs, state.type), state, mode)}
+            restarted = restart(Map.fetch!(config.programs, state.type), state, mode)
+            {name, detached(restarted, runtime.wiring, name)}
           end),
         tasks: Map.new(runtime.tasks, fn {name, _state} -> {name, task_state(now)} end)
     }
@@ -324,6 +346,12 @@ defmodule Logex.Runtime do
 
   defp task_state(due), do: %{next_due: due, overlaps: 0}
 
+  # M2-4: one copy of each global. Between scans an instance's state holds none of its
+  # var_externals, which instance/1 and restart/3 start at 0 as any tag: the resource's
+  # global is the only copy (decision 49).
+  defp detached(%Instance{env: env} = state, wiring, name),
+    do: %{state | env: Map.drop(env, Map.fetch!(wiring.externals, name))}
+
   @doc "Each task's overlap count, by name: the periods it missed since `start/1` or `restart/2`."
   def overlaps(runtime) do
     %__MODULE__{tasks: tasks} = runtime!(runtime)
@@ -332,7 +360,8 @@ defmodule Logex.Runtime do
 
   @doc """
   The value at an access path, the resource omitted (`docs/organisation.md` §4.7), as
-  `{:ok, value}`: a global, `"estop"`; a program instance's tag, `"m1.fault"`; or a member
+  `{:ok, value}`: a global, `"estop"`; a program instance's tag, `"m1.fault"`, a
+  var_external read as its global, `"m1.estop"` the value of `"estop"` (M2-4); or a member
   of a function block instance in it, `"m1.t1.acc"`, as logic names one. A string that
   names no such value, an instance named whole, an internal member, a task, the
   configuration, a path that names nothing, or no path at all, gives `{:error, reason}`,
@@ -700,8 +729,8 @@ defmodule Logex.Runtime do
 
   # What a cycle reads of the configuration, derived once: the tasks in declaration order,
   # each with its instances in theirs; the task-less instances; each instance's type and
-  # its connections in and out; the input points' types and the output points' names; and
-  # the globals by name.
+  # its connections in and out; the input points' types and the output points' names; the
+  # globals by name; and each instance's var_externals, by name (M2-4).
   defp wiring(%Configuration{} = config) do
     by_task = Enum.group_by(config.instances, & &1.task, & &1.name)
     types = Map.new(config.instances, &{&1.name, &1.type})
@@ -728,9 +757,14 @@ defmodule Logex.Runtime do
       copy_out: grouped(config.instances, Map.get(sections, :var_output, [])),
       inputs: Map.new(for {global, {:ok, {_, "i", _}}} <- points, do: {global.name, global.type}),
       outputs: for({global, {:ok, {_, "q", _}}} <- points, do: global.name),
-      globals: Map.new(config.globals, &{&1.name, &1})
+      globals: Map.new(config.globals, &{&1.name, &1}),
+      externals:
+        Map.new(config.instances, &{&1.name, externals(Map.fetch!(config.programs, &1.type))})
     }
   end
+
+  defp externals(%Program{tags: tags}),
+    do: for({name, %Tag{section: :var_external}} <- tags, do: name)
 
   defp section(config, types, connection) do
     %Tag{section: section} =
@@ -890,7 +924,10 @@ defmodule Logex.Runtime do
   defp overlap(0, _task), do: []
   defp overlap(missed, task), do: [{:overlap, task, missed}]
 
-  # One scan of one instance: its var_inputs copied in, `call/4`, its var_outputs out.
+  # One scan of one instance: its var_inputs copied in, `call/4`, its var_outputs out. M2-4:
+  # each var_external's global is merged into the state before `call/4` and split off
+  # after, back into the global, before the copy-out: a write through a var_external is
+  # made during the scan, and a connection's copy-out after it (decision 47).
   defp scanned(
          name,
          task,
@@ -904,7 +941,11 @@ defmodule Logex.Runtime do
         {member, value(to, globals)}
       end)
 
+    externals = Map.fetch!(wiring.externals, name)
+    state = %{state | env: Map.merge(state.env, Map.take(globals, externals))}
     {outputs, state} = call(program, state, inputs, %Scan{now: now, first: first})
+    globals = Map.merge(globals, Map.take(state.env, externals))
+    state = %{state | env: Map.drop(state.env, externals)}
 
     globals =
       Enum.reduce(Map.fetch!(wiring.copy_out, name), globals, fn {member, global}, globals ->
@@ -953,8 +994,7 @@ defmodule Logex.Runtime do
 
   defp at_path(:error, {:ok, type}, {head, [tag | members], path}, runtime) do
     program = Map.fetch!(runtime.config.programs, type)
-    env = Map.fetch!(runtime.instances, head).env
-    in_program(tag_of(program, tag), {head, tag, members, path}, program, env)
+    read_tag(tag_of(program, tag), {head, tag, members, path}, program, runtime)
   end
 
   defp at_path(:error, :error, {head, _rest, _path}, runtime),
@@ -990,6 +1030,14 @@ defmodule Logex.Runtime do
 
   defp fetched({:ok, tag}, blocks), do: {:ok, typed(tag, blocks)}
   defp fetched(:error, _blocks), do: :error
+
+  # M2-4: a var_external is read as its global, the one copy, directly; a path below one
+  # goes too deep, as below any bool or dint.
+  defp read_tag({:ok, %Tag{section: :var_external}}, {_head, tag, [], _path}, _program, runtime),
+    do: Map.fetch!(runtime.globals, tag)
+
+  defp read_tag(found, {head, _tag, _members, _path} = at, program, runtime),
+    do: in_program(found, at, program, Map.fetch!(runtime.instances, head).env)
 
   defp in_program(:error, {head, tag, _members, _path}, program, _env),
     do:

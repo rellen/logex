@@ -593,6 +593,201 @@ defmodule Logex.SchedulerTest do
     end
   end
 
+  # M2-4 (docs/organisation.md §4.10, decisions 46, 47 and 49): one copy of each global.
+  # The scheduler merges each var_external's global into its instance's state before
+  # call/4 and splits it off after, into the global, before the copy-out.
+  describe "a global shared through var_external" do
+    # Copies `x`, read through a var_external, to `g`, written through one.
+    @copier "var_external x bool\nvar_external g bool\nxic x ote g"
+
+    # Reads `g` through a var_external into its output.
+    @reader "var_output out bool\nvar_external g bool\nxic g ote out"
+
+    defp copier_and_reader(order) do
+      programs = [program(@copier, "copier"), program(@reader, "reader")]
+      instances = for {name, type} <- order, do: %Instance{name: name, type: type}
+
+      Configuration.new!(
+        name: "plant",
+        programs: programs,
+        globals: [
+          %Global{name: "x", type: :bool, at: "panel.i.0"},
+          %Global{name: "g", type: :bool, initial: 1},
+          %Global{name: "y", type: :bool, at: "panel.q.0"}
+        ],
+        instances: instances,
+        connections: [%Connection{instance: "r", member: "out", to: "y"}]
+      )
+    end
+
+    # The opaque resource, looked into on purpose (decision 49): one copy of each global
+    # means no instance's state holds a var_external between cycles, which no public call
+    # can see, since every merge overwrites a stale copy and get/2 reads the global.
+    defp held(%Runtime{instances: instances}, name),
+      do: for({instance, state} <- instances, Map.has_key?(state.env, name), do: instance)
+
+    test "no instance's state holds one between cycles: start/1, a cycle and restart/2 " <>
+           "keep the one copy, the resource's" do
+      runtime = Runtime.start(copier_and_reader([{"c", "copier"}, {"r", "reader"}]))
+      assert {held(runtime, "x"), held(runtime, "g")} == {[], []}
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"x" => 1})
+      assert {held(runtime, "x"), held(runtime, "g")} == {[], []}
+      runtime = Runtime.restart(runtime, :cold)
+      assert {held(runtime, "x"), held(runtime, "g")} == {[], []}
+      # Each instance's own tags stay in its state.
+      assert Map.keys(runtime.instances["r"].env) == ["out"]
+    end
+
+    test "an instance reads and writes the global itself: what an earlier one wrote in the " <>
+           "cycle, and a later one's in the next" do
+      # The copier first: the reader sees `g` as it wrote it, in the same cycle.
+      runtime = Runtime.start(copier_and_reader([{"c", "copier"}, {"r", "reader"}]))
+      {runtime, first, _} = Runtime.cycle(runtime, 0, %{"x" => 0})
+      {_runtime, second, _} = Runtime.cycle(runtime, 10, %{"x" => 1})
+      assert {first, second} == {%{"y" => 0}, %{"y" => 1}}
+
+      # The reader first: it sees `g` at its initial value, 1, then the copier's 0 a cycle
+      # late.
+      runtime = Runtime.start(copier_and_reader([{"r", "reader"}, {"c", "copier"}]))
+      {runtime, first, _} = Runtime.cycle(runtime, 0, %{"x" => 0})
+      {runtime, second, _} = Runtime.cycle(runtime, 10, %{"x" => 1})
+      {_runtime, third, _} = Runtime.cycle(runtime, 10, %{})
+      assert {first, second, third} == {%{"y" => 1}, %{"y" => 0}, %{"y" => 1}}
+    end
+
+    test "a connection's copy-out lands after a write through a var_external to one global " <>
+           "(decision 47)" do
+      both = program("var_output q bool\nvar_external g bool\notl g\notu q", "both")
+
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [both],
+          globals: [%Global{name: "g", type: :bool, at: "panel.q.0"}],
+          instances: [%Instance{name: "b", type: "both"}],
+          connections: [%Connection{instance: "b", member: "q", to: "g"}]
+        )
+
+      assert [
+               %Logex.Diagnostic{
+                 message: "`b` writes `g` through its var_external, and its own " <> _
+               }
+             ] =
+               config.warnings
+
+      # The scan latches `g`, and its copy-out of `q`, 0, lands after: it stands.
+      {runtime, outputs, _} = Runtime.cycle(Runtime.start(config), 0, %{})
+
+      assert {outputs, Runtime.get(runtime, "g"), Runtime.get(runtime, "b.g")} ==
+               {%{"g" => 0}, {:ok, 0}, {:ok, 0}}
+    end
+
+    test "an output point written through one is an output, and get/2 reads it as the " <>
+           "global, whoever wrote it last" do
+      runtime = Runtime.start(copier_and_reader([{"c", "copier"}, {"r", "reader"}]))
+      # Before any cycle: the global's initial value, 1, through every path.
+      assert for(path <- ~w(g c.g r.g), do: Runtime.get(runtime, path)) ==
+               List.duplicate({:ok, 1}, 3)
+
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"x" => 0})
+      assert for(path <- ~w(g c.g r.g c.x), do: Runtime.get!(runtime, path)) == [0, 0, 0, 0]
+
+      assert Runtime.get(runtime, "c.g.x") ==
+               {:error, "`c.g.x` goes too deep: `c.g` is a bool, which has no members"}
+
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [program(@copier, "copier")],
+          globals: [
+            %Global{name: "x", type: :bool, at: "panel.i.0"},
+            %Global{name: "g", type: :bool, at: "panel.q.4"}
+          ],
+          instances: [%Instance{name: "c", type: "copier"}]
+        )
+
+      assert config.warnings == []
+      {_runtime, outputs, _} = Runtime.cycle(Runtime.start(config), 0, %{"x" => 1})
+      assert outputs == %{"g" => 1}
+    end
+
+    test "restart/2: the global back by its one rule, an input point kept, and the " <>
+           "instances' var_externals still out of their states" do
+      runtime = Runtime.start(copier_and_reader([{"c", "copier"}, {"r", "reader"}]))
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"x" => 0})
+      assert Runtime.get!(runtime, "g") == 0
+      runtime = Runtime.restart(runtime, :cold)
+
+      assert for(path <- ~w(g c.g x c.x r.out), do: Runtime.get!(runtime, path)) == [
+               1,
+               1,
+               0,
+               0,
+               0
+             ]
+
+      {_runtime, outputs, _} = Runtime.cycle(runtime, 10, %{"x" => 1})
+      assert outputs == %{"y" => 1}
+    end
+
+    # §4.6's "scan/2 and a one-line configuration give identical outputs" holds for a
+    # program with var_externals, given for each an unlocated global of no initial value
+    # that no other instance uses: the lone instance's own tag at 0.
+    test "a program run alone agrees with a one-instance configuration of its globals" do
+      alarm =
+        program(
+          "var_input trip bool\nvar_input reset bool\nvar_output lamp bool\n" <>
+            "var_external latched bool\nvar_external trips dint\nvar edge bool\n" <>
+            "xic trip ons edge otl latched\nxic reset otu latched\nxic latched ote lamp\n" <>
+            "xic edge move 1 trips",
+          "alarm"
+        )
+
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [alarm],
+          tasks: [task("t", 10, 0)],
+          globals: [
+            %Global{name: "trip", type: :bool, at: "panel.i.0"},
+            %Global{name: "reset", type: :bool, at: "panel.i.1"},
+            %Global{name: "lamp", type: :bool, at: "panel.q.0"},
+            %Global{name: "latched", type: :bool},
+            %Global{name: "trips", type: :dint}
+          ],
+          instances: [%Instance{name: "a", type: "alarm", task: "t"}],
+          connections: [
+            %Connection{instance: "a", member: "trip", to: "trip"},
+            %Connection{instance: "a", member: "reset", to: "reset"},
+            %Connection{instance: "a", member: "lamp", to: "lamp"}
+          ]
+        )
+
+      :rand.seed(:exsss, {2026, 10, 12})
+
+      Enum.reduce(1..400, {Runtime.instance(alarm), Runtime.start(config), 0}, fn step,
+                                                                                  {lone, rt, now} ->
+        inputs = %{"trip" => :rand.uniform(2) - 1, "reset" => Enum.random([0, 0, 0, 1])}
+        restart = rem(step, 37) == 0
+
+        {lone, rt} =
+          if restart,
+            do: {Runtime.restart(alarm, lone, :cold), Runtime.restart(rt, :cold)},
+            else: {lone, rt}
+
+        elapsed = if now == 0 and step == 1, do: 0, else: 10
+        {outputs, lone} = Runtime.scan(alarm, Runtime.put_inputs(alarm, lone, inputs), elapsed)
+        {rt, rt_outputs, _} = Runtime.cycle(rt, elapsed, inputs)
+        assert rt_outputs == outputs, "step #{step}"
+
+        for tag <- ~w(latched trips edge),
+            do: assert(Runtime.get!(rt, "a." <> tag) == lone.env[tag], "a.#{tag} at step #{step}")
+
+        {lone, rt, now + elapsed}
+      end)
+    end
+  end
+
   describe "growth" do
     # A cycle of n instances, each on a task of its own, all due, each copying an input
     # point in and an output point out. Counted in reductions, the least of three.
@@ -727,6 +922,48 @@ defmodule Logex.SchedulerTest do
 
       assert next4 / next < 6,
              "4x the tasks took #{Float.round(next4 / next, 1)}x for next_due_in/1"
+    end
+
+    # M2-4: n task-less instances of a type that reads and writes k globals through
+    # var_external: a scan merges k globals in and splits k off, so a cycle is linear in
+    # the instances and in their var_externals. Over 32 runs on Elixir 1.20.4, 16 alone and
+    # 16 beside three full suites, 4x the instances took 4.20x at most and 4x the
+    # var_externals 3.34x, each bound a fifth above the highest.
+    defp sharers(n, k) do
+      sharer =
+        program(
+          Enum.map_join(1..k, &"var_external g#{&1} bool\n") <>
+            Enum.map_join(1..k, &"xio g#{&1} ote g#{&1}\n"),
+          "sharer"
+        )
+
+      Configuration.new!(
+        name: "plant",
+        programs: [sharer],
+        globals: for(j <- 1..k, do: %Global{name: "g#{j}", type: :bool}),
+        instances: for(i <- 1..n, do: %Instance{name: "s#{i}", type: "sharer"})
+      )
+    end
+
+    defp reductions_to_share(n, k) do
+      {runtime, _, _} = Runtime.cycle(Runtime.start(sharers(n, k)), 0, %{})
+
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          _ = Runtime.cycle(runtime, 10, %{})
+          {:reductions, later} = Process.info(self(), :reductions)
+          later - before
+        end
+      )
+    end
+
+    test "a cycle stays linear in the instances that share globals and in their " <>
+           "var_externals" do
+      instances = reductions_to_share(400, 8) / reductions_to_share(100, 8)
+      externals = reductions_to_share(100, 32) / reductions_to_share(100, 8)
+      assert instances < 5.04, "4x the instances took #{Float.round(instances, 2)}x"
+      assert externals < 4.01, "4x the var_externals took #{Float.round(externals, 2)}x"
     end
 
     test "a cycle stays linear in the number of instances, tasks and connections" do

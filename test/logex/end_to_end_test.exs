@@ -2153,4 +2153,175 @@ defmodule Logex.EndToEndTest do
              ]
     end
   end
+
+  # PLAN.md M2-4's Done-when, as decision 46 has it tested: §4.4's plant, its `estop`
+  # declared once, as an input point, and read by the two motors through `var_external`,
+  # stops both in the same cycle where both run; and a pulse shorter than `m2`'s interval
+  # never reaches `m2`, since an instance sees a global when it runs (§4.4).
+  describe "a global shared through var_external (M2-4)" do
+    @describetag :tmp_dir
+
+    alias Logex.Configuration
+
+    # docs/organisation.md's text, cut where it stands: §4.4's plant, without its event
+    # task, which M2-6 brings, its `trip` line blanked, so every line keeps its number, and
+    # the snapshot that `trip` runs left with no task; §4.3's seal-in block, and §4.3's
+    # motor, written to use it, whose `estop` is a var_external; and §4.4's snapshot.
+    defp document, do: File.read!("docs/organisation.md")
+
+    defp cut(after_text) do
+      [_before, rest] = String.split(document(), after_text, parts: 2)
+      [_before, block] = String.split(rest, "```\n", parts: 2)
+      [text, _after] = String.split(block, "```", parts: 2)
+      text
+    end
+
+    defp shared_plant do
+      [_before, rest] = String.split(document(), "```\n// plant.", parts: 2)
+      [plant, _after] = String.split("// plant." <> rest, "```", parts: 2)
+      plant |> String.replace(~r/^task trip .*$/m, "") |> String.replace(" with trip", "")
+    end
+
+    @snapshot_ld """
+    var_input a bool
+    var_input b bool
+    var_output a_was bool
+    var_output b_was bool
+
+    xic a ote a_was
+    xic b ote b_was
+    """
+
+    defp shared_programs do
+      seal_ld = cut("**A function block type** is")
+      motor_ld = cut("**The motor, rewritten to use it**")
+      assert motor_ld =~ "var_external estop bool"
+      assert {:ok, seal} = Logex.compile(seal_ld, name: "seal")
+
+      assert {:ok, %Logex.Program{warnings: []} = motor} =
+               Logex.compile(motor_ld, name: "motor", types: [seal])
+
+      {:ok, snapshot} = Logex.compile(@snapshot_ld, name: "snapshot")
+
+      {%{"motor" => motor, "snapshot" => snapshot},
+       %{"seal.ld" => seal_ld, "motor.ld" => motor_ld}}
+    end
+
+    # The plant cycled every 10 ms from 0 to `last` ms, each cycle's inputs `image.(now)`:
+    # each cycle's time, contactors and the instances it ran.
+    defp cycled_plant(plant, image, last) do
+      times = Enum.to_list(0..last//10)
+
+      Enum.map_reduce(times, Logex.Runtime.start(plant), fn now, runtime ->
+        {runtime, outputs, events} = Logex.Runtime.cycle(runtime, min(now, 10), image.(now))
+        ran = for {:ran, _task, instance, _now} <- events, do: instance
+        {{now, {outputs["k1"], outputs["k2"]}, ran}, runtime}
+      end)
+    end
+
+    # Both start buttons pressed at 0 ms, which both tasks see, and released at 10 ms.
+    defp started(0), do: %{"pb_start_1" => 1, "pb_start_2" => 1}
+    defp started(10), do: %{"pb_start_1" => 0, "pb_start_2" => 0}
+    defp started(_now), do: %{}
+
+    defp held_from(at), do: fn now -> Map.merge(started(now), estop(now == at)) end
+    defp estop(true), do: %{"estop" => 1}
+    defp estop(false), do: %{}
+
+    defp the_done_when(plant) do
+      assert plant.warnings == []
+      {trace, runtime} = cycled_plant(plant, held_from(50), 100)
+
+      for {now, contactors, ran} <- trace do
+        # `m1` runs every 10 ms, `m2` every 50: both at 50 ms, the cycle the e-stop rises.
+        assert "m2" in ran == (rem(now, 50) == 0)
+        expected = if now < 50, do: {1, 1}, else: {0, 0}
+        assert contactors == expected, "at #{now} ms"
+      end
+
+      # The one e-stop, read as the global through each instance's var_external.
+      for path <- ~w(estop m1.estop m2.estop),
+          do: assert(Logex.Runtime.get(runtime, path) == {:ok, 1})
+
+      for path <- ~w(m1.fault m2.fault), do: assert(Logex.Runtime.get!(runtime, path) == 1)
+    end
+
+    test "M2-4's Done-when: an e-stop declared once as a var_global and read by two " <>
+           "instances through var_external stops both in the same cycle, from text" do
+      {programs, _files} = shared_programs()
+      assert {:ok, plant} = Configuration.compile("plant", shared_plant(), programs)
+      the_done_when(plant)
+    end
+
+    test "M2-4's Done-when, from files on disk", %{tmp_dir: dir} do
+      {_programs, files} = shared_programs()
+
+      for {name, text} <-
+            Map.merge(files, %{"snapshot.ld" => @snapshot_ld, "plant.logex" => shared_plant()}),
+          do: File.write!(Path.join(dir, name), text)
+
+      assert {:ok, plant} = Configuration.compile_file(Path.join(dir, "plant.logex"))
+      the_done_when(plant)
+    end
+
+    test "an e-stop shorter than `m2`'s interval never reaches it: it must be held as long " <>
+           "as the slowest interval that reads it (decision 46)" do
+      {programs, _files} = shared_programs()
+      {:ok, plant} = Configuration.compile("plant", shared_plant(), programs)
+
+      # A 10 ms pulse at 20 ms: `m1` sees it and stops; `m2`, which runs at 0 and 50 ms,
+      # never does.
+      pulse = fn now -> Map.merge(started(now), %{"estop" => if(now in [20], do: 1, else: 0)}) end
+      {trace, runtime} = cycled_plant(plant, pulse, 100)
+
+      for {now, {k1, k2}, _ran} <- trace do
+        assert k1 == if(now < 20, do: 1, else: 0), "k1 at #{now} ms"
+        assert k2 == 1, "k2 at #{now} ms"
+      end
+
+      assert {Logex.Runtime.get!(runtime, "m1.fault"), Logex.Runtime.get!(runtime, "m2.fault")} ==
+               {1, 0}
+    end
+
+    # §4.10, M2-6's tie-break, as M2-4 lets it be written: two writers of one global through
+    # var_external, here in one task at one priority, each scan sees what the one before it
+    # in the cycle wrote, and the later write stands.
+    test "two instances that write one global through var_external: the later in the cycle " <>
+           "stands, and each reads what the other last wrote" do
+      {:ok, writer} =
+        Logex.compile(
+          "var_input v dint\nvar_output seen dint\nvar_external shared dint\n" <>
+            "move shared seen\nmove v shared",
+          name: "writer"
+        )
+
+      plant =
+        Configuration.new!(
+          name: "plant",
+          programs: [writer],
+          tasks: [%Configuration.Task{name: "t", interval: 10, priority: 0}],
+          globals: [
+            %Configuration.Global{name: "shared", type: :dint, initial: 7},
+            %Configuration.Global{name: "s1", type: :dint, at: "drive.q.0"},
+            %Configuration.Global{name: "s2", type: :dint, at: "drive.q.1"}
+          ],
+          instances: [
+            %Configuration.Instance{name: "w1", type: "writer", task: "t"},
+            %Configuration.Instance{name: "w2", type: "writer", task: "t"}
+          ],
+          connections: [
+            %Configuration.Connection{instance: "w1", member: "v", to: 1},
+            %Configuration.Connection{instance: "w1", member: "seen", to: "s1"},
+            %Configuration.Connection{instance: "w2", member: "v", to: 2},
+            %Configuration.Connection{instance: "w2", member: "seen", to: "s2"}
+          ]
+        )
+
+      assert [%Logex.Diagnostic{severity: :warning}] = plant.warnings
+      {runtime, first, _events} = Logex.Runtime.cycle(Logex.Runtime.start(plant), 0, %{})
+      {runtime, second, _events} = Logex.Runtime.cycle(runtime, 10, %{})
+      assert {first, second} == {%{"s1" => 7, "s2" => 1}, %{"s1" => 2, "s2" => 1}}
+      assert Logex.Runtime.get(runtime, "shared") == {:ok, 2}
+    end
+  end
 end
