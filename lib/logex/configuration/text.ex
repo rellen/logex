@@ -6,18 +6,18 @@ defmodule Logex.Configuration.Text do
 
       file        -> line*                     the lexer drops blank lines and comments
       line        -> task | global | program | connection
-      task        -> 'task' NAME ['interval' INT] ['priority' INT]
+      task        -> 'task' NAME ['single' NAME] ['interval' INT] ['priority' INT]
       global      -> 'var_global' NAME TYPE [INT] ['at' NAME]
       program     -> 'program' NAME NAME ['with' NAME]
       connection  -> PATH (NAME | INT)         PATH: a name with `.` parts, as `m1.start`
       TYPE        -> 'bool' | 'dint'
 
   `line/1` reads `line` by its first token; `task/3` reads `task`, with `inputs/2` its
-  inputs, `order/4` their order and `value/5` each one's number; `global/3` reads
-  `global`, with `typed/3` its type, `initial/2` its initial value and `located/2` its
-  location; `program/3`, `typed_program/3`, `program_type/4`, `scheduled/2` and
-  `with_task/4` read `program`; and `connection/4` and `wire/3` read `connection`. Every
-  decision is made on the next token alone.
+  inputs, `order/4` their order and `value/5` each one's number or, for `single`, its
+  name; `global/3` reads `global`, with `typed/3` its type, `initial/2` its initial value
+  and `located/2` its location; `program/3`, `typed_program/3`, `program_type/4`,
+  `scheduled/2` and `with_task/4` read `program`; and `connection/4` and `wire/3` read
+  `connection`. Every decision is made on the next token alone.
 
   Everything the lexer settles is reused whole: positions, `//` comments, a run of
   newlines as one line end, a line ended by LF, CRLF or a lone CR alike (B8), and the `.`
@@ -29,12 +29,14 @@ defmodule Logex.Configuration.Text do
   **What it reads into.** `read/1` gives the elements a `%Logex.Configuration{}` holds, in
   line order, each with the line that declares it:
 
-  - `task <name> interval <ms> priority <p>`, a `%Logex.Configuration.Task{}`, its inputs
-    in IEC's order, `interval` before `priority`, each once (Ed 2 Annex B.1.7,
-    `task_initialization`). An interval is a whole number of milliseconds, as a timer's
-    preset is (decision 13): `10ms`, `t#10ms` and `1.5` do not lex. An input left out
-    reads as nil, which `Logex.Configuration.check/1` refuses, as it refuses one left
-    out from Elixir;
+  - `task <name> [single <global>] [interval <ms>] priority <p>`, a
+    `%Logex.Configuration.Task{}`, its inputs in IEC's order, `single` before `interval`
+    before `priority`, each once (Ed 2 Annex B.1.7, `task_initialization`). A single is
+    a name, whatever it names, a dotted one among them, for `Logex.Configuration.check/1`
+    to read (M2-6). An interval is a whole number of milliseconds, as a timer's preset is
+    (decision 13): `10ms`, `t#10ms` and `1.5` do not lex. An input left out reads as nil,
+    and a task with neither a single nor an interval, or no priority, is refused by
+    `Logex.Configuration.check/1`, as it is from Elixir;
   - `var_global <name> <type> [<initial>] [at <location>]`, a
     `%Logex.Configuration.Global{}`;
   - `program <instance> <type> [with <task>]`, a `%Logex.Configuration.Instance{}`, with
@@ -69,10 +71,11 @@ defmodule Logex.Configuration.Text do
   is named by one. M2-3's are `task`, which starts its line, `interval` and `priority`,
   which belong on a `task` line, so no line starts with one and no task is named by one,
   and `with`, which belongs on a `program` line after the type, so no line starts with it
-  and no program type is named by it. A configuration file reserves its words in that
-  file kind only (§4.8, decision 10): a `.ld` program may name a tag `program` or `task`.
-  A message names a word only once a line reads it, so none offers a line this reader
-  still refuses: `single`, M2-6's, is no input of a task yet.
+  and no program type is named by it. M2-6's is `single`, which belongs on a `task` line,
+  so no line starts with it and no task is named by it. A configuration file reserves its
+  words in that file kind only (§4.8, decision 10): a `.ld` program may name a tag
+  `program`, `task` or `single`. A message names a word only once a line reads it, so
+  none offers a line this reader refuses.
 
   **What a line can say.** `entries!/1` is the text's own definition of its data, as
   `Logex.Parser.well_formed!/1` is a program's: exactly the entries a line can say, and so
@@ -92,6 +95,7 @@ defmodule Logex.Configuration.Text do
     "task" => :line,
     "var_global" => :line,
     "program" => :line,
+    "single" => :task,
     "interval" => :task,
     "priority" => :task,
     "with" => :program,
@@ -104,7 +108,7 @@ defmodule Logex.Configuration.Text do
 
   # A task's inputs, in IEC's order (Ed 2 Annex B.1.7, `task_initialization`), each with
   # its rank in that order and the field it fills.
-  @inputs %{"interval" => {0, :interval}, "priority" => {1, :priority}}
+  @inputs %{"single" => {0, :single}, "interval" => {1, :interval}, "priority" => {2, :priority}}
   @order Enum.sort_by(Map.keys(@inputs), &elem(Map.fetch!(@inputs, &1), 0))
 
   # The words a line reads where a task's name goes, so no task is named by one.
@@ -233,7 +237,7 @@ defmodule Logex.Configuration.Text do
 
   defp suggested(suggestion, word), do: "unknown configuration line `#{word}`" <> suggestion
 
-  # task -> 'task' NAME ['interval' INT] ['priority' INT]
+  # task -> 'task' NAME ['single' NAME] ['interval' INT] ['priority' INT]
   defp task([], first, _line),
     do: {:error, fail(first, "`task` needs a name, as in `task fast interval 10 priority 1`"), []}
 
@@ -253,7 +257,7 @@ defmodule Logex.Configuration.Text do
        ), []}
 
   defp named_task(_key, name, _token, {rest, line}) do
-    task = %Logex.Configuration.Task{name: name, interval: nil, priority: nil, line: line}
+    task = %Logex.Configuration.Task{name: name, priority: nil, line: line}
     inputs(rest, task)
   end
 
@@ -292,24 +296,45 @@ defmodule Logex.Configuration.Text do
 
   defp before(nil, _key), do: :ok
 
-  defp before(later, key),
-    do: "`#{key}` goes before `#{later}`, as in `task fast interval 10 priority 1`"
+  defp before(later, key), do: "`#{key}` goes before `#{later}`, as in " <> in_order(key)
 
-  # Each input takes a number, which the lexer reads whole, so an interval is a whole
-  # number of milliseconds (decision 13).
-  defp value([{:int_lit, _, number} | rest], _key, field, _token, task),
+  defp in_order("single"), do: "`task parts single part_in interval 1000 priority 2`"
+  defp in_order(_interval), do: "`task fast interval 10 priority 1`"
+
+  # A single takes a name, which check/1 reads (M2-6), but not an input's word, which is
+  # the next input: the name is missing. The others take a number, which the lexer reads
+  # whole, so an interval is a whole number of milliseconds (decision 13).
+  defp value([{:name, _, name} | rest] = tokens, "single", field, token, task),
+    do:
+      single_value(
+        String.downcase(name) in @input_words,
+        {name, rest, tokens},
+        token,
+        {field, task}
+      )
+
+  defp value([{:int_lit, _, number} | rest], key, field, _token, task) when key != "single",
     do: inputs(rest, Map.put(task, field, number))
 
-  defp value(rest, key, _field, token, task),
+  defp value(rest, key, _field, token, task), do: refused_value(rest, key, token, task)
+
+  defp single_value(false, {name, rest, _tokens}, _token, {field, task}),
+    do: inputs(rest, Map.put(task, field, name))
+
+  defp single_value(true, {_name, _rest, tokens}, token, {_field, task}),
+    do: refused_value(tokens, "single", token, task)
+
+  defp refused_value(rest, key, token, task),
     do: {:error, fail(at_found(rest, token), takes(key) <> found(rest)), declared(task)}
 
+  defp takes("single"), do: "`single` takes a bool global's name, as in `single estop`"
   defp takes("interval"), do: "`interval` takes a number of milliseconds, as in `interval 10`"
   defp takes("priority"), do: "`priority` takes a number, 0 the highest, as in `priority 1`"
 
   defp unexpected_on_task(token, task),
     do:
       "unexpected #{describe(token)} on the line of task `#{task.name}`: a task takes " <>
-        "`interval` and `priority`"
+        "`single`, `interval` and `priority`"
 
   # global -> 'var_global' NAME TYPE [INT] ['at' NAME]
   defp global([], first, _line),
@@ -630,8 +655,11 @@ defmodule Logex.Configuration.Text do
   defp placed(%{line: line} = entry, {next, text}),
     do: {line + 1, [String.duplicate("\n", line - next) <> printed(entry) | text]}
 
-  defp printed(%Logex.Configuration.Task{name: name, interval: interval, priority: priority}) do
-    words = ["task", name] ++ given("interval", interval) ++ given("priority", priority)
+  defp printed(%Logex.Configuration.Task{name: name, interval: interval, priority: priority} = t) do
+    words =
+      ["task", name] ++
+        given("single", t.single) ++ given("interval", interval) ++ given("priority", priority)
+
     Enum.join(words, " ") <> "\n"
   end
 
@@ -659,9 +687,9 @@ defmodule Logex.Configuration.Text do
   it. A line can say a proper list of:
 
   - a `%Logex.Configuration.Task{}`, its name one name token to the lexer and neither
-    `interval` nor `priority` in any case, which a line reads as that keyword; no single,
-    which a task line does not take yet (M2-6); its interval and its priority each nil or
-    an integer of 0 or more;
+    `single`, `interval` nor `priority` in any case, which a line reads as that keyword;
+    its single nil or one name token, none of those three in any case either (M2-6); its
+    interval and its priority each nil or an integer of 0 or more;
   - a `%Logex.Configuration.Global{}`, its name one name token to the lexer and none of
     `at`, `bool` or `dint` in any case, which a line reads as that keyword; its type
     `:bool` or `:dint`; its initial value nil or an integer of 0 or more; its location nil
@@ -725,7 +753,8 @@ defmodule Logex.Configuration.Text do
        ) do
     name!(name, entry)
     keyword!(name, @input_words, "a task's name", entry)
-    unsaid_single!(entry)
+    optional_name!(entry.single, entry)
+    optional_keyword!(entry.single, @input_words, "a task's single", entry)
     count!(interval, entry)
     count!(priority, entry)
   end
@@ -749,12 +778,6 @@ defmodule Logex.Configuration.Text do
     path!(instance, member, entry)
     to!(to, entry)
   end
-
-  # M2-6 gives a task a single from Elixir first; no line says one until the reader does.
-  defp unsaid_single!(%Logex.Configuration.Task{single: nil}), do: :ok
-
-  defp unsaid_single!(entry),
-    do: unsaid!("a task's single is nil: a task line takes `interval` and `priority`", entry)
 
   defp type!(type, _entry) when type in [:bool, :dint], do: :ok
   defp type!(_type, entry), do: unsaid!("a global's type is :bool or :dint", entry)
@@ -801,6 +824,9 @@ defmodule Logex.Configuration.Text do
     {init, [last]} = Enum.split(Enum.map(words, &"`#{&1}`"), -1)
     Enum.join(init, ", ") <> " or " <> last
   end
+
+  defp optional_keyword!(nil, _keywords, _place, _entry), do: :ok
+  defp optional_keyword!(word, keywords, place, entry), do: keyword!(word, keywords, place, entry)
 
   defp optional_name!(nil, _entry), do: :ok
   defp optional_name!(name, entry), do: name!(name, entry)

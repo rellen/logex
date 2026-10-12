@@ -1216,11 +1216,15 @@ defmodule Logex.Configuration do
   defp interval(%{interval: interval}) when is_integer(interval) and interval in @interval,
     do: []
 
+  # Its examples name the task only where its name is one a line can declare (§4.10,
+  # M2-6), and `t` otherwise.
   defp interval(%{name: name, single: nil, interval: nil, line: line}),
     do: [
       diagnostic(
         line,
-        "task `#{name}` needs an interval, as in `task #{name} interval 10 priority 1`"
+        "task `#{name}` needs an interval or a single, as in " <>
+          "`task #{example(name)} interval 10 priority 1` or " <>
+          "`task #{example(name)} single estop priority 0`"
       )
     ]
 
@@ -1279,6 +1283,11 @@ defmodule Logex.Configuration do
        ]
 
   defp priority(_task), do: []
+
+  defp example(name), do: example_named(Declarations.name?(name) and not reserved?(name), name)
+
+  defp example_named(true, name), do: name
+  defp example_named(false, _name), do: "t"
 
   # A task's single (M2-6) names a bool global, located or not (§4.4, "Events"): a name
   # where a global is wanted, read as a connection reads one (§4.7), the did-you-mean among

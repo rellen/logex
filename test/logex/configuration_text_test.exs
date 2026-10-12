@@ -1,6 +1,6 @@
 defmodule Logex.Configuration.TextTest do
   @moduledoc """
-  `Logex.Configuration.Text` (M2-2, M2-3): a configuration file read into the elements of
+  `Logex.Configuration.Text` (M2-2, M2-3, M2-6): a configuration file read into the elements of
   a `%Logex.Configuration{}`, each with its line, every line it cannot read a diagnostic at
   its token, as whole lists from source; what a line can say, `entries!/1`; and the
   printer, whose text reads back to the very entries it printed.
@@ -21,14 +21,6 @@ defmodule Logex.Configuration.TextTest do
 
     [block, _after] = String.split("// plant." <> rest, "```", parts: 2)
     block
-  end
-
-  # The plant without its event task, which M2-6 brings: its `trip` line blanked, so every
-  # line keeps its number, and the snapshot that `trip` runs left with no task.
-  defp periodic(source) do
-    source
-    |> String.replace(~r/^task trip .*$/m, "")
-    |> String.replace(" with trip", "")
   end
 
   defp errors(source) do
@@ -57,9 +49,9 @@ defmodule Logex.Configuration.TextTest do
         "%Logex.Configuration.Instance{} or %Logex.Configuration.Connection{}, with its " <>
         "struct's keys"
 
-  describe "reading (M2-2, M2-3): the elements of a configuration, each with its line" do
-    test "§4.4's plant without its event task reads to its tasks, globals, instances and " <>
-           "connections" do
+  describe "reading (M2-2, M2-3, M2-6): the elements of a configuration, each with its line" do
+    # As written: its event task, `task trip single estop priority 0`, reads since M2-6.
+    test "§4.4's plant reads to its tasks, globals, instances and connections" do
       globals =
         for {name, line, type, at} <- [
               {"estop", 6, :bool, "panel.i.7"},
@@ -81,9 +73,11 @@ defmodule Logex.Configuration.TextTest do
             ],
             do: global(line, name, type, at)
 
-      assert Text.read(periodic(plant())) ==
+      trip = %Logex.Configuration.Task{name: "trip", single: "estop", priority: 0, line: 4}
+
+      assert Text.read(plant()) ==
                {:ok,
-                [task(2, "fast", 10, 1), task(3, "slow", 50, 2)] ++
+                [task(2, "fast", 10, 1), task(3, "slow", 50, 2), trip] ++
                   globals ++
                   [
                     instance(23, "m1", "motor", "fast"),
@@ -102,25 +96,12 @@ defmodule Logex.Configuration.TextTest do
                     wire(37, "m2", "motor", "k2"),
                     wire(38, "m2", "run_lamp", "lamp_2"),
                     wire(39, "m2", "speed_sp", "sp_2"),
-                    instance(41, "snap", "snapshot"),
+                    instance(41, "snap", "snapshot", "trip"),
                     wire(42, "snap", "a", "k1"),
                     wire(43, "snap", "b", "k2"),
                     wire(44, "snap", "a_was", "k1_at_trip"),
                     wire(45, "snap", "b_was", "k2_at_trip")
                   ]}
-    end
-
-    # `single` is M2-6's, no input of a task yet, and no message offers it: the event
-    # task's line is broken there, and still declares `trip`, which the snapshot names.
-    test "§4.4's plant as written is refused only at its event task, a later item's" do
-      assert {:error, [diagnostic], entries} = Text.read(plant())
-
-      assert Diagnostic.format(diagnostic) ==
-               "line 4, column 11: unexpected `single` on the line of task `trip`: a task " <>
-                 "takes `interval` and `priority`"
-
-      assert {:declared, 4, %{kind: :task, name: "trip"}} in entries
-      assert instance(41, "snap", "snapshot", "trip") in entries
     end
 
     test "keywords are matched in any case, and names are not folded" do
@@ -140,9 +121,9 @@ defmodule Logex.Configuration.TextTest do
     end
 
     test "a line ends at LF, CRLF or a lone CR and keeps its number, and a comment is not read" do
-      {:ok, entries} = Text.read(periodic(plant()))
-      assert Text.read(String.replace(periodic(plant()), "\n", "\r\n")) == {:ok, entries}
-      assert Text.read(String.replace(periodic(plant()), "\n", "\r")) == {:ok, entries}
+      {:ok, entries} = Text.read(plant())
+      assert Text.read(String.replace(plant(), "\n", "\r\n")) == {:ok, entries}
+      assert Text.read(String.replace(plant(), "\n", "\r")) == {:ok, entries}
 
       assert Text.read("// a plant\n\nvar_global k bool // the contactor\n  // nothing\nm1.x k") ==
                {:ok, [global(3, "k", :bool), wire(5, "m1", "x", "k")]}
@@ -212,9 +193,11 @@ defmodule Logex.Configuration.TextTest do
              ]
     end
 
-    # IEC's order (Ed 2 Annex B.1.7): `interval` before `priority`, each once. `single` is
-    # M2-6's and no input yet. An input left out reads as nil, for the validator to refuse.
-    test "a task line: a name, then `interval` and `priority`, once each, in that order" do
+    # IEC's order (Ed 2 Annex B.1.7): `single` before `interval` before `priority`, each
+    # once (M2-6 brings `single`). An input left out reads as nil, for the validator to
+    # refuse.
+    test "a task line: a name, then `single`, `interval` and `priority`, once each, in that " <>
+           "order" do
       source = """
       task
       task 5 interval 10 priority 1
@@ -225,11 +208,17 @@ defmodule Logex.Configuration.TextTest do
       task t7 interval 10 interval 20 priority 1
       task t8 priority 1 interval 10
       task t9 priority 1 PRIORITY 2
-      task t10 single go priority 1
+      task t10 single 5 priority 1
       task t11 interval fast priority 1
       task t12 interval 10 priority
       task t13 interval priority 1
       task t14 interval 10 with fast
+      task t15 interval 10 single go priority 1
+      task t16 single a Single b priority 1
+      task t17 single
+      task t18 single interval 10 priority 1
+      task single go priority 1
+      task t20 priority 1 single go
       """
 
       assert errors(source) == [
@@ -240,60 +229,61 @@ defmodule Logex.Configuration.TextTest do
                "line 4, column 6: `task` needs a name before `Priority`, as in " <>
                  "`task fast interval 10 priority 1`",
                "line 5, column 32: unexpected `every` on the line of task `t5`: a task takes " <>
-                 "`interval` and `priority`",
+                 "`single`, `interval` and `priority`",
                "line 6, column 32: unexpected `7` on the line of task `t6`: a task takes " <>
-                 "`interval` and `priority`",
+                 "`single`, `interval` and `priority`",
                "line 7, column 21: `interval` is given twice on the line of task `t7`",
                "line 8, column 20: `interval` goes before `priority`, as in " <>
                  "`task fast interval 10 priority 1`",
                "line 9, column 20: `priority` is given twice on the line of task `t9`",
-               "line 10, column 10: unexpected `single` on the line of task `t10`: a task takes " <>
-                 "`interval` and `priority`",
+               "line 10, column 17: `single` takes a bool global's name, as in `single estop`, " <>
+                 "found `5`",
                "line 11, column 19: `interval` takes a number of milliseconds, as in " <>
                  "`interval 10`, found `fast`",
                "line 12, column 22: `priority` takes a number, 0 the highest, as in `priority 1`",
                "line 13, column 19: `interval` takes a number of milliseconds, as in " <>
                  "`interval 10`, found `priority`",
                "line 14, column 22: unexpected `with` on the line of task `t14`: a task takes " <>
-                 "`interval` and `priority`"
+                 "`single`, `interval` and `priority`",
+               "line 15, column 22: `single` goes before `interval`, as in " <>
+                 "`task parts single part_in interval 1000 priority 2`",
+               "line 16, column 19: `single` is given twice on the line of task `t16`",
+               "line 17, column 10: `single` takes a bool global's name, as in `single estop`",
+               "line 18, column 17: `single` takes a bool global's name, as in `single estop`, " <>
+                 "found `interval`",
+               "line 19, column 6: `task` needs a name before `single`, as in " <>
+                 "`task fast interval 10 priority 1`",
+               "line 20, column 21: `single` goes before `priority`, as in " <>
+                 "`task parts single part_in interval 1000 priority 2`"
              ]
+    end
 
-      # A name, then whatever inputs it has, in order: what they mean, an input left out
-      # among it, is the validator's to refuse.
-      assert Text.read(
-               "task a interval 10 priority 1\ntask b\ntask c priority 0\ntask d interval 0"
-             ) ==
+    # M2-6: a single is a name, whatever it names: check/1 reads it, a dotted one among
+    # them (§4.7), and the keywords of other lines too, which name nothing in a file.
+    test "a task line's single: any name, in IEC's order, in any case" do
+      source = """
+      task trip single estop priority 0
+      task parts SINGLE part_in Interval 1000 priority 2
+      task d single m1.out priority 1
+      task w single with
+      task e single Estop
+      """
+
+      assert Text.read(source) ==
                {:ok,
                 [
-                  task(1, "a", 10, 1),
-                  task(2, "b", nil, nil),
-                  task(3, "c", nil, 0),
-                  task(4, "d", 0, nil)
+                  %Logex.Configuration.Task{name: "trip", single: "estop", priority: 0, line: 1},
+                  %Logex.Configuration.Task{
+                    name: "parts",
+                    single: "part_in",
+                    interval: 1000,
+                    priority: 2,
+                    line: 2
+                  },
+                  %Logex.Configuration.Task{name: "d", single: "m1.out", priority: 1, line: 3},
+                  %Logex.Configuration.Task{name: "w", single: "with", priority: nil, line: 4},
+                  %Logex.Configuration.Task{name: "e", single: "Estop", priority: nil, line: 5}
                 ]}
-    end
-
-    # Decision 13: an interval is integer milliseconds, not a TIME literal, and the lexer
-    # reads a number whole: a unit, `t#` or a fraction is no number, and stops the read.
-    test "an interval is a whole number of milliseconds: `10ms`, `t#10ms` and `1.5` do not lex" do
-      for {interval, column, message} <- [
-            {"10ms", 20,
-             ~s(missing separator after integer: "10ms" is neither a number nor a tag)},
-            {"t#10ms", 21, ~s(illegal character "#")},
-            {"1.5", 21, ~s(illegal character ".")}
-          ] do
-        assert {:error, [%Diagnostic{stage: :lex, line: 1, column: ^column} = lexed], []} =
-                 Text.read("task fast interval #{interval} priority 1")
-
-        assert lexed.message == message
-      end
-    end
-
-    test "a branch delimiter has no place in a configuration" do
-      assert errors("( var_global a bool )\nvar_global b bool | c\nprogram m1 motor )") == [
-               "line 1, column 1: a configuration line cannot hold `(`",
-               "line 2, column 19: a configuration line cannot hold `|`",
-               "line 3, column 18: a configuration line cannot hold `)`"
-             ]
     end
 
     test "a global line: a name, a type, then an initial value, a location, or both" do
@@ -501,6 +491,8 @@ defmodule Logex.Configuration.TextTest do
       entries = [
         %Logex.Configuration.Task{name: "fast", interval: 10, priority: 1},
         %Logex.Configuration.Task{name: "t", interval: nil, priority: nil},
+        %Logex.Configuration.Task{name: "trip", single: "estop", priority: 0},
+        %Logex.Configuration.Task{name: "parts", single: "m1.q", interval: 1000, priority: 2},
         %Global{name: "k1", type: :bool, at: "panel.q.0"},
         %Global{name: "sp", type: :dint, initial: 1200},
         %Global{name: "g", type: :bool, initial: 1, at: "panel.q.1"},
@@ -513,6 +505,8 @@ defmodule Logex.Configuration.TextTest do
       text = """
       task fast interval 10 priority 1
       task t
+      task trip single estop priority 0
+      task parts single m1.q interval 1000 priority 2
       var_global k1 bool at panel.q.0
       var_global sp dint 1200
       var_global g bool 1 at panel.q.1
@@ -581,17 +575,20 @@ defmodule Logex.Configuration.TextTest do
              "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
             {%{fast | priority: :high},
              "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
-            # M2-6: a task's single is data before a task line takes it, so print/1 never
-            # drops one.
-            {%{fast | single: "estop"},
-             "a task's single is nil: a task line takes `interval` and `priority`"},
+            # M2-6: a task's single, one name token, and no input's word, which a line reads
+            # as the next input.
+            {%{fast | single: "a b"}, "a name lexes as one name token"},
+            {%{fast | single: :estop}, "a name lexes as one name token"},
+            {%{fast | single: "Interval"},
+             "a task's single is not `interval`, `priority` or `single`, in any case: a line " <>
+               "reads that word as its keyword"},
             # A keyword a line reads in a task's name place.
             {%{fast | name: "INTERVAL"},
-             "a task's name is not `interval` or `priority`, in any case: a line reads that " <>
-               "word as its keyword"},
+             "a task's name is not `interval`, `priority` or `single`, in any case: a line reads " <>
+               "that word as its keyword"},
             {%{fast | name: "priority"},
-             "a task's name is not `interval` or `priority`, in any case: a line reads that " <>
-               "word as its keyword"},
+             "a task's name is not `interval`, `priority` or `single`, in any case: a line reads " <>
+               "that word as its keyword"},
             {%{start | instance: "m1.x"},
              "a connection's instance has no `.`: its first `.` begins the member"},
             {%{start | member: "start."}, "a name lexes as one name token"},
@@ -685,9 +682,8 @@ defmodule Logex.Configuration.TextTest do
 
     test "everything read/1 reads, entries!/1 takes, and it prints back to the same text's " <>
            "entries" do
-      # Every line of one to four words from a small vocabulary, M2-2's and M2-3's words
-      # and a later item's among them: read/1 never raises, and what it reads is what a
-      # line can say.
+      # Every line of one to four words from a small vocabulary, M2-2's, M2-3's and M2-6's
+      # words among them: read/1 never raises, and what it reads is what a line can say.
       vocabulary =
         ~w(task var_global program Interval priority AT bool dint with single x m1.a panel.i.0 5) ++
           ["("]

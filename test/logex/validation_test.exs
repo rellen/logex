@@ -777,6 +777,18 @@ defmodule Logex.ValidationTest do
              ]
     end
 
+    # M2-6 reserves `single` in a configuration file, which breaks a var_external so named;
+    # a tag of any other section may still be called it.
+    test "`single`, a task line's word, names no var_external, in any case" do
+      assert source_errors(
+               "var_external single bool\nvar_external SINGLE dint\nvar_output k bool\nxic k ote k"
+             ) ==
+               ["line 1: `single` #{@keyword}", "line 2: `SINGLE` #{@keyword}"]
+
+      assert {:ok, %Logex.Program{}} =
+               source_compile("var_input single bool\nvar_output out bool\nxic single ote out")
+    end
+
     test "a configuration file's keyword still names a tag of any other section" do
       assert {:ok, %Logex.Program{}} =
                source_compile(
