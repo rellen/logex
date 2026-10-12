@@ -513,8 +513,8 @@ each again from source; §4.10.)*
   INTERVAL 0 as "no periodic scheduling" (rule 2). MatIEC runs such a task every tick, so
   logex refuses the ambiguous case. *(Milestone 2's design bounds an interval at
   2147483647 ms, §4.10, and a priority at 65535, decision 37.)* *(Landed with M2-3 and
-  M2-6: a task with neither is offered both, and an event task's interval of 0 is told
-  to leave it out.)*
+  M2-6: a task with neither is offered both, an event task's interval of 0 is told
+  to leave it out, and a task with no priority is shown one of its own kind.)*
 - **Events.** A `single` source must be a bool global. *(logex restriction. IEC's
   `data_source` also takes a constant, a program output or a direct variable, B.1.7,
   p.158.)* *(Landed with M2-6: a dint, another kind of name or no global is a diagnostic
@@ -1898,7 +1898,8 @@ task lines, the warning, the Done-when from source, Milestone 2's done sentence,
 documents. The
 readings the landing made, each in `Logex.Configuration`'s or `Logex.Runtime`'s
 moduledoc and pinned: a task with neither an interval nor a single is offered both, its
-example naming the task only where its name is one; an event task's interval of 0 is told
+example naming the task only where its name is one, and a task with no priority is shown
+one of its own kind, named so too (since the review); an event task's interval of 0 is told
 to leave it out; a single's value on a task line is any name token but an input's word;
 the ton warning is one a timer, at its instance's line, citing the `ton`'s own file and
 line, each program type's timers read once; and a decision-52 cycle counts the periods it

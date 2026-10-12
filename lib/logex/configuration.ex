@@ -41,7 +41,9 @@ defmodule Logex.Configuration do
     scheduling, and an instance that runs every cycle is one with no task, an event task
     one with no interval; a single names a bool global, located or not, whose rising edge
     makes the task due, read where a global is wanted, as a connection's is, its
-    did-you-mean among the bool globals;
+    did-you-mean among the bool globals. A task with no priority is shown one of its own
+    kind, its single, its interval or both, each its own where a line can say it, and
+    named as every task example is, `t` where its name is none a line can declare;
   - a global's initial value fits its type, and a located global takes none; a location
     is `<device>.i.<address>` for an input point or `<device>.q.<address>` for an output
     point, its device a name, its address one or more whole numbers with no leading zero,
@@ -1271,12 +1273,14 @@ defmodule Logex.Configuration do
   defp priority(%{priority: priority}) when is_integer(priority) and priority in @priority,
     do: []
 
-  defp priority(%{name: name, priority: nil, line: line}),
+  # Its example is a task of its own kind, named as the interval's examples are, with the
+  # task's own single and interval where a line can say them (§4.10, M2-6).
+  defp priority(%{name: name, priority: nil, line: line} = task),
     do: [
       diagnostic(
         line,
-        "task `#{name}` needs a priority, as in `task #{name} interval 10 priority 1`: 0 is " <>
-          "the highest"
+        "task `#{name}` needs a priority, as in " <>
+          "`task #{example(name)}#{shown_kind(task)} priority 1`: 0 is the highest"
       )
     ]
 
@@ -1296,6 +1300,25 @@ defmodule Logex.Configuration do
 
   defp example_named(true, name), do: name
   defp example_named(false, _name), do: "t"
+
+  # A task's kind, as its line says it: a single, an interval or both; one with neither,
+  # told so already, is shown the periodic kind.
+  defp shown_kind(%{single: nil, interval: interval}), do: " interval #{shown_interval(interval)}"
+  defp shown_kind(%{single: single, interval: nil}), do: " single #{shown_single(single)}"
+
+  defp shown_kind(%{single: single, interval: interval}),
+    do: " single #{shown_single(single)} interval #{shown_interval(interval)}"
+
+  defp shown_interval(interval) when is_integer(interval) and interval in @interval, do: interval
+  defp shown_interval(_interval), do: 10
+
+  defp shown_single(single) when is_binary(single),
+    do: single_named(Declarations.name?(single) and not reserved?(single), single)
+
+  defp shown_single(_single), do: "estop"
+
+  defp single_named(true, single), do: single
+  defp single_named(false, _single), do: "estop"
 
   # A task's single (M2-6) names a bool global, located or not (§4.4, "Events"): a name
   # where a global is wanted, read as a connection reads one (§4.7), the did-you-mean among

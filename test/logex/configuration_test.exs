@@ -751,6 +751,56 @@ defmodule Logex.ConfigurationTest do
 
     # IEC reads an interval of 0 as no periodic scheduling: an event task is declared
     # without one, which the message says, not that an instance runs every cycle.
+    # The example is a task of its own kind, named by the one rule the interval's examples
+    # use, `t` for a name no line can declare, with its own single and interval where a
+    # line can say them, `estop` and 10 where not.
+    test "a task that needs a priority is shown one of its own kind", %{seal: seal} do
+      tasks = [
+        event("e", "pb2", nil),
+        both("b", "pb2", 50, nil),
+        task("p", 25, nil),
+        task("n", nil, nil),
+        event("u.v", "pb2", nil),
+        event("s", "a.b", nil),
+        event("r", "Program", nil),
+        both("z", "pb2", 0, nil),
+        both("w", "pb2", 2_147_483_648, nil),
+        task("Task", 10, nil)
+      ]
+
+      assert triggers(seal, tasks) == [
+               "`u.v` cannot name a task: `.` is kept for a path, as in `m1.start`, and a " <>
+                 "location, as in `panel.i.0`",
+               "`Task` is a keyword and cannot name a task",
+               "task `e` needs a priority, as in `task e single pb2 priority 1`: 0 is the highest",
+               "task `b` needs a priority, as in `task b single pb2 interval 50 priority 1`: 0 " <>
+                 "is the highest",
+               "task `p` needs a priority, as in `task p interval 25 priority 1`: 0 is the highest",
+               "task `n` needs an interval or a single, as in `task n interval 10 priority 1` " <>
+                 "or `task n single estop priority 0`",
+               "task `n` needs a priority, as in `task n interval 10 priority 1`: 0 is the highest",
+               "task `u.v` needs a priority, as in `task t single pb2 priority 1`: 0 is the " <>
+                 "highest",
+               "task `s` needs a priority, as in `task s single estop priority 1`: 0 is the " <>
+                 "highest",
+               "the single of `s`: `a.b` names a member of an instance, and there is no " <>
+                 "instance `a`",
+               "task `r` needs a priority, as in `task r single estop priority 1`: 0 is the " <>
+                 "highest",
+               "the single of `r`: no global `Program`: `Program` is a keyword of a " <>
+                 "configuration file, and nothing in one is named so",
+               "the interval of `z` is 0: an interval is at least 1 ms, and a task that runs " <>
+                 "only on the rising edges of its single is declared without one",
+               "task `z` needs a priority, as in `task z single pb2 interval 10 priority 1`: 0 " <>
+                 "is the highest",
+               "the interval of `w` is `2147483648` ms: an interval is 1 to 2147483647 ms",
+               "task `w` needs a priority, as in `task w single pb2 interval 10 priority 1`: 0 " <>
+                 "is the highest",
+               "task `Task` needs a priority, as in `task t interval 10 priority 1`: 0 is the " <>
+                 "highest"
+             ]
+    end
+
     test "an event task's interval of 0 is told to leave it out", %{seal: seal} do
       assert triggers(seal, [both("t", "pb", 0, 3), task("u", 0, 3)]) == [
                "the interval of `t` is 0: an interval is at least 1 ms, and a task that runs " <>
@@ -1387,7 +1437,7 @@ defmodule Logex.ConfigurationTest do
                "plant.logex: line 3: task `u.v` needs an interval or a single, as in " <>
                  "`task t interval 10 priority 1` or `task t single estop priority 0`",
                "plant.logex: line 3: task `u.v` needs a priority, as in " <>
-                 "`task u.v interval 10 priority 1`: 0 is the highest",
+                 "`task t interval 10 priority 1`: 0 is the highest",
                "plant.logex: line 5: `g` is declared twice: first on line 4, as a global",
                "plant.logex: line 5: `g` is a bool: its initial value must be 0 or 1, found `7`",
                "plant.logex: line 5: `nowhere` is not a location: a location is a device, `i` " <>
@@ -1676,6 +1726,57 @@ defmodule Logex.ConfigurationTest do
 
     # M2-6: every check of a task's single, from source, in the words the data gives
     # (`describe "a task's single (M2-6)"`), each at its task's line.
+    # The "needs a priority" example in the task's own kind, as the data gives it
+    # (`describe "a task's single (M2-6)"`); a keyword names no task on a line.
+    test "a task that needs a priority is shown one of its own kind", %{seal: seal} do
+      source =
+        @base <>
+          """
+          task e single pb2
+          task b single pb2 interval 50
+          task p interval 25
+          task n
+          task u.v single pb2
+          task s single a.b
+          task r single Program
+          task z single pb2 interval 0
+          task w single pb2 interval 2147483648
+          """
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 9: task `e` needs a priority, as in `task e single pb2 priority 1`: 0 is " <>
+                 "the highest",
+               "line 10: task `b` needs a priority, as in " <>
+                 "`task b single pb2 interval 50 priority 1`: 0 is the highest",
+               "line 11: task `p` needs a priority, as in `task p interval 25 priority 1`: 0 is " <>
+                 "the highest",
+               "line 12: task `n` needs an interval or a single, as in " <>
+                 "`task n interval 10 priority 1` or `task n single estop priority 0`",
+               "line 12: task `n` needs a priority, as in `task n interval 10 priority 1`: 0 is " <>
+                 "the highest",
+               "line 13: `u.v` cannot name a task: `.` is kept for a path, as in `m1.start`, " <>
+                 "and a location, as in `panel.i.0`",
+               "line 13: task `u.v` needs a priority, as in `task t single pb2 priority 1`: 0 " <>
+                 "is the highest",
+               "line 14: task `s` needs a priority, as in `task s single estop priority 1`: 0 " <>
+                 "is the highest",
+               "line 14: the single of `s`: `a.b` names a member of an instance, and there is " <>
+                 "no instance `a`",
+               "line 15: task `r` needs a priority, as in `task r single estop priority 1`: 0 " <>
+                 "is the highest",
+               "line 15: the single of `r`: no global `Program`: `Program` is a keyword of a " <>
+                 "configuration file, and nothing in one is named so",
+               "line 16: the interval of `z` is 0: an interval is at least 1 ms, and a task " <>
+                 "that runs only on the rising edges of its single is declared without one",
+               "line 16: task `z` needs a priority, as in " <>
+                 "`task z single pb2 interval 10 priority 1`: 0 is the highest",
+               "line 17: the interval of `w` is `2147483648` ms: an interval is 1 to " <>
+                 "2147483647 ms",
+               "line 17: task `w` needs a priority, as in " <>
+                 "`task w single pb2 interval 10 priority 1`: 0 is the highest"
+             ]
+    end
+
     test "a task's single", %{seal: seal} do
       source =
         @base <>

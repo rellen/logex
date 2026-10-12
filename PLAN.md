@@ -1917,7 +1917,8 @@ configuration file's must be built that way before they land.
 
   Readings the landing made, each pinned by a test, and in §4.10's M2-6 note: until the
   reader read `single`, a task with neither input kept M2-3's message, and since then it
-  is offered both, its example naming the task only where its name is one; an event
+  is offered both, its example naming the task only where its name is one, as a task with
+  no priority, shown one of its own kind since the review, is named; an event
   task's interval of 0 is told to leave it out; a single counts as a use of its global; a
   single's value on a task line is any name token but an input's word; the ton warning is
   one a timer, at its instance's line, citing the `ton`'s own file and line, each program
@@ -1932,8 +1933,10 @@ configuration file's must be built that way before they land.
   the program's tags once a timer, quadratic in the timers, now pinned by a growth test in
   reductions with its timers inside blocks; and a block's timer from types read from no
   file is cited by the block's name, "on line 5 of block `inner`", where "on its line 5"
-  read as the program's line. 862 tests pass on Elixir 1.20.4 (8 of them doctests), up
-  from 860.
+  read as the program's line; and a task with no priority is shown a task line of its own
+  kind, `task e single trig priority 1` for an event task, where every task was shown a
+  periodic one, named by the rule the interval's examples use, so a refused `u.v` is
+  shown `task t …`. 864 tests pass on Elixir 1.20.4 (8 of them doctests), up from 860.
 
 The scheduling rules are decided too: PRIORITY on every task, 0 the highest; ties go to
 the earlier due time, then declaration order; no preemption; missed periods coalesced,
