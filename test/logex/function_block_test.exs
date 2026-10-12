@@ -92,6 +92,11 @@ defmodule Logex.FunctionBlockTest do
     ast
   end
 
+  # M2-4: what a block's file says to a var_external.
+  @no_external "cannot be a var_external in a function block's file: a block reaches no " <>
+                 "global of a configuration, so it takes one through a var_input, which the " <>
+                 "`cal` that runs it fills"
+
   @holder """
   function_block holder
   var_input go bool
@@ -240,6 +245,41 @@ defmodule Logex.FunctionBlockTest do
       body = %{named.body | name: "function_block"}
       refute FbType.user?(%{named | name: "function_block", body: body})
       refute FbType.user?(%{named | name: "ton", body: %{body | name: "ton"}})
+    end
+
+    # M2-4: a deliberate, reversible departure from IEC, which allows VAR_EXTERNAL in a
+    # FUNCTION_BLOCK (docs/naming.md, `var_external`): a block takes a global through a
+    # var_input its `cal` fills.
+    test "refuses var_external, each at its line, its uses excused, before the type is built" do
+      assert errors(
+               "function_block b\nvar_external estop bool\nvar_input go bool\n" <>
+                 "VAR_EXTERNAL speed dint\nvar_output q bool\nxic estop ote q\n" <>
+                 "xic go move 5 speed",
+               [],
+               "b"
+             ) == [
+               "line 2: `estop` #{@no_external}",
+               "line 4: `speed` #{@no_external}"
+             ]
+
+      # A program's file takes one, and a block's file the same line as a var_input.
+      assert {:ok, %Logex.Program{}} =
+               Logex.compile("var_external estop bool\nvar_output q bool\nxic estop ote q",
+                 name: "p"
+               )
+
+      assert %FbType{} =
+               block!(
+                 "function_block b\nvar_input estop bool\nvar_output q bool\nxic estop ote q"
+               )
+
+      # One declared from Elixir, which no line can cite, is the host's mistake.
+      raises("`e` #{@no_external}", fn ->
+        Logex.Compiler.instructionize(
+          ast("function_block b\nvar_output q bool\nxic e ote q"),
+          [Tag.new!("e", :bool, :var_external)]
+        )
+      end)
     end
 
     test "function_block is reserved in a block's file only, and heads it" do

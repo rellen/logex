@@ -130,7 +130,9 @@ defmodule Logex.Compiler do
     paths = Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end)
     found = Enum.reject(Enum.reverse(lowering), &excused?(&1, untyped))
     errors = declaring ++ undeclared(found, tags, note?) ++ shared ++ timing
-    {rungs, tags, heading ++ header_tags(kind, tags) ++ errors ++ calls ++ paths}
+
+    {rungs, tags,
+     heading ++ header_tags(kind, tags) ++ externals(kind, tags) ++ errors ++ calls ++ paths}
   end
 
   @doc """
@@ -398,6 +400,26 @@ defmodule Logex.Compiler do
 
   defp header_tag(line, name),
     do: diagnostic(line, "`#{name}` heads a function block's file and cannot name a tag in one")
+
+  # M2-4: a block's file refuses `var_external`, though IEC allows it (docs/naming.md,
+  # `var_external`), deliberately and reversibly: a block's body runs over its instance's
+  # own state, which holds no global, so a block takes a global through a var_input its
+  # `cal` fills. Refused before the block's type is built, whose members are its var_inputs,
+  # var_outputs and vars (Logex.FbType.of/1). A tag declared from Elixir, which no line can
+  # cite, is refused as a host mistake, as header_tags/2's is.
+  defp externals({:block, _name}, tags),
+    do: for({name, %Tag{section: :var_external, line: line}} <- tags, do: external(line, name))
+
+  defp externals(:program, _tags), do: []
+
+  defp external(nil, name), do: raise(ArgumentError, external_message(name))
+  defp external(line, name), do: diagnostic(line, external_message(name))
+
+  defp external_message(name),
+    do:
+      "`#{name}` cannot be a var_external in a function block's file: a block reaches no " <>
+        "global of a configuration, so it takes one through a var_input, which the `cal` " <>
+        "that runs it fills"
 
   # Recursion through a tag declared from Elixir, which no line can cite: a host mistake.
   # A type holds every type below it in its one table (decision 53), so whether it holds

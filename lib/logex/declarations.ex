@@ -5,6 +5,7 @@ defmodule Logex.Declarations do
   is a section keyword, and every one comes before the first rung of logic.
 
       <section> <name> <type> [<initial>]     section: var | var_input | var_output
+                                                       | var_external
                                               type:    bool | dint | ton | a block's name
 
   The section and type words are data, in `@sections` and `@types`, and a function block
@@ -14,11 +15,25 @@ defmodule Logex.Declarations do
   initial value. A user function block's name is a type word only where the compile is
   given that block (`Logex.compile/2`'s `types:`), and is not reserved: it is built per
   compile, not a row (PLAN.md M1-3).
+
+  A `var_external` (M2-4) names a configuration's global, declared there again with
+  `var_global` (Ed 2 §2.4.3): a bool or a dint, with no initial value (Ed 2 §2.4.3.2) and
+  no instance, and named by no configuration file's keyword
+  (`Logex.Configuration.Text.keywords/0`), since its name is a global's too
+  (`docs/organisation.md` §4.8). Logic reads and writes it. A function block's file
+  refuses it (`Logex.Compiler`), and a program run alone keeps it as a tag of its own, at
+  0, which its host cannot set (`Logex.Runtime`).
   """
 
   alias Logex.{Diagnostic, FbType, Tag}
+  alias Logex.Configuration.Text
 
-  @sections %{"var" => :var, "var_input" => :var_input, "var_output" => :var_output}
+  @sections %{
+    "var" => :var,
+    "var_input" => :var_input,
+    "var_output" => :var_output,
+    "var_external" => :var_external
+  }
   @types %{"bool" => :bool, "dint" => :dint}
 
   @section_atoms Map.values(@sections)
@@ -448,7 +463,9 @@ defmodule Logex.Declarations do
   end
 
   defp check(%Tag{} = tag, _types, checked),
-    do: {name(tag.name) ++ type(tag.type) ++ section(tag.section) ++ initial(tag), checked}
+    do:
+      {name(tag.name) ++
+         type(tag.type) ++ section(tag.section) ++ initial(tag) ++ external(tag), checked}
 
   defp name(name) when is_binary(name), do: name(reserved(name), name, Logex.Lexer.tokenize(name))
   defp name(name), do: ["#{inspect(name)} is not a tag name"]
@@ -513,7 +530,7 @@ defmodule Logex.Declarations do
   # nothing else: OE-1 withdrew the `%{"pre" => ms}` a tag from Elixir could carry, since a
   # `ton` silently replaced it and, with none, no text could give that `.pre`.
   defp instance(%Tag{section: section, name: name} = tag)
-       when section in [:var_input, :var_output],
+       when section in [:var_input, :var_output, :var_external],
        do: [
          "#{label(name)} is #{instance_of(tag.type)}: an instance is the program's own, " <>
            "declared with `var`, as in `var #{display(name)} #{tag.type.name}`, not with " <>
@@ -549,6 +566,14 @@ defmodule Logex.Declarations do
       "#{label(name)} is a var_input: its value comes from outside, so it takes no initial value"
     ]
 
+  # M2-4: Ed 2 §2.4.3.2, p.43: "Initial values cannot be given in VAR_EXTERNAL
+  # declarations." Its value is its global's, `Logex.Configuration.initial/1`'s at a start.
+  defp initial(%Tag{section: :var_external, name: name}),
+    do: [
+      "#{label(name)} is a var_external: its value is the configuration's global of that " <>
+        "name, so it takes no initial value"
+    ]
+
   defp initial(%Tag{name: name, initial: v}) when not is_integer(v),
     do: ["the initial value of #{label(name)} must be an integer, found #{inspect(v)}"]
 
@@ -556,6 +581,22 @@ defmodule Logex.Declarations do
     do: fit(fits?(type, v), type, name, v)
 
   defp initial(_tag), do: []
+
+  # M2-4: a var_external's name is a global's too, declared with `var_global` in a
+  # configuration file, so a word that file reserves names none, in any case
+  # (docs/organisation.md §4.8). A word reserved here too is refused by name/1 already.
+  defp external(%Tag{section: :var_external, name: name}) when is_binary(name),
+    do: keyword(reserved(name) == nil and String.downcase(name) in Text.keywords(), name)
+
+  defp external(_tag), do: []
+
+  defp keyword(false, _name), do: []
+
+  defp keyword(true, name),
+    do: [
+      "`#{name}` is a keyword of a configuration file, where a var_external's global is " <>
+        "declared, so it cannot name a var_external"
+    ]
 
   # A negative literal does not lex until PLAN.md §5's rule lands, so no declaration line
   # holds one, and one from Elixir is refused as what the text cannot say (OE-1). Goes when

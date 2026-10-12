@@ -561,6 +561,22 @@ defmodule Logex.EditTest do
       assert {_, _, [{:input, "a", 1}, {:unread, "b", 1}]} = Edit.untest(edit, state)
     end
 
+    # M2-4: a lone instance's var_external is a tag of its own (Logex.Runtime), so an edit
+    # moves it as any tag: no rule of the edit names the section.
+    test "a var_external run alone is a section like any other: a change to or from one " <>
+           "keeps the value, and one that becomes a var_input is reported (decision 25)" do
+      v1 = c!(@seal <> "var g bool\nxic start otl g\nxic g ote motor")
+      v2 = c!(@seal <> "var_external g bool\nxic start otl g\nxic g ote motor")
+      v3 = c!(@seal <> "var_input g bool\nxic g ote motor")
+      {_, state} = run(v1, [{0, %{"start" => 1}}, {10, %{"start" => 0}}])
+      assert state.env["g"] == 1
+      {edit, state, report} = Edit.test(accept!(v1, v2, state), state)
+      assert {report, state.env["g"]} == {[], 1}
+      {v2, state, []} = Edit.assemble(edit, state)
+      {_edit, state, report} = Edit.test(accept!(v2, v3, state), state)
+      assert {report, state.env["g"]} == {[{:input, "g", 1}], 1}
+    end
+
     test "one the state lacks after a plain swap is unread at 0" do
       v0 = c!(@seal <> "xic start ote motor")
       v1 = c!(@seal <> @stop <> "xic start xio stop ote motor")

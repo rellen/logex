@@ -489,6 +489,59 @@ defmodule Logex.RuntimeTest do
     end
   end
 
+  # M2-4: outside a configuration, a var_external is a tag of its own at 0, which its host
+  # cannot set: exactly a one-instance configuration whose global is unlocated, with no
+  # initial value, that no other instance uses (docs/organisation.md §4.10, M2-4).
+  describe "a var_external run alone (M2-4)" do
+    setup do
+      {:ok, alarm} =
+        Logex.compile(
+          "var_input trip bool\nvar_output lamp bool\nvar_external estop bool\n" <>
+            "var_external count dint\nxic trip otl estop\nxic estop ote lamp\n" <>
+            "xic trip move 3 count",
+          name: "alarm"
+        )
+
+      %{alarm: alarm}
+    end
+
+    test "starts at 0, as its own tag, and keeps what logic writes", %{alarm: a} do
+      state = Runtime.instance(a)
+      assert state.env == %{"trip" => 0, "lamp" => 0, "estop" => 0, "count" => 0}
+      {_, state} = Runtime.scan(a, Runtime.put_inputs(a, state, %{"trip" => 1}), 10)
+      {outputs, state} = Runtime.scan(a, Runtime.put_inputs(a, state, %{"trip" => 0}), 10)
+      assert outputs == %{"lamp" => 1}
+      assert %{"estop" => 1, "count" => 3} = state.env
+    end
+
+    test "is no input: its host cannot set it", %{alarm: a} do
+      state = Runtime.instance(a)
+
+      raises(
+        "input `count` is a var_external (declared on line 4), not a var_input: only a " <>
+          "var_input is set from outside\n" <>
+          "input `estop` is a var_external (declared on line 3), not a var_input: only a " <>
+          "var_input is set from outside",
+        fn -> Runtime.put_inputs(a, state, %{"estop" => 1, "count" => 2}) end
+      )
+
+      raises(
+        "input `estop` is a var_external (declared on line 3), not a var_input: only a " <>
+          "var_input is set from outside",
+        fn -> Runtime.call(a, state, %{"estop" => 0}, %Scan{now: 0, first: true}) end
+      )
+    end
+
+    test "restart/3 puts it back at 0, keeping only the var_inputs", %{alarm: a} do
+      state = Runtime.put_inputs(a, Runtime.instance(a), %{"trip" => 1})
+      {_, state} = Runtime.scan(a, state, 10)
+      assert %{"estop" => 1, "count" => 3} = state.env
+
+      assert Runtime.restart(a, state, :cold).env ==
+               %{"trip" => 1, "lamp" => 0, "estop" => 0, "count" => 0}
+    end
+  end
+
   describe "a timer in an instance (M1-6)" do
     @timed """
     var_input go bool

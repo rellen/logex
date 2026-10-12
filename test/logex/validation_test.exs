@@ -8,6 +8,10 @@ defmodule Logex.ValidationTest do
   """
   use ExUnit.Case, async: true
 
+  # M2-4: what a var_external named by a configuration file's keyword is told.
+  @keyword "is a keyword of a configuration file, where a var_external's global is " <>
+             "declared, so it cannot name a var_external"
+
   # M2-5: what Logex.Declarations.check/1 says an unknown function block type is not.
   @given "and the types Logex.compile/2 gives for a function block's file"
 
@@ -717,6 +721,90 @@ defmodule Logex.ValidationTest do
                "line 9: `retain` is not declared",
                "line 10: `c` is not declared",
                "line 11: `d` is not declared"
+             ]
+    end
+  end
+
+  # M2-4: a program's declaration of a configuration's global (docs/naming.md,
+  # `var_external`). Its binding to a global is a configuration's check
+  # (Logex.Configuration), and its value at run time the scheduler's (Logex.Runtime).
+  describe "var_external (M2-4)" do
+    test "declares a bool or a dint that logic reads and writes, its section in any case" do
+      assert {:ok, %Logex.Program{tags: tags, warnings: []}} =
+               source_compile(
+                 "var_external estop bool\nVAR_EXTERNAL Speed dint\nvar_output k bool\n" <>
+                   "xic estop ote k\nxic k otl estop\nmove 5 Speed\neq Speed 5 otu estop"
+               )
+
+      assert Map.new(tags, fn {name, tag} -> {name, {tag.section, tag.type, tag.initial}} end) ==
+               %{
+                 "estop" => {:var_external, :bool, nil},
+                 "Speed" => {:var_external, :dint, nil},
+                 "k" => {:var_output, :bool, nil}
+               }
+    end
+
+    test "is reserved in a program's file, in any case, as every section word is" do
+      assert source_errors("var var_external bool\nvar Var_External bool") == [
+               "line 1: `var_external` is a keyword and cannot name a tag",
+               "line 2: `Var_External` is a keyword and cannot name a tag"
+             ]
+    end
+
+    test "takes no initial value, no instance, and no name a configuration file reserves" do
+      assert source_errors(
+               "var_external a bool 1\nvar_external b dint 0\nvar_external t1 ton\n" <>
+                 "var_external task bool\nvar_external Interval dint\nvar_external PRIORITY bool\n" <>
+                 "var_external with bool\nvar_external program bool\nvar_external var_global bool\n" <>
+                 "var_external at bool\nvar_external Bool bool\nvar_external c\n" <>
+                 "var_output k bool\nxic t1.dn ote k"
+             ) == [
+               "line 1: `a` is a var_external: its value is the configuration's global of that " <>
+                 "name, so it takes no initial value",
+               "line 2: `b` is a var_external: its value is the configuration's global of that " <>
+                 "name, so it takes no initial value",
+               "line 3: `t1` is a ton: an instance is the program's own, declared with `var`, " <>
+                 "as in `var t1 ton`, not with `var_external`",
+               "line 4: `task` #{@keyword}",
+               "line 5: `Interval` #{@keyword}",
+               "line 6: `PRIORITY` #{@keyword}",
+               "line 7: `with` #{@keyword}",
+               "line 8: `program` #{@keyword}",
+               "line 9: `var_global` #{@keyword}",
+               "line 10: `at` #{@keyword}",
+               "line 11: `Bool` is a type and cannot name a tag",
+               "line 12: `c` needs a type: `var_external c bool` or `var_external c dint`"
+             ]
+    end
+
+    test "a configuration file's keyword still names a tag of any other section" do
+      assert {:ok, %Logex.Program{}} =
+               source_compile(
+                 "var task bool\nvar_input with bool\nvar_output at bool\nxic with ote at\n" <>
+                   "xic at ote task"
+               )
+    end
+
+    test "from Elixir, by the same rules" do
+      assert Logex.Tag.new!("estop", :bool, :var_external) ==
+               %Logex.Tag{name: "estop", type: :bool, section: :var_external}
+
+      for {args, message} <- [
+            {["e", :bool, :var_external, 0],
+             "`e` is a var_external: its value is the configuration's global of that name, " <>
+               "so it takes no initial value"},
+            {["Task", :dint, :var_external], "`Task` #{@keyword}"},
+            {["t1", Logex.FbType.ton(), :var_external],
+             "`t1` is a ton: an instance is the program's own, declared with `var`, as in " <>
+               "`var t1 ton`, not with `var_external`"}
+          ] do
+        assert_raise ArgumentError, message, fn -> apply(Logex.Tag, :new!, args) end
+      end
+    end
+
+    test "one no rung uses is warned about, as any tag is" do
+      assert source_warnings("var_external estop bool\nvar_output k bool\nxic k ote k") == [
+               "line 1: warning: `estop` is declared but no rung uses it"
              ]
     end
   end

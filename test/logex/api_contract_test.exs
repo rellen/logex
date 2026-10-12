@@ -77,7 +77,8 @@ defmodule Logex.ApiContractTest do
 
   alias Logex.{Diagnostic, Edit, Instance, Program, Runtime, Scan, Tag}
 
-  @words ~w(var var_input var_output bool dint xic xio ote otl otu move a b c start stop Motor) ++
+  @words ~w(var var_input var_output var_external bool dint xic xio ote otl otu move a b c) ++
+           ~w(start stop Motor) ++
            ~w(ton ons eq ne lt gt le ge t1 t1.dn t1.acc t1.pre t1.zz t1.et a.b s1 n d.3) ++
            ["(", "|", ")", "0", "1", "7", "1200", "3000000000", "retain", "\n", "\n"]
 
