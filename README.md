@@ -5,22 +5,23 @@ text into a named, stateless value, and runs it as instances, one scan at a time
 time the host injects. No dependencies and no generated code: the lexer and parser are
 written by hand, and the whole thing is twenty-two small modules.
 
-**Stage: early, and honest about it.** Fifteen instructions, among them an on-delay
-timer, a one-shot and six comparisons, parallel branches to arbitrary nesting depth,
+**Stage: early, and honest about it.** Fifteen instructions, among them an on-delay timer,
+a one-shot and six comparisons, parallel branches to arbitrary nesting depth,
 latch/unlatch that holds across scans, power flow that resets per rung, a typed tag table
 that every tag is declared in, function blocks of your own, each written once in a file of
 its own, instantiated as often as needed and run with `cal`, a public API
-(`Logex.compile/2`, `Logex.compile_file/1` and `Logex.Runtime`), an online edit that
-changes a running instance's program, its function blocks included, without a restart
-(`Logex.Edit`), a scheduler that runs instances of several programs as one configuration
-on periodic tasks, wired to input and output points (`Logex.Configuration`), written as a
-configuration file (`.logex`) that names its `.ld` program types or built from Elixir
-data, and a printer that turns an AST back into source so a routine round-trips, as a
-configuration file does too — all of that works and is tested end to end, and a program
-or a configuration with mistakes in it gets every one reported with its file and line
-rather than an exception, a misspelt tag included. What does not exist yet: counters, the
-other timers, math, shared globals and event tasks. `PLAN.md` is a full review of the codebase and says precisely what is missing, in
-what order it gets fixed, and why.
+(`Logex.compile/2`, `Logex.compile_file/1`, `Logex.compile_files/1` and `Logex.Runtime`),
+an online edit that changes a running instance's program, its function blocks included,
+without a restart (`Logex.Edit`), a scheduler that runs instances of several programs as
+one configuration on periodic tasks, wired to input and output points
+(`Logex.Configuration`), written as a configuration file (`.logex`) that names its `.ld`
+program types or built from Elixir data, and a printer that turns an AST back into source
+so a routine round-trips, as a configuration file does too — all of that works and is
+tested end to end, and a program or a configuration with mistakes in it gets every one
+reported with its file and line rather than an exception, a misspelt tag included. What
+does not exist yet: counters, the other timers, math, shared globals and event tasks.
+`PLAN.md` is a full review of the codebase and says precisely what is missing, in what
+order it gets fixed, and why.
 
 ## The dialect
 
@@ -61,7 +62,8 @@ Source syntax today:
   with `cal`. In a block's file `function_block` is reserved, in any case. A block holds
   no instance of itself, at any depth
 - `Logex.compile_file/1` takes a `.ld` file only, exactly: any other name is a `:file`
-  diagnostic
+  diagnostic. `Logex.compile_files/1` compiles several, each as `compile_file/1` does,
+  through one memo, so a block several of them hold is compiled once
 
 A configuration file (`.logex`, "A configuration", below) has lines of its own, one
 element each, its keywords in any case, `//` comments, and a line ending as a `.ld`
@@ -551,10 +553,13 @@ broken.logex: line 11: unknown program type `pump`: there is no `pump.ld` beside
 ```
 
 - The plant is named after its file, and `motor` is compiled from `motor.ld` once, however
-  many instances it has; a function block that several program types hold is compiled
-  once too. A `.ld` file a `program` line names that is a function block's, or that does
-  not compile, is cited at the line of its first instance, the `.ld` file's own mistakes
-  after the configuration's, each with its own file and line.
+  many instances it has. The program types are compiled through `Logex.compile_files/1`,
+  one memo for the configuration, so a function block that several program types hold is
+  compiled once too, and its warnings are handed back once, by the first program type
+  that holds it. A `.ld` file a `program` line names that is a function block's, or that
+  does not compile, is cited at the line of its first instance, the latter with the files
+  its mistakes are cited in, a block's among them; those mistakes follow the
+  configuration's, each once, with its own file and line.
 - Every task is due in the first cycle. `m2` sees its start button only when it next runs,
   at 50 ms, so it starts then, and holds itself in after the button is released.
 - Every mistake is a diagnostic at its line, naming the file, in line order, and the

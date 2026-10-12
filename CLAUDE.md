@@ -31,11 +31,12 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   each loaded block's warnings after the program's, each with its block's file, while
   `compile/2` gives only the program's (decision 34). Since M2-2 `compile_file/1` takes a
   `.ld` path only, exactly, any other a `:file` diagnostic before anything is read, and
-  `compile_files/1` is that loader over several paths with one memo, each path's result
-  `compile_file/1`'s, so a block several of them hold is compiled once and its warnings
+  `compile_files/1` is that loader over several paths with one memo, each path compiled as
+  `compile_file/1` compiles it, so a block several of them hold is compiled once and its warnings
   handed back once, by the first program among them that holds it and compiles, a block's
   own file handing back nothing, and a chain of files that holds itself cited from each
-  path as that path's `compile_file/1` cites it
+  path as that path's `compile_file/1` cites it; `Logex.Configuration.compile_file/1`
+  loads a configuration's program types through it, one call a configuration
 - `lib/logex/runtime.ex` — runs a program as instances (M1-5): `instance/1`, `call/4` (one
   scan of one instance, at a given `%Logex.Scan{}`), `put_inputs/3` with `scan/2,3` (the
   task-less sugar) and `restart/3`, with the host contract in its moduledoc: a host
@@ -80,7 +81,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   (`.logex`, decision 35), named after it, each program type a `program` line names
   loaded from `<type>.ld` beside it through `Logex.compile_files/1`, one memo for the
   configuration, and a type that is missing, a block's file (the one block-type message)
-  or a file that does not compile cited once at its first instance's line, every
+  or a file that does not compile cited once at its first instance's line, the last
+  naming the files its mistakes are cited in, which follow once each, every
   diagnostic naming its file; `location/1`; and `initial/1`, the one rule for a new
   global's value, as `Logex.Program.initial_env/1` is a tag's.
   `lib/logex/configuration/text.ex` is a configuration file's text (M2-2, its task lines

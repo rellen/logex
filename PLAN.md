@@ -1551,6 +1551,8 @@ configuration file's must be built that way before they land.
     alone or `( program m1 motor`, declares a program it cannot name, a placeholder
     `Logex.Configuration.Text.read/1` gives with no name, so the configuration is given
     the line's diagnostic only, not "declares no `program`" after it.
+  - README's list of the public API, and its syntax list and "A configuration file",
+    name `Logex.compile_files/1`, the loader a configuration's program types go through.
 
   775 tests pass on Elixir 1.20.4 (8 of them doctests), up from 770 on `d2e1a84`.
 - **M2-3 · Periodic tasks in text.** `task <n> interval <ms> priority <p>` and `with`.
