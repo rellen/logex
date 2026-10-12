@@ -212,7 +212,7 @@ CONTROLLER                                   CONFIGURATION (+ one implicit RESOU
 | TASK, periodic | `task fast interval 10 priority 1` | per task: next due time | M2-3 |
 | VAR_EXTERNAL | `var_external estop bool` in a `.ld` | the configuration's global | M2-4 |
 | FUNCTION_BLOCK type and instance | a file headed `function_block seal`; `var s1 seal`, `cal s1 …` | nested: `m1.s1.run` | M2-5 (landed) |
-| TASK, event | `task trip single estop priority 0` | per task: last SINGLE value | M2-6 |
+| TASK, event | `task trip single estop priority 0` | per task: last SINGLE value | M2-6 (landed) |
 | access path | `m1.t1.acc`, read by `Logex.Runtime.get/2` | — | M1-6, M2 |
 
 **Three rules hold from M1-3 onwards.**
@@ -457,7 +457,11 @@ an e-stop must be held at least as long as the slowest interval that reads it, a
 maintained e-stop contact is: a 10 ms pulse never reaches `m2`.)* *(Landed with M2-4,
 2026-10-12: `end_to_end_test.exs` cycles this plant, its `trip` task left out until M2-6,
 with §4.3's motor; the e-stop raised at 50 ms, a cycle both tasks run, drops `k1` and `k2`
-in that cycle, and a 10 ms pulse at 20 ms stops `m1` and never reaches `m2`.)*
+in that cycle, and a 10 ms pulse at 20 ms stops `m1` and never reaches `m2`.)* *(Landed
+with M2-6, 2026-10-12: the plant as written reads, compiles with no warning and runs,
+from text and from files on disk, its `trip` task among them; `trip` runs once per rising
+edge of `estop`, before `m1` and `m2` in each cycle it runs, and in cycle 1 if `estop` is
+already 1, and `snap` records the contactors as the cycle before left them.)*
 
 **Line shapes.** Every line is a keyword line, like M1-3's declarations, or a connection
 line, which starts with a qualified name. Indentation is cosmetic.
@@ -508,10 +512,14 @@ each again from source; §4.10.)*
 - **Tasks.** A task needs `interval` or `single`, and `interval` is at least 1. IEC reads
   INTERVAL 0 as "no periodic scheduling" (rule 2). MatIEC runs such a task every tick, so
   logex refuses the ambiguous case. *(Milestone 2's design bounds an interval at
-  2147483647 ms, §4.10, and a priority at 65535, decision 37.)*
+  2147483647 ms, §4.10, and a priority at 65535, decision 37.)* *(Landed with M2-3 and
+  M2-6: a task with neither is offered both, and an event task's interval of 0 is told
+  to leave it out.)*
 - **Events.** A `single` source must be a bool global. *(logex restriction. IEC's
   `data_source` also takes a constant, a program output or a direct variable, B.1.7,
-  p.158.)*
+  p.158.)* *(Landed with M2-6: a dint, another kind of name or no global is a diagnostic
+  at the task's line, a name with `.` parts is told its reading, as a connection's global
+  is, and a single is a use of its global.)*
 
 A receipt: seven of the configuration spike's thirteen diagnostics for one deliberately
 broken source, each line exact, pinned by no test. *(Milestone 2's design rewords four of
@@ -667,6 +675,10 @@ Logex.Runtime.cycle(rt, elapsed_ms, inputs) :: {rt, outputs, events}
        for `ons`.
      - A 1→0→1 pulse inside one host step cannot be seen. A trigger written by logic takes
        effect in the next cycle.
+     - *(Landed with M2-6, 2026-10-12, as these rules, decision 39 and decisions 50 to 52
+       say: each trigger sampled once, after the input merge and before any scan; the last
+       sample 0 at `start/1` and by `restart/2`; `next_due_in/1` counting periodic due
+       times only.)*
 4. **Order and scans.** Due tasks run by priority, 0 first, then the earlier due time, then
    declaration order:
    - the due-time step is rule 3a, *"the program organization unit with the longest waiting
@@ -754,7 +766,9 @@ instructions ref., ONS, p.73). `first` is per instance.
   *(M1-5 had neither a `ton` nor an event task to warn about. `ton` landed with M1-6; the
   warning waits for event tasks, M2-6.)* *(Milestone 2's design carries it on the
   configuration's `warnings`, not a program's, since only the configuration knows which
-  task runs an instance; §4.10, M2-6.)*
+  task runs an instance; §4.10, M2-6.)* *(Landed with M2-6: one for each timer of each
+  instance an event task runs, a block's by its path, at the instance's line, citing the
+  `ton` in its own text.)*
 - A `now` that goes backwards is an error, never a negative `.acc`. *(Landed with M1-5:
   `Logex.Runtime.call/4` raises `ArgumentError` for a `%Scan{}` earlier than the
   instance's clock, and `scan/3` for a negative elapsed time.)*
@@ -866,7 +880,9 @@ warns that `.` in the lexer is safe only while there are no float literals.
 A `var_external` name must be legal in both kinds, because it is declared again as a
 `var_global`. *(Landed with M2-4: `Logex.Declarations` refuses a configuration file's
 keyword, `Logex.Configuration.Text.keywords/0` as M2-3 left it, as a `var_external`'s
-name, in any case; M2-6's `single` joins the list when it lands.)*
+name, in any case; M2-6's `single` joins the list when it lands.)* *(Landed with M2-6,
+2026-10-12: `single` is a configuration file's word, and a `var_external` named `single`
+is refused, in any case.)*
 
 **This departs from IEC and from one reviewer**, who argued for reserving the Table C.2
 words (`task program with at` …) everywhere, as IEC does (§2.1.3). logex reserves a word
@@ -1031,7 +1047,9 @@ against M2-1 as it landed, 2026-10-02: each item it can meet, it meets, as marke
   edit that adds one, with the edit's exceptions listed: `ons`, an event task's trigger and
   `first`; *(met for M2-1's pieces: `Logex.Configuration.initial/1` for a global and
   `Logex.Runtime`'s one-rule section for the clock, an instance and a task; an event
-  task's trigger is M2-6's)*
+  task's trigger is M2-6's)* *(met for M2-6's: the trigger's last sample in the same
+  section, 0 from `start/1` and `restart/2`, kept by OE-2's switch, which refuses a changed
+  `single` or an added or removed `interval`)*
 - one checked constructor, which the configuration file's reader feeds; *(met:
   `Logex.Configuration.check/1`, which `new!/1` and `start/1` run; M2-2's reader feeds
   it, through `compile/3`, since 2026-10-11)*
@@ -1297,7 +1315,8 @@ instance already holds around the new piece:
   is reported as `:initial_changed`, except one a start rule starts, at its new initial
   value, and a var_input of the program started, whose value a restart keeps: neither is
   so reported;
-- M2-6 will add an event task's trigger.
+- an event task's trigger is a resource's state, not a tag's: its rule is in
+  `Logex.Runtime`'s one-rule section (M2-6, landed).
 
 *Milestone 2's state* (designed 2026-10-02, §4.10; M2-1's pieces landed with it on
 2026-10-02, and `Logex.Runtime`'s moduledoc gives their rules as built, and M2-5's on
@@ -1481,7 +1500,8 @@ F3, the held values of F4) and still costs less than one scan.
 
 **Designed 2026-10-02; M2-1 landed the same day (`PLAN.md` M2-1), M2-5 on 2026-10-04
 (`PLAN.md` M2-5), M2-2 and M2-3 on 2026-10-11 (`PLAN.md` M2-2 and M2-3), and M2-4 on
-2026-10-12 (`PLAN.md` M2-4); only M2-6 has not.** A design pass spiked Milestone 2 in three
+2026-10-12 (`PLAN.md` M2-4), and M2-6 the same day (`PLAN.md` M2-6), which completes
+Milestone 2.** A design pass spiked Milestone 2 in three
 tracks on copies of `47319f7`, on Elixir 1.20.4 / OTP 28: the scheduler from Elixir data
 (M2-1); user function blocks (M2-5); and the configuration file, shared globals and event
 tasks (M2-2, M2-3, M2-4, M2-6). Each track was reviewed for correctness and for fit with
@@ -1865,13 +1885,24 @@ names a global refused for its name, so decision 42's silence has no case here.)
   - `get/2` reads a `var_external`'s path as the global directly;
   - a `var_external` may not be named like a word the configuration file reserves, as
     `Logex.Configuration.Text`'s list stands when M2-4 lands; M2-6's commit names
-    `var_external single` among the names it breaks;
+    `var_external single` among the names it breaks; *(M2-6's fourth commit names it, and
+    no name in the repository breaks)*
   - the two warnings go through M2-2's warnings pipeline, which `start/1` never reads,
     with each connection's instance found through an index made once, so checking stays
     linear in the instances;
   - "one copy" is pinned by a test that looks inside the resource (decision 49).
 
-**M2-6 · Event tasks.**
+**M2-6 · Event tasks.** *(Landed 2026-10-12, as these rules say, in eight commits: the
+survey, the data and the run time, the Done-when from data with the contract walk, the
+task lines, the warning, the Done-when from source, Milestone 2's done sentence, and the
+documents. The
+readings the landing made, each in `Logex.Configuration`'s or `Logex.Runtime`'s
+moduledoc and pinned: a task with neither an interval nor a single is offered both, its
+example naming the task only where its name is one; an event task's interval of 0 is told
+to leave it out; a single's value on a task line is any name token but an input's word;
+the ton warning is one a timer, at its instance's line, citing the `ton`'s own file and
+line, each program type's timers read once; and a decision-52 cycle counts the periods it
+missed as any late periodic task does.)*
 - *`single` with `interval`:* decision 39. A task with `single` alone never overlaps.
 - *The tie-break.* An event task's due time, for the earlier-due-time tie-break, is the
   cycle's `now`, since §4.6 step 3 makes it due on the edge seen in this cycle. A late
@@ -1899,7 +1930,9 @@ names a global refused for its name, so decision 42's silence has no case here.)
     tests, one instance writing a global that another copies to an output point; *(M2-4
     wrote the first form's shape in `end_to_end_test.exs`, two writers of one global
     through `var_external` in one task, the later write standing; the tie-break between
-    an event task and a late periodic one waits for M2-6)*
+    an event task and a late periodic one waits for M2-6)* *(Landed with M2-6, in both
+    forms: `end_to_end_test.exs`'s two writers of one global, and `scheduler_test.exs`'s
+    copier.)*
   - `Logex.Configuration.Task` enforces `name` and `priority` only, and a test pins the
     enforced keys;
   - an unknown `single`'s did-you-mean is among the bool globals; an example in a message
@@ -2109,13 +2142,15 @@ each again from source; §4.10.)* Each rule is checked by reverting it (CLAUDE.m
   false EN freezes only its own instance, and a recursive type, an unknown FB type or a
   `cal` of a non-instance is a located diagnostic.*
 
-**M2-6 · Event tasks.**
+**M2-6 · Event tasks.** *(Landed 2026-10-12; `PLAN.md` M2-6.)*
 - `single`, with the §4.6 edge rules, and `single` combined with `interval` *(decision
   39)*.
-- Reserves `single` in `.logex`.
+- Reserves `single` in `.logex`. *(Landed 2026-10-12.)*
 - *Acceptance: an event task triggered from an input point runs once per rising edge,
   before lower-priority tasks due in the same cycle, and runs in cycle 1 if its trigger is
   already true.*
+- *(Landed 2026-10-12, `PLAN.md` M2-6. With it Milestone 2 is done: `logex_test.exs`
+  walks the sentence below from files on disk.)*
 
 **Milestone 2 is done when** a configuration file on disk does all of the following:
 - instantiates one `.ld` program type twice, with a function block inside it;
@@ -2520,7 +2555,7 @@ the rules in §4.10.
     counted.* §4.6's periodic phase never drifts, and rule 2 suspends periodic runs while
     SINGLE is 1 rather than counting them missed. There is no free-software precedent:
     MatIEC ignores INTERVAL when SINGLE is given, and Beremiz's editor cannot express
-    both. Adopted.
+    both. Adopted. *(Landed 2026-10-12.)*
 40. **A task's next due time when OE-2 changes its interval (M2-3 states it; OE-2 builds
     it):**
     - `min(next_due, now + new interval)`: a shorter interval takes effect within one new
@@ -2647,18 +2682,18 @@ in the places below. Their routine answers are §4.10's rules under M2-4 and M2-
       turn holds at 0 for ever, a livelock in zero time.
 
     *Recommend periodic due times only, the loop restated.* A pending edge's hazard is a
-    runner's concern, and the runner is not designed. Adopted.
+    runner's concern, and the runner is not designed. Adopted. *(Landed 2026-10-12.)*
 51. **A late host's edge cycle (M2-6).** For a task with `single` and `interval`, the
     periodic due times that came between the last cycle, whose sample was 0, and this
     one, whose sample is 1: skipped and not counted, as decision 39 reads by this cycle's
     sample; or counted as missed periods. *Recommend skipped, not counted.* It hides a
     host's lateness only while the trigger is 1, when rule 2 owes no periodic run anyway.
-    Adopted.
+    Adopted. *(Landed 2026-10-12.)*
 52. **A late host's falling cycle (M2-6).** A periodic due time that came while the input
     image still held 1, in a cycle that samples 0: it runs, since the sample decides; or
     it is skipped, since the image held 1 until this cycle's merge. *Recommend it runs:*
     one rule for every source of trigger, since only the sample is known both for a
-    trigger written by logic and for an input point. Adopted.
+    trigger written by logic and for an input point. Adopted. *(Landed 2026-10-12.)*
 
 **From the check of M2-5's fixes, decided 2026-10-05.** A check of the commits that fixed
 what the review of M2-5 confirmed, each finding reproduced, left questions the record

@@ -13,14 +13,15 @@ its own, instantiated as often as needed and run with `cal`, a public API
 (`Logex.compile/2`, `Logex.compile_file/1`, `Logex.compile_files/1` and `Logex.Runtime`),
 an online edit that changes a running instance's program, its function blocks included,
 without a restart (`Logex.Edit`), a scheduler that runs instances of several programs as
-one configuration on periodic tasks, wired to input and output points, its programs
+one configuration on periodic tasks and on event tasks, which the rising edge of a bool
+global makes due, wired to input and output points, its programs
 sharing globals by name, such as an e-stop, through `var_external`
 (`Logex.Configuration`), written as a configuration file (`.logex`) that names its `.ld`
 program types or built from Elixir data, and a printer that turns an AST back into source
 so a routine round-trips, as a configuration file does too — all of that works and is
 tested end to end, and a program or a configuration with mistakes in it gets every one
 reported with its file and line rather than an exception, a misspelt tag included. What
-does not exist yet: counters, the other timers, math and event tasks.
+does not exist yet: counters, the other timers and math.
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
 
@@ -78,6 +79,10 @@ file's does:
 
 - `task <name> interval <ms> priority <p>`: a periodic task, every 1 to 2147483647 ms,
   at a priority of 0, the highest, to 65535, its inputs in that order
+- `task <name> single <global> [interval <ms>] priority <p>`: an event task, due in the
+  cycle its trigger, a bool global, rises from 0 to 1, and in the first if it is already
+  1; with `interval` too, also due periodically while the trigger is 0, at most once a
+  cycle. `single` comes first of the three inputs, as IEC orders them
 - `var_global <name> <type> [<initial>]`, a `bool` or a `dint`, and `var_global <name>
   <type> at <device>.i.<n>` or `… at <device>.q.<n>`, an input or an output point, which
   takes no initial value: the `var_global … at` lines are the plant's I/O list
@@ -88,9 +93,9 @@ file's does:
   member's section fixes its direction. Every `var_input` is connected once, to a global
   of its type or a constant; a `var_output` drives a global of its type, never an input
   point, and one connection at most drives a global. Names resolve over the whole file
-- `task interval priority with program var_global at bool dint` are reserved in a
-  configuration file, in any case, and nowhere else: a `.ld` program may still have a tag
-  called `task`, though no `var_external`, whose name is a global's too
+- `task single interval priority with program var_global at bool dint` are reserved in
+  a configuration file, in any case, and nowhere else: a `.ld` program may still have a
+  tag called `task` or `single`, though no `var_external`, whose name is a global's too
 - a program type's `var_external` binds to the global of its name and type, checked once
   a type at its first instance's `program` line; nothing writes an input point through
   one, and no connection names one. Two instances that write one global through one, and
@@ -187,15 +192,9 @@ totality is a guarantee, not a feature to write programs against (`PLAN.md` §5)
 
 ### Settled, not yet landed
 
-These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5 and §3's
-Milestone 2) and will change the source language:
-- **Program organisation** ([`docs/organisation.md`](docs/organisation.md)): event
-  tasks, `task <name> single <global> priority <p>`. Each new word still gets its
-  `docs/naming.md` stanza, which may change a spelling. The scheduler (M2-1), function
-  blocks called with `cal` (M2-5), the configuration file with its periodic tasks (M2-2
-  and M2-3) and globals shared through `var_external` (M2-4) have landed ("A function
-  block" and "A configuration", below).
-
+These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5) and will
+change the source language. Program organisation, `PLAN.md`'s Milestone 2, has landed
+whole ("A function block" and "A configuration", below):
 - **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
 - **The other timers, counters and math** arrive as `tof tp rto res`, `ctu ctd`, `add sub
   mul div mod abs sqrt neg` — IEC names wherever IEC names the operation. `rto`, `res` and
@@ -459,7 +458,7 @@ belts.ld: line 18: `ote` writes `s1.run`, but `s1` is an instance of `seal`, who
 ## A configuration
 
 A configuration runs instances of one or more programs as one resource: each instance on a
-periodic task or on none, its `var_input`s and `var_output`s connected to globals, and the
+periodic task, on an event task or on none, its `var_input`s and `var_output`s connected to globals, and the
 globals located at the host's input and output points or not
 ([`docs/organisation.md`](docs/organisation.md) §4.4 to §4.6). It is written as a
 configuration file (`.logex`), which `Logex.Configuration.compile_file/1` reads, loading
@@ -850,6 +849,131 @@ wrong.logex: line 9: `c1.estop` is a var_external of `conveyor`, which reaches t
   stands, or, for a global that is an `ons`'s storage bit, the one-shot fires on the
   wrong scans.
 
+### An event task
+
+`trip.logex` runs a conveyor of `conveyor.ld`, above, on a 10 ms task, and `snapshot.ld`
+on an event task, `trip`, which the e-stop's rising edge makes due:
+
+```
+var_input a bool
+var_output a_was bool
+
+xic a ote a_was
+```
+
+```
+// trip.logex -- a conveyor, and a snapshot of its contactor when the e-stop rises
+task fast interval 10 priority 1
+task trip single estop priority 0
+
+var_global estop      bool at panel.i.7
+var_global pb_start_1 bool at panel.i.0
+var_global pb_reset   bool at panel.i.2
+var_global k1         bool at panel.q.0
+var_global k1_at_trip bool
+
+program c1 conveyor with fast
+  c1.start pb_start_1
+  c1.stop  0
+  c1.reset pb_reset
+  c1.motor k1
+
+program snap snapshot with trip
+  snap.a     k1
+  snap.a_was k1_at_trip
+```
+
+`trip.exs` presses the start button, raises the e-stop, holds it, releases and resets it,
+restarts the conveyor and raises the e-stop again; then it loads `timed.logex`, which runs
+a program with a timer under an event task, and `wrong_trip.logex`, which has a mistake on
+each of its task lines. `debounce.ld` and the two files:
+
+```
+var_input in bool
+var_output out bool
+var t1 ton
+
+xic in ton t1 20
+xic t1.dn ote out
+```
+
+```
+task trip single pb priority 0
+var_global pb bool at panel.i.0
+program d debounce with trip
+  d.in pb
+```
+
+```
+task trip single sp priority 0
+task tick priority 1
+task late single pb interval 0 priority 2
+var_global sp dint
+var_global pb bool at panel.i.0
+program d debounce with late
+  d.in pb
+```
+
+```elixir
+{:ok, line} = Logex.Configuration.compile_file("trip.logex")
+
+steps = [
+  {"started             ", 0, %{"pb_start_1" => 1}},
+  {"released            ", 10, %{"pb_start_1" => 0}},
+  {"e-stop rises        ", 10, %{"estop" => 1}},
+  {"held                ", 10, %{}},
+  {"released, reset     ", 10, %{"estop" => 0, "pb_reset" => 1}},
+  {"restarted           ", 10, %{"pb_reset" => 0, "pb_start_1" => 1}},
+  {"e-stop rises again  ", 10, %{"estop" => 1, "pb_start_1" => 0}}
+]
+
+Enum.reduce(steps, {Logex.Runtime.start(line), 0}, fn {label, elapsed, inputs}, {rt, now} ->
+  {rt, out, events} = Logex.Runtime.cycle(rt, elapsed, inputs)
+  ran = for {:ran, task, instance, _now} <- events, do: "#{task}:#{instance}"
+  at_trip = Logex.Runtime.get!(rt, "k1_at_trip")
+  IO.puts("t=#{String.pad_leading("#{now + elapsed}", 2)}  #{label}k1=#{out["k1"]} k1_at_trip=#{at_trip}  ran #{Enum.join(ran, ", ")}")
+  {rt, now + elapsed}
+end)
+
+{:ok, timed} = Logex.Configuration.compile_file("timed.logex")
+Enum.each(timed.warnings, &IO.puts(Logex.Diagnostic.format(&1)))
+
+{:error, diagnostics} = Logex.Configuration.compile_file("wrong_trip.logex")
+Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
+```
+
+```
+$ mix run trip.exs
+t= 0  started             k1=1 k1_at_trip=0  ran fast:c1
+t=10  released            k1=1 k1_at_trip=0  ran fast:c1
+t=20  e-stop rises        k1=0 k1_at_trip=1  ran trip:snap, fast:c1
+t=30  held                k1=0 k1_at_trip=1  ran fast:c1
+t=40  released, reset     k1=0 k1_at_trip=1  ran fast:c1
+t=50  restarted           k1=1 k1_at_trip=1  ran fast:c1
+t=60  e-stop rises again  k1=0 k1_at_trip=1  ran trip:snap, fast:c1
+timed.logex: line 3: warning: `d` runs under the event task `trip`, and `debounce` runs the timer `t1` on line 5 of `debounce.ld`: a ton times across the task's runs, and one whose rung is true on two runs in a row counts the whole time between them
+wrong_trip.logex: line 1: the single of `trip`, `sp`, is a dint (line 4): a single is a bool global
+wrong_trip.logex: line 2: task `tick` needs an interval or a single, as in `task tick interval 10 priority 1` or `task tick single estop priority 0`
+wrong_trip.logex: line 3: the interval of `late` is 0: an interval is at least 1 ms, and a task that runs only on the rising edges of its single is declared without one
+```
+
+- A task's `single` is sampled once a cycle, after the inputs are merged and before any
+  scan, and a sample of 1 after one of 0 makes the task due. `trip` runs at 20 ms and at
+  60 ms, not while the e-stop is held, and at priority 0 it runs before `c1` in each, so
+  the snapshot records the contactor as the cycle before left it. The last sample starts
+  at 0, so a trigger already 1 in the first cycle fires, and `restart/2` sets it to 0
+  again; a pulse inside one host step is never seen, and a trigger that logic writes fires
+  in the next cycle.
+- An event task's due time is the cycle's `now`, so a late periodic task of the same
+  priority runs before it. With `interval` too, a task runs at most once a cycle: on an
+  edge, or at its due time while the trigger is 0; a due time that comes while it is 1 is
+  skipped and not counted, and the phase never moves. `next_due_in/1` counts periodic due
+  times only, so a host cycles at once after `start/1` and `restart/2`, whatever it says.
+- A ton in a program an event task runs times across the task's runs, which only the
+  configuration knows, so the configuration warns of each, a block's timer by its path.
+- A single names a bool global; a dint, another kind of name and no global are each a
+  diagnostic at the task's line, a dotted one told the reading it has.
+
 ## Changing a running program
 
 A running instance takes a changed program without a restart, the way the conventional
@@ -1061,7 +1185,7 @@ mix format
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
 - `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
 - `CLAUDE.md` — commands and conventions for anyone (or anything) editing the code
-- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, and globals shared through `var_external` with M2-4; event tasks, the rest of Milestone 2, are designed)
+- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, globals shared through `var_external` with M2-4, and event tasks with M2-6, which completes Milestone 2; a configured plant's online edit, OE-2, is designed)
 - [`docs/defladder.md`](docs/defladder.md) — a study of an Elixir-embedded `defladder` DSL: what Nx's `defn` does, an executed spike, and a recommendation (proposed, not adopted)
 
 ## License

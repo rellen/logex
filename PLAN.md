@@ -16,10 +16,10 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
-§1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5, §3's M2-2 and M2-3 and §3's M2-4
-have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its first item,
-M2-1, landed the same day, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11, and M2-4 on
-2026-10-12; M2-6, the rest of Milestone 2, and OE-2 are still forward work.
+§1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5, §3's M2-2 and M2-3, §3's M2-4 and
+§3's M2-6 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
+first item, M2-1, landed the same day, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11,
+and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 is still forward work.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -1337,8 +1337,8 @@ one (owed below). The scheduler's and the function blocks' spikes, merged, pass 
 582 tests on Elixir 1.20.4. The maintainer took decisions 30–40 as recommended but 35,
 the configuration file's extension, choosing `.logex`, outside the options offered; the
 pass's routine choices, the rules of §4.10, were all taken as recommended. M2-1 landed
-on 2026-10-02, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11, and M2-4 on 2026-10-12
-(below); only M2-6 has not.
+on 2026-10-02, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11, and M2-4 and M2-6 on
+2026-10-12 (below), which completes Milestone 2.
 
 **The order (decision 30):** the design record, then M2-1, M2-5, M2-2, M2-3, M2-4 and
 M2-6.
@@ -1894,6 +1894,38 @@ configuration file's must be built that way before they land.
   reserved, the warning from the walk, the Done-when from source) and the documents.
   Decisions 50–52 and §4.10's rules settled what the spike found.)*
 
+  **Status: DONE — landed 2026-10-12**, as eight commits on `f75f1f1`, the reordered
+  record's with the survey first, Milestone 2's done sentence walked before the documents
+  and the documents last, each green under the full gate on Elixir 1.20.4 / OTP 28: (1)
+  the `single` stanza, ported from the backup of 2026-10-04, its quotations
+  checked again against the saved sources and the stanza brought to M2-2's to M2-4's
+  keywords and to decisions 50 to 52, `0e86384`; (2) `single` on
+  `Logex.Configuration.Task`, `check/1`'s rows, the edges at run time, decision 39 and
+  decisions 50 to 52, the trigger's last sample in `Logex.Runtime`'s one-rule section, the
+  rule tests and a growth test, `48eb735`; (3) PLAN M2-6's Done-when from data, the owed
+  tie-break with two writers of one global, and M2-1's contract walk drawing event tasks
+  against a model of decision 39 in phase points, `8ee4a33`; (4) the task line, `single`
+  reserved, every check asserted again from source, `81cde64`; (5) the warning for a
+  `ton` in a program an event task runs, from `Logex.Walk.timers/1`, `b967e77`; (6) the
+  Done-when from source, §4.4's plant whole from text and from files on disk, `bbe68f5`;
+  (7) Milestone 2's done sentence walked in `logex_test.exs`, `40ab59c`; (8) the
+  documents, the commit after it. The messages of (2), (4) and (5) record their mutation
+  tables, every rule each adds reverted alone in a worktree of its commit and the full
+  suite judged by its exit code: 49 rules (27, 13 and 9), every one red; (3), (6) and (7)
+  add tests only, and record which earlier rows they turn red. 860 tests pass on Elixir
+  1.20.4 (8 of them doctests), up from 821.
+
+  Readings the landing made, each pinned by a test, and in §4.10's M2-6 note: until the
+  reader read `single`, a task with neither input kept M2-3's message, and since then it
+  is offered both, its example naming the task only where its name is one; an event
+  task's interval of 0 is told to leave it out; a single counts as a use of its global; a
+  single's value on a task line is any name token but an input's word; the ton warning is
+  one a timer, at its instance's line, citing the `ton`'s own file and line, each program
+  type's timers read once; and a decision-52 cycle counts the periods it missed as any
+  late periodic task does. The contract walk takes 500 configurations, up from 400, its
+  reach held at 300 seeds of three families. Growth bounds are a fifth above the highest
+  of 32 runs, half of them beside three full suites or in a full suite.
+
 The scheduling rules are decided too: PRIORITY on every task, 0 the highest; ties go to
 the earlier due time, then declaration order; no preemption; missed periods coalesced,
 counted and reported; time injected in milliseconds, never read from a clock; reserved
@@ -1908,7 +1940,12 @@ type twice, with a function block inside it; wires the instances to declared I/O
 and to a shared global; schedules them under a periodic task, an event task and no task;
 runs deterministically for N cycles from an injected clock and input image, with the same
 outputs on every run; and reports every wiring, typing or scheduling mistake as a located
-diagnostic naming its file and line.
+diagnostic naming its file and line. *(Done 2026-10-12, with M2-6: `test/logex_test.exs`,
+"Milestone 2's done sentence, as written in PLAN.md", walks it clause by clause from files
+on disk through `Logex.Configuration.compile_file/1`. "Schedules them" is read as the
+configuration's instances: the one type's two run under the periodic task and no task,
+and the event task runs a snapshot, as §4.4's plant has it, since two instances cannot run
+under three schedules.)*
 
 **Owed, from the design (2026-10-02).**
 - **The port of the configuration checks into one validator.** The configuration
@@ -1942,7 +1979,9 @@ diagnostic naming its file and line.
   M2-4 and M2-6 settled what they found. The tie-break test is still owed, and §4.10 now
   says how it is written: in both forms, two writers of one global through
   `var_external` in `end_to_end_test.exs`, once M2-4 has landed, and, beside the rule
-  tests, one instance writing a global that another copies to an output point.)*
+  tests, one instance writing a global that another copies to an output point.)* *(Closed
+  by M2-6, in both forms: `end_to_end_test.exs` and `scheduler_test.exs`, `48eb735` and
+  `8ee4a33`.)*
 - **The untested rising-lines check.** M2-5 checks that a block's body given in `types:`
   is one a compile gives, its rungs among them on rising lines, each on one line, after
   its declarations. Reverted alone, that line check left the function blocks' spike green,
