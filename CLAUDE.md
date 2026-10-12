@@ -31,9 +31,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   each loaded block's warnings after the program's, each with its block's file, while
   `compile/2` gives only the program's (decision 34). Since M2-2 `compile_file/1` takes a
   `.ld` path only, exactly, any other a `:file` diagnostic before anything is read, and
-  `compile_files/1` is that loader over several paths with one memo, so a block several
-  of them hold is compiled once and its warnings handed back once, by the first that
-  loads it
+  `compile_files/1` is that loader over several paths with one memo, each path's result
+  `compile_file/1`'s, so a block several of them hold is compiled once and its warnings
+  handed back once, by the first program among them that holds it and compiles, a block's
+  own file handing back nothing, and a chain of files that holds itself cited from each
+  path as that path's `compile_file/1` cites it
 - `lib/logex/runtime.ex` — runs a program as instances (M1-5): `instance/1`, `call/4` (one
   scan of one instance, at a given `%Logex.Scan{}`), `put_inputs/3` with `scan/2,3` (the
   task-less sugar) and `restart/3`, with the host contract in its moduledoc: a host

@@ -387,6 +387,74 @@ defmodule LogexTest do
       assert Logex.compile_files([]) == []
     end
 
+    # A block's own file hands nothing back, so it counts no block as handed back: a
+    # program after it hands back the warnings of the block and of the block it holds.
+    test "a block's file before a program that holds it hands back nothing for it",
+         %{tmp_dir: dir} do
+      File.write!(
+        Path.join(dir, "inner.ld"),
+        "function_block inner\nvar_input i bool\nvar_output o bool\nvar spare_inner bool\n" <>
+          "xic i ote o\n"
+      )
+
+      seal = Path.join(dir, "seal.ld")
+
+      File.write!(
+        seal,
+        "function_block seal\nvar_input i bool\nvar_output o bool\nvar spare_seal bool\n" <>
+          "var n inner\ncal n i o\n"
+      )
+
+      belt = Path.join(dir, "belt.ld")
+      File.write!(belt, "var_input i bool\nvar_output o bool\nvar s seal\ncal s i o\n")
+      unused = &"`#{&1}` is declared but no rung uses it"
+
+      assert [{:ok, %Logex.FbType{} = block}, {:ok, program}] =
+               Logex.compile_files([seal, belt])
+
+      assert Enum.map(block.body.warnings, & &1.message) == [unused.("spare_seal")]
+      assert {:ok, program} == Logex.compile_file(belt)
+
+      assert Enum.map(program.warnings, & &1.message) == [
+               unused.("spare_inner"),
+               unused.("spare_seal")
+             ]
+    end
+
+    # What a cycle cites depends on the file it was reached from, so each path's result is
+    # its own compile_file/1's, in either order.
+    test "a chain of blocks that holds itself is cited from each path as compile_file/1 " <>
+           "cites it",
+         %{tmp_dir: dir} do
+      for {name, holds} <- [{"fa", "fb"}, {"fb", "fa"}] do
+        File.write!(
+          Path.join(dir, name <> ".ld"),
+          "function_block #{name}\nvar_input i bool\nvar x #{holds}\ncal x i\n"
+        )
+      end
+
+      [pa, pb] =
+        for {name, holds} <- [{"pa", "fa"}, {"pb", "fb"}] do
+          path = Path.join(dir, name <> ".ld")
+          File.write!(path, "var_input i bool\nvar x #{holds}\ncal x i\n")
+          path
+        end
+
+      cycle = fn file, chain ->
+        [own, held | _] = chain
+
+        "#{Path.join(dir, file)}: line 3: `#{own}` cannot hold an instance of `#{held}` " <>
+          "(#{Enum.join(chain, " → ")}): a function block never holds an instance of " <>
+          "itself, at any depth"
+      end
+
+      assert formatted(Logex.compile_file(pa)) == [cycle.("fb.ld", ["fb", "fa", "fb"])]
+      assert formatted(Logex.compile_file(pb)) == [cycle.("fa.ld", ["fa", "fb", "fa"])]
+      alone = [Logex.compile_file(pa), Logex.compile_file(pb)]
+      assert Logex.compile_files([pa, pb]) == alone
+      assert Logex.compile_files([pb, pa]) == Enum.reverse(alone)
+    end
+
     test "raises ArgumentError for what is not a proper list of binaries" do
       for paths <- ["one.ld", [~c"one.ld"], ["one.ld" | "two.ld"], [:one]] do
         assert_raise ArgumentError,

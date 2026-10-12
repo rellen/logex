@@ -1527,12 +1527,22 @@ configuration file's must be built that way before they land.
     block's file with the one block-type message; a file that does not compile by name,
     its own diagnostics after the configuration's, each with its own file and line;
   - a program type's warnings stay in its program, a block's handed back once a
-    configuration, by the first program type that loads it; the configuration's own stay
+    configuration, by the first program type that holds it and compiles (so worded
+    after the review below); the configuration's own stay
     in its `warnings`;
   - a type that is no name, or a keyword, is not looked for.
   Growth: the reader, the printer and `compile/3`, read over 44 runs, 4.20x to 4.59x,
   4.01x to 4.06x and 4.25x to 4.95x for 4x the input, bounds 5.6, 5.0 and 6.0; the
   loader, over 36, 4.007x to 4.025x for 4x the program types, bound 4.9.
+
+  A review of M2-2's and M2-3's commits confirmed findings fixed in the commits after
+  `d2e1a84`, each with a test that fails when its fix alone is reverted:
+  - `Logex.compile_files/1` keeps which blocks a program has handed back apart from its
+    memo, so a block's own file before a program that holds it no longer takes the
+    warnings of the blocks below it from that program; and a result a cycle gave is not
+    kept past its path, so each path's result is its own `compile_file/1`'s.
+
+  772 tests pass on Elixir 1.20.4 (8 of them doctests), up from 770 on `d2e1a84`.
 - **M2-3 · Periodic tasks in text.** `task <n> interval <ms> priority <p>` and `with`.
   *Done when* the plant of `docs/organisation.md` §4.4 without its event task, its `motor`
   the §4.2 one plus `var t1 ton` and a rung `xic motor ton t1 5000` (so no `estop`,

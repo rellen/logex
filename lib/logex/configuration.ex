@@ -385,8 +385,8 @@ defmodule Logex.Configuration do
   Each program type a `program` line names, `motor`, is `motor.ld` beside the file,
   compiled by `Logex.compile_files/1` in the order the types are first named: one memo for
   the configuration, so a function block several program types hold is read and compiled
-  once, and its warnings are handed back once, by the program type that first loads it. A
-  program type's warnings stay in its program, the configuration's own in its `warnings`.
+  once, and its warnings are handed back once, by the first program type that holds it and
+  compiles. A program type's warnings stay in its program, the configuration's own in its `warnings`.
   A name on a `program` line that gives no program type is cited once, at the line of
   its first instance, and no instance of it is reported again:
 

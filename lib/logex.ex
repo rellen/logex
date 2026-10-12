@@ -125,7 +125,7 @@ defmodule Logex do
   the blocks beside it, so its own mistakes are listed too.
   """
   def compile_file(path) when is_binary(path) do
-    {result, _results} = of_kind(Path.extname(path), Path.basename(path), path, %{})
+    {result, _call} = of_kind(Path.extname(path), Path.basename(path), path, {%{}, MapSet.new()})
     result
   end
 
@@ -137,16 +137,19 @@ defmodule Logex do
   Compiles each of `paths` as `compile_file/1` compiles it, in one call: a result a path,
   in their order. One memo serves the call (decision 34, M2-2), so a block that several of
   the files hold, at any depth, is read and compiled once, and its warnings are handed
-  back once, among those of the first file in `paths` that loads it. A path given twice
-  gives its one result twice. `Logex.Configuration.compile_file/1` loads a
-  configuration's program types through it.
+  back once, among those of the first program in `paths` that holds it and compiles: a
+  block's own file in `paths` hands back nothing, so a program after it still hands its
+  blocks' warnings back. A chain of files that holds itself is found again for each path,
+  since what it cites depends on the file it was reached from. A path given twice gives
+  its one result twice. `Logex.Configuration.compile_file/1` loads a configuration's
+  program types through it.
 
   `paths` that is not a proper list of binaries is the host's mistake, raised as
   `ArgumentError` before any file is read.
   """
   def compile_files(paths) do
     paths!(paths, paths)
-    {results, _memo} = Enum.map_reduce(paths, {%{}, %{}}, &compiled_once/2)
+    {results, _acc} = Enum.map_reduce(paths, {%{}, {%{}, MapSet.new()}}, &compiled_once/2)
     results
   end
 
@@ -160,79 +163,97 @@ defmodule Logex do
         "Logex.compile_files/1 takes a list of paths as binaries, got: #{inspect(paths)}"
       )
 
-  # `done` is each path's result, as given back; `memo` the loader's results by path, one
-  # for the call.
-  defp compiled_once(path, {done, memo}), do: once(Map.fetch(done, path), path, {done, memo})
+  # `done` is each path's result, as given back; `call` is the call's memo and the paths
+  # of the blocks whose warnings a program has handed back, kept apart.
+  defp compiled_once(path, {done, call}), do: once(Map.fetch(done, path), path, {done, call})
 
   defp once({:ok, result}, _path, acc), do: {result, acc}
 
-  defp once(:error, path, {done, memo}) do
-    {result, memo} = of_kind(Path.extname(path), Path.basename(path), path, memo)
-    {result, {Map.put(done, path, result), memo}}
+  defp once(:error, path, {done, call}) do
+    {result, call} = of_kind(Path.extname(path), Path.basename(path), path, call)
+    {result, {Map.put(done, path, result), call}}
   end
 
   # The gate in front of the loader: the extension says what a file is, so only a `.ld`
   # file is read. A file named only `.ld` has no extension to Elixir, and is a `.ld` file
   # whose name names nothing, which the loader says.
-  defp of_kind(".ld", _basename, path, memo), do: loaded(path, memo)
-  defp of_kind("", ".ld", path, memo), do: loaded(path, memo)
+  defp of_kind(".ld", _basename, path, call), do: loaded(path, call)
+  defp of_kind("", ".ld", path, call), do: loaded(path, call)
 
-  defp of_kind(".logex", basename, path, memo),
+  defp of_kind(".logex", basename, path, call),
     do:
       {not_ld(
          path,
          "`#{basename}` is a configuration file (`.logex`), which " <>
            "Logex.Configuration.compile_file/1 loads"
-       ), memo}
+       ), call}
 
-  defp of_kind(_extension, basename, path, memo),
+  defp of_kind(_extension, basename, path, call),
     do:
       {not_ld(
          path,
          "`#{basename}` is not a `.ld` file: Logex.compile_file/1 compiles a program " <>
            "or a function block from its `.ld` file"
-       ), memo}
+       ), call}
 
   defp not_ld(path, message), do: {:error, [%{file_problem(message) | file: path}]}
 
-  # The program's warnings are handed back with those of the blocks this load compiled,
-  # its own list, so a block compiled for an earlier file of the call, which the results
-  # hold, is not handed back again.
-  defp loaded(path, results) do
-    {result, {results, loaded}} = load(path, {%{}, []}, {results, []})
-    {handed_back(result, loaded), results}
+  # One path of the call: its result, and the call's memo and handed-back paths after it.
+  # The memo keeps each file's result with the blocks it reaches, so a program whose blocks
+  # an earlier path compiled still finds them; a result a cycle gave is not kept past this
+  # path, since what it cites depends on the files loaded above it.
+  defp loaded(path, {memo, handed}) do
+    {{result, reached, _cyclic}, {memo, cyclic}} = load(path, {%{}, []}, {memo, []})
+    {result, handed} = handed_back(result, reached, memo, handed)
+    {result, {Map.drop(memo, cyclic), handed}}
   end
 
   # `held` are the names of the files being loaded, as a set and as a list, innermost
-  # first, so a cycle is found in one lookup and named only when there is one. The second
-  # argument is each file compiled so far, by path, so none is compiled twice, and the
-  # same results newest first, so the warnings are handed back in the order compiled.
-  defp load(path, held, {results, _loaded} = memo),
-    do: loading(Map.fetch(results, path), path, held, memo)
+  # first, so a cycle is found in one lookup and named only when there is one. The memo
+  # is each file compiled so far, by path, so none is compiled twice, as `{result,
+  # reached, cyclic}`: `reached` the paths of the blocks it holds, at any depth, each once,
+  # a block after those it holds, and `cyclic` whether a cycle gave it. Beside it, the
+  # paths this load gave a cyclic result.
+  defp load(path, held, {memo, _cyclic} = state),
+    do: loading(Map.fetch(memo, path), path, held, state)
 
-  defp loading({:ok, result}, _path, _held, memo), do: {result, memo}
+  defp loading({:ok, entry}, _path, _held, state), do: {entry, state}
 
-  defp loading(:error, path, held, memo) do
-    {result, {results, loaded}} = read(File.read(path), path, held, memo)
-    result = in_file(result, path)
-    {result, {Map.put(results, path, result), [result | loaded]}}
+  defp loading(:error, path, held, state) do
+    {{result, reached, cyclic}, {memo, cyclics}} = read(File.read(path), path, held, state)
+    entry = {in_file(result, path), reached, cyclic}
+    {entry, {Map.put(memo, path, entry), cyclics(cyclic, path, cyclics)}}
   end
 
-  # The program's own warnings, then those of every block the call loaded, in the order
-  # compiled. Every result but the program's is a block's, the call having succeeded.
-  defp handed_back({:ok, %Program{warnings: own} = program}, [_program | loaded]) do
-    blocks = for {:ok, %FbType{body: body}} <- Enum.reverse(loaded), do: body.warnings
-    {:ok, %{program | warnings: own ++ Enum.concat(blocks)}}
+  defp cyclics(true, path, cyclics), do: [path | cyclics]
+  defp cyclics(false, _path, cyclics), do: cyclics
+
+  # The program's own warnings, then those of every block it reaches that no program of
+  # the call has handed back, a block's after those of the blocks it holds. Every block a
+  # program that compiles reaches compiled too. A block's type, or a mistake, hands back
+  # nothing, and counts no block as handed back.
+  defp handed_back({:ok, %Program{warnings: own} = program}, reached, memo, handed) do
+    fresh = Enum.reject(reached, &MapSet.member?(handed, &1))
+
+    blocks =
+      for path <- fresh,
+          {{:ok, %FbType{body: body}}, _reached, _cyclic} = Map.fetch!(memo, path),
+          do: body.warnings
+
+    {{:ok, %{program | warnings: own ++ Enum.concat(blocks)}},
+     MapSet.union(handed, MapSet.new(fresh))}
   end
 
-  defp handed_back(result, _loaded), do: result
+  defp handed_back(result, _reached, _memo, handed), do: {result, handed}
 
-  defp read({:error, reason}, _path, _held, memo),
-    do: {{:error, [file_problem("cannot be read: #{:file.format_error(reason)}")]}, memo}
+  defp read({:error, reason}, _path, _held, state),
+    do:
+      {{{:error, [file_problem("cannot be read: #{:file.format_error(reason)}")]}, [], false},
+       state}
 
-  defp read({:ok, source}, path, held, memo) do
+  defp read({:ok, source}, path, held, state) do
     name = Path.rootname(Path.basename(path))
-    from_file(name_problem(name), {name, path}, source, {held, memo})
+    from_file(name_problem(name), {name, path}, source, {held, state})
   end
 
   defp from_file(nil, {name, path}, source, context),
@@ -242,22 +263,25 @@ defmodule Logex do
   # mistakes follow the name's: its blocks are no unknown types, nor their uses undeclared.
   # It is compiled under no name, as `compile/2` would not take this one.
   defp from_file(problem, {name, path}, source, context) do
-    {result, memo} = parsed_file(parse(source), {name, path, nil}, source, context)
-    {{:error, [file_problem(problem <> " (rename the file)") | mistakes_in(result)]}, memo}
+    {{result, reached, cyclic}, state} =
+      parsed_file(parse(source), {name, path, nil}, source, context)
+
+    {{{:error, [file_problem(problem <> " (rename the file)") | mistakes_in(result)]}, reached,
+      cyclic}, state}
   end
 
-  defp parsed_file({:ok, ast}, {name, path, as}, source, {{set, list}, memo}) do
+  defp parsed_file({:ok, ast}, {name, path, as}, source, {{set, list}, state}) do
     held = {Map.put(set, name, true), [name | list]}
 
-    {types, problems, memo} =
+    {types, problems, {reached, cyclic}, state} =
       ast
       |> needed(name)
-      |> Enum.reduce({[], [], memo}, &dependency(&1, &2, {path, held}))
+      |> Enum.reduce({[], [], {[], false}, state}, &dependency(&1, &2, {path, held}))
 
-    {built(problems, ast, {as, source}, types), memo}
+    {{built(problems, ast, {as, source}, types), Enum.uniq(Enum.reverse(reached)), cyclic}, state}
   end
 
-  defp parsed_file(front_end, _file, _source, {_held, memo}), do: {front_end, memo}
+  defp parsed_file(front_end, _file, _source, {_held, state}), do: {{front_end, [], false}, state}
 
   defp built([], ast, {name, source}, types), do: lowered(ast, source, name, types)
   defp built(problems, _ast, _file, _types), do: {:error, Enum.uniq(Enum.reverse(problems))}
@@ -291,12 +315,13 @@ defmodule Logex do
   defp found(true, {_word, _line, file} = named, acc, held),
     do: kind_of(peek(file), named, acc, held)
 
-  defp kind_of(:program, {word, line, file}, {types, problems, memo}, _held) do
+  defp kind_of(:program, {word, line, file}, {types, problems, reach, state}, _held) do
     message =
       "`#{word}` is a program (#{Path.basename(file)}), not a function block: " <>
         "only a function block's file gives a type for `var`"
 
-    {types, [%Diagnostic{stage: :validate, line: line, message: message} | problems], memo}
+    {types, [%Diagnostic{stage: :validate, line: line, message: message} | problems], reach,
+     state}
   end
 
   defp kind_of(_block_or_unread, {word, _line, _file} = named, acc, {set, _list} = held),
@@ -319,27 +344,34 @@ defmodule Logex do
   defp headed(true), do: :block
   defp headed(false), do: :program
 
-  defp cycle(true, {word, line, _file}, {types, problems, memo}, {_set, list}) do
-    [own | _] = list
+  # A cycle's message names the chain of files loaded above it, so the result it gives,
+  # and every result above it, is cyclic.
+  defp cycle(true, {word, line, _file}, {types, problems, {reached, _cyclic}, state}, held) do
+    {_set, [own | _] = list} = held
     chain = [own | Enum.drop_while(Enum.reverse(list), &(&1 != word))]
 
     message =
       "`#{own}` cannot hold an instance of `#{word}` (#{Enum.join(chain, " → ")}): " <>
         "a function block never holds an instance of itself, at any depth"
 
-    {types, [%Diagnostic{stage: :validate, line: line, message: message} | problems], memo}
+    {types, [%Diagnostic{stage: :validate, line: line, message: message} | problems],
+     {reached, true}, state}
   end
 
-  defp cycle(false, {_word, _line, file}, {types, problems, memo}, held) do
-    {result, memo} = load(file, held, memo)
-    dependent(result, {types, problems, memo})
+  defp cycle(false, {_word, _line, file}, {types, problems, reach, state}, held) do
+    {{result, below, cyclic}, state} = load(file, held, state)
+    dependent(result, {types, problems, reached(reach, below, file, cyclic), state})
   end
 
-  defp dependent({:ok, %FbType{} = type}, {types, problems, memo}),
-    do: {[type | types], problems, memo}
+  # The blocks a file reaches, newest first: those its block reaches, then the block.
+  defp reached({reached, cyclic}, below, file, below_cyclic),
+    do: {[file | Enum.reverse(below, reached)], cyclic or below_cyclic}
 
-  defp dependent({:error, diagnostics}, {types, problems, memo}),
-    do: {types, Enum.reverse(diagnostics, problems), memo}
+  defp dependent({:ok, %FbType{} = type}, {types, problems, reach, state}),
+    do: {[type | types], problems, reach, state}
+
+  defp dependent({:error, diagnostics}, {types, problems, reach, state}),
+    do: {types, Enum.reverse(diagnostics, problems), reach, state}
 
   defp mistakes_in({:ok, _program}), do: []
   defp mistakes_in({:error, diagnostics}), do: diagnostics
