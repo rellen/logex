@@ -394,8 +394,10 @@ defmodule Logex.Configuration do
     did-you-mean among the `.ld` files beside it;
   - a function block's file gets the one message for a block type where a program goes
     (`Logex.Declarations.not_a_program/1`);
-  - a file that does not compile is cited by name, and its own diagnostics, each with its
-    file and line, follow the configuration's, a type's in the order the types are named.
+  - a file that does not compile is cited by name, with the files its mistakes are cited
+    in, the blocks it holds among them, and those diagnostics, each with its file and
+    line, follow the configuration's, a type's in the order the types are named, each
+    once, though several types hold the block it is in.
 
   A path that is not a `.logex` file, one named only `.logex`, a file that cannot be
   read, or a name that cannot name a configuration is a `:file` diagnostic, and only after
@@ -509,8 +511,15 @@ defmodule Logex.Configuration do
       {programs, [diagnostic(line, "`#{type}` is " <> Declarations.not_a_program(block)) | cited],
        theirs}
 
+  # The type's mistakes may be in the blocks it holds, so the files named are those they
+  # are cited in, in the order they come.
   defp type_loaded({{type, line}, {:error, diagnostics}}, {programs, cited, theirs}) do
-    message = "program type `#{type}` does not compile: its mistakes are cited in `#{type}.ld`"
+    files = for %Diagnostic{file: file} <- diagnostics, is_binary(file), uniq: true, do: file
+
+    message =
+      "program type `#{type}` does not compile: its mistakes follow, cited in " <>
+        listed(Enum.map(files, &Path.basename/1))
+
     {programs, [diagnostic(line, message) | cited], Enum.reverse(diagnostics, theirs)}
   end
 
@@ -528,7 +537,10 @@ defmodule Logex.Configuration do
           Declarations.suggest(type, Enum.sort(names), & &1, "program types")
       )
 
-  defp with_theirs({:error, diagnostics}, theirs), do: {:error, diagnostics ++ theirs}
+  # A block several program types hold gives each the same mistakes: each is listed once.
+  defp with_theirs({:error, diagnostics}, theirs),
+    do: {:error, diagnostics ++ Enum.uniq(theirs)}
+
   defp with_theirs({:ok, _config} = compiled, []), do: compiled
 
   # `loaded` is what compile_file/1 adds: the file, the diagnostics its loader cites at

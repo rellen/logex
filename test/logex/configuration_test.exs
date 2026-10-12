@@ -3060,11 +3060,72 @@ defmodule Logex.ConfigurationTest do
         """)
 
       assert file_errors(path) == [
-               "#{path}: line 3: program type `broken` does not compile: its mistakes are " <>
-                 "cited in `broken.ld`",
+               "#{path}: line 3: program type `broken` does not compile: its mistakes " <>
+                 "follow, cited in `broken.ld`",
                "#{path}: line 9: `k` is already driven by `m1.motor` (line 8)",
                "#{broken}: line 2: unknown instruction `xyz`",
                "#{broken}: line 3: `c` is not declared"
+             ]
+    end
+
+    # A block's mistakes are cited in its file, so the citation names the files they are
+    # in; two program types that hold one broken block each cite it, and its mistakes
+    # follow once.
+    test "two program types that hold one broken block cite its file, its mistakes listed " <>
+           "once",
+         %{tmp_dir: dir} do
+      plant(dir)
+      latch = write(dir, "latch.ld", "function_block latch\nvar_input i bool\nxic i ote q\n")
+      held = "var_input a bool\nvar l latch\ncal l a\n"
+      write(dir, "left.ld", held)
+      right = write(dir, "right.ld", "var_input a bool\nvar m motor\n" <> held)
+
+      path =
+        write(dir, "shared.logex", """
+        program r1 right
+        r1.a 0
+        program l1 left
+        l1.a 0
+        """)
+
+      assert file_errors(path) == [
+               "#{path}: line 1: program type `right` does not compile: its mistakes follow, " <>
+                 "cited in `right.ld` and `latch.ld`",
+               "#{path}: line 3: program type `left` does not compile: its mistakes follow, " <>
+                 "cited in `latch.ld`",
+               "#{right}: line 2: `motor` is a program (motor.ld), not a function block: " <>
+                 "only a function block's file gives a type for `var`",
+               "#{latch}: line 3: `q` is not declared"
+             ]
+    end
+
+    # Each type's diagnostics after the configuration's, in the order the types are first
+    # named, not their names' order or the reverse.
+    test "the diagnostics of broken program types come in the order the types are named",
+         %{tmp_dir: dir} do
+      plant(dir)
+      zeta = write(dir, "zeta.ld", "var a bool\nxyz a\n")
+      alpha = write(dir, "alpha.ld", "var_input a bool\nxic a ote b\n")
+      mid = write(dir, "mid.ld", "var_input a bool\nxic a ote c\n")
+
+      path =
+        write(dir, "order.logex", """
+        program z1 zeta
+        program m1 mid
+        program a1 alpha
+        program z2 zeta
+        """)
+
+      assert file_errors(path) == [
+               "#{path}: line 1: program type `zeta` does not compile: its mistakes follow, " <>
+                 "cited in `zeta.ld`",
+               "#{path}: line 2: program type `mid` does not compile: its mistakes follow, " <>
+                 "cited in `mid.ld`",
+               "#{path}: line 3: program type `alpha` does not compile: its mistakes follow, " <>
+                 "cited in `alpha.ld`",
+               "#{zeta}: line 2: unknown instruction `xyz`",
+               "#{mid}: line 2: `c` is not declared",
+               "#{alpha}: line 2: `b` is not declared"
              ]
     end
 

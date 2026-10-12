@@ -1525,7 +1525,9 @@ configuration file's must be built that way before they land.
     instance's line, its other instances silent: a missing `<type>.ld` as an unknown
     program type, with a did-you-mean among the `.ld` files beside the configuration; a
     block's file with the one block-type message; a file that does not compile by name,
-    its own diagnostics after the configuration's, each with its own file and line;
+    with the files its mistakes are cited in, and those diagnostics after the
+    configuration's, each with its own file and line, each once, in the order the types
+    are named (so worded after the review below);
   - a program type's warnings stay in its program, a block's handed back once a
     configuration, by the first program type that holds it and compiles (so worded
     after the review below); the configuration's own stay
@@ -1541,8 +1543,12 @@ configuration file's must be built that way before they land.
     memo, so a block's own file before a program that holds it no longer takes the
     warnings of the blocks below it from that program; and a result a cycle gave is not
     kept past its path, so each path's result is its own `compile_file/1`'s.
+  - `Logex.Configuration.compile_file/1` lists a block's mistakes once, though several
+    program types hold it, and a program type that does not compile names the files its
+    mistakes are cited in, a block's among them, where it named the type's own; and a
+    test pins that the types' diagnostics come in the order the types are named.
 
-  772 tests pass on Elixir 1.20.4 (8 of them doctests), up from 770 on `d2e1a84`.
+  774 tests pass on Elixir 1.20.4 (8 of them doctests), up from 770 on `d2e1a84`.
 - **M2-3 · Periodic tasks in text.** `task <n> interval <ms> priority <p>` and `with`.
   *Done when* the plant of `docs/organisation.md` §4.4 without its event task, its `motor`
   the §4.2 one plus `var t1 ton` and a rung `xic motor ton t1 5000` (so no `estop`,
