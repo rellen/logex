@@ -1324,7 +1324,9 @@ defmodule Logex.Configuration do
   # where a global is wanted, read as a connection reads one (§4.7), the did-you-mean among
   # the bool globals, since a dint is never the fix. A name refused already is silent
   # (decision 42), and one no line can say was the host's mistake. `{problems, used}`: a
-  # global the single names is used, whatever is wrong with it.
+  # bool global the single names is used. A dint it names is a diagnostic, and a
+  # configuration with one gives no warnings, so whether that counts as a use cannot be
+  # seen: it counts none.
   defp trigger(%{single: single} = task, world) when is_binary(single),
     do: trigger_of(word?(single), task, world)
 
@@ -1366,7 +1368,7 @@ defmodule Logex.Configuration do
            "the single of `#{task.name}`, `#{name}`, is a dint#{where(global)}: a single is " <>
              "a bool global"
          )
-       ], MapSet.new([name])}
+       ], MapSet.new()}
 
   # A bool global, or one whose type is the host's mistake, refused already.
   defp triggered({:ok, %Global{name: name}}, _task), do: {[], MapSet.new([name])}

@@ -1936,7 +1936,9 @@ configuration file's must be built that way before they land.
   read as the program's line; and a task with no priority is shown a task line of its own
   kind, `task e single trig priority 1` for an event task, where every task was shown a
   periodic one, named by the rule the interval's examples use, so a refused `u.v` is
-  shown `task t …`. 864 tests pass on Elixir 1.20.4 (8 of them doctests), up from 860.
+  shown `task t …`; and a dint single, a diagnostic, counts no use of its global, a
+  branch no warning could show, since a configuration with a diagnostic gives none. 864
+  tests pass on Elixir 1.20.4 (8 of them doctests), up from 860.
 
 The scheduling rules are decided too: PRIORITY on every task, 0 the highest; ties go to
 the earlier due time, then declaration order; no preemption; missed periods coalesced,
