@@ -1198,8 +1198,8 @@ defmodule Logex.RuntimeTest do
                tokenize: 1
              ]
 
-      # M2-4: B5's one walk of a program's IR, which the compiler, Logex.Warnings and
-      # Logex.Edit read.
+      # M2-4: B5's one walk of a program's IR, which the compiler, Logex.Warnings,
+      # Logex.Edit and Logex.Configuration read.
       assert Enum.sort(Logex.Walk.__info__(:functions)) ==
                [instructions: 1, timers: 1, uses: 2, writes: 1]
 

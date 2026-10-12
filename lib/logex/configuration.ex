@@ -56,10 +56,22 @@ defmodule Logex.Configuration do
     wanted, a name with `.` parts is told the reading it has (`docs/organisation.md`
     §4.7): a location, written only after `at`; an instance's member, since instances
     share a value only through a global; or a member of what is no instance;
+  - a program type an instance runs (M2-4) has, for each of its var_externals, a global of
+    that name and type (Ed 2 §2.4.3), and writes through none of them an input point,
+    which nothing drives; each type is checked once, at its first instance's line, its
+    declaration's line and its first write's named in its own text, and a var_external
+    named in a connection is told it reaches its global itself. Which tags it writes is
+    `Logex.Walk.writes/1`'s;
   - a configuration runs at least one program instance.
 
-  Its warnings: a global nothing uses; an output point that something reads and nothing
-  drives, which stays at 0; and a task that runs no instance.
+  Its warnings: a global nothing uses, where an instance's var_external uses its global; an
+  output point that something reads and nothing drives, which stays at 0, where a write
+  through a var_external drives it; a task that runs no instance; and, since M2-4, two
+  instances that write one global through a var_external, and an instance that writes
+  through one a global a connection drives (decision 48), each in the words true of it:
+  each scan reads what the other last wrote and the later write in a cycle stands; an
+  instance's own connection's copy-out, after the scan, stands (decision 47); or, for a
+  global an `ons` keeps its storage bit in, the one-shot fires on the wrong scans.
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -82,7 +94,7 @@ defmodule Logex.Configuration do
   refusals do. Only a mistake pays it.
   """
 
-  alias Logex.{Declarations, Diagnostic, FbType, Program, Tag}
+  alias Logex.{Declarations, Diagnostic, FbType, Program, Tag, Walk}
   alias Logex.Configuration.{Connection, Global, Instance, Text}
 
   defstruct name: nil,
@@ -658,6 +670,7 @@ defmodule Logex.Configuration do
     {points, d_points} = located(globals, space.kept)
     world = world(space, points, programs)
     {wiring, d_wiring} = wiring(Enum.sort_by(connections, &line_key/1), world, wired)
+    externals = externals(instances, world)
 
     diagnostics =
       [
@@ -667,6 +680,7 @@ defmodule Logex.Configuration do
         d_points,
         runs(instances, {programs, MapSet.union(given(config.programs), cited)}, world),
         d_wiring,
+        externals.diagnostics,
         unconnected(instances, space.kept, world, wiring.inputs),
         empty(config.instances, named)
       ]
@@ -676,7 +690,7 @@ defmodule Logex.Configuration do
       |> elem(0)
 
     {Enum.map(diagnostics, &%{&1 | file: file}),
-     Enum.map(warnings({tasks, globals, instances}, wiring), &%{&1 | file: file})}
+     Enum.map(warnings({tasks, globals, instances}, wiring, externals), &%{&1 | file: file})}
   end
 
   # Each list of names a diagnostic would end with is given once, by the first diagnostic
@@ -1675,6 +1689,17 @@ defmodule Logex.Configuration do
   defp of_member({:ok, %Tag{section: :var_output} = tag}, _i, _p, connection, acc, world),
     do: output(other_end(connection.to), connection, tag, acc, world)
 
+  # M2-4: a var_external reaches its global itself, so no connection names it.
+  defp of_member({:ok, %Tag{section: :var_external}}, _i, program, connection, acc, _world),
+    do:
+      problem(
+        acc,
+        connection,
+        "`#{connection.instance}.#{connection.member}` is a var_external of `#{program.name}`, " <>
+          "which reaches the global `#{connection.member}` itself: only a var_input or " <>
+          "var_output connects"
+      )
+
   defp of_member({:ok, %Tag{section: section}}, _instance, program, connection, acc, _world),
     do:
       problem(
@@ -2009,6 +2034,127 @@ defmodule Logex.Configuration do
       |> Enum.filter(&match?(%Tag{}, &1))
       |> Enum.sort_by(&{line_key(&1), &1.name})
 
+  # M2-4: each instantiated program type's var_externals, in the order it declares them,
+  # each bound to the global of its name and type (Ed 2 §2.4.3), and nothing written through
+  # one to an input point (docs/organisation.md §4.4). Each type is checked once, at its
+  # first instance, its `program` line (instances come in line order, which check/1 holds
+  # them to), naming the line of the type's declaration, and of its first write, in the
+  # type's own file (§4.10, M2-2's "Citing a program type"). A type given but run by no
+  # instance is not checked. What each instance
+  # writes through a var_external comes from Logex.Walk.writes/1, read once a type, and an
+  # `ons` storage bit from Logex.Walk.uses/2: the writers the warnings name, every instance
+  # of a type among them.
+  defp externals(instances, world) do
+    found =
+      instances
+      |> Enum.flat_map(&instantiated(Map.fetch(world.runnable, &1.name), &1))
+      |> Enum.reduce(
+        %{types: %{}, diagnostics: [], used: MapSet.new(), driving: MapSet.new(), writers: []},
+        &bound(&1, &2, world)
+      )
+
+    %{found | diagnostics: Enum.reverse(found.diagnostics), writers: Enum.reverse(found.writers)}
+  end
+
+  defp instantiated({:ok, {instance, program}}, instance), do: [{instance, program}]
+  defp instantiated(_not_run, _instance), do: []
+
+  defp bound({instance, program}, found, world) do
+    {facts, first} = facts(Map.fetch(found.types, instance.type), program)
+
+    writers =
+      for %Tag{name: name} <- facts.externals,
+          is_map_key(facts.writes, name),
+          do: {name, instance, MapSet.member?(facts.bits, name)}
+
+    %{
+      found
+      | types: Map.put(found.types, instance.type, facts),
+        diagnostics: checked_once(first, facts, instance, program, world) ++ found.diagnostics,
+        used: Enum.reduce(facts.externals, found.used, &MapSet.put(&2, &1.name)),
+        driving: Enum.reduce(writers, found.driving, &MapSet.put(&2, elem(&1, 0))),
+        writers: Enum.reverse(writers, found.writers)
+    }
+  end
+
+  defp facts({:ok, facts}, _program), do: {facts, false}
+
+  defp facts(:error, program) do
+    {%{
+       externals: for(%Tag{section: :var_external} = tag <- declared(program), do: tag),
+       writes: Walk.writes(program),
+       bits:
+         MapSet.new(
+           for {:write, name, _line, :ons} <-
+                 Walk.uses(program.rungs, Program.typed_tags(program)),
+               do: name
+         )
+     }, true}
+  end
+
+  defp checked_once(false, _facts, _instance, _program, _world), do: []
+
+  defp checked_once(true, facts, instance, program, world),
+    do:
+      facts.externals
+      |> Enum.flat_map(&binding(&1, {facts.writes, program}, world))
+      |> Enum.reverse()
+      |> Enum.map(&diagnostic(instance.line, &1))
+
+  # A var_external's name is no keyword and has no `.` (Logex.Declarations), so it never
+  # names a global refused for its name, which decision 42 would leave silent.
+  defp binding(tag, typed, world), do: bound_to(Map.get(world.names, tag.name), tag, typed, world)
+
+  defp bound_to(nil, tag, {_writes, program}, world),
+    do: [no_global(Declarations.suggest(tag.name, world.globals, & &1, "names"), tag, program)]
+
+  # A global whose type is the host's mistake is refused already: one mistake, one message.
+  defp bound_to({:global, _line, %Global{type: type}}, _tag, _typed, _world)
+       when type not in [:bool, :dint],
+       do: []
+
+  defp bound_to(
+         {:global, _line, %Global{type: type} = global},
+         %Tag{type: type} = tag,
+         {writes, program},
+         _world
+       ),
+       do: written_point(location(global.at), Map.fetch(writes, tag.name), global, {tag, program})
+
+  defp bound_to({:global, _line, global}, tag, {_writes, program}, _world),
+    do: ["#{declares(tag, program)}, but `#{global.name}` is a #{global.type}#{where(global)}"]
+
+  defp bound_to({kind, line, _ref}, tag, {_writes, program}, _world),
+    do: [
+      "#{declares(tag, program)}, but `#{tag.name}` is #{a(kind)}#{at_line(line)}, not a global"
+    ]
+
+  defp no_global("", tag, program),
+    do:
+      "#{declares(tag, program)}, but there is no global `#{tag.name}`: declare it, as in " <>
+        "`var_global #{tag.name} #{tag.type}`"
+
+  defp no_global(suggestion, tag, program),
+    do: "#{declares(tag, program)}, but there is no global `#{tag.name}`" <> suggestion
+
+  defp written_point({:ok, {_device, "i", _address}}, {:ok, [line | _]}, global, {tag, program}),
+    do: [
+      "`#{program.name}` writes its var_external `#{tag.name}`#{in_type(line, program)}, but " <>
+        "`#{global.name}` is an input point#{where(global)}: nothing writes an input point"
+    ]
+
+  defp written_point(_location, _written, _global, _tag), do: []
+
+  defp declares(%Tag{} = tag, program),
+    do:
+      "`#{program.name}` declares `var_external #{tag.name} #{tag.type}`" <>
+        in_type(tag.line, program)
+
+  # Where in a program type's own text a line is: in its file, when it was read from one.
+  defp in_type(nil, _program), do: ""
+  defp in_type(line, %Program{file: nil}), do: " on its line #{line}"
+  defp in_type(line, %Program{file: file}), do: " on line #{line} of `#{Path.basename(file)}`"
+
   # IEC requires one program at least (Ed 2 Annex B.1.7; Ed 3 Annex A). A broken
   # `program` line counts, as it was reported already, one broken before its name too.
   defp empty([], named),
@@ -2025,25 +2171,85 @@ defmodule Logex.Configuration do
   # and an output point that something reads and nothing drives, which stays at 0. An
   # output point nothing uses is told it is unused only. A configuration that gives them
   # has no mistake, so every task and global keeps its name, and every output point its
-  # address.
-  defp warnings({tasks, globals, instances}, wiring) do
+  # address. M2-4: a var_external of an instantiated type uses its global, and a write
+  # through one drives it; and the two writer warnings (decision 48), which only the IR
+  # shows (§4.4).
+  defp warnings({tasks, globals, instances}, wiring, externals) do
     running = MapSet.new(instances, & &1.task)
+    used = MapSet.union(wiring.used, externals.used)
 
     (Enum.flat_map(tasks, &idle(MapSet.member?(running, &1.name), &1)) ++
-       Enum.flat_map(globals, &doubt(MapSet.member?(wiring.used, &1.name), &1, wiring)))
+       Enum.flat_map(globals, &doubt(MapSet.member?(used, &1.name), &1, {wiring, externals})) ++
+       writers(externals.writers, wiring.driven))
     |> Enum.sort_by(&line_order/1)
   end
+
+  # M2-4 (decision 48): each instance that writes a global through its var_external after
+  # an earlier one does, in line order, is told the first; and each that writes one a
+  # connection drives is told the connection. One wording is true of every writer, a latch
+  # among them: each scan reads what the other last wrote, and the later write in a cycle
+  # stands. An instance's own connection's copy-out comes after its scan (decision 47), so
+  # it stands; and a global any writer's `ons` keeps its storage bit in is told so, in the
+  # words of Logex.Warnings' storage-bit warning, whoever the other writer is, since the
+  # bit is then written between that one-shot's scans: of two such instances, the one that
+  # runs second never fires on the edge the first saw.
+  defp writers(writers, driven) do
+    bits = for {global, _instance, true} <- writers, into: MapSet.new(), do: global
+    by_global = Enum.group_by(writers, &elem(&1, 0), &elem(&1, 1))
+
+    twice =
+      for {global, [first | later]} <- by_global,
+          instance <- later,
+          do: twice(global, instance, first, MapSet.member?(bits, global))
+
+    connected =
+      for {global, instance, _bit} <- writers,
+          {:ok, connection} <- [Map.fetch(driven, global)],
+          do: connected(global, instance, connection, MapSet.member?(bits, global))
+
+    twice ++ connected
+  end
+
+  defp twice(global, instance, first, bit),
+    do:
+      warning(
+        instance.line,
+        "`#{instance.name}` writes `#{global}` through its var_external, as " <>
+          "`#{first.name}` does#{where(first)}: " <> stands(bit, global)
+      )
+
+  defp connected(global, instance, %Connection{instance: name} = connection, bit),
+    do:
+      warning(
+        instance.line,
+        "`#{instance.name}` writes `#{global}` through its var_external, and " <>
+          "#{own(name == instance.name)}`#{name}.#{connection.member}` drives it" <>
+          "#{where(connection)}: " <> driven_stands(bit, name == instance.name, global)
+      )
+
+  defp own(true), do: "its own "
+  defp own(false), do: ""
+
+  defp driven_stands(false, true, _global), do: "its own copy-out, after the scan, stands"
+  defp driven_stands(bit, _own, global), do: stands(bit, global)
+
+  defp stands(false, _global),
+    do: "each scan reads what the other last wrote, and the later write in a cycle stands"
+
+  defp stands(true, global),
+    do: "`#{global}` is the storage bit of an `ons`: the one-shot then fires on the wrong scans"
 
   defp idle(true, _task), do: []
   defp idle(false, task), do: [warning(task.line, "task `#{task.name}` runs no instance")]
 
-  defp doubt(false, global, _wiring),
+  defp doubt(false, global, _seen),
     do: [warning(global.line, "`#{global.name}` is declared but nothing uses it")]
 
-  defp doubt(true, global, wiring),
+  defp doubt(true, global, {wiring, externals}),
     do:
       undriven(
-        output_point?(location(global.at)) and not Map.has_key?(wiring.driven, global.name),
+        output_point?(location(global.at)) and not Map.has_key?(wiring.driven, global.name) and
+          not MapSet.member?(externals.driving, global.name),
         global
       )
 

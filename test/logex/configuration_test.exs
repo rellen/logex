@@ -3855,6 +3855,379 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  # M2-4: a program's var_external, bound to the configuration's global of its name and
+  # type (Ed 2 §2.4.3), once a type, at its first instance's `program` line; nothing written
+  # through one to an input point; and the two writer warnings (decision 48). Each pinned
+  # as a whole list from data, again from a configuration file's text, and from files on
+  # disk, where the program type's own file is named.
+  describe "var_external (M2-4): bound to a global, and its writers" do
+    @describetag :tmp_dir
+
+    @reader """
+    var_external estop bool
+    var_output lamp bool
+    xic estop ote lamp
+    """
+
+    @writer """
+    var_input go bool
+    var_external alarm bool
+    var_external count dint
+    xic go otl alarm
+    xic go move 1 count
+    """
+
+    @pulse """
+    var_input go bool
+    var_output y bool
+    var_external edge bool
+    xic go ons edge ote y
+    """
+
+    # A latch on the one-shot's storage bit, and a second write to an input point.
+    @latch """
+    var_input go bool
+    var_external edge bool
+    var_external alarm bool
+    xic go otl edge
+    xio go otu alarm
+    xic go otl alarm
+    """
+
+    @own """
+    var_input go bool
+    var_output q bool
+    var_external g bool
+    xic go otl g
+    xic go ote q
+    """
+
+    defp sharing do
+      for {name, source} <-
+            [reader: @reader, writer: @writer, pulse: @pulse, latch: @latch, own: @own],
+          into: %{} do
+        {:ok, program} = Logex.compile(source, name: "#{name}")
+        {"#{name}", program}
+      end
+    end
+
+    defp shared(globals, instances, connections),
+      do: %Configuration{
+        name: "plant",
+        programs: sharing(),
+        globals: globals,
+        instances: instances,
+        connections: connections
+      }
+
+    defp gone(instances),
+      do: for(i <- instances, do: %Connection{instance: i, member: "go", to: 0})
+
+    test "one bound to a global of its name and type runs, using the global, and a write " <>
+           "through one drives an output point" do
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: Map.values(Map.take(sharing(), ["reader", "writer"])),
+          globals: [
+            %Global{name: "estop", type: :bool, at: "panel.i.7"},
+            %Global{name: "alarm", type: :bool, at: "panel.q.0"},
+            %Global{name: "count", type: :dint, at: "drive.q.0"},
+            %Global{name: "lamp", type: :bool}
+          ],
+          instances: [%Instance{name: "r", type: "reader"}, %Instance{name: "w", type: "writer"}],
+          connections: [
+            %Connection{instance: "r", member: "lamp", to: "lamp"},
+            %Connection{instance: "w", member: "go", to: 1}
+          ]
+        )
+
+      # `estop`, an input point, is read, and `alarm` and `count`, output points, are
+      # driven, each through a var_external: none is told nothing uses or drives it.
+      assert config.warnings == []
+    end
+
+    test "an output point read through one and driven by nothing is told so" do
+      lamp = %Global{name: "estop", type: :bool, at: "panel.q.3"}
+
+      assert Configuration.new!(
+               name: "plant",
+               programs: [sharing()["reader"]],
+               globals: [lamp],
+               instances: [%Instance{name: "r", type: "reader"}]
+             ).warnings == [
+               %Diagnostic{
+                 stage: :configure,
+                 severity: :warning,
+                 line: nil,
+                 message: "`estop` is an output point, but nothing drives it: it stays at 0"
+               }
+             ]
+    end
+
+    test "one with no global of its name, or of another type, is told so, once a type, at " <>
+           "its first instance; a type no instance runs is not checked" do
+      config =
+        shared(
+          [
+            %Global{name: "estp", type: :bool},
+            %Global{name: "alarm", type: :dint},
+            %Global{name: "lamp", type: :bool}
+          ],
+          [
+            %Instance{name: "r1", type: "reader"},
+            %Instance{name: "r2", type: "reader"},
+            %Instance{name: "w", type: "writer"}
+          ],
+          gone(["w"])
+        )
+
+      assert formatted(config) == [
+               "`reader` declares `var_external estop bool` on its line 1, but there is no " <>
+                 "global `estop` — did you mean `estp`?",
+               "`writer` declares `var_external alarm bool` on its line 2, but `alarm` is a dint",
+               "`writer` declares `var_external count dint` on its line 3, but there is no " <>
+                 "global `count`: declare it, as in `var_global count dint`"
+             ]
+
+      # One a name of another kind takes is no global; a global whose type is the host's
+      # mistake is refused once, as that.
+      assert refused(
+               name: "plant",
+               programs: Map.values(sharing()),
+               globals: [
+                 %Global{name: "alarm", type: :int},
+                 %Global{name: "count", type: :dint}
+               ],
+               instances: [
+                 %Instance{name: "estop", type: "reader"},
+                 %Instance{name: "w", type: "writer"}
+               ],
+               connections: gone(["w"])
+             ) == [
+               "global `alarm` has type :int: a global is :bool or :dint",
+               "`reader` declares `var_external estop bool` on its line 1, but `estop` is an " <>
+                 "instance, not a global"
+             ]
+    end
+
+    test "a write through one to an input point is refused, once a type, citing the first " <>
+           "write; a read of one is not" do
+      config =
+        shared(
+          [
+            %Global{name: "estop", type: :bool, at: "panel.i.7"},
+            %Global{name: "alarm", type: :bool, at: "panel.i.0"},
+            %Global{name: "count", type: :dint, at: "drive.i.0"}
+          ],
+          [
+            %Instance{name: "r", type: "reader"},
+            %Instance{name: "w1", type: "writer"},
+            %Instance{name: "w2", type: "writer"},
+            %Instance{name: "l", type: "latch"}
+          ],
+          gone(["w1", "w2", "l"])
+        )
+
+      # `latch` writes `alarm` twice, on its lines 5 and 6: the first is cited. Its `edge`
+      # has no global, told so too.
+      assert formatted(config) == [
+               "`writer` writes its var_external `alarm` on its line 4, but `alarm` is an " <>
+                 "input point: nothing writes an input point",
+               "`writer` writes its var_external `count` on its line 5, but `count` is an " <>
+                 "input point: nothing writes an input point",
+               "`latch` declares `var_external edge bool` on its line 2, but there is no " <>
+                 "global `edge`: declare it, as in `var_global edge bool`",
+               "`latch` writes its var_external `alarm` on its line 5, but `alarm` is an " <>
+                 "input point: nothing writes an input point"
+             ]
+    end
+
+    test "one named in a connection is told it reaches its global itself" do
+      config =
+        shared(
+          [%Global{name: "estop", type: :bool}],
+          [%Instance{name: "r", type: "reader"}],
+          [%Connection{instance: "r", member: "estop", to: "estop"}]
+        )
+
+      assert formatted(config) == [
+               "`r.estop` is a var_external of `reader`, which reaches the global `estop` " <>
+                 "itself: only a var_input or var_output connects"
+             ]
+    end
+
+    test "two instances that write one global through one, and a writer of a global a " <>
+           "connection drives, are warned about, each in the words true of it" do
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: Map.values(sharing()),
+          globals: [
+            %Global{name: "alarm", type: :bool},
+            %Global{name: "count", type: :dint},
+            %Global{name: "edge", type: :bool},
+            %Global{name: "g", type: :bool}
+          ],
+          instances: [
+            %Instance{name: "w1", type: "writer"},
+            %Instance{name: "w2", type: "writer"},
+            %Instance{name: "p1", type: "pulse"},
+            %Instance{name: "p2", type: "pulse"},
+            %Instance{name: "l", type: "latch"},
+            %Instance{name: "o", type: "own"}
+          ],
+          connections:
+            gone(["w1", "w2", "p1", "p2", "l", "o"]) ++
+              [
+                %Connection{instance: "p1", member: "y", to: "alarm"},
+                %Connection{instance: "p2", member: "y", to: "edge"},
+                %Connection{instance: "o", member: "q", to: "g"}
+              ]
+        )
+
+      stands = "each scan reads what the other last wrote, and the later write in a cycle stands"
+
+      one_shot =
+        "`edge` is the storage bit of an `ons`: the one-shot then fires on the wrong scans"
+
+      assert Enum.map(config.warnings, &Diagnostic.format/1) == [
+               "warning: `w2` writes `alarm` through its var_external, as `w1` does: #{stands}",
+               "warning: `l` writes `alarm` through its var_external, as `w1` does: #{stands}",
+               "warning: `w2` writes `count` through its var_external, as `w1` does: #{stands}",
+               "warning: `p2` writes `edge` through its var_external, as `p1` does: #{one_shot}",
+               "warning: `l` writes `edge` through its var_external, as `p1` does: #{one_shot}",
+               "warning: `w1` writes `alarm` through its var_external, and `p1.y` drives it: " <>
+                 stands,
+               "warning: `w2` writes `alarm` through its var_external, and `p1.y` drives it: " <>
+                 stands,
+               "warning: `p1` writes `edge` through its var_external, and `p2.y` drives it: " <>
+                 one_shot,
+               "warning: `p2` writes `edge` through its var_external, and its own `p2.y` " <>
+                 "drives it: #{one_shot}",
+               "warning: `l` writes `edge` through its var_external, and `p2.y` drives it: " <>
+                 one_shot,
+               "warning: `l` writes `alarm` through its var_external, and `p1.y` drives it: " <>
+                 stands,
+               "warning: `o` writes `g` through its var_external, and its own `o.q` drives it: " <>
+                 "its own copy-out, after the scan, stands"
+             ]
+    end
+
+    @shared_logex """
+    var_global estp bool
+    var_global alarm dint at drive.i.0
+    var_global count dint
+    program r1 reader
+    program r2 reader
+    program w writer
+    w.go 0
+    """
+
+    test "again from a configuration file's text, each at its instance's line" do
+      assert errors(@shared_logex, sharing()) == [
+               "line 4: `reader` declares `var_external estop bool` on its line 1, but there " <>
+                 "is no global `estop` — did you mean `estp`?",
+               "line 6: `writer` declares `var_external alarm bool` on its line 2, but `alarm` " <>
+                 "is a dint (line 2)"
+             ]
+
+      writers = """
+      var_global alarm bool
+      var_global count dint
+      program w1 writer
+      w1.go 0
+      program w2 writer
+      w2.go 1
+      """
+
+      assert warned(writers, sharing()) == [
+               "line 5: warning: `w2` writes `alarm` through its var_external, as `w1` does " <>
+                 "(line 3): each scan reads what the other last wrote, and the later write in " <>
+                 "a cycle stands",
+               "line 5: warning: `w2` writes `count` through its var_external, as `w1` does " <>
+                 "(line 3): each scan reads what the other last wrote, and the later write in " <>
+                 "a cycle stands"
+             ]
+    end
+
+    test "and from files on disk, the program type's own file named", %{tmp_dir: dir} do
+      for {file, text} <- [{"reader.ld", @reader}, {"writer.ld", @writer}],
+          do: File.write!(Path.join(dir, file), text)
+
+      plant = Path.join(dir, "shared.logex")
+
+      File.write!(
+        plant,
+        "var_global estp bool\nvar_global alarm bool at panel.i.0\nvar_global count dint\n" <>
+          "program r1 reader\nprogram w writer\nw.go 0\n"
+      )
+
+      assert {:error, diagnostics} = Configuration.compile_file(plant)
+
+      assert Enum.map(diagnostics, &Diagnostic.format/1) == [
+               "#{plant}: line 4: `reader` declares `var_external estop bool` on line 1 of " <>
+                 "`reader.ld`, but there is no global `estop` — did you mean `estp`?",
+               "#{plant}: line 5: `writer` writes its var_external `alarm` on line 4 of " <>
+                 "`writer.ld`, but `alarm` is an input point (line 2): nothing writes an input " <>
+                 "point"
+             ]
+    end
+
+    # The binding and the writer warnings meet a configuration spoiled by hand too: a
+    # seeded property, as "nothing escapes" draws for the seal alone.
+    test "check/1 on a configuration whose programs share globals, spoiled by hand, gives " <>
+           "diagnostics or an ArgumentError, never anything else" do
+      :rand.seed(:exsss, {2026, 10, 12})
+
+      good =
+        Configuration.new!(
+          name: "plant",
+          programs: Map.values(sharing()),
+          globals: [
+            %Global{name: "estop", type: :bool, at: "panel.i.7"},
+            %Global{name: "alarm", type: :bool, at: "panel.q.0"},
+            %Global{name: "count", type: :dint},
+            %Global{name: "edge", type: :bool}
+          ],
+          instances: [
+            %Instance{name: "r", type: "reader"},
+            %Instance{name: "w1", type: "writer"},
+            %Instance{name: "w2", type: "writer"},
+            %Instance{name: "p", type: "pulse"}
+          ],
+          connections:
+            gone(["w1", "w2", "p"]) ++ [%Connection{instance: "p", member: "y", to: "alarm"}]
+        )
+
+      assert length(good.warnings) == 4
+
+      outcomes =
+        for _ <- 1..1000 do
+          config = spoil_struct(spoil_struct(good, :rand.uniform(4)), :rand.uniform(4))
+
+          try do
+            Configuration.check(config)
+          rescue
+            ArgumentError -> :raised
+          end
+        end
+
+      assert Enum.count(outcomes, &(&1 == :raised)) > 500
+      assert Enum.count(outcomes, &match?([%Diagnostic{} | _], &1)) > 10
+    end
+
+    test "start/1 checks it again" do
+      config =
+        shared([%Global{name: "estp", type: :bool}], [%Instance{name: "r", type: "reader"}], [])
+
+      assert_raise ArgumentError,
+                   "`reader` declares `var_external estop bool` on its line 1, but there is no " <>
+                     "global `estop` — did you mean `estp`?",
+                   fn -> Logex.Runtime.start(config) end
+    end
+  end
+
   describe "growth" do
     # A configuration of n instances, each with a task, three globals and three
     # connections, two of them refused, so every check has work to do: the namespace, the
@@ -3936,6 +4309,46 @@ defmodule Logex.ConfigurationTest do
     test "check/1 stays linear in the configuration's size", %{seal: seal} do
       ratio = reductions_to_check(2000, seal) / reductions_to_check(500, seal)
       assert ratio < 6, "4x the instances took #{Float.round(ratio, 1)}x the reductions"
+    end
+
+    # M2-4: n instances of one type, each writing through var_externals two globals every
+    # other one writes too, and the first of them also driven by a connection: the binding
+    # is checked once a type, each writer is found from the walk read once a type, and each
+    # instance's connection by an index built once, so the binding and the two writer
+    # warnings stay linear in the instances: 4x the instances took 4.07x to 4.11x over 32
+    # runs on Elixir 1.20.4, 16 alone and 16 beside three full suites, and the bound is a
+    # fifth above the highest.
+    test "check/1 stays linear in the instances that share globals through var_external" do
+      {:ok, writer} =
+        Logex.compile(
+          "var_input go bool\nvar_output q bool\nvar_external alarm bool\n" <>
+            "var_external count dint\nxic go otl alarm\nxic go move 1 count\nxic go ote q",
+          name: "writer"
+        )
+
+      bind = fn n ->
+        config = %Configuration{
+          name: "plant",
+          programs: %{"writer" => writer},
+          globals: [%Global{name: "alarm", type: :bool}, %Global{name: "count", type: :dint}],
+          instances: for(i <- 1..n, do: %Instance{name: "w#{i}", type: "writer"}),
+          connections:
+            [%Connection{instance: "w1", member: "q", to: "alarm"}] ++
+              for(i <- 1..n, do: %Connection{instance: "w#{i}", member: "go", to: 0})
+        }
+
+        Enum.min(
+          for _ <- 1..3 do
+            {:reductions, before} = Process.info(self(), :reductions)
+            [] = Configuration.check(config)
+            {:reductions, later} = Process.info(self(), :reductions)
+            later - before
+          end
+        )
+      end
+
+      ratio = bind.(2000) / bind.(500)
+      assert ratio < 4.93, "4x the instances took #{Float.round(ratio, 1)}x the reductions"
     end
   end
 

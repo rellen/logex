@@ -4,8 +4,9 @@ defmodule Logex.Walk do
   a compiled program's rungs do, read from the rungs alone, as public functions rather
   than a field of `%Logex.Program{}` that a program built by hand could get wrong.
   `Logex.Compiler`, `Logex.Warnings` and `Logex.Edit` read their instructions, uses,
-  writes and timers here, each instruction's slots through `Logex.Compiler.signature/2`,
-  the one lookup (M2-5).
+  writes and timers here, and `Logex.Configuration.check/1` what each program type writes
+  through its var_externals (M2-4), each instruction's slots through
+  `Logex.Compiler.signature/2`, the one lookup (M2-5).
 
   - `instructions/1`: every instruction of a routine's rungs, in rung order;
   - `uses/2`: every tag operand, with what its slot does to it;
