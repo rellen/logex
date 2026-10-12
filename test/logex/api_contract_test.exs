@@ -1643,10 +1643,15 @@ defmodule Logex.ApiContractTest do
   # configurations a run, 1 of the 260 seeds {n, 77, 7}, n to 60, and {n, 1, 1} and
   # {7, n, 2026}, n to 100, missed it. At 400 it was expected more than 15 times a run.
   # M2-6 draws a task with a single for 1 in 2 tasks, which makes two periodic runs of one
-  # priority rarer, so the walk takes 500 configurations: the reach holds at this seed and,
+  # priority rarer, so the walk took 500 configurations, its reach held at this seed and,
   # in its place, at each of {n, 77, 7}, {n, 1, 1} and {7, n, 2026}, n from 1 to 100, its
   # rarest atoms reached by at least 2 configurations a run (`:due_time_order`), 3
   # (`:first_cycle_edge`) and 5 (`:tie_event_periodic`), and every other by 7 or more.
+  # Since M2-6's review it takes 1000, the maintainer's choice, for margin: at those 300
+  # seeds every refusal is reached a run and its rarest atoms by at least 11
+  # configurations (`:due_time_order`), 15 (`:first_cycle_edge`), 16
+  # (`:tie_event_periodic`) and 19 (`:logic_trigger`), and every other by 56 or more; at
+  # this seed, by 15, 37, 20 and 48.
   test "a resource refuses every host mistake with a documented ArgumentError, accepts " <>
          "every call without one, and runs as its rules say" do
     programs =
@@ -1657,7 +1662,7 @@ defmodule Logex.ApiContractTest do
 
     :rand.seed(:exsss, {2026, 10, 2})
 
-    for _ <- 1..500 do
+    for _ <- 1..1000 do
       config = configuration(programs)
       model = model(config)
       runtime = Runtime.start(config)

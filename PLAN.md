@@ -1923,8 +1923,8 @@ configuration file's must be built that way before they land.
   single's value on a task line is any name token but an input's word; the ton warning is
   one a timer, at its instance's line, citing the `ton`'s own file and line, each program
   type's timers read once; and a decision-52 cycle counts the periods it missed as any
-  late periodic task does. The contract walk takes 500 configurations, up from 400, its
-  reach held at 300 seeds of three families. Growth bounds are a fifth above the highest
+  late periodic task does. The contract walk took 500 configurations, up from 400, its
+  reach held at 300 seeds of three families, and since the review takes 1000. Growth bounds are a fifth above the highest
   of 32 runs, half of them beside three full suites or in a full suite.
 
   Its review's fixes, each a commit after the documents', each green under the full gate
@@ -1937,8 +1937,11 @@ configuration file's must be built that way before they land.
   kind, `task e single trig priority 1` for an event task, where every task was shown a
   periodic one, named by the rule the interval's examples use, so a refused `u.v` is
   shown `task t …`; and a dint single, a diagnostic, counts no use of its global, a
-  branch no warning could show, since a configuration with a diagnostic gives none. 864
-  tests pass on Elixir 1.20.4 (8 of them doctests), up from 860.
+  branch no warning could show, since a configuration with a diagnostic gives none; and
+  the contract walk takes 1000 configurations, the maintainer's choice, up from 500, its
+  reach measured again at the same 300 seeds, every atom reached by 11 configurations a
+  run or more (`:due_time_order`), where 500 gave 2. 864 tests pass on Elixir 1.20.4 (8
+  of them doctests), up from 860.
 
 The scheduling rules are decided too: PRIORITY on every task, 0 the highest; ties go to
 the earlier due time, then declaration order; no preemption; missed periods coalesced,
