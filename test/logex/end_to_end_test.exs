@@ -2324,4 +2324,146 @@ defmodule Logex.EndToEndTest do
       assert Logex.Runtime.get(runtime, "shared") == {:ok, 2}
     end
   end
+
+  # PLAN.md M2-6's Done-when, from Elixir data: an event task triggered from an input point
+  # runs once per rising edge, before lower-priority tasks due in the same cycle, and runs
+  # in cycle 1 if its trigger is already true. Its edges are found from the trace of the
+  # input alone, which knows nothing of how the scheduler samples. The same from a
+  # configuration file is below, with the task lines.
+  describe "an event task (M2-6), from data" do
+    alias Logex.Configuration
+
+    @relay "var_input in bool\nvar_output out bool\nxic in ote out"
+
+    # `trip`, an event task at priority 0 on the input point `estop`, runs `snap`; `slow`,
+    # a 10 ms task at priority 2, runs `m`, so both are due in every cycle `estop` rises.
+    defp tripped do
+      {:ok, relay} = Logex.compile(@relay, name: "relay")
+
+      Configuration.new!(
+        name: "plant",
+        programs: [relay],
+        tasks: [
+          %Configuration.Task{name: "slow", interval: 10, priority: 2},
+          %Configuration.Task{name: "trip", single: "estop", priority: 0}
+        ],
+        globals: [
+          %Configuration.Global{name: "estop", type: :bool, at: "panel.i.0"},
+          %Configuration.Global{name: "x", type: :bool, at: "panel.i.1"},
+          %Configuration.Global{name: "y", type: :bool, at: "panel.q.0"},
+          %Configuration.Global{name: "z", type: :bool, at: "panel.q.1"}
+        ],
+        instances: [
+          %Configuration.Instance{name: "m", type: "relay", task: "slow"},
+          %Configuration.Instance{name: "snap", type: "relay", task: "trip"}
+        ],
+        connections:
+          for(
+            {instance, out} <- [{"m", "y"}, {"snap", "z"}],
+            member <- ~w(in out),
+            do: %Configuration.Connection{
+              instance: instance,
+              member: member,
+              to: if(member == "in", do: "x", else: out)
+            }
+          )
+      )
+    end
+
+    # Each cycle's runs, `estop` set to each value of `trace` in turn, 10 ms apart.
+    defp tripped_runs(config, trace) do
+      trace
+      |> Enum.map_reduce(Logex.Runtime.start(config), fn value, runtime ->
+        {runtime, _outputs, events} = Logex.Runtime.cycle(runtime, 10, %{"estop" => value})
+        {for({:ran, task, instance, _now} <- events, do: {task, instance}), runtime}
+      end)
+      |> elem(0)
+    end
+
+    # The cycles where the trace rises from 0 to 1, the trace starting from 0.
+    defp rising(trace),
+      do:
+        for(
+          {[before, now], cycle} <- Enum.with_index(Enum.chunk_every([0 | trace], 2, 1, :discard)),
+          before == 0 and now == 1,
+          do: cycle
+        )
+
+    test "M2-6's Done-when: it runs once per rising edge, before a lower-priority task due " <>
+           "in the same cycle, and in cycle 1 if its trigger is already true" do
+      for trace <- [[0, 1, 1, 0, 0, 1, 0, 1, 1, 1], [1, 1, 0, 1, 0, 0, 1, 1, 0, 1]] do
+        runs = tripped_runs(tripped(), trace)
+
+        tripped =
+          for {cycle_runs, cycle} <- Enum.with_index(runs), {"trip", _} <- cycle_runs, do: cycle
+
+        assert tripped == rising(trace)
+
+        # The 10 ms task runs in every cycle, and after `trip` in each it runs.
+        for {cycle_runs, cycle} <- Enum.with_index(runs) do
+          expected =
+            if cycle in tripped, do: [{"trip", "snap"}, {"slow", "m"}], else: [{"slow", "m"}]
+
+          assert cycle_runs == expected, "cycle #{cycle + 1}"
+        end
+      end
+
+      # In cycle 1: the second trace's trigger is 1 at once.
+      assert hd(tripped_runs(tripped(), [1])) == [{"trip", "snap"}, {"slow", "m"}]
+    end
+
+    # docs/organisation.md §4.10, M2-6: the tie-break owed, in the form decision 47's
+    # var_external lets it be written: an event task and a late periodic task of one
+    # priority, both writing one global, and which write lands. The event task's due time
+    # is the cycle's now, so the periodic task, late and due earlier, runs first, and the
+    # event task's write stands, whichever is declared first; one due exactly at now ties,
+    # and the order declared decides.
+    test "an event task and a late periodic task of one priority, both writing one global: " <>
+           "the write that lands" do
+      {:ok, writer} =
+        Logex.compile("var_input v dint\nvar_external shared dint\nmove v shared",
+          name: "writer"
+        )
+
+      plant = fn tasks ->
+        Configuration.new!(
+          name: "plant",
+          programs: [writer],
+          tasks: tasks,
+          globals: [
+            %Configuration.Global{name: "trig", type: :bool, at: "panel.i.0"},
+            %Configuration.Global{name: "shared", type: :dint}
+          ],
+          instances: [
+            %Configuration.Instance{name: "wp", type: "writer", task: "p"},
+            %Configuration.Instance{name: "we", type: "writer", task: "e"}
+          ],
+          connections: [
+            %Configuration.Connection{instance: "wp", member: "v", to: 1},
+            %Configuration.Connection{instance: "we", member: "v", to: 2}
+          ]
+        )
+      end
+
+      periodic = %Configuration.Task{name: "p", interval: 10, priority: 1}
+      event = %Configuration.Task{name: "e", single: "trig", priority: 1}
+
+      # Started at 0, where `p` runs alone; then the trigger rises at `at` ms.
+      landed = fn tasks, at ->
+        config = plant.(tasks)
+        assert [%Logex.Diagnostic{severity: :warning}] = config.warnings
+        {runtime, _, _} = Logex.Runtime.cycle(Logex.Runtime.start(config), 0, %{})
+        {runtime, _, events} = Logex.Runtime.cycle(runtime, at, %{"trig" => 1})
+        {Logex.Runtime.get!(runtime, "shared"), for({:ran, t, _, _} <- events, do: t)}
+      end
+
+      # At 15 `p` is 5 ms late: it runs first, and `e`'s write, 2, lands.
+      assert landed.([event, periodic], 15) == {2, ["p", "e"]}
+      assert landed.([periodic, event], 15) == {2, ["p", "e"]}
+
+      # At 10 `p` is due exactly at now: the order declared decides.
+      assert landed.([event, periodic], 10) == {1, ["e", "p"]}
+      assert landed.([periodic, event], 10) == {2, ["p", "e"]}
+    end
+  end
 end

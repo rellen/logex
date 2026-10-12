@@ -61,6 +61,18 @@ defmodule Logex.ApiContractTest do
   call is made twice and gives the same result. Its reach covers every refusal and what
   the scheduler must be seen to do.
 
+  M2-6: the same walk draws event tasks, a task with a single alone or with an interval
+  too, beside periodic ones, its trigger an input point, an output point read back or an
+  unlocated global a connection drives. Its model restates decision 39 in phase points
+  from each task's anchor, and its oracle counts the skipped ones: every period of a task
+  with an interval up to now is run, counted as missed, or skipped under a high trigger.
+  Oracles that know only each trigger's samples, read from outside before each cycle,
+  check that a task with a single alone runs exactly on the rising edges of its trigger,
+  one with an interval too on every edge, never while its trigger stays 1 and at most once
+  a cycle, and that tasks run in priority order. A configuration started with a single
+  that is no name, or that names no bool global, or with an event task's interval of 0, is
+  refused, and the reach covers each kind of edge, skip and late cycle (decisions 50 to 52).
+
   M2-5: a fifth walk takes online edits of programs that hold user function blocks, a
   block inside a block among them, drawn from versions that change a block's body, add
   and drop its members and timers, and change a member's kind, which accept refuses. Its
@@ -1551,7 +1563,13 @@ defmodule Logex.ApiContractTest do
     # diagnostic it gives, formatted.
     {:negative, "a priority is 0, the highest, to 65535, found -"},
     {:priority, "a priority is 0 to 65535, and 0 is the highest"},
+    # M2-6: a task's single, a bool global's name, as a host gives one or a text could; an
+    # event task's interval of 0 is told so before any other's, whose words its own share.
+    {:single_interval, "a task that runs only on the rising edges of its single"},
     {:interval, "an interval is at least 1 ms"},
+    {:single_host, "a single is a bool global's name, or nil for none"},
+    {:single_dint, "is a dint: a single is a bool global"},
+    {:single_unknown, "the single of `t9`: no global"},
     {:lines, "a configuration's lines are all nil"},
     {:line, "a line is a positive integer"}
   ]
@@ -1573,7 +1591,18 @@ defmodule Logex.ApiContractTest do
     :timer_done,
     :infinity,
     :restart,
-    :image_kept
+    :image_kept,
+    # M2-6: event tasks, alone and with an interval.
+    :edge_event,
+    :edge_both,
+    :held_skip,
+    :late_edge_skip,
+    :falling_due,
+    :first_cycle_edge,
+    :restart_refire,
+    :logic_trigger,
+    :overlap_under_single,
+    :tie_event_periodic
   ]
 
   # The program types a configuration of the walk draws from: a contact, a latch, a timer
@@ -1606,12 +1635,18 @@ defmodule Logex.ApiContractTest do
   # The one global with an initial value, which a restart puts back.
   @initials %{"n0" => 7}
 
+  # The bool globals a task's single may name (M2-6).
+  @triggers ~w(i0 i1 i2 i0 o0 g0 g1)
+
   # Its draws are sized from the rate of its rarest atom, `:due_time_order`, seen in about
   # one configuration in 26 over the seeds {n, 77, 7}, n from 1 to 60. At 150
   # configurations a run, 1 of the 260 seeds {n, 77, 7}, n to 60, and {n, 1, 1} and
-  # {7, n, 2026}, n to 100, missed it. At 400 it is expected more than 15 times a run, and
-  # the reach holds at this seed and, in its place, at each of {n, 77, 7}, {n, 1, 1} and
-  # {7, n, 2026}, n from 1 to 100, every atom reached by 7 configurations a run or more.
+  # {7, n, 2026}, n to 100, missed it. At 400 it was expected more than 15 times a run.
+  # M2-6 draws a task with a single for 1 in 2 tasks, which makes two periodic runs of one
+  # priority rarer, so the walk takes 500 configurations: the reach holds at this seed and,
+  # in its place, at each of {n, 77, 7}, {n, 1, 1} and {7, n, 2026}, n from 1 to 100, its
+  # rarest atoms reached by at least 2 configurations a run (`:due_time_order`), 3
+  # (`:first_cycle_edge`) and 5 (`:tie_event_periodic`), and every other by 7 or more.
   test "a resource refuses every host mistake with a documented ArgumentError, accepts " <>
          "every call without one, and runs as its rules say" do
     programs =
@@ -1622,10 +1657,12 @@ defmodule Logex.ApiContractTest do
 
     :rand.seed(:exsss, {2026, 10, 2})
 
-    for _ <- 1..400 do
+    for _ <- 1..500 do
       config = configuration(programs)
       model = model(config)
       runtime = Runtime.start(config)
+      Process.put(:config_samples, %{})
+      Process.put(:config_fresh, :start)
       config_walk(config, runtime, model, 50)
     end
 
@@ -1637,11 +1674,7 @@ defmodule Logex.ApiContractTest do
   defp configuration(programs) do
     tasks =
       for name <- Enum.take(Enum.shuffle(~w(fast mid slow)), :rand.uniform(4) - 1),
-          do: %Logex.Configuration.Task{
-            name: name,
-            interval: pick([5, 10, 15, 30]),
-            priority: pick([0, 1, 2, 2, 65_535])
-          }
+          do: task_of(pick([:periodic, :periodic, :periodic, :event, :both, :both]), name)
 
     # Names drawn in a random order, so that declaration order is not name order, and no
     # order a name gives can pass for the one the configuration declares.
@@ -1711,6 +1744,19 @@ defmodule Logex.ApiContractTest do
     )
   end
 
+  # M2-6: a task of a kind drawn, its trigger a bool global: an input point, an output point
+  # read back, or an unlocated global a connection may drive.
+  defp task_of(kind, name) do
+    task = %Logex.Configuration.Task{name: name, priority: pick([0, 1, 2, 2, 65_535])}
+    triggered(kind, task)
+  end
+
+  defp triggered(:periodic, task), do: %{task | interval: pick([5, 10, 15, 30])}
+  defp triggered(:event, task), do: %{task | single: pick(@triggers)}
+
+  defp triggered(:both, task),
+    do: %{task | single: pick(@triggers), interval: pick([5, 10, 15, 30])}
+
   # A var_input's source: a global of its type, an output point read back among them, or a
   # constant.
   defp source_for(:bool), do: pick(~w(i0 i1 i2 i0 i1 o0 g0 g1) ++ [0, 1])
@@ -1719,16 +1765,21 @@ defmodule Logex.ApiContractTest do
   # The walk's own model of a resource, from the rules in Logex.Runtime's moduledoc and
   # docs/organisation.md §4.6, each instance scanned by Runtime.call/4 alone: the input
   # image and every global, each instance's state, and each task's next due time, which
-  # is a multiple of its interval since every task is due at 0.
+  # is a multiple of its interval since every task is due at 0, nil for a task with no
+  # interval. M2-6: each task with a single keeps its trigger's last sample, 0 at start,
+  # and counts the due times it skipped, phase points passed while its trigger samples 1
+  # (decisions 39 and 51), apart from its periodic runs.
   defp model(config),
     do: %{
       now: 0,
       globals: Map.new(config.globals, &{&1.name, Map.get(@initials, &1.name, 0)}),
       states: Map.new(config.instances, &{&1.name, Runtime.instance(config.programs[&1.type])}),
       anchor: Map.new(config.tasks, &{&1.name, 0}),
-      next: Map.new(config.tasks, &{&1.name, 0}),
+      next: Map.new(config.tasks, &{&1.name, &1.interval && 0}),
+      last: Map.new(config.tasks, &{&1.name, 0}),
       overlaps: Map.new(config.tasks, &{&1.name, 0}),
       runs: Map.new(config.tasks, &{&1.name, 0}),
+      skipped: Map.new(config.tasks, &{&1.name, 0}),
       cycles: 0
     }
 
@@ -1747,9 +1798,11 @@ defmodule Logex.ApiContractTest do
             {name, Runtime.restart(config.programs[state.type], state, mode)}
           end),
         anchor: Map.new(config.tasks, &{&1.name, model.now}),
-        next: Map.new(config.tasks, &{&1.name, model.now}),
+        next: Map.new(config.tasks, &{&1.name, &1.interval && model.now}),
+        last: Map.new(config.tasks, &{&1.name, 0}),
         overlaps: Map.new(config.tasks, &{&1.name, 0}),
-        runs: Map.new(config.tasks, &{&1.name, 0})
+        runs: Map.new(config.tasks, &{&1.name, 0}),
+        skipped: Map.new(config.tasks, &{&1.name, 0})
     }
 
   defp kept(true, value, _initial), do: value
@@ -1760,32 +1813,30 @@ defmodule Logex.ApiContractTest do
   defp model_cycle(config, model, elapsed, inputs) do
     now = model.now + elapsed
     globals = Map.merge(model.globals, inputs)
-
-    due =
-      config.tasks
-      |> Enum.with_index()
-      |> Enum.filter(fn {task, _} -> model.next[task.name] <= now end)
-      |> Enum.sort_by(fn {task, index} -> {task.priority, model.next[task.name], index} end)
-      |> Enum.map(&elem(&1, 0))
-
     model = %{model | now: now, globals: globals, cycles: model.cycles + 1}
 
+    # Every trigger sampled before any scan, then what each task does: an edge runs at
+    # now; a due time that has come runs at it while the trigger samples 0, or is skipped
+    # with every phase point up to now while it samples 1, an edge cycle's among them.
+    {plans, model} =
+      config.tasks
+      |> Enum.with_index()
+      |> Enum.map_reduce(model, fn {task, index}, model ->
+        sample = task.single && globals[task.single]
+        edge? = task.single != nil and model.last[task.name] == 0 and sample == 1
+        come? = task.interval != nil and model.next[task.name] <= now
+        model = %{model | last: Map.put(model.last, task.name, sample || 0)}
+        model_plan({edge?, come?, sample}, task, index, model)
+      end)
+
+    due =
+      plans
+      |> Enum.reject(&is_nil/1)
+      |> Enum.sort_by(fn {task, index, at} -> {task.priority, at, index} end)
+
     {model, events} =
-      Enum.reduce(due, {model, []}, fn task, {model, events} ->
-        # The periods since its due time, up to now, are the multiples of its interval
-        # from its anchor in that span: one runs, and the rest are missed.
-        anchor = model.anchor[task.name]
-        periods = div(now - anchor, task.interval)
-        missed = periods - div(model.next[task.name] - anchor, task.interval)
-
-        model = %{
-          model
-          | next: Map.put(model.next, task.name, anchor + (periods + 1) * task.interval),
-            overlaps: Map.update!(model.overlaps, task.name, &(&1 + missed)),
-            runs: Map.update!(model.runs, task.name, &(&1 + 1))
-        }
-
-        events = if missed > 0, do: [{:overlap, task.name, missed} | events], else: events
+      Enum.reduce(due, {model, []}, fn {task, _index, at}, {model, events} ->
+        {model, events} = model_run(task, at, model, events)
 
         Enum.reduce(
           for(i <- config.instances, i.task == task.name, do: i),
@@ -1808,6 +1859,63 @@ defmodule Logex.ApiContractTest do
           do: {name, model.globals[name]}
 
     {model, outputs, Enum.reverse(events)}
+  end
+
+  # The phase points of a task from its anchor: the first after now, and how many lie from
+  # its next due time to now.
+  defp phase_after(model, task),
+    do:
+      model.anchor[task.name] +
+        (div(model.now - model.anchor[task.name], task.interval) + 1) * task.interval
+
+  defp phase_points(model, task),
+    do:
+      div(model.now - model.anchor[task.name], task.interval) -
+        div(model.next[task.name] - model.anchor[task.name], task.interval) + 1
+
+  defp model_plan({true, come?, _sample}, task, index, model) do
+    model = model_skip(come?, task, model)
+    {{task, index, model.now}, model}
+  end
+
+  defp model_plan({false, true, 1}, task, _index, model), do: {nil, model_skip(true, task, model)}
+
+  defp model_plan({false, true, _sample}, task, index, model),
+    do: {{task, index, model.next[task.name]}, model}
+
+  defp model_plan({false, false, _sample}, _task, _index, model), do: {nil, model}
+
+  defp model_skip(false, _task, model), do: model
+
+  defp model_skip(true, task, model),
+    do: %{
+      model
+      | next: Map.put(model.next, task.name, phase_after(model, task)),
+        skipped: Map.update!(model.skipped, task.name, &(&1 + phase_points(model, task)))
+    }
+
+  # A run at its due time is periodic: the phase points from it up to now are the one run
+  # and the periods it missed. A run at now that is no due time is an edge's, which moves
+  # nothing.
+  defp model_run(task, at, model, events) do
+    periodic? = task.interval != nil and at == model.next[task.name] and at <= model.now
+    model_periodic(periodic?, task, model, events)
+  end
+
+  defp model_periodic(false, _task, model, events), do: {model, events}
+
+  defp model_periodic(true, task, model, events) do
+    missed = phase_points(model, task) - 1
+
+    model = %{
+      model
+      | next: Map.put(model.next, task.name, phase_after(model, task)),
+        overlaps: Map.update!(model.overlaps, task.name, &(&1 + missed)),
+        runs: Map.update!(model.runs, task.name, &(&1 + 1))
+    }
+
+    events = if missed > 0, do: [{:overlap, task.name, missed} | events], else: events
+    {model, events}
   end
 
   defp model_scan(config, instance, task, {model, events}) do
@@ -1844,6 +1952,7 @@ defmodule Logex.ApiContractTest do
           {:ok, {next, outputs, events}} ->
             before = model
             refute mistake?, "a host mistake was accepted: #{inspect({elapsed, inputs})}"
+            samples!(config, runtime, inputs, events)
 
             {model, expected_outputs, expected_events} =
               model_cycle(config, model, elapsed, inputs)
@@ -1897,6 +2006,8 @@ defmodule Logex.ApiContractTest do
             )
 
             check_restarted(config, next, model)
+            Process.put(:config_samples, %{})
+            Process.put(:config_fresh, :restart)
             config_walk(config, next, model, n - 1)
 
           :refused ->
@@ -1906,9 +2017,12 @@ defmodule Logex.ApiContractTest do
     end
   end
 
-  # Right after a restart, every task is due at once and every value is the model's.
+  # Right after a restart, every task with an interval is due at once, so next_due_in/1 is
+  # 0 if there is one and :infinity if not, however many event tasks there are (decision
+  # 50), and every value is the model's.
   defp check_restarted(config, runtime, model) do
-    assert Runtime.next_due_in(runtime) == if(config.tasks == [], do: :infinity, else: 0)
+    periodic? = Enum.any?(config.tasks, &(&1.interval != nil))
+    assert Runtime.next_due_in(runtime) == if(periodic?, do: 0, else: :infinity)
     assert Runtime.overlaps(runtime) == model.overlaps
     for {name, value} <- model.globals, do: assert(Runtime.get!(runtime, name) == value)
 
@@ -1921,7 +2035,7 @@ defmodule Logex.ApiContractTest do
   # Everything the scheduler's rules say a model must also show: the next due time, every
   # global, and every tag of every instance.
   defp check_model(config, runtime, model) do
-    next = model.next |> Map.values() |> Enum.min(fn -> nil end)
+    next = model.next |> Map.values() |> Enum.reject(&is_nil/1) |> Enum.min(fn -> nil end)
     expected = if next == nil, do: :infinity, else: next - model.now
     assert Runtime.next_due_in(runtime) == expected
     # After a cycle no task is overdue: each it ran moved past now.
@@ -1935,16 +2049,92 @@ defmodule Logex.ApiContractTest do
         is_integer(value),
         do: assert(Runtime.get!(runtime, "#{instance.name}.#{tag}") == value)
 
-    # Every period of a task up to now is either run or counted as missed: an oracle that
-    # knows nothing of how the scheduler finds them.
-    for task <- config.tasks do
-      assert model.runs[task.name] + model.overlaps[task.name] ==
+    # Every period of a task up to now is either run, counted as missed or, for a task
+    # with a single, skipped under a high trigger (decision 39): an oracle that knows
+    # nothing of how the scheduler finds them. A task with a single alone has no periods
+    # and never overlaps.
+    for task <- config.tasks, task.interval != nil do
+      assert model.runs[task.name] + model.overlaps[task.name] + model.skipped[task.name] ==
                div(model.now - model.anchor[task.name], task.interval) + 1
     end
+
+    for task <- config.tasks, task.interval == nil, do: assert(model.overlaps[task.name] == 0)
+  end
+
+  # M2-6: oracles that know only each trigger's samples, read from outside before the
+  # cycle through get!/2 and the inputs it sends, the last sample 0 after a start or a
+  # restart: a task with a single alone runs exactly on its trigger's rising edges, and one
+  # with an interval too on every edge, never while its trigger stays 1, and at most once a
+  # cycle; and the tasks run in priority order. Its reach is the walk's.
+  defp samples!(config, runtime, inputs, events) do
+    seen = Process.get(:config_samples, %{})
+    fresh = Process.get(:config_fresh, :start)
+
+    samples =
+      for task <- config.tasks,
+          task.single != nil,
+          into: %{},
+          do: {task.name, Map.get(inputs, task.single, Runtime.get!(runtime, task.single))}
+
+    ran = Enum.dedup(for {:ran, task, _, _} <- events, task != :none, do: task)
+    running = MapSet.new(for i <- config.instances, i.task != nil, do: i.task)
+
+    for task <- config.tasks, task.single != nil, MapSet.member?(running, task.name) do
+      edge? = Map.get(seen, task.name, 0) == 0 and samples[task.name] == 1
+      held? = Map.get(seen, task.name, 0) == 1 and samples[task.name] == 1
+      runs = Enum.count(ran, &(&1 == task.name))
+      assert runs <= 1, "#{task.name} ran #{runs} times in one cycle"
+      if edge?, do: assert(runs == 1, "#{task.name} missed an edge")
+      if held?, do: assert(runs == 0, "#{task.name} ran under a held trigger")
+      if task.interval == nil, do: assert(runs == if(edge?, do: 1, else: 0))
+      config_reach(:edge_event, edge? and task.interval == nil)
+      config_reach(:edge_both, edge? and task.interval != nil)
+      config_reach(:first_cycle_edge, edge? and fresh == :start)
+      config_reach(:restart_refire, edge? and fresh == :restart)
+      config_reach(:logic_trigger, edge? and task.single in ~w(o0 g0 g1) and fresh == false)
+    end
+
+    by_name = Map.new(config.tasks, &{&1.name, &1})
+    order = for name <- ran, do: by_name[name]
+
+    for [a, b] <- Enum.chunk_every(order, 2, 1, :discard) do
+      assert a.priority <= b.priority
+
+      config_reach(
+        :tie_event_periodic,
+        a.priority == b.priority and a.single == nil != (b.single == nil)
+      )
+    end
+
+    Process.put(:config_samples, Map.merge(seen, samples))
+    Process.put(:config_fresh, false)
   end
 
   defp observe(config, {before, model}, events, elapsed) do
     ran = for {:ran, task, instance, _} <- events, do: {task, instance}
+
+    # M2-6: a due time skipped under a held trigger, one cycle's skips at an edge after a
+    # late host (decision 51), a periodic run in a cycle that samples 0 of a due time that
+    # came while the trigger was last seen 1 (decision 52), and an overlap of a task with
+    # a single and an interval.
+    for task <- config.tasks, task.single != nil and task.interval != nil do
+      skipped = model.skipped[task.name] - before.skipped[task.name]
+      ran? = Enum.any?(ran, &(elem(&1, 0) == task.name))
+      config_reach(:held_skip, skipped > 0 and not ran?)
+      config_reach(:late_edge_skip, skipped > 1 and ran?)
+
+      config_reach(
+        :falling_due,
+        before.last[task.name] == 1 and model.last[task.name] == 0 and
+          model.runs[task.name] > before.runs[task.name]
+      )
+
+      config_reach(
+        :overlap_under_single,
+        Enum.any?(events, &match?({:overlap, name, _} when name == task.name, &1))
+      )
+    end
+
     config_reach(:ran_task, Enum.any?(ran, &(elem(&1, 0) != :none)))
     config_reach(:ran_taskless, Enum.any?(ran, &(elem(&1, 0) == :none)))
     config_reach(:overlap, Enum.any?(events, &match?({:overlap, _, _}, &1)))
@@ -1959,10 +2149,15 @@ defmodule Logex.ApiContractTest do
     indexes = Enum.map(order, &elem(&1, 1))
     config_reach(:priority_order, indexes != Enum.sort(indexes))
 
+    # Two periodic runs of one priority, the one due earlier first; a task with a single
+    # among them where it ran periodically (M2-6).
+    periodic? = &(model.runs[&1.name] > before.runs[&1.name])
+
     config_reach(
       :due_time_order,
       Enum.any?(Enum.chunk_every(order, 2, 1, :discard), fn [{a, _}, {b, _}] ->
-        a.priority == b.priority and before.next[a.name] < before.next[b.name]
+        a.priority == b.priority and periodic?.(a) and periodic?.(b) and
+          before.next[a.name] < before.next[b.name]
       end)
     )
 
@@ -2073,16 +2268,24 @@ defmodule Logex.ApiContractTest do
     {:restart, mode not in [:cold, :warm], mode}
   end
 
-  # The configuration started again with one mistake: a negative priority or a line no
-  # file gives, which no configuration text can say, or a priority past 65535 or an
-  # interval of 0, which a text can (decisions 36 and 37).
+  # The configuration started again with one mistake: a negative priority, a line no file
+  # gives or a single that is no name, which no configuration text can say, or a priority
+  # past 65535, an interval of 0 or a single that names no bool global, which a text can
+  # (decisions 36 and 37; M2-6).
   defp config_operation(8, config, _runtime) do
-    task = fn interval, priority ->
+    task = fn single, interval, priority ->
       %{
         config
         | tasks:
             config.tasks ++
-              [%Logex.Configuration.Task{name: "t9", interval: interval, priority: priority}]
+              [
+                %Logex.Configuration.Task{
+                  name: "t9",
+                  single: single,
+                  interval: interval,
+                  priority: priority
+                }
+              ]
       }
     end
 
@@ -2090,9 +2293,13 @@ defmodule Logex.ApiContractTest do
 
     {:start,
      pick([
-       task.(10, -1),
-       task.(10, 65_536),
-       task.(0, 0),
+       task.(nil, 10, -1),
+       task.(nil, 10, 65_536),
+       task.(nil, 0, 0),
+       task.("i0", 0, 0),
+       task.("d0", nil, 0),
+       task.("zz", nil, 1),
+       task.(7, 10, 0),
        %{config | globals: [%{first | line: 3} | rest]},
        %{config | globals: [%{first | line: 0} | rest]}
      ])}
