@@ -16,10 +16,10 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
-§1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5 and §3's M2-2 and M2-3 have been
-brought current. Milestone 2 was designed on 2026-10-02 (§3), its first item, M2-1,
-landed the same day, M2-5 on 2026-10-04, and M2-2 and M2-3 on 2026-10-11; the rest of
-Milestone 2 and OE-2 are still forward work.
+§1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5, §3's M2-2 and M2-3 and §3's M2-4
+have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its first item,
+M2-1, landed the same day, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11, and M2-4 on
+2026-10-12; M2-6, the rest of Milestone 2, and OE-2 are still forward work.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -90,6 +90,11 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   its file and line in the configuration file's words; `Logex.Configuration.Text` prints
   a configuration back to its text, exactly. `Logex.compile_file/1` takes a `.ld` file
   only.
+- Globals shared by name (M2-4): `var_external estop bool` in a program's `.ld` file
+  names the configuration's `var_global estop bool`, bound by name and type and checked
+  once a program type; a scan reads and writes the global itself, one copy in the
+  resource, and two writers of one global are warnings. `Logex.Walk` is the one walk of a
+  program's IR that the checks read.
 
 These were each verified directly:
 
@@ -1332,8 +1337,8 @@ one (owed below). The scheduler's and the function blocks' spikes, merged, pass 
 582 tests on Elixir 1.20.4. The maintainer took decisions 30–40 as recommended but 35,
 the configuration file's extension, choosing `.logex`, outside the options offered; the
 pass's routine choices, the rules of §4.10, were all taken as recommended. M2-1 landed
-on 2026-10-02, M2-5 on 2026-10-04, and M2-2 and M2-3 on 2026-10-11 (below); nothing else
-has.
+on 2026-10-02, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11, and M2-4 on 2026-10-12
+(below); only M2-6 has not.
 
 **The order (decision 30):** the design record, then M2-1, M2-5, M2-2, M2-3, M2-4 and
 M2-6.
@@ -1609,6 +1614,40 @@ configuration file's must be built that way before they land.
   tested on §4.4's plant at a cycle both tasks are due, 50 ms, with a second test that a
   pulse shorter than `m2`'s interval never reaches it (decision 46). The survey is
   committed first, on its branch, since CLAUDE.md asks for the survey before the code.)*
+
+  **Status: DONE — landed 2026-10-12**, as six commits on `fd8fda8`, the record's four
+  with the survey first and the documents last, each green under the full gate on Elixir
+  1.20.4 / OTP 28: (1) the `var_external` stanza, ported from the backup of 2026-10-04 and
+  its quotations checked again, `c057553`; (2) B5's one walk, `Logex.Walk`, whose
+  `instructions/1`, `uses/2`, `writes/1` and `timers/1` the compiler, `Logex.Warnings` and
+  `Logex.Edit` read in place of their own walks, `writes/1` and `timers/1` reaching into
+  each block a `cal` runs by path, with no change in behaviour, the suite of `c057553`
+  passing whole against its `lib/` and every traced call of that suite agreeing,
+  `2a03b52`; (3) the section, its `.ld` rules, a configuration file's keywords refused as
+  a var_external's name, and its refusal in a block's file, `c9087ca`; (4) the binding,
+  the input-point write check, a var_external in a connection, M2-2's two warnings brought
+  to it and decision 48's two writer warnings, in `check/1`, `b71b780`; (5) one copy of
+  each global at run time, decisions 46, 47 and 49, the Done-when from text and from files
+  on disk, the sampling test, the rule tests and the contract walk against a model of one
+  map of globals, `6f91512`; (6) the documents, the commit after it. The messages of (2) to
+  (5) record their mutation tables, every rule each adds reverted alone in its own
+  worktree and the full suite judged by its exit code: 61 rules (22, 9, 22 and 8), every
+  one red. 821 tests pass on Elixir 1.20.4 (8 of them doctests), up from 775.
+
+  Readings the landing made, each pinned by a test, and in §4.10's M2-4 note: the walk
+  gives a path inside a block the lines of the block's own text, each block type read
+  once a call, its paths put from the top down, since putting them level by level was
+  cubic in a chain's depth; the storage-bit words of the writer warnings are given
+  wherever any writer's `ons` keeps its bit in the global, whoever the other writer is;
+  a var_external line refused for its initial value declares nothing, as a var_input's
+  does; and the binding needs neither a sort of the instances nor decision 42's silence,
+  since `check/1` holds lines rising and no var_external can be named as a refused global
+  is. The tie-break test §4.10 owes M2-6 now has the form M2-4 gives it, two writers of one
+  global through `var_external` in `end_to_end_test.exs`; the event task's half waits for
+  M2-6. Growth bounds are a fifth above the highest of 32 or more runs, half of them
+  beside three full suites; the walk's depth test and M2-2's loader test each failed once
+  in the 39 full suites the mutation rows ran four at once on four cores, the load "Costs
+  to keep in view" records.
 - **M2-5 · User function blocks.** `function_block <name>` as a file's first line,
   matching the file name; *(its first rung since 2026-10-02: comments and blank lines may
   come before it, §4.10)*
@@ -1890,7 +1929,9 @@ diagnostic naming its file and line.
   loader, `Logex.compile_files/1`, which the configuration's loader goes through, and a
   block's file on a `program` line, given the one block-type message. The other three,
   a `cal`'s outputs among a program's writes, a block's `ton` among its timers and a
-  block's `var_external`, are M2-4's.)*
+  block's `var_external`, are M2-4's.)* *(Closed by M2-4: `Logex.Walk.writes/1` counts a
+  `cal`'s outputs as writes and `timers/1` names a block's `ton` by its path, its second
+  commit, and a block's file refuses `var_external` at its line, its third.)*
 - **Two run-time pieces were not spiked by the design:** M2-4's one copy of a global, and
   M2-6's edges with `single` and `interval`. Their rules were the design's text alone. A
   test of the event task's tie-break is owed: an event task and a late periodic task of
@@ -2261,7 +2302,10 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   commit. Until then M2-5 adds a `cal` clause to each walk; §3.)* *(M2-5 landed so: its
   second commit gave the two walks one lookup of an instruction's slots,
   `Logex.Compiler.signature/2`, and its third taught that lookup `cal`, whose slots are
-  its block's.)*
+  its block's.)* *(M2-4 landed the walk, `Logex.Walk`, its second commit, `2a03b52`: the
+  compiler, `Logex.Warnings` and `Logex.Edit` read it, and `Logex.Configuration` reads
+  which tags a program type writes there. The lowering, `Ast`, `Instruction` and
+  `Analyzer`, is still in `Logex.Compiler`.)*
 
 - **B6 · Project metadata.** No `@spec`/`@moduledoc` on `Logex.Compiler`; no
   `description`/`package`/`licenses` in `mix.exs` despite a full Apache-2.0 `LICENSE`;

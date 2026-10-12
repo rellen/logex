@@ -50,7 +50,12 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   and `get!/2`, an access path (`{:ok, value}` or `{:error, reason}`, or the value or a
   raise, decision 41), and `restart/2`, which keeps the clock and the input image as
   `restart/3` keeps an instance's var_inputs; their rules, events and the host's loop are
-  in its moduledoc.
+  in its moduledoc. Since M2-4 a scan merges each `var_external`'s global into its
+  instance's state before `call/4` and splits it off after, back into the global, before
+  the copy-out (decision 47), so the resource holds one copy of each global and no
+  instance's state holds a var_external between cycles (decision 49, which a test pins
+  by looking inside); `get/2` reads `m1.estop` as the global, and a program run alone
+  keeps a var_external as its own tag at 0.
   `lib/logex/instance.ex` and `lib/logex/scan.ex` hold its two structs, each with
   `ons_blocked` since OE-1: the storage bits whose `ons` the next scan blocks, the hook an
   online edit's switch uses to keep a new or changed one-shot from firing, a bit inside a
@@ -84,7 +89,13 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   or a file that does not compile cited once at its first instance's line, the last
   naming the files its mistakes are cited in, which follow once each, every
   diagnostic naming its file; `location/1`; and `initial/1`, the one rule for a new
-  global's value, as `Logex.Program.initial_env/1` is a tag's.
+  global's value, as `Logex.Program.initial_env/1` is a tag's. Since M2-4 `check/1` binds
+  each `var_external` of a program type an instance runs to the global of its name and
+  type, once a type at its first instance's line, naming the type's own file and line,
+  refuses a write through one to an input point, from `Logex.Walk.writes/1`, and a
+  connection that names one, and gives the two writer warnings on `warnings` (decision
+  48); a var_external uses its global and a write through one drives it, for M2-2's
+  warnings.
   `lib/logex/configuration/text.ex` is a configuration file's text (M2-2, its task lines
   and `with` since M2-3): its words as data, `keywords/0`, which `naming_test.exs`
   reads; `read/1`, a recursive descent over
@@ -118,7 +129,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   table, members included (M1-6), names as a location an operand shaped like one whose
   first part is not declared, as `panel.i.0` (M2-2), gives each timer the preset on the
   one `ton` that runs it, refuses a second `ons` on one storage bit and anything after a `ton` on its path,
-  and returns `{:ok, %Logex.Program{}}` (warnings included) or
+  refuses a `var_external` in a function block's file (M2-4), at its line, or as an
+  `ArgumentError` for one declared from Elixir, and returns `{:ok, %Logex.Program{}}` (warnings included) or
   `{:error, [%Logex.Diagnostic{}]}`. Since M2-5 `instructionize/3` takes the function
   block types a routine may hold, each checked at full depth, one version per name; a
   routine headed `function_block <name>` gives `{:ok, %Logex.FbType{}}`; a block never
@@ -143,7 +155,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   them; and `timers/1`, which timers it runs, each to its `ton`'s line and preset. The
   last two reach into every block a `cal` runs, at any depth, by path (`p.s.t1`), each
   block type read once a call. The compiler, `Logex.Warnings` and `Logex.Edit` read it in
-  place of walks of their own
+  place of walks of their own, and `Logex.Configuration.check/1` what a program type
+  writes through its var_externals
 - `lib/logex/declarations.ex` — declaration lines to a tag table, after parsing: the
   section and type words as data (`@sections`, `@types`, and the function block type
   words of `Logex.FbType.builtins/0`), `kinds/0` (M2-5: the words that head a file of
@@ -153,7 +166,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   goes), `preset?/1` (a `ton`'s
   preset range, 0 to 2147483647 ms), and `check/1`, the one validator for a declaration
   line and for `Logex.Tag.new!/4`, so from Elixir too it refuses what no line can say: an
-  initial value on an instance, and a negative one (OE-1)
+  initial value on an instance, and a negative one (OE-1). Since M2-4 `var_external` is a
+  row of `@sections`: a bool or a dint with no initial value and no instance, and no
+  configuration file's keyword (`Logex.Configuration.Text.keywords/0`) names one
 - `lib/logex/tag.ex` — `%Logex.Tag{}`, whose type is `:bool`, `:dint` or, for an instance
   of a function block such as `var t1 ton` or `var s1 seal`, the `%Logex.FbType{}` itself,
   one `Logex.FbType.user?/1` accepts for a user block, except in a compiled program or
@@ -161,7 +176,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   the program's or the outermost type's one table holds (decision 53); and `new!/4`,
   which declares a tag from Elixir. Since OE-1 it takes no timer preset (the
   `%{"pre" => ms}` M1-6 allowed: a preset is the number on the `ton` that runs the
-  timer) and no negative initial value
+  timer) and no negative initial value. Its section may be `:var_external` (M2-4)
 - `lib/logex/fb_type.ex` — `%Logex.FbType{}`, a function block type's schema (M1-6), which
   M2-5's user function blocks reuse: its members, each a `%Logex.FbType.Member{}` with a
   type, a role (`:input`, `:output`, `:internal`, and a user block's own `var`, `:local`)
@@ -205,7 +220,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `lib/logex/diagnostic.ex` — `%Logex.Diagnostic{stage:, line:, message:, file:, column:,
   severity:}`, the one error and warning type of every stage, and `format/1` for the
   `motor.ld: line 3, column 5: …` form
-- Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`; `validation_test.exs` holds every diagnostic and warning `instructionize/2` gives, driven from source. `test/logex_test.exs` pins `Logex` (and walks Milestone 1's done sentence), `runtime_test.exs` every message the runtime raises and the exact public surface, `walk_test.exs` each fact of `Logex.Walk` from source, at depth, with its growth, `edit_test.exs` every message, diagnostic and rule of `Logex.Edit`, `configuration_test.exs` every diagnostic, warning and host mistake of `Logex.Configuration`, as whole lists from data and again from source, the loader of `compile_file/1` from files on disk, and the configuration file's round trip, seeded, its totality over every argument and its growth, `configuration_text_test.exs` every line a configuration file's reader refuses, as whole lists from source, and what a line can say, `scheduler_test.exs` a test at least per rule of a cycle, `function_block_test.exs` every diagnostic, host mistake and rule of M2-5's user function blocks, from source, the loader of `compile_file/1` among them, an online edit of a program that holds them among them, with its growth tests in the block list's bytes (decision 32), and `api_contract_test.exs` a seeded property over the host contract, which since M1-6 checks every accepted scan against an oracle for `ton` and `ons` and makes every accepted call twice, and since OE-1 walks online edits too, and since M2-1 configurations run as resources, against a model that scans each instance through `call/4` alone, and since M2-5 online edits of programs that hold blocks, two deep, with a one-shot oracle on every scan from the programs' text
+- Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`; `validation_test.exs` holds every diagnostic and warning `instructionize/2` gives, driven from source. `test/logex_test.exs` pins `Logex` (and walks Milestone 1's done sentence), `runtime_test.exs` every message the runtime raises and the exact public surface, `walk_test.exs` each fact of `Logex.Walk` from source, at depth, with its growth, `edit_test.exs` every message, diagnostic and rule of `Logex.Edit`, `configuration_test.exs` every diagnostic, warning and host mistake of `Logex.Configuration`, as whole lists from data and again from source, the loader of `compile_file/1` from files on disk, and the configuration file's round trip, seeded, its totality over every argument and its growth, `configuration_text_test.exs` every line a configuration file's reader refuses, as whole lists from source, and what a line can say, `scheduler_test.exs` a test at least per rule of a cycle, one copy of a global shared through `var_external` among them, `function_block_test.exs` every diagnostic, host mistake and rule of M2-5's user function blocks, from source, the loader of `compile_file/1` among them, an online edit of a program that holds them among them, with its growth tests in the block list's bytes (decision 32), and `api_contract_test.exs` a seeded property over the host contract, which since M1-6 checks every accepted scan against an oracle for `ton` and `ons` and makes every accepted call twice, and since OE-1 walks online edits too, and since M2-1 configurations run as resources, against a model that scans each instance through `call/4` alone, and since M2-5 online edits of programs that hold blocks, two deep, with a one-shot oracle on every scan from the programs' text, and since M2-4 resources whose programs share globals through `var_external`, against a model that runs each program as Elixir over one map of globals
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
@@ -230,13 +245,15 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   of one instance; its *assertions* name no IR tag (one helper matches the
   `{:routine, {:rungs, _}}` wrapper to count rungs). It was the first test to cross every
   stage boundary, and is where a behaviour change is pinned, `ton`'s, PLAN M1-6's
-  decision-6 test, PLAN OE-1's Done-when, and PLAN M2-1's, M2-5's, M2-2's and M2-3's
-  Done-whens among them, the last four through `Logex.Runtime.cycle/3`, M2-1's with
+  decision-6 test, PLAN OE-1's Done-when, and PLAN M2-1's, M2-5's, M2-2's, M2-3's and
+  M2-4's Done-whens among them, the last five through `Logex.Runtime.cycle/3`, M2-1's with
   `scan/2` beside it, M2-5's reading `m1.s2.run` through `Logex.Runtime.get/2`, from text
   and from files on disk through `Logex.compile_file/1`, M2-2's from a configuration file
   and its program type on disk through `Logex.Configuration.compile_file/1`, against an
-  oracle that knows nothing of logex, and M2-3's from §4.4's plant read by
-  `Logex.Configuration.compile/3`; `validation_test.exs` and
+  oracle that knows nothing of logex, M2-3's from §4.4's plant read by
+  `Logex.Configuration.compile/3`, and M2-4's, §4.4's plant with §4.3's motor, whose
+  `estop` is a `var_external`, from text and from files on disk, beside a test that an
+  e-stop pulse shorter than `m2`'s interval never reaches it (decision 46); `validation_test.exs` and
   `printer_test.exs` also run source to an environment in places.
   `lex_and_parse_test.exs` starts from a source string and so crosses the tokenize→parse
   seam, but no further; the other two hand-type one stage's input and cannot see a seam at
@@ -244,8 +261,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `README.md` — what logex is, the dialect stance, the instruction table and worked
   examples, among them a function block loaded from beside the program that runs it, a
   configuration file loaded with its program type and run by the scheduler, the same
-  configuration built from Elixir, and a running program changed by `Logex.Edit`, its
-  blocks included. **Any change to the language stales it:** a
+  configuration built from Elixir, an e-stop shared through `var_external`, and a running
+  program changed by `Logex.Edit`, its blocks included. **Any change to the language stales it:** a
   new instruction adds a row and may clear a "Settled, not yet landed" bullet; a syntax
   change touches the syntax list, the instruction table and the examples (whose output is
   real — re-run it). So does a change to a block's rules or the loader, through "A
@@ -259,8 +276,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   word, word that heads a file or configuration file's word; append-only
 - `docs/organisation.md` — where logex is heading above one program: IEC's configuration,
   tasks, program instances and I/O mapping, in logex's dialect. Decided (PLAN §5; the
-  work is PLAN's M1-3, M1-5, M1-6, OE-1, Milestone 2 and OE-2; OE-1, M2-1, M2-5, M2-2
-  and M2-3 have landed, and Milestone 2 was designed on 2026-10-02, §4.10 and decisions
+  work is PLAN's M1-3, M1-5, M1-6, OE-1, Milestone 2 and OE-2; OE-1, M2-1, M2-5, M2-2,
+  M2-3 and M2-4 have landed, and Milestone 2 was designed on 2026-10-02, §4.10 and decisions
   30–40). Read it before designing anything that names a program, schedules one, binds I/O, or changes a
   running controller (§4.9, online edit, decided 2026-10-01).
 - `docs/instruction-sets.md` — reference: IEC's LD elements and standard library by table number,

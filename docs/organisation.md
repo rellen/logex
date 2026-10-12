@@ -389,6 +389,8 @@ cycle among FB types, which fits a model where one instance is one nested map.
   the message names.
 - *The motor above* needs M2-4's `var_external`. With `estop` declared a `var_input`
   instead, and `seal.ld` beside it, it compiles with no warning and runs as described.
+  *(M2-4 landed 2026-10-12: as written, `seal.ld` beside it, it compiles with no warning,
+  and `end_to_end_test.exs` runs it, cut from this document, in §4.4's plant.)*
 
 ### 4.4 The configuration
 
@@ -452,7 +454,10 @@ the trip, reading the output points back, which is allowed. *(Worded more exactl
 2026-10-04, decision 46: it runs before any instance due in that cycle. An instance sees a
 global when it runs, so `m2`, on the 50 ms task, sees the e-stop only at its next scan, and
 an e-stop must be held at least as long as the slowest interval that reads it, as a
-maintained e-stop contact is: a 10 ms pulse never reaches `m2`.)*
+maintained e-stop contact is: a 10 ms pulse never reaches `m2`.)* *(Landed with M2-4,
+2026-10-12: `end_to_end_test.exs` cycles this plant, its `trip` task left out until M2-6,
+with §4.3's motor; the e-stop raised at 50 ms, a cycle both tasks run, drops `k1` and `k2`
+in that cycle, and a 10 ms pulse at 20 ms stops `m1` and never reaches `m2`.)*
 
 **Line shapes.** Every line is a keyword line, like M1-3's declarations, or a connection
 line, which starts with a qualified name. Indentation is cosmetic.
@@ -485,7 +490,9 @@ each again from source; §4.10.)*
   global through `var_external` are only visible in the IR: that is a warning, in M1-5's
   `warnings:` channel. *(logex. IEC forbids neither.)* *(Milestone 2's design carries
   this warning on the configuration's own `warnings`, `%Logex.Configuration{}.warnings`:
-  a program's `warnings` sees one program, never two instances. §4.10, M2-4.)*
+  a program's `warnings` sees one program, never two instances. §4.10, M2-4.)* *(Landed
+  with M2-4, in decision 48's words, beside the warning for an instance that writes
+  through `var_external` a global a connection drives.)*
 - **Every var_input is connected**, to a global, a point or a constant. *(logex. No IEC
   rule on an unconnected program input was found.)* M1-3 gives a var_input no initial
   value, so an unconnected one would read 0 forever. *(Milestone 2's design pass found one,
@@ -544,7 +551,10 @@ wiring stays a connection. A program that writes a `var_external` bound to an in
 is an error, so `%Logex.Program{}` records which tags it writes. M1-3's lowering already
 knows each operand's write access. *(Milestone 2's design: which tags a program writes
 is a public function over its IR, B5's one walk, not a field of `%Logex.Program{}`; §4.10,
-M2-4.)*
+M2-4.)* *(Landed with M2-4, 2026-10-12: `Logex.Walk.writes/1`, which
+`Logex.Configuration.check/1` reads once a program type, at its first instance's line,
+naming the type's file and the line of its first write; and `Logex.Runtime.get/2` reads
+`m1.estop` as the global.)*
 
 **Loading.**
 - `Logex.Configuration.compile(name, source, %{"motor" => program, …})` is the pure seam:
@@ -669,7 +679,10 @@ Logex.Runtime.cycle(rt, elapsed_ms, inputs) :: {rt, outputs, events}
    Each scan copies the connected var_inputs in, runs the rungs, and copies the var_outputs
    out. MatIEC generates exactly that around each program call: `:=` connections, then
    `<type>_body__`, then `=>` connections (`generate_c.cc`, the `program_configuration`
-   visitor).
+   visitor). *(M2-4, landed 2026-10-12: each `var_external`'s global is merged into the
+   instance's state with the copy-in and split off after the rungs, back into the global,
+   before the copy-out (decision 47), so a resource holds one copy of each global, which
+   MatIEC reaches through a pointer, written during the body, before its `=>`.)*
 5. **Output image.** The output map is returned once, after every due scan.
 
 **There is no preemption.** A scan runs to completion in zero logical time. IEC permits
@@ -790,7 +803,10 @@ scans"; the elapsed-time `scan/3` above replaces that meaning, and M1-5 must say
 host's input image, which a configuration's copy-in refreshes every scan anyway: that is
 what keeps `scan/2` and the one-line configuration in agreement across a restart. Since
 M1-6 it keeps only those whose values fit their types, which a recompile of the same name
-may have changed.)*
+may have changed.)* *(Since M2-4 a program with a `var_external` agrees too, given for each
+an unlocated global of no initial value that no other instance uses: run alone, the
+program keeps it as its own tag at 0, which its host cannot set and `restart/3` puts back
+at 0. `scheduler_test.exs` pins the agreement over 400 seeded steps.)*
 
 **Receipt.** The configuration spike ran an earlier form of the §4.4 plant: the §4.2
 `motor`, no event task, no `estop` and no snapshot, and `m2.reset` wired to `pb_reset`
@@ -843,12 +859,14 @@ warns that `.` in the lexer is safe only while there are no float literals.
 
 | File kind | Reserved (in any case) |
 |---|---|
-| `.ld` program | the mnemonics (`cal` and `ton` among them); `var var_input var_output bool dint` (M1-3); `var_external` (M2-4) |
+| `.ld` program | the mnemonics (`cal` and `ton` among them); `var var_input var_output bool dint` (M1-3); `var_external` (M2-4, landed) |
 | `.ld` function block | as a program, plus `function_block` (M2-5, landed) |
 | configuration (`.logex`) | `task interval single priority program with var_global at bool dint`; later `var_config` |
 
 A `var_external` name must be legal in both kinds, because it is declared again as a
-`var_global`.
+`var_global`. *(Landed with M2-4: `Logex.Declarations` refuses a configuration file's
+keyword, `Logex.Configuration.Text.keywords/0` as M2-3 left it, as a `var_external`'s
+name, in any case; M2-6's `single` joins the list when it lands.)*
 
 **This departs from IEC and from one reviewer**, who argued for reserving the Table C.2
 words (`task program with at` …) everywhere, as IEC does (§2.1.3). logex reserves a word
@@ -872,7 +890,9 @@ declarations within function block type declarations"* (features 10a and 10b), a
 grammars of both editions allow it in a function block. The departure is deliberate and
 reversible. A block's body runs over its own instance's state, which holds no global, so
 a block takes a global through a var_input operand instead. Binding it through the
-program instance that holds the block would need a write path out of a body.
+program instance that holds the block would need a write path out of a body. *(Landed with
+M2-4: a located diagnostic at its line, made before the block's type is built, and an
+`ArgumentError` for one declared from Elixir.)*
 
 ### 4.9 Changing a running controller (online edit)
 
@@ -1023,6 +1043,8 @@ against M2-1 as it landed, 2026-10-02: each item it can meet, it meets, as marke
   configured plant is not edited until OE-2)*
 - one copy of each global's value; *(met for M2-1's globals, one value each in the
   resource; M2-4's `var_external` keeps it by merging the global in around each scan)*
+  *(met since M2-4: no instance's state holds a var_external between cycles, which a test
+  pins by looking inside the resource, decision 49)*
 - the events `cycle/3` returns are an open set, which a host must tolerate. *(met:
   `Logex.Runtime`'s moduledoc says so)*
 
@@ -1458,8 +1480,8 @@ F3, the held values of F4) and still costs less than one scan.
 ### 4.10 Milestone 2's design (designed 2026-10-02)
 
 **Designed 2026-10-02; M2-1 landed the same day (`PLAN.md` M2-1), M2-5 on 2026-10-04
-(`PLAN.md` M2-5), and M2-2 and M2-3 on 2026-10-11 (`PLAN.md` M2-2 and M2-3); nothing else
-has.** A design pass spiked Milestone 2 in three
+(`PLAN.md` M2-5), M2-2 and M2-3 on 2026-10-11 (`PLAN.md` M2-2 and M2-3), and M2-4 on
+2026-10-12 (`PLAN.md` M2-4); only M2-6 has not.** A design pass spiked Milestone 2 in three
 tracks on copies of `47319f7`, on Elixir 1.20.4 / OTP 28: the scheduler from Elixir data
 (M2-1); user function blocks (M2-5); and the configuration file, shared globals and event
 tasks (M2-2, M2-3, M2-4, M2-6). Each track was reviewed for correctness and for fit with
@@ -1800,7 +1822,14 @@ M2-3.)*
   `interval` stanza of `docs/naming.md` and in `Logex.Runtime`'s one-rule section, and
   nothing builds it before OE-2.)*
 
-**M2-4 · Shared globals.**
+**M2-4 · Shared globals.** *(Landed 2026-10-12, as these rules; `PLAN.md` M2-4 gives the
+commits. Readings the landing made, each pinned: the walk is `Logex.Walk`, whose
+`writes/1` and `timers/1` reach into each block a `cal` runs by path, `p.s.t1`, with the
+lines of the block's own text, each block type read once a call; the writer warnings'
+storage-bit words are given wherever any writer's `ons` keeps its bit in the global,
+whoever the other writer is, as a fact of the global; a `var_external` line refused for
+its initial value declares nothing, as a `var_input`'s does; and a `var_external` never
+names a global refused for its name, so decision 42's silence has no case here.)*
 - *One IR walk first.* B5's one walk of a program's IR lands as M2-4's first commit,
   before any check that reads a program's writes or timers. It answers "which tags a
   program writes" and "which timers it runs" as public functions over the IR, not as a
@@ -1867,7 +1896,10 @@ M2-3.)*
     held 1 (decision 52);
   - the owed tie-break test is written in both forms: two writers of one global through
     `var_external` (M2-4 lands first) in `end_to_end_test.exs`, and, beside the rule
-    tests, one instance writing a global that another copies to an output point;
+    tests, one instance writing a global that another copies to an output point; *(M2-4
+    wrote the first form's shape in `end_to_end_test.exs`, two writers of one global
+    through `var_external` in one task, the later write standing; the tie-break between
+    an event task and a late periodic one waits for M2-6)*
   - `Logex.Configuration.Task` enforces `name` and `priority` only, and a test pins the
     enforced keys;
   - an unknown `single`'s did-you-mean is among the bool globals; an example in a message
@@ -2056,7 +2088,7 @@ each again from source; §4.10.)* Each rule is checked by reverting it (CLAUDE.m
   arrive with M2-4 and M2-5), driven for one simulated second, runs `m1` 100 times and
   `m2` 20 times, and each instance's `t1` times against the one clock.*
 
-**M2-4 · Shared globals.**
+**M2-4 · Shared globals.** *(Landed 2026-10-12; `PLAN.md` M2-4.)*
 - `var_external` in `.ld`, reserved there.
 - The type-agreement check (Ed 2 §2.4.3), the input-point write check, and the
   two-writer warning.
@@ -2573,14 +2605,14 @@ in the places below. Their routine answers are §4.10's rules under M2-4 and M2-
       decided text asks for.
 
     *Recommend the first.* It keeps the decided words true of the decided plant and
-    documents what they do not say. Adopted.
+    documents what they do not say. Adopted. *(Landed 2026-10-12.)*
 47. **A write through a `var_external` and a connection's copy-out to one global, in one
     scan (M2-4):** the copy-out lands last, after the `var_external` is split off, as
     IEC and MatIEC write an external during the body and `=>` after it; or the write
     through the `var_external` lands last; or a global one instance both writes through a
     `var_external` and drives by a connection is refused. *Recommend the copy-out last,*
     stated in `Logex.Runtime`'s cycle steps and in the warning's words; a refusal would
-    refuse what IEC allows and §4.4 makes a warning. Adopted.
+    refuse what IEC allows and §4.4 makes a warning. Adopted. *(Landed 2026-10-12.)*
 48. **The two writer warnings' words (M2-4).** The design's "the later of the two in a
     cycle wins" is false for two instances that only latch one alarm, for an `ons` whose
     storage bit is a `var_external` shared by two instances (the second never fires on the
@@ -2595,14 +2627,14 @@ in the places below. Their routine answers are §4.10's rules under M2-4 and M2-
 
     *Recommend the first,* keeping the two decided warnings and their scope; the refusal
     stays a later tightening, since refusing later breaks programs and warning now does
-    not. Adopted.
+    not. Adopted. *(Landed 2026-10-12.)*
 49. **How "one copy of each global" is pinned (M2-4).** It cannot be seen through the
     public API: reverting any of the three places that drop a global from an instance's
     state left the spike's whole suite green. Pin it by a test that looks inside the
     opaque `%Logex.Runtime{}` on purpose, as the plain-data test does; or only through
     OE-2's switch, when it lands; or let the state keep a stale copy, overwritten at
     every merge. *Recommend the test that looks inside:* the drops are one line each and a
-    refactor can lose them, and decision 45's switch depends on them. Adopted.
+    refactor can lose them, and decision 45's switch depends on them. Adopted. *(Landed 2026-10-12.)*
 50. **`next_due_in/1` with event tasks, and the host's loop (M2-6).** It counts periodic
     tasks only, so a configuration of event tasks, or of task-less instances alone, as on
     main already, answers `:infinity`, against the moduledoc's "`next_due_in/1` is 0 after

@@ -13,13 +13,14 @@ its own, instantiated as often as needed and run with `cal`, a public API
 (`Logex.compile/2`, `Logex.compile_file/1`, `Logex.compile_files/1` and `Logex.Runtime`),
 an online edit that changes a running instance's program, its function blocks included,
 without a restart (`Logex.Edit`), a scheduler that runs instances of several programs as
-one configuration on periodic tasks, wired to input and output points
+one configuration on periodic tasks, wired to input and output points, its programs
+sharing globals by name, such as an e-stop, through `var_external`
 (`Logex.Configuration`), written as a configuration file (`.logex`) that names its `.ld`
 program types or built from Elixir data, and a printer that turns an AST back into source
 so a routine round-trips, as a configuration file does too — all of that works and is
 tested end to end, and a program or a configuration with mistakes in it gets every one
 reported with its file and line rather than an exception, a misspelt tag included. What
-does not exist yet: counters, the other timers, math, shared globals and event tasks.
+does not exist yet: counters, the other timers, math and event tasks.
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
 
@@ -31,12 +32,18 @@ become an importer.**
 Source syntax today:
 
 - declaration lines before the first rung, one tag each: `<section> <name> <type>
-  [<initial>]`, the section `var`, `var_input` or `var_output`, the type `bool`, `dint`,
-  `ton` or a function block's name, as in `var_output speed_sp dint 1200`. Every tag a
-  rung uses must be declared. A `var_input` is supplied from outside and no instruction
-  may write it; a tag with no initial value starts at 0. A timer, `var t1 ton`, is
-  declared only with `var` and with no initial value: its preset is the number on the
-  `ton` that runs it. So is an instance of a function block, `var s1 seal`
+  [<initial>]`, the section `var`, `var_input`, `var_output` or `var_external`, the type
+  `bool`, `dint`, `ton` or a function block's name, as in `var_output speed_sp dint 1200`.
+  Every tag a rung uses must be declared. A `var_input` is supplied from outside and no
+  instruction may write it; a tag with no initial value starts at 0. A timer, `var t1
+  ton`, is declared only with `var` and with no initial value: its preset is the number on
+  the `ton` that runs it. So is an instance of a function block, `var s1 seal`
+- `var_external estop bool` names a configuration's global, its `var_global estop bool`
+  ("A global shared by name", below): logic reads and writes the global itself, one copy
+  for every instance that declares it. It is a bool or a dint, with no initial value, and
+  no configuration file's keyword names one. A function block's file refuses it: a block
+  takes a global through a var_input its `cal` fills. A program run alone keeps it as a
+  tag of its own, at 0, which its host cannot set
 - mnemonics, sections and types in any case (`xic`, `XIC`, `VAR_INPUT`), and reserved: no
   tag may be named after one, in any case, so `ote`, `Ote`, `cal` and `bool` are never
   tags; tags are case-sensitive (`aa` and `AA` are two tags). A function block's name is
@@ -83,7 +90,11 @@ file's does:
   point, and one connection at most drives a global. Names resolve over the whole file
 - `task interval priority with program var_global at bool dint` are reserved in a
   configuration file, in any case, and nowhere else: a `.ld` program may still have a tag
-  called `task`
+  called `task`, though no `var_external`, whose name is a global's too
+- a program type's `var_external` binds to the global of its name and type, checked once
+  a type at its first instance's `program` line; nothing writes an input point through
+  one, and no connection names one. Two instances that write one global through one, and
+  an instance that writes through one a global a connection drives, are warnings
 
 The *vocabulary* is a conventional ladder mnemonic set. The *branch delimiters used to be
 too*, and are no longer — which is worth stating plainly, because the survey that found the
@@ -159,6 +170,9 @@ line 2: `move` expects 2 operands (a value, then a tag), found 1 before the inst
 line 2: `ote` expects 1 operand (a tag), found none
 ```
 
+A tag an instruction writes may be a `var_external`: the write is to its global, which a
+configuration refuses where that global is an input point.
+
 Two behaviours that are deliberate rather than accidental: branches do **not**
 short-circuit, so a later leg's `ote` and `move` still take effect after an earlier leg is
 already true; and the environment threads through the legs in order, so a leg can see what
@@ -175,12 +189,12 @@ totality is a guarantee, not a feature to write programs against (`PLAN.md` §5)
 
 These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5 and §3's
 Milestone 2) and will change the source language:
-- **Program organisation** ([`docs/organisation.md`](docs/organisation.md)):
-  `var_external` for a global every instance shares, such as an e-stop; event tasks,
-  `task <name> single <global> priority <p>`. Each new word still gets its
+- **Program organisation** ([`docs/organisation.md`](docs/organisation.md)): event
+  tasks, `task <name> single <global> priority <p>`. Each new word still gets its
   `docs/naming.md` stanza, which may change a spelling. The scheduler (M2-1), function
-  blocks called with `cal` (M2-5) and the configuration file with its periodic tasks
-  (M2-2 and M2-3) have landed ("A function block" and "A configuration", below).
+  blocks called with `cal` (M2-5), the configuration file with its periodic tasks (M2-2
+  and M2-3) and globals shared through `var_external` (M2-4) have landed ("A function
+  block" and "A configuration", below).
 
 - **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
 - **The other timers, counters and math** arrive as `tof tp rto res`, `ctu ctd`, `add sub
@@ -697,6 +711,145 @@ no task `slwo` — did you mean `slow`?
   file could hold, and `check/1` returns them as diagnostics, each cited at its line when
   a file gives one. `new!/1` raises them all, the host's first.
 
+### A global shared by name
+
+`conveyor.ld` reads an e-stop that every conveyor shares, through `var_external`, and
+latches its `fault` on it until `reset`:
+
+```
+var_input start bool
+var_input stop bool
+var_input reset bool
+var_output motor bool
+var_external estop bool
+var fault bool
+
+xic estop otl fault
+xic reset otu fault
+( xic start | xic motor ) xio stop xio fault ote motor
+```
+
+`line.logex` declares the e-stop once, as an input point, and runs two conveyors, `c1`
+on a 10 ms task and `c2` on a 50 ms one. Neither connects `estop`: each reads the global
+by name.
+
+```
+// line.logex -- two conveyors, one e-stop
+task fast interval 10 priority 1
+task slow interval 50 priority 2
+
+var_global estop      bool at panel.i.7
+var_global pb_start_1 bool at panel.i.0
+var_global pb_start_2 bool at panel.i.1
+var_global pb_reset   bool at panel.i.2
+var_global k1         bool at panel.q.0
+var_global k2         bool at panel.q.1
+
+program c1 conveyor with fast
+  c1.start pb_start_1
+  c1.stop  0
+  c1.reset pb_reset
+  c1.motor k1
+
+program c2 conveyor with slow
+  c2.start pb_start_2
+  c2.stop  0
+  c2.reset pb_reset
+  c2.motor k2
+```
+
+`shared.exs` runs the line twice, once with the e-stop held from 50 ms and once with a
+10 ms press at 20 ms, then loads `wrong.logex`, which misspells the global and connects
+the var_external besides:
+
+```
+var_global estp       bool at panel.i.7
+var_global pb_start_1 bool at panel.i.0
+var_global k1         bool at panel.q.0
+program c1 conveyor
+  c1.start pb_start_1
+  c1.stop  0
+  c1.reset 0
+  c1.motor k1
+  c1.estop estp
+```
+
+```elixir
+{:ok, line} = Logex.Configuration.compile_file("line.logex")
+
+run = fn label, steps ->
+  IO.puts(label)
+
+  Enum.reduce(steps, Logex.Runtime.start(line), fn {now, inputs}, rt ->
+    {rt, out, events} = Logex.Runtime.cycle(rt, min(now, 10), inputs)
+    ran = for {:ran, _task, instance, _now} <- events, do: instance
+    IO.puts("  t=#{String.pad_leading("#{now}", 2)}  k1=#{out["k1"]} k2=#{out["k2"]}  ran #{Enum.join(ran, ", ")}")
+    rt
+  end)
+end
+
+start = %{"pb_start_1" => 1, "pb_start_2" => 1}
+release = %{"pb_start_1" => 0, "pb_start_2" => 0}
+
+rt =
+  run.("e-stop held from 50 ms:", [
+    {0, start}, {10, release}, {20, %{}}, {30, %{}}, {40, %{}}, {50, %{"estop" => 1}}, {60, %{}}
+  ])
+
+IO.inspect(for(path <- ~w(estop c1.estop c2.estop c2.fault), do: Logex.Runtime.get!(rt, path)),
+  label: "estop c1.estop c2.estop c2.fault"
+)
+
+run.("e-stop pressed for 10 ms at 20 ms:", [
+  {0, start}, {10, release}, {20, %{"estop" => 1}}, {30, %{"estop" => 0}}, {40, %{}}, {50, %{}}
+])
+
+{:error, diagnostics} = Logex.Configuration.compile_file("wrong.logex")
+Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
+```
+
+```
+$ mix run shared.exs
+e-stop held from 50 ms:
+  t= 0  k1=1 k2=1  ran c1, c2
+  t=10  k1=1 k2=1  ran c1
+  t=20  k1=1 k2=1  ran c1
+  t=30  k1=1 k2=1  ran c1
+  t=40  k1=1 k2=1  ran c1
+  t=50  k1=0 k2=0  ran c1, c2
+  t=60  k1=0 k2=0  ran c1
+estop c1.estop c2.estop c2.fault: [1, 1, 1, 1]
+e-stop pressed for 10 ms at 20 ms:
+  t= 0  k1=1 k2=1  ran c1, c2
+  t=10  k1=1 k2=1  ran c1
+  t=20  k1=0 k2=1  ran c1
+  t=30  k1=0 k2=1  ran c1
+  t=40  k1=0 k2=1  ran c1
+  t=50  k1=0 k2=1  ran c1, c2
+wrong.logex: line 4: `conveyor` declares `var_external estop bool` on line 5 of `conveyor.ld`, but there is no global `estop` — did you mean `estp`?
+wrong.logex: line 9: `c1.estop` is a var_external of `conveyor`, which reaches the global `estop` itself: only a var_input or var_output connects
+```
+
+- During a scan an instance reads and writes the global itself: the scheduler merges
+  each `var_external`'s global into the instance's state before the scan and splits it
+  off after, so the resource holds one copy of each global, and `get!/2` reads `c2.estop`
+  as `estop`. An instance sees what an earlier one wrote in the same cycle, as with a
+  connection; a connection's copy-out comes after a write through a `var_external` to the
+  same global, so the copy-out stands.
+- The e-stop held from 50 ms, a cycle both tasks run, stops both conveyors in that cycle.
+  An instance sees a global when it runs, so `c2`, on the 50 ms task, never sees the 10 ms
+  press: an e-stop must be held at least as long as the slowest interval that reads it,
+  as a maintained e-stop contact is.
+- A `var_external` with no global of its name, or of another type, is a diagnostic at
+  the line of the first instance of its type, naming the type's own file and line, once
+  a type; so is a write through one to an input point. A connection never names one.
+- Two instances that write one global through `var_external`, and an instance that writes
+  through one a global a connection drives, are warnings on the configuration's
+  `warnings`, in the words true of each: each scan reads what the other last wrote, and
+  the later write in a cycle stands, or an instance's own copy-out, after the scan,
+  stands, or, for a global that is an `ons`'s storage bit, the one-shot fires on the
+  wrong scans.
+
 ## Changing a running program
 
 A running instance takes a changed program without a restart, the way the conventional
@@ -908,7 +1061,7 @@ mix format
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
 - `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
 - `CLAUDE.md` — commands and conventions for anyone (or anything) editing the code
-- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, and the configuration file with its periodic tasks with M2-2 and M2-3; the rest of Milestone 2 is designed)
+- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, and globals shared through `var_external` with M2-4; event tasks, the rest of Milestone 2, are designed)
 - [`docs/defladder.md`](docs/defladder.md) — a study of an Elixir-embedded `defladder` DSL: what Nx's `defn` does, an executed spike, and a recommendation (proposed, not adopted)
 
 ## License
