@@ -1494,12 +1494,12 @@ configuration file's must be built that way before they land.
   mutation table in its message, every rule it adds reverted alone and the full suite
   judged by exit code. The first five were built on `025199a`, before M2-5, and rebased
   onto `732c0b6`, the last three after M2-3's commits, a departure from the record's order
-  made because they need M2-5's loader: (1) the survey, `8006dd8` (the record's 1); (2) the
-  reader and printer, `Logex.Configuration.Text`, `2177ef6` (3); (3) the checks as rows of
-  `check/1`, with `Configuration.compile/3`, `2dbb30f` (4); (4) the round trip, totality
-  and growth, `c3ec5cb` (6); (5) a location in a rung, `2eb0852` (7); then, after M2-3's,
-  (6) `compile_file/1` takes only `.ld`, `250926a` (2); (7) the configuration's loader,
-  `f963271` (5); (8) the Done-when from files on disk, `82a587e` (8); (9) the documents,
+  made because they need M2-5's loader: (1) the survey, `f2929d4` (the record's 1); (2) the
+  reader and printer, `Logex.Configuration.Text`, `be90e26` (3); (3) the checks as rows of
+  `check/1`, with `Configuration.compile/3`, `3a17ecd` (4); (4) the round trip, totality
+  and growth, `2e015cb` (6); (5) a location in a rung, `82bb5af` (7); then, after M2-3's,
+  (6) `compile_file/1` takes only `.ld`, `20ff260` (2); (7) the configuration's loader,
+  `4d2aac1` (5); (8) the Done-when from files on disk, `229a45a` (8); (9) the documents,
   the commit after it (8). 770 tests pass on Elixir 1.20.4 (8 of them doctests), up from
   675 on `732c0b6`. The mutation tables of (1) to (5) were run before the rebase, on
   `025199a`, 154 rules (9, 55, 59, 20 and 11), every one red; (5)'s eleven were run again
@@ -1538,7 +1538,7 @@ configuration file's must be built that way before they land.
   loader, over 36, 4.007x to 4.025x for 4x the program types, bound 4.9.
 
   A review of M2-2's and M2-3's commits confirmed findings fixed in the commits after
-  `d2e1a84`, each with a test that fails when its fix alone is reverted:
+  `a5b4e62`, each with a test that fails when its fix alone is reverted:
   - `Logex.compile_files/1` keeps which blocks a program has handed back apart from its
     memo, so a block's own file before a program that holds it no longer takes the
     warnings of the blocks below it from that program; and a result a cycle gave is not
@@ -1554,7 +1554,7 @@ configuration file's must be built that way before they land.
   - README's list of the public API, and its syntax list and "A configuration file",
     name `Logex.compile_files/1`, the loader a configuration's program types go through.
 
-  775 tests pass on Elixir 1.20.4 (8 of them doctests), up from 770 on `d2e1a84`.
+  775 tests pass on Elixir 1.20.4 (8 of them doctests), up from 770 on `a5b4e62`.
 - **M2-3 · Periodic tasks in text.** `task <n> interval <ms> priority <p>` and `with`.
   *Done when* the plant of `docs/organisation.md` §4.4 without its event task, its `motor`
   the §4.2 one plus `var t1 ton` and a rung `xic motor ton t1 5000` (so no `estop`,
@@ -1577,9 +1577,9 @@ configuration file's must be built that way before they land.
 
   **Status: DONE — landed 2026-10-11**, as three commits between M2-2's fifth and sixth,
   built on `025199a` and rebased onto `732c0b6` without a conflict but in the Done-when's
-  test file, with the documents in M2-2's last commit: (1) the survey, `058ae8f`; (2)
+  test file, with the documents in M2-2's last commit: (1) the survey, `0668643`; (2)
   task lines and `with`, the warning for a task that runs no instance, and the §4.4
-  receipt's seven diagnostics word for word, `0277087`; (3) the Done-when, `7b68b77`:
+  receipt's seven diagnostics word for word, `bd6980f`; (3) the Done-when, `4fa6cbc`:
   §4.4's plant without its event task, read by `Configuration.compile/3`, cycled every 10
   ms from 0 to 990 ms, runs `m1` 100 times and `m2` 20 times, and each `t1` times against
   the one clock, the inputs timed as the record asks. (2)'s 51 rules and the 21 the
@@ -1878,7 +1878,7 @@ diagnostic naming its file and line.
   `check/1` as rows, rewrites the public-surface pin once, and asserts every M2-1 check
   again from source. Two device names that differ only in case are refused there, the one
   check M2-1's data can express that M2-1 does not land; no spike built it. *(Closed by
-  M2-2's third commit, `2dbb30f`, the device names' case among its rows.)*
+  M2-2's third commit, `3a17ecd`, the device names' case among its rows.)*
 - **The seams between M2-5 and the configuration file** are planned, not built: the
   configuration spike has no `cal`. Each commit at a seam checks it on the composed tree:
   a `cal`'s outputs among a program's writes, a block's `ton` among its timers, a block's
