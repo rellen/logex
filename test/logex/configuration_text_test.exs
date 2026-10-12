@@ -448,6 +448,7 @@ defmodule Logex.Configuration.TextTest do
                {:declared, 6, %{kind: :instance, name: "m2"}},
                {:declared, 7, %{kind: :connection, instance: "m1", member: "start"}},
                {:declared, 8, %{kind: :connection, instance: "m1", member: "stop"}},
+               {:declared, 10, %{kind: :instance, name: nil}},
                instance(11, "m3", "motor"),
                {:declared, 12, %{kind: :task, name: "t1"}},
                {:declared, 13, %{kind: :task, name: "t2"}},
@@ -482,11 +483,13 @@ defmodule Logex.Configuration.TextTest do
              ]
 
       # The delimiter is the line's one diagnostic: what its words before it say is read
-      # only for what they name, a line that names nothing before it names nothing.
+      # only for what they name, a line that names nothing before it names nothing, but
+      # a `program` line, delimiters aside, declares a program it cannot name.
       assert entries == [
                {:declared, 1, %{kind: :global, name: "g"}},
                {:declared, 2, %{kind: :instance, name: "m1"}},
                {:declared, 3, %{kind: :connection, instance: "m2", member: "start"}},
+               {:declared, 5, %{kind: :instance, name: nil}},
                {:declared, 6, %{kind: :task, name: "fast"}},
                {:declared, 7, %{kind: :instance, name: "m5"}}
              ]

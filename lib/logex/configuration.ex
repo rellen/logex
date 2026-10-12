@@ -654,7 +654,7 @@ defmodule Logex.Configuration do
     {tasks, globals, instances, connections} = parts
     {wired, named} = Enum.split_with(declared, &match?({:declared, _, %{kind: :connection}}, &1))
     [tasks, globals, instances] = Enum.map([tasks, globals, instances], &worded/1)
-    space = namespace(tasks, globals, instances, named)
+    space = namespace(tasks, globals, instances, Enum.reject(named, &unnamed?/1))
     {points, d_points} = located(globals, space.kept)
     world = world(space, points, programs)
     {wiring, d_wiring} = wiring(Enum.sort_by(connections, &line_key/1), world, wired)
@@ -1072,6 +1072,10 @@ defmodule Logex.Configuration do
 
     %{names: names, silent: silent, kept: kept, problems: Enum.reverse(problems)}
   end
+
+  # A placeholder for a `program` line broken before its name takes no name.
+  defp unnamed?({:declared, _line, %{name: nil}}), do: true
+  defp unnamed?(_placeholder), do: false
 
   defp line_key({:declared, line, _named}), do: {0, line}
   defp line_key(%{line: nil}), do: {1, 0}
@@ -2006,7 +2010,7 @@ defmodule Logex.Configuration do
       |> Enum.sort_by(&{line_key(&1), &1.name})
 
   # IEC requires one program at least (Ed 2 Annex B.1.7; Ed 3 Annex A). A broken
-  # `program` line counts, as it was reported already.
+  # `program` line counts, as it was reported already, one broken before its name too.
   defp empty([], named),
     do: no_program(Enum.any?(named, &match?({:declared, _line, %{kind: :instance}}, &1)))
 

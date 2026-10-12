@@ -57,7 +57,10 @@ defmodule Logex.Configuration.Text do
   :task | :global | :instance, name: name}}`, or `{:declared, line, %{kind: :connection,
   instance: instance, member: member}}` for a connection, so that what checks the rest
   need not report that name undeclared, or that var_input unconnected: one mistake, one
-  message. A line broken by `(`, `|` or `)` is read up to the delimiter for this.
+  message. A line broken by `(`, `|` or `)` is read up to the delimiter for this. A
+  `program` line broken before its instance's name, its delimiters aside, gives
+  `{:declared, line, %{kind: :instance, name: nil}}`, which names nothing, so that a
+  configuration is not also told it declares no `program`.
 
   **Keywords**, `keywords/0`, are matched in any case, and names are not folded. Each
   Milestone 2 item brings its own words (`docs/organisation.md` §4.10). M2-2's are
@@ -144,7 +147,13 @@ defmodule Logex.Configuration.Text do
   defp lines([], entries, problems), do: {:error, Enum.reverse(problems), Enum.reverse(entries)}
 
   defp lines([tokens | rest], entries, problems),
-    do: lines(rest, entries, problems, grouped(Enum.find(tokens, &delimiter?/1), tokens))
+    do:
+      lines(
+        rest,
+        entries,
+        problems,
+        counted(grouped(Enum.find(tokens, &delimiter?/1), tokens), tokens)
+      )
 
   defp lines(rest, entries, problems, {:ok, entry}), do: lines(rest, [entry | entries], problems)
 
@@ -169,6 +178,21 @@ defmodule Logex.Configuration.Text do
 
   defp placeholders({:ok, entry}), do: declared(entry)
   defp placeholders({:error, _problem, declared}), do: declared
+
+  # A `program` line broken before its instance's name, delimiters aside, still declares
+  # a program, one it cannot name: a configuration it is in is not told it declares none.
+  defp counted({:error, problem, []}, tokens),
+    do: {:error, problem, unnamed(Enum.find(tokens, &(not delimiter?(&1))))}
+
+  defp counted(read, _tokens), do: read
+
+  defp unnamed({:name, _, word} = first), do: program_line(String.downcase(word), first)
+  defp unnamed(_number_or_nothing), do: []
+
+  defp program_line("program", first),
+    do: [{:declared, line_of(first), %{kind: :instance, name: nil}}]
+
+  defp program_line(_word, _first), do: []
 
   # A line is read by its first word, and is never empty: the lexer coalesces newlines.
   defp line([{:name, _, word} = first | rest]),

@@ -1547,8 +1547,12 @@ configuration file's must be built that way before they land.
     program types hold it, and a program type that does not compile names the files its
     mistakes are cited in, a block's among them, where it named the type's own; and a
     test pins that the types' diagnostics come in the order the types are named.
+  - a `program` line broken before its instance's name, `program 5 motor`, `program`
+    alone or `( program m1 motor`, declares a program it cannot name, a placeholder
+    `Logex.Configuration.Text.read/1` gives with no name, so the configuration is given
+    the line's diagnostic only, not "declares no `program`" after it.
 
-  774 tests pass on Elixir 1.20.4 (8 of them doctests), up from 770 on `d2e1a84`.
+  775 tests pass on Elixir 1.20.4 (8 of them doctests), up from 770 on `d2e1a84`.
 - **M2-3 · Periodic tasks in text.** `task <n> interval <ms> priority <p>` and `with`.
   *Done when* the plant of `docs/organisation.md` §4.4 without its event task, its `motor`
   the §4.2 one plus `var t1 ton` and a rung `xic motor ton t1 5000` (so no `estop`,

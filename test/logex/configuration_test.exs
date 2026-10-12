@@ -2161,6 +2161,37 @@ defmodule Logex.ConfigurationTest do
              ]
     end
 
+    # A `program` line broken before its instance's name, a delimiter before its first
+    # word among the ways, still declares a program, which nothing names: only the line's
+    # diagnostic is given. A broken line of another kind declares none.
+    test "a `program` line broken before its name is a program the configuration declares",
+         %{seal: seal} do
+      programs = %{"seal" => seal}
+
+      assert errors("program 5 seal", programs) == [
+               "line 1, column 9: expected an instance name after `program`, found `5`"
+             ]
+
+      assert errors("PROGRAM", programs) == [
+               "line 1, column 1: `program` needs an instance name and a program type, as " <>
+                 "in `program m1 motor`"
+             ]
+
+      assert errors("( program m1 seal", programs) == [
+               "line 1, column 1: a configuration line cannot hold `(`"
+             ]
+
+      assert errors("task 5\n| program", programs) == [
+               "line 1, column 6: expected a task's name after `task`, found `5`",
+               "line 2, column 1: a configuration line cannot hold `|`"
+             ]
+
+      assert errors("( task t", programs) == [
+               "line 1, column 1: a configuration line cannot hold `(`",
+               "this configuration declares no `program`: it would run nothing"
+             ]
+    end
+
     # Each wrong reading of a dotted name is named (§4.7): a location is written only after
     # `at`, its advice in its one spelling, and one a global is at reads as that location
     # first, whatever its device is called; instances share a value only through a global;
