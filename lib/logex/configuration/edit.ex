@@ -2,16 +2,33 @@ defmodule Logex.Configuration.Edit do
   @moduledoc """
   A staged edit of a running configuration (OE-2, `docs/organisation.md` §4.9, "OE-2's
   design"): a candidate configuration is accepted against the resource that runs the
-  original, `%Logex.Runtime{}`, as `Logex.Edit` accepts a program against a lone
-  instance (decision 59). Every step is taken between two cycles and returns a report.
+  original, `%Logex.Runtime{}`, tested in it, untested, and assembled or cancelled, with
+  `Logex.Edit`'s steps and report over a whole plant (decision 59). Every step is taken
+  between two cycles and returns a report.
 
-      {:ok, edit, forecast} = Logex.Configuration.Edit.accept(runtime, candidate)
-      {original, runtime, []} = Logex.Configuration.Edit.cancel(edit, runtime)
+      {:ok, edit, forecast}     = Logex.Configuration.Edit.accept(runtime, candidate)
+      {edit, runtime, report}   = Logex.Configuration.Edit.test(edit, runtime)   # the candidate runs
+      {edit, runtime, report}   = Logex.Configuration.Edit.untest(edit, runtime) # the original again
+      {edit, runtime, report}   = Logex.Configuration.Edit.test(edit, runtime)
+      {config, runtime, report} = Logex.Configuration.Edit.assemble(edit, runtime)
 
-  **Accept** reads the running configuration from the resource, so it takes no program to
-  run: `accept/2` checks the candidate against it and the resource, and changes nothing.
-  Its forecast is the report a test taken now would give: the switch to the candidate,
-  computed over the resource as it is and thrown away (decision 27).
+  | Step | Taken from | `Logex.Runtime.cycle/3` then runs | The resource |
+  |---|---|---|---|
+  | `accept/2` | — | the original | read for the forecast, unchanged |
+  | `test/2` | accepted, untested | the candidate | switched to the candidate |
+  | `untest/2` | testing | the original | switched back |
+  | `assemble/2` | testing | the candidate; the edit ends | pruned to the candidate |
+  | `cancel/2` | accepted | the original; the edit ends | unchanged but for its generation; the report is `[]` |
+  | `cancel/2` | untested | the original; the edit ends | pruned to the original |
+
+  The resource carries the configuration it runs, so the host chooses nothing to scan:
+  `running/1` says what a cycle runs, and the host keeps the runtime each step returns. A
+  `Logex.Runtime.restart/2` during an edit keeps its stage (decision 65).
+
+  **Accept** reads the running configuration from the resource: `accept/2` checks the
+  candidate against it and the resource, and changes nothing. Its forecast is the report a
+  test taken now would give, the switch computed over the resource as it is and thrown
+  away (decision 27); a test taken later reads the resource as it is then.
 
   It refuses, as `{:error, diagnostics}` at stage `:edit`, what may change only with a
   restart: a task added or removed; a task's `single` added, removed or changed; an event
@@ -26,28 +43,52 @@ defmodule Logex.Configuration.Edit do
   first such instance in the candidate, each in that type's own `file` (fix F15). A
   candidate's warnings stop nothing.
 
-  **What may change while running**, which the forecast reports:
+  **A switch**, `test/2` or `untest/2`, moves the resource from the configuration it stops
+  to the one it starts, writes it in the resource, which then runs the latter, and prunes
+  nothing:
   - an instance both configurations run as one program type, a *kept* instance, moves
     through `Logex.Edit`'s per-instance switch, by one plan per program type and
     direction built at accept (fix F5), its reports named by its path, `m1.t1`. Each
-    global is merged into its state by the var_externals of the program the switch stops
-    (decision 45), and the plan knows the var_externals for globals, so no start rule
-    starts one and none is reported as a changed initial value;
+    global is merged into its state by the var_externals of the program the switch stops,
+    and each var_external of the program started is split off again after, with any of
+    the program stopped's that the one started does not declare, so no instance's state
+    holds one (decisions 45 and 49), and the plan knows them, so no start rule starts one
+    and none is reported as a changed initial value. No switch writes a global. A timer
+    resumes from the resource's clock, and the switch gives the instance that clock as its
+    `now`, fix F11's undo reading the instance's own `now` first, the time the last switch
+    gave it (decision 56);
   - an instance only the configuration started runs, or one it runs as another program
-    type (decision 43), which may run on another task (decision 61), is started as
-    `Logex.Runtime.instance/1` starts it, `{:instance_added, name, type}`; one only the configuration stopped runs, or the
-    old state of one retyped, is set aside, `{:instance_stopped, name, type}`;
+    type (decision 43), which may run on another task (decision 61), comes back from
+    aside where an earlier switch of this edit set it aside, as it was, its `now` the
+    resource's and each timer that was timing resumed from the switch, `:resumed` by its
+    path, since the edit stopped it, not its logic (decision 57),
+    `{:instance_back, name, type}`; or is started as `Logex.Runtime.instance/1` starts it,
+    its var_externals dropped as `start/1` drops them, `{:instance_added, name, type}`;
+  - an instance only the configuration stopped runs, or the old state of one retyped, is
+    set aside, kept unused and never scanned, `{:instance_stopped, name, type}`;
   - a global only the configuration started declares starts at
     `Logex.Configuration.initial/1`, `{:added, name, value}`, at the switch that first
-    finds it missing; one only the configuration stopped declares is kept unused; and a
-    kept global whose initial value changed keeps its running value until
-    `Logex.Runtime.restart/2`, `{:initial_changed, name, {old, new}}` (decision 44);
+    finds it missing; one only the configuration stopped declares is kept unused, so an
+    instance set aside that reads it finds it if it comes back; and a kept global whose
+    initial value changed keeps its running value until `Logex.Runtime.restart/2`,
+    `{:initial_changed, name, {old, new}}` (decision 44);
   - a task whose interval changed is next due at `min(next_due, now + new interval)`
     (decision 40), `{:interval, task, {old, new}}`, and `{:next_due, task, {from, to}}`
-    where that moves it; its trigger's last sample is kept, so no switch fires an event.
+    where that moves it; its trigger's last sample is kept, so no switch fires an event;
+  - the wiring is derived again from the configuration started, so a var_input's new
+    connection is read at its instance's next scan.
 
-  **Cancel** from accept ends the edit and changes nothing but the resource's generation,
-  which it moves on by one (decision 64), and reports `[]`.
+  **Assemble** (from test) and **cancel** (after an untest) are not switches: each prunes
+  the resource to the configuration it keeps, each kept instance by its type's plan, by
+  path, as `Logex.Edit` prunes one; every instance set aside, `{:instance_pruned, name,
+  type}`; and every global the kept configuration does not declare, `{:pruned, name,
+  value}`. Cancel from accept changes nothing but the resource's generation, which it moves
+  on by one (decision 64), and reports `[]`.
+
+  **A restart during an edit** (decision 65) restarts the instances of the configuration
+  the resource runs, drops those set aside and the globals only the other configuration
+  declares, and keeps the generation and the edit's stage: the next switch starts again
+  what it dropped, `:instance_added` and `:added`.
 
   **The report** is a list of `{kind, name, detail}`, sorted, at most one entry per kind
   and name, the kinds an open set a host must tolerate. A global, task or instance is
@@ -60,14 +101,14 @@ defmodule Logex.Configuration.Edit do
   `Logex.Configuration.check/1` refuses among them (decision 63); then that the candidate
   keeps the running configuration's name. A step checks the edit, then the runtime, then
   that the edit is current, its generation and then the configuration the resource runs,
-  then the stage. The generation (decision 60) is moved on by every step but accept, so a
-  step on an edit that has ended, or one another edit has stepped past, is refused. Two
-  resources started from one configuration are equal, plain data, so an edit accepted on
-  one may be stepped on the other while their generations agree: that is outside the
-  contract, as is an edit built or changed by hand.
+  then the stage, in OE-1's words. The generation (decision 60) is moved on by every step
+  but accept, so a step on an edit that has ended, or one another edit has stepped past,
+  is refused. Two resources started from one configuration are equal, plain data, so an
+  edit accepted on one may be stepped on the other while their generations agree: that is
+  outside the contract, as is an edit built or changed by hand.
   """
 
-  alias Logex.{Configuration, Diagnostic, Program, Runtime, Tag}
+  alias Logex.{Configuration, Diagnostic, FbType, Instance, Program, Runtime, Tag}
   alias Logex.Edit.Plan
 
   @enforce_keys [:original, :candidate, :stage, :plans, :records, :generation]
@@ -104,9 +145,56 @@ defmodule Logex.Configuration.Edit do
 
   defp accepted(diagnostics, _runtime, _candidate), do: {:error, diagnostics}
 
+  @doc "Runs the candidate in the resource, from accept or after an untest."
+  def test(edit, runtime) do
+    edit = edit!(edit)
+    tested(edit, current!(edit, runtime!(runtime)))
+  end
+
+  defp tested(%__MODULE__{stage: stage} = edit, runtime) when stage in [:accepted, :untested],
+    do: stepped(edit, runtime, :test, :testing)
+
+  defp tested(edit, _runtime), do: stage!(edit, "test", "accepted or untested")
+
+  @doc "Runs the original in the resource again, from test."
+  def untest(edit, runtime) do
+    edit = edit!(edit)
+    untested(edit, current!(edit, runtime!(runtime)))
+  end
+
+  defp untested(%__MODULE__{stage: :testing} = edit, runtime),
+    do: stepped(edit, runtime, :untest, :untested)
+
+  defp untested(edit, _runtime), do: stage!(edit, "untest", "under test")
+
+  # A switch, written into the resource by Logex.Runtime.edited/2, which moves its
+  # generation on; the edit expects the new one.
+  defp stepped(edit, runtime, direction, stage) do
+    {changes, records, report} = switch(edit, runtime, direction)
+    %Runtime{generation: generation} = runtime = Runtime.edited(runtime, changes)
+    {%{edit | stage: stage, records: records, generation: generation}, runtime, report}
+  end
+
+  @doc """
+  Keeps the candidate, from test, and ends the edit: what only the original has is pruned.
+  Returns the candidate, the configuration the resource runs from now on.
+  """
+  def assemble(edit, runtime) do
+    edit = edit!(edit)
+    assembled(edit, current!(edit, runtime!(runtime)))
+  end
+
+  defp assembled(%__MODULE__{stage: :testing} = edit, runtime) do
+    {runtime, report} = prune(edit, runtime, :test)
+    {edit.candidate, runtime, report}
+  end
+
+  defp assembled(edit, _runtime), do: stage!(edit, "assemble", "under test")
+
   @doc """
   Keeps the original and ends the edit: from accept, the resource unchanged but for its
-  generation, and the report `[]`. Returns the original.
+  generation, and the report `[]`; after an untest, what only the candidate has pruned.
+  Returns the original.
   """
   def cancel(edit, runtime) do
     edit = edit!(edit)
@@ -115,6 +203,11 @@ defmodule Logex.Configuration.Edit do
 
   defp cancelled(%__MODULE__{stage: :accepted} = edit, runtime),
     do: {edit.original, Runtime.edited(runtime, %{}), []}
+
+  defp cancelled(%__MODULE__{stage: :untested} = edit, runtime) do
+    {runtime, report} = prune(edit, runtime, :untest)
+    {edit.original, runtime, report}
+  end
 
   defp cancelled(edit, _runtime), do: stage!(edit, "cancel", "accepted or untested")
 
@@ -389,13 +482,15 @@ defmodule Logex.Configuration.Edit do
         instance({instance, Map.get(froms, instance.name), from, to}, context, acc)
       end)
 
+    started_names = for %{name: name, type: type} <- to.instances, froms[name] != type, do: name
+
     {tasks, timed} = tasks(from, to, runtime)
 
     changes = %{
       config: to,
       globals: globals,
       instances: instances,
-      aside: Map.merge(runtime.aside, Map.new(stopped)),
+      aside: Map.merge(Map.drop(runtime.aside, started_names), Map.new(stopped)),
       tasks: tasks
     }
 
@@ -408,13 +503,17 @@ defmodule Logex.Configuration.Edit do
   end
 
   # A kept instance, of one program type in both: decision 45's merge by the var_externals
-  # of the program stopped, then the type's plan.
+  # of the program stopped, the type's plan, and the split by those of the program started,
+  # with any of the program stopped's that the one started does not declare, so no copy of
+  # a global stays in the state (decision 49). The switch resumes a timer from the
+  # resource's clock, and gives the instance that clock (decision 56).
   defp instance(
-         {%{name: name, type: type}, type, from, _to},
+         {%{name: name, type: type}, type, from, to},
          context,
          {instances, records, reports}
        ) do
     stops = Map.fetch!(from.programs, type)
+    starts = Map.fetch!(to.programs, type)
 
     merged =
       merged(Map.fetch!(context.runtime.instances, name), externals(stops), context.globals)
@@ -422,26 +521,95 @@ defmodule Logex.Configuration.Edit do
     plan = Map.fetch!(Map.fetch!(context.edit.plans, type), context.direction)
     record = Map.get(records, name, Plan.record())
 
-    {state, record, report} = Plan.switch(plan, record, merged, context.first?)
+    {state, record, report} =
+      Plan.switch(plan, record, merged, context.first?, context.runtime.now)
+
+    state = split(state, externals(starts) ++ undeclared(externals(stops), starts))
 
     {Map.put(instances, name, state), Map.put(records, name, record),
      for({kind, path, detail} <- report, do: {kind, name <> "." <> path, detail}) ++ reports}
   end
 
   # An instance the configuration started runs that the one stopped does not, as this
-  # type: a new one, started as Logex.Runtime.instance/1 starts it, holding no var_external,
-  # as start/1 starts one (decision 43).
-  defp instance(
-         {%{name: name, type: type}, _other, _from, to},
+  # type: back from aside, where an earlier switch of this edit set it aside, or a new one,
+  # started as Logex.Runtime.instance/1 starts it, holding no var_external, as start/1
+  # starts one (decision 43).
+  defp instance({%{name: name, type: type}, _other, _from, to}, context, acc),
+    do:
+      back(
+        Map.fetch(context.runtime.aside, name),
+        {name, Map.fetch!(to.programs, type)},
+        context,
+        acc
+      )
+
+  # Decision 57: an instance set aside as one of this type comes back as it was set aside,
+  # its `now` the resource's, as a switch gives a kept one (decision 56), and each timer
+  # that was timing resumed from the switch, by its path: the edit stopped the instance, not
+  # its logic, so the time set aside is not caught up.
+  defp back(
+         {:ok, %Instance{type: type} = state},
+         {name, %Program{name: type} = program},
+         context,
+         {instances, records, reports}
+       ) do
+    %Runtime{now: now} = context.runtime
+    {env, resumed} = resume(timers(program), state.env, {name, now})
+
+    {Map.put(instances, name, %{state | env: env, now: now}), records,
+     [{:instance_back, name, type} | resumed ++ reports]}
+  end
+
+  defp back(
+         _none,
+         {name, %Program{name: type} = program},
          _context,
          {instances, records, reports}
        ) do
-    state = Runtime.instance(Map.fetch!(to.programs, type))
+    state = split(Runtime.instance(program), externals(program))
     {Map.put(instances, name, state), records, [{:instance_added, name, type} | reports]}
   end
 
+  # Every timer a program's state holds, at any depth, by its path: each of its tags whose
+  # type is the built-in timer, and inside each instance of a user block, each member's in
+  # turn, read inside the program's one table of types (decision 53).
+  defp timers(%Program{} = program),
+    do:
+      for(
+        {name, %Tag{type: type}} <- Program.typed_tags(program),
+        path <- timer_paths(type, [name]),
+        do: path
+      )
+
+  defp timer_paths(%FbType{body: nil}, path), do: [Enum.reverse(path)]
+
+  defp timer_paths(%FbType{members: members} = type, path),
+    do:
+      for(
+        member <- members,
+        inner <- timer_paths(FbType.type_of(type, member), [member.name | path]),
+        do: inner
+      )
+
+  defp timer_paths(_leaf, _path), do: []
+
+  defp resume(paths, env, at),
+    do: Enum.reduce(paths, {env, []}, &resumed(get_in(env, &1), &1, at, &2))
+
+  defp resumed(%{"en" => 1, "last" => last} = timer, path, {name, now}, {env, reports})
+       when last < now,
+       do:
+         {put_in(env, path, %{timer | "last" => now}),
+          [{:resumed, Enum.join([name | path], "."), now - last} | reports]}
+
+  defp resumed(_timer, _path, _at, acc), do: acc
+
   defp merged(%{env: env} = state, externals, globals),
     do: %{state | env: Map.merge(env, Map.take(globals, externals))}
+
+  defp split(%{env: env} = state, externals), do: %{state | env: Map.drop(env, externals)}
+
+  defp undeclared(names, %Program{tags: tags}), do: Enum.reject(names, &is_map_key(tags, &1))
 
   defp externals(%Program{tags: tags}),
     do: for({name, %Tag{section: :var_external}} <- tags, do: name)
@@ -502,4 +670,45 @@ defmodule Logex.Configuration.Edit do
 
   defp next_due(_name, same, same), do: []
   defp next_due(name, next, due), do: [{:next_due, name, {next, due}}]
+
+  # ---- assemble and cancel: the prune -----------------------------------------------------
+
+  # Assemble keeps the candidate, from test, and cancel after an untest the original, which
+  # runs: each instance kept in both pruned by its type's plan for the direction that last
+  # switched to it, by path; every instance set aside pruned whole; and every global the
+  # configuration kept does not declare pruned. Nothing is switched, so no one-shot is
+  # blocked and no `.pre` moves.
+  defp prune(edit, %Runtime{} = runtime, direction) do
+    {from, to} = sides(edit, direction)
+    froms = Map.new(from.instances, &{&1.name, &1.type})
+
+    {instances, reports} =
+      Enum.reduce(to.instances, {runtime.instances, []}, fn instance, acc ->
+        pruned(instance, Map.get(froms, instance.name), {edit, direction}, acc)
+      end)
+
+    keep = by_name(to.globals)
+
+    {globals, gone} =
+      Map.split_with(runtime.globals, fn {name, _value} -> is_map_key(keep, name) end)
+
+    report =
+      reports ++
+        for({name, value} <- gone, do: {:pruned, name, value}) ++
+        for({name, state} <- runtime.aside, do: {:instance_pruned, name, state.type})
+
+    {Runtime.edited(runtime, %{instances: instances, globals: globals, aside: %{}}),
+     Enum.sort(report)}
+  end
+
+  defp pruned(%{name: name, type: type}, type, {edit, direction}, {instances, reports}) do
+    plan = Map.fetch!(Map.fetch!(edit.plans, type), direction)
+    record = Map.get(edit.records, name, Plan.record())
+    {state, report} = Plan.prune(plan, record, Map.fetch!(instances, name))
+
+    {Map.put(instances, name, state),
+     for({kind, path, detail} <- report, do: {kind, name <> "." <> path, detail}) ++ reports}
+  end
+
+  defp pruned(_added, _other, _context, acc), do: acc
 end

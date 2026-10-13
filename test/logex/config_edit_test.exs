@@ -595,4 +595,398 @@ defmodule Logex.ConfigEditTest do
                Runtime.cycle(runtime, 10, %{}) |> elem(1)
     end
   end
+
+  # The resource looked into on purpose, as scheduler_test.exs's decision-49 test looks:
+  # which instances' states hold `name`.
+  defp holding(%Runtime{instances: instances}, name),
+    do: for({instance, state} <- instances, Map.has_key?(state.env, name), do: instance)
+
+  # A timer's `last`, internal to it, which no access path reads.
+  defp last_of(%Runtime{instances: instances}, name), do: instances[name].env["t1"]["last"]
+
+  defp cycles(runtime, n, inputs \\ %{}) do
+    Enum.reduce(1..n, {runtime, nil}, fn _, {runtime, _} ->
+      {runtime, outputs, _} = Runtime.cycle(runtime, 10, inputs)
+      {runtime, outputs}
+    end)
+  end
+
+  defp without_m2(text \\ plant_text()),
+    do: String.replace(text, ~r/program m2 motor with slow\n(  m2\..*\n)+/, "")
+
+  describe "the steps, at the wrong stage" do
+    test "each is refused in OE-1's words" do
+      runtime = running(10)
+
+      {edit, _} =
+        accepted(runtime, plant(String.replace(plant_text(), "interval 50", "interval 20")))
+
+      assert_raise ArgumentError,
+                   "untest takes an edit under test, but this one is accepted",
+                   fn ->
+                     Edit.untest(edit, runtime)
+                   end
+
+      assert_raise ArgumentError,
+                   "assemble takes an edit under test, but this one is accepted",
+                   fn ->
+                     Edit.assemble(edit, runtime)
+                   end
+
+      {testing, runtime, _} = Edit.test(edit, runtime)
+
+      assert_raise ArgumentError,
+                   "test takes an edit accepted or untested, but this one is under test",
+                   fn -> Edit.test(testing, runtime) end
+
+      assert_raise ArgumentError,
+                   "cancel takes an edit accepted or untested, but this one is under test",
+                   fn -> Edit.cancel(testing, runtime) end
+
+      {untested, runtime, _} = Edit.untest(testing, runtime)
+      assert Edit.stage(untested) == :untested
+
+      assert_raise ArgumentError,
+                   "untest takes an edit under test, but this one is untested",
+                   fn ->
+                     Edit.untest(untested, runtime)
+                   end
+
+      assert_raise ArgumentError,
+                   "assemble takes an edit under test, but this one is untested",
+                   fn ->
+                     Edit.assemble(untested, runtime)
+                   end
+
+      # The generation is checked before the stage: an edit stepped past is told so.
+      assert_raise ArgumentError, ~r/^this edit expects the resource at generation 1/, fn ->
+        Edit.test(testing, runtime)
+      end
+    end
+  end
+
+  describe "test and untest switch the resource between two cycles" do
+    test "test runs the candidate from the next cycle, its report the forecast; untest runs " <>
+           "the original again; each moves the generation on" do
+      runtime = running(100)
+      motor = String.replace(motor_ld(), "ton t1 5000", "ton t1 6000")
+      candidate = plant(plant_text(), programs(motor))
+      {edit, forecast} = accepted(runtime, candidate)
+      {edit, tested, report} = Edit.test(edit, runtime)
+      assert report == forecast
+      assert {Edit.stage(edit), Edit.running(edit)} == {:testing, candidate}
+      assert tested.generation == runtime.generation + 1
+      assert Runtime.get!(tested, "m1.t1.pre") == 6000
+      {tested, _} = cycles(tested, 3)
+      assert Runtime.get!(tested, "m1.t1.pre") == 6000
+
+      {edit, untested, report} = Edit.untest(edit, tested)
+      assert {:preset, "m1.t1", {6000, 5000}} in report
+      assert {Edit.stage(edit), Edit.running(edit)} == {:untested, plant()}
+      assert untested.generation == tested.generation + 1
+      {untested, _} = cycles(untested, 2)
+      assert Runtime.get!(untested, "m2.t1.pre") == 5000
+    end
+
+    test "no instance's state holds a var_external after any step (decisions 45 and 49)" do
+      runtime = running(40)
+
+      text =
+        String.replace(
+          plant_text(),
+          "var_global k2_at_trip bool",
+          "var_global k2_at_trip bool\nvar_global alarm bool 1"
+        )
+
+      motor =
+        String.replace(
+          motor_ld(),
+          "var_external estop bool",
+          "var_external estop bool\nvar_external alarm bool"
+        )
+
+      text =
+        text <> "program m3 motor\n  m3.start 0\n  m3.stop 0\n  m3.overtemp 0\n  m3.reset 0\n"
+
+      {edit, _} = accepted(runtime, plant(text, programs(motor)))
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      assert {holding(runtime, "estop"), holding(runtime, "alarm")} == {[], []}
+      {runtime, _} = cycles(runtime, 5)
+      assert {holding(runtime, "estop"), holding(runtime, "alarm")} == {[], []}
+      {edit, runtime, _} = Edit.untest(edit, runtime)
+      assert {holding(runtime, "estop"), holding(runtime, "alarm")} == {[], []}
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {_config, runtime, _} = Edit.assemble(edit, runtime)
+      assert {holding(runtime, "estop"), holding(runtime, "alarm")} == {[], []}
+      assert Runtime.get!(runtime, "m3.alarm") == 1
+    end
+
+    test "a var_external the program started does not declare leaves no copy in the state" do
+      runtime = running(20)
+
+      motor =
+        String.replace(motor_ld(), "var_external estop bool\n", "")
+        |> String.replace("xic estop otl fault\n", "")
+
+      {edit, _} = accepted(runtime, plant(plant_text(), programs(motor)))
+      {_edit, runtime, _} = Edit.test(edit, runtime)
+      assert holding(runtime, "estop") == []
+    end
+
+    test "a connection changed is read at its instance's next scan" do
+      runtime = running(50)
+
+      {edit, _} =
+        accepted(
+          runtime,
+          plant(String.replace(plant_text(), "  m2.reset    0", "  m2.reset    pb_reset"))
+        )
+
+      {_edit, runtime, _} = Edit.test(edit, runtime)
+      {runtime, _, _} = Runtime.cycle(runtime, 50, %{"pb_reset" => 1})
+      assert Runtime.get!(runtime, "m2.reset") == 1
+    end
+
+    test "no switch fires an event: a trigger's last sample is kept" do
+      runtime = running(10)
+      {runtime, _, events} = Runtime.cycle(runtime, 10, %{"estop" => 1})
+      assert {:ran, "trip", "snap", 20} in events
+
+      {edit, _} =
+        accepted(runtime, plant(String.replace(plant_text(), "interval 50", "interval 20")))
+
+      {_edit, runtime, _} = Edit.test(edit, runtime)
+      {_runtime, _, events} = Runtime.cycle(runtime, 10, %{})
+      refute Enum.any?(events, &match?({:ran, "trip", _, _}, &1))
+    end
+
+    test "decision 40's next due time is the resource's from the switch" do
+      runtime = running(10)
+
+      {edit, _} =
+        accepted(runtime, plant(String.replace(plant_text(), "interval 50", "interval 20")))
+
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      assert Runtime.next_due_in(runtime) == 10
+      {runtime, _, events} = Runtime.cycle(runtime, 20, %{})
+      assert {:ran, "slow", "m2", 30} in events
+
+      # And back at untest, with the old interval: min(50, 30 + 50) keeps 50.
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:interval, "slow", {20, 50}} in report
+      assert {:next_due, "slow", {50, 50}} not in report
+      {_runtime, _, events} = Runtime.cycle(runtime, 20, %{})
+      assert {:ran, "slow", "m2", 50} in events
+    end
+
+    test "only the first test starts again a tag the candidate adds" do
+      runtime = running(10)
+
+      motor =
+        String.replace(motor_ld(), "var halt bool", "var halt bool\nvar kept dint 5") <>
+          "xic motor move 9 kept\n"
+
+      {edit, forecast} = accepted(runtime, plant(plant_text(), programs(motor)))
+      assert {:added, "m1.kept", 5} in forecast
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {runtime, _} = cycles(runtime, 1)
+      assert Runtime.get!(runtime, "m1.kept") == 9
+      {edit, runtime, _} = Edit.untest(edit, runtime)
+      {_edit, runtime, report} = Edit.test(edit, runtime)
+      refute Enum.any?(report, &match?({:added, "m1.kept", _}, &1))
+      assert Runtime.get!(runtime, "m1.kept") == 9
+    end
+  end
+
+  describe "the resource's clock (decision 56)" do
+    test "a switch gives each kept instance the resource's now, and a timer resumes from it" do
+      # `m2`, on the 50 ms task, scans at 0 and 50; the candidate takes its timer's rung
+      # out, and the untest gives it back at 130 ms, `m2` last scanned at 100.
+      runtime = running(70)
+      assert runtime.instances["m2"].now == 50
+      motor = String.replace(motor_ld(), "xic motor ton t1 5000\n", "")
+      {edit, _} = accepted(runtime, plant(plant_text(), programs(motor)))
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      assert runtime.instances["m2"].now == 70
+      {runtime, _} = cycles(runtime, 6)
+      assert runtime.instances["m2"].now == 100
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      # From 50 ms, where the original last ran it: 130 - 50, none caught up.
+      assert {:resumed, "m2.t1", 80} in report
+      assert runtime.instances["m2"].now == 130
+      assert Runtime.get!(runtime, "m2.t1.acc") == 50
+      {runtime, _} = cycles(runtime, 2)
+      assert Runtime.get!(runtime, "m2.t1.acc") == 50 + 20
+    end
+
+    test "fix F11's undo reads the instance's own clock, so a cycle that does not scan it " <>
+           "cannot hide a resume from the untest" do
+      # First an edit that takes the timer's rung out, assembled at 60 ms: `m2.t1` frozen,
+      # timing, its `last` the 50 ms of `m2`'s last scan.
+      runtime = running(60)
+
+      no_timer =
+        plant(plant_text(), programs(String.replace(motor_ld(), "xic motor ton t1 5000\n", "")))
+
+      {edit, _} = accepted(runtime, no_timer)
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {_config, runtime, _} = Edit.assemble(edit, runtime)
+      assert last_of(runtime, "m2") == 50
+
+      # Then one that gives it back, tested at once, and untested at 90 ms, `m2` not
+      # scanned between: the untest gives the test's resume back.
+      {edit, _} = accepted(runtime, plant())
+      {edit, runtime, report} = Edit.test(edit, runtime)
+      assert {:resumed, "m2.t1", 10} in report
+      {runtime, _} = cycles(runtime, 3)
+      assert runtime.instances["m2"].switched
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:resume_undone, "m2.t1", 10} in report
+      assert last_of(runtime, "m2") == 50
+    end
+  end
+
+  describe "instances set aside and brought back (decisions 43, 57 and 65)" do
+    test "one removed is set aside, unscanned, and brought back by untest with its state" do
+      runtime = running(60)
+      {edit, _} = accepted(runtime, plant(without_m2()))
+      {edit, runtime, report} = Edit.test(edit, runtime)
+      assert {:instance_stopped, "m2", "motor"} in report
+      aside = runtime.aside["m2"]
+      assert aside == running(60).instances["m2"]
+      {runtime, _} = cycles(runtime, 5)
+      assert runtime.aside["m2"] == aside
+      refute Map.has_key?(runtime.instances, "m2")
+
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:instance_back, "m2", "motor"} in report
+      refute Enum.any?(report, &match?({:instance_added, _, _}, &1))
+      assert runtime.aside == %{}
+      back = runtime.instances["m2"]
+      assert %{back | now: aside.now, env: aside.env} == aside
+      assert Runtime.get!(runtime, "m2.motor") == 1
+    end
+
+    test "its timers carry on from where they stopped, reported (decision 57)" do
+      runtime = running(60)
+      acc = Runtime.get!(runtime, "m2.t1.acc")
+      {edit, _} = accepted(runtime, plant(without_m2()))
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {runtime, _} = cycles(runtime, 12)
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:resumed, "m2.t1", 180 - 50} in report
+      assert runtime.instances["m2"].now == 180
+      assert last_of(runtime, "m2") == 180
+      {runtime, _} = cycles(runtime, 2)
+      assert Runtime.get!(runtime, "m2.t1.acc") == acc + 20
+    end
+
+    test "a timer that was not timing is left as it was set aside" do
+      # `m2` stopped at 50 ms, its timer no longer timing.
+      {runtime, _, _} = Runtime.cycle(running(40), 10, %{"pb_stop_2" => 1})
+      assert Runtime.get!(runtime, "m2.t1.en") == 0
+      {edit, _} = accepted(runtime, plant(without_m2()))
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      aside = runtime.aside["m2"]
+      {runtime, _} = cycles(runtime, 6)
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      refute Enum.any?(report, &match?({:resumed, _, _}, &1))
+      assert runtime.instances["m2"].env == aside.env
+    end
+
+    test "one retyped trades places with its old state at each switch (decision 43)" do
+      runtime = running(60)
+
+      text =
+        plant_text()
+        |> String.replace("program snap snapshot with trip", "program snap motor with fast")
+        |> String.replace(~r/  snap\..*\n/, "")
+        |> Kernel.<>("  snap.start 0\n  snap.stop 0\n  snap.overtemp 0\n  snap.reset 0\n")
+
+      {edit, _} = accepted(runtime, plant(text))
+      {edit, runtime, report} = Edit.test(edit, runtime)
+      assert {:instance_stopped, "snap", "snapshot"} in report
+      assert {:instance_added, "snap", "motor"} in report
+      assert runtime.instances["snap"].type == "motor"
+      assert runtime.aside["snap"].type == "snapshot"
+      {edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:instance_stopped, "snap", "motor"} in report
+      assert {:instance_back, "snap", "snapshot"} in report
+      assert {runtime.instances["snap"].type, runtime.aside["snap"].type} == {"snapshot", "motor"}
+      {_edit, runtime, report} = Edit.test(edit, runtime)
+      assert {:instance_back, "snap", "motor"} in report
+      assert runtime.aside["snap"].type == "snapshot"
+    end
+
+    test "restart/2 during an edit drops what is set aside and what only the other " <>
+           "configuration declares; the next switch starts each again (decision 65)" do
+      runtime = running(60)
+
+      text =
+        without_m2(
+          String.replace(plant_text(), "var_global k2_at_trip bool\n", "")
+          |> String.replace("  snap.b_was k2_at_trip\n", "")
+        )
+
+      {edit, _} = accepted(runtime, plant(text))
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      generation = runtime.generation
+      runtime = Runtime.restart(runtime, :cold)
+      assert {runtime.aside, runtime.generation, Edit.stage(edit)} == {%{}, generation, :testing}
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:instance_added, "m2", "motor"} in report
+      assert {:added, "k2_at_trip", 0} in report
+      assert Runtime.get!(runtime, "m2.motor") == 0
+    end
+  end
+
+  describe "assemble and cancel after an untest prune" do
+    test "assemble prunes the instances set aside, the globals and the tags only the " <>
+           "original has, by path" do
+      motor = String.replace(motor_ld(), "var halt bool", "var halt bool\nvar spare dint 4")
+      original = plant(plant_text(), programs(motor))
+      runtime = running(60, original)
+
+      text =
+        without_m2(
+          String.replace(plant_text(), "var_global k2_at_trip bool\n", "")
+          |> String.replace("  snap.b_was k2_at_trip\n", "")
+        )
+
+      candidate = plant(text)
+      {edit, _} = accepted(runtime, candidate)
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {kept, runtime, report} = Edit.assemble(edit, runtime)
+      assert kept == candidate
+      assert {:instance_pruned, "m2", "motor"} in report
+      assert {:pruned, "k2_at_trip", 0} in report
+      assert {:pruned, "m1.spare", 4} in report
+      assert runtime.aside == %{}
+      refute Map.has_key?(runtime.globals, "k2_at_trip")
+      refute Map.has_key?(runtime.instances["m1"].env, "spare")
+      assert_raise ArgumentError, ~r/generation/, fn -> Edit.untest(edit, runtime) end
+    end
+
+    test "cancel after an untest prunes what only the candidate has" do
+      runtime = running(60)
+
+      text =
+        String.replace(
+          plant_text(),
+          "var_global k2_at_trip bool",
+          "var_global k2_at_trip bool\nvar_global alarm bool 1"
+        ) <> "program m3 motor\n  m3.start 0\n  m3.stop 0\n  m3.overtemp 0\n  m3.reset 0\n"
+
+      {edit, _} = accepted(runtime, plant(text))
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:instance_stopped, "m3", "motor"} in report
+      {kept, runtime, report} = Edit.cancel(edit, runtime)
+      assert kept == plant()
+      assert {:instance_pruned, "m3", "motor"} in report
+      assert {:pruned, "alarm", 1} in report
+      assert {runtime.aside, Map.has_key?(runtime.globals, "alarm")} == {%{}, false}
+      assert_raise ArgumentError, ~r/generation/, fn -> Edit.test(edit, runtime) end
+    end
+  end
 end

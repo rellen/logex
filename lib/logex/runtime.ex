@@ -134,15 +134,16 @@ defmodule Logex.Runtime do
     removed from a task with one, while the plant runs (§4.9);
   - the generation (OE-2), the count of the configuration edits' steps taken on the
     resource, is 0 at `start/1` and kept by a cycle and by `restart/2`, so that a restart
-    during an edit keeps the edit's stage. Every step of an edit but accept is to move it
-    on by one, cancel from accept included (decisions 60 and 64), so an edit that has
-    ended can never step again;
+    during an edit keeps the edit's stage. Every step of an edit but accept moves it on by
+    one, cancel from accept included (decisions 60 and 64), so an edit that has ended can
+    never step again;
   - the instances set aside (OE-2), `aside`, the state of each instance an edit's switch
     stops, by name, are none at `start/1`, kept by a cycle and never scanned, and dropped
-    by `restart/2`, so the next switch starts each again (decision 65). A switch is to set
+    by `restart/2`, so the next switch starts each again (decision 65). A switch sets
     aside each instance only the configuration it stops runs, and the old state of one it
-    retypes, and bring one back where the configuration it starts runs it again;
-    assemble, and cancel after an untest, are to prune them.
+    retypes, and brings one back where the configuration it starts runs it again, its
+    `now` the resource's and each timer that was timing resumed from the switch (decision
+    57); assemble, and cancel after an untest, prune them.
 
   Until OE-2, a program instance inside a resource is not edited: `Logex.Edit` takes one
   lone instance, which `instance/1` made, and the resource holds its instances itself, as

@@ -531,7 +531,15 @@ defmodule Logex.Edit.Plan do
 
   # ---- the per-instance half: a switch, between two scans, and a prune --------------------
 
-  def switch(plan, record, %Instance{env: env, now: now} = state, first_test?) do
+  def switch(plan, record, state, first_test?),
+    do: switch(plan, record, state, first_test?, state.now)
+
+  # OE-2 (decision 56): `at` is the clock a timer resumes from, which the switch then gives
+  # the instance as its `now`: a lone instance's own `now`, so nothing moves, and in a
+  # resource the resource's. Fix F11's undo reads the instance's own `now` before it moves,
+  # which while `switched` is true is the time the last switch gave it, so a cycle between
+  # a test and its untest that does not scan the instance cannot hide a resume from it.
+  def switch(plan, record, %Instance{env: env, now: now} = state, first_test?, at) do
     shown = learnt(record.shown, plan.left, state)
 
     started =
@@ -542,7 +550,7 @@ defmodule Logex.Edit.Plan do
     fresh = Map.take(plan.initial, started)
     env = Map.merge(env, fresh)
     scanned = scanned(record.scanned, state, plan)
-    clock = {now, state.switched, elem(scanned, 0) == plan.stops}
+    clock = {{now, at}, state.switched, elem(scanned, 0) == plan.stops}
 
     {env, inside, pre} =
       Enum.reduce(
@@ -571,7 +579,7 @@ defmodule Logex.Edit.Plan do
         timed({name, name, from, to}, record.pre, clock, acc)
       end)
 
-    {%{state | env: env, switched: true, ons_blocked: blocked},
+    {%{state | env: env, switched: true, ons_blocked: blocked, now: at},
      %{record | shown: shown, pre: pre, scanned: scanned}, Enum.sort(timed ++ inside ++ report)}
   end
 
@@ -760,14 +768,14 @@ defmodule Logex.Edit.Plan do
          %{"pre" => pre} = value,
          {key, name, from, to},
          undo,
-         {now, switched, stopped_last?},
+         {{now, at}, switched, stopped_last?},
          {env, report, left}
        ) do
     {value, undone} = undone(value, undo, switched, now, name)
     target = target(undo, pre, from, to)
 
     {value, resumed, found} =
-      resumed({from, to, stopped_last?}, %{value | "pre" => target}, name, now)
+      resumed({from, to, stopped_last?}, %{value | "pre" => target}, name, at)
 
     {Map.put(env, key, value), moved(name, pre, target, to, value) ++ undone ++ resumed ++ report,
      Map.put(left, name, {target, pre, found})}

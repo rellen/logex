@@ -1247,7 +1247,7 @@ defmodule Logex.RuntimeTest do
       # calls, and a configuration's edit is to: the type-change refusals, a plan per
       # direction, the empty record, a switch and a prune.
       assert Enum.sort(Logex.Edit.Plan.__info__(:functions)) ==
-               [plans: 2, plans: 3, prune: 3, record: 0, retyped: 2, switch: 4]
+               [plans: 2, plans: 3, prune: 3, record: 0, retyped: 2, switch: 4, switch: 5]
 
       assert {:docs_v1, _, _, _, :hidden, _, _} = Code.fetch_docs(Logex.Edit.Plan)
 
@@ -1261,9 +1261,12 @@ defmodule Logex.RuntimeTest do
                __struct__: 0,
                __struct__: 1,
                accept: 2,
+               assemble: 2,
                cancel: 2,
                running: 1,
-               stage: 1
+               stage: 1,
+               test: 2,
+               untest: 2
              ]
 
       # OE-1: the definition of a well-formed tree, which instructionize/2 checks on entry.
