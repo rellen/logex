@@ -84,10 +84,40 @@ defmodule Logex.ApiContractTest do
   from the program's `cal` to the body's `ons` rung, differs in its text from the one it
   last ran under, the one-shot passes no power: on the scan right after a switch, or on a
   later one, where its instance's `cal` was false until then (decision 32).
+
+  OE-2: a sixth walk takes staged edits of a running configuration
+  (`Logex.Configuration.Edit`) between its cycles, over configurations of periodic tasks,
+  an event task with and without an interval, two program types that share a global
+  through `var_external` and hold a block two deep, and up to six instances, some on a slow
+  task that skips cycles. Each candidate is the running configuration's draws with one to
+  three changes allowed while running (a type's version, its timer taken out or given
+  back, the blocks, an instance added, removed or retyped, an interval, a priority, the
+  order of instances or tasks, a global added, removed or given another initial value, the
+  wiring) and, one time in three, one refused, read back through a configuration file's
+  text so that each element has its line. Accept refuses exactly the diagnostics restated
+  from the two configurations, in order; every host mistake is refused with a documented
+  message, a candidate `check/1` refuses with `start/1`'s; and every accepted call is made
+  twice and gives the same result. Its properties: the forecast is the report a test taken
+  at once gives; the writes each report lists, applied to the resource before the step,
+  give it after, globals, states, the instances set aside and next due times, each kept
+  instance's `switched`, block list and `now` as their rules say; no step moves the clock,
+  an overlap count or a trigger's sample; no state holds a var_external (decision 49); a
+  step on an edit that has ended or been stepped past is refused by the generation; and a
+  test then an untest with no cycle between leaves every state as the test found it, but
+  for what either switch started, a tag the test joined to its global (decision 55), and a
+  timer the untest resumed in an instance it brought back from aside (decision 57), or
+  gave back a resume of an earlier switch's after the clock moved (decision 56's known
+  limit). Its oracles know nothing of the edit: after every step, a model of the
+  scheduler seeded from the resource, M2-1's with M2-4's var_externals, runs each instance
+  through `call/4` alone and must give every cycle's outputs, events, globals and states;
+  no scan lets a timer gain more than the time since its own state's last scan; and a
+  one-shot passes power only where its state's last scan ran the same `ons` rung with its
+  condition 0. Its reach covers every refusal, every report kind and each property.
   """
   use ExUnit.Case, async: true
 
   alias Logex.{Diagnostic, Edit, Instance, Program, Runtime, Scan, Tag}
+  alias Logex.Configuration.Edit, as: ConfigEdit
 
   @words ~w(var var_input var_output var_external bool dint xic xio ote otl otu move a b c) ++
            ~w(start stop Motor) ++
@@ -632,7 +662,33 @@ defmodule Logex.ApiContractTest do
     :pruned,
     :resume_undone,
     :resumed,
-    :unread
+    :unread,
+    # OE-2: a configuration's edit gives these too, and every kind above by path.
+    :instance_added,
+    :instance_back,
+    :instance_pruned,
+    :instance_stopped,
+    :interval,
+    :joined,
+    :left,
+    :next_due,
+    :order,
+    :priority
+  ]
+
+  # The kinds only a configuration's edit gives, which the walk of a lone instance's edit
+  # cannot reach.
+  @configuration_kinds [
+    :instance_added,
+    :instance_back,
+    :instance_pruned,
+    :instance_stopped,
+    :interval,
+    :joined,
+    :left,
+    :next_due,
+    :order,
+    :priority
   ]
 
   @timer_kinds [:dn_drops, :dn_rises, :preset, :preset_kept, :resume_undone, :resumed]
@@ -845,7 +901,7 @@ defmodule Logex.ApiContractTest do
     end
 
     assert Process.get(:edit_refused, MapSet.new()) == MapSet.new(@edit_refusals)
-    assert Process.get(:kinds, MapSet.new()) == MapSet.new(@report_kinds)
+    assert Process.get(:kinds, MapSet.new()) == MapSet.new(@report_kinds -- @configuration_kinds)
     assert Process.get(:edit_reach, MapSet.new()) == MapSet.new(@edit_reach)
   end
 
@@ -3090,5 +3146,1514 @@ defmodule Logex.ApiContractTest do
       for {name, value} <- model.own[instance.name],
           do: assert(Runtime.get!(runtime, "#{instance.name}.#{name}") == value)
     end
+  end
+
+  # ---- OE-2: the walk over a configuration's edit ----------------------------------------
+
+  # The host's mistakes a configuration's edit refuses, and the runtime's and start/1's it
+  # passes on, by their first words.
+  @ce_refusals [
+    {:runtime, "expected a %Logex.Runtime{} from Logex.Runtime.start/1"},
+    {:not_a_configuration, "expected a %Logex.Configuration{} from"},
+    {:not_an_edit, "expected a %Logex.Configuration.Edit{}"},
+    {:name, "the candidate is `"},
+    {:generation, "this edit expects the resource at generation"},
+    {:configuration, "this edit is of another configuration"},
+    {:untest_stage, "untest takes an edit"},
+    {:test_stage, "test takes an edit"},
+    {:assemble_stage, "assemble takes an edit"},
+    {:cancel_stage, "cancel takes an edit"},
+    {:invalid, "no task `"}
+  ]
+
+  # What accept refuses, by the words of each message, as the walk predicts it.
+  @ce_diagnostics [
+    :task_added,
+    :task_removed,
+    :single,
+    :event_interval,
+    :moved,
+    :global_type,
+    :located,
+    :located_new,
+    :located_removed,
+    :tag_type
+  ]
+
+  @ce_reach [
+    :forecast,
+    :round_trip,
+    :round_trip_back,
+    :round_trip_started,
+    :round_trip_joined,
+    :unscanned_switch,
+    :restart_in_edit,
+    :stale,
+    :assembled,
+    :cancelled_accepted,
+    :cancelled_untested,
+    :model_after_switch,
+    :model_after_prune,
+    :pulse_after_switch,
+    :retyped_elsewhere,
+    :blocked_inside
+  ]
+
+  test "a configuration's edit refuses every host mistake with a documented ArgumentError, " <>
+         "and each step's writes rebuild the resource, which then runs as its rules say" do
+    :rand.seed(:exsss, {2026, 10, 13})
+
+    for _ <- 1..500 do
+      spec = ce_spec()
+      {:ok, config} = ce_config(spec)
+      runtime = Runtime.start(config)
+
+      w = %{
+        rt: runtime,
+        model: ce_seed(runtime),
+        spec: spec,
+        e: nil,
+        c: nil,
+        stale: [],
+        round: nil,
+        prev: %{},
+        onsp: %{},
+        resumed: false,
+        o: nil
+      }
+
+      ce_walk(w, 50)
+    end
+
+    assert Process.get(:ce_refused, MapSet.new()) == MapSet.new(Keyword.keys(@ce_refusals))
+    assert Process.get(:ce_diagnosed, MapSet.new()) == MapSet.new(@ce_diagnostics)
+    assert Process.get(:ce_kinds, MapSet.new()) == MapSet.new(@report_kinds)
+    assert Process.get(:ce_reach, MapSet.new()) == MapSet.new(@ce_reach)
+  end
+
+  # A value the type checker cannot see through, so that a host's mistake is passed as the
+  # host would pass it.
+  defp ce_opaque(value), do: Process.get(:__opaque_to_the_type_checker__, value)
+
+  defp ce_reach(name), do: reached(:ce_reach, name)
+  defp ce_reach(name, true), do: ce_reach(name)
+  defp ce_reach(_name, false), do: :ok
+
+  # ---- the draws ---------------------------------------------------------------------------
+
+  # One version of a program type, from one vocabulary, so that two versions share their
+  # names: `x` a var_input, a var or none, which a switch makes live or unread; the timer
+  # `t1` run by a `ton` at one of two presets or none, its `.pre` written by logic now and
+  # then, and its `.dn` copied out or not, which holds an output; a one-shot whose rung
+  # changes; `n` with an initial value that changes, or none; `k`, whose type a refused
+  # draw changes; `g0` a var_external, a var or none, read and now and then written; and a
+  # `blk` instance, two deep, run or not.
+  defp ce_version,
+    do: %{
+      x: pick([:input, :var, :none]),
+      ton: pick([nil, 15, 30, 30, 45]),
+      pre: pick([true, false, false]),
+      out: pick([true, true, false]),
+      ons: pick([nil, :xic, :xic, :xio]),
+      n: pick([nil, 1, 2]),
+      k: :bool,
+      g: pick([:ext, :ext, :var, :none]),
+      gw: pick([true, false, false]),
+      blk: pick([true, false])
+    }
+
+  defp ce_source(v) do
+    decls =
+      ["var_input in bool"] ++
+        ce_x(v.x) ++
+        ["var_output out bool", "var_output q bool", "var_output r bool"] ++
+        ["var t1 ton", "var sp dint 40", "var s bool", "var c bool", "var w bool"] ++
+        ce_n(v.n) ++ ["var k #{v.k}"] ++ ce_g(v.g) ++ ce_blk(v.blk)
+
+    rungs =
+      ce_ton(v.ton) ++
+        if(v.pre, do: ["xio in move sp t1.pre"], else: []) ++
+        if(v.out, do: ["xic t1.dn ote out"], else: []) ++
+        ce_ons(v.ons) ++
+        [if(v.k == :bool, do: "xic in ote k", else: "xic in move 1 k")] ++
+        if(v.x == :none, do: [], else: ["xic x ote r"]) ++
+        ce_g_rungs(v.g, v.gw) ++ if(v.blk, do: ["cal b1 in w"], else: [])
+
+    Enum.join(decls, "\n") <> "\n\n" <> Enum.join(rungs, "\n") <> "\n"
+  end
+
+  defp ce_x(:input), do: ["var_input x bool"]
+  defp ce_x(:var), do: ["var x bool"]
+  defp ce_x(:none), do: []
+  defp ce_n(nil), do: []
+  defp ce_n(n), do: ["var n dint #{n}"]
+  defp ce_g(:ext), do: ["var_external g0 bool"]
+  defp ce_g(:var), do: ["var g0 bool"]
+  defp ce_g(:none), do: []
+  defp ce_blk(true), do: ["var b1 blk"]
+  defp ce_blk(false), do: []
+  defp ce_ton(nil), do: []
+  defp ce_ton(preset), do: ["xic in ton t1 #{preset}"]
+  defp ce_ons(nil), do: []
+  defp ce_ons(:xic), do: ["xic in ote c ons s ote q"]
+  defp ce_ons(:xio), do: ["xio in ote c ons s ote q"]
+  defp ce_g_rungs(:none, _write?), do: []
+  defp ce_g_rungs(_g, true), do: ["xic g0 ote w", "xic in ote g0"]
+  defp ce_g_rungs(_g, false), do: ["xic g0 ote w"]
+
+  # The two blocks, two deep: `leaf`'s timer at one of two presets, and `blk`'s member `m`
+  # with an initial value that changes, or none.
+  defp ce_blocks(%{leaf: preset, m: m, ons: ons}) do
+    {:ok, leaf} =
+      Logex.compile(
+        "function_block leaf\nvar_input go bool\nvar_output done bool\nvar t ton\n\n" <>
+          "xic go ton t #{preset}\n",
+        name: "leaf"
+      )
+
+    member = if m, do: "var m dint #{m}\n", else: ""
+    shot = %{nil => "", xic: "xic go ons e ote f\n", xio: "xio go ons e ote f\n"}[ons]
+
+    {:ok, blk} =
+      Logex.compile(
+        "function_block blk\nvar_input go bool\nvar_output done bool\nvar i1 leaf\n" <>
+          "var e bool\nvar f bool\n" <> member <> "\ncal i1 go done\n" <> shot,
+        name: "blk",
+        types: [leaf]
+      )
+
+    blk
+  end
+
+  @ce_points [
+    {"i0", :bool, "panel.i.0"},
+    {"i1", :bool, "panel.i.1"},
+    {"o0", :bool, "panel.q.0"},
+    {"o1", :bool, "panel.q.1"},
+    {"o2", :bool, "panel.q.2"},
+    {"o3", :bool, "panel.q.3"}
+  ]
+
+  defp ce_spec do
+    tasks = [
+      %{name: "fast", single: nil, interval: 10, priority: pick([1, 2])},
+      %{name: "slow", single: nil, interval: pick([20, 30]), priority: pick([1, 2, 3])},
+      %{name: "ev", single: "i0", interval: pick([nil, 20]), priority: pick([0, 2])}
+    ]
+
+    instances =
+      for name <- Enum.take(Enum.shuffle(~w(m1 m2 m3 m4)), 1 + :rand.uniform(3)),
+          do: %{name: name, type: pick(~w(a b)), task: pick(["fast", "slow", "slow", "ev", nil])}
+
+    spec = %{
+      tasks: tasks,
+      globals:
+        for({name, type, at} <- @ce_points, do: %{name: name, type: type, at: at, initial: nil}) ++
+          [
+            %{name: "g0", type: :bool, at: nil, initial: pick([nil, 1])},
+            %{name: "g1", type: :bool, at: nil, initial: nil},
+            %{name: "spare", type: :dint, at: nil, initial: nil}
+          ],
+      instances: instances,
+      versions: %{"a" => ce_version(), "b" => ce_version()},
+      blocks: %{leaf: pick([20, 25]), m: pick([nil, 1, 2]), ons: pick([nil, :xic, :xio])},
+      wiring: %{}
+    }
+
+    ce_wire(spec, false)
+  end
+
+  # Every var_input of each instance connected, each var_output now and then to a point or
+  # a global nothing else drives; with `keep?`, each instance keeps what it had where that
+  # still holds.
+  defp ce_wire(spec, keep?) do
+    globals = Map.new(spec.globals, &{&1.name, &1})
+
+    {wiring, _driven} =
+      Enum.map_reduce(spec.instances, MapSet.new(), fn %{name: name, type: type}, driven ->
+        v = spec.versions[type]
+        had = if keep?, do: Map.get(spec.wiring, name, %{}), else: %{}
+
+        ins =
+          for member <- ["in"] ++ if(v.x == :input, do: ["x"], else: []),
+              into: %{},
+              do: {member, ce_source_of(Map.get(had, member), globals)}
+
+        {outs, driven} =
+          Enum.reduce(~w(out q r), {%{}, driven}, fn member, {outs, driven} ->
+            ce_sink(Map.get(had, member), member, globals, {outs, driven})
+          end)
+
+        {{name, Map.merge(ins, outs)}, driven}
+      end)
+
+    %{spec | wiring: Map.new(wiring)}
+  end
+
+  defp ce_source_of(had, globals) when is_binary(had) do
+    if Map.has_key?(globals, had), do: had, else: ce_source_of(nil, globals)
+  end
+
+  defp ce_source_of(had, _globals) when is_integer(had), do: had
+  defp ce_source_of(nil, _globals), do: pick(["i0", "i1", "g1", 0, 1, 1])
+
+  defp ce_sink(had, member, globals, {outs, driven}) when is_binary(had) do
+    case Map.has_key?(globals, had) and not MapSet.member?(driven, had) do
+      true -> {Map.put(outs, member, had), MapSet.put(driven, had)}
+      false -> {outs, driven}
+    end
+  end
+
+  defp ce_sink(nil, member, globals, {outs, driven}) do
+    free =
+      for name <- ~w(o0 o1 o2 o3 g1), Map.has_key?(globals, name), name not in driven, do: name
+
+    case {free, :rand.uniform(2)} do
+      {[_ | _], 1} ->
+        sink = pick(free)
+        {Map.put(outs, member, sink), MapSet.put(driven, sink)}
+
+      _ ->
+        {outs, driven}
+    end
+  end
+
+  defp ce_text(spec) do
+    tasks =
+      for t <- spec.tasks,
+          do:
+            "task #{t.name}" <>
+              if(t.single, do: " single #{t.single}", else: "") <>
+              if(t.interval, do: " interval #{t.interval}", else: "") <>
+              " priority #{t.priority}"
+
+    globals =
+      for g <- spec.globals,
+          do:
+            "var_global #{g.name} #{g.type}" <>
+              if(g.at, do: " at #{g.at}", else: "") <>
+              if(g.initial, do: " #{g.initial}", else: "")
+
+    programs =
+      for i <- spec.instances do
+        Enum.join(
+          ["program #{i.name} #{i.type}" <> if(i.task, do: " with #{i.task}", else: "")] ++
+            for(
+              {member, to} <- Enum.sort(Map.get(spec.wiring, i.name, %{})),
+              do: "  #{i.name}.#{member} #{to}"
+            ),
+          "\n"
+        )
+      end
+
+    Enum.join([Enum.join(tasks, "\n"), Enum.join(globals, "\n") | programs], "\n\n") <> "\n"
+  end
+
+  defp ce_programs(spec) do
+    blk = ce_blocks(spec.blocks)
+
+    Map.new(spec.versions, fn {type, v} ->
+      {:ok, program} = Logex.compile(ce_source(v), name: type, types: [blk])
+      {type, program}
+    end)
+  end
+
+  defp ce_config(spec),
+    do: Logex.Configuration.compile("plant", ce_text(spec), ce_programs(spec))
+
+  # A candidate: the running configuration's draws with one to three changes, most of them
+  # allowed while running and some refused, the wiring then mended, or drawn again.
+  @ce_changes [
+    :version,
+    :version,
+    :ton,
+    :ton,
+    :ton,
+    :blocks,
+    :add,
+    :remove,
+    :retype,
+    :interval,
+    :priority,
+    :reorder,
+    :reorder_tasks,
+    :global_add,
+    :global_remove,
+    :initial,
+    :rewire
+  ]
+
+  @ce_refused [
+    :task_add,
+    :task_remove,
+    :single,
+    :event_interval,
+    :move,
+    :global_type,
+    :located,
+    :tag_type
+  ]
+
+  # One to three changes allowed while running, and one time in three one refused too.
+  defp ce_candidate(spec) do
+    changes =
+      for(_ <- 1..:rand.uniform(3), do: pick(@ce_changes)) ++
+        if(:rand.uniform(3) == 1, do: [pick(@ce_refused)], else: [])
+
+    spec = Enum.reduce(changes, spec, &ce_change/2)
+    ce_wire(spec, :rewire not in changes)
+  end
+
+  # A new version of a type, `k` kept; or one that keeps all but its timer's `ton`, taken
+  # out, given back or moved to another preset, so that resumes and their undoing come up.
+  defp ce_change(:version, spec) do
+    type = pick(~w(a b))
+    %{spec | versions: Map.put(spec.versions, type, %{ce_version() | k: spec.versions[type].k})}
+  end
+
+  defp ce_change(:ton, spec) do
+    type = pick(~w(a b))
+    was = spec.versions[type]
+
+    %{
+      spec
+      | versions: Map.put(spec.versions, type, %{was | ton: pick([nil, 15, 30, 45] -- [was.ton])})
+    }
+  end
+
+  defp ce_change(:blocks, spec),
+    do: %{
+      spec
+      | blocks: %{leaf: pick([20, 25]), m: pick([nil, 1, 2]), ons: pick([nil, :xic, :xio])}
+    }
+
+  defp ce_change(:add, spec) do
+    case ~w(m1 m2 m3 m4 m5 m6) -- Enum.map(spec.instances, & &1.name) do
+      [] ->
+        spec
+
+      free ->
+        instance = %{
+          name: pick(free),
+          type: pick(~w(a b)),
+          task: pick(["fast", "slow", "ev", nil])
+        }
+
+        %{spec | instances: spec.instances ++ [instance]}
+    end
+  end
+
+  defp ce_change(:remove, %{instances: [_, _ | _] = instances} = spec),
+    do: %{spec | instances: List.delete_at(instances, :rand.uniform(length(instances)) - 1)}
+
+  defp ce_change(:remove, spec), do: spec
+
+  # Decisions 43 and 61: a new instance under an old name, on any task.
+  defp ce_change(:retype, spec) do
+    i = :rand.uniform(length(spec.instances)) - 1
+
+    instances =
+      List.update_at(spec.instances, i, fn instance ->
+        %{
+          instance
+          | type: if(instance.type == "a", do: "b", else: "a"),
+            task: pick(["fast", "slow", "ev", nil])
+        }
+      end)
+
+    %{spec | instances: instances}
+  end
+
+  defp ce_change(:interval, spec) do
+    tasks =
+      Enum.map(spec.tasks, fn
+        %{interval: nil} = task ->
+          task
+
+        task ->
+          if :rand.uniform(2) == 1, do: %{task | interval: pick([5, 10, 15, 20, 40])}, else: task
+      end)
+
+    %{spec | tasks: tasks}
+  end
+
+  defp ce_change(:priority, spec) do
+    i = :rand.uniform(length(spec.tasks)) - 1
+    %{spec | tasks: List.update_at(spec.tasks, i, &%{&1 | priority: pick([0, 1, 2, 3])})}
+  end
+
+  defp ce_change(:reorder, spec), do: %{spec | instances: Enum.shuffle(spec.instances)}
+  defp ce_change(:reorder_tasks, spec), do: %{spec | tasks: Enum.shuffle(spec.tasks)}
+
+  defp ce_change(:global_add, spec) do
+    case Enum.any?(spec.globals, &(&1.name == "g2")) do
+      true ->
+        spec
+
+      false ->
+        %{
+          spec
+          | globals:
+              spec.globals ++ [%{name: "g2", type: :bool, at: nil, initial: pick([nil, 1])}]
+        }
+    end
+  end
+
+  defp ce_change(:global_remove, spec),
+    do: %{
+      spec
+      | globals: Enum.reject(spec.globals, &(&1.name in ~w(spare g2) and :rand.uniform(2) == 1))
+    }
+
+  defp ce_change(:initial, spec),
+    do: %{spec | globals: Enum.map(spec.globals, &ce_initial/1)}
+
+  defp ce_change(:rewire, spec), do: spec
+
+  # Refused at accept.
+  defp ce_change(:task_add, spec),
+    do: %{spec | tasks: spec.tasks ++ [%{name: "extra", single: nil, interval: 5, priority: 3}]}
+
+  defp ce_change(:task_remove, spec) do
+    instances = Enum.map(spec.instances, &if(&1.task == "slow", do: %{&1 | task: nil}, else: &1))
+    %{spec | tasks: Enum.reject(spec.tasks, &(&1.name == "slow")), instances: instances}
+  end
+
+  defp ce_change(:single, spec),
+    do: %{
+      spec
+      | tasks: Enum.map(spec.tasks, &if(&1.single, do: %{&1 | single: pick(~w(i1 g1))}, else: &1))
+    }
+
+  defp ce_change(:event_interval, spec),
+    do: %{
+      spec
+      | tasks:
+          Enum.map(spec.tasks, fn
+            %{single: nil} = task -> task
+            %{interval: nil} = task -> %{task | interval: 20}
+            task -> %{task | interval: nil}
+          end)
+    }
+
+  defp ce_change(:move, spec) do
+    i = :rand.uniform(length(spec.instances)) - 1
+    tasks = ["fast", "slow", "ev", nil]
+
+    %{
+      spec
+      | instances: List.update_at(spec.instances, i, &%{&1 | task: pick(tasks -- [&1.task])})
+    }
+  end
+
+  defp ce_change(:global_type, spec),
+    do: %{
+      spec
+      | globals:
+          Enum.map(spec.globals, &if(&1.name == "spare", do: %{&1 | type: :bool}, else: &1))
+    }
+
+  defp ce_change(:located, spec) do
+    case pick([:move, :new, :drop, :to_g1]) do
+      :move ->
+        ce_located(spec, "o3", &%{&1 | at: "panel.q.7"})
+
+      :new ->
+        %{
+          spec
+          | globals: spec.globals ++ [%{name: "o9", type: :bool, at: "panel.q.9", initial: nil}]
+        }
+
+      :drop ->
+        %{spec | globals: Enum.reject(spec.globals, &(&1.name == "o3"))}
+
+      :to_g1 ->
+        ce_located(spec, "g1", &%{&1 | at: "panel.q.8"})
+    end
+  end
+
+  defp ce_change(:tag_type, spec) do
+    type = pick(~w(a b))
+    v = spec.versions[type]
+
+    %{
+      spec
+      | versions: Map.put(spec.versions, type, %{v | k: if(v.k == :bool, do: :dint, else: :bool)})
+    }
+  end
+
+  defp ce_located(spec, name, fun),
+    do: %{spec | globals: Enum.map(spec.globals, &if(&1.name == name, do: fun.(&1), else: &1))}
+
+  defp ce_initial(%{name: "g0", initial: nil} = global), do: %{global | initial: 1}
+  defp ce_initial(%{name: "g0"} = global), do: %{global | initial: nil}
+  defp ce_initial(global), do: global
+
+  # ---- what accept refuses, restated from the two configurations -------------------------
+
+  defp ce_predicted(o, c) do
+    tasks = Map.new(o.tasks, &{&1.name, &1})
+    globals = Map.new(o.globals, &{&1.name, &1})
+    instances = Map.new(o.instances, &{&1.name, &1})
+
+    own =
+      Enum.flat_map(c.tasks, &ce_task(Map.get(tasks, &1.name), &1)) ++
+        Enum.flat_map(c.globals, &ce_global(Map.get(globals, &1.name), &1)) ++
+        Enum.flat_map(c.instances, &ce_moved(Map.get(instances, &1.name), &1))
+
+    kept_tasks = MapSet.new(c.tasks, & &1.name)
+    kept_globals = MapSet.new(c.globals, & &1.name)
+
+    gone =
+      for(
+        t <- o.tasks,
+        t.name not in kept_tasks,
+        do:
+          {:task_removed, nil,
+           "task `#{t.name}` (line #{t.line} of the running configuration) is removed: a task is removed only with a restart"}
+      ) ++
+        for g <- o.globals,
+            g.at != nil,
+            g.name not in kept_globals,
+            do:
+              {:located_removed, nil,
+               "`#{g.name}` at `#{g.at}` (line #{g.line} of the running configuration) is removed: located I/O changes only with a restart"}
+
+    types =
+      Enum.uniq(
+        for i <- c.instances, Map.get(instances, i.name, %{type: nil}).type == i.type, do: i.type
+      )
+
+    typed =
+      for type <- types,
+          was = o.programs[type].tags["k"].type,
+          now = c.programs[type].tags["k"],
+          was != now.type,
+          do:
+            {:tag_type, now.line,
+             "`k` is a #{was} in the running program and a #{now.type} in the candidate: a tag's type changes only with a restart"}
+
+    Enum.sort_by(own, &elem(&1, 1)) ++ gone ++ typed
+  end
+
+  defp ce_task(nil, t),
+    do: [{:task_added, t.line, "task `#{t.name}` is added: a task is added only with a restart"}]
+
+  defp ce_task(was, t) do
+    single =
+      if was.single != t.single,
+        do: [
+          {:single, t.line,
+           "task `#{t.name}`'s single changes from #{ce_named(was.single)} to #{ce_named(t.single)}: a task's single changes only with a restart"}
+        ],
+        else: []
+
+    interval =
+      if was.single != nil and was.single == t.single and
+           was.interval == nil != (t.interval == nil),
+         do: [
+           {:event_interval, t.line,
+            "task `#{t.name}` has a single, and its interval is #{if t.interval, do: "added", else: "removed"}: an event task's interval is added or removed only with a restart"}
+         ],
+         else: []
+
+    single ++ interval
+  end
+
+  defp ce_named(nil), do: "none"
+  defp ce_named(name), do: "`#{name}`"
+
+  defp ce_global(nil, %{at: nil}), do: []
+
+  defp ce_global(nil, g),
+    do: [
+      {:located_new, g.line,
+       "`#{g.name}` at `#{g.at}` is added: located I/O changes only with a restart"}
+    ]
+
+  defp ce_global(was, g) do
+    typed =
+      if was.type != g.type,
+        do: [
+          {:global_type, g.line,
+           "`#{g.name}` is a #{was.type} global in the running configuration and a #{g.type} in the candidate: a global's type changes only with a restart"}
+        ],
+        else: []
+
+    located =
+      case {was.at, g.at} do
+        {same, same} ->
+          []
+
+        {nil, at} ->
+          [
+            {:located, g.line,
+             "`#{g.name}` has no location in the running configuration and is at `#{at}` in the candidate: located I/O changes only with a restart"}
+          ]
+
+        {at, nil} ->
+          [
+            {:located, g.line,
+             "`#{g.name}` is at `#{at}` in the running configuration and has no location in the candidate: located I/O changes only with a restart"}
+          ]
+
+        {a, b} ->
+          [
+            {:located, g.line,
+             "`#{g.name}` is at `#{a}` in the running configuration and at `#{b}` in the candidate: located I/O changes only with a restart"}
+          ]
+      end
+
+    typed ++ located
+  end
+
+  defp ce_moved(%{type: type, task: was}, %{type: type, task: task} = i) when was != task,
+    do: [
+      {:moved, i.line,
+       "`#{i.name}` runs #{ce_with(was)} in the running configuration and #{ce_with(task)} in the candidate: an instance moves to another task only with a restart"}
+    ]
+
+  defp ce_moved(_was, _instance), do: []
+
+  defp ce_with(nil), do: "with no task"
+  defp ce_with(task), do: "with `#{task}`"
+
+  # ---- the walk ----------------------------------------------------------------------------
+
+  defp ce_walk(w, 0), do: w
+
+  # Right after a test, half the time its untest with no cycle between, the round trip.
+  defp ce_walk(%{round: {_, _}} = w, n) when n > 0,
+    do:
+      ce_walk(
+        if(:rand.uniform(3) > 1, do: ce_step(:untest, w), else: ce_op(:rand.uniform(12), w)),
+        n - 1
+      )
+
+  # Right after a switch that resumed a timer, often the switch back, at once or after a
+  # short cycle that its task may not scan, which gives the resume back (fix F11).
+  defp ce_walk(%{resumed: true, e: edit} = w, n) when n > 0 and edit != nil do
+    w = %{w | resumed: false}
+
+    case :rand.uniform(4) do
+      1 -> ce_walk(ce_step(:back, w), n - 1)
+      2 -> ce_walk(w, n)
+      _ -> ce_walk(ce_step(:back, ce_cycle(w, 5)), n - 1)
+    end
+  end
+
+  defp ce_walk(w, n), do: ce_walk(ce_op(:rand.uniform(12), w), n - 1)
+
+  defp ce_op(op, w) when op <= 5, do: ce_cycle(w)
+  defp ce_op(op, %{e: nil} = w) when op in 6..8, do: ce_accept(w)
+
+  defp ce_op(op, w) when op in 6..9 and w.e != nil,
+    do: ce_step(pick([:test, :untest, :assemble, :cancel, :back, :back]), w)
+
+  defp ce_op(9, w), do: ce_cycle(w)
+  defp ce_op(10, w), do: ce_restart(w)
+  defp ce_op(11, w), do: ce_stale(w)
+  defp ce_op(12, w), do: ce_mistakes(w)
+
+  defp ce_attempt(fun) do
+    result = fun.()
+    assert fun.() == result, "the same call gave two results"
+    {:ok, result}
+  rescue
+    error in ArgumentError ->
+      kind = Enum.find(@ce_refusals, fn {_, words} -> String.contains?(error.message, words) end)
+      assert kind, "undocumented refusal: #{error.message}"
+      reached(:ce_refused, elem(kind, 0))
+      {:refused, elem(kind, 0), error.message}
+  end
+
+  # A cycle, against the model seeded from the resource after the last step, and the two
+  # oracles that know nothing of an edit: no scan lets a timer gain more than the time
+  # since its instance's last scan, and a one-shot passes power only where its instance's
+  # last scan ran the same `ons` rung with its condition 0.
+  defp ce_cycle(w), do: ce_cycle(w, pick([0, 5, 10, 10, 15, 30]))
+
+  defp ce_cycle(w, elapsed) do
+    # Inputs change now and then, so that a timer times for long enough to be done.
+    inputs = for name <- ~w(i0 i1), :rand.uniform(4) == 1, into: %{}, do: {name, pick([0, 1])}
+    {:ok, {rt, outputs, events}} = ce_attempt(fn -> Runtime.cycle(w.rt, elapsed, inputs) end)
+
+    {model, expected_outputs, expected_events} =
+      ce_model_cycle(w.rt.config, w.model, elapsed, inputs)
+
+    assert events == expected_events
+    assert outputs == expected_outputs
+    assert rt.globals == model.globals
+    assert rt.instances == model.states
+
+    {prev, onsp} =
+      Enum.reduce(events, {w.prev, w.onsp}, fn
+        {:ran, _task, name, now}, {prev, onsp} ->
+          before = w.rt.instances[name]
+          later = rt.instances[name]
+          # Each state's own history: a retyped instance's old state, set aside, and its
+          # new one share a name.
+          key = {name, later.type}
+          gap = now - Map.get(prev, key, 0)
+
+          for path <- [["t1"], ["b1", "i1", "t"]],
+              %{"acc" => was} <- [get_in(before.env, path)],
+              %{"acc" => acc} <- [get_in(later.env, path)],
+              do:
+                assert(
+                  acc - was <= gap,
+                  "#{name}.#{Enum.join(path, ".")} gained #{acc - was} in #{gap} ms"
+                )
+
+          rung = ce_ons_rung(rt.config.programs[later.type])
+
+          if later.env["q"] == 1 and rung != nil do
+            assert Map.get(onsp, key) == {rung, 0}, "#{name}'s one-shot pulsed"
+            ce_reach(:pulse_after_switch, before.switched)
+          end
+
+          {Map.put(prev, key, now), Map.put(onsp, key, rung && {rung, later.env["c"]})}
+
+        _event, acc ->
+          acc
+      end)
+
+    ce_reach(
+      :unscanned_switch,
+      Enum.any?(rt.instances, fn {_n, s} -> s.switched end) and w.round != nil
+    )
+
+    %{w | rt: rt, model: model, prev: prev, onsp: onsp, round: nil}
+  end
+
+  defp ce_ons_rung(%{source: source}),
+    do: Enum.find(String.split(source, "\n"), &String.contains?(&1, " ons "))
+
+  defp ce_accept(w) do
+    spec = ce_candidate(w.spec)
+
+    case ce_config(spec) do
+      {:ok, candidate} -> ce_accepted(candidate, spec, w)
+      {:error, _diagnostics} -> w
+    end
+  end
+
+  defp ce_accepted(candidate, spec, w) do
+    predicted = ce_predicted(w.rt.config, candidate)
+
+    case ce_attempt(fn -> ConfigEdit.accept(w.rt, candidate) end) do
+      {:ok, {:error, diagnostics}} ->
+        assert predicted != []
+
+        assert Enum.map(diagnostics, &{&1.line, &1.message}) ==
+                 Enum.map(predicted, &{elem(&1, 1), elem(&1, 2)})
+
+        for {kind, _, _} <- predicted, do: reached(:ce_diagnosed, kind)
+        w
+
+      {:ok, {:ok, edit, forecast}} ->
+        assert predicted == [], inspect(predicted)
+        ce_report!(forecast)
+        # The forecast is the report a test taken now gives.
+        {_edit, _rt, report} = ConfigEdit.test(edit, w.rt)
+        assert report == forecast
+        ce_reach(:forecast)
+
+        retyped =
+          for i <- candidate.instances,
+              o <- w.rt.config.instances,
+              o.name == i.name,
+              o.type != i.type,
+              o.task != i.task,
+              do: i
+
+        ce_reach(:retyped_elsewhere, retyped != [])
+        %{w | e: edit, c: {candidate, spec}, o: w.rt.config}
+    end
+  end
+
+  defp ce_report!(report) do
+    assert report == Enum.sort(report)
+    keys = for {kind, name, _detail} <- report, do: {kind, name}
+    assert keys == Enum.uniq(keys)
+
+    for {kind, _name, _detail} <- report do
+      assert kind in @report_kinds
+      reached(:ce_kinds, kind)
+    end
+  end
+
+  @ce_allowed %{
+    test: [:accepted, :untested],
+    untest: [:testing],
+    assemble: [:testing],
+    cancel: [:accepted, :untested]
+  }
+
+  defp ce_step(:back, w),
+    do: ce_step(if(ConfigEdit.stage(w.e) == :testing, do: :untest, else: :test), w)
+
+  defp ce_step(step, w) do
+    stage = ConfigEdit.stage(w.e)
+    allowed? = stage in @ce_allowed[step]
+    result = ce_attempt(fn -> apply(ConfigEdit, step, [w.e, w.rt]) end)
+    ce_stepped(step, stage, allowed?, result, w)
+  end
+
+  defp ce_stepped(_step, _stage, false, result, w) do
+    assert {:refused, _kind, _message} = result
+    w
+  end
+
+  defp ce_stepped(step, stage, true, {:ok, {next, rt, report}}, w)
+       when step in [:test, :untest] do
+    ce_report!(report)
+    assert ConfigEdit.stage(next) == if(step == :test, do: :testing, else: :untested)
+    assert rt.config == ConfigEdit.running(next)
+    ce_unmoved!(w.rt, rt, report)
+    ce_rebuilt!(w.rt, rt, report, :switch)
+    ce_restated!(w.rt, rt, report, {:switch, step == :test and stage == :accepted})
+    ce_one_copy!(rt, if(step == :test, do: ConfigEdit.running(w.e), else: elem(w.c, 0)))
+    ce_round!(step, w, rt, report)
+    ce_reach(:model_after_switch)
+    _ = stage
+
+    %{
+      w
+      | e: next,
+        rt: rt,
+        model: ce_seed(rt),
+        stale: [w.e | w.stale],
+        round: if(step == :test, do: {w.rt, report}, else: nil),
+        resumed: Enum.any?(report, &match?({:resumed, _, _}, &1))
+    }
+  end
+
+  defp ce_stepped(step, stage, true, {:ok, {kept, rt, report}}, w) do
+    ce_report!(report)
+    ce_unmoved!(w.rt, rt, report)
+
+    case {step, stage} do
+      {:cancel, :accepted} ->
+        assert report == []
+        assert %{rt | generation: w.rt.generation} == w.rt
+        ce_reach(:cancelled_accepted)
+
+      _ ->
+        ce_rebuilt!(w.rt, rt, report, :prune)
+
+        ce_restated!(
+          w.rt,
+          rt,
+          report,
+          {:prune, if(step == :assemble, do: w.o, else: elem(w.c, 0))}
+        )
+
+        assert rt.aside == %{}
+        ce_reach(if(step == :assemble, do: :assembled, else: :cancelled_untested))
+        ce_reach(:model_after_prune)
+    end
+
+    ce_one_copy!(rt, rt.config)
+    assert rt.config == kept
+    {_, spec} = w.c
+    spec = if step == :assemble, do: spec, else: w.spec
+
+    %{
+      w
+      | e: nil,
+        c: nil,
+        rt: rt,
+        model: ce_seed(rt),
+        spec: spec,
+        stale: [w.e | w.stale],
+        round: nil
+    }
+  end
+
+  # Each report kind of the configuration's, against its rule restated from the two
+  # configurations' text and the resource before the step; and what a step leaves in every
+  # running state, read from its program's text: a switch every tag its program declares
+  # but a var_external, and a prune those alone.
+  defp ce_restated!(before, later, report, {:switch, first?}) do
+    {from, to} = {before.config, later.config}
+    was = Map.new(from.tasks, &{&1.name, &1})
+
+    tasks =
+      for(
+        t <- to.tasks,
+        o = was[t.name],
+        o.interval != t.interval,
+        do: {:interval, t.name, {o.interval, t.interval}}
+      ) ++
+        for(
+          t <- to.tasks,
+          o = was[t.name],
+          o.priority != t.priority,
+          do: {:priority, t.name, {o.priority, t.priority}}
+        ) ++
+        for t <- to.tasks,
+            o = was[t.name],
+            o.interval != t.interval,
+            next = before.tasks[t.name].next_due,
+            min(next, before.now + t.interval) != next,
+            do: {:next_due, t.name, {next, min(next, before.now + t.interval)}}
+
+    old = Map.new(from.globals, &{&1.name, &1})
+
+    globals =
+      for(
+        g <- to.globals,
+        not Map.has_key?(before.globals, g.name),
+        do: {:added, g.name, g.initial || 0}
+      ) ++
+        for(
+          g <- to.globals,
+          Map.has_key?(before.globals, g.name),
+          o = old[g.name],
+          o != nil and (o.initial || 0) != (g.initial || 0),
+          do: {:initial_changed, g.name, {o.initial || 0, g.initial || 0}}
+        ) ++ ce_held(from, to, later)
+
+    kept =
+      for i <- to.instances,
+          Enum.any?(from.instances, &(&1.name == i.name and &1.type == i.type)),
+          do: i.name
+
+    stopped = for i <- from.instances, i.name not in kept, do: {:instance_stopped, i.name, i.type}
+
+    started =
+      for i <- to.instances,
+          i.name not in kept,
+          do:
+            {if(match?(%{type: t} when t == i.type, before.aside[i.name]),
+               do: :instance_back,
+               else: :instance_added
+             ), i.name, i.type}
+
+    shared =
+      for name <- kept,
+          type = Enum.find(to.instances, &(&1.name == name)).type,
+          {f, t} = {ce_externals(from.programs[type]), ce_externals(to.programs[type])},
+          entry <-
+            for(
+              e <- t,
+              e not in f,
+              do: {:joined, "#{name}.#{e}", {before.instances[name].env[e], later.globals[e]}}
+            ) ++
+              for(
+                e <- f,
+                e not in t,
+                Map.has_key?(to.programs[type].tags, e),
+                do: {:left, "#{name}.#{e}", later.globals[e]}
+              ),
+          do: entry
+
+    restated = Enum.sort(tasks ++ globals ++ stopped ++ started ++ shared ++ ce_orders(from, to))
+
+    given =
+      for {kind, name, _} = entry <- report,
+          kind in [
+            :interval,
+            :priority,
+            :next_due,
+            :instance_stopped,
+            :instance_added,
+            :instance_back,
+            :joined,
+            :left,
+            :order
+          ] or
+            (not String.contains?(to_string(name), ".") and
+               kind in [:added, :initial_changed, :held]),
+          do: entry
+
+    assert given == restated
+
+    # Each resume from the resource's clock (decisions 56 and 57), of a timer that was
+    # timing; and, but at the first test, no start over a value the state already holds.
+    for {:resumed, path, gap} <- report do
+      [name | rest] = String.split(path, ".")
+
+      %{"en" => 1, "last" => last} =
+        get_in(Map.merge(before.instances, before.aside)[name].env, rest)
+
+      assert last + gap == later.now
+    end
+
+    for {:added, path, _} <- report,
+        not first?,
+        [name, rest] <- [String.split(path, ".", parts: 2)],
+        state = before.instances[name],
+        state != nil,
+        Enum.any?(from.instances, &(&1.name == name)),
+        do:
+          assert(
+            get_in(state.env, String.split(rest, ".")) == nil,
+            "#{path} started over a value"
+          )
+
+    # No start rule starts a var_external, whose value is its global's.
+    for {:added, path, _} <- report,
+        [name, tag] <- [String.split(path, ".", parts: 2)],
+        state = later.instances[name],
+        do: refute(tag in ce_externals(to.programs[state.type]), "#{path} started")
+
+    ce_declared!(later, &MapSet.subset?/2)
+  end
+
+  defp ce_restated!(before, later, report, {:prune, from}) do
+    to = later.config
+
+    restated =
+      Enum.sort(
+        for(
+          name <- Map.keys(before.globals),
+          not Enum.any?(to.globals, &(&1.name == name)),
+          do: {:pruned, name, before.globals[name]}
+        ) ++
+          for({name, state} <- before.aside, do: {:instance_pruned, name, state.type}) ++
+          ce_held(from, to, later)
+      )
+
+    given = for {_kind, name, _} = entry <- report, not String.contains?(name, "."), do: entry
+    assert given == restated
+    ce_declared!(later, &MapSet.equal?/2)
+  end
+
+  defp ce_declared!(rt, relation) do
+    for {_name, state} <- rt.instances do
+      program = rt.config.programs[state.type]
+      declared = MapSet.new(Map.keys(program.tags) -- ce_externals(program))
+      assert relation.(declared, MapSet.new(Map.keys(state.env)))
+    end
+  end
+
+  defp ce_externals(program),
+    do: for({name, %Tag{section: :var_external}} <- program.tags, do: name)
+
+  # Decision 20 for the plant, from the programs' text: a global a connection copies out a
+  # var_output that some rung writes to, or that a rung writes through a var_external.
+  defp ce_drives(config) do
+    writes = fn program, name -> program.source =~ ~r/\b(ote|otl|otu) #{name}\b/ end
+    types = Map.new(config.instances, &{&1.name, &1.type})
+
+    MapSet.new(
+      for(
+        c <- config.connections,
+        is_binary(c.to),
+        writes.(config.programs[types[c.instance]], c.member),
+        do: c.to
+      ) ++
+        for(
+          i <- config.instances,
+          program = config.programs[i.type],
+          name <- ce_externals(program),
+          writes.(program, name),
+          do: name
+        )
+    )
+  end
+
+  defp ce_held(from, to, later) do
+    declared = MapSet.new(to.globals, & &1.name)
+
+    for g <- Enum.sort(MapSet.difference(ce_drives(from), ce_drives(to))),
+        g in declared,
+        do: {:held, g, later.globals[g]}
+  end
+
+  # Decision 62, restated: the names both have on a task, or of the tasks, in another order.
+  defp ce_orders(from, to) do
+    by_task = fn config -> Enum.group_by(config.instances, &(&1.task || :none), & &1.name) end
+    {was, now} = {by_task.(from), by_task.(to)}
+
+    lists =
+      [{:tasks, Enum.map(from.tasks, & &1.name), Enum.map(to.tasks, & &1.name)}] ++
+        for {task, names} <- now, do: {task, Map.get(was, task, []), names}
+
+    for {name, old, new} <- lists,
+        old -- (old -- new) != new -- (new -- old),
+        do: {:order, name, new}
+  end
+
+  # No step moves the clock, an overlap count or a trigger's last sample, and only
+  # decision 40 moves a next due time.
+  defp ce_unmoved!(before, later, report) do
+    assert later.now == before.now
+    moved = for {:next_due, task, {_from, to}} <- report, into: %{}, do: {task, to}
+
+    for {name, state} <- before.tasks do
+      assert later.tasks[name] == %{state | next_due: Map.get(moved, name, state.next_due)}
+    end
+  end
+
+  # Decision 49: no state, running or set aside, holds a var_external of its own program,
+  # the running configuration's or, set aside, the other's.
+  defp ce_one_copy!(rt, other) do
+    for {states, config} <- [{rt.instances, rt.config}, {rt.aside, other}],
+        {_name, state} <- states,
+        {name, %Tag{section: :var_external}} <- config.programs[state.type].tags,
+        do: refute(Map.has_key?(state.env, name))
+  end
+
+  # The writes a report lists, applied to the resource before its step, give it after.
+  defp ce_rebuilt!(before, later, report, kind) do
+    names = fn wanted -> for {^wanted, name, _} <- report, do: name end
+    stopped = names.(:instance_stopped)
+    back = names.(:instance_back)
+    added = names.(:instance_added)
+
+    fresh =
+      for name <- added, into: %{} do
+        %{type: type} = Enum.find(later.config.instances, &(&1.name == name))
+        program = later.config.programs[type]
+        externals = for {n, %Tag{section: :var_external}} <- program.tags, do: n
+        state = Runtime.instance(program)
+        {name, %{state | env: Map.drop(state.env, externals)}}
+      end
+
+    instances =
+      before.instances
+      |> Map.drop(stopped)
+      |> Map.merge(Map.take(before.aside, back))
+      |> Map.merge(fresh)
+
+    aside =
+      before.aside
+      |> Map.drop(back)
+      |> Map.merge(Map.take(before.instances, stopped))
+      |> Map.drop(names.(:instance_pruned))
+
+    {instances, globals} =
+      Enum.reduce(report, {instances, before.globals}, fn {kind, name, value} = entry,
+                                                          {instances, globals} ->
+        case String.split(to_string(name), ".", parts: 2) do
+          [instance, path] ->
+            {Map.update!(
+               instances,
+               instance,
+               &%{&1 | env: ce_write({kind, path, value}, &1.env)}
+             ), globals}
+
+          [_global] ->
+            {instances, ce_global_write(entry, globals)}
+        end
+      end)
+
+    assert later.globals == globals
+
+    assert Map.new(later.instances, fn {n, s} -> {n, s.env} end) ==
+             Map.new(instances, fn {n, s} -> {n, s.env} end)
+
+    assert Map.new(later.aside, fn {n, s} -> {n, s.env} end) ==
+             Map.new(aside, fn {n, s} -> {n, s.env} end)
+
+    for {name, state} <- later.instances,
+        name in back or (kind == :switch and name not in added) do
+      assert state.now == later.now
+    end
+
+    if kind == :switch do
+      kept = Map.keys(later.instances) -- (added ++ back)
+
+      for name <- kept do
+        state = later.instances[name]
+        assert state.switched
+
+        bits =
+          for {:ons_blocked, path, _} <- report,
+              [^name, bit] <- [String.split(path, ".", parts: 2)],
+              do: bit
+
+        assert state.ons_blocked == bits
+        ce_reach(:blocked_inside, Enum.any?(bits, &String.contains?(&1, ".")))
+      end
+    end
+  end
+
+  defp ce_write({kind, path, value}, env) when kind in [:added, :input, :left],
+    do: put_in(env, Enum.map(String.split(path, "."), &Access.key(&1, %{})), value)
+
+  defp ce_write({:preset, path, {_from, to}}, env),
+    do: put_in(env, String.split(path, ".") ++ ["pre"], to)
+
+  defp ce_write({:resumed, path, gap}, env),
+    do: update_in(env, String.split(path, ".") ++ ["last"], &(&1 + gap))
+
+  defp ce_write({:resume_undone, path, gap}, env),
+    do: update_in(env, String.split(path, ".") ++ ["last"], &(&1 - gap))
+
+  defp ce_write({kind, path, _value}, env) when kind in [:pruned, :joined] do
+    case Enum.split(String.split(path, "."), -1) do
+      {[], [leaf]} -> Map.delete(env, leaf)
+      {parent, [leaf]} -> update_in(env, parent, &Map.delete(&1, leaf))
+    end
+  end
+
+  defp ce_write(_fact, env), do: env
+
+  defp ce_global_write({:added, name, value}, globals), do: Map.put(globals, name, value)
+  defp ce_global_write({:pruned, name, _value}, globals), do: Map.delete(globals, name)
+  defp ce_global_write(_fact, globals), do: globals
+
+  # A test then an untest with no cycle between leaves the resource as the test found it,
+  # but for what either switch started, kept unused, and a timer the untest resumed in an
+  # instance it brought back from aside (decision 57): found from the states, never from
+  # the reports' writes.
+  defp ce_round!(:untest, %{round: {before, test_report}} = w, later, report) do
+    _ = w
+    started = for {:instance_added, name, _} <- test_report, do: name
+    assert Map.keys(later.instances) |> Enum.sort() == Map.keys(before.instances) |> Enum.sort()
+    assert Map.drop(later.aside, started) |> Map.keys() == Map.keys(before.aside)
+    assert Map.take(later.globals, Map.keys(before.globals)) == before.globals
+    back = for {:instance_back, name, _} <- report, do: name
+    resumed = for {:resumed, path, _} <- report, do: path
+
+    for {name, state} <- before.instances do
+      after_env = later.instances[name].env
+
+      # Decision 55: a tag the test joined to its global lost its own value, and the untest
+      # leaves it at the global's.
+      paths =
+        for {kind, path, _} <- test_report ++ report,
+            kind in [:added, :input, :joined],
+            [^name, p] <- [String.split(path, ".", parts: 2)],
+            do: p
+
+      ce_reach(:round_trip_started, paths != [])
+      ce_reach(:round_trip_joined, Enum.any?(test_report, &match?({:joined, _, _}, &1)))
+
+      expected =
+        Enum.reduce(paths, state.env, fn p, env ->
+          ce_exempt(get_in(after_env, String.split(p, ".")), p, env)
+        end)
+
+      expected =
+        Enum.reduce(resumed, expected, fn path, env ->
+          undone? = Enum.any?(test_report, &match?({:resume_undone, ^path, _}, &1))
+
+          ce_resumed_back(
+            String.split(path, ".", parts: 2),
+            name,
+            {name in back, undone?},
+            later.now,
+            env
+          )
+        end)
+
+      assert after_env == expected
+
+      unless state.first,
+        do: assert(later.instances[name].ons_blocked == state.ons_blocked or name in back)
+    end
+
+    ce_reach(:round_trip)
+  end
+
+  defp ce_round!(_step, _w, _later, _report), do: :ok
+
+  # A path a switch started, or a joined tag, is as the round trip left it: there, or not.
+  defp ce_exempt(nil, path, env), do: ce_write({:pruned, path, nil}, env)
+  defp ce_exempt(value, path, env), do: ce_write({:added, path, value}, env)
+
+  # Decision 57: a timer of an instance back from aside resumes from the untest. Decision
+  # 56: so does one of a kept instance that the test gave back a resume of an earlier
+  # switch's, the clock having moved since with no scan of it: the known limit of §4.9's
+  # spike, time since the instance's last scan not counted.
+  defp ce_resumed_back([name, path], name, {back?, undone?}, now, env) when back? or undone? do
+    ce_reach(:round_trip_back, back?)
+    put_in(env, String.split(path, ".") ++ ["last"], now)
+  end
+
+  defp ce_resumed_back(_path, _name, _back?, _now, env), do: env
+
+  defp ce_restart(w) do
+    {:ok, rt} = ce_attempt(fn -> Runtime.restart(w.rt, :cold) end)
+    assert rt.aside == %{} and rt.generation == w.rt.generation
+    ce_reach(:restart_in_edit, w.e != nil)
+    %{w | rt: rt, model: ce_seed(rt), round: nil}
+  end
+
+  # A step on an edit that has ended, or that another has stepped past.
+  defp ce_stale(%{stale: [old | _]} = w) do
+    assert {:refused, :generation, _} = ce_attempt(fn -> ConfigEdit.test(old, w.rt) end)
+    ce_reach(:stale)
+    w
+  end
+
+  defp ce_stale(w), do: w
+
+  defp ce_mistakes(w) do
+    assert {:refused, :runtime, _} =
+             ce_attempt(fn -> ConfigEdit.accept(ce_opaque(:nope), w.rt.config) end)
+
+    assert {:refused, :not_a_configuration, _} =
+             ce_attempt(fn -> ConfigEdit.accept(w.rt, ce_opaque(:nope)) end)
+
+    assert {:refused, :name, _} =
+             ce_attempt(fn -> ConfigEdit.accept(w.rt, %{w.rt.config | name: "other"}) end)
+
+    bad = %{w.rt.config | instances: Enum.map(w.rt.config.instances, &%{&1 | task: "nowhere"})}
+    {:refused, :invalid, message} = ce_attempt(fn -> ConfigEdit.accept(w.rt, bad) end)
+    assert message == ce_message(fn -> Runtime.start(bad) end)
+
+    if w.e do
+      assert {:refused, :not_an_edit, _} =
+               ce_attempt(fn -> ConfigEdit.test(ce_opaque(:nope), w.rt) end)
+
+      assert {:refused, :runtime, _} =
+               ce_attempt(fn -> ConfigEdit.test(w.e, ce_opaque(:nope)) end)
+
+      other =
+        Runtime.start(%{w.rt.config | tasks: Enum.map(w.rt.config.tasks, &%{&1 | priority: 9})})
+
+      other = %{other | generation: w.rt.generation}
+      assert {:refused, :configuration, _} = ce_attempt(fn -> ConfigEdit.test(w.e, other) end)
+    end
+
+    w
+  end
+
+  defp ce_message(fun) do
+    fun.()
+  rescue
+    error in ArgumentError -> error.message
+  end
+
+  # ---- the model, M2-1's with M2-4's var_externals, seeded from a resource --------------
+
+  defp ce_seed(rt),
+    do: %{
+      now: rt.now,
+      globals: rt.globals,
+      states: rt.instances,
+      anchor: Map.new(rt.tasks, fn {name, s} -> {name, s.next_due || 0} end),
+      next: Map.new(rt.tasks, fn {name, s} -> {name, s.next_due} end),
+      last: Map.new(rt.tasks, fn {name, s} -> {name, Map.get(s, :last, 0)} end),
+      overlaps: Map.new(rt.tasks, fn {name, s} -> {name, s.overlaps} end),
+      runs: Map.new(rt.tasks, fn {name, _} -> {name, 0} end),
+      skipped: Map.new(rt.tasks, fn {name, _} -> {name, 0} end),
+      cycles: 0
+    }
+
+  defp ce_model_cycle(config, model, elapsed, inputs) do
+    now = model.now + elapsed
+    globals = Map.merge(model.globals, inputs)
+    model = %{model | now: now, globals: globals, cycles: model.cycles + 1}
+
+    {plans, model} =
+      config.tasks
+      |> Enum.with_index()
+      |> Enum.map_reduce(model, fn {task, index}, model ->
+        sample = task.single && globals[task.single]
+        edge? = task.single != nil and model.last[task.name] == 0 and sample == 1
+        come? = task.interval != nil and model.next[task.name] <= now
+        model = %{model | last: Map.put(model.last, task.name, sample || 0)}
+        ce_model_plan({edge?, come?, sample}, task, index, model)
+      end)
+
+    due =
+      plans
+      |> Enum.reject(&is_nil/1)
+      |> Enum.sort_by(fn {task, index, at} -> {task.priority, at, index} end)
+
+    {model, events} =
+      Enum.reduce(due, {model, []}, fn {task, _index, at}, {model, events} ->
+        {model, events} = ce_model_run(task, at, model, events)
+
+        Enum.reduce(
+          for(i <- config.instances, i.task == task.name, do: i),
+          {model, events},
+          &ce_model_scan(config, &1, task.name, &2)
+        )
+      end)
+
+    {model, events} =
+      Enum.reduce(
+        for(i <- config.instances, i.task == nil, do: i),
+        {model, events},
+        &ce_model_scan(config, &1, :none, &2)
+      )
+
+    outputs =
+      for g <- config.globals,
+          g.at != nil and String.contains?(g.at, ".q."),
+          into: %{},
+          do: {g.name, model.globals[g.name]}
+
+    {model, outputs, Enum.reverse(events)}
+  end
+
+  defp ce_model_plan({true, _come?, _sample}, task, index, model) do
+    model =
+      if task.interval && model.next[task.name] <= model.now,
+        do: ce_model_skip(task, model),
+        else: model
+
+    {{task, index, model.now}, model}
+  end
+
+  defp ce_model_plan({false, true, 1}, task, _index, model), do: {nil, ce_model_skip(task, model)}
+
+  defp ce_model_plan({false, true, _sample}, task, index, model),
+    do: {{task, index, model.next[task.name]}, model}
+
+  defp ce_model_plan({false, false, _sample}, _task, _index, model), do: {nil, model}
+
+  defp ce_phase_after(model, task),
+    do:
+      model.next[task.name] +
+        (div(model.now - model.next[task.name], task.interval) + 1) * task.interval
+
+  defp ce_model_skip(task, model),
+    do: %{model | next: Map.put(model.next, task.name, ce_phase_after(model, task))}
+
+  defp ce_model_run(task, at, model, events) do
+    case task.interval != nil and at == model.next[task.name] and at <= model.now do
+      false ->
+        {model, events}
+
+      true ->
+        missed = div(model.now - at, task.interval)
+
+        model = %{
+          model
+          | next: Map.put(model.next, task.name, ce_phase_after(model, task)),
+            overlaps: Map.update!(model.overlaps, task.name, &(&1 + missed))
+        }
+
+        {model, if(missed > 0, do: [{:overlap, task.name, missed} | events], else: events)}
+    end
+  end
+
+  defp ce_model_scan(config, instance, task, {model, events}) do
+    program = config.programs[instance.type]
+    mine = for c <- config.connections, c.instance == instance.name, do: c
+    section = fn c -> program.tags[c.member].section end
+    externals = for {name, %Tag{section: :var_external}} <- program.tags, do: name
+
+    inputs =
+      for c <- mine,
+          section.(c) == :var_input,
+          into: %{},
+          do: {c.member, if(is_binary(c.to), do: model.globals[c.to], else: c.to)}
+
+    state = model.states[instance.name]
+    state = %{state | env: Map.merge(state.env, Map.take(model.globals, externals))}
+
+    {outputs, state} =
+      Runtime.call(program, state, inputs, %Scan{now: model.now, first: state.first})
+
+    globals = Map.merge(model.globals, Map.take(state.env, externals))
+    state = %{state | env: Map.drop(state.env, externals)}
+
+    globals =
+      for c <- mine, section.(c) == :var_output, reduce: globals do
+        globals -> Map.put(globals, c.to, outputs[c.member])
+      end
+
+    {%{model | states: Map.put(model.states, instance.name, state), globals: globals},
+     [{:ran, task, instance.name, model.now} | events]}
   end
 end

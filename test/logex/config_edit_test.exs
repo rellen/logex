@@ -1240,4 +1240,92 @@ defmodule Logex.ConfigEditTest do
       refute Enum.any?(forecast, &match?({:priority, _, _}, &1))
     end
   end
+
+  # Fix F16 for the plant: accept and every step stay linear in the instances of one type,
+  # which share one plan, in the program types, each its own plan, and in a program's
+  # size. Each measure is the least of three counts of reductions for accept, test,
+  # untest, test and assemble, the candidate's every timer moved to a new preset and every
+  # one-shot's rung changed, so each switch moves and blocks something in each instance.
+  describe "growth (fix F16)" do
+    defp grown(types, instances, size) do
+      source = fn preset, contact ->
+        decl =
+          Enum.map_join(1..size, "\n", &"var t#{&1} ton\nvar s#{&1} bool\nvar_output o#{&1} bool")
+
+        "var_input in bool\n" <>
+          decl <>
+          "\n\n" <>
+          Enum.map_join(
+            1..size,
+            "\n",
+            &"xic in ton t#{&1} #{preset}\n#{contact} in ons s#{&1} ote o#{&1}"
+          )
+      end
+
+      config = fn preset, contact ->
+        programs =
+          for t <- 1..types do
+            {:ok, program} = Logex.compile(source.(preset, contact), name: "p#{t}")
+            program
+          end
+
+        names = for t <- 1..types, i <- 1..instances, do: {"m#{t}_#{i}", "p#{t}"}
+
+        Configuration.new!(
+          name: "plant",
+          programs: programs,
+          tasks: [%Configuration.Task{name: "fast", interval: 10, priority: 1}],
+          instances:
+            for(
+              {name, type} <- names,
+              do: %Configuration.Instance{name: name, type: type, task: "fast"}
+            ),
+          connections:
+            for(
+              {name, _type} <- names,
+              do: %Configuration.Connection{instance: name, member: "in", to: 1}
+            )
+        )
+      end
+
+      {config.(30, "xic"), config.(40, "xio")}
+    end
+
+    defp reductions_to_edit({original, candidate}) do
+      {runtime, _, _} = Runtime.cycle(Runtime.start(original), 0, %{})
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{})
+
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          {:ok, edit, _} = Edit.accept(runtime, candidate)
+          {edit, rt, _} = Edit.test(edit, runtime)
+          {edit, rt, _} = Edit.untest(edit, rt)
+          {edit, rt, _} = Edit.test(edit, rt)
+          {_, _, report} = Edit.assemble(edit, rt)
+          {:reductions, later} = Process.info(self(), :reductions)
+          assert report == []
+          later - before
+        end
+      )
+    end
+
+    # Over 32 runs on Elixir 1.20.4, 16 alone and 16 beside a full suite, 4x the instances
+    # took 3.90x to 3.95x, 4x the types 4.00x to 4.03x and 4x the program 4.01x to 4.05x;
+    # each bound is a fifth above its highest.
+    test "accept and its steps stay linear in the instances of one type, one plan" do
+      ratio = reductions_to_edit(grown(1, 200, 4)) / reductions_to_edit(grown(1, 50, 4))
+      assert ratio < 4.74, "4x the instances took #{Float.round(ratio, 2)}x the reductions"
+    end
+
+    test "accept and its steps stay linear in the program types, a plan each" do
+      ratio = reductions_to_edit(grown(80, 1, 4)) / reductions_to_edit(grown(20, 1, 4))
+      assert ratio < 4.84, "4x the types took #{Float.round(ratio, 2)}x the reductions"
+    end
+
+    test "accept and its steps stay linear in a program's size" do
+      ratio = reductions_to_edit(grown(1, 2, 800)) / reductions_to_edit(grown(1, 2, 200))
+      assert ratio < 4.86, "4x the program took #{Float.round(ratio, 2)}x the reductions"
+    end
+  end
 end
