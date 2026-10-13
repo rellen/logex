@@ -78,6 +78,19 @@ defmodule Logex.Configuration.Edit do
   - the wiring is derived again from the configuration started, so a var_input's new
     connection is read at its instance's next scan.
 
+  **Held outputs** (decisions 20 and 58). A global the configuration a step stops drives,
+  where a connection copies out a var_output its program writes (`Logex.Walk.writes/1`) or
+  a program writes it through a var_external, and the configuration it starts declares
+  and does not drive, holds its value, and every step of that direction reports it,
+  `{:held, global, value}`, its value in the resource, which is what the next cycle's
+  outputs give for an output point. A connection whose var_output the program no longer
+  writes copies out a frozen value, so its point holds too. Each kept instance's own
+  var_outputs come by path beside it, as `Logex.Edit` reports them, so a held point is
+  named both as the point the operator sees and as the output the programmer changed.
+  Test, its forecast and assemble report what the original drives and the candidate
+  does not; untest, and cancel after an untest, the reverse. Both are read from the two
+  configurations alone, once at accept.
+
   **Assemble** (from test) and **cancel** (after an untest) are not switches: each prunes
   the resource to the configuration it keeps, each kept instance by its type's plan, by
   path, as `Logex.Edit` prunes one; every instance set aside, `{:instance_pruned, name,
@@ -108,11 +121,11 @@ defmodule Logex.Configuration.Edit do
   outside the contract, as is an edit built or changed by hand.
   """
 
-  alias Logex.{Configuration, Diagnostic, FbType, Instance, Program, Runtime, Tag}
+  alias Logex.{Configuration, Diagnostic, FbType, Instance, Program, Runtime, Tag, Walk}
   alias Logex.Edit.Plan
 
-  @enforce_keys [:original, :candidate, :stage, :plans, :records, :generation]
-  defstruct [:original, :candidate, :stage, :plans, :records, :generation]
+  @enforce_keys [:original, :candidate, :stage, :plans, :held, :records, :generation]
+  defstruct [:original, :candidate, :stage, :plans, :held, :records, :generation]
 
   @opaque t :: %__MODULE__{}
 
@@ -135,6 +148,7 @@ defmodule Logex.Configuration.Edit do
       candidate: candidate,
       stage: :accepted,
       plans: plans(original, candidate),
+      held: %{test: held(original, candidate), untest: held(candidate, original)},
       records: %{},
       generation: generation
     }
@@ -447,6 +461,55 @@ defmodule Logex.Configuration.Edit do
          )}
       end)
 
+  # ---- held outputs (decision 20) ---------------------------------------------------------
+
+  # The globals a configuration drives, which the configuration stopped drives and the one
+  # started, which declares them, does not: each holds its value, and every step of that
+  # direction reports it, beside each kept instance's own var_outputs by path (decision 58).
+  # Read from the two configurations alone, once at accept, as a plan is.
+  defp held(from, to) do
+    driven = drives(to)
+    keep = by_name(to.globals)
+
+    Enum.sort(
+      for name <- Map.keys(drives(from)),
+          is_map_key(keep, name),
+          not is_map_key(driven, name),
+          do: name
+    )
+  end
+
+  # A global is driven where a connection copies out a var_output its program writes
+  # (Logex.Walk.writes/1), or a program writes it through a var_external. A connection whose
+  # var_output the program no longer writes copies out a frozen value: the point holds. A
+  # connection names a var_input or a var_output (Logex.Configuration.check/1), and no
+  # logic writes a var_input (Logex.Compiler), so a member written is a var_output. Each
+  # program type's writes are read once.
+  defp drives(%Configuration{programs: programs, instances: instances, connections: connections}) do
+    types = Map.new(instances, &{&1.name, &1.type})
+
+    writes =
+      Map.new(Enum.uniq(Map.values(types)), &{&1, Map.new(Walk.writes(Map.fetch!(programs, &1)))})
+
+    copied =
+      for %Configuration.Connection{instance: instance, member: member, to: global} <-
+            connections,
+          is_binary(global),
+          is_map_key(Map.fetch!(writes, Map.fetch!(types, instance)), member),
+          do: global
+
+    through =
+      for {type, written} <- writes,
+          {name, %Tag{section: :var_external}} <- Map.fetch!(programs, type).tags,
+          is_map_key(written, name),
+          do: name
+
+    Map.new(copied ++ through, &{&1, true})
+  end
+
+  defp holding(names, globals),
+    do: for(name <- names, do: {:held, name, Map.fetch!(globals, name)})
+
   # ---- a switch, between two cycles -------------------------------------------------------
 
   defp sides(edit, :test), do: {edit.original, edit.candidate}
@@ -497,7 +560,8 @@ defmodule Logex.Configuration.Edit do
     report =
       reports ++
         started ++
-        for({name, state} <- stopped, do: {:instance_stopped, name, state.type}) ++ timed
+        for({name, state} <- stopped, do: {:instance_stopped, name, state.type}) ++
+        timed ++ holding(Map.fetch!(edit.held, direction), globals)
 
     {changes, records, Enum.sort(report)}
   end
@@ -695,7 +759,8 @@ defmodule Logex.Configuration.Edit do
     report =
       reports ++
         for({name, value} <- gone, do: {:pruned, name, value}) ++
-        for({name, state} <- runtime.aside, do: {:instance_pruned, name, state.type})
+        for({name, state} <- runtime.aside, do: {:instance_pruned, name, state.type}) ++
+        holding(Map.fetch!(edit.held, direction), globals)
 
     {Runtime.edited(runtime, %{instances: instances, globals: globals, aside: %{}}),
      Enum.sort(report)}

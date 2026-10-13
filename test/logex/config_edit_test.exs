@@ -989,4 +989,95 @@ defmodule Logex.ConfigEditTest do
       assert_raise ArgumentError, ~r/generation/, fn -> Edit.test(edit, runtime) end
     end
   end
+
+  describe "a global nothing drives any more holds its value, and every step reports it " <>
+             "(decisions 20 and 58)" do
+    test "a var_output no longer written: its point and the instance's own output, both" do
+      runtime = running(60)
+      motor = String.replace(motor_ld(), "xic motor ote run_lamp\n", "")
+      {edit, forecast} = accepted(runtime, plant(plant_text(), programs(motor)))
+      assert {:held, "lamp_1", 1} in forecast
+      assert {:held, "m1.run_lamp", 1} in forecast
+      assert {:held, "lamp_2", 1} in forecast
+      assert {:held, "m2.run_lamp", 1} in forecast
+      {edit, runtime, report} = Edit.test(edit, runtime)
+      assert report == forecast
+      {runtime, outputs} = cycles(runtime, 3, %{"pb_stop_1" => 1})
+      assert {outputs["k1"], outputs["lamp_1"]} == {0, 1}
+
+      # Back, the original drives them: nothing is held. Assemble holds them again.
+      {edit, runtime, report} = Edit.untest(edit, runtime)
+      refute Enum.any?(report, &match?({:held, _, _}, &1))
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      {_config, _runtime, report} = Edit.assemble(edit, runtime)
+      assert {:held, "lamp_1", 1} in report
+      assert {:held, "m1.run_lamp", 1} in report
+    end
+
+    test "an instance removed: each point it drove, held across the cycles it is set aside" do
+      runtime = running(60)
+      {edit, _} = accepted(runtime, plant(without_m2()))
+      {_edit, runtime, report} = Edit.test(edit, runtime)
+
+      assert for({:held, name, value} <- report, do: {name, value}) == [
+               {"k2", 1},
+               {"lamp_2", 1},
+               {"sp_2", 1200}
+             ]
+
+      {_runtime, outputs} = cycles(runtime, 5)
+      assert {outputs["k2"], outputs["lamp_2"], outputs["sp_2"]} == {1, 1, 1200}
+    end
+
+    test "a global written through a var_external, which nothing writes any more" do
+      alarm =
+        String.replace(
+          motor_ld(),
+          "var_external estop bool",
+          "var_external estop bool\nvar_external alarm bool"
+        ) <> "xic fault ote alarm\n"
+
+      text =
+        String.replace(
+          plant_text(),
+          "var_global k2_at_trip bool",
+          "var_global k2_at_trip bool\nvar_global alarm bool"
+        )
+
+      runtime = running(60, plant(text, programs(alarm)))
+      quiet = String.replace(alarm, "xic fault ote alarm\n", "")
+      {_edit, forecast} = accepted(runtime, plant(text, programs(quiet)))
+      assert {:held, "alarm", 0} in forecast
+    end
+
+    test "a point another driver takes over is not held, nor one the candidate removes" do
+      runtime = running(60)
+
+      text =
+        plant_text()
+        |> String.replace("  m1.run_lamp lamp_1", "  m1.motor    lamp_1")
+        |> String.replace("  snap.b_was k2_at_trip\n", "")
+        |> String.replace("var_global k2_at_trip bool\n", "")
+
+      {_edit, forecast} = accepted(runtime, plant(text))
+      refute Enum.any?(forecast, &match?({:held, _, _}, &1))
+    end
+
+    test "cancel after an untest holds what the candidate drove and the original does not" do
+      text =
+        plant_text() <>
+          "program m3 motor\n  m3.start 0\n  m3.stop 0\n  m3.overtemp 0\n  m3.reset 0\n  m3.run_lamp k2_at_trip\n"
+
+      text = String.replace(text, "  snap.b_was k2_at_trip\n", "")
+      original = plant(String.replace(plant_text(), "  snap.b_was k2_at_trip\n", ""))
+      runtime = running(60, original)
+      {edit, _} = accepted(runtime, plant(text))
+      {edit, runtime, report} = Edit.test(edit, runtime)
+      refute Enum.any?(report, &match?({:held, _, _}, &1))
+      {edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:held, "k2_at_trip", 0} in report
+      {_config, _runtime, report} = Edit.cancel(edit, runtime)
+      assert {:held, "k2_at_trip", 0} in report
+    end
+  end
 end
