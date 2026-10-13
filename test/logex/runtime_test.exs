@@ -1132,12 +1132,15 @@ defmodule Logex.RuntimeTest do
                [compile: 2, compile_file: 1, compile_files: 1]
 
       # M2-1: the scheduler, and its resource, `%Logex.Runtime{}`, opaque as an edit is.
+      # OE-2: edited/2, internal (no doc), the one writer of a configuration edit's step
+      # into the resource.
       assert Enum.sort(Runtime.__info__(:functions)) ==
                [
                  __struct__: 0,
                  __struct__: 1,
                  call: 4,
                  cycle: 3,
+                 edited: 2,
                  get: 2,
                  get!: 2,
                  instance: 1,
@@ -1244,9 +1247,24 @@ defmodule Logex.RuntimeTest do
       # calls, and a configuration's edit is to: the type-change refusals, a plan per
       # direction, the empty record, a switch and a prune.
       assert Enum.sort(Logex.Edit.Plan.__info__(:functions)) ==
-               [plans: 2, prune: 3, record: 0, retyped: 2, switch: 4]
+               [plans: 2, plans: 3, prune: 3, record: 0, retyped: 2, switch: 4]
 
       assert {:docs_v1, _, _, _, :hidden, _, _} = Code.fetch_docs(Logex.Edit.Plan)
+
+      {:docs_v1, _, _, _, _, _, docs} = Code.fetch_docs(Runtime)
+
+      assert [{{:function, :edited, 2}, _, _, :hidden, _}] =
+               for({{_, :edited, _}, _, _, _, _} = doc <- docs, do: doc)
+
+      # OE-2: the staged edit of a running configuration, whose struct is opaque.
+      assert Enum.sort(Logex.Configuration.Edit.__info__(:functions)) == [
+               __struct__: 0,
+               __struct__: 1,
+               accept: 2,
+               cancel: 2,
+               running: 1,
+               stage: 1
+             ]
 
       # OE-1: the definition of a well-formed tree, which instructionize/2 checks on entry.
       assert Enum.sort(Logex.Parser.__info__(:functions)) ==

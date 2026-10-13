@@ -408,6 +408,18 @@ defmodule Logex.Runtime do
   defp detached(%Instance{env: env} = state, wiring, name),
     do: %{state | env: Map.drop(env, Map.fetch!(wiring.externals, name))}
 
+  @doc false
+  # OE-2: the one writer of a configuration edit's step into the resource, so that its
+  # fields are written in this module alone (Logex.Configuration.Edit computes them).
+  # `changes` holds what the step gives, among `config`, `globals`, `instances`, `aside`
+  # and `tasks`, each whole: a switch gives all five, a prune the instances, globals and
+  # what is set aside, and cancel from accept none. The wiring is derived again from the
+  # configuration, and every step moves the generation on by one (decisions 60 and 64).
+  def edited(%__MODULE__{} = runtime, changes) do
+    %__MODULE__{config: config, generation: generation} = runtime = struct!(runtime, changes)
+    %{runtime | wiring: wiring(config), generation: generation + 1}
+  end
+
   @doc "Each task's overlap count, by name: the periods it missed since `start/1` or `restart/2`."
   def overlaps(runtime) do
     %__MODULE__{tasks: tasks} = runtime!(runtime)

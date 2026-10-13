@@ -90,9 +90,18 @@ defmodule Logex.Edit.Plan do
   # The per-program half (F5): what each program declares and drives, read once, and a
   # plan for each direction. A switch then reads and writes only the state and the record,
   # so nothing a plan holds can go stale. Sets are maps to `true`, for `is_map_key/2`.
-  def plans(original, candidate) do
-    o = facts(original)
-    c = facts(candidate)
+  #
+  # OE-2: `externals` says what a program's var_externals are. For a lone instance,
+  # `:tags`, each is a tag of its own at 0 (Logex.Runtime), which the start rules start as
+  # any tag. In a resource, `:globals`, each is its global, the one copy, which the
+  # configuration edit merges into the state around the switch and splits off after
+  # (decision 45): no start rule starts one, and none is reported as a changed initial
+  # value, since its value is the global's.
+  def plans(original, candidate), do: plans(original, candidate, :tags)
+
+  def plans(original, candidate, externals) do
+    o = facts(original, externals)
+    c = facts(candidate, externals)
     forward = held(o, c)
     back = held(c, o)
     watched = Map.new(forward ++ back, &{&1, true})
@@ -106,7 +115,7 @@ defmodule Logex.Edit.Plan do
   # A program's tags with each instance's type itself (Logex.Program.typed_tags/1), as
   # every walk below reads them: a block's compiled body, which runs as a program too,
   # names each type it holds.
-  defp facts(%Program{rungs: rungs} = program) do
+  defp facts(%Program{rungs: rungs} = program, externals) do
     tags = Program.typed_tags(program)
     {ons, called, bodies} = rungs(rungs, tags)
     timers = Walk.timers(program)
@@ -117,6 +126,7 @@ defmodule Logex.Edit.Plan do
       initial: Program.initial_env(program),
       inputs: section(tags, :var_input),
       outputs: section(tags, :var_output),
+      shared: shared(externals, tags),
       writes: Map.new(Walk.writes(program), fn {name, lines} -> {name, length(lines)} end),
       ons: ons,
       ons_rungs: Map.new(ons, fn {key, _bits} -> {key, true} end),
@@ -142,6 +152,10 @@ defmodule Logex.Edit.Plan do
   defp section(tags, wanted),
     do: for({name, %Tag{section: ^wanted}} <- tags, into: %{}, do: {name, true})
 
+  # OE-2: the var_externals that are globals, held by no state (above).
+  defp shared(:tags, _tags), do: %{}
+  defp shared(:globals, tags), do: section(tags, :var_external)
+
   # The preset of the `ton` that runs a timer, Logex.Walk.timers/1's, or nil where no `ton`
   # of the program runs it.
   defp preset({_line, preset}), do: preset
@@ -160,7 +174,12 @@ defmodule Logex.Edit.Plan do
       initial: to.initial,
       table: to.table,
       keep: Map.new(to.tags, fn {name, _tag} -> {name, true} end),
-      starts: for({name, tag} <- to.tags, do: {name, not is_map_key(from.tags, name), fit(tag)}),
+      starts:
+        for(
+          {name, tag} <- to.tags,
+          not is_map_key(to.shared, name),
+          do: {name, not is_map_key(from.tags, name), fit(tag)}
+        ),
       inputs: to.inputs,
       live: for(name <- Map.keys(to.inputs), not is_map_key(from.inputs, name), do: name),
       unread: for(name <- Map.keys(from.inputs), not is_map_key(to.inputs, name), do: name),
@@ -196,13 +215,16 @@ defmodule Logex.Edit.Plan do
     do: is_map_key(facts.outputs, name) and is_map_key(facts.writes, name)
 
   # Decision 29: a bool or a dint both declare, of one type, whose initial value differs,
-  # and that is no var_input of `to`, since a restart keeps a var_input's value.
+  # and that is no var_input of `to`, since a restart keeps a var_input's value. OE-2: nor
+  # a var_external that is a global in either, whose value and initial value are the
+  # global's.
   defp changed(from, to),
     do:
       for(
         {name, %Tag{type: type}} <- to.tags,
         type in [:bool, :dint],
         not is_map_key(to.inputs, name),
+        not is_map_key(to.shared, name) and not is_map_key(from.shared, name),
         {:ok, %Tag{type: ^type}} <- [Map.fetch(from.tags, name)],
         Map.fetch!(from.initial, name) != Map.fetch!(to.initial, name),
         do: {name, Map.fetch!(from.initial, name), Map.fetch!(to.initial, name)}
