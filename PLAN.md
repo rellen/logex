@@ -19,7 +19,8 @@ fix took the shape it did, so its present tense describes the code *before* thos
 §1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5, §3's M2-2 and M2-3, §3's M2-4 and
 §3's M2-6 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
 first item, M2-1, landed the same day, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11,
-and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 is still forward work.
+and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed on 2026-10-13
+and is still forward work.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -2156,8 +2157,61 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   moving an instance to another task, adding or removing a task, located I/O, devices and
   a function block's members refused (adding or removing a task until its rule is
   verified, a function block's members until M2-5); output points
-  left undriven held and reported. *Done when* (to be written by its design pass, after
-  M2-6).
+  left undriven held and reported. *Done when* §4.4's plant, from text and from files on
+  disk, running with both motors sealed in and `t1` timing, takes a candidate that raises
+  `t1`'s preset and adds an `ons` in `motor.ld`, adds a member to `seal.ld`, shortens
+  `slow`'s interval from 50 to 20 ms, removes `snap`, and adds an unlocated global `alarm`
+  with an initial value, which the motor reads through `var_external`: test switches the
+  resource between two cycles with no instance restarted, no one-shot pulsed and no event
+  fired, `m1` and `m2` keeping their state by path with the decided `.pre`, `slow` next due
+  within 20 ms, and its report names each instance's preset move and added member, the
+  added global, `alarm` joined in each instance, the interval, `snap` stopped and
+  `k1_at_trip` held; untest runs the original over the same resource, `snap` back from
+  the state it was set aside with, its timers carrying on from where they stopped; assemble
+  prunes `snap` and its report names it; a changed `single`, an added task, an instance
+  moved to another task, a moved output point and a changed tag type are each refused at
+  accept, at their line in `plant.logex` or `motor.ld`; and a step on an edit that has
+  ended is refused by the generation counter. (`trip` then runs no instance, a warning,
+  which stops nothing. The candidate's `ons` moves no output, so it drives no new point, as
+  OE-1's Done-when keeps its own.)
+
+  *Designed 2026-10-13* against `92431a9` (`docs/organisation.md` §4.9, "OE-2's design"),
+  from a throwaway spike of the switch on §4.4's plant, and decided the same day, every
+  question as recommended (decisions 55–65): the shared global wins when a `var` becomes a
+  `var_external`, the instance's own value dropped and reported (55); a timer resumes from
+  the resource's clock, an instance's `now` set to it at a switch (56); an instance back
+  from aside carries on from where it stopped, its timers not caught up (57); a held output
+  is named both as its point and as the instance's var_output (58); a second module,
+  `Logex.Configuration.Edit`, beside `Logex.Edit` (59); the generation counter on the
+  resource only, a stale edit of a lone instance the host's duty, documented (60); a
+  retyped instance may run on another task (61); a reorder of tasks or instances allowed
+  and reported as `:order` (62); a candidate `check/1` refuses is the host's mistake, raised
+  as `start/1` raises it (63); cancel from accept moves the generation (64); and
+  `restart/2` during an edit drops what is set aside and what only the other configuration
+  declares, the next switch starting it again (65). It reserves no word, so it owes no
+  survey and no `docs/naming.md` stanza. Its landing order, each commit gated alone by
+  `mix format --check-formatted`, `mix compile --force --warnings-as-errors` in both
+  environments and `mix test --warnings-as-errors`, judged by exit code on Elixir 1.20.4,
+  and each rule it adds reverted alone and red:
+  1. the design record: `docs/organisation.md` §4.9's "OE-2's design" and §7's decisions
+     55–65, each "until OE-2" annotated where it stands, and this Done-when;
+  2. before the code that depends on it, a spike in the contract walk of OE-1's record of
+     each instance across instances on slow tasks, which skip cycles, and what it finds;
+  3. the per-instance half of `Logex.Edit` moved to an internal `Logex.Edit.Plan`, with no
+     change in behaviour, shown as M2-4 showed it for `Logex.Walk`;
+  4. the resource's new state, `generation` and `aside`, with their rules in
+     `Logex.Runtime`'s one-rule section;
+  5. `Logex.Configuration.Edit`'s accept and its refusals;
+  6. test, untest, assemble and cancel;
+  7. held outputs;
+  8. shared globals across a switch;
+  9. the report kinds;
+  10. the contract walk in `api_contract_test.exs`, with an oracle that knows nothing of
+      the implementation;
+  11. the Done-when in `end_to_end_test.exs`, from text and from files on disk;
+  12. the documents: README's "Changing a running program" with a real run, CLAUDE.md's
+      Key Files, `Logex.Runtime`'s one-rule section, `docs/organisation.md` and this
+      status.
 
   *From Milestone 2's design (2026-10-02; `docs/organisation.md` §4.9, "One rule for new
   state", and §4.10).* M2-5 brings the edit of a function block's members, by path
@@ -2172,7 +2226,8 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   questions Milestone 2 leaves it, none of which an M2 commit depends on. *(All three
   were decided on 2026-10-04 as recommended, `docs/organisation.md` decisions 43, 44 and
   45; how OE-2 reports the write into a shared global when a `var` becomes a
-  `var_external` stays OE-2's.)*
+  `var_external` stays OE-2's.)* *(That one was decided on 2026-10-13 by decision 55, with
+  OE-2's design: no switch writes the global.)*
   - an instance whose type an edit changes: recommended as a remove plus an add, the old
     instance pruned and the new one started by `Runtime.instance/1`, over a refusal,
     since instances may be added and removed while running and state is keyed by name;
