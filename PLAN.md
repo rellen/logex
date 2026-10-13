@@ -2196,7 +2196,11 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   1. the design record: `docs/organisation.md` §4.9's "OE-2's design" and §7's decisions
      55–65, each "until OE-2" annotated where it stands, and this Done-when;
   2. before the code that depends on it, a spike in the contract walk of OE-1's record of
-     each instance across instances on slow tasks, which skip cycles, and what it finds;
+     each instance across instances on slow tasks, which skip cycles, and what it finds:
+     *(done 2026-10-13: fix F11's undo must read the instance's own clock, before decision
+     56 moves it to the resource's; and a timer frozen by a switch loses the time since its
+     instance's last scan when a later switch resumes it, which decision 56 accepted, a
+     known limit; `docs/organisation.md` §4.9, "OE-2's design")*
   3. the per-instance half of `Logex.Edit` moved to an internal `Logex.Edit.Plan`, with no
      change in behaviour, shown as M2-4 showed it for `Logex.Walk`;
   4. the resource's new state, `generation` and `aside`, with their rules in

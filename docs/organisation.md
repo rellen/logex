@@ -1735,7 +1735,7 @@ above and `Logex.Runtime`'s one-rule section:
 | the instances set aside, `aside` | none | kept, never scanned | dropped: the next switch starts each again, `:instance_added` (decision 65) | — | — | an instance only the configuration stopped runs, and a retyped one's old state, set aside | pruned, `:instance_pruned` |
 | a kept instance's env | `Logex.Runtime.instance/1` | `call/4` | `restart/3` | OE-1's per-instance switch, by path, between decision 45's merge and split | — | — | OE-1's prune, by path |
 | an added instance | — | — | — | — | as `Logex.Runtime.instance/1` starts it, var_externals dropped, or back from aside | — | — |
-| an instance's `now` | 0 | the cycle's `now` at its scan | kept | the resource's `now` (decision 56) | 0, as `start/1` gives; back from aside, the resource's `now` | — | kept |
+| an instance's `now` | 0 | the cycle's `now` at its scan | kept | the resource's `now` (decision 56), after fix F11's undo has read the one the last switch set | 0, as `start/1` gives; back from aside, the resource's `now` | — | kept |
 | an instance's `first` | true | false after its scan | true | never touched | true; back from aside, as set aside | — | never touched |
 | an instance's `ons_blocked` | `[]` | emptied, but for bits inside a block not run (decision 32) | `[]` | OE-1's rules, against the program that last scanned it | `[]`; back from aside, as set aside | — | OE-1's: kept, not added to |
 | an instance's `switched` | false | false after its scan | kept | true | false; back from aside, as set aside | — | kept |
@@ -1751,6 +1751,39 @@ Two points the table makes, which OE-1's lone instance never met:
   keeps the generation and the edit's stage: the next switch starts again what it dropped,
   `:instance_added` and `:added`, as OE-1's restart during an edit does for tags
   (decision 65).
+
+*The spike of OE-1's record across slow tasks* (2026-10-13, before any of OE-2's code,
+`PLAN.md` OE-2's second step). A throwaway draft of the contract walk ran the design
+spike's switch, with decision 56's clock, over a plant of three instances of one program
+type, on a 10 ms task, a 50 ms task and none, through 300 walks of 80 operations: cycles
+of 5 to 20 ms, and edits among four versions of the type, with and without its `ton`, its
+preset changed and its `ons` rung changed. Its oracles knew nothing of the rules: no scan
+let a timer gain more than the time since its instance's last scan; a one-shot passed
+power only where the instance's last scan ran the same `ons` rung with its condition 0;
+and a test then an untest with no scan of an instance between left that instance's state
+as the test found it. It found one defect and one cost the record already accepts.
+- **Fix F11's undo must read the instance's own clock.** Built as decision 56 first
+  reads, a switch that set the instance's `now` to the resource's before OE-1's
+  per-instance rules ran left the undo comparing a resumed timer's `last` with the
+  resource's clock. Where a cycle came between a test and its untest, as one does for
+  every instance its task did not scan, the `last` the test had set no longer equalled
+  `now`, so the untest gave no resume back and left the timer's `last` at the test's time,
+  unreported: the very defect fix F11 fixed. Every one of three seeds found it. The record
+  settles the answer: fix F11 says a test and an untest with no scan between leave the
+  original's timers as they were, and decision 56 says a switch resumes from the
+  resource's clock. So a switch reads the instance's `now` for the undo, which, while
+  `switched` is true, is the time the last switch set, then resumes from the resource's
+  `now` and sets the instance's `now` to it. With that, the walk held at all three seeds:
+  between 1,486 and 1,617 round trips over an instance no scan reached, and about 4,000
+  one-shot pulses each, every one where the oracle allowed it.
+- **A timer frozen by a switch loses the time since its instance's last scan,** up to one
+  interval of the instance's task, when a later switch resumes it from the resource's
+  clock: from a version that runs its `ton` to one that does not, and back, the time
+  between the instance's last scan and the first switch was the running program's own,
+  and is not counted. Decision 56's own measurement includes 20 ms of it (`m2` last
+  scanned at 50 ms, frozen at 70 ms, resumed at 130 ms, 80 ms not caught up), and the
+  decision was taken with it. It is a known limit, and the round trip a walk checks in a
+  resource allows it: a timer the untest itself resumes ends at the untest's time.
 
 *The forecast* is the report a test taken now would give: the switch computed over the
 runtime as it is, and thrown away. A test taken later reads the resource as it is then
@@ -3068,7 +3101,11 @@ choices are §4.9's rules.
     switched at 130 ms, resumed 80 ms by the first, and by the second 50 ms, with 30 ms then
     caught up at the next scan. §4.9's "`now` and `first` never touched" becomes "`first`
     never touched, and an instance's `now` set to the resource's at a switch", which is
-    never earlier and which no scan reads otherwise. Adopted.
+    never earlier and which no scan reads otherwise. Adopted. *(Refined by the spike of
+    OE-1's record across slow tasks, §4.9's "OE-2's design": the switch reads the
+    instance's own `now` for fix F11's undo, the time the last switch set, before it sets
+    `now` to the resource's, or a cycle between a test and its untest would leave a
+    resumed timer's `last` at the test's time, unreported.)*
 57. **An instance brought back from aside: whether its timers catch up (OE-2).** An instance
     set aside, removed at test or the old state of a retyped one, comes back at untest, or
     at a second test for one only the candidate runs; its timers that were timing kept
