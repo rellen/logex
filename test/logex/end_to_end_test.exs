@@ -2552,4 +2552,243 @@ defmodule Logex.EndToEndTest do
       the_event_done_when(plant)
     end
   end
+
+  # PLAN.md OE-2's Done-when, as it is worded: §4.4's plant whole, with §4.3's motor and
+  # seal-in block and §4.4's snapshot, from a configuration file's text and from files on
+  # disk, changed by a candidate in all three kinds of file and edited while it runs,
+  # through Logex.Configuration.Edit's steps and Logex.Runtime's cycles alone.
+  describe "a staged edit of the running plant (OE-2)" do
+    @describetag :tmp_dir
+
+    alias Logex.Configuration
+    alias Logex.Configuration.Edit, as: ConfigEdit
+
+    # The candidate's files: `t1`'s preset raised and a one-shot added in `motor.ld`, whose
+    # rung moves no output, and the global `alarm` read through a var_external; a member
+    # added to `seal.ld`; and in `plant.logex`, `slow` cut from 50 to 20 ms, `snap` removed
+    # and `alarm` declared, with an initial value.
+    defp edited_files do
+      motor =
+        cut("**The motor, rewritten to use it**")
+        |> String.replace("ton t1 5000", "ton t1 6000")
+        |> String.replace(
+          "var_external estop bool",
+          "var_external estop bool\nvar_external alarm bool\nvar edge bool\nvar kick bool\nvar lit bool"
+        )
+        |> Kernel.<>("xic start ons edge ote kick\nxic alarm ote lit\n")
+
+      seal =
+        String.replace(
+          cut("**A function block type** is"),
+          "var_output run bool",
+          "var_output run bool\nvar n dint 7"
+        )
+
+      plant =
+        whole_plant()
+        |> String.replace("task slow interval 50 priority 2", "task slow interval 20 priority 2")
+        |> String.replace(~r/\nprogram snap snapshot with trip\n(  snap\..*\n)+/, "")
+        |> String.replace(
+          "var_global k2_at_trip bool",
+          "var_global k2_at_trip bool\nvar_global alarm bool 1"
+        )
+
+      %{
+        "motor.ld" => motor,
+        "seal.ld" => seal,
+        "plant.logex" => plant,
+        "snapshot.ld" => @snapshot_ld
+      }
+    end
+
+    # The same files, refused: `trip`'s single changed, a task added, `m2` moved to `fast`
+    # and `sp_2` to another point in `plant.logex`, and `running_ms` made a bool in
+    # `motor.ld`.
+    defp refused_files do
+      motor =
+        cut("**The motor, rewritten to use it**")
+        |> String.replace("var_output running_ms dint", "var_output running_ms bool")
+        |> String.replace("xic motor move t1.acc running_ms", "xic motor ote running_ms")
+
+      plant =
+        whole_plant()
+        |> String.replace(
+          "task trip single estop priority 0",
+          "task trip single pb_reset priority 0\ntask extra interval 5 priority 3"
+        )
+        |> String.replace("program m2 motor with slow", "program m2 motor with fast")
+        |> String.replace(
+          "var_global sp_2       dint at drive.q.1",
+          "var_global sp_2       dint at drive.q.2"
+        )
+
+      %{
+        "motor.ld" => motor,
+        "seal.ld" => cut("**A function block type** is"),
+        "plant.logex" => plant,
+        "snapshot.ld" => @snapshot_ld
+      }
+    end
+
+    defp compiled_from_text(files) do
+      {:ok, seal} = Logex.compile(files["seal.ld"], name: "seal")
+      {:ok, motor} = Logex.compile(files["motor.ld"], name: "motor", types: [seal])
+      {:ok, snapshot} = Logex.compile(files["snapshot.ld"], name: "snapshot")
+
+      {:ok, config} =
+        Configuration.compile("plant", files["plant.logex"], %{
+          "motor" => motor,
+          "snapshot" => snapshot
+        })
+
+      config
+    end
+
+    defp compiled_from_disk(files, dir) do
+      File.mkdir_p!(dir)
+      for {name, text} <- files, do: File.write!(Path.join(dir, name), text)
+      {:ok, config} = Configuration.compile_file(Path.join(dir, "plant.logex"))
+      config
+    end
+
+    defp line_of(text, start),
+      do: 1 + Enum.find_index(String.split(text, "\n"), &String.starts_with?(&1, start))
+
+    defp oe2_done_when(original, candidate, refused, files) do
+      # Running: both motors sealed in from 0 ms, `t1` timing; at 60 ms the start button
+      # of `m1` is pressed again and held, so that a one-shot on it would fire.
+      runtime = Logex.Runtime.start(original)
+      {runtime, _, _} = Logex.Runtime.cycle(runtime, 0, %{"pb_start_1" => 1, "pb_start_2" => 1})
+      {runtime, _, _} = Logex.Runtime.cycle(runtime, 10, %{"pb_start_1" => 0, "pb_start_2" => 0})
+
+      runtime =
+        Enum.reduce(20..50//10, runtime, fn _, rt -> elem(Logex.Runtime.cycle(rt, 10, %{}), 0) end)
+
+      {runtime, outputs, _} = Logex.Runtime.cycle(runtime, 10, %{"pb_start_1" => 1})
+      assert {outputs["k1"], outputs["k2"]} == {1, 1}
+      assert Logex.Runtime.get!(runtime, "m1.t1.acc") == 60
+      assert Logex.Runtime.get!(runtime, "m2.t1.acc") == 50
+
+      # `trip` then runs no instance: a warning, which stops nothing.
+      assert Enum.any?(candidate.warnings, &(&1.message =~ "`trip`"))
+      assert Logex.Runtime.get!(runtime, "snap.a_was") == 0
+
+      # Accept, and test: the resource switched between two cycles.
+      assert {:ok, edit, forecast} = ConfigEdit.accept(runtime, candidate)
+      {edit, runtime, report} = ConfigEdit.test(edit, runtime)
+      assert report == forecast
+
+      for entry <- [
+            {:preset, "m1.t1", {5000, 6000}},
+            {:preset, "m2.t1", {5000, 6000}},
+            {:added, "m1.s1.n", 7},
+            {:added, "m2.s1.n", 7},
+            {:added, "alarm", 1},
+            {:joined, "m1.alarm", {nil, 1}},
+            {:joined, "m2.alarm", {nil, 1}},
+            {:interval, "slow", {50, 20}},
+            {:instance_stopped, "snap", "snapshot"},
+            {:held, "k1_at_trip", 0}
+          ],
+          do: assert(entry in report, inspect(entry))
+
+      refute Enum.any?(report, &match?({:instance_added, _, _}, &1))
+
+      assert {Logex.Runtime.get!(runtime, "m1.t1.pre"), Logex.Runtime.get!(runtime, "m2.t1.pre")} ==
+               {6000, 6000}
+
+      # The next cycle runs the candidate: no instance restarted, no one-shot pulsed with
+      # the start button held, and no event fired.
+      {runtime, outputs, events} = Logex.Runtime.cycle(runtime, 10, %{})
+      assert {outputs["k1"], outputs["k2"]} == {1, 1}
+      assert Logex.Runtime.get!(runtime, "m1.t1.acc") == 70
+      assert Logex.Runtime.get!(runtime, "m1.kick") == 0
+      assert Logex.Runtime.get!(runtime, "m1.lit") == 1
+
+      assert for({:ran, task, instance, _} <- events, do: {task, instance}) == [{"fast", "m1"}]
+
+      # `slow` next due within 20 ms of the switch: at 80 ms, where 50 would have made it 100.
+      {runtime, _, events} = Logex.Runtime.cycle(runtime, 10, %{"pb_start_1" => 0})
+      assert {:ran, "slow", "m2", 80} in events
+      {runtime, _, _} = Logex.Runtime.cycle(runtime, 10, %{"pb_start_1" => 1})
+      assert Logex.Runtime.get!(runtime, "m1.kick") == 1
+
+      # Untest: the original over the same resource, `snap` back as it was set aside.
+      {edit, runtime, report} = ConfigEdit.untest(edit, runtime)
+      assert {:instance_back, "snap", "snapshot"} in report
+      refute Enum.any?(report, &match?({:resumed, "snap." <> _, _}, &1))
+      assert Logex.Runtime.get!(runtime, "snap.a_was") == 0
+      assert ConfigEdit.running(edit) == original
+      {runtime, _, events} = Logex.Runtime.cycle(runtime, 10, %{"estop" => 1})
+      assert {"trip", "snap"} in for({:ran, task, instance, _} <- events, do: {task, instance})
+      assert Logex.Runtime.get!(runtime, "k1_at_trip") == 1
+      {runtime, _, _} = Logex.Runtime.cycle(runtime, 10, %{"estop" => 0, "pb_reset" => 1})
+      {runtime, _, _} = Logex.Runtime.cycle(runtime, 10, %{"pb_reset" => 0})
+
+      # Test again, and assemble at the same boundary: `snap` pruned, and named.
+      {edit, runtime, _} = ConfigEdit.test(edit, runtime)
+      {kept, runtime, report} = ConfigEdit.assemble(edit, runtime)
+      assert kept == candidate
+      assert {:instance_pruned, "snap", "snapshot"} in report
+      assert {:error, _} = Logex.Runtime.get(runtime, "snap.a")
+
+      # A step on the edit that has ended is refused by the generation counter.
+      assert_raise ArgumentError,
+                   ~r/^this edit expects the resource at generation \d+, but it is at generation/,
+                   fn ->
+                     ConfigEdit.untest(edit, runtime)
+                   end
+
+      # Refused at accept, each at its line in plant.logex or motor.ld.
+      assert {:error, diagnostics} = ConfigEdit.accept(Logex.Runtime.start(original), refused)
+      plant = files["plant.logex"]
+      motor = files["motor.ld"]
+
+      assert Enum.map(diagnostics, &{&1.file && Path.basename(&1.file), &1.line, &1.message}) == [
+               {plant_file(refused), line_of(plant, "task trip"),
+                "task `trip`'s single changes from `estop` to `pb_reset`: a task's single changes only with a restart"},
+               {plant_file(refused), line_of(plant, "task extra"),
+                "task `extra` is added: a task is added only with a restart"},
+               {plant_file(refused), line_of(plant, "var_global sp_2"),
+                "`sp_2` is at `drive.q.1` in the running configuration and at `drive.q.2` in the candidate: located I/O changes only with a restart"},
+               {plant_file(refused), line_of(plant, "program m2"),
+                "`m2` runs with `slow` in the running configuration and with `fast` in the candidate: an instance moves to another task only with a restart"},
+               {motor_file(refused), line_of(motor, "var_output running_ms"),
+                "`running_ms` is a dint in the running program and a bool in the candidate: a tag's type changes only with a restart"}
+             ]
+    end
+
+    defp plant_file(%Configuration{file: nil}), do: nil
+    defp plant_file(%Configuration{}), do: "plant.logex"
+    defp motor_file(%Configuration{programs: %{"motor" => %{file: nil}}}), do: nil
+    defp motor_file(%Configuration{}), do: "motor.ld"
+
+    test "OE-2's Done-when, from a configuration file's text" do
+      {_programs, originals} = shared_programs()
+
+      files =
+        Map.merge(originals, %{"snapshot.ld" => @snapshot_ld, "plant.logex" => whole_plant()})
+
+      oe2_done_when(
+        compiled_from_text(files),
+        compiled_from_text(edited_files()),
+        compiled_from_text(refused_files()),
+        refused_files()
+      )
+    end
+
+    test "OE-2's Done-when, from files on disk", %{tmp_dir: dir} do
+      {_programs, originals} = shared_programs()
+
+      files =
+        Map.merge(originals, %{"snapshot.ld" => @snapshot_ld, "plant.logex" => whole_plant()})
+
+      oe2_done_when(
+        compiled_from_disk(files, Path.join(dir, "running")),
+        compiled_from_disk(edited_files(), Path.join(dir, "candidate")),
+        compiled_from_disk(refused_files(), Path.join(dir, "refused")),
+        refused_files()
+      )
+    end
+  end
 end
