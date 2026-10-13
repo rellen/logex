@@ -122,8 +122,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `file` (fix F15), with a forecast),
   `test/2`, `untest/2`, `assemble/2`, `cancel/2`, `running/1` and `stage/1`, each step
   returning a report. Accept builds a plan per direction from the two programs; a switch
-  and a prune are per-instance functions of a plan, the edit's record and the state,
-  private until OE-2 calls them. Since M2-5 (decisions 31 and 32) a function block's type,
+  and a prune are per-instance functions of a plan, the edit's record and the state.
+  Since OE-2's third step the type-change refusals, the plans, the record, the switch and
+  the prune are `lib/logex/edit/plan.ex`'s, `Logex.Edit.Plan`, internal (no moduledoc),
+  which `Logex.Edit` calls and OE-2's configuration edit is to call, one plan per program
+  type. Since M2-5 (decisions 31 and 32) a function block's type,
   for the edit, is its name and its members' kinds: a member whose kind changes is refused
   by its path, and a switch moves an instance member by member, by path, `p.count`, a
   plan built once per block type; an `ons` inside an instance is blocked where any rung of

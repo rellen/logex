@@ -1240,6 +1240,14 @@ defmodule Logex.RuntimeTest do
                untest: 2
              ]
 
+      # OE-2: the per-instance half of an edit, internal (no moduledoc), which Logex.Edit
+      # calls, and a configuration's edit is to: the type-change refusals, a plan per
+      # direction, the empty record, a switch and a prune.
+      assert Enum.sort(Logex.Edit.Plan.__info__(:functions)) ==
+               [plans: 2, prune: 3, record: 0, retyped: 2, switch: 4]
+
+      assert {:docs_v1, _, _, _, :hidden, _, _} = Code.fetch_docs(Logex.Edit.Plan)
+
       # OE-1: the definition of a well-formed tree, which instructionize/2 checks on entry.
       assert Enum.sort(Logex.Parser.__info__(:functions)) ==
                [format_error: 1, parse: 1, well_formed!: 1]
