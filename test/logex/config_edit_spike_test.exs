@@ -275,4 +275,58 @@ defmodule Logex.ConfigEditSpikeTest do
     assert rt2.instances["m2"].env["t1"]["acc"] == acc + 20
     assert rt.instances["m2"].env["t1"]["last"] == rt.now
   end
+
+  test "a var_output no longer written holds its point, named by instance and by point" do
+    rt = running(60)
+    motor = String.replace(motor_ld(), "xic motor ote run_lamp\n", "")
+    {:ok, edit, _} = CEdit.accept(rt, plant(plant_text(), programs(motor)))
+    {_edit, _rt, report} = CEdit.test(edit, rt)
+    assert {:held, "lamp_1", 1} in report
+    assert {:held, "m1.run_lamp", 1} in report
+  end
+
+  test "a block type changed for the whole configuration moves each instance by path" do
+    rt = running(60)
+
+    seal_ld =
+      cut("**A function block type** is")
+      |> String.replace("var_output run bool", "var_output run bool\nvar n dint 7")
+
+    {:ok, seal} = Logex.compile(seal_ld, name: "seal")
+    {:ok, motor} = Logex.compile(motor_ld(), name: "motor", types: [seal])
+    {:ok, snapshot} = Logex.compile(@snapshot_ld, name: "snapshot")
+    candidate = plant(plant_text(), %{"motor" => motor, "snapshot" => snapshot})
+    {:ok, edit, _} = CEdit.accept(rt, candidate)
+    {_edit, rt, report} = CEdit.test(edit, rt)
+    assert {:added, "m1.s1.n", 7} in report
+    assert {:added, "m2.s1.n", 7} in report
+    assert rt.instances["m1"].env["s1"]["n"] == 7
+  end
+
+  test "a var_external added, bound to a global the edit adds, is no tag started" do
+    rt = running(20)
+
+    motor =
+      String.replace(
+        motor_ld(),
+        "var_external estop bool",
+        "var_external estop bool\nvar_external alarm bool\nvar_external level dint"
+      )
+
+    text =
+      String.replace(
+        plant_text(),
+        "var_global k1_at_trip bool",
+        "var_global k1_at_trip bool\nvar_global alarm bool 1\nvar_global level dint 42"
+      )
+
+    {:ok, candidate} = Configuration.compile("plant", text, programs(motor))
+    {:ok, edit, _} = CEdit.accept(rt, candidate)
+    {_edit, rt, report} = CEdit.test(edit, rt)
+    assert {:added, "alarm", 1} in report
+    assert {:joined, "m1.alarm", {nil, 1}} in report
+    assert {:joined, "m1.level", {nil, 42}} in report
+    refute Enum.any?(report, &match?({:added, "m1.alarm", _}, &1))
+    refute Map.has_key?(rt.instances["m1"].env, "alarm")
+  end
 end

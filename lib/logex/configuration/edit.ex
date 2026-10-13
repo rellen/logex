@@ -375,10 +375,16 @@ defmodule Logex.Configuration.Edit do
   defp drives(config) do
     types = Map.new(config.instances, &{&1.name, &1.type})
 
+    writes = Map.new(config.programs, fn {name, p} -> {name, Map.new(Walk.writes(p))} end)
+
+    # A connection drives its global only where its program writes the var_output: one
+    # the program writes no more copies out a frozen value, which holds.
     outs =
       for c <- config.connections,
           is_binary(c.to),
-          %Tag{section: :var_output} <- [config.programs[types[c.instance]].tags[c.member]],
+          type = types[c.instance],
+          %Tag{section: :var_output} <- [config.programs[type].tags[c.member]],
+          is_map_key(writes[type], c.member),
           do: c.to
 
     ext =
