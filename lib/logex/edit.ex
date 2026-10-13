@@ -209,9 +209,10 @@ defmodule Logex.Edit do
   **One edit per instance** (fix F5). At accept the edit builds two plans, original to
   candidate and back, from the two programs alone, so a plan cannot go stale; a switch and
   a prune are each a function of one plan, the edit's record of one instance, and its
-  state. They are an internal module's, `Logex.Edit.Plan`, so that OE-2's configuration
-  edit can build the plans once per program type and call those once per instance; here
-  each instance takes its own edit. A report names a tag, or a member inside an instance
+  state. They are an internal module's, `Logex.Edit.Plan`, so that
+  `Logex.Configuration.Edit`, the edit of a running configuration (OE-2), builds the plans
+  once per program type and calls those once per instance; here each instance takes its
+  own edit. A report names a tag, or a member inside an instance
   by its path.
 
   **Host mistakes** raise `ArgumentError`, each with a message a test pins: something
@@ -219,8 +220,9 @@ defmodule Logex.Edit do
   another name than the running program's (two unnamed programs count as one name);
   something other than an edit; a state that is not the running program's, with the
   runtime's own messages; and a step taken at the wrong stage. A step checks the edit,
-  then the state, then the stage. Outside the contract, and not detected until OE-2's
-  configuration carries a generation: scanning the program the edit is not running, two
+  then the state, then the stage. Outside the contract, and not detected, since only a
+  configuration's edit carries a generation (decision 60): scanning the program the edit
+  is not running, two
   edits of one instance at once, a step on an edit that has ended or been superseded, an
   edit accepted against a program the state is not running, and an edit built or changed
   by hand. The program the state is running is the one the last of these left it with:

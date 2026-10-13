@@ -16,11 +16,11 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
-§1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5, §3's M2-2 and M2-3, §3's M2-4 and
-§3's M2-6 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
+§1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5, §3's M2-2 and M2-3, §3's M2-4,
+§3's M2-6 and §3's OE-2 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
 first item, M2-1, landed the same day, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11,
-and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed on 2026-10-13
-and is still forward work.
+and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed and landed on
+2026-10-13 (§3).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -96,6 +96,12 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   once a program type; a scan reads and writes the global itself, one copy in the
   resource, and two writers of one global are warnings. `Logex.Walk` is the one walk of a
   program's IR that the checks read.
+- A staged online edit of a running configuration (OE-2): `Logex.Configuration.Edit`
+  accepts a candidate configuration against the resource that runs the original, refusing
+  what changes only with a restart at its line, then tests, untests, assembles or cancels
+  it between two cycles: each kept instance moved by its program type's one plan,
+  instances started, set aside and brought back, globals started and held, every step
+  reported, and a stale edit refused by the resource's generation.
 
 These were each verified directly:
 
@@ -2216,6 +2222,44 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   12. the documents: README's "Changing a running program" with a real run, CLAUDE.md's
       Key Files, `Logex.Runtime`'s one-rule section, `docs/organisation.md` and this
       status.
+
+  **Status: DONE — landed 2026-10-13**, as the twelve commits of its landing order: (1)
+  the design record, `626bbae`; (2) the spike's record, `2ec04d9`; (3)
+  `Logex.Edit.Plan`, `d237f15`; (4) the resource's `generation` and `aside`, `7812d4e`; (5)
+  accept and its refusals, `abd2f39`; (6) the steps, `c00f3f2`; (7) held outputs,
+  `08a339c`; (8) a shared global's section change, `ac95a73`; (9) the report kinds,
+  `2a15d9b`; (10) the contract walk and the growth tests, `e739834`; (11) the Done-when,
+  `9c2e732`; (12) the documents, the commit after it, among them README's "A running
+  plant", whose output is a real run. 923 tests pass on Elixir 1.20.4 (8 of them
+  doctests), up from 864. The messages of (3) to (9) record their mutation tables, every
+  rule each adds reverted alone and the full suite judged by its exit code: 107 rules, 8,
+  6, 43, 28, 8, 7 and 7, every one red, (6)'s row 6.11 once a test was added for it, the
+  one survivor; and two rules found dead, an element with no line sorted last in (5) and
+  a connection's member checked to be a var_output in (7), were removed and say why. (10)
+  and (11) add no rule: rows of the earlier commits applied alone turn the walk red on 25
+  of 25, and the Done-when on 12 of 13, the thirteenth decision 56's clock, which its plant
+  does not reach. (1), (2) and (12) are documents.
+
+  The spike of (2) found one defect in the design as written, decided by the record: fix
+  F11's undo must read the instance's own `now`, before decision 56 moves it to the
+  resource's; and one cost decision 56 accepted, a timer frozen by a switch not counting
+  the time since its instance's last scan, a known limit. The walk of (10) found no
+  defect in `lib/`; it found that a test then an untest with no cycle between changes
+  three things decided rules change (decisions 55, 57 and 56's limit), which it allows by
+  name. Readings and departures, each in its commit: the split drops a var_external the
+  started program does not declare at all, rather than keep a copy of a global unused,
+  against decision 45's words, which decision 49 forbids (6); `:joined` and `:left` are
+  writes, not the facts the design's table called them (8); a held global is one the
+  configuration started declares (7); a reorder of the tasks is reported under `:tasks`
+  (9); a step checks the generation before the configuration the resource runs (5); an
+  instance back from aside keeps its `first`, `switched` and block list (6); the design's
+  steps 5 to 7, kept and added instances and the globals, were split by what each commit's
+  tests could see, the forecast needing the switch at (5) and the resource after a step at
+  (6), with merge and split in (5) and (6) and their reports in (8); and the growth tests
+  landed with the walk. Measured at the landing: accept and its steps take 3.90x to 3.95x
+  the reductions for 4x the instances of one type, 4.00x to 4.03x for 4x the types and
+  4.01x to 4.05x for 4x a program's size, over 32 runs; the walk takes about 9 s alone,
+  and the full suite 23.4 s, up from 18.0 s.
 
   *From Milestone 2's design (2026-10-02; `docs/organisation.md` §4.9, "One rule for new
   state", and §4.10).* M2-5 brings the edit of a function block's members, by path

@@ -1495,6 +1495,12 @@ F3, the held values of F4) and still costs less than one scan.
 - *(M2-5, landed 2026-10-04.)* `function_block_test.exs` holds a test per rule of the
   edit of a program that holds function blocks, by path (decisions 31 and 32), among them
   a block frozen by a false `cal` across a switch, and its growth tests;
+- *(OE-2, landed 2026-10-13.)* `config_edit_test.exs` holds every host mistake and refusal
+  of `Logex.Configuration.Edit`, the refusals as whole lists from source and from data, a
+  test per rule of a step on §4.4's plant, and its growth tests; `api_contract_test.exs`
+  a walk of a configuration's edit (its moduledoc); `end_to_end_test.exs` `PLAN.md` OE-2's
+  Done-when, from text and from files on disk; and `scheduler_test.exs` the resource's
+  `generation` and `aside` across a cycle and a restart;
   `api_contract_test.exs` adds an edit walk over programs that hold blocks two deep, with
   a one-shot oracle on every scan, from the programs' text.
 
@@ -1519,8 +1525,25 @@ against `92431a9`, on Elixir 1.20.4 / OTP 28, and decided the same day: decision
 (§7), all as recommended. A throwaway spike on that commit built the switch from OE-1's
 per-instance plan, switch and prune with decision 45's merge and split, and ran thirteen
 probes on §4.4's plant; its figures are receipts, and pin nothing. `PLAN.md` OE-2 gives the
-Done-when and the landing order. What follows is the edit as designed: nothing of it has
-landed until `PLAN.md` OE-2 says so.
+Done-when and the landing order. *(Landed 2026-10-13, as `PLAN.md` OE-2 records, in the
+ten commits after this record and its spike; what follows is the edit as designed, and
+`Logex.Configuration.Edit`'s moduledoc gives it as built. Readings the landing made, each
+in its commit and pinned: the split drops, with the started program's var_externals, any
+of the stopped program's that the started one does not declare at all, rather than keep a
+copy of a global in the state until a prune, the one place it departs from decision 45's
+words; `:joined` and `:left` are writes the resource shows, an own value dropped and an
+own tag set, not facts; a global is held only where the configuration started declares
+it, one it removes being pruned instead; a reorder of the tasks themselves is reported
+under `:tasks`; a step checks the generation before the configuration the resource runs;
+an instance back from aside keeps its `first`, `switched` and block list as set aside;
+and two rules found dead were removed, an element with no line sorted last, since a
+configuration's lines are all numbers or all nil, and a connection's member checked to be
+a var_output, since no logic writes a var_input. The contract walk found that a test then
+an untest with no cycle between leaves the resource as it was but for what either switch
+started and three things decided rules change: a tag the test joined to its global
+(decision 55), a timer of an instance back from aside (decision 57), and a timer whose
+earlier resume the test gave back after the clock moved (decision 56's known limit,
+below).)*
 
 *Already decided, and built on:* decision 43 (a retyped instance is a remove plus an add),
 44 (a kept global's changed initial value is reported), 45 (merge by the running
@@ -1610,7 +1633,8 @@ duty. The new kinds, and OE-1's given at the configuration's level:
 
 The writes a report lists, applied to the resource before its step, give the resource
 after it, exactly, with each instance's `switched` and block list as OE-1 states them and
-its `now` as decision 56 sets it. `api_contract_test.exs` is to check it.
+its `now` as decision 56 sets it. `api_contract_test.exs`'s walk of a configuration's edit
+checks it.
 
 *Host mistakes* raise `ArgumentError`, each message pinned by a test. A step checks the
 edit, then the runtime, then that the edit is current, its generation first and then the
@@ -1805,8 +1829,9 @@ block.
 *Cost.* Accept builds two plans per program type a kept instance runs, and a switch is
 linear in the instances' state, the wiring derived again at each switch, and the check
 that the resource runs the edit's configuration linear in the configuration. Accept and
-each step are to be held linear in the instances and in the program's size by growth
-tests in reductions (fix F16).
+each step are held linear in the instances of one type, in the program types and in a
+program's size by `config_edit_test.exs`'s growth tests in reductions (fix F16): over 32
+runs, 4x each took 3.90x to 3.95x, 4.00x to 4.03x and 4.01x to 4.05x the reductions.
 
 ### 4.10 Milestone 2's design (designed 2026-10-02)
 
@@ -1839,7 +1864,8 @@ are receipts, and pin nothing.
 - **A configured plant is not edited until OE-2.** This is forced: OE-2 comes after
   Milestone 2, and `%Logex.Runtime{}` is opaque and changes only through the API (§4.9).
   `Logex.Edit` still edits a lone instance. *(Designed 2026-10-13, §4.9's "OE-2's
-  design", decisions 55–65; until OE-2 lands, this stands.)*
+  design", decisions 55–65, and landed the same day: `Logex.Configuration.Edit` edits a
+  running plant, writing the resource through `Logex.Runtime` alone.)*
 
 **M2-1 · The scheduler, from Elixir data.** *(Landed 2026-10-02, as these rules
 say. Two readings the landing made, each in `Logex.Configuration`'s moduledoc and pinned:
@@ -1908,7 +1934,8 @@ any value that is not the struct is.)*
   in a one-rule section. §4.9's "One rule for new state" lists the pieces. OE-2 adds the
   generation counter; M2-1 does not reserve it. *(Designed 2026-10-13: `generation` in
   `%Logex.Runtime{}`, on the resource only, decision 60, with `aside`, the instances an
-  edit sets aside, §4.9's "OE-2's design".)*
+  edit sets aside, §4.9's "OE-2's design". Landed the same day, each in `Logex.Runtime`'s
+  one-rule section.)*
 - *Not taken.* No `outputs` field on `%Logex.Program{}`, which would spare each scan its
   walk of the tags. Revisit it with the runner.
 - *Cost.* A cycle and `next_due_in/1` are linear in the tasks declared, whatever is due;
@@ -2284,7 +2311,7 @@ missed as any late periodic task does.)*
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays |
 | IEC textual paste-compatibility (`END_*` blocks, `:=`, `;`) | not adopted | logex is a dialect (`PLAN.md` §5) |
-| Online edit (a new type, instances keep their state) | **OE-1 landed 2026-10-01** (§4.9): the staged edit of one program instance, `Logex.Edit`; OE-2, a configuration's, after Milestone 2, so a configured plant is not edited until OE-2, designed and decided 2026-10-13 (§4.9, "OE-2's design"; decisions 55–65); the edit of a program that holds function blocks (decisions 31 and 32) landed with M2-5 on 2026-10-04 | Instance state stays keyed by declared tag name, which is what lets an edit move it by name. A *plain swap*, a recompile of the same name scanned over a kept instance with no edit, stays in the contract (decision 26) and does what it did before OE-1, since a state's values are not checked each scan: the instance keeps its values until a restart. So it keeps its old `.pre` under a changed preset; a tag the recompile adds reads 0, not its initial value, so an added timer starts at a `.pre` of 0 and is done at its first true scan; a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output; and an `ons` it adds fires on its first scan if its condition is already true (`end_to_end_test.exs` pins all but the type change). A restart puts the values right, keeping only the var_inputs whose values fit their types. `Logex.Edit` moves the state by rule instead: a switch moves `.pre` where it still holds the old preset, starts what is added at its initial value, at the first test restarts a value that does not fit its type, and blocks an added or changed `ons` for one scan; accept refuses a type change. |
+| Online edit (a new type, instances keep their state) | **OE-1 landed 2026-10-01** (§4.9): the staged edit of one program instance, `Logex.Edit`; OE-2, a configuration's, after Milestone 2, designed, decided and **landed 2026-10-13** as `Logex.Configuration.Edit` (§4.9, "OE-2's design"; decisions 55–65); the edit of a program that holds function blocks (decisions 31 and 32) landed with M2-5 on 2026-10-04 | Instance state stays keyed by declared tag name, which is what lets an edit move it by name. A *plain swap*, a recompile of the same name scanned over a kept instance with no edit, stays in the contract (decision 26) and does what it did before OE-1, since a state's values are not checked each scan: the instance keeps its values until a restart. So it keeps its old `.pre` under a changed preset; a tag the recompile adds reads 0, not its initial value, so an added timer starts at a `.pre` of 0 and is done at its first true scan; a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output; and an `ons` it adds fires on its first scan if its condition is already true (`end_to_end_test.exs` pins all but the type change). A restart puts the values right, keeping only the var_inputs whose values fit their types. `Logex.Edit` moves the state by rule instead: a switch moves `.pre` where it still holds the old preset, starts what is added at its initial value, at the first test restarts a value that does not fit its type, and blocks an added or changed `ons` for one scan; accept refuses a type change. |
 
 ---
 
@@ -3086,6 +3113,7 @@ choices are §4.9's rules.
     writing it could release a pressed e-stop for the whole plant from an edit. The spike
     built it and needed no special case. Adopted: the shared global wins, the instance's
     private value is dropped and reported, and no switch writes a global.
+    *(Landed 2026-10-13.)*
 56. **Which clock a timer resumes from, in an instance its task does not scan every cycle
     (OE-2).** OE-1's resume sets a restored timer's `last` to the instance's `now`, its last
     scan's time, and in a resource an instance on a slow task last scanned up to one
@@ -3105,7 +3133,7 @@ choices are §4.9's rules.
     OE-1's record across slow tasks, §4.9's "OE-2's design": the switch reads the
     instance's own `now` for fix F11's undo, the time the last switch set, before it sets
     `now` to the resource's, or a cycle between a test and its untest would leave a
-    resumed timer's `last` at the test's time, unreported.)*
+    resumed timer's `last` at the test's time, unreported.)* *(Landed 2026-10-13.)*
 57. **An instance brought back from aside: whether its timers catch up (OE-2).** An instance
     set aside, removed at test or the old state of a retyped one, comes back at untest, or
     at a second test for one only the candidate runs; its timers that were timing kept
@@ -3119,7 +3147,7 @@ choices are §4.9's rules.
     23's case, not decision 8's. Its one-shots need no block: their bits hold what they
     last received, so an edge they see on return is a real one. Adopted: an instance back
     from aside carries on from where it stopped, its timers do not catch up, and the report
-    says so.
+    says so. *(Landed 2026-10-13.)*
 58. **How a held output is named in the report (OE-2).** A var_output a kept instance no
     longer writes gives OE-1's `{:held, "m1.run_lamp", v}` by path, and the output point
     it is connected to, `lamp_1`, holds too, `{:held, "lamp_1", v}`.
@@ -3130,7 +3158,7 @@ choices are §4.9's rules.
 
     *Recommend both.* The point is what the operator sees, the instance's output what the
     programmer changed, and keeping OE-1's entries means the per-instance switch is used
-    unchanged and the walk can check both. Adopted.
+    unchanged and the walk can check both. Adopted. *(Landed 2026-10-13.)*
 59. **One edit or two (OE-2):** `Logex.Edit` extended, with `accept/2` over a runtime beside
     `accept/3` over an instance and each step dispatching on its struct; or a new module,
     `Logex.Configuration.Edit`, with the same step names and report shape, the per-instance
@@ -3138,7 +3166,7 @@ choices are §4.9's rules.
     moduledoc and its pinned host-mistake messages describe one instance, and two kinds of
     edit in one struct would make every message say which it means; the cost is one more
     public module in the surface test. Adopted: `Logex.Edit` stays the edit of a lone
-    instance.
+    instance. *(Landed 2026-10-13.)*
 60. **The generation counter for a lone instance (OE-2).** OE-1's undetected cases, a step
     on an ended or superseded edit and two edits at once, stay undetected for `Logex.Edit`.
     Give `%Logex.Instance{}` a generation too, a new field with its check, message, value
@@ -3146,13 +3174,13 @@ choices are §4.9's rules.
     counter on the resource only. *Recommend not now:* a lone instance is the bench and the
     test harness, and a running controller is a resource, which gets it. Adopted: only the
     configuration edit gets the counter, and for a lone instance a stale edit stays the
-    host's duty, documented as a known limit.
+    host's duty, documented as a known limit. *(Landed 2026-10-13.)*
 61. **Whether a retyped instance may run on another task (OE-2).** Decision 19 refuses
     moving an instance to another task, and decision 43 makes a retyped instance a remove
     plus an add. Allow it, since the new instance is a new one and an added instance may go
     on any task that exists; or refuse it, so that a name keeps its task whatever its type.
     *Recommend allowing it:* it follows from decision 43, and a refusal would make the host
-    rename the instance to get the same effect. Adopted.
+    rename the instance to get the same effect. Adopted. *(Landed 2026-10-13.)*
 62. **Reordering tasks or instances while running (OE-2).** The order of `instances` is the
     execution order within a task, and the order of `tasks` breaks ties of priority and due
     time (decision 11). Neither is state, but a reorder changes behaviour: an instance moved
@@ -3166,26 +3194,26 @@ choices are §4.9's rules.
     task, or `:none` for the task-less instances, wherever the instances both
     configurations run there change their order among themselves, its detail every
     instance's name there in the new order; a task's order by `:tasks`, wherever the tasks
-    change theirs, its detail every task's name in the new order.
+    change theirs, its detail every task's name in the new order. *(Landed 2026-10-13.)*
 63. **A candidate that `Logex.Configuration.check/1` refuses, at accept (OE-2):** the host's
     mistake, raised as `Logex.Runtime.start/1` raises it; or `:edit` diagnostics. *Recommend
     raising:* a candidate from text reaches accept only through `compile/3` or
     `compile_file/1`, which return its problems first, so one that still has them was
     built by the host, and `start/1` raises the same. One rule for handing a configuration
-    to a running resource. Adopted.
+    to a running resource. Adopted. *(Landed 2026-10-13.)*
 64. **Cancel from accept and the generation (OE-2):** cancel from accept moves the
     generation on, as every step but accept does, so that an edit that has ended can never
     step; or it leaves the resource exactly as it was, its generation included, so that an
     edit cancelled from accept could still be tested. *Recommend moving it:* an edit ends
     at cancel, and a counter that a cancel leaves alone could not refuse a step on it.
-    Adopted.
+    Adopted. *(Landed 2026-10-13.)*
 65. **`restart/2` during a configuration edit (OE-2):** it restarts the instances of the
     configuration the resource runs, drops the instances set aside and the globals only the
     other configuration declares, and keeps the generation and the edit's stage, the next
     switch starting again what it dropped, `:instance_added` and `:added`, as OE-1's restart
     during an edit does for tags; or it keeps the instances set aside as they are. *Recommend
     dropping them:* a restart starts the plant again, and an instance kept aside across it
-    would come back with state no restart touched. Adopted.
+    would come back with state no restart touched. Adopted. *(Landed 2026-10-13.)*
 
 ---
 

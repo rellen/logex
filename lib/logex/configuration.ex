@@ -1426,12 +1426,14 @@ defmodule Logex.Configuration do
   The one rule for a new global (`docs/organisation.md` §4.9), as
   `Logex.Program.initial_env/1` is for a tag: `Logex.Runtime.start/1` starts every global
   by it, `Logex.Runtime.restart/2` every global but an input point, whose value it keeps,
-  and an online edit of a configuration (OE-2) is to start each global it adds by it. The
-  edit's exceptions, for a global the resource already holds: a kept global keeps
-  its value until a restart, a changed `initial` included; an input or output point is
-  neither added nor removed while running, located I/O being refused then; and an output
-  point that no connection drives any more holds its value, as an output an edit leaves
-  undriven does (decision 20).
+  and `Logex.Configuration.Edit`, the edit of a running configuration (OE-2), each
+  global it adds, at the switch that first finds it missing. The edit's exceptions, for a
+  global the resource already holds: a kept global keeps its value until a restart, a
+  changed `initial` included, which the switch reports (decision 44); one the
+  configuration started does not declare is kept unused until assemble or cancel prunes
+  it; an input or output point is neither added nor removed while running, located I/O
+  being refused then; and a global that nothing drives any more holds its value, as an
+  output an edit leaves undriven does (decision 20).
 
       iex> Logex.Configuration.initial(%Logex.Configuration.Global{name: "sp", type: :dint, initial: 1200})
       1200

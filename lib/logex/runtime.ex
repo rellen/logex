@@ -105,33 +105,42 @@ defmodule Logex.Runtime do
   7. A mistake by the host raises `ArgumentError`, and nothing else escapes.
 
   **One rule for each piece of a resource's state** (`docs/organisation.md` §4.9), which
-  `start/1` uses and an online edit of a configuration (OE-2) is to use for a piece it
-  adds:
+  `start/1` uses and `Logex.Configuration.Edit`, the edit of a running configuration
+  (OE-2), uses for a piece it adds, with its exceptions:
   - the clock, `now`, is 0 at `start/1`, moves on by each cycle's `elapsed_ms`, and is
-    kept by `restart/2` and by an edit;
-  - a global starts by `Logex.Configuration.initial/1`, whose doc lists the edit's
-    exceptions; an input point's value is the host's from its first cycle on, and
-    `restart/2` keeps it;
+    kept by `restart/2` and by every step of an edit;
+  - a global starts by `Logex.Configuration.initial/1`: at `start/1`, at `restart/2` but
+    for an input point, whose value is the host's from its first cycle on and is kept, and
+    at the switch that first finds one the configuration started declares missing. A kept
+    one whose initial value an edit changes keeps its running value until `restart/2`
+    (decision 44); one only the configuration stopped declares is kept unused until
+    assemble or cancel prunes it; and an output point nothing drives any more holds its
+    value (decision 20);
   - a program instance starts as `instance/1` makes it, every tag by
     `Logex.Program.initial_env/1`, whose doc lists the edit's exceptions, and `restart/2`
-    restarts it through `restart/3`;
+    restarts it through `restart/3`. An edit's switch moves a kept one by its program
+    type's plan (`Logex.Edit`'s rules, by path), its `now` set to the resource's after fix
+    F11's undo reads its own (decision 56); one only the configuration started runs starts
+    as `start/1` starts one, or comes back from aside;
   - a var_external (M2-4) holds no state of its own in a resource: there is one copy of
     each global, the resource's. A cycle merges it into its instance's state for the one
     scan and splits it off after; `start/1` and `restart/2` drop the 0 that `instance/1`
-    and `restart/3` give it, so between cycles no instance's state holds one. OE-2's switch
-    is to merge each by the running program's var_externals before the instance's switch
-    and split each off by the candidate's after (decision 45), so a tag both declare keeps
-    its value whatever its section and the global is left alone;
+    and `restart/3` give it, so between cycles no instance's state holds one. An edit's
+    switch merges each by the var_externals of the program it stops before the instance's
+    switch and splits each off by those of the program it starts after, with any of the
+    first that the second does not declare (decision 45), so a tag both declare keeps its
+    value whatever its section, a `var` made a var_external drops its own value for the
+    global's (decision 55), and no switch writes a global;
   - a task is due at the clock, `now`, with no overlap counted: at 0 by `start/1`, at the
     kept clock by `restart/2`. No edit adds or removes a task while it runs (decision 19),
     so no edit starts one by this rule. A task an edit keeps keeps its overlap count and
     its due time, except that an interval the edit changes makes it next due at
-    `min(next_due, now + new interval)` (decision 40);
+    `min(next_due, now + new interval)`, at test and again at untest (decision 40);
   - a task's trigger (M2-6), the last sample of its `single`, is 0 at `start/1` and by
     `restart/2`, so a trigger already 1 fires in the next cycle, and a cycle samples it
-    once, after the input merge and before any scan. OE-2's switch is to keep it, so a
-    switch fires no event, and to refuse a changed `single`, or an `interval` added to or
-    removed from a task with one, while the plant runs (§4.9);
+    once, after the input merge and before any scan. An edit's switch keeps it, so a
+    switch fires no event, and its accept refuses a changed `single`, or an `interval`
+    added to or removed from a task with one, while the plant runs (§4.9);
   - the generation (OE-2), the count of the configuration edits' steps taken on the
     resource, is 0 at `start/1` and kept by a cycle and by `restart/2`, so that a restart
     during an edit keeps the edit's stage. Every step of an edit but accept moves it on by
@@ -145,10 +154,12 @@ defmodule Logex.Runtime do
     `now` the resource's and each timer that was timing resumed from the switch (decision
     57); assemble, and cancel after an untest, prune them.
 
-  Until OE-2, a program instance inside a resource is not edited: `Logex.Edit` takes one
-  lone instance, which `instance/1` made, and the resource holds its instances itself, as
-  its opacity requires. `restart/2` restarts the whole resource; there is no restart of one
-  instance inside it.
+  A program instance inside a resource is edited only with its configuration, through
+  `Logex.Configuration.Edit`, whose steps take and return the resource and write it
+  through this module alone (`edited/2`, internal), as its opacity requires; `Logex.Edit`
+  takes one lone instance, which `instance/1` made. `restart/2` restarts the whole
+  resource, during an edit too, keeping its stage; there is no restart of one instance
+  inside it.
 
   A program run alone, through `instance/1`, `call/4` and `scan/2,3`, keeps a
   var_external as a tag of its own, at 0, which its host cannot set, as no input is but a
@@ -200,7 +211,16 @@ defmodule Logex.Runtime do
   runs nothing. A type given to `Logex.compile/2` or `Logex.Tag.new!/4` cannot be one: it
   is the one its source text compiles to (`Logex.FbType.user?/1`, decision 54).
 
-  **During an edit** the host scans, sets inputs and restarts through
+  **During an edit of a running configuration** the host's loop is unchanged: it takes
+  each step between two cycles, keeps the runtime each step returns, which `cycle/3` then
+  runs, and tolerates a report kind it does not know. The input image is the resource's,
+  kept across every step; each var_input is copied in from its connection; and a held
+  output point is among every cycle's outputs at the value it holds. A step on an edit
+  that has ended or that another has stepped past is refused by the generation; two
+  resources started from one configuration cannot be told apart, so stepping an edit on
+  the other is outside this contract (decision 60).
+
+  **During an edit of a lone instance** the host scans, sets inputs and restarts through
   `Logex.Edit.running/1`; scanning the other program is outside this contract. The edit
   adds two duties (OE-1, fix F10):
   - under test, send only the var_inputs of `Logex.Edit.running(edit)`: one the candidate

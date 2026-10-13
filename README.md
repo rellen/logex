@@ -3,7 +3,7 @@
 A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
 text into a named, stateless value, and runs it as instances, one scan at a time, with the
 time the host injects. No dependencies and no generated code: the lexer and parser are
-written by hand, and the whole thing is twenty-three small modules.
+written by hand, and the whole thing is twenty-five small modules.
 
 **Stage: early, and honest about it.** Fifteen instructions, among them an on-delay timer,
 a one-shot and six comparisons, parallel branches to arbitrary nesting depth,
@@ -12,7 +12,8 @@ that every tag is declared in, function blocks of your own, each written once in
 its own, instantiated as often as needed and run with `cal`, a public API
 (`Logex.compile/2`, `Logex.compile_file/1`, `Logex.compile_files/1` and `Logex.Runtime`),
 an online edit that changes a running instance's program, its function blocks included,
-without a restart (`Logex.Edit`), a scheduler that runs instances of several programs as
+without a restart (`Logex.Edit`), and one that changes a running configuration as a whole
+(`Logex.Configuration.Edit`), a scheduler that runs instances of several programs as
 one configuration on periodic tasks and on event tasks, which the rising edge of a bool
 global makes due, wired to input and output points, its programs
 sharing globals by name, such as an e-stop, through `var_external`
@@ -1149,9 +1150,183 @@ to the runtime, to `accept/3` or in a configuration's `programs`, raises one mes
 `seal` is a function block type, which runs inside a program through `cal`: an instance is of a %Logex.Program{}
 ```
 
-An edit takes one lone instance. An instance a configuration runs is not edited until
-OE-2, which edits a running configuration: a `%Logex.Runtime{}` is opaque, and changes
-only through its API.
+An edit of a lone instance gives the host the duties above; one of a running plant, below,
+takes them over.
+
+### A running plant
+
+A configuration that runs is edited as a whole, `Logex.Configuration.Edit`, with the same
+steps and the same report over the resource: `accept/2` takes the `%Logex.Runtime{}` that
+runs the original and the candidate configuration; each step takes the runtime and
+returns it, switched between two cycles, so `Logex.Runtime.cycle/3` runs whatever the
+edit has installed, and the host chooses nothing. It never writes a global: decisions
+55–65 in [`docs/organisation.md`](docs/organisation.md) §7, and its "OE-2's design" in
+§4.9, give every rule.
+
+`v2/conveyor.ld` sounds a horn, a new unlocated global it writes through a
+`var_external`, while the conveyor is faulted; `v2/trip.logex` checks it every 5 ms and
+drops the snapshot:
+
+```
+var_input start bool
+var_input stop bool
+var_input reset bool
+var_output motor bool
+var_external estop bool
+var_external horn bool
+var fault bool
+
+xic estop otl fault
+xic reset otu fault
+( xic start | xic motor ) xio stop xio fault ote motor
+xic fault ote horn
+```
+
+```
+// trip.logex -- the conveyor sounds a horn while it is faulted, checked every 5 ms
+task fast interval 5 priority 1
+task trip single estop priority 0
+
+var_global estop      bool at panel.i.7
+var_global pb_start_1 bool at panel.i.0
+var_global pb_reset   bool at panel.i.2
+var_global k1         bool at panel.q.0
+var_global k1_at_trip bool
+var_global horn       bool
+
+program c1 conveyor with fast
+  c1.start pb_start_1
+  c1.stop  0
+  c1.reset pb_reset
+  c1.motor k1
+```
+
+`edit_plant.exs` runs `trip.logex`, above, edits it while it runs, untests, tests again and
+assembles; then tries a step on the edit that has ended, and a candidate,
+`moved/trip.logex`, that is `v2/trip.logex` with `c1` moved to `trip`:
+
+```elixir
+{:ok, line} = Logex.Configuration.compile_file("trip.logex")
+{:ok, v2} = Logex.Configuration.compile_file("v2/trip.logex")
+
+cycle = fn rt, elapsed, label, inputs ->
+  {rt, out, events} = Logex.Runtime.cycle(rt, elapsed, inputs)
+  ran = for {:ran, task, instance, _now} <- events, do: "#{task}:#{instance}"
+  # `horn` is a global of the candidate's alone.
+  horn =
+    case Logex.Runtime.get(rt, "horn") do
+      {:ok, value} -> " horn=#{value}"
+      {:error, _reason} -> ""
+    end
+
+  IO.puts("#{label}k1=#{out["k1"]} k1_at_trip=#{Logex.Runtime.get!(rt, "k1_at_trip")}#{horn}  ran #{Enum.join(ran, ", ")}")
+  rt
+end
+
+step = fn {edit, rt, report}, label ->
+  IO.puts(label)
+  Enum.each(report, &IO.puts("        #{inspect(&1)}"))
+  {edit, rt}
+end
+
+rt =
+  Logex.Runtime.start(line)
+  |> cycle.(0, "t=  0  started           ", %{"pb_start_1" => 1})
+  |> cycle.(10, "t= 10  released          ", %{"pb_start_1" => 0})
+
+{:ok, edit, _forecast} = Logex.Configuration.Edit.accept(rt, v2)
+{edit, rt} = step.(Logex.Configuration.Edit.test(edit, rt), "test")
+
+rt =
+  rt
+  |> cycle.(5, "t= 15  under test        ", %{})
+  |> cycle.(5, "t= 20  e-stop rises      ", %{"estop" => 1})
+
+{edit, rt} = step.(Logex.Configuration.Edit.untest(edit, rt), "untest")
+
+rt =
+  rt
+  |> cycle.(10, "t= 30  released, reset   ", %{"estop" => 0, "pb_reset" => 1})
+  |> cycle.(10, "t= 40  e-stop rises      ", %{"estop" => 1, "pb_reset" => 0})
+
+{edit, rt} = step.(Logex.Configuration.Edit.test(edit, rt), "test")
+{_line, rt} = step.(Logex.Configuration.Edit.assemble(edit, rt), "assemble")
+_rt = cycle.(rt, 5, "t= 45  assembled         ", %{"estop" => 0})
+
+try do
+  Logex.Configuration.Edit.untest(edit, rt)
+rescue
+  error in ArgumentError -> IO.puts(error.message)
+end
+
+{:ok, moved} = Logex.Configuration.compile_file("moved/trip.logex")
+{:error, diagnostics} = Logex.Configuration.Edit.accept(Logex.Runtime.start(line), moved)
+Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
+```
+
+```
+$ mix run edit_plant.exs
+t=  0  started           k1=1 k1_at_trip=0  ran fast:c1
+t= 10  released          k1=1 k1_at_trip=0  ran fast:c1
+test
+        {:added, "horn", 0}
+        {:held, "k1_at_trip", 0}
+        {:instance_stopped, "snap", "snapshot"}
+        {:interval, "fast", {10, 5}}
+        {:joined, "c1.horn", {nil, 0}}
+        {:next_due, "fast", {20, 15}}
+t= 15  under test        k1=1 k1_at_trip=0 horn=0  ran fast:c1
+t= 20  e-stop rises      k1=0 k1_at_trip=0 horn=1  ran fast:c1
+untest
+        {:instance_back, "snap", "snapshot"}
+        {:interval, "fast", {5, 10}}
+t= 30  released, reset   k1=0 k1_at_trip=0  ran fast:c1
+t= 40  e-stop rises      k1=0 k1_at_trip=0  ran trip:snap, fast:c1
+test
+        {:held, "k1_at_trip", 0}
+        {:instance_stopped, "snap", "snapshot"}
+        {:interval, "fast", {10, 5}}
+        {:joined, "c1.horn", {nil, 1}}
+assemble
+        {:held, "k1_at_trip", 0}
+        {:instance_pruned, "snap", "snapshot"}
+t= 45  assembled         k1=0 k1_at_trip=0 horn=1  ran fast:c1
+this edit expects the resource at generation 3, but it is at generation 4: the edit has ended, or another edit has stepped since
+moved/trip.logex: line 12: `c1` runs with `fast` in the running configuration and with `trip` in the candidate: an instance moves to another task only with a restart
+```
+
+- **Test** switched the plant between two cycles, with no instance restarted: `c1` kept
+  its state and stayed sealed in. The new global `horn` started at its initial value, and
+  `c1` reads and writes it from its next scan, `:joined` with no value of its own. `fast`
+  is next due within its new interval of the switch, at 15 ms, not 20. `snap` is set
+  aside, its state kept, and `k1_at_trip`, which nothing drives any more, holds its
+  value. The e-stop's edge at 20 ms runs no snapshot: the candidate's `trip` runs no
+  instance.
+- **Untest** brought `snap` back as it was set aside. No switch fires an event: the
+  trigger's last sample was kept, so `trip` runs at the next real edge, at 40 ms.
+- **Test**, again: `horn` was kept unused while the original ran, so it is not started
+  again, and `c1` joins it at its last value.
+- **Assemble** kept the candidate and pruned `snap`. The edit is over, and the resource's
+  generation, which every step moved on, refuses a step on it.
+- **Accept refuses** what changes only with a restart, each at its line in the
+  candidate's files: a task added or removed, a task's `single`, an event task's interval
+  added or removed, an instance moved to another task, a global's type, located I/O, and
+  a tag's type in a program type an instance keeps.
+
+A program type changed for the whole plant moves each instance of it through the
+per-instance switch above, by one plan for the type, its reports named by path,
+`c1.t1`. An instance added starts as `start/1` starts one; one removed is set aside and
+pruned at assemble, and comes back at untest with its timers carrying on from where they
+stopped; one given another program type is a remove and an add, and may run on another
+task. A var_external made a program's own `var` keeps the global's value, `:left`; a
+`var` made a var_external drops its own value for the global's, `:joined`, and the global
+is left alone. A changed priority, and a reorder of tasks or instances, is allowed and
+reported. A restart during an edit keeps its stage.
+
+The host's duties shrink to the loop's: take each step between two cycles, keep the
+runtime it returns, and tolerate a report kind it does not know. The input image is the
+resource's and kept, each var_input is copied in from its connection, and a held point is
+in every cycle's outputs at the value it holds.
 
 ## Running it
 
@@ -1185,7 +1360,7 @@ mix format
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
 - `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
 - `CLAUDE.md` — commands and conventions for anyone (or anything) editing the code
-- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, globals shared through `var_external` with M2-4, and event tasks with M2-6, which completes Milestone 2; a configured plant's online edit, OE-2, is designed)
+- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, globals shared through `var_external` with M2-4, and event tasks with M2-6, which completes Milestone 2, and a configured plant's online edit with OE-2)
 - [`docs/defladder.md`](docs/defladder.md) — a study of an Elixir-embedded `defladder` DSL: what Nx's `defn` does, an executed spike, and a recommendation (proposed, not adopted)
 
 ## License
