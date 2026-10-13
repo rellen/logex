@@ -80,6 +80,13 @@ defmodule Logex.Configuration.Edit do
   - a task whose interval changed is next due at `min(next_due, now + new interval)`
     (decision 40), `{:interval, task, {old, new}}`, and `{:next_due, task, {from, to}}`
     where that moves it; its trigger's last sample is kept, so no switch fires an event;
+  - a task whose priority changed is reported, `{:priority, task, {old, new}}`: the next
+    cycle's sort reads it, so it needs no state;
+  - the order of the instances on each task, and of the tasks, is configuration, not
+    state, so a reorder is allowed (decision 62) and reported where the names both
+    configurations have there change their order among themselves: `{:order, task,
+    names}`, `task` `:none` for the task-less instances and `:tasks` for the tasks
+    themselves, `names` every name there in its new order;
   - the wiring is derived again from the configuration started, so a var_input's new
     connection is read at its instance's next scan.
 
@@ -111,7 +118,32 @@ defmodule Logex.Configuration.Edit do
   **The report** is a list of `{kind, name, detail}`, sorted, at most one entry per kind
   and name, the kinds an open set a host must tolerate. A global, task or instance is
   named by its own name, since they share one namespace, and anything inside an instance
-  by its path.
+  by its path. Each kept instance's switch and prune give `Logex.Edit`'s kinds, by path,
+  `{:preset, "m1.t1", {5000, 6000}}`, as its moduledoc's table says. The configuration's:
+
+  | Kind | Name | Detail | Given by |
+  |---|---|---|---|
+  | `:instance_added` | instance | its program type: started as `Logex.Runtime.instance/1` starts it, holding no var_external | a switch |
+  | `:instance_stopped` | instance | its program type: set aside, its state kept unused | a switch |
+  | `:instance_back` | instance | its program type: back from aside as it was set aside, its timers resumed | a switch |
+  | `:instance_pruned` | instance | its program type: its state dropped | assemble, cancel |
+  | `:added` | global | the initial value it starts at | a switch |
+  | `:initial_changed` | global | `{old, new}`: the running value is kept until a restart | a switch |
+  | `:pruned` | global | the value it had | assemble, cancel |
+  | `:held` | global | its value, which nothing drives any more | every step |
+  | `:interval` | task | `{old, new}`, in ms | a switch |
+  | `:next_due` | task | `{from, to}`, in ms: decision 40's move | a switch |
+  | `:priority` | task | `{old, new}` | a switch |
+  | `:joined` | `instance.tag` | `{own, global}`: the own value dropped, nil for none, and the global it reads | a switch |
+  | `:left` | `instance.tag` | the global's value, now the instance's own | a switch |
+  | `:order` | task, `:none` or `:tasks` | the names there in their new order | a switch |
+
+  The writes a report lists, applied to the resource before its step, give the resource
+  after it: OE-1's by path, as `Logex.Edit`'s moduledoc lists them, and `:instance_added`,
+  `:instance_stopped`, `:instance_back`, `:instance_pruned`, `:added`, `:pruned`,
+  `:next_due`, `:joined` and `:left`, with each kept instance's `switched` and block list
+  as OE-1 states them, and the `now` of a kept instance and of one back from aside the
+  resource's (decisions 56 and 57). The other kinds state facts.
 
   **Host mistakes** raise `ArgumentError`, each with a message a test pins. Accept checks
   the runtime, with `Logex.Runtime`'s own message; then the candidate, as
@@ -745,10 +777,49 @@ defmodule Logex.Configuration.Edit do
   defp tasks(from, to, %Runtime{tasks: states, now: now}) do
     was = by_name(from.tasks)
 
-    Enum.reduce(to.tasks, {states, []}, fn task, {states, reports} ->
-      retimed(Map.fetch!(was, task.name), task, now, {states, reports})
-    end)
+    {states, reports} =
+      Enum.reduce(to.tasks, {states, []}, fn task, {states, reports} ->
+        old = Map.fetch!(was, task.name)
+        retimed(old, task, now, {states, priority(old, task) ++ reports})
+      end)
+
+    {states, reports ++ orders(from, to)}
   end
+
+  # A priority is read at each cycle's sort, so a changed one needs no state, and is
+  # reported.
+  defp priority(%{priority: same}, %{priority: same}), do: []
+
+  defp priority(%{priority: old}, %{name: name, priority: new}),
+    do: [{:priority, name, {old, new}}]
+
+  # Decision 62: the order of the instances on each task, `:none` for the task-less ones,
+  # is their execution order, and the order of the tasks breaks ties of priority and due
+  # time (decision 11). Neither is state, so a reorder is allowed; one is reported wherever
+  # the names both configurations have there change their order among themselves, with
+  # every name there in its new order.
+  defp orders(from, to) do
+    tasks = Enum.map(to.tasks, & &1.name)
+    was = Enum.group_by(from.instances, &(&1.task || :none), & &1.name)
+    now = Enum.group_by(to.instances, &(&1.task || :none), & &1.name)
+
+    ordered(:tasks, Enum.map(from.tasks, & &1.name), tasks) ++
+      Enum.flat_map(now, fn {task, names} -> ordered(task, Map.get(was, task, []), names) end)
+  end
+
+  defp ordered(name, was, now) do
+    both = Map.new(was, &{&1, true})
+    kept = Map.new(now, &{&1, true})
+
+    reorder(
+      Enum.filter(was, &is_map_key(kept, &1)) == Enum.filter(now, &is_map_key(both, &1)),
+      name,
+      now
+    )
+  end
+
+  defp reorder(true, _name, _names), do: []
+  defp reorder(false, name, names), do: [{:order, name, names}]
 
   defp retimed(%{interval: same}, %{interval: same}, _now, acc), do: acc
 

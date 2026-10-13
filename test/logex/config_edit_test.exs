@@ -1163,4 +1163,81 @@ defmodule Logex.ConfigEditTest do
       refute Enum.any?(forecast, &match?({kind, _, _} when kind in [:joined, :left], &1))
     end
   end
+
+  describe "a task's priority and the order of tasks and instances (decision 62)" do
+    test "a priority changed is reported, and read at the next cycle's sort" do
+      runtime = running(40)
+
+      text =
+        String.replace(
+          plant_text(),
+          "task fast interval 10 priority 1",
+          "task fast interval 10 priority 5"
+        )
+
+      {edit, forecast} = accepted(runtime, plant(text))
+      assert {:priority, "fast", {1, 5}} in forecast
+      {_edit, runtime, _} = Edit.test(edit, runtime)
+      {_runtime, _, events} = Runtime.cycle(runtime, 10, %{})
+      assert for({:ran, task, _, _} <- events, do: task) == ["slow", "fast"]
+    end
+
+    test "instances reordered on a task are reported, and run in their new order" do
+      one_task =
+        String.replace(plant_text(), "program m2 motor with slow", "program m2 motor with fast")
+
+      runtime = running(20, plant(one_task))
+
+      swapped =
+        String.replace(
+          one_task,
+          ~r/(program m1 motor with fast\n(?:  m1\..*\n)+)\n(program m2 motor with fast\n(?:  m2\..*\n)+)/,
+          "\\2\n\\1"
+        )
+
+      assert swapped != one_task
+      {edit, forecast} = accepted(runtime, plant(swapped))
+      assert {:order, "fast", ["m2", "m1"]} in forecast
+      {_edit, runtime, _} = Edit.test(edit, runtime)
+      {_runtime, _, events} = Runtime.cycle(runtime, 10, %{})
+      assert for({:ran, "fast", instance, _} <- events, do: instance) == ["m2", "m1"]
+    end
+
+    test "tasks reordered are reported; the task-less instances' order by :none" do
+      runtime = running(20)
+
+      text =
+        plant_text()
+        |> String.replace(
+          "task fast interval 10 priority 1\ntask slow interval 50 priority 2",
+          "task slow interval 50 priority 2\ntask fast interval 10 priority 1"
+        )
+
+      {_edit, forecast} = accepted(runtime, plant(text))
+      assert {:order, :tasks, ["slow", "fast", "trip"]} in forecast
+
+      extra =
+        "program m3 motor\n  m3.start 0\n  m3.stop 0\n  m3.overtemp 0\n  m3.reset 0\n\nprogram m4 motor\n  m4.start 0\n  m4.stop 0\n  m4.overtemp 0\n  m4.reset 0\n"
+
+      runtime = running(20, plant(plant_text() <> extra))
+
+      swapped =
+        plant_text() <> String.replace(extra, ~r/(program m3.*?\n)\n(program m4.*)/s, "\\2\n\\1")
+
+      {_edit, forecast} = accepted(runtime, plant(swapped))
+      assert {:order, :none, ["m4", "m3"]} in forecast
+    end
+
+    test "an instance added or removed is no reorder" do
+      runtime = running(20)
+
+      text =
+        without_m2() <>
+          "program m9 motor with fast\n  m9.start 0\n  m9.stop 0\n  m9.overtemp 0\n  m9.reset 0\n"
+
+      {_edit, forecast} = accepted(runtime, plant(text))
+      refute Enum.any?(forecast, &match?({:order, _, _}, &1))
+      refute Enum.any?(forecast, &match?({:priority, _, _}, &1))
+    end
+  end
 end
