@@ -483,7 +483,7 @@ defmodule Logex.ConfigEditTest do
       # starts it.
       own = String.replace(motor_ld(), "var_external estop bool", "var estop bool 1")
       {_edit, forecast} = accepted(runtime, plant(plant_text(), programs(own)))
-      refute Enum.any?(forecast, &match?({_, "m" <> _, _}, &1))
+      refute Enum.any?(forecast, &match?({kind, "m" <> _, _} when kind != :left, &1))
 
       # A var_external added, bound to a global the edit adds: the global starts, and no
       # tag of the instance does.
@@ -503,8 +503,8 @@ defmodule Logex.ConfigEditTest do
 
       {_edit, forecast} = accepted(runtime, plant(text, programs(motor)))
       assert {:added, "alarm", 1} in forecast
-      refute Enum.any?(forecast, &match?({_, "m1.alarm", _}, &1))
-      refute Enum.any?(forecast, &match?({_, "m2.alarm", _}, &1))
+      refute Enum.any?(forecast, &match?({kind, "m1.alarm", _} when kind != :joined, &1))
+      refute Enum.any?(forecast, &match?({kind, "m2.alarm", _} when kind != :joined, &1))
 
       # A `var` with an initial value made a var_external: no changed initial value, since
       # its value is the global's.
@@ -1078,6 +1078,89 @@ defmodule Logex.ConfigEditTest do
       assert {:held, "k2_at_trip", 0} in report
       {_config, _runtime, report} = Edit.cancel(edit, runtime)
       assert {:held, "k2_at_trip", 0} in report
+    end
+  end
+
+  describe "a shared global across a switch (decisions 45, 49 and 55)" do
+    # The motor with its `estop` its own `var`, which a rung latches from `overtemp`, so
+    # its value can differ from the global's.
+    defp own_estop,
+      do:
+        motor_ld()
+        |> String.replace("var_external estop bool", "var estop bool")
+        |> Kernel.<>("xic overtemp otl estop\n")
+
+    test "a var_external become a var keeps the global's value as the instance's own, the " <>
+           "global alone" do
+      runtime = running(40)
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{"estop" => 1})
+      {edit, _} = accepted(runtime, plant(plant_text(), programs(own_estop())))
+      {edit, runtime, report} = Edit.test(edit, runtime)
+      assert {:left, "m1.estop", 1} in report
+      assert {:left, "m2.estop", 1} in report
+      assert runtime.instances["m1"].env["estop"] == 1
+
+      # The global falls; `m1`'s own `estop` does not follow it.
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{"estop" => 0})
+      assert {Runtime.get!(runtime, "estop"), Runtime.get!(runtime, "m1.estop")} == {0, 1}
+
+      # Back: `m1` reads the global again, its own value dropped and reported.
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:joined, "m1.estop", {1, 0}} in report
+      refute Map.has_key?(runtime.instances["m1"].env, "estop")
+      assert Runtime.get!(runtime, "estop") == 0
+    end
+
+    test "a var become a var_external: the shared global wins, and no switch writes it " <>
+           "(decision 55)" do
+      original = plant(plant_text(), programs(own_estop()))
+      runtime = Runtime.start(original)
+      {runtime, _, _} = Runtime.cycle(runtime, 0, %{"tt_1" => 1})
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{"tt_1" => 0})
+      assert {runtime.instances["m1"].env["estop"], Runtime.get!(runtime, "estop")} == {1, 0}
+      {edit, _} = accepted(runtime, plant())
+      {_edit, runtime, report} = Edit.test(edit, runtime)
+      assert {:joined, "m1.estop", {1, 0}} in report
+      assert {:joined, "m2.estop", {0, 0}} in report
+      assert Runtime.get!(runtime, "estop") == 0
+      assert holding(runtime, "estop") == []
+    end
+
+    test "a var_external added, bound to its global, had no value of its own" do
+      runtime = running(20)
+
+      motor =
+        String.replace(
+          motor_ld(),
+          "var_external estop bool",
+          "var_external estop bool\nvar_external alarm bool\nvar_external level dint"
+        )
+
+      text =
+        String.replace(
+          plant_text(),
+          "var_global k2_at_trip bool",
+          "var_global k2_at_trip bool\nvar_global alarm bool 1\nvar_global level dint 42"
+        )
+
+      {_edit, forecast} = accepted(runtime, plant(text, programs(motor)))
+      assert {:added, "alarm", 1} in forecast
+      assert {:joined, "m1.alarm", {nil, 1}} in forecast
+      assert {:joined, "m1.level", {nil, 42}} in forecast
+    end
+
+    test "a var_external in both, or one the candidate drops, is reported by neither" do
+      runtime = running(20)
+      motor = String.replace(motor_ld(), "ton t1 5000", "ton t1 6000")
+      {_edit, forecast} = accepted(runtime, plant(plant_text(), programs(motor)))
+      refute Enum.any?(forecast, &match?({kind, _, _} when kind in [:joined, :left], &1))
+
+      dropped =
+        String.replace(motor_ld(), "var_external estop bool\n", "")
+        |> String.replace("xic estop otl fault\n", "")
+
+      {_edit, forecast} = accepted(runtime, plant(plant_text(), programs(dropped)))
+      refute Enum.any?(forecast, &match?({kind, _, _} when kind in [:joined, :left], &1))
     end
   end
 end

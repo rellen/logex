@@ -53,7 +53,12 @@ defmodule Logex.Configuration.Edit do
     and each var_external of the program started is split off again after, with any of
     the program stopped's that the one started does not declare, so no instance's state
     holds one (decisions 45 and 49), and the plan knows them, so no start rule starts one
-    and none is reported as a changed initial value. No switch writes a global. A timer
+    and none is reported as a changed initial value. No switch writes a global: a
+    var_external of the program started that the program stopped declares as its own tag,
+    or not at all, has that own value dropped, `{:joined, path, {own, global}}`, `own` nil
+    where it had none, and reads the shared global from its next scan (decision 55); one of
+    the program stopped that the one started declares as its own tag keeps the global's
+    value as its own, `{:left, path, value}` (decision 25). A timer
     resumes from the resource's clock, and the switch gives the instance that clock as its
     `now`, fix F11's undo reading the instance's own `now` first, the time the last switch
     gave it (decision 56);
@@ -589,9 +594,11 @@ defmodule Logex.Configuration.Edit do
       Plan.switch(plan, record, merged, context.first?, context.runtime.now)
 
     state = split(state, externals(starts) ++ undeclared(externals(stops), starts))
+    shared = sections(stops, starts, merged.env, context.globals)
 
     {Map.put(instances, name, state), Map.put(records, name, record),
-     for({kind, path, detail} <- report, do: {kind, name <> "." <> path, detail}) ++ reports}
+     for({kind, path, detail} <- report ++ shared, do: {kind, name <> "." <> path, detail}) ++
+       reports}
   end
 
   # An instance the configuration started runs that the one stopped does not, as this
@@ -606,6 +613,27 @@ defmodule Logex.Configuration.Edit do
         context,
         acc
       )
+
+  # Decision 55, and decision 45 the other way: a var_external of the program started that
+  # the program stopped declares otherwise, or not at all, has its own value dropped at the
+  # split, nil where it had none, and reads its global from the next scan, `:joined`; one
+  # of the program stopped that the one started declares as its own tag keeps the global's
+  # value, merged in, as its own, `:left`. No global is written.
+  defp sections(stops, starts, env, globals) do
+    {was, now} = {Map.new(externals(stops), &{&1, true}), Map.new(externals(starts), &{&1, true})}
+
+    for(
+      name <- Map.keys(now),
+      not is_map_key(was, name),
+      do: {:joined, name, {Map.get(env, name), Map.fetch!(globals, name)}}
+    ) ++
+      for(
+        name <- Map.keys(was),
+        not is_map_key(now, name),
+        is_map_key(starts.tags, name),
+        do: {:left, name, Map.fetch!(globals, name)}
+      )
+  end
 
   # Decision 57: an instance set aside as one of this type comes back as it was set aside,
   # its `now` the resource's, as a switch gives a kept one (decision 56), and each timer
