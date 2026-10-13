@@ -276,6 +276,18 @@ defmodule Logex.Edit do
 
   defp accepted(diagnostics, _running, _candidate, _state), do: {:error, diagnostics}
 
+  # SPIKE (OE-2): the per-program and per-instance halves, for Logex.Configuration.Edit.
+  @doc false
+  def __retyped__(running, candidate), do: retyped(running, candidate)
+  @doc false
+  def __plans__(original, candidate), do: plans(original, candidate)
+  @doc false
+  def __record__, do: @record
+  @doc false
+  def __switch__(plan, record, state, first_test?), do: switch(plan, record, state, first_test?)
+  @doc false
+  def __prune__(plan, record, state), do: prune(plan, record, state)
+
   @doc "Runs the candidate over the state, from accept or after an untest."
   def test(edit, state) do
     edit = edit!(edit)

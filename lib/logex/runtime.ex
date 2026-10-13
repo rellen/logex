@@ -209,7 +209,11 @@ defmodule Logex.Runtime do
   # `wiring`, what `start/1` derives from the configuration once, never state of its own.
   # A task with a single holds its trigger's last sample there too (M2-6).
   @enforce_keys [:config, :now, :globals, :instances, :tasks, :wiring]
-  defstruct [:config, :now, :globals, :instances, :tasks, :wiring]
+  defstruct [:config, :now, :globals, :instances, :tasks, :wiring, generation: 0, idle: %{}]
+
+  # SPIKE (OE-2): what the configuration edit derives again from a candidate.
+  @doc false
+  def __wiring__(config), do: wiring(config)
 
   @opaque t :: %__MODULE__{}
 
@@ -365,7 +369,8 @@ defmodule Logex.Runtime do
             restarted = restart(Map.fetch!(config.programs, state.type), state, mode)
             {name, detached(restarted, runtime.wiring, name)}
           end),
-        tasks: Map.new(config.tasks, &{&1.name, task_state(&1, now)})
+        tasks: Map.new(config.tasks, &{&1.name, task_state(&1, now)}),
+        idle: %{}
     }
   end
 
