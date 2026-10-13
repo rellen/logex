@@ -572,6 +572,41 @@ defmodule Logex.SchedulerTest do
     end
   end
 
+  # OE-2 (docs/organisation.md §4.9, "OE-2's design"; decisions 60, 64 and 65): a
+  # configuration edit's two pieces of the resource's state, the generation of its steps and
+  # the instances its switch sets aside. No edit fills either yet, so each test sets them in
+  # the opaque resource by hand, on purpose, as the decision-49 test looks inside it.
+  describe "a configuration edit's state in the resource (OE-2)" do
+    test "start/1 gives generation 0 and sets nothing aside" do
+      runtime = Runtime.start(plant())
+      assert {runtime.generation, runtime.aside} == {0, %{}}
+
+      assert Enum.sort(Map.keys(Map.from_struct(runtime))) ==
+               [:aside, :config, :generation, :globals, :instances, :now, :tasks, :wiring]
+    end
+
+    test "a cycle keeps the generation and what is set aside, and never scans it" do
+      runtime = Runtime.start(plant())
+      aside = %{"q" => Runtime.instance(program(@pulse, "pulse"))}
+      runtime = %{runtime | generation: 3, aside: aside}
+      {runtime, _, events} = Runtime.cycle(runtime, 10, %{"x" => 1})
+      {runtime, _, _} = Runtime.cycle(runtime, 10, %{"x" => 0})
+      assert {runtime.generation, runtime.aside} == {3, aside}
+      refute Enum.any?(events, &match?({:ran, _, "q", _}, &1))
+    end
+
+    test "restart/2 keeps the generation and drops what is set aside (decision 65)" do
+      runtime = Runtime.start(plant())
+      aside = %{"q" => Runtime.instance(program(@pulse, "pulse"))}
+      runtime = %{runtime | generation: 3, aside: aside}
+
+      for mode <- [:cold, :warm] do
+        restarted = Runtime.restart(runtime, mode)
+        assert {restarted.generation, restarted.aside} == {3, %{}}
+      end
+    end
+  end
+
   describe "a cycle" do
     test "is a function of its arguments: made twice, it gives the same result" do
       config =

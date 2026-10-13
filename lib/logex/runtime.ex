@@ -131,7 +131,18 @@ defmodule Logex.Runtime do
     `restart/2`, so a trigger already 1 fires in the next cycle, and a cycle samples it
     once, after the input merge and before any scan. OE-2's switch is to keep it, so a
     switch fires no event, and to refuse a changed `single`, or an `interval` added to or
-    removed from a task with one, while the plant runs (§4.9).
+    removed from a task with one, while the plant runs (§4.9);
+  - the generation (OE-2), the count of the configuration edits' steps taken on the
+    resource, is 0 at `start/1` and kept by a cycle and by `restart/2`, so that a restart
+    during an edit keeps the edit's stage. Every step of an edit but accept is to move it
+    on by one, cancel from accept included (decisions 60 and 64), so an edit that has
+    ended can never step again;
+  - the instances set aside (OE-2), `aside`, the state of each instance an edit's switch
+    stops, by name, are none at `start/1`, kept by a cycle and never scanned, and dropped
+    by `restart/2`, so the next switch starts each again (decision 65). A switch is to set
+    aside each instance only the configuration it stops runs, and the old state of one it
+    retypes, and bring one back where the configuration it starts runs it again;
+    assemble, and cancel after an untest, are to prune them.
 
   Until OE-2, a program instance inside a resource is not edited: `Logex.Edit` takes one
   lone instance, which `instance/1` made, and the resource holds its instances itself, as
@@ -207,9 +218,11 @@ defmodule Logex.Runtime do
   # for each global, the input points' among them; `instances`, each program instance's
   # state by name; `tasks`, each task's next due time and overlap count by name; and
   # `wiring`, what `start/1` derives from the configuration once, never state of its own.
-  # A task with a single holds its trigger's last sample there too (M2-6).
-  @enforce_keys [:config, :now, :globals, :instances, :tasks, :wiring]
-  defstruct [:config, :now, :globals, :instances, :tasks, :wiring]
+  # A task with a single holds its trigger's last sample there too (M2-6). OE-2:
+  # `generation`, the count of the configuration edits' steps taken on it, and `aside`,
+  # the state of each instance an edit's switch has set aside, by name, never scanned.
+  @enforce_keys [:config, :now, :globals, :instances, :tasks, :wiring, :generation, :aside]
+  defstruct [:config, :now, :globals, :instances, :tasks, :wiring, :generation, :aside]
 
   @opaque t :: %__MODULE__{}
 
@@ -297,7 +310,9 @@ defmodule Logex.Runtime do
           {name, detached(instance(Map.fetch!(config.programs, type)), wiring, name)}
         end),
       tasks: Map.new(config.tasks, &{&1.name, task_state(&1, 0)}),
-      wiring: wiring
+      wiring: wiring,
+      generation: 0,
+      aside: %{}
     }
   end
 
@@ -348,7 +363,8 @@ defmodule Logex.Runtime do
   `start/1` left it, but for its clock and its input image, which it keeps: every other
   global back at its initial value, each instance through `restart/3`, every task with an
   interval due at the next cycle, every trigger's last sample 0, so a trigger already 1
-  fires in it, and every overlap count 0. Keeping the input image is what keeps
+  fires in it, and every overlap count 0. An instance a configuration edit set aside is
+  dropped, and the edit's generation kept (OE-2). Keeping the input image is what keeps
   `scan/2` with `restart/3` and a one-instance configuration in agreement across a
   restart, with nothing for the host to send again (decision 38). There is no restart of
   one instance inside a resource.
@@ -365,7 +381,8 @@ defmodule Logex.Runtime do
             restarted = restart(Map.fetch!(config.programs, state.type), state, mode)
             {name, detached(restarted, runtime.wiring, name)}
           end),
-        tasks: Map.new(config.tasks, &{&1.name, task_state(&1, now)})
+        tasks: Map.new(config.tasks, &{&1.name, task_state(&1, now)}),
+        aside: %{}
     }
   end
 
