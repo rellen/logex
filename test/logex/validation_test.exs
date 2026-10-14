@@ -1347,15 +1347,19 @@ defmodule Logex.ValidationTest do
              ]
     end
 
-    test "two literal sources compile, with a warning, and one literal does not warn" do
+    # Decision 98: every source a literal warns, for each of the five; one literal does not,
+    # nor a divide by a literal 1, which is harmless.
+    test "two literal sources compile, with a warning, and one literal does not warn, " <>
+           "a divide by 1 among them" do
       assert source_warnings(
                "var d dint\nadd 2 3 d\n( sub -1 1 d | mul 0 d d )\nadd d 1 d\n" <>
-                 "div 7 2 d mod -7 2 d\ndiv d 2 d mod 7 d d"
+                 "div 7 2 d mod -7 2 d\ndiv d 2 d mod 7 d d\ndiv d 1 d mod d 1 d\nmul 2 3 d"
              ) == [
                "line 2: warning: `add` reads two literals, `2` and `3`: its result never changes",
                "line 3: warning: `sub` reads two literals, `-1` and `1`: its result never changes",
                "line 5: warning: `div` reads two literals, `7` and `2`: its result never changes",
-               "line 5: warning: `mod` reads two literals, `-7` and `2`: its result never changes"
+               "line 5: warning: `mod` reads two literals, `-7` and `2`: its result never changes",
+               "line 8: warning: `mul` reads two literals, `2` and `3`: its result never changes"
              ]
     end
   end

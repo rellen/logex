@@ -2591,8 +2591,11 @@ names it breaks. Growth tests are in reductions.
   any type with the suite green: `add`'s second source and destination, the first source
   of `sub`, `mul` and `div`, `mod`'s second source and destination, and `neg`'s
   destination, where `neg d b` wrote -5 to a bool. `validation_test.exs` puts a bool in
-  every slot of every arithmetic instruction, each refused at its line. The suite is at
-  1115 tests (8 doctests).
+  every slot of every arithmetic instruction, each refused at its line. Two of decision
+  98's warning rules were pinned by no test: a warning added for a divide by a literal 1,
+  and none given for a `mul` of two literals, each left the suite green; the warnings
+  test now holds `div d 1 d` and `mod d 1 d`, which draw none, and `mul 2 3 d`, which
+  draws its warning. The suite is at 1115 tests (8 doctests).
 - **M3-4 · The coil one-shots: `osr`, `osf`.** IEC's transition-sensing coils in the
   conventional form, a storage bit and a pulse bit (decision 80), which pass on the power
   they receive; each storage bit under every rule an `ons` bit has, on decision 21's block
