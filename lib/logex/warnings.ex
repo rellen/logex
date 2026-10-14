@@ -87,19 +87,24 @@ defmodule Logex.Warnings do
   # Each `ote` after the first on a tag declared in source cites the first. An `ons`
   # storage bit is left to storage_writes/3, which warns about every `ote` on it: the `ons`
   # writes it too, so the last `ote` need not be what decides it, and one instruction gets
-  # one warning.
+  # one warning. The uses are walked in rung order, each tag's first `ote` kept in a map
+  # that is only looked up, so the warnings on one line come in rung order, as
+  # storage_writes/3's do (B10).
   defp second_otes(uses, tags, owners) do
-    uses
-    |> Enum.filter(fn {_access, name, _line, symbol} ->
-      symbol == :ote and from_source?(tags, name) and not Map.has_key?(owners, name)
-    end)
-    |> Enum.group_by(fn {_access, name, _line, _symbol} -> name end, fn {_, _, line, _} ->
-      line
-    end)
-    |> Enum.flat_map(fn {name, [first | later]} ->
-      Enum.map(later, &second_ote(name, first, &1))
-    end)
+    {warnings, _firsts} =
+      uses
+      |> Enum.filter(fn {_access, name, _line, symbol} ->
+        symbol == :ote and from_source?(tags, name) and not Map.has_key?(owners, name)
+      end)
+      |> Enum.flat_map_reduce(%{}, fn {_access, name, line, _symbol}, firsts ->
+        later_ote(Map.fetch(firsts, name), name, line, firsts)
+      end)
+
+    warnings
   end
+
+  defp later_ote(:error, name, line, firsts), do: {[], Map.put(firsts, name, line)}
+  defp later_ote({:ok, first}, name, line, firsts), do: {[second_ote(name, first, line)], firsts}
 
   # M1-6: every other write to an `ons` storage bit declared in source, before or after
   # the `ons` in the scan, is warned about at its own line, citing the `ons`. The uses are

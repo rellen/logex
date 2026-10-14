@@ -2585,8 +2585,15 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   path's), but its rungs are wordy, its autocomplete is ElixirLS-only, and it is a
   dependency.)*
 
-- **B10 · `Logex.Warnings.second_otes/3` orders by a map.** It groups the `ote` uses with
-  `Enum.group_by/3` and walks the groups, so two second-`ote` warnings on one line come
+- **B10 · `Logex.Warnings.second_otes/3` orders by a map. LANDED.** It walks the `ote`
+  uses in rung order, keeping each tag's first `ote` in a map that is only looked up, as
+  M1-6's storage-bit pass walks its uses; "second ote warnings on one line come in rung
+  order, however many there are" in `validation_test.exs` pins it with 40 tags given their
+  second `ote` on one line in the reverse of their names' order, and fails with the
+  grouping put back. What follows is the finding as written.
+
+  It grouped the `ote` uses with
+  `Enum.group_by/3` and walked the groups, so two second-`ote` warnings on one line came
   out in the map's order: the names' order for 32 names or fewer, no order past that
   (CONTRIBUTING's "32 keys or fewer"), and never rung order. The final sort by line keeps
   lines in order, not the warnings within one. M1-6's own passes walk the uses in rung
@@ -2859,7 +2866,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
 | §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, and members with M1-6; bit access, arrays and negative literals open |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed; re-scoped 2026-10-01 as a one-way seed that emits a whole program as data |
-| B10 | nit | warnings | Second-`ote` warnings on one line come in map order, not rung order | `Logex.Warnings.second_otes/3` | open |
+| B10 | nit | warnings | Second-`ote` warnings on one line come in map order, not rung order | `Logex.Warnings.second_otes/3` | **closed** — the uses walked in rung order; guarded by a 40-tag test in `validation_test.exs` |
 
 ---
 

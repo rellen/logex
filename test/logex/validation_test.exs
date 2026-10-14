@@ -946,6 +946,21 @@ defmodule Logex.ValidationTest do
              ]
     end
 
+    test "second ote warnings on one line come in rung order, however many there are" do
+      # 40 tags, each given its second `ote` on one line in the reverse of their names'
+      # order: an order taken from a map of more than 32 keys would not be this one.
+      names = for i <- 40..1//-1, do: "m" <> String.pad_leading("#{i}", 2, "0")
+      declarations = Enum.map_join(names, &"var #{&1} bool\n")
+      firsts = "xic a " <> Enum.map_join(Enum.reverse(names), " ", &"ote #{&1}")
+      seconds = "xic a " <> Enum.map_join(names, " ", &"ote #{&1}")
+
+      assert source_warnings("var a bool\n" <> declarations <> firsts <> "\n" <> seconds) ==
+               Enum.map(names, fn name ->
+                 "line 43: warning: `#{name}` already has an `ote` on line 42: " <>
+                   "the last one in the scan decides it"
+               end)
+    end
+
     test "a use inside a group nested in another group counts" do
       assert source_warnings("var a bool\nvar b bool\nxic a ( xio a | ( xic b | xio b ) ) ote a") ==
                []
