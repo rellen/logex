@@ -6057,4 +6057,439 @@ defmodule Logex.ApiContractTest do
 
   defp tm_bit(true), do: 1
   defp tm_bit(false), do: 0
+
+  # ---- M3-3: arithmetic, against IEC's rules restated as Elixir --------------------------
+
+  # What the arithmetic walk must be seen to do, at least once each.
+  @ar_reach [
+    :above,
+    :below,
+    :div_by_zero,
+    :mod_by_zero,
+    :min_by_minus_one,
+    :neg_min,
+    :abs_min,
+    :mod_negative,
+    :cut,
+    :de_energised,
+    :block_fault,
+    :block_frozen,
+    :event_fault,
+    :edit_kept,
+    :restarted,
+    :negative_literal
+  ]
+
+  @ar_max 2_147_483_647
+  @ar_min -2_147_483_648
+
+  # Values near the dint's limits and near 0, which a source, a literal or an input, takes.
+  @ar_pool [0, 0, 1, -1, 2, -2, 3, -3, 7, -7, 46_341, -46_341, 65_536, -65_536] ++
+             [@ar_max, @ar_min, @ar_max - 1, @ar_min + 1, 1_000_000_000, -1_000_000_000]
+
+  @ar_ops [:add, :sub, :mul, :div, :mod, :neg, :abs]
+
+  test "arithmetic runs as IEC's rules restated: every scan's results, power out and faults " <>
+         "agree with an oracle that knows nothing of logex, alone, in a block, in a resource " <>
+         "and across an edit, and no value outside a dint reaches a state" do
+    :rand.seed(:exsss, {2026, 10, 333})
+
+    for _ <- 1..150 do
+      spec = ar_spec()
+      program = ar_program(spec)
+      ar_lone(spec, program, 24)
+      ar_resource(spec, program, 8)
+    end
+
+    assert Process.get(:ar_reach, MapSet.new()) == MapSet.new(@ar_reach)
+  end
+
+  defp ar_reached(name), do: reached(:ar_reach, name)
+
+  # A program's rungs over four dint inputs, three vars and two dint outputs, each rung an
+  # optional contact on `g`, one to three arithmetic instructions and an optional coil, and
+  # now and then a block `c1` of the same kind, run by a `cal` on `gb`. Each var starts at
+  # a value drawn near a limit.
+  defp ar_spec do
+    %{
+      inits: for(_ <- 1..3, do: pick(@ar_pool)),
+      rungs:
+        for(
+          _ <- 1..Enum.random(2..6),
+          do: ar_rung(~w(x0 x1 x2 x3 v0 v1 v2 y0 y1), ~w(v0 v1 v2 y0 y1), ~w(ok0 ok1 ok2), "g")
+        ),
+      block:
+        if(:rand.uniform(3) == 1,
+          do: nil,
+          else: %{
+            init: pick(@ar_pool),
+            rungs: for(_ <- 1..Enum.random(1..3), do: ar_rung(~w(a b w r), ~w(w r), ~w(ok), "go"))
+          }
+        )
+    }
+  end
+
+  defp ar_rung(sources, destinations, coils, contact) do
+    {pick([nil, nil, {:xic, contact}, {:xio, contact}]),
+     for(_ <- 1..Enum.random(1..3), do: ar_instruction(pick(@ar_ops), sources, destinations)),
+     pick([nil | coils])}
+  end
+
+  defp ar_instruction(op, sources, destinations) when op in [:neg, :abs],
+    do: {op, [ar_source(sources)], pick(destinations)}
+
+  defp ar_instruction(op, sources, destinations) when op in [:div, :mod],
+    do: {op, [ar_source(sources), ar_divisor(sources)], pick(destinations)}
+
+  defp ar_instruction(op, sources, destinations),
+    do: {op, [ar_source(sources), ar_source(sources)], pick(destinations)}
+
+  defp ar_source(sources),
+    do: if(:rand.uniform(3) == 1, do: {:lit, pick(@ar_pool)}, else: {:tag, pick(sources)})
+
+  # A literal zero divisor is refused when the program compiles (decision 78): a divisor is
+  # a tag, which may be 0, or a literal that is not.
+  defp ar_divisor(sources) do
+    case ar_source(sources) do
+      {:lit, 0} -> {:lit, pick([1, -1, 7, @ar_min])}
+      source -> source
+    end
+  end
+
+  @ar_block_head [
+    "function_block calc",
+    "var_input a dint",
+    "var_input b dint",
+    "var_input go bool",
+    "var_output r dint",
+    "var_output ok bool"
+  ]
+
+  defp ar_block_source(block),
+    do:
+      Enum.join(
+        @ar_block_head ++ ["var w dint #{block.init}"] ++ Enum.map(block.rungs, &ar_text/1),
+        "\n"
+      )
+
+  defp ar_declarations(spec),
+    do:
+      ["var_input g bool", "var_input gb bool"] ++
+        for(x <- ~w(x0 x1 x2 x3), do: "var_input #{x} dint") ++
+        for({init, i} <- Enum.with_index(spec.inits), do: "var v#{i} dint #{init}") ++
+        for(y <- ~w(y0 y1 yb), do: "var_output #{y} dint") ++
+        for(ok <- ~w(ok0 ok1 ok2 okb), do: "var_output #{ok} bool") ++
+        if(spec.block, do: ["var c1 calc"], else: [])
+
+  defp ar_source_text(spec),
+    do:
+      Enum.join(
+        ar_declarations(spec) ++ Enum.map(spec.rungs, &ar_text/1) ++ ar_cal_text(spec.block),
+        "\n"
+      )
+
+  defp ar_cal_text(nil), do: []
+  defp ar_cal_text(_block), do: ["xic gb cal c1 x0 x1 g yb okb"]
+
+  defp ar_text({contact, instructions, coil}) do
+    Enum.join(
+      ar_contact_text(contact) ++
+        Enum.map(instructions, fn {op, sources, destination} ->
+          Enum.join(["#{op}" | Enum.map(sources, &ar_operand_text/1)] ++ [destination], " ")
+        end) ++ if(coil, do: ["ote #{coil}"], else: []),
+      " "
+    )
+  end
+
+  defp ar_contact_text(nil), do: []
+  defp ar_contact_text({c, tag}), do: ["#{c} #{tag}"]
+
+  defp ar_operand_text({:lit, n}), do: "#{n}"
+  defp ar_operand_text({:tag, tag}), do: tag
+
+  defp ar_program(spec) do
+    types =
+      case spec.block do
+        nil ->
+          []
+
+        block ->
+          {:ok, calc} = Logex.compile(ar_block_source(block), name: "calc")
+          [calc]
+      end
+
+    {:ok, program} = Logex.compile(ar_source_text(spec), name: "ar", types: types)
+    program
+  end
+
+  # ---- the oracle: IEC's rules, restated, over plain maps ------------------------------
+
+  # The program's first rung's line, after its declarations, and the block's.
+  defp ar_first_line(spec), do: length(ar_declarations(spec)) + 1
+  defp ar_block_first_line, do: length(@ar_block_head) + 2
+
+  defp ar_initial(spec) do
+    base =
+      Map.new(~w(g gb x0 x1 x2 x3 y0 y1 yb ok0 ok1 ok2 okb), &{&1, 0})
+      |> Map.merge(Map.new(Enum.with_index(spec.inits), fn {v, i} -> {"v#{i}", v} end))
+
+    case spec.block do
+      nil ->
+        base
+
+      block ->
+        Map.put(base, "c1", %{
+          "a" => 0,
+          "b" => 0,
+          "go" => 0,
+          "r" => 0,
+          "ok" => 0,
+          "w" => block.init
+        })
+    end
+  end
+
+  # One scan: the program's rungs, then the `cal`, each fault `{op, line, path}`, in order.
+  defp ar_scan(spec, env) do
+    {env, faults} = ar_routine(spec.rungs, env, ar_first_line(spec), nil)
+    {env, more} = ar_cal(spec.block, env, ar_first_line(spec) + length(spec.rungs))
+    {env, faults ++ more}
+  end
+
+  defp ar_routine(rungs, env, first, path) do
+    {env, faults, _line} =
+      Enum.reduce(rungs, {env, [], first}, fn rung, {env, faults, line} ->
+        {env, more} = ar_rung_run(rung, env, line, path)
+        {env, faults ++ more, line + 1}
+      end)
+
+    {env, faults}
+  end
+
+  defp ar_rung_run({contact, instructions, coil}, env, line, path) do
+    power = ar_contact(contact, env)
+    if not power, do: ar_reached(:de_energised)
+
+    {powered, env, faults} =
+      Enum.reduce(instructions, {power, env, []}, fn instruction, {now, env, faults} ->
+        # A rung's power that an earlier instruction on it took away.
+        if power and not now, do: ar_reached(:cut)
+        ar_instruction_run(instruction, now, env, {line, path}, faults)
+      end)
+
+    env = if coil, do: Map.put(env, coil, if(powered, do: 1, else: 0)), else: env
+    {env, Enum.reverse(faults)}
+  end
+
+  defp ar_contact(nil, _env), do: true
+  defp ar_contact({:xic, tag}, env), do: env[tag] == 1
+  defp ar_contact({:xio, tag}, env), do: env[tag] != 1
+
+  # De-energised, nothing; after an instruction that passed no power, so too.
+  defp ar_instruction_run(_instruction, false, env, _at, faults) do
+    {false, env, faults}
+  end
+
+  defp ar_instruction_run({op, sources, destination}, true, env, {line, path}, faults) do
+    values = Enum.map(sources, &ar_value(&1, env))
+    if Enum.any?(sources, &match?({:lit, n} when n < 0, &1)), do: ar_reached(:negative_literal)
+    ar_notes(op, values)
+
+    case ar_exact(op, values) do
+      :zero_divisor ->
+        ar_reached(if(op == :div, do: :div_by_zero, else: :mod_by_zero))
+        if path, do: ar_reached(:block_fault)
+        {false, Map.put(env, destination, 0), [{op, line, path} | faults]}
+
+      {:ok, exact} when exact > @ar_max ->
+        ar_reached(:above)
+        {false, Map.put(env, destination, @ar_max), faults}
+
+      {:ok, exact} when exact < @ar_min ->
+        ar_reached(:below)
+        {false, Map.put(env, destination, @ar_min), faults}
+
+      {:ok, exact} ->
+        {true, Map.put(env, destination, exact), faults}
+    end
+  end
+
+  defp ar_value({:lit, n}, _env), do: n
+  defp ar_value({:tag, tag}, env), do: Map.fetch!(env, tag)
+
+  defp ar_notes(:div, [@ar_min, -1]), do: ar_reached(:min_by_minus_one)
+  defp ar_notes(:neg, [@ar_min]), do: ar_reached(:neg_min)
+  defp ar_notes(:abs, [@ar_min]), do: ar_reached(:abs_min)
+
+  defp ar_notes(:mod, [a, b]) when a < 0 and b != 0 and rem(a, b) != 0,
+    do: ar_reached(:mod_negative)
+
+  defp ar_notes(_op, _values), do: :ok
+
+  # The exact result, on Elixir's integers: IEC's DIV truncates toward zero, restated from
+  # the magnitudes alone, and MOD is IN1 - (IN1/IN2)*IN2 from it (Ed 3 Table 29 notes d, e).
+  defp ar_exact(:add, [a, b]), do: {:ok, a + b}
+  defp ar_exact(:sub, [a, b]), do: {:ok, a - b}
+  defp ar_exact(:mul, [a, b]), do: {:ok, a * b}
+  defp ar_exact(op, [_a, 0]) when op in [:div, :mod], do: :zero_divisor
+  defp ar_exact(:div, [a, b]), do: {:ok, ar_truncated(a, b)}
+  defp ar_exact(:mod, [a, b]), do: {:ok, a - ar_truncated(a, b) * b}
+  defp ar_exact(:neg, [a]), do: {:ok, 0 - a}
+  defp ar_exact(:abs, [a]), do: {:ok, if(a < 0, do: 0 - a, else: a)}
+
+  defp ar_truncated(a, b) do
+    magnitude = Integer.floor_div(abs(a), abs(b))
+    if a < 0 != b < 0, do: -magnitude, else: magnitude
+  end
+
+  # The `cal` on `gb`: the block's inputs copied in, its body over its own map, its outputs
+  # copied out; on a false `gb`, nothing at all (decision 12).
+  defp ar_cal(nil, env, _line), do: {env, []}
+
+  defp ar_cal(block, env, _line) when is_map(block) do
+    if env["gb"] == 1 do
+      c1 = Map.merge(env["c1"], %{"a" => env["x0"], "b" => env["x1"], "go" => env["g"]})
+      {c1, faults} = ar_routine(block.rungs, c1, ar_block_first_line(), "c1")
+      {Map.merge(env, %{"c1" => c1, "yb" => c1["r"], "okb" => c1["ok"]}), faults}
+    else
+      ar_reached(:block_frozen)
+      {env, []}
+    end
+  end
+
+  defp ar_inputs do
+    %{
+      "g" => pick([1, 1, 1, 0]),
+      "gb" => pick([1, 1, 0]),
+      "x0" => pick(@ar_pool),
+      "x1" => pick(@ar_pool),
+      "x2" => pick(@ar_pool),
+      "x3" => pick(@ar_pool)
+    }
+  end
+
+  defp ar_fault({op, line, path}, file),
+    do: %Logex.Fault{kind: :divide_by_zero, instruction: op, path: path, file: file, line: line}
+
+  defp ar_outputs(env), do: Map.take(env, ~w(y0 y1 yb ok0 ok1 ok2 okb))
+
+  # Every value a state holds is a dint's, or a bool's, at any depth.
+  defp ar_dints?(%{} = env), do: Enum.all?(env, fn {_k, v} -> ar_dints?(v) end)
+  defp ar_dints?(v), do: is_integer(v) and v in @ar_min..@ar_max
+
+  # ---- the walks ------------------------------------------------------------------------
+
+  # A lone instance: every scan's outputs, state and faults the oracle's; halfway, an online
+  # edit to another program of the same tags, whose every kept value stays as it was.
+  defp ar_lone(spec, program, scans) do
+    assert %Instance{faults: []} = Runtime.instance(program)
+
+    {spec, program, state, model} =
+      Enum.reduce(1..scans, {spec, program, Runtime.instance(program), ar_initial(spec)}, fn
+        n, {spec, program, state, model} ->
+          {state, model} = ar_maybe_restart(n == div(scans, 3), spec, program, state, model)
+
+          {spec, program, state, model} =
+            ar_maybe_edit(n == div(scans, 2), spec, program, state, model)
+
+          inputs = ar_inputs()
+          {model, faults} = ar_scan(spec, Map.merge(model, inputs))
+
+          {outputs, state} =
+            Runtime.call(program, state, inputs, %Scan{now: state.now + 10, first: state.first})
+
+          assert outputs == ar_outputs(model), ar_source_text(spec)
+          assert state.env == model, ar_source_text(spec)
+          assert state.faults == Enum.map(faults, &ar_fault(&1, nil)), ar_source_text(spec)
+          assert ar_dints?(state.env)
+          {spec, program, state, model}
+      end)
+
+    {spec, program, state, model}
+  end
+
+  # A restart, cold or warm, is no scan: it keeps the last scan's faults, and starts every
+  # tag again but the var_inputs, which keep the host's values.
+  defp ar_maybe_restart(false, _spec, _program, state, model), do: {state, model}
+
+  defp ar_maybe_restart(true, spec, program, state, model) do
+    restarted = Runtime.restart(program, state, pick([:cold, :warm]))
+    model = Map.merge(ar_initial(spec), Map.take(model, ~w(g gb x0 x1 x2 x3)))
+    assert restarted.faults == state.faults
+    assert restarted.env == model
+    ar_reached(:restarted)
+    {restarted, model}
+  end
+
+  defp ar_maybe_edit(false, spec, program, state, model), do: {spec, program, state, model}
+
+  defp ar_maybe_edit(true, spec, program, state, model) do
+    candidate_spec = %{ar_spec() | inits: spec.inits, block: spec.block}
+    candidate = ar_program(candidate_spec)
+    {:ok, edit, _forecast} = Edit.accept(program, candidate, state)
+    {edit, switched, _report} = Edit.test(edit, state)
+    {_program, switched, _report} = Edit.assemble(edit, switched)
+
+    # Arithmetic keeps no state of its own: what it wrote is each tag's, kept by name, and
+    # the last scan's faults stay until the next scan.
+    assert switched.env == state.env
+    assert switched.faults == state.faults
+    ar_reached(:edit_kept)
+    {candidate_spec, candidate, switched, model}
+  end
+
+  # A resource of two instances of the program, one on a task and one with none, their
+  # inputs connected to input points: each cycle's events, `{:ran, ...}` and then each
+  # fault's `{:fault, ...}`, the oracle's, and each instance's state too.
+  defp ar_resource(spec, program, cycles) do
+    inputs = ~w(g gb x0 x1 x2 x3)
+
+    config =
+      Logex.Configuration.new!(
+        name: "plant",
+        programs: [program],
+        tasks: [%Logex.Configuration.Task{name: "fast", interval: 10, priority: 1}],
+        globals:
+          for(
+            {name, i} <- Enum.with_index(inputs),
+            do: %Logex.Configuration.Global{
+              name: name,
+              type: if(name in ~w(g gb), do: :bool, else: :dint),
+              at: "panel.i.#{i}"
+            }
+          ),
+        instances: [
+          %Logex.Configuration.Instance{name: "m1", type: "ar", task: "fast"},
+          %Logex.Configuration.Instance{name: "m2", type: "ar"}
+        ],
+        connections:
+          for(
+            instance <- ~w(m1 m2),
+            input <- inputs,
+            do: %Logex.Configuration.Connection{instance: instance, member: input, to: input}
+          )
+      )
+
+    Enum.reduce(1..cycles, {Runtime.start(config), ar_initial(spec), ar_initial(spec), 0}, fn
+      _, {rt, m1, m2, now} ->
+        sample = ar_inputs()
+        {m1, f1} = ar_scan(spec, Map.merge(m1, sample))
+        {m2, f2} = ar_scan(spec, Map.merge(m2, sample))
+        {rt, _outputs, events} = Runtime.cycle(rt, if(now == 0, do: 0, else: 10), sample)
+        now = if now == 0, do: 10, else: now + 10
+        at = now - 10
+
+        assert events ==
+                 [{:ran, "fast", "m1", at}] ++
+                   Enum.map(f1, &{:fault, "fast", "m1", ar_fault(&1, nil)}) ++
+                   [{:ran, :none, "m2", at}] ++
+                   Enum.map(f2, &{:fault, :none, "m2", ar_fault(&1, nil)})
+
+        if f1 != [], do: ar_reached(:event_fault)
+        %Runtime{instances: %{"m1" => s1, "m2" => s2}} = rt
+        assert {s1.env, s1.faults, s2.env, s2.faults} == {m1, [], m2, []}
+        assert ar_dints?(s1.env) and ar_dints?(s2.env)
+        {rt, m1, m2, now}
+    end)
+  end
 end
