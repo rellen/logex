@@ -2230,8 +2230,8 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   `08a339c`; (8) a shared global's section change, `ac95a73`; (9) the report kinds,
   `2a15d9b`; (10) the contract walk and the growth tests, `e739834`; (11) the Done-when,
   `9c2e732`; (12) the documents, the commit after it, among them README's "A running
-  plant", whose output is a real run. 928 tests pass on Elixir 1.20.4 (8 of them
-  doctests), up from 864: 923 at the landing, and five more with the review's fixes below. The messages of (3) to (9) record their mutation tables, every
+  plant", whose output is a real run. 930 tests pass on Elixir 1.20.4 (8 of them
+  doctests), up from 864: 923 at the landing, and seven more with the review's fixes below. The messages of (3) to (9) record their mutation tables, every
   rule each adds reverted alone and the full suite judged by its exit code: 107 rules, 8,
   6, 43, 28, 8, 7 and 7, every one red, (6)'s row 6.11 once a test was added for it, the
   one survivor; and two rules found dead, an element with no line sorted last in (5) and
@@ -2271,7 +2271,8 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   with the fix); the contract walk now accepts while an edit is open, superseding it,
   against a fresh start of the candidate. It also found rules no test pinned, each now
   pinned: a timer inside a block an instance holds, resumed by its path when the
-  instance comes back from aside.
+  instance comes back from aside; no resume of an instance back at the time it was set
+  aside; and accept's refusals in line order from a text that puts globals before tasks.
 
   *From Milestone 2's design (2026-10-02; `docs/organisation.md` §4.9, "One rule for new
   state", and §4.10).* M2-5 brings the edit of a function block's members, by path

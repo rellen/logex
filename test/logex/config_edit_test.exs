@@ -275,6 +275,37 @@ defmodule Logex.ConfigEditTest do
              ]
     end
 
+    test "in line order however the candidate's text orders its elements, globals before " <>
+           "tasks among them" do
+      tasks =
+        "task fast interval 10 priority 1\ntask slow interval 50 priority 2\n" <>
+          "task trip single estop priority 0\n"
+
+      text =
+        plant_text()
+        |> String.replace(tasks <> "\n", "")
+        |> String.replace(
+          "var_global sp_2       dint at drive.q.1",
+          "var_global sp_2       dint at drive.q.2"
+        )
+        |> String.replace(
+          "\nprogram m1 motor",
+          "\n" <> tasks <> "task extra interval 5 priority 3\n\nprogram m1 motor",
+          global: false
+        )
+
+      assert line(text, "var_global sp_2") < line(text, "task extra")
+      assert {:error, diagnostics} = Edit.accept(running(10), plant(text))
+
+      assert Enum.map(diagnostics, &{&1.line, &1.message}) == [
+               {line(text, "var_global sp_2"),
+                "`sp_2` is at `drive.q.1` in the running configuration and at `drive.q.2` " <>
+                  "in the candidate: located I/O changes only with a restart"},
+               {line(text, "task extra"),
+                "task `extra` is added: a task is added only with a restart"}
+             ]
+    end
+
     test "a task's single changed, a task removed, and an instance moved to no task, from " <>
            "source" do
       text =
@@ -922,6 +953,19 @@ defmodule Logex.ConfigEditTest do
       assert {:resumed, "p.s1.t", 500} in report
       {runtime, outputs} = cycles(runtime, 1)
       assert {acc.(runtime), outputs["q"]} == {300, 0}
+    end
+
+    test "one brought back at the time it was set aside resumes nothing" do
+      # `m1`, on `fast`, last scanned at 60 ms, set aside and brought back at 60 ms.
+      runtime = running(60)
+      text = String.replace(plant_text(), ~r/program m1 motor with fast\n(  m1\..*\n)+/, "")
+      {edit, _} = accepted(runtime, plant(text))
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      assert runtime.aside["m1"].env["t1"]["en"] == 1
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:instance_back, "m1", "motor"} in report
+      refute Enum.any?(report, &match?({:resumed, "m1." <> _, _}, &1))
+      assert runtime.instances["m1"].env == running(60).instances["m1"].env
     end
 
     test "a timer that was not timing is left as it was set aside" do
