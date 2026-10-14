@@ -2607,7 +2607,10 @@ names it breaks. Growth tests are in reductions.
   `docs/organisation.md` §4.9's "The data path" still read as before negative literals, a
   literal of 0 or more, a negative initial value refused from Elixir and an `ArgumentError`
   test of a negative preset that M3-3 removed; each is annotated as landed with M3-3, as
-  are M2-1's landing note and decision 28. The suite is at 1115 tests (8 doctests).
+  are M2-1's landing note and decision 28. The golden record's header named the commit
+  under (2) before the series was rebased, `c48bba5`, which is not in its history; it now
+  names `68e638b`, and the record regenerated on top of `68e638b` with (2) is byte for
+  byte the one committed. The suite is at 1115 tests (8 doctests).
 - **M3-4 · The coil one-shots: `osr`, `osf`.** IEC's transition-sensing coils in the
   conventional form, a storage bit and a pulse bit (decision 80), which pass on the power
   they receive; each storage bit under every rule an `ons` bit has, on decision 21's block
