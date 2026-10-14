@@ -76,7 +76,8 @@ defmodule Logex.Configuration do
   through one a global a connection drives (decision 48), each in the words true of it:
   each scan reads what the other last wrote and the later write in a cycle stands; an
   instance's own connection's copy-out, after the scan, stands (decision 47); or, for a
-  global an `ons` keeps its storage bit in, the one-shot fires on the wrong scans. Since
+  global an `ons`, or since M3-4 an `osr` or an `osf`, keeps its storage bit in, the
+  one-shot fires on the wrong scans, its instruction named. Since
   M2-6, each timer a program instance runs that an event task runs, a task with a single
   alone or with an interval too, a timer inside a block its `cal`s run included, by its
   path: a ton times across the task's runs (`docs/organisation.md` §4.6, "Caveats"), at the
@@ -2186,9 +2187,10 @@ defmodule Logex.Configuration do
   # them to), naming the line of the type's declaration, and of its first write, in the
   # type's own file (§4.10, M2-2's "Citing a program type"). A type given but run by no
   # instance is not checked. What each instance
-  # writes through a var_external comes from Logex.Walk.writes/1, read once a type, and an
-  # `ons` storage bit from Logex.Walk.uses/2: the writers the warnings name, every instance
-  # of a type among them.
+  # writes through a var_external comes from Logex.Walk.writes/1, read once a type, and a
+  # one-shot's storage bit, an `ons`'s or since M3-4 an `osr`'s or an `osf`'s, from
+  # Logex.Walk.storage_bits/1, with its instruction: the writers the warnings name, every
+  # instance of a type among them.
   defp externals(instances, world) do
     found =
       instances
@@ -2210,7 +2212,7 @@ defmodule Logex.Configuration do
     writers =
       for %Tag{name: name} <- facts.externals,
           is_map_key(facts.writes, name),
-          do: {name, instance, MapSet.member?(facts.bits, name)}
+          do: {name, instance, Map.get(facts.bits, name)}
 
     %{
       found
@@ -2229,11 +2231,7 @@ defmodule Logex.Configuration do
        externals: for(%Tag{section: :var_external} = tag <- declared(program), do: tag),
        writes: Walk.writes(program),
        bits:
-         MapSet.new(
-           for {:write, name, _line, :ons} <-
-                 Walk.uses(program.rungs, Program.typed_tags(program)),
-               do: name
-         )
+         Map.new(Walk.storage_bits(program.rungs), fn {bit, _line, symbol} -> {bit, symbol} end)
      }, true}
   end
 
@@ -2338,19 +2336,27 @@ defmodule Logex.Configuration do
   # words of Logex.Warnings' storage-bit warning, whoever the other writer is, since the
   # bit is then written between that one-shot's scans: of two such instances, the one that
   # runs second never fires on the edge the first saw.
+  #
+  # M3-4: the bit's one-shot named, `ons`, `osr` or `osf`, that of the first writer in line
+  # order whose storage bit it is.
   defp writers(writers, driven) do
-    bits = for {global, _instance, true} <- writers, into: MapSet.new(), do: global
+    bits =
+      Enum.reduce(writers, %{}, fn
+        {global, _instance, symbol}, bits when symbol != nil -> Map.put_new(bits, global, symbol)
+        _writer, bits -> bits
+      end)
+
     by_global = Enum.group_by(writers, &elem(&1, 0), &elem(&1, 1))
 
     twice =
       for {global, [first | later]} <- by_global,
           instance <- later,
-          do: twice(global, instance, first, MapSet.member?(bits, global))
+          do: twice(global, instance, first, Map.get(bits, global))
 
     connected =
       for {global, instance, _bit} <- writers,
           {:ok, connection} <- [Map.fetch(driven, global)],
-          do: connected(global, instance, connection, MapSet.member?(bits, global))
+          do: connected(global, instance, connection, Map.get(bits, global))
 
     twice ++ connected
   end
@@ -2375,14 +2381,17 @@ defmodule Logex.Configuration do
   defp own(true), do: "its own "
   defp own(false), do: ""
 
-  defp driven_stands(false, true, _global), do: "its own copy-out, after the scan, stands"
+  defp driven_stands(nil, true, _global), do: "its own copy-out, after the scan, stands"
   defp driven_stands(bit, _own, global), do: stands(bit, global)
 
-  defp stands(false, _global),
+  defp stands(nil, _global),
     do: "each scan reads what the other last wrote, and the later write in a cycle stands"
 
-  defp stands(true, global),
-    do: "`#{global}` is the storage bit of an `ons`: the one-shot then fires on the wrong scans"
+  # `ons`, `osr` and `osf` are each said letter by letter, "an".
+  defp stands(one_shot, global),
+    do:
+      "`#{global}` is the storage bit of an `#{one_shot}`: the one-shot then fires on the " <>
+        "wrong scans"
 
   # M2-6 (§4.6's caveat; §4.10, M2-6): each timer an instance an event task runs runs,
   # at any depth, a block's by its path, at the instance's line. A ton counts the time

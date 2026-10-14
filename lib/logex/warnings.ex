@@ -7,7 +7,9 @@ defmodule Logex.Warnings do
   - a `var_output` a rung reads but none writes: it stays at its initial value;
   - a second `ote` on one tag: only the last one in the scan decides it;
   - an `ons` storage bit that another instruction writes (M1-6): the one-shot then fires
-    on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`);
+    on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`). Since M3-4 so
+    is an `osr`'s or an `osf`'s storage bit, and a coil's pulse bit is written as an
+    `ote` writes its tag, so a second coil on it is the second-`ote` warning;
   - a comparison of two literals (M1-6): its result never changes; since M3-3 so is an
     arithmetic instruction whose every source is a literal, `add 2 3 x` or `neg 5 x`;
   - a timer no `ton` runs (M1-6): it never times; since M3-1 any built-in instance no
@@ -32,15 +34,17 @@ defmodule Logex.Warnings do
       Enum.group_by(uses, fn {_, name, _, _} -> name end, fn {access, _, _, _} -> access end)
 
     # M1-6: each `ons` storage bit, to the line of the one `ons` that writes it. The
-    # compiler refuses a second `ons` on one bit, so a program that compiles has one.
-    owners = Map.new(for {:write, name, line, :ons} <- uses, do: {name, line})
+    # compiler refuses a second `ons` on one bit, so a program that compiles has one. M3-4:
+    # each one-shot's, an `ons`, an `osr` or an `osf`, to its line and symbol.
+    owners =
+      Map.new(Walk.storage_bits(rungs), fn {bit, line, symbol} -> {bit, {line, symbol}} end)
 
     tags
     |> Map.values()
     |> Enum.filter(& &1.line)
     |> Enum.flat_map(&about(&1, Map.get(accesses, &1.name, [])))
     |> Kernel.++(second_otes(instructions, tags, owners))
-    |> Kernel.++(storage_writes(uses, tags, owners))
+    |> Kernel.++(storage_writes(instructions, tags, owners))
     |> Kernel.++(Enum.flat_map(instructions, &constant/1))
     |> Enum.sort_by(& &1.line)
   end
@@ -114,48 +118,67 @@ defmodule Logex.Warnings do
   # M3-1: an `ote` names its target whole, a member by its path, `stock.r`, since a ctud's
   # `r` and `ld` are two bits logic writes; `Logex.Walk.uses/2` gives a member as its
   # instance.
+  #
+  # M3-4 (decision 101): a pulse coil writes its pulse bit on every run, as an `ote` writes
+  # its tag, so `ote`, `osr` and `osf` are one set of coils here, each later one citing the
+  # first in that one's words.
   defp second_otes(instructions, tags, owners) do
     {warnings, _firsts} =
       instructions
-      |> Enum.flat_map(&ote_target/1)
-      |> Enum.filter(fn {name, instance, _line} ->
+      |> Enum.flat_map(&coil_target/1)
+      |> Enum.filter(fn {name, instance, _line, _symbol} ->
         from_source?(tags, instance) and not Map.has_key?(owners, name)
       end)
-      |> Enum.flat_map_reduce(%{}, fn {name, _instance, line}, firsts ->
-        later_ote(Map.fetch(firsts, name), name, line, firsts)
+      |> Enum.flat_map_reduce(%{}, fn {name, _instance, line, symbol}, firsts ->
+        later_ote(Map.fetch(firsts, name), name, {line, symbol}, firsts)
       end)
 
     warnings
   end
 
-  defp ote_target({:ote, line, [{:name, _, name}]}), do: [{name, name, line}]
+  defp coil_target({:ote, line, [target]}), do: target(target, line, :ote)
 
-  defp ote_target({:ote, line, [{:member, _, [instance | _] = path}]}),
-    do: [{Enum.join(path, "."), instance, line}]
+  defp coil_target({symbol, line, [_storage, pulse]}) when symbol in [:osr, :osf],
+    do: target(pulse, line, symbol)
 
-  defp ote_target(_instruction), do: []
+  defp coil_target(_instruction), do: []
 
-  defp later_ote(:error, name, line, firsts), do: {[], Map.put(firsts, name, line)}
-  defp later_ote({:ok, first}, name, line, firsts), do: {[second_ote(name, first, line)], firsts}
+  defp target({:name, _, name}, line, symbol), do: [{name, name, line, symbol}]
+
+  defp target({:member, _, [instance | _] = path}, line, symbol),
+    do: [{Enum.join(path, "."), instance, line, symbol}]
+
+  defp target(_literal, _line, _symbol), do: []
+
+  defp later_ote(:error, name, first, firsts), do: {[], Map.put(firsts, name, first)}
+
+  defp later_ote({:ok, first}, name, {line, _symbol}, firsts),
+    do: {[second_ote(name, first, line)], firsts}
 
   # M1-6: every other write to an `ons` storage bit declared in source, before or after
   # the `ons` in the scan, is warned about at its own line, citing the `ons`. The uses are
   # walked in rung order, not grouped into a map, whose order stops being sorted past 32
-  # keys.
-  defp storage_writes(uses, tags, owners) do
-    for {:write, name, line, symbol} <- uses,
-        symbol != :ons,
+  # keys. M3-4: so for every one-shot's storage bit (decision 80), every write but the
+  # one-shot's own, its first operand, a coil's pulse bit among them.
+  defp storage_writes(instructions, tags, owners) do
+    for instruction <- instructions,
+        {:write, name, line, symbol} <- others(instruction, Walk.uses_of(instruction, tags)),
         {:ok, first} <- [Map.fetch(owners, name)],
         from_source?(tags, name),
         do: storage_write(symbol, name, first, line)
   end
 
-  defp storage_write(symbol, name, first, line),
+  @one_shots Walk.one_shots()
+
+  defp others({symbol, _line, _operands}, [_storage | uses]) when symbol in @one_shots, do: uses
+  defp others(_instruction, uses), do: uses
+
+  defp storage_write(symbol, name, {first, owner}, line),
     do:
       warning(
         line,
-        "`#{symbol}` writes `#{name}`, the storage bit of the `ons` #{where(first, line)}: " <>
-          "the one-shot then fires on the wrong scans"
+        "`#{symbol}` writes `#{name}`, the storage bit of the `#{owner}` " <>
+          "#{where(first, line)}: the one-shot then fires on the wrong scans"
       )
 
   defp where(line, line), do: "in this rung"
@@ -195,11 +218,15 @@ defmodule Logex.Warnings do
   defp from_source?(tags, name),
     do: match?(%Tag{line: line} when line != nil, Map.get(tags, name))
 
-  defp second_ote(name, line, line),
-    do: warning(line, "`#{name}` already has an `ote` in this rung: #{last()}")
+  defp second_ote(name, {first, :ote}, line),
+    do: warning(line, "`#{name}` already has an `ote` #{where(first, line)}: #{last()}")
 
-  defp second_ote(name, first, line),
-    do: warning(line, "`#{name}` already has an `ote` on line #{first}: #{last()}")
+  defp second_ote(name, {first, coil}, line),
+    do:
+      warning(
+        line,
+        "`#{name}` is already the pulse bit of the `#{coil}` #{where(first, line)}: #{last()}"
+      )
 
   defp last, do: "the last one in the scan decides it"
 

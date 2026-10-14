@@ -5103,6 +5103,112 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  # M3-4: the pulse coils in a configuration. A coil's pulse bit and storage bit are writes
+  # (Logex.Walk.writes/1, by their slots), so through a var_external each meets every
+  # writer rule of M2-4's, and a global a coil keeps its storage bit in is told so in the
+  # coil's words. A coil under an event task is no warning, as an `ons` is none (decision
+  # 103).
+  describe "pulse coils in a configuration (M3-4)" do
+    @coiled """
+    var_input go bool
+    var_output up bool
+    var_output down bool
+    var_output y bool
+    var_output late bool
+    var s1 bool
+    var s2 bool
+    var s3 bool
+    var t9 ton
+    xic go osr s1 up
+    xic go osf s2 down
+    xic go ons s3 ote y
+    xic go ton t9 50
+    xic t9.dn ote late
+    """
+
+    test "a coil under an event task is no warning, as an `ons` is none, where a timer " <>
+           "beside it is (decision 103)" do
+      {:ok, coiled} = Logex.compile(@coiled, name: "coiled")
+
+      source = """
+      task trip single go priority 0
+      var_global go bool at panel.i.0
+      program a coiled with trip
+      a.go go
+      """
+
+      assert warned(source, %{"coiled" => coiled}) == [
+               "line 3: warning: `a` runs under the event task `trip`, and `coiled` runs the " <>
+                 "timer `t9` on its line 13: a ton times across the task's runs, and one whose " <>
+                 "rung is true on two runs in a row counts the whole time between them"
+             ]
+    end
+
+    test "a write through a var_external to an input point, by a coil's pulse bit or its " <>
+           "storage bit, is refused, citing the first write" do
+      {:ok, edger} =
+        Logex.compile(
+          "var_input go bool\nvar_external pressed bool\nvar_external held bool\n" <>
+            "var_output y bool\nvar s bool\nxic go osr s pressed\nxic go osf held y",
+          name: "edger"
+        )
+
+      config = %Configuration{
+        name: "plant",
+        programs: %{"edger" => edger},
+        globals: [
+          %Global{name: "pressed", type: :bool, at: "panel.i.0"},
+          %Global{name: "held", type: :bool, at: "panel.i.1"}
+        ],
+        instances: [%Instance{name: "e", type: "edger"}],
+        connections: [%Connection{instance: "e", member: "go", to: 0}]
+      }
+
+      assert formatted(config) == [
+               "`edger` writes its var_external `pressed` on its line 6, but `pressed` is an " <>
+                 "input point: nothing writes an input point",
+               "`edger` writes its var_external `held` on its line 7, but `held` is an input " <>
+                 "point: nothing writes an input point"
+             ]
+    end
+
+    test "two writers of one global are warned about, a coil's storage bit in the coil's " <>
+           "words, and its pulse bit as any write" do
+      {:ok, rising} =
+        Logex.compile(
+          "var_input go bool\nvar_output y bool\nvar_external edge bool\n" <>
+            "var_external step bool\nxic go osr edge step ote y",
+          name: "rising"
+        )
+
+      {:ok, falling} =
+        Logex.compile(
+          "var_input go bool\nvar_external edge bool\nvar_external step bool\n" <>
+            "xic go osf edge step",
+          name: "falling"
+        )
+
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [rising, falling],
+          globals: [%Global{name: "edge", type: :bool}, %Global{name: "step", type: :bool}],
+          instances: [
+            %Instance{name: "r", type: "rising"},
+            %Instance{name: "f", type: "falling"}
+          ],
+          connections: gone(["r", "f"])
+        )
+
+      assert Enum.map(config.warnings, &Diagnostic.format/1) == [
+               "warning: `f` writes `edge` through its var_external, as `r` does: `edge` is " <>
+                 "the storage bit of an `osr`: the one-shot then fires on the wrong scans",
+               "warning: `f` writes `step` through its var_external, as `r` does: each scan " <>
+                 "reads what the other last wrote, and the later write in a cycle stands"
+             ]
+    end
+  end
+
   describe "growth" do
     # A configuration of n instances, each with a task, three globals and three
     # connections, two of them refused, so every check has work to do: the namespace, the

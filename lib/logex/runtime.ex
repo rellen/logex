@@ -184,7 +184,8 @@ defmodule Logex.Runtime do
   `docs/organisation.md` §4.9): accept, test, untest, assemble or cancel, each between two
   scans, its state moved by name. An instance carries two fields for it
   (`Logex.Instance`): `ons_blocked`, the storage bits whose `ons` its next scan blocks,
-  and since M3-1 the counters' edge memories whose `ctu` or `ctd` it blocks,
+  and since M3-1 the counters' edge memories whose `ctu` or `ctd` it blocks, and since M3-4
+  the storage bits whose `osr` or `osf` it blocks,
   which an edit's switch sets and only the runtime fills into a scan (`Logex.Scan`), and a
   scan empties but for a bit inside an instance whose body it did not run (M2-5); and
   `switched`, which an edit's switch sets and a scan clears. Since M3-3 a third,
@@ -1460,6 +1461,33 @@ defmodule Logex.Runtime do
     {false, write(env, storage, 0)}
   end
 
+  # M3-4: the pulse coils (docs/naming.md, `osr` and `osf`; decisions 80, 100 to 102), IEC's
+  # transition-sensing coils in the conventional set's form: the storage bit holds the power
+  # the coil received at its last run, read as a contact reads a bit, as an `ons`'s does,
+  # and the pulse bit is set for the one run on which that power rises, for `osr`, or falls,
+  # for `osf`, and cleared at every other, IEC's variable "ON from one evaluation of this
+  # element to the next". Never on an instance's first scan, nor where an online edit's
+  # block list holds the storage bit, as for `ons` (decisions 21 and 69). Each run writes
+  # the pulse bit, then the storage bit, and passes on the power it received, IEC's "always
+  # copied to the right link". `osf`'s edge is seen by its de-energised run.
+  defp evaluate({:osr, _, [storage, pulse]}, {true, env}, %Scan{} = scan) do
+    rose = edge?(storage, scan) and not closed?(read(env, storage))
+    {true, env |> write(pulse, one(rose)) |> write(storage, 1)}
+  end
+
+  defp evaluate({:osr, _, [storage, pulse]}, {false, env}, _scan) do
+    {false, env |> write(pulse, 0) |> write(storage, 0)}
+  end
+
+  defp evaluate({:osf, _, [storage, pulse]}, {true, env}, _scan) do
+    {true, env |> write(pulse, 0) |> write(storage, 1)}
+  end
+
+  defp evaluate({:osf, _, [storage, pulse]}, {false, env}, %Scan{} = scan) do
+    fell = edge?(storage, scan) and closed?(read(env, storage))
+    {false, env |> write(pulse, one(fell)) |> write(storage, 0)}
+  end
+
   # The six comparisons (docs/naming.md, `eq` to `ge`) are input instructions, as a contact
   # is: energised, power is the comparison of the first operand with the second, `lt a b`
   # reading a < b; de-energised, no power. Neither writes anything.
@@ -1640,14 +1668,19 @@ defmodule Logex.Runtime do
   end
 
   # The block list names storage bits, and a storage bit is a declared bool of the routine
-  # running, always a `{:name, _, bit}`: the compiler refuses an `ons` on a member, a
-  # counter's `r` or `ld`, the only bool members logic may write (M3-1). An `ons` on a
-  # member, which only a program built by hand can hold, is never blocked. A counter's edge
-  # memory is blocked by its own instruction (counted/4). A
-  # bit inside an instance is in the tree under the instance's name, which a `cal` hands its
-  # body (M2-5); a storage bit is never named as an instance of its routine is.
+  # running, always a `{:name, _, bit}`: the compiler refuses an `ons`, an `osr` or an `osf`
+  # on a member, a counter's `r` or `ld`, the only bool members logic may write (M3-1,
+  # M3-4). One on a member, which only a program built by hand can hold, is never blocked.
+  # A counter's edge memory is blocked by its own instruction (counted/4). A bit inside an
+  # instance is in the tree under the instance's name, which a `cal` hands its body (M2-5);
+  # a storage bit is never named as an instance of its routine is.
   defp blocked?({:name, _, bit}, blocked), do: is_map_key(blocked, bit)
   defp blocked?({:member, _, _path}, _blocked), do: false
+
+  # M3-4: whether a pulse coil may see an edge on this scan: not on a first scan, nor where
+  # its storage bit is blocked, as an `ons` passes no power then.
+  defp edge?(storage, %Scan{first: first, ons_blocked: blocked}),
+    do: not first and not blocked?(storage, blocked)
 
   # The type of an instance a `cal` runs: the one its tag names, or a tag's own in a program
   # built by hand. A name the program's blocks lack, which only a program built by hand can

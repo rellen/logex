@@ -9,7 +9,10 @@ defmodule Logex.Walk do
   `Logex.Compiler.signature/2`, the one lookup (M2-5).
 
   - `instructions/1`: every instruction of a routine's rungs, in rung order;
-  - `uses/2`: every tag operand, with what its slot does to it;
+  - `uses/2`: every tag operand, with what its slot does to it, and `uses_of/2` one
+    instruction's;
+  - `storage_bits/1`: each one-shot's storage bit, an `ons`'s, an `osr`'s or an `osf`'s
+    (M3-4), and `one_shots/0`, the instructions that keep one;
   - `writes/1`: which tags a program writes, and where;
   - `member_writes/1`: which members of its instances it writes, and where (decision 96);
   - `presets/1`: which built-in instances a program runs, and at what preset (M3-1);
@@ -26,6 +29,8 @@ defmodule Logex.Walk do
   """
 
   alias Logex.{Compiler, FbType, Program, Tag}
+
+  @one_shots [:ons, :osr, :osf]
 
   @doc """
   Every instruction of `rungs`, in order: each rung's left to right, the legs of a group,
@@ -51,9 +56,13 @@ defmodule Logex.Walk do
   of the routine that holds the rungs, each instance's type itself
   (`Logex.Program.typed_tags/1`), from which a `cal`'s slots are its block's.
   """
-  def uses(rungs, tags), do: Enum.flat_map(instructions(rungs), &used(&1, tags))
+  def uses(rungs, tags), do: Enum.flat_map(instructions(rungs), &uses_of(&1, tags))
 
-  defp used({symbol, line, operands} = instruction, tags),
+  @doc """
+  The uses of one instruction, as `uses/2` gives them, in its operands' order: a
+  one-shot's first is its storage bit's write (`one_shots/0`).
+  """
+  def uses_of({symbol, line, operands} = instruction, tags),
     do:
       for(
         {{access, _type}, operand} <- Enum.zip(Compiler.signature(instruction, tags), operands),
@@ -66,10 +75,33 @@ defmodule Logex.Walk do
   defp tag_of({:int_lit, _, _}), do: nil
 
   @doc """
+  The instructions that keep an edge in a storage bit, a bool of the routine they stand in,
+  each naming it as its first operand: `ons`, the one-shot on the rung condition (M1-6),
+  and the pulse coils `osr` and `osf` (M3-4), whose second operand is the pulse bit. A
+  storage bit is under one rule whichever of the three keeps it: one one-shot to a bit
+  (`Logex.Compiler`), any other write a warning (`Logex.Warnings`), and on an online
+  edit's block list by name (`Logex.Edit`, decisions 21 and 80).
+  """
+  def one_shots, do: @one_shots
+
+  @doc """
+  Each one-shot of `rungs` whose storage bit is a tag, in rung order, as `{bit, line,
+  symbol}`: the bit it names, and its instruction's line and symbol (`one_shots/0`). A
+  one-shot on a member, which the compiler refuses, is none.
+  """
+  def storage_bits(rungs),
+    do:
+      for(
+        {symbol, line, [{:name, _, bit} | _]} <- instructions(rungs),
+        symbol in @one_shots,
+        do: {bit, line, symbol}
+      )
+
+  @doc """
   Which tags `program` writes: each to the lines of its writes, in rung order, one line a
   write, so a tag written twice on one line has that line twice. A tag is written by an
-  operand in a `:write` slot, an `ons` storage bit and a tag a `cal`'s var_output fills
-  among them, a member written counting as its instance's (`uses/2`), and by an
+  operand in a `:write` slot, a one-shot's storage bit, a pulse coil's pulse bit and a tag
+  a `cal`'s var_output fills among them, a member written counting as its instance's (`uses/2`), and by an
   `:instance` slot, whose instruction runs it: `ton t1` writes `t1`, `cal s1` writes `s1`.
 
   It reaches into each block a `cal` runs, at any depth: what the block's body writes is
@@ -173,7 +205,7 @@ defmodule Logex.Walk do
 
   defp written(instructions, tags) do
     instructions
-    |> Enum.flat_map(&used(&1, tags))
+    |> Enum.flat_map(&uses_of(&1, tags))
     |> Enum.reduce(%{}, fn
       {access, name, line, _symbol}, writes when access in [:write, :instance] ->
         Map.update(writes, name, [line], &[line | &1])

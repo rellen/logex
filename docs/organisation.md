@@ -2650,8 +2650,9 @@ what M3-1 built. Decisions 93–95 are M3-2's own routine choices, taken as it l
 was taken the same day, after M3-2's review, from a question the maintainer was asked
 then. Decisions 97–99 are M3-3's own routine choices, taken as it landed on 2026-10-14,
 99 the shape of the report decision 78 left to M3-3, and 98's reading of a `mod` by zero
-confirmed by the maintainer the same day, after M3-3's review. All ninety-nine are kept
-with their options so the reasons stay with them.
+confirmed by the maintainer the same day, after M3-3's review. Decisions 100–103 are
+M3-4's own routine choices, taken as it landed the same day. All one hundred and three are
+kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3428,7 +3429,7 @@ questions asked after M3-1's review, the same day.
     an instance's first scan** since it started or restarted, `ons`, `ctu` and `ctd` now,
     `tp` (decision 75), `osr` and `osf` when they land. It is the conventional prescan's
     for a counter, which sets `.CU` true *"to prevent invalid increments during the first
-    program scan"* (general instructions ref., CTU, p.99). *(Landed with M3-1 for the counters, 2026-10-14.)* *(Landed with M3-2 for `tp`, 2026-10-14.)*
+    program scan"* (general instructions ref., CTU, p.99). *(Landed with M3-1 for the counters, 2026-10-14.)* *(Landed with M3-2 for `tp`, 2026-10-14.)* *(Landed with M3-4 for `osr` and `osf`, 2026-10-14: neither sets its pulse bit on a first scan, whatever its storage bit holds.)*
 70. **A reset or load while the count input is high (M3-1).** The operator presses
     "reset batch" while a box is still on the photo-eye.
     - The box is not counted again: after the reset the count shows 0, and the next box to
@@ -3548,7 +3549,10 @@ questions asked after M3-1's review, the same day.
     - or leave them out, since `ons` on a line of its own does the job.
 
     *Recommend adding both.* Adopted: `osr` and `osf`, each storage bit under every rule
-    an `ons` bit has.
+    an `ons` bit has. *(Landed with M3-4, 2026-10-14: each passes on the power it receives,
+    decision 100; its pulse bit may be a member logic may write, decision 101; `osf` pulses
+    on its false rung's run, and a frozen block holds both bits, decision 102; and neither
+    is warned about under an event task, as `ons` is not, decision 103.)*
 81. **Skipping ahead (M3-5).** Jump over a group of lines while the line is in manual mode.
     - Yes, forward only: the skipped lines do not run that scan, and their outputs stay as
       they were; a backward jump, which could loop for ever, is refused;
@@ -3926,6 +3930,78 @@ the record keeps; 99 is the shape of the report decision 78 asked for and left t
     controller is set to, and logex has no such setting. The conventional DIV and MOD
     raise a minor fault, type 4 code 4, for a zero divisor, and the controller runs on;
     logex's event is that, located. *(Landed 2026-10-14.)*
+
+**M3-4's own choices, 2026-10-14.** Decisions 100–103 are M3-4's routine choices for the
+pulse coils decision 80 adopted, each with the alternative the record keeps; where the
+record answers one, 103, it says which decisions do.
+
+100. **What a pulse coil passes on, and what may follow it on its line (M3-4),**
+     following decisions 73 and 98. A start button steps a sequence once a press, and the
+     same line lights a lamp while it is held: `xic start_pb osr s1 step ote held_lamp`.
+     - The power it receives, as `ote` passes it: IEC's coil, *"The state of the left link
+       is always copied to the right link"* (Ed 2 Table 62 features 8 and 9, p.142; Ed 3
+       Table 76, pp.218–219), and the conventional OSR and OSF, *"Set Rung-condition-out
+       to Rung-condition-in"* (general instructions ref., pp.74–81). It is settled, so
+       anything may follow on its path, the lamp here, which sees the button, not the
+       pulse;
+     - the pulse, as `ons` passes it, so the rest of the line sees one scan only;
+     - or nothing after it, as after a counter or a timer (decision 73).
+
+     *Recommend the first.* Adopted. Decision 73 refuses what follows an instruction
+     whose power out is not settled; IEC and the conventional set agree on this one, which
+     is what parts a coil from `ons`: the one-shot gates the line, and the coil lets it
+     run on. A program that wants the pulse on the same line reads the pulse bit after
+     it, `xic start_pb osr s1 step xic step …`. *(Landed 2026-10-14.)*
+101. **A pulse coil's two bits (M3-4).** The coil keeps the power it last received in a
+     storage bit and sets a pulse bit: `osr s1 step`.
+     - The storage bit first, then the pulse bit, the conventional order, each a bool the
+       coil writes, so neither a var_input; the storage bit a tag of the routine, under
+       every rule an `ons` bit has (decision 80), so never a member, since the block list
+       names it as a tag (decision 21); the pulse bit a tag or a member logic may write,
+       `osr s1 boxes.r` a one-scan reset, and never the storage bit, which would hold
+       only the power and never pulse; and, since each run writes the pulse bit as `ote`
+       writes its tag, a second coil on it, an `ote` among them, the second-`ote`
+       warning, the later one told the first in its words;
+     - or the pulse bit a tag only, as the storage bit is, and a second coil on it
+       refused.
+
+     *Recommend the first.* Adopted. A one-scan pulse into a counter's reset or load is
+     the coil's commonest job after stepping a sequence, and a member logic may write is
+     written by `ote` already; nothing an edit keeps names a pulse bit. Two coils on one
+     pulse bit compile, as two `ote`s on one tag do, since only the last in the scan
+     decides it and a warning says so. A second one-shot on a storage bit, an `ons`, an
+     `osr` or an `osf`, is an error in the words of the two, and a storage bit and pulse
+     bit that are one tag an error at the coil's line. *(Landed 2026-10-14.)*
+102. **When `osf` sees its edge, and a coil in a frozen block (M3-4).** A "box left the
+     eye" pulse, `xic eye osf s2 gone`, and the same coil inside a block whose `cal` is
+     false while the box leaves.
+     - `osf` sees the fall on its run with its rung false, as IEC's element is evaluated
+       with its left link OFF as with it ON: the pulse bit is set where the storage bit
+       holds 1, then the storage bit cleared; a true rung clears the pulse bit and sets
+       the storage bit. A coil in a block whose `cal` is false does not run, so both its
+       bits are held, as everything in a frozen block is (decisions 8 and 89): a pulse set
+       at the body's last run stays on until it next runs, and an edge that comes and
+       goes while it is frozen is never seen;
+     - or a frozen block's pulse bits cleared, so no pulse outlives a scan.
+
+     *Recommend the first.* Adopted: one rule for everything in a block, which a block's
+     own `ote` already meets, its tag held by a false `cal`; a program that must not see a
+     held pulse reads the block's enable beside it. *(Landed 2026-10-14.)*
+103. **A pulse coil under an event task (M3-4).** The e-stop's own event task pulses a
+     "pressed" bit, `xic estop osr s1 pressed`; the task runs only when the e-stop
+     switches on, so the coil sees "pressed" at every run and never pulses after the
+     first, which is the instance's first scan.
+     - No warning, as for an `ons`: decision 72 warns of a counter under an event task and
+       leaves a one-shot unwarned, and decision 80 puts a coil's storage bit under every
+       rule an `ons` bit has;
+     - or a warning, in the coil's words, as for a counter (decision 72) and every timer,
+       a `tp` among them (M3-2), which would then leave `ons` the one edge-driven
+       instruction unwarned.
+
+     *Taken: no warning,* as decisions 72 and 80 read together, and the reversible way: a
+     warning stops nothing, and adding one later breaks no program. Whether one-shots,
+     `ons` with them, should be warned about as counters are is the maintainer's to
+     decide. *(Landed 2026-10-14.)*
 
 ---
 

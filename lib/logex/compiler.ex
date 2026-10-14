@@ -45,6 +45,12 @@ defmodule Logex.Compiler do
     "otu" => {:otu, [{:write, :bool}]},
     "move" => {:move, [{:value, :any}, {:write, :any}]},
     "ons" => {:ons, [{:write, :bool}]},
+    # M3-4: IEC's transition-sensing coils in the conventional set's form (decision 80):
+    # the storage bit, which an `ons` would keep, then the pulse bit, two bools each run
+    # writes, `osr` pulsing on the rising edge of the power it receives and `osf` on the
+    # falling, and passing that power on (decision 100).
+    "osr" => {:osr, [{:write, :bool}, {:write, :bool}]},
+    "osf" => {:osf, [{:write, :bool}, {:write, :bool}]},
     "eq" => {:eq, [{:value, :dint}, {:value, :dint}]},
     "ne" => {:ne, [{:value, :dint}, {:value, :dint}]},
     "lt" => {:lt, [{:value, :dint}, {:value, :dint}]},
@@ -655,55 +661,91 @@ defmodule Logex.Compiler do
   # the bit is only a warning (Logex.Warnings), since it may be a deliberate re-arm. An
   # `ons` on anything but a declared bool was reported already and is passed over. One walk
   # in rung order, so it stays linear.
+  #
+  # M3-4: so for every one-shot, the pulse coils `osr` and `osf` beside `ons`
+  # (Logex.Walk.one_shots/0), whose storage bit is under every rule an `ons` bit has
+  # (decision 80): one one-shot of any of the three to a bit. A coil's pulse bit is its
+  # second operand, which must be another tag than its storage bit (decision 101).
+  @one_shots Walk.one_shots()
+
   defp shared_bits(instructions, tags) do
     {_first, diagnostics} = Enum.reduce(instructions, {%{}, []}, &shared_bit(&1, &2, tags))
 
     Enum.reverse(diagnostics)
   end
 
-  defp shared_bit({:ons, line, [{:name, _, bit}]}, {first, diagnostics}, tags),
-    do: storage_bit(Map.fetch(first, bit), Map.get(tags, bit), {bit, line}, {first, diagnostics})
+  defp shared_bit({symbol, line, [{:name, _, bit} | pulse]}, {first, _} = acc, tags)
+       when symbol in @one_shots do
+    tag = Map.get(tags, bit)
+    {first, diagnostics} = storage_bit(Map.fetch(first, bit), tag, {bit, line, symbol}, acc)
+    {first, own_pulse(pulse, tag, {bit, line, symbol}, diagnostics)}
+  end
 
   # M3-1: a counter's `r` and `ld` are the first bool members logic may write, and neither
   # is a storage bit: the counter reads it as its input, and an online edit's block list
   # names a storage bit as a tag of the routine (decision 21).
   # A member logic may not write, or that is no bool, was reported already.
-  defp shared_bit({:ons, line, [{:member, _, [instance, member]}]}, acc, tags),
-    do: member_bit(writable?(Map.get(tags, instance), member), {line, instance, member}, acc)
+  defp shared_bit({symbol, line, [{:member, _, [instance, member]} | _]}, acc, tags)
+       when symbol in @one_shots,
+       do:
+         member_bit(
+           writable?(Map.get(tags, instance), member),
+           {line, symbol, instance, member},
+           acc
+         )
 
   defp shared_bit(_instruction, acc, _tags), do: acc
+
+  # M3-4 (decision 101): a coil's pulse bit is not its storage bit. Each run writes both, the
+  # pulse and then the power received, so one tag would hold only the power and never pulse.
+  # A storage bit that is no declared bool was reported already.
+  defp own_pulse([{:name, _, bit}], %Tag{type: :bool}, {bit, line, symbol}, diagnostics),
+    do: [
+      diagnostic(
+        line,
+        "`#{bit}` is both the storage bit and the pulse bit of this `#{symbol}`: its pulse " <>
+          "bit is another tag, which it sets for one scan on an edge"
+      )
+      | diagnostics
+    ]
+
+  defp own_pulse(_pulse, _tag, _coil, diagnostics), do: diagnostics
 
   defp writable?(%Tag{type: %FbType{} = type}, member),
     do: match?({:ok, %Member{write: true, type: :bool}}, FbType.member(type, member))
 
   defp writable?(_tag, _member), do: false
 
-  defp member_bit(true, {line, instance, member}, {first, diagnostics}),
+  defp member_bit(true, {line, symbol, instance, member}, {first, diagnostics}),
     do:
       {first,
        [
          diagnostic(
            line,
-           "`ons` keeps its storage bit in a bool of its own, not in `#{instance}.#{member}`, " <>
-             "a member of `#{instance}`, which its instance reads"
+           "`#{symbol}` keeps its storage bit in a bool of its own, not in " <>
+             "`#{instance}.#{member}`, a member of `#{instance}`, which its instance reads"
          )
          | diagnostics
        ]}
 
-  defp member_bit(false, _ons, acc), do: acc
+  defp member_bit(false, _one_shot, acc), do: acc
 
-  defp storage_bit(:error, %Tag{type: :bool}, {bit, line}, {first, diagnostics}),
-    do: {Map.put(first, bit, line), diagnostics}
+  defp storage_bit(:error, %Tag{type: :bool}, {bit, line, symbol}, {first, diagnostics}),
+    do: {Map.put(first, bit, {line, symbol}), diagnostics}
 
-  defp storage_bit({:ok, first_line}, %Tag{}, {bit, line}, {first, diagnostics}) do
+  defp storage_bit({:ok, {first_line, other}}, %Tag{}, {bit, line, symbol}, {first, diagnostics}) do
     message =
-      "`#{bit}` is already the storage bit of the `ons` #{where(first_line, line)}: " <>
-        "each `ons` needs a storage bit of its own"
+      "`#{bit}` is already the storage bit of the `#{other}` #{where(first_line, line)}: " <>
+        "each #{one_shot(other, symbol)} needs a storage bit of its own"
 
     {first, [diagnostic(line, message) | diagnostics]}
   end
 
-  defp storage_bit(:error, _not_a_bool, _ons, acc), do: acc
+  defp storage_bit(:error, _not_a_bool, _one_shot, acc), do: acc
+
+  # In the words of the two one-shots, one mnemonic where they are one.
+  defp one_shot(symbol, symbol), do: "`#{symbol}`"
+  defp one_shot(_first, _second), do: "`ons`, `osr` or `osf`"
 
   # M1-6: one `ton` runs a timer, and the number on it is the timer's preset, its `.pre`
   # when an instance starts or restarts, which logic may then change (decision 4). So the

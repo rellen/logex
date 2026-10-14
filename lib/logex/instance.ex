@@ -20,8 +20,11 @@ defmodule Logex.Instance do
     or none, keeps it in the list, and a switch taken after such a scan keeps it listed
     where the program it starts still has that `ons`. Since M3-1 it also lists counters'
     edge memories, by path, `boxes.cu` or `s1.c.cu`: each is blocked as an `ons` bit is,
-    its `ctu` or `ctd` counting no edge at the next scan that runs it (decision 87). The
-    field keeps its name, the list naming every edge memory an edit blocks.
+    its `ctu` or `ctd` counting no edge at the next scan that runs it (decision 87). Since
+    M3-4 it lists a pulse coil's storage bit as it lists an `ons`'s, by name: its `osr` or
+    `osf` sets no pulse at the next scan that runs it, and still writes both its bits
+    (decision 80). The field keeps its name, the list naming every edge memory an edit
+    blocks.
   - `switched` says whether an online edit has switched it to another program since its
     last scan (`Logex.Edit`): a switch sets it, and a scan clears it. It is how an edit
     knows whether the program it stops has scanned since the last switch, and so whether

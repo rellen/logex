@@ -85,7 +85,12 @@ defmodule Logex.InstructionizeTest do
       var r1 tof
       var p1 tp
       var q1 rto
+      var m bool
+      var n bool
+      var o bool
+      var u bool
       xic a xio b ons e ote c
+      xic a osr m n osf o u
       xic a otl b
       xic a otu b
       move d f

@@ -1276,15 +1276,22 @@ defmodule Logex.RuntimeTest do
       # Logex.Edit and Logex.Configuration read.
       # M3-1: presets/1, every built-in instance a program runs, and counters/1 beside
       # timers/1. Decision 96: member_writes/1, the members a program writes, by path.
+      # M3-4: one_shots/0 and storage_bits/1, every one-shot's storage bit, and uses_of/2,
+      # one instruction's uses.
       assert Enum.sort(Logex.Walk.__info__(:functions)) == [
                counters: 1,
                instructions: 1,
                member_writes: 1,
+               one_shots: 0,
                presets: 1,
+               storage_bits: 1,
                timers: 1,
                uses: 2,
+               uses_of: 2,
                writes: 1
              ]
+
+      assert Logex.Walk.one_shots() == [:ons, :osr, :osf]
 
       # The two structs a host holds and builds; OE-1 gave both `ons_blocked`, and the
       # instance `switched`; M3-3 the instance `faults`, its last scan's (decision 99).

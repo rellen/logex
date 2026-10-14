@@ -20,6 +20,7 @@ defmodule Logex.Edit.Plan do
 
   # The instructions that run a built-in instance (Logex.FbType.rules/1, M3-1).
   @runners FbType.runners()
+  @one_shots Walk.one_shots()
 
   @doc false
   # The record an edit starts with, of each instance it moves.
@@ -372,11 +373,13 @@ defmodule Logex.Edit.Plan do
   # A rung's `ons` storage bits and the instances its `cal`s run, each newest first, from
   # Logex.Walk's instructions of the rung. M3-1 (decision 87): an instruction that runs a
   # built-in instance with an edge memory, a counter's `ctu` or `ctd`, has its memory among
-  # the bits, `{:edge, "boxes.cu"}`, by its type's rules (Logex.FbType.rules/1).
+  # the bits, `{:edge, "boxes.cu"}`, by its type's rules (Logex.FbType.rules/1). M3-4
+  # (decision 80): a pulse coil's storage bit is a one-shot's, as an `ons`'s is, and its
+  # pulse bit an ordinary bool.
   defp oned_and_called(rung, tags),
     do:
       Enum.reduce(Walk.instructions([rung]), {[], []}, fn
-        {:ons, _line, [{:name, _, bit}]}, {bits, cals} ->
+        {symbol, _line, [{:name, _, bit} | _]}, {bits, cals} when symbol in @one_shots ->
           {[bit | bits], cals}
 
         instruction, {bits, cals} ->

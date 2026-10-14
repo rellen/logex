@@ -1176,6 +1176,179 @@ defmodule Logex.ValidationTest do
     end
   end
 
+  # M3-4: the pulse coils, `osr` and `osf` (decisions 80, 100 and 101): a storage bit under
+  # every rule an `ons` bit has, and a pulse bit written as an `ote` writes its tag.
+  describe "pulse coils (M3-4)" do
+    test "take a storage bit and a pulse bit, each a bool tag it writes: M1-3's rules refuse " <>
+           "anything else" do
+      assert source_errors(
+               "var_input i bool\nvar d dint\nvar a bool\nvar q bool\nvar r bool\n" <>
+                 "xic a osr i q\nxic a osf d q\nxic a osr 5 q\nxic a osf r 0\nxic a osr q\n" <>
+                 "osf\nxic a osr a i"
+             ) == [
+               "line 6: `osr` writes `i`, a var_input (declared on line 1): " <>
+                 "logic must not write an input",
+               "line 7: `osf` writes a bool, but `d` is a dint (declared on line 2)",
+               "line 8: `osr` expects a tag, found `5`",
+               "line 9: `osf` expects a tag, found `0`",
+               "line 10: `osr` expects 2 operands (a tag, then a tag), found 1",
+               "line 11: `osf` expects 2 operands (a tag, then a tag), found none",
+               "line 12: `osr` writes `i`, a var_input (declared on line 1): " <>
+                 "logic must not write an input"
+             ]
+    end
+
+    test "are reserved in any case" do
+      assert source_errors("var osr bool\nvar Osf bool\nvar OSR bool") == [
+               "line 1: `osr` is an instruction and cannot name a tag",
+               "line 2: `Osf` is an instruction and cannot name a tag",
+               "line 3: `OSR` is an instruction and cannot name a tag"
+             ]
+    end
+
+    test "a storage bit may be a var or a var_output and a pulse bit a member logic may " <>
+           "write, each read freely, and anything may follow a coil on its path " <>
+           "(decision 100)" do
+      outputs = Enum.map_join(1..5, &"var_output y#{&1} bool\n")
+
+      assert source_warnings(
+               "var_input go bool\nvar s1 bool\nvar_output s2 bool\nvar_output p bool\n" <>
+                 "var c ctud\nvar l rto\nvar s3 bool\nvar s4 bool\n" <>
+                 outputs <>
+                 "xic go osr s1 p ote y1\nxic go osf s2 c.r ( xic s1 | xic s2 ) ote y2\n" <>
+                 "( xic go osr s3 l.r | xic p ) xic c.qu ote y3\nxic go osf s4 c.ld ote y4\n" <>
+                 "xic go ctu c 3\nxic go ctd c 3\nxic go rto l 9\nxic l.dn xic s3 xio s4 ote y5"
+             ) == []
+    end
+
+    test "a second one-shot on one storage bit, an `ons`, an `osr` or an `osf`, is an error " <>
+           "citing the first, in the words of the two (decision 80)" do
+      assert source_errors(
+               "var go bool\nvar s bool\nvar t bool\nvar u bool\nvar q bool\n" <>
+                 "xic go ons s\nxic go osr s q\nxic go osf s q\nxic go osr t q osr t q\n" <>
+                 "xic go osf u q\n( xic go ons u | xio go osf u q )"
+             ) == [
+               "line 7: `s` is already the storage bit of the `ons` on line 6: " <>
+                 "each `ons`, `osr` or `osf` needs a storage bit of its own",
+               "line 8: `s` is already the storage bit of the `ons` on line 6: " <>
+                 "each `ons`, `osr` or `osf` needs a storage bit of its own",
+               "line 9: `t` is already the storage bit of the `osr` in this rung: " <>
+                 "each `osr` needs a storage bit of its own",
+               "line 11: `u` is already the storage bit of the `osf` on line 10: " <>
+                 "each `ons`, `osr` or `osf` needs a storage bit of its own",
+               "line 11: `u` is already the storage bit of the `osf` on line 10: " <>
+                 "each `osf` needs a storage bit of its own"
+             ]
+
+      # A coil's storage bit taken first, then an `ons`'s.
+      assert source_errors("var go bool\nvar s bool\nvar q bool\nxic go osf s q\nxio go ons s") ==
+               [
+                 "line 5: `s` is already the storage bit of the `osf` on line 4: " <>
+                   "each `ons`, `osr` or `osf` needs a storage bit of its own"
+               ]
+    end
+
+    test "a storage bit is never a member, even one logic may write, and a pulse bit never " <>
+           "one logic may not write" do
+      assert source_errors(
+               "var a bool\nvar c ctu\nvar l rto\nvar t ton\nvar q bool\nvar s bool\n" <>
+                 "var w bool\nxic a osr c.r q\nxic a osf l.r q\nxic a osr s t.dn\n" <>
+                 "xic a osf w c.q\nxic a ctu c 3\nxic a rto l 5\nxic a ton t 3"
+             ) == [
+               "line 8: `osr` keeps its storage bit in a bool of its own, not in `c.r`, a member " <>
+                 "of `c`, which its instance reads",
+               "line 9: `osf` keeps its storage bit in a bool of its own, not in `l.r`, a member " <>
+                 "of `l`, which its instance reads",
+               "line 10: `osr` writes `t.dn`, but logic may write only `.pre` and `.acc` of a ton",
+               "line 11: `osf` writes `c.q`, but logic may write only `.r` and `.pv` of a ctu"
+             ]
+    end
+
+    test "a coil's storage bit and pulse bit are two tags (decision 101), told once, and " <>
+           "only of a declared bool" do
+      assert source_errors(
+               "var a bool\nvar d dint\nvar s bool\nxic a osr a a\nxic a osf s s\n" <>
+                 "xic a osf zz zz\nxic a osr d d"
+             ) == [
+               "line 4: `a` is both the storage bit and the pulse bit of this `osr`: its pulse " <>
+                 "bit is another tag, which it sets for one scan on an edge",
+               "line 5: `s` is both the storage bit and the pulse bit of this `osf`: its pulse " <>
+                 "bit is another tag, which it sets for one scan on an edge",
+               "line 6: `zz` is not declared",
+               "line 7: `osr` writes a bool, but `d` is a dint (declared on line 2)",
+               "line 7: `osr` writes a bool, but `d` is a dint (declared on line 2)"
+             ]
+    end
+
+    test "another write to a coil's storage bit, before or after it, another coil's pulse bit " <>
+           "among them, is warned about at the write, citing the coil" do
+      assert source_warnings(
+               "var go bool\nvar s bool\nvar q bool\nvar d bool\nvar t bool\nxio go otu s\n" <>
+                 "xic go osr s q\nxic d ote s\nxic d otl s\nxic d move 1 s\nxic d osf d s\n" <>
+                 "xic go osf t go ( ote t | otl t )"
+             ) == [
+               "line 6: warning: `otu` writes `s`, the storage bit of the `osr` on line 7: " <>
+                 "the one-shot then fires on the wrong scans",
+               "line 8: warning: `ote` writes `s`, the storage bit of the `osr` on line 7: " <>
+                 "the one-shot then fires on the wrong scans",
+               "line 9: warning: `otl` writes `s`, the storage bit of the `osr` on line 7: " <>
+                 "the one-shot then fires on the wrong scans",
+               "line 10: warning: `move` writes `s`, the storage bit of the `osr` on line 7: " <>
+                 "the one-shot then fires on the wrong scans",
+               "line 11: warning: `osf` writes `s`, the storage bit of the `osr` on line 7: " <>
+                 "the one-shot then fires on the wrong scans",
+               "line 12: warning: `ote` writes `t`, the storage bit of the `osf` in this rung: " <>
+                 "the one-shot then fires on the wrong scans",
+               "line 12: warning: `otl` writes `t`, the storage bit of the `osf` in this rung: " <>
+                 "the one-shot then fires on the wrong scans"
+             ]
+
+      # So for an `ons`'s storage bit that a coil's pulse bit is.
+      assert source_warnings("var go bool\nvar s bool\nvar t bool\nxic go ons s\nxic go osr t s") ==
+               [
+                 "line 5: warning: `osr` writes `s`, the storage bit of the `ons` on line 4: " <>
+                   "the one-shot then fires on the wrong scans"
+               ]
+    end
+
+    test "a pulse bit is written as an `ote` writes its tag: a second coil on it, an `ote` " <>
+           "among them, cites the first in its words, a member by its path (decision 101)" do
+      assert source_warnings(
+               "var go bool\nvar a bool\nvar b bool\nvar q bool\nvar p bool\nvar c ctud\n" <>
+                 "var s1 bool\nvar s2 bool\nvar s3 bool\nvar s4 bool\nvar s5 bool\n" <>
+                 "xic go ote q\nxic a osr s1 q\nxic b osf s2 p\nxic go ote p osr s3 p\n" <>
+                 "xic a osr s4 c.r\nxic b osf s5 c.ld\nxic go ote c.r\n" <>
+                 "xic a ctu c 4\nxic b ctd c 4"
+             ) == [
+               "line 13: warning: `q` already has an `ote` on line 12: the last one in the scan " <>
+                 "decides it",
+               "line 15: warning: `p` is already the pulse bit of the `osf` on line 14: the last " <>
+                 "one in the scan decides it",
+               "line 15: warning: `p` is already the pulse bit of the `osf` on line 14: the last " <>
+                 "one in the scan decides it",
+               "line 18: warning: `c.r` is already the pulse bit of the `osr` on line 16: the " <>
+                 "last one in the scan decides it"
+             ]
+    end
+
+    test "a var_output a coil writes, as its storage or its pulse bit, is written" do
+      assert source_warnings(
+               "var_input go bool\nvar_output s bool\nvar_output p bool\nxic go osf s p\n" <>
+                 "xic s xic p ote p"
+             ) == [
+               "line 5: warning: `p` is already the pulse bit of the `osf` on line 4: the last " <>
+                 "one in the scan decides it"
+             ]
+    end
+
+    test "is never warned about for bits declared from Elixir" do
+      declared = Enum.map(~w(go s q), &Logex.Tag.new!(&1, :bool))
+
+      assert {:ok, %Logex.Program{warnings: []}} =
+               source_compile("xic go osr s q\nxic go ote s ote q otl q", declared)
+    end
+  end
+
   describe "comparisons (M1-6)" do
     test "take two dints, each a tag or a literal that fits 32 bits" do
       assert source_errors(

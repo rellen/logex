@@ -164,6 +164,14 @@ defmodule Logex.Edit do
   Each listed bit is reported as `:ons_blocked`, with its value, which the switch leaves
   alone.
 
+  A pulse coil's storage bit (M3-4, decision 80) is a one-shot's by every rule above, its
+  `osr` or `osf` setting no pulse at the next scan that runs it, and still writing both its
+  bits: a coil the edit adds, one whose rung it changes, its kind, its pulse bit and its
+  condition among the rung, and one whose storage bit the program that last scanned also
+  writes another way. Its pulse bit is an ordinary bool, an output an edit stops driving
+  held as any is (below), so a coil removed on the scan of its pulse leaves its pulse bit
+  on.
+
   **Held outputs** (decision 20, fix F4). A var_output of either program that the program
   stopped drove, writing it through an instruction's write operand (an `ons` storage bit
   included), and that the program started does not drive as a var_output (it removes it,
@@ -211,7 +219,7 @@ defmodule Logex.Edit do
   | `:dn_drops`, `:dn_rises` | `{acc, pre}`, as `ton` counts them, a negative `.acc` as 0; for a counter, `{cv, pv}` | a switch |
   | `:resumed` | the milliseconds not caught up: `last` moves on by that many, to `now` | a switch |
   | `:resume_undone` | the milliseconds of the resume this edit's last switch made: `last` moves back by that many | a switch |
-  | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan that runs it; for a counter's edge memory, its value: its `ctu` or `ctd` counts no edge then | a switch |
+  | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan that runs it, its `osr` or `osf` sets no pulse; for a counter's edge memory, its value: its `ctu` or `ctd` counts no edge then | a switch |
   | `:held` | for an output the next program shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |
   | `:unwritten` | the value it keeps: a member input logic writes that the program stopped writes and the program started does not (decision 96) | a switch |
   | `:pruned` | the value it had | assemble, cancel |

@@ -1384,6 +1384,177 @@ defmodule Logex.EditTest do
     end
   end
 
+  # M3-4: a pulse coil's storage bit is under every rule an `ons` bit has (decision 80): on
+  # decision 21's block list by name, its rung compared without presets (decision 87), and
+  # blocked inside a block until a scan runs its body (decision 32). Its pulse bit is an
+  # ordinary bool, held where an edit stops driving it (decision 20).
+  describe "a pulse coil across a switch (decisions 21, 80 and 87)" do
+    @p "var_input go bool\nvar_input a bool\nvar_input b bool\nvar s9 bool\n" <>
+         "var_output pulse bool\nvar_output y bool\n"
+
+    # Runs `src1` through `before`, tests `src2` over its state, then drives `src2` through
+    # `after_`: the outputs of each scan after the switch, the test's report and its state.
+    defp coil_switched(src1, src2, before, after_) do
+      v1 = c!(@p <> src1)
+      v2 = c!(@p <> src2)
+      {_, state} = run(v1, before)
+      {:ok, edit, forecast} = Edit.accept(v1, v2, state)
+      {_edit, tested, report} = Edit.test(edit, state)
+      assert report == forecast
+
+      {outs, _} =
+        Enum.map_reduce(after_, tested, fn step, state -> drive(v2, state, [step]) end)
+
+      {outs, report, tested}
+    end
+
+    test "an osr the edit adds while its rung is true gives no pulse at the switch, and the " <>
+           "next real edge pulses" do
+      assert {[%{"pulse" => 0, "y" => 1}, %{"pulse" => 0}, %{"pulse" => 1}],
+              [{:ons_blocked, "s9", 0}], %Instance{ons_blocked: ["s9"]}} =
+               coil_switched(
+                 "xio go ote s9\nxic a ote pulse",
+                 "xic go osr s9 pulse ote y",
+                 [{0, %{"go" => 1}}, {10, %{}}],
+                 [{10, %{}}, {10, %{"go" => 0}}, {10, %{"go" => 1}}]
+               )
+    end
+
+    test "an osf the edit adds where its storage bit holds 1 and its rung is false gives no " <>
+           "pulse at the switch, and the next real fall pulses" do
+      assert {[%{"pulse" => 0, "y" => 0}, %{"pulse" => 0}, %{"pulse" => 1}],
+              [{:ons_blocked, "s9", 1}], _} =
+               coil_switched(
+                 "xic a ote s9\nxic b ote pulse",
+                 "xic go osf s9 pulse ote y",
+                 [{0, %{"a" => 1}}, {10, %{}}],
+                 [{10, %{}}, {10, %{"go" => 1}}, {10, %{"go" => 0}}]
+               )
+    end
+
+    test "one whose rung the edit changes is blocked, its condition, its kind or its pulse " <>
+           "bit, the whole rung compared as an `ons`'s is, each where an unblocked one pulses" do
+      for {src2, a, after_} <- [
+            {"xic b osr s9 pulse", 0, [{10, %{"b" => 1}}]},
+            {"xic a osf s9 pulse", 1, [{10, %{"a" => 0}}]},
+            {"xic a osr s9 y", 0, [{10, %{"a" => 1}}]}
+          ] do
+        before = [{0, %{}}, {10, %{"a" => a}}]
+        assert {[out], report, _} = coil_switched("xic a osr s9 pulse", src2, before, after_)
+        assert {:ons_blocked, "s9", a} in report, src2
+        assert out["pulse"] == 0 and Map.get(out, "y", 0) == 0, src2
+      end
+    end
+
+    test "one the edit leaves alone keeps a real edge on the switch scan, though its rung " <>
+           "moved, and so does one whose rung changes in a timer's preset alone (decision 87)" do
+      for {src1, src2} <- [
+            {"xic go osr s9 pulse\nxic a ote y", "xic a ote y\nxic go osr s9 pulse"},
+            {"var t1 ton\nxic go osr s9 pulse ton t1 500",
+             "var t1 ton\nxic go osr s9 pulse ton t1 600"}
+          ] do
+        assert {[%{"pulse" => 1}], report, %Instance{ons_blocked: []}} =
+                 coil_switched(src1, src2, [{0, %{}}, {10, %{}}], [{10, %{"go" => 1}}])
+
+        refute Enum.any?(report, &match?({:ons_blocked, _, _}, &1))
+      end
+
+      assert {[%{"pulse" => 1}], [], _} =
+               coil_switched(
+                 "xic go osf s9 pulse\nxic a ote y",
+                 "xic a ote y\nxic go osf s9 pulse",
+                 [{0, %{"go" => 1}}, {10, %{}}],
+                 [{10, %{"go" => 0}}]
+               )
+    end
+
+    test "no switch writes a storage bit or a pulse bit, so a rung that reads either sees " <>
+           "no write that no logic made" do
+      assert {[%{"y" => 0, "pulse" => 0}], [{:ons_blocked, "s9", 0}], %Instance{env: env}} =
+               coil_switched(
+                 "xic a osr s9 pulse",
+                 "xic s9 ote y\nxic b osr s9 pulse",
+                 [{0, %{}}, {10, %{}}],
+                 [{10, %{"b" => 1}}]
+               )
+
+      assert env["s9"] == 0 and env["pulse"] == 0
+    end
+
+    test "one removed at its pulse leaves the pulse bit held at 1, reported as an output an " <>
+           "edit stops driving (decision 20)" do
+      assert {[%{"y" => 0}, %{"y" => 1}], report, %Instance{env: %{"pulse" => 1}}} =
+               coil_switched(
+                 "xic go osr s9 pulse",
+                 "xic go ote y",
+                 [{0, %{}}, {10, %{"go" => 1}}],
+                 [{10, %{"go" => 0}}, {10, %{"go" => 1}}]
+               )
+
+      assert {:held, "pulse", 1} in report
+    end
+
+    test "one the test removes and the untest restores is blocked at the untest, the " <>
+           "candidate having last scanned, so its stale storage bit gives no pulse" do
+      v1 = c!(@p <> "xic go osr s9 pulse")
+      v2 = c!(@p <> "xic go ote y")
+      {_, state} = run(v1, [{0, %{}}, {10, %{"go" => 1}}])
+      {edit, state, _} = Edit.test(accept!(v1, v2, state), state)
+      # The rung falls and rises again while the coil is gone: the storage bit still says 1.
+      {_, state} = drive(v2, state, [{10, %{"go" => 0}}, {10, %{"go" => 1}}])
+      assert state.env["s9"] == 1
+      {_edit, state, report} = Edit.untest(edit, state)
+      assert {:ons_blocked, "s9", 1} in report
+      # The rung is true and the bit says 1: an unblocked coil would give none either, so
+      # drop the rung and raise it again for a real edge.
+      assert {%{"pulse" => 0}, state} = drive(v1, state, [{10, %{"go" => 0}}])
+      assert {%{"pulse" => 1}, _} = drive(v1, state, [{10, %{"go" => 1}}])
+
+      # An osf so: the candidate leaves its bit at 0, though the rung rose meanwhile, and the
+      # restored coil's first run, on a falling rung, is blocked.
+      v1 = c!(@p <> "xic go osf s9 pulse")
+      v2 = c!(@p <> "xic go ote y\nxic b ote s9")
+      {_, state} = run(v1, [{0, %{}}, {10, %{}}])
+      {edit, state, _} = Edit.test(accept!(v1, v2, state), state)
+      {_, state} = drive(v2, state, [{10, %{"go" => 1, "b" => 1}}])
+      {_edit, state, report} = Edit.untest(edit, state)
+      assert {:ons_blocked, "s9", 1} in report
+      assert {%{"pulse" => 0}, state} = drive(v1, state, [{10, %{"go" => 0}}])
+      assert {%{"pulse" => 1}, _} = drive(v1, state, [{10, %{"go" => 1}}, {10, %{"go" => 0}}])
+    end
+
+    test "one inside a block is blocked by its path until a scan runs its body, the block " <>
+           "frozen meanwhile (decision 32)" do
+      {:ok, edge} =
+        Logex.compile(
+          "function_block edge\nvar_input in bool\nvar_output up bool\nvar s bool\n" <>
+            "xic in ote s\nxic s ote up",
+          name: "edge"
+        )
+
+      {:ok, coiled} =
+        Logex.compile(
+          "function_block edge\nvar_input in bool\nvar_output up bool\nvar s bool\n" <>
+            "xic in osr s up",
+          name: "edge"
+        )
+
+      d = "var_input on bool\nvar_input go bool\nvar_output up bool\nvar e edge\n"
+      {:ok, v1} = Logex.compile(d <> "xic on cal e go up", name: "m", types: [edge])
+      {:ok, v2} = Logex.compile(d <> "xic on cal e go up", name: "m", types: [coiled])
+
+      # The original leaves `e.s` at 0 with `go` low, then the block freezes.
+      {_, state} = run(v1, [{0, %{"on" => 1}}, {10, %{"on" => 0}}])
+      {_edit, tested, report} = Edit.test(accept!(v1, v2, state), state)
+      assert {:ons_blocked, "e.s", 0} in report
+      {%{"up" => 0}, frozen} = drive(v2, tested, [{10, %{"go" => 1}}])
+      assert frozen.ons_blocked == ["e.s"]
+      {%{"up" => 0}, ran} = drive(v2, frozen, [{10, %{"on" => 1}}])
+      assert ran.ons_blocked == [] and ran.env["e"]["s"] == 1
+      assert {%{"up" => 1}, _} = drive(v2, ran, [{10, %{"go" => 0}}, {10, %{"go" => 1}}])
+    end
+  end
+
   # M3-1: a counter across a switch: its `pv` by decisions 23 and 27, its forecast
   # (decision 88), and its edge memory on decision 21's block list by path (decision 87).
   describe "a counter across a switch (decisions 87 and 88)" do

@@ -102,6 +102,49 @@ defmodule Logex.WalkTest do
     end
   end
 
+  # M3-4: the one-shots, `ons` and the pulse coils, each keeping its storage bit first.
+  describe "storage_bits/1 and uses_of/2" do
+    test "each one-shot's storage bit, in rung order, a group's legs where they stand, with " <>
+           "its line and symbol; a coil's pulse bit is none" do
+      p =
+        program!("""
+        var a bool
+        var s1 bool
+        var s2 bool
+        var s3 bool
+        var q bool
+        var r bool
+        xic a osf s2 q ( ons s1 | osr s3 r )
+        xic s1 osr r s1
+        """)
+
+      assert Walk.storage_bits(p.rungs) ==
+               [{"s2", 7, :osf}, {"s1", 7, :ons}, {"s3", 7, :osr}, {"r", 8, :osr}]
+    end
+
+    test "a coil writes its storage bit, then its pulse bit, and uses/2 is each " <>
+           "instruction's uses_of/2 in turn" do
+      p =
+        program!("""
+        var a bool
+        var s bool
+        var c ctu
+        xic a osr s c.r
+        xic a ctu c 4
+        """)
+
+      tags = Program.typed_tags(p)
+      [_xic, osr | _] = Walk.instructions(p.rungs)
+      assert Walk.uses_of(osr, tags) == [{:write, "s", 4, :osr}, {:write, "c", 4, :osr}]
+
+      assert Walk.uses(p.rungs, tags) ==
+               Enum.flat_map(Walk.instructions(p.rungs), &Walk.uses_of(&1, tags))
+
+      assert Walk.writes(p) == %{"s" => [4], "c" => [4, 5]}
+      assert Walk.member_writes(p) == %{"c.r" => [4]}
+    end
+  end
+
   describe "writes/1" do
     test "a write slot, a storage bit and an instance run are writes, each line a write, in rung order" do
       p =
