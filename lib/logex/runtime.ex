@@ -114,7 +114,8 @@ defmodule Logex.Runtime do
     at the switch that first finds one the configuration started declares missing. A kept
     one whose initial value an edit changes keeps its running value until `restart/2`
     (decision 44); one only the configuration stopped declares is kept unused until
-    assemble or cancel prunes it; and an output point nothing drives any more holds its
+    assemble or cancel prunes it, or the first test of an edit that supersedes this one
+    drops it (decision 66); and an output point nothing drives any more holds its
     value (decision 20);
   - a program instance starts as `instance/1` makes it, every tag by
     `Logex.Program.initial_env/1`, whose doc lists the edit's exceptions, and `restart/2`
@@ -152,7 +153,8 @@ defmodule Logex.Runtime do
     aside each instance only the configuration it stops runs, and the old state of one it
     retypes, and brings one back where the configuration it starts runs it again, its
     `now` the resource's and each timer that was timing resumed from the switch (decision
-    57); assemble, and cancel after an untest, prune them.
+    57); assemble, and cancel after an untest, prune them, and an edit's first test drops
+    those an edit it superseded left (decision 66).
 
   A program instance inside a resource is edited only with its configuration, through
   `Logex.Configuration.Edit`, whose steps take and return the resource and write it

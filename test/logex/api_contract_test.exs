@@ -94,7 +94,8 @@ defmodule Logex.ApiContractTest do
   back, the blocks, an instance added, removed or retyped, an interval, a priority, the
   order of instances or tasks, a global added, removed or given another initial value, the
   wiring) and, one time in three, one refused, read back through a configuration file's
-  text so that each element has its line. Accept refuses exactly the diagnostics restated
+  text so that each element has its line; now and then one is accepted while an edit is
+  open, from the configuration the resource runs, and supersedes it. Accept refuses exactly the diagnostics restated
   from the two configurations, in order; every host mistake is refused with a documented
   message, a candidate `check/1` refuses with `start/1`'s; and every accepted call is made
   twice and gives the same result. Its properties: the forecast is the report a test taken
@@ -102,7 +103,11 @@ defmodule Logex.ApiContractTest do
   give it after, globals, states, the instances set aside and next due times, each kept
   instance's `switched`, block list and `now` as their rules say; no step moves the clock,
   an overlap count or a trigger's sample; no state holds a var_external (decision 49); a
-  step on an edit that has ended or been stepped past is refused by the generation; and a
+  step on an edit that has ended, been stepped past or been superseded is refused by the
+  generation; at an edit's first test what a superseded edit left is dropped and reported
+  (decision 66), and each instance a switch starts, and at a first test each instance and
+  global the original lacks, is as a fresh start of the configuration started gives it;
+  and a
   test then an untest with no cycle between leaves every state as the test found it, but
   for what either switch started, a tag the test joined to its global (decision 55), and a
   timer the untest resumed in an instance it brought back from aside (decision 57), or
@@ -3196,7 +3201,12 @@ defmodule Logex.ApiContractTest do
     :model_after_prune,
     :pulse_after_switch,
     :retyped_elsewhere,
-    :blocked_inside
+    :blocked_inside,
+    :superseded,
+    :superseded_aside,
+    :superseded_global,
+    :superseded_named_again,
+    :stale_superseded
   ]
 
   test "a configuration's edit refuses every host mistake with a documented ArgumentError, " <>
@@ -3215,6 +3225,8 @@ defmodule Logex.ApiContractTest do
         e: nil,
         c: nil,
         stale: [],
+        passed: [],
+        sup: [],
         round: nil,
         prev: %{},
         onsp: %{},
@@ -3847,8 +3859,14 @@ defmodule Logex.ApiContractTest do
   defp ce_op(op, w) when op <= 5, do: ce_cycle(w)
   defp ce_op(op, %{e: nil} = w) when op in 6..8, do: ce_accept(w)
 
-  defp ce_op(op, w) when op in 6..9 and w.e != nil,
-    do: ce_step(pick([:test, :untest, :assemble, :cancel, :back, :back]), w)
+  # An edit open, now and then another accepted over it, which supersedes it (§4.9): the
+  # running configuration's draws changed, the edit it supersedes never stepped again.
+  defp ce_op(op, w) when op in 6..9 and w.e != nil do
+    case :rand.uniform(6) do
+      1 -> ce_accept(w)
+      _ -> ce_step(pick([:test, :untest, :assemble, :cancel, :back, :back]), w)
+    end
+  end
 
   defp ce_op(9, w), do: ce_cycle(w)
   defp ce_op(10, w), do: ce_restart(w)
@@ -3930,6 +3948,7 @@ defmodule Logex.ApiContractTest do
     do: Enum.find(String.split(source, "\n"), &String.contains?(&1, " ons "))
 
   defp ce_accept(w) do
+    w = %{w | spec: ce_running_spec(w)}
     spec = ce_candidate(w.spec)
 
     case ce_config(spec) do
@@ -3937,6 +3956,13 @@ defmodule Logex.ApiContractTest do
       {:error, _diagnostics} -> w
     end
   end
+
+  # The draws of the configuration the resource runs: an open edit's candidate under test,
+  # its original otherwise.
+  defp ce_running_spec(%{e: nil, spec: spec}), do: spec
+
+  defp ce_running_spec(%{e: edit, c: {_candidate, spec}} = w),
+    do: if(ConfigEdit.stage(edit) == :testing, do: spec, else: w.spec)
 
   defp ce_accepted(candidate, spec, w) do
     predicted = ce_predicted(w.rt.config, candidate)
@@ -3968,7 +3994,9 @@ defmodule Logex.ApiContractTest do
               do: i
 
         ce_reach(:retyped_elsewhere, retyped != [])
-        %{w | e: edit, c: {candidate, spec}, o: w.rt.config}
+        ce_reach(:superseded, w.e != nil)
+        sup = if w.e, do: [w.e | w.sup], else: w.sup
+        %{w | e: edit, c: {candidate, spec}, o: w.rt.config, round: nil, sup: sup}
     end
   end
 
@@ -4024,6 +4052,8 @@ defmodule Logex.ApiContractTest do
         rt: rt,
         model: ce_seed(rt),
         stale: [w.e | w.stale],
+        passed: w.sup ++ w.passed,
+        sup: [],
         round: if(step == :test, do: {w.rt, report}, else: nil),
         resumed: Enum.any?(report, &match?({:resumed, _, _}, &1))
     }
@@ -4054,7 +4084,9 @@ defmodule Logex.ApiContractTest do
         ce_reach(:model_after_prune)
     end
 
-    ce_one_copy!(rt, rt.config)
+    # Cancel from accept leaves what a superseded edit set aside, which no configuration
+    # here runs, for the next edit's first test to drop (decision 66).
+    ce_one_copy!(rt, if(stage == :accepted, do: nil, else: rt.config))
     assert rt.config == kept
     {_, spec} = w.c
     spec = if step == :assemble, do: spec, else: w.spec
@@ -4067,6 +4099,8 @@ defmodule Logex.ApiContractTest do
         model: ce_seed(rt),
         spec: spec,
         stale: [w.e | w.stale],
+        passed: w.sup ++ w.passed,
+        sup: [],
         round: nil
     }
   end
@@ -4077,6 +4111,7 @@ defmodule Logex.ApiContractTest do
   # but a var_external, and a prune those alone.
   defp ce_restated!(before, later, report, {:switch, first?}) do
     {from, to} = {before.config, later.config}
+    {before, dropped} = ce_left(before, from, first?)
     was = Map.new(from.tasks, &{&1.name, &1})
 
     tasks =
@@ -4149,7 +4184,10 @@ defmodule Logex.ApiContractTest do
               ),
           do: entry
 
-    restated = Enum.sort(tasks ++ globals ++ stopped ++ started ++ shared ++ ce_orders(from, to))
+    restated =
+      Enum.sort(
+        dropped ++ tasks ++ globals ++ stopped ++ started ++ shared ++ ce_orders(from, to)
+      )
 
     given =
       for {kind, name, _} = entry <- report,
@@ -4160,15 +4198,46 @@ defmodule Logex.ApiContractTest do
             :instance_stopped,
             :instance_added,
             :instance_back,
+            :instance_pruned,
             :joined,
             :left,
             :order
           ] or
             (not String.contains?(to_string(name), ".") and
-               kind in [:added, :initial_changed, :held]),
+               kind in [:added, :initial_changed, :held, :pruned]),
           do: entry
 
     assert given == restated
+
+    ce_reach(
+      :superseded_named_again,
+      Enum.any?(dropped, fn {_kind, name, _} ->
+        Enum.any?(to.instances ++ to.globals, &(&1.name == name))
+      end)
+    )
+
+    # A fresh start of the configuration started, which knows nothing of an edit, for what
+    # only it runs or declares: each instance a switch starts is as start/1 starts it, and
+    # at the first test so is each instance and each global the original lacks, whatever an
+    # edit this one superseded left in the resource (decision 66); what is set aside is
+    # then the original's alone.
+    fresh = Runtime.start(to)
+
+    for {:instance_added, name, _} <- report,
+        do: assert(later.instances[name] == fresh.instances[name], name)
+
+    if first? do
+      for i <- to.instances,
+          i.name not in kept,
+          do: assert(later.instances[i.name] == fresh.instances[i.name], i.name)
+
+      for g <- to.globals,
+          not Map.has_key?(old, g.name),
+          do: assert(later.globals[g.name] == fresh.globals[g.name], g.name)
+
+      assert Enum.sort(Map.keys(later.aside)) ==
+               Enum.sort(for i <- from.instances, i.name not in kept, do: i.name)
+    end
 
     # Each resume from the resource's clock (decisions 56 and 57), of a timer that was
     # timing; and, but at the first test, no start over a value the state already holds.
@@ -4219,6 +4288,22 @@ defmodule Logex.ApiContractTest do
     given = for {_kind, name, _} = entry <- report, not String.contains?(name, "."), do: entry
     assert given == restated
     ce_declared!(later, &MapSet.equal?/2)
+  end
+
+  # Decision 66: at an edit's first switch what the resource holds that the original does
+  # not declare, which an edit this one superseded left, is dropped before the switch and
+  # reported, `:pruned` and `:instance_pruned`; the switch is restated over the rest.
+  defp ce_left(before, _from, false), do: {before, []}
+
+  defp ce_left(before, from, true) do
+    declared = MapSet.new(from.globals, & &1.name)
+    {kept, gone} = Map.split_with(before.globals, fn {name, _} -> name in declared end)
+    ce_reach(:superseded_aside, before.aside != %{})
+    ce_reach(:superseded_global, gone != %{})
+
+    {%{before | globals: kept, aside: %{}},
+     for({name, value} <- gone, do: {:pruned, name, value}) ++
+       for({name, state} <- before.aside, do: {:instance_pruned, name, state.type})}
   end
 
   defp ce_declared!(rt, relation) do
@@ -4292,13 +4377,27 @@ defmodule Logex.ApiContractTest do
   # the running configuration's or, set aside, the other's.
   defp ce_one_copy!(rt, other) do
     for {states, config} <- [{rt.instances, rt.config}, {rt.aside, other}],
+        config != nil,
         {_name, state} <- states,
         {name, %Tag{section: :var_external}} <- config.programs[state.type].tags,
         do: refute(Map.has_key?(state.env, name))
   end
 
-  # The writes a report lists, applied to the resource before its step, give it after.
+  # The writes a report lists, applied to the resource before its step, give it after: a
+  # global's `:pruned` and an `:instance_pruned` first, which at a first test drop what a
+  # superseded edit left before the switch writes over it (decision 66).
   defp ce_rebuilt!(before, later, report, kind) do
+    {prunes, report} =
+      Enum.split_with(report, fn {kind, name, _} ->
+        kind in [:pruned, :instance_pruned] and not String.contains?(to_string(name), ".")
+      end)
+
+    gone = fn wanted -> for {^wanted, name, _} <- prunes, do: name end
+
+    base =
+      {Map.drop(before.globals, gone.(:pruned)), Map.drop(before.aside, gone.(:instance_pruned))}
+
+    {base_globals, base_aside} = base
     names = fn wanted -> for {^wanted, name, _} <- report, do: name end
     stopped = names.(:instance_stopped)
     back = names.(:instance_back)
@@ -4316,18 +4415,17 @@ defmodule Logex.ApiContractTest do
     instances =
       before.instances
       |> Map.drop(stopped)
-      |> Map.merge(Map.take(before.aside, back))
+      |> Map.merge(Map.take(base_aside, back))
       |> Map.merge(fresh)
 
     aside =
-      before.aside
+      base_aside
       |> Map.drop(back)
       |> Map.merge(Map.take(before.instances, stopped))
-      |> Map.drop(names.(:instance_pruned))
 
     {instances, globals} =
-      Enum.reduce(report, {instances, before.globals}, fn {kind, name, value} = entry,
-                                                          {instances, globals} ->
+      Enum.reduce(report, {instances, base_globals}, fn {kind, name, value} = entry,
+                                                        {instances, globals} ->
         case String.split(to_string(name), ".", parts: 2) do
           [instance, path] ->
             {Map.update!(
@@ -4404,9 +4502,12 @@ defmodule Logex.ApiContractTest do
   defp ce_round!(:untest, %{round: {before, test_report}} = w, later, report) do
     _ = w
     started = for {:instance_added, name, _} <- test_report, do: name
+    # What a first test dropped of a superseded edit's (decision 66) is not the original's.
+    dropped = for {kind, name, _} <- test_report, kind in [:pruned, :instance_pruned], do: name
+    {aside, globals} = {Map.drop(before.aside, dropped), Map.drop(before.globals, dropped)}
     assert Map.keys(later.instances) |> Enum.sort() == Map.keys(before.instances) |> Enum.sort()
-    assert Map.drop(later.aside, started) |> Map.keys() == Map.keys(before.aside)
-    assert Map.take(later.globals, Map.keys(before.globals)) == before.globals
+    assert Map.drop(later.aside, started) |> Map.keys() == Map.keys(aside)
+    assert Map.take(later.globals, Map.keys(globals)) == globals
     back = for {:instance_back, name, _} <- report, do: name
     resumed = for {:resumed, path, _} <- report, do: path
 
@@ -4479,6 +4580,12 @@ defmodule Logex.ApiContractTest do
   defp ce_stale(%{stale: [old | _]} = w) do
     assert {:refused, :generation, _} = ce_attempt(fn -> ConfigEdit.test(old, w.rt) end)
     ce_reach(:stale)
+
+    for superseded <- Enum.take(w.passed, 1) do
+      assert {:refused, :generation, _} = ce_attempt(fn -> ConfigEdit.test(superseded, w.rt) end)
+      ce_reach(:stale_superseded)
+    end
+
     w
   end
 

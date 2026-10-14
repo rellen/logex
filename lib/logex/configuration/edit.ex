@@ -45,7 +45,14 @@ defmodule Logex.Configuration.Edit do
 
   **A switch**, `test/2` or `untest/2`, moves the resource from the configuration it stops
   to the one it starts, writes it in the resource, which then runs the latter, and prunes
-  nothing:
+  nothing but, at the first test, what an edit this one superseded left (decision 66):
+  - at an edit's first test, the resource runs the original and holds nothing of this
+    edit's, so an instance set aside, or a global the original does not declare, was left
+    by an earlier edit, accepted over the same resource and never ended, under another
+    candidate. It is dropped before the switch, as a prune drops it, `{:instance_pruned,
+    name, type}` and `{:pruned, name, value}`, so that no instance comes back, and no
+    global keeps a value, that this edit's programs never ran: a candidate that runs or
+    declares it again starts it as `Logex.Runtime.start/1` would;
   - an instance both configurations run as one program type, a *kept* instance, moves
     through `Logex.Edit`'s per-instance switch, by one plan per program type and
     direction built at accept (fix F5), its reports named by its path, `m1.t1`. Each
@@ -108,7 +115,8 @@ defmodule Logex.Configuration.Edit do
   path, as `Logex.Edit` prunes one; every instance set aside, `{:instance_pruned, name,
   type}`; and every global the kept configuration does not declare, `{:pruned, name,
   value}`. Cancel from accept changes nothing but the resource's generation, which it moves
-  on by one (decision 64), and reports `[]`.
+  on by one (decision 64), and reports `[]`, so what a superseded edit left stays, unused,
+  for the next edit's first test, or a restart, to drop.
 
   **A restart during an edit** (decision 65) restarts the instances of the configuration
   the resource runs, drops those set aside and the globals only the other configuration
@@ -126,10 +134,10 @@ defmodule Logex.Configuration.Edit do
   | `:instance_added` | instance | its program type: started as `Logex.Runtime.instance/1` starts it, holding no var_external | a switch |
   | `:instance_stopped` | instance | its program type: set aside, its state kept unused | a switch |
   | `:instance_back` | instance | its program type: back from aside as it was set aside, its timers resumed | a switch |
-  | `:instance_pruned` | instance | its program type: its state dropped | assemble, cancel |
+  | `:instance_pruned` | instance | its program type: its state dropped | assemble, cancel; a first test, what a superseded edit set aside |
   | `:added` | global | the initial value it starts at | a switch |
   | `:initial_changed` | global | `{old, new}`: the running value is kept until a restart | a switch |
-  | `:pruned` | global | the value it had | assemble, cancel |
+  | `:pruned` | global | the value it had | assemble, cancel; a first test, what a superseded edit kept unused |
   | `:held` | global | its value, which nothing drives any more | every step |
   | `:interval` | task | `{old, new}`, in ms | a switch |
   | `:next_due` | task | `{from, to}`, in ms: decision 40's move | a switch |
@@ -143,7 +151,9 @@ defmodule Logex.Configuration.Edit do
   `:instance_stopped`, `:instance_back`, `:instance_pruned`, `:added`, `:pruned`,
   `:next_due`, `:joined` and `:left`, with each kept instance's `switched` and block list
   as OE-1 states them, and the `now` of a kept instance and of one back from aside the
-  resource's (decisions 56 and 57). The other kinds state facts.
+  resource's (decisions 56 and 57). A first test's `:instance_pruned` and `:pruned` are
+  written before the rest, since what they drop is gone before the switch, which may start
+  it again under the same name (decision 66). The other kinds state facts.
 
   **Host mistakes** raise `ArgumentError`, each with a message a test pins. Accept checks
   the runtime, with `Logex.Runtime`'s own message; then the candidate, as
@@ -559,13 +569,16 @@ defmodule Logex.Configuration.Edit do
   # declares.
   defp switch(edit, %Runtime{} = runtime, direction) do
     {from, to} = sides(edit, direction)
-    {globals, reports} = globals(from, to, runtime.globals)
+    first? = direction == :test and edit.stage == :accepted
+    {left, aside, dropped} = superseded(first?, from, runtime)
+    {globals, reports} = globals(from, to, left)
 
     context = %{
-      first?: direction == :test and edit.stage == :accepted,
+      first?: first?,
       direction: direction,
       edit: edit,
       runtime: runtime,
+      aside: aside,
       globals: globals
     }
 
@@ -590,17 +603,38 @@ defmodule Logex.Configuration.Edit do
       config: to,
       globals: globals,
       instances: instances,
-      aside: Map.merge(Map.drop(runtime.aside, started_names), Map.new(stopped)),
+      aside: Map.merge(Map.drop(aside, started_names), Map.new(stopped)),
       tasks: tasks
     }
 
     report =
-      reports ++
+      dropped ++
+        reports ++
         started ++
         for({name, state} <- stopped, do: {:instance_stopped, name, state.type}) ++
         timed ++ holding(Map.fetch!(edit.held, direction), globals)
 
     {changes, records, Enum.sort(report)}
+  end
+
+  # Decision 66: at an edit's first switch the resource runs the original and holds nothing
+  # of this edit's, so what it holds that the original does not declare, an instance set
+  # aside or a global kept unused, was left by an edit this one superseded, under another
+  # candidate: it is dropped before the switch, as assemble prunes it, `:instance_pruned` and
+  # `:pruned`, so that nothing comes back, or starts over a value, that this edit's
+  # programs never ran.
+  defp superseded(false, _from, %Runtime{globals: globals, aside: aside}),
+    do: {globals, aside, []}
+
+  defp superseded(true, %Configuration{globals: declared}, %Runtime{} = runtime) do
+    keep = by_name(declared)
+
+    {globals, gone} =
+      Map.split_with(runtime.globals, fn {name, _value} -> is_map_key(keep, name) end)
+
+    {globals, %{},
+     for({name, value} <- gone, do: {:pruned, name, value}) ++
+       for({name, state} <- runtime.aside, do: {:instance_pruned, name, state.type})}
   end
 
   # A kept instance, of one program type in both: decision 45's merge by the var_externals
@@ -640,7 +674,7 @@ defmodule Logex.Configuration.Edit do
   defp instance({%{name: name, type: type}, _other, _from, to}, context, acc),
     do:
       back(
-        Map.fetch(context.runtime.aside, name),
+        Map.fetch(context.aside, name),
         {name, Map.fetch!(to.programs, type)},
         context,
         acc

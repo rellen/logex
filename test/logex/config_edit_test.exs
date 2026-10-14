@@ -990,6 +990,117 @@ defmodule Logex.ConfigEditTest do
     end
   end
 
+  describe "an edit accepted while another is open, superseding it (decision 66)" do
+    test "an instance the superseded edit set aside is dropped at the first test, and one " <>
+           "the candidate runs again starts as a fresh start of the candidate starts it" do
+      runtime = running(60)
+      {first, _} = accepted(runtime, plant(without_m2()))
+      {_first, runtime, _} = Edit.test(first, runtime)
+      {runtime, _} = cycles(runtime, 3)
+      assert Map.keys(runtime.aside) == ["m2"]
+
+      # The corrected candidate runs `m2` again, under a motor whose timer is slower.
+      motor = String.replace(motor_ld(), "ton t1 5000", "ton t1 7000")
+      candidate = plant(plant_text(), programs(motor))
+      {second, forecast} = accepted(runtime, candidate)
+      {_second, runtime, report} = Edit.test(second, runtime)
+      assert report == forecast
+      assert {:instance_pruned, "m2", "motor"} in report
+      assert {:instance_added, "m2", "motor"} in report
+      refute Enum.any?(report, &match?({:instance_back, _, _}, &1))
+      assert runtime.aside == %{}
+      assert runtime.instances["m2"] == Runtime.start(candidate).instances["m2"]
+      assert Runtime.get!(runtime, "m2.t1.pre") == 7000
+      assert Runtime.get!(runtime, "m2.motor") == 0
+    end
+
+    test "an instance the superseded edit set aside and the candidate does not run is " <>
+           "dropped, and reported" do
+      runtime = running(60)
+      {first, _} = accepted(runtime, plant(without_m2()))
+      {first, runtime, _} = Edit.test(first, runtime)
+      {_first, runtime, _} = Edit.untest(first, runtime)
+      assert runtime.aside == %{}
+
+      # Untested, the first edit has set aside its own `m3`, which the original never ran.
+      text =
+        plant_text() <>
+          "program m3 motor\n  m3.start 0\n  m3.stop 0\n  m3.overtemp 0\n  m3.reset 0\n"
+
+      {first, _} = accepted(runtime, plant(text))
+      {first, runtime, _} = Edit.test(first, runtime)
+      {_first, runtime, _} = Edit.untest(first, runtime)
+      assert Map.keys(runtime.aside) == ["m3"]
+
+      {second, forecast} =
+        accepted(runtime, plant(String.replace(plant_text(), "priority 2", "priority 3")))
+
+      {second, runtime, report} = Edit.test(second, runtime)
+      assert report == forecast
+      assert {:instance_pruned, "m3", "motor"} in report
+      assert runtime.aside == %{}
+      {_second, runtime, report} = Edit.untest(second, runtime)
+      refute Enum.any?(report, &match?({_, "m3", _}, &1))
+      refute Map.has_key?(runtime.instances, "m3")
+    end
+
+    test "a global the superseded edit kept unused is dropped at the first test, and one " <>
+           "the candidate declares again starts at its initial value, of its new type" do
+      original =
+        String.replace(
+          plant_text(),
+          "var_global k2_at_trip bool\n",
+          "var_global k2_at_trip bool\nvar_global level dint 1200\nvar_global spare dint 7\n"
+        )
+
+      runtime = running(10, plant(original))
+      {first, _} = accepted(runtime, plant())
+      {_first, runtime, report} = Edit.test(first, runtime)
+      refute Enum.any?(report, &match?({:pruned, _, _}, &1))
+
+      # Kept unused, which no access path reads.
+      assert Map.take(runtime.globals, ~w(level spare)) == %{"level" => 1200, "spare" => 7}
+
+      candidate =
+        plant(
+          String.replace(
+            plant_text(),
+            "var_global k2_at_trip bool\n",
+            "var_global k2_at_trip bool\nvar_global level bool\n"
+          )
+        )
+
+      {second, forecast} = accepted(runtime, candidate)
+      {_second, runtime, report} = Edit.test(second, runtime)
+      assert report == forecast
+      assert {:pruned, "level", 1200} in report
+      assert {:pruned, "spare", 7} in report
+      assert {:added, "level", 0} in report
+      assert Runtime.get(runtime, "level") == {:ok, 0}
+      refute Map.has_key?(runtime.globals, "spare")
+      assert Map.keys(runtime.globals) == Map.keys(Runtime.start(candidate).globals)
+    end
+
+    test "the report's writes rebuild the resource, the prunes written first" do
+      runtime = running(60)
+      {first, _} = accepted(runtime, plant(without_m2()))
+      {_first, before, _} = Edit.test(first, runtime)
+      {second, _} = accepted(before, plant())
+      {_second, later, report} = Edit.test(second, before)
+
+      {prunes, writes} =
+        Enum.split_with(
+          report,
+          &match?({kind, _, _} when kind in [:pruned, :instance_pruned], &1)
+        )
+
+      assert prunes == [{:instance_pruned, "m2", "motor"}]
+      assert {:instance_added, "m2", "motor"} in writes
+      assert later.aside == Map.drop(before.aside, ["m2"])
+      assert later.instances["m2"] == Runtime.start(plant()).instances["m2"]
+    end
+  end
+
   describe "a global nothing drives any more holds its value, and every step reports it " <>
              "(decisions 20 and 58)" do
     test "a var_output no longer written: its point and the instance's own output, both" do

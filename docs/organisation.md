@@ -1619,10 +1619,10 @@ duty. The new kinds, and OE-1's given at the configuration's level:
 | `:instance_added` | instance | its program type | a switch | write: started as `Logex.Runtime.instance/1` starts it, holding no var_external |
 | `:instance_stopped` | instance | its program type | a switch | write: set aside, its state kept unused |
 | `:instance_back` | instance | its program type | a switch | write: back from aside, its state as it was set aside, its timers resumed (decision 57) |
-| `:instance_pruned` | instance | its program type | assemble, cancel | write: its state dropped |
+| `:instance_pruned` | instance | its program type | assemble, cancel; a first test, what a superseded edit set aside (decision 66) | write: its state dropped |
 | `:added` | global | its initial value | a switch | write: `Logex.Configuration.initial/1` |
 | `:initial_changed` | global | `{old, new}` | a switch | fact: the running value is kept (decision 44) |
-| `:pruned` | global | the value it had | assemble, cancel | write |
+| `:pruned` | global | the value it had | assemble, cancel; a first test, what a superseded edit kept unused (decision 66) | write |
 | `:held` | global | its value | every step | fact: nothing drives it any more (decision 20; decision 58) |
 | `:interval` | task | `{old, new}` ms | a switch | fact |
 | `:next_due` | task | `{from, to}` ms | a switch | write: decision 40 |
@@ -1633,7 +1633,8 @@ duty. The new kinds, and OE-1's given at the configuration's level:
 
 The writes a report lists, applied to the resource before its step, give the resource
 after it, exactly, with each instance's `switched` and block list as OE-1 states them and
-its `now` as decision 56 sets it. `api_contract_test.exs`'s walk of a configuration's edit
+its `now` as decision 56 sets it, a first test's `:instance_pruned` and `:pruned` written
+before the rest (decision 66). `api_contract_test.exs`'s walk of a configuration's edit
 checks it.
 
 *Host mistakes* raise `ArgumentError`, each message pinned by a test. A step checks the
@@ -1766,7 +1767,7 @@ above and `Logex.Runtime`'s one-rule section:
 | a var_external | none held | merged in, split off | none held | decision 45, as above | bound by name | — | none held |
 | an instance back from aside | — | — | — | — | its state as set aside, each timer that was timing resumed from the switch, `:resumed` by path (decision 57) | — | — |
 
-Two points the table makes, which OE-1's lone instance never met:
+Three points the table makes, which OE-1's lone instance never met:
 - **An instance on a slow task is not scanned by every cycle.** Its `switched` stays true
   from a switch until its own next scan, however many cycles pass, which is what fix F3's
   "no scan since the last switch" needs, read per instance.
@@ -1775,6 +1776,15 @@ Two points the table makes, which OE-1's lone instance never met:
   keeps the generation and the edit's stage: the next switch starts again what it dropped,
   `:instance_added` and `:added`, as OE-1's restart during an edit does for tags
   (decision 65).
+- **An edit accepted while another is open supersedes it** once it steps: the generation
+  then refuses the old one. The resource may then hold what the superseded edit left: an
+  instance set aside, or a global only its candidate, or its original, declared, kept
+  unused. At the new edit's first test the resource runs the new edit's original and
+  holds nothing of the new edit's, so each of these, an instance set aside or a global the
+  original does not declare, is dropped before the switch, `:instance_pruned` and
+  `:pruned`, and a candidate that runs or declares it again starts it as `start/1` would,
+  `:instance_added` and `:added` (decision 66). Cancel from accept leaves it, unused, for
+  the next edit's first test or a restart to drop.
 
 *The spike of OE-1's record across slow tasks* (2026-10-13, before any of OE-2's code,
 `PLAN.md` OE-2's second step). A throwaway draft of the contract walk ran the design
@@ -2529,8 +2539,9 @@ preference stated. Decisions 46–52 were taken the same day, all as recommended
 throwaway spikes of the run-time pieces no design spike had built, one copy of a global
 (M2-4) and event tasks (M2-6). Decisions 53–54 were taken on 2026-10-05, as recommended,
 from the check of M2-5's fixes. Decisions 55–65 were taken on 2026-10-13, all as
-recommended, from OE-2's design (§4.9, "OE-2's design"). All sixty-five are kept with their
-options so the reasons stay with them.
+recommended, from OE-2's design (§4.9, "OE-2's design"). Decision 66 was taken on
+2026-10-14, as recommended, from the review of OE-2's landing, which found the case it
+answers. All sixty-six are kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3214,6 +3225,36 @@ choices are §4.9's rules.
     during an edit does for tags; or it keeps the instances set aside as they are. *Recommend
     dropping them:* a restart starts the plant again, and an instance kept aside across it
     would come back with state no restart touched. Adopted. *(Landed 2026-10-13.)*
+66. **What an edit superseded by another left in the resource (OE-2).** An edit accepted
+    while another is open supersedes it (§4.9): once the new one steps, the generation refuses
+    the old one, so it never assembles or cancels, and nothing prunes what it left. On
+    §4.4's plant: the first try adds a horn instance `h` and a `dint` global `lvl`, is
+    tested and untested, `h` set aside and `lvl` kept unused at 50; the corrected
+    candidate, accepted without a cancel, gives `h` a 3 s on-delay and makes `lvl` a `bool`.
+    Its test found `h` aside under its name and brought it back, unmigrated, its timer's
+    `.pre` 0, so the horn sounded at once, not after 3 s, and kept `lvl` at 50 as a bool.
+    - Drop it at the new edit's first test: the resource then runs the new edit's original
+      and holds nothing of the new edit's, so every instance set aside, and every global
+      the original does not declare, is the superseded edit's, dropped before the switch
+      and reported, `:instance_pruned` and `:pruned`, and a candidate that runs or declares
+      it again starts it as `Logex.Runtime.start/1` would;
+    - start over it at the first test, as decision 26 starts again a tag the candidate
+      adds over what a plain swap left, an instance or global the candidate names again
+      started and reported as added, the rest left unused until assemble or cancel prunes
+      it;
+    - or refuse an accept while the resource holds anything a superseded edit left, so
+      that the host must untest and cancel first.
+
+    *Recommend dropping it.* It makes true what §4.9 already says, that an instance comes
+    back from aside only where an earlier switch of this edit set it aside; the report
+    names what is lost, so its writes still rebuild the resource; and starting over it
+    would keep, unused until assemble, state that no program of either configuration
+    declares. A refusal would take away the supersede §4.9 supports, and make the host
+    untest and cancel an edit it has given up on. A first test's prunes are written
+    before its other writes, since the switch may start again what they drop under the
+    same name. Cancel from accept still changes nothing but the generation (decision 64),
+    so what it leaves waits for the next edit's first test or a restart. Adopted.
+    *(Landed 2026-10-14.)*
 
 ---
 

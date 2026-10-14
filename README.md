@@ -1160,7 +1160,7 @@ steps and the same report over the resource: `accept/2` takes the `%Logex.Runtim
 runs the original and the candidate configuration; each step takes the runtime and
 returns it, switched between two cycles, so `Logex.Runtime.cycle/3` runs whatever the
 edit has installed, and the host chooses nothing. It never writes a global: decisions
-55–65 in [`docs/organisation.md`](docs/organisation.md) §7, and its "OE-2's design" in
+55–66 in [`docs/organisation.md`](docs/organisation.md) §7, and its "OE-2's design" in
 §4.9, give every rule.
 
 `v2/conveyor.ld` sounds a horn, a new unlocated global it writes through a
@@ -1321,7 +1321,10 @@ stopped; one given another program type is a remove and an add, and may run on a
 task. A var_external made a program's own `var` keeps the global's value, `:left`; a
 `var` made a var_external drops its own value for the global's, `:joined`, and the global
 is left alone. A changed priority, and a reorder of tasks or instances, is allowed and
-reported. A restart during an edit keeps its stage.
+reported. A restart during an edit keeps its stage. An edit accepted while another is
+open supersedes it: at its first test, whatever the earlier edit left set aside or kept
+unused is dropped, `:instance_pruned` and `:pruned`, so an instance or global the new
+candidate names again starts afresh (decision 66).
 
 The host's duties shrink to the loop's: take each step between two cycles, keep the
 runtime it returns, and tolerate a report kind it does not know. The input image is the
