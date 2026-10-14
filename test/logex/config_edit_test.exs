@@ -990,6 +990,57 @@ defmodule Logex.ConfigEditTest do
       assert {acc.(runtime), outputs["q"]} == {300, 0}
     end
 
+    # M3-2: a `tof` in its delay and a `tp` in its pulse are timing while `.tt` is set, with
+    # `.en` 0 where the rung is false (decisions 93 and 94), so each comes back resumed by its
+    # own timing member, not by `.en` as a `ton` does.
+    test "a tof in its delay and a tp in its pulse, their rungs false, carry on too, each " <>
+           "by `.tt` (decisions 57, 93 and 94)" do
+      for {type, shows, start} <- [{"tof", "dn", [1, 0, 0]}, {"tp", "tt", [0, 1, 0]}] do
+        {:ok, timed} =
+          Logex.compile(
+            "var_input x bool\nvar_output y bool\nvar t #{type}\n\nxic x #{type} t 50\n" <>
+              "xic t.#{shows} ote y\n",
+            name: "a"
+          )
+
+        {:ok, other} =
+          Logex.compile("var_input x bool\nvar_output y bool\n\nxic x ote y\n", name: "b")
+
+        head =
+          "task fast interval 10 priority 1\nvar_global i bool at d.i.0\n" <>
+            "var_global q bool at d.q.0\nvar_global r bool at d.q.1\n" <>
+            "program k b with fast\n  k.x i\n  k.y r\n"
+
+        {:ok, original} =
+          Configuration.compile("plant", head <> "program p a with fast\n  p.x i\n  p.y q\n", %{
+            "a" => timed,
+            "b" => other
+          })
+
+        {:ok, candidate} = Configuration.compile("plant", head, %{"b" => other})
+
+        runtime =
+          Enum.reduce(start, Runtime.start(original), fn i, runtime ->
+            elem(cycles(runtime, 1, %{"i" => i}), 0)
+          end)
+
+        # 10 ms of its 50 gone, its rung false.
+        assert %{"tt" => 1, "en" => 0, "acc" => 10} = runtime.instances["p"].env["t"]
+        {edit, _} = accepted(runtime, candidate)
+        {edit, runtime, _} = Edit.test(edit, runtime)
+        # Set aside for 500 ms, which its timer does not catch up (decision 57).
+        {runtime, _} = cycles(runtime, 50, %{"i" => 0})
+        {_edit, runtime, report} = Edit.untest(edit, runtime)
+        assert {:resumed, "p.t", 500} in report, type
+        # The 40 ms left: three cycles more with `.tt` set, and the fourth ends it.
+        {runtime, outputs} = cycles(runtime, 3)
+        timer = fn rt -> Map.take(rt.instances["p"].env["t"], ~w(acc tt)) end
+        assert {timer.(runtime), outputs["q"]} == {%{"acc" => 40, "tt" => 1}, 1}, type
+        {runtime, outputs} = cycles(runtime, 1)
+        assert {Runtime.get!(runtime, "p.t.tt"), outputs["q"]} == {0, 0}, type
+      end
+    end
+
     test "one brought back at the time it was set aside resumes nothing" do
       # `m1`, on `fast`, last scanned at 60 ms, set aside and brought back at 60 ms.
       runtime = running(60)

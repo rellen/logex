@@ -3238,6 +3238,7 @@ defmodule Logex.ApiContractTest do
     :blocked_inside,
     :round_trip_aside,
     :round_trip_next_due,
+    :resumed_by_tt,
     :superseded,
     :superseded_aside,
     :superseded_global,
@@ -3251,6 +3252,7 @@ defmodule Logex.ApiContractTest do
 
     for _ <- 1..500 do
       spec = ce_spec()
+      Process.put(:ce_timers, Map.new(spec.versions, fn {type, v} -> {type, v.timer} end))
       {:ok, config} = ce_config(spec)
       runtime = Runtime.start(config)
 
@@ -3291,7 +3293,8 @@ defmodule Logex.ApiContractTest do
 
   # One version of a program type, from one vocabulary, so that two versions share their
   # names: `x` a var_input, a var or none, which a switch makes live or unread; the timer
-  # `t1` run by a `ton` at one of two presets or none, its `.pre` written by logic now and
+  # `t1`, of one kind for every version of its type (M3-2: a `ton`, a `tof`, a `tp` or an
+  # `rto`), run at one of two presets or none, its `.pre` written by logic now and
   # then, and its `.dn` copied out or not, which holds an output; a one-shot whose rung
   # changes; `n` with an initial value that changes, or none; `k`, whose type a refused
   # draw changes; `g0` a var_external, a var or none, read and now and then written; and a
@@ -3299,6 +3302,7 @@ defmodule Logex.ApiContractTest do
   defp ce_version,
     do: %{
       x: pick([:input, :var, :none]),
+      timer: pick(~w(ton ton tof tp rto)),
       ton: pick([nil, 15, 30, 30, 45]),
       pre: pick([true, false, false]),
       out: pick([true, true, false]),
@@ -3315,11 +3319,11 @@ defmodule Logex.ApiContractTest do
       ["var_input in bool"] ++
         ce_x(v.x) ++
         ["var_output out bool", "var_output q bool", "var_output r bool"] ++
-        ["var t1 ton", "var sp dint 40", "var s bool", "var c bool", "var w bool"] ++
+        ["var t1 #{v.timer}", "var sp dint 40", "var s bool", "var c bool", "var w bool"] ++
         ce_n(v.n) ++ ["var k #{v.k}"] ++ ce_g(v.g) ++ ce_blk(v.blk)
 
     rungs =
-      ce_ton(v.ton) ++
+      ce_ton(v.timer, v.ton) ++
         if(v.pre, do: ["xio in move sp t1.pre"], else: []) ++
         if(v.out, do: ["xic t1.dn ote out"], else: []) ++
         ce_ons(v.ons) ++
@@ -3340,8 +3344,8 @@ defmodule Logex.ApiContractTest do
   defp ce_g(:none), do: []
   defp ce_blk(true), do: ["var b1 blk"]
   defp ce_blk(false), do: []
-  defp ce_ton(nil), do: []
-  defp ce_ton(preset), do: ["xic in ton t1 #{preset}"]
+  defp ce_ton(_timer, nil), do: []
+  defp ce_ton(timer, preset), do: ["xic in #{timer} t1 #{preset}"]
   defp ce_ons(nil), do: []
   defp ce_ons(:xic), do: ["xic in ote c ons s ote q"]
   defp ce_ons(:xio), do: ["xio in ote c ons s ote q"]
@@ -3552,11 +3556,13 @@ defmodule Logex.ApiContractTest do
     ce_wire(spec, :rewire not in changes)
   end
 
-  # A new version of a type, `k` kept; or one that keeps all but its timer's `ton`, taken
-  # out, given back or moved to another preset, so that resumes and their undoing come up.
+  # A new version of a type, `k` and its timer's kind kept; or one that keeps all but its
+  # timer's instruction, taken out, given back or moved to another preset, so that resumes
+  # and their undoing come up.
   defp ce_change(:version, spec) do
     type = pick(~w(a b))
-    %{spec | versions: Map.put(spec.versions, type, %{ce_version() | k: spec.versions[type].k})}
+    was = spec.versions[type]
+    %{spec | versions: Map.put(spec.versions, type, %{ce_version() | k: was.k, timer: was.timer})}
   end
 
   defp ce_change(:ton, spec) do
@@ -4279,11 +4285,11 @@ defmodule Logex.ApiContractTest do
     # timing; and, but at the first test, no start over a value the state already holds.
     for {:resumed, path, gap} <- report do
       [name | rest] = String.split(path, ".")
-
-      %{"en" => 1, "last" => last} =
-        get_in(Map.merge(before.instances, before.aside)[name].env, rest)
-
+      state = Map.merge(before.instances, before.aside)[name]
+      times = ce_times(state.type, rest)
+      %{^times => 1, "last" => last} = get_in(state.env, rest)
       assert last + gap == later.now
+      ce_reach(:resumed_by_tt, times == "tt")
     end
 
     for {:added, path, _} <- report,
@@ -4624,14 +4630,25 @@ defmodule Logex.ApiContractTest do
   defp ce_back_again(true, state, now) do
     env =
       Enum.reduce([["t1"], ["b1", "i1", "t"]], state.env, fn path, env ->
+        times = ce_times(state.type, path)
+
         case get_in(env, path) do
-          %{"en" => 1, "last" => last} when last < now -> put_in(env, path ++ ["last"], now)
+          %{^times => 1, "last" => last} when last < now -> put_in(env, path ++ ["last"], now)
           _ -> env
         end
       end)
 
     %{state | env: env, now: now}
   end
+
+  # The member whose 1 says a timer is timing, by its kind (M3-2): a `tof` in its delay and
+  # a `tp` in its pulse, `.tt`, whatever the rung; a `ton` and an `rto`, `.en`, the rung's.
+  # `t1`'s kind is its program type's, one for the walk; the leaf block's timer is a `ton`.
+  defp ce_times(type, ["t1"]), do: ce_times(Process.get(:ce_timers)[type])
+  defp ce_times(_type, _path), do: "en"
+
+  defp ce_times(kind) when kind in ["tof", "tp"], do: "tt"
+  defp ce_times(_kind), do: "en"
 
   defp ce_next_due(next, {same, same}, _now), do: next
   defp ce_next_due(next, {old, new}, now), do: min(min(next, now + new), now + old)
