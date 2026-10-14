@@ -885,8 +885,8 @@ defmodule Logex.Edit.Plan do
     do: done(dn, en, max(acc, 0), pre, name)
 
   # M3-1 (decision 88): a counter's done member, `q` or a ctud's `qu`, is `cv >= pv` at its
-  # next run, whatever its rung, so its forecast is certain. A ctd's `q`, `cv <= 0`, moves
-  # with no preset.
+  # next run, whatever its rung, against the `cv` that run leaves, so the forecast holds
+  # unless that run counts, resets or loads. A ctd's `q`, `cv <= 0`, moves with no preset.
   defp done(_to, value, name, %{kind: :counter, done: member, preset: preset})
        when is_binary(member),
        do: counted(Map.get(value, member), Map.get(value, "cv"), Map.get(value, preset), name)

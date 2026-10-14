@@ -1395,6 +1395,42 @@ defmodule Logex.EditTest do
       assert %{"cv" => 4, "q" => 1} = later.env["boxes"]
     end
 
+    test "the forecast is the next run's unless that run counts, resets or loads" do
+      to_four = String.replace(@boxes, "ctu boxes 3", "ctu boxes 4")
+      three = @counted ++ [{10, %{"eye" => 0}}, {10, %{"eye" => 1}}, {10, %{"eye" => 0}}]
+
+      # `q` would drop at 3 against 4, but the next run counts the box to 4.
+      assert {[{:dn_drops, "boxes", {3, 4}}, {:preset, "boxes", {3, 4}}], _, later, _} =
+               counter_switched(@boxes, to_four, three, [{10, %{"eye" => 1}}])
+
+      assert %{"cv" => 4, "q" => 1} = later.env["boxes"]
+
+      # `q` would rise at 2 against 2, but the reset, on its rung above, clears the count.
+      down = String.replace(@boxes, "ctu boxes 3", "ctu boxes 2")
+
+      assert {[{:dn_rises, "boxes", {2, 2}}, {:preset, "boxes", {3, 2}}], _, later, _} =
+               counter_switched(@boxes, down, @counted, [{10, %{"eye" => 0, "rst" => 1}}])
+
+      assert %{"cv" => 0, "q" => 0} = later.env["boxes"]
+    end
+
+    test "a ctud's preset moved forecasts its `qu`, the done output its `ctu` side sets" do
+      stock = "var stock ctud\nxic rst ote stock.ld\nxic eye ctu stock 5\nxic out ctd stock 5"
+      to = fn pv -> String.replace(stock, "stock 5", "stock #{pv}") end
+      loaded = [{0, %{"rst" => 1}}, {10, %{"rst" => 0}}]
+
+      assert {[{:dn_drops, "stock", {5, 7}}, {:preset, "stock", {5, 7}}], tested, later, _} =
+               counter_switched(stock, to.(7), loaded, [{10, %{}}])
+
+      assert %{"cv" => 5, "pv" => 7, "qu" => 1} = tested.env["stock"]
+      assert %{"cv" => 5, "qu" => 0, "qd" => 0} = later.env["stock"]
+
+      assert {[{:dn_rises, "stock", {0, 0}}, {:preset, "stock", {5, 0}}], _, later, _} =
+               counter_switched(stock, to.(0), [{0, %{}}], [{10, %{}}])
+
+      assert %{"cv" => 0, "qu" => 1, "qd" => 1} = later.env["stock"]
+    end
+
     test "a `pv` logic moved is kept and reported, and a ctd's preset moves no forecast" do
       moved = "var_input more bool\n" <> @boxes <> "\nxic more move 9 boxes.pv"
       to = String.replace(moved, "ctu boxes 3", "ctu boxes 4")

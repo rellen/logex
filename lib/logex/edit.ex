@@ -102,8 +102,9 @@ defmodule Logex.Edit do
   for `.pre`, above, each move reported as `:preset` or `:preset_kept`, and it keeps its
   count, `cv`, and its flags. After a move of the `.pv` of a counter the program started
   runs, `:dn_drops` and `:dn_rises` say what its done member, `q` (a ctud's `qu`), now `cv
-  >= pv` against the old `.pv`, becomes at the counter's next run, whatever its rung: certain,
-  since every run sets it. A ctd's `q` is `cv <= 0`, which no `.pv` moves, so it has none.
+  >= pv` against the old `.pv`, becomes at the counter's next run, whatever its rung, since
+  every run sets it, unless that run counts, resets or loads, which moves `cv` first. A
+  ctd's `q` is `cv <= 0`, which no `.pv` moves, so it has none.
   No counter is resumed: it keeps no time. A counter's edge memory, `cu` or `cd`, is
   blocked as a one-shot's storage bit is (below), by its path, `boxes.cu`: its `ctu` or
   `ctd` counts no edge at the next scan that runs it, so a counter the edit adds while its

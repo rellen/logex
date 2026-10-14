@@ -2425,7 +2425,10 @@ names it breaks. Growth tests are in reductions.
   so: a rung is compared without the preset of any `ton` on it too, so an edit that moves
   only a `ton`'s preset no longer blocks an `ons` on its rung. The change loses fewer real
   edges and makes none up, so it was kept, owned by decision 87 and pinned in
-  `edit_test.exs`. The suite is at 975 tests (8 doctests).
+  `edit_test.exs`. No test pinned a `ctud`'s forecast, on its `qu`, and one does now. A
+  counter's forecast was said to be certain, and holds only unless the run it forecasts
+  counts, resets or loads, as decision 88 now says, pinned both ways. The suite is at 977
+  tests (8 doctests).
 - **M3-2 · The other timers: `tof`, `tp`, `rto`.** Each an instruction and a type word,
   as `ton` is, with the `ton`'s members `.pre .acc .dn .tt .en` (decision 68 keeps them for
   timers), in milliseconds. `tp`'s pulse is `.tt`, `.dn` coming on as it ends (decision

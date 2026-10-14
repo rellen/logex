@@ -1288,7 +1288,7 @@ and name. The kinds are an open set, which a host must tolerate:
 | `:unread` | the value it holds, 0 where the state lacks it, as after a plain swap; the host stops sending it | a switch |
 | `:preset` | `{from, to}`, the move of `.pre` | a switch |
 | `:preset_kept` | `{pre, preset}`: `.pre` kept where logic changed it, on a timer the program started runs | a switch |
-| `:dn_drops`, `:dn_rises` | `{acc, preset}`: what `.dn` does at the next scan with its rung true, a negative `.acc` counted as 0 | a switch |
+| `:dn_drops`, `:dn_rises` | `{acc, preset}`: what `.dn` does at the next scan with its rung true, a negative `.acc` counted as 0; for a counter, `{cv, pv}`: what its `q` (a ctud's `qu`) becomes at its next run, unless that run counts, resets or loads (decision 88) | a switch |
 | `:resumed` | the milliseconds not caught up | a switch |
 | `:resume_undone` | the milliseconds of the resume this edit's last switch made, which `last` moves back by | a switch |
 | `:ons_blocked` | the storage bit's value, unchanged | a switch |
@@ -3537,7 +3537,11 @@ alternative the record keeps.
     since the preset is read by no power on the rung, and was kept. M3-1's step 3 made the
     change without saying so; this note owns it, and `edit_test.exs` pins it.)*
 88. **A counter's forecast after its preset moves (M3-1).** A `.pv` moved by decisions 23
-    and 27 changes `q` (`qu` on a `ctud`) at the counter's next run, whatever its rung.
+    and 27 changes `q` (`qu` on a `ctud`) at the counter's next run, whatever its rung,
+    unless that run counts, resets or loads. *(Corrected 2026-10-14, after M3-1's review,
+    which had read "certain": the run sets `q` from the `cv` it leaves, so a box counted or
+    a reset at that run can keep `q` where it was, as a timer's forecast holds unless
+    enough time has passed.)*
     - Report it as `:dn_drops` and `:dn_rises`, read as "the done output", `{cv, pv}`;
     - or two new report kinds.
 
