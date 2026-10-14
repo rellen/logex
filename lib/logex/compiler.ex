@@ -651,53 +651,77 @@ defmodule Logex.Compiler do
 
   # M1-6: one `ton` runs a timer, and the number on it is the timer's preset, its `.pre`
   # when an instance starts or restarts, which logic may then change (decision 4). So the
-  # compiled tag carries it, as the initial value of its `pre`. A second `ton` on a timer
-  # is an error at its own line, citing the first, as a second `ons` on a storage bit is:
-  # two would give a timer two presets, and a false one resets the timer under a true one
+  # compiled tag carries it, as the initial value of its preset member, the one its type
+  # names (Logex.FbType.rules/1, M3-1). A second instruction of one mnemonic on one
+  # instance is an error at its own line, citing the first, as a second `ons` on a storage
+  # bit is: two would give it two presets, and a false one resets a timer under a true one
   # every scan. One walk in rung order, so it stays linear.
   defp presets(instructions, tags) do
     {run, diagnostics} =
       instructions
-      |> Enum.flat_map(&ton/1)
+      |> Enum.flat_map(&run/1)
       |> Enum.reduce({%{}, []}, &preset(&1, &2, tags))
 
-    {Enum.reduce(run, tags, fn {timer, {_line, pre}}, tags -> starts(tags, timer, pre) end),
-     Enum.reverse(diagnostics)}
+    {Enum.reduce(run, tags, fn {instance, {_line, symbol, pre}}, tags ->
+       starts(tags, instance, symbol, pre)
+     end), Enum.reverse(diagnostics)}
   end
 
-  # Every `ton` that names a timer runs it, whatever its preset: `ton t1 sp` and a second
-  # `ton t1 5000` are two mistakes. A preset that is not a literal was reported already, and
-  # a program with a diagnostic never runs, so its nil is never a timer's `.pre`.
-  defp ton({:ton, line, [{:name, _, timer} | preset]}), do: [{timer, line, preset_of(preset)}]
-  defp ton(_instruction), do: []
+  # The instructions that run a built-in instance, `ton` among them (Logex.FbType.rules/1).
+  @runners FbType.runners()
+
+  # Every instruction that names an instance runs it, whatever its preset: `ton t1 sp` and
+  # a second `ton t1 5000` are two mistakes. A preset that is not a literal was reported
+  # already, and a program with a diagnostic never runs, so its nil is never a `.pre`.
+  defp run({symbol, line, [{:name, _, instance} | preset]}) when symbol in @runners,
+    do: [{instance, line, symbol, preset_of(preset)}]
+
+  defp run(_instruction), do: []
 
   defp preset_of([{:int_lit, _, preset}]), do: preset
   defp preset_of(_reported), do: nil
 
-  defp preset({timer, line, pre}, {run, diagnostics}, tags),
+  defp preset({instance, line, symbol, pre}, {run, diagnostics}, tags),
     do:
-      run_by(Map.fetch(run, timer), Map.get(tags, timer), {timer, line, pre}, {run, diagnostics})
+      run_by(
+        Map.fetch(run, instance),
+        Map.get(tags, instance),
+        {instance, line, symbol, pre},
+        {run, diagnostics}
+      )
 
-  defp run_by(:error, %Tag{type: %FbType{}}, {timer, line, pre}, {run, diagnostics}),
-    do: {Map.put(run, timer, {line, pre}), diagnostics}
+  defp run_by(:error, %Tag{type: %FbType{}}, {instance, line, symbol, pre}, {run, diagnostics}),
+    do: {Map.put(run, instance, {line, symbol, pre}), diagnostics}
 
-  defp run_by({:ok, {first, _}}, %Tag{}, {timer, line, _pre}, {run, diagnostics}) do
+  defp run_by({:ok, {first, _, _}}, %Tag{}, {instance, line, symbol, _pre}, {run, diagnostics}) do
     message =
-      "`#{timer}` is already run by the `ton` #{where(first, line)}: one `ton` runs a timer"
+      "`#{instance}` is already run by the `#{symbol}` #{where(first, line)}: " <>
+        "one `#{symbol}` runs #{a_runs(symbol)}"
 
     {run, [diagnostic(line, message) | diagnostics]}
   end
 
-  defp run_by(:error, _not_an_instance, _ton, acc), do: acc
+  defp run_by(:error, _not_an_instance, _run, acc), do: acc
 
-  defp starts(tags, timer, pre), do: Map.update!(tags, timer, &%{&1 | initial: %{"pre" => pre}})
+  defp a_runs(:ton), do: "a timer"
 
-  # M1-6: nothing may follow a `ton` on its path. Whether the power after a `ton` is the
-  # rung's, as after `ote`, or the timer's `.dn`, IEC's Q, is not settled, and refusing
-  # both is the reversible way to leave it open. An element bears a `ton` if it is one, or
-  # if it is a group one of whose legs holds one, and in every series, a rung or a leg,
-  # each element after one that bears a `ton` is an error at its own line, once, citing
-  # the first such `ton`. Legs beside a `ton` are not on its path, and are fine. One walk of
+  # The preset starts the member the type names, on a type the instruction runs; on any
+  # other, which was reported already, there is nothing to start.
+  defp starts(tags, instance, symbol, pre),
+    do: Map.update!(tags, instance, &started(&1, FbType.runs?(&1.type, symbol), pre))
+
+  defp started(%Tag{type: type} = tag, true, pre),
+    do: %{tag | initial: %{FbType.rules(type).preset => pre}}
+
+  defp started(tag, false, _pre), do: tag
+
+  # M1-6: nothing may follow a `ton` on its path, nor, since M3-1, any instruction that
+  # runs a built-in instance (decision 73). Whether the power after one is the rung's, as
+  # after `ote`, or the instance's done member, IEC's Q, is not settled, and refusing both
+  # is the reversible way to leave it open. An element bears such an instruction if it is
+  # one, or if it is a group one of whose legs holds one, and in every series, a rung or a
+  # leg, each element after one that bears one is an error at its own line, once, citing
+  # the first. Legs beside a `ton` are not on its path, and are fine. One walk of
   # a rung, whose diagnostics are gathered newest first and reversed once, so a group
   # nested deep is not copied at every level.
   defp path(elements, known) do
@@ -713,7 +737,8 @@ defmodule Logex.Compiler do
     series(rest, earliest(before, borne), diagnostics, known)
   end
 
-  defp bears({:ton, _, _} = ton, diagnostics, _known), do: {diagnostics, ton}
+  defp bears({symbol, _, _} = runner, diagnostics, _known) when symbol in @runners,
+    do: {diagnostics, runner}
 
   defp bears({:branches, legs}, diagnostics, known),
     do: Enum.reduce(legs, {diagnostics, nil}, &leg(&1, &2, known))
@@ -730,11 +755,11 @@ defmodule Logex.Compiler do
 
   defp follows(nil, _element, _known), do: []
 
-  defp follows({:ton, line, operands}, element, known) do
+  defp follows({symbol, line, operands}, element, known) do
     message =
-      "#{shown(element)} follows #{shown({:ton, line, Enum.take(operands, 1)})} on its path: " <>
-        "what passes on after a `ton` is not settled, so a `ton` ends its path; " <>
-        read_timer(operands, known)
+      "#{shown(element)} follows #{shown({symbol, line, Enum.take(operands, 1)})} on its " <>
+        "path: what passes on after a `#{symbol}` is not settled, so a `#{symbol}` ends its " <>
+        "path; " <> read_instance(symbol, operands, known)
 
     [diagnostic(line_of(element, line), message)]
   end
@@ -749,20 +774,42 @@ defmodule Logex.Compiler do
   defp text({:int_lit, _, value}), do: "#{value}"
   defp text({:member, _, path}), do: Enum.join(path, ".")
 
-  defp read_timer([{:name, _, timer} | _], known), do: read(timer?(timer, known), timer)
-  defp read_timer(_no_timer, _known), do: read(false, nil)
+  # The member a rung below reads, the one the instance's type gives the instruction
+  # (Logex.FbType.rules/1), or for a name not declared yet, the one the type the
+  # instruction is named after gives it.
+  defp read_instance(symbol, [{:name, _, instance} | _], known),
+    do: read(runnable(symbol, instance, known), symbol, instance)
 
-  defp read(true, timer), do: "read the timer with `xic #{timer}.dn` on a rung below"
-  defp read(false, _timer), do: "read the timer's `.dn` on a rung below"
+  defp read_instance(symbol, _no_instance, _known), do: read(nil, symbol, nil)
 
-  # Whether a hint may name `name` as a timer: a declared one, or a name not declared yet,
-  # which the hint fits once it is declared as one. Anything else, a bool, a member or a
-  # reserved word, has a diagnostic of its own, which a hint beside it would contradict.
-  defp timer?(name, known), do: runnable?(Declarations.reserved(name), hinted(name, known))
+  defp read(nil, symbol, _instance),
+    do: "read the #{noun(symbol)}'s `.#{reads(own_type(symbol), symbol)}` on a rung below"
 
-  defp runnable?(nil, {:ok, %Tag{type: %FbType{name: "ton"}}}), do: true
-  defp runnable?(nil, :error), do: true
-  defp runnable?(_reserved, _found), do: false
+  defp read(type, symbol, instance),
+    do: "read the #{noun(symbol)} with `xic #{instance}.#{reads(type, symbol)}` on a rung below"
+
+  defp reads(type, symbol), do: elem(Map.fetch!(FbType.rules(type).runs, symbol), 1)
+
+  defp noun(:ton), do: "timer"
+
+  # The built-in type an instruction is named after.
+  defp own_type(symbol), do: FbType.builtin(Atom.to_string(symbol))
+
+  # Whether a hint may name `name` as an instance the instruction runs: a declared one, or
+  # a name not declared yet, which the hint fits once it is declared as one. Anything else,
+  # a bool, a member or a reserved word, has a diagnostic of its own, which a hint beside
+  # it would contradict. The type it is read as, or nil.
+  defp runnable(symbol, name, known),
+    do: runnable_as(Declarations.reserved(name), hinted(name, known), symbol)
+
+  defp runnable_as(nil, {:ok, %Tag{type: %FbType{} = type}}, symbol),
+    do: if_runs(FbType.runs?(type, symbol), type)
+
+  defp runnable_as(nil, :error, symbol), do: own_type(symbol)
+  defp runnable_as(_reserved, _found, _symbol), do: nil
+
+  defp if_runs(true, type), do: type
+  defp if_runs(false, _type), do: nil
 
   # A name not declared yet is one that can be: a name differing from a declared tag only
   # in case never can be (Logex.Declarations), so a hint naming it would never compile.
@@ -954,7 +1001,7 @@ defmodule Logex.Compiler do
     diagnostics = check_count(signature, operands, rest, at, diagnostics)
     diagnostics = check_kinds(signature, operands, at, diagnostics)
     diagnostics = check_tags(signature, operands, at, scope, diagnostics)
-    diagnostics = check_preset(signature, operands, at, known, diagnostics)
+    diagnostics = check_preset(signature, operands, {symbol, at}, known, diagnostics)
     lower(rest, [{symbol, line, Enum.map(operands, &operand/1)} | ir], diagnostics, known)
   end
 
@@ -1309,41 +1356,53 @@ defmodule Logex.Compiler do
   defp check_kind(kind, {:int_lit, _, value}, {line, word}, diagnostics),
     do: [diagnostic(line, "`#{word}` expects #{kind(kind)}, found `#{value}`") | diagnostics]
 
-  # M1-6: `ton t1 sp`. The preset is the timer's starting `.pre`, a number on the rung; a
-  # value from a tag is moved into `.pre` instead, which logic may write (decision 4).
+  # M1-6: `ton t1 sp`. The preset is the instance's starting preset member, a number on
+  # the rung; a value from a tag is moved into that member instead, which logic may write
+  # (decision 4), `.pre` for a timer.
   defp check_preset(
          [_, {:preset, _}],
          [first, {:name, line, name}],
-         {_, word},
+         {symbol, {_, word}},
          known,
          diagnostics
        ) do
     message =
-      "`#{word}` takes its preset as a number of milliseconds, found `#{name}`" <>
-        moved(first, name, known)
+      "`#{word}` takes its preset as #{unit(symbol)}, found `#{name}`" <>
+        moved(first, name, symbol, known)
 
     [diagnostic(line, message) | diagnostics]
   end
 
   defp check_preset(_signature, _operands, _at, _known, diagnostics), do: diagnostics
 
+  defp unit(:ton), do: "a number of milliseconds"
+
   # The `move` is named only where it would compile, once a name in it not declared yet is
-  # declared: into a timer's `.pre`, from a dint. One name is never both, nor are two that
-  # differ only in case (Logex.Declarations), so `ton b b` and `ton b B` have none.
-  defp moved({:name, _, timer}, name, known),
-    do: moved(String.downcase(timer) == String.downcase(name), timer, name, known)
+  # declared: into an instance's preset member, from a dint. One name is never both, nor
+  # are two that differ only in case (Logex.Declarations), so `ton b b` and `ton b B` have
+  # none.
+  defp moved({:name, _, instance}, name, symbol, known),
+    do:
+      moved_into(
+        String.downcase(instance) == String.downcase(name),
+        {instance, symbol},
+        name,
+        known
+      )
 
-  defp moved(_literal, _name, _known), do: ""
+  defp moved(_literal, _name, _symbol, _known), do: ""
 
-  defp moved(true, _timer, _name, _known), do: ""
+  defp moved_into(true, _instance, _name, _known), do: ""
 
-  defp moved(false, timer, name, known),
-    do: move(timer?(timer, known) and dint?(name, known), timer, name)
+  defp moved_into(false, {instance, symbol}, name, known),
+    do: move(runnable(symbol, instance, known), dint?(name, known), instance, name)
 
-  defp move(true, timer, name),
-    do: ": to preset `#{timer}` from a tag, `move #{name} #{timer}.pre` on a rung above"
+  defp move(%FbType{} = type, true, instance, name),
+    do:
+      ": to preset `#{instance}` from a tag, `move #{name} #{instance}." <>
+        "#{FbType.rules(type).preset}` on a rung above"
 
-  defp move(false, _timer, _name), do: ""
+  defp move(_type, _dint?, _instance, _name), do: ""
 
   defp dint?(name, known), do: dint_value?(Declarations.reserved(name), hinted(name, known))
 
@@ -1374,8 +1433,9 @@ defmodule Logex.Compiler do
   defp check_tag({{:value, :dint}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics),
     do: literal(Declarations.fits?(:dint, value), value, {line, word}, diagnostics)
 
-  # A preset is a dint number of milliseconds, and never negative (docs/naming.md, `ton`).
-  # Only a preset too large reaches this until a negative literal lexes, as above.
+  # A preset is a dint, a number of milliseconds for a timer, and never negative
+  # (docs/naming.md, `ton`). Only a preset too large reaches this until a negative literal
+  # lexes, as above.
   defp check_tag({{:preset, _}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics),
     do: preset(Declarations.preset?(value), value, {line, word}, diagnostics)
 
@@ -1391,9 +1451,17 @@ defmodule Logex.Compiler do
 
   defp preset(false, value, {line, word}, diagnostics),
     do: [
-      diagnostic(line, "`#{word}` takes a preset of 0 to 2147483647 ms, found `#{value}`")
+      diagnostic(
+        line,
+        "`#{word}` takes a preset of 0 to 2147483647#{suffix(symbol_of(word))}, " <>
+          "found `#{value}`"
+      )
       | diagnostics
     ]
+
+  defp suffix(:ton), do: " ms"
+
+  defp symbol_of(word), do: elem(Map.fetch!(@instructions, String.downcase(word)), 0)
 
   defp literal(true, _value, _at, diagnostics), do: diagnostics
 

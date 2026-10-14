@@ -118,7 +118,7 @@ defmodule Logex.Edit.Plan do
   defp facts(%Program{rungs: rungs} = program, externals) do
     tags = Program.typed_tags(program)
     {ons, called, bodies} = rungs(rungs, tags)
-    timers = Walk.timers(program)
+    presets = Walk.presets(program)
 
     %{
       tags: tags,
@@ -131,11 +131,14 @@ defmodule Logex.Edit.Plan do
       ons: ons,
       ons_rungs: Map.new(ons, fn {key, _bits} -> {key, true} end),
       ons_bits: for({_key, bits} <- ons, bit <- bits, into: %{}, do: {bit, true}),
+      # M3-1: every built-in instance, a timer or not, with the preset of the instruction
+      # that runs it and its type's rules (Logex.FbType.rules/1): the preset rules are every
+      # built-in's, and the forecast and the resume its type's.
       timers:
         for(
-          {name, %Tag{type: %FbType{body: nil}}} <- tags,
+          {name, %Tag{type: %FbType{body: nil} = type}} <- tags,
           into: %{},
-          do: {name, preset(Map.get(timers, name))}
+          do: {name, {preset(Map.get(presets, name)), FbType.rules(type)}}
         ),
       # M2-5: each instance of a user block, with its type and whether a `cal` runs it; and
       # where each block type's body has its one-shots and what it runs, by the type's name.
@@ -156,8 +159,8 @@ defmodule Logex.Edit.Plan do
   defp shared(:tags, _tags), do: %{}
   defp shared(:globals, tags), do: section(tags, :var_external)
 
-  # The preset of the `ton` that runs a timer, Logex.Walk.timers/1's, or nil where no `ton`
-  # of the program runs it.
+  # The preset of the instruction that runs a built-in instance, Logex.Walk.presets/1's, or
+  # nil where no instruction of the program runs it.
   defp preset({_line, preset}), do: preset
   defp preset(nil), do: nil
 
@@ -191,14 +194,20 @@ defmodule Logex.Edit.Plan do
       nested: nested(from, to)
     }
 
-  # Each timer either program declares, with the preset of the `ton` that runs it in the
-  # program stopped and in the one started, nil for none: the `.pre` rules read no more.
+  # Each built-in instance either program declares, with the preset of the instruction
+  # that runs it in the program stopped and in the one started, nil for none, and its
+  # type's rules, which accept keeps one type a name: the `.pre` rules read no more.
   defp timers(from, to),
     do:
       for(
-        name <- Map.keys(Map.merge(from.timers, to.timers)),
-        do: {name, Map.get(from.timers, name), Map.get(to.timers, name)}
+        {name, {_preset, rules}} <- Map.merge(from.timers, to.timers),
+        do: {name, preset_in(from, name), preset_in(to, name), rules}
       )
+
+  defp preset_in(facts, name), do: preset_of(Map.get(facts.timers, name))
+
+  defp preset_of({preset, _rules}), do: preset
+  defp preset_of(nil), do: nil
 
   # Decision 20: a var_output of either program that `from` drove and `to` does not drive
   # as a var_output.
@@ -442,8 +451,8 @@ defmodule Logex.Edit.Plan do
       |> Enum.reject(&is_map_key(names, &1.name))
       |> Enum.flat_map_reduce(memo, &gone_member(&1, FbType.type_of(type, &1), &2))
 
-  defp gone_member(%Member{name: name}, %FbType{body: nil}, memo),
-    do: {[{:timer_gone, name}], memo}
+  defp gone_member(%Member{name: name}, %FbType{body: nil} = type, memo),
+    do: {[{:timer_gone, name, FbType.rules(type)}], memo}
 
   defp gone_member(%Member{name: name}, %FbType{} = type, memo) do
     {plan, memo} = gone_plan(Map.fetch(memo, {:gone, type.name}), type, memo)
@@ -481,7 +490,9 @@ defmodule Logex.Edit.Plan do
     {_type, {ran, run}, _bodies} = context
     start = FbType.initial(type, initial)
     keys = Enum.sort(Map.keys(start))
-    {{:timer, name, keys, start, runs_ton(ran, old), runs_ton(run, initial), old != nil}, memo}
+    rules = FbType.rules(type)
+    from = runs_ton(ran, old, rules)
+    {{:timer, name, keys, start, {from, runs_ton(run, initial, rules)}, old != nil, rules}, memo}
   end
 
   defp member(%Member{type: %FbType{} = type, initial: initial}, old, context, memo, name) do
@@ -499,13 +510,13 @@ defmodule Logex.Edit.Plan do
   defp old_type(nil), do: nil
   defp old_type(%Member{type: type}), do: type
 
-  # The preset of the `ton` that runs a timer inside a block, as the compiler gives its
-  # member (Logex.Compiler), where the program runs the block; nil where it does not, or no
-  # `ton` of the body runs the timer.
-  defp runs_ton(false, _member_or_initial), do: nil
-  defp runs_ton(true, nil), do: nil
-  defp runs_ton(true, %Member{initial: initial}), do: runs_ton(true, initial)
-  defp runs_ton(true, %{} = initial), do: Map.get(initial, "pre")
+  # The preset of the instruction that runs a built-in instance inside a block, as the
+  # compiler gives its preset member (Logex.Compiler), where the program runs the block; nil
+  # where it does not, or no instruction of the body runs it.
+  defp runs_ton(false, _member_or_initial, _rules), do: nil
+  defp runs_ton(true, nil, _rules), do: nil
+  defp runs_ton(true, %Member{initial: initial}, rules), do: runs_ton(true, initial, rules)
+  defp runs_ton(true, %{} = initial, %{preset: preset}), do: Map.get(initial, preset)
 
   # Whether a block's body, in one program's version of it, has a `cal` of an instance it
   # holds. It is asked only of a version the program holds: of the program started's own,
@@ -575,8 +586,8 @@ defmodule Logex.Edit.Plan do
         holding(plan, shown, env)
 
     {env, timed, pre} =
-      Enum.reduce(plan.timers, {env, [], pre}, fn {name, from, to}, acc ->
-        timed({name, name, from, to}, record.pre, clock, acc)
+      Enum.reduce(plan.timers, {env, [], pre}, fn {name, from, to, rules}, acc ->
+        timed({name, name, from, to, rules}, record.pre, clock, acc)
       end)
 
     {%{state | env: env, switched: true, ons_blocked: blocked, now: at},
@@ -626,14 +637,14 @@ defmodule Logex.Edit.Plan do
     |> initial_changed({kept?, old, initial}, path)
   end
 
-  defp moved_member({:timer, name, keys, initial, from, to, kept?}, prefix, rules, acc) do
+  defp moved_member({:timer, name, keys, initial, {from, to}, kept?, type}, prefix, rules, acc) do
     {first?, undo, clock, _table} = rules
     {map, reports, pre} = acc
     path = prefix <> "." <> name
 
     timer_moved(
       starts?(Map.fetch(map, name), not kept?, {:members, keys}, first?),
-      {name, path, initial, from, to},
+      {name, path, initial, from, to, type},
       {undo, clock},
       {map, reports, pre}
     )
@@ -653,8 +664,8 @@ defmodule Logex.Edit.Plan do
 
   # A timer only the stopped program's version declares: kept, unused, and its `.pre` and
   # `last` given back where this edit's last switch moved them.
-  defp moved_member({:timer_gone, name}, prefix, {_first?, undo, clock, _table}, acc),
-    do: timed({name, prefix <> "." <> name, nil, nil}, undo, clock, acc)
+  defp moved_member({:timer_gone, name, type}, prefix, {_first?, undo, clock, _table}, acc),
+    do: timed({name, prefix <> "." <> name, nil, nil, type}, undo, clock, acc)
 
   defp moved_member({:block_gone, name, plan}, prefix, rules, {map, reports, pre}),
     do:
@@ -677,11 +688,13 @@ defmodule Logex.Edit.Plan do
 
   defp initial_changed({:kept, acc}, _initials, _path), do: acc
 
-  defp timer_moved(true, {name, path, initial, _from, _to}, _clocks, {map, reports, pre}),
-    do: {Map.put(map, name, initial), [{:added, path, initial} | reports], pre}
+  defp timer_moved(true, {name, path, initial, _from, _to, _type}, _clocks, acc) do
+    {map, reports, pre} = acc
+    {Map.put(map, name, initial), [{:added, path, initial} | reports], pre}
+  end
 
-  defp timer_moved(false, {name, path, _initial, from, to}, {undo, clock}, acc),
-    do: timed({name, path, from, to}, undo, clock, acc)
+  defp timer_moved(false, {name, path, _initial, from, to, type}, {undo, clock}, acc),
+    do: timed({name, path, from, to, type}, undo, clock, acc)
 
   # A block's initial state is built only where one starts: built for every member it would
   # make the plan quadratic in the depth of nesting. The plan holds the block's type as the
@@ -761,23 +774,26 @@ defmodule Logex.Edit.Plan do
   # program runs (below), so the rules that read the others never reach it.
   # `key` is the timer's name in the map it lives in, and `name` how the record and the
   # report name it: a top-level timer's name, or its path inside an instance (M2-5).
-  defp timed({key, name, _from, _to} = timer, undo, clock, {env, _report, _left} = acc),
-    do: timer(Map.get(env, key), timer, Map.get(undo, name), clock, acc)
+  # M3-1: `.pre` is the type's preset member, `pre` for a timer (Logex.FbType.rules/1).
+  defp timed({key, name, _from, _to, %{preset: member}} = timer, undo, clock, {env, _, _} = acc),
+    do:
+      timer(Map.fetch(as_map(Map.get(env, key)), member), timer, Map.get(undo, name), clock, acc)
 
   defp timer(
-         %{"pre" => pre} = value,
-         {key, name, from, to},
+         {:ok, pre},
+         {key, name, from, to, %{preset: member} = rules},
          undo,
          {{now, at}, switched, stopped_last?},
          {env, report, left}
        ) do
-    {value, undone} = undone(value, undo, switched, now, name)
+    {value, undone} = undone(Map.fetch!(env, key), undo, switched, now, name)
     target = target(undo, pre, from, to)
 
     {value, resumed, found} =
-      resumed({from, to, stopped_last?}, %{value | "pre" => target}, name, at)
+      resumed({from, to, stopped_last?}, Map.put(value, member, target), name, {at, rules})
 
-    {Map.put(env, key, value), moved(name, pre, target, to, value) ++ undone ++ resumed ++ report,
+    {Map.put(env, key, value),
+     moved(name, {pre, target, to}, value, rules) ++ undone ++ resumed ++ report,
      Map.put(left, name, {target, pre, found})}
   end
 
@@ -786,7 +802,10 @@ defmodule Logex.Edit.Plan do
   # value of another type, or a map of only the members logic wrote. No `ton` of either
   # program runs it, or that program's scan would have made it a timer's whole map, and no
   # rule reads it.
-  defp timer(_not_a_timer, _timer, _undo, _now, acc), do: acc
+  defp timer(:error, _timer, _undo, _now, acc), do: acc
+
+  defp as_map(%{} = map), do: map
+  defp as_map(_not_a_map), do: %{}
 
   # Where `.pre` goes. F1 first: still what this edit's last switch left, it goes back to
   # what that switch found. Otherwise, decision 23: a timer the program started runs no
@@ -803,21 +822,22 @@ defmodule Logex.Edit.Plan do
   # What a switch reports of `.pre`: a move, with what it does to `.dn` where the program
   # started runs the timer; or, where `.pre` stays on a timer that program runs, a `.pre`
   # that is not its preset.
-  defp moved(_name, pre, pre, nil, _timer), do: []
-  defp moved(_name, pre, pre, pre, _timer), do: []
-  defp moved(name, pre, pre, to, _timer), do: [{:preset_kept, name, {pre, to}}]
+  defp moved(_name, {pre, pre, nil}, _value, _rules), do: []
+  defp moved(_name, {pre, pre, pre}, _value, _rules), do: []
+  defp moved(name, {pre, pre, to}, _value, _rules), do: [{:preset_kept, name, {pre, to}}]
 
-  defp moved(name, pre, target, to, timer),
-    do: [{:preset, name, {pre, target}} | done(to, timer, name)]
+  defp moved(name, {pre, target, to}, value, rules),
+    do: [{:preset, name, {pre, target}} | done(to, value, name, rules)]
 
   # F6: `.dn` is `.acc` against `.pre`, with no latch (docs/naming.md, `ton`), so after a
   # move it drops at the next scan with its rung true, unless `.pre` - `.acc` ms pass by
   # then, or rises at that scan, where it is timing. Each counted as `ton` counts it, a
   # negative `.acc` as 0. A moved `.pre` is never negative where the program started runs
   # the timer: a switch moves it to a preset, or back from one.
-  defp done(nil, _timer, _name), do: []
+  # M3-1: by the type's kind (Logex.FbType.rules/1).
+  defp done(nil, _value, _name, _rules), do: []
 
-  defp done(_to, %{"pre" => pre, "acc" => acc, "dn" => dn, "en" => en}, name),
+  defp done(_to, %{"pre" => pre, "acc" => acc, "dn" => dn, "en" => en}, name, %{kind: :timer}),
     do: done(dn, en, max(acc, 0), pre, name)
 
   defp done(1, _en, acc, pre, name) when acc < pre, do: [{:dn_drops, name, {acc, pre}}]
@@ -835,11 +855,14 @@ defmodule Logex.Edit.Plan do
   # the one-shots' rule asks it (F3): where that is the program started, a test and an
   # untest with no scan between, the program started left the timer as it is, frozen or
   # not, and no resume is due.
-  defp resumed({nil, to, true}, %{"en" => 1, "last" => last} = timer, name, now)
-       when to != nil and last < now,
+  #
+  # M3-1: a timer's, by its kind (Logex.FbType.rules/1): a type that keeps no time has no
+  # `last` to resume.
+  defp resumed({nil, to, true}, %{"en" => 1, "last" => last} = timer, name, {now, rules})
+       when to != nil and last < now and :erlang.map_get(:kind, rules) == :timer,
        do: {%{timer | "last" => now}, [{:resumed, name, now - last}], last}
 
-  defp resumed(_presets, timer, _name, _now), do: {timer, [], nil}
+  defp resumed(_presets, timer, _name, _at), do: {timer, [], nil}
 
   # A resume undone: where this edit's last switch resumed the timer and no scan has run
   # since (`switched`), its `last`, still that switch's `now`, goes back to the one it

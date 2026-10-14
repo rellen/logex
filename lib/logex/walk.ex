@@ -11,9 +11,10 @@ defmodule Logex.Walk do
   - `instructions/1`: every instruction of a routine's rungs, in rung order;
   - `uses/2`: every tag operand, with what its slot does to it;
   - `writes/1`: which tags a program writes, and where;
-  - `timers/1`: which timers a program runs, and at what preset.
+  - `presets/1`: which built-in instances a program runs, and at what preset (M3-1);
+  - `timers/1`: which of them are timers.
 
-  `writes/1` and `timers/1` know `cal`: a `cal` writes the instance it runs and each tag
+  `writes/1`, `presets/1` and `timers/1` know `cal`: a `cal` writes the instance it runs and each tag
   its block's var_outputs fill, as its slots say, and they reach into each block a `cal`
   runs, at any depth, naming what its body writes or runs by its path, `s1.t1`, as an
   access path does (§4.7). Each block type's body is read once a call, however many
@@ -85,6 +86,16 @@ defmodule Logex.Walk do
   """
   def timers(%Program{} = program), do: reach(program, &timed/2)
 
+  @doc """
+  Which built-in instances `program` runs (M3-1): each instance an instruction that runs a
+  built-in type runs (`Logex.FbType.rules/1`), a timer a `ton` runs among them, to
+  `{line, preset}`, as `timers/1` gives a timer's: the first such instruction in rung order,
+  its line and its preset, nil where it is no literal. It reaches into each block a `cal`
+  runs, as `timers/1` does. `Logex.Edit` reads it, whose preset rules are every built-in's,
+  and `timers/1` is the part of it that keeps time, which M2-6's event-task warning reads.
+  """
+  def presets(%Program{} = program), do: reach(program, &preset_runs/2)
+
   # A routine's own facts, `own.(instructions, tags)`, a map of names to a list of lines
   # (writes) or a first run (timers); then, from the top down, each block its `cal`s run,
   # at any depth, its body's own facts by their paths. Each block type's own facts and
@@ -149,13 +160,27 @@ defmodule Logex.Walk do
     |> Map.new(fn {name, lines} -> {name, Enum.reverse(lines)} end)
   end
 
-  defp timed(instructions, _tags),
-    do: Enum.reduce(instructions, %{}, &ton/2)
+  # The timers among the built-in instances a routine runs: those whose type keeps time.
+  defp timed(instructions, tags),
+    do:
+      instructions
+      |> preset_runs(tags)
+      |> Map.filter(fn {name, _run} -> kind(Map.get(tags, name)) == :timer end)
 
-  defp ton({:ton, line, [{:name, _, timer} | preset]}, timers),
-    do: Map.put_new(timers, timer, {line, preset_of(preset)})
+  defp kind(%Tag{type: %FbType{} = type}), do: kind_of(FbType.rules(type))
+  defp kind(_not_a_builtin), do: nil
 
-  defp ton(_instruction, timers), do: timers
+  defp kind_of(%{kind: kind}), do: kind
+  defp kind_of(nil), do: nil
+
+  @runners FbType.runners()
+
+  defp preset_runs(instructions, _tags), do: Enum.reduce(instructions, %{}, &run/2)
+
+  defp run({symbol, line, [{:name, _, instance} | preset]}, runs) when symbol in @runners,
+    do: Map.put_new(runs, instance, {line, preset_of(preset)})
+
+  defp run(_instruction, runs), do: runs
 
   defp preset_of([{:int_lit, _, preset}]), do: preset
   defp preset_of(_no_literal), do: nil

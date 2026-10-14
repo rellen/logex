@@ -1211,8 +1211,9 @@ defmodule Logex.RuntimeTest do
 
       # M2-4: B5's one walk of a program's IR, which the compiler, Logex.Warnings,
       # Logex.Edit and Logex.Configuration read.
+      # M3-1: presets/1, every built-in instance a program runs, beside timers/1.
       assert Enum.sort(Logex.Walk.__info__(:functions)) ==
-               [instructions: 1, timers: 1, uses: 2, writes: 1]
+               [instructions: 1, presets: 1, timers: 1, uses: 2, writes: 1]
 
       # The two structs a host holds and builds; OE-1 gave both `ons_blocked`, and the
       # instance `switched`.
@@ -1276,7 +1277,7 @@ defmodule Logex.RuntimeTest do
       # M2-5: same?/2, the one definition of one version of a block, which a compile's
       # one-version check uses. Decision 53: held/1 and within/2, a type as the one table
       # holds it and as it reads inside the table, and check/2, user?/1 across the types a
-      # compile is given.
+      # compile is given. M3-1: rules/1, runners/0 and runs?/2, each built-in type as data.
       assert Enum.sort(Logex.FbType.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,
@@ -1289,6 +1290,9 @@ defmodule Logex.RuntimeTest do
                member: 2,
                of: 1,
                public: 1,
+               rules: 1,
+               runners: 0,
+               runs?: 2,
                same?: 2,
                signature: 1,
                ton: 0,

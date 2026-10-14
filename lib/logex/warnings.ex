@@ -9,7 +9,8 @@ defmodule Logex.Warnings do
   - an `ons` storage bit that another instruction writes (M1-6): the one-shot then fires
     on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`);
   - a comparison of two literals (M1-6): its result never changes;
-  - a timer no `ton` runs (M1-6): it never times;
+  - a timer no `ton` runs (M1-6): it never times, a built-in instance in its type's words
+    (M3-1);
   - an instance of a user function block no `cal` runs (M2-5): it never runs.
 
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
@@ -56,8 +57,23 @@ defmodule Logex.Warnings do
 
   defp unrun(true, _tag), do: []
 
-  defp unrun(false, tag),
-    do: [warning(tag.line, "`#{tag.name}` is a ton, but no `ton` runs it: it never times")]
+  # M3-1: in the type's words, from its rules (Logex.FbType.rules/1): what runs it, and
+  # what it then never does.
+  defp unrun(false, %Tag{type: type} = tag) do
+    %{kind: kind, runs: runs} = FbType.rules(type)
+
+    [
+      warning(
+        tag.line,
+        "`#{tag.name}` is #{Logex.Declarations.instance_of(type)}, but no " <>
+          "#{runners(Map.keys(runs))} runs it: it never #{does(kind)}"
+      )
+    ]
+  end
+
+  defp runners(symbols), do: Enum.map_join(Enum.sort(symbols), " or ", &"`#{&1}`")
+
+  defp does(:timer), do: "times"
 
   # M2-5: as the timer's, saying `cal` (PLAN.md M2-5).
   defp uncalled(true, _tag), do: []

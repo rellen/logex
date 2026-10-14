@@ -741,7 +741,9 @@ defmodule Logex.Configuration.Edit do
         do: path
       )
 
-  defp timer_paths(%FbType{body: nil}, path), do: [Enum.reverse(path)]
+  # M3-1: a built-in that keeps time (Logex.FbType.rules/1); one that keeps none, a
+  # counter, has nothing to resume.
+  defp timer_paths(%FbType{body: nil} = type, path), do: timing(FbType.rules(type), path)
 
   defp timer_paths(%FbType{members: members} = type, path),
     do:
@@ -752,6 +754,9 @@ defmodule Logex.Configuration.Edit do
       )
 
   defp timer_paths(_leaf, _path), do: []
+
+  defp timing(%{kind: :timer}, path), do: [Enum.reverse(path)]
+  defp timing(_keeps_no_time, _path), do: []
 
   defp resume(paths, env, at),
     do: Enum.reduce(paths, {env, []}, &resumed(get_in(env, &1), &1, at, &2))

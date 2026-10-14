@@ -92,6 +92,43 @@ defmodule Logex.FbType do
   @doc "The built-in function block types, by their lowercase type word."
   def builtins, do: %{"ton" => ton()}
 
+  # What each built-in type is to the instructions that run it, by its type word: the one
+  # description the compiler, the walks, the warnings and the edit read, rather than match
+  # on a type's name (M3-1). `kind` is what it does, `:timer`, which keeps time, or
+  # `:counter`, which keeps none; `preset` the member the number on its instruction starts;
+  # `done` the member a moved preset changes at its next run; and `runs` each instruction
+  # that runs it, by its IR symbol, to `{edge, reads}`: the member that is that
+  # instruction's edge memory, nil for none, and the member a rung below reads it by.
+  @runs %{
+    "ton" => %{kind: :timer, preset: "pre", done: "dn", runs: %{ton: {nil, "dn"}}}
+  }
+
+  @doc """
+  What a built-in function block type is to the instructions that run it (M3-1), or nil
+  for a user function block: `%{kind:, preset:, done:, runs:}`. `kind` is `:timer` for a
+  type that keeps time; `preset` the member the number on its instruction starts, `"pre"`
+  for a `ton`; `done` the member a moved preset changes at its next run, `"dn"`; and `runs`
+  each instruction that runs it, by its IR symbol, to `{edge, reads}`, the member that is
+  that instruction's edge memory, nil for none, and the member a rung below reads it by.
+  """
+  def rules(%__MODULE__{name: name, body: nil}) when is_map_key(@runs, name),
+    do: Map.fetch!(@runs, name)
+
+  def rules(_type), do: nil
+
+  @doc """
+  The IR symbols of the instructions that run a built-in instance, each once, in order:
+  every key of a built-in type's `runs` (`rules/1`).
+  """
+  def runners,
+    do: @runs |> Map.values() |> Enum.flat_map(&Map.keys(&1.runs)) |> Enum.uniq() |> Enum.sort()
+
+  @doc "Whether the instruction `symbol` runs an instance of `type` (`rules/1`)."
+  def runs?(type, symbol), do: runs_in?(rules(type), symbol)
+
+  defp runs_in?(%{runs: runs}, symbol), do: is_map_key(runs, symbol)
+  defp runs_in?(nil, _symbol), do: false
+
   @doc "The built-in type a word names, in any case, or nil."
   def builtin(word) when is_binary(word), do: Map.get(builtins(), String.downcase(word))
 
