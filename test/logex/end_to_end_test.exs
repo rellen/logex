@@ -3047,4 +3047,348 @@ defmodule Logex.EndToEndTest do
       {_program, _state, _report} = Logex.Edit.assemble(edit, later)
     end
   end
+
+  # PLAN.md M3-2's Done-when, as worded on 2026-10-14: a fan's tof runs it on for its
+  # preset after the motor stops, two instances on 10 ms and 50 ms tasks stopping the fan at
+  # the same logical time, as decision 6 measured ton; a tp sounds a horn for exactly its
+  # preset from a fault's rising edge, whatever the fault does meanwhile, and not for a
+  # fault present at start; an rto lubrication timer keeps its time across the motor
+  # stopping and loses it only to its clear and a restart; and the event-task warning names
+  # each. Each piece runs in one configuration through Logex.Runtime.cycle/3, against an
+  # oracle in plain Elixir that knows nothing of logex.
+  describe "the other timers (M3-2)" do
+    alias Logex.Configuration
+
+    @fan_ld """
+    var_input motor bool
+    var_output fan bool
+    var run_on tof
+    xic motor tof run_on 3000
+    xic run_on.dn ote fan
+    """
+
+    @horn_ld """
+    var_input fault bool
+    var_output horn bool
+    var_output fault_lamp bool
+    var horn_pulse tp
+    xic fault tp horn_pulse 3000
+    xic horn_pulse.tt ote horn
+    xic fault ote fault_lamp
+    """
+
+    @lube_ld """
+    var_input conveyor bool
+    var_input greased bool
+    var_output grease_due bool
+    var_output run_ms dint
+    var lube rto
+    xic greased ote lube.r
+    xic conveyor rto lube 20000
+    xic lube.dn ote grease_due
+    move lube.acc run_ms
+    """
+
+    @line_logex """
+    task fast interval 10 priority 1
+    task slow interval 50 priority 2
+    task trip single estop priority 0
+    var_global estop bool at panel.i.0
+    var_global motor bool at panel.i.1
+    var_global fault bool at panel.i.2
+    var_global conveyor bool at panel.i.3
+    var_global greased bool at panel.i.4
+    var_global fan_1 bool at panel.q.0
+    var_global fan_2 bool at panel.q.1
+    var_global horn bool at panel.q.2
+    var_global fault_lamp bool at panel.q.3
+    var_global grease_due bool at panel.q.4
+    var_global run_ms dint
+    program f1 fan with fast
+    f1.motor motor
+    f1.fan fan_1
+    program f2 fan with slow
+    f2.motor motor
+    f2.fan fan_2
+    program h1 horn with fast
+    h1.fault fault
+    h1.horn horn
+    h1.fault_lamp fault_lamp
+    program l1 lube with fast
+    l1.conveyor conveyor
+    l1.greased greased
+    l1.grease_due grease_due
+    l1.run_ms run_ms
+    program f9 fan with trip
+    f9.motor estop
+    program h9 horn with trip
+    h9.fault estop
+    program l9 lube with trip
+    l9.conveyor estop
+    l9.greased 0
+    """
+
+    defp line_programs,
+      do:
+        Map.new([{"fan", @fan_ld}, {"horn", @horn_ld}, {"lube", @lube_ld}], fn {name, text} ->
+          {:ok, program} = Logex.compile(text, name: name)
+          {name, program}
+        end)
+
+    defp line_from_text do
+      assert {:ok, line} = Configuration.compile("line", @line_logex, line_programs())
+      line
+    end
+
+    defp line_from_files(dir) do
+      for {name, text} <- [
+            {"fan.ld", @fan_ld},
+            {"horn.ld", @horn_ld},
+            {"lube.ld", @lube_ld},
+            {"line.logex", @line_logex}
+          ],
+          do: File.write!(Path.join(dir, name), text)
+
+      assert {:ok, line} = Configuration.compile_file(Path.join(dir, "line.logex"))
+      line
+    end
+
+    # The line cycled every 10 ms from 0, each cycle's changes from `changes`, by its time:
+    # each cycle's time and the globals named.
+    defp line_cycles(runtime, last, changes, names) do
+      Enum.map_reduce(0..last//10, runtime, fn now, runtime ->
+        {runtime, _outputs, _events} =
+          Logex.Runtime.cycle(runtime, if(now == 0, do: 0, else: 10), Map.get(changes, now, %{}))
+
+        {{now, Map.new(names, &{&1, Logex.Runtime.get!(runtime, &1)})}, runtime}
+      end)
+    end
+
+    defp fan_stops_together(line) do
+      # The motor runs from 0 to 1000 ms, a time both tasks scan.
+      {trace, _runtime} =
+        line_cycles(
+          Logex.Runtime.start(line),
+          6000,
+          %{0 => %{"motor" => 1}, 1000 => %{"motor" => 0}},
+          ~w(fan_1 fan_2)
+        )
+
+      off = fn fan ->
+        Enum.find_value(trace, fn {now, g} -> g[fan] == 0 and now > 0 and now end)
+      end
+
+      # On with the motor, through its 3 s run-on, and off at 4000 ms in both: the fast
+      # instance's delay starts at its 1000 ms scan and the slow one's at its own, so each
+      # is done at its first scan at or after 4000 ms, which both make.
+      assert off.("fan_1") == 4000
+      assert off.("fan_2") == 4000
+
+      for {now, g} <- trace, now in 0..3990 do
+        assert g["fan_1"] == 1, "fan_1 at #{now} ms"
+      end
+
+      for {now, g} <- trace, rem(now, 50) == 0, do: assert(g["fan_1"] == g["fan_2"], "at #{now}")
+      assert Logex.Runtime.get!(Logex.Runtime.start(line), "f1.run_on.dn") == 0
+    end
+
+    # The line cycled at the elapsed times given, each with its changes: each cycle's time
+    # and the globals named.
+    defp line_at(runtime, steps, names) do
+      {trace, _} =
+        Enum.map_reduce(steps, {runtime, 0}, fn {elapsed, changes}, {runtime, now} ->
+          {runtime, _outputs, _events} = Logex.Runtime.cycle(runtime, elapsed, changes)
+          now = now + elapsed
+          {{now, Map.new(names, &{&1, Logex.Runtime.get!(runtime, &1)})}, {runtime, now}}
+        end)
+
+      trace
+    end
+
+    defp horn_oracle(faults) do
+      {horn, _} =
+        Enum.map_reduce(Enum.with_index(faults), {0, nil}, fn {fault, i}, {prev, start} ->
+          now = i * 10
+
+          {on, start} =
+            cond do
+              start != nil and now - start >= 3000 -> {0, nil}
+              start != nil -> {1, start}
+              i > 0 and fault == 1 and prev == 0 -> {1, now}
+              true -> {0, nil}
+            end
+
+          {on, {fault, start}}
+        end)
+
+      horn
+    end
+
+    defp horn_sounds(line) do
+      :rand.seed(:exsss, {2026, 10, 32})
+
+      {faults, _} =
+        Enum.map_reduce(0..1999, 0, fn _, level ->
+          level = if :rand.uniform(40) == 1, do: 1 - level, else: level
+          {level, level}
+        end)
+
+      changes = Map.new(Enum.with_index(faults), fn {f, i} -> {i * 10, %{"fault" => f}} end)
+      {trace, _} = line_cycles(Logex.Runtime.start(line), 19_990, changes, ~w(horn fault_lamp))
+      expected = horn_oracle(faults)
+
+      for {{now, g}, {want, fault}} <- Enum.zip(trace, Enum.zip(expected, faults)) do
+        assert g["horn"] == want, "horn at #{now} ms"
+        assert g["fault_lamp"] == fault
+      end
+
+      # The seed gives pulses, the fault falling and rising inside one, and a pulse ending
+      # with the fault still on: each pulse the trace sees end is exactly 3000 ms of horn.
+      runs = Enum.chunk_by(Enum.with_index(expected), &elem(&1, 0))
+      ended = Enum.reject(runs, &(elem(List.last(&1), 1) == length(expected) - 1))
+      lengths = for [{1, _} | _] = run <- ended, do: length(run) * 10
+      assert length(lengths) >= 3 and Enum.all?(lengths, &(&1 == 3000))
+
+      inside =
+        for [{1, i} | _] = run <- runs,
+            Enum.any?(Enum.slice(faults, i, length(run)), &(&1 == 0)),
+            do: i
+
+      assert inside != []
+
+      # A fault present at start sounds no horn, its lamp lit.
+      {trace, _} =
+        line_cycles(Logex.Runtime.start(line), 4000, %{0 => %{"fault" => 1}}, ~w(horn fault_lamp))
+
+      assert Enum.all?(trace, fn {_now, g} -> g["horn"] == 0 and g["fault_lamp"] == 1 end)
+
+      # The actual time counts, not a nominal period: cycled late and irregularly, its task
+      # running once a late cycle, the horn sounds from the fault's rising edge at 10 ms
+      # until the first cycle at or past 3010 ms.
+      steps = [{0, %{}}, {10, %{"fault" => 1}}, {10, %{"fault" => 0}}, {1480, %{}}]
+      steps = steps ++ [{1500, %{"fault" => 1}}, {10, %{}}, {10, %{}}]
+
+      assert line_at(Logex.Runtime.start(line), steps, ~w(horn)) ==
+               Enum.map([0, 10, 20, 1500, 3000, 3010, 3020], &{&1, %{"horn" => tm_on(&1)}})
+    end
+
+    defp tm_on(now) when now in 10..3000, do: 1
+    defp tm_on(_now), do: 0
+
+    # The oracle: the conveyor's running time, each 10 ms where it ran on this scan and the
+    # last, stopping at 20000; the greased button, on its rung above, clears it on its own
+    # scan and holds it at 0.
+    defp lube_oracle(inputs) do
+      {acc, _} =
+        Enum.map_reduce(inputs, {0, 0}, fn %{"conveyor" => c, "greased" => g}, {acc, prev} ->
+          acc =
+            cond do
+              g == 1 -> 0
+              c == 1 and prev == 1 -> min(acc + 10, 20_000)
+              true -> acc
+            end
+
+          {acc, {acc, c}}
+        end)
+
+      acc
+    end
+
+    defp lube_keeps(line) do
+      :rand.seed(:exsss, {2026, 10, 76})
+
+      {inputs, _} =
+        Enum.map_reduce(0..19_999, %{"conveyor" => 0, "greased" => 0}, fn _, levels ->
+          conveyor =
+            if :rand.uniform(300) == 1, do: 1 - levels["conveyor"], else: levels["conveyor"]
+
+          greased = if :rand.uniform(6000) == 1, do: 1, else: 0
+          levels = %{"conveyor" => conveyor, "greased" => greased}
+          {levels, levels}
+        end)
+
+      changes = Map.new(Enum.with_index(inputs), fn {input, i} -> {i * 10, input} end)
+
+      {trace, runtime} =
+        line_cycles(Logex.Runtime.start(line), 199_990, changes, ~w(run_ms grease_due))
+
+      expected = lube_oracle(inputs)
+
+      for {{now, g}, want} <- Enum.zip(trace, expected) do
+        assert g["run_ms"] == want, "run_ms at #{now} ms"
+        assert g["grease_due"] == if(want == 20_000, do: 1, else: 0)
+      end
+
+      # The seed gives time kept across a stop, the preset reached, and a clear.
+      kept =
+        Enum.zip([expected, tl(expected), tl(inputs)])
+        |> Enum.any?(fn {acc, next, input} ->
+          input["conveyor"] == 0 and acc > 0 and next == acc
+        end)
+
+      assert kept
+      assert 20_000 in expected
+      assert Enum.any?(Enum.zip(expected, tl(expected)), fn {a, b} -> a > 0 and b == 0 end)
+
+      # Cycled late and irregularly, it adds the actual time between two scans that both see
+      # the conveyor run, and none across a stop.
+      steps = [{0, %{"conveyor" => 1}}, {10, %{}}, {990, %{}}, {500, %{"conveyor" => 0}}]
+      steps = steps ++ [{500, %{"conveyor" => 1}}, {600, %{}}, {10, %{"greased" => 1}}]
+
+      assert for(
+               {now, g} <- line_at(Logex.Runtime.start(line), steps, ~w(run_ms)),
+               do: {now, g["run_ms"]}
+             ) ==
+               [{0, 0}, {10, 10}, {1000, 1000}, {1500, 1000}, {2000, 1000}, {2600, 1600}] ++
+                 [{2610, 0}]
+
+      # A restart, warm or cold, loses it, until `retain` lands (decision 76).
+      for mode <- [:warm, :cold] do
+        assert Logex.Runtime.get!(runtime, "l1.lube.acc") == List.last(expected)
+        restarted = Logex.Runtime.restart(runtime, mode)
+        assert Logex.Runtime.get!(restarted, "l1.lube.acc") == 0
+      end
+    end
+
+    defp warned(line, file) do
+      at = if file, do: "#{file}: ", else: ""
+
+      assert Enum.map(line.warnings, &Logex.Diagnostic.format/1) == [
+               "#{at}line 30: warning: `f9` runs under the event task `trip`, and `fan` runs " <>
+                 "the timer `run_on`#{cited("fan", 4, file)}: a tof's delay ends only at one of " <>
+                 "the task's runs, so what it holds on stays on until the first run after its " <>
+                 "preset has passed",
+               "#{at}line 32: warning: `h9` runs under the event task `trip`, and `horn` runs " <>
+                 "the timer `horn_pulse`#{cited("horn", 5, file)}: a tp's pulse ends only at one " <>
+                 "of the task's runs, so it lasts until the first run after its preset has " <>
+                 "passed, and it starts only on an edge between two runs: a rung that is the " <>
+                 "task's trigger is true at every run and never starts one",
+               "#{at}line 34: warning: `l9` runs under the event task `trip`, and `lube` runs " <>
+                 "the timer `lube`#{cited("lube", 7, file)}: an rto times across the task's " <>
+                 "runs, and one whose rung is true on two runs in a row adds the whole time " <>
+                 "between them"
+             ]
+    end
+
+    defp cited(_type, line, nil), do: " on its line #{line}"
+    defp cited(type, line, _file), do: " on line #{line} of `#{type}.ld`"
+
+    test "M3-2's Done-when, from text: the fan, the horn, the lubrication timer and the " <>
+           "event-task warning" do
+      line = line_from_text()
+      warned(line, nil)
+      fan_stops_together(line)
+      horn_sounds(line)
+      lube_keeps(line)
+    end
+
+    @tag :tmp_dir
+    test "M3-2's Done-when, from files on disk", %{tmp_dir: dir} do
+      line = line_from_files(dir)
+      warned(line, Path.join(dir, "line.logex"))
+      fan_stops_together(line)
+      horn_sounds(line)
+      lube_keeps(line)
+    end
+  end
 end
