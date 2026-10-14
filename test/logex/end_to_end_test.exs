@@ -2791,4 +2791,260 @@ defmodule Logex.EndToEndTest do
       )
     end
   end
+
+  # PLAN.md M3-1's Done-when, as worded on 2026-10-14: IEC's counters, each against an
+  # oracle that knows nothing of logex, from text and from files on disk.
+  describe "counters (M3-1)" do
+    @boxes_ld """
+    var_input eye bool
+    var_input reset_pb bool
+    var_output full_lamp bool
+    var_output count dint
+    var boxes ctu
+    xic reset_pb ote boxes.r
+    xic eye ctu boxes 12
+    xic boxes.q ote full_lamp
+    move boxes.cv count
+    """
+
+    @buffer_ld """
+    var_input infeed bool
+    var_input outfeed bool
+    var_input clear bool
+    var_input refill bool
+    var_input portion bool
+    var_output stock_count dint
+    var_output buffer_full bool
+    var_output buffer_empty bool
+    var_output left dint
+    var_output hopper_empty bool
+    var stock ctud
+    var hopper ctd
+    xic clear ote stock.r
+    xic infeed ctu stock 2
+    xic outfeed ctd stock 2
+    move stock.cv stock_count
+    xic stock.qu ote buffer_full
+    xic stock.qd ote buffer_empty
+    xic refill ote hopper.ld
+    xic portion ctd hopper 4
+    move hopper.cv left
+    xic hopper.q ote hopper_empty
+    """
+
+    # Each scan's inputs, seeded: a level held for a few scans at a time, a reset or a
+    # load rarely.
+    defp seeded(names, rare, n) do
+      Enum.map_reduce(1..n, Map.new(names ++ rare, &{&1, 0}), fn _i, levels ->
+        levels =
+          Map.new(levels, fn {name, level} ->
+            {name, flip(name in rare, level)}
+          end)
+
+        {levels, levels}
+      end)
+      |> elem(0)
+    end
+
+    defp flip(true, _level), do: if(Enum.random(1..60) == 1, do: 1, else: 0)
+    defp flip(false, level), do: Enum.random([level, level, 1 - level])
+
+    defp box_scans(program, inputs, state \\ nil) do
+      state = state || Logex.Runtime.instance(program)
+
+      Enum.map_reduce(inputs, state, fn input, state ->
+        Logex.Runtime.scan(program, Logex.Runtime.put_inputs(program, state, input), 10)
+      end)
+    end
+
+    # The oracle: a box is counted on a scan whose eye is 1 where the last scan's was 0, but
+    # never on the first scan, and none while the reset is held; the reset, on its rung
+    # above the counter's, empties the count on its own scan.
+    defp boxes_oracle(inputs) do
+      {counts, _} =
+        Enum.map_reduce(Enum.with_index(inputs), {0, 0}, fn {%{"eye" => eye} = input, i},
+                                                            {count, last} ->
+          count =
+            cond do
+              input["reset_pb"] == 1 -> 0
+              i > 0 and eye == 1 and last == 0 -> count + 1
+              true -> count
+            end
+
+          {count, {count, eye}}
+        end)
+
+      counts
+    end
+
+    defp boxes_checked(program) do
+      :rand.seed(:exsss, {2026, 10, 14})
+      inputs = seeded(["eye"], ["reset_pb"], 400)
+      {outputs, _state} = box_scans(program, inputs)
+      expected = boxes_oracle(inputs)
+
+      assert Enum.map(outputs, & &1["count"]) == expected
+
+      assert Enum.map(outputs, & &1["full_lamp"]) ==
+               Enum.map(expected, &if(&1 >= 12, do: 1, else: 0))
+
+      assert Enum.max(expected) >= 12
+
+      # A box on the eye at a reset is not counted again once the reset is let go.
+      reset_on_eye =
+        for {input, i} <- Enum.with_index(inputs),
+            i > 0,
+            input["reset_pb"] == 1 and input["eye"] == 1,
+            do: i
+
+      assert reset_on_eye != []
+    end
+
+    test "M3-1's Done-when: a box counter counts every rising edge of its photo-eye once, " <>
+           "none on the first scan and none for a box on the eye at a reset, and lights the " <>
+           "case-full lamp at its preset" do
+      {:ok, program} = Logex.compile(@boxes_ld, name: "boxes")
+      boxes_checked(program)
+
+      # A box already on the eye at start is not counted.
+      {[first | _], _} = box_scans(program, [%{"eye" => 1}, %{"eye" => 1}])
+      assert first["count"] == 0
+    end
+
+    @tag :tmp_dir
+    test "M3-1's Done-when from files on disk, through compile_file/1", %{tmp_dir: dir} do
+      path = Path.join(dir, "boxes.ld")
+      File.write!(path, @boxes_ld)
+      {:ok, program} = Logex.compile_file(path)
+      boxes_checked(program)
+
+      buffer = Path.join(dir, "buffer.ld")
+      File.write!(buffer, @buffer_ld)
+      {:ok, program} = Logex.compile_file(buffer)
+      buffer_checked(program)
+    end
+
+    # The buffer: each infeed edge adds one, each outfeed edge takes one away, the clear
+    # empties it; the hopper is loaded full by the refill and each portion takes one away.
+    defp buffer_oracle(inputs) do
+      {rows, _} =
+        Enum.map_reduce(Enum.with_index(inputs), {0, 0, %{}}, fn {input, i},
+                                                                 {stock, left, last} ->
+          rise = fn name -> i > 0 and input[name] == 1 and Map.get(last, name, 0) == 0 end
+
+          stock =
+            cond do
+              input["clear"] == 1 ->
+                0
+
+              true ->
+                stock + if(rise.("infeed"), do: 1, else: 0) - if(rise.("outfeed"), do: 1, else: 0)
+            end
+
+          left =
+            cond do
+              input["refill"] == 1 -> 4
+              rise.("portion") -> left - 1
+              true -> left
+            end
+
+          {{stock, left}, {stock, left, input}}
+        end)
+
+      rows
+    end
+
+    defp buffer_checked(program) do
+      :rand.seed(:exsss, {2026, 10, 15})
+      inputs = seeded(~w(infeed outfeed portion), ~w(clear refill), 400)
+      {outputs, _state} = box_scans(program, inputs)
+      expected = buffer_oracle(inputs)
+
+      assert Enum.map(outputs, &{&1["stock_count"], &1["left"]}) == expected
+
+      assert Enum.map(outputs, &{&1["buffer_full"], &1["buffer_empty"], &1["hopper_empty"]}) ==
+               Enum.map(expected, fn {stock, left} ->
+                 {if(stock >= 2, do: 1, else: 0), if(stock <= 0, do: 1, else: 0),
+                  if(left <= 0, do: 1, else: 0)}
+               end)
+
+      assert Enum.any?(expected, fn {stock, _} -> stock >= 2 end)
+      assert Enum.any?(expected, fn {stock, _} -> stock < 0 end)
+      assert Enum.any?(expected, fn {_, left} -> left in 1..3 end)
+    end
+
+    test "M3-1's Done-when: a ctud buffer and a ctd hopper agree with an oracle that knows " <>
+           "nothing of logex" do
+      {:ok, program} = Logex.compile(@buffer_ld, name: "buffer")
+      buffer_checked(program)
+    end
+
+    test "M3-1's Done-when: a count driven to the dint's top stops there with `ov` on until " <>
+           "a reset" do
+      {:ok, program} = Logex.compile(@boxes_ld, name: "boxes")
+      state = %{Logex.Runtime.instance(program) | first: false}
+      state = put_in(state.env["boxes"]["cv"], 2_147_483_645)
+      inputs = for(eye <- [1, 0, 1, 0, 1, 0, 1, 0], do: %{"eye" => eye}) ++ [%{"reset_pb" => 1}]
+
+      {seen, _state} =
+        Enum.map_reduce(inputs, state, fn input, state ->
+          {outputs, state} =
+            Logex.Runtime.scan(program, Logex.Runtime.put_inputs(program, state, input), 10)
+
+          {{outputs["count"], state.env["boxes"]["ov"]}, state}
+        end)
+
+      assert seen == [
+               {2_147_483_646, 0},
+               {2_147_483_646, 0},
+               {2_147_483_647, 0},
+               {2_147_483_647, 0},
+               {2_147_483_647, 1},
+               {2_147_483_647, 1},
+               {2_147_483_647, 1},
+               {2_147_483_647, 1},
+               {0, 0}
+             ]
+    end
+
+    test "M3-1's Done-when: an online edit that raises the preset while boxes are counted " <>
+           "keeps the count, moves `pv`, forecasts `q`, and counts no box at the switch that " <>
+           "was not a real edge" do
+      {:ok, running} = Logex.compile(@boxes_ld, name: "boxes")
+
+      {:ok, candidate} =
+        @boxes_ld
+        |> String.replace("ctu boxes 12", "ctu boxes 20")
+        |> String.replace("var boxes ctu\n", "var boxes ctu\nvar rejects ctu\n")
+        |> Kernel.<>("xic eye ctu rejects 5\n")
+        |> Logex.compile(name: "boxes")
+
+      # Thirteen boxes, the last still on the eye at the switch.
+      inputs = [%{"eye" => 0}] ++ Enum.flat_map(1..13, fn _ -> [%{"eye" => 1}, %{"eye" => 0}] end)
+      {outputs, state} = box_scans(running, Enum.drop(inputs, -1))
+      assert List.last(outputs) == %{"count" => 13, "full_lamp" => 1}
+
+      {:ok, edit, forecast} = Logex.Edit.accept(running, candidate, state)
+      {edit, tested, report} = Logex.Edit.test(edit, state)
+      assert report == forecast
+
+      assert report == [
+               {:added, "rejects", Logex.Program.initial_env(candidate)["rejects"]},
+               {:dn_drops, "boxes", {13, 20}},
+               {:ons_blocked, "rejects.cu", 0},
+               {:preset, "boxes", {12, 20}}
+             ]
+
+      assert %{"cv" => 13, "pv" => 20} = tested.env["boxes"]
+
+      # The box on the eye counts once, before the switch; the new counter counts nothing
+      # for it; the next box counts in each.
+      {outputs, later} =
+        box_scans(candidate, [%{"eye" => 1}, %{"eye" => 0}, %{"eye" => 1}], tested)
+
+      assert Enum.map(outputs, &{&1["count"], &1["full_lamp"]}) == [{13, 0}, {13, 0}, {14, 0}]
+      assert later.env["rejects"]["cv"] == 1
+      {_program, _state, _report} = Logex.Edit.assemble(edit, later)
+    end
+  end
 end
