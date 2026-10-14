@@ -121,6 +121,22 @@ defmodule Logex.ApiContractTest do
   no scan lets a timer gain more than the time since its own state's last scan; and a
   one-shot passes power only where its state's last scan ran the same `ons` rung with its
   condition 0. Its reach covers every refusal, every report kind and each property.
+
+  M3-1: a seventh walk runs IEC's counters, an up counter with its reset above or below
+  its rung, a down counter with its load, an up-down counter run from two rungs with its
+  preset now and then moved to the top, and an up counter inside a block a `cal` runs,
+  in three versions of its body, over random inputs, scans, restarts and online edits that
+  change a preset, a rung, a block's body or a counter's presence, and now and then a
+  counter's kind, which accept refuses. Its oracle restates IEC's bodies from the
+  programs' text, rung by rung over the input image, and knows nothing of the block list:
+  every scan is exact for each counter side that has run under its own rung's text with no
+  switch since, or since its instance started; a side a switch came before counts no edge
+  unless it last ran under the same rung text, and then may or may not; a switch keeps
+  every counter both programs declare as it was but for `pv`, which at a first test moves
+  to the new preset where logic left the old (decisions 23 and 27); the writes each report
+  lists rebuild the state; each forecast holds at the counter's next run; a test then an
+  untest with no scan between gives every counter back; and a restart starts each at its
+  preset. Every accepted call is made twice and gives the same result.
   """
   use ExUnit.Case, async: true
 
@@ -4814,4 +4830,556 @@ defmodule Logex.ApiContractTest do
     {%{model | states: Map.put(model.states, instance.name, state), globals: globals},
      [{:ran, task, instance.name, model.now} | events]}
   end
+
+  # ---- M3-1: counters, against IEC's rules restated from the programs' text -------------
+
+  # What the counter walk must be seen to do, at least once each.
+  @ct_reach [
+    :counted,
+    :first_held,
+    :reset_held,
+    :loaded,
+    :overflow,
+    :both_edges,
+    :frozen,
+    :kept_across,
+    :edge_blocked,
+    :edge_kept,
+    :blocked_counted_later,
+    :preset_moved,
+    :preset_kept,
+    :forecast_drops,
+    :forecast_rises,
+    :round_trip,
+    :retype_refused,
+    :restarted
+  ]
+
+  @ct_inputs ~w(e1 e2 e3 rs ld on)
+
+  test "counters run as IEC's, restated from the programs' text: every scan exact where no " <>
+         "switch came since a counter last ran, no count an edit made, and each switch's " <>
+         "report rebuilding the state" do
+    :rand.seed(:exsss, {2026, 10, 314})
+    Process.put(:ct_programs, %{})
+
+    for _ <- 1..300 do
+      spec = ct_spec()
+      program = ct_program(spec)
+      w = %{spec: spec, p: program, s: Runtime.instance(program), e: nil, c: nil}
+      # A new instance's memories are as its program leaves them: each side counts as last
+      # run under its own rung, with no switch since.
+      clean = Map.new(ct_texts(spec), fn {side, _text} -> {side, true} end)
+      w = %{w | s: w.s} |> Map.merge(%{clean: clean, last: ct_texts(spec), forecast: []})
+      ct_walk(Map.merge(w, %{round: nil, blocked: [], restarted: false}), 60)
+    end
+
+    assert Process.get(:ct_reach, MapSet.new()) == MapSet.new(@ct_reach)
+  end
+
+  defp ct_reached(name), do: reached(:ct_reach, name)
+
+  # A program's counters, drawn: an up counter `u` with its reset above or below its rung, a
+  # down counter `d` with its load, an up-down counter `b`, its two sides on two rungs and
+  # now and then a preset moved near the top, and a block `s1` holding an up counter, in
+  # one of three versions of its body, which a `cal` on `on` runs.
+  defp ct_spec,
+    do: %{
+      u:
+        ct_maybe(fn ->
+          %{p: pick([1, 2, 3]), chain: ct_chain(), reset: pick([:above, :below])}
+        end),
+      kind_u: "ctu",
+      d: ct_maybe(fn -> %{p: pick([1, 2]), chain: ct_chain(), load: pick([:above, :below])} end),
+      b:
+        ct_maybe(fn ->
+          %{p: pick([2, 3]), up: ct_chain(), down: ct_chain(), big: pick([true, false])}
+        end),
+      s: ct_maybe(fn -> pick([1, 2, 3]) end)
+    }
+
+  defp ct_maybe(fun), do: if(:rand.uniform(4) == 1, do: nil, else: fun.())
+
+  defp ct_chain,
+    do: for(_ <- 1..:rand.uniform(2), do: {pick([:xic, :xic, :xio]), pick(~w(e1 e2 e3))})
+
+  # The candidate: one to two of the changes an edit may make, or now and then a change of
+  # `u`'s kind, which accept refuses.
+  defp ct_candidate(spec),
+    do:
+      Enum.reduce(1..:rand.uniform(2), spec, fn _, spec -> ct_change(:rand.uniform(15), spec) end)
+
+  defp ct_change(1, %{u: %{} = u} = spec), do: %{spec | u: %{u | p: pick([1, 2, 3, 4])}}
+  defp ct_change(2, %{u: %{} = u} = spec), do: %{spec | u: %{u | chain: ct_chain()}}
+  defp ct_change(3, %{u: %{} = u} = spec), do: %{spec | u: %{u | reset: pick([:above, :below])}}
+  defp ct_change(4, spec), do: %{spec | u: pick([nil, %{p: 2, chain: ct_chain(), reset: :above}])}
+  defp ct_change(5, %{d: %{} = d} = spec), do: %{spec | d: %{d | p: pick([1, 2, 3])}}
+  defp ct_change(6, %{b: %{} = b} = spec), do: %{spec | b: %{b | p: pick([1, 2, 3, 4])}}
+  defp ct_change(7, %{b: %{} = b} = spec), do: %{spec | b: %{b | up: ct_chain()}}
+  defp ct_change(8, %{b: %{} = b} = spec), do: %{spec | b: %{b | down: ct_chain()}}
+  defp ct_change(9, %{b: %{} = b} = spec), do: %{spec | b: %{b | big: not b.big}}
+  defp ct_change(10, spec), do: %{spec | s: pick([nil, 1, 2, 3])}
+  defp ct_change(11, %{u: %{}} = spec), do: %{spec | kind_u: pick(["ctud", spec.kind_u])}
+  # A preset moved, the commonest change, so that forecasts come both ways.
+  defp ct_change(n, spec) when n in [13, 14], do: ct_change(pick([1, 6]), spec)
+  defp ct_change(15, %{s: version} = spec) when version in [1, 2], do: %{spec | s: 3 - version}
+  defp ct_change(_n, spec), do: %{spec | d: pick([nil, %{p: 1, chain: ct_chain(), load: :below}])}
+
+  @ct_bodies %{
+    1 => "xic go ctu c 2",
+    2 => "xic go ctu c 4",
+    3 => "xic go xio clr ctu c 2"
+  }
+
+  defp ct_body(version) do
+    {:ok, tally} =
+      Logex.compile(
+        "function_block tally\nvar_input go bool\nvar_input clr bool\nvar_output q bool\n" <>
+          "var c ctu\nxic clr ote c.r\n#{@ct_bodies[version]}\nxic c.q ote q",
+        name: "tally"
+      )
+
+    tally
+  end
+
+  # Each spec's program, compiled once a run.
+  defp ct_program(spec) do
+    known = Process.get(:ct_programs)
+
+    case known do
+      %{^spec => program} ->
+        program
+
+      _ ->
+        {:ok, program} = Logex.compile(ct_source(spec), name: "ct", types: ct_types(spec))
+        Process.put(:ct_programs, Map.put(known, spec, program))
+        program
+    end
+  end
+
+  defp ct_types(%{s: nil}), do: []
+  defp ct_types(%{s: version}), do: [ct_body(version)]
+
+  defp ct_source(spec) do
+    declarations =
+      Enum.map(@ct_inputs, &"var_input #{&1} bool") ++
+        ["var_output y bool", "var_output n dint"] ++
+        if(spec.u, do: ["var u #{spec.kind_u}"], else: []) ++
+        if(spec.d, do: ["var d ctd"], else: []) ++
+        if(spec.b, do: ["var b ctud"], else: []) ++ if(spec.s, do: ["var s1 tally"], else: [])
+
+    Enum.join(declarations ++ Enum.map(ct_rungs(spec), &ct_text/1) ++ ["xic e2 move 1 n"], "\n")
+  end
+
+  # The rungs, in order, as the model runs them: `{:set, counter, member, chain-or-input}`,
+  # `{:count, counter, side, chain, preset}`, `{:move, counter, value}` and `{:cal, version}`.
+  defp ct_rungs(spec), do: ct_u(spec.u) ++ ct_d(spec.d) ++ ct_b(spec.b) ++ ct_s(spec.s)
+
+  defp ct_u(nil), do: []
+
+  defp ct_u(%{reset: :above} = u),
+    do: [{:set, "u", "r", "rs"}, {:count, "u", :up, u.chain, u.p}]
+
+  defp ct_u(%{reset: :below} = u),
+    do: [{:count, "u", :up, u.chain, u.p}, {:set, "u", "r", "rs"}]
+
+  defp ct_d(nil), do: []
+
+  defp ct_d(%{load: :above} = d),
+    do: [{:set, "d", "ld", "ld"}, {:count, "d", :down, d.chain, d.p}]
+
+  defp ct_d(%{load: :below} = d),
+    do: [{:count, "d", :down, d.chain, d.p}, {:set, "d", "ld", "ld"}]
+
+  defp ct_b(nil), do: []
+
+  defp ct_b(b),
+    do:
+      if(b.big, do: [{:move, "b", 2_147_483_647}], else: []) ++
+        [
+          {:set, "b", "r", "rs"},
+          {:set, "b", "ld", "ld"},
+          {:count, "b", :up, b.up, b.p},
+          {:count, "b", :down, b.down, b.p}
+        ]
+
+  defp ct_s(nil), do: []
+  defp ct_s(version), do: [{:cal, version}]
+
+  defp ct_text({:set, counter, member, input}), do: "xic #{input} ote #{counter}.#{member}"
+  defp ct_text({:move, counter, value}), do: "xic e3 move #{value} #{counter}.pv"
+  defp ct_text({:cal, _version}), do: "xic on cal s1 e1 rs y"
+
+  defp ct_text({:count, counter, side, chain, preset}),
+    do: "#{ct_chain_text(chain)} #{ct_mnemonic(side)} #{counter} #{preset}"
+
+  defp ct_chain_text(chain), do: Enum.map_join(chain, " ", fn {c, input} -> "#{c} #{input}" end)
+
+  defp ct_mnemonic(:up), do: "ctu"
+  defp ct_mnemonic(:down), do: "ctd"
+
+  # Each counter's side, to the text of the rung it runs under, its preset left out: the
+  # block's by the text of its body's rung.
+  defp ct_texts(spec),
+    do:
+      Map.new(
+        for(
+          {:count, counter, side, chain, _p} <- ct_rungs(spec),
+          do: {{counter, side}, {ct_chain_text(chain), ct_mnemonic(side)}}
+        ) ++
+          for(
+            {:cal, version} <- ct_rungs(spec),
+            do: {{"s1.c", :up}, String.replace(@ct_bodies[version], ~r/ \d+$/, "")}
+          )
+      )
+
+  # Each counter's kind and preset, in this spec.
+  defp ct_kinds(spec),
+    do:
+      Map.new(
+        if(spec.u, do: [{"u", {spec.kind_u, spec.u.p}}], else: []) ++
+          if(spec.d, do: [{"d", {"ctd", spec.d.p}}], else: []) ++
+          if(spec.b, do: [{"b", {"ctud", spec.b.p}}], else: []) ++
+          if(spec.s, do: [{"s1.c", {"ctu", ct_body_preset(spec.s)}}], else: [])
+      )
+
+  defp ct_body_preset(2), do: 4
+  defp ct_body_preset(_version), do: 2
+
+  defp ct_walk(w, 0), do: w
+
+  defp ct_walk(w, n),
+    do:
+      ct_walk(
+        ct_op(pick(~w(scan scan scan scan accept test untest assemble cancel restart)a), w),
+        n - 1
+      )
+
+  defp ct_level(name) when name in ["rs", "ld"], do: pick([0, 0, 0, 0, 0, 1])
+  defp ct_level(_name), do: pick([0, 1])
+
+  defp ct_running(%{e: nil} = w), do: {w.p, w.spec}
+  defp ct_running(%{e: edit} = w), do: ct_side_of(Edit.stage(edit), w)
+
+  defp ct_side_of(:testing, w), do: {Edit.running(w.e), w.c}
+  defp ct_side_of(_stage, w), do: {Edit.running(w.e), w.spec}
+
+  defp ct_op(:scan, w) do
+    {program, spec} = ct_running(w)
+    # A reset or a load is rare, so counts build up, to a preset and past it.
+    inputs = for name <- @ct_inputs, :rand.uniform(3) == 1, into: %{}, do: {name, ct_level(name)}
+    before = Runtime.put_inputs(program, w.s, inputs)
+    {:ok, {_outputs, later}} = attempt(fn -> Runtime.scan(program, before, 10) end)
+    w = ct_check_scan(w, spec, before, later)
+    %{w | s: later, round: nil, restarted: false}
+  end
+
+  defp ct_op(:restart, w) do
+    {program, spec} = ct_running(w)
+    s = Runtime.restart(program, w.s, pick([:cold, :warm]))
+
+    for {name, {kind, preset}} <- ct_kinds(spec) do
+      assert ct_at(s.env, name) == ct_initial(kind, preset)
+    end
+
+    ct_reached(:restarted)
+    clean = Map.new(ct_texts(spec), fn {side, _text} -> {side, true} end)
+    %{w | s: s, clean: clean, last: ct_texts(spec), forecast: [], round: nil, restarted: true}
+  end
+
+  defp ct_op(:accept, %{e: nil} = w) do
+    candidate = ct_candidate(w.spec)
+
+    case Edit.accept(w.p, ct_program(candidate), w.s) do
+      {:ok, edit, _forecast} ->
+        %{w | e: edit, c: candidate}
+
+      {:error, [%Diagnostic{stage: :edit, message: message}]} ->
+        assert w.spec.u != nil and candidate.u != nil and candidate.kind_u != w.spec.kind_u
+        assert message =~ "`u` is a #{w.spec.kind_u} in the running program and a ctud"
+        ct_reached(:retype_refused)
+        w
+    end
+  end
+
+  defp ct_op(:test, %{e: e} = w) when e != nil,
+    do: ct_switch(Edit.stage(e) in [:accepted, :untested], :test, w)
+
+  defp ct_op(:untest, %{e: e} = w) when e != nil,
+    do: ct_switch(Edit.stage(e) == :testing, :untest, w)
+
+  defp ct_op(:assemble, %{e: e} = w) when e != nil,
+    do: ct_finish(Edit.stage(e) == :testing, :assemble, w)
+
+  defp ct_op(:cancel, %{e: e} = w) when e != nil,
+    do: ct_finish(Edit.stage(e) in [:accepted, :untested], :cancel, w)
+
+  defp ct_op(_op, w), do: w
+
+  defp ct_finish(false, _step, w), do: w
+
+  defp ct_finish(true, step, w) do
+    {:ok, {program, s, _report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
+    spec = if step == :assemble, do: w.c, else: w.spec
+    %{w | p: program, s: s, e: nil, c: nil, spec: spec, round: nil}
+  end
+
+  defp ct_switch(false, _step, w), do: w
+
+  defp ct_switch(true, step, w) do
+    first? = Edit.stage(w.e) == :accepted
+    {from, to} = if step == :test, do: {w.spec, w.c}, else: {w.c, w.spec}
+    {:ok, {edit, s, report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
+
+    # The writes the report lists rebuild the state.
+    assert s.env == ct_rebuilt(w.s.env, report)
+
+    for {name, {kind, preset}} <- ct_kinds(to) do
+      was = ct_kinds(from)[name]
+      now = ct_at(s.env, name)
+      old = ct_at(w.s.env, name)
+
+      # A counter both programs declare, of one kind, keeps its count and its memories, and
+      # at a first test its `pv` moves to the new preset where logic left the old, or is
+      # kept (decisions 23 and 27).
+      if match?({^kind, _}, was) and is_map(old) do
+        assert Map.delete(now, "pv") == Map.delete(old, "pv")
+        ct_reached(:kept_across)
+
+        if first? do
+          {_kind, from_p} = was
+          assert now["pv"] == if(old["pv"] == from_p, do: preset, else: old["pv"])
+          if old["pv"] != now["pv"], do: ct_reached(:preset_moved)
+          if old["pv"] == now["pv"] and now["pv"] != preset, do: ct_reached(:preset_kept)
+        end
+      end
+    end
+
+    blocked = for {:ons_blocked, path, _value} <- report, do: path
+    if blocked != [], do: ct_reached(:edge_blocked)
+
+    # A test then an untest with no scan between gives the counters back.
+    if step == :untest and w.round != nil do
+      for {name, _} <- ct_kinds(to), is_map(ct_at(w.round, name)) do
+        assert ct_at(s.env, name) == ct_at(w.round, name)
+      end
+
+      ct_reached(:round_trip)
+    end
+
+    forecast =
+      for {kind, name, {cv, pv}} <- report,
+          kind in [:dn_drops, :dn_rises],
+          do: {kind, name, cv, pv}
+
+    round = if step == :test, do: w.s.env, else: nil
+    blocked = Enum.uniq(blocked ++ w.blocked)
+
+    # A restart with no scan since leaves every memory as a fresh instance's, so an edge a
+    # counter sees after it is a real one, whatever its rung's text was.
+    last = if w.restarted, do: Map.merge(w.last, ct_texts(to)), else: w.last
+
+    %{w | e: edit, s: s, clean: %{}, forecast: forecast, round: round, blocked: blocked}
+    |> Map.put(:last, last)
+  end
+
+  defp ct_rebuilt(env, report),
+    do:
+      Enum.reduce(report, env, fn
+        {:added, name, value}, env -> ct_put(env, name, value)
+        {:preset, name, {_from, to}}, env -> ct_put(env, name <> ".pv", to)
+        _fact, env -> env
+      end)
+
+  defp ct_at(env, name), do: get_in(env, String.split(name, "."))
+  defp ct_put(env, name, value), do: put_in(env, String.split(name, "."), value)
+
+  defp ct_initial("ctu", p), do: %{"cu" => 0, "r" => 0, "pv" => p, "q" => 0, "cv" => 0, "ov" => 0}
+
+  defp ct_initial("ctd", p),
+    do: %{"cd" => 0, "ld" => 0, "pv" => p, "q" => 0, "cv" => 0, "un" => 0}
+
+  defp ct_initial("ctud", p),
+    do: %{
+      "cu" => 0,
+      "cd" => 0,
+      "r" => 0,
+      "ld" => 0,
+      "pv" => p,
+      "qu" => 0,
+      "qd" => 0,
+      "cv" => 0,
+      "ov" => 0,
+      "un" => 0
+    }
+
+  # The scan, restated: every counter as IEC's body leaves it, run rung by rung over the
+  # input image, from the state before the scan. A side runs exactly where it has run under
+  # its rung's text with no switch since; one a switch came before counts no edge, unless
+  # it last ran under the same text, in which case it may count it, the edit's block list
+  # being the implementation's and no part of this oracle.
+  defp ct_check_scan(w, spec, before, later) do
+    image = Map.take(before.env, @ct_inputs)
+    texts = ct_texts(spec)
+    kinds = ct_kinds(spec)
+    start = Map.new(kinds, fn {name, _kind} -> {name, ct_at(before.env, name)} end)
+    ctx = %{image: image, w: w, texts: texts, kinds: kinds, first: before.first}
+
+    {possible, ran} =
+      Enum.reduce(ct_rungs(spec), {[{start, []}], []}, fn rung, acc -> ct_run(rung, acc, ctx) end)
+
+    got = Map.new(kinds, fn {name, _kind} -> {name, ct_at(later.env, name)} end)
+    matching = for {counters, notes} <- possible, counters == got, do: notes
+    assert matching != [], "no IEC reading gives #{inspect(got)} from #{inspect(start)}"
+    notes = hd(matching)
+    Enum.each(for(note when is_atom(note) <- notes, do: note), &ct_reached/1)
+    if Enum.count(notes, &(&1 == {:side, "b"})) == 2, do: ct_reached(:both_edges)
+
+    # Each forecast holds at the next run, where the count and the preset did not move.
+    for {kind, name, cv, pv} <- w.forecast,
+        {name, :up} in ran or {name, :down} in ran,
+        got[name]["cv"] == cv and got[name]["pv"] == pv do
+      done = Map.get(got[name], "qu", got[name]["q"])
+      assert done == if(kind == :dn_drops, do: 0, else: 1)
+      ct_reached(if kind == :dn_drops, do: :forecast_drops, else: :forecast_rises)
+    end
+
+    if before.first and Enum.any?(ran, &ct_cond(&1, spec, image)), do: ct_reached(:first_held)
+
+    forecast =
+      Enum.reject(w.forecast, fn {_k, name, _cv, _pv} ->
+        {name, :up} in ran or {name, :down} in ran
+      end)
+
+    %{
+      w
+      | clean: Enum.reduce(ran, w.clean, &Map.put(&2, &1, true)),
+        last: Enum.reduce(ran, w.last, &Map.put(&2, &1, texts[&1])),
+        forecast: forecast
+    }
+  end
+
+  defp ct_cond({"s1.c", :up}, _spec, image), do: image["on"] == 1 and image["e1"] == 1
+
+  defp ct_cond({counter, side}, spec, image) do
+    [chain] = for {:count, ^counter, ^side, chain, _} <- ct_rungs(spec), do: chain
+    ct_eval(chain, image)
+  end
+
+  defp ct_eval(chain, image),
+    do: Enum.all?(chain, fn {c, input} -> c == :xic == (image[input] == 1) end)
+
+  defp ct_run({:set, counter, member, input}, {possible, ran}, ctx),
+    do:
+      {for({c, notes} <- possible, do: {put_in(c, [counter, member], ctx.image[input]), notes}),
+       ran}
+
+  defp ct_run({:move, counter, value}, {possible, ran}, ctx),
+    do:
+      {for(
+         {c, notes} <- possible,
+         do: {ct_if(ctx.image["e3"] == 1, c, [counter, "pv"], value), notes}
+       ), ran}
+
+  defp ct_run({:count, counter, side, chain, _preset}, {possible, ran}, ctx) do
+    cond = ct_eval(chain, ctx.image)
+    {kind, _} = ctx.kinds[counter]
+
+    {Enum.flat_map(possible, &ct_side(&1, counter, {kind, side, cond}, ctx)),
+     [{counter, side} | ran]}
+  end
+
+  defp ct_run({:cal, version}, {possible, ran}, %{image: %{"on" => 1} = image} = ctx) do
+    cond = image["e1"] == 1 and (version != 3 or image["rs"] != 1)
+
+    possible =
+      possible
+      |> Enum.map(fn {c, notes} -> {put_in(c, ["s1.c", "r"], image["rs"]), notes} end)
+      |> Enum.flat_map(&ct_side(&1, "s1.c", {"ctu", :up, cond}, ctx))
+
+    {possible, [{"s1.c", :up} | ran]}
+  end
+
+  defp ct_run({:cal, _version}, {possible, ran}, _ctx) do
+    ct_reached(:frozen)
+    {possible, ran}
+  end
+
+  defp ct_if(true, map, path, value), do: put_in(map, path, value)
+  defp ct_if(false, map, _path, _value), do: map
+
+  # One side, as IEC's body runs it: the edge counted where allowed, and, where only a
+  # switch's block decides it, both readings.
+  defp ct_side({counters, notes}, counter, {kind, side, cond}, ctx) do
+    key = {counter, side}
+    clean? = Map.get(ctx.w.clean, key, false)
+
+    allowed =
+      cond do
+        ctx.first -> [false]
+        clean? -> [true]
+        Map.get(ctx.w.last, key) == ctx.texts[key] -> [false, true]
+        true -> [false]
+      end
+
+    c = counters[counter]
+    mem = if side == :up, do: "cu", else: "cd"
+    edge? = cond and c[mem] == 0
+    held = if edge? and c["r"] == 1 and kind != "ctd", do: [:reset_held], else: []
+
+    for ok <- Enum.uniq(allowed) do
+      {c, counted} = ct_iec(kind, side, c, edge? and ok, cond)
+      sides = for :counted <- counted, do: {:side, counter}
+      why = ct_why(counted, ok, clean?, key, ctx)
+      {Map.put(counters, counter, c), notes ++ held ++ counted ++ sides ++ why}
+    end
+  end
+
+  # A count after a switch: one kept, where only the block list decides it, or a counter
+  # an edit blocked, counting at a later run.
+  defp ct_why([:counted | _], true, false, _key, _ctx), do: [:edge_kept]
+
+  defp ct_why([:counted | _], true, true, {counter, side}, ctx),
+    do:
+      if("#{counter}.#{ct_memory(side)}" in ctx.w.blocked, do: [:blocked_counted_later], else: [])
+
+  defp ct_why(_counted, _ok, _clean?, _key, _ctx), do: []
+
+  defp ct_memory(:up), do: "cu"
+  defp ct_memory(:down), do: "cd"
+
+  @ct_max 2_147_483_647
+  @ct_min -2_147_483_648
+
+  defp ct_iec(kind, side, c, edge, cond) do
+    mem = ct_memory(side)
+    ov = Map.get(c, "ov", 0)
+    un = Map.get(c, "un", 0)
+
+    {cv, ov, un, notes} =
+      cond do
+        kind != "ctd" and c["r"] == 1 -> {0, 0, 0, []}
+        kind != "ctu" and c["ld"] == 1 -> {c["pv"], 0, 0, [:loaded]}
+        edge and side == :up and c["cv"] == @ct_max -> {c["cv"], 1, un, [:overflow]}
+        edge and side == :up -> {c["cv"] + 1, ov, un, [:counted]}
+        edge and side == :down and c["cv"] == @ct_min -> {c["cv"], ov, 1, []}
+        edge and side == :down -> {c["cv"] - 1, ov, un, [:counted]}
+        true -> {c["cv"], ov, un, []}
+      end
+
+    c = Map.merge(c, %{"cv" => cv, mem => if(cond, do: 1, else: 0)})
+    c = if Map.has_key?(c, "ov"), do: Map.put(c, "ov", ov), else: c
+    c = if Map.has_key?(c, "un"), do: Map.put(c, "un", un), else: c
+    {ct_done(kind, c), notes}
+  end
+
+  defp ct_done("ctu", c), do: %{c | "q" => if(c["cv"] >= c["pv"], do: 1, else: 0)}
+  defp ct_done("ctd", c), do: %{c | "q" => if(c["cv"] <= 0, do: 1, else: 0)}
+
+  defp ct_done("ctud", c),
+    do: %{
+      c
+      | "qu" => if(c["cv"] >= c["pv"], do: 1, else: 0),
+        "qd" => if(c["cv"] <= 0, do: 1, else: 0)
+    }
 end
