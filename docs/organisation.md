@@ -3661,6 +3661,31 @@ the record keeps.
     while it runs: where `.acc` is at or past the new `.pre` there, `:dn_rises` says the
     pulse ends at the timer's next run, `.tt` dropping and `.dn` rising, unless that run
     finds its rung false, when `.dn` stays at 0 as the pulse ends.
+95. **What a retentive timer's reset clears, and its rule across an edit (M3-2),** which
+    decision 90 left to M3-2. Decision 76's lubrication timer adds up the motor's running
+    time, `xic motor rto lube 360000000`, and `xic greased ote lube.r` clears it.
+    - `r` clears the time and the status bits, `.acc`, `.dn` and `.tt`, as the
+      conventional RES does, and keeps `.pre`; `.en` takes the rung's power as on every
+      run. While `r` is held the timer stays at 0, adding nothing, and it times again from
+      the last scan that saw `r`. Across an online edit `r` is a member like a counter's
+      `r`: kept with its instance, 0 in a new one;
+    - or `r` also clears `.en`, so the first scan after `r` is released adds nothing, as
+      a `ton`'s first scan with its rung true adds nothing.
+
+    *Taken: the first.* `.en` is the rung's power when the instruction last ran, as the
+    conventional TIMER's `.EN` is, so a reset leaves it what the rung made it, as a
+    counter's reset keeps its edge memory (decision 70); the time from the last scan that
+    saw `r` to the next is counted, at most one scan more than the other reading would
+    give. `r` acts when the timer's own instruction runs, as a counter's does (decisions
+    84 and 91): a reset rung above the timer clears it on the same scan, one below it a
+    scan later. Every restart, warm or cold, starts it again at 0 (decision 76). Across a
+    switch it is a timer by decision 23, resumed where its rung was true, `.en` set, as a
+    `ton` is; a change of type, a `ton` made an `rto`, needs a restart. A moved `.pre`
+    changes `.dn` at the timer's next run with its rung true, since a false rung keeps
+    `.dn` as it was: `:dn_drops` where `.dn` is set and `.acc` below the new `.pre`,
+    unless at least `.pre` − `.acc` ms of true rung pass by then; `:dn_rises` where `.dn`
+    is 0 and `.acc` at or past the new `.pre`, whether or not its rung was true at the
+    switch, unless that run finds `r` set.
 
 ---
 

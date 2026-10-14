@@ -1858,8 +1858,42 @@ xic a ton t1 7") == [
       assert %{"h" => %{"pre" => 3000, "tt" => 0}} = Logex.Program.initial_env(program)
     end
 
+    test "an rto runs an rto only, once, nothing after it, logic writing `.pre`, `.acc` and " <>
+           "its reset `r` (decision 90), which is no storage bit" do
+      assert source_errors(
+               "var l rto\nvar t1 ton\nvar a bool\n" <>
+                 "xic a rto t1 5\nxic a ton l 5\nxic a rto l 5\nxic a rto l 5\n" <>
+                 "xic a rto l 5 ote a\nxic a ote l.dn\nxic a ons l.r ote a"
+             ) == [
+               "line 4: `rto` runs a rto, but `t1` is a ton (declared on line 2)",
+               "line 5: `ton` runs a ton, but `l` is a rto (declared on line 1)",
+               "line 7: `l` is already run by the `rto` on line 6: one `rto` runs a timer",
+               "line 8: `l` is already run by the `rto` on line 6: one `rto` runs a timer",
+               "line 8: `ote a` follows `rto l` on its path: what passes on after a `rto` is not " <>
+                 "settled, so a `rto` ends its path; read the timer with `xic l.dn` on a rung below",
+               "line 9: `ote` writes `l.dn`, but logic may write only `.pre`, `.acc` and `.r` of a " <>
+                 "rto",
+               "line 10: `ons` keeps its storage bit in a bool of its own, not in `l.r`, a member " <>
+                 "of `l`, which its instance reads"
+             ]
+
+      assert source_warnings(
+               "var_input a bool\nvar_input g bool\nvar_output y bool\nvar l rto\n" <>
+                 "xic g ote l.r\nxic a rto l 360000000\nxic l.dn xic l.r ote y"
+             ) == []
+
+      assert source_warnings("var l rto\nvar_input a bool\nxic a ote l.r") == [
+               "line 1: warning: `l` is a rto, but no `rto` runs it: it never times"
+             ]
+
+      assert source_errors("var rto bool\nvar RTO dint\nvar a bool\nxic a ote a") == [
+               "line 1: `rto` is an instruction and cannot name a tag",
+               "line 2: `RTO` is an instruction and cannot name a tag"
+             ]
+    end
+
     test "from Elixir, a timer takes no preset: that is the number on its instruction" do
-      for type <- ~w(tof tp) do
+      for type <- ~w(tof tp rto) do
         tag = %Logex.Tag{
           name: "f",
           type: Logex.FbType.builtin(type),

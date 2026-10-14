@@ -1440,6 +1440,21 @@ defmodule Logex.Runtime do
     {false, pulsed(env, timer, false, scan)}
   end
 
+  # M3-2: the retentive timer (docs/naming.md, `rto`; the conventional RTO; decisions 76, 90
+  # and 95). Rung power is its IN. Where its reset `r` is 1 when it runs, `.acc`, `.dn` and
+  # `.tt` go to 0 and no time is added, whatever the rung, `.en` taking the rung's power.
+  # Otherwise, energised, it runs as a `ton` does; de-energised, `.en` and `.tt` go to 0 and
+  # `.acc` and `.dn` are kept, so its time adds up across the rung's drops. `last` is stamped
+  # on every run, and `r` is kept as logic left it. Every start and restart puts it at 0, as
+  # every tag is put (decision 76). Nothing may follow it on its path (decision 73).
+  defp evaluate({:rto, _, [timer, _preset]}, {true, env}, %Scan{now: now}) do
+    {true, write(env, timer, retained(as_map(read(env, timer)), true, now))}
+  end
+
+  defp evaluate({:rto, _, [timer, _preset]}, {false, env}, %Scan{now: now}) do
+    {false, write(env, timer, retained(as_map(read(env, timer)), false, now))}
+  end
+
   # M3-1: IEC's counters (docs/naming.md, `ctu`, `ctd` and `ctud`; decisions 67 to 71 and
   # 84 to 86). Rung power is the count input of the side the mnemonic names, `cu` for a
   # `ctu` and `cd` for a `ctd`, and each run is IEC's body for that side, over the
@@ -1738,6 +1753,33 @@ defmodule Logex.Runtime do
       "dn" => 0,
       "tt" => 0,
       "en" => 0,
+      "last" => now
+    }
+
+  # M3-2: one run of an `rto`, its reset first.
+  defp retained(timer, power, now), do: retained(closed?(Map.get(timer, "r")), power, timer, now)
+
+  defp retained(true, power, timer, now),
+    do: %{
+      "pre" => integer(Map.get(timer, "pre")),
+      "acc" => 0,
+      "dn" => 0,
+      "tt" => 0,
+      "en" => one(power),
+      "r" => 1,
+      "last" => now
+    }
+
+  defp retained(false, true, timer, now), do: Map.put(timing(timer, now), "r", 0)
+
+  defp retained(false, false, timer, now),
+    do: %{
+      "pre" => integer(Map.get(timer, "pre")),
+      "acc" => integer(Map.get(timer, "acc")),
+      "dn" => bit(Map.get(timer, "dn")),
+      "tt" => 0,
+      "en" => 0,
+      "r" => 0,
       "last" => now
     }
 

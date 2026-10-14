@@ -85,8 +85,8 @@ defmodule Logex.Edit do
     switch found, so a test and an untest with no scan between leave the original's
     timers as they were. A resume an earlier edit's last switch made is not given back;
   - *resume:* a timer the program started runs and the program stopped does not, timing
-    when it last ran (its `last` before `now`, and `.en` 1 for a `ton`, `.tt` 1 for a `tof`
-    in its delay or a `tp` in its pulse, M3-2), resumes from the switch, where the
+    when it last ran (its `last` before `now`, and `.en` 1 for a `ton` or an `rto`, `.tt` 1
+    for a `tof` in its delay or a `tp` in its pulse, M3-2), resumes from the switch, where the
     program stopped is the one that last scanned (as for one-shots, below): its `last`
     becomes `now`, so the time no `ton` ran it is not caught up. Where the program started
     last scanned, a test and an untest with no scan between, it left the timer as it is.
@@ -110,7 +110,12 @@ defmodule Logex.Edit do
   `.dn` rising, unless that run finds its rung false, when `.dn` stays 0. A `tp`'s edge
   memory, `.en`, is blocked as a counter's is (below), by its path, `horn_pulse.en`, so a
   `tp` the edit adds while its rung is true, or whose rung it changes, starts no pulse at
-  the switch (decision 94).
+  the switch (decision 94). An `rto` keeps `.dn` across a false rung, so its `.dn` changes
+  with its `.pre` at its next run with its rung true: `:dn_drops` where `.dn` is 1 and `.acc`
+  below the new `.pre`, unless at least `.pre` − `.acc` ms of true rung pass by then, and
+  `:dn_rises` where `.dn` is 0 and `.acc` at or past it, its rung true at the switch or not,
+  unless that run finds its reset `r` set. Its `r` is a member as a counter's is, kept by a
+  switch and 0 in a new instance (decision 95).
 
   **Counters** (M3-1, decisions 87 and 88). A counter's `.pv` moves by the timers' rules
   for `.pre`, above, each move reported as `:preset` or `:preset_kept`, and it keeps its

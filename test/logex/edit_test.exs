@@ -1788,6 +1788,108 @@ defmodule Logex.EditTest do
       end
     end
 
+    @lube "var_input g bool\nvar l rto\nxic g ote l.r\nxic go rto l 30\nxic l.dn ote y"
+
+    test "an rto's `.pre` moved forecasts `.dn` at its next run with its rung true: a drop " <>
+           "where it is set, a rise where `.acc` is past it, its rung false or not " <>
+           "(decision 95)" do
+      done = [{0, %{"go" => 1}}, {10, %{}}, {10, %{}}, {10, %{}}, {10, %{"go" => 0}}]
+      longer = String.replace(@lube, "rto l 30", "rto l 50")
+
+      assert {[{:dn_drops, "l", {30, 50}}, {:preset, "l", {30, 50}}], _, later, _} =
+               timer_switched(@lube, longer, done, [{10, %{}}])
+
+      # A false rung keeps `.dn`; the next true one drops it.
+      assert %{"dn" => 1, "acc" => 30} = later.env["l"]
+      {_, later} = drive(c!(@t <> longer), later, [{10, %{"go" => 1}}])
+      assert %{"dn" => 0, "acc" => 30} = later.env["l"]
+
+      # Paused at 20 with its rung false, a preset moved to 20 or below rises at the next
+      # true run, though `.en` is 0.
+      paused = [{0, %{"go" => 1}}, {10, %{}}, {10, %{}}, {10, %{"go" => 0}}]
+
+      for {to, acc} <- [{"20", 20}, {"15", 20}] do
+        shorter = String.replace(@lube, "rto l 30", "rto l " <> to)
+        pre = String.to_integer(to)
+
+        assert {[{:dn_rises, "l", {^acc, ^pre}}, {:preset, "l", {30, ^pre}}], tested, later, _} =
+                 timer_switched(@lube, shorter, paused, [{10, %{}}, {10, %{"go" => 1}}])
+
+        assert tested.env["l"]["en"] == 0
+        assert %{"dn" => 1, "acc" => ^pre} = later.env["l"]
+      end
+
+      # Short of a new preset with `.dn` 0, or done and still done: no forecast.
+      assert {[{:preset, "l", {30, 40}}], _, _, _} =
+               timer_switched(@lube, String.replace(@lube, "rto l 30", "rto l 40"), paused, [])
+
+      assert {[{:preset, "l", {30, 25}}], _, _, _} =
+               timer_switched(@lube, String.replace(@lube, "rto l 30", "rto l 25"), done, [])
+
+      # Done, `.acc` moved by logic to the new preset itself while the rung is false: `.dn`
+      # stays, so no drop.
+      moved = "var_input k bool\n" <> @lube <> "\nxic k move 20 l.acc"
+      to_20 = String.replace(moved, "rto l 30", "rto l 20")
+      paused_done = done ++ [{10, %{"k" => 1}}, {10, %{"k" => 0}}]
+
+      assert {[{:preset, "l", {30, 20}}], tested, later, _} =
+               timer_switched(moved, to_20, paused_done, [{10, %{"go" => 1}}])
+
+      assert %{"dn" => 1, "acc" => 20} = tested.env["l"]
+      assert %{"dn" => 1, "acc" => 20} = later.env["l"]
+    end
+
+    test "an rto keeps its time and its reset `r` across a switch, 0 in one the edit adds, " <>
+           "and blocks nothing (decision 95)" do
+      held = [{0, %{"go" => 1}}, {10, %{}}, {10, %{"g" => 1}}, {10, %{"g" => 0}}]
+
+      assert {[], tested, later, _} =
+               timer_switched(@lube, @lube <> "\nxic go ote y", held, [{10, %{}}])
+
+      assert %{"acc" => 10, "r" => 0, "en" => 1} = tested.env["l"]
+      assert later.env["l"]["acc"] == 20
+
+      # Its reset held at the switch stays held under a candidate that writes `r` no more.
+      unreset = String.replace(@lube, "xic g ote l.r\n", "")
+      resetting = [{0, %{"go" => 1}}, {10, %{"g" => 1}}]
+
+      assert {[], tested, later, _} = timer_switched(@lube, unreset, resetting, [{10, %{}}])
+      assert tested.env["l"]["r"] == 1
+      assert %{"acc" => 0, "r" => 1} = later.env["l"]
+
+      assert {[{:added, "l", added}, {:input, "g", 0}], %Instance{ons_blocked: []}, _, _} =
+               timer_switched("xic go ote y", @lube, [{0, %{"go" => 1}}], [])
+
+      assert added["r"] == 0
+    end
+
+    test "a ton made an rto is refused at accept" do
+      v1 = c!(@t <> "var l ton\nxic go ton l 30")
+      v2 = c!(@t <> "var l rto\nxic go rto l 30")
+
+      assert {:error, [%Diagnostic{stage: :edit, line: 3, message: message}]} =
+               Edit.accept(v1, v2, Runtime.instance(v1))
+
+      assert message =~ "`l` is a ton in the running program and a rto in the candidate"
+    end
+
+    test "an rto the switch gives back resumes from the switch where its rung was true " <>
+           "(`.en`), and not where it was paused" do
+      v1 = c!(@t <> @lube)
+      v2 = c!(@t <> "var_input g bool\nvar l rto\nxic g ote l.r\nxic l.dn ote y")
+
+      for {before, resumed} <- [
+            {[{0, %{"go" => 1}}], [{:resumed, "l", 500}]},
+            {[{0, %{"go" => 1}}, {10, %{"go" => 0}}], []}
+          ] do
+        {_, state} = run(v1, before)
+        {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
+        {_, state} = drive(v2, state, List.duplicate({10, %{}}, 50))
+        {_edit, _state, report} = Edit.untest(edit, state)
+        assert report == resumed
+      end
+    end
+
     test "a tof the switch gives back resumes from the switch where its delay ran (`.tt`), " <>
            "and not where only its rung was true" do
       gone = "var r tof\nxic r.dn ote y"

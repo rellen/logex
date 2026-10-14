@@ -643,6 +643,7 @@ defmodule Logex.RuntimeTest do
                "ton" => ton,
                "tof" => FbType.tof(),
                "tp" => FbType.tp(),
+               "rto" => FbType.rto(),
                "ctu" => FbType.ctu(),
                "ctd" => FbType.ctd(),
                "ctud" => FbType.ctud()
@@ -677,7 +678,16 @@ defmodule Logex.RuntimeTest do
       end
 
       assert FbType.rules(FbType.ctud()).runs == %{ctu: {"cu", "qu"}, ctd: {"cd", "qd"}}
-      assert FbType.runners() == [:ctd, :ctu, :tof, :ton, :tp]
+      assert FbType.runners() == [:ctd, :ctu, :rto, :tof, :ton, :tp]
+
+      # An rto adds its reset input, which logic writes (decision 90).
+      rto = FbType.rto()
+      assert Enum.map(rto.members, & &1.name) == ~w(pre acc dn tt en r last)
+      assert Enum.map(FbType.writable(rto), & &1.name) == ~w(pre acc r)
+      assert {:ok, %Member{type: :bool, role: :input}} = FbType.member(rto, "r")
+      assert FbType.builtin("RTO") == rto
+      assert %{kind: :timer, times: "en", forecast: :retentive} = FbType.rules(rto)
+      assert FbType.initial(rto) == Map.put(FbType.initial(FbType.ton()), "r", 0)
     end
 
     test "a new instance starts where its type says, overridden member by member, and " <>
@@ -1334,6 +1344,7 @@ defmodule Logex.RuntimeTest do
                member: 2,
                of: 1,
                public: 1,
+               rto: 0,
                rules: 1,
                runners: 0,
                runs?: 2,

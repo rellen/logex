@@ -904,6 +904,14 @@ defmodule Logex.Edit.Plan do
   defp done(_to, %{"pre" => pre, "acc" => acc, "tt" => tt}, name, %{forecast: :pulse}),
     do: pulse_ends(tt, max(acc, 0), pre, name)
 
+  # M3-2: an `rto`'s `.dn` is set again only at a run with its rung true, since a false rung
+  # keeps it, so its forecast is at its next run with its rung true: a drop where `.dn` is 1
+  # and `.acc` below the new `.pre`, unless at least `.pre` - `.acc` ms of true rung pass by
+  # then, and a rise where `.dn` is 0 and `.acc` at or past it, whatever `.en`, unless that
+  # run finds `r` set (decision 95).
+  defp done(_to, %{"pre" => pre, "acc" => acc, "dn" => dn}, name, %{forecast: :retentive}),
+    do: retentive(dn, max(acc, 0), pre, name)
+
   defp done(_to, value, name, %{forecast: :count, done: member, preset: preset})
        when is_binary(member),
        do: counted(Map.get(value, member), Map.get(value, "cv"), Map.get(value, preset), name)
@@ -915,6 +923,10 @@ defmodule Logex.Edit.Plan do
 
   defp pulse_ends(1, acc, pre, name) when acc >= pre, do: [{:dn_rises, name, {acc, pre}}]
   defp pulse_ends(_tt, _acc, _pre, _name), do: []
+
+  defp retentive(1, acc, pre, name) when acc < pre, do: [{:dn_drops, name, {acc, pre}}]
+  defp retentive(0, acc, pre, name) when acc >= pre, do: [{:dn_rises, name, {acc, pre}}]
+  defp retentive(_dn, _acc, _pre, _name), do: []
 
   defp counted(1, cv, pv, name) when is_integer(cv) and cv < pv, do: [{:dn_drops, name, {cv, pv}}]
 

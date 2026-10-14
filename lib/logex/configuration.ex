@@ -87,7 +87,8 @@ defmodule Logex.Configuration do
   each counter such an instance runs, so too, after its timers (decision 72): a counter
   sees its rung only at the task's runs (`Logex.Walk.counters/1`). Since M3-2, each timer
   in its own type's words: a tof's delay and a tp's pulse end only at one of the task's
-  runs, and a tp starts only on an edge between two runs.
+  runs, a tp starts only on an edge between two runs, and an rto, as a ton, adds the whole
+  time between two runs whose rung is true.
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -2470,6 +2471,12 @@ defmodule Logex.Configuration do
     do:
       "a tof's delay ends only at one of the task's runs, so what it holds on stays on " <>
         "until the first run after its preset has passed"
+
+  # M3-2: an rto adds the time between two runs whose rung is true, as a ton counts it.
+  defp across("rto"),
+    do:
+      "an rto times across the task's runs, and one whose rung is true on two runs in a " <>
+        "row adds the whole time between them"
 
   # M3-2: a tp's pulse ends only at a run, and it sees an edge only between two runs.
   defp across("tp"),

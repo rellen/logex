@@ -17,8 +17,8 @@ defmodule Logex.FbType do
 
   Every input and output may be read from outside, anywhere an operand of its type may go.
   `write: true` marks the members logic outside the block may also write: of a `ton`,
-  `.pre` and `.acc` (decision 9); of a counter, its inputs `r`, `ld` and `pv` (decision
-  86); of a user block, none (M2-5). `initial` is the member's
+  `.pre` and `.acc` (decision 9), and of an `rto` its reset `r` too (decision 90); of a
+  counter, its inputs `r`, `ld` and `pv` (decision 86); of a user block, none (M2-5). `initial` is the member's
   value in a new instance; for a member whose type is itself a `%Logex.FbType{}`, it is a
   map of that nested instance's own initial values, by member name.
 
@@ -36,7 +36,7 @@ defmodule Logex.FbType do
   it nests, at any depth.
 
   `body` is nil for a built-in type: the `ton`, since M3-1 the counters `ctu`, `ctd` and
-  `ctud`, and since M3-2 the timers `tof` and `tp` (`rules/1`). For a user function block (M2-5) it is the block's compiled body,
+  `ctud`, and since M3-2 the timers `tof`, `tp` and `rto` (`rules/1`). For a user function block (M2-5) it is the block's compiled body,
   a `%Logex.Program{}` named after the block, whose tags are its members, whose `blocks`
   holds the types of the instances it declares at any depth, whose rungs `cal` runs over
   an instance's map, and whose `source` is the block's text. `of/1` builds the type from
@@ -103,6 +103,21 @@ defmodule Logex.FbType do
   @doc "The built-in pulse timer, as `var horn_pulse tp` declares it (M3-2)."
   def tp, do: %{ton() | name: "tp"}
 
+  # M3-2: the retentive timer (docs/naming.md, `rto`), the `ton`'s members (decision 68) and
+  # a reset input, `r`, which logic writes and the timer reads at its next run (decisions
+  # 90 and 95).
+  @doc "The built-in retentive timer, as `var lube rto` declares it (M3-2)."
+  def rto do
+    %__MODULE__{members: members} = ton = ton()
+    {timer, [last]} = Enum.split(members, -1)
+
+    %{
+      ton
+      | name: "rto",
+        members: timer ++ [%Member{name: "r", type: :bool, role: :input, write: true}, last]
+    }
+  end
+
   # M3-1: IEC's three counters (decision 67), their pins lowercased (decision 68; Ed 3
   # §6.6.3.5.4, Table 45), and the conventional set's overflow and underflow flags, which
   # IEC has none of (docs/naming.md, `ctu`). `cu` and `cd` are the count inputs, which the
@@ -161,6 +176,7 @@ defmodule Logex.FbType do
       "ton" => ton(),
       "tof" => tof(),
       "tp" => tp(),
+      "rto" => rto(),
       "ctu" => ctu(),
       "ctd" => ctd(),
       "ctud" => ctud()
@@ -174,7 +190,7 @@ defmodule Logex.FbType do
   # says a timer is adding time between its runs, which an edit's resume reads, nil for a
   # counter; `forecast` how a moved preset's effect on `done` is forecast, by the rule the
   # type keeps (M3-2): `:on_delay` for a `ton`, `:off_delay` for a `tof`, `:pulse` for a
-  # `tp`, `:count` for a counter; and `runs` each
+  # `tp`, `:retentive` for an `rto`, `:count` for a counter; and `runs` each
   # instruction that runs it, by its IR symbol, to `{edge, reads}`: the member that is that
   # instruction's edge memory, nil for none, and the member a rung below reads it by. A
   # `ctd`'s `q` is `cv <= 0`, which no preset moves, so it has no `done`; a `ctud` is run by
@@ -209,6 +225,16 @@ defmodule Logex.FbType do
       forecast: :pulse,
       runs: %{tp: {"en", "tt"}}
     },
+    # M3-2: an `rto` adds time while its rung is true, `.en`, as a `ton` does, and keeps
+    # `.dn` across a false rung, which its forecast reads (decision 95).
+    "rto" => %{
+      kind: :timer,
+      preset: "pre",
+      done: "dn",
+      times: "en",
+      forecast: :retentive,
+      runs: %{rto: {nil, "dn"}}
+    },
     "ctu" => %{
       kind: :counter,
       preset: "pv",
@@ -242,10 +268,10 @@ defmodule Logex.FbType do
   the number on its instruction starts, `"pre"` for a `ton` and `"pv"` for a counter;
   `done` the member a moved preset changes at its next run, `"dn"`, `"q"` or a `ctud`'s
   `"qu"`, nil for a `ctd`, whose `q` is `cv <= 0`; `times` the member whose 1 says a timer
-  adds time between its runs, `"en"` for a `ton`, `"tt"` for a `tof` and a `tp`, nil for a
-  counter (M3-2); `forecast` the rule a moved preset's forecast follows, `:on_delay` for a
-  `ton`, `:off_delay` for a `tof`, `:pulse` for a `tp` and `:count` for a counter (M3-2);
-  and `runs`
+  adds time between its runs, `"en"` for a `ton` and an `rto`, `"tt"` for a `tof` and a
+  `tp`, nil for a counter (M3-2); `forecast` the rule a moved preset's forecast follows,
+  `:on_delay` for a `ton`, `:off_delay` for a `tof`, `:pulse` for a `tp`, `:retentive` for
+  an `rto` and `:count` for a counter (M3-2); and `runs`
   each instruction that runs it, by its IR symbol, to `{edge, reads}`, the member that is
   that instruction's edge memory, nil for none, and the member a rung below reads it by.
   """
