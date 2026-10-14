@@ -3265,6 +3265,12 @@ defmodule Logex.ApiContractTest do
     :stale_superseded
   ]
 
+  # The longest walk of the suite, 16.8 s to 18.2 s over 32 runs of the suite on four
+  # cores, 16 alone and 16 four at once, and past ExUnit's default of 60 s on a busier
+  # machine: in M3-3's mutation runs, four suites at once, it timed out twice, failing two
+  # rows by a timeout that said nothing of their mutants. Its 500 configurations are what
+  # its reach needs, so its time is given room rather than its draws cut.
+  @tag timeout: 300_000
   test "a configuration's edit refuses every host mistake with a documented ArgumentError, " <>
          "and each step's writes rebuild the resource, which then runs as its rules say" do
     :rand.seed(:exsss, {2026, 10, 13})

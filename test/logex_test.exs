@@ -206,11 +206,28 @@ defmodule LogexTest do
     tons = Enum.map(names, &"ton #{&1}_t 60 xic #{&1}\nton zz #{&1} xic #{&1}")
     twice = Enum.join(declarations ++ rungs ++ tons, "\n")
 
-    {:reductions, before} = Process.info(self(), :reductions)
-    {:ok, _program} = Logex.compile(source, name: "big")
-    {:error, _two_tons} = Logex.compile(twice, name: "big")
-    {:reductions, later} = Process.info(self(), :reductions)
-    later - before
+    in_a_large_heap(fn ->
+      {:reductions, before} = Process.info(self(), :reductions)
+      {:ok, _program} = Logex.compile(source, name: "big")
+      {:error, _two_tons} = Logex.compile(twice, name: "big")
+      {:reductions, later} = Process.info(self(), :reductions)
+      later - before
+    end)
+  end
+
+  # A process of its own, whose heap starts large enough that the compile at 2,000 tags
+  # runs one major collection, not 61: each copies a heap that holds the program built so
+  # far, and is charged in reductions, more of them on a busy machine, which is what moved
+  # the figure, not the compile. 4M words, 32 MB.
+  defp in_a_large_heap(measure) do
+    Task.await(
+      Task.async(fn ->
+        Process.flag(:min_heap_size, 4_000_000)
+        :erlang.garbage_collect()
+        measure.()
+      end),
+      :infinity
+    )
   end
 
   # One rung nested `depth` groups deep, each with a second leg and a contact after it, and
@@ -316,18 +333,18 @@ defmodule LogexTest do
     # and 2,000 tags a linear compile grows about 4x; a pass that walks every use for
     # every tag, as the warnings first did, grows about 14x, 13.5x to 13.7x at M3-3's
     # review. What takes the figure above 4x is garbage collection, and a busy machine
-    # takes it further. With a heap so large that none runs, the compile grows 4.04x to
-    # 4.09x; with it, about 4.5x in a VM of its own, since the 2,000 tags' 65 major
-    # collections, to 500's 13, each copy a heap that holds the program built so far; and
-    # a busy VM charges the same collections more reductions, so that in the suite the
-    # count at 2,000 tags rises with the time the compile takes and 500's barely moves.
-    # Over 96 runs of the suite when 6, the bound it had, failed now and then, it grew
-    # 4.34x to 5.64x, which set 6.8; over 48 at M3-3's review, 16 alone and 32 four at
-    # once, 4.55x to 6.84x, the highest four at once, and the review's own runs reached
-    # 7.29x. The bound is a fifth above that highest.
+    # takes it further: each major collection copies a heap that holds the program built
+    # so far, 65 of them at 2,000 tags to 13 at 500, and a busy VM charges the same
+    # collections more reductions, so that in the test's own process the figure reached
+    # 7.29x with four suites at once, and its bound was 8.75. So each size compiles in a
+    # process of its own whose heap starts at 4M words (in_a_large_heap/1), where 2,000
+    # tags take one major collection and 11 minor ones, not 61 and 168, and 500 tags two
+    # minor ones: over 32 runs of the suite, 16 alone and 16 four at once, it grew 4.07x to
+    # 4.12x alone and 4.09x to 4.36x four at once, the collections left charged a little
+    # more on a busy machine. The bound is a fifth above that highest.
     test "compiling stays linear in the program's size" do
       ratio = reductions_to_compile(2000) / reductions_to_compile(500)
-      assert ratio < 8.75, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
+      assert ratio < 5.24, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
     end
 
     # And in its depth. At 500 and 8,000 levels a linear compile grows about 16x. A walk
