@@ -2488,7 +2488,18 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   which tags a program type writes there. The lowering, `Ast`, `Instruction` and
   `Analyzer`, is still in `Logex.Compiler`.)*
 
-- **B6 · Project metadata.** No `@spec`/`@moduledoc` on `Logex.Compiler`; no
+- **B6 · Project metadata. LANDED.** `mix.exs` has a `description`, a `package`
+  (`licenses: ["Apache-2.0"]`, a link to the GitHub repository) and a `source_url`, which
+  `mix hex.build` reads back with no warning; `extra_applications: [:logger]` is gone, as
+  nothing in `lib/` or `test/` uses Logger; `Logex.Compiler` has a `@moduledoc` naming its
+  stages and why each is public (no `@spec`s: the docs state each function's shapes). The
+  Elixir requirement, `~> 1.20`, is unchanged. `mix test --cover` reports 99.24% on 1.20.4,
+  `Logex.Compiler` 98.42%, every module 100% but `Logex.FbType` (97.30%), `Logex.Walk`
+  (97.56%), `Logex.Compiler`, `Logex.Configuration` (99.09%), `Logex.Declarations`
+  (99.13%), `Logex` (99.18%), `Logex.Runtime` (99.51%) and `Logex.Edit.Plan` (99.67%).
+  The CI it once listed is B3's. What follows is the finding as written.
+
+  No `@spec`/`@moduledoc` on `Logex.Compiler`; no
   `description`/`package`/`licenses` in `mix.exs` despite a full Apache-2.0 `LICENSE`;
   unused `extra_applications: [:logger]`. `mix test --cover` reported a meaningless ~54%
   while it counted the generated scanners (`Logex.Compiler` 90%, `:ladder_lexer` 30%).
@@ -2861,7 +2872,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | B4 | low | tooling | nix dev shell bit-rotted: `erlangR26` alias removed from nixpkgs master 2024-05-24; flake tracked `master`; lock from 2024-01-19 | `shell.nix`, `flake.nix` | **landed** `9c1a7bd` — OTP 28 / Elixir 1.20 on `nixos-26.05`; lock refresh owed |
 | B2 | low | lexer | Digit-led lexeme splits rather than erroring: `1bst` → `int_lit(1)` + `name("bst")` | `Logex.Lexer`, the integer clause (was `ladder_lexer.xrl:20`) | **closed** — a located `:missing_separator` lex error naming the whole run |
 | B3 | low | history | 2 commits ship a red suite (`ec0534a`, `35fe1b9`) — an interior island; `d47eb21` is a clean bisect baseline | — | open |
-| B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | open |
+| B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | **closed** — metadata, a `@moduledoc` on `Logex.Compiler`, no `:logger`; CI is B3's |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
 | §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, and members with M1-6; bit access, arrays and negative literals open |

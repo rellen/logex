@@ -1,4 +1,25 @@
 defmodule Logex.Compiler do
+  @moduledoc """
+  The stages from a routine's text to a program type (M1-2, M1-3, M1-6, M2-5).
+
+  `tokenize/1` and `parse/1` are `Logex.Lexer`'s and `Logex.Parser`'s. `instructionize/3`
+  takes the parse tree, first checking it against `Logex.Parser.well_formed!/1` and
+  raising `ArgumentError` on a tree no text could say (OE-1); takes the declaration lines
+  off into a tag table, with any tags declared from Elixir (`Logex.Tag.new!/4`); checks
+  every instruction against its operand signature, `instructions/0`, and every operand
+  against the table, members included; and returns `{:ok, %Logex.Program{}}`, its
+  warnings included, `{:ok, %Logex.FbType{}}` for a routine headed `function_block
+  <name>`, or `{:error, [%Logex.Diagnostic{}]}`, every mistake in the routine, in line
+  order. The function block types a routine may hold are given as its third argument,
+  each checked at full depth.
+
+  A host compiles through `Logex.compile/2` and `Logex.compile_file/1`. The stage
+  functions stay public for the front end's golden record, the Elixir-side declarer and
+  the naming test; `signature/2` for the walks (`Logex.Walk`), which look an instruction's
+  slots up here; and `lowered?/1` and `recompiled/4` for the check of a type given
+  (`Logex.FbType.user?/1`, decision 54).
+  """
+
   alias Logex.{Declarations, Diagnostic, FbType, Program, Tag, Walk}
   alias Logex.FbType.Member
 
