@@ -57,8 +57,10 @@ defmodule Logex.Program do
   `restart/2` start every program instance of a configuration by it, through `instance/1`
   and `restart/3`. The edit's exceptions, for state an instance already holds around the
   new piece: `first` stays false; an `ons` the edit adds or changes is blocked for one
-  scan by the instance's `ons_blocked`, where a new instance relies on `first`; a
-  var_input a switch starts or makes live is reported, since its value is the host's; at
+  scan by the instance's `ons_blocked`, where a new instance relies on `first`, and so is
+  a counter's edge memory, `cu` or `cd`, whose instruction the edit adds or whose rung it
+  changes, by its path, so its next run counts no edge (M3-1); a var_input a switch
+  starts or makes live is reported, since its value is the host's; at
   the first test, a tag the candidate adds, or one whose value does not fit its type,
   starts here over what a plain swap left; and a kept bool or dint whose initial value
   changed keeps its value until a restart, and is reported as `:initial_changed`, except

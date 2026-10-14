@@ -2427,7 +2427,11 @@ names it breaks. Growth tests are in reductions.
   edges and makes none up, so it was kept, owned by decision 87 and pinned in
   `edit_test.exs`. No test pinned a `ctud`'s forecast, on its `qu`, and one does now. A
   counter's forecast was said to be certain, and holds only unless the run it forecasts
-  counts, resets or loads, as decision 88 now says, pinned both ways. The suite is at 977
+  counts, resets or loads, as decision 88 now says, pinned both ways. Decision 67's words
+  had a new `ctd` start from its preset, loaded, where IEC's CTD and M3-1 start it empty,
+  `cv` 0 and `q` on until `ld` loads it; the maintainer confirmed IEC's on 2026-10-14, and
+  decision 67 and README now say so, as `docs/naming.md` did. The one-rule lists now name
+  a counter's blocked edge memory, and README's `ctu` row no `ld`. The suite is at 977
   tests (8 doctests).
 - **M3-2 · The other timers: `tof`, `tp`, `rto`.** Each an instruction and a type word,
   as `ton` is, with the `ton`'s members `.pre .acc .dn .tt .en` (decision 68 keeps them for

@@ -1323,6 +1323,9 @@ instance already holds around the new piece:
 - `first` stays false;
 - an `ons` the edit adds or changes is blocked by `ons_blocked`, where a new instance
   relies on `first`;
+- a counter's edge memory, `cu` or `cd`, whose instruction the edit adds or whose rung it
+  changes, is blocked the same way, by its path, so the counter's next run counts no edge
+  (M3-1, decision 87);
 - a var_input a switch makes live is reported as `:input`, because its value is the
   host's;
 - at the first test, a tag the candidate adds, or one whose value does not fit its type,
@@ -3302,11 +3305,13 @@ alternative the record keeps.
 
 67. **Which kinds of counter (M3-1).** Picture a photo-eye on a conveyor that adds one for
     each box, a buffer table where boxes are added at one end and taken off at the other,
-    and a hopper that starts full and counts portions down to empty.
+    and a hopper, loaded with its preset when it is filled, that counts portions down to
+    empty.
     - Two kinds, an up counter `ctu` and an up-and-down counter `ctud`, where the `ctd`
       instruction runs only a `ctud`;
     - IEC's three, `ctu`, `ctd` and `ctud` (Ed 3 §6.6.3.5.4, Table 45; Ed 2 Table 36):
-      the down counter starts from its preset, loaded, and is done at 0;
+      the down counter starts empty, at 0 and done, counts down from its preset once its
+      load puts it there, and is done at 0;
     - or one kind that always counts both ways.
 
     *Recommended: two kinds*, so that "done" and "reset" meant one thing on every counter.
@@ -3314,7 +3319,13 @@ alternative the record keeps.
     putting `cv` to 0; `ctd` counts down, its load `ld` putting `cv` to `pv`, and its `q`
     is on when `cv <= 0`; `ctud` counts both ways, `qu` on when `cv >= pv` and `qd` when
     `cv <= 0`, with both `r` and `ld`. Each is a type word, `var hopper ctd`, and a change
-    of kind is a type change, which needs a restart. *(Landed with M3-1, 2026-10-14.)*
+    of kind is a type change, which needs a restart. A new `ctd` starts empty, `cv` 0 and
+    `q` already on, until `ld` loads it, as IEC's CTD does. *(Landed with M3-1,
+    2026-10-14.)* *(Corrected 2026-10-14, after M3-1's review: the option above had read
+    "the down counter starts from its preset, loaded", and the picture "a hopper that
+    starts full", where IEC's CTD, and M3-1 as built, start a new `ctd` empty. The
+    maintainer confirmed IEC's behaviour on 2026-10-14, after the review: a new down
+    counter starts empty.)*
 68. **What a counter's members are called (M3-1),** a follow-up to 67. The design gave the
     conventional COUNTER's members, `.pre .acc .dn` with `.cu .cd .ov .un`, beside the
     timer's `.pre .acc .dn`.
