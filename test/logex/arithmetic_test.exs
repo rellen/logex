@@ -1,7 +1,7 @@
 defmodule Logex.ArithmeticTest do
   @moduledoc """
-  M3-3: IEC's arithmetic on dints, `add`, `sub` and `mul` (docs/organisation.md decisions
-  77, 79 and 98; docs/naming.md, each mnemonic's stanza), each rule of a scan pinned from
+  M3-3: IEC's arithmetic on dints, `add`, `sub`, `mul`, `div` and `mod`
+  (docs/organisation.md decisions 77 to 79 and 98; docs/naming.md, each mnemonic's stanza), each rule of a scan pinned from
   source through `Logex.Runtime.call/4`, a test that fails when the rule alone is reverted.
   The compiler's refusals and warnings are `validation_test.exs`'s, the writes of the walk
   `walk_test.exs`'s, and an edit's rules `edit_test.exs`'s.
@@ -145,6 +145,77 @@ defmodule Logex.ArithmeticTest do
     end
   end
 
+  describe "div" do
+    test "writes the quotient truncated toward zero, IEC's 7/3 = 2 and (-7)/3 = -2" do
+      assert two("div", 7, 3) == {2, 1}
+      assert two("div", -7, 3) == {-2, 1}
+      assert two("div", 7, -3) == {-2, 1}
+      assert two("div", -7, -3) == {2, 1}
+      assert two("div", 7, 2) == {3, 1}
+      assert two("div", -7, 2) == {-3, 1}
+      assert two("div", 0, 5) == {0, 1}
+      assert two("div", @min, 1) == {@min, 1}
+      assert two("div", @max, -1) == {-@max, 1}
+    end
+
+    # Decision 78: 0 and no power on that scan; the scan's report of it is the fault's.
+    test "a zero divisor writes 0 and passes no power on that scan, the plant running on" do
+      assert two("div", 7, 0) == {0, 0}
+      assert two("div", 0, 0) == {0, 0}
+      assert two("div", @min, 0) == {0, 0}
+
+      p = c!(String.replace(@two, "OP", "div"))
+
+      assert trace(p, [
+               %{"go" => 1, "a" => 600, "b" => 60},
+               %{"b" => 0},
+               %{"b" => 3}
+             ]) == [%{"r" => 10, "ok" => 1}, %{"r" => 0, "ok" => 0}, %{"r" => 200, "ok" => 1}]
+    end
+
+    # Decision 77: the one quotient outside a dint, which is no zero divisor.
+    test "the minimum divided by -1 stops at the top, with no power" do
+      assert two("div", @min, -1) == {@max, 0}
+    end
+
+    test "de-energised, writes nothing and passes no power, a zero divisor too" do
+      assert two("div", 7, 3, 0) == {0, 0}
+      p = c!(String.replace(@two, "OP", "div"))
+
+      assert trace(p, [%{"go" => 1, "a" => 9, "b" => 3}, %{"go" => 0, "b" => 0}]) ==
+               [%{"r" => 3, "ok" => 1}, %{"r" => 3, "ok" => 0}]
+    end
+  end
+
+  describe "mod" do
+    # IEC's IN1 - (IN1/IN2)*IN2 with DIV's truncation, Elixir's rem/2: the dividend's sign,
+    # never the divisor's, as Integer.mod/2 would give.
+    test "writes the remainder, its sign the dividend's" do
+      assert two("mod", 7, 3) == {1, 1}
+      assert two("mod", -7, 3) == {-1, 1}
+      assert two("mod", 7, -3) == {1, 1}
+      assert two("mod", -7, -3) == {-1, 1}
+      assert two("mod", 6, 3) == {0, 1}
+      assert two("mod", -6, 3) == {0, 1}
+      assert two("mod", 5, 7) == {5, 1}
+    end
+
+    test "a remainder always fits, the minimum's by -1 among them" do
+      assert two("mod", @min, -1) == {0, 1}
+      assert two("mod", @min, @max) == {-1, 1}
+      assert two("mod", @max, @min) == {@max, 1}
+    end
+
+    test "a zero divisor writes 0 and passes no power on that scan, as `div`'s does" do
+      assert two("mod", 7, 0) == {0, 0}
+      assert two("mod", -7, 0) == {0, 0}
+    end
+
+    test "de-energised, writes nothing and passes no power" do
+      assert two("mod", 7, 3, 0) == {0, 0}
+    end
+  end
+
   describe "on the rung" do
     # Decision 98: the power out is IEC's ENO, settled, so anything may follow, a second
     # arithmetic instruction among them, which runs only where the first succeeded.
@@ -232,6 +303,13 @@ defmodule Logex.ArithmeticTest do
 
         {outputs, _} = Runtime.call(p, state, %{}, %Scan{now: 0, first: true})
         assert outputs == %{"r" => 4, "ok" => 1}
+
+        # A divisor that is no integer reads 0 too, and is then a zero one.
+        d = c!(String.replace(@two, "OP", "div"))
+        state = %{state | env: %{"go" => 1, "a" => 7, "b" => junk}}
+
+        assert {%{"r" => 0, "ok" => 0}, _} =
+                 Runtime.call(d, state, %{}, %Scan{now: 0, first: true})
       end
     end
   end

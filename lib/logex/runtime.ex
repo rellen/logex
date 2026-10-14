@@ -238,8 +238,10 @@ defmodule Logex.Runtime do
 
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
 
-  # M3-3: the arithmetic of two sources whose result is brought into a dint (decision 77).
+  # M3-3: the arithmetic of two sources whose result is brought into a dint (decision 77),
+  # and the two that divide, whose divisor may be 0 (decision 78).
   @sums [:add, :sub, :mul]
+  @divisions [:div, :mod]
 
   @dint_max 2_147_483_647
   @dint_min -2_147_483_648
@@ -1409,6 +1411,21 @@ defmodule Logex.Runtime do
     {false, env}
   end
 
+  # M3-3: `div` and `mod` (docs/naming.md; IEC's DIV and MOD; decisions 77, 78 and 98).
+  # Energised, `div` writes the quotient truncated toward zero, IEC's 7/3 = 2 and
+  # (-7)/3 = -2, and `mod` the remainder, IEC's IN1 - (IN1/IN2)*IN2, whose sign is the
+  # dividend's: Elixir's `div/2` and `rem/2`. A zero divisor writes 0 and passes no power
+  # (decision 78). The one quotient outside a dint, -2147483648 / -1, is brought to the
+  # limit with no power, as `add`'s sum is (decision 77); a remainder always fits. The
+  # power out is otherwise true. De-energised, nothing is written and no power passes.
+  defp evaluate({op, _, [a, b, destination]}, {true, env}, _scan) when op in @divisions do
+    divided(op, integer(read(env, a)), integer(read(env, b)), destination, env)
+  end
+
+  defp evaluate({op, _, _}, {false, env}, _scan) when op in @divisions do
+    {false, env}
+  end
+
   # The on-delay timer (docs/naming.md, `ton`; docs/organisation.md §4.6). Rung power is
   # its IN. `last` is the time this `ton` last ran, energised or not (decision 5), and
   # energised, `.acc` gains `now - last`, unless `.en` shows it was not already enabled:
@@ -1699,6 +1716,17 @@ defmodule Logex.Runtime do
   defp sum(:add, a, b), do: a + b
   defp sum(:sub, a, b), do: a - b
   defp sum(:mul, a, b), do: a * b
+
+  # M3-3: a division, by a divisor that is 0 or not.
+  defp divided(_op, _a, 0, destination, env), do: {false, write(env, destination, 0)}
+
+  defp divided(op, a, b, destination, env) do
+    {power, value} = bounded(quotient(op, a, b))
+    {power, write(env, destination, value)}
+  end
+
+  defp quotient(:div, a, b), do: div(a, b)
+  defp quotient(:mod, a, b), do: rem(a, b)
 
   # A result outside a dint is brought to the nearer limit, and passes no power on that
   # scan (decision 77); one inside it passes power.

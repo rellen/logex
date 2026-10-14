@@ -71,6 +71,11 @@ defmodule Logex.Compiler do
     "add" => {:add, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
     "sub" => {:sub, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
     "mul" => {:mul, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
+    # M3-3: `div a b d` is a / b truncated toward zero, and `mod a b d` its remainder, the
+    # dividend's sign. A zero divisor gives 0 and no power (decision 78); a literal one is
+    # refused.
+    "div" => {:div, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
+    "mod" => {:mod, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
     # M2-5: `cal` runs an instance of a user function block. Its entry is a marker, not a
     # signature: the signature is the block's, built per compile from the instance's type
     # (Logex.FbType.signature/1), the instance, then the block's var_inputs and var_outputs
@@ -1092,6 +1097,7 @@ defmodule Logex.Compiler do
     diagnostics = check_kinds(signature, operands, at, diagnostics)
     diagnostics = check_tags(signature, operands, at, scope, diagnostics)
     diagnostics = check_preset(signature, operands, {symbol, at}, known, diagnostics)
+    diagnostics = check_divisor(symbol, operands, at, diagnostics)
     lower(rest, [{symbol, line, Enum.map(operands, &operand/1)} | ir], diagnostics, known)
   end
 
@@ -1471,6 +1477,22 @@ defmodule Logex.Compiler do
   end
 
   defp check_preset(_signature, _operands, _at, _known, diagnostics), do: diagnostics
+
+  # M3-3 (decision 78): a zero divisor gives 0 and passes no power, so a literal one could
+  # never divide, and is refused where it stands, `-0` among them, which lexes as 0. A tag
+  # that is 0 for a while is the run's to report (Logex.Runtime).
+  defp check_divisor(symbol, [_dividend, {:int_lit, line, 0} | _], {_, word}, diagnostics)
+       when symbol in [:div, :mod],
+       do: [
+         diagnostic(
+           line,
+           "`#{word}` divides by the literal `0`: a zero divisor gives 0 and passes no power " <>
+             "on every scan, so a literal one is refused"
+         )
+         | diagnostics
+       ]
+
+  defp check_divisor(_symbol, _operands, _at, diagnostics), do: diagnostics
 
   defp unit(symbol), do: unit_of(kind_of(symbol))
 

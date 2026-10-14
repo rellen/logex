@@ -1219,7 +1219,8 @@ defmodule Logex.ValidationTest do
     end
   end
 
-  # M3-3: IEC's arithmetic, `add`, `sub` and `mul` (decisions 77, 79 and 98).
+  # M3-3: IEC's arithmetic, `add`, `sub`, `mul`, `div` and `mod` (decisions 77 to 79 and
+  # 98).
   describe "arithmetic (M3-3)" do
     test "takes two dint sources, each a tag, a member or a literal, and a dint it writes" do
       assert source_errors(
@@ -1257,10 +1258,41 @@ defmodule Logex.ValidationTest do
              ]
     end
 
+    test "`div` and `mod` take two dint sources and write a dint, as `add` does" do
+      assert source_errors(
+               "var b bool\nvar d dint\nvar_input i dint\n" <>
+                 "div d b d\nmod b 2 d\ndiv d 2 i\nmod d 2 5\ndiv d 2 b"
+             ) == [
+               "line 4: `div` reads a dint, but `b` is a bool (declared on line 1)",
+               "line 5: `mod` reads a dint, but `b` is a bool (declared on line 1)",
+               "line 6: `div` writes `i`, a var_input (declared on line 3): logic must not " <>
+                 "write an input",
+               "line 7: `mod` expects a tag, found `5`",
+               "line 8: `div` writes a dint, but `b` is a bool (declared on line 1)"
+             ]
+    end
+
+    # Decision 78: a literal zero divisor, `-0` among them, could never divide. A divisor
+    # that is a tag, or a zero dividend, compiles.
+    test "a literal zero divisor is refused, at its line" do
+      assert source_errors(
+               "var d dint\ndiv d 0 d\nmod 7 -0 d\n( div d 1 d | mod d 0 d )\ndiv 0 d d"
+             ) == [
+               "line 2: `div` divides by the literal `0`: a zero divisor gives 0 and passes no " <>
+                 "power on every scan, so a literal one is refused",
+               "line 3: `mod` divides by the literal `0`: a zero divisor gives 0 and passes no " <>
+                 "power on every scan, so a literal one is refused",
+               "line 4: `mod` divides by the literal `0`: a zero divisor gives 0 and passes no " <>
+                 "power on every scan, so a literal one is refused"
+             ]
+
+      assert source_warnings("var d dint\ndiv 0 d d\nmod d d d\nadd 0 d d\nsub d 0 d") == []
+    end
+
     test "are reserved in any case" do
-      assert source_errors("var add dint\nvar SUB bool\nvar Mul dint") ==
+      assert source_errors("var add dint\nvar SUB bool\nvar Mul dint\nvar DIV dint\nvar Mod bool") ==
                for(
-                 {word, line} <- Enum.with_index(~w(add SUB Mul), 1),
+                 {word, line} <- Enum.with_index(~w(add SUB Mul DIV Mod), 1),
                  do: "line #{line}: `#{word}` is an instruction and cannot name a tag"
                )
 
@@ -1271,9 +1303,14 @@ defmodule Logex.ValidationTest do
     end
 
     test "two literal sources compile, with a warning, and one literal does not warn" do
-      assert source_warnings("var d dint\nadd 2 3 d\n( sub -1 1 d | mul 0 d d )\nadd d 1 d") == [
+      assert source_warnings(
+               "var d dint\nadd 2 3 d\n( sub -1 1 d | mul 0 d d )\nadd d 1 d\n" <>
+                 "div 7 2 d mod -7 2 d\ndiv d 2 d mod 7 d d"
+             ) == [
                "line 2: warning: `add` reads two literals, `2` and `3`: its result never changes",
-               "line 3: warning: `sub` reads two literals, `-1` and `1`: its result never changes"
+               "line 3: warning: `sub` reads two literals, `-1` and `1`: its result never changes",
+               "line 5: warning: `div` reads two literals, `7` and `2`: its result never changes",
+               "line 5: warning: `mod` reads two literals, `-7` and `2`: its result never changes"
              ]
     end
   end

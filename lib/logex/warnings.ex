@@ -176,7 +176,7 @@ defmodule Logex.Warnings do
 
   # M3-3: an arithmetic instruction whose every source is a literal compiles, as IEC's
   # ADD(2, 3) does, but its result never changes.
-  @arithmetic [:add, :sub, :mul]
+  @arithmetic [:add, :sub, :mul, :div, :mod]
 
   defp constant({symbol, line, [{:int_lit, _, a}, {:int_lit, _, b}, _destination]})
        when symbol in @arithmetic,
