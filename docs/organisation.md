@@ -1539,11 +1539,19 @@ an instance back from aside keeps its `first`, `switched` and block list as set 
 and two rules found dead were removed, an element with no line sorted last, since a
 configuration's lines are all numbers or all nil, and a connection's member checked to be
 a var_output, since no logic writes a var_input. The contract walk found that a test then
-an untest with no cycle between leaves the resource as it was but for what either switch
-started and three things decided rules change: a tag the test joined to its global
+an untest with no cycle between leaves every instance's env as it was but for what either
+switch started and three things decided rules change: a tag the test joined to its global
 (decision 55), a timer of an instance back from aside (decision 57), and a timer whose
 earlier resume the test gave back after the clock moved (decision 56's known limit,
-below).)*
+below).)* *(Its round trip compared only each instance's env, the names set aside and
+the original's globals, though this note claimed the whole resource, which the review of
+the landing found on 2026-10-14. It now compares the rest too, and the resource is as it
+was but for those and what a switch's own rules set: each instance's `now` the resource's
+(decision 56), a kept one's `switched` true (OE-1), each instance set aside that the test
+brought back with its `now` and timers as decision 57 left them, and a changed interval's
+next due time, `min(next_due, now + new interval)` (decision 40), which the untest's own
+`min` with the old interval moves no further back: `slow` from 100 ms to 30 at 10 ms is
+next due at 40 ms after the round trip, where a plant never edited is due at 100.)*
 
 *Already decided, and built on:* decision 43 (a retyped instance is a remove plus an add),
 44 (a kept global's changed initial value is reported), 45 (merge by the running

@@ -108,11 +108,14 @@ defmodule Logex.ApiContractTest do
   (decision 66), and each instance a switch starts, and at a first test each instance and
   global the original lacks, is as a fresh start of the configuration started gives it;
   and a
-  test then an untest with no cycle between leaves every state as the test found it, but
-  for what either switch started, a tag the test joined to its global (decision 55), and a
-  timer the untest resumed in an instance it brought back from aside (decision 57), or
-  gave back a resume of an earlier switch's after the clock moved (decision 56's known
-  limit). Its oracles know nothing of the edit: after every step, a model of the
+  test then an untest with no cycle between leaves the resource as the test found it,
+  every state, each set aside, the globals and the tasks, but for what either switch
+  started, a tag the test joined to its global (decision 55), a timer the untest resumed
+  in an instance it brought back from aside (decision 57), or gave back a resume of an
+  earlier switch's after the clock moved (decision 56's known limit), and what a switch's
+  own rules set: each instance's `now` the resource's (decision 56), a kept one's
+  `switched` (OE-1), one set aside that the test brought back as decision 57 left it, and
+  a changed interval's next due time (decision 40). Its oracles know nothing of the edit: after every step, a model of the
   scheduler seeded from the resource, M2-1's with M2-4's var_externals, runs each instance
   through `call/4` alone and must give every cycle's outputs, events, globals and states;
   no scan lets a timer gain more than the time since its own state's last scan; and a
@@ -3202,6 +3205,8 @@ defmodule Logex.ApiContractTest do
     :pulse_after_switch,
     :retyped_elsewhere,
     :blocked_inside,
+    :round_trip_aside,
+    :round_trip_next_due,
     :superseded,
     :superseded_aside,
     :superseded_global,
@@ -4496,11 +4501,11 @@ defmodule Logex.ApiContractTest do
   defp ce_global_write(_fact, globals), do: globals
 
   # A test then an untest with no cycle between leaves the resource as the test found it,
-  # but for what either switch started, kept unused, and a timer the untest resumed in an
-  # instance it brought back from aside (decision 57): found from the states, never from
-  # the reports' writes.
-  defp ce_round!(:untest, %{round: {before, test_report}} = w, later, report) do
-    _ = w
+  # every state, each set aside, the globals and the tasks, but for what either switch
+  # started, kept unused, a timer the untest resumed in an instance it brought back from
+  # aside (decision 57), and what the switches' own rules set, each named below: found
+  # from the states, never from the reports' writes.
+  defp ce_round!(:untest, %{round: {before, test_report}, c: {candidate, _}}, later, report) do
     started = for {:instance_added, name, _} <- test_report, do: name
     # What a first test dropped of a superseded edit's (decision 66) is not the original's.
     dropped = for {kind, name, _} <- test_report, kind in [:pruned, :instance_pruned], do: name
@@ -4547,12 +4552,58 @@ defmodule Logex.ApiContractTest do
 
       unless state.first,
         do: assert(later.instances[name].ons_blocked == state.ons_blocked or name in back)
+
+      # The rest of the state: its type and `first` never touched; its `now` the
+      # resource's, which a switch gives a kept instance and one back from aside (decisions
+      # 56 and 57); and `switched` set by a switch of a kept one (OE-1), and as set aside
+      # for one back.
+      assert %{later.instances[name] | env: state.env, ons_blocked: state.ons_blocked} ==
+               %{state | now: later.now, switched: state.switched or name not in back}
+    end
+
+    # Each instance set aside before the test and still aside after the untest: one the
+    # candidate runs as its type came back at the test, its `now` the resource's and each
+    # timer that was timing resumed from it (decision 57), and was set aside again as it
+    # then was; any other is untouched. Found from the states alone.
+    for {name, state} <- Map.drop(aside, started) do
+      back? = Enum.any?(candidate.instances, &(&1.name == name and &1.type == state.type))
+      ce_reach(:round_trip_aside, back?)
+      assert later.aside[name] == ce_back_again(back?, state, later.now)
+    end
+
+    # Each task as the test found it but for decision 40: a changed interval's next due
+    # time is min(next_due, now + new interval) at the test, and again with the old one at
+    # the untest, which moves it no further back.
+    intervals = Map.new(candidate.tasks, &{&1.name, &1.interval})
+
+    for %{name: name, interval: old} <- before.config.tasks do
+      task = before.tasks[name]
+      due = ce_next_due(task.next_due, {old, intervals[name]}, later.now)
+      ce_reach(:round_trip_next_due, due != task.next_due)
+      assert later.tasks[name] == %{task | next_due: due}
     end
 
     ce_reach(:round_trip)
   end
 
   defp ce_round!(_step, _w, _later, _report), do: :ok
+
+  defp ce_back_again(false, state, _now), do: state
+
+  defp ce_back_again(true, state, now) do
+    env =
+      Enum.reduce([["t1"], ["b1", "i1", "t"]], state.env, fn path, env ->
+        case get_in(env, path) do
+          %{"en" => 1, "last" => last} when last < now -> put_in(env, path ++ ["last"], now)
+          _ -> env
+        end
+      end)
+
+    %{state | env: env, now: now}
+  end
+
+  defp ce_next_due(next, {same, same}, _now), do: next
+  defp ce_next_due(next, {old, new}, now), do: min(min(next, now + new), now + old)
 
   # A path a switch started, or a joined tag, is as the round trip left it: there, or not.
   defp ce_exempt(nil, path, env), do: ce_write({:pruned, path, nil}, env)

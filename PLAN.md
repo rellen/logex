@@ -2246,8 +2246,9 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   the time since its instance's last scan, a known limit. The walk of (10) found no
   defect in `lib/`; it found that a test then an untest with no cycle between changes
   three things decided rules change (decisions 55, 57 and 56's limit), which it allows by
-  name. Readings and departures, each in its commit: the split drops a var_external the
-  started program does not declare at all, rather than keep a copy of a global unused,
+  name, in every instance's env (the review below found the rest of the resource
+  unchecked). Readings and departures, each in its commit: the split drops a var_external
+  the started program does not declare at all, rather than keep a copy of a global unused,
   against decision 45's words, which decision 49 forbids (6); `:joined` and `:left` are
   writes, not the facts the design's table called them (8); a held global is one the
   configuration started declares (7); a reorder of the tasks is reported under `:tasks`
@@ -2273,6 +2274,12 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   pinned: a timer inside a block an instance holds, resumed by its path when the
   instance comes back from aside; no resume of an instance back at the time it was set
   aside; and accept's refusals in line order from a text that puts globals before tasks.
+  And it found the round trip's claim, here and in §4.9, wider than the walk's check,
+  which compared each instance's env, the names set aside and the original's globals
+  alone: the walk now compares every state, each set aside, the globals and the tasks,
+  allowing by name what a switch's own rules set, an instance's `now` (decision 56), a
+  kept one's `switched`, one brought back from aside (decision 57) and a changed
+  interval's next due time (decision 40), and both claims say so.
 
   *From Milestone 2's design (2026-10-02; `docs/organisation.md` §4.9, "One rule for new
   state", and §4.10).* M2-5 brings the edit of a function block's members, by path
