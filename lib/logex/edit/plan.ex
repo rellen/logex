@@ -878,20 +878,25 @@ defmodule Logex.Edit.Plan do
   # then, or rises at that scan, where it is timing. Each counted as `ton` counts it, a
   # negative `.acc` as 0. A moved `.pre` is never negative where the program started runs
   # the timer: a switch moves it to a preset, or back from one.
-  # M3-1: by the type's kind (Logex.FbType.rules/1).
+  # M3-1: by the type's kind; M3-2, by the rule its forecast follows (Logex.FbType.rules/1).
   defp done(nil, _value, _name, _rules), do: []
 
-  defp done(_to, %{"pre" => pre, "acc" => acc, "dn" => dn, "en" => en}, name, %{kind: :timer}),
-    do: done(dn, en, max(acc, 0), pre, name)
+  defp done(
+         _to,
+         %{"pre" => pre, "acc" => acc, "dn" => dn, "en" => en},
+         name,
+         %{forecast: :on_delay}
+       ),
+       do: done(dn, en, max(acc, 0), pre, name)
 
   # M3-1 (decision 88): a counter's done member, `q` or a ctud's `qu`, is `cv >= pv` at its
   # next run, whatever its rung, against the `cv` that run leaves, so the forecast holds
   # unless that run counts, resets or loads. A ctd's `q`, `cv <= 0`, moves with no preset.
-  defp done(_to, value, name, %{kind: :counter, done: member, preset: preset})
+  defp done(_to, value, name, %{forecast: :count, done: member, preset: preset})
        when is_binary(member),
        do: counted(Map.get(value, member), Map.get(value, "cv"), Map.get(value, preset), name)
 
-  defp done(_to, _value, _name, %{kind: :counter}), do: []
+  defp done(_to, _value, _name, %{forecast: :count}), do: []
 
   defp counted(1, cv, pv, name) when is_integer(cv) and cv < pv, do: [{:dn_drops, name, {cv, pv}}]
 
@@ -917,12 +922,17 @@ defmodule Logex.Edit.Plan do
   # not, and no resume is due.
   #
   # M3-1: a timer's, by its kind (Logex.FbType.rules/1): a type that keeps no time has no
-  # `last` to resume.
-  defp resumed({nil, to, true}, %{"en" => 1, "last" => last} = timer, name, {now, rules})
-       when to != nil and last < now and :erlang.map_get(:kind, rules) == :timer,
-       do: {%{timer | "last" => now}, [{:resumed, name, now - last}], last}
+  # `last` to resume. M3-2: "timing" is the member the type's rules name, `times`, at 1.
+  defp resumed({nil, to, true}, timer, name, {now, %{kind: :timer, times: times}})
+       when to != nil,
+       do: resume(Map.get(timer, times), timer, name, now)
 
   defp resumed(_presets, timer, _name, _at), do: {timer, [], nil}
+
+  defp resume(1, %{"last" => last} = timer, name, now) when last < now,
+    do: {%{timer | "last" => now}, [{:resumed, name, now - last}], last}
+
+  defp resume(_timing, timer, _name, _now), do: {timer, [], nil}
 
   # A resume undone: where this edit's last switch resumed the timer and no scan has run
   # since (`switched`), its `last`, still that switch's `now`, goes back to the one it

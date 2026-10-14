@@ -2422,29 +2422,32 @@ defmodule Logex.Configuration do
     {timers ++ counters, Map.put(memo, name, timers ++ counters)}
   end
 
+  # Each with its type word, read in the routine whose text holds it (M3-2).
   defp citing(runs, kind, program, tables),
     do:
       runs
       |> Enum.sort()
       |> Enum.map_reduce(tables, fn {path, {line, _preset}}, tables ->
-        {holder, tables} = holder(String.split(path, "."), {:program, program}, tables)
-        {{kind, path, cited(line, holder)}, tables}
+        parts = String.split(path, ".")
+        {holder, tables} = holder(parts, {:program, program}, tables)
+        {typed, tables} = typed_tags(Map.fetch(tables, key(holder)), holder, tables)
+        %Tag{type: %FbType{name: word}} = Map.fetch!(typed, List.last(parts))
+        {{kind, path, cited(line, holder), word}, tables}
       end)
 
-  defp timer_warning({:timer, path, cited}, instance, program),
+  # M3-2: in the words of the timer's own type.
+  defp timer_warning({:timer, path, cited, word}, instance, program),
     do:
       warning(
         instance.line,
         "`#{instance.name}` runs under the event task `#{instance.task}`, and " <>
-          "`#{program.name}` runs the timer `#{path}`#{cited}" <>
-          ": a ton times across the task's runs, and one whose rung is true on two runs " <>
-          "in a row counts the whole time between them"
+          "`#{program.name}` runs the timer `#{path}`#{cited}: " <> across(word)
       )
 
   # M3-1 (decision 72): a counter sees its rung only at the task's runs, so an edge that
   # comes and goes between two is never counted, and one whose rung is the task's own
   # trigger is true at every run and never counts at all.
-  defp timer_warning({:counter, path, cited}, instance, program),
+  defp timer_warning({:counter, path, cited, _word}, instance, program),
     do:
       warning(
         instance.line,
@@ -2454,6 +2457,11 @@ defmodule Logex.Configuration do
           "is never counted, and a rung that is the task's trigger is true at every run " <>
           "and never counts"
       )
+
+  defp across("ton"),
+    do:
+      "a ton times across the task's runs, and one whose rung is true on two runs in a " <>
+        "row counts the whole time between them"
 
   # The routine whose text holds a timer: the program's, or a block's body down its path,
   # each routine's typed tags read once, by the routine (`:program`, or its block's name,

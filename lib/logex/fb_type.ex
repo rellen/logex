@@ -150,30 +150,59 @@ defmodule Logex.FbType do
   # description the compiler, the walks, the warnings and the edit read, rather than match
   # on a type's name (M3-1). `kind` is what it does, `:timer`, which keeps time, or
   # `:counter`, which keeps none; `preset` the member the number on its instruction starts;
-  # `done` the member a moved preset changes at its next run; and `runs` each instruction
-  # that runs it, by its IR symbol, to `{edge, reads}`: the member that is that
+  # `done` the member a moved preset changes at its next run; `times` the member whose 1
+  # says a timer is adding time between its runs, which an edit's resume reads, nil for a
+  # counter; `forecast` how a moved preset's effect on `done` is forecast, by the rule the
+  # type keeps (M3-2): `:on_delay` for a `ton`, `:count` for a counter; and `runs` each
+  # instruction that runs it, by its IR symbol, to `{edge, reads}`: the member that is that
   # instruction's edge memory, nil for none, and the member a rung below reads it by. A
   # `ctd`'s `q` is `cv <= 0`, which no preset moves, so it has no `done`; a `ctud` is run by
   # a `ctu` and a `ctd`, each its own side (decision 85).
   @runs %{
-    "ton" => %{kind: :timer, preset: "pre", done: "dn", runs: %{ton: {nil, "dn"}}},
-    "ctu" => %{kind: :counter, preset: "pv", done: "q", runs: %{ctu: {"cu", "q"}}},
-    "ctd" => %{kind: :counter, preset: "pv", done: nil, runs: %{ctd: {"cd", "q"}}},
+    "ton" => %{
+      kind: :timer,
+      preset: "pre",
+      done: "dn",
+      times: "en",
+      forecast: :on_delay,
+      runs: %{ton: {nil, "dn"}}
+    },
+    "ctu" => %{
+      kind: :counter,
+      preset: "pv",
+      done: "q",
+      times: nil,
+      forecast: :count,
+      runs: %{ctu: {"cu", "q"}}
+    },
+    "ctd" => %{
+      kind: :counter,
+      preset: "pv",
+      done: nil,
+      times: nil,
+      forecast: :count,
+      runs: %{ctd: {"cd", "q"}}
+    },
     "ctud" => %{
       kind: :counter,
       preset: "pv",
       done: "qu",
+      times: nil,
+      forecast: :count,
       runs: %{ctu: {"cu", "qu"}, ctd: {"cd", "qd"}}
     }
   }
 
   @doc """
   What a built-in function block type is to the instructions that run it (M3-1), or nil
-  for a user function block: `%{kind:, preset:, done:, runs:}`. `kind` is `:timer` for a
-  type that keeps time and `:counter` for a counter; `preset` the member the number on its
-  instruction starts, `"pre"` for a `ton` and `"pv"` for a counter; `done` the member a
-  moved preset changes at its next run, `"dn"`, `"q"` or a `ctud`'s `"qu"`, nil for a
-  `ctd`, whose `q` is `cv <= 0`; and `runs`
+  for a user function block: `%{kind:, preset:, done:, times:, forecast:, runs:}`. `kind`
+  is `:timer` for a type that keeps time and `:counter` for a counter; `preset` the member
+  the number on its instruction starts, `"pre"` for a `ton` and `"pv"` for a counter;
+  `done` the member a moved preset changes at its next run, `"dn"`, `"q"` or a `ctud`'s
+  `"qu"`, nil for a `ctd`, whose `q` is `cv <= 0`; `times` the member whose 1 says a timer
+  adds time between its runs, `"en"` for a `ton`, nil for a counter (M3-2); `forecast`
+  the rule a moved preset's forecast follows, `:on_delay` for a `ton` and `:count` for a
+  counter (M3-2); and `runs`
   each instruction that runs it, by its IR symbol, to `{edge, reads}`, the member that is
   that instruction's edge memory, nil for none, and the member a rung below reads it by.
   """

@@ -768,9 +768,16 @@ defmodule Logex.Compiler do
 
   defp agreed(_first, _runs, acc), do: acc
 
-  defp a_runs(:ton), do: "a timer"
-  defp a_runs(:ctu), do: "a counter's count up"
-  defp a_runs(:ctd), do: "a counter's count down"
+  # In the words of the kind of type the instruction is named after (Logex.FbType.rules/1,
+  # M3-2): every timer's, one; a counter's, its side.
+  defp a_runs(symbol), do: a_runs(kind_of(symbol), symbol)
+
+  defp a_runs(:timer, _symbol), do: "a timer"
+  defp a_runs(:counter, :ctu), do: "a counter's count up"
+  defp a_runs(:counter, :ctd), do: "a counter's count down"
+
+  # The kind of the built-in type an instruction is named after, `:timer` or `:counter`.
+  defp kind_of(symbol), do: FbType.rules(own_type(symbol)).kind
 
   # The preset starts the member the type names, on a type the instruction runs; on any
   # other, which was reported already, there is nothing to start.
@@ -857,8 +864,7 @@ defmodule Logex.Compiler do
 
   defp reads(type, symbol), do: elem(Map.fetch!(FbType.rules(type).runs, symbol), 1)
 
-  defp noun(:ton), do: "timer"
-  defp noun(_counter), do: "counter"
+  defp noun(symbol), do: Atom.to_string(kind_of(symbol))
 
   # The built-in type an instruction is named after.
   defp own_type(symbol), do: FbType.builtin(Atom.to_string(symbol))
@@ -1450,8 +1456,10 @@ defmodule Logex.Compiler do
 
   defp check_preset(_signature, _operands, _at, _known, diagnostics), do: diagnostics
 
-  defp unit(:ton), do: "a number of milliseconds"
-  defp unit(_counter), do: "a number, a count"
+  defp unit(symbol), do: unit_of(kind_of(symbol))
+
+  defp unit_of(:timer), do: "a number of milliseconds"
+  defp unit_of(:counter), do: "a number, a count"
 
   # The `move` is named only where it would compile, once a name in it not declared yet is
   # declared: into an instance's preset member, from a dint. One name is never both, nor
@@ -1535,8 +1543,10 @@ defmodule Logex.Compiler do
       | diagnostics
     ]
 
-  defp suffix(:ton), do: " ms"
-  defp suffix(_counter), do: ""
+  defp suffix(symbol), do: suffix_of(kind_of(symbol))
+
+  defp suffix_of(:timer), do: " ms"
+  defp suffix_of(:counter), do: ""
 
   defp symbol_of(word), do: elem(Map.fetch!(@instructions, String.downcase(word)), 0)
 

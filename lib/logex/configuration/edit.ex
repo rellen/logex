@@ -731,14 +731,15 @@ defmodule Logex.Configuration.Edit do
   end
 
   # Every timer a program's state holds, at any depth, by its path: each of its tags whose
-  # type is the built-in timer, and inside each instance of a user block, each member's in
-  # turn, read inside the program's one table of types (decision 53).
+  # type is a built-in timer, and inside each instance of a user block, each member's in
+  # turn, read inside the program's one table of types (decision 53), with the member whose
+  # 1 says it is timing (M3-2).
   defp timers(%Program{} = program),
     do:
       for(
         {name, %Tag{type: type}} <- Program.typed_tags(program),
-        path <- timer_paths(type, [name]),
-        do: path
+        timer <- timer_paths(type, [name]),
+        do: timer
       )
 
   # M3-1: a built-in that keeps time (Logex.FbType.rules/1); one that keeps none, a
@@ -755,14 +756,17 @@ defmodule Logex.Configuration.Edit do
 
   defp timer_paths(_leaf, _path), do: []
 
-  defp timing(%{kind: :timer}, path), do: [Enum.reverse(path)]
+  defp timing(%{kind: :timer, times: times}, path), do: [{Enum.reverse(path), times}]
   defp timing(_keeps_no_time, _path), do: []
 
-  defp resume(paths, env, at),
-    do: Enum.reduce(paths, {env, []}, &resumed(get_in(env, &1), &1, at, &2))
+  defp resume(timers, env, at),
+    do:
+      Enum.reduce(timers, {env, []}, fn {path, times}, acc ->
+        resumed(get_in(env, path), {path, times}, at, acc)
+      end)
 
-  defp resumed(%{"en" => 1, "last" => last} = timer, path, {name, now}, {env, reports})
-       when last < now,
+  defp resumed(%{"last" => last} = timer, {path, times}, {name, now}, {env, reports})
+       when :erlang.map_get(times, timer) == 1 and last < now,
        do:
          {put_in(env, path, %{timer | "last" => now}),
           [{:resumed, Enum.join([name | path], "."), now - last} | reports]}
