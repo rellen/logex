@@ -3788,7 +3788,7 @@ what becomes of a block's input that an online edit leaves no rung writing.
     is a kind of its own, `:unread`'s mirror, in `Logex.Edit`'s table and §4.9's. A
     timer's `.acc`, which logic may write too (decision 9), is its own output, set at
     every run, and is not reported. Nothing is blocked or written: the counter or timer
-    reads its kept input at its next run, as decision 91 reads any. *(Landed 2026-10-14.)*
+    reads its kept input at its next run, as decision 91 reads any. *(Landed 2026-10-14. Its scope confirmed by the maintainer the same day: the report names the member whatever its value, not only when it is on, since nothing resets the counter or timer any more either way, and a `pv` or `.pre` is reported beside `r` and `ld`.)*
 
 ---
 

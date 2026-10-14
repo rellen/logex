@@ -162,7 +162,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   preset rules are every built-in's, a counter's `.pv` by decisions 23 and 27, its forecast
   `:dn_drops` and `:dn_rises` of `q` (decision 88), and no resume; and a counter's edge
   memory is on the one-shots' block list by path, its rung compared without any preset,
-  with no writes test (decision 87). Since M3-2 a timer resumes by its type's `times`
+  with no writes test (decision 87). Since M3-2 a member input logic wrote, a counter's `r`,
+  `ld` or `pv`, an `rto`'s `r` or a timer's `.pre`, that the candidate writes through no
+  instruction keeps its value and is reported `:unwritten` by its path (decision 96). Since M3-2 a timer resumes by its type's `times`
   member (`.en` for a `ton` and an `rto`, `.tt` for a `tof` and a `tp`), its `.dn`
   forecast follows its type's rule (`forecast`), and a `tp`'s `.en` is on the block list
   as a counter's edge memory is (decisions 93 to 95). Its moduledoc gives every rule, report kind and host mistake; §4.9
@@ -227,7 +229,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   since M3-2 its `tof`, `tp` or `rto`. Since M3-1
   `presets/1`, every built-in instance it runs, which `Logex.Edit` reads, and `counters/1`,
   the counters among them, which M2-6's event-task warning reads beside `timers/1`, now the
-  timers alone. The
+  timers alone. Since M3-2 `member_writes/1`, the member inputs of built-in instances a
+  program writes through an instruction, which an edit reads for `:unwritten` (decision 96). The
   last two reach into every block a `cal` runs, at any depth, by path (`p.s.t1`), each
   block type read once a call. The compiler, `Logex.Warnings` and `Logex.Edit` read it in
   place of walks of their own, and `Logex.Configuration.check/1` what a program type
@@ -377,7 +380,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   M2-1, M2-5, M2-2, M2-3, M2-4 and M2-6, and OE-2 have landed, Milestone 2 designed on
   2026-10-02, §4.10 and decisions 30–40, and OE-2 on 2026-10-13, §4.9's "OE-2's design"
   and decisions 55–66; Milestone 3, the missing instruction set, decided on 2026-10-14, decisions 67–92, M3-1's
-  counters landed, and M3-2's timers, with decisions 93–95). Read it before designing anything that names a program, schedules one, binds I/O, or changes a
+  counters landed, and M3-2's timers, with decisions 93–96). Read it before designing anything that names a program, schedules one, binds I/O, or changes a
   running controller (§4.9, online edit, decided 2026-10-01).
 - `docs/instruction-sets.md` — reference: IEC's LD elements and standard library by table number,
   Instruction List (withdrawn in Ed 4), and the free-software instruction sets. Read it before
