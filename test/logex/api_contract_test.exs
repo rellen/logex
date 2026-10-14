@@ -137,6 +137,21 @@ defmodule Logex.ApiContractTest do
   lists rebuild the state; each forecast holds at the counter's next run; a test then an
   untest with no scan between gives every counter back; and a restart starts each at its
   preset. Every accepted call is made twice and gives the same result.
+
+  M3-2: an eighth walk runs the other timers, an off-delay `tof`, a pulse `tp`, a retentive
+  `rto` with its reset above or below its rung, and a pulse inside a block a `cal` runs,
+  in three versions of its body, over random inputs and scan intervals, restarts and online
+  edits that change a preset, a rung, a reset's place, a block's body or a timer's presence,
+  and now and then the `tof`'s kind, which accept refuses. Its oracle restates each rule
+  from the programs' text, IEC's TOF and TP and the conventional RTO, rung by rung over the
+  input image at the scan's time, and knows nothing of the block list: every scan is exact
+  but where a pulse a switch came before last ran under the same rung text, which may or
+  may not start; one whose text changed starts none; a switch keeps every timer both
+  programs run as it was but for `.pre` and `last`, `.pre` moving at a first test to the
+  new preset where logic left the old; the writes each report lists rebuild the state; each
+  forecast holds at the run its type's rule decides it; a test then an untest with no scan
+  between gives every timer back; and a restart starts each at its preset. Every accepted
+  call is made twice and gives the same result.
   """
   use ExUnit.Case, async: true
 
@@ -5382,4 +5397,599 @@ defmodule Logex.ApiContractTest do
       | "qu" => if(c["cv"] >= c["pv"], do: 1, else: 0),
         "qd" => if(c["cv"] <= 0, do: 1, else: 0)
     }
+
+  # ---- M3-2: the other timers, against IEC's and the conventional rules restated --------
+
+  # What the timer walk must be seen to do, at least once each.
+  @tm_reach [
+    :delay_ended,
+    :delay_cut,
+    :pulsed,
+    :retrigger_ignored,
+    :pulse_held,
+    :first_held,
+    :reset_held,
+    :retained,
+    :rto_done,
+    :frozen,
+    :kept_across,
+    :edge_blocked,
+    :edge_kept,
+    :blocked_pulsed_later,
+    :preset_moved,
+    :forecast_drops,
+    :forecast_rises,
+    :round_trip,
+    :retype_refused,
+    :restarted
+  ]
+
+  @tm_inputs ~w(e1 e2 e3 rs on)
+
+  test "the other timers run as IEC's and the conventional RTO, restated from the " <>
+         "programs' text: every scan exact but where only an edit's block decides a pulse, " <>
+         "and each switch's report rebuilding the state" do
+    :rand.seed(:exsss, {2026, 10, 1414})
+    Process.put(:tm_programs, %{})
+
+    for _ <- 1..300 do
+      spec = tm_spec()
+      program = tm_program(spec)
+      clean = Map.new(tm_texts(spec), fn {key, _text} -> {key, true} end)
+
+      w = %{
+        spec: spec,
+        p: program,
+        s: Runtime.instance(program),
+        e: nil,
+        c: nil,
+        clean: clean,
+        last: tm_texts(spec),
+        forecast: [],
+        round: nil,
+        blocked: [],
+        restarted: false
+      }
+
+      tm_walk(w, 60)
+    end
+
+    assert Process.get(:tm_reach, MapSet.new()) == MapSet.new(@tm_reach)
+  end
+
+  defp tm_reached(name), do: reached(:tm_reach, name)
+
+  # A program's timers, drawn: an off-delay `f`, a pulse `h`, a retentive `l` with its reset
+  # above or below its rung, and a block `s1` holding a pulse, in one of three versions of
+  # its body, which a `cal` on `on` runs. Presets are a few scans long.
+  defp tm_spec,
+    do: %{
+      f: tm_maybe(fn -> %{p: pick([0, 20, 40]), chain: tm_chain()} end),
+      kind_f: "tof",
+      h: tm_maybe(fn -> %{p: pick([0, 20, 40]), chain: tm_chain()} end),
+      l:
+        tm_maybe(fn -> %{p: pick([30, 60]), chain: tm_chain(), reset: pick([:above, :below])} end),
+      s: tm_maybe(fn -> pick([1, 2, 3]) end)
+    }
+
+  defp tm_maybe(fun), do: if(:rand.uniform(4) == 1, do: nil, else: fun.())
+
+  defp tm_chain,
+    do: for(_ <- 1..:rand.uniform(2), do: {pick([:xic, :xic, :xio]), pick(~w(e1 e2 e3))})
+
+  # The candidate: one or two of the changes an edit may make, or now and then a change of
+  # `f`'s kind, which accept refuses.
+  defp tm_candidate(spec),
+    do:
+      Enum.reduce(1..:rand.uniform(2), spec, fn _, spec -> tm_change(:rand.uniform(12), spec) end)
+
+  defp tm_change(1, %{f: %{} = f} = spec), do: %{spec | f: %{f | p: pick([0, 10, 20, 40])}}
+  defp tm_change(2, %{f: %{} = f} = spec), do: %{spec | f: %{f | chain: tm_chain()}}
+  defp tm_change(3, %{h: %{} = h} = spec), do: %{spec | h: %{h | p: pick([0, 10, 20, 40])}}
+  defp tm_change(4, %{h: %{} = h} = spec), do: %{spec | h: %{h | chain: tm_chain()}}
+  defp tm_change(5, %{l: %{} = l} = spec), do: %{spec | l: %{l | p: pick([10, 30, 60])}}
+  defp tm_change(6, %{l: %{} = l} = spec), do: %{spec | l: %{l | reset: pick([:above, :below])}}
+  defp tm_change(7, spec), do: %{spec | h: pick([nil, %{p: 20, chain: tm_chain()}])}
+  defp tm_change(8, spec), do: %{spec | s: pick([nil, 1, 2, 3])}
+  defp tm_change(9, %{f: %{}} = spec), do: %{spec | kind_f: pick(["ton", spec.kind_f])}
+  defp tm_change(n, spec) when n in [10, 11], do: tm_change(pick([1, 3, 5]), spec)
+  defp tm_change(_n, spec), do: %{spec | f: pick([nil, %{p: 20, chain: tm_chain()}])}
+
+  @tm_bodies %{
+    1 => "xic go tp t 20",
+    2 => "xic go tp t 40",
+    3 => "xic go xio clr tp t 20"
+  }
+
+  defp tm_body(version) do
+    {:ok, pulse} =
+      Logex.compile(
+        "function_block pulse\nvar_input go bool\nvar_input clr bool\nvar_output q bool\n" <>
+          "var t tp\n#{@tm_bodies[version]}\nxic t.tt ote q",
+        name: "pulse"
+      )
+
+    pulse
+  end
+
+  defp tm_program(spec) do
+    known = Process.get(:tm_programs)
+
+    case known do
+      %{^spec => program} ->
+        program
+
+      _ ->
+        types = if spec.s, do: [tm_body(spec.s)], else: []
+        {:ok, program} = Logex.compile(tm_source(spec), name: "tm", types: types)
+        Process.put(:tm_programs, Map.put(known, spec, program))
+        program
+    end
+  end
+
+  defp tm_source(spec) do
+    declarations =
+      Enum.map(@tm_inputs, &"var_input #{&1} bool") ++
+        ["var_output y bool"] ++
+        if(spec.f, do: ["var f #{spec.kind_f}"], else: []) ++
+        if(spec.h, do: ["var h tp"], else: []) ++
+        if(spec.l, do: ["var l rto"], else: []) ++ if(spec.s, do: ["var s1 pulse"], else: [])
+
+    Enum.join(declarations ++ Enum.map(tm_rungs(spec), &tm_text/1), "\n")
+  end
+
+  # The rungs, in order, as the model runs them: `{:timer, name, kind, chain, preset}`,
+  # `{:set, name, member, input}` and `{:cal, version}`.
+  defp tm_rungs(spec),
+    do:
+      if(spec.f, do: [{:timer, "f", spec.kind_f, spec.f.chain, spec.f.p}], else: []) ++
+        if(spec.h, do: [{:timer, "h", "tp", spec.h.chain, spec.h.p}], else: []) ++
+        tm_l(spec.l) ++ if(spec.s, do: [{:cal, spec.s}], else: [])
+
+  defp tm_l(nil), do: []
+
+  defp tm_l(%{reset: :above} = l),
+    do: [{:set, "l", "r", "rs"}, {:timer, "l", "rto", l.chain, l.p}]
+
+  defp tm_l(%{reset: :below} = l),
+    do: [{:timer, "l", "rto", l.chain, l.p}, {:set, "l", "r", "rs"}]
+
+  defp tm_text({:timer, name, kind, chain, preset}),
+    do: "#{tm_chain_text(chain)} #{kind} #{name} #{preset}"
+
+  defp tm_text({:set, name, member, input}), do: "xic #{input} ote #{name}.#{member}"
+  defp tm_text({:cal, _version}), do: "xic on cal s1 e1 rs y"
+
+  defp tm_chain_text(chain), do: Enum.map_join(chain, " ", fn {c, input} -> "#{c} #{input}" end)
+
+  # Each pulse's rung text, its preset left out, the block's by its body's rung: what decides
+  # whether an edit blocks its edge.
+  defp tm_texts(spec),
+    do:
+      Map.new(
+        for({:timer, "h", _kind, chain, _p} <- tm_rungs(spec), do: {"h", tm_chain_text(chain)}) ++
+          for(
+            {:cal, version} <- tm_rungs(spec),
+            do: {"s1.t", String.replace(@tm_bodies[version], ~r/ \d+$/, "")}
+          )
+      )
+
+  # Each timer's kind and preset, in this spec.
+  defp tm_kinds(spec),
+    do:
+      Map.new(
+        for({:timer, name, kind, _chain, p} <- tm_rungs(spec), do: {name, {kind, p}}) ++
+          for({:cal, version} <- tm_rungs(spec), do: {"s1.t", {"tp", tm_body_preset(version)}})
+      )
+
+  defp tm_body_preset(2), do: 40
+  defp tm_body_preset(_version), do: 20
+
+  defp tm_walk(w, 0), do: w
+
+  defp tm_walk(w, n),
+    do:
+      tm_walk(
+        tm_op(pick(~w(scan scan scan scan scan accept test untest assemble cancel restart)a), w),
+        n - 1
+      )
+
+  defp tm_running(%{e: nil} = w), do: {w.p, w.spec}
+  defp tm_running(%{e: edit} = w), do: tm_side_of(Edit.stage(edit), w)
+
+  defp tm_side_of(:testing, w), do: {Edit.running(w.e), w.c}
+  defp tm_side_of(_stage, w), do: {Edit.running(w.e), w.spec}
+
+  defp tm_level("rs"), do: pick([0, 0, 0, 0, 0, 1])
+  defp tm_level(_name), do: pick([0, 1])
+
+  defp tm_op(:scan, w) do
+    {program, spec} = tm_running(w)
+    inputs = for name <- @tm_inputs, :rand.uniform(3) == 1, into: %{}, do: {name, tm_level(name)}
+    before = Runtime.put_inputs(program, w.s, inputs)
+    ms = pick([0, 5, 10, 10, 20, 45])
+    {:ok, {_outputs, later}} = attempt(fn -> Runtime.scan(program, before, ms) end)
+    w = tm_check_scan(w, spec, before, later)
+    %{w | s: later, round: nil, restarted: false}
+  end
+
+  defp tm_op(:restart, w) do
+    {program, spec} = tm_running(w)
+    s = Runtime.restart(program, w.s, pick([:cold, :warm]))
+
+    for {name, {kind, preset}} <- tm_kinds(spec),
+        do: assert(tm_at(s.env, name) == tm_initial(kind, preset))
+
+    tm_reached(:restarted)
+    clean = Map.new(tm_texts(spec), fn {key, _text} -> {key, true} end)
+    %{w | s: s, clean: clean, last: tm_texts(spec), forecast: [], round: nil, restarted: true}
+  end
+
+  defp tm_op(:accept, %{e: nil} = w) do
+    candidate = tm_candidate(w.spec)
+
+    case Edit.accept(w.p, tm_program(candidate), w.s) do
+      {:ok, edit, _forecast} ->
+        %{w | e: edit, c: candidate}
+
+      {:error, [%Diagnostic{stage: :edit, message: message}]} ->
+        assert w.spec.f != nil and candidate.f != nil and candidate.kind_f != w.spec.kind_f
+        assert message =~ "`f` is a #{w.spec.kind_f} in the running program and a"
+        tm_reached(:retype_refused)
+        w
+    end
+  end
+
+  defp tm_op(:test, %{e: e} = w) when e != nil,
+    do: tm_switch(Edit.stage(e) in [:accepted, :untested], :test, w)
+
+  defp tm_op(:untest, %{e: e} = w) when e != nil,
+    do: tm_switch(Edit.stage(e) == :testing, :untest, w)
+
+  defp tm_op(:assemble, %{e: e} = w) when e != nil,
+    do: tm_finish(Edit.stage(e) == :testing, :assemble, w)
+
+  defp tm_op(:cancel, %{e: e} = w) when e != nil,
+    do: tm_finish(Edit.stage(e) in [:accepted, :untested], :cancel, w)
+
+  defp tm_op(_op, w), do: w
+
+  defp tm_finish(false, _step, w), do: w
+
+  defp tm_finish(true, step, w) do
+    {:ok, {program, s, _report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
+    spec = if step == :assemble, do: w.c, else: w.spec
+    %{w | p: program, s: s, e: nil, c: nil, spec: spec, round: nil}
+  end
+
+  defp tm_switch(false, _step, w), do: w
+
+  defp tm_switch(true, step, w) do
+    first? = Edit.stage(w.e) == :accepted
+    {from, to} = if step == :test, do: {w.spec, w.c}, else: {w.c, w.spec}
+    {:ok, {edit, s, report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
+
+    # The writes the report lists rebuild the state.
+    assert s.env == tm_rebuilt(w.s.env, report)
+
+    # A timer both programs run, of one kind, keeps every member but `.pre` and `last`, and
+    # at a first test its `.pre` moves to the new preset where logic left the old, which no
+    # logic here moves (decisions 23 and 27).
+    for {name, {kind, preset}} <- tm_kinds(to),
+        {^kind, from_p} <- [tm_kinds(from)[name]],
+        old = tm_at(w.s.env, name),
+        is_map(old) do
+      now = tm_at(s.env, name)
+      assert Map.drop(now, ["pre", "last"]) == Map.drop(old, ["pre", "last"])
+      tm_reached(:kept_across)
+
+      if first? do
+        assert now["pre"] == if(old["pre"] == from_p, do: preset, else: old["pre"])
+        if old["pre"] != now["pre"], do: tm_reached(:preset_moved)
+      end
+    end
+
+    blocked = for {:ons_blocked, path, _value} <- report, do: path
+    if blocked != [], do: tm_reached(:edge_blocked)
+
+    if step == :untest and w.round != nil do
+      for {name, _} <- tm_kinds(to),
+          is_map(tm_at(w.round, name)),
+          do: assert(tm_at(s.env, name) == tm_at(w.round, name))
+
+      tm_reached(:round_trip)
+    end
+
+    kinds = tm_kinds(to)
+
+    forecast =
+      for {kind, name, {_acc, _pre}} <- report,
+          kind in [:dn_drops, :dn_rises],
+          do: {kind, name, elem(kinds[name], 0)}
+
+    # Exactly the forecasts each type's rule gives, from the state the switch leaves, for
+    # each timer whose `.pre` it moved (decisions 93 to 95).
+    expected =
+      for {:preset, name, {_from, _to}} <- report,
+          {type, _p} = kinds[name],
+          kind <- tm_expected(type, tm_at(s.env, name)),
+          do: {kind, name, type}
+
+    assert Enum.sort(forecast) == Enum.sort(expected)
+
+    round = if step == :test, do: w.s.env, else: nil
+    last = if w.restarted, do: Map.merge(w.last, tm_texts(to)), else: w.last
+
+    %{
+      w
+      | e: edit,
+        s: s,
+        clean: %{},
+        forecast: forecast,
+        round: round,
+        blocked: Enum.uniq(blocked ++ w.blocked),
+        last: last
+    }
+  end
+
+  defp tm_rebuilt(env, report),
+    do:
+      Enum.reduce(report, env, fn
+        {:added, name, value}, env -> tm_put(env, name, value)
+        {:preset, name, {_from, to}}, env -> tm_put(env, name <> ".pre", to)
+        {:resumed, name, gap}, env -> update_in(env, tm_path(name <> ".last"), &(&1 + gap))
+        {:resume_undone, name, gap}, env -> update_in(env, tm_path(name <> ".last"), &(&1 - gap))
+        _fact, env -> env
+      end)
+
+  defp tm_path(name), do: String.split(name, ".")
+  defp tm_at(env, name), do: get_in(env, tm_path(name))
+  defp tm_put(env, name, value), do: put_in(env, tm_path(name), value)
+
+  defp tm_initial("rto", p), do: Map.put(tm_initial("ton", p), "r", 0)
+
+  defp tm_initial(_kind, p),
+    do: %{"pre" => p, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => 0}
+
+  # The scan, restated: every timer as its rule leaves it, run rung by rung over the input
+  # image at the scan's `now`, from the state before the scan. A pulse a switch came before
+  # starts on an edge only where it last ran under the same rung text, and then may or may
+  # not, the edit's block list being the implementation's and no part of this oracle.
+  defp tm_check_scan(w, spec, before, later) do
+    image = Map.take(before.env, @tm_inputs)
+    kinds = tm_kinds(spec)
+    start = Map.new(kinds, fn {name, _} -> {name, tm_at(before.env, name)} end)
+    ctx = %{image: image, w: w, texts: tm_texts(spec), first: before.first, now: later.now}
+
+    {possible, ran} =
+      Enum.reduce(tm_rungs(spec), {[{start, []}], %{}}, fn rung, acc -> tm_run(rung, acc, ctx) end)
+
+    got = Map.new(kinds, fn {name, _} -> {name, tm_at(later.env, name)} end)
+    matching = for {timers, notes} <- possible, timers == got, do: notes
+    assert matching != [], "no reading gives #{inspect(got)} from #{inspect(start)}"
+    Enum.each(hd(matching), &tm_reached/1)
+
+    # Each forecast holds at the timer's next run where its rule says it is decided.
+    for {kind, name, type} <- w.forecast, Map.has_key?(ran, name) do
+      tm_forecast(kind, type, got[name], ran[name])
+    end
+
+    forecast = Enum.reject(w.forecast, fn {_kind, name, _type} -> Map.has_key?(ran, name) end)
+
+    %{
+      w
+      | clean: Enum.reduce(Map.keys(ran), w.clean, &Map.put(&2, &1, true)),
+        last: Enum.reduce(Map.keys(ran), w.last, &tm_last(&2, &1, ctx.texts)),
+        forecast: forecast
+    }
+  end
+
+  defp tm_last(last, name, texts) when is_map_key(texts, name),
+    do: Map.put(last, name, texts[name])
+
+  defp tm_last(last, _name, _texts), do: last
+
+  defp tm_expected("tof", %{"tt" => 1, "acc" => acc, "pre" => pre}) when acc >= pre,
+    do: [:dn_drops]
+
+  defp tm_expected("tp", %{"tt" => 1, "acc" => acc, "pre" => pre}) when acc >= pre,
+    do: [:dn_rises]
+
+  defp tm_expected("rto", %{"dn" => 1, "acc" => acc, "pre" => pre}) when acc < pre,
+    do: [:dn_drops]
+
+  defp tm_expected("rto", %{"dn" => 0, "acc" => acc, "pre" => pre}) when acc >= pre,
+    do: [:dn_rises]
+
+  defp tm_expected("ton", %{"dn" => 1, "acc" => acc, "pre" => pre}) when acc < pre,
+    do: [:dn_drops]
+
+  defp tm_expected("ton", %{"dn" => 0, "en" => 1, "acc" => acc, "pre" => pre})
+       when acc >= pre,
+       do: [:dn_rises]
+
+  defp tm_expected(_type, _timer), do: []
+
+  # A tof's drop holds where its next run finds its rung false; a pulse's end at its next run
+  # whatever, `.dn` the rung's; an rto's at its next run with its rung true and `r` 0, a drop
+  # where enough time has not passed.
+  defp tm_forecast(:dn_drops, "tof", timer, {false, _r}) do
+    assert timer["dn"] == 0
+    tm_reached(:forecast_drops)
+  end
+
+  defp tm_forecast(:dn_rises, "tp", timer, {cond, _r}) do
+    assert timer["tt"] == 0 and timer["dn"] == if(cond, do: 1, else: 0)
+    tm_reached(:forecast_rises)
+  end
+
+  defp tm_forecast(:dn_drops, "rto", timer, {true, 0}) do
+    assert timer["dn"] == 0 or timer["acc"] == timer["pre"]
+    tm_reached(:forecast_drops)
+  end
+
+  defp tm_forecast(:dn_rises, "rto", timer, {true, 0}) do
+    assert timer["dn"] == 1
+    tm_reached(:forecast_rises)
+  end
+
+  defp tm_forecast(_kind, _type, _timer, _run), do: :ok
+
+  defp tm_eval(chain, image),
+    do: Enum.all?(chain, fn {c, input} -> c == :xic == (image[input] == 1) end)
+
+  defp tm_run({:set, name, member, input}, {possible, ran}, ctx),
+    do:
+      {for({t, notes} <- possible, do: {put_in(t, [name, member], ctx.image[input]), notes}), ran}
+
+  defp tm_run({:timer, name, kind, chain, _p}, {possible, ran}, ctx) do
+    cond = tm_eval(chain, ctx.image)
+
+    {Enum.flat_map(possible, &tm_one(&1, name, {kind, cond}, ctx)),
+     tm_ran(ran, name, cond, possible)}
+  end
+
+  defp tm_run({:cal, version}, {possible, ran}, %{image: %{"on" => 1} = image} = ctx) do
+    cond = image["e1"] == 1 and (version != 3 or image["rs"] != 1)
+
+    {Enum.flat_map(possible, &tm_one(&1, "s1.t", {"tp", cond}, ctx)),
+     tm_ran(ran, "s1.t", cond, possible)}
+  end
+
+  defp tm_run({:cal, _version}, {possible, ran}, _ctx) do
+    tm_reached(:frozen)
+    {possible, ran}
+  end
+
+  # The timers that ran, each with its rung and, for an rto, the reset it saw.
+  defp tm_ran(ran, name, cond, [{timers, _} | _]),
+    do: Map.put(ran, name, {cond, Map.get(timers[name], "r", 0)})
+
+  defp tm_one({timers, notes}, name, {kind, cond}, ctx) do
+    t = timers[name]
+    elapsed = if is_integer(t["last"]), do: max(ctx.now - t["last"], 0), else: 0
+
+    edges = tm_edges(name, kind, ctx)
+    first = if ctx.first and kind == "tp" and cond and t["en"] == 0, do: [:first_held], else: []
+
+    for {t2, more} <- tm_rule(kind, t, cond, elapsed, edges) do
+      {Map.put(timers, name, Map.put(t2, "last", ctx.now)),
+       notes ++ more ++ first ++ tm_why(:pulsed in more, edges, name, ctx)}
+    end
+  end
+
+  # A pulse after a switch: one only the block list decided, or one an edit blocked,
+  # pulsing at a later run.
+  defp tm_why(true, [false, true], _name, _ctx), do: [:edge_kept]
+
+  defp tm_why(true, [true], name, ctx),
+    do: if((name <> ".en") in ctx.w.blocked, do: [:blocked_pulsed_later], else: [])
+
+  defp tm_why(_pulsed, _edges, _name, _ctx), do: []
+
+  # Where a pulse may start on an edge: never on a first scan; always where it last ran
+  # under its own text with no switch since; maybe where a switch came since and the text is
+  # the same; never where the text changed.
+  defp tm_edges(_name, kind, _ctx) when kind != "tp", do: [true]
+
+  defp tm_edges(name, "tp", ctx) do
+    cond do
+      ctx.first -> [false]
+      Map.get(ctx.w.clean, name, false) -> [true]
+      Map.get(ctx.w.last, name) == ctx.texts[name] -> [false, true]
+      true -> [false]
+    end
+  end
+
+  # The off-delay timer: IEC's TOF, `.dn` its Q (decision 93).
+  defp tm_rule("tof", t, true, _elapsed, _edges) do
+    notes = if t["tt"] == 1, do: [:delay_cut], else: []
+    [{%{t | "acc" => 0, "dn" => 1, "tt" => 0, "en" => 1}, notes}]
+  end
+
+  defp tm_rule("tof", t, false, elapsed, _edges) do
+    lim = max(t["pre"], 0)
+
+    cond do
+      t["tt"] == 1 or t["en"] == 1 ->
+        acc = min(max(t["acc"], 0) + if(t["tt"] == 1, do: elapsed, else: 0), lim)
+        on = if acc < lim, do: 1, else: 0
+        notes = if on == 0 and t["tt"] == 1, do: [:delay_ended], else: []
+        [{%{t | "acc" => acc, "dn" => on, "tt" => on, "en" => 0}, notes}]
+
+      true ->
+        [{%{t | "dn" => 0, "tt" => 0, "en" => 0}, []}]
+    end
+  end
+
+  # The on-delay timer, which `f` becomes where an edit that drops it changes its kind too
+  # and a later one gives it back.
+  defp tm_rule("ton", t, true, elapsed, _edges) do
+    lim = max(t["pre"], 0)
+    acc = min(max(t["acc"], 0) + if(t["en"] == 1, do: elapsed, else: 0), lim)
+    done = if acc == lim, do: 1, else: 0
+    [{%{t | "acc" => acc, "dn" => done, "tt" => 1 - done, "en" => 1}, []}]
+  end
+
+  defp tm_rule("ton", t, false, _elapsed, _edges),
+    do: [{%{t | "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0}, []}]
+
+  # The pulse timer: IEC's TP, its pulse `.tt` (decisions 74, 75 and 94).
+  defp tm_rule("tp", t, cond, elapsed, edges) do
+    lim = max(t["pre"], 0)
+
+    for edge_ok <- Enum.uniq(edges) do
+      edge = cond and t["en"] == 0
+
+      cond do
+        t["tt"] == 1 ->
+          acc = min(max(t["acc"], 0) + elapsed, lim)
+          ignored = if edge, do: [:retrigger_ignored], else: []
+          tm_pulse(t, acc, lim, cond, ignored)
+
+        edge and edge_ok ->
+          tm_pulse(t, 0, lim, cond, [:pulsed])
+
+        cond ->
+          held = if t["dn"] == 1, do: [:pulse_held], else: []
+          {%{t | "tt" => 0, "en" => 1}, held}
+
+        true ->
+          {%{t | "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0}, []}
+      end
+    end
+  end
+
+  # The retentive timer: the conventional RTO, cleared by `r` (decisions 76, 90 and 95).
+  defp tm_rule("rto", t, cond, elapsed, _edges) do
+    lim = max(t["pre"], 0)
+    en = if cond, do: 1, else: 0
+
+    cond do
+      t["r"] == 1 ->
+        held = if cond and t["acc"] > 0, do: [:reset_held], else: []
+        [{%{t | "acc" => 0, "dn" => 0, "tt" => 0, "en" => en}, held}]
+
+      cond ->
+        kept = if t["en"] == 0 and t["acc"] > 0, do: [:retained], else: []
+        acc = min(max(t["acc"], 0) + if(t["en"] == 1, do: elapsed, else: 0), lim)
+        done = if acc == lim, do: 1, else: 0
+        notes = if done == 1 and t["dn"] == 0, do: [:rto_done], else: []
+        [{%{t | "acc" => acc, "dn" => done, "tt" => 1 - done, "en" => 1}, kept ++ notes}]
+
+      true ->
+        [{%{t | "tt" => 0, "en" => 0}, []}]
+    end
+  end
+
+  defp tm_pulse(t, acc, lim, cond, notes) do
+    cond do
+      acc < lim -> {%{t | "acc" => acc, "dn" => 0, "tt" => 1, "en" => tm_bit(cond)}, notes}
+      cond -> {%{t | "acc" => acc, "dn" => 1, "tt" => 0, "en" => 1}, notes}
+      true -> {%{t | "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0}, notes}
+    end
+  end
+
+  defp tm_bit(true), do: 1
+  defp tm_bit(false), do: 0
 end
