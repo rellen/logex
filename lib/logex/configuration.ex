@@ -83,7 +83,9 @@ defmodule Logex.Configuration do
   instance's line, citing the `ton`'s line in its own text: its file's, the program's own
   line where the program was read from none, and a block's line by the block's name where
   the block was read from none, as in "on line 5 of block `inner`", each program type's timers
-  read once (`Logex.Walk.timers/1`) and cited once, whatever its instances.
+  read once (`Logex.Walk.timers/1`) and cited once, whatever its instances. Since M3-1,
+  each counter such an instance runs, so too, after its timers (decision 72): a counter
+  sees its rung only at the task's runs (`Logex.Walk.counters/1`).
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -2411,22 +2413,25 @@ defmodule Logex.Configuration do
 
   defp timers_of({:ok, timers}, _program, memo), do: {timers, memo}
 
-  # Each timer with its citation, built once a program type: the routines down each path
-  # are read through a table of their typed tags, each routine's built once.
+  # Each timer, then each counter (M3-1, decision 72), with its citation, built once a
+  # program type: the routines down each path are read through a table of their typed
+  # tags, each routine's built once.
   defp timers_of(:error, %Program{name: name} = program, memo) do
-    {timers, _tables} =
-      program
-      |> Walk.timers()
-      |> Enum.sort()
-      |> Enum.map_reduce(%{}, fn {path, {line, _preset}}, tables ->
-        {holder, tables} = holder(String.split(path, "."), {:program, program}, tables)
-        {{path, cited(line, holder)}, tables}
-      end)
-
-    {timers, Map.put(memo, name, timers)}
+    {timers, tables} = citing(Walk.timers(program), :timer, program, %{})
+    {counters, _tables} = citing(Walk.counters(program), :counter, program, tables)
+    {timers ++ counters, Map.put(memo, name, timers ++ counters)}
   end
 
-  defp timer_warning({path, cited}, instance, program),
+  defp citing(runs, kind, program, tables),
+    do:
+      runs
+      |> Enum.sort()
+      |> Enum.map_reduce(tables, fn {path, {line, _preset}}, tables ->
+        {holder, tables} = holder(String.split(path, "."), {:program, program}, tables)
+        {{kind, path, cited(line, holder)}, tables}
+      end)
+
+  defp timer_warning({:timer, path, cited}, instance, program),
     do:
       warning(
         instance.line,
@@ -2434,6 +2439,20 @@ defmodule Logex.Configuration do
           "`#{program.name}` runs the timer `#{path}`#{cited}" <>
           ": a ton times across the task's runs, and one whose rung is true on two runs " <>
           "in a row counts the whole time between them"
+      )
+
+  # M3-1 (decision 72): a counter sees its rung only at the task's runs, so an edge that
+  # comes and goes between two is never counted, and one whose rung is the task's own
+  # trigger is true at every run and never counts at all.
+  defp timer_warning({:counter, path, cited}, instance, program),
+    do:
+      warning(
+        instance.line,
+        "`#{instance.name}` runs under the event task `#{instance.task}`, and " <>
+          "`#{program.name}` runs the counter `#{path}`#{cited}" <>
+          ": a counter sees its rung only at the task's runs, so a pulse between two runs " <>
+          "is never counted, and a rung that is the task's trigger is true at every run " <>
+          "and never counts"
       )
 
   # The routine whose text holds a timer: the program's, or a block's body down its path,

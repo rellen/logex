@@ -30,7 +30,9 @@ defmodule Logex.Compiler do
   # `:read` and `:write` must be a tag, and `:value` may be a tag or an integer literal.
   # M1-6 adds two: `{:instance, type}` is an instance of that function block type, which
   # the instruction runs, the only slot where an instance is named whole; `:preset` is a
-  # literal number of milliseconds, 0 to 2147483647. Type: `:bool`, `:dint`, or `:any`,
+  # literal number, 0 to 2147483647, of milliseconds for a timer and a count for a counter;
+  # since M3-1 an instance slot names a list where it runs instances of several types.
+  # Type: `:bool`, `:dint`, or `:any`,
   # which IEC's MOVE takes (`IN : ANY` -> `OUT : ANY`, docs/naming.md). A tag here may be
   # a member of an instance, `t1.acc`, which has the type its schema gives it (M1-6).
   # Mnemonics are matched case-insensitively and are reserved: no tag may be named after
@@ -50,6 +52,12 @@ defmodule Logex.Compiler do
     "le" => {:le, [{:value, :dint}, {:value, :dint}]},
     "ge" => {:ge, [{:value, :dint}, {:value, :dint}]},
     "ton" => {:ton, [{:instance, "ton"}, {:preset, :dint}]},
+    # M3-1: IEC's counters (decision 67). Rung power is the count input of the counter's
+    # side the mnemonic names, `cu` or `cd`, and the preset is its starting `pv`, a count.
+    # An instance slot may take several types, a list: a `ctud` is run by one of each
+    # (decision 85).
+    "ctu" => {:ctu, [{:instance, ["ctu", "ctud"]}, {:preset, :dint}]},
+    "ctd" => {:ctd, [{:instance, ["ctd", "ctud"]}, {:preset, :dint}]},
     # M2-5: `cal` runs an instance of a user function block. Its entry is a marker, not a
     # signature: the signature is the block's, built per compile from the instance's type
     # (Logex.FbType.signature/1), the instance, then the block's var_inputs and var_outputs
@@ -634,7 +642,33 @@ defmodule Logex.Compiler do
   defp shared_bit({:ons, line, [{:name, _, bit}]}, {first, diagnostics}, tags),
     do: storage_bit(Map.fetch(first, bit), Map.get(tags, bit), {bit, line}, {first, diagnostics})
 
+  # M3-1: a counter's `r` and `ld` are the first bool members logic may write, and neither
+  # is a storage bit: the counter reads it as its input, and an online edit's block list
+  # names a storage bit as a tag of the routine (decision 21).
+  # A member logic may not write, or that is no bool, was reported already.
+  defp shared_bit({:ons, line, [{:member, _, [instance, member]}]}, acc, tags),
+    do: member_bit(writable?(Map.get(tags, instance), member), {line, instance, member}, acc)
+
   defp shared_bit(_instruction, acc, _tags), do: acc
+
+  defp writable?(%Tag{type: %FbType{} = type}, member),
+    do: match?({:ok, %Member{write: true, type: :bool}}, FbType.member(type, member))
+
+  defp writable?(_tag, _member), do: false
+
+  defp member_bit(true, {line, instance, member}, {first, diagnostics}),
+    do:
+      {first,
+       [
+         diagnostic(
+           line,
+           "`ons` keeps its storage bit in a bool of its own, not in `#{instance}.#{member}`, " <>
+             "a member of `#{instance}`, which its instance reads"
+         )
+         | diagnostics
+       ]}
+
+  defp member_bit(false, _ons, acc), do: acc
 
   defp storage_bit(:error, %Tag{type: :bool}, {bit, line}, {first, diagnostics}),
     do: {Map.put(first, bit, line), diagnostics}
@@ -656,13 +690,18 @@ defmodule Logex.Compiler do
   # instance is an error at its own line, citing the first, as a second `ons` on a storage
   # bit is: two would give it two presets, and a false one resets a timer under a true one
   # every scan. One walk in rung order, so it stays linear.
+  #
+  # M3-1: a `ctud` is run by a `ctu` and a `ctd` (decision 85), so the rule is one
+  # instruction of each mnemonic an instance, and the two must give it one preset: the
+  # second to run it is an error at its own line where its preset differs from the first's,
+  # which starts the instance.
   defp presets(instructions, tags) do
-    {run, diagnostics} =
+    {_run, first, diagnostics} =
       instructions
       |> Enum.flat_map(&run/1)
-      |> Enum.reduce({%{}, []}, &preset(&1, &2, tags))
+      |> Enum.reduce({%{}, %{}, []}, &preset(&1, &2, tags))
 
-    {Enum.reduce(run, tags, fn {instance, {_line, symbol, pre}}, tags ->
+    {Enum.reduce(first, tags, fn {instance, {_line, symbol, pre}}, tags ->
        starts(tags, instance, symbol, pre)
      end), Enum.reverse(diagnostics)}
   end
@@ -681,29 +720,57 @@ defmodule Logex.Compiler do
   defp preset_of([{:int_lit, _, preset}]), do: preset
   defp preset_of(_reported), do: nil
 
-  defp preset({instance, line, symbol, pre}, {run, diagnostics}, tags),
+  defp preset({instance, _line, symbol, _pre} = runs, {run, first, diagnostics}, tags),
     do:
       run_by(
-        Map.fetch(run, instance),
+        Map.fetch(run, {instance, symbol}),
         Map.get(tags, instance),
-        {instance, line, symbol, pre},
-        {run, diagnostics}
+        runs,
+        {run, first, diagnostics}
       )
 
-  defp run_by(:error, %Tag{type: %FbType{}}, {instance, line, symbol, pre}, {run, diagnostics}),
-    do: {Map.put(run, instance, {line, symbol, pre}), diagnostics}
+  defp run_by(:error, %Tag{type: %FbType{}}, {instance, line, symbol, pre}, acc) do
+    {run, first, diagnostics} = acc
+    run = Map.put(run, {instance, symbol}, line)
 
-  defp run_by({:ok, {first, _, _}}, %Tag{}, {instance, line, symbol, _pre}, {run, diagnostics}) do
+    agreed(
+      Map.fetch(first, instance),
+      {instance, line, symbol, pre},
+      {run, Map.put_new(first, instance, {line, symbol, pre}), diagnostics}
+    )
+  end
+
+  defp run_by({:ok, first_line}, %Tag{}, {instance, line, symbol, _pre}, acc) do
+    {run, first, diagnostics} = acc
+
     message =
-      "`#{instance}` is already run by the `#{symbol}` #{where(first, line)}: " <>
+      "`#{instance}` is already run by the `#{symbol}` #{where(first_line, line)}: " <>
         "one `#{symbol}` runs #{a_runs(symbol)}"
 
-    {run, [diagnostic(line, message) | diagnostics]}
+    {run, first, [diagnostic(line, message) | diagnostics]}
   end
 
   defp run_by(:error, _not_an_instance, _run, acc), do: acc
 
+  # The second instruction to run an instance, of the other mnemonic, gives the preset the
+  # first gave. A preset that is no literal was reported already.
+  defp agreed({:ok, {first_line, other, pre}}, {instance, line, symbol, given}, acc)
+       when pre != given and is_integer(pre) and is_integer(given) do
+    {run, first, diagnostics} = acc
+
+    message =
+      "`#{instance}` already has the preset #{pre} from the `#{other}` " <>
+        "#{where(first_line, line)}: the `ctu` and the `ctd` of a ctud give it one preset, " <>
+        "so this `#{symbol}` takes #{pre} too"
+
+    {run, first, [diagnostic(line, message) | diagnostics]}
+  end
+
+  defp agreed(_first, _runs, acc), do: acc
+
   defp a_runs(:ton), do: "a timer"
+  defp a_runs(:ctu), do: "a counter's count up"
+  defp a_runs(:ctd), do: "a counter's count down"
 
   # The preset starts the member the type names, on a type the instruction runs; on any
   # other, which was reported already, there is nothing to start.
@@ -791,6 +858,7 @@ defmodule Logex.Compiler do
   defp reads(type, symbol), do: elem(Map.fetch!(FbType.rules(type).runs, symbol), 1)
 
   defp noun(:ton), do: "timer"
+  defp noun(_counter), do: "counter"
 
   # The built-in type an instruction is named after.
   defp own_type(symbol), do: FbType.builtin(Atom.to_string(symbol))
@@ -1064,12 +1132,13 @@ defmodule Logex.Compiler do
   defp not_run(nil, {:undeclared, head}, line, _name, _word),
     do: [{:undeclared, line, head, :member}]
 
-  defp not_run(nil, {:ok, %Tag{type: %FbType{name: type}} = tag}, line, name, word),
+  defp not_run(nil, {:ok, %Tag{type: %FbType{name: type} = fb} = tag}, line, name, word),
     do: [
       diagnostic(
         line,
         "`#{word}` runs an instance of a user function block, but `#{name}` is a " <>
-          "#{type}#{declared(tag)}, which `#{type} #{name}` and its preset run"
+          "#{type}#{declared(tag)}, " <>
+          run_by_own(Enum.sort(Map.keys(FbType.rules(fb).runs), :desc), name)
       )
     ]
 
@@ -1098,6 +1167,12 @@ defmodule Logex.Compiler do
           "`#{name}`"
       )
     ]
+
+  # M3-1: what runs a built-in instance, each instruction with its preset.
+  defp run_by_own([symbol], name), do: "which `#{symbol} #{name}` and its preset run"
+
+  defp run_by_own(symbols, name),
+    do: "which #{Enum.map_join(symbols, " and ", &"`#{&1} #{name}`")}, each with its preset, run"
 
   defp reserved_word(:mnemonic), do: "the instruction"
   defp reserved_word(:type), do: "the type"
@@ -1322,7 +1397,7 @@ defmodule Logex.Compiler do
   defp kind({:read, _type}), do: "a tag"
   defp kind({:write, _type}), do: "a tag"
   defp kind({:value, _type}), do: "a value"
-  defp kind({:instance, type}), do: "a #{type}"
+  defp kind({:instance, type}), do: a_type(type)
   defp kind({:preset, _type}), do: "a preset"
 
   defp found(0), do: "none"
@@ -1376,6 +1451,7 @@ defmodule Logex.Compiler do
   defp check_preset(_signature, _operands, _at, _known, diagnostics), do: diagnostics
 
   defp unit(:ton), do: "a number of milliseconds"
+  defp unit(_counter), do: "a number, a count"
 
   # The `move` is named only where it would compile, once a name in it not declared yet is
   # declared: into an instance's preset member, from a dint. One name is never both, nor
@@ -1460,6 +1536,7 @@ defmodule Logex.Compiler do
     ]
 
   defp suffix(:ton), do: " ms"
+  defp suffix(_counter), do: ""
 
   defp symbol_of(word), do: elem(Map.fetch!(@instructions, String.downcase(word)), 0)
 
@@ -1551,6 +1628,17 @@ defmodule Logex.Compiler do
   defp resolve(nil, {:ok, %Tag{type: %FbType{name: type}}}, {:instance, type}, _, _, diagnostics),
     do: diagnostics
 
+  # M3-1: a slot of several types, a counter's.
+  defp resolve(
+         nil,
+         {:ok, %Tag{type: %FbType{name: type} = fb} = tag},
+         {:instance, [_ | _] = types} = slot,
+         operand,
+         at,
+         diagnostics
+       ),
+       do: of_kind(type in types, {tag, fb}, slot, {operand, at}, diagnostics)
+
   defp resolve(
          nil,
          {:ok, %Tag{type: %FbType{} = type} = tag},
@@ -1615,6 +1703,35 @@ defmodule Logex.Compiler do
     [diagnostic(line, message) | diagnostics]
   end
 
+  defp of_kind(true, _tag, _slot, _at, diagnostics), do: diagnostics
+
+  defp of_kind(
+         false,
+         {tag, type},
+         {:instance, types},
+         {{:name, line, _}, {_, word}},
+         diagnostics
+       ),
+       do: [
+         diagnostic(
+           line,
+           "`#{word}` runs #{a_type(types)}, but `#{tag.name}` is " <>
+             "#{Declarations.instance_of(type)}#{declared(tag)}" <> both_ways(type, tag)
+         )
+         | diagnostics
+       ]
+
+  # A counter of the other kind is one declaration from one that counts both ways.
+  defp both_ways(%FbType{name: kind, body: nil}, tag) when kind in ["ctu", "ctd"],
+    do:
+      ": a #{kind} only counts #{way(kind)}; declare it `var #{tag.name} ctud` to count both " <>
+        "ways"
+
+  defp both_ways(_type, _tag), do: ""
+
+  defp way("ctu"), do: "up"
+  defp way("ctd"), do: "down"
+
   # A user block may show no member outside it (M2-5).
   defp members("", []), do: ": it has none that logic outside it may name"
   defp members("", names), do: ": its members are " <> listed(Enum.map(names, &"`#{&1}`"))
@@ -1655,6 +1772,7 @@ defmodule Logex.Compiler do
   defp example(member, tag), do: ": name one of its members, as in `#{tag.name}.#{member.name}`"
 
   defp a_type(:any), do: "a value"
+  defp a_type([_ | _] = types), do: Enum.map_join(types, " or ", &"a #{&1}")
   defp a_type(type), do: "a #{type}"
 
   defp check_member_type(diagnostics, {_access, :any}, _name, _member, _at), do: diagnostics
@@ -1664,7 +1782,10 @@ defmodule Logex.Compiler do
 
   defp check_member_type(diagnostics, {access, type}, name, member, {line, word}),
     do: [
-      diagnostic(line, "`#{word}` #{verb(access)} a #{type}, but `#{name}` is a #{member.type}")
+      diagnostic(
+        line,
+        "`#{word}` #{verb(access)} #{a_type(type)}, but `#{name}` is a #{member.type}"
+      )
       | diagnostics
     ]
 
@@ -1698,7 +1819,8 @@ defmodule Logex.Compiler do
 
   defp check_type(diagnostics, access, type, tag, {line, word}) do
     message =
-      "`#{word}` #{verb(access)} a #{type}, but `#{tag.name}` is a #{tag.type}#{declared(tag)}"
+      "`#{word}` #{verb(access)} #{a_type(type)}, but `#{tag.name}` is a " <>
+        "#{tag.type}#{declared(tag)}"
 
     [diagnostic(line, message) | diagnostics]
   end
@@ -1807,6 +1929,7 @@ defmodule Logex.Compiler do
 
   defp how(false, _slot, _name), do: ""
   defp how(true, :member, _name), do: ""
+  defp how(true, {:instance, [type | _]}, name), do: note("`var #{name} #{type}`")
   defp how(true, {:instance, type}, name), do: note("`var #{name} #{type}`")
   defp how(true, :block, _name), do: ""
   defp how(true, _slot, name), do: note("`var #{name} bool` or `var #{name} dint`")

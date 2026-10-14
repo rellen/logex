@@ -18,6 +18,9 @@ defmodule Logex.Edit.Plan do
   # earlier edit (F2, F3).
   @record %{shown: %{}, pre: %{}, scanned: nil}
 
+  # The instructions that run a built-in instance (Logex.FbType.rules/1, M3-1).
+  @runners FbType.runners()
+
   @doc false
   # The record an edit starts with, of each instance it moves.
   def record, do: @record
@@ -130,7 +133,7 @@ defmodule Logex.Edit.Plan do
       writes: Map.new(Walk.writes(program), fn {name, lines} -> {name, length(lines)} end),
       ons: ons,
       ons_rungs: Map.new(ons, fn {key, _bits} -> {key, true} end),
-      ons_bits: for({_key, bits} <- ons, bit <- bits, into: %{}, do: {bit, true}),
+      ons_bits: for({_key, bits} <- ons, bit <- bits, into: %{}, do: {bit_name(bit), true}),
       # M3-1: every built-in instance, a timer or not, with the preset of the instruction
       # that runs it and its type's rules (Logex.FbType.rules/1): the preset rules are every
       # built-in's, and the forecast and the resume its type's.
@@ -326,7 +329,7 @@ defmodule Logex.Edit.Plan do
     do:
       Enum.reduce(rungs, ons, fn {stripped, bits, cals}, ons ->
         chain = [stripped | chain]
-        ons = oned(Enum.map(bits, &(prefix <> "." <> &1)), {prefix, chain}, ons)
+        ons = oned(Enum.map(bits, &prefixed(prefix, &1)), {prefix, chain}, ons)
 
         Enum.reduce(cals, ons, fn {name, type}, ons ->
           inside({prefix <> "." <> name, type}, chain, ons, bodies)
@@ -334,13 +337,41 @@ defmodule Logex.Edit.Plan do
       end)
 
   # A rung's `ons` storage bits and the instances its `cal`s run, each newest first, from
-  # Logex.Walk's instructions of the rung.
+  # Logex.Walk's instructions of the rung. M3-1 (decision 87): an instruction that runs a
+  # built-in instance with an edge memory, a counter's `ctu` or `ctd`, has its memory among
+  # the bits, `{:edge, "boxes.cu"}`, by its type's rules (Logex.FbType.rules/1).
   defp oned_and_called(rung, tags),
     do:
       Enum.reduce(Walk.instructions([rung]), {[], []}, fn
-        {:ons, _line, [{:name, _, bit}]}, {bits, cals} -> {[bit | bits], cals}
-        instruction, {bits, cals} -> {bits, calling(instruction, tags, cals)}
+        {:ons, _line, [{:name, _, bit}]}, {bits, cals} ->
+          {[bit | bits], cals}
+
+        instruction, {bits, cals} ->
+          {edges(instruction, tags, bits), calling(instruction, tags, cals)}
       end)
+
+  defp edges({symbol, _line, [{:name, _, instance} | _]}, tags, bits),
+    do: edge(Map.get(tags, instance), symbol, instance, bits)
+
+  defp edges(_instruction, _tags, bits), do: bits
+
+  defp edge(%Tag{type: %FbType{body: nil} = type}, symbol, instance, bits),
+    do: edge_of(Map.get(FbType.rules(type).runs, symbol), instance, bits)
+
+  defp edge(_not_a_builtin, _symbol, _instance, bits), do: bits
+
+  defp edge_of({memory, _reads}, instance, bits) when is_binary(memory),
+    do: [{:edge, instance <> "." <> memory} | bits]
+
+  defp edge_of(_no_memory, _instance, bits), do: bits
+
+  # A storage bit's name, or an edge memory's path; and either under a prefix, its path
+  # inside an instance.
+  defp bit_name({:edge, path}), do: path
+  defp bit_name(bit), do: bit
+
+  defp prefixed(prefix, {:edge, path}), do: {:edge, prefix <> "." <> path}
+  defp prefixed(prefix, bit), do: prefix <> "." <> bit
 
   # M2-5: the instances a rung's `cal`s run, each with its type. A `cal` of an instance its
   # table does not hold as a user block's, which only a body built by hand can have, runs
@@ -368,6 +399,11 @@ defmodule Logex.Edit.Plan do
 
   defp bare({:cal, _line, [{:name, _, instance} | _] = operands}, tags),
     do: {:cal, Enum.map(operands, &operand/1), formals(Map.get(tags, instance))}
+
+  # M3-1 (decision 87): an instruction that runs a built-in instance is stripped of its
+  # preset, which no power on the rung reads, so a preset changed alone is the same rung.
+  defp bare({symbol, _line, [instance, _preset]}, _tags) when symbol in @runners,
+    do: {symbol, [operand(instance)]}
 
   defp bare({symbol, _line, operands}, _tags), do: {symbol, Enum.map(operands, &operand/1)}
 
@@ -530,15 +566,22 @@ defmodule Logex.Edit.Plan do
   # through nothing else: an `ons` that `to` adds, one whose rung it changes, and one whose
   # bit `from` also writes through another instruction, which may leave the bit at a value
   # that is not the power the `ons` last received.
+  #
+  # M3-1 (decision 87): a counter's edge memory, which no logic writes, is blocked where its
+  # rung is not in `from`, with no test of the writes, which count every write of its
+  # instance.
   defp blocks(from, to),
     do:
       for(
         {rung, bits} <- to.ons,
         same <- [is_map_key(from.ons_rungs, rung)],
         bit <- bits,
-        not (same and Map.get(from.writes, bit) == 1),
-        do: bit
+        not (same and written_alone?(bit, from.writes)),
+        do: bit_name(bit)
       )
+
+  defp written_alone?({:edge, _path}, _writes), do: true
+  defp written_alone?(bit, writes), do: Map.get(writes, bit) == 1
 
   # ---- the per-instance half: a switch, between two scans, and a prune --------------------
 
@@ -839,6 +882,22 @@ defmodule Logex.Edit.Plan do
 
   defp done(_to, %{"pre" => pre, "acc" => acc, "dn" => dn, "en" => en}, name, %{kind: :timer}),
     do: done(dn, en, max(acc, 0), pre, name)
+
+  # M3-1 (decision 88): a counter's done member, `q` or a ctud's `qu`, is `cv >= pv` at its
+  # next run, whatever its rung, so its forecast is certain. A ctd's `q`, `cv <= 0`, moves
+  # with no preset.
+  defp done(_to, value, name, %{kind: :counter, done: member, preset: preset})
+       when is_binary(member),
+       do: counted(Map.get(value, member), Map.get(value, "cv"), Map.get(value, preset), name)
+
+  defp done(_to, _value, _name, %{kind: :counter}), do: []
+
+  defp counted(1, cv, pv, name) when is_integer(cv) and cv < pv, do: [{:dn_drops, name, {cv, pv}}]
+
+  defp counted(0, cv, pv, name) when is_integer(cv) and cv >= pv,
+    do: [{:dn_rises, name, {cv, pv}}]
+
+  defp counted(_done, _cv, _pv, _name), do: []
 
   defp done(1, _en, acc, pre, name) when acc < pre, do: [{:dn_drops, name, {acc, pre}}]
   defp done(0, 1, acc, pre, name) when acc >= pre, do: [{:dn_rises, name, {acc, pre}}]

@@ -1338,6 +1338,197 @@ defmodule Logex.EditTest do
     end
   end
 
+  # M3-1: a counter across a switch: its `pv` by decisions 23 and 27, its forecast
+  # (decision 88), and its edge memory on decision 21's block list by path (decision 87).
+  describe "a counter across a switch (decisions 87 and 88)" do
+    @c "var_input eye bool\nvar_input rst bool\nvar_input out bool\nvar_input g bool\n" <>
+         "var_output y bool\n"
+
+    defp counter_switched(src1, src2, before, after_) do
+      v1 = c!(@c <> src1)
+      v2 = c!(@c <> src2)
+      {_, state} = run(v1, before)
+      {:ok, edit, forecast} = Edit.accept(v1, v2, state)
+      {edit, tested, report} = Edit.test(edit, state)
+      assert report == forecast
+      {_, later} = drive(v2, tested, after_)
+      {report, tested, later, edit}
+    end
+
+    @boxes "var boxes ctu\nxic rst ote boxes.r\nxic eye ctu boxes 3\nxic boxes.q ote y"
+    @counted [{0, %{}}, {10, %{"eye" => 1}}, {10, %{"eye" => 0}}, {10, %{"eye" => 1}}]
+
+    test "a preset moved keeps the count, moves `pv`, and forecasts `q` at the next run, " <>
+           "whatever its rung" do
+      down = String.replace(@boxes, "ctu boxes 3", "ctu boxes 2")
+
+      assert {[{:dn_rises, "boxes", {2, 2}}, {:preset, "boxes", {3, 2}}], tested, later, _} =
+               counter_switched(@boxes, down, @counted, [{10, %{"eye" => 0}}])
+
+      assert %{"cv" => 2, "pv" => 2, "q" => 0} = tested.env["boxes"]
+      assert %{"cv" => 2, "q" => 1} = later.env["boxes"]
+
+      up = String.replace(@boxes, "ctu boxes 3", "ctu boxes 5")
+      three = @counted ++ [{10, %{"eye" => 0}}, {10, %{"eye" => 1}}]
+
+      assert {[{:dn_drops, "boxes", {3, 5}}, {:preset, "boxes", {3, 5}}], _, later, _} =
+               counter_switched(@boxes, up, three, [{10, %{}}])
+
+      assert %{"cv" => 3, "q" => 0} = later.env["boxes"]
+
+      # A `pv` moved to the count itself leaves `q` on: no forecast.
+      four = three ++ [{10, %{"eye" => 0}}, {10, %{"eye" => 1}}]
+      to_four = String.replace(@boxes, "ctu boxes 3", "ctu boxes 4")
+
+      assert {[{:preset, "boxes", {3, 4}}], _, later, _} =
+               counter_switched(@boxes, to_four, four, [{10, %{}}])
+
+      assert %{"cv" => 4, "q" => 1} = later.env["boxes"]
+    end
+
+    test "a `pv` logic moved is kept and reported, and a ctd's preset moves no forecast" do
+      moved = "var_input more bool\n" <> @boxes <> "\nxic more move 9 boxes.pv"
+      to = String.replace(moved, "ctu boxes 3", "ctu boxes 4")
+
+      assert {[{:preset_kept, "boxes", {9, 4}}], _, _, _} =
+               counter_switched(moved, to, [{0, %{"more" => 1}}, {10, %{"more" => 0}}], [])
+
+      hopper = "var hopper ctd\nxic g ote hopper.ld\nxic eye ctd hopper 3"
+      refilled = [{0, %{"g" => 1}}, {10, %{"g" => 0}}]
+
+      assert {[{:preset, "hopper", {3, 1}}], _, _, _} =
+               counter_switched(
+                 hopper,
+                 String.replace(hopper, "hopper 3", "hopper 1"),
+                 refilled,
+                 []
+               )
+    end
+
+    test "a counter whose kind changes is refused at accept: a restart changes a type" do
+      v1 = c!(@c <> "var boxes ctu\nxic eye ctu boxes 3")
+      v2 = c!(@c <> "var boxes ctud\nxic eye ctu boxes 3")
+
+      assert {:error,
+              [
+                %Diagnostic{
+                  stage: :edit,
+                  line: 6,
+                  message:
+                    "`boxes` is a ctu in the running program and a ctud in the candidate: a " <>
+                      "tag's type changes only with a restart"
+                }
+              ]} = Edit.accept(v1, v2, Runtime.instance(v1))
+    end
+
+    test "one the edit adds while its rung is true counts nothing at the switch, and the " <>
+           "next real edge counts" do
+      assert {[{:added, "boxes", _}, {:ons_blocked, "boxes.cu", 0}], tested, later, _} =
+               counter_switched("xic eye ote y", @boxes, [{0, %{"eye" => 1}}, {10, %{}}], [
+                 {10, %{}}
+               ])
+
+      assert tested.ons_blocked == ["boxes.cu"]
+      assert %{"cv" => 0, "cu" => 1} = later.env["boxes"]
+      assert later.ons_blocked == []
+
+      {_, _, later, _} =
+        counter_switched(
+          "xic eye ote y",
+          @boxes,
+          [{0, %{"eye" => 1}}],
+          [{10, %{}}, {10, %{"eye" => 0}}, {10, %{"eye" => 1}}]
+        )
+
+      assert later.env["boxes"]["cv"] == 1
+    end
+
+    test "one whose rung the edit changes is blocked; one it leaves alone, or changes in its " <>
+           "preset alone, keeps a real edge at the switch, though a reset writes its instance" do
+      before = [{0, %{}}, {10, %{"eye" => 0, "g" => 1}}]
+      switch = [{10, %{"eye" => 1}}]
+      gated = String.replace(@boxes, "xic eye ctu", "xic eye xic g ctu")
+
+      assert {[{:ons_blocked, "boxes.cu", 0}], _, later, _} =
+               counter_switched(@boxes, gated, before, switch)
+
+      assert later.env["boxes"]["cv"] == 0
+
+      for same <- [@boxes <> "\nxic g ote y", String.replace(@boxes, "boxes 3", "boxes 7")] do
+        assert {report, %Instance{ons_blocked: []}, later, _} =
+                 counter_switched(@boxes, same, before, switch)
+
+        refute Enum.any?(report, &match?({:ons_blocked, _, _}, &1))
+        assert later.env["boxes"]["cv"] == 1
+      end
+    end
+
+    test "a ctud's two sides are blocked alone: an edit of its infeed loses no outfeed edge" do
+      stock = "var stock ctud\nxic rst ote stock.ld\nxic eye ctu stock 5\nxic out ctd stock 5"
+      gated = String.replace(stock, "xic eye ctu", "xic eye xic g ctu")
+      before = [{0, %{"rst" => 1}}, {10, %{"rst" => 0}}]
+
+      # Loaded to 5, then both edges in one scan: the infeed's is blocked, the outfeed's
+      # counts.
+      assert {[{:ons_blocked, "stock.cu", 0}], _, later, _} =
+               counter_switched(stock, gated, before, [{10, %{"eye" => 1, "g" => 1, "out" => 1}}])
+
+      assert later.env["stock"]["cv"] == 4
+    end
+
+    test "one inside a block is blocked by its path until its body runs (decision 32)" do
+      {:ok, cell} =
+        Logex.compile(
+          "function_block cell\nvar_input eye bool\nvar_output full bool\nvar c ctu\n" <>
+            "xic eye ctu c 2\nxic c.q ote full",
+          name: "cell"
+        )
+
+      {:ok, gated} =
+        Logex.compile(
+          "function_block cell\nvar_input eye bool\nvar_input g bool\nvar_output full bool\n" <>
+            "var c ctu\nxic eye xic g ctu c 2\nxic c.q ote full",
+          name: "cell"
+        )
+
+      d = "var_input on bool\nvar_input eye bool\nvar_output full bool\nvar s1 cell\n"
+      {:ok, v1} = Logex.compile(d <> "xic on cal s1 eye full", name: "m", types: [cell])
+
+      {:ok, v2} =
+        Logex.compile(d <> "xic on cal s1 eye on full", name: "m", types: [gated])
+
+      {_, state} = run(v1, [{0, %{"on" => 1}}, {10, %{"on" => 0}}])
+      {_edit, tested, report} = Edit.test(accept!(v1, v2, state), state)
+      assert {:ons_blocked, "s1.c.cu", 0} in report
+      {_, frozen} = drive(v2, tested, [{10, %{"eye" => 1}}])
+      assert frozen.ons_blocked == ["s1.c.cu"]
+      {_, ran} = drive(v2, frozen, [{10, %{"on" => 1}}])
+      assert ran.ons_blocked == []
+      assert ran.env["s1"]["c"]["cv"] == 0
+      {_, later} = drive(v2, ran, [{10, %{"eye" => 0}}, {10, %{"eye" => 1}}])
+      assert later.env["s1"]["c"]["cv"] == 1
+    end
+
+    test "one removed keeps its count, frozen, and restored takes its preset outright " <>
+           "(decision 23)" do
+      gone = "var boxes ctu\nxic boxes.q ote y"
+      back = String.replace(@boxes, "ctu boxes 3", "ctu boxes 6")
+      v1 = c!(@c <> @boxes)
+      v2 = c!(@c <> gone)
+      v3 = c!(@c <> back)
+      {_, state} = run(v1, @counted)
+
+      {program, state, _} =
+        Edit.assemble(Edit.test(accept!(v1, v2, state), state) |> elem(0), state)
+
+      {_, state} = drive(program, state, [{10, %{"eye" => 0}}, {10, %{"eye" => 1}}])
+      assert state.env["boxes"]["cv"] == 2
+      {_edit, state, report} = Edit.test(accept!(program, v3, state), state)
+      assert {:preset, "boxes", {3, 6}} in report
+      assert %{"cv" => 2, "pv" => 6} = state.env["boxes"]
+    end
+  end
+
   describe "the report" do
     test "is sorted, past the 32 keys where a map stops being" do
       many = Enum.map_join(1..40, fn i -> "var x#{i} dint #{i}\n" end)

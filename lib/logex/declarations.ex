@@ -76,8 +76,17 @@ defmodule Logex.Declarations do
       "a function block type, which runs inside a program through `#{runner(type)}`: " <>
         "an instance is of a %Logex.Program{}"
 
-  defp runner(%FbType{name: name, body: nil}) when is_binary(name), do: String.downcase(name)
+  # M3-1: a built-in's instructions (Logex.FbType.rules/1), a ctud's two, or for a type
+  # built by hand that names none, its own word.
+  defp runner(%FbType{name: name, body: nil} = type) when is_binary(name),
+    do: own_runners(FbType.rules(type), name)
+
   defp runner(_user_block), do: "cal"
+
+  defp own_runners(%{runs: runs}, _name),
+    do: runs |> Map.keys() |> Enum.sort(:desc) |> Enum.join("` and `")
+
+  defp own_runners(nil, name), do: String.downcase(name)
 
   # A type word names an elementary type or a built-in function block type, in any case,
   # or a function block the compile is given, by its exact name: an entry of `types`, a
@@ -519,8 +528,8 @@ defmodule Logex.Declarations do
 
   defp known(false, type),
     do: [
-      "unknown function block type #{inspect(type.name)}: logex has Logex.FbType.ton() " <>
-        "and the types Logex.compile/2 gives for a function block's file"
+      "unknown function block type #{inspect(type.name)}: logex has the built-in types of " <>
+        "Logex.FbType.builtins/0 and the types Logex.compile/2 gives for a function block's file"
     ]
 
   # M1-6: an instance is the program's own state. It is not supplied from outside, and the
@@ -545,11 +554,22 @@ defmodule Logex.Declarations do
         "members start where its type says"
     ]
 
-  defp instance(%Tag{name: name} = tag),
-    do: [
-      "#{label(name)} is a #{tag.type.name}: its preset is the number on its `ton` " <>
-        "instruction, as in `ton #{display(name)} 5000`, not an initial value on its declaration"
+  # M3-1: on the instruction its type's rules name, a ctud's `ctu` first.
+  defp instance(%Tag{name: name, type: type} = tag) do
+    {symbol, example} = preset_example(FbType.rules(type))
+
+    [
+      "#{label(name)} is a #{tag.type.name}: its preset is the number on its `#{symbol}` " <>
+        "instruction, as in `#{symbol} #{display(name)} #{example}`, not an initial value on " <>
+        "its declaration"
     ]
+  end
+
+  defp preset_example(%{kind: kind, runs: runs}),
+    do: {runs |> Map.keys() |> Enum.max(), preset_number(kind)}
+
+  defp preset_number(:timer), do: 5000
+  defp preset_number(:counter), do: 10
 
   defp display(name) when is_binary(name), do: name
   defp display(_name), do: "t1"

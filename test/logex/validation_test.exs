@@ -1305,25 +1305,33 @@ defmodule Logex.ValidationTest do
              "`t1` is a ton: its preset is the number on its `ton` instruction, " <>
                "as in `ton t1 5000`, not an initial value on its declaration"},
             {["t1", %{ton | name: "tof"}],
-             ~s|unknown function block type "tof": logex has Logex.FbType.ton() | <> @given},
+             ~s|unknown function block type "tof": logex has the built-in types of Logex.FbType.builtins/0 | <>
+               @given},
             {["t1", %{ton | members: []}],
-             ~s|unknown function block type "ton": logex has Logex.FbType.ton() | <> @given},
+             ~s|unknown function block type "ton": logex has the built-in types of Logex.FbType.builtins/0 | <>
+               @given},
             # A hand-built schema may hold anything, and is refused, never looked up by it.
             {["t1", %{ton | name: nil}],
-             "unknown function block type nil: logex has Logex.FbType.ton() " <> @given},
+             "unknown function block type nil: logex has the built-in types of Logex.FbType.builtins/0 " <>
+               @given},
             {["t1", %{ton | name: 5}, :var_input],
-             "unknown function block type 5: logex has Logex.FbType.ton() " <> @given},
+             "unknown function block type 5: logex has the built-in types of Logex.FbType.builtins/0 " <>
+               @given},
             # Nor is it looked into, where a name that cannot be printed would escape.
             {["t1", %{ton | name: %{}}, :var_input],
-             "unknown function block type %{}: logex has Logex.FbType.ton() " <> @given},
+             "unknown function block type %{}: logex has the built-in types of Logex.FbType.builtins/0 " <>
+               @given},
             {["t1", %{ton | name: {:a}}, :var, 5],
-             "unknown function block type {:a}: logex has Logex.FbType.ton() " <> @given},
+             "unknown function block type {:a}: logex has the built-in types of Logex.FbType.builtins/0 " <>
+               @given},
             # Whatever an unknown schema's members hold, and a struct is never taken for a
             # map of inputs.
             {["t1", %{ton | members: :junk}, :var, %{"acc" => 1}],
-             ~s|unknown function block type "ton": logex has Logex.FbType.ton() | <> @given},
+             ~s|unknown function block type "ton": logex has the built-in types of Logex.FbType.builtins/0 | <>
+               @given},
             {["t1", %{ton | members: [1]}, :var, %{"acc" => 1}],
-             ~s|unknown function block type "ton": logex has Logex.FbType.ton() | <> @given},
+             ~s|unknown function block type "ton": logex has the built-in types of Logex.FbType.builtins/0 | <>
+               @given},
             {["t1", ton, :var, %Logex.Scan{now: 0, first: true}],
              "`t1` is a ton: its preset is the number on its `ton` instruction, " <>
                "as in `ton t1 5000`, not an initial value on its declaration"}
@@ -1710,6 +1718,193 @@ xic a ton t1 7") == [
     end
   end
 
+  describe "counters (M3-1)" do
+    @counters "var c ctu\nvar h ctd\nvar k ctud\nvar t1 ton\nvar a bool\nvar n dint\n"
+
+    test "each runs a counter of its own kind or a ctud, a ctu or a ctd of the other kind " <>
+           "told how to count both ways (decisions 67 and 85)" do
+      assert source_errors(
+               @counters <>
+                 "xic a ctd c 5\nxic a ctu h 5\nxic a ton k 5\nxic a ctu t1 5\nxic a ctu a 5\n" <>
+                 "ctu n 5\nctu 5 5\nctu c"
+             ) == [
+               "line 7: `ctd` runs a ctd or a ctud, but `c` is a ctu (declared on line 1): a ctu " <>
+                 "only counts up; declare it `var c ctud` to count both ways",
+               "line 8: `ctu` runs a ctu or a ctud, but `h` is a ctd (declared on line 2): a ctd " <>
+                 "only counts down; declare it `var h ctud` to count both ways",
+               "line 9: `ton` runs a ton, but `k` is a ctud (declared on line 3)",
+               "line 10: `ctu` runs a ctu or a ctud, but `t1` is a ton (declared on line 4)",
+               "line 11: `ctu` runs a ctu or a ctud, but `a` is a bool (declared on line 5)",
+               "line 12: `ctu` runs a ctu or a ctud, but `n` is a dint (declared on line 6)",
+               "line 13: `ctu` expects a ctu or a ctud, found `5`",
+               "line 14: `ctu` expects 2 operands (a ctu or a ctud, then a preset), found 1"
+             ]
+
+      assert {:ok, program} =
+               source_compile(
+                 @counters <> "xic a ctu c 5\nxic a CTD h 0\nxic a ctu k 7\nxio a ctd k 7"
+               )
+
+      assert %{"c" => %{"pv" => 5}, "h" => %{"pv" => 0}, "k" => %{"pv" => 7}} =
+               Logex.Program.initial_env(program)
+    end
+
+    test "one `ctu` and one `ctd` an instance, a ctud's two agreeing on its preset " <>
+           "(decision 85)" do
+      assert source_errors(
+               @counters <>
+                 "xic a ctu c 5\nxic a ctu c 6\nxic a ctd h 1\nxic a ctd h 1\nxic a ctu k 5\n" <>
+                 "xic a ctd k 6\nxic a ctd k 5"
+             ) == [
+               "line 8: `c` is already run by the `ctu` on line 7: one `ctu` runs a counter's " <>
+                 "count up",
+               "line 10: `h` is already run by the `ctd` on line 9: one `ctd` runs a counter's " <>
+                 "count down",
+               "line 12: `k` already has the preset 5 from the `ctu` on line 11: the `ctu` and " <>
+                 "the `ctd` of a ctud give it one preset, so this `ctd` takes 5 too",
+               "line 13: `k` is already run by the `ctd` on line 12: one `ctd` runs a counter's " <>
+                 "count down"
+             ]
+
+      # The `ctd` first, the `ctu` second: the second is cited, in its own words.
+      assert source_errors(@counters <> "xic a ctd k 4 \nxic a ctu k 2\nxic a ctu c 1") == [
+               "line 8: `k` already has the preset 4 from the `ctd` on line 7: the `ctu` and " <>
+                 "the `ctd` of a ctud give it one preset, so this `ctu` takes 4 too"
+             ]
+    end
+
+    test "its preset is a count of 0 to 2147483647, and one from a tag is moved into `pv`" do
+      assert source_errors(
+               @counters <>
+                 "xic a ctu c n\nxic a ctd h 2147483648\nxic a ctu k zz\nxic a ctd h n"
+             ) == [
+               "line 7: `ctu` takes its preset as a number, a count, found `n`: to preset `c` " <>
+                 "from a tag, `move n c.pv` on a rung above",
+               "line 8: `ctd` takes a preset of 0 to 2147483647, found `2147483648`",
+               "line 9: `ctu` takes its preset as a number, a count, found `zz`: to preset `k` " <>
+                 "from a tag, `move zz k.pv` on a rung above",
+               "line 10: `ctd` takes its preset as a number, a count, found `n`: to preset `h` " <>
+                 "from a tag, `move n h.pv` on a rung above",
+               "line 10: `h` is already run by the `ctd` on line 8: one `ctd` runs a counter's " <>
+                 "count down"
+             ]
+
+      assert {:ok, program} = source_compile(@counters <> "xic a ctu c 2147483647")
+      assert %{"pv" => 2_147_483_647} = Logex.Program.initial_env(program)["c"]
+    end
+
+    test "nothing may follow one on its path (decision 73), read by its own done member" do
+      assert source_errors(
+               @counters <>
+                 "xic a ctu c 5 ote a\nxic a ( ctd h 5 | xic a ) ote a\nxic a ctu k 3\n" <>
+                 "xic a ctd k 3 xic a"
+             ) == [
+               "line 7: `ote a` follows `ctu c` on its path: what passes on after a `ctu` is " <>
+                 "not settled, so a `ctu` ends its path; read the counter with `xic c.q` on a " <>
+                 "rung below",
+               "line 8: `ote a` follows `ctd h` on its path: what passes on after a `ctd` is " <>
+                 "not settled, so a `ctd` ends its path; read the counter with `xic h.q` on a " <>
+                 "rung below",
+               "line 10: `xic a` follows `ctd k` on its path: what passes on after a `ctd` is " <>
+                 "not settled, so a `ctd` ends its path; read the counter with `xic k.qd` on a " <>
+                 "rung below"
+             ]
+
+      # A name that runs no counter is read by the counter's `.q`.
+      assert source_errors("var a bool\nxic a ctu a 3 ote a") == [
+               "line 2: `ctu` runs a ctu or a ctud, but `a` is a bool (declared on line 1)",
+               "line 2: `ote a` follows `ctu a` on its path: what passes on after a `ctu` is not " <>
+                 "settled, so a `ctu` ends its path; read the counter's `.q` on a rung below"
+             ]
+    end
+
+    test "logic writes only its inputs `r`, `ld` and `pv` (decision 86), and reads every " <>
+           "member" do
+      runs = "xic a ctu c 5\nxic a ctd h 5\nxic a ctu k 5\nxic a ctd k 5\n"
+
+      assert source_errors(
+               @counters <>
+                 runs <>
+                 "move 1 c.cv\nxic a ote c.q\nxic a ote c.cu\nxic a ote h.un\nxic a ote k.ov\n" <>
+                 "xic a ote k.qd\nmove 4 k.cv"
+             ) == [
+               "line 11: `move` writes `c.cv`, but logic may write only `.r` and `.pv` of a ctu",
+               "line 12: `ote` writes `c.q`, but logic may write only `.r` and `.pv` of a ctu",
+               "line 13: `ote` writes `c.cu`, but logic may write only `.r` and `.pv` of a ctu",
+               "line 14: `ote` writes `h.un`, but logic may write only `.ld` and `.pv` of a ctd",
+               "line 15: `ote` writes `k.ov`, but logic may write only `.r`, `.ld` and `.pv` of a " <>
+                 "ctud",
+               "line 16: `ote` writes `k.qd`, but logic may write only `.r`, `.ld` and `.pv` of a " <>
+                 "ctud",
+               "line 17: `move` writes `k.cv`, but logic may write only `.r`, `.ld` and `.pv` of a " <>
+                 "ctud"
+             ]
+
+      # A ctud's `r` and `ld` are two bits, so an `ote` on each is no second `ote`.
+      assert {:ok, []} =
+               {:ok,
+                source_warnings(
+                  "var_input a bool\nvar_input b bool\nvar_output y bool\nvar k ctud\n" <>
+                    runs_k() <>
+                    "xic a ote k.r\nxic b ote k.ld\nmove 3 k.pv\n" <>
+                    "xic k.qu xic k.qd xic k.ov xic k.un xic k.cu xic k.cd ge k.cv 1 ote y"
+                )}
+    end
+
+    test "a storage bit is no counter's input" do
+      assert source_errors(@counters <> "xic a ons c.r ote a\nxic a ctu c 3") == [
+               "line 7: `ons` keeps its storage bit in a bool of its own, not in `c.r`, a member " <>
+                 "of `c`, which its instance reads"
+             ]
+    end
+
+    test "a counter no `ctu` or `ctd` runs is a warning, a reset alone running none" do
+      assert source_warnings(
+               "var c ctu\nvar h ctd\nvar k ctud\nvar_input a bool\n" <>
+                 "xic a ote c.r\nxic a ote h.ld\nxic a ote k.r"
+             ) == [
+               "line 1: warning: `c` is a ctu, but no `ctu` runs it: it never counts",
+               "line 2: warning: `h` is a ctd, but no `ctd` runs it: it never counts",
+               "line 3: warning: `k` is a ctud, but no `ctu` or `ctd` runs it: it never counts"
+             ]
+    end
+
+    test "an undeclared counter is offered its declaration, and a counter's word names no tag" do
+      assert source_errors("ctu boxes 5") == [
+               "line 1: `boxes` is not declared (this program declares no tags: each is now " <>
+                 "declared before the first rung, as `var boxes ctu`)"
+             ]
+
+      assert source_errors("var ctu bool\nvar Ctd bool\nvar CTUD dint\nvar a bool\nxic a ote a") ==
+               [
+                 "line 1: `ctu` is an instruction and cannot name a tag",
+                 "line 2: `Ctd` is an instruction and cannot name a tag",
+                 "line 3: `CTUD` is a type and cannot name a tag"
+               ]
+
+      assert source_errors(@counters <> "xic a ctu k 5\ncal k a") == [
+               "line 8: `cal` runs an instance of a user function block, but `k` is a ctud " <>
+                 "(declared on line 3), which `ctu k` and `ctd k`, each with its preset, run"
+             ]
+    end
+
+    test "from Elixir, a counter takes no preset: that is the number on its instruction" do
+      for {type, word} <- [{"ctu", "ctu"}, {"ctd", "ctd"}, {"ctud", "ctu"}] do
+        tag = %Logex.Tag{
+          name: "c",
+          type: Logex.FbType.builtin(type),
+          section: :var,
+          initial: %{"pv" => 4}
+        }
+
+        assert Logex.Declarations.check(tag) == [
+                 "`c` is a #{type}: its preset is the number on its `#{word}` instruction, " <>
+                   "as in `#{word} c 10`, not an initial value on its declaration"
+               ]
+      end
+    end
+  end
+
   describe "members (M1-6)" do
     @timer "var t1 ton\nvar a bool\nvar d dint\n"
 
@@ -2070,7 +2265,8 @@ xic a ton t1 7") == [
              "`a` is a ton: its preset is the number on its `ton` instruction, " <>
                "as in `ton a 5000`, not an initial value on its declaration"},
             {[%Logex.Tag{name: "a", type: %Logex.FbType{name: nil, members: nil}, section: :var}],
-             "unknown function block type nil: logex has Logex.FbType.ton() " <> @given},
+             "unknown function block type nil: logex has the built-in types of Logex.FbType.builtins/0 " <>
+               @given},
             {[
                %Logex.Tag{
                  name: "a",
@@ -2078,7 +2274,9 @@ xic a ton t1 7") == [
                  section: :var,
                  initial: %{"acc" => 1}
                }
-             ], ~s|unknown function block type "ton": logex has Logex.FbType.ton() | <> @given},
+             ],
+             ~s|unknown function block type "ton": logex has the built-in types of Logex.FbType.builtins/0 | <>
+               @given},
             # A line marks a tag declared in source, which the warnings would then cite.
             {[%Logex.Tag{name: "a", type: :bool, section: :var, line: 2}],
              "a tag declared from Elixir has no line, got: 2"},
@@ -2125,6 +2323,8 @@ xic a ton t1 7") == [
     {:ok, ast} = Compiler.parse(tokens)
     Compiler.instructionize(ast, declared)
   end
+
+  defp runs_k, do: "xic a ctu k 5\nxic b ctd k 5\n"
 
   defp source_warnings(source) do
     {:ok, program} = source_compile(source)

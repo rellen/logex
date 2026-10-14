@@ -12,9 +12,10 @@ defmodule Logex.Walk do
   - `uses/2`: every tag operand, with what its slot does to it;
   - `writes/1`: which tags a program writes, and where;
   - `presets/1`: which built-in instances a program runs, and at what preset (M3-1);
-  - `timers/1`: which of them are timers.
+  - `timers/1`: which of them are timers;
+  - `counters/1`: which of them are counters.
 
-  `writes/1`, `presets/1` and `timers/1` know `cal`: a `cal` writes the instance it runs and each tag
+  `writes/1`, `presets/1`, `timers/1` and `counters/1` know `cal`: a `cal` writes the instance it runs and each tag
   its block's var_outputs fill, as its slots say, and they reach into each block a `cal`
   runs, at any depth, naming what its body writes or runs by its path, `s1.t1`, as an
   access path does (§4.7). Each block type's body is read once a call, however many
@@ -96,6 +97,14 @@ defmodule Logex.Walk do
   """
   def presets(%Program{} = program), do: reach(program, &preset_runs/2)
 
+  @doc """
+  Which counters `program` runs (M3-1): the part of `presets/1` whose type is a counter
+  (`Logex.FbType.rules/1`), each to `{line, preset}`, the first `ctu` or `ctd` that runs
+  it, a block's by its path. `Logex.Configuration.check/1`'s event-task warning reads it
+  (decision 72).
+  """
+  def counters(%Program{} = program), do: reach(program, &counted/2)
+
   # A routine's own facts, `own.(instructions, tags)`, a map of names to a list of lines
   # (writes) or a first run (timers); then, from the top down, each block its `cal`s run,
   # at any depth, its body's own facts by their paths. Each block type's own facts and
@@ -160,12 +169,16 @@ defmodule Logex.Walk do
     |> Map.new(fn {name, lines} -> {name, Enum.reverse(lines)} end)
   end
 
-  # The timers among the built-in instances a routine runs: those whose type keeps time.
-  defp timed(instructions, tags),
+  # The timers among the built-in instances a routine runs, those whose type keeps time,
+  # and the counters.
+  defp timed(instructions, tags), do: of_kind(instructions, tags, :timer)
+  defp counted(instructions, tags), do: of_kind(instructions, tags, :counter)
+
+  defp of_kind(instructions, tags, wanted),
     do:
       instructions
       |> preset_runs(tags)
-      |> Map.filter(fn {name, _run} -> kind(Map.get(tags, name)) == :timer end)
+      |> Map.filter(fn {name, _run} -> kind(Map.get(tags, name)) == wanted end)
 
   defp kind(%Tag{type: %FbType{} = type}), do: kind_of(FbType.rules(type))
   defp kind(_not_a_builtin), do: nil

@@ -179,6 +179,7 @@ defmodule Logex.Runtime do
   `docs/organisation.md` §4.9): accept, test, untest, assemble or cancel, each between two
   scans, its state moved by name. An instance carries two fields for it
   (`Logex.Instance`): `ons_blocked`, the storage bits whose `ons` its next scan blocks,
+  and since M3-1 the counters' edge memories whose `ctu` or `ctd` it blocks,
   which an edit's switch sets and only the runtime fills into a scan (`Logex.Scan`), and a
   scan empties but for a bit inside an instance whose body it did not run (M2-5); and
   `switched`, which an edit's switch sets and a scan clears.
@@ -201,7 +202,7 @@ defmodule Logex.Runtime do
   `Logex.Edit` moves a state to a new program by rule instead: it starts what is added,
   restarts a value that does not fit its type, refuses a type change, moves a timer's
   `.pre` to a changed preset where logic left it alone, resumes a timer it gives back
-  its `ton` from the switch, and blocks each one-shot it adds or changes until a scan runs
+  its `ton` from the switch, and blocks each one-shot and counter it adds or changes until a scan runs
   it, the next scan at the top level, where a plain swap's first scan can fire one whose
   condition was already true; inside a function block's instance it does each of these by
   the member's path (M2-5).
@@ -1402,6 +1403,34 @@ defmodule Logex.Runtime do
     {false, write(env, timer, reset(as_map(read(env, timer)), now))}
   end
 
+  # M3-1: IEC's counters (docs/naming.md, `ctu`, `ctd` and `ctud`; decisions 67 to 71 and
+  # 84 to 86). Rung power is the count input of the side the mnemonic names, `cu` for a
+  # `ctu` and `cd` for a `ctd`, and each run is IEC's body for that side, over the
+  # instance's type, which the routine's tag table names: on a `ctu` or a `ctud`, `r` puts
+  # `cv` to 0; else on a `ctd` or a `ctud`, `ld` puts it to `pv`; either clears the flags;
+  # otherwise a rising edge of the side's input, its edge memory 0 from its last run,
+  # counts, never on the instance's first scan nor where the edit's block list holds the
+  # memory (decision 87), stopping at the dint's limits with `ov` or `un` set, which stays
+  # until a reset or load. The memory then takes the rung's power, a reset or load keeping
+  # it as IEC's R_TRIG does (decision 70), and the outputs are set from `cv`. The preset
+  # operand is not read: it is the instance's starting `pv`. Nothing may follow a counter on
+  # its path (decision 73), so the power each clause hands on is never read.
+  defp evaluate({:ctu, _, [counter, _preset]}, {true, env}, scan) do
+    {true, counted(env, counter, {:up, true}, scan)}
+  end
+
+  defp evaluate({:ctu, _, [counter, _preset]}, {false, env}, scan) do
+    {false, counted(env, counter, {:up, false}, scan)}
+  end
+
+  defp evaluate({:ctd, _, [counter, _preset]}, {true, env}, scan) do
+    {true, counted(env, counter, {:down, true}, scan)}
+  end
+
+  defp evaluate({:ctd, _, [counter, _preset]}, {false, env}, scan) do
+    {false, counted(env, counter, {:down, false}, scan)}
+  end
+
   # M2-5: `cal` runs an instance of a user function block (docs/organisation.md §4.3).
   # Rung power is its EN, and its ENO is the power out. Energised, each var_input operand
   # is read into the instance, the block's body runs over the instance's own map, with the
@@ -1426,9 +1455,10 @@ defmodule Logex.Runtime do
   end
 
   # The block list names storage bits, and a storage bit is a declared bool of the routine
-  # running, always a `{:name, _, bit}`: no member is a bool that logic may write (a ton's
-  # `pre` and `acc` are dints, and no member of a user block is written from outside it).
-  # An `ons` on a member, which only a program built by hand can hold, is never blocked. A
+  # running, always a `{:name, _, bit}`: the compiler refuses an `ons` on a member, a
+  # counter's `r` or `ld`, the only bool members logic may write (M3-1). An `ons` on a
+  # member, which only a program built by hand can hold, is never blocked. A counter's edge
+  # memory is blocked by its own instruction (counted/4). A
   # bit inside an instance is in the tree under the instance's name, which a `cal` hands its
   # body (M2-5); a storage bit is never named as an instance of its routine is.
   defp blocked?({:name, _, bit}, blocked), do: is_map_key(blocked, bit)
@@ -1480,6 +1510,117 @@ defmodule Logex.Runtime do
     do: write(env, operand, Map.get(state, name, 0))
 
   defp copy_out(_input, env, _state), do: env
+
+  # M3-1: one run of a counter's side. Its kind is its tag's type in the routine's table;
+  # an instance a program built by hand holds no tag for counts as the mnemonic's own. The
+  # compiler names a counter only whole, `{:name, _, counter}`. Its
+  # edge memory is blocked where the edit's block list names it, `boxes.cu` under the
+  # counter's name in the tree, and the run is recorded as a `cal`'s is, so that the scan
+  # keeps no block of a memory whose instruction ran (decision 87).
+  defp counted(env, {:name, _, name} = counter, {side, power}, %Scan{} = scan) do
+    kind = counter_kind(Map.get(scan.tags, name), side)
+    memory = memory(side)
+    tree = as_map(Map.get(scan.ons_blocked, name))
+    blocked = scan.first or Map.get(tree, memory) == true
+    state = as_map(read(env, counter))
+    edge = power and not blocked and not closed?(Map.get(state, memory))
+    env = write(env, counter, count(kind, side, state, {power, edge}))
+    unblocked(map_size(tree) > 0, env, name)
+  end
+
+  defp counter_kind(%Tag{type: %FbType{name: kind, body: nil}}, _side)
+       when kind in ["ctu", "ctd", "ctud"],
+       do: kind
+
+  defp counter_kind(_no_tag, :up), do: "ctu"
+  defp counter_kind(_no_tag, :down), do: "ctd"
+
+  defp memory(:up), do: "cu"
+  defp memory(:down), do: "cd"
+
+  defp unblocked(true, env, name),
+    do: Map.put(env, @ran, Map.put(as_map(Map.get(env, @ran)), name, %{}))
+
+  defp unblocked(false, env, _name), do: env
+
+  @dint_max 2_147_483_647
+  @dint_min -2_147_483_648
+
+  # Whatever a hand-built env left in a counter, a well-formed one comes back: a member that
+  # is not an integer reads 0, and a bit is read as a contact.
+  defp count(kind, side, state, {power, edge}) do
+    pv = integer(Map.get(state, "pv"))
+    flags = {closed?(Map.get(state, "ov")), closed?(Map.get(state, "un"))}
+    {cv, {ov, un}} = step(kind, side, state, {integer(Map.get(state, "cv")), pv, flags, edge})
+    members(kind, state, %{"pv" => pv, "cv" => cv, "ov" => ov, "un" => un}, {side, power})
+  end
+
+  # IEC's priority, R before LD before a count (Ed 3 Table 45): a ctu has no `ld` and a
+  # ctd no `r`.
+  defp step(kind, side, state, {cv, pv, flags, edge}),
+    do: step(kind, reset?(kind, state), load?(kind, state), side, {cv, pv, flags, edge})
+
+  defp step(_kind, true, _load, _side, {_cv, _pv, _flags, _edge}), do: {0, {false, false}}
+  defp step(_kind, false, true, _side, {_cv, pv, _flags, _edge}), do: {pv, {false, false}}
+  defp step(_kind, false, false, _side, {cv, _pv, flags, false}), do: {cv, flags}
+
+  defp step(_kind, false, false, :up, {cv, _pv, {_ov, un}, true}) when cv >= @dint_max,
+    do: {cv, {true, un}}
+
+  defp step(_kind, false, false, :up, {cv, _pv, flags, true}), do: {cv + 1, flags}
+
+  defp step(_kind, false, false, :down, {cv, _pv, {ov, _un}, true}) when cv <= @dint_min,
+    do: {cv, {ov, true}}
+
+  defp step(_kind, false, false, :down, {cv, _pv, flags, true}), do: {cv - 1, flags}
+
+  defp reset?("ctd", _state), do: false
+  defp reset?(_kind, state), do: closed?(Map.get(state, "r"))
+
+  defp load?("ctu", _state), do: false
+  defp load?(_kind, state), do: closed?(Map.get(state, "ld"))
+
+  # Each kind's members, the side's memory taking the rung's power and the other side's
+  # kept.
+  defp members("ctu", state, %{"pv" => pv, "cv" => cv, "ov" => ov}, {:up, power}),
+    do: %{
+      "cu" => one(power),
+      "r" => bit(Map.get(state, "r")),
+      "pv" => pv,
+      "q" => one(cv >= pv),
+      "cv" => cv,
+      "ov" => one(ov)
+    }
+
+  defp members("ctd", state, %{"pv" => pv, "cv" => cv, "un" => un}, {:down, power}),
+    do: %{
+      "cd" => one(power),
+      "ld" => bit(Map.get(state, "ld")),
+      "pv" => pv,
+      "q" => one(cv <= 0),
+      "cv" => cv,
+      "un" => one(un)
+    }
+
+  defp members("ctud", state, %{"pv" => pv, "cv" => cv, "ov" => ov, "un" => un}, {side, power}),
+    do:
+      Map.merge(
+        %{
+          "cu" => bit(Map.get(state, "cu")),
+          "cd" => bit(Map.get(state, "cd")),
+          "r" => bit(Map.get(state, "r")),
+          "ld" => bit(Map.get(state, "ld")),
+          "pv" => pv,
+          "qu" => one(cv >= pv),
+          "qd" => one(cv <= 0),
+          "cv" => cv,
+          "ov" => one(ov),
+          "un" => one(un)
+        },
+        %{memory(side) => one(power)}
+      )
+
+  defp bit(value), do: one(closed?(value))
 
   # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is
   # complementary by construction, as `xic` and `xio` are (M1-4). Erlang's term order is

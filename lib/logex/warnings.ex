@@ -9,8 +9,9 @@ defmodule Logex.Warnings do
   - an `ons` storage bit that another instruction writes (M1-6): the one-shot then fires
     on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`);
   - a comparison of two literals (M1-6): its result never changes;
-  - a timer no `ton` runs (M1-6): it never times, a built-in instance in its type's words
-    (M3-1);
+  - a timer no `ton` runs (M1-6): it never times; since M3-1 any built-in instance no
+    instruction of its type runs, in its type's words, a counter no `ctu` or `ctd` runs:
+    it never counts;
   - an instance of a user function block no `cal` runs (M2-5): it never runs.
 
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
@@ -37,7 +38,7 @@ defmodule Logex.Warnings do
     |> Map.values()
     |> Enum.filter(& &1.line)
     |> Enum.flat_map(&about(&1, Map.get(accesses, &1.name, [])))
-    |> Kernel.++(second_otes(uses, tags, owners))
+    |> Kernel.++(second_otes(instructions, tags, owners))
     |> Kernel.++(storage_writes(uses, tags, owners))
     |> Kernel.++(Enum.flat_map(instructions, &constant/1))
     |> Enum.sort_by(& &1.line)
@@ -71,9 +72,11 @@ defmodule Logex.Warnings do
     ]
   end
 
-  defp runners(symbols), do: Enum.map_join(Enum.sort(symbols), " or ", &"`#{&1}`")
+  # A ctud's `ctu`, then its `ctd`.
+  defp runners(symbols), do: Enum.map_join(Enum.sort(symbols, :desc), " or ", &"`#{&1}`")
 
   defp does(:timer), do: "times"
+  defp does(:counter), do: "counts"
 
   # M2-5: as the timer's, saying `cal` (PLAN.md M2-5).
   defp uncalled(true, _tag), do: []
@@ -106,18 +109,30 @@ defmodule Logex.Warnings do
   # one warning. The uses are walked in rung order, each tag's first `ote` kept in a map
   # that is only looked up, so the warnings on one line come in rung order, as
   # storage_writes/3's do (B10).
-  defp second_otes(uses, tags, owners) do
+  #
+  # M3-1: an `ote` names its target whole, a member by its path, `stock.r`, since a ctud's
+  # `r` and `ld` are two bits logic writes; `Logex.Walk.uses/2` gives a member as its
+  # instance.
+  defp second_otes(instructions, tags, owners) do
     {warnings, _firsts} =
-      uses
-      |> Enum.filter(fn {_access, name, _line, symbol} ->
-        symbol == :ote and from_source?(tags, name) and not Map.has_key?(owners, name)
+      instructions
+      |> Enum.flat_map(&ote_target/1)
+      |> Enum.filter(fn {name, instance, _line} ->
+        from_source?(tags, instance) and not Map.has_key?(owners, name)
       end)
-      |> Enum.flat_map_reduce(%{}, fn {_access, name, line, _symbol}, firsts ->
+      |> Enum.flat_map_reduce(%{}, fn {name, _instance, line}, firsts ->
         later_ote(Map.fetch(firsts, name), name, line, firsts)
       end)
 
     warnings
   end
+
+  defp ote_target({:ote, line, [{:name, _, name}]}), do: [{name, name, line}]
+
+  defp ote_target({:ote, line, [{:member, _, [instance | _] = path}]}),
+    do: [{Enum.join(path, "."), instance, line}]
+
+  defp ote_target(_instruction), do: []
 
   defp later_ote(:error, name, line, firsts), do: {[], Map.put(firsts, name, line)}
   defp later_ote({:ok, first}, name, line, firsts), do: {[second_ote(name, first, line)], firsts}

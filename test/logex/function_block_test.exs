@@ -1022,7 +1022,7 @@ defmodule Logex.FunctionBlockTest do
       )
 
       raises(
-        ~s|unknown function block type "seal": logex has Logex.FbType.ton() and the types | <>
+        ~s|unknown function block type "seal": logex has the built-in types of Logex.FbType.builtins/0 and the types | <>
           "Logex.compile/2 gives for a function block's file",
         fn -> Tag.new!("s1", %{seal | body: %{seal.body | name: "other"}}) end
       )
@@ -1229,7 +1229,7 @@ defmodule Logex.FunctionBlockTest do
       made_up = %Diagnostic{stage: :validate, severity: :warning, line: 6, message: "made up"}
 
       message =
-        "unknown function block type \"seal\": logex has Logex.FbType.ton() and the types " <>
+        "unknown function block type \"seal\": logex has the built-in types of Logex.FbType.builtins/0 and the types " <>
           "Logex.compile/2 gives for a function block's file"
 
       for edited <- [

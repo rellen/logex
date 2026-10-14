@@ -3481,6 +3481,76 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  # M3-1 (decision 72): a counter an event task runs sees its rung only at the task's runs.
+  describe "a counter under an event task (M3-1), a warning" do
+    @describetag :tmp_dir
+
+    @tally_ld """
+    function_block tally
+    var_input go bool
+    var_output done bool
+    var c ctu
+    xic go ctu c 3
+    xic c.q ote done
+    """
+
+    @counted_ld """
+    var_input go bool
+    var_output done bool
+    var_output late bool
+    var s tally
+    var presses ctud
+    var t9 ton
+    cal s go done
+    xic go ctu presses 10
+    xio go ctd presses 10
+    xic go ton t9 50
+    xic t9.dn xic presses.qu ote late
+    """
+
+    @counted_logex """
+    task trip single go priority 0
+    task fast interval 10 priority 1
+    var_global go bool at panel.i.0
+    program a counted with trip
+    a.go go
+    program b counted with fast
+    b.go go
+    """
+
+    defp counting(instance, task, counter, cited),
+      do:
+        "`#{instance}` runs under the event task `#{task}`, and `counted` runs the counter " <>
+          "`#{counter}`#{cited}: a counter sees its rung only at the task's runs, so a pulse " <>
+          "between two runs is never counted, and a rung that is the task's trigger is true " <>
+          "at every run and never counts"
+
+    test "each counter of each instance an event task runs, a block's by its path, after its " <>
+           "timers, and none drawing the timer's warning",
+         %{tmp_dir: dir} do
+      for {name, text} <- [
+            {"tally.ld", @tally_ld},
+            {"counted.ld", @counted_ld},
+            {"events.logex", @counted_logex}
+          ],
+          do: File.write!(Path.join(dir, name), text)
+
+      file = Path.join(dir, "events.logex")
+      assert {:ok, config} = Configuration.compile_file(file)
+
+      assert Enum.map(config.warnings, &Diagnostic.format/1) == [
+               "#{file}: line 4: warning: `a` runs under the event task `trip`, and `counted` " <>
+                 "runs the timer `t9` on line 10 of `counted.ld`: a ton times across the task's " <>
+                 "runs, and one whose rung is true on two runs in a row counts the whole time " <>
+                 "between them",
+               "#{file}: line 4: warning: " <>
+                 counting("a", "trip", "presses", " on line 8 of `counted.ld`"),
+               "#{file}: line 4: warning: " <>
+                 counting("a", "trip", "s.c", " on line 5 of `tally.ld`")
+             ]
+    end
+  end
+
   describe "compile_file/1 (M2-2): a configuration file and its program types, on disk" do
     @describetag :tmp_dir
 

@@ -18,7 +18,10 @@ defmodule Logex.Instance do
     instance is named by its path, `s1.edge`, and is blocked at the next scan that runs its
     `ons` (decision 32): a scan in which no `cal` runs the instance's body, its `cal` false
     or none, keeps it in the list, and a switch taken after such a scan keeps it listed
-    where the program it starts still has that `ons`.
+    where the program it starts still has that `ons`. Since M3-1 it also lists counters'
+    edge memories, by path, `boxes.cu` or `s1.c.cu`: each is blocked as an `ons` bit is,
+    its `ctu` or `ctd` counting no edge at the next scan that runs it (decision 87). The
+    field keeps its name, the list naming every edge memory an edit blocks.
   - `switched` says whether an online edit has switched it to another program since its
     last scan (`Logex.Edit`): a switch sets it, and a scan clears it. It is how an edit
     knows whether the program it stops has scanned since the last switch, and so whether

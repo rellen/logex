@@ -638,7 +638,31 @@ defmodule Logex.RuntimeTest do
       assert FbType.member(ton, "DN") == :error
       assert FbType.builtin("TON") == ton
       assert FbType.builtin("tof") == nil
-      assert FbType.builtins() == %{"ton" => ton}
+
+      assert FbType.builtins() == %{
+               "ton" => ton,
+               "ctu" => FbType.ctu(),
+               "ctd" => FbType.ctd(),
+               "ctud" => FbType.ctud()
+             }
+    end
+
+    # M3-1: IEC's pins lowercased (decision 68), and the inputs only written (decision 86).
+    test "the counters' members, and which a program may name and write" do
+      for {type, members, writable} <- [
+            {FbType.ctu(), ~w(cu r pv q cv ov), ~w(r pv)},
+            {FbType.ctd(), ~w(cd ld pv q cv un), ~w(ld pv)},
+            {FbType.ctud(), ~w(cu cd r ld pv qu qd cv ov un), ~w(r ld pv)}
+          ] do
+        assert Enum.map(type.members, & &1.name) == members
+        assert Enum.map(FbType.public(type), & &1.name) == members
+        assert Enum.map(FbType.writable(type), & &1.name) == writable
+        assert FbType.builtin(String.upcase(type.name)) == type
+        assert FbType.initial(type) == Map.new(members, &{&1, 0})
+      end
+
+      assert FbType.rules(FbType.ctud()).runs == %{ctu: {"cu", "qu"}, ctd: {"cd", "qd"}}
+      assert FbType.runners() == [:ctd, :ctu, :ton]
     end
 
     test "a new instance starts where its type says, overridden member by member, and " <>
@@ -1211,9 +1235,10 @@ defmodule Logex.RuntimeTest do
 
       # M2-4: B5's one walk of a program's IR, which the compiler, Logex.Warnings,
       # Logex.Edit and Logex.Configuration read.
-      # M3-1: presets/1, every built-in instance a program runs, beside timers/1.
+      # M3-1: presets/1, every built-in instance a program runs, and counters/1 beside
+      # timers/1.
       assert Enum.sort(Logex.Walk.__info__(:functions)) ==
-               [instructions: 1, presets: 1, timers: 1, uses: 2, writes: 1]
+               [counters: 1, instructions: 1, presets: 1, timers: 1, uses: 2, writes: 1]
 
       # The two structs a host holds and builds; OE-1 gave both `ons_blocked`, and the
       # instance `switched`.
@@ -1277,13 +1302,17 @@ defmodule Logex.RuntimeTest do
       # M2-5: same?/2, the one definition of one version of a block, which a compile's
       # one-version check uses. Decision 53: held/1 and within/2, a type as the one table
       # holds it and as it reads inside the table, and check/2, user?/1 across the types a
-      # compile is given. M3-1: rules/1, runners/0 and runs?/2, each built-in type as data.
+      # compile is given. M3-1: the three counters, and rules/1, runners/0 and runs?/2, each
+      # built-in type as data.
       assert Enum.sort(Logex.FbType.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,
                builtin: 1,
                builtins: 0,
                check: 2,
+               ctd: 0,
+               ctu: 0,
+               ctud: 0,
                held: 1,
                initial: 1,
                initial: 2,

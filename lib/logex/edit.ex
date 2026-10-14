@@ -98,6 +98,22 @@ defmodule Logex.Edit do
   `.dn`, now 0 while timing with `.acc` at or past the new `.pre`, rises at that scan. No
   latch is added: `.dn` is `.acc` against `.pre`, as `ton` counts them.
 
+  **Counters** (M3-1, decisions 87 and 88). A counter's `.pv` moves by the timers' rules
+  for `.pre`, above, each move reported as `:preset` or `:preset_kept`, and it keeps its
+  count, `cv`, and its flags. After a move of the `.pv` of a counter the program started
+  runs, `:dn_drops` and `:dn_rises` say what its done member, `q` (a ctud's `qu`), now `cv
+  >= pv` against the old `.pv`, becomes at the counter's next run, whatever its rung: certain,
+  since every run sets it. A ctd's `q` is `cv <= 0`, which no `.pv` moves, so it has none.
+  No counter is resumed: it keeps no time. A counter's edge memory, `cu` or `cd`, is
+  blocked as a one-shot's storage bit is (below), by its path, `boxes.cu`: its `ctu` or
+  `ctd` counts no edge at the next scan that runs it, so a counter the edit adds while its
+  rung is true counts nothing at the switch. Each instruction's memory is listed alone, a
+  ctud's two sides each by its own rung, and the rungs are compared with the preset of
+  every counter and timer on them left out, which no power on a rung reads, so a preset
+  changed alone loses no real edge. No logic writes an edge memory, so it is listed only
+  where its rung is not in the program that last scanned. A counter inside an instance a
+  `cal` runs is blocked by its path, `s1.c.cu`, until a scan runs it (decision 32).
+
   **One-shots** (decision 21, fixes F2, F3 and F7). No switch writes a storage bit: a bit
   armed by writing 1 would echo into any rung that reads it. A switch lists bits in the
   instance's `ons_blocked` instead, and the next scan that runs each one's `ons` blocks it,
@@ -156,12 +172,12 @@ defmodule Logex.Edit do
   | `:input` | the value it reads now: the host sends its real value before the next scan | a switch |
   | `:unread` | the value it holds, 0 if the state lacks it: the host stops sending it | a switch |
   | `:initial_changed` | `{old, new}`, the two initial values; the running value is kept | a switch |
-  | `:preset` | `{from, to}`, the move of the timer's `.pre` | a switch |
-  | `:preset_kept` | `{pre, preset}`: `.pre` kept, not the preset of the `ton` that runs it | a switch |
-  | `:dn_drops`, `:dn_rises` | `{acc, pre}`, as `ton` counts them, a negative `.acc` as 0 | a switch |
+  | `:preset` | `{from, to}`, the move of the timer's `.pre`, a counter's `.pv` | a switch |
+  | `:preset_kept` | `{pre, preset}`: `.pre` (`.pv`) kept, not the preset of the instruction that runs it | a switch |
+  | `:dn_drops`, `:dn_rises` | `{acc, pre}`, as `ton` counts them, a negative `.acc` as 0; for a counter, `{cv, pv}` | a switch |
   | `:resumed` | the milliseconds not caught up: `last` moves on by that many, to `now` | a switch |
   | `:resume_undone` | the milliseconds of the resume this edit's last switch made: `last` moves back by that many | a switch |
-  | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan that runs it | a switch |
+  | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan that runs it; for a counter's edge memory, its value: its `ctu` or `ctd` counts no edge then | a switch |
   | `:held` | for an output the next program shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |
   | `:pruned` | the value it had | assemble, cancel |
 

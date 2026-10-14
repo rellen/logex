@@ -17,7 +17,8 @@ defmodule Logex.FbType do
 
   Every input and output may be read from outside, anywhere an operand of its type may go.
   `write: true` marks the members logic outside the block may also write: of a `ton`,
-  `.pre` and `.acc` (decision 9); of a user block, none (M2-5). `initial` is the member's
+  `.pre` and `.acc` (decision 9); of a counter, its inputs `r`, `ld` and `pv` (decision
+  86); of a user block, none (M2-5). `initial` is the member's
   value in a new instance; for a member whose type is itself a `%Logex.FbType{}`, it is a
   map of that nested instance's own initial values, by member name.
 
@@ -34,11 +35,12 @@ defmodule Logex.FbType do
   once, as one reached through one is. An instance's state still grows with the instances
   it nests, at any depth.
 
-  `body` is nil for the built-in `ton`. For a user function block (M2-5) it is the block's
-  compiled body, a `%Logex.Program{}` named after the block, whose tags are its members,
-  whose `blocks` holds the types of the instances it declares at any depth, whose rungs
-  `cal` runs over an instance's map, and whose `source` is the block's text. `of/1` builds
-  the type from it. A user type is valid exactly when it is the one its text compiles to
+  `body` is nil for a built-in type: the `ton` and, since M3-1, the counters `ctu`, `ctd`
+  and `ctud` (`rules/1`). For a user function block (M2-5) it is the block's compiled body,
+  a `%Logex.Program{}` named after the block, whose tags are its members, whose `blocks`
+  holds the types of the instances it declares at any depth, whose rungs `cal` runs over
+  an instance's map, and whose `source` is the block's text. `of/1` builds the type from
+  it. A user type is valid exactly when it is the one its text compiles to
   (decision 54; `user?/1`): `of/1` of the body `Logex.compile/2` gives for its `source`, a
   block of its name, the file it was read from aside, and every type its table holds the
   one its own text compiles to in turn, each under its own name, with no table of its own,
@@ -89,8 +91,60 @@ defmodule Logex.FbType do
       ]
     }
 
+  # M3-1: IEC's three counters (decision 67), their pins lowercased (decision 68; Ed 3
+  # §6.6.3.5.4, Table 45), and the conventional set's overflow and underflow flags, which
+  # IEC has none of (docs/naming.md, `ctu`). `cu` and `cd` are the count inputs, which the
+  # power into a `ctu` and a `ctd` drives, held from the last run as the edge memory; `r`,
+  # `ld` and `pv` the inputs logic writes, read at the counter's next run (decision 84);
+  # and logic writes nothing else (decision 86).
+  @doc "The built-in up counter, as `var boxes ctu` declares it (M3-1)."
+  def ctu,
+    do: %__MODULE__{
+      name: "ctu",
+      members: [
+        %Member{name: "cu", type: :bool, role: :input},
+        %Member{name: "r", type: :bool, role: :input, write: true},
+        %Member{name: "pv", type: :dint, role: :input, write: true},
+        %Member{name: "q", type: :bool, role: :output},
+        %Member{name: "cv", type: :dint, role: :output},
+        %Member{name: "ov", type: :bool, role: :output}
+      ]
+    }
+
+  @doc "The built-in down counter, as `var hopper ctd` declares it (M3-1)."
+  def ctd,
+    do: %__MODULE__{
+      name: "ctd",
+      members: [
+        %Member{name: "cd", type: :bool, role: :input},
+        %Member{name: "ld", type: :bool, role: :input, write: true},
+        %Member{name: "pv", type: :dint, role: :input, write: true},
+        %Member{name: "q", type: :bool, role: :output},
+        %Member{name: "cv", type: :dint, role: :output},
+        %Member{name: "un", type: :bool, role: :output}
+      ]
+    }
+
+  @doc "The built-in up-down counter, as `var stock ctud` declares it (M3-1)."
+  def ctud,
+    do: %__MODULE__{
+      name: "ctud",
+      members: [
+        %Member{name: "cu", type: :bool, role: :input},
+        %Member{name: "cd", type: :bool, role: :input},
+        %Member{name: "r", type: :bool, role: :input, write: true},
+        %Member{name: "ld", type: :bool, role: :input, write: true},
+        %Member{name: "pv", type: :dint, role: :input, write: true},
+        %Member{name: "qu", type: :bool, role: :output},
+        %Member{name: "qd", type: :bool, role: :output},
+        %Member{name: "cv", type: :dint, role: :output},
+        %Member{name: "ov", type: :bool, role: :output},
+        %Member{name: "un", type: :bool, role: :output}
+      ]
+    }
+
   @doc "The built-in function block types, by their lowercase type word."
-  def builtins, do: %{"ton" => ton()}
+  def builtins, do: %{"ton" => ton(), "ctu" => ctu(), "ctd" => ctd(), "ctud" => ctud()}
 
   # What each built-in type is to the instructions that run it, by its type word: the one
   # description the compiler, the walks, the warnings and the edit read, rather than match
@@ -98,16 +152,28 @@ defmodule Logex.FbType do
   # `:counter`, which keeps none; `preset` the member the number on its instruction starts;
   # `done` the member a moved preset changes at its next run; and `runs` each instruction
   # that runs it, by its IR symbol, to `{edge, reads}`: the member that is that
-  # instruction's edge memory, nil for none, and the member a rung below reads it by.
+  # instruction's edge memory, nil for none, and the member a rung below reads it by. A
+  # `ctd`'s `q` is `cv <= 0`, which no preset moves, so it has no `done`; a `ctud` is run by
+  # a `ctu` and a `ctd`, each its own side (decision 85).
   @runs %{
-    "ton" => %{kind: :timer, preset: "pre", done: "dn", runs: %{ton: {nil, "dn"}}}
+    "ton" => %{kind: :timer, preset: "pre", done: "dn", runs: %{ton: {nil, "dn"}}},
+    "ctu" => %{kind: :counter, preset: "pv", done: "q", runs: %{ctu: {"cu", "q"}}},
+    "ctd" => %{kind: :counter, preset: "pv", done: nil, runs: %{ctd: {"cd", "q"}}},
+    "ctud" => %{
+      kind: :counter,
+      preset: "pv",
+      done: "qu",
+      runs: %{ctu: {"cu", "qu"}, ctd: {"cd", "qd"}}
+    }
   }
 
   @doc """
   What a built-in function block type is to the instructions that run it (M3-1), or nil
   for a user function block: `%{kind:, preset:, done:, runs:}`. `kind` is `:timer` for a
-  type that keeps time; `preset` the member the number on its instruction starts, `"pre"`
-  for a `ton`; `done` the member a moved preset changes at its next run, `"dn"`; and `runs`
+  type that keeps time and `:counter` for a counter; `preset` the member the number on its
+  instruction starts, `"pre"` for a `ton` and `"pv"` for a counter; `done` the member a
+  moved preset changes at its next run, `"dn"`, `"q"` or a `ctud`'s `"qu"`, nil for a
+  `ctd`, whose `q` is `cv <= 0`; and `runs`
   each instruction that runs it, by its IR symbol, to `{edge, reads}`, the member that is
   that instruction's edge memory, nil for none, and the member a rung below reads it by.
   """
