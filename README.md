@@ -161,6 +161,8 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
 | `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two dints, each a tag, a member or a literal | compare — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`; none on a false rung. Two literals are a warning |
 | `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
+| `ctu boxes 12` | an up counter (`var boxes ctu`) or an up-down one (`ctud`), then a preset of 0 to 2147483647 | count up — rung power is the counter's count input `cu`. Each rising edge adds one to `.cv`, never on an instance's first scan, and `.q` is `.cv >= .pv`. Its reset `.r`, an input a rung writes, as `xic reset_pb ote boxes.r`, puts `.cv` to 0 at the counter's next run, and keeps its memory of `cu`, so a box on the eye at a reset is not counted again. At 2147483647 the count stops and `.ov` stays on until a reset. The preset is where `.pv` starts; logic writes only `.r`, `.ld` and `.pv`. One `ctu` runs a counter, and nothing may follow it on its path: read it with `xic boxes.q` on a rung below |
+| `ctd hopper 40` | a down counter (`var hopper ctd`) or an up-down one, then a preset | count down — rung power is `cd`. Its load `.ld` puts `.cv` to `.pv`; each rising edge takes one away, stopping at −2147483648 with `.un` on until a load; `.q` is `.cv <= 0`. A `ctud`, `var stock ctud`, is run by one `ctu` and one `ctd` on two rungs, with one preset, and has `.r` and `.ld`, `.qu` at `.cv >= .pv` and `.qd` at `.cv <= 0` |
 | `cal s1 a b q` | an instance of a function block, then a value for each of its var_inputs (a tag, a member or a literal of its type) and a tag for each of its var_outputs, which it writes, so not a `var_input`, in the block's declaration order | runs the instance: rung power is its EN, and passes on. True: copies `a` and `b` in, runs the block's rungs over the instance's state and copies its outputs out to `q`. False: copies nothing in or out and runs nothing, so the instance and `q` are frozen; a timer inside catches up when the block next runs. One `cal` runs an instance, and a `ton` is run by its `ton`, never by `cal` |
 | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
 
@@ -197,11 +199,14 @@ These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5) an
 change the source language. Program organisation, `PLAN.md`'s Milestone 2, has landed
 whole ("A function block" and "A configuration", below):
 - **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
-- **The other timers, counters and math** arrive as `tof tp rto res`, `ctu ctd`, `add sub
-  mul div mod abs sqrt neg` — IEC names wherever IEC names the operation. `rto`, `res` and
-  `neg` are the exceptions: the standard has no retentive timer, no standalone counter
-  reset and no negate function, so those follow rule 2 and come from a vendor.
-  `docs/naming.md` says which, per mnemonic.
+- **The rest of Milestone 3** (`PLAN.md` §3, decisions 67–89 in
+  [`docs/organisation.md`](docs/organisation.md) §7), after the counters, which have
+  landed ("A counter", below): the other timers `tof tp rto`; integer arithmetic `add sub
+  mul div mod neg abs`, `sqrt` waiting for a real type; the pulse coils `osr osf`; and a
+  forward `jmp` to an `lbl`. IEC names wherever IEC names the operation; `rto`, `neg`,
+  `osr`, `osf`, `jmp` and `lbl` are rule 2's, from a vendor, `docs/naming.md` saying which
+  as each lands. There is no `res`: a counter resets through its own `r` input, as IEC's
+  does, and how a retentive timer is cleared is M3-2's to settle.
 
 ## An example
 
@@ -348,6 +353,98 @@ and `xic go ton t1 3000 ote lamp` is refused:
 ```
 delay.ld: line 8: `ote lamp` follows `ton t1` on its path: what passes on after a `ton` is not settled, so a `ton` ends its path; read the timer with `xic t1.dn` on a rung below
 ```
+
+### A counter
+
+`boxes.ld` — a box counter on a conveyor: a photo-eye adds one for each box, the
+case-full lamp lights at three, and a button resets the count for the next case:
+
+```
+var_input eye bool
+var_input reset_pb bool
+var_output full_lamp bool
+var_output count dint
+var boxes ctu
+
+xic reset_pb ote boxes.r
+xic eye ctu boxes 3
+xic boxes.q ote full_lamp
+move boxes.cv count
+```
+
+`boxes.exs` scans it once per line, 10 ms apart:
+
+```elixir
+{:ok, boxes} = Logex.compile_file("boxes.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(boxes, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(boxes, state, 10)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  state
+end
+
+Logex.Runtime.instance(boxes)
+|> scan.("box on the eye at start", %{"eye" => 1})
+|> scan.("eye clear              ", %{"eye" => 0})
+|> scan.("box 1                  ", %{"eye" => 1})
+|> scan.("still box 1            ", %{})
+|> scan.("eye clear              ", %{"eye" => 0})
+|> scan.("box 2                  ", %{"eye" => 1})
+|> scan.("eye clear              ", %{"eye" => 0})
+|> scan.("box 3                  ", %{"eye" => 1})
+|> scan.("reset, box on the eye  ", %{"reset_pb" => 1})
+|> scan.("reset let go           ", %{"reset_pb" => 0})
+|> scan.("eye clear              ", %{"eye" => 0})
+|> scan.("box 1 of the next case ", %{"eye" => 1})
+```
+
+```
+$ mix run boxes.exs
+box on the eye at start  %{"count" => 0, "full_lamp" => 0}
+eye clear                %{"count" => 0, "full_lamp" => 0}
+box 1                    %{"count" => 1, "full_lamp" => 0}
+still box 1              %{"count" => 1, "full_lamp" => 0}
+eye clear                %{"count" => 1, "full_lamp" => 0}
+box 2                    %{"count" => 2, "full_lamp" => 0}
+eye clear                %{"count" => 2, "full_lamp" => 0}
+box 3                    %{"count" => 3, "full_lamp" => 1}
+reset, box on the eye    %{"count" => 0, "full_lamp" => 0}
+reset let go             %{"count" => 0, "full_lamp" => 0}
+eye clear                %{"count" => 0, "full_lamp" => 0}
+box 1 of the next case   %{"count" => 1, "full_lamp" => 0}
+```
+
+The counter counts rising edges of its rung, never while the eye stays blocked and never
+on the first scan, so the box already on the eye at start is not counted. Its reset is its
+`r` input, which the reset rung writes as any rung writes a bit: IEC drives a counter by
+its pins, a pin written before the counter's rung taking effect at its next run. A reset
+leaves the counter's memory of its eye alone, so the box still on the eye when the button
+was pressed is not counted again in the next case: the next box is box 1. The counter's
+members are IEC's, lowercased, in `state.env["boxes"]`: `cu`, `r` and `pv` its inputs, `q`
+and `cv` its outputs, and `ov`, set where a count would pass 2147483647, which then stops
+there until a reset. Logic writes only `r` and `pv`.
+
+A down counter, `var hopper ctd`, is IEC's CTD: its load, `ld`, puts `cv` to its preset,
+each portion takes one away, and its `q` is on at 0. An up-down counter, `var stock ctud`,
+is run by a `ctu` on one rung and a `ctd` on another, as a buffer table's infeed and
+outfeed eyes, with `r` and `ld` both:
+
+```
+xic infeed ctu stock 50
+xic outfeed ctd stock 50
+xic stock.qu ote buffer_full
+```
+
+A `ctd` on an up counter is refused, with what to declare instead:
+
+```
+line 8: `ctd` runs a ctd or a ctud, but `boxes` is a ctu (declared on line 5): a ctu only counts up; declare it `var boxes ctud` to count both ways
+```
+
+A counter in a function block whose `cal` is false is frozen with the rest of the block:
+a box that passes the eye while it is frozen is not counted. A counter under an event
+task is a configuration warning, since it sees its rung only when the task runs.
 
 ### A function block
 
@@ -1149,6 +1246,71 @@ to the runtime, to `accept/3` or in a configuration's `programs`, raises one mes
 ```
 `seal` is a function block type, which runs inside a program through `cal`: an instance is of a %Logex.Program{}
 ```
+
+A counter is edited as a timer is: its count is kept, its `.pv` moves to a changed
+preset where logic left it alone, and its edge memory is blocked as an `ons` bit is, by
+its path, where the edit adds the counter or changes its rung, so the switch counts no box
+that was not a real edge. `recount.exs` raises `boxes.ld`'s case from three to five while
+the third box is still on the eye:
+
+```elixir
+{:ok, boxes} = Logex.compile_file("boxes.ld")
+# A case of five, not three: boxes_v2.ld is boxes.ld with `ctu boxes 5`.
+{:ok, v2} = Logex.compile(File.read!("boxes_v2.ld"), name: "boxes")
+
+scan = fn state, program, label, inputs ->
+  state = Logex.Runtime.put_inputs(program, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(program, state, 10)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  state
+end
+
+state =
+  Logex.Runtime.instance(boxes)
+  |> scan.(boxes, "start      ", %{})
+  |> scan.(boxes, "box 1      ", %{"eye" => 1})
+  |> scan.(boxes, "eye clear  ", %{"eye" => 0})
+  |> scan.(boxes, "box 2      ", %{"eye" => 1})
+  |> scan.(boxes, "eye clear  ", %{"eye" => 0})
+  |> scan.(boxes, "box 3      ", %{"eye" => 1})
+
+{:ok, edit, _forecast} = Logex.Edit.accept(boxes, v2, state)
+{edit, state, report} = Logex.Edit.test(edit, state)
+IO.puts("test, with box 3 still on the eye")
+Enum.each(report, &IO.puts("        #{inspect(&1)}"))
+{boxes, state, _report} = Logex.Edit.assemble(edit, state)
+
+state
+|> scan.(boxes, "still box 3", %{})
+|> scan.(boxes, "eye clear  ", %{"eye" => 0})
+|> scan.(boxes, "box 4      ", %{"eye" => 1})
+|> scan.(boxes, "eye clear  ", %{"eye" => 0})
+|> scan.(boxes, "box 5      ", %{"eye" => 1})
+```
+
+```
+$ mix run recount.exs
+start        %{"count" => 0, "full_lamp" => 0}
+box 1        %{"count" => 1, "full_lamp" => 0}
+eye clear    %{"count" => 1, "full_lamp" => 0}
+box 2        %{"count" => 2, "full_lamp" => 0}
+eye clear    %{"count" => 2, "full_lamp" => 0}
+box 3        %{"count" => 3, "full_lamp" => 1}
+test, with box 3 still on the eye
+        {:dn_drops, "boxes", {3, 5}}
+        {:preset, "boxes", {3, 5}}
+still box 3  %{"count" => 3, "full_lamp" => 0}
+eye clear    %{"count" => 3, "full_lamp" => 0}
+box 4        %{"count" => 4, "full_lamp" => 0}
+eye clear    %{"count" => 4, "full_lamp" => 0}
+box 5        %{"count" => 5, "full_lamp" => 1}
+```
+
+The count stays at 3, `pv` moves to 5, and the report forecasts that `q`, done at 3 of 3,
+drops at the counter's next run, which it does: the lamp goes out, and the box still on
+the eye is not counted again. A counter the edit adds while its rung is true is reported
+`{:ons_blocked, "rejects.cu", 0}` and counts nothing at the switch; a preset changed alone
+blocks nothing, since no power on the rung reads it.
 
 An edit of a lone instance gives the host the duties above; one of a running plant, below,
 takes them over.

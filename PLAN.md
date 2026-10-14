@@ -17,10 +17,11 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
 §1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5, §3's M2-2 and M2-3, §3's M2-4,
-§3's M2-6 and §3's OE-2 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
+§3's M2-6, §3's OE-2 and §3's M3-1 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
 first item, M2-1, landed the same day, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11,
 and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed and landed on
-2026-10-13 (§3), and Milestone 3 was designed and decided on 2026-10-14 (§3, "Milestone 3").
+2026-10-13 (§3), and Milestone 3 was designed and decided on 2026-10-14, its first item, M3-1, landing the
+same day (§3, "Milestone 3").
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -96,6 +97,11 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   once a program type; a scan reads and writes the global itself, one copy in the
   resource, and two writers of one global are warnings. `Logex.Walk` is the one walk of a
   program's IR that the checks read.
+- IEC's counters (M3-1): `var boxes ctu`, `var hopper ctd` and `var stock ctud`, run by
+  `ctu boxes 12` and `ctd hopper 40`, a `ctud` by one of each on two rungs; a rising edge
+  counts, never on a first scan; the reset `r` and load `ld` are inputs a rung writes; the
+  count stops at the dint's limits with `ov` or `un` latched; and an online edit moves a
+  counter's `pv`, forecasts its `q` and blocks an edge it would otherwise make.
 - A staged online edit of a running configuration (OE-2): `Logex.Configuration.Edit`
   accepts a candidate configuration against the resource that runs the original, refusing
   what changes only with a restart at its line, then tests, untests, assembles or cancels
@@ -2386,6 +2392,33 @@ names it breaks. Growth tests are in reductions.
   5. the Done-when in `end_to_end_test.exs`, from text and from files on disk;
   6. the documents: README's instruction table and an example with a real run, CLAUDE.md's
      Key Files, `docs/organisation.md` §4.9's rules for the new state, and this status.
+
+  **Status: DONE — landed 2026-10-14**, as the six commits of its landing order, after the
+  design record: (0) the design record, `89dba29`; (1) the survey, `4571826`;
+  (2) the refactor that stops treating every built-in as a `ton`, `2edd634`; (3) the
+  counters, `eb7ba9c`; (4) the contract walk, `e1fb841`; (5) the Done-when, `84be063`; (6)
+  the documents, the commit after it, among them README's "A counter" and the counter in
+  "Changing a running program", whose output is a real run. 974 tests pass on Elixir
+  1.20.4 (8 of them doctests), up from 932. (2) changes no behaviour: the suite is
+  unchanged, and a differential probe of 3,000 seeded programs and 600 seeded edits gives
+  identical hashes in its tree and its parent's. (3)'s message records its mutation
+  table, every rule it adds reverted alone and the full suite judged by its exit code: 54
+  rules, 52 red at once and two survivors, each given a test and red with it. (4) and (5)
+  add no rule: (3)'s rows that touch a scan or the edit turn the walk alone red on 28 of
+  34, and the Done-when alone on 26, each of the rest red in the full suite and named in
+  its commit.
+
+  Readings and departures, each in its commit and its decision: IEC's model sent the
+  design back (decisions 67 and 68), so there is no `res`, a counter's reset and load being
+  its `r` and `ld` inputs, written by any rung and read at its next run (decision 84); a
+  `ctud` is run by a `ctu` and a `ctd` (85); `cv` is read-only, where decision 9 lets logic
+  write a timer's `.acc` (86); the conventional RES clears `.CU`, and logex keeps the edge
+  memory (70); the conventional CTUD rolls over, and logex stops (71). Two rules the design
+  did not name came with the counters: an `ons` on a counter's `r` or `ld`, the first bool
+  members logic may write, is refused, since the edit's block list names a storage bit as
+  a tag; and a second `ote` is told by its target's path, a ctud's `r` and `ld` being two
+  bits. The unknown-type message for a type given from Elixir now names
+  `Logex.FbType.builtins/0`, not `Logex.FbType.ton()`. The walk found no defect in `lib/`.
 - **M3-2 · The other timers: `tof`, `tp`, `rto`.** Each an instruction and a type word,
   as `ton` is, with the `ton`'s members `.pre .acc .dn .tt .en` (decision 68 keeps them for
   timers), in milliseconds. `tp`'s pulse is `.tt`, `.dn` coming on as it ends (decision
@@ -3034,7 +3067,7 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    M1-6, as a declared instance on the injected clock; TOF, TP, RTO, RES and the counters
    are open, and reuse its `%Logex.FbType{}`.* *(Milestone 3, decided 2026-10-14: IEC's
    counters `ctu`, `ctd` and `ctud` in M3-1, reset and loaded through their `r` and `ld`
-   inputs rather than a RES; `tof`, `tp` and `rto` in M3-2.)*
+   inputs rather than a RES, landed 2026-10-14; `tof`, `tp` and `rto` in M3-2.)*
 2. **A scan loop and I/O image.** The input image, the clock and the first-scan bit landed
    with M1-5 (`put_inputs/3`, `%Logex.Scan{}`). The scheduler landed with M2-1:
    `Logex.Runtime.cycle/3` steps a configuration's resource by the time the host says has

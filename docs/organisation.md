@@ -1332,6 +1332,24 @@ instance already holds around the new piece:
 - an event task's trigger is a resource's state, not a tag's: its rule is in
   `Logex.Runtime`'s one-rule section (M2-6, landed).
 
+*Milestone 3's state* (decided 2026-10-14, decisions 67–89; M3-1's counters landed the same
+day, and `Logex.Runtime`, `Logex.Instance` and `Logex.Edit` give their rules as built). A
+counter, `ctu`, `ctd` or `ctud`, is a built-in function block instance, state of the
+program instance that holds it, as a timer is:
+
+| Piece | A new instance | A scan | `restart/3` | A switch: kept | added | removed, then restored |
+|---|---|---|---|---|---|---|
+| `cv`, `ov`, `un` | 0 | IEC's body for the side its `ctu` or `ctd` runs (decisions 69–71) | 0 | kept | 0, by `initial_env/1` | frozen, then kept |
+| `pv` | the instruction's preset | written by logic, read at the next run | the preset | moved where logic left the old preset, else kept (decisions 23, 27), reported `:preset`, `:preset_kept`, with `q`'s forecast (decision 88) | the preset | frozen, then the new preset outright (decision 23) |
+| `r`, `ld` | 0 | written by logic, read at the next run (decision 84) | 0 | kept | 0 | frozen, then kept |
+| `cu`, `cd`, the edge memories | 0 | the side's rung power | 0 | kept; blocked by path where its rung changed, the presets left out (decision 87) | 0, blocked | frozen, then blocked |
+| `q`, `qu`, `qd` | 0 | set from `cv` at every run | 0 | kept, set at the next run | 0 | frozen, then set at the next run |
+
+In a block whose `cal` is false everything is held, and an edge that comes and goes while
+it is frozen is not counted (decision 89); a blocked memory there stays listed until a
+scan runs it (decision 32). A counter keeps no time, so nothing resumes it, from a switch
+or from aside. A type change, `ctu` to `ctud` among them, is refused at accept.
+
 *Milestone 2's state* (designed 2026-10-02, §4.10; M2-1's pieces landed with it on
 2026-10-02, and `Logex.Runtime`'s moduledoc gives their rules as built, and M2-5's on
 2026-10-04, whose rules `Logex.Program.initial_env/1`, `Logex.Instance` and
@@ -3292,7 +3310,7 @@ alternative the record keeps.
     putting `cv` to 0; `ctd` counts down, its load `ld` putting `cv` to `pv`, and its `q`
     is on when `cv <= 0`; `ctud` counts both ways, `qu` on when `cv >= pv` and `qd` when
     `cv <= 0`, with both `r` and `ld`. Each is a type word, `var hopper ctd`, and a change
-    of kind is a type change, which needs a restart.
+    of kind is a type change, which needs a restart. *(Landed with M3-1, 2026-10-14.)*
 68. **What a counter's members are called (M3-1),** a follow-up to 67. The design gave the
     conventional COUNTER's members, `.pre .acc .dn` with `.cu .cd .ov .un`, beside the
     timer's `.pre .acc .dn`.
@@ -3304,7 +3322,7 @@ alternative the record keeps.
     the count inputs, and the reset and load as inputs, `r` and `ld`. IEC has no overflow
     flag, so they come from the vendors by `docs/naming.md`'s rule 2: `ov` and `un`, the
     conventional set's, the only family that has them (decision 71). Logex's timers keep
-    `.pre .acc .dn`: a counter reads `xic boxes.q`, a timer `xic t1.dn`.
+    `.pre .acc .dn`: a counter reads `xic boxes.q`, a timer `xic t1.dn`. *(Landed with M3-1, 2026-10-14.)*
 69. **The first scan, for everything edge-driven (M3-1, M3-2, M3-4).** A box is already
     on the photo-eye when the controller starts.
     - Not counted: the counter waits for the next box, as the one-shot `ons` already
@@ -3316,7 +3334,7 @@ alternative the record keeps.
     an instance's first scan** since it started or restarted, `ons`, `ctu` and `ctd` now,
     `tp` (decision 75), `osr` and `osf` when they land. It is the conventional prescan's
     for a counter, which sets `.CU` true *"to prevent invalid increments during the first
-    program scan"* (general instructions ref., CTU, p.99).
+    program scan"* (general instructions ref., CTU, p.99). *(Landed with M3-1 for the counters, 2026-10-14.)*
 70. **A reset or load while the count input is high (M3-1).** The operator presses
     "reset batch" while a box is still on the photo-eye.
     - The box is not counted again: after the reset the count shows 0, and the next box to
@@ -3329,7 +3347,7 @@ alternative the record keeps.
     keep it, an R_TRIG called before the reset is tested (MatIEC `lib/counter.txt`). The
     conventional RES clears the counter's status bits, its `.CU` and `.CD` among them
     (general instructions ref., RES, pp.107–108), so a box on the eye would count again
-    there.
+    there. *(Landed with M3-1, 2026-10-14.)*
 71. **A counter at the dint's limit (M3-1).** A counter reaches its largest possible
     number, a little over two billion.
     - It stops there and raises an overflow flag, which stays on until someone resets it;
@@ -3341,7 +3359,7 @@ alternative the record keeps.
     at −2147483648 a count down subtracts nothing and sets `un`. Each flag stays on until a
     reset or a load: `r` clears `ov` on a `ctu`, `ld` clears `un` on a `ctd`, and either
     clears both on a `ctud`. IEC bounds its bodies by `PVmax` and `PVmin`, whose values are
-    *"Implementer specific"* (Ed 3 Table 45 NOTE); logex's are the dint's.
+    *"Implementer specific"* (Ed 3 Table 45 NOTE); logex's are the dint's. *(Landed with M3-1, 2026-10-14.)*
 72. **A counter under an event task (M3-1).** The e-stop's own event task counts how many
     times the e-stop was pressed. The task runs only when the e-stop switches on, so the
     counter only ever sees "pressed", never a new press, and its count stays at 0.
@@ -3351,7 +3369,7 @@ alternative the record keeps.
     *Recommend warning.* Adopted: a counter a program instance runs, at any depth, under a
     task with a `single`, alone or with an interval, is a warning on the configuration's
     `warnings`, as M2-6 warns for a `ton`, citing the counter's instruction. A one-shot
-    under an event task is still not warned about.
+    under an event task is still not warned about. *(Landed with M3-1, 2026-10-14.)*
 73. **What follows a counter or timer on its line (M3-1, M3-2).** "Photo-eye, then counter,
     then lamp" on one line, rather than the lamp on the next line worked by the counter's
     done bit.
@@ -3362,7 +3380,7 @@ alternative the record keeps.
     *Recommend not allowed, for now.* Adopted: nothing may follow a `ctu`, a `ctd` or any
     timer on its path. Refusing keeps either reading open to a later change that breaks no
     program. For the record, the conventional CTU and CTD set rung-condition-out to
-    rung-condition-in (general instructions ref., pp.95 and 99).
+    rung-condition-in (general instructions ref., pp.95 and 99). *(Landed with M3-1 for the counters, 2026-10-14.)*
 74. **Which signal is a pulse timer's pulse (M3-2).** A horn should sound for 3 seconds
     when a fault appears.
     - Its "timing" bit, `.tt`, on for the 3 seconds, with `.dn` coming on when the pulse
@@ -3468,7 +3486,7 @@ alternative the record keeps.
     reset button is held the count stays at 0, and a box that arrives meanwhile is not
     counted (IEC's R before the count); the reset shows on the scan the button is pressed
     where its rung comes above the counter's, and on the next where it comes below, as the
-    rule says.
+    rule says. *(Landed with M3-1, 2026-10-14.)*
 85. **A `ctud`'s two count inputs, from two rungs (M3-1).** IEC's CTUD is one call with
     both inputs; a ladder rung has one power flow.
     - Two instructions on one `ctud`: `xic infeed ctu stock 50` on one rung drives its
@@ -3484,7 +3502,7 @@ alternative the record keeps.
     in one scan net zero, as IEC's `NOT (CU AND CD)` gives; at a limit the side that would
     leave the dint is refused and flagged, and the other counts. `ctud` is a type word
     only, and a `ctu` or `ctd` on a counter of the other kind, or two `ctu`s on one, is
-    refused.
+    refused. *(Landed with M3-1, 2026-10-14.)*
 86. **Which members logic may write (M3-1).** IEC's outputs are read, never written, from
     outside a block.
     - The inputs `r`, `ld` and `pv`; never `cv`, `q`, `qu`, `qd`, `ov` or `un`, which
@@ -3492,8 +3510,7 @@ alternative the record keeps.
     - or `cv` too, as decision 9 lets logic write a timer's `.acc`.
 
     *Taken: the inputs only.* The count changes through `r` and `ld`, which also clear the
-    flags, so no write can leave `ov` on at a count of 3. Decision 9 stands for timers.
-   
+    flags, so no write can leave `ov` on at a count of 3. Decision 9 stands for timers. *(Landed with M3-1, 2026-10-14.)*
 87. **A counter across an online edit (M3-1),** from the spike: a counter an edit adds
     while its rung is true counted at once, and the block list blocked a preset-only
     change.
@@ -3506,14 +3523,14 @@ alternative the record keeps.
     - or a list and a report kind of their own.
 
     *Taken: decision 21's list.* A `ctud` blocks each side alone, so an edit of its infeed
-    rung loses no outfeed edge.
+    rung loses no outfeed edge. *(Landed with M3-1, 2026-10-14.)*
 88. **A counter's forecast after its preset moves (M3-1).** A `.pv` moved by decisions 23
     and 27 changes `q` (`qu` on a `ctud`) at the counter's next run, whatever its rung.
     - Report it as `:dn_drops` and `:dn_rises`, read as "the done output", `{cv, pv}`;
     - or two new report kinds.
 
     *Taken: the existing kinds,* documented as a counter's `q` where the instance is a
-    counter, so a host that knows them knows a counter's.
+    counter, so a host that knows them knows a counter's. *(Landed with M3-1, 2026-10-14.)*
 89. **A counter in a frozen block (M3-1).** A block whose `cal` is false holds everything
     in it (decision 8): a counter there neither counts nor sees its rung, so a box that
     comes and goes while the block is frozen is never counted, and one still on the eye
@@ -3522,7 +3539,7 @@ alternative the record keeps.
     - Keep decision 8's freeze, and say so where a counter is described;
     - or run a frozen block's counters.
 
-    *Taken: the freeze,* one rule for everything in a block.
+    *Taken: the freeze,* one rule for everything in a block. *(Landed with M3-1, 2026-10-14.)*
 
 ---
 
