@@ -314,13 +314,20 @@ defmodule LogexTest do
 
     # Counted in reductions rather than time, so the bound holds on any machine. At 500
     # and 2,000 tags a linear compile grows about 4x; a pass that walks every use for
-    # every tag, as the warnings first did, grows about 14x. Over 96 runs of the suite on
-    # Elixir 1.20.4, 32 alone, 32 two at once and 32 four at once, it grew 4.34x to 5.64x,
-    # the highest four at once; alone, 4.34x to 4.92x. The bound is a fifth above the
-    # highest, where 6, the bound it had, failed now and then with suites running at once.
+    # every tag, as the warnings first did, grows about 14x, 13.5x to 13.7x at M3-3's
+    # review. What takes the figure above 4x is garbage collection, and a busy machine
+    # takes it further. With a heap so large that none runs, the compile grows 4.04x to
+    # 4.09x; with it, about 4.5x in a VM of its own, since the 2,000 tags' 65 major
+    # collections, to 500's 13, each copy a heap that holds the program built so far; and
+    # a busy VM charges the same collections more reductions, so that in the suite the
+    # count at 2,000 tags rises with the time the compile takes and 500's barely moves.
+    # Over 96 runs of the suite when 6, the bound it had, failed now and then, it grew
+    # 4.34x to 5.64x, which set 6.8; over 48 at M3-3's review, 16 alone and 32 four at
+    # once, 4.55x to 6.84x, the highest four at once, and the review's own runs reached
+    # 7.29x. The bound is a fifth above that highest.
     test "compiling stays linear in the program's size" do
       ratio = reductions_to_compile(2000) / reductions_to_compile(500)
-      assert ratio < 6.8, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
+      assert ratio < 8.75, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
     end
 
     # And in its depth. At 500 and 8,000 levels a linear compile grows about 16x. A walk

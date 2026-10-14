@@ -2623,7 +2623,19 @@ names it breaks. Growth tests are in reductions.
   drops out of and a type's is the same in: 0.99x to 1.31x over 48 runs, 16 alone and 32
   four at once, bound 1.57; a body read again for each instance gives 3.87x, its
   instructions alone walked again 3.5x, and the type's body read eight times, which
-  failed the old ratio at 1.77x, 1.02x to 1.13x. The suite is at 1115 tests (8 doctests).
+  failed the old ratio at 1.77x, 1.02x to 1.13x. `logex_test.exs`'s "compiling stays
+  linear in the program's size" reached 6.88x at main and 7.29x at the tip with four
+  suites at once, over its bound of 6.8, and 6.84x in the 48 runs taken to re-measure it.
+  What drives it is garbage collection, not the compile: with a heap so large that none
+  runs, compiling 4x the tags takes 4.04x to 4.09x the reductions, at `d5df77e`, at main
+  and at the tip alike; collection, 65 major ones at 2,000 tags to 13 at 500, each copying
+  a heap that holds the program built so far, takes it to about 4.5x in a VM of its own;
+  and a busy VM charges the same collections more, 5% more beside eight busy processes, so
+  in the suite the count at 2,000 tags rises with the compile's time, 28.4M reductions at
+  2.0 s to 44.3M at 10.8 s, while 500's stays at 6.2M to 6.7M. With nothing in logex to
+  fix, the bound is now a fifth above the highest figure seen, the review's 7.29x: 8.75,
+  which the warnings' old quadratic pass, 13.5x to 13.7x, still fails. The suite is at
+  1115 tests (8 doctests).
 - **M3-4 · The coil one-shots: `osr`, `osf`.** IEC's transition-sensing coils in the
   conventional form, a storage bit and a pulse bit (decision 80), which pass on the power
   they receive; each storage bit under every rule an `ons` bit has, on decision 21's block
