@@ -1814,8 +1814,52 @@ xic a ton t1 7") == [
              ]
     end
 
+    test "a tp runs a tp only, once, its preset in ms, nothing after it on its path, read " <>
+           "by its pulse `.tt` (decisions 73 and 74)" do
+      assert source_errors(
+               "var h tp\nvar f tof\nvar a bool\nvar n dint\n" <>
+                 "xic a tp f 5\nxic a tof h 5\nxic a tp h 5\nxic a tp h 6\nxic a tp h n\n" <>
+                 "xic a tp h 2147483648\nxic a tp h 5 ote a\nxic a ote h.tt\nxic a ote h.dn\n" <>
+                 "xic a tp a 1 xic a"
+             ) == [
+               "line 5: `tp` runs a tp, but `f` is a tof (declared on line 2)",
+               "line 6: `tof` runs a tof, but `h` is a tp (declared on line 1)",
+               "line 8: `h` is already run by the `tp` on line 7: one `tp` runs a timer",
+               "line 9: `tp` takes its preset as a number of milliseconds, found `n`: to preset " <>
+                 "`h` from a tag, `move n h.pre` on a rung above",
+               "line 9: `h` is already run by the `tp` on line 7: one `tp` runs a timer",
+               "line 10: `tp` takes a preset of 0 to 2147483647 ms, found `2147483648`",
+               "line 10: `h` is already run by the `tp` on line 7: one `tp` runs a timer",
+               "line 11: `h` is already run by the `tp` on line 7: one `tp` runs a timer",
+               "line 11: `ote a` follows `tp h` on its path: what passes on after a `tp` is not " <>
+                 "settled, so a `tp` ends its path; read the timer with `xic h.tt` on a rung below",
+               "line 12: `ote` writes `h.tt`, but logic may write only `.pre` and `.acc` of a tp",
+               "line 13: `ote` writes `h.dn`, but logic may write only `.pre` and `.acc` of a tp",
+               "line 14: `tp` runs a tp, but `a` is a bool (declared on line 3)",
+               "line 14: `xic a` follows `tp a` on its path: what passes on after a `tp` is not " <>
+                 "settled, so a `tp` ends its path; read the timer's `.tt` on a rung below"
+             ]
+
+      assert source_warnings("var h tp\nvar_input a bool\nxic a move 4 h.pre") == [
+               "line 1: warning: `h` is a tp, but no `tp` runs it: it never times"
+             ]
+
+      assert source_errors("tp horn_pulse 5") == [
+               "line 1: `horn_pulse` is not declared (this program declares no tags: each is now " <>
+                 "declared before the first rung, as `var horn_pulse tp`)"
+             ]
+
+      assert source_errors("var tp bool\nvar Tp dint\nvar a bool\nxic a ote a") == [
+               "line 1: `tp` is an instruction and cannot name a tag",
+               "line 2: `Tp` is an instruction and cannot name a tag"
+             ]
+
+      assert {:ok, program} = source_compile("var h tp\nvar a bool\nxic a TP h 3000")
+      assert %{"h" => %{"pre" => 3000, "tt" => 0}} = Logex.Program.initial_env(program)
+    end
+
     test "from Elixir, a timer takes no preset: that is the number on its instruction" do
-      for type <- ~w(tof) do
+      for type <- ~w(tof tp) do
         tag = %Logex.Tag{
           name: "f",
           type: Logex.FbType.builtin(type),

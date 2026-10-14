@@ -36,7 +36,7 @@ defmodule Logex.FbType do
   it nests, at any depth.
 
   `body` is nil for a built-in type: the `ton`, since M3-1 the counters `ctu`, `ctd` and
-  `ctud`, and since M3-2 the timer `tof` (`rules/1`). For a user function block (M2-5) it is the block's compiled body,
+  `ctud`, and since M3-2 the timers `tof` and `tp` (`rules/1`). For a user function block (M2-5) it is the block's compiled body,
   a `%Logex.Program{}` named after the block, whose tags are its members, whose `blocks`
   holds the types of the instances it declares at any depth, whose rungs `cal` runs over
   an instance's map, and whose `source` is the block's text. `of/1` builds the type from
@@ -97,6 +97,12 @@ defmodule Logex.FbType do
   @doc "The built-in off-delay timer, as `var run_on tof` declares it (M3-2)."
   def tof, do: %{ton() | name: "tof"}
 
+  # M3-2: the pulse timer (docs/naming.md, `tp`), with the `ton`'s members (decision 68):
+  # its pulse is `.tt`, `.dn` set as the pulse ends while the rung holds (decision 74), and
+  # `.en` the rung's power at its last run, its edge memory.
+  @doc "The built-in pulse timer, as `var horn_pulse tp` declares it (M3-2)."
+  def tp, do: %{ton() | name: "tp"}
+
   # M3-1: IEC's three counters (decision 67), their pins lowercased (decision 68; Ed 3
   # §6.6.3.5.4, Table 45), and the conventional set's overflow and underflow flags, which
   # IEC has none of (docs/naming.md, `ctu`). `cu` and `cd` are the count inputs, which the
@@ -151,7 +157,14 @@ defmodule Logex.FbType do
 
   @doc "The built-in function block types, by their lowercase type word."
   def builtins,
-    do: %{"ton" => ton(), "tof" => tof(), "ctu" => ctu(), "ctd" => ctd(), "ctud" => ctud()}
+    do: %{
+      "ton" => ton(),
+      "tof" => tof(),
+      "tp" => tp(),
+      "ctu" => ctu(),
+      "ctd" => ctd(),
+      "ctud" => ctud()
+    }
 
   # What each built-in type is to the instructions that run it, by its type word: the one
   # description the compiler, the walks, the warnings and the edit read, rather than match
@@ -160,8 +173,8 @@ defmodule Logex.FbType do
   # `done` the member a moved preset changes at its next run; `times` the member whose 1
   # says a timer is adding time between its runs, which an edit's resume reads, nil for a
   # counter; `forecast` how a moved preset's effect on `done` is forecast, by the rule the
-  # type keeps (M3-2): `:on_delay` for a `ton`, `:off_delay` for a `tof`, `:count` for a
-  # counter; and `runs` each
+  # type keeps (M3-2): `:on_delay` for a `ton`, `:off_delay` for a `tof`, `:pulse` for a
+  # `tp`, `:count` for a counter; and `runs` each
   # instruction that runs it, by its IR symbol, to `{edge, reads}`: the member that is that
   # instruction's edge memory, nil for none, and the member a rung below reads it by. A
   # `ctd`'s `q` is `cv <= 0`, which no preset moves, so it has no `done`; a `ctud` is run by
@@ -185,6 +198,16 @@ defmodule Logex.FbType do
       times: "tt",
       forecast: :off_delay,
       runs: %{tof: {nil, "dn"}}
+    },
+    # M3-2: a `tp` adds time while its pulse runs, `.tt`, which a rung below reads, and its
+    # rising edge is read from `.en`, which an edit's block list holds (decision 94).
+    "tp" => %{
+      kind: :timer,
+      preset: "pre",
+      done: "dn",
+      times: "tt",
+      forecast: :pulse,
+      runs: %{tp: {"en", "tt"}}
     },
     "ctu" => %{
       kind: :counter,
@@ -219,9 +242,10 @@ defmodule Logex.FbType do
   the number on its instruction starts, `"pre"` for a `ton` and `"pv"` for a counter;
   `done` the member a moved preset changes at its next run, `"dn"`, `"q"` or a `ctud`'s
   `"qu"`, nil for a `ctd`, whose `q` is `cv <= 0`; `times` the member whose 1 says a timer
-  adds time between its runs, `"en"` for a `ton`, `"tt"` for a `tof`, nil for a counter
-  (M3-2); `forecast` the rule a moved preset's forecast follows, `:on_delay` for a `ton`,
-  `:off_delay` for a `tof` and `:count` for a counter (M3-2); and `runs`
+  adds time between its runs, `"en"` for a `ton`, `"tt"` for a `tof` and a `tp`, nil for a
+  counter (M3-2); `forecast` the rule a moved preset's forecast follows, `:on_delay` for a
+  `ton`, `:off_delay` for a `tof`, `:pulse` for a `tp` and `:count` for a counter (M3-2);
+  and `runs`
   each instruction that runs it, by its IR symbol, to `{edge, reads}`, the member that is
   that instruction's edge memory, nil for none, and the member a rung below reads it by.
   """

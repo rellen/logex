@@ -86,7 +86,7 @@ defmodule Logex.Edit do
     timers as they were. A resume an earlier edit's last switch made is not given back;
   - *resume:* a timer the program started runs and the program stopped does not, timing
     when it last ran (its `last` before `now`, and `.en` 1 for a `ton`, `.tt` 1 for a `tof`
-    in its delay, M3-2), resumes from the switch, where the
+    in its delay or a `tp` in its pulse, M3-2), resumes from the switch, where the
     program stopped is the one that last scanned (as for one-shots, below): its `last`
     becomes `now`, so the time no `ton` ran it is not caught up. Where the program started
     last scanned, a test and an untest with no scan between, it left the timer as it is.
@@ -104,7 +104,13 @@ defmodule Logex.Edit do
   changes with its `.pre` only during its delay, `.tt` 1: where `.acc` is at or past the
   new `.pre` there, `:dn_drops` says `.dn` drops at its next run, unless that run finds its
   rung true, which ends the delay with `.dn` set. A `tof` blocks nothing: an edit that turns
-  its rung false starts its delay, `.dn` held through it, as the rung falling would.
+  its rung false starts its delay, `.dn` held through it, as the rung falling would. A `tp`'s
+  pulse changes with its `.pre` only while it runs, `.tt` 1: where `.acc` is at or past
+  the new `.pre` there, `:dn_rises` says the pulse ends at its next run, `.tt` dropping and
+  `.dn` rising, unless that run finds its rung false, when `.dn` stays 0. A `tp`'s edge
+  memory, `.en`, is blocked as a counter's is (below), by its path, `horn_pulse.en`, so a
+  `tp` the edit adds while its rung is true, or whose rung it changes, starts no pulse at
+  the switch (decision 94).
 
   **Counters** (M3-1, decisions 87 and 88). A counter's `.pv` moves by the timers' rules
   for `.pre`, above, each move reported as `:preset` or `:preset_kept`, and it keeps its

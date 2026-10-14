@@ -1685,6 +1685,109 @@ defmodule Logex.EditTest do
       assert %{"dn" => 1, "tt" => 1, "acc" => 10} = later.env["r"]
     end
 
+    @horn "var h tp\nxic go tp h 30\nxic h.tt ote y"
+    @pulsing [{0, %{}}, {10, %{"go" => 1}}, {10, %{}}, {10, %{}}]
+
+    test "a tp's `.pre` moved during its pulse forecasts its end at its next run, `.dn` " <>
+           "rising unless that run finds its rung false (decision 94)" do
+      shorter = String.replace(@horn, "tp h 30", "tp h 15")
+
+      assert {[{:dn_rises, "h", {20, 15}}, {:preset, "h", {30, 15}}], tested, later, _} =
+               timer_switched(@horn, shorter, @pulsing, [{10, %{}}])
+
+      assert %{"acc" => 20, "tt" => 1, "dn" => 0} = tested.env["h"]
+      assert %{"acc" => 15, "tt" => 0, "dn" => 1} = later.env["h"]
+
+      assert {_, _, later, _} = timer_switched(@horn, shorter, @pulsing, [{10, %{"go" => 0}}])
+      assert %{"acc" => 0, "tt" => 0, "dn" => 0} = later.env["h"]
+
+      exact = String.replace(@horn, "tp h 30", "tp h 20")
+
+      assert {[{:dn_rises, "h", {20, 20}}, {:preset, "h", {30, 20}}], _, _, _} =
+               timer_switched(@horn, exact, @pulsing, [])
+
+      # Short of the new preset, or once the pulse has ended, no forecast and no new pulse.
+      longer = String.replace(@horn, "tp h 30", "tp h 40")
+
+      assert {[{:preset, "h", {30, 40}}], _, _, _} =
+               timer_switched(@horn, longer, @pulsing, [])
+
+      ended = @pulsing ++ [{10, %{}}, {10, %{}}]
+
+      assert {[{:preset, "h", {30, 10}}], _, later, _} =
+               timer_switched(@horn, String.replace(@horn, "tp h 30", "tp h 10"), ended, [
+                 {10, %{}}
+               ])
+
+      assert %{"tt" => 0, "dn" => 1, "acc" => 30} = later.env["h"]
+    end
+
+    test "a tp the edit adds while its rung is true starts no pulse at the switch, its edge " <>
+           "memory blocked by its path, and the next real edge does (decision 94)" do
+      assert {[{:added, "h", _}, {:ons_blocked, "h.en", 0}], tested, later, _} =
+               timer_switched("xic go ote y", @horn, [{0, %{}}, {10, %{"go" => 1}}], [{10, %{}}])
+
+      assert tested.ons_blocked == ["h.en"]
+      assert %{"tt" => 0, "en" => 1} = later.env["h"]
+      assert later.ons_blocked == []
+
+      {_, _, later, _} =
+        timer_switched("xic go ote y", @horn, [{0, %{}}, {10, %{"go" => 1}}], [
+          {10, %{}},
+          {10, %{"go" => 0}},
+          {10, %{"go" => 1}}
+        ])
+
+      assert later.env["h"]["tt"] == 1
+    end
+
+    test "a tp whose rung the edit changes is blocked; one whose preset alone changes keeps " <>
+           "a real edge at the switch" do
+      before = [{0, %{}}, {10, %{"go" => 0}}]
+      gated = String.replace(@horn, "xic go tp", "xic go xio y tp")
+
+      assert {[{:ons_blocked, "h.en", 0}], _, later, _} =
+               timer_switched(@horn, gated, before, [{10, %{"go" => 1}}])
+
+      assert later.env["h"]["tt"] == 0
+
+      assert {[{:preset, "h", {30, 50}}], %Instance{ons_blocked: []}, later, _} =
+               timer_switched(@horn, String.replace(@horn, "tp h 30", "tp h 50"), before, [
+                 {10, %{"go" => 1}}
+               ])
+
+      assert later.env["h"]["tt"] == 1
+    end
+
+    test "a tof made a tp is refused at accept" do
+      v1 = c!(@t <> "var h tof\nxic go tof h 30")
+      v2 = c!(@t <> "var h tp\nxic go tp h 30")
+
+      assert {:error, [%Diagnostic{stage: :edit, line: 3, message: message}]} =
+               Edit.accept(v1, v2, Runtime.instance(v1))
+
+      assert message =~ "`h` is a tof in the running program and a tp in the candidate"
+    end
+
+    test "a tp the switch gives back resumes from the switch where its pulse ran (`.tt`), " <>
+           "and not where only its rung was true, its edge blocked against the program that " <>
+           "ran without it" do
+      v1 = c!(@t <> @horn)
+      v2 = c!(@t <> "var h tp\nxic h.tt ote y")
+
+      for {before, resumed} <- [
+            {[{0, %{}}, {10, %{"go" => 1}}], [{:ons_blocked, "h.en", 1}, {:resumed, "h", 500}]},
+            {[{0, %{}}, {10, %{"go" => 1}}, {10, %{}}, {10, %{}}, {10, %{}}],
+             [{:ons_blocked, "h.en", 1}]}
+          ] do
+        {_, state} = run(v1, before)
+        {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
+        {_, state} = drive(v2, state, List.duplicate({10, %{}}, 50))
+        {_edit, _state, report} = Edit.untest(edit, state)
+        assert report == resumed
+      end
+    end
+
     test "a tof the switch gives back resumes from the switch where its delay ran (`.tt`), " <>
            "and not where only its rung was true" do
       gone = "var r tof\nxic r.dn ote y"

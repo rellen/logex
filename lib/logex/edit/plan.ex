@@ -898,6 +898,12 @@ defmodule Logex.Edit.Plan do
   defp done(_to, %{"pre" => pre, "acc" => acc, "tt" => tt}, name, %{forecast: :off_delay}),
     do: off_delay(tt, max(acc, 0), pre, name)
 
+  # M3-2: a `tp`'s `.pre` moves its pulse only while it runs (`.tt` 1): there its next run
+  # ends the pulse where `.acc` is at or past the new `.pre`, `.dn` rising, unless that run
+  # finds its rung false, when `.dn` stays 0 as the pulse ends (decision 94).
+  defp done(_to, %{"pre" => pre, "acc" => acc, "tt" => tt}, name, %{forecast: :pulse}),
+    do: pulse_ends(tt, max(acc, 0), pre, name)
+
   defp done(_to, value, name, %{forecast: :count, done: member, preset: preset})
        when is_binary(member),
        do: counted(Map.get(value, member), Map.get(value, "cv"), Map.get(value, preset), name)
@@ -906,6 +912,9 @@ defmodule Logex.Edit.Plan do
 
   defp off_delay(1, acc, pre, name) when acc >= pre, do: [{:dn_drops, name, {acc, pre}}]
   defp off_delay(_tt, _acc, _pre, _name), do: []
+
+  defp pulse_ends(1, acc, pre, name) when acc >= pre, do: [{:dn_rises, name, {acc, pre}}]
+  defp pulse_ends(_tt, _acc, _pre, _name), do: []
 
   defp counted(1, cv, pv, name) when is_integer(cv) and cv < pv, do: [{:dn_drops, name, {cv, pv}}]
 

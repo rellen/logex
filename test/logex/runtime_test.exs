@@ -642,6 +642,7 @@ defmodule Logex.RuntimeTest do
       assert FbType.builtins() == %{
                "ton" => ton,
                "tof" => FbType.tof(),
+               "tp" => FbType.tp(),
                "ctu" => FbType.ctu(),
                "ctd" => FbType.ctd(),
                "ctud" => FbType.ctud()
@@ -650,7 +651,7 @@ defmodule Logex.RuntimeTest do
 
     # M3-2: the other timers keep the ton's members (decision 68), each its own type.
     test "the other timers' members, and which a program may name and write" do
-      for {type, times} <- [{FbType.tof(), "tt"}] do
+      for {type, times} <- [{FbType.tof(), "tt"}, {FbType.tp(), "tt"}] do
         assert Enum.map(type.members, & &1.name) == ~w(pre acc dn tt en last)
         assert Enum.map(FbType.public(type), & &1.name) == ~w(pre acc dn tt en)
         assert Enum.map(FbType.writable(type), & &1.name) == ~w(pre acc)
@@ -676,7 +677,7 @@ defmodule Logex.RuntimeTest do
       end
 
       assert FbType.rules(FbType.ctud()).runs == %{ctu: {"cu", "qu"}, ctd: {"cd", "qd"}}
-      assert FbType.runners() == [:ctd, :ctu, :tof, :ton]
+      assert FbType.runners() == [:ctd, :ctu, :tof, :ton, :tp]
     end
 
     test "a new instance starts where its type says, overridden member by member, and " <>
@@ -1340,6 +1341,7 @@ defmodule Logex.RuntimeTest do
                signature: 1,
                tof: 0,
                ton: 0,
+               tp: 0,
                type_of: 2,
                user?: 1,
                within: 2,

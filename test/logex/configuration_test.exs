@@ -3502,10 +3502,12 @@ defmodule Logex.ConfigurationTest do
     var s hold
     var fan tof
     var t9 ton
+    var horn tp
     cal s go held
     xic go tof fan 100
     xic go ton t9 50
-    xic t9.dn xic fan.dn ote late
+    xic go tp horn 3000
+    xic t9.dn xic fan.dn xic horn.tt ote late
     """
 
     @timed_logex """
@@ -3533,13 +3535,17 @@ defmodule Logex.ConfigurationTest do
       under = "#{file}: line 4: warning: `a` runs under the event task `trip`, and `timed` runs"
 
       assert Enum.map(config.warnings, &Diagnostic.format/1) == [
-               "#{under} the timer `fan` on line 8 of `timed.ld`: a tof's delay ends only at " <>
+               "#{under} the timer `fan` on line 9 of `timed.ld`: a tof's delay ends only at " <>
                  "one of the task's runs, so what it holds on stays on until the first run " <>
                  "after its preset has passed",
+               "#{under} the timer `horn` on line 11 of `timed.ld`: a tp's pulse ends only at " <>
+                 "one of the task's runs, so it lasts until the first run after its preset has " <>
+                 "passed, and it starts only on an edge between two runs: a rung that is the " <>
+                 "task's trigger is true at every run and never starts one",
                "#{under} the timer `s.r` on line 5 of `hold.ld`: a tof's delay ends only at " <>
                  "one of the task's runs, so what it holds on stays on until the first run " <>
                  "after its preset has passed",
-               "#{under} the timer `t9` on line 9 of `timed.ld`: a ton times across the task's " <>
+               "#{under} the timer `t9` on line 10 of `timed.ld`: a ton times across the task's " <>
                  "runs, and one whose rung is true on two runs in a row counts the whole time " <>
                  "between them"
              ]

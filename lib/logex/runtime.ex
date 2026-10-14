@@ -1421,6 +1421,25 @@ defmodule Logex.Runtime do
     {false, write(env, timer, off_delay(as_map(read(env, timer)), now))}
   end
 
+  # M3-2: the pulse timer (docs/naming.md, `tp`; IEC's TP; decisions 74, 75 and 94). Rung
+  # power is its IN. A rising edge, `.en` 0 from its last run, never on the instance's first
+  # scan nor where the edit's block list holds `.en`, starts the pulse: `.tt` set and `.acc`
+  # at 0, adding nothing. While `.tt` is set each run adds `now - last`, its rung true or
+  # false, `.acc` staying in 0..max(.pre, 0), and an edge starts nothing; at the limit `.tt`
+  # drops, and `.dn` is set where the rung is true, or `.dn` and `.acc` go to 0 where it is
+  # false. Otherwise, energised it keeps `.dn` and `.acc`, so `.dn` holds while the rung does
+  # after a pulse, and de-energised both go to 0. `.en` takes the rung's power and `last` is
+  # stamped on every run. The run is recorded as a counter's is, so that the scan keeps no
+  # block of a memory whose instruction ran (decision 87). Nothing may follow it on its path
+  # (decision 73).
+  defp evaluate({:tp, _, [timer, _preset]}, {true, env}, scan) do
+    {true, pulsed(env, timer, true, scan)}
+  end
+
+  defp evaluate({:tp, _, [timer, _preset]}, {false, env}, scan) do
+    {false, pulsed(env, timer, false, scan)}
+  end
+
   # M3-1: IEC's counters (docs/naming.md, `ctu`, `ctd` and `ctud`; decisions 67 to 71 and
   # 84 to 86). Rung power is the count input of the side the mnemonic names, `cu` for a
   # `ctu` and `cd` for a `ctd`, and each run is IEC's body for that side, over the
@@ -1721,6 +1740,58 @@ defmodule Logex.Runtime do
       "en" => 0,
       "last" => now
     }
+
+  # M3-2: one run of a `tp`. The compiler names a timer only whole, `{:name, _, timer}`.
+  defp pulsed(env, {:name, _, name} = timer, power, %Scan{now: now} = scan) do
+    tree = as_map(Map.get(scan.ons_blocked, name))
+    blocked = scan.first or Map.get(tree, "en") == true
+    state = as_map(read(env, timer))
+    edge = power and not blocked and not closed?(Map.get(state, "en"))
+    env = write(env, timer, pulse(closed?(Map.get(state, "tt")), edge, state, {power, now}))
+    unblocked(map_size(tree) > 0, env, name)
+  end
+
+  # Pulsing: the time since its last run, whatever the rung or an edge.
+  defp pulse(true, _edge, timer, {power, now}) do
+    acc = max(integer(Map.get(timer, "acc")), 0) + elapsed(true, Map.get(timer, "last"), now)
+    pulsing(timer, acc, {power, now})
+  end
+
+  # A rising edge starts the pulse from 0.
+  defp pulse(false, true, timer, at), do: pulsing(timer, 0, at)
+
+  # Neither: held true, `.dn` and `.acc` as they were; false, both 0.
+  defp pulse(false, false, timer, {true, now}),
+    do: %{
+      "pre" => integer(Map.get(timer, "pre")),
+      "acc" => integer(Map.get(timer, "acc")),
+      "dn" => bit(Map.get(timer, "dn")),
+      "tt" => 0,
+      "en" => 1,
+      "last" => now
+    }
+
+  defp pulse(false, false, timer, {false, now}),
+    do: %{
+      "pre" => integer(Map.get(timer, "pre")),
+      "acc" => 0,
+      "dn" => 0,
+      "tt" => 0,
+      "en" => 0,
+      "last" => now
+    }
+
+  defp pulsing(timer, acc, {power, now}) do
+    pre = integer(Map.get(timer, "pre"))
+    limit = max(pre, 0)
+    acc = min(acc, limit)
+    timer = %{"pre" => pre, "acc" => acc, "en" => one(power), "last" => now}
+    ended(acc == limit, power, timer)
+  end
+
+  defp ended(false, _power, timer), do: Map.merge(timer, %{"dn" => 0, "tt" => 1})
+  defp ended(true, true, timer), do: Map.merge(timer, %{"dn" => 1, "tt" => 0})
+  defp ended(true, false, timer), do: Map.merge(timer, %{"acc" => 0, "dn" => 0, "tt" => 0})
 
   defp elapsed(true, last, now) when is_integer(last), do: max(now - last, 0)
   defp elapsed(_enabled, _last, _now), do: 0

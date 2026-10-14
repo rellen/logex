@@ -3636,6 +3636,31 @@ the record keeps.
     decision 21's block list: an edit that turns its rung false starts the delay, `.dn`
     staying set through it, as the rung falling would, where blocking it would stop the
     fan at once.
+94. **A pulse timer's pulse, start to end (M3-2),** following decisions 74 and 75. A horn
+    sounds for 3 seconds from a fault's rising edge: `xic fault tp horn_pulse 3000`, the
+    horn worked by `xic horn_pulse.tt` on a rung below.
+    - The pulse runs its preset whatever the rung does, as IEC's diagram draws it: a new
+      edge during the pulse starts nothing, a pulse once ended starts again only after the
+      rung falls and rises, and `.dn`, set as the pulse ends with the rung true, stays set
+      while the rung holds, as IEC's ET stays at PT; a pulse that ends with the rung false
+      leaves `.dn` and `.acc` at 0;
+    - or a new edge during the pulse starts it again from 0, a retriggerable pulse, as
+      Siemens's classic S_PEXT extends one.
+
+    *Taken: IEC's.* The pulse is IEC's TP, MatIEC's body read step for step: it starts on a
+    rising edge, `.en` 0 from the timer's last run, never on a first scan (decision 75) nor
+    where an online edit's block list holds `.en`, `.acc` at 0 and adding nothing on that
+    scan; each run while `.tt` is set adds the time since the timer last ran, its rung
+    true or false, and at `.pre` the pulse ends. With a preset of 0 it starts and ends on
+    one scan, `.tt` never set and `.dn` set. Raising `.pre` once the pulse has ended starts
+    nothing. Its edge memory `.en` joins decision 21's block list by its path,
+    `horn_pulse.en`, as a counter's does (decision 87): a `tp` an edit adds while its rung
+    is true, or one whose rung it changes, sounds no horn at the switch, and one whose
+    preset alone changes keeps a real edge. Across a switch it is a timer by decision 23,
+    resumed where its pulse was running, `.tt` set. A moved `.pre` changes its pulse only
+    while it runs: where `.acc` is at or past the new `.pre` there, `:dn_rises` says the
+    pulse ends at the timer's next run, `.tt` dropping and `.dn` rising, unless that run
+    finds its rung false, when `.dn` stays at 0 as the pulse ends.
 
 ---
 

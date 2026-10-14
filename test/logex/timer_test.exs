@@ -1,7 +1,8 @@
 defmodule Logex.TimerTest do
   @moduledoc """
-  M3-2: the timers beside `ton`, the off-delay `tof` (docs/organisation.md decisions 68,
-  69, 73 and 93; docs/naming.md, `tof`), each rule of a scan pinned from source through `Logex.Runtime.call/4`, a test that fails when the rule
+  M3-2: the timers beside `ton`, the off-delay `tof` and the pulse `tp`
+  (docs/organisation.md decisions 68, 69, 73 to 75, 93 and 94; docs/naming.md, `tof` and
+  `tp`), each rule of a scan pinned from source through `Logex.Runtime.call/4`, a test that fails when the rule
   alone is reverted. The compiler's refusals and warnings are `validation_test.exs`'s, an
   edit's rules `edit_test.exs`'s, and the configuration's warning `configuration_test.exs`'s.
   """
@@ -171,11 +172,159 @@ defmodule Logex.TimerTest do
     end
   end
 
+  @horn """
+  var_input fault bool
+  var_output horn bool
+  var horn_pulse tp
+  xic fault tp horn_pulse 30
+  xic horn_pulse.tt ote horn
+  """
+
+  describe "tp" do
+    test "a rising edge starts a pulse of exactly its preset on `.tt`, whatever the rung " <>
+           "does meanwhile; an edge during it starts nothing (decisions 74 and 94)" do
+      p = c!(@horn)
+
+      assert members(p, levels("fault", [0, 1, 0, 1, 0, 0, 0, 0]), "horn_pulse") == [
+               {0, 0, 0, 0},
+               {0, 0, 1, 1},
+               {10, 0, 1, 0},
+               {20, 0, 1, 1},
+               {0, 0, 0, 0},
+               {0, 0, 0, 0},
+               {0, 0, 0, 0},
+               {0, 0, 0, 0}
+             ]
+
+      assert trace(p, levels("fault", [0, 1, 0, 1, 0, 0]), ["horn"]) == [0, 1, 1, 1, 0, 0]
+    end
+
+    test "`.dn` is set as the pulse ends with the rung true and holds while it does; a " <>
+           "pulse once ended needs the rung to fall and rise again" do
+      p = c!(@horn)
+
+      assert members(p, levels("fault", [0, 1, 1, 1, 1, 1, 0, 1]), "horn_pulse") == [
+               {0, 0, 0, 0},
+               {0, 0, 1, 1},
+               {10, 0, 1, 1},
+               {20, 0, 1, 1},
+               {30, 1, 0, 1},
+               {30, 1, 0, 1},
+               {0, 0, 0, 0},
+               {0, 0, 1, 1}
+             ]
+    end
+
+    test "no pulse on the first scan, though the fault is present at start, nor on a " <>
+           "restart's (decisions 69 and 75)" do
+      p = c!(@horn)
+      assert trace(p, levels("fault", [1, 1, 0, 1]), ["horn"]) == [0, 0, 0, 1]
+
+      state = Runtime.instance(p)
+      {_, state} = Runtime.call(p, state, %{"fault" => 0}, %Scan{now: 0, first: true})
+      state = Runtime.restart(p, state, :cold)
+      assert trace(p, levels("fault", [1, 1]), ["horn"], state) == [0, 0]
+    end
+
+    test "with a preset of 0 the pulse starts and ends on one scan, `.tt` never set and " <>
+           "`.dn` set" do
+      p = c!(String.replace(@horn, "horn_pulse 30", "horn_pulse 0"))
+
+      assert members(p, levels("fault", [0, 1, 1, 0]), "horn_pulse") == [
+               {0, 0, 0, 0},
+               {0, 1, 0, 1},
+               {0, 1, 0, 1},
+               {0, 0, 0, 0}
+             ]
+    end
+
+    test "raising `.pre` once the pulse has ended starts nothing; during it, lengthens it" do
+      p = c!("var_input more bool\n" <> @horn <> "xic more move 50 horn_pulse.pre")
+      inputs = levels("fault", [0, 1, 1, 1, 1]) ++ [%{"more" => 1}, %{}, %{}]
+      assert trace(p, inputs, ["horn"]) == [0, 1, 1, 1, 0, 0, 0, 0]
+
+      inputs = levels("fault", [0, 1]) ++ [%{"more" => 1}, %{}, %{}, %{}, %{}, %{}]
+      assert trace(p, inputs, ["horn"]) == [0, 1, 1, 1, 1, 1, 0, 0]
+    end
+
+    test "`.acc` logic writes during the pulse counts from there, a negative one from 0, " <>
+           "and a negative `.pre` ends a pulse at once" do
+      p =
+        c!(
+          "var_input skip bool\nvar_input back dint\n" <>
+            @horn <> "xic skip move back horn_pulse.acc"
+        )
+
+      inputs = levels("fault", [0, 1]) ++ [%{"skip" => 1, "back" => 25}, %{"skip" => 0}]
+      assert trace(p, inputs, ["horn"]) == [0, 1, 1, 0]
+
+      # Written before the edge, it is no part of the pulse, which starts from 0.
+      inputs = [%{"skip" => 1, "back" => 25}, %{"skip" => 0, "fault" => 1}, %{}, %{}, %{}]
+      assert trace(p, inputs, ["horn"]) == [0, 1, 1, 1, 0]
+
+      state = %{Runtime.instance(p) | first: false}
+      timer = %{state.env["horn_pulse"] | "acc" => -40, "tt" => 1, "en" => 1}
+      state = put_in(state.env["horn_pulse"], timer)
+      assert trace(p, [%{}, %{}, %{}], ["horn_pulse", "acc"], state) == [10, 20, 0]
+
+      neg = put_in(state.env["horn_pulse"], %{timer | "pre" => -5, "acc" => 0})
+
+      assert trace(p, [%{"fault" => 1}], ["horn_pulse"], neg) == [
+               %{"pre" => -5, "acc" => 0, "dn" => 1, "tt" => 0, "en" => 1, "last" => 10}
+             ]
+    end
+
+    test "`last` is the time it last ran, and a hand-built env's timer comes back well-formed" do
+      p = c!(@horn)
+
+      assert trace(p, levels("fault", [1, 0, 1, 1, 0]), ["horn_pulse", "last"]) == [
+               10,
+               20,
+               30,
+               40,
+               50
+             ]
+
+      state = put_in(%{Runtime.instance(p) | first: false}.env["horn_pulse"], %{"tt" => true})
+
+      assert [%{"pre" => 0, "acc" => 0, "dn" => 1, "tt" => 0, "en" => 1, "last" => 10}] =
+               trace(p, [%{"fault" => 1}], ["horn_pulse"], state)
+    end
+
+    test "inside a function block a frozen `tp` ends its pulse when the block next runs, " <>
+           "and sees an edge against its last run (decision 8)" do
+      {:ok, cell} =
+        Logex.compile(
+          "function_block cell\nvar_input go bool\nvar_output on bool\nvar t tp\n" <>
+            "xic go tp t 30\nxic t.tt ote on",
+          name: "cell"
+        )
+
+      p =
+        c!(
+          "var_input run bool\nvar_input go bool\nvar_output on bool\nvar s1 cell\n" <>
+            "xic run cal s1 go on",
+          [cell]
+        )
+
+      inputs =
+        for {run, go} <- [{1, 0}, {1, 1}, {0, 0}, {0, 0}, {0, 1}, {1, 1}, {1, 0}, {0, 1}, {1, 1}],
+            do: %{"run" => run, "go" => go}
+
+      assert trace(p, inputs, ["s1", "t", "tt"]) == [0, 1, 1, 1, 1, 0, 0, 0, 1]
+    end
+  end
+
   test "a timer's type given where a program goes is refused, naming its instruction" do
     assert_raise ArgumentError,
                  "`tof` is a function block type, which runs inside a program through `tof`: " <>
                    "an instance is of a %Logex.Program{}",
                  fn -> Runtime.instance(Logex.FbType.tof()) end
+
+    assert_raise ArgumentError,
+                 "`tp` is a function block type, which runs inside a program through `tp`: " <>
+                   "an instance is of a %Logex.Program{}",
+                 fn -> Runtime.instance(Logex.FbType.tp()) end
   end
 
   test "a restart, warm or cold, starts a timer again at its preset" do
