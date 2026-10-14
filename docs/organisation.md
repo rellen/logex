@@ -3495,7 +3495,10 @@ questions asked after M3-1's review, the same day.
 
     *Recommend stopping and passing no power.* Adopted: a result outside a dint is brought
     to the nearer limit, and the instruction passes no power on that scan. No value
-    outside a dint ever reaches a state.
+    outside a dint ever reaches a state. *(Landed with M3-3, 2026-10-14: the power out is
+    IEC's ENO, so anything may follow, decision 98; the result is computed exactly and then
+    brought in, so a product far past a limit stops at the limit of its sign; and an
+    overflow is not reported as a fault, only a zero divisor is, decision 99.)*
 78. **Dividing by zero (M3-3).** The line works out "boxes per minute", and just after
     start-up the minutes are 0.
     - The division gives 0 and passes no power on that scan;
@@ -3505,7 +3508,10 @@ questions asked after M3-1's review, the same day.
     and no power on that scan, and the cycle reports it to the host as an event, a minor
     fault naming the instance, the file and the line. The plant keeps running. A literal
     zero divisor is refused when the program compiles. The event's shape is M3-3's to
-    design; this records only the rule.
+    design; this records only the rule. *(Landed with M3-3, 2026-10-14, for `div` and
+    `mod` alike, where MatIEC's MOD keeps ENO TRUE: the event is `{:fault, task,
+    instance, %Logex.Fault{}}` after its scan's `{:ran, ...}`, and a lone instance's
+    `state.faults`, decision 99.)*
 79. **Which calculations (M3-3).** Add, subtract, multiply, divide and remainder, the
     README's promised negate and absolute value, and square root.
     - All eight now;
@@ -3514,6 +3520,7 @@ questions asked after M3-1's review, the same day.
 
     *Recommend the seven.* Adopted: `add sub mul div mod neg abs` now, `sqrt` later. Each
     new word stops being a tag name: a program with a tag called `add` or `mod` is renamed.
+    *(Landed with M3-3, 2026-10-14, after negative literals, decision 97.)*
 80. **Pulse coils (M3-4).** A programmer wants a one-scan pulse when the start button is
     pressed, while the rest of the line carries on seeing the button.
     - Add both, `osr` for "switched on" and `osf` for "switched off", IEC's transition-

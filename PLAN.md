@@ -17,11 +17,11 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
 §1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5, §3's M2-2 and M2-3, §3's M2-4,
-§3's M2-6, §3's OE-2 and §3's M3-1 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
+§3's M2-6, §3's OE-2, §3's M3-1, M3-2 and M3-3 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
 first item, M2-1, landed the same day, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11,
 and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed and landed on
-2026-10-13 (§3), and Milestone 3 was designed and decided on 2026-10-14, its first item, M3-1, landing the
-same day (§3, "Milestone 3").
+2026-10-13 (§3), and Milestone 3 was designed and decided on 2026-10-14, its first three
+items, M3-1, M3-2 and M3-3, landing the same day (§3, "Milestone 3").
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -108,6 +108,11 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   a timer by every rule a `ton` keeps, its forecast and resume by its own type across an
   online edit, a `tp`'s edge blocked as a counter's is, and each warned of under an event
   task in its own words.
+- Integer arithmetic (M3-3): `add sub mul div mod neg abs` on dints, the result brought to
+  the nearer limit with no power on that scan, IEC's ENO; a zero divisor 0 and no power,
+  reported to the host as a minor fault, a `%Logex.Fault{}` in a lone instance's state and
+  a `{:fault, ...}` event of a cycle; and negative literals, `-5`, a sign glued to its
+  digits.
 - A staged online edit of a running configuration (OE-2): `Logex.Configuration.Edit`
   accepts a candidate configuration against the resource that runs the original, refusing
   what changes only with a restart at its line, then tests, untests, assembles or cancels
@@ -2534,6 +2539,52 @@ names it breaks. Growth tests are in reductions.
   the valve at a setpoint read with `ge`; a total driven past 2147483647, a `div` by a tag
   that is 0, which the cycle reports as its event, and a `mod` of a negative operand each
   give what their stanzas say; and no value outside a dint ever reaches a state.
+
+  **Status: DONE — landed 2026-10-14**, as nine commits, M3-1's landing order with the
+  negative literals first, as this item says, and step 3 one commit per family: (1) the
+  survey, the stanzas `add`, `sub`, `mul`, `div`, `mod`, `neg` and `abs`, `68e638b`; (2)
+  negative literals, with the front end, the printer's generator and the golden record,
+  `7445d57`; (3) `add sub mul`, `c9d383e`, `div mod`, `941861a`, and `neg abs`,
+  `9220d63`; (4) the divide-by-zero report, `747b27b`; (5) the contract walk, `7837ea0`;
+  (6) the Done-when, `1858bc3`; (7) the documents, the commit after it, among them README's
+  "Arithmetic", whose output is a real run. 1115 tests pass on Elixir 1.20.4 (8 of them
+  doctests), up from 1044. Each of (2), (3) and (4)'s messages records its mutation
+  table, every rule it adds reverted alone and the full suite judged by its exit code:
+  97 rules, 93 red at once and four survivors, each given a test and red with it (a
+  divisor a hand-built env holds as no integer, a bool divisor and `mod`'s destination
+  refused, and a block's record of its faults left in its instance's map). A row whose
+  first failure was a load-sensitive growth bound or a timeout was run again and judged
+  by what failed then. (5) and (6) add no rule: (3) and (4)'s 58 rows that touch a scan
+  turn the walk alone red on 48 and the Done-when alone on 22, each of the rest red in the
+  full suite and named in its commit. The golden record gained 24 entries, each a new
+  source with a `-`, and changed none.
+
+  Readings and choices, each in its commit and its decision: a negative literal is its
+  sign glued to its digits, one token, and a sign begins a lexeme, so `a-5` and `5-3` are
+  each one mistyped lexeme, named whole, as B2's `1bst` is, never a silent split; it goes
+  wherever a literal goes, a preset staying 0 or more, and a configuration file's numbers
+  with it, where a negative interval or priority is now a diagnostic in the file's words,
+  no longer the host's mistake (decision 97). The power out is IEC's ENO, settled, so
+  anything may follow an arithmetic instruction on its path, where decision 73 refuses
+  what follows a counter or a timer (decision 98). A result is computed exactly and then
+  brought to the nearer limit, so a product far past it stops at the limit of its sign;
+  `div` truncates toward zero and `mod` takes the dividend's sign, Elixir's `div/2` and
+  `rem/2`, where CODESYS documents a non-negative remainder. A zero divisor gives 0 and no
+  power for `mod` as for `div`, where MatIEC's MOD keeps ENO TRUE, and only a zero
+  divisor is reported, an overflow not (decisions 77 and 78). The report is plain data,
+  `%Logex.Fault{}`, in a new instance field, `faults`, its last scan's, which a scan
+  replaces and `put_inputs/3`, `restart/3` and a switch keep, and a cycle's new event,
+  `{:fault, task, instance, fault}`, after its scan's `{:ran, ...}`, a resource keeping no
+  fault in its states (decision 99). Every source a literal draws a warning, as two
+  compared literals do; a destination that is a source, and a divide by 1, draw none.
+  Arithmetic keeps no state of its own: what it writes is a tag's, under every rule an
+  edit keeps. The walk found no defect in `lib/`. A commit before the nine, `0a3832a`,
+  sets `function_block_test.exs`'s bound on accept reading a block's body once a fifth
+  above its figure again, 1.64: the figure had grown from 1.12x, which set the bound of
+  1.35, to about 1.35x by decision 96, on the bound, and CI failed it from (4) on, where
+  M3-3 moved it about 0.005x higher. M3-3 reads no body more than once: each rung costs
+  accept about the same at 100 and 400 instances, and a body read again for each instance
+  gives 3.20x.
 - **M3-4 · The coil one-shots: `osr`, `osf`.** IEC's transition-sensing coils in the
   conventional form, a storage bit and a pulse bit (decision 80), which pass on the power
   they receive; each storage bit under every rule an `ons` bit has, on decision 21's block
@@ -2979,6 +3030,10 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   infix arithmetic arrives. *(OE-1: until this lands, `Logex.Parser.well_formed!/1`
   refuses a negative literal in a tree built as data, and `Logex.Declarations.check/1` a
   negative initial value from Elixir. Landing it widens both, in the same change.)*
+  *(Landed with M3-3, 2026-10-14, `docs/organisation.md` decision 97: both widened, with
+  `Logex.Configuration`'s checks, whose file can say a negative number now; and a sign
+  begins a lexeme, so `a-5` and `5-3` are one mistyped lexeme each, named whole, as
+  B2's `1bst` is.)*
 - **Case — mnemonics case-insensitive, tags case-sensitive.** **Landed with M1-2.** One
   `String.downcase/1` at `instructionize/1`'s mnemonic lookup. IEC and every vendor are case-*insensitive*, so a user arriving from
   any of them has a correct prior. M1-3 added the rest (**landed**): two declared tags
@@ -3135,7 +3190,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | **closed** — metadata, a `@moduledoc` on `Logex.Compiler`, no `:logger`; CI is B3's |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
-| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, and members with M1-6; bit access, arrays and negative literals open |
+| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3; bit access and arrays open |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed; re-scoped 2026-10-01 as a one-way seed that emits a whole program as data |
 | B10 | nit | warnings | Second-`ote` warnings on one line come in map order, not rung order | `Logex.Warnings.second_otes/3` | **closed** — the uses walked in rung order; guarded by a 40-tag test in `validation_test.exs` |
 
@@ -3166,12 +3221,14 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    low cost. *Landed with M1-6, on dints.*
 5. **Math (ADD/SUB/MUL/DIV), one-shots (ONS/OSR/OSF), then control flow (JMP/LBL/MCR).**
    ONS is the canonical instruction that cannot exist without cross-scan state. *`ons`
-   landed with M1-6; OSR and OSF are open.* *(Milestone 3: arithmetic in M3-3, `osr` and
-   `osf` in M3-4, forward `jmp`/`lbl` in M3-5, and no MCR, decision 83.)* JMP/LBL
+   landed with M1-6; OSR and OSF are open.* *(Milestone 3: arithmetic in M3-3, landed
+   2026-10-14, `add sub mul div mod neg abs`; `osr` and `osf` in M3-4, forward `jmp`/`lbl`
+   in M3-5, and no MCR, decision 83.)* JMP/LBL
    do *not* require abandoning the `Enum.reduce` over rungs — widening the accumulator
    from `env` to `{skip, env}` is enough for forward jumps; only backward jumps need an
    indexed loop.
 6. **Surface syntax: comments, negative literals, structured addressing.** See §5.
+   *(Negative literals landed with M3-3, 2026-10-14.)*
 7. **Program organisation: configurations, tasks, program instances, I/O mapping.**
    Decided in §5; Milestone 2 (§3), designed 2026-10-02, its first item, M2-1, landed the
    same day, and M2-5, user function blocks, on 2026-10-04; the model in

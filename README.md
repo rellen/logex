@@ -35,7 +35,8 @@ Source syntax today:
 
 - declaration lines before the first rung, one tag each: `<section> <name> <type>
   [<initial>]`, the section `var`, `var_input`, `var_output` or `var_external`, the type
-  `bool`, `dint`, `ton` or a function block's name, as in `var_output speed_sp dint 1200`.
+  `bool`, `dint`, `ton` or a function block's name, as in `var_output speed_sp dint 1200`
+  or `var tare dint -120`.
   Every tag a rung uses must be declared. A `var_input` is supplied from outside and no
   instruction may write it; a tag with no initial value starts at 0. A timer, `var t1
   ton`, is declared only with `var` and with no initial value: its preset is the number on
@@ -52,6 +53,10 @@ Source syntax today:
   matched exactly, as a tag's is, and is not reserved
 - operands separated by spaces — and a number must be followed by one: `move 1bst aa` is an
   error naming `1bst`, not the number `1` and a tag `bst`
+- an integer, `5`, or a negative one, its sign glued to its digits, `-5`, with no `+`. A
+  sign begins a number, so it needs a space before it too: `move 5-3 aa` is an error naming
+  `5-3`, and `ote a-5` one naming `a-5`; a difference is `sub`. A literal goes in 32 bits,
+  −2147483648 to 2147483647, a preset being 0 or more
 - no operand parentheses, no terminator
 - `//` starts a comment, which runs to the end of its line
 - a name may have `.` parts: `t1.dn` is the member `dn` of the timer `t1`. A timer's
@@ -79,7 +84,8 @@ element each, its keywords in any case, `//` comments, and a line ending as a `.
 file's does:
 
 - `task <name> interval <ms> priority <p>`: a periodic task, every 1 to 2147483647 ms,
-  at a priority of 0, the highest, to 65535, its inputs in that order
+  at a priority of 0, the highest, to 65535, its inputs in that order. A number out of
+  range, a negative one among them, is a diagnostic at its line
 - `task <name> single <global> [interval <ms>] priority <p>`: an event task, due in the
   cycle its trigger, a bool global, rises from 0 to 1, and in the first if it is already
   1; with `interval` too, also due periodically while the trigger is 0, at most once a
@@ -166,6 +172,9 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `rto lube 360000000` | a retentive timer (`var lube rto`), then a preset in ms | retentive on-delay timer, the conventional RTO — true, it times as `ton`; false, it keeps `.acc` and `.dn`, so its time adds up across the rung's drops. Its reset `.r`, an input a rung writes, `xic greased ote lube.r`, puts `.acc`, `.dn` and `.tt` to 0 at its next run; every restart, warm or cold, starts it at 0. Logic writes `.pre`, `.acc` and `.r` |
 | `ctu boxes 12` | an up counter (`var boxes ctu`) or an up-down one (`ctud`), then a preset of 0 to 2147483647 | count up — rung power is the counter's count input `cu`. Each rising edge adds one to `.cv`, never on an instance's first scan, and `.q` is `.cv >= .pv`. Its reset `.r`, an input a rung writes, as `xic reset_pb ote boxes.r`, puts `.cv` to 0 at the counter's next run, and keeps its memory of `cu`, so a box on the eye at a reset is not counted again. At 2147483647 the count stops and `.ov` stays on until a reset. The preset is where `.pv` starts; logic writes only `.r` and `.pv`, and a `ctud`'s `.ld`. One `ctu` runs a counter, and nothing may follow it on its path: read it with `xic boxes.q` on a rung below |
 | `ctd hopper 40` | a down counter (`var hopper ctd`) or an up-down one, then a preset | count down — rung power is `cd`. Its load `.ld` puts `.cv` to `.pv`; each rising edge takes one away, stopping at −2147483648 with `.un` on until a load; `.q` is `.cv <= 0`. A `ctud`, `var stock ctud`, is run by one `ctu` and one `ctd` on two rungs, with one preset, and has `.r` and `.ld`, `.qu` at `.cv >= .pv` and `.qd` at `.cv <= 0` |
+| `add a b dst` `sub a b dst` `mul a b dst` | two dints, each a tag, a member or a literal, then a dint tag or member it writes, not a `var_input` | add, subtract (`a − b`), multiply — true: writes the result and passes power; a result outside a dint stops at the nearer limit, −2147483648 or 2147483647, and passes no power on that scan. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
+| `div a b dst` `mod a b dst` | as `add` | divide, truncated toward zero (`div -7 2 q` is −3), and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. `div -2147483648 -1` stops at the top, with no power |
+| `neg a dst` `abs a dst` | a dint, a tag, a member or a literal, then a dint it writes | negate, absolute value — as `add`, one source: −2147483648 has no positive twin, so each gives 2147483647 for it, with no power |
 | `cal s1 a b q` | an instance of a function block, then a value for each of its var_inputs (a tag, a member or a literal of its type) and a tag for each of its var_outputs, which it writes, so not a `var_input`, in the block's declaration order | runs the instance: rung power is its EN, and passes on. True: copies `a` and `b` in, runs the block's rungs over the instance's state and copies its outputs out to `q`. False: copies nothing in or out and runs nothing, so the instance and `q` are frozen; a timer inside catches up when the block next runs. One `cal` runs an instance, and a `ton` is run by its `ton`, never by `cal` |
 | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
 
@@ -201,14 +210,14 @@ totality is a guarantee, not a feature to write programs against (`PLAN.md` §5)
 These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5) and will
 change the source language. Program organisation, `PLAN.md`'s Milestone 2, has landed
 whole ("A function block" and "A configuration", below):
-- **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
-- **The rest of Milestone 3** (`PLAN.md` §3, decisions 67–96 in
-  [`docs/organisation.md`](docs/organisation.md) §7), after the counters and the other
-  timers, which have landed ("A counter" and "Three more timers", below): integer
-  arithmetic `add sub mul div mod neg abs`, `sqrt` waiting for a real type; the pulse coils
-  `osr osf`; and a forward `jmp` to an `lbl`. IEC names wherever IEC names the operation;
-  `neg`, `osr`, `osf`, `jmp` and `lbl` are rule 2's, from a vendor, `docs/naming.md` saying
-  which as each lands. There is no `res`: a counter resets through its own `r` input, as
+- **Bit access** with `.` (`word.3`).
+- **The rest of Milestone 3** (`PLAN.md` §3, decisions 67–99 in
+  [`docs/organisation.md`](docs/organisation.md) §7), after the counters, the other
+  timers and integer arithmetic, which have landed ("A counter", "Three more timers" and
+  "Arithmetic", below), `sqrt` waiting for a real type: the pulse coils `osr osf`; and a
+  forward `jmp` to an `lbl`. IEC names wherever IEC names the operation; `neg`, `osr`,
+  `osf`, `jmp` and `lbl` are rule 2's, from a vendor, `docs/naming.md` saying which as
+  each lands. There is no `res`: a counter resets through its own `r` input, as
   IEC's does, and so does a retentive timer, `xic greased ote lube.r` (decision 90).
 
 ## An example
@@ -547,6 +556,117 @@ fault is present sounds no horn at the switch. Under an event task each is a
 configuration warning in its own words: a `tof`'s delay and a `tp`'s pulse end only when
 the task next runs.
 
+### Arithmetic
+
+`fill.ld` — a fill valve: each scan adds the meter's flow to a running total, `ge` closes
+the valve once the total reaches the setpoint, a lamp shows the total is still real, and
+the flow per minute is worked out from the minutes run:
+
+```
+var_input flow dint
+var_input setpoint dint
+var_input minutes dint
+var_output valve bool
+var_output total dint
+var_output total_ok bool
+var_output per_minute dint
+var full bool
+
+add total flow total ote total_ok
+ge total setpoint ote full
+xio full ote valve
+div total minutes per_minute
+```
+
+`fill.exs` scans it once per line, 100 ms apart, printing each scan's faults under it,
+then runs it under a configuration for one cycle and prints the events:
+
+```elixir
+{:ok, fill} = Logex.compile_file("fill.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(fill, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(fill, state, 100)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  for fault <- state.faults, do: IO.puts("    #{inspect(fault)}")
+  state
+end
+
+Logex.Runtime.instance(fill)
+|> scan.("400 in, no minutes yet", %{"flow" => 400, "setpoint" => 1000})
+|> scan.("a minute in           ", %{"minutes" => 1})
+|> scan.("past the setpoint     ", %{"minutes" => 2})
+|> scan.("a meter gone wild     ", %{"flow" => 2_147_483_000})
+|> scan.("still wild            ", %{})
+|> scan.("a backflow of 5       ", %{"flow" => -5})
+
+config =
+  Logex.Configuration.new!(
+    name: "plant",
+    programs: [fill],
+    tasks: [%Logex.Configuration.Task{name: "fill", interval: 100, priority: 1}],
+    globals: [
+      %Logex.Configuration.Global{name: "flow", type: :dint, at: "meter.i.0"},
+      %Logex.Configuration.Global{name: "valve", type: :bool, at: "panel.q.0"}
+    ],
+    instances: [%Logex.Configuration.Instance{name: "f1", type: "fill", task: "fill"}],
+    connections: [
+      %Logex.Configuration.Connection{instance: "f1", member: "flow", to: "flow"},
+      %Logex.Configuration.Connection{instance: "f1", member: "setpoint", to: 1000},
+      %Logex.Configuration.Connection{instance: "f1", member: "minutes", to: 0},
+      %Logex.Configuration.Connection{instance: "f1", member: "valve", to: "valve"}
+    ]
+  )
+
+{_rt, outputs, events} = Logex.Runtime.cycle(Logex.Runtime.start(config), 0, %{"flow" => 400})
+IO.puts("a cycle: #{inspect(outputs)}")
+for event <- events, do: IO.puts("    #{inspect(event)}")
+
+{:error, [diagnostic]} =
+  Logex.compile("var_input total dint\nvar_output rate dint\ndiv total 0 rate", name: "rate")
+
+IO.puts(Logex.Diagnostic.format(diagnostic))
+
+{:error, [diagnostic]} = Logex.compile("var_output x dint\nmove 5-3 x", name: "minus")
+IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```
+$ mix run fill.exs
+400 in, no minutes yet  %{"per_minute" => 0, "total" => 400, "total_ok" => 1, "valve" => 1}
+    %Logex.Fault{kind: :divide_by_zero, instruction: :div, path: nil, file: "fill.ld", line: 13}
+a minute in             %{"per_minute" => 800, "total" => 800, "total_ok" => 1, "valve" => 1}
+past the setpoint       %{"per_minute" => 600, "total" => 1200, "total_ok" => 1, "valve" => 0}
+a meter gone wild       %{"per_minute" => 1073741823, "total" => 2147483647, "total_ok" => 0, "valve" => 0}
+still wild              %{"per_minute" => 1073741823, "total" => 2147483647, "total_ok" => 0, "valve" => 0}
+a backflow of 5         %{"per_minute" => 1073741821, "total" => 2147483642, "total_ok" => 1, "valve" => 0}
+a cycle: %{"valve" => 1}
+    {:ran, "fill", "f1", 0}
+    {:fault, "fill", "f1", %Logex.Fault{kind: :divide_by_zero, instruction: :div, path: nil, file: "fill.ld", line: 13}}
+line 3: `div` divides by the literal `0`: a zero divisor gives 0 and passes no power on every scan, so a literal one is refused
+line 2, column 6: missing separator before `-`: "5-3" is neither a tag nor a number, and a sign begins a number
+```
+
+- `add total flow total` reads its sources before it writes, so the total runs on from
+  scan to scan. Each arithmetic instruction's power out is IEC's ENO: true when its
+  result is a dint's, so anything may follow it on its rung, here the `ote total_ok`.
+- A result outside a dint stops at the nearer limit, −2147483648 or 2147483647, and on
+  that scan the instruction passes no power: the wild meter's total stops at the top and
+  `total_ok` goes off, so no total ever jumps to a huge negative number, and none outside
+  a dint reaches a state. It comes back in with the next flow that brings it in.
+- A zero divisor, the minutes at start-up, gives 0 and no power on that scan, and is a
+  minor fault the scan reports: a lone instance's `state.faults` is every
+  `%Logex.Fault{}` of the scan that returned it, `[]` for none, and a cycle gives each as
+  an event just after its scan's `{:ran, ...}`, naming the task and the instance. The
+  fault names the instruction, the file and the line, and `path`, the block instance it
+  ran in for one inside a function block. The plant runs on.
+- `div` truncates toward zero, as IEC's does, so `div -7 2 q` is −3, and `mod` is the
+  remainder IEC defines, its sign the dividend's: `mod -7 3 r` is −1. `neg` and `abs` of
+  −2147483648 overflow, giving 2147483647 and no power, as `div -2147483648 -1` does.
+- A literal zero divisor is refused when the program compiles. A negative literal is its
+  sign glued to its digits, `-5`, wherever a literal goes, and a sign begins a number, so
+  `5-3` is an error rather than a number and then another: a difference is `sub`.
+
 ### A function block
 
 `seal.ld` — the seal-in of `motor.ld`'s first rung, written once as a function block. Its
@@ -861,7 +981,7 @@ IO.inspect(Logex.Runtime.get!(rt, "m1.fault"), label: "m1.fault")
 bad =
   Keyword.merge(fields,
     tasks: [
-      %Configuration.Task{name: "fast", interval: 10, priority: -1},
+      %Configuration.Task{name: "fast", interval: 10, priority: 1.5},
       %Configuration.Task{name: "slow", interval: 50, priority: 2}
     ],
     instances: [
@@ -889,7 +1009,7 @@ t=105  35 ms late     k1=1 k2=1 sp_1=0 sp_2=1200  [{:overlap, "fast", 2}, {:ran,
 overlaps: %{"fast" => 2, "slow" => 0}
 next due in: 5
 m1.fault: 1
-task `fast`: a priority is 0, the highest, to 65535, found -1
+task `fast`: a priority is 0, the highest, to 65535, found 1.5
 no task `slwo` — did you mean `slow`?
 `pb_stop_1` is an input point: `m2.motor`, a var_output, cannot drive it
 ```
@@ -904,9 +1024,9 @@ no task `slwo` — did you mean `slow`?
   before its scan; its phase is kept, so it is next due at 110 ms. `overlaps/1` counts
   the missed periods, and `get!/2` reads any global or any instance's tag by its path;
   `get/2` gives it as `{:ok, value}`, or `{:error, reason}` for a path that names nothing.
-- A priority of -1 is a mistake no configuration file could hold, since a negative number
-  does not lex, so `Logex.Configuration.check/1` raises it as the host's; the other two a
-  file could hold, and `check/1` returns them as diagnostics, each cited at its line when
+- A priority of 1.5 is a mistake no configuration file could hold, since a number in one
+  is whole, so `Logex.Configuration.check/1` raises it as the host's; the other two a
+  file could hold, as it could a priority of -1, a negative number lexing since M3-3, and `check/1` returns them as diagnostics, each cited at its line when
   a file gives one. `new!/1` raises them all, the host's first.
 
 ### A global shared by name
@@ -1339,7 +1459,7 @@ not know.
 
 A program built as data rather than text, through `Logex.Compiler.instructionize/2` and
 `Logex.Tag.new!/4`, is refused with an `ArgumentError` where no text could say it, as a
-negative literal, a timer's preset given from Elixir, or a function block type edited by
+literal that is no integer, a timer's preset given from Elixir, or a function block type edited by
 hand and given in `types:`. So every program an edit takes could be written as a `.ld`
 file, and every block it holds as a block's file. A block type given where a program goes,
 to the runtime, to `accept/3` or in a configuration's `programs`, raises one message:
