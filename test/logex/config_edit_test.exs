@@ -881,6 +881,49 @@ defmodule Logex.ConfigEditTest do
       assert Runtime.get!(runtime, "m2.t1.acc") == acc + 20
     end
 
+    test "a timer inside a block an instance holds carries on too, by its path" do
+      {:ok, block} =
+        Logex.compile(
+          "function_block sb\nvar_input i bool\nvar_output q bool\nvar t ton\n\n" <>
+            "xic i ton t 1000\nxic t.dn ote q\n",
+          name: "sb"
+        )
+
+      {:ok, held} =
+        Logex.compile("var_input x bool\nvar_output y bool\nvar s1 sb\n\ncal s1 x y\n",
+          name: "a",
+          types: [block]
+        )
+
+      {:ok, other} =
+        Logex.compile("var_input x bool\nvar_output y bool\n\nxic x ote y\n", name: "b")
+
+      head =
+        "task fast interval 10 priority 1\nvar_global i bool at d.i.0\n" <>
+          "var_global q bool at d.q.0\nvar_global r bool at d.q.1\n" <>
+          "program k b with fast\n  k.x i\n  k.y r\n"
+
+      {:ok, original} =
+        Configuration.compile("plant", head <> "program p a with fast\n  p.x i\n  p.y q\n", %{
+          "a" => held,
+          "b" => other
+        })
+
+      {:ok, candidate} = Configuration.compile("plant", head, %{"b" => other})
+      # A block's own `var` is hidden from an access path, so the state is looked into.
+      acc = fn %Runtime{instances: instances} -> instances["p"].env["s1"]["t"]["acc"] end
+      {runtime, _} = cycles(Runtime.start(original), 30, %{"i" => 1})
+      assert acc.(runtime) == 290
+      {edit, _} = accepted(runtime, candidate)
+      {edit, runtime, _} = Edit.test(edit, runtime)
+      # Set aside for 500 ms, which its timer does not catch up (decision 57).
+      {runtime, _} = cycles(runtime, 50)
+      {_edit, runtime, report} = Edit.untest(edit, runtime)
+      assert {:resumed, "p.s1.t", 500} in report
+      {runtime, outputs} = cycles(runtime, 1)
+      assert {acc.(runtime), outputs["q"]} == {300, 0}
+    end
+
     test "a timer that was not timing is left as it was set aside" do
       # `m2` stopped at 50 ms, its timer no longer timing.
       {runtime, _, _} = Runtime.cycle(running(40), 10, %{"pb_stop_2" => 1})
