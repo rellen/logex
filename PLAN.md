@@ -2410,7 +2410,17 @@ first, lands green, and pins every rule with a test that fails when the rule is 
   first letter is consumed and the message names `1b` instead of `1bst`. `mov 123 hh`,
   bare `1`, and identifiers ending in digits (`bst1`, `tag1`) are unaffected.
 
-- **B3 · CI.** *Since the hand-written front end (§6), three lines:
+- **B3 · CI. LANDED.** `.github/workflows/ci.yml` runs on every push and pull request,
+  on `ubuntu-latest`, with `erlef/setup-beam@v1.24.1` giving Erlang/OTP 28 and Elixir
+  1.20.4, the pair `mix.exs` and `shell.nix` pin, `deps` and `_build` cached on the
+  versions it resolved and `mix.exs` (there is no `mix.lock`). Four steps, each judged by
+  its exit code: `mix format --check-formatted`, `mix compile --force
+  --warnings-as-errors`, `MIX_ENV=test mix compile --force --warnings-as-errors` and
+  `mix test --warnings-as-errors`; CONTRIBUTING's "Before you commit" lists the same four.
+  The red island in history below stays where it is: CI keeps a new one from landing
+  unseen. What follows is the item as written.
+
+  *Since the hand-written front end (§6), three lines:
   `mix compile --force --warnings-as-errors`, `mix format --check-formatted`,
   `mix test --warnings-as-errors` (the flag since M1-5's second review: `mix compile` never
   compiles the tests, so a warning in one passed the plain `mix test` for six commits),
@@ -2871,7 +2881,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | M0-3 | low | tooling | Generated `src/*.erl` tracked, embedding absolute `/nix/store` paths → ~700-line cross-OTP churn | `src/ladder_lexer.erl:1` (at `c9c7f51`; untracked since) | **closed** `dde8c1d` |
 | B4 | low | tooling | nix dev shell bit-rotted: `erlangR26` alias removed from nixpkgs master 2024-05-24; flake tracked `master`; lock from 2024-01-19 | `shell.nix`, `flake.nix` | **landed** `9c1a7bd` — OTP 28 / Elixir 1.20 on `nixos-26.05`; lock refresh owed |
 | B2 | low | lexer | Digit-led lexeme splits rather than erroring: `1bst` → `int_lit(1)` + `name("bst")` | `Logex.Lexer`, the integer clause (was `ladder_lexer.xrl:20`) | **closed** — a located `:missing_separator` lex error naming the whole run |
-| B3 | low | history | 2 commits ship a red suite (`ec0534a`, `35fe1b9`) — an interior island; `d47eb21` is a clean bisect baseline | — | open |
+| B3 | low | history | 2 commits ship a red suite (`ec0534a`, `35fe1b9`) — an interior island; `d47eb21` is a clean bisect baseline | `.github/workflows/ci.yml` | **closed** — CI runs the four gates on every push and pull request; the island stays in history |
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | **closed** — metadata, a `@moduledoc` on `Logex.Compiler`, no `:logger`; CI is B3's |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |

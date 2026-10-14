@@ -6,7 +6,8 @@ commits it cites, and it is a small single-maintainer project, so treat it as ad
 receipts rather than as established ceremony. Every rule below exists because something
 specific broke.
 
-**What it is not.** A workflow. There is no CI, no branch protection and no review
+**What it is not.** A workflow. There is CI, which runs the gates of "Before you commit"
+on every push and pull request (PLAN.md §4·B3), but no branch protection and no review
 requirement; recent history is direct-to-main. Do not invent process here.
 
 ---
@@ -359,11 +360,15 @@ choice, not an oversight to fix.
 
 ## Before you commit
 
-    mix compile --force --warnings-as-errors
     mix format --check-formatted
+    mix compile --force --warnings-as-errors
+    MIX_ENV=test mix compile --force --warnings-as-errors
     mix test --warnings-as-errors
 
-All three must pass, judged by exit code. `--force` recompiles every module in `lib/`, so a
+All four must pass, judged by exit code; the third builds `lib/` as the suite builds it.
+CI (`.github/workflows/ci.yml`) runs the same four, each a step of its own judged by its
+exit code, on every push and pull request, on Erlang/OTP 28 and Elixir 1.20.4 through
+`erlef/setup-beam`: a red run there is a red commit. `--force` recompiles every module in `lib/`, so a
 warning in a file you did not touch still fails the build. `mix compile` never compiles the
 tests, and plain `mix test` exits 0 when they warn: from `ee91fe5` to `4a1079c` the type
 checker printed two warnings on every run of `runtime_test.exs`, across six commits that

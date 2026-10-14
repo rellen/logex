@@ -1356,6 +1356,11 @@ mix test
 mix format
 ```
 
+CI runs the gates `CONTRIBUTING.md` asks of every commit — `mix format
+--check-formatted`, `mix compile --force --warnings-as-errors`, the same under
+`MIX_ENV=test`, and `mix test --warnings-as-errors` — on every push and pull request, on
+Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`).
+
 ## Documents
 
 - `PLAN.md` — the codebase review and the ordered plan of work

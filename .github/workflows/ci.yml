@@ -1,0 +1,50 @@
+# The four gates CONTRIBUTING.md asks of every commit (PLAN.md §4·B3), each a step of its
+# own, so each is judged by its own exit code. The toolchain is the pair mix.exs and
+# shell.nix pin: Erlang/OTP 28 and Elixir 1.20.4.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    env:
+      OTP_VERSION: "28"
+      ELIXIR_VERSION: "1.20.4"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Erlang/OTP and Elixir
+        id: beam
+        uses: erlef/setup-beam@v1.24.1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+
+      # There is no mix.lock (logex has no dependencies), so the cache is keyed on the
+      # versions setup-beam resolved and on mix.exs.
+      - name: Cache deps and _build
+        uses: actions/cache@v5
+        with:
+          path: |
+            deps
+            _build
+          key: mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('mix.exs') }}
+          restore-keys: |
+            mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-
+
+      - name: mix format --check-formatted
+        run: mix format --check-formatted
+
+      - name: mix compile --force --warnings-as-errors
+        run: mix compile --force --warnings-as-errors
+
+      - name: MIX_ENV=test mix compile --force --warnings-as-errors
+        run: mix compile --force --warnings-as-errors
+        env:
+          MIX_ENV: test
+
+      - name: mix test --warnings-as-errors
+        run: mix test --warnings-as-errors
