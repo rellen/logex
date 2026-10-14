@@ -2570,7 +2570,8 @@ names it breaks. Growth tests are in reductions.
   brought to the nearer limit, so a product far past it stops at the limit of its sign;
   `div` truncates toward zero and `mod` takes the dividend's sign, Elixir's `div/2` and
   `rem/2`, where CODESYS documents a non-negative remainder. A zero divisor gives 0 and no
-  power for `mod` as for `div`, where MatIEC's MOD keeps ENO TRUE, and only a zero
+  power for `mod` as for `div`, where MatIEC's MOD keeps ENO TRUE, as the maintainer
+  confirmed after the review, and only a zero
   divisor is reported, an overflow not (decisions 77 and 78). The report is plain data,
   `%Logex.Fault{}`, in a new instance field, `faults`, its last scan's, which a scan
   replaces and `put_inputs/3`, `restart/3` and a switch keep, and a cycle's new event,
@@ -2610,7 +2611,9 @@ names it breaks. Growth tests are in reductions.
   are M2-1's landing note and decision 28. The golden record's header named the commit
   under (2) before the series was rebased, `c48bba5`, which is not in its history; it now
   names `68e638b`, and the record regenerated on top of `68e638b` with (2) is byte for
-  byte the one committed. The suite is at 1115 tests (8 doctests).
+  byte the one committed. Asked after the review, the maintainer confirmed that a `mod` by
+  zero behaves as a `div` by zero, 0, no power and a reported fault, noted on decision 98.
+  The suite is at 1115 tests (8 doctests).
 - **M3-4 · The coil one-shots: `osr`, `osf`.** IEC's transition-sensing coils in the
   conventional form, a storage bit and a pulse bit (decision 80), which pass on the power
   they receive; each storage bit under every rule an `ons` bit has, on decision 21's block

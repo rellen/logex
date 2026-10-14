@@ -2649,8 +2649,9 @@ what M3-1 built. Decisions 93–95 are M3-2's own routine choices, taken as it l
 2026-10-14, 93 confirmed by the maintainer the same day, after M3-2's review. Decision 96
 was taken the same day, after M3-2's review, from a question the maintainer was asked
 then. Decisions 97–99 are M3-3's own routine choices, taken as it landed on 2026-10-14,
-99 the shape of the report decision 78 left to M3-3. All ninety-nine are kept with their
-options so the reasons stay with them.
+99 the shape of the report decision 78 left to M3-3, and 98's reading of a `mod` by zero
+confirmed by the maintainer the same day, after M3-3's review. All ninety-nine are kept
+with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3883,7 +3884,10 @@ the record keeps; 99 is the shape of the report decision 78 asked for and left t
     about stays small: every source a literal, `add 2 3 x`, compiles with a warning, as two
     compared literals do (M1-6), since its result never changes; a destination that is a
     source, `add total flow total`, is the instruction's commonest use and draws none; nor
-    does a divide by a literal 1, which is harmless. *(Landed 2026-10-14.)*
+    does a divide by a literal 1, which is harmless. *(Landed 2026-10-14. That a `mod` by
+    zero behaves as a `div` by zero, writing 0, passing no power and reporting its fault
+    (decisions 78 and 99), where MatIEC's MOD keeps ENO TRUE, was confirmed by the
+    maintainer on 2026-10-14, after M3-3's review.)*
 99. **How a zero divisor is reported to the host (M3-3),** the event's shape decision 78
     left to M3-3. The line works out "boxes per minute", `div boxes minutes per_minute`,
     and just after start-up the minutes are 0: the division gives 0, passes no power, and
