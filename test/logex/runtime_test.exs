@@ -637,14 +637,28 @@ defmodule Logex.RuntimeTest do
       assert FbType.member(ton, "last") == :error
       assert FbType.member(ton, "DN") == :error
       assert FbType.builtin("TON") == ton
-      assert FbType.builtin("tof") == nil
+      assert FbType.builtin("tonr") == nil
 
       assert FbType.builtins() == %{
                "ton" => ton,
+               "tof" => FbType.tof(),
                "ctu" => FbType.ctu(),
                "ctd" => FbType.ctd(),
                "ctud" => FbType.ctud()
              }
+    end
+
+    # M3-2: the other timers keep the ton's members (decision 68), each its own type.
+    test "the other timers' members, and which a program may name and write" do
+      for {type, times} <- [{FbType.tof(), "tt"}] do
+        assert Enum.map(type.members, & &1.name) == ~w(pre acc dn tt en last)
+        assert Enum.map(FbType.public(type), & &1.name) == ~w(pre acc dn tt en)
+        assert Enum.map(FbType.writable(type), & &1.name) == ~w(pre acc)
+        assert FbType.builtin(String.upcase(type.name)) == type
+        assert FbType.initial(type) == FbType.initial(FbType.ton())
+        assert %{kind: :timer, preset: "pre", done: "dn", times: ^times} = FbType.rules(type)
+        refute type == FbType.ton()
+      end
     end
 
     # M3-1: IEC's pins lowercased (decision 68), and the inputs only written (decision 86).
@@ -662,7 +676,7 @@ defmodule Logex.RuntimeTest do
       end
 
       assert FbType.rules(FbType.ctud()).runs == %{ctu: {"cu", "qu"}, ctd: {"cd", "qd"}}
-      assert FbType.runners() == [:ctd, :ctu, :ton]
+      assert FbType.runners() == [:ctd, :ctu, :tof, :ton]
     end
 
     test "a new instance starts where its type says, overridden member by member, and " <>
@@ -1303,7 +1317,7 @@ defmodule Logex.RuntimeTest do
       # one-version check uses. Decision 53: held/1 and within/2, a type as the one table
       # holds it and as it reads inside the table, and check/2, user?/1 across the types a
       # compile is given. M3-1: the three counters, and rules/1, runners/0 and runs?/2, each
-      # built-in type as data.
+      # built-in type as data. M3-2: the other timers.
       assert Enum.sort(Logex.FbType.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,
@@ -1324,6 +1338,7 @@ defmodule Logex.RuntimeTest do
                runs?: 2,
                same?: 2,
                signature: 1,
+               tof: 0,
                ton: 0,
                type_of: 2,
                user?: 1,

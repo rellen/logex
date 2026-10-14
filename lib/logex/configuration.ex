@@ -85,7 +85,8 @@ defmodule Logex.Configuration do
   the block was read from none, as in "on line 5 of block `inner`", each program type's timers
   read once (`Logex.Walk.timers/1`) and cited once, whatever its instances. Since M3-1,
   each counter such an instance runs, so too, after its timers (decision 72): a counter
-  sees its rung only at the task's runs (`Logex.Walk.counters/1`).
+  sees its rung only at the task's runs (`Logex.Walk.counters/1`). Since M3-2, each timer
+  in its own type's words: a tof's delay ends only at one of the task's runs.
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -2462,6 +2463,12 @@ defmodule Logex.Configuration do
     do:
       "a ton times across the task's runs, and one whose rung is true on two runs in a " <>
         "row counts the whole time between them"
+
+  # M3-2: a tof's delay ends only at a run, which may be long after its preset.
+  defp across("tof"),
+    do:
+      "a tof's delay ends only at one of the task's runs, so what it holds on stays on " <>
+        "until the first run after its preset has passed"
 
   # The routine whose text holds a timer: the program's, or a block's body down its path,
   # each routine's typed tags read once, by the routine (`:program`, or its block's name,

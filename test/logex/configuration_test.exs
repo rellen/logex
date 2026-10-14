@@ -3481,6 +3481,71 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  # M3-2: every timer an event task runs times only across the task's runs, each warned of
+  # in its own type's words.
+  describe "a timer under an event task (M3-2), a warning in its type's words" do
+    @describetag :tmp_dir
+
+    @hold_ld """
+    function_block hold
+    var_input go bool
+    var_output held bool
+    var r tof
+    xic go tof r 30
+    xic r.dn ote held
+    """
+
+    @timed_ld """
+    var_input go bool
+    var_output held bool
+    var_output late bool
+    var s hold
+    var fan tof
+    var t9 ton
+    cal s go held
+    xic go tof fan 100
+    xic go ton t9 50
+    xic t9.dn xic fan.dn ote late
+    """
+
+    @timed_logex """
+    task trip single go priority 0
+    task fast interval 10 priority 1
+    var_global go bool at panel.i.0
+    program a timed with trip
+    a.go go
+    program b timed with fast
+    b.go go
+    """
+
+    test "each timer of each instance an event task runs, a block's by its path", %{
+      tmp_dir: dir
+    } do
+      for {name, text} <- [
+            {"hold.ld", @hold_ld},
+            {"timed.ld", @timed_ld},
+            {"events.logex", @timed_logex}
+          ],
+          do: File.write!(Path.join(dir, name), text)
+
+      file = Path.join(dir, "events.logex")
+      assert {:ok, config} = Configuration.compile_file(file)
+      under = "#{file}: line 4: warning: `a` runs under the event task `trip`, and `timed` runs"
+
+      assert Enum.map(config.warnings, &Diagnostic.format/1) == [
+               "#{under} the timer `fan` on line 8 of `timed.ld`: a tof's delay ends only at " <>
+                 "one of the task's runs, so what it holds on stays on until the first run " <>
+                 "after its preset has passed",
+               "#{under} the timer `s.r` on line 5 of `hold.ld`: a tof's delay ends only at " <>
+                 "one of the task's runs, so what it holds on stays on until the first run " <>
+                 "after its preset has passed",
+               "#{under} the timer `t9` on line 9 of `timed.ld`: a ton times across the task's " <>
+                 "runs, and one whose rung is true on two runs in a row counts the whole time " <>
+                 "between them"
+             ]
+    end
+  end
+
   # M3-1 (decision 72): a counter an event task runs sees its rung only at the task's runs.
   describe "a counter under an event task (M3-1), a warning" do
     @describetag :tmp_dir

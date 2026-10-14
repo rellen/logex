@@ -85,7 +85,8 @@ defmodule Logex.Edit do
     switch found, so a test and an untest with no scan between leave the original's
     timers as they were. A resume an earlier edit's last switch made is not given back;
   - *resume:* a timer the program started runs and the program stopped does not, timing
-    when it last ran (`.en` 1, its `last` before `now`), resumes from the switch, where the
+    when it last ran (its `last` before `now`, and `.en` 1 for a `ton`, `.tt` 1 for a `tof`
+    in its delay, M3-2), resumes from the switch, where the
     program stopped is the one that last scanned (as for one-shots, below): its `last`
     becomes `now`, so the time no `ton` ran it is not caught up. Where the program started
     last scanned, a test and an untest with no scan between, it left the timer as it is.
@@ -97,6 +98,13 @@ defmodule Logex.Edit do
   rung true, unless at least `.pre` − `.acc` ms have passed by then; `:dn_rises` that its
   `.dn`, now 0 while timing with `.acc` at or past the new `.pre`, rises at that scan. No
   latch is added: `.dn` is `.acc` against `.pre`, as `ton` counts them.
+
+  The other timers (M3-2, decisions 93 on) are timers by every rule above, each by its own
+  type: a change of a timer's type, a `ton` made a `tof`, needs a restart. A `tof`'s `.dn`
+  changes with its `.pre` only during its delay, `.tt` 1: where `.acc` is at or past the
+  new `.pre` there, `:dn_drops` says `.dn` drops at its next run, unless that run finds its
+  rung true, which ends the delay with `.dn` set. A `tof` blocks nothing: an edit that turns
+  its rung false starts its delay, `.dn` held through it, as the rung falling would.
 
   **Counters** (M3-1, decisions 87 and 88). A counter's `.pv` moves by the timers' rules
   for `.pre`, above, each move reported as `:preset` or `:preset_kept`, and it keeps its

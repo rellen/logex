@@ -1574,6 +1574,137 @@ defmodule Logex.EditTest do
     end
   end
 
+  # M3-2: the timers beside `ton` across a switch: each a timer by decision 23, its forecast
+  # and its resume by its own type (decisions 93 on).
+  describe "the other timers across a switch (decision 23, decisions 93 on)" do
+    @t "var_input go bool\nvar_output y bool\n"
+    @fan "var r tof\nxic go tof r 30\nxic r.dn ote y"
+
+    defp timer_switched(src1, src2, before, after_) do
+      v1 = c!(@t <> src1)
+      v2 = c!(@t <> src2)
+      {_, state} = run(v1, before)
+      {:ok, edit, forecast} = Edit.accept(v1, v2, state)
+      {edit, tested, report} = Edit.test(edit, state)
+      assert report == forecast
+      {_, later} = drive(v2, tested, after_)
+      {report, tested, later, edit}
+    end
+
+    @falling [{0, %{"go" => 1}}, {10, %{"go" => 0}}, {10, %{}}, {10, %{}}]
+
+    test "a tof's `.pre` moved during its delay forecasts `.dn` dropping at its next run, " <>
+           "unless that run finds its rung true (decision 93)" do
+      shorter = String.replace(@fan, "tof r 30", "tof r 15")
+
+      assert {[{:dn_drops, "r", {20, 15}}, {:preset, "r", {30, 15}}], tested, later, _} =
+               timer_switched(@fan, shorter, @falling, [{10, %{}}])
+
+      assert %{"acc" => 20, "dn" => 1, "tt" => 1, "pre" => 15} = tested.env["r"]
+      assert %{"acc" => 15, "dn" => 0, "tt" => 0} = later.env["r"]
+
+      assert {_, _, later, _} = timer_switched(@fan, shorter, @falling, [{10, %{"go" => 1}}])
+      assert %{"acc" => 0, "dn" => 1} = later.env["r"]
+
+      # At the new preset itself, as at a preset of 20 the delay ends at 20.
+      exact = String.replace(@fan, "tof r 30", "tof r 20")
+
+      assert {[{:dn_drops, "r", {20, 20}}, {:preset, "r", {30, 20}}], _, later, _} =
+               timer_switched(@fan, exact, @falling, [{10, %{}}])
+
+      assert %{"dn" => 0} = later.env["r"]
+
+      # Still short of the new preset: no forecast.
+      longer = String.replace(@fan, "tof r 30", "tof r 40")
+
+      assert {[{:preset, "r", {30, 40}}], _, later, _} =
+               timer_switched(@fan, longer, @falling, [{10, %{}}, {10, %{}}])
+
+      assert %{"acc" => 40, "dn" => 0} = later.env["r"]
+    end
+
+    test "a tof's `.pre` moved while its rung is true, or at rest, forecasts nothing, and " <>
+           "starts no delay at rest" do
+      shorter = String.replace(@fan, "tof r 30", "tof r 5")
+
+      assert {[{:preset, "r", {30, 5}}], _, later, _} =
+               timer_switched(@fan, shorter, [{0, %{"go" => 1}}], [{10, %{}}])
+
+      assert %{"dn" => 1, "acc" => 0} = later.env["r"]
+
+      # Energised, `.acc` is 0, at a preset of 0 too.
+      zero = String.replace(@fan, "tof r 30", "tof r 0")
+
+      assert {[{:preset, "r", {30, 0}}], _, later, _} =
+               timer_switched(@fan, zero, [{0, %{"go" => 1}}], [{10, %{}}])
+
+      assert %{"dn" => 1} = later.env["r"]
+
+      rested = @falling ++ [{10, %{}}, {10, %{}}]
+
+      # At rest, `.acc` at 30, past a new preset of 10: no forecast, and `.dn` stays 0.
+      assert {[{:preset, "r", {30, 10}}], _, later, _} =
+               timer_switched(@fan, String.replace(@fan, "tof r 30", "tof r 10"), rested, [
+                 {10, %{}}
+               ])
+
+      assert %{"dn" => 0} = later.env["r"]
+      longer = String.replace(@fan, "tof r 30", "tof r 90")
+
+      assert {[{:preset, "r", {30, 90}}], _, later, _} =
+               timer_switched(@fan, longer, rested, [{10, %{}}])
+
+      assert %{"dn" => 0, "tt" => 0, "acc" => 30} = later.env["r"]
+    end
+
+    test "a ton made a tof is refused at accept: a restart changes a type" do
+      v1 = c!(@t <> "var r ton\nxic go ton r 30")
+      v2 = c!(@t <> "var r tof\nxic go tof r 30")
+
+      assert {:error, [%Diagnostic{stage: :edit, line: 3, message: message}]} =
+               Edit.accept(v1, v2, Runtime.instance(v1))
+
+      assert message ==
+               "`r` is a ton in the running program and a tof in the candidate: a tag's " <>
+                 "type changes only with a restart"
+    end
+
+    test "a tof the edit adds starts at rest and blocks nothing; one whose rung it drops " <>
+           "starts its delay, `.dn` held through it" do
+      assert {[{:added, "r", _}], tested, later, _} =
+               timer_switched("xic go ote y", @fan, [{0, %{"go" => 1}}], [{10, %{}}])
+
+      assert tested.ons_blocked == []
+      assert %{"dn" => 1, "en" => 1} = later.env["r"]
+
+      gated = String.replace(@fan, "xic go tof", "xic go xio go tof")
+
+      assert {[], _, later, _} =
+               timer_switched(@fan, gated, [{0, %{"go" => 1}}], [{10, %{}}, {10, %{}}])
+
+      assert %{"dn" => 1, "tt" => 1, "acc" => 10} = later.env["r"]
+    end
+
+    test "a tof the switch gives back resumes from the switch where its delay ran (`.tt`), " <>
+           "and not where only its rung was true" do
+      gone = "var r tof\nxic r.dn ote y"
+      v1 = c!(@t <> @fan)
+      v2 = c!(@t <> gone)
+
+      for {before, resumed} <- [
+            {[{0, %{"go" => 1}}, {10, %{"go" => 0}}], [{:resumed, "r", 500}]},
+            {[{0, %{"go" => 1}}], []}
+          ] do
+        {_, state} = run(v1, before)
+        {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
+        {_, state} = drive(v2, state, List.duplicate({10, %{}}, 50))
+        {_edit, state, report} = Edit.untest(edit, state)
+        assert report == resumed
+        assert state.env["r"]["last"] < state.now or resumed != []
+      end
+    end
+  end
+
   describe "the report" do
     test "is sorted, past the 32 keys where a map stops being" do
       many = Enum.map_join(1..40, fn i -> "var x#{i} dint #{i}\n" end)

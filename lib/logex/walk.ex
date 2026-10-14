@@ -78,8 +78,8 @@ defmodule Logex.Walk do
   def writes(%Program{} = program), do: reach(program, &written/2)
 
   @doc """
-  Which timers `program` runs: each timer a `ton` runs, to `{line, preset}`, the `ton`'s
-  line and its preset in milliseconds, nil where the preset is no literal, which a program
+  Which timers `program` runs: each timer a `ton` runs, or since M3-2 a `tof`, to
+  `{line, preset}`, the instruction's line and its preset in milliseconds, nil where the preset is no literal, which a program
   that compiles never has. A timer is run by one `ton` in a program that compiles; where
   several name it, the first in rung order is given. It reaches into each block a `cal`
   runs, as `writes/1` does: a timer the body runs is run too, by its path, `s1.t1`, at the

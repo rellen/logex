@@ -3604,6 +3604,39 @@ questions asked after M3-1's review, the same day.
     outputs are never written from outside a block, and the flags `ov` and `un` stay
     consistent with the count, cleared by the same reset or load that moves it.
 
+**M3-2's own choices, 2026-10-14.** Decisions 93 onward are M3-2's routine choices, where
+neither the record nor IEC left a question for the maintainer, each with the alternative
+the record keeps.
+
+93. **An off-delay timer's done bit and its delay (M3-2).** A fan runs on for 30 seconds
+    after the motor stops: `xic motor tof run_on 30000`, the fan worked by a rung below.
+    - `.dn` is IEC's Q and the conventional TOF's `.DN`: set while the rung is true and
+      through the delay, off once it ends, so the fan is wired to `xic run_on.dn`; `.tt` is
+      set only while the delay runs;
+    - or `.dn` means "the delay is over", set once it ends, as decision 74's words read
+      for a pulse timer, the fan then wired to the rung's own contact and `.tt` in parallel.
+
+    *Taken: IEC's Q.* IEC's TOF and the conventional TOF agree, and §8 maps `.dn` to Q for
+    every timer; a `tof`'s "done" is then on while it still runs its delay, which is what
+    both families mean by it, where decision 74 chose for a pulse alone. The delay is
+    IEC's and MatIEC's: the first de-energised run after an energised one starts it, adding
+    nothing, as a `ton`'s rising scan adds nothing; each de-energised run while `.tt` is
+    set adds the time since the timer last ran, stopping at `.pre`, where `.dn` and `.tt`
+    drop; a rung true again ends the delay with `.dn` still set. At rest `.acc` stays at
+    `.pre`, as IEC's ET does, and raising `.pre` there starts nothing, as MatIEC's state 2
+    holds; a new instance starts at rest with every member at its initial value, `.acc` 0,
+    one rule for new state, where the conventional prescan sets `.acc` to `.pre`. The
+    falling edge is read from `.en`, which every start and restart puts at 0, so no first
+    scan sees one (decision 69). Across an online edit a `tof` is a timer as a `ton` is
+    (decision 23): its `.pre` moves by decisions 23 and 27, a change of type needs a
+    restart, and one restored resumes from the switch where it was timing, which for a
+    `tof` is `.tt` set, not `.en`. A moved `.pre` changes `.dn` only during the delay: where
+    `.acc` is at or past the new `.pre` there, `:dn_drops` says `.dn` drops at the timer's
+    next run, unless that run finds its rung true. Its falling edge needs no place on
+    decision 21's block list: an edit that turns its rung false starts the delay, `.dn`
+    staying set through it, as the rung falling would, where blocking it would stop the
+    fan at once.
+
 ---
 
 ## 8. Sources, and what is unverified

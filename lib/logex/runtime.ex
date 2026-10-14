@@ -1403,6 +1403,24 @@ defmodule Logex.Runtime do
     {false, write(env, timer, reset(as_map(read(env, timer)), now))}
   end
 
+  # M3-2: the off-delay timer (docs/naming.md, `tof`; IEC's TOF). Rung power is its IN.
+  # Energised, `.dn` and `.en` are set and `.acc` and `.tt` go to 0. De-energised, the run
+  # after an energised one (`.en` 1) starts the delay, adding nothing, and each run while it
+  # runs (`.tt` 1) adds `now - last`, as a `ton`'s energised run does, `.acc` staying in
+  # 0..max(.pre, 0); at the limit `.dn` and `.tt` go to 0, so with a preset of 0 `.dn` drops
+  # on the falling edge's own scan. Otherwise it is at rest: `.dn` and `.tt` 0, and `.acc`
+  # where the delay left it. `.en` is 0 on every de-energised run, and `last` is stamped on
+  # every run, so a `tof` a frozen block holds catches up when it next runs (decision 8).
+  # Its falling edge is read from `.en`, which every start and restart puts at 0, so no first
+  # scan sees one (decision 69). Nothing may follow it on its path (decision 73).
+  defp evaluate({:tof, _, [timer, _preset]}, {true, env}, %Scan{now: now}) do
+    {true, write(env, timer, held_on(as_map(read(env, timer)), now))}
+  end
+
+  defp evaluate({:tof, _, [timer, _preset]}, {false, env}, %Scan{now: now}) do
+    {false, write(env, timer, off_delay(as_map(read(env, timer)), now))}
+  end
+
   # M3-1: IEC's counters (docs/naming.md, `ctu`, `ctd` and `ctud`; decisions 67 to 71 and
   # 84 to 86). Rung power is the count input of the side the mnemonic names, `cu` for a
   # `ctu` and `cd` for a `ctd`, and each run is IEC's body for that side, over the
@@ -1657,6 +1675,47 @@ defmodule Logex.Runtime do
     do: %{
       "pre" => integer(Map.get(timer, "pre")),
       "acc" => 0,
+      "dn" => 0,
+      "tt" => 0,
+      "en" => 0,
+      "last" => now
+    }
+
+  # M3-2: a `tof`'s runs, energised and not.
+  defp held_on(timer, now),
+    do: %{
+      "pre" => integer(Map.get(timer, "pre")),
+      "acc" => 0,
+      "dn" => 1,
+      "tt" => 0,
+      "en" => 1,
+      "last" => now
+    }
+
+  defp off_delay(timer, now),
+    do: delayed(closed?(Map.get(timer, "en")) or closed?(Map.get(timer, "tt")), timer, now)
+
+  defp delayed(true, timer, now) do
+    pre = integer(Map.get(timer, "pre"))
+    limit = max(pre, 0)
+    elapsed = elapsed(closed?(Map.get(timer, "tt")), Map.get(timer, "last"), now)
+    acc = min(max(integer(Map.get(timer, "acc")), 0) + elapsed, limit)
+    running = acc != limit
+
+    %{
+      "pre" => pre,
+      "acc" => acc,
+      "dn" => one(running),
+      "tt" => one(running),
+      "en" => 0,
+      "last" => now
+    }
+  end
+
+  defp delayed(false, timer, now),
+    do: %{
+      "pre" => integer(Map.get(timer, "pre")),
+      "acc" => integer(Map.get(timer, "acc")),
       "dn" => 0,
       "tt" => 0,
       "en" => 0,

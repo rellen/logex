@@ -1304,8 +1304,8 @@ defmodule Logex.ValidationTest do
             {["t1", ton, :var, 5000],
              "`t1` is a ton: its preset is the number on its `ton` instruction, " <>
                "as in `ton t1 5000`, not an initial value on its declaration"},
-            {["t1", %{ton | name: "tof"}],
-             ~s|unknown function block type "tof": logex has the built-in types of Logex.FbType.builtins/0 | <>
+            {["t1", %{ton | name: "tonr"}],
+             ~s|unknown function block type "tonr": logex has the built-in types of Logex.FbType.builtins/0 | <>
                @given},
             {["t1", %{ton | members: []}],
              ~s|unknown function block type "ton": logex has the built-in types of Logex.FbType.builtins/0 | <>
@@ -1715,6 +1715,119 @@ xic a ton t1 7") == [
                "line 7: `ote lamp` follows `ton` on its path: what passes on after a `ton` is " <>
                  "not settled, so a `ton` ends its path; read the timer's `.dn` on a rung below"
              ]
+    end
+  end
+
+  describe "timers (M3-2)" do
+    @timers "var f tof\nvar t1 ton\nvar c ctu\nvar a bool\nvar n dint\n"
+
+    test "each runs a timer of its own type only, and starts its `.pre` from its preset" do
+      assert source_errors(
+               @timers <>
+                 "xic a tof t1 5\nxic a ton f 5\nxic a tof c 5\nxic a ctu f 5\nxic a tof a 5\n" <>
+                 "tof 5 5\ntof f"
+             ) == [
+               "line 6: `tof` runs a tof, but `t1` is a ton (declared on line 2)",
+               "line 7: `ton` runs a ton, but `f` is a tof (declared on line 1)",
+               "line 8: `tof` runs a tof, but `c` is a ctu (declared on line 3)",
+               "line 9: `ctu` runs a ctu or a ctud, but `f` is a tof (declared on line 1)",
+               "line 10: `tof` runs a tof, but `a` is a bool (declared on line 4)",
+               "line 11: `tof` expects a tof, found `5`",
+               "line 12: `tof` expects 2 operands (a tof, then a preset), found 1"
+             ]
+
+      assert {:ok, program} =
+               source_compile(@timers <> "xic a TOF f 30\nxic a ton t1 5\nxic a ctu c 1")
+
+      assert %{"f" => %{"pre" => 30, "acc" => 0}} = Logex.Program.initial_env(program)
+    end
+
+    test "one runs a timer, its preset a number of milliseconds, one from a tag moved into " <>
+           "`.pre`" do
+      assert source_errors(
+               @timers <> "xic a tof f 5\nxic a tof f 6\nxic a tof f n\nxic a tof f 2147483648"
+             ) == [
+               "line 7: `f` is already run by the `tof` on line 6: one `tof` runs a timer",
+               "line 8: `tof` takes its preset as a number of milliseconds, found `n`: to " <>
+                 "preset `f` from a tag, `move n f.pre` on a rung above",
+               "line 8: `f` is already run by the `tof` on line 6: one `tof` runs a timer",
+               "line 9: `tof` takes a preset of 0 to 2147483647 ms, found `2147483648`",
+               "line 9: `f` is already run by the `tof` on line 6: one `tof` runs a timer"
+             ]
+    end
+
+    test "nothing may follow one on its path (decision 73), read by its `.dn`" do
+      assert source_errors(@timers <> "xic a tof f 5 ote a\nxic a ( tof f 5 | xic a ) ote a") ==
+               [
+                 "line 6: `ote a` follows `tof f` on its path: what passes on after a `tof` is " <>
+                   "not settled, so a `tof` ends its path; read the timer with `xic f.dn` on a " <>
+                   "rung below",
+                 "line 7: `f` is already run by the `tof` on line 6: one `tof` runs a timer",
+                 "line 7: `ote a` follows `tof f` on its path: what passes on after a `tof` is " <>
+                   "not settled, so a `tof` ends its path; read the timer with `xic f.dn` on a " <>
+                   "rung below"
+               ]
+
+      assert source_errors("var a bool\nxic a tof a 3 ote a") == [
+               "line 2: `tof` runs a tof, but `a` is a bool (declared on line 1)",
+               "line 2: `ote a` follows `tof a` on its path: what passes on after a `tof` is not " <>
+                 "settled, so a `tof` ends its path; read the timer's `.dn` on a rung below"
+             ]
+    end
+
+    test "logic writes only `.pre` and `.acc` (decision 9), and reads every member" do
+      assert source_errors(
+               @timers <> "xic a tof f 5\nxic a ote f.dn\nxic a ote f.tt\nxic a ote f.en"
+             ) ==
+               [
+                 "line 7: `ote` writes `f.dn`, but logic may write only `.pre` and `.acc` of a tof",
+                 "line 8: `ote` writes `f.tt`, but logic may write only `.pre` and `.acc` of a tof",
+                 "line 9: `ote` writes `f.en`, but logic may write only `.pre` and `.acc` of a tof"
+               ]
+
+      assert source_warnings(
+               "var_input a bool\nvar_output y bool\nvar f tof\nxic a tof f 5\n" <>
+                 "xic a move 9 f.pre\nxic a move 1 f.acc\nxic f.dn xic f.tt xic f.en ge f.acc 1 ote y"
+             ) == []
+    end
+
+    test "a timer no instruction of its type runs is a warning" do
+      assert source_warnings("var f tof\nvar_input a bool\nxic a move 4 f.pre") == [
+               "line 1: warning: `f` is a tof, but no `tof` runs it: it never times"
+             ]
+    end
+
+    test "an undeclared timer is offered its declaration, and its word names no tag" do
+      assert source_errors("tof run_on 5") == [
+               "line 1: `run_on` is not declared (this program declares no tags: each is now " <>
+                 "declared before the first rung, as `var run_on tof`)"
+             ]
+
+      assert source_errors("var tof bool\nvar TOF dint\nvar a bool\nxic a ote a") == [
+               "line 1: `tof` is an instruction and cannot name a tag",
+               "line 2: `TOF` is an instruction and cannot name a tag"
+             ]
+
+      assert source_errors(@timers <> "xic a tof f 5\ncal f a") == [
+               "line 7: `cal` runs an instance of a user function block, but `f` is a tof " <>
+                 "(declared on line 1), which `tof f` and its preset run"
+             ]
+    end
+
+    test "from Elixir, a timer takes no preset: that is the number on its instruction" do
+      for type <- ~w(tof) do
+        tag = %Logex.Tag{
+          name: "f",
+          type: Logex.FbType.builtin(type),
+          section: :var,
+          initial: %{"pre" => 4}
+        }
+
+        assert Logex.Declarations.check(tag) == [
+                 "`f` is a #{type}: its preset is the number on its `#{type}` instruction, " <>
+                   "as in `#{type} f 5000`, not an initial value on its declaration"
+               ]
+      end
     end
   end
 

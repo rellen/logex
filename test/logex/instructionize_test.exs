@@ -82,6 +82,7 @@ defmodule Logex.InstructionizeTest do
       var t1 ton
       var s1 seal
       var k ctud
+      var r1 tof
       xic a xio b ons e ote c
       xic a otl b
       xic a otu b
@@ -91,6 +92,7 @@ defmodule Logex.InstructionizeTest do
       cal s1 a 0 h
       xic a ctu k 5
       xic b ctd k 5
+      xic a tof r1 30
       """
 
       assert {:ok, %Logex.Program{rungs: rungs} = program} =

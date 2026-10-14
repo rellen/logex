@@ -52,6 +52,8 @@ defmodule Logex.Compiler do
     "le" => {:le, [{:value, :dint}, {:value, :dint}]},
     "ge" => {:ge, [{:value, :dint}, {:value, :dint}]},
     "ton" => {:ton, [{:instance, "ton"}, {:preset, :dint}]},
+    # M3-2: the off-delay timer, rung power its IN, the preset its starting `.pre` in ms.
+    "tof" => {:tof, [{:instance, "tof"}, {:preset, :dint}]},
     # M3-1: IEC's counters (decision 67). Rung power is the count input of the counter's
     # side the mnemonic names, `cu` or `cd`, and the preset is its starting `pv`, a count.
     # An instance slot may take several types, a list: a `ctud` is run by one of each
