@@ -663,8 +663,8 @@ running" reads backwards.
 >   to the device, but here "done" is on while the timer is still running.
 > - **A new signal name used only by this timer**, such as "output".
 >
-> **Recommendation: "timing".** Then a horn wired to "done" does not sound during the
-> part that is not done yet.
+> **Recommendation: "timing".** Then "done" never means "still running" on any timer,
+> and the horn is wired to the signal that is on while the pulse runs.
 
 **Q8 (technical).** Confirm Q2's rule for `tp`: no pulse on the first scan, even with
 the fault present at start. IEC TP pulses. **Recommend confirming.** An alarm present
