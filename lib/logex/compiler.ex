@@ -76,6 +76,10 @@ defmodule Logex.Compiler do
     # refused.
     "div" => {:div, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
     "mod" => {:mod, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
+    # M3-3: `neg a d` is 0 - a, the vendors' NEG, and `abs a d` IEC's ABS: one source, then
+    # the destination. The most negative dint has no positive twin, so it alone overflows.
+    "neg" => {:neg, [{:value, :dint}, {:write, :dint}]},
+    "abs" => {:abs, [{:value, :dint}, {:write, :dint}]},
     # M2-5: `cal` runs an instance of a user function block. Its entry is a marker, not a
     # signature: the signature is the block's, built per compile from the instance's type
     # (Logex.FbType.signature/1), the instance, then the block's var_inputs and var_outputs

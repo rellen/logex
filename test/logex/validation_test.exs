@@ -1219,8 +1219,8 @@ defmodule Logex.ValidationTest do
     end
   end
 
-  # M3-3: IEC's arithmetic, `add`, `sub`, `mul`, `div` and `mod` (decisions 77 to 79 and
-  # 98).
+  # M3-3: IEC's arithmetic, `add`, `sub`, `mul`, `div` and `mod`, and `neg` and `abs`
+  # (decisions 77 to 79 and 98).
   describe "arithmetic (M3-3)" do
     test "takes two dint sources, each a tag, a member or a literal, and a dint it writes" do
       assert source_errors(
@@ -1289,10 +1289,39 @@ defmodule Logex.ValidationTest do
       assert source_warnings("var d dint\ndiv 0 d d\nmod d d d\nadd 0 d d\nsub d 0 d") == []
     end
 
+    test "`neg` and `abs` take a dint source, a tag, a member or a literal, and a dint they write" do
+      assert source_errors(
+               "var b bool\nvar d dint\nvar_input i dint\nvar t1 ton\n" <>
+                 "neg b d\nabs 2147483648 d\nneg d\nabs d 5\nneg d i\nabs d t1.dn\nneg d d d"
+             ) == [
+               "line 5: `neg` reads a dint, but `b` is a bool (declared on line 1)",
+               "line 6: `abs` reads a dint: `2147483648` does not fit in 32 bits",
+               "line 7: `neg` expects 2 operands (a value, then a tag), found 1",
+               "line 8: `abs` expects a tag, found `5`",
+               "line 9: `neg` writes `i`, a var_input (declared on line 3): logic must not " <>
+                 "write an input",
+               "line 10: `abs` writes a dint, but `t1.dn` is a bool",
+               "line 10: `abs` writes `t1.dn`, but logic may write only `.pre` and `.acc` of a ton",
+               "line 11: unknown instruction `d`"
+             ]
+
+      assert source_warnings(
+               "var d dint\nvar b bool\nvar t1 ton\nxic b ton t1 5\nneg t1.acc d ote b\n" <>
+                 "abs -2147483648 d\nneg d d\nneg 5 t1.pre"
+             ) ==
+               [
+                 "line 6: warning: `abs` reads a literal, `-2147483648`: its result never changes",
+                 "line 8: warning: `neg` reads a literal, `5`: its result never changes"
+               ]
+    end
+
     test "are reserved in any case" do
-      assert source_errors("var add dint\nvar SUB bool\nvar Mul dint\nvar DIV dint\nvar Mod bool") ==
+      assert source_errors(
+               "var add dint\nvar SUB bool\nvar Mul dint\nvar DIV dint\nvar Mod bool\n" <>
+                 "var neg dint\nvar ABS dint"
+             ) ==
                for(
-                 {word, line} <- Enum.with_index(~w(add SUB Mul DIV Mod), 1),
+                 {word, line} <- Enum.with_index(~w(add SUB Mul DIV Mod neg ABS), 1),
                  do: "line #{line}: `#{word}` is an instruction and cannot name a tag"
                )
 

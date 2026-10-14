@@ -239,9 +239,10 @@ defmodule Logex.Runtime do
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
 
   # M3-3: the arithmetic of two sources whose result is brought into a dint (decision 77),
-  # and the two that divide, whose divisor may be 0 (decision 78).
+  # the two that divide, whose divisor may be 0 (decision 78), and the two of one source.
   @sums [:add, :sub, :mul]
   @divisions [:div, :mod]
+  @signs [:neg, :abs]
 
   @dint_max 2_147_483_647
   @dint_min -2_147_483_648
@@ -1426,6 +1427,20 @@ defmodule Logex.Runtime do
     {false, env}
   end
 
+  # M3-3: `neg` and `abs` (docs/naming.md; the vendors' NEG and IEC's ABS; decisions 77 and
+  # 98). Energised, `neg` writes 0 - a and `abs` a's absolute value, brought into the dint:
+  # -2147483648 alone has no positive twin, so each gives 2147483647 for it, with no power
+  # on that scan; the power out is otherwise true. De-energised, nothing is written and no
+  # power passes.
+  defp evaluate({op, _, [a, destination]}, {true, env}, _scan) when op in @signs do
+    {power, value} = bounded(signed(op, integer(read(env, a))))
+    {power, write(env, destination, value)}
+  end
+
+  defp evaluate({op, _, _}, {false, env}, _scan) when op in @signs do
+    {false, env}
+  end
+
   # The on-delay timer (docs/naming.md, `ton`; docs/organisation.md §4.6). Rung power is
   # its IN. `last` is the time this `ton` last ran, energised or not (decision 5), and
   # energised, `.acc` gains `now - last`, unless `.en` shows it was not already enabled:
@@ -1727,6 +1742,9 @@ defmodule Logex.Runtime do
 
   defp quotient(:div, a, b), do: div(a, b)
   defp quotient(:mod, a, b), do: rem(a, b)
+
+  defp signed(:neg, a), do: -a
+  defp signed(:abs, a), do: abs(a)
 
   # A result outside a dint is brought to the nearer limit, and passes no power on that
   # scan (decision 77); one inside it passes power.

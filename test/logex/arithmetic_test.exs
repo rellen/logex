@@ -1,7 +1,8 @@
 defmodule Logex.ArithmeticTest do
   @moduledoc """
-  M3-3: IEC's arithmetic on dints, `add`, `sub`, `mul`, `div` and `mod`
-  (docs/organisation.md decisions 77 to 79 and 98; docs/naming.md, each mnemonic's stanza), each rule of a scan pinned from
+  M3-3: IEC's arithmetic on dints, `add`, `sub`, `mul`, `div` and `mod`, and `neg` and
+  `abs` (docs/organisation.md decisions 77 to 79 and 98; docs/naming.md, each mnemonic's
+  stanza), each rule of a scan pinned from
   source through `Logex.Runtime.call/4`, a test that fails when the rule alone is reverted.
   The compiler's refusals and warnings are `validation_test.exs`'s, the writes of the walk
   `walk_test.exs`'s, and an edit's rules `edit_test.exs`'s.
@@ -213,6 +214,91 @@ defmodule Logex.ArithmeticTest do
 
     test "de-energised, writes nothing and passes no power" do
       assert two("mod", 7, 3, 0) == {0, 0}
+    end
+  end
+
+  # One scan of a program with the source `a`, the result `r` and its power `ok`.
+  @one """
+  var_input go bool
+  var_input a dint
+  var_output r dint
+  var_output ok bool
+  xic go OP a r ote ok
+  """
+
+  defp one(op, a, go \\ 1) do
+    p = c!(String.replace(@one, "OP", op))
+    [out] = trace(p, [%{"go" => go, "a" => a}])
+    {out["r"], out["ok"]}
+  end
+
+  describe "neg" do
+    test "writes 0 - a and passes power" do
+      assert one("neg", 5) == {-5, 1}
+      assert one("neg", -5) == {5, 1}
+      assert one("neg", 0) == {0, 1}
+      assert one("neg", @max) == {-@max, 1}
+      assert one("neg", -@max) == {@max, 1}
+    end
+
+    # The most negative dint has no positive twin: decision 77's limit, with no power.
+    test "the minimum alone overflows: the top, and no power on that scan" do
+      assert one("neg", @min) == {@max, 0}
+    end
+
+    test "de-energised, writes nothing and passes no power" do
+      assert one("neg", 5, 0) == {0, 0}
+      p = c!(String.replace(@one, "OP", "neg"))
+
+      assert trace(p, [%{"go" => 1, "a" => 4}, %{"go" => 0, "a" => 9}]) ==
+               [%{"r" => -4, "ok" => 1}, %{"r" => -4, "ok" => 0}]
+    end
+  end
+
+  describe "abs" do
+    test "writes a where a >= 0 and -a otherwise, and passes power" do
+      assert one("abs", 5) == {5, 1}
+      assert one("abs", -5) == {5, 1}
+      assert one("abs", 0) == {0, 1}
+      assert one("abs", @max) == {@max, 1}
+      assert one("abs", -@max) == {@max, 1}
+    end
+
+    test "the minimum alone overflows: the top, never a negative, and no power" do
+      assert one("abs", @min) == {@max, 0}
+    end
+
+    test "de-energised, writes nothing and passes no power" do
+      assert one("abs", -5, 0) == {0, 0}
+      p = c!(String.replace(@one, "OP", "abs"))
+
+      assert trace(p, [%{"go" => 1, "a" => -4}, %{"go" => 0, "a" => -9}]) ==
+               [%{"r" => 4, "ok" => 1}, %{"r" => 4, "ok" => 0}]
+    end
+
+    test "its destination may be its source, and a member is read and written" do
+      p =
+        c!("""
+        var_input a dint
+        var_output r dint
+        var t1 ton
+        move a r
+        abs r r neg r t1.acc
+        move t1.acc r
+        """)
+
+      assert Enum.map(trace(p, [%{"a" => -7}, %{"a" => 3}]), & &1["r"]) == [-7, -3]
+    end
+
+    test "a source a hand-built env holds as no integer reads 0" do
+      p = c!(String.replace(@one, "OP", "neg"))
+
+      for junk <- [nil, 1.5, %{}, :x] do
+        state = %Instance{type: "m", env: %{"go" => 1, "a" => junk}, now: 0, first: true}
+
+        assert {%{"r" => 0, "ok" => 1}, _} =
+                 Runtime.call(p, state, %{}, %Scan{now: 0, first: true})
+      end
     end
   end
 

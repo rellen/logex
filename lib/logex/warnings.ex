@@ -9,7 +9,7 @@ defmodule Logex.Warnings do
   - an `ons` storage bit that another instruction writes (M1-6): the one-shot then fires
     on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`);
   - a comparison of two literals (M1-6): its result never changes; since M3-3 so is an
-    arithmetic instruction whose every source is a literal, which `move` says;
+    arithmetic instruction whose every source is a literal, `add 2 3 x` or `neg 5 x`;
   - a timer no `ton` runs (M1-6): it never times; since M3-1 any built-in instance no
     instruction of its type runs, in its type's words, a counter no `ctu` or `ctd` runs:
     it never counts;
@@ -186,6 +186,9 @@ defmodule Logex.Warnings do
            "`#{symbol}` reads two literals, `#{a}` and `#{b}`: its result never changes"
          )
        ]
+
+  defp constant({symbol, line, [{:int_lit, _, a}, _destination]}) when symbol in [:neg, :abs],
+    do: [warning(line, "`#{symbol}` reads a literal, `#{a}`: its result never changes")]
 
   defp constant(_instruction), do: []
 
