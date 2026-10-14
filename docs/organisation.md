@@ -1224,7 +1224,9 @@ again where the program it starts still has the `ons`. At the top level every ru
 so a scan still empties the list there. Landed with M2-5, 2026-10-04: a `cal` records
 that its body ran, and the scan takes the record out.)* A switch lists:
 - each `ons` of T that is new, or whose rung differs with line numbers ignored, against
-  the program that last scanned;
+  the program that last scanned, and, since M3-1, with the preset of every `ton` and
+  counter on it ignored too, which no power on the rung reads, so a preset changed alone
+  blocks no `ons` (decision 87);
 - each `ons` of T whose storage bit that program wrote through anything but an identical
   `ons`, such as an `otu` (fix F7).
 
@@ -2662,7 +2664,9 @@ routine choices. All eighty-nine are kept with their options so the reasons stay
     edit never touched. Adopted: an untouched `ons` behaves normally. *(Changed 2026-10-02
     by decision 32: "for that one scan" becomes "until a scan runs it". At the top level
     every rung runs, so nothing changes there; inside a function block a false `cal`
-    leaves its `ons` unrun.)*
+    leaves its `ons` unrun.)* *(Changed 2026-10-14 by decision 87: "whose rung changed"
+    is read with the preset of every `ton` and counter on the rung ignored too, so a
+    `ton`'s preset changed alone no longer blocks an `ons` on its rung.)*
 22. **Inputs across a switch (E2):** report each var_input that becomes live,
     `{:input, name, value}`, and each one the running program no longer reads,
     `{:unread, name, value}`, the host sending the real value of each live one before the
@@ -3523,7 +3527,15 @@ alternative the record keeps.
     - or a list and a report kind of their own.
 
     *Taken: decision 21's list.* A `ctud` blocks each side alone, so an edit of its infeed
-    rung loses no outfeed edge. *(Landed with M3-1, 2026-10-14.)*
+    rung loses no outfeed edge. *(Landed with M3-1, 2026-10-14.)* *(Added 2026-10-14,
+    after M3-1's review: the comparison without presets is decision 21's for every entry
+    of the list, an `ons`'s storage bit among them, not only a counter's edge memory, and
+    a `ton`'s preset is left out as a counter's is. That changes what came before M3-1: an
+    edit that moves only the preset of a `ton` on a rung that holds an `ons`, `xic a ons b
+    ton t1 500` to `ton t1 600`, blocked the `ons` until M3-1 and blocks it no more, so
+    its next real edge is no longer lost. It loses fewer real edges and makes none up,
+    since the preset is read by no power on the rung, and was kept. M3-1's step 3 made the
+    change without saying so; this note owns it, and `edit_test.exs` pins it.)*
 88. **A counter's forecast after its preset moves (M3-1).** A `.pv` moved by decisions 23
     and 27 changes `q` (`qu` on a `ctud`) at the counter's next run, whatever its rung.
     - Report it as `:dn_drops` and `:dn_rises`, read as "the done output", `{cv, pv}`;

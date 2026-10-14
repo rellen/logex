@@ -562,7 +562,8 @@ defmodule Logex.Edit.Plan do
 
   # Decision 21 and fix F7: the storage bits of the `ons` of `to` that a switch from `from`,
   # the program that last scanned, blocks until a scan runs each. Each is blocked unless
-  # `from` has that `ons` in an identical rung, line numbers ignored, and writes its bit
+  # `from` has that `ons` in an identical rung, line numbers and presets ignored (M3-1,
+  # decision 87, so a `ton`'s preset changed alone blocks none), and writes its bit
   # through nothing else: an `ons` that `to` adds, one whose rung it changes, and one whose
   # bit `from` also writes through another instruction, which may leave the bit at a value
   # that is not the power the `ons` last received.

@@ -2419,6 +2419,13 @@ names it breaks. Growth tests are in reductions.
   a tag; and a second `ote` is told by its target's path, a ctud's `r` and `ld` being two
   bits. The unknown-type message for a type given from Elixir now names
   `Logex.FbType.builtins/0`, not `Logex.FbType.ton()`. The walk found no defect in `lib/`.
+
+  M3-1's review found no defect in the counters, against IEC and the decisions, and its
+  fixes are the commits after (6). Step 3 had changed one rule of OE-1's without saying
+  so: a rung is compared without the preset of any `ton` on it too, so an edit that moves
+  only a `ton`'s preset no longer blocks an `ons` on its rung. The change loses fewer real
+  edges and makes none up, so it was kept, owned by decision 87 and pinned in
+  `edit_test.exs`. The suite is at 975 tests (8 doctests).
 - **M3-2 · The other timers: `tof`, `tp`, `rto`.** Each an instruction and a type word,
   as `ton` is, with the `ton`'s members `.pre .acc .dn .tt .en` (decision 68 keeps them for
   timers), in milliseconds. `tp`'s pulse is `.tt`, `.dn` coming on as it ends (decision

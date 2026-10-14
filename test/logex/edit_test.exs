@@ -1247,6 +1247,15 @@ defmodule Logex.EditTest do
       end
     end
 
+    test "one whose rung the edit changes in its ton's preset alone keeps a real edge on the " <>
+           "switch scan (decision 87)" do
+      src1 = "var t1 ton\nxic go ons s9 ton t1 500\nxic t1.en ote pulse"
+      src2 = String.replace(src1, "t1 500", "t1 600")
+
+      assert {%{"pulse" => 1}, [{:preset, "t1", {500, 600}}], %Instance{ons_blocked: []}} =
+               switched(src1, src2, [{0, %{}}, {10, %{}}], [{10, %{"go" => 1}}])
+    end
+
     test "no switch writes a storage bit, so a rung that reads one sees no phantom write" do
       assert {%{"y" => 0, "pulse" => 0}, [{:ons_blocked, "s9", 0}], %Instance{env: env}} =
                switched(

@@ -121,10 +121,12 @@ defmodule Logex.Edit do
   writes its bit. At the top level that is the next scan; inside a function block's
   instance, the next whose `cal` runs its body (decision 32). Against the program that last
   scanned, a switch lists each `ons` of the program it starts that is not in an identical
-  rung there, line numbers ignored, or whose bit that program also writes through another
-  instruction: an `ons` the edit adds, one whose rung it changes, and one whose bit may not
-  hold the power the `ons` last received. An untouched `ons` is not listed, and keeps a real
-  edge on the switch scan.
+  rung there, line numbers and the preset of every timer and counter on it ignored, or
+  whose bit that program also writes through another instruction: an `ons` the edit adds,
+  one whose rung it changes, and one whose bit may not hold the power the `ons` last
+  received. An untouched `ons` is not listed, and keeps a real edge on the switch scan; so
+  does one whose rung changes only in a `ton`'s preset, which no power on the rung reads,
+  and which blocked it before M3-1 (decision 87).
   - The program that last scanned is the one the switch stops where a scan has run since
     the last switch (`Logex.Instance`'s `switched` is false), and otherwise the one this
     edit recorded at that switch.
