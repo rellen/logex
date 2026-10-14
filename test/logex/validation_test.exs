@@ -258,13 +258,10 @@ defmodule Logex.ValidationTest do
       assert {:error, _undeclared} = Compiler.instructionize(tree)
     end
 
-    test "a negative literal, or one that is not an integer, in a declaration line too" do
-      for value <- [-1, -2_147_483_648, 1.5, :x, "1"] do
+    test "a literal that is not an integer, in a declaration line too" do
+      for value <- [1.5, :x, "1", nil] do
         literal = {:int_lit, 2, value}
-
-        message =
-          "a literal is an integer, 0 or more: a negative one does not lex yet " <>
-            "(PLAN.md §5), got: #{inspect(literal)}"
+        message = "a literal is an integer, got: #{inspect(literal)}"
 
         refused(rungs([@good, {:rung, [{:name, 2, "move"}, literal, {:name, 2, "aa"}]}]), message)
 
@@ -280,6 +277,23 @@ defmodule Logex.ValidationTest do
 
       assert {:error, [%Logex.Diagnostic{message: "`move` writes `1" <> _}]} =
                Compiler.instructionize(tree, @declared)
+    end
+
+    # M3-3 (decision 97): a negative literal lexes, so a tree may hold one, as `parse/1`
+    # gives it, in a rung and in a declaration line alike.
+    test "a negative literal is a tree's, as `-5` lexes" do
+      declared = [Logex.Tag.new!("k", :dint)]
+
+      for value <- [-1, -2_147_483_648, -(10 ** 40)] do
+        tree = rungs([{:rung, [{:name, 1, "eq"}, {:int_lit, 1, value}, {:name, 1, "k"}]}])
+        assert Logex.Parser.well_formed!(tree) == tree
+        assert {_ok_or_error, _} = Compiler.instructionize(tree, declared)
+      end
+
+      {:ok, tokens, _} = Compiler.tokenize("var k dint -5\nvar x bool\neq k -5 ote x")
+      assert {:ok, tree} = Compiler.parse(tokens)
+      assert {:ok, program} = Compiler.instructionize(tree)
+      assert program.tags["k"].initial == -5
     end
 
     test "a branch group with no legs, which differs from one with an empty leg" do
@@ -1480,19 +1494,14 @@ defmodule Logex.ValidationTest do
              ]
     end
 
-    test "a negative preset never reaches the compiler: the tree is refused on entry" do
-      # `-1` does not lex yet (PLAN.md §5), so only a tree built as data holds it, and
-      # instructionize/2 refuses that as a host mistake (OE-1, decision 28). Until a
-      # negative literal lexes, the preset's range is reached only at its upper end, above.
-      {:ok, tokens, _} = Compiler.tokenize("var t1 ton")
-      {:ok, {:routine, {:rungs, declarations}}} = Compiler.parse(tokens)
-      rung = {:rung, [{:name, 2, "ton"}, {:name, 2, "t1"}, {:int_lit, 2, -1}]}
-
-      assert_raise ArgumentError,
-                   "not a tree Logex.Parser.parse/1 can produce: a literal is an integer, " <>
-                     "0 or more: a negative one does not lex yet (PLAN.md §5), " <>
-                     "got: {:int_lit, 2, -1}",
-                   fn -> Compiler.instructionize({:routine, {:rungs, declarations ++ [rung]}}) end
+    # M3-3 (decision 97): `-1` lexes, and a preset stays 0 or more, so a negative one is
+    # refused at its line, as one too large is, a timer's in milliseconds and a counter's a
+    # count.
+    test "a negative preset is refused at its line, as one too large is" do
+      assert source_errors("var t1 ton\nvar c ctu\nton t1 -1\nctu c -2147483648") == [
+               "line 3: `ton` takes a preset of 0 to 2147483647 ms, found `-1`",
+               "line 4: `ctu` takes a preset of 0 to 2147483647, found `-2147483648`"
+             ]
     end
 
     test "one ton runs a timer: a second is an error, citing the first" do
@@ -2466,13 +2475,6 @@ xic a ton t1 7") == [
             {["a", :bool, :var, "1"], ~s(the initial value of `a` must be an integer, found "1")},
             {["x", :dint, :var, -2_147_483_649],
              "`x` is a dint: `-2147483649` does not fit in 32 bits"},
-            # What no declaration line can say, until a negative literal lexes (OE-1).
-            {["x", :dint, :var, -1],
-             "`x` is a dint: its initial value `-1` is negative, which no declaration line " <>
-               "can say until a negative literal lexes"},
-            {["x", :dint, :var_output, -2_147_483_648],
-             "`x` is a dint: its initial value `-2147483648` is negative, which no declaration " <>
-               "line can say until a negative literal lexes"},
             {["x", :bool, :var, -1],
              "`x` is a bool: its initial value must be 0 or 1, found `-1`"},
             {["x", :int, :var, 5], "unknown type :int: #{@has_elixir} — did you mean `:dint`?"},
@@ -2485,6 +2487,13 @@ xic a ton t1 7") == [
           ] do
         assert_raise ArgumentError, message, fn -> apply(Logex.Tag, :new!, args) end
       end
+
+      # M3-3 (decision 97): a negative initial value is one a line can say now, `var x dint
+      # -1`, so from Elixir too a dint may start negative.
+      assert %Logex.Tag{initial: -1} = Logex.Tag.new!("x", :dint, :var, -1)
+
+      assert %Logex.Tag{initial: -2_147_483_648} =
+               Logex.Tag.new!("x", :dint, :var_output, -2_147_483_648)
     end
 
     test "are checked again as they enter the table, however they were built" do
@@ -2493,9 +2502,8 @@ xic a ton t1 7") == [
              "unknown type :real: #{@has_elixir}"},
             {[%Logex.Tag{name: "a", type: :bool, section: :var, initial: 7}],
              "`a` is a bool: its initial value must be 0 or 1, found `7`"},
-            {[%Logex.Tag{name: "a", type: :dint, section: :var, initial: -7}],
-             "`a` is a dint: its initial value `-7` is negative, which no declaration line " <>
-               "can say until a negative literal lexes"},
+            {[%Logex.Tag{name: "a", type: :bool, section: :var, initial: -7}],
+             "`a` is a bool: its initial value must be 0 or 1, found `-7`"},
             {[
                %Logex.Tag{
                  name: "a",

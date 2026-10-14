@@ -101,8 +101,10 @@ defmodule Logex.Configuration do
   are neither all nil, as from Elixir, nor rising in each list, one element a line, as a
   file's are; a name, a location, a type or a task that the lexer does not read as one
   name token; a task's single that is neither nil nor one name token; a number that is not
-  an integer of 0 or more, since a negative literal does not lex yet (`PLAN.md` §5); a global's type that is neither `:bool` nor `:dint`; and a
-  connection's instance that is not a name, or with its member makes no one path.
+  an integer; a global's type that is neither `:bool` nor `:dint`; and a connection's
+  instance that is not a name, or with its member makes no one path. A negative number was
+  one too, until a negative literal lexed (M3-3, decision 97): a line can say one now, so
+  a negative interval or priority is a diagnostic, in the file's words, as one too large is.
 
   Each list of names a diagnostic ends with is given once, by the first diagnostic in
   line order that needs it, so a refusal is linear in its size. Its time is not: each
@@ -890,8 +892,8 @@ defmodule Logex.Configuration do
        )}
 
   # What no configuration text can say in an element's fields: a name, a type, a task or
-  # a location that is not one name token to the lexer; a number that is not an integer
-  # of 0 or more, since no negative literal lexes yet; a global's type that is neither
+  # a location that is not one name token to the lexer; a number that is not an integer,
+  # a negative one among those a line can say since M3-3; a global's type that is neither
   # :bool nor :dint, the type words a line has; and a connection's instance that is not a
   # name, or with its member no one path, as a line writes the two as one token. Each
   # such field is left out of the diagnostics.
@@ -937,7 +939,7 @@ defmodule Logex.Configuration do
           "found #{inspect(single)}"
       )
 
-  defp counted(value, _rule) when value == nil or (is_integer(value) and value >= 0), do: []
+  defp counted(value, _rule) when value == nil or is_integer(value), do: []
   defp counted(value, rule), do: [rule <> ", found #{inspect(value)}"]
 
   defp interval_rule(name), do: "task #{label(name)}: an interval is 1 to 2147483647 ms"
@@ -948,15 +950,8 @@ defmodule Logex.Configuration do
   defp global_type(%Global{name: name, type: type}),
     do: ["global #{label(name)} has type #{inspect(type)}: a global is :bool or :dint"]
 
-  defp global_initial(%Global{initial: initial})
-       when initial == nil or (is_integer(initial) and initial >= 0),
-       do: []
-
-  defp global_initial(%Global{name: name, initial: initial}) when is_integer(initial),
-    do: [
-      "global #{label(name)} has the initial value `#{initial}`, which is negative: " <>
-        "no line can say one until a negative literal lexes"
-    ]
+  defp global_initial(%Global{initial: initial}) when initial == nil or is_integer(initial),
+    do: []
 
   defp global_initial(%Global{name: name, initial: initial}),
     do: [
@@ -994,10 +989,10 @@ defmodule Logex.Configuration do
   defp other_end_rule(%Connection{instance: instance, member: member, to: to}),
     do:
       "#{path(instance, member)} is connected to #{inspect(to)}: a connection's other end is " <>
-        "a global, by name, or a constant of 0 or more"
+        "a global, by name, or a constant"
 
   # What a connection's other end is: a global's name, a constant, or the host's mistake.
-  defp other_end(to) when is_integer(to) and to >= 0, do: :constant
+  defp other_end(to) when is_integer(to), do: :constant
   defp other_end(to), do: global_or_junk(word?(to))
 
   defp global_or_junk(true), do: :global
@@ -1225,7 +1220,7 @@ defmodule Logex.Configuration do
     {Enum.concat(problems), used}
   end
 
-  # An interval or a priority a line can hold, an integer of 0 or more or none, is a
+  # An interval or a priority a line can hold, an integer or none, is a
   # diagnostic outside its range, in the configuration file's words; anything else was the
   # host's mistake. A task needs an interval, a single or both (M2-6).
   defp interval(%{interval: interval}) when is_integer(interval) and interval in @interval,
@@ -1264,14 +1259,13 @@ defmodule Logex.Configuration do
       )
     ]
 
-  defp interval(%{name: name, interval: interval, line: line})
-       when is_integer(interval) and interval > 0,
-       do: [
-         diagnostic(
-           line,
-           "the interval of `#{name}` is `#{interval}` ms: an interval is 1 to 2147483647 ms"
-         )
-       ]
+  defp interval(%{name: name, interval: interval, line: line}) when is_integer(interval),
+    do: [
+      diagnostic(
+        line,
+        "the interval of `#{name}` is `#{interval}` ms: an interval is 1 to 2147483647 ms"
+      )
+    ]
 
   defp interval(_task), do: []
 
@@ -1289,15 +1283,14 @@ defmodule Logex.Configuration do
       )
     ]
 
-  defp priority(%{name: name, priority: priority, line: line})
-       when is_integer(priority) and priority >= 0,
-       do: [
-         diagnostic(
-           line,
-           "the priority of `#{name}` is `#{priority}`: a priority is 0 to 65535, and 0 is " <>
-             "the highest"
-         )
-       ]
+  defp priority(%{name: name, priority: priority, line: line}) when is_integer(priority),
+    do: [
+      diagnostic(
+        line,
+        "the priority of `#{name}` is `#{priority}`: a priority is 0 to 65535, and 0 is " <>
+          "the highest"
+      )
+    ]
 
   defp priority(_task), do: []
 
@@ -1393,7 +1386,7 @@ defmodule Logex.Configuration do
   # scans.
   defp initial(%Global{initial: nil}, _location), do: []
 
-  defp initial(%Global{initial: v}, _location) when not is_integer(v) or v < 0, do: []
+  defp initial(%Global{initial: v}, _location) when not is_integer(v), do: []
 
   defp initial(%Global{name: name, line: line}, {:ok, {_device, "i", _address}}),
     do: [

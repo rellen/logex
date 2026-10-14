@@ -690,21 +690,22 @@ defmodule Logex.Configuration.Text do
   - a `%Logex.Configuration.Task{}`, its name one name token to the lexer and neither
     `single`, `interval` nor `priority` in any case, which a line reads as that keyword;
     its single nil or one name token, none of those three in any case either (M2-6); its
-    interval and its priority each nil or an integer of 0 or more;
+    interval and its priority each nil or an integer;
   - a `%Logex.Configuration.Global{}`, its name one name token to the lexer and none of
     `at`, `bool` or `dint` in any case, which a line reads as that keyword; its type
-    `:bool` or `:dint`; its initial value nil or an integer of 0 or more; its location nil
+    `:bool` or `:dint`; its initial value nil or an integer; its location nil
     or one name token;
   - a `%Logex.Configuration.Instance{}`, its name, its type and its task, if it has one,
     each one name token, its type not `with` in any case, which a line reads as that
     keyword;
   - a `%Logex.Configuration.Connection{}`, its instance a name with no `.`, since its first
     `.` begins the member, and the two one name token, as in `m1.start`; connected to a
-    global's name, one name token, or to a constant of 0 or more;
+    global's name, one name token, or to a constant;
 
   each with the keys of its struct and no others, and their lines all nil, as from Elixir,
   or positive and rising from entry to entry, one entry a line, as `read/1` gives them. A
-  number of 0 or more, since a negative one does not lex yet (`PLAN.md` §5).
+  number may be negative, since a negative literal lexes (M3-3, decision 97), `-5`, and
+  prints as it reads.
   """
   def entries!(entries) do
     proper!(entries, entries)
@@ -842,14 +843,8 @@ defmodule Logex.Configuration.Text do
   defp one_name!(_lexed, _word, entry), do: unsaid!("a name lexes as one name token", entry)
 
   defp count!(nil, _entry), do: :ok
-  defp count!(n, _entry) when is_integer(n) and n >= 0, do: :ok
-
-  defp count!(_n, entry),
-    do:
-      unsaid!(
-        "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)",
-        entry
-      )
+  defp count!(n, _entry) when is_integer(n), do: :ok
+  defp count!(_n, entry), do: unsaid!("a number is an integer", entry)
 
   # Lines are where a file declares each entry: none from Elixir, or rising, one a line.
   defp lines!([nil], _entries, _last), do: :ok

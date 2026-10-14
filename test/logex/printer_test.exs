@@ -30,7 +30,10 @@ defmodule Logex.PrinterTest do
                      # rungs -> rung rnd rungs
                      :many_rungs,
                      # a name with `.` parts: a lexer rule, not a production, but printed
-                     :dotted_name
+                     :dotted_name,
+                     # a literal below 0, its sign glued to its digits (M3-3, decision 97):
+                     # a lexer rule too, but printed
+                     :negative_int_lit
                    ])
 
   describe "round trip" do
@@ -83,6 +86,12 @@ defmodule Logex.PrinterTest do
 
     test "integer literals print in their shortest form" do
       assert Printer.print(parse!("mov 007 hh")) == "mov 7 hh"
+    end
+
+    # M3-3 (decision 97): a sign is glued to its digits, and `-0` is 0.
+    test "a negative literal prints with its sign glued on, and `-0` as 0" do
+      assert Printer.print(parse!("move -007 hh\neq -0 x")) == "move -7 hh\neq 0 x"
+      assert Printer.print(parse!("( move -5 a | ) ote b")) == "( move -5 a | ) ote b"
     end
 
     test "a branch group prints with single spaces around every delimiter" do
@@ -149,7 +158,7 @@ defmodule Logex.PrinterTest do
     # can hold, whatever the node's place: so a tree broken at any one node is refused.
     @breaks %{
       name: [:junk, :line_zero, :two_words, :not_a_word],
-      int_lit: [:negative, :not_an_integer, :line_nil],
+      int_lit: [:not_an_integer, :line_nil],
       branches: [:no_legs, :leg_not_a_list, :improper]
     }
 
@@ -232,7 +241,9 @@ defmodule Logex.PrinterTest do
   defp element(_depth, _, line), do: leaf(line)
 
   defp leaf(line), do: leaf(:rand.uniform(4), line)
-  defp leaf(1, line), do: {:int_lit, line, :rand.uniform(300) - 1}
+  # A literal from -299 to 300, negative ones since M3-3 (decision 97): the one draw it
+  # always made, so the corpus keeps its shapes.
+  defp leaf(1, line), do: {:int_lit, line, :rand.uniform(600) - 300}
   defp leaf(_, line), do: {:name, line, Enum.random(@names)}
 
   defp group(depth, line),
@@ -281,7 +292,6 @@ defmodule Logex.PrinterTest do
   defp break(:line_zero, {:name, _, word}), do: {:name, 0, word}
   defp break(:two_words, {:name, line, _}), do: {:name, line, "a b"}
   defp break(:not_a_word, {:name, line, _}), do: {:name, line, :aa}
-  defp break(:negative, {:int_lit, line, n}), do: {:int_lit, line, -n - 1}
   defp break(:not_an_integer, {:int_lit, line, n}), do: {:int_lit, line, n + 0.5}
   defp break(:line_nil, {:int_lit, _, n}), do: {:int_lit, nil, n}
   defp break(:no_legs, {:branches, _}), do: {:branches, []}
@@ -300,7 +310,7 @@ defmodule Logex.PrinterTest do
   defp shapes({:name, _, name}, _depth),
     do: MapSet.new([:name | dotted_shape(String.contains?(name, "."))])
 
-  defp shapes({:int_lit, _, _}, _depth), do: MapSet.new([:int_lit])
+  defp shapes({:int_lit, _, n}, _depth), do: MapSet.new([:int_lit | negative_shape(n < 0)])
 
   defp shapes({:branches, legs}, depth) do
     flags =
@@ -332,4 +342,6 @@ defmodule Logex.PrinterTest do
   defp depth_shape(_), do: []
   defp dotted_shape(true), do: [:dotted_name]
   defp dotted_shape(false), do: []
+  defp negative_shape(true), do: [:negative_int_lit]
+  defp negative_shape(false), do: []
 end

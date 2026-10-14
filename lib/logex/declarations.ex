@@ -501,7 +501,8 @@ defmodule Logex.Declarations do
   So it refuses, from Elixir too, what no declaration line can say (OE-1;
   `docs/organisation.md` §4.9, decisions 24 and 28): any initial value on an instance,
   whose preset is the number on the `ton` that runs it, with the message `var t1 ton 5`
-  gets; and a negative initial value, which no line holds until a negative literal lexes.
+  gets. A negative initial value it refused too, until a negative literal lexed (M3-3,
+  decision 97): a dint's may now be negative, as `var offset dint -5` says.
   A compiled timer carries its preset as an initial value (`Logex.Compiler`), which no
   declaration may give, so this refuses it too.
   """
@@ -684,15 +685,6 @@ defmodule Logex.Declarations do
     do: [
       "`#{name}` is a keyword of a configuration file, where a var_external's global is " <>
         "declared, so it cannot name a var_external"
-    ]
-
-  # A negative literal does not lex until PLAN.md §5's rule lands, so no declaration line
-  # holds one, and one from Elixir is refused as what the text cannot say (OE-1). Goes when
-  # the rule lands.
-  defp fit(true, :dint, name, v) when v < 0,
-    do: [
-      "#{label(name)} is a dint: its initial value `#{v}` is negative, which no declaration " <>
-        "line can say until a negative literal lexes"
     ]
 
   defp fit(true, _type, _name, _v), do: []

@@ -1672,7 +1672,7 @@ defmodule Logex.ApiContractTest do
     {:mode, "restart takes :cold or :warm"},
     # start/1 checks its configuration again: a host's mistake that check/1 raises, or a
     # diagnostic it gives, formatted.
-    {:negative, "a priority is 0, the highest, to 65535, found -"},
+    {:fractional, "a priority is 0, the highest, to 65535, found 1.5"},
     {:priority, "a priority is 0 to 65535, and 0 is the highest"},
     # M2-6: a task's single, a bool global's name, as a host gives one or a text could; an
     # event task's interval of 0 is told so before any other's, whose words its own share.
@@ -2384,10 +2384,11 @@ defmodule Logex.ApiContractTest do
     {:restart, mode not in [:cold, :warm], mode}
   end
 
-  # The configuration started again with one mistake: a negative priority, a line no file
-  # gives or a single that is no name, which no configuration text can say, or a priority
-  # past 65535, an interval of 0 or a single that names no bool global, which a text can
-  # (decisions 36 and 37; M2-6).
+  # The configuration started again with one mistake: a fractional priority, a line no
+  # file gives or a single that is no name, which no configuration text can say, or a
+  # priority past 65535, an interval of 0 or a single that names no bool global, which a
+  # text can (decisions 36 and 37; M2-6). A negative priority was the first until a
+  # negative literal lexed (M3-3, decision 97): a text can say one now.
   defp config_operation(8, config, _runtime) do
     task = fn single, interval, priority ->
       %{
@@ -2409,7 +2410,7 @@ defmodule Logex.ApiContractTest do
 
     {:start,
      pick([
-       task.(nil, 10, -1),
+       task.(nil, 10, 1.5),
        task.(nil, 10, 65_536),
        task.(nil, 0, 0),
        task.("i0", 0, 0),

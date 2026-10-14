@@ -133,8 +133,8 @@ defmodule Logex.Compiler do
   each reported as undeclared (M2-5): a misspelled block name is one message.
 
   The routine is checked first, against `Logex.Parser.well_formed!/1`: a tree that
-  `Logex.Parser.parse/1` could not have produced, such as an empty group, a negative
-  literal or a rung over two lines, raises `ArgumentError`, a host mistake, since no
+  `Logex.Parser.parse/1` could not have produced, such as an empty group, a literal that
+  is no integer or a rung over two lines, raises `ArgumentError`, a host mistake, since no
   source text says it and no diagnostic could cite it (OE-1). Then `declared`.
   """
   def instructionize(routine, declared \\ [], types \\ []) do
@@ -315,7 +315,7 @@ defmodule Logex.Compiler do
   defp ir_operand?({:name, line, name}) when is_integer(line) and line > 0, do: is_binary(name)
 
   defp ir_operand?({:int_lit, line, value}) when is_integer(line) and line > 0,
-    do: is_integer(value) and value >= 0
+    do: is_integer(value)
 
   defp ir_operand?({:member, line, path}) when is_integer(line) and line > 0,
     do: proper?(path, &is_binary/1)
@@ -1520,15 +1520,13 @@ defmodule Logex.Compiler do
 
   # A literal in a dint slot must fit 32 bits, as a declared initial value must (M1-6: the
   # comparisons). An `:any` slot's literal is checked against the tag beside it, by unify/3.
-  # Until PLAN.md §5's negative literals lex, Logex.Parser.well_formed!/1 refuses one on
-  # entry (OE-1), so this and unify/3 meet only a literal too large, never one too small;
-  # the lower ends are kept for them.
+  # Since M3-3 a literal may be negative (decision 97), so each meets one too small too.
   defp check_tag({{:value, :dint}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics),
     do: literal(Declarations.fits?(:dint, value), value, {line, word}, diagnostics)
 
-  # A preset is a dint, a number of milliseconds for a timer, and never negative
-  # (docs/naming.md, `ton`). Only a preset too large reaches this until a negative literal
-  # lexes, as above.
+  # A preset is a dint, a number of milliseconds for a timer or a count for a counter, and
+  # never negative (docs/naming.md, `ton`): a negative literal lexes since M3-3, and is
+  # refused here (decision 97).
   defp check_tag({{:preset, _}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics),
     do: preset(Declarations.preset?(value), value, {line, word}, diagnostics)
 

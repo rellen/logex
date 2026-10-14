@@ -1348,28 +1348,31 @@ defmodule Logex.EndToEndTest do
       t2 = Logex.Tag.new!("t2", Logex.FbType.ton())
       assert {:ok, %Logex.Program{}} = Logex.Compiler.instructionize(tree, [t2])
 
-      # No text says `move -900 speed_sp` until a negative literal lexes (PLAN.md §5), so
-      # the tree that would is a host mistake. Matched by its rule: the rest of the message
-      # prints the node, a shape of the tree.
+      # No text says `move 900.5 speed_sp`, since logex has no decimals, so the tree that
+      # would is a host mistake. Matched by its rule: the rest of the message prints the
+      # node, a shape of the tree. A negative literal lexes since M3-3 (decision 97), so
+      # `move -900 speed_sp` is a tree the text says.
       error =
         assert_raise ArgumentError, fn ->
-          Logex.Compiler.instructionize(replace(tree, 900, -900), [t2])
+          Logex.Compiler.instructionize(replace(tree, 900, 900.5), [t2])
         end
 
-      assert "not a tree Logex.Parser.parse/1 can produce: a literal is an integer, 0 or " <>
-               "more: a negative one does not lex yet (PLAN.md §5), got: " <> _node =
-               error.message
+      assert "not a tree Logex.Parser.parse/1 can produce: a literal is an integer, got: " <>
+               _node = error.message
 
-      # Nor does a declaration line give a timer its preset, or a tag a negative value.
+      assert {:ok, %Logex.Program{}} =
+               Logex.Compiler.instructionize(replace(tree, 900, -900), [t2])
+
+      # Nor does a declaration line give a timer its preset, or a tag a value that is no
+      # integer.
       assert_raise ArgumentError,
                    "`t2` is a ton: its preset is the number on its `ton` instruction, as in " <>
                      "`ton t2 5000`, not an initial value on its declaration",
                    fn -> Logex.Tag.new!("t2", Logex.FbType.ton(), :var, %{"pre" => 2000}) end
 
       assert_raise ArgumentError,
-                   "`speed_sp` is a dint: its initial value `-1` is negative, which no " <>
-                     "declaration line can say until a negative literal lexes",
-                   fn -> Logex.Tag.new!("speed_sp", :dint, :var_output, -1) end
+                   "the initial value of `speed_sp` must be an integer, found 1.5",
+                   fn -> Logex.Tag.new!("speed_sp", :dint, :var_output, 1.5) end
     end
   end
 

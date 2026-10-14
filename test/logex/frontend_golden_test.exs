@@ -8,7 +8,9 @@ defmodule Logex.FrontendGoldenTest do
   and its hand-written replacement matched it unchanged. It has changed since only on
   purpose: B2 rewrote 139 entries (`157393c`), B8 165 (every one an input with a lone CR,
   `713b2d2`), `//` comments one (`"ote aa // note"`, `1fab52c`) and `.` name parts one
-  (`"ote a.b"`, `46f17f0`), and the header's wording changed once. It exercises the front end far more widely than
+  (`"ote a.b"`, `46f17f0`), and the header's wording changed once. M3-3's negative
+  literals (decision 97) changed none and added 24, each a new source with a `-` in it,
+  `"move -5 aa"` and `"ote a-5"` among them, after the curated ones. It exercises the front end far more widely than
   the rest of the suite — CRLF, lone CRs, blank and whitespace-only lines, token
   boundaries, every unbalanced delimiter.
 
@@ -56,7 +58,15 @@ defmodule Logex.FrontendGoldenTest do
 
     # Its reach: what each rule of the check meets in a tree parse/1 gives.
     assert trees |> Enum.flat_map(&reach/1) |> MapSet.new() ==
-             MapSet.new([:many_rungs, :later_line, :int_lit, :dotted, :nested, :no_line])
+             MapSet.new([
+               :many_rungs,
+               :later_line,
+               :int_lit,
+               :negative,
+               :dotted,
+               :nested,
+               :no_line
+             ])
   end
 
   test "the record covers every outcome the front end can have" do
@@ -101,7 +111,8 @@ defmodule Logex.FrontendGoldenTest do
   defp element_reach({:name, line, word}, _depth),
     do: [:leaf | later(line)] ++ dotted(String.contains?(word, "."))
 
-  defp element_reach({:int_lit, line, _n}, _depth), do: [:leaf, :int_lit | later(line)]
+  defp element_reach({:int_lit, line, n}, _depth),
+    do: [:leaf, :int_lit | later(line)] ++ negative(n < 0)
 
   defp nested(0), do: []
   defp nested(_depth), do: [:nested]
@@ -111,6 +122,9 @@ defmodule Logex.FrontendGoldenTest do
 
   defp dotted(true), do: [:dotted]
   defp dotted(false), do: []
+
+  defp negative(true), do: [:negative]
+  defp negative(false), do: []
 
   defp line({line, _column}), do: line
   defp line(line) when is_integer(line), do: line

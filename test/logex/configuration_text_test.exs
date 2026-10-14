@@ -562,10 +562,7 @@ defmodule Logex.Configuration.TextTest do
             {%{a | name: :a}, "a name lexes as one name token"},
             {%{a | at: "%ix0.0"}, "a name lexes as one name token"},
             {%{a | type: :real}, "a global's type is :bool or :dint"},
-            {%{a | initial: -1},
-             "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
-            {%{a | initial: 1.0},
-             "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
+            {%{a | initial: 1.0}, "a number is an integer"},
             {%{m1 | type: "a b"}, "a name lexes as one name token"},
             {%{m1 | task: "a b"}, "a name lexes as one name token"},
             {%{m1 | task: :fast}, "a name lexes as one name token"},
@@ -577,12 +574,8 @@ defmodule Logex.Configuration.TextTest do
              "a line is a positive integer, or nil for an entry built in Elixir"},
             {%{fast | name: "t.1 x"}, "a name lexes as one name token"},
             {%{fast | name: nil}, "a name lexes as one name token"},
-            {%{fast | interval: -10},
-             "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
-            {%{fast | interval: 1.5},
-             "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
-            {%{fast | priority: :high},
-             "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
+            {%{fast | interval: 1.5}, "a number is an integer"},
+            {%{fast | priority: :high}, "a number is an integer"},
             # M2-6: a task's single, one name token, and no input's word, which a line reads
             # as the next input.
             {%{fast | single: "a b"}, "a name lexes as one name token"},
@@ -603,8 +596,7 @@ defmodule Logex.Configuration.TextTest do
             {%{start | member: ""}, "a name lexes as one name token"},
             {%{start | member: :start}, "a name lexes as one name token"},
             {%{start | to: "x y"}, "a name lexes as one name token"},
-            {%{start | to: -1},
-             "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"},
+            {%{start | to: 1.0}, "a connection is to a global, by its name, or to a constant"},
             {%{start | to: {:global, "g"}},
              "a connection is to a global, by its name, or to a constant"},
             # A keyword a line reads in a global's name place: no line can say these.
@@ -632,7 +624,12 @@ defmodule Logex.Configuration.TextTest do
         %Instance{name: "at", type: "bool"},
         %Instance{name: "priority", type: "task", task: "interval"},
         %Connection{instance: "bool", member: "at.0", to: "dint"},
-        %Connection{instance: "with", member: "task", to: "priority"}
+        %Connection{instance: "with", member: "task", to: "priority"},
+        # M3-3 (decision 97): a negative number lexes, so a line can say one in each place
+        # a number goes, for check/1 to judge.
+        %Logex.Configuration.Task{name: "slow", interval: -10, priority: -1},
+        %Global{name: "offset", type: :dint, initial: -2_147_483_648},
+        %Connection{instance: "m1", member: "sp", to: -5}
       ]
 
       assert Text.entries!(said) == said

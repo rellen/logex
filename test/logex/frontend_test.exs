@@ -243,6 +243,92 @@ defmodule Logex.FrontendTest do
     end
   end
 
+  describe "negative literals (M3-3, decision 97): a sign glued to its digits" do
+    test "a `-` straight before digits is one int_lit, located at the `-`" do
+      assert {:ok, tokens, 1} = Compiler.tokenize("move -5 x eq -0 -007 ( -2147483648 |-1)")
+
+      assert tokens == [
+               {:name, {1, 1}, "move"},
+               {:int_lit, {1, 6}, -5},
+               {:name, {1, 9}, "x"},
+               {:name, {1, 11}, "eq"},
+               {:int_lit, {1, 14}, 0},
+               {:int_lit, {1, 17}, -7},
+               {:bst, {1, 22}},
+               {:int_lit, {1, 24}, -2_147_483_648},
+               {:nxb, {1, 36}},
+               {:int_lit, {1, 37}, -1},
+               {:bnd, {1, 39}}
+             ]
+
+      # Any number of digits, as for a positive one: the compiler says what does not fit.
+      assert {:ok, [{:int_lit, {1, 1}, n}], 1} =
+               Compiler.tokenize("-" <> String.duplicate("9", 40))
+
+      assert n == -(10 ** 40 - 1)
+    end
+
+    test "a `-` with no digit straight after it is illegal, and there is no `+`" do
+      for {source, column} <- [
+            {"move - 5 x", 6},
+            {"move --5 x", 6},
+            {"-", 1},
+            {"move -x y", 6},
+            {"ote a-b", 6},
+            {"move 7 -", 8}
+          ] do
+        assert {:error, {{1, ^column}, Logex.Lexer, {:illegal, "-"}}, 1} =
+                 Compiler.tokenize(source),
+               inspect(source)
+      end
+
+      assert {:error, {{1, 6}, Logex.Lexer, {:illegal, "+"}}, 1} = Compiler.tokenize("move +5 x")
+    end
+
+    # B2 widened to `-?[0-9]+`: a signed number running into a letter or `_` is named whole.
+    test "a signed number running into a letter is B2's mistyped lexeme, named whole" do
+      assert {:error, {{1, 6}, Logex.Lexer, {:missing_separator, "-5ab"}}, 1} =
+               Compiler.tokenize("move -5ab x")
+
+      assert {:error, {{2, 1}, Logex.Lexer, {:missing_separator, "-12_x.y"}}, 2} =
+               Compiler.tokenize("xic a\n-12_x.y")
+    end
+
+    # A sign begins a number, so it needs a separator before it: `a-5` is no tag and then a
+    # literal, which would be a silent split, nor a subtraction, which is `sub`.
+    test "a name or number running straight into a signed number is one lexeme, named whole" do
+      for {source, column, run} <- [
+            {"ote a-5", 5, "a-5"},
+            {"xic t1.dn-5", 5, "t1.dn-5"},
+            {"move 5-3 x", 6, "5-3"},
+            {"move -5-3 x", 6, "-5-3"},
+            {"eq a.1-5x b", 4, "a.1-5x"},
+            {"xic a\n\n  b-0", 3, "b-0"}
+          ] do
+        assert {:error, {{line, ^column}, Logex.Lexer, {:signed_inside, ^run}}, line} =
+                 Compiler.tokenize(source),
+               inspect(source)
+      end
+
+      assert Logex.Lexer.format_error({:signed_inside, "a-5"}) ==
+               ~s(missing separator before `-`: "a-5" is neither a tag nor a number, and a ) <>
+                 "sign begins a number"
+    end
+
+    test "a sign after punctuation or a separator begins a number" do
+      for source <- ["(-5)", "( -5 | -6 )", "move -5\tx", "move -5\r\nmove -6 y", "xic a // -5"] do
+        assert {:ok, _, _} = Compiler.tokenize(source), inspect(source)
+      end
+    end
+
+    test "parse/1 keeps a negative literal as any other, and the printer gives it back" do
+      assert {:ok, {:routine, {:rungs, [rung: [_, {:int_lit, 1, -900}, _]]}} = tree} =
+               parse("move -900 speed_sp")
+
+      assert Logex.Printer.print(tree) == "move -900 speed_sp"
+    end
+  end
+
   describe "error messages say what is wrong and point at where to fix it" do
     test "an unclosed group is reported at the innermost ( still open" do
       assert {:error, {{1, 1}, Logex.Parser, :unclosed}} = parse("( ( xic aa ) ote bb")

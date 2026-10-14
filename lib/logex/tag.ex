@@ -41,7 +41,6 @@ defmodule Logex.Tag do
     preset is the number on the `ton` that runs it; the `%{"pre" => ms}` this took until
     OE-1 is withdrawn, since a `ton` silently replaced it and, with none, no text could
     give that `.pre`;
-  - a negative initial value, until a negative literal lexes (`PLAN.md` §5);
   - a user block's type that is not the one its source text compiles to
     (`Logex.FbType.user?/1`, decision 54), such as one whose body was edited by hand
     (M2-5).

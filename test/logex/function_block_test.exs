@@ -2140,8 +2140,16 @@ defmodule Logex.FunctionBlockTest do
       [{:rung, [contact, {:move, l, [_one, n]}]}, {:rung, [group, coil]}] = counter.rungs
       assert Logex.Compiler.lowered?(counter)
 
+      # M3-3 (decision 97): a negative literal is a compiled body's, as `-1` lexes.
+      assert Logex.Compiler.lowered?(
+               body(
+                 "function_block counter\nvar_input go bool\nvar_output q bool\nvar n dint\n" <>
+                   "xic go move -1 n\n( xic go | xio go ) ote q"
+               )
+             )
+
       for rungs <- [
-            [{:rung, [contact, {:move, l, [{:int_lit, l, -1}, n]}]}, {:rung, [group, coil]}],
+            [{:rung, [contact, {:move, l, [{:int_lit, l, 1.5}, n]}]}, {:rung, [group, coil]}],
             [
               {:rung, [contact, {:move, l, [{:int_lit, l, 1}, n]}]},
               {:rung, [{:branches, []}, coil]}

@@ -252,7 +252,7 @@ defmodule Logex.ConfigurationTest do
         Configuration.new!(base(seal))
         | file: :plant,
           name: "a b",
-          tasks: [task("t", -5, 70_000), task("u", 0, 1)],
+          tasks: [task("t", 1.5, 70_000), task("u", 0, 1)],
           instances: [%Instance{name: "m", type: :seal}]
       }
 
@@ -261,21 +261,21 @@ defmodule Logex.ConfigurationTest do
                  "got: :plant",
                ~s|"a b" cannot name a configuration: a name is a letter or `_`, then letters, | <>
                  "digits or `_`",
-               "task `t`: an interval is 1 to 2147483647 ms, found -5",
+               "task `t`: an interval is 1 to 2147483647 ms, found 1.5",
                "program instance `m`: its type is a program's name, found :seal"
              ]
 
       fields =
         Keyword.merge(base(seal),
           name: "a b",
-          tasks: [task("t", -5, 70_000), task("u", 0, 1)],
+          tasks: [task("t", 1.5, 70_000), task("u", 0, 1)],
           instances: [%Instance{name: "m", type: :seal}]
         )
 
       assert refused(fields) == [
                ~s|"a b" cannot name a configuration: a name is a letter or `_`, then letters, | <>
                  "digits or `_`",
-               "task `t`: an interval is 1 to 2147483647 ms, found -5",
+               "task `t`: an interval is 1 to 2147483647 ms, found 1.5",
                "program instance `m`: its type is a program's name, found :seal",
                "the priority of `t` is `70000`: a priority is 0 to 65535, and 0 is the highest",
                "the interval of `u` is 0: an interval is at least 1 ms, and an instance that " <>
@@ -288,7 +288,7 @@ defmodule Logex.ConfigurationTest do
                  "digits or `_`",
                "programs must be a map of program names to %Logex.Program{}, got a list: " <>
                  "Logex.Configuration.new!/1 takes a list and keys it by name",
-               "task `t`: an interval is 1 to 2147483647 ms, found -5",
+               "task `t`: an interval is 1 to 2147483647 ms, found 1.5",
                "program instance `m`: its type is a program's name, found :seal"
              ]
     end
@@ -676,12 +676,11 @@ defmodule Logex.ConfigurationTest do
         task("e", -1, 1.0)
       ]
 
-      # A negative or a fractional number is the host's mistake, which no line can say; a
-      # number out of range, or none, a line can, and is told it in the file's words.
+      # A fractional number is the host's mistake, which no line can say; a number out of
+      # range, or none, a line can, and is told it in the file's words, a negative one among
+      # them since a negative literal lexes (M3-3, decision 97).
       assert refused(Keyword.put(base(seal), :tasks, tasks)) == [
                "task `d`: an interval is 1 to 2147483647 ms, found 1.5",
-               "task `d`: a priority is 0, the highest, to 65535, found -1",
-               "task `e`: an interval is 1 to 2147483647 ms, found -1",
                "task `e`: a priority is 0, the highest, to 65535, found 1.0",
                "the interval of `a` is 0: an interval is at least 1 ms, and an instance that " <>
                  "runs every cycle is declared without `with`",
@@ -692,7 +691,9 @@ defmodule Logex.ConfigurationTest do
                "task `c` needs an interval or a single, as in " <>
                  "`task c interval 10 priority 1` or `task c single estop priority 0`",
                "task `c` needs a priority, as in `task c interval 10 priority 1`: 0 is the " <>
-                 "highest"
+                 "highest",
+               "the priority of `d` is `-1`: a priority is 0 to 65535, and 0 is the highest",
+               "the interval of `e` is `-1` ms: an interval is 1 to 2147483647 ms"
              ]
     end
   end
@@ -904,8 +905,8 @@ defmodule Logex.ConfigurationTest do
   end
 
   describe "globals" do
-    test "a bool or a dint, its initial value fitting it, never negative, and none on a " <>
-           "located global",
+    test "a bool or a dint, its initial value fitting it, a dint's negative too, and none " <>
+           "on a located global",
          %{seal: seal} do
       globals = [
         %Global{name: "a", type: :real},
@@ -918,23 +919,27 @@ defmodule Logex.ConfigurationTest do
         %Global{name: "i", type: :bool, initial: 1},
         %Global{name: "j", type: :dint, initial: 2_147_483_647},
         %Global{name: "l", type: :bool, initial: -1, at: "panel.i.6"},
-        %Global{name: "n", type: nil}
+        %Global{name: "n", type: nil},
+        %Global{name: "o", type: :bool, initial: -1},
+        %Global{name: "p", type: :dint, initial: -2_147_483_649}
       ]
 
+      # M3-3 (decision 97): a negative initial value is one a line can say, so a dint's
+      # is taken, `d`'s -1, and a bool's or a located global's told what is wrong with it.
       assert refused(Keyword.put(base(seal), :globals, base(seal)[:globals] ++ globals)) == [
                "global `a` has type :real: a global is :bool or :dint",
-               "global `d` has the initial value `-1`, which is negative: no line can say one " <>
-                 "until a negative literal lexes",
                "the initial value of global `e` must be an integer, found 1.0",
-               "global `l` has the initial value `-1`, which is negative: no line can say one " <>
-                 "until a negative literal lexes",
                "global `n` has type nil: a global is :bool or :dint",
                "`b` is a bool: its initial value must be 0 or 1, found `2`",
                "`c` is a dint: `2147483648` does not fit in 32 bits",
                "`f` is an input point: its value comes from the input image, so it takes no " <>
                  "initial value",
                "`h` is an output point: it takes no initial value, and is 0 until its driver " <>
-                 "writes it"
+                 "writes it",
+               "`l` is an input point: its value comes from the input image, so it takes no " <>
+                 "initial value",
+               "`o` is a bool: its initial value must be 0 or 1, found `-1`",
+               "`p` is a dint: `-2147483649` does not fit in 32 bits"
              ]
     end
 
@@ -1133,14 +1138,14 @@ defmodule Logex.ConfigurationTest do
         %Connection{instance: "m", member: "start", to: "pbb"},
         %Connection{instance: "m", member: "stop", to: "sp"},
         %Connection{instance: "m", member: "stop", to: 1},
-        %Connection{instance: "m", member: "start", to: -1},
+        %Connection{instance: "m", member: "start", to: 1.5},
         %Connection{instance: "m", member: "motor", to: "k"}
       ]
 
       # A second connection is refused as one, whatever its other end.
       assert refused(Keyword.put(base(seal), :connections, connections)) == [
-               "`m.start` is connected to -1: a connection's other end is a global, by name, " <>
-                 "or a constant of 0 or more",
+               "`m.start` is connected to 1.5: a connection's other end is a global, by name, " <>
+                 "or a constant",
                "no global `pbb` — did you mean `pb`?",
                "`m.stop` is a bool, but `sp` is a dint",
                "`m.stop` is already connected, to `sp`: a var_input has one source",
@@ -1151,14 +1156,26 @@ defmodule Logex.ConfigurationTest do
       # mistake, one message.
       constants = [
         %Connection{instance: "m", member: "start", to: 2},
-        %Connection{instance: "m", member: "stop", to: -1},
+        %Connection{instance: "m", member: "stop", to: 1.5},
         %Connection{instance: "m", member: "motor", to: "k"}
       ]
 
       assert refused(Keyword.put(base(seal), :connections, constants)) == [
-               "`m.stop` is connected to -1: a connection's other end is a global, by name, or " <>
-                 "a constant of 0 or more",
+               "`m.stop` is connected to 1.5: a connection's other end is a global, by name, or " <>
+                 "a constant",
                "`m.start` is a bool: only 0 or 1 fit, found `2`"
+             ]
+
+      # M3-3 (decision 97): a negative constant is one a line can say, `m.start -1`, so a
+      # bool's is told what fits, as a 2 is.
+      negative = [
+        %Connection{instance: "m", member: "start", to: -1},
+        %Connection{instance: "m", member: "stop", to: 0},
+        %Connection{instance: "m", member: "motor", to: "k"}
+      ]
+
+      assert refused(Keyword.put(base(seal), :connections, negative)) == [
+               "`m.start` is a bool: only 0 or 1 fit, found `-1`"
              ]
 
       dints = [
@@ -1169,7 +1186,7 @@ defmodule Logex.ConfigurationTest do
 
       assert refused(Keyword.put(base(seal), :connections, dints)) == [
                ~s|`m.stop` is connected to "pb 2": a connection's other end is a global, by | <>
-                 "name, or a constant of 0 or more"
+                 "name, or a constant"
              ]
 
       # A var_input tied to a constant is connected as surely as one tied to a global; a
@@ -1209,7 +1226,10 @@ defmodule Logex.ConfigurationTest do
 
       assert %Configuration{} = Configuration.new!(fields.(2_147_483_647))
 
-      for to <- [2_147_483_648, 3_000_000_000],
+      # M3-3 (decision 97): and below 0, to the dint's bottom.
+      assert %Configuration{} = Configuration.new!(fields.(-2_147_483_648))
+
+      for to <- [2_147_483_648, 3_000_000_000, -2_147_483_649],
           do: assert(refused(fields.(to)) == ["`d.a` is a dint: `#{to}` does not fit in 32 bits"])
     end
 
@@ -1235,17 +1255,18 @@ defmodule Logex.ConfigurationTest do
           ]
         )
 
+      # `m.sp` is a var_output, which drives no constant, -3 among them since a negative
+      # literal lexes (M3-3, decision 97), as it drives no 1.
       assert refused(fields) == [
                "`m.motor` is connected to :k: a connection's other end is a global, by name, or " <>
-                 "a constant of 0 or more",
-               "`m.sp` is connected to -3: a connection's other end is a global, by name, or " <>
-                 "a constant of 0 or more",
+                 "a constant",
                "`m.motor` is a var_output, which drives a global: it cannot drive the constant " <>
                  "`1`",
                "no global `kk` — did you mean `k`?",
                "`pb` is an input point: `m.motor`, a var_output, cannot drive it",
                "`m.motor` is a bool, but `sp` is a dint",
-               "`k` is already driven by `m.motor`"
+               "`k` is already driven by `m.motor`",
+               "`m.sp` is a var_output, which drives a global: it cannot drive the constant `-3`"
              ]
 
       # A var_output refused for its type drives nothing, so the one that then drives its
@@ -1311,15 +1332,15 @@ defmodule Logex.ConfigurationTest do
     test "a connection whose end is the host's mistake connects nothing", %{seal: seal} do
       ends = [
         %Connection{instance: "m", member: :start, to: "pb"},
-        %Connection{instance: "m", member: "stop", to: -1},
+        %Connection{instance: "m", member: "stop", to: 1.5},
         %Connection{instance: "m", member: "motor", to: "k"}
       ]
 
       assert refused(Keyword.put(base(seal), :connections, ends)) == [
                ~s|a connection's instance is a name, and with its member makes one path, as | <>
                  ~s|in `m1.start`, found "m" and :start|,
-               "`m.stop` is connected to -1: a connection's other end is a global, by name, or " <>
-                 "a constant of 0 or more",
+               "`m.stop` is connected to 1.5: a connection's other end is a global, by name, or " <>
+                 "a constant",
                "`m` leaves its var_input `start` unconnected: connect it to a global, a point " <>
                  "or a constant, as in `m.start 0`"
              ]
@@ -1566,6 +1587,58 @@ defmodule Logex.ConfigurationTest do
   end
 
   defp compiled(source, programs), do: Configuration.compile("plant", source, programs)
+
+  # M3-3 (decision 97): a negative number lexes, so a configuration's text can say one
+  # wherever it says a number, and check/1 judges each in the file's words: a dint's
+  # initial value and a dint var_input's constant are taken, and a bool's, an interval and
+  # a priority are told their ranges, as one too large is.
+  describe "a negative number in a configuration's text" do
+    setup do
+      {:ok, scale} =
+        Logex.compile("var_input tare dint\nvar_output w dint\nmove tare w", name: "scale")
+
+      %{programs: %{"scale" => scale}}
+    end
+
+    test "is refused where its range starts at 0 or is a bool's", %{programs: programs} do
+      source = """
+      var_global offset dint -120
+      var_global flag bool -1
+      task t interval -10 priority -1
+      program s scale with t
+      s.tare -5
+      s.w offset
+      """
+
+      assert errors(source, programs) == [
+               "line 2: `flag` is a bool: its initial value must be 0 or 1, found `-1`",
+               "line 3: the interval of `t` is `-10` ms: an interval is 1 to 2147483647 ms",
+               "line 3: the priority of `t` is `-1`: a priority is 0 to 65535, and 0 is the " <>
+                 "highest"
+             ]
+    end
+
+    test "is taken as a dint's initial value and a var_input's constant",
+         %{programs: programs} do
+      source = """
+      var_global offset dint -120
+      task t interval 10 priority 1
+      program s scale with t
+      s.tare -2147483648
+      s.w offset
+      """
+
+      assert {:ok, config} = compiled(source, programs)
+      assert [%Global{name: "offset", initial: -120}] = config.globals
+      assert [%Connection{member: "tare", to: -2_147_483_648}, _] = config.connections
+      assert Text.read(Text.print(config)) == Text.read(source)
+
+      runtime = Logex.Runtime.start(config)
+      assert Logex.Runtime.get!(runtime, "offset") == -120
+      {runtime, _outputs, _events} = Logex.Runtime.cycle(runtime, 0, %{})
+      assert Logex.Runtime.get!(runtime, "offset") == -2_147_483_648
+    end
+  end
 
   # Each instance's var_inputs connected, `start` to the input point `pb` and `stop` tied
   # off, as connection lines.
@@ -4238,7 +4311,7 @@ defmodule Logex.ConfigurationTest do
               "a connection is to a global, by its name, or to a constant",
               "a global's name is not `at`, `bool` or `dint`, in any case: a line reads that " <>
                 "word as its keyword",
-              "a number is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)"
+              "a number is an integer"
             ]
             |> Enum.map(&Regex.escape/1)
             |> Enum.join("|")
@@ -4267,7 +4340,8 @@ defmodule Logex.ConfigurationTest do
                    PRIORITY with With single fast m m2 m.start m.stop m.motor m.sp m.fault m.t1
                    m.t1.pre m.x.y m2.start pb
                    pb2 k sp seal Seal x.y panel.i.0 panel.I.0 panel.q.00 Panel.q.1 panel.q.0
-                   drive.q.1.0 0 1 7 2147483647 2147483648 99999999999 \( | \) //) ++
+                   drive.q.1.0 0 1 7 2147483647 2147483648 99999999999 -1 -7 -2147483648
+                   -2147483649 - \( | \) //) ++
                   ["\t", "\r", "\r\n", "%", "é", <<255>>]
 
     # The text's functions and compile/3, each argument junk in turn, sources among them
@@ -4557,7 +4631,7 @@ defmodule Logex.ConfigurationTest do
     # start/1 runs check/1 again: a host's mistake raises as check/1 raises it, and the
     # diagnostics raise formatted, a line each, in their order.
     test "raises the problems check/1 gives, in their order", %{seal: seal} do
-      mistaken = %{Configuration.new!(base(seal)) | file: %{}, tasks: [task("t", -1, 0)]}
+      mistaken = %{Configuration.new!(base(seal)) | file: %{}, tasks: [task("t", 1.5, 0)]}
       error = assert_raise ArgumentError, fn -> Logex.Runtime.start(mistaken) end
       assert String.split(error.message, "\n") == mistakes(mistaken)
       assert [_, _] = mistakes(mistaken)

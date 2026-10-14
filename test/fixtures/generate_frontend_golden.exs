@@ -141,6 +141,37 @@ defmodule FrontendGolden do
       "ote aa\r\n\r\n( xic bb",
       deep,
       many
+    ] ++ signed()
+  end
+
+  # M3-3 (decision 97): negative literals, a sign glued to its digits. Added after the rest,
+  # so the record's other entries keep their places and the diff is these alone.
+  defp signed do
+    [
+      "move -5 aa",
+      "move -0 aa",
+      "move -007 aa",
+      "move -2147483648 aa",
+      "move -123456789012345678901234567890 aa",
+      "-5",
+      "-",
+      "move - 5 aa",
+      "move --5 aa",
+      "move +5 aa",
+      "move -aa bb",
+      "move -5aa bb",
+      "move -5_ bb",
+      "ote a-5",
+      "ote aa -5",
+      "move 5-3 aa",
+      "move -5-3 aa",
+      "xic t1.dn-5",
+      "(-5)",
+      "( -5 | -6 ) ote aa",
+      "( xic aa |-1)",
+      "xic aa\n-5 ote bb",
+      "xic aa\r\nmove -5 bb\n\nmove 7-x cc",
+      "eq aa -1 ote bb // -2"
     ]
   end
 

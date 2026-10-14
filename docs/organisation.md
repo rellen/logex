@@ -2618,7 +2618,8 @@ questions the maintainer was asked then: 90 one M3-2 had left open, 91 and 92 co
 what M3-1 built. Decisions 93–95 are M3-2's own routine choices, taken as it landed on
 2026-10-14, 93 confirmed by the maintainer the same day, after M3-2's review. Decision 96
 was taken the same day, after M3-2's review, from a question the maintainer was asked
-then. All ninety-six are kept with their options so the reasons stay with them.
+then. Decision 97 is M3-3's own routine choice, taken as it landed on 2026-10-14. All
+ninety-seven are kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3789,6 +3790,39 @@ what becomes of a block's input that an online edit leaves no rung writing.
     timer's `.acc`, which logic may write too (decision 9), is its own output, set at
     every run, and is not reported. Nothing is blocked or written: the counter or timer
     reads its kept input at its next run, as decision 91 reads any. *(Landed 2026-10-14. Its scope confirmed by the maintainer the same day: the report names the member whatever its value, not only when it is on, since nothing resets the counter or timer any more either way, and a `pv` or `.pre` is reported beside `r` and `ld`.)*
+
+**M3-3's own choices, 2026-10-14.** Decision 97 is M3-3's routine choice, where neither
+the record nor IEC left a question for the maintainer, with the alternative the record
+keeps.
+
+97. **How a negative literal is written, and where one goes (M3-3),** `PLAN.md` §5's rule
+    landing first in M3-3. A level setpoint below a sensor's zero, `move -5 offset`, or a
+    tare written on a declaration, `var tare dint -120`.
+    - `-5`, the sign glued to the digits, one token, located at the `-`, as `PLAN.md` §5
+      settled; a `-` with no digit straight after it stays illegal, so `- 5` and `--5`
+      do not lex, and there is no `+`. A sign begins a lexeme, so a name or a number
+      running straight into one, `a-5`, `t1.dn-5` or `5-3`, is one mistyped lexeme,
+      named whole from its start, as B2 names `1bst`, and a signed number running into a
+      letter, `-5a`, is B2's own. `-0` is 0, and prints as 0;
+    - or `a-5` read as the tag `a` and then the literal `-5`, a silent split of the kind
+      B2 closed for `1bst`.
+
+    *Recommend the first.* Adopted. IEC's integer literal takes a sign, `-12` and `+986`
+    (Ed 3 Table 5 feature 1, p.27; Annex A, `Signed_Int`), and logex keeps `+` out, as
+    `PLAN.md` §5 has it. A negative literal goes wherever a literal goes, each slot's own
+    check then judging it: a `move`'s source, a comparison's operand, an arithmetic
+    operand, a `cal`'s var_input, a dint's initial value, and in a configuration file a
+    global's initial value, a var_input's constant, an interval and a priority. A bool's
+    0 or 1 and a preset's 0 to 2147483647 are unchanged, so `ton t1 -1` is refused at its
+    line, as `ton t1 2147483648` is, and a negative interval or priority is refused in the
+    configuration file's words, as one too large is, where `Logex.Configuration.check/1`
+    raised one as the host's mistake until a line could say it (decision 36).
+    `Logex.Parser.well_formed!/1`, `Logex.Declarations.check/1` and
+    `Logex.Configuration.Text.entries!/1` widen with it, as `PLAN.md` §5 said they would.
+    The golden record gains a source for each case and changes none of its entries, since
+    no source in it held a `-` before a digit. logex has no infix operator, so a `-` can
+    only be a sign; when infix arithmetic arrives, the sign moves to the grammar.
+    *(Landed 2026-10-14.)*
 
 ---
 

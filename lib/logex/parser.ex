@@ -34,17 +34,17 @@ defmodule Logex.Parser do
       routine  = {:routine, {:rungs, [rung, ...]}}     the list may be empty
       rung     = {:rung, [element, ...]}               one element or more
       element  = {:name, line, word}                   word lexes as one name token
-               | {:int_lit, line, n}                   n an integer, 0 or more
+               | {:int_lit, line, n}                   n an integer, negative too
                | {:branches, [leg, ...]}               one leg or more
       leg      = [element, ...]                        possibly empty: a jumper
 
   Every line is a positive integer. Every name and literal of one rung, inside its groups
   too, is on one line, the rung's, and each rung is on a line after the rung before it.
   A rung of nothing but empty groups, `( )`, carries no line, but stands on a line of its
-  own, so the next rung's line is past that one too. The check widens when `PLAN.md`
-  §5's negative literals and line continuations land, and not before. Until then what the
-  compiler does with either, a negative preset's message and an element cited at a line
-  of its own, is kept for them, but nothing reaches it.
+  own, so the next rung's line is past that one too. It widened when `PLAN.md` §5's
+  negative literals landed (M3-3, decision 97), as `-5` lexes, and widens when its line
+  continuations land, and not before. Until then what the compiler does with one, an
+  element cited at a line of its own, is kept for it, but nothing reaches it.
   """
 
   @doc """
@@ -143,15 +143,11 @@ defmodule Logex.Parser do
     line!(line, name, at)
   end
 
-  defp element!({:int_lit, line, n} = literal, at) when is_integer(n) and n >= 0,
+  defp element!({:int_lit, line, n} = literal, at) when is_integer(n),
     do: line!(line, literal, at)
 
   defp element!({:int_lit, _line, _n} = literal, _at),
-    do:
-      refuse!(
-        "a literal is an integer, 0 or more: a negative one does not lex yet (PLAN.md §5)",
-        literal
-      )
+    do: refuse!("a literal is an integer", literal)
 
   defp element!({:branches, [_ | _] = legs}, at), do: legs!(legs, at)
 

@@ -8,19 +8,22 @@ defmodule Logex.Lexer do
       {:bst, loc}  {:nxb, loc}  {:bnd, loc}  {:rnd, loc}
       {:name, loc, binary}  {:int_lit, loc, integer}
 
-  A name may have `.` parts, `t1.dn` or `word.3`, and is still one `name` token.
+  A name may have `.` parts, `t1.dn` or `word.3`, and is still one `name` token. An
+  integer may have a sign, `-5`, glued to its digits (M3-3): one `int_lit` token, located
+  at the `-`.
 
   `Logex.Parser` keeps only the line in the AST, whose shape the suite pins; the column
   is there for diagnostics. Whitespace and `//` comments are never emitted.
 
   This replaced `src/ladder_lexer.xrl`. `test/fixtures/frontend_golden.txt` is the record
-  that one first wrote, which this matched before B2, B8 and PLAN.md §5's comment and
-  `.` rules changed it on purpose. Six things differ on purpose: locations carry a column;
-  a source that is not valid UTF-8 is a located error rather than the
+  that one first wrote, which this matched before B2, B8 and PLAN.md §5's comment, `.` and
+  negative-literal rules changed it on purpose. Seven things differ on purpose: locations
+  carry a column; a source that is not valid UTF-8 is a located error rather than the
   `UnicodeConversionError` that `String.to_charlist/1` raised before leex ever ran; a
   number running straight into a tag, `1bst`, is an error rather than two tokens (B2); a
-  lone `\r` is a newline, not whitespace (B8); `//` starts a comment; and a name may have
-  `.` parts. leex made the last two illegal characters.
+  lone `\r` is a newline, not whitespace (B8); `//` starts a comment; a name may have `.`
+  parts; and a `-` glued to digits is a negative literal's sign (M3-3, decision 97). leex
+  made the last three illegal characters.
   """
 
   defguardp is_name_start(ch) when ch in ?a..?z or ch in ?A..?Z or ch == ?_
@@ -36,6 +39,11 @@ defmodule Logex.Lexer do
 
   def format_error({:missing_separator, text}),
     do: "missing separator after integer: #{inspect(text)} is neither a number nor a tag"
+
+  def format_error({:signed_inside, text}),
+    do:
+      "missing separator before `-`: #{inspect(text)} is neither a tag nor a number, " <>
+        "and a sign begins a number"
 
   # `(`, `|` and `)` are punctuation, outside the NAME character set, so a missing space
   # cannot fuse a delimiter into a neighbouring tag (PLAN.md §4·B1).
@@ -63,6 +71,19 @@ defmodule Logex.Lexer do
   # lexer_binaries_test.exs fails if they come back.
   defp lex(<<d, _::binary>> = src, l, c, acc) when d in ?0..?9 do
     n = digits(src, 0)
+    <<digits::binary-size(^n), rest::binary>> = src
+    number(rest, digits, l, c, acc)
+  end
+
+  # PLAN.md §5, M3-3 (decision 97): a `-` glued to digits is a negative literal's sign, and
+  # the two are one token, located at the `-`: `-5`, and `-0`, which is 0. logex has no
+  # infix operator, so a `-` can only be a sign; when infix arithmetic arrives, this moves
+  # to the grammar. A `-` with no digit straight after it stays illegal, `- 5` and `--5`
+  # among them, and there is no leading `+`. B2's rule holds for the signed run too: `-5a`
+  # is one mistyped lexeme.
+  defp lex(<<?-, d, _::binary>> = src, l, c, acc) when d in ?0..?9 do
+    <<?-, unsigned::binary>> = src
+    n = digits(unsigned, 0) + 1
     <<digits::binary-size(^n), rest::binary>> = src
     number(rest, digits, l, c, acc)
   end
@@ -106,17 +127,32 @@ defmodule Logex.Lexer do
   end
 
   defp number(rest, digits, l, c, acc),
-    do: lex(rest, l, c + byte_size(digits), [{:int_lit, {l, c}, String.to_integer(digits)} | acc])
+    do: lexeme(rest, digits, {:int_lit, {l, c}, String.to_integer(digits)}, {l, c}, acc)
 
   defp name(src, {:ok, n}, l, c, acc) do
     <<name::binary-size(^n), rest::binary>> = src
-    lex(rest, l, c + n, [{:name, {l, c}, name} | acc])
+    lexeme(rest, name, {:name, {l, c}, name}, {l, c}, acc)
   end
 
   defp name(src, {:mistyped, n}, l, c, _acc) do
     <<run::binary-size(^n), _::binary>> = src
     {:error, {{l, c}, __MODULE__, {:missing_separator, run}}, l}
   end
+
+  # M3-3 (decision 97): a sign begins a number, so it needs a separator before it, as B2's
+  # number needs one after it. A name or a number running straight on into a signed number,
+  # `a-5`, `t1.dn-5` or `5-3`, is one mistyped lexeme, named whole from its start through
+  # the word after the `-`, never a name and then a literal: the writer meant a tag, or a
+  # subtraction, which is `sub`. A `-` with no digit after it is the next lexeme's, illegal.
+  defp lexeme(<<?-, d, _::binary>> = rest, text, _token, {l, c}, _acc) when d in ?0..?9 do
+    <<?-, signed::binary>> = rest
+    n = word(signed, 0)
+    <<tail::binary-size(^n), _::binary>> = signed
+    {:error, {{l, c}, __MODULE__, {:signed_inside, text <> "-" <> tail}}, l}
+  end
+
+  defp lexeme(rest, text, token, {l, c}, acc),
+    do: lex(rest, l, c + byte_size(text), [token | acc])
 
   # PLAN.md §5: a name goes on in `.` parts, each a name or an integer, and stays one
   # token: `t1.dn`, `word.3`, `m1.t1.acc`. Each returns `{:ok, n}` for a name `n` long, or
