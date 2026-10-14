@@ -2481,8 +2481,9 @@ names it breaks. Growth tests are in reductions.
   and the conventional TOF's `.DN`, on through its delay (decision 93), where decision 74's
   words, "done never means still running on any timer", would read otherwise for a `tof`;
   a `tp` is IEC's TP, its edge memory `.en` on decision 21's block list by path (decision
-  94); an `rto`'s `r` clears the conventional RES's members, `.acc`, `.dn` and `.tt`,
-  keeping `.pre`, `.en` the rung's, and is a member kept across an edit (decision 95), so
+  94); an `rto`'s `r` clears `.acc`, `.dn` and `.tt`, keeping `.pre`, and `.en` stays
+  the rung's, where the conventional RES clears `.EN` too, and is a member kept across an
+  edit (decision 95), so
   a reset held at a switch under a candidate that writes `r` no more stays held until a
   restart. A `tof` blocks nothing: an edit that turns its rung false starts its delay. A
   new `tof` starts at rest with `.acc` 0, where the conventional prescan sets `.acc` to
@@ -2502,8 +2503,14 @@ names it breaks. Growth tests are in reductions.
   type word, `Logex.FbType.builtins/0`'s among them, and suggests the nearest, `tpp` told
   of `tp` and `:tof` of `Logex.FbType.tof()`. The messages called an `rto` "a rto": a
   type word's article is now by how it is said, from a table of logex's own type words, so
-  "an rto", and a user block's name still takes none of its own. The suite is at 1037
-  tests (8 doctests).
+  "an rto", and a user block's name still takes none of its own. The rest were the
+  record's words. §4.9's M3-2 table read a `tp` back from aside as blocked, which it is not,
+  as a counter is not: an input that rose while it was aside is a real edge. The one-rule
+  lists now name a `tp`'s blocked `.en`. Decisions 93 and 94 claimed MatIEC's bodies step
+  for step, and at a preset of 0 MatIEC holds Q one call longer than logex, as each now
+  notes. Decision 95 and `docs/naming.md`'s `rto` said `r` clears what the conventional
+  RES clears, which clears `.EN` too: logex keeps `.en`, a departure each now owns. §8 maps
+  `.dn` to Q but for a `tp`. The suite is at 1037 tests (8 doctests).
 - **M3-3 · Integer arithmetic: `add sub mul div mod neg abs`.** IEC's names, and `neg`
   the vendors' (decision 79); `sqrt` waits for a real type. A result outside a dint is
   brought to the nearer limit and the instruction passes no power on that scan (decision

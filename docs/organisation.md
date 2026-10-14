@@ -1326,6 +1326,8 @@ instance already holds around the new piece:
 - a counter's edge memory, `cu` or `cd`, whose instruction the edit adds or whose rung it
   changes, is blocked the same way, by its path, so the counter's next run counts no edge
   (M3-1, decision 87);
+- so is a `tp`'s edge memory, `.en`, by its path, `horn_pulse.en`, so its next run starts
+  no pulse (M3-2, decision 94);
 - a var_input a switch makes live is reported as `:input`, because its value is the
   host's;
 - at the first test, a tag the candidate adds, or one whose value does not fit its type,
@@ -1363,7 +1365,7 @@ them until `retain` lands (decision 76); `.pre` moved at a switch by decisions 2
 reported `:preset` or `:preset_kept`; a removed one frozen and a restored one given its
 preset outright. What differs is by type:
 
-| Piece | A scan | A switch: kept | added | removed, then restored, or back from aside |
+| Piece | A scan | A switch: kept | added | removed, then restored |
 |---|---|---|---|---|
 | a `tof`'s members | IEC's TOF, `.dn` its Q (decision 93) | kept; `:dn_drops` where `.pre` moves at or below `.acc` during the delay, and where it moves to 0 while the rung is true, `.dn` then dropping at its next run with the rung false | at rest, nothing blocked | frozen, then resumed from the switch where `.tt` was set |
 | a `tp`'s members | IEC's TP, its pulse `.tt` (decisions 74, 75, 94) | kept; `:dn_rises` where `.pre` moves at or below `.acc` during the pulse | 0 | frozen, then resumed where `.tt` was set |
@@ -1374,6 +1376,14 @@ preset outright. What differs is by type:
 In a block whose `cal` is false each is held with the rest, `last` with it, and catches up
 when the block next runs (decision 8). When M3-5's forward `jmp` lands, a timer in the
 rungs it skips is to freeze and catch up so too (decision 82).
+
+An instance a configuration's edit sets aside and brings back (decision 57) is not
+"removed, then restored": it comes back as it was set aside, under the program it ran
+then, each of these timers resumed from the switch where its timing member was set, `.tt`
+for a `tof` and a `tp`, `.en` for an `rto`, as a `ton` is by `.en`. Nothing in it is
+blocked, a `tp`'s `.en` and a counter's `cu` and `cd` alike: no edit changed the rungs it
+runs, so each edge memory holds the power its rung last received, and an input that rose
+while the instance was aside is a real edge, which its first scan back pulses or counts.
 
 *Milestone 2's state* (designed 2026-10-02, §4.10; M2-1's pieces landed with it on
 2026-10-02, and `Logex.Runtime`'s moduledoc gives their rules as built, and M2-5's on
@@ -3373,7 +3383,7 @@ questions asked after M3-1's review, the same day.
     an instance's first scan** since it started or restarted, `ons`, `ctu` and `ctd` now,
     `tp` (decision 75), `osr` and `osf` when they land. It is the conventional prescan's
     for a counter, which sets `.CU` true *"to prevent invalid increments during the first
-    program scan"* (general instructions ref., CTU, p.99). *(Landed with M3-1 for the counters, 2026-10-14.) *(Landed with M3-2 for `tp`, 2026-10-14.)*
+    program scan"* (general instructions ref., CTU, p.99). *(Landed with M3-1 for the counters, 2026-10-14.)* *(Landed with M3-2 for `tp`, 2026-10-14.)*
 70. **A reset or load while the count input is high (M3-1).** The operator presses
     "reset batch" while a box is still on the photo-eye.
     - The box is not counted again: after the reset the count shows 0, and the next box to
@@ -3642,11 +3652,11 @@ the record keeps.
       for a pulse timer, the fan then wired to the rung's own contact and `.tt` in parallel.
 
     *Taken: IEC's Q.* IEC's TOF and the conventional TOF agree, and §8 maps `.dn` to Q for
-    every timer; a `tof`'s "done" is then on while it still runs its delay, which is what
-    both families mean by it, where decision 74 chose for a pulse alone. The delay is
-    IEC's and MatIEC's: the first de-energised run after an energised one starts it, adding
-    nothing, as a `ton`'s rising scan adds nothing; each de-energised run while `.tt` is
-    set adds the time since the timer last ran, stopping at `.pre`, where `.dn` and `.tt`
+    every timer but a `tp`; a `tof`'s "done" is then on while it still runs its delay, which
+    is what both families mean by it, where decision 74 chose for a pulse alone. The delay
+    is IEC's and MatIEC's: the first de-energised run after an energised one starts it,
+    adding nothing, as a `ton`'s rising scan adds nothing; each de-energised run while `.tt`
+    is set adds the time since the timer last ran, stopping at `.pre`, where `.dn` and `.tt`
     drop; a rung true again ends the delay with `.dn` still set. At rest `.acc` stays at
     `.pre`, as IEC's ET does, and raising `.pre` there starts nothing, as MatIEC's state 2
     holds; a new instance starts at rest with every member at its initial value, `.acc` 0,
@@ -3654,20 +3664,26 @@ the record keeps.
     falling edge is read from `.en`, which every start and restart puts at 0, so no first
     scan sees one (decision 69). Across an online edit a `tof` is a timer as a `ton` is
     (decision 23): its `.pre` moves by decisions 23 and 27, a change of type needs a
-    restart, and one restored resumes from the switch where it was timing, which for a
-    `tof` is `.tt` set, not `.en`. A moved `.pre` changes `.dn` during the delay: where
-    `.acc` is at or past the new `.pre` there, `:dn_drops` says `.dn` drops at the timer's
-    next run, unless that run finds its rung true. It changes it too where the rung was
-    true at the timer's last run, `.en` set, and `.pre` moves to 0: the delay then ends on
-    the falling edge's own scan, so `:dn_drops`, `{0, 0}`, says `.dn` drops at the timer's
-    next run with its rung false, however many runs with its rung true come first, as a
-    `ton`'s and an `rto`'s forecasts are for a run with the rung true. Its falling edge
-    needs no place on decision 21's block list: an edit that turns its rung false starts
-    the delay, `.dn` staying set through it, as the rung falling would, where blocking it
-    would stop the fan at once. *(Corrected 2026-10-14, after M3-2's review, which had read
-    "only during the delay": the fan's run-on moved from 30 s to 0 while the motor runs
-    stops the fan the moment the motor stops, where the original runs it on 30 s more, and
-    the edit forecast nothing. It now forecasts `:dn_drops`.)*
+    restart, and one restored resumes from the switch where it was timing, which for a `tof`
+    is `.tt` set, not `.en`. A moved `.pre` changes `.dn` during the delay: where `.acc` is
+    at or past the new `.pre` there, `:dn_drops` says `.dn` drops at the timer's next run,
+    unless that run finds its rung true. It changes it too where the rung was true at the
+    timer's last run, `.en` set, and `.pre` moves to 0: the delay then ends on the falling
+    edge's own scan, so `:dn_drops`, `{0, 0}`, says `.dn` drops at the timer's next run with
+    its rung false, however many runs with its rung true come first, as a `ton`'s and an
+    `rto`'s forecasts are for a run with the rung true. Its falling edge needs no place on
+    decision 21's block list: an edit that turns its rung false starts the delay, `.dn`
+    staying set through it, as the rung falling would, where blocking it would stop the fan
+    at once. *(Corrected 2026-10-14, after M3-2's review, which had read "only during the
+    delay": the fan's run-on moved from 30 s to 0 while the motor runs stops the fan the
+    moment the motor stops, where the original runs it on 30 s more, and the edit forecast
+    nothing. It now forecasts `:dn_drops`.)* *(Noted 2026-10-14, after M3-2's review: at a
+    preset of 0 the delay is IEC's and not MatIEC's. MatIEC's `TOF` (`lib/timer.txt`) enters
+    state 1 on the falling edge's call and tests the end only on a later call, in its `ELSE`
+    branch, so its Q, `IN OR (STATE = 1)`, stays TRUE for that call; logex drops `.dn` on
+    the falling edge's own scan, a delay of 0 ms, as IEC's diagram draws it, and
+    timer_test.exs pins it. At any other preset no run that starts the delay can end it, and
+    the two agree.)*
 94. **A pulse timer's pulse, start to end (M3-2),** following decisions 74 and 75. A horn
     sounds for 3 seconds from a fault's rising edge: `xic fault tp horn_pulse 3000`, the
     horn worked by `xic horn_pulse.tt` on a rung below.
@@ -3679,45 +3695,54 @@ the record keeps.
     - or a new edge during the pulse starts it again from 0, a retriggerable pulse, as
       Siemens's classic S_PEXT extends one.
 
-    *Taken: IEC's.* The pulse is IEC's TP, MatIEC's body read step for step: it starts on a
-    rising edge, `.en` 0 from the timer's last run, never on a first scan (decision 75) nor
-    where an online edit's block list holds `.en`, `.acc` at 0 and adding nothing on that
-    scan; each run while `.tt` is set adds the time since the timer last ran, its rung
-    true or false, and at `.pre` the pulse ends. With a preset of 0 it starts and ends on
-    one scan, `.tt` never set and `.dn` set. Raising `.pre` once the pulse has ended starts
-    nothing. Its edge memory `.en` joins decision 21's block list by its path,
-    `horn_pulse.en`, as a counter's does (decision 87): a `tp` an edit adds while its rung
-    is true, or one whose rung it changes, sounds no horn at the switch, and one whose
-    preset alone changes keeps a real edge. Across a switch it is a timer by decision 23,
-    resumed where its pulse was running, `.tt` set. A moved `.pre` changes its pulse only
-    while it runs: where `.acc` is at or past the new `.pre` there, `:dn_rises` says the
-    pulse ends at the timer's next run, `.tt` dropping and `.dn` rising, unless that run
-    finds its rung false, when `.dn` stays at 0 as the pulse ends.
+    *Taken: IEC's.* The pulse is IEC's TP, MatIEC's body read step for step but at a preset
+    of 0 (below): it starts on a rising edge, `.en` 0 from the timer's last run, never on a
+    first scan (decision 75) nor where an online edit's block list holds `.en`, `.acc` at 0
+    and adding nothing on that scan; each run while `.tt` is set adds the time since the
+    timer last ran, its rung true or false, and at `.pre` the pulse ends. With a preset of 0
+    it starts and ends on one scan, `.tt` never set and `.dn` set. Raising `.pre` once the
+    pulse has ended starts nothing. Its edge memory `.en` joins decision 21's block list by
+    its path, `horn_pulse.en`, as a counter's does (decision 87): a `tp` an edit adds while
+    its rung is true, or one whose rung it changes, sounds no horn at the switch, and one
+    whose preset alone changes keeps a real edge. Across a switch it is a timer by decision
+    23, resumed where its pulse was running, `.tt` set. A moved `.pre` changes its pulse
+    only while it runs: where `.acc` is at or past the new `.pre` there, `:dn_rises` says
+    the pulse ends at the timer's next run, `.tt` dropping and `.dn` rising, unless that run
+    finds its rung false, when `.dn` stays at 0 as the pulse ends. *(Noted 2026-10-14, after
+    M3-2's review: at a preset of 0 the pulse is IEC's and not MatIEC's. MatIEC's `TP`
+    (`lib/timer.txt`) sets Q TRUE on the rising edge's call and tests the end only on a
+    later call, in its `ELSIF (STATE = 1)` branch, so its Q is TRUE for that one call; logex
+    starts and ends the pulse on the rising edge's own scan, a pulse of 0 ms, `.tt` never
+    set, and timer_test.exs pins it. At any other preset the two agree.)*
 95. **What a retentive timer's reset clears, and its rule across an edit (M3-2),** which
     decision 90 left to M3-2. Decision 76's lubrication timer adds up the motor's running
     time, `xic motor rto lube 360000000`, and `xic greased ote lube.r` clears it.
-    - `r` clears the time and the status bits, `.acc`, `.dn` and `.tt`, as the
-      conventional RES does, and keeps `.pre`; `.en` takes the rung's power as on every
-      run. While `r` is held the timer stays at 0, adding nothing, and it times again from
-      the last scan that saw `r`. Across an online edit `r` is a member like a counter's
-      `r`: kept with its instance, 0 in a new one;
-    - or `r` also clears `.en`, so the first scan after `r` is released adds nothing, as
-      a `ton`'s first scan with its rung true adds nothing.
+    - `r` clears the time and the status bits `.dn` and `.tt`, and keeps `.pre`; `.en`
+      takes the rung's power as on every run, where the conventional RES, which sets
+      `.ACC` to 0 and a TIMER's *"control status bits to false"* (general instructions
+      ref., RES, p.107), clears `.EN` too. While `r` is held the timer stays at 0, adding
+      nothing, and it times again from the last scan that saw `r`. Across an online edit
+      `r` is a member like a counter's `r`: kept with its instance, 0 in a new one;
+    - or `r` also clears `.en`, as the conventional RES does, so the first scan after `r`
+      is released adds nothing, as a `ton`'s first scan with its rung true adds nothing.
 
-    *Taken: the first.* `.en` is the rung's power when the instruction last ran, as the
-    conventional TIMER's `.EN` is, so a reset leaves it what the rung made it, as a
-    counter's reset keeps its edge memory (decision 70); the time from the last scan that
-    saw `r` to the next is counted, at most one scan more than the other reading would
-    give. `r` acts when the timer's own instruction runs, as a counter's does (decisions
-    84 and 91): a reset rung above the timer clears it on the same scan, one below it a
-    scan later. Every restart, warm or cold, starts it again at 0 (decision 76). Across a
-    switch it is a timer by decision 23, resumed where its rung was true, `.en` set, as a
-    `ton` is; a change of type, a `ton` made an `rto`, needs a restart. A moved `.pre`
-    changes `.dn` at the timer's next run with its rung true, since a false rung keeps
-    `.dn` as it was: `:dn_drops` where `.dn` is set and `.acc` below the new `.pre`,
-    unless at least `.pre` − `.acc` ms of true rung pass by then; `:dn_rises` where `.dn`
-    is 0 and `.acc` at or past the new `.pre`, whether or not its rung was true at the
-    switch, unless that run finds `r` set.
+    *Taken: the first,* a departure from the conventional RES that logex owns. `.en` is the
+    rung's power when the instruction last ran, as the conventional TIMER's `.EN` is, so a
+    reset leaves it what the rung made it, as a counter's reset keeps its edge memory
+    (decision 70), where RES clears a counter's `.CU` and `.CD` too; the time from the last
+    scan that saw `r` to the next is counted, at most one scan more than the other reading
+    would give. `r` acts when the timer's own instruction runs, as a counter's does
+    (decisions 84 and 91): a reset rung above the timer clears it on the same scan, one
+    below it a scan later. Every restart, warm or cold, starts it again at 0 (decision 76).
+    Across a switch it is a timer by decision 23, resumed where its rung was true, `.en`
+    set, as a `ton` is; a change of type, a `ton` made an `rto`, needs a restart. A moved
+    `.pre` changes `.dn` at the timer's next run with its rung true, since a false rung
+    keeps `.dn` as it was: `:dn_drops` where `.dn` is set and `.acc` below the new `.pre`,
+    unless at least `.pre` − `.acc` ms of true rung pass by then; `:dn_rises` where `.dn` is
+    0 and `.acc` at or past the new `.pre`, whether or not its rung was true at the switch,
+    unless that run finds `r` set. *(Corrected 2026-10-14, after M3-2's review, which had
+    read "as the conventional RES does" of `.acc`, `.dn` and `.tt` alone: RES clears every
+    status bit of a TIMER, `.EN` among them, and logex keeps `.en`.)*
 
 ---
 
@@ -3796,7 +3821,8 @@ numbers").**
 - **Inferred, not stated by the sources:**
   - that the conventional family has no program type/instance split, inferred from *"A
     program can be scheduled under one task only"*;
-  - the timer member mapping `.pre`→PT, `.acc`→ET, `.dn`→Q.
+  - the timer member mapping `.pre`→PT, `.acc`→ET, `.dn`→Q, except a `tp`'s, whose Q is
+    `.tt` (decision 74).
 - **Not found in IEC:**
   - any rule for an unconnected program input *(found since by inference, §4.4)*;
   - the meaning of W and D sizes for logex's `dint`, which does not arise under §4.5.
