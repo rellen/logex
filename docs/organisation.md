@@ -1355,6 +1355,26 @@ it is frozen is not counted (decision 89); a blocked memory there stays listed u
 scan runs it (decision 32). A counter keeps no time, so nothing resumes it, from a switch
 or from aside. A type change, `ctu` to `ctud` among them, is refused at accept.
 
+M3-2's timers, `tof`, `tp` and `rto`, landed on 2026-10-14 (decisions 93–95). Each is a
+timer as a `ton` is, with its members, an `rto` with its reset `r` too, and every rule a
+`ton`'s member has: started by `initial_env/1`, at its preset for `.pre` and 0 for the
+rest; started again by `restart/3` and `restart/2`, warm or cold, an `rto`'s time among
+them until `retain` lands (decision 76); `.pre` moved at a switch by decisions 23 and 27,
+reported `:preset` or `:preset_kept`; a removed one frozen and a restored one given its
+preset outright. What differs is by type:
+
+| Piece | A scan | A switch: kept | added | removed, then restored, or back from aside |
+|---|---|---|---|---|
+| a `tof`'s members | IEC's TOF, `.dn` its Q (decision 93) | kept; `:dn_drops` where `.pre` moves at or below `.acc` during the delay | at rest, nothing blocked | frozen, then resumed from the switch where `.tt` was set |
+| a `tp`'s members | IEC's TP, its pulse `.tt` (decisions 74, 75, 94) | kept; `:dn_rises` where `.pre` moves at or below `.acc` during the pulse | 0 | frozen, then resumed where `.tt` was set |
+| a `tp`'s `.en`, its edge memory | the rung's power | kept; blocked by path where its rung changed, the presets left out (decision 87) | 0, blocked | frozen, then blocked |
+| an `rto`'s members | the conventional RTO, `.acc` and `.dn` kept across a false rung (decisions 76, 95) | kept; `:dn_drops` and `:dn_rises` at its next run with its rung true | 0 | frozen, then resumed where `.en` was set |
+| an `rto`'s `r` | written by logic, read at the next run (decisions 90, 95) | kept | 0 | frozen, then kept |
+
+In a block whose `cal` is false each is held with the rest, `last` with it, and catches up
+when the block next runs (decision 8). When M3-5's forward `jmp` lands, a timer in the
+rungs it skips is to freeze and catch up so too (decision 82).
+
 *Milestone 2's state* (designed 2026-10-02, §4.10; M2-1's pieces landed with it on
 2026-10-02, and `Logex.Runtime`'s moduledoc gives their rules as built, and M2-5's on
 2026-10-04, whose rules `Logex.Program.initial_env/1`, `Logex.Instance` and
@@ -2578,7 +2598,8 @@ answers. Decisions 67–89 were taken on 2026-10-14 from Milestone 3's design (b
 67, 68 and 78 against their recommendations, the others as recommended, 84–89 M3-1's own
 routine choices. Decisions 90–92 were taken the same day, after M3-1's review, from three
 questions the maintainer was asked then: 90 one M3-2 had left open, 91 and 92 confirming
-what M3-1 built. All ninety-two are kept with their options so the reasons stay with them.
+what M3-1 built. Decisions 93–95 are M3-2's own routine choices, taken as it landed on
+2026-10-14. All ninety-five are kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3352,7 +3373,7 @@ questions asked after M3-1's review, the same day.
     an instance's first scan** since it started or restarted, `ons`, `ctu` and `ctd` now,
     `tp` (decision 75), `osr` and `osf` when they land. It is the conventional prescan's
     for a counter, which sets `.CU` true *"to prevent invalid increments during the first
-    program scan"* (general instructions ref., CTU, p.99). *(Landed with M3-1 for the counters, 2026-10-14.)*
+    program scan"* (general instructions ref., CTU, p.99). *(Landed with M3-1 for the counters, 2026-10-14.) *(Landed with M3-2 for `tp`, 2026-10-14.)*
 70. **A reset or load while the count input is high (M3-1).** The operator presses
     "reset batch" while a box is still on the photo-eye.
     - The box is not counted again: after the reset the count shows 0, and the next box to
@@ -3398,7 +3419,7 @@ questions asked after M3-1's review, the same day.
     *Recommend not allowed, for now.* Adopted: nothing may follow a `ctu`, a `ctd` or any
     timer on its path. Refusing keeps either reading open to a later change that breaks no
     program. For the record, the conventional CTU and CTD set rung-condition-out to
-    rung-condition-in (general instructions ref., pp.95 and 99). *(Landed with M3-1 for the counters, 2026-10-14.)*
+    rung-condition-in (general instructions ref., pp.95 and 99). *(Landed with M3-1 for the counters, 2026-10-14.)* *(Landed with M3-2 for the timers, 2026-10-14: the conventional TOF and RTO pass rung-condition-in too, general instructions ref., pp.113 and 124.)*
 74. **Which signal is a pulse timer's pulse (M3-2).** A horn should sound for 3 seconds
     when a fault appears.
     - Its "timing" bit, `.tt`, on for the 3 seconds, with `.dn` coming on when the pulse
@@ -3407,14 +3428,17 @@ questions asked after M3-1's review, the same day.
     - or a new member of its own.
 
     *Recommend `.tt`.* Adopted: a `tp`'s pulse is `.tt`, and `.dn` comes on when the pulse
-    ends, so "done" never means "still running" on any timer.
+    ends, so "done" never means "still running" on any timer. *(Landed with M3-2,
+    2026-10-14, `.dn` set as the pulse ends while the rung holds, decision 94. A `tof`'s
+    `.dn` is IEC's Q, on through its delay, decision 93.)*
 75. **A pulse timer on the first scan (M3-2).** The fault is already present when the
     controller starts. Does the horn sound?
     - No, by decision 69's one start-up rule; the fault lamp, driven by the fault itself,
       still lights;
     - or yes, as IEC's TP would.
 
-    *Recommend no.* Adopted: a `tp` does not fire on the first scan.
+    *Recommend no.* Adopted: a `tp` does not fire on the first scan. *(Landed with M3-2,
+    2026-10-14.)*
 76. **A retentive timer across a restart (M3-2).** A lubrication timer adds up how long
     the conveyor motor has run, so the line is greased every 100 hours; the motor stopping
     does not clear it.
@@ -3424,7 +3448,7 @@ questions asked after M3-1's review, the same day.
     - or that retain work first.
 
     *Recommend back to zero.* Adopted: an `rto` starts again at every restart, warm or
-    cold, as every tag does, until `retain` lands.
+    cold, as every tag does, until `retain` lands. *(Landed with M3-2, 2026-10-14.)*
 77. **Arithmetic past the dint's limit (M3-3).** The fill valve adds each delivery to a
     running total, and the total passes the largest number logex holds.
     - It wraps round to a huge negative number;
@@ -3583,7 +3607,8 @@ questions asked after M3-1's review, the same day.
     `rto` is cleared by `xic greased ote lube.r`, written like a counter's reset and read
     when its instruction next runs, so a program clears everything that keeps a count one
     way. There is no `res` instruction, for a timer or a counter. What else `.r` clears
-    beside the time, and its rule across an edit, are M3-2's design.
+    beside the time, and its rule across an edit, are M3-2's design. *(Landed with M3-2,
+    2026-10-14; what `.r` clears and its rule across an edit, decision 95.)*
 91. **When a counter's reset or load acts (M3-1),** asked after M3-1's review, to confirm
     what decision 84 built. The operator presses "reset batch", its rung above the box
     counter's, or below it.

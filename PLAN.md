@@ -102,6 +102,12 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   counts, never on a first scan; the reset `r` and load `ld` are inputs a rung writes; the
   count stops at the dint's limits with `ov` or `un` latched; and an online edit moves a
   counter's `pv`, forecasts its `q` and blocks an edge it would otherwise make.
+- The other timers (M3-2): IEC's off-delay `tof`, `.dn` on through its delay, and pulse
+  `tp`, its pulse `.tt` from a rising edge, never on a first scan, and the conventional
+  retentive `rto`, keeping its time across a false rung and cleared by its `r` input; each
+  a timer by every rule a `ton` keeps, its forecast and resume by its own type across an
+  online edit, a `tp`'s edge blocked as a counter's is, and each warned of under an event
+  task in its own words.
 - A staged online edit of a running configuration (OE-2): `Logex.Configuration.Edit`
   accepts a candidate configuration against the resource that runs the original, refusing
   what changes only with a restart at its line, then tests, untests, assembles or cancels
@@ -2456,6 +2462,32 @@ names it breaks. Growth tests are in reductions.
   the fault does meanwhile, and not for a fault present at start; an `rto` lubrication
   timer keeps its time across the motor stopping and loses it only to its clear and a
   restart; and the event-task warning names each.
+
+  **Status: DONE — landed 2026-10-14**, as eight commits, M3-1's landing order with step 3
+  one commit per timer: (1) the survey, the stanzas `tof`, `tp` and `rto`, `e34712f`; (2)
+  the refactor that stops reading every timer as a `ton`, `64fe3d4`; (3) `tof`, `39e0261`,
+  `tp`, `795150e`, and `rto`, `6740d16`; (4) the contract walk, `a3e0c33`; (5) the
+  Done-when, `035ddae`; (6) the documents, the commit after it, among them README's "Three
+  more timers", whose output is a real run. 1032 tests pass on Elixir 1.20.4 (8 of them
+  doctests), up from 977. (2) changes no behaviour: the suite is unchanged, and a
+  differential probe of 4,000 seeded programs and 600 seeded edits gives identical hashes in
+  its tree and its parent's. Each of (3)'s messages records its mutation table, every rule
+  it adds reverted alone and the full suite judged by its exit code: 89 rules, 82 red at
+  once and seven survivors, each given a test and red with it. (4) and (5) add no rule:
+  (3)'s 82 rows that touch a scan or the edit turn the walk alone red on 66, and the
+  Done-when alone on 31, each of the rest red in the full suite and named in its commit.
+
+  Readings and choices, each in its commit and its decision: a `tof`'s `.dn` is IEC's Q
+  and the conventional TOF's `.DN`, on through its delay (decision 93), where decision 74's
+  words, "done never means still running on any timer", would read otherwise for a `tof`;
+  a `tp` is IEC's TP, its edge memory `.en` on decision 21's block list by path (decision
+  94); an `rto`'s `r` clears the conventional RES's members, `.acc`, `.dn` and `.tt`,
+  keeping `.pre`, `.en` the rung's, and is a member kept across an edit (decision 95), so
+  a reset held at a switch under a candidate that writes `r` no more stays held until a
+  restart. A `tof` blocks nothing: an edit that turns its rung false starts its delay. A
+  new `tof` starts at rest with `.acc` 0, where the conventional prescan sets `.acc` to
+  `.pre`. The forecasts reuse `:dn_drops` and `:dn_rises`, a `tp`'s `:dn_rises` its pulse
+  ending, as decision 88 reused them for a counter. The walk found no defect in `lib/`.
 - **M3-3 · Integer arithmetic: `add sub mul div mod neg abs`.** IEC's names, and `neg`
   the vendors' (decision 79); `sqrt` waits for a real type. A result outside a dint is
   brought to the nearer limit and the instruction passes no power on that scan (decision
@@ -3087,7 +3119,8 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    M1-6, as a declared instance on the injected clock; TOF, TP, RTO, RES and the counters
    are open, and reuse its `%Logex.FbType{}`.* *(Milestone 3, decided 2026-10-14: IEC's
    counters `ctu`, `ctd` and `ctud` in M3-1, reset and loaded through their `r` and `ld`
-   inputs rather than a RES, landed 2026-10-14; `tof`, `tp` and `rto` in M3-2.)*
+   inputs rather than a RES, landed 2026-10-14; `tof`, `tp` and `rto` in M3-2, landed
+   2026-10-14, the `rto` cleared through its `r` input.)*
 2. **A scan loop and I/O image.** The input image, the clock and the first-scan bit landed
    with M1-5 (`put_inputs/3`, `%Logex.Scan{}`). The scheduler landed with M2-1:
    `Logex.Runtime.cycle/3` steps a configuration's resource by the time the host says has

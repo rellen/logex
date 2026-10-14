@@ -161,6 +161,9 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
 | `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two dints, each a tag, a member or a literal | compare — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`; none on a false rung. Two literals are a warning |
 | `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
+| `tof run_on 30000` | an off-delay timer (`var run_on tof`), then a preset in ms | off-delay timer, IEC's TOF — rung power is its IN. True: `.dn` set, `.acc` 0. The first false scan starts the delay, and `.dn` stays set until `.acc` reaches `.pre`, then drops; a true rung during the delay ends it with `.dn` still set. A new or restarted one is at rest, `.dn` 0. Read it with `xic run_on.dn` on a rung below |
+| `tp horn_pulse 3000` | a pulse timer (`var horn_pulse tp`), then a preset in ms | pulse timer, IEC's TP — a rising edge of its rung, never on an instance's first scan, starts a pulse on `.tt` exactly `.pre` long, whatever the rung does meanwhile, an edge during it ignored; `.dn` is set as the pulse ends and holds while the rung does. Read the pulse with `xic horn_pulse.tt` on a rung below |
+| `rto lube 360000000` | a retentive timer (`var lube rto`), then a preset in ms | retentive on-delay timer, the conventional RTO — true, it times as `ton`; false, it keeps `.acc` and `.dn`, so its time adds up across the rung's drops. Its reset `.r`, an input a rung writes, `xic greased ote lube.r`, puts `.acc`, `.dn` and `.tt` to 0 at its next run; every restart, warm or cold, starts it at 0. Logic writes `.pre`, `.acc` and `.r` |
 | `ctu boxes 12` | an up counter (`var boxes ctu`) or an up-down one (`ctud`), then a preset of 0 to 2147483647 | count up — rung power is the counter's count input `cu`. Each rising edge adds one to `.cv`, never on an instance's first scan, and `.q` is `.cv >= .pv`. Its reset `.r`, an input a rung writes, as `xic reset_pb ote boxes.r`, puts `.cv` to 0 at the counter's next run, and keeps its memory of `cu`, so a box on the eye at a reset is not counted again. At 2147483647 the count stops and `.ov` stays on until a reset. The preset is where `.pv` starts; logic writes only `.r` and `.pv`, and a `ctud`'s `.ld`. One `ctu` runs a counter, and nothing may follow it on its path: read it with `xic boxes.q` on a rung below |
 | `ctd hopper 40` | a down counter (`var hopper ctd`) or an up-down one, then a preset | count down — rung power is `cd`. Its load `.ld` puts `.cv` to `.pv`; each rising edge takes one away, stopping at −2147483648 with `.un` on until a load; `.q` is `.cv <= 0`. A `ctud`, `var stock ctud`, is run by one `ctu` and one `ctd` on two rungs, with one preset, and has `.r` and `.ld`, `.qu` at `.cv >= .pv` and `.qd` at `.cv <= 0` |
 | `cal s1 a b q` | an instance of a function block, then a value for each of its var_inputs (a tag, a member or a literal of its type) and a tag for each of its var_outputs, which it writes, so not a `var_input`, in the block's declaration order | runs the instance: rung power is its EN, and passes on. True: copies `a` and `b` in, runs the block's rungs over the instance's state and copies its outputs out to `q`. False: copies nothing in or out and runs nothing, so the instance and `q` are frozen; a timer inside catches up when the block next runs. One `cal` runs an instance, and a `ton` is run by its `ton`, never by `cal` |
@@ -199,15 +202,14 @@ These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5) an
 change the source language. Program organisation, `PLAN.md`'s Milestone 2, has landed
 whole ("A function block" and "A configuration", below):
 - **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
-- **The rest of Milestone 3** (`PLAN.md` §3, decisions 67–92 in
-  [`docs/organisation.md`](docs/organisation.md) §7), after the counters, which have
-  landed ("A counter", below): the other timers `tof tp rto`; integer arithmetic `add sub
-  mul div mod neg abs`, `sqrt` waiting for a real type; the pulse coils `osr osf`; and a
-  forward `jmp` to an `lbl`. IEC names wherever IEC names the operation; `rto`, `neg`,
-  `osr`, `osf`, `jmp` and `lbl` are rule 2's, from a vendor, `docs/naming.md` saying which
-  as each lands. There is no `res`: a counter resets through its own `r` input, as IEC's
-  does, and a retentive timer will be cleared through its own `r` input too, `xic greased
-  ote lube.r` (decision 90).
+- **The rest of Milestone 3** (`PLAN.md` §3, decisions 67–95 in
+  [`docs/organisation.md`](docs/organisation.md) §7), after the counters and the other
+  timers, which have landed ("A counter" and "Three more timers", below): integer
+  arithmetic `add sub mul div mod neg abs`, `sqrt` waiting for a real type; the pulse coils
+  `osr osf`; and a forward `jmp` to an `lbl`. IEC names wherever IEC names the operation;
+  `neg`, `osr`, `osf`, `jmp` and `lbl` are rule 2's, from a vendor, `docs/naming.md` saying
+  which as each lands. There is no `res`: a counter resets through its own `r` input, as
+  IEC's does, and so does a retentive timer, `xic greased ote lube.r` (decision 90).
 
 ## An example
 
@@ -447,6 +449,102 @@ line 8: `ctd` runs a ctd or a ctud, but `boxes` is a ctu (declared on line 5): a
 A counter in a function block whose `cal` is false is frozen with the rest of the block:
 a box that passes the eye while it is frozen is not counted. A counter under an event
 task is a configuration warning, since it sees its rung only when the task runs.
+
+### Three more timers
+
+`line.ld` — a fan that runs on after the motor stops, a horn pulsed on a fault, and a
+lubrication timer that adds up the motor's running time, each with a preset of a few
+scans so the run is short:
+
+```
+var_input motor bool
+var_input fault bool
+var_input greased bool
+var_output fan bool
+var_output horn bool
+var_output grease_due bool
+var_output run_ms dint
+var run_on tof
+var horn_pulse tp
+var lube rto
+
+xic motor tof run_on 30
+xic run_on.dn ote fan
+xic fault tp horn_pulse 30
+xic horn_pulse.tt ote horn
+xic greased ote lube.r
+xic motor rto lube 50
+xic lube.dn ote grease_due
+move lube.acc run_ms
+```
+
+`line.exs` scans it once per line, 10 ms apart:
+
+```elixir
+{:ok, line} = Logex.compile_file("line.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(line, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(line, state, 10)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  state
+end
+
+Logex.Runtime.instance(line)
+|> scan.("fault at start, motor on", %{"fault" => 1, "motor" => 1})
+|> scan.("motor runs              ", %{})
+|> scan.("motor stops, fault clear", %{"motor" => 0, "fault" => 0})
+|> scan.("run-on                  ", %{})
+|> scan.("fault                   ", %{"fault" => 1})
+|> scan.("run-on over, fault clear", %{"fault" => 0})
+|> scan.("fault again, ignored    ", %{"fault" => 1})
+|> scan.("pulse over, motor on    ", %{"motor" => 1})
+|> scan.("motor runs              ", %{})
+|> scan.("motor runs              ", %{})
+|> scan.("motor runs              ", %{})
+|> scan.("motor runs: greasing due", %{})
+|> scan.("greased                 ", %{"greased" => 1})
+|> scan.("greased let go          ", %{"greased" => 0})
+```
+
+```
+$ mix run line.exs
+fault at start, motor on  %{"fan" => 1, "grease_due" => 0, "horn" => 0, "run_ms" => 0}
+motor runs                %{"fan" => 1, "grease_due" => 0, "horn" => 0, "run_ms" => 10}
+motor stops, fault clear  %{"fan" => 1, "grease_due" => 0, "horn" => 0, "run_ms" => 10}
+run-on                    %{"fan" => 1, "grease_due" => 0, "horn" => 0, "run_ms" => 10}
+fault                     %{"fan" => 1, "grease_due" => 0, "horn" => 1, "run_ms" => 10}
+run-on over, fault clear  %{"fan" => 0, "grease_due" => 0, "horn" => 1, "run_ms" => 10}
+fault again, ignored      %{"fan" => 0, "grease_due" => 0, "horn" => 1, "run_ms" => 10}
+pulse over, motor on      %{"fan" => 1, "grease_due" => 0, "horn" => 0, "run_ms" => 10}
+motor runs                %{"fan" => 1, "grease_due" => 0, "horn" => 0, "run_ms" => 20}
+motor runs                %{"fan" => 1, "grease_due" => 0, "horn" => 0, "run_ms" => 30}
+motor runs                %{"fan" => 1, "grease_due" => 0, "horn" => 0, "run_ms" => 40}
+motor runs: greasing due  %{"fan" => 1, "grease_due" => 1, "horn" => 0, "run_ms" => 50}
+greased                   %{"fan" => 1, "grease_due" => 0, "horn" => 0, "run_ms" => 0}
+greased let go            %{"fan" => 1, "grease_due" => 0, "horn" => 0, "run_ms" => 10}
+```
+
+The `tof` holds `fan` on through its 30 ms run-on after the motor stops, and drops it at
+30 ms after the scan that saw the motor stop; `.dn` is IEC's Q, on while the rung is true and through the delay. The
+`tp` gives no pulse for the fault present at start, by the start-up rule every
+edge-driven instruction keeps, and the fault at 50 ms sounds the horn for exactly 30 ms,
+`.tt` its pulse, though the fault clears and comes back meanwhile: an edge during a pulse
+starts nothing. Its `.dn` comes on as the pulse ends, while the rung holds. The `rto`
+keeps its 10 ms while the motor is stopped and adds to it when it runs again, from the
+scan after the motor starts again, as a `ton` adds nothing on the scan that first sees its rung
+true; `grease_due` lights at its 50 ms, and its reset input `r`, written by the
+`greased` rung above it, clears it, the time counting again from the last scan that saw
+the reset. A restart, warm or cold, starts it at 0 too, until `retain` lands.
+
+Each is a timer by every rule a `ton` keeps: one instruction runs it, nothing may follow
+it on its path, logic may move into `.pre` and `.acc`, and a `ton` made a `tof` is a
+change of type, which an online edit refuses. An edit that moves a preset
+forecasts each by its own rule: a `tof`'s `.dn` dropping during its delay, a `tp`'s pulse
+ending, an `rto`'s `.dn` at its next run with its rung true. A `tp` an edit adds while its
+fault is present sounds no horn at the switch. Under an event task each is a
+configuration warning in its own words: a `tof`'s delay and a `tp`'s pulse end only when
+the task next runs.
 
 ### A function block
 
