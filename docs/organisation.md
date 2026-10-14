@@ -2609,7 +2609,8 @@ answers. Decisions 67–89 were taken on 2026-10-14 from Milestone 3's design (b
 routine choices. Decisions 90–92 were taken the same day, after M3-1's review, from three
 questions the maintainer was asked then: 90 one M3-2 had left open, 91 and 92 confirming
 what M3-1 built. Decisions 93–95 are M3-2's own routine choices, taken as it landed on
-2026-10-14. All ninety-five are kept with their options so the reasons stay with them.
+2026-10-14, 93 confirmed by the maintainer the same day, after M3-2's review. All
+ninety-five are kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3440,7 +3441,8 @@ questions asked after M3-1's review, the same day.
     *Recommend `.tt`.* Adopted: a `tp`'s pulse is `.tt`, and `.dn` comes on when the pulse
     ends, so "done" never means "still running" on any timer. *(Landed with M3-2,
     2026-10-14, `.dn` set as the pulse ends while the rung holds, decision 94. A `tof`'s
-    `.dn` is IEC's Q, on through its delay, decision 93.)*
+    `.dn` is IEC's Q, on through its delay, decision 93, the one exception to these words,
+    confirmed by the maintainer on 2026-10-14.)*
 75. **A pulse timer on the first scan (M3-2).** The fault is already present when the
     controller starts. Does the horn sound?
     - No, by decision 69's one start-up rule; the fault lamp, driven by the fault itself,
@@ -3639,9 +3641,9 @@ questions asked after M3-1's review, the same day.
     outputs are never written from outside a block, and the flags `ov` and `un` stay
     consistent with the count, cleared by the same reset or load that moves it.
 
-**M3-2's own choices, 2026-10-14.** Decisions 93 onward are M3-2's routine choices, where
+**M3-2's own choices, 2026-10-14.** Decisions 93–95 are M3-2's routine choices, where
 neither the record nor IEC left a question for the maintainer, each with the alternative
-the record keeps.
+the record keeps. After M3-2's review the maintainer confirmed 93, the same day.
 
 93. **An off-delay timer's done bit and its delay (M3-2).** A fan runs on for 30 seconds
     after the motor stops: `xic motor tof run_on 30000`, the fan worked by a rung below.
@@ -3683,7 +3685,12 @@ the record keeps.
     branch, so its Q, `IN OR (STATE = 1)`, stays TRUE for that call; logex drops `.dn` on
     the falling edge's own scan, a delay of 0 ms, as IEC's diagram draws it, and
     timer_test.exs pins it. At any other preset no run that starts the delay can end it, and
-    the two agree.)*
+    the two agree.)* *(Confirmed by the maintainer on 2026-10-14, after M3-2's review: a
+    `tof`'s `.dn` follows IEC, on while the rung is true and through the run-on, and the fan
+    is wired to `.dn`. The maintainer was asked knowing what it means: "done" is on while
+    the timer still counts the run-on, so a `tof` is the one exception to decision 74's
+    "done never means still running" on any timer, which decision 74 took for a pulse and
+    which every other timer keeps.)*
 94. **A pulse timer's pulse, start to end (M3-2),** following decisions 74 and 75. A horn
     sounds for 3 seconds from a fault's rising edge: `xic fault tp horn_pulse 3000`, the
     horn worked by `xic horn_pulse.tt` on a rung below.

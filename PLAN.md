@@ -2479,7 +2479,9 @@ names it breaks. Growth tests are in reductions.
 
   Readings and choices, each in its commit and its decision: a `tof`'s `.dn` is IEC's Q
   and the conventional TOF's `.DN`, on through its delay (decision 93), where decision 74's
-  words, "done never means still running on any timer", would read otherwise for a `tof`;
+  words, "done never means still running on any timer", would read otherwise for a `tof`,
+  as the maintainer confirmed after the review, knowing "done" is then on while the run-on
+  still counts;
   a `tp` is IEC's TP, its edge memory `.en` on decision 21's block list by path (decision
   94); an `rto`'s `r` clears `.acc`, `.dn` and `.tt`, keeping `.pre`, and `.en` stays
   the rung's, where the conventional RES clears `.EN` too, and is a member kept across an
@@ -2510,7 +2512,9 @@ names it breaks. Growth tests are in reductions.
   for step, and at a preset of 0 MatIEC holds Q one call longer than logex, as each now
   notes. Decision 95 and `docs/naming.md`'s `rto` said `r` clears what the conventional
   RES clears, which clears `.EN` too: logex keeps `.en`, a departure each now owns. §8 maps
-  `.dn` to Q but for a `tp`. The suite is at 1037 tests (8 doctests).
+  `.dn` to Q but for a `tp`. Asked after the review, the maintainer confirmed decision 93,
+  a `tof`'s `.dn` IEC's Q through the run-on, the one exception to decision 74's words. The
+  suite is at 1037 tests (8 doctests).
 - **M3-3 · Integer arithmetic: `add sub mul div mod neg abs`.** IEC's names, and `neg`
   the vendors' (decision 79); `sqrt` waits for a real type. A result outside a dint is
   brought to the nearer limit and the instruction passes no power on that scan (decision
