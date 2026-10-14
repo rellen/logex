@@ -3398,4 +3398,255 @@ defmodule Logex.EndToEndTest do
       lube_keeps(line)
     end
   end
+
+  # PLAN.md M3-3's Done-when, as worded on 2026-10-14: a fill valve's total, `add total flow
+  # total` on every scan of a 100 ms task, agrees with an Elixir oracle over seeded flows
+  # and closes the valve at a setpoint read with `ge`; a total driven past 2147483647, a
+  # `div` by a tag that is 0, which the cycle reports as its event, and a `mod` of a
+  # negative operand each give what their stanzas say; and no value outside a dint ever
+  # reaches a state. Each piece runs in one configuration through Logex.Runtime.cycle/3,
+  # from text and from files on disk, against an oracle in plain Elixir that knows nothing
+  # of logex.
+  describe "integer arithmetic (M3-3)" do
+    alias Logex.{Configuration, Fault, Runtime}
+
+    @max 2_147_483_647
+    @min -2_147_483_648
+
+    @fill_ld """
+    var_input flow dint
+    var_input setpoint dint
+    var_input reset bool
+    var_output valve bool
+    var_output total dint
+    var_output total_ok bool
+    var full bool
+    xic reset move 0 total
+    xio reset add total flow total ote total_ok
+    ge total setpoint ote full
+    xio full ote valve
+    """
+
+    # Boxes per minute, its minutes 0 just after start-up (decision 78), and a phase of a
+    # signed offset, a `mod` of a negative operand.
+    @rate_ld """
+    var_input total dint
+    var_input minutes dint
+    var_input offset dint
+    var_output per_minute dint
+    var_output rate_ok bool
+    var_output phase dint
+    div total minutes per_minute ote rate_ok
+    mod offset 4 phase
+    """
+
+    @fill_logex """
+    task fill interval 100 priority 1
+    var_global flow dint at meter.i.0
+    var_global setpoint dint 5000
+    var_global reset bool at panel.i.0
+    var_global minutes dint at panel.i.1
+    var_global offset dint at panel.i.2
+    var_global valve bool at panel.q.0
+    var_global total_ok bool at panel.q.1
+    var_global total dint
+    var_global per_minute dint
+    var_global rate_ok bool
+    var_global phase dint
+    program f1 fill with fill
+    f1.flow flow
+    f1.setpoint setpoint
+    f1.reset reset
+    f1.valve valve
+    f1.total total
+    f1.total_ok total_ok
+    program r1 rate with fill
+    r1.total total
+    r1.minutes minutes
+    r1.offset offset
+    r1.per_minute per_minute
+    r1.rate_ok rate_ok
+    r1.phase phase
+    """
+
+    defp fill_from_text do
+      programs =
+        Map.new([{"fill", @fill_ld}, {"rate", @rate_ld}], fn {name, text} ->
+          {:ok, program} = Logex.compile(text, name: name)
+          {name, program}
+        end)
+
+      assert {:ok, plant} = Configuration.compile("plant", @fill_logex, programs)
+      {plant, nil}
+    end
+
+    defp fill_from_files(dir) do
+      for {name, text} <- [
+            {"fill.ld", @fill_ld},
+            {"rate.ld", @rate_ld},
+            {"plant.logex", @fill_logex}
+          ],
+          do: File.write!(Path.join(dir, name), text)
+
+      assert {:ok, plant} = Configuration.compile_file(Path.join(dir, "plant.logex"))
+      {plant, Path.join(dir, "rate.ld")}
+    end
+
+    # Every value the resource holds, each instance's state and each global, is a dint's
+    # or a bool's: looked at inside the opaque resource on purpose, since no public call
+    # shows a value that never reaches an output.
+    defp all_dints?(%Runtime{instances: instances, globals: globals}),
+      do:
+        Enum.all?(Map.values(globals), &dint?/1) and
+          Enum.all?(Map.values(instances), &(dint?(&1.env) and &1.faults == []))
+
+    defp dint?(%{} = map), do: Enum.all?(Map.values(map), &dint?/1)
+    defp dint?(value), do: is_integer(value) and value in @min..@max
+
+    # Cycles every 10 ms from 0 to `last`, each cycle's input changes from `changes` by its
+    # time: each cycle's time, its events and the globals named.
+    defp fill_cycles(runtime, last, changes, names) do
+      Enum.map_reduce(0..last//10, runtime, fn now, runtime ->
+        {runtime, _outputs, events} =
+          Runtime.cycle(runtime, if(now == 0, do: 0, else: 10), Map.get(changes, now, %{}))
+
+        assert all_dints?(runtime), "a value outside a dint at #{now} ms"
+        {{now, events, Map.new(names, &{&1, Runtime.get!(runtime, &1)})}, runtime}
+      end)
+    end
+
+    defp clamp(value), do: value |> min(@max) |> max(@min)
+
+    # The oracle: the task runs at every 100 ms, from 0, and each run adds the flow then
+    # sampled to the total, brought into a dint, and closes the valve once the total reaches
+    # the setpoint.
+    defp fill_oracle(flows, setpoint, last) do
+      {trace, _} =
+        Enum.map_reduce(0..last//10, {0, 0}, fn now, {flow, total} ->
+          flow = Map.get(flows, now, flow)
+          total = if rem(now, 100) == 0, do: clamp(total + flow), else: total
+          {{now, total, if(total >= setpoint, do: 0, else: 1)}, {flow, total}}
+        end)
+
+      trace
+    end
+
+    defp fills_to_setpoint({plant, _file}) do
+      :rand.seed(:exsss, {2026, 10, 33})
+
+      flows =
+        Map.new(
+          for(now <- 0..3000//10, :rand.uniform(4) == 1, do: {now, :rand.uniform(400) - 50})
+        )
+
+      {trace, _runtime} =
+        fill_cycles(
+          Runtime.start(plant),
+          3000,
+          Map.new(flows, fn {t, f} -> {t, %{"flow" => f}} end),
+          ~w(total valve)
+        )
+
+      assert for({now, _events, g} <- trace, do: {now, g["total"], g["valve"]}) ==
+               fill_oracle(flows, 5000, 3000)
+
+      # The valve closes at the scan where the total reaches the setpoint, and stays closed.
+      assert {closed, _, _} = Enum.find(trace, fn {_now, _events, g} -> g["valve"] == 0 end)
+      assert rem(closed, 100) == 0
+      assert Enum.all?(trace, fn {now, _, g} -> now < closed or g["valve"] == 0 end)
+    end
+
+    defp total_stops_at_the_top({plant, _file}) do
+      {trace, _runtime} =
+        fill_cycles(
+          Runtime.start(plant),
+          600,
+          %{0 => %{"flow" => 1_500_000_000}, 300 => %{"flow" => -1}, 500 => %{"reset" => 1}},
+          ~w(total total_ok)
+        )
+
+      runs =
+        for {now, _events, g} <- trace, rem(now, 100) == 0, do: {now, g["total"], g["total_ok"]}
+
+      # 1.5 billion, then past the top: there and no power, so `total_ok` is off, at every
+      # run that would pass it; a flow of -1 brings it back in, and the reset to 0.
+      assert runs == [
+               {0, 1_500_000_000, 1},
+               {100, @max, 0},
+               {200, @max, 0},
+               {300, @max - 1, 1},
+               {400, @max - 2, 1},
+               {500, 0, 0},
+               {600, 0, 0}
+             ]
+    end
+
+    defp divides_by_zero({plant, file}) do
+      {trace, _runtime} =
+        fill_cycles(
+          Runtime.start(plant),
+          300,
+          %{0 => %{"flow" => 60, "minutes" => 0}, 200 => %{"minutes" => 2}},
+          ~w(per_minute rate_ok valve total)
+        )
+
+      fault = %Fault{kind: :divide_by_zero, instruction: :div, path: nil, file: file, line: 7}
+
+      for {now, events, g} <- trace, rem(now, 100) == 0 do
+        if now < 200 do
+          # The rate is 0 and not real, the cycle reports the fault after r1's run, and the
+          # plant runs on: the valve is open and the total counts.
+          assert events == [
+                   {:ran, "fill", "f1", now},
+                   {:ran, "fill", "r1", now},
+                   {:fault, "fill", "r1", fault}
+                 ]
+
+          assert {g["per_minute"], g["rate_ok"], g["valve"]} == {0, 0, 1}
+        else
+          assert events == [{:ran, "fill", "f1", now}, {:ran, "fill", "r1", now}]
+          assert {g["per_minute"], g["rate_ok"]} == {div(g["total"], 2), 1}
+        end
+      end
+
+      assert for({now, _, g} <- trace, rem(now, 100) == 0, do: g["total"]) == [60, 120, 180, 240]
+    end
+
+    defp phase_of_a_negative({plant, _file}) do
+      {trace, _runtime} =
+        fill_cycles(
+          Runtime.start(plant),
+          400,
+          %{
+            0 => %{"offset" => -7, "minutes" => 1},
+            100 => %{"offset" => 7},
+            200 => %{"offset" => -8},
+            300 => %{"offset" => @min},
+            400 => %{"offset" => -1}
+          },
+          ~w(phase)
+        )
+
+      # IEC's IN1 - (IN1/IN2)*IN2: the dividend's sign, never the divisor's.
+      assert for({now, _, g} <- trace, rem(now, 100) == 0, do: g["phase"]) == [-3, 3, 0, 0, -1]
+    end
+
+    test "M3-3's Done-when, from text: the fill valve, its total past the top, a rate by " <>
+           "zero minutes and a phase of a negative offset" do
+      plant = fill_from_text()
+      fills_to_setpoint(plant)
+      total_stops_at_the_top(plant)
+      divides_by_zero(plant)
+      phase_of_a_negative(plant)
+    end
+
+    @tag :tmp_dir
+    test "M3-3's Done-when, from files on disk, each fault naming its file", %{tmp_dir: dir} do
+      plant = fill_from_files(dir)
+      fills_to_setpoint(plant)
+      total_stops_at_the_top(plant)
+      divides_by_zero(plant)
+      phase_of_a_negative(plant)
+    end
+  end
 end
