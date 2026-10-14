@@ -96,8 +96,12 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   function block's instance named by its path and kept until a scan runs its body
   (decision 32), and since M3-1 a counter's edge memory by its path, `boxes.cu`, since
   M3-2 a `tp`'s, `horn_pulse.en`. The instance also has `switched`, which an edit's switch sets and a scan
-  clears, and since M3-3 `faults`, its last scan's minor faults, which each scan replaces
-  and `put_inputs/3`, `restart/3` and a switch keep (decision 99), and the scan `tags` (M2-5), the tag table of the routine it runs, which `cal`
+  clears, and since M3-3 `faults`, its last scan's minor faults, `[]` from `instance/1`,
+  which each scan replaces and `put_inputs/3`, `restart/3` and a switch keep, each entry
+  point that takes a state refusing one that is not a proper list of `%Logex.Fault{}`,
+  before it checks the state's owner, and which a resource's states hold as `[]` between
+  cycles, a cycle reporting them as events and dropping them (decision 99), and the scan
+  `tags` (M2-5), the tag table of the routine it runs, which `cal`
   narrows to its block's. Every entry point that takes a program refuses a function block
   type with one message, `Logex.Declarations.not_a_program/1`'s.
 - `lib/logex/configuration.ex` — `%Logex.Configuration{}` (M2-1, `docs/organisation.md`
@@ -114,7 +118,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   for the host's mistakes no text can make, a line each (decision 36:
   a bad name, file or programs, a part that is not a proper list of its struct, a struct
   that lacks one of its keys, a bad line, lines neither all nil nor rising, a name no
-  lexer reads as one token, a negative number); `new!/1`, from Elixir, raising one
+  lexer reads as one token, a number that is not an integer); `new!/1`, from Elixir, raising one
   `ArgumentError` with every problem, an element that brings a line among them;
   `compile/3` (M2-2), a configuration file's text against program types given as data,
   through `Logex.Configuration.Text.read/1` and `check/1`'s rules, what a broken line
@@ -148,7 +152,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `Logex.Lexer`'s tokens, not `Logex.Parser`'s, giving the elements of a configuration in
   line order, each with its line, or a `:configure` diagnostic with its column for each
   line it cannot read, a placeholder for what a broken line names among the entries;
-  `entries!/1`, what a line can say; and `print/1`, of a configuration or its entries,
+  `entries!/1`, what a line can say, a number negative too since M3-3 (decision 97); and
+  `print/1`, of a configuration or its entries,
   whose text reads back to the very entries it printed, and through `compile/3` to the
   very configuration, each element on its line: the exact round trip. It checks no word's
   meaning, which is `check/1`'s
@@ -262,7 +267,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   goes), `preset?/1` (a `ton`'s
   preset range, 0 to 2147483647 ms), and `check/1`, the one validator for a declaration
   line and for `Logex.Tag.new!/4`, so from Elixir too it refuses what no line can say: an
-  initial value on an instance, and a negative one (OE-1). Since M2-4 `var_external` is a
+  initial value on an instance (OE-1), and until M3-3 a negative one: since a negative
+  literal lexes a line can say one, so a dint's may be negative, `var tare dint -120`, a
+  bool's still 0 or 1 (decision 97). Since M2-4 `var_external` is a
   row of `@sections`: a bool or a dint with no initial value and no instance, and no
   configuration file's keyword (`Logex.Configuration.Text.keywords/0`) names one
 - `lib/logex/tag.ex` — `%Logex.Tag{}`, whose type is `:bool`, `:dint` or, for an instance
@@ -272,7 +279,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   the program's or the outermost type's one table holds (decision 53); and `new!/4`,
   which declares a tag from Elixir. Since OE-1 it takes no timer preset (the
   `%{"pre" => ms}` M1-6 allowed: a preset is the number on the `ton` that runs the
-  timer) and no negative initial value. Its section may be `:var_external` (M2-4)
+  timer), and since M3-3 a dint's negative initial value, which it refused until a negative
+  literal lexed (decision 97). Its section may be `:var_external` (M2-4)
 - `lib/logex/fb_type.ex` — `%Logex.FbType{}`, a function block type's schema (M1-6), which
   M2-5's user function blocks reuse: its members, each a `%Logex.FbType.Member{}` with a
   type, a role (`:input`, `:output`, `:internal`, and a user block's own `var`, `:local`)
@@ -320,7 +328,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `instructionize/2` checks on entry (OE-1). Since M3-3 a `-` glued to digits is a
   negative literal's sign, one `int_lit` token at the `-`, and a sign begins a lexeme, so
   `a-5` and `5-3` are one mistyped lexeme each, `{:signed_inside, run}`, as B2 names
-  `1bst` (decision 97); `well_formed!/1` takes any integer. There is no generator, so nothing reports a
+  `1bst` (decision 97); a `-` with no digit straight after it, `- 5` or `--5`, is still
+  illegal, and there is no `+`; `well_formed!/1` takes any integer. There is no generator, so nothing reports a
   grammar conflict: **a new syntax form goes into `printer_test.exs`'s generator and
   `@required_shapes` before it lands**, and the golden record below must stay green.
 - `lib/logex/printer.ex` — the parse AST back to canonical source text
@@ -329,8 +338,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `motor.ld: line 3, column 5: …` form
 - `lib/logex/fault.ex` — `%Logex.Fault{kind:, instruction:, path:, file:, line:}` (M3-3,
   decision 99), a minor fault a scan met and ran on through, a zero divisor of `div` or
-  `mod` the one kind so far: plain data, in a lone instance's `faults` and a cycle's
-  `{:fault, task, instance, fault}` events, never raised
+  `mod` the one kind so far, `:divide_by_zero`: `path` nil on the program's own rungs, or
+  the block instance it ran in, `s1` or `s1.inner`, and `file` and `line` those of the
+  routine that holds it, a block's its body's; plain data, in a lone instance's `faults`
+  and a cycle's `{:fault, task, instance, fault}` events, `task` `:none` for a task-less
+  instance, never raised
 - Tests in `test/logex/` mirror compiler stages: `lex_and_parse_test.exs`, `instructionize_test.exs`, `evaluation_test.exs`; `validation_test.exs` holds every diagnostic and warning `instructionize/2` gives, driven from source. `test/logex_test.exs` pins `Logex` (and walks Milestone 1's done sentence and, from files on disk, Milestone 2's), `runtime_test.exs` every message the runtime raises and the exact public surface, `walk_test.exs` each fact of `Logex.Walk` from source, at depth, with its growth, `counter_test.exs` every rule of a scan of M3-1's counters from source through `call/4`, `timer_test.exs` every rule of a scan of M3-2's `tof`, `tp` and `rto` from source through `call/4`, `arithmetic_test.exs` every rule of a scan of M3-3's arithmetic from source through `call/4`, near the dint's limits and in a block, `fault_test.exs` every rule of the minor fault a zero divisor raises, a lone instance's, a block's by its path and file, a resource's events, across an edit, its host mistakes and its growth in reductions, `edit_test.exs` every message, diagnostic and rule of `Logex.Edit`, `configuration_test.exs` every diagnostic, warning and host mistake of `Logex.Configuration`, as whole lists from data and again from source, the loader of `compile_file/1` from files on disk, and the configuration file's round trip, seeded, its totality over every argument and its growth, `configuration_text_test.exs` every line a configuration file's reader refuses, as whole lists from source, and what a line can say, `scheduler_test.exs` a test at least per rule of a cycle, one copy of a global shared through `var_external` among them, and an event task's edges with decision 39, `function_block_test.exs` every diagnostic, host mistake and rule of M2-5's user function blocks, from source, the loader of `compile_file/1` among them, an online edit of a program that holds them among them, with its growth tests in the block list's bytes (decision 32), `config_edit_test.exs` every host mistake, refusal and rule of `Logex.Configuration.Edit` on §4.4's plant, the refusals as whole lists from source and from data, with its growth tests in the instances, the types and a program's size (OE-2), and `api_contract_test.exs` a seeded property over the host contract, which since M1-6 checks every accepted scan against an oracle for `ton` and `ons` and makes every accepted call twice, and since OE-1 walks online edits too, and since M2-1 configurations run as resources, against a model that scans each instance through `call/4` alone, and since M2-5 online edits of programs that hold blocks, two deep, with a one-shot oracle on every scan from the programs' text, and since M2-4 resources whose programs share globals through `var_external`, against a model that runs each program as Elixir over one map of globals, and since M2-6 configurations with event tasks, alone and with an interval, against a model of decision 39 in phase points and oracles that know only each trigger's samples, and since OE-2 staged edits of a running configuration, on a slow task that skips cycles among them, each step's writes rebuilding the resource, against a model of the scheduler seeded from the resource after every step and oracles for timers and one-shots that know nothing of the edit, and since M3-1 counters, alone and in a block, over scans, restarts and edits, against IEC's bodies restated from the programs' text, exact wherever no switch came since a counter last ran, with an oracle that knows nothing of the block list, and since M3-2 the other timers, `tof`, `tp` and `rto`, alone and a pulse in a block, over scans of random intervals, restarts and edits, against each rule restated from the programs' text, exact but where only an edit's block decides a pulse, and since M3-3 arithmetic, alone, in a block and in a resource, near the dint's limits and at zero divisors, against IEC's rules restated in Elixir, every scan's state, outputs and faults and every cycle's events exact, across an online edit whose kept values stay as they were
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
@@ -422,7 +434,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 
 - `evaluate/3` clauses, private in `Logex.Runtime`, take `(instruction, {power_flow_bool, env_map}, %Logex.Scan{})` and return `{new_power_flow_bool, new_env_map}`. The scan is read-only and the same for every instruction of one routine run, a program's rungs or one run of a block's body: a clause that needs the time reads `scan.now`, one that needs the first scan reads `scan.first`, and every other clause ignores it as `_scan` (M1-6). `ons` reads `scan.first` and `scan.ons_blocked`, the storage bits whose `ons` passes no power on this one scan, which `call/4` builds from the instance's `ons_blocked` list as a tree of those bits, each to `true` and each instance holding one to a tree of its own, so that each `ons` looks its bit up rather than walking the list, emptying the instance's list after the scan but for the bits inside an instance whose body did not run (OE-1, decision 32); a host never fills it in. `cal` (M2-5) reads `scan.tags`, the routine's tag table, and `scan.blocks`, the program's one table of block types (decision 53), which `call/4` fills from the program, and runs its block's body with the scan narrowed to its instance, `tags` the body's and `ons_blocked` the instance's own tree, `now`, `first` and `blocks` unchanged; a clause that looks a tag up in `scan.tags` uses the routine's table. `div` and `mod` (M3-3) record a zero divisor in the routine's env under an atom key, `:faults`, which no tag can be, as `cal` records a body's run under `:ran`: the routine that ran it takes the record out when it is done, `call/4` into the state's `faults`, a `cal` into its own routine's, a level down (decision 99). No test calls the evaluator: a test runs a program through `Logex.Runtime.call/4`, on a hand-built `%Logex.Instance{}` when it needs a particular env
 - A mistake in the source is a `%Logex.Diagnostic{}`, returned; a mistake by the host is an `ArgumentError`, raised, whose message a test pins. Nothing else may escape the public API (`api_contract_test.exs`)
-- An operand in the AST is `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. `Logex.Parser.well_formed!/1` states the whole tree `parse/1` can produce, and `instructionize/2` raises `ArgumentError` on any other (OE-1): every line a positive integer, every element of a rung on its one line, each rung on a line after the last, a name that lexes as one name token, a literal of 0 or more, a rung of one element or more and a group of one leg or more. A test that builds a tree by hand builds one of those. The lexer's tokens carry `{line, column}`; the parser keeps only the line, because the suite pins that shape. An instruction in the IR is `{symbol, line, operands}`, carrying its mnemonic's line; a `{:branches, legs}` node carries no line of its own. In the IR, and only there, a member of an instance is `{:member, line, path}`, `t1.acc` becoming `{:member, 3, ["t1", "acc"]}` (M1-6): the runtime's `read/2` and `write/3` take it as they take a tag, and anything that walks IR operands must handle it. A walk that reads what an instruction's operands do looks its slots up through `Logex.Compiler.signature/2`, given the program's tag table, never in a table of its own (M2-5), as `Logex.Walk` does, which `Logex.Warnings` and `Logex.Edit` read: a `cal`'s slots are its block's, so the outputs it fills are writes
+- An operand in the AST is `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. `Logex.Parser.well_formed!/1` states the whole tree `parse/1` can produce, and `instructionize/2` raises `ArgumentError` on any other (OE-1): every line a positive integer, every element of a rung on its one line, each rung on a line after the last, a name that lexes as one name token, a literal an integer, negative too since M3-3 (decision 97), a rung of one element or more and a group of one leg or more. A test that builds a tree by hand builds one of those. The lexer's tokens carry `{line, column}`; the parser keeps only the line, because the suite pins that shape. An instruction in the IR is `{symbol, line, operands}`, carrying its mnemonic's line; a `{:branches, legs}` node carries no line of its own. In the IR, and only there, a member of an instance is `{:member, line, path}`, `t1.acc` becoming `{:member, 3, ["t1", "acc"]}` (M1-6): the runtime's `read/2` and `write/3` take it as they take a tag, and anything that walks IR operands must handle it. A walk that reads what an instruction's operands do looks its slots up through `Logex.Compiler.signature/2`, given the program's tag table, never in a table of its own (M2-5), as `Logex.Walk` does, which `Logex.Warnings` and `Logex.Edit` read: a `cal`'s slots are its block's, so the outputs it fills are writes
 - New instructions, step 1 — **survey the name before writing any code**: add a
   ``### `mnemonic` `` stanza to `docs/naming.md` (IEC 61131-3 element, function or
   function block with clause and table number, then the major vendor toolchains, then the

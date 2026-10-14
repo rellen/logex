@@ -2598,8 +2598,13 @@ names it breaks. Growth tests are in reductions.
   draws its warning. `state.faults`'s message was missing from `runtime_test.exs`'s table
   of every message the runtime raises, and its check could move after the owner's with
   the suite green: the table now holds it, and a state of another program whose faults
-  are no list raises the faults' message, as the block list's does. The suite is at 1115
-  tests (8 doctests).
+  are no list raises the faults' message, as the block list's does. CLAUDE.md still said
+  four things M3-3 made untrue: that `Logex.Configuration.check/1` raises a negative
+  number as the host's mistake, that `Logex.Declarations.check/1` and `Logex.Tag.new!/4`
+  refuse a negative initial value, and that `well_formed!/1` takes a literal of 0 or more;
+  each now says what is, and its Key Files give a fault's fields, the `faults` field's
+  rule at every step and its check before the owner's, and a `-` that still does not lex.
+  The suite is at 1115 tests (8 doctests).
 - **M3-4 · The coil one-shots: `osr`, `osf`.** IEC's transition-sensing coils in the
   conventional form, a storage bit and a pulse bit (decision 80), which pass on the power
   they receive; each storage bit under every rule an `ons` bit has, on decision 21's block
