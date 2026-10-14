@@ -50,6 +50,7 @@ defmodule Logex.Compiler do
     "le" => {:le, [{:value, :dint}, {:value, :dint}]},
     "ge" => {:ge, [{:value, :dint}, {:value, :dint}]},
     "ton" => {:ton, [{:instance, "ton"}, {:preset, :dint}]},
+    "ctu" => {:ctu, [{:instance, "ctu"}, {:preset, :dint}]},
     # M2-5: `cal` runs an instance of a user function block. Its entry is a marker, not a
     # signature: the signature is the block's, built per compile from the instance's type
     # (Logex.FbType.signature/1), the instance, then the block's var_inputs and var_outputs
@@ -668,7 +669,9 @@ defmodule Logex.Compiler do
   # Every `ton` that names a timer runs it, whatever its preset: `ton t1 sp` and a second
   # `ton t1 5000` are two mistakes. A preset that is not a literal was reported already, and
   # a program with a diagnostic never runs, so its nil is never a timer's `.pre`.
-  defp ton({:ton, line, [{:name, _, timer} | preset]}), do: [{timer, line, preset_of(preset)}]
+  defp ton({symbol, line, [{:name, _, timer} | preset]}) when symbol in [:ton, :ctu],
+    do: [{timer, line, preset_of(preset)}]
+
   defp ton(_instruction), do: []
 
   defp preset_of([{:int_lit, _, preset}]), do: preset
@@ -713,7 +716,8 @@ defmodule Logex.Compiler do
     series(rest, earliest(before, borne), diagnostics, known)
   end
 
-  defp bears({:ton, _, _} = ton, diagnostics, _known), do: {diagnostics, ton}
+  defp bears({symbol, _, _} = ton, diagnostics, _known) when symbol in [:ton, :ctu],
+    do: {diagnostics, ton}
 
   defp bears({:branches, legs}, diagnostics, known),
     do: Enum.reduce(legs, {diagnostics, nil}, &leg(&1, &2, known))
@@ -730,10 +734,10 @@ defmodule Logex.Compiler do
 
   defp follows(nil, _element, _known), do: []
 
-  defp follows({:ton, line, operands}, element, known) do
+  defp follows({symbol, line, operands}, element, known) do
     message =
-      "#{shown(element)} follows #{shown({:ton, line, Enum.take(operands, 1)})} on its path: " <>
-        "what passes on after a `ton` is not settled, so a `ton` ends its path; " <>
+      "#{shown(element)} follows #{shown({symbol, line, Enum.take(operands, 1)})} on its path: " <>
+        "what passes on after a `#{symbol}` is not settled, so a `#{symbol}` ends its path; " <>
         read_timer(operands, known)
 
     [diagnostic(line_of(element, line), message)]

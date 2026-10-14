@@ -1402,6 +1402,18 @@ defmodule Logex.Runtime do
     {false, write(env, timer, reset(as_map(read(env, timer)), now))}
   end
 
+  # SPIKE (M3 design): the up counter. Rung power is CU; `.cu` holds the power it got last
+  # scan, so it counts on a rising edge, never on an instance's first scan (as `ons`), and
+  # saturates at the dint's top, setting `.ov`. `.dn` is `.acc >= .pre`, every scan it runs.
+  defp evaluate({:ctu, _, [counter, _preset]}, {true, env}, %Scan{first: first} = scan) do
+    blocked = first or blocked?(counter, scan.ons_blocked)
+    {true, write(env, counter, counted(as_map(read(env, counter)), true, blocked))}
+  end
+
+  defp evaluate({:ctu, _, [counter, _preset]}, {false, env}, _scan) do
+    {false, write(env, counter, counted(as_map(read(env, counter)), false, true))}
+  end
+
   # M2-5: `cal` runs an instance of a user function block (docs/organisation.md §4.3).
   # Rung power is its EN, and its ENO is the power out. Energised, each var_input operand
   # is read into the instance, the block's body runs over the instance's own map, with the
@@ -1509,6 +1521,24 @@ defmodule Logex.Runtime do
       "tt" => one(not done),
       "en" => 1,
       "last" => now
+    }
+  end
+
+  @dint_max 2_147_483_647
+
+  defp counted(counter, power, first) do
+    pre = integer(Map.get(counter, "pre"))
+    acc = integer(Map.get(counter, "acc"))
+    edge = power and not first and not closed?(Map.get(counter, "cu"))
+    over = edge and acc >= @dint_max
+    acc = if edge and not over, do: acc + 1, else: acc
+
+    %{
+      "pre" => pre,
+      "acc" => acc,
+      "cu" => one(power),
+      "dn" => one(acc >= pre),
+      "ov" => one(over or closed?(Map.get(counter, "ov")))
     }
   end
 

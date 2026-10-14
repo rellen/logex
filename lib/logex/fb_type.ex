@@ -89,8 +89,23 @@ defmodule Logex.FbType do
       ]
     }
 
+  # SPIKE (M3 design): the conventional COUNTER's members, lowercased. `.cu` is the
+  # power the `ctu` received last scan, its edge memory, as `.en` is a timer's.
+  @doc "SPIKE: the built-in up counter, as `var c1 ctu` declares it."
+  def ctu,
+    do: %__MODULE__{
+      name: "ctu",
+      members: [
+        %Member{name: "pre", type: :dint, role: :input, write: true},
+        %Member{name: "acc", type: :dint, role: :output, write: true},
+        %Member{name: "cu", type: :bool, role: :output},
+        %Member{name: "dn", type: :bool, role: :output},
+        %Member{name: "ov", type: :bool, role: :output}
+      ]
+    }
+
   @doc "The built-in function block types, by their lowercase type word."
-  def builtins, do: %{"ton" => ton()}
+  def builtins, do: %{"ton" => ton(), "ctu" => ctu()}
 
   @doc "The built-in type a word names, in any case, or nil."
   def builtin(word) when is_binary(word), do: Map.get(builtins(), String.downcase(word))

@@ -763,3 +763,13 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 
 **A `ton` in an event task's program** times across events: one whose rung is true on two runs in a row adds the whole time between them to `.acc`, as Mitsubishi's long timer would and its timer (T) would not. It draws a warning on the configuration's `warnings`, since only the configuration knows which task runs an instance. The warning covers a task with `single` alone or with `interval`, and a `ton` inside a block the program's `cal`s run (`docs/organisation.md` §4.6, "Caveats", and §4.10, M2-6).
 **Checked:** 2026-10-04. IEC 61131-3:2003 §1.3.69, §2.5.2.3.2 (Table 35's NOTE), §2.7.2, Figure 20, Table 50, Annex B.1.7 and Table C.2, and IEC 61131-3:2013 §3.83, §6.8.2, Table 63 and Annex A, read directly in the copies `docs/instruction-sets.md` §9 lists; MatIEC at `3a41303`, `stage4/generate_c/generate_c.cc` (the `task_initialization_c` visitor) and `lib/edge_detection.txt` (`R_TRIG`); Beremiz `editors/ResourceEditor.py` at `5e3a749`; the conventional family's tasks manual (Sept 2025); CODESYS online help, *Object: Task*, read on 2026-10-02 and again on 2026-10-04; Mitsubishi *MELSEC iQ-R CPU Module User's Manual (Application)*, SH(NA)-081264ENG-AR. The Siemens row is carried from Milestone 2's design survey (2026-10-02) and was not re-read for this stanza. IEC 61131-3:2025 was not read. Each quotation and page number checked again against the text of its source on 2026-10-12, the CODESYS page as saved on 2026-10-02, as the stanza was brought to what M2-2, M2-3 and M2-4 landed.
+
+### `ctu` — SPIKE ONLY, count up (not a survey)
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var c1 ctu`; `xic eye ctu c1 10` | Spike stanza for the M3 design pass; never lands. |
+
+**Chosen:** `ctu`
+**Why:** spike.
+**Checked:** not checked.

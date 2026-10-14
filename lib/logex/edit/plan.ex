@@ -330,6 +330,8 @@ defmodule Logex.Edit.Plan do
     do:
       Enum.reduce(Walk.instructions([rung]), {[], []}, fn
         {:ons, _line, [{:name, _, bit}]}, {bits, cals} -> {[bit | bits], cals}
+        # SPIKE (M3): a counter's edge memory, `.cu`, is blocked as a storage bit is.
+        {:ctu, _line, [{:name, _, counter} | _]}, {bits, cals} -> {[counter | bits], cals}
         instruction, {bits, cals} -> {bits, calling(instruction, tags, cals)}
       end)
 
@@ -819,6 +821,15 @@ defmodule Logex.Edit.Plan do
 
   defp done(_to, %{"pre" => pre, "acc" => acc, "dn" => dn, "en" => en}, name),
     do: done(dn, en, max(acc, 0), pre, name)
+
+  # SPIKE (M3): a counter's `.dn` is `.acc >= .pre` at its next run, whatever its rung.
+  defp done(_to, %{"pre" => pre, "acc" => acc, "dn" => 1, "cu" => _}, name) when acc < pre,
+    do: [{:dn_drops, name, {acc, pre}}]
+
+  defp done(_to, %{"pre" => pre, "acc" => acc, "dn" => 0, "cu" => _}, name) when acc >= pre,
+    do: [{:dn_rises, name, {acc, pre}}]
+
+  defp done(_to, %{"cu" => _}, _name), do: []
 
   defp done(1, _en, acc, pre, name) when acc < pre, do: [{:dn_drops, name, {acc, pre}}]
   defp done(0, 1, acc, pre, name) when acc >= pre, do: [{:dn_rises, name, {acc, pre}}]

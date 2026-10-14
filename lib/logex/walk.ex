@@ -152,7 +152,7 @@ defmodule Logex.Walk do
   defp timed(instructions, _tags),
     do: Enum.reduce(instructions, %{}, &ton/2)
 
-  defp ton({:ton, line, [{:name, _, timer} | preset]}, timers),
+  defp ton({symbol, line, [{:name, _, timer} | preset]}, timers) when symbol in [:ton, :ctu],
     do: Map.put_new(timers, timer, {line, preset_of(preset)})
 
   defp ton(_instruction, timers), do: timers
