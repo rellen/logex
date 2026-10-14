@@ -2585,6 +2585,14 @@ names it breaks. Growth tests are in reductions.
   M3-3 moved it about 0.005x higher. M3-3 reads no body more than once: each rung costs
   accept about the same at 100 and 400 instances, and a body read again for each instance
   gives 3.20x.
+
+  M3-3's review found no defect in `lib/`, and its fixes are the commits after (7). Eight
+  of the arithmetic's operand slots were pinned by no test, each widened from a dint to
+  any type with the suite green: `add`'s second source and destination, the first source
+  of `sub`, `mul` and `div`, `mod`'s second source and destination, and `neg`'s
+  destination, where `neg d b` wrote -5 to a bool. `validation_test.exs` puts a bool in
+  every slot of every arithmetic instruction, each refused at its line. The suite is at
+  1115 tests (8 doctests).
 - **M3-4 · The coil one-shots: `osr`, `osf`.** IEC's transition-sensing coils in the
   conventional form, a storage bit and a pulse bit (decision 80), which pass on the power
   they receive; each storage bit under every rule an `ons` bit has, on decision 21's block

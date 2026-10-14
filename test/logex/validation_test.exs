@@ -1222,11 +1222,14 @@ defmodule Logex.ValidationTest do
   # M3-3: IEC's arithmetic, `add`, `sub`, `mul`, `div` and `mod`, and `neg` and `abs`
   # (decisions 77 to 79 and 98).
   describe "arithmetic (M3-3)" do
+    # Each slot of each instruction meets a bool in one of these three tests, so every
+    # slot's type is pinned: a slot widened to `:any` lets its bool through.
     test "takes two dint sources, each a tag, a member or a literal, and a dint it writes" do
       assert source_errors(
                "var b bool\nvar d dint\nvar_input i dint\nvar t1 ton\nvar c ctu\n" <>
                  "add b d d\nsub d 2147483648 d\nmul d -2147483649 d\nadd d d\n" <>
-                 "sub d 1 5\nmul d 1 b\nadd d 1 i\nsub d 1 t1.dn\nmul 2 d c.cv\nadd t1 1 d"
+                 "sub d 1 5\nmul d 1 b\nadd d 1 i\nsub d 1 t1.dn\nmul 2 d c.cv\nadd t1 1 d\n" <>
+                 "add d b d\nadd d 1 b\nsub b 1 d\nsub d b d\nmul b 1 d\nmul d b d"
              ) == [
                "line 6: `add` reads a dint, but `b` is a bool (declared on line 1)",
                "line 7: `sub` reads a dint: `2147483648` does not fit in 32 bits",
@@ -1240,7 +1243,13 @@ defmodule Logex.ValidationTest do
                "line 13: `sub` writes `t1.dn`, but logic may write only `.pre` and `.acc` of a ton",
                "line 14: `mul` writes `c.cv`, but logic may write only `.r` and `.pv` of a ctu",
                "line 15: `add` reads a dint, but `t1` is a ton (declared on line 4): name one " <>
-                 "of its members, as in `t1.acc`"
+                 "of its members, as in `t1.acc`",
+               "line 16: `add` reads a dint, but `b` is a bool (declared on line 1)",
+               "line 17: `add` writes a dint, but `b` is a bool (declared on line 1)",
+               "line 18: `sub` reads a dint, but `b` is a bool (declared on line 1)",
+               "line 19: `sub` reads a dint, but `b` is a bool (declared on line 1)",
+               "line 20: `mul` reads a dint, but `b` is a bool (declared on line 1)",
+               "line 21: `mul` reads a dint, but `b` is a bool (declared on line 1)"
              ]
     end
 
@@ -1261,14 +1270,18 @@ defmodule Logex.ValidationTest do
     test "`div` and `mod` take two dint sources and write a dint, as `add` does" do
       assert source_errors(
                "var b bool\nvar d dint\nvar_input i dint\n" <>
-                 "div d b d\nmod b 2 d\ndiv d 2 i\nmod d 2 5\ndiv d 2 b"
+                 "div d b d\nmod b 2 d\ndiv d 2 i\nmod d 2 5\ndiv d 2 b\n" <>
+                 "div b 2 d\nmod d b d\nmod d 2 b"
              ) == [
                "line 4: `div` reads a dint, but `b` is a bool (declared on line 1)",
                "line 5: `mod` reads a dint, but `b` is a bool (declared on line 1)",
                "line 6: `div` writes `i`, a var_input (declared on line 3): logic must not " <>
                  "write an input",
                "line 7: `mod` expects a tag, found `5`",
-               "line 8: `div` writes a dint, but `b` is a bool (declared on line 1)"
+               "line 8: `div` writes a dint, but `b` is a bool (declared on line 1)",
+               "line 9: `div` reads a dint, but `b` is a bool (declared on line 1)",
+               "line 10: `mod` reads a dint, but `b` is a bool (declared on line 1)",
+               "line 11: `mod` writes a dint, but `b` is a bool (declared on line 1)"
              ]
     end
 
@@ -1292,7 +1305,8 @@ defmodule Logex.ValidationTest do
     test "`neg` and `abs` take a dint source, a tag, a member or a literal, and a dint they write" do
       assert source_errors(
                "var b bool\nvar d dint\nvar_input i dint\nvar t1 ton\n" <>
-                 "neg b d\nabs 2147483648 d\nneg d\nabs d 5\nneg d i\nabs d t1.dn\nneg d d d"
+                 "neg b d\nabs 2147483648 d\nneg d\nabs d 5\nneg d i\nabs d t1.dn\nneg d d d\n" <>
+                 "neg d b\nabs b d"
              ) == [
                "line 5: `neg` reads a dint, but `b` is a bool (declared on line 1)",
                "line 6: `abs` reads a dint: `2147483648` does not fit in 32 bits",
@@ -1302,7 +1316,9 @@ defmodule Logex.ValidationTest do
                  "write an input",
                "line 10: `abs` writes a dint, but `t1.dn` is a bool",
                "line 10: `abs` writes `t1.dn`, but logic may write only `.pre` and `.acc` of a ton",
-               "line 11: unknown instruction `d`"
+               "line 11: unknown instruction `d`",
+               "line 12: `neg` writes a dint, but `b` is a bool (declared on line 1)",
+               "line 13: `abs` reads a dint, but `b` is a bool (declared on line 1)"
              ]
 
       assert source_warnings(
