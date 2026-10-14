@@ -2319,7 +2319,7 @@ first, lands green, and pins every rule with a test that fails when the rule is 
 
 ### Milestone 3 — the missing instruction set
 
-**Designed and decided 2026-10-14** (`docs/organisation.md` §7, decisions 67–89;
+**Designed and decided 2026-10-14** (`docs/organisation.md` §7, decisions 67–92;
 "decision N" in this section is that §7's). §8's domain gaps, in its order: counters, the
 other three timers, integer arithmetic, the coil one-shots `osr` and `osf`, and control
 flow. A design pass on `970dede` surveyed each item and built a throwaway spike of an up
@@ -2333,7 +2333,11 @@ while its rung is true counted at once; and a counter in a frozen block misses a
 that comes and goes while it is frozen. The maintainer took the questions as recommended
 but three: IEC's three counter kinds (decision 67), IEC's member names (68), and a zero
 divisor reported to the host as a minor fault (78). 67 and 68 sent M3-1 back to IEC's
-counter model, whose routine choices are decisions 84–89.
+counter model, whose routine choices are decisions 84–89. After M3-1's review the
+maintainer answered three more questions the same day: an `rto` is cleared by an `r`
+input member, with no `res` (decision 90); a counter's reset or load acts when its own
+rung runs, as IEC's rule has it (91, confirmed as built); and `cv` stays read-only to
+logic (92, confirmed).
 
 Each item surveys its words in `docs/naming.md` first, before any code, and lands as a
 gated series, each commit gated alone by `mix format --check-formatted`, `mix compile
@@ -2431,25 +2435,27 @@ names it breaks. Growth tests are in reductions.
   had a new `ctd` start from its preset, loaded, where IEC's CTD and M3-1 start it empty,
   `cv` 0 and `q` on until `ld` loads it; the maintainer confirmed IEC's on 2026-10-14, and
   decision 67 and README now say so, as `docs/naming.md` did. The one-rule lists now name
-  a counter's blocked edge memory, and README's `ctu` row no `ld`. The suite is at 977
-  tests (8 doctests).
-- **M3-2 · The other timers: `tof`, `tp`, `rto`.** Each an instruction and a type word,
-  as `ton` is, with the `ton`'s members `.pre .acc .dn .tt .en` (decision 68 keeps them for
+  a counter's blocked edge memory, and README's `ctu` row no `ld`. The maintainer's
+  answers to three questions asked after the review are decisions 90–92: an `rto`'s clear
+  for M3-2, and two confirmations of what M3-1 built, a reset or load acting at the
+  counter's own run and `cv` read-only. The suite is at 977 tests (8 doctests).
+- **M3-2 · The other timers: `tof`, `tp`, `rto`.** Each an instruction and a type word, as
+  `ton` is, with the `ton`'s members `.pre .acc .dn .tt .en` (decision 68 keeps them for
   timers), in milliseconds. `tp`'s pulse is `.tt`, `.dn` coming on as it ends (decision
   74), and it fires on a rising edge, never on the first scan (75), its edge memory on the
   block list as a counter's is (87); an `rto` keeps `.acc` across a false rung and starts
   again at every restart until `retain` lands (76); nothing may follow any of them (73);
-  M2-6's event-task warning is widened to every timer, in its own words; and across an edit
-  each has its `.dn` forecast and resume trigger by type. *Open, for M3-2's design:* how an
-  `rto` is cleared, now that a counter resets through its `r` input (decision 84) and the
-  design's `res` instruction is gone with the conventional counter: an `r` input member as
-  on Siemens' TONR, or a `res` instruction. *Done when* a fan's `tof` runs it on for its
-  preset after the motor stops, two instances on 10 ms and 50 ms tasks stopping the fan
-  at the same logical time, as decision 6 measured `ton`; a `tp` sounds a horn for
-  exactly its preset from a fault's rising edge, whatever the fault does meanwhile, and not
-  for a fault present at start; an `rto` lubrication timer keeps its time across the motor
-  stopping and loses it only to its clear and a restart; and the event-task warning names
-  each.
+  M2-6's event-task warning is widened to every timer, in its own words; and across an
+  edit each has its `.dn` forecast and resume trigger by type. An `rto` is cleared by its
+  reset input member, `xic greased ote lube.r`, written like a counter's reset, and there
+  is no `res` instruction (decision 90, decided 2026-10-14 after M3-1's review, where this
+  was open); what else `.r` clears, and its rule across an edit, are M3-2's design. *Done
+  when* a fan's `tof` runs it on for its preset after the motor stops, two instances on 10
+  ms and 50 ms tasks stopping the fan at the same logical time, as decision 6 measured
+  `ton`; a `tp` sounds a horn for exactly its preset from a fault's rising edge, whatever
+  the fault does meanwhile, and not for a fault present at start; an `rto` lubrication
+  timer keeps its time across the motor stopping and loses it only to its clear and a
+  restart; and the event-task warning names each.
 - **M3-3 · Integer arithmetic: `add sub mul div mod neg abs`.** IEC's names, and `neg`
   the vendors' (decision 79); `sqrt` waits for a real type. A result outside a dint is
   brought to the nearer limit and the instruction passes no power on that scan (decision

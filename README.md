@@ -199,14 +199,15 @@ These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5) an
 change the source language. Program organisation, `PLAN.md`'s Milestone 2, has landed
 whole ("A function block" and "A configuration", below):
 - **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
-- **The rest of Milestone 3** (`PLAN.md` §3, decisions 67–89 in
+- **The rest of Milestone 3** (`PLAN.md` §3, decisions 67–92 in
   [`docs/organisation.md`](docs/organisation.md) §7), after the counters, which have
   landed ("A counter", below): the other timers `tof tp rto`; integer arithmetic `add sub
   mul div mod neg abs`, `sqrt` waiting for a real type; the pulse coils `osr osf`; and a
   forward `jmp` to an `lbl`. IEC names wherever IEC names the operation; `rto`, `neg`,
   `osr`, `osf`, `jmp` and `lbl` are rule 2's, from a vendor, `docs/naming.md` saying which
   as each lands. There is no `res`: a counter resets through its own `r` input, as IEC's
-  does, and how a retentive timer is cleared is M3-2's to settle.
+  does, and a retentive timer will be cleared through its own `r` input too, `xic greased
+  ote lube.r` (decision 90).
 
 ## An example
 

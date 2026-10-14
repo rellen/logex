@@ -1337,7 +1337,7 @@ instance already holds around the new piece:
 - an event task's trigger is a resource's state, not a tag's: its rule is in
   `Logex.Runtime`'s one-rule section (M2-6, landed).
 
-*Milestone 3's state* (decided 2026-10-14, decisions 67–89; M3-1's counters landed the same
+*Milestone 3's state* (decided 2026-10-14, decisions 67–92; M3-1's counters landed the same
 day, and `Logex.Runtime`, `Logex.Instance` and `Logex.Edit` give their rules as built). A
 counter, `ctu`, `ctd` or `ctud`, is a built-in function block instance, state of the
 program instance that holds it, as a timer is:
@@ -2576,7 +2576,9 @@ recommended, from OE-2's design (§4.9, "OE-2's design"). Decision 66 was taken 
 2026-10-14, as recommended, from the review of OE-2's landing, which found the case it
 answers. Decisions 67–89 were taken on 2026-10-14 from Milestone 3's design (below):
 67, 68 and 78 against their recommendations, the others as recommended, 84–89 M3-1's own
-routine choices. All eighty-nine are kept with their options so the reasons stay with them.
+routine choices. Decisions 90–92 were taken the same day, after M3-1's review, from three
+questions the maintainer was asked then: 90 one M3-2 had left open, 91 and 92 confirming
+what M3-1 built. All ninety-two are kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3301,7 +3303,8 @@ its sixteen questions and to one follow-up, in the order the milestone lands the
 against the recommendation, 67, 68 and 78, the rest as recommended. Each is given with the
 plain-language example the maintainer was asked. Decisions 84–89 are M3-1's own routine
 choices, taken when 67 and 68 sent its design back to IEC's counter model, each with an
-alternative the record keeps.
+alternative the record keeps. Decisions 90–92 are the maintainer's answers to three
+questions asked after M3-1's review, the same day.
 
 67. **Which kinds of counter (M3-1).** Picture a photo-eye on a conveyor that adds one for
     each box, a buffer table where boxes are added at one end and taken off at the other,
@@ -3501,7 +3504,8 @@ alternative the record keeps.
     reset button is held the count stays at 0, and a box that arrives meanwhile is not
     counted (IEC's R before the count); the reset shows on the scan the button is pressed
     where its rung comes above the counter's, and on the next where it comes below, as the
-    rule says. *(Landed with M3-1, 2026-10-14.)*
+    rule says. *(Landed with M3-1, 2026-10-14. When a reset or load acts was confirmed by
+    decision 91, and an `rto` is cleared by an input member the same way, decision 90.)*
 85. **A `ctud`'s two count inputs, from two rungs (M3-1).** IEC's CTUD is one call with
     both inputs; a ladder rung has one power flow.
     - Two instructions on one `ctud`: `xic infeed ctu stock 50` on one rung drives its
@@ -3525,7 +3529,7 @@ alternative the record keeps.
     - or `cv` too, as decision 9 lets logic write a timer's `.acc`.
 
     *Taken: the inputs only.* The count changes through `r` and `ld`, which also clear the
-    flags, so no write can leave `ov` on at a count of 3. Decision 9 stands for timers. *(Landed with M3-1, 2026-10-14.)*
+    flags, so no write can leave `ov` on at a count of 3. Decision 9 stands for timers. *(Landed with M3-1, 2026-10-14. Confirmed by decision 92.)*
 87. **A counter across an online edit (M3-1),** from the spike: a counter an edit adds
     while its rung is true counted at once, and the block list blocked a preset-only
     change.
@@ -3567,6 +3571,38 @@ alternative the record keeps.
     - or run a frozen block's counters.
 
     *Taken: the freeze,* one rule for everything in a block. *(Landed with M3-1, 2026-10-14.)*
+90. **How a retentive timer is cleared (M3-2),** asked after M3-1's review. Picture
+    decision 76's lubrication timer, adding up how long the conveyor motor has run: once
+    the line has been greased, its time must go back to zero.
+    - A reset input member, `.r`, written by any rung as a counter's `r` is (decision 84):
+      `xic greased ote lube.r`, as Siemens' TONR has an `R` pin;
+    - or a `res` instruction, the conventional set's RES: `xic greased res lube`.
+
+    The design had cleared an `rto` with `res`; once 84 dropped `res`, `PLAN.md`'s M3-2
+    left the choice open, with no recommendation. **Taken: the reset input member.** An
+    `rto` is cleared by `xic greased ote lube.r`, written like a counter's reset and read
+    when its instruction next runs, so a program clears everything that keeps a count one
+    way. There is no `res` instruction, for a timer or a counter. What else `.r` clears
+    beside the time, and its rule across an edit, are M3-2's design.
+91. **When a counter's reset or load acts (M3-1),** asked after M3-1's review, to confirm
+    what decision 84 built. The operator presses "reset batch", its rung above the box
+    counter's, or below it.
+    - When the counter's own rung runs, as IEC's separate-assignment rule has it (Ed 3
+      §6.6.3.4.1, rule 3b): a reset rung above the counter clears the count on the same
+      scan, one below it a scan later, and while the reset is held no edge is counted;
+    - or at the moment a rung writes `r` or `ld`, wherever the counter's rung stands.
+
+    **Taken, as built: when the counter's own rung runs.** Confirmed as wanted on
+    2026-10-14. It is IEC's rule, and how M3-1 runs a counter (decision 84).
+92. **Whether logic may write a counter's count (M3-1),** asked after M3-1's review, to
+    confirm decision 86. An operator wants to correct a count by hand.
+    - `cv` read-only to logic: a count changes only by counting, by `r`, and by `ld`,
+      which puts `cv` to a `pv` logic may write first;
+    - or `cv` writable, as decision 9 lets logic write a timer's `.acc`.
+
+    **Taken, as built: `cv` stays read-only to logic.** Confirmed on 2026-10-14. IEC's
+    outputs are never written from outside a block, and the flags `ov` and `un` stay
+    consistent with the count, cleared by the same reset or load that moves it.
 
 ---
 
