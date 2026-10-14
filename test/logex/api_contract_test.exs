@@ -152,6 +152,21 @@ defmodule Logex.ApiContractTest do
   forecast holds at the run its type's rule decides it; a test then an untest with no scan
   between gives every timer back; and a restart starts each at its preset. Every accepted
   call is made twice and gives the same result.
+
+  M3-4: a tenth walk runs the pulse coils, `osr` and `osf`, each on a chain of contacts,
+  its storage bit declared 0 or 1, and one inside a block a `cal` runs, in three versions of
+  its body, over random inputs, scans, restarts and online edits that change a coil's
+  chain, its kind, its storage bit's initial value, what follows it, its presence, the
+  order of its rung or the block's body. Its oracle restates IEC's transition-sensing
+  coils from the programs' text, over the input image, and knows nothing of the block
+  list: every scan is exact for each coil that has run under its own rung's text with no
+  switch since, or since its instance started; a coil a switch came before pulses no edge
+  unless it last ran under the same rung text, and then may or may not; every coil writes
+  its storage bit with the power it receives and passes that power on; a coil a block's
+  false `cal` freezes, or that the program no longer runs, leaves both its bits alone; a
+  switch keeps every bit as it was; the writes each report lists rebuild the state; a test
+  then an untest with no scan between gives every bit back; and a restart starts each at
+  its declared value. Every accepted call is made twice and gives the same result.
   """
   use ExUnit.Case, async: true
 
@@ -6498,4 +6513,394 @@ defmodule Logex.ApiContractTest do
         {rt, m1, m2, now}
     end)
   end
+
+  # ---- M3-4: the pulse coils, against IEC's transition-sensing coils restated ----------
+
+  # What the coil walk must be seen to do, at least once each.
+  @pc_reach [
+    :rose,
+    :fell,
+    :first_held,
+    :passed_on,
+    :frozen,
+    :frozen_pulse_held,
+    :removed_pulse_held,
+    :kept_across,
+    :edge_blocked,
+    :edge_kept,
+    :blocked_pulsed_later,
+    :added,
+    :pruned,
+    :round_trip,
+    :restarted
+  ]
+
+  @pc_inputs ~w(e1 e2 e3 on)
+
+  test "pulse coils run as IEC's restated from the text: every scan exact where no switch " <>
+         "came since a coil last ran, no pulse an edit made, and the power passed on" do
+    :rand.seed(:exsss, {2026, 10, 444})
+    Process.put(:pc_programs, %{})
+
+    # Sized from its rarest atom, a removed coil's pulse bit held at 1, which needs the
+    # coil to pulse on the scan before the switch that removes it: about 16 a run at 800
+    # walks over the seeds {n, 77, 7}, {n, 1, 1} and {7, n, 2026}, n to 25, and the reach
+    # holds at each of them and of {n, 3, 33} and {99, n, 5}, n to 35.
+    for _ <- 1..800 do
+      spec = pc_spec()
+      program = pc_program(spec)
+
+      w = %{
+        spec: spec,
+        p: program,
+        s: Runtime.instance(program),
+        e: nil,
+        c: nil,
+        clean: Map.new(pc_texts(spec), fn {bit, _text} -> {bit, true} end),
+        last: pc_texts(spec),
+        round: nil,
+        blocked: [],
+        restarted: false
+      }
+
+      pc_walk(w, 60)
+    end
+
+    assert Process.get(:pc_reach, MapSet.new()) == MapSet.new(@pc_reach)
+  end
+
+  defp pc_reached(name), do: reached(:pc_reach, name)
+
+  # A program's coils, drawn: `r` and `f`, each an `osr` or an `osf` on a chain of
+  # contacts, its storage bit declared 0 or 1 and its rung now and then ending in an `ote`
+  # that shows the power the coil passes on; and a block `b`, in one of three versions of
+  # its body, a coil inside it, which a `cal` on `on` runs. A coil's two bits are declared
+  # only where the coil is, so an edit adds and drops them.
+  defp pc_spec, do: %{r: pc_maybe(&pc_coil/0), f: pc_maybe(&pc_coil/0), b: pc_maybe(&pc_v/0)}
+
+  defp pc_maybe(fun), do: if(:rand.uniform(4) == 1, do: nil, else: fun.())
+
+  defp pc_coil,
+    do: %{
+      kind: pick([:osr, :osf]),
+      chain: pc_chain(),
+      init: pick([0, 1]),
+      y: pick([true, false])
+    }
+
+  defp pc_v, do: pick([1, 2, 3])
+
+  defp pc_chain,
+    do: for(_ <- 1..:rand.uniform(2), do: {pick([:xic, :xic, :xio]), pick(~w(e1 e2 e3))})
+
+  # The candidate: one or two of the changes an edit may make to a coil, none of which a
+  # restart needs: its chain, its kind, its storage bit's initial value, whether an `ote`
+  # follows it, its presence, the block's version, or the order of the two coils' rungs.
+  defp pc_candidate(spec),
+    do:
+      Enum.reduce(1..:rand.uniform(2), spec, fn _, spec -> pc_change(:rand.uniform(9), spec) end)
+
+  defp pc_change(1, spec), do: pc_coil_change(spec, :r)
+  defp pc_change(2, spec), do: pc_coil_change(spec, :f)
+  defp pc_change(3, spec), do: %{spec | r: pick([nil, pc_coil()])}
+  defp pc_change(4, spec), do: %{spec | f: pick([nil, pc_coil()])}
+  defp pc_change(5, spec), do: %{spec | b: pick([nil, 1, 2, 3])}
+  defp pc_change(6, spec), do: Map.put(spec, :swapped, not Map.get(spec, :swapped, false))
+  defp pc_change(_n, spec), do: pc_coil_change(spec, pick([:r, :f]))
+
+  defp pc_coil_change(spec, coil) do
+    case spec[coil] do
+      nil ->
+        spec
+
+      c ->
+        Map.put(
+          spec,
+          coil,
+          case :rand.uniform(4) do
+            1 -> %{c | chain: pc_chain()}
+            2 -> %{c | kind: if(c.kind == :osr, do: :osf, else: :osr)}
+            3 -> %{c | init: 1 - c.init}
+            4 -> %{c | y: not c.y}
+          end
+        )
+    end
+  end
+
+  @pc_bodies %{1 => "xic go osr s p", 2 => "xio go osr s p", 3 => "xic go osf s p"}
+
+  defp pc_body(version) do
+    {:ok, edge} =
+      Logex.compile(
+        "function_block edge\nvar_input go bool\nvar_output p bool\nvar s bool\n" <>
+          @pc_bodies[version],
+        name: "edge"
+      )
+
+    edge
+  end
+
+  defp pc_program(spec) do
+    known = Process.get(:pc_programs)
+
+    case known do
+      %{^spec => program} ->
+        program
+
+      _ ->
+        types = if spec.b, do: [pc_body(spec.b)], else: []
+        {:ok, program} = Logex.compile(pc_source(spec), name: "pc", types: types)
+        Process.put(:pc_programs, Map.put(known, spec, program))
+        program
+    end
+  end
+
+  defp pc_source(spec) do
+    coils = for name <- [:r, :f], c = spec[name], do: {name, c}
+
+    declarations =
+      Enum.map(@pc_inputs, &"var_input #{&1} bool") ++
+        Enum.flat_map(coils, fn {name, c} ->
+          ["var s#{name} bool #{c.init}", "var_output p#{name} bool", "var_output y#{name} bool"]
+        end) ++
+        if(spec.b, do: ["var b edge", "var_output bu bool"], else: [])
+
+    rungs = Enum.map(coils, &pc_text/1)
+    rungs = if Map.get(spec, :swapped, false), do: Enum.reverse(rungs), else: rungs
+    cal = if spec.b, do: ["xic on cal b e1 bu"], else: []
+    Enum.join(declarations ++ rungs ++ cal, "\n")
+  end
+
+  defp pc_text({name, c}),
+    do:
+      "#{pc_chain_text(c.chain)} #{c.kind} s#{name} p#{name}" <>
+        if(c.y, do: " ote y#{name}", else: "")
+
+  defp pc_chain_text(chain), do: Enum.map_join(chain, " ", fn {c, input} -> "#{c} #{input}" end)
+
+  # Each coil, by its storage bit's path, to the text of the rung it runs under: the
+  # block's by its body's rung, under the `cal` rung, which no version changes.
+  defp pc_texts(spec),
+    do:
+      Map.new(
+        for(name <- [:r, :f], c = spec[name], do: {"s#{name}", pc_text({name, c})}) ++
+          if(spec.b, do: [{"b.s", @pc_bodies[spec.b]}], else: [])
+      )
+
+  defp pc_walk(w, 0), do: w
+
+  defp pc_walk(w, n),
+    do:
+      pc_walk(
+        pc_op(pick(~w(scan scan scan scan accept test untest assemble cancel restart)a), w),
+        n - 1
+      )
+
+  defp pc_running(%{e: nil} = w), do: {w.p, w.spec}
+  defp pc_running(%{e: edit} = w), do: pc_side(Edit.stage(edit), w)
+
+  defp pc_side(:testing, w), do: {Edit.running(w.e), w.c}
+  defp pc_side(_stage, w), do: {Edit.running(w.e), w.spec}
+
+  defp pc_op(:scan, w) do
+    {program, spec} = pc_running(w)
+    inputs = for name <- @pc_inputs, :rand.uniform(2) == 1, into: %{}, do: {name, pick([0, 1])}
+    before = Runtime.put_inputs(program, w.s, inputs)
+    {:ok, {_outputs, later}} = attempt(fn -> Runtime.scan(program, before, 10) end)
+    w = pc_check_scan(w, spec, before, later)
+    %{w | s: later, round: nil, restarted: false}
+  end
+
+  defp pc_op(:restart, w) do
+    {program, spec} = pc_running(w)
+    s = Runtime.restart(program, w.s, pick([:cold, :warm]))
+
+    # Each bit starts again at its declared value.
+    for {name, c} <- [r: spec.r, f: spec.f], c != nil do
+      assert {s.env["s#{name}"], s.env["p#{name}"]} == {c.init, 0}
+    end
+
+    pc_reached(:restarted)
+    clean = Map.new(pc_texts(spec), fn {bit, _text} -> {bit, true} end)
+    %{w | s: s, clean: clean, last: pc_texts(spec), round: nil, restarted: true}
+  end
+
+  defp pc_op(:accept, %{e: nil} = w) do
+    candidate = pc_candidate(w.spec)
+
+    {:ok, {:ok, edit, _forecast}} =
+      attempt(fn -> Edit.accept(w.p, pc_program(candidate), w.s) end)
+
+    %{w | e: edit, c: candidate}
+  end
+
+  defp pc_op(:test, %{e: e} = w) when e != nil,
+    do: pc_switch(Edit.stage(e) in [:accepted, :untested], :test, w)
+
+  defp pc_op(:untest, %{e: e} = w) when e != nil,
+    do: pc_switch(Edit.stage(e) == :testing, :untest, w)
+
+  defp pc_op(:assemble, %{e: e} = w) when e != nil,
+    do: pc_finish(Edit.stage(e) == :testing, :assemble, w)
+
+  defp pc_op(:cancel, %{e: e} = w) when e != nil,
+    do: pc_finish(Edit.stage(e) in [:accepted, :untested], :cancel, w)
+
+  defp pc_op(_op, w), do: w
+
+  defp pc_finish(false, _step, w), do: w
+
+  defp pc_finish(true, step, w) do
+    {:ok, {program, s, report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
+    assert s.env == pc_rebuilt(w.s.env, report)
+    if Enum.any?(report, &match?({:pruned, _, _}, &1)), do: pc_reached(:pruned)
+    spec = if step == :assemble, do: w.c, else: w.spec
+    %{w | p: program, s: s, e: nil, c: nil, spec: spec, round: nil}
+  end
+
+  defp pc_switch(false, _step, w), do: w
+
+  defp pc_switch(true, step, w) do
+    to = if step == :test, do: w.c, else: w.spec
+    {:ok, {edit, s, report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
+
+    # The writes the report lists rebuild the state: no switch writes a coil's bits, but
+    # a tag it adds starts at its initial value.
+    assert s.env == pc_rebuilt(w.s.env, report)
+    if Enum.any?(report, &match?({:added, _, _}, &1)), do: pc_reached(:added)
+
+    # Each coil's bits the program started declares are kept as the state held them, or
+    # started at their initial values where the state lacked them.
+    for bit <- Map.keys(pc_texts(to)), is_integer(pc_at(w.s.env, bit)) do
+      assert pc_at(s.env, bit) == pc_at(w.s.env, bit)
+      pc_reached(:kept_across)
+    end
+
+    blocked = for {:ons_blocked, path, _value} <- report, do: path
+    if blocked != [], do: pc_reached(:edge_blocked)
+
+    # A test then an untest with no scan between gives every bit back.
+    if step == :untest and w.round != nil do
+      assert Map.take(s.env, Map.keys(w.round)) == w.round
+      pc_reached(:round_trip)
+    end
+
+    round = if step == :test, do: w.s.env, else: nil
+
+    # A restart with no scan since leaves every bit as a fresh instance's, so an edge a coil
+    # sees after it is a real one, whatever its rung's text was.
+    last = if w.restarted, do: Map.merge(w.last, pc_texts(to)), else: w.last
+    blocked = Enum.uniq(blocked ++ w.blocked)
+    %{w | e: edit, s: s, clean: %{}, last: last, round: round, blocked: blocked}
+  end
+
+  defp pc_rebuilt(env, report),
+    do:
+      Enum.reduce(report, env, fn
+        {:added, name, value}, env -> Map.put(env, name, value)
+        {:pruned, name, _value}, env -> Map.delete(env, name)
+        _fact, env -> env
+      end)
+
+  defp pc_at(env, path), do: get_in(env, String.split(path, "."))
+
+  # The scan, restated: each coil IEC's transition-sensing coil, over the input image, from
+  # the state before the scan. A coil whose storage bit says the power it last received
+  # pulses where that power rose, for `osr`, or fell, for `osf`, never on a first scan,
+  # exactly where it has run under its rung's text with no switch since; one a switch came
+  # before pulses no edge unless it last ran under the same text, and then may or may not,
+  # the edit's block list being the implementation's and no part of this oracle. Every
+  # coil writes its storage bit with the power it receives, and passes that power on; a
+  # coil the program does not run, removed or frozen in its block, leaves both bits alone.
+  defp pc_check_scan(w, spec, before, later) do
+    image = Map.take(before.env, @pc_inputs)
+    texts = pc_texts(spec)
+
+    ran =
+      for {name, c} <- [r: spec.r, f: spec.f], c != nil do
+        cond = pc_eval(c.chain, image)
+        bit = "s#{name}"
+        pulse = pc_coil!(c.kind, cond, bit, "p#{name}", {before, later, w, texts})
+
+        if c.y do
+          assert later.env["y#{name}"] == pc_one(cond)
+          pc_reached(:passed_on)
+        end
+
+        if pulse == 1 and w.clean[bit] == true and bit in w.blocked,
+          do: pc_reached(:blocked_pulsed_later)
+
+        bit
+      end
+
+    ran = ran ++ pc_block(spec.b, image, {before, later, w, texts})
+
+    # A removed coil's pulse bit holds what its last run gave it.
+    for name <- ~w(r f), spec[String.to_atom(name)] == nil, is_integer(before.env["p#{name}"]) do
+      assert later.env["p#{name}"] == before.env["p#{name}"]
+      if later.env["p#{name}"] == 1, do: pc_reached(:removed_pulse_held)
+    end
+
+    %{
+      w
+      | clean: Enum.reduce(ran, w.clean, &Map.put(&2, &1, true)),
+        last: Enum.reduce(ran, w.last, &Map.put(&2, &1, texts[&1]))
+    }
+  end
+
+  defp pc_block(nil, _image, _ctx), do: []
+
+  defp pc_block(version, %{"on" => 1} = image, {_before, later, _w, _texts} = ctx) do
+    {kind, cond} = pc_body_coil(version, image["e1"] == 1)
+    pulse = pc_coil!(kind, cond, "b.s", "b.p", ctx)
+    assert later.env["bu"] == pulse
+    ["b.s"]
+  end
+
+  defp pc_block(_version, _image, {before, later, _w, _texts}) do
+    assert later.env["b"] == before.env["b"] and later.env["bu"] == before.env["bu"]
+    pc_reached(:frozen)
+    if later.env["b"]["p"] == 1, do: pc_reached(:frozen_pulse_held)
+    []
+  end
+
+  defp pc_body_coil(1, e1), do: {:osr, e1}
+  defp pc_body_coil(2, e1), do: {:osr, not e1}
+  defp pc_body_coil(3, e1), do: {:osf, e1}
+
+  # One coil's run: its storage bit takes the power, and its pulse bit the edge where the
+  # oracle allows one, checked against the state; the pulse it gave.
+  defp pc_coil!(kind, cond, bit, pulse, {before, later, w, texts}) do
+    stored = pc_at(before.env, bit)
+    edge? = pc_edge?(kind, cond, stored)
+
+    allowed =
+      cond do
+        before.first -> [false]
+        Map.get(w.clean, bit, false) -> [true]
+        Map.get(w.last, bit) == texts[bit] -> [false, true]
+        true -> [false]
+      end
+
+    if before.first and edge?, do: pc_reached(:first_held)
+    got = pc_at(later.env, pulse)
+    assert pc_at(later.env, bit) == pc_one(cond)
+    assert got in Enum.map(allowed, &pc_one(edge? and &1)), "#{pulse}: #{got} from #{stored}"
+    if got == 1, do: pc_reached(if kind == :osr, do: :rose, else: :fell)
+
+    if got == 1 and not Map.get(w.clean, bit, false), do: pc_reached(:edge_kept)
+    got
+  end
+
+  defp pc_edge?(:osr, cond, stored), do: cond and not pc_closed?(stored)
+  defp pc_edge?(:osf, cond, stored), do: not cond and pc_closed?(stored)
+
+  defp pc_closed?(1), do: true
+  defp pc_closed?(_value), do: false
+
+  defp pc_eval(chain, image),
+    do: Enum.all?(chain, fn {c, input} -> c == :xic == (image[input] == 1) end)
+
+  defp pc_one(true), do: 1
+  defp pc_one(false), do: 0
 end
