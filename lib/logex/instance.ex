@@ -27,13 +27,20 @@ defmodule Logex.Instance do
     knows whether the program it stops has scanned since the last switch, and so whether
     the state holds what that program last gave the host. `restart/3` leaves it alone,
     since a restart is not a scan.
+  - `faults` (M3-3, decision 99) are the minor faults of its last scan, each a
+    `%Logex.Fault{}`, in the order they happened: a `div` or a `mod` that met a zero
+    divisor. `[]` from `Logex.Runtime.instance/1`; each scan replaces them with its own,
+    `[]` for none, so a host reads them after the scan that gave them; `put_inputs/3`,
+    `restart/3` and an edit's switch keep them, since none is a scan. A resource reports
+    each as an event of its cycle and keeps none: between cycles an instance's state in it
+    holds `[]`.
 
   Make one with `Logex.Runtime.instance/1`. One built or edited by hand is outside the
   contract of `Logex.Runtime`.
   """
 
   @enforce_keys [:type, :env, :now, :first]
-  defstruct [:type, :env, :now, :first, ons_blocked: [], switched: false]
+  defstruct [:type, :env, :now, :first, ons_blocked: [], switched: false, faults: []]
 
   @type t :: %__MODULE__{
           type: String.t() | nil,
@@ -41,6 +48,7 @@ defmodule Logex.Instance do
           now: non_neg_integer,
           first: boolean,
           ons_blocked: [String.t()],
-          switched: boolean
+          switched: boolean,
+          faults: [Logex.Fault.t()]
         }
 end

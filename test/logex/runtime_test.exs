@@ -1273,9 +1273,15 @@ defmodule Logex.RuntimeTest do
              ]
 
       # The two structs a host holds and builds; OE-1 gave both `ons_blocked`, and the
-      # instance `switched`.
+      # instance `switched`; M3-3 the instance `faults`, its last scan's (decision 99).
       assert Enum.sort(Map.keys(Instance.__struct__())) ==
-               [:__struct__, :env, :first, :now, :ons_blocked, :switched, :type]
+               [:__struct__, :env, :faults, :first, :now, :ons_blocked, :switched, :type]
+
+      # M3-3: a minor fault, as a scan's state and a cycle's events give it, plain data.
+      assert Enum.sort(Map.keys(Logex.Fault.__struct__())) ==
+               [:__struct__, :file, :instruction, :kind, :line, :path]
+
+      assert Logex.Fault.__info__(:functions) == [__struct__: 0, __struct__: 1]
 
       # M2-5: the scan also carries the tag table of the routine it runs, and the block types
       # it holds, the runtime's.

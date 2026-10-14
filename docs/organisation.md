@@ -807,7 +807,10 @@ Logex.Runtime.get(rt, "m1.t1.acc")                                              
 `get/2` returns the value at the path, and raises `ArgumentError` for a path that names
 no global, tag or public member, as every host mistake does.)* *(Changed 2026-10-04 by
 decision 41: `get/2` gives `{:ok, value}` or `{:error, reason}`, and `get!/2` gives the
-value or raises `ArgumentError` with that reason.)*
+value or raises `ArgumentError` with that reason.)* *(Changed 2026-10-14 by decision 99,
+M3-3: an event `{:fault, task | :none, instance, %Logex.Fault{}}` follows its scan's
+`{:ran, ...}` for each minor fault the scan met, a zero divisor, and a lone instance's
+state keeps its last scan's in `state.faults`.)*
 
 `scan/2` and a one-line configuration must give identical outputs for the README program.
 A test pins that, or the two runtimes drift apart. PLAN M1-5 defines `scan/3` as "n
@@ -1383,6 +1386,18 @@ preset outright. What differs is by type:
 In a block whose `cal` is false each is held with the rest, `last` with it, and catches up
 when the block next runs (decision 8). When M3-5's forward `jmp` lands, a timer in the
 rungs it skips is to freeze and catch up so too (decision 82).
+
+M3-3's arithmetic, `add sub mul div mod neg abs`, landed on 2026-10-14 (decisions 77–79,
+97–99), and keeps no state of its own: what it writes is its destination's, a dint tag or
+a member logic may write, ordinary state under every rule above, started by
+`initial_env/1`, kept by name across a switch, held and reported `:held` where it is an
+output no rung drives any more. An edit that adds, changes or removes one blocks nothing
+and reports nothing of its own. The one new piece is an instance's record of its last
+scan's minor faults (decision 99):
+
+| Piece | A new instance | A scan | `put_inputs/3`, `restart/3` | A switch | In a resource |
+|---|---|---|---|---|---|
+| `faults`, each a `%Logex.Fault{}` | `[]` | the scan's own, in order, `[]` for none | kept: neither is a scan | kept | reported as `{:fault, ...}` events by the cycle and dropped, so `[]` between cycles |
 
 An instance a configuration's edit sets aside and brings back (decision 57) is not
 "removed, then restored": it comes back as it was set aside, under the program it ran
@@ -2618,8 +2633,9 @@ questions the maintainer was asked then: 90 one M3-2 had left open, 91 and 92 co
 what M3-1 built. Decisions 93–95 are M3-2's own routine choices, taken as it landed on
 2026-10-14, 93 confirmed by the maintainer the same day, after M3-2's review. Decision 96
 was taken the same day, after M3-2's review, from a question the maintainer was asked
-then. Decisions 97 and 98 are M3-3's own routine choices, taken as it landed on
-2026-10-14. All ninety-eight are kept with their options so the reasons stay with them.
+then. Decisions 97–99 are M3-3's own routine choices, taken as it landed on 2026-10-14,
+99 the shape of the report decision 78 left to M3-3. All ninety-nine are kept with their
+options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3791,9 +3807,9 @@ what becomes of a block's input that an online edit leaves no rung writing.
     every run, and is not reported. Nothing is blocked or written: the counter or timer
     reads its kept input at its next run, as decision 91 reads any. *(Landed 2026-10-14. Its scope confirmed by the maintainer the same day: the report names the member whatever its value, not only when it is on, since nothing resets the counter or timer any more either way, and a `pv` or `.pre` is reported beside `r` and `ld`.)*
 
-**M3-3's own choices, 2026-10-14.** Decisions 97 and 98 are M3-3's routine choices, where
+**M3-3's own choices, 2026-10-14.** Decisions 97–99 are M3-3's routine choices, where
 neither the record nor IEC left a question for the maintainer, each with the alternative
-the record keeps.
+the record keeps; 99 is the shape of the report decision 78 asked for and left to M3-3.
 
 97. **How a negative literal is written, and where one goes (M3-3),** `PLAN.md` §5's rule
     landing first in M3-3. A level setpoint below a sensor's zero, `move -5 offset`, or a
@@ -3843,6 +3859,44 @@ the record keeps.
     compared literals do (M1-6), since its result never changes; a destination that is a
     source, `add total flow total`, is the instruction's commonest use and draws none; nor
     does a divide by a literal 1, which is harmless. *(Landed 2026-10-14.)*
+99. **How a zero divisor is reported to the host (M3-3),** the event's shape decision 78
+    left to M3-3. The line works out "boxes per minute", `div boxes minutes per_minute`,
+    and just after start-up the minutes are 0: the division gives 0, passes no power, and
+    the host is to be told, the plant running on. The host runs the plant through
+    `Logex.Runtime.cycle/3`, whose events are a log, or one program alone through
+    `call/4` and `scan/2`, which return `{outputs, state}` and no events.
+    - A fault is data, `%Logex.Fault{kind: :divide_by_zero, instruction: :div | :mod,
+      path:, file:, line:}`, `path` nil on the program's own rungs or the block instance
+      it ran in, `"s1"` or `"s1.inner"`, and `file` and `line` the routine's own, the
+      block's file for a block's, as a diagnostic cites them. A cycle reports each as an
+      event, `{:fault, task | :none, instance, fault}`, just after its scan's `{:ran, task,
+      instance, now}`, in the order they happened, `instance` the program instance's name,
+      so `"m1"` and `"s1"` place one at `m1.s1`; a lone instance's state carries its last
+      scan's in a new field, `state.faults`, `[]` for none, replaced by every scan, which
+      a host reads after the scan that returned it. A resource keeps none in its states:
+      the events are the record, as the resource is the one copy of each global (decision
+      49);
+    - the same, but a fault as a tuple, `{:divide_by_zero, :div, path, file, line}`, which
+      fits a report's or an event's style and names nothing;
+    - or `call/4` and `scan/2,3` returning a third element, the scan's events, which every
+      host and test of a lone instance would have to change for.
+
+    *Recommend the first.* Adopted. The events are an open set (`Logex.Runtime`), so a host
+    that tolerates a kind it does not know runs on unchanged, and `:fault`'s fault has its
+    own open `kind`, for any later minor fault. A fault names what decision 78 asks, the
+    instance, the file and the line, and what the host needs to find the instruction: its
+    mnemonic, and the block instance's path, since a line alone is the block's file's. The
+    field is new state in an instance, with its rule: `instance/1` gives `[]`; each scan
+    replaces it; `put_inputs/3`, `restart/3` and an edit's switch keep it, since none is a
+    scan, as each keeps `switched`; the runtime checks it, a proper list of
+    `%Logex.Fault{}`, with a message a test pins, and looks no further, since the next scan
+    replaces it. A cycle reports the faults and then drops them from the state it keeps,
+    so a resource's state, its restart and a configuration edit carry none. Only a zero
+    divisor is a fault: a result brought to a dint's limit passes no power and is not
+    reported (decision 77), as the conventional set reports an overflow only where a
+    controller is set to, and logex has no such setting. The conventional DIV and MOD
+    raise a minor fault, type 4 code 4, for a zero divisor, and the controller runs on;
+    logex's event is that, located. *(Landed 2026-10-14.)*
 
 ---
 

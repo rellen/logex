@@ -52,9 +52,12 @@ defmodule Logex.Runtime do
   6. The outputs are every output point, after every scan of the cycle.
 
   The events, in the order they happened, are `{:ran, task, instance, now}`, `task` being
-  `:none` for a task-less instance, and `{:overlap, task, missed}`, just before its task's
-  scans. They are an open set: a host tolerates a kind it does not know; an event task's
-  run is its `{:ran, ...}` events, with no kind of its own. `next_due_in/1` is when a
+  `:none` for a task-less instance, `{:overlap, task, missed}`, just before its task's
+  scans, and since M3-3 `{:fault, task, instance, fault}`, a `%Logex.Fault{}`, each minor
+  fault the scan met, a zero divisor, just after its scan's `{:ran, ...}`, in the order
+  they happened (decision 99): the plant runs on. They are an open set: a host tolerates a
+  kind it does not know; an event task's run is its `{:ran, ...}` events, with no kind of
+  its own. `next_due_in/1` is when a
   periodic due time next comes, which a runner sleeps on: it counts periodic due times
   only, a task with a single and an interval's among them even while its trigger is held
   1, since task-less instances run in whatever cycle comes and an edge is seen only in a
@@ -119,7 +122,9 @@ defmodule Logex.Runtime do
     value (decision 20);
   - a program instance starts as `instance/1` makes it, every tag by
     `Logex.Program.initial_env/1`, whose doc lists the edit's exceptions, and `restart/2`
-    restarts it through `restart/3`. An edit's switch moves a kept one by its program
+    restarts it through `restart/3`. A cycle reports the faults of its scan as events and
+    keeps none (M3-3, decision 99), so its `faults` is `[]` between cycles, and a restart
+    and an edit's switch find it so. An edit's switch moves a kept one by its program
     type's plan (`Logex.Edit`'s rules, by path), its `now` set to the resource's after fix
     F11's undo reads its own (decision 56); one only the configuration started runs starts
     as `start/1` starts one, or comes back from aside;
@@ -182,7 +187,11 @@ defmodule Logex.Runtime do
   and since M3-1 the counters' edge memories whose `ctu` or `ctd` it blocks,
   which an edit's switch sets and only the runtime fills into a scan (`Logex.Scan`), and a
   scan empties but for a bit inside an instance whose body it did not run (M2-5); and
-  `switched`, which an edit's switch sets and a scan clears.
+  `switched`, which an edit's switch sets and a scan clears. Since M3-3 a third,
+  `faults`, the minor faults of its last scan (decision 99), which each scan replaces and
+  nothing else writes, is how a lone instance's host sees a zero divisor: after `call/4`,
+  `scan/2` or `scan/3`, `state.faults` is every `%Logex.Fault{}` that scan met, in order,
+  `[]` for none.
 
   **The host contract.** A mistake by the host raises `ArgumentError` (a host bug, not a
   PLC event, `docs/organisation.md` §4.6); a mistake in the source is a diagnostic from
@@ -233,7 +242,18 @@ defmodule Logex.Runtime do
     sending each one it reports as `{:unread, name, value}`.
   """
 
-  alias Logex.{Configuration, Declarations, Diagnostic, FbType, Instance, Program, Scan, Tag}
+  alias Logex.{
+    Configuration,
+    Declarations,
+    Diagnostic,
+    Fault,
+    FbType,
+    Instance,
+    Program,
+    Scan,
+    Tag
+  }
+
   alias Logex.FbType.Member
 
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
@@ -261,6 +281,10 @@ defmodule Logex.Runtime do
 
   # M2-5: the key under which a scan records which instances' bodies ran.
   @ran :ran
+
+  # M3-3: the key under which a routine records the minor faults its scan met (decision
+  # 99), an atom too, so no tag or member name can be it.
+  @faults :faults
 
   @doc "A new instance of `program`: every tag at its initial value, before its first scan."
   def instance(program) do
@@ -535,10 +559,45 @@ defmodule Logex.Runtime do
     tree = tree(blocked)
     scan = %Scan{now: now, first: first, ons_blocked: tree, tags: tags, blocks: blocks}
     {unrun, env} = unrun(tree, Enum.reduce(rungs, env, &rung(&1, &2, scan)))
+    {faults, env} = faulted(env, program)
 
     {outputs(program, env),
-     %{state | env: env, now: now, first: false, ons_blocked: unrun, switched: false}}
+     %{
+       state
+       | env: env,
+         now: now,
+         first: false,
+         ons_blocked: unrun,
+         switched: false,
+         faults: faults
+     }}
   end
+
+  # M3-3 (decision 99): the program's record of the faults its scan met, taken out of the
+  # env, so no state keeps one, oldest first: each on its own rungs stamped with its file
+  # and no path, each from a block already placed (`raised/4`).
+  defp faulted(env, %Program{file: file}) do
+    {faults, env} = Map.pop(env, @faults, [])
+    {faults |> as_list() |> Enum.reverse() |> Enum.flat_map(&placed(&1, nil, file)), env}
+  end
+
+  # A fault met on a routine's own rungs, `{symbol, line}`, is placed in the routine: at
+  # `path`, nil for the program's, in its file. One placed already, a block's, is kept by the
+  # program, and is a level further down from any other routine that ran that block: its
+  # path gains the instance's name.
+  # What a hand-built env left under the key is no fault.
+  defp placed({symbol, line}, path, file) when is_atom(symbol) and is_integer(line),
+    do: [%Fault{kind: :divide_by_zero, instruction: symbol, path: path, file: file, line: line}]
+
+  defp placed(%Fault{} = fault, nil, _file), do: [fault]
+
+  defp placed(%Fault{path: path} = fault, instance, _file),
+    do: [%{fault | path: instance <> "." <> path}]
+
+  defp placed(_junk, _path, _file), do: []
+
+  defp as_list(list) when is_list(list), do: list
+  defp as_list(_not_a_list), do: []
 
   # The bits of the tree whose `ons` did not run, by their paths, sorted: those inside an
   # instance whose body did not run. Each `cal` that runs an instance's body records it in
@@ -618,8 +677,8 @@ defmodule Logex.Runtime do
   defp state!(%Instance{switched: switched}, _program) when not is_boolean(switched),
     do: raise(ArgumentError, "state.switched must be true or false, got: #{inspect(switched)}")
 
-  defp state!(%Instance{ons_blocked: blocked} = state, program),
-    do: owner!(blocked!(bits?(blocked), state), program)
+  defp state!(%Instance{ons_blocked: blocked, faults: faults} = state, program),
+    do: owner!(faults!(faults?(faults), blocked!(bits?(blocked), state)), program)
 
   defp state!(other, _program),
     do:
@@ -641,6 +700,21 @@ defmodule Logex.Runtime do
       raise(
         ArgumentError,
         "state.ons_blocked must be a list of storage bit names, got: #{inspect(blocked)}"
+      )
+
+  # M3-3 (decision 99): the faults of the last scan, a proper list of them, as a scan gives
+  # it; a scan replaces it, so its values are not looked into.
+  defp faults?([]), do: true
+  defp faults?([%Fault{} | faults]), do: faults?(faults)
+  defp faults?(_not_faults), do: false
+
+  defp faults!(true, state), do: state
+
+  defp faults!(false, %Instance{faults: faults}),
+    do:
+      raise(
+        ArgumentError,
+        "state.faults must be a list of %Logex.Fault{}, got: #{inspect(faults)}"
       )
 
   defp owner!(%Instance{type: name} = state, %Program{name: name}), do: state
@@ -1095,9 +1169,12 @@ defmodule Logex.Runtime do
 
     externals = Map.fetch!(wiring.externals, name)
     state = %{state | env: Map.merge(state.env, Map.take(globals, externals))}
-    {outputs, state} = call(program, state, inputs, %Scan{now: now, first: first})
+
+    {outputs, %Instance{faults: faults} = state} =
+      call(program, state, inputs, %Scan{now: now, first: first})
+
     globals = Map.merge(globals, Map.take(state.env, externals))
-    state = %{state | env: Map.drop(state.env, externals)}
+    state = %{state | env: Map.drop(state.env, externals), faults: []}
 
     globals =
       Enum.reduce(Map.fetch!(wiring.copy_out, name), globals, fn {member, global}, globals ->
@@ -1105,7 +1182,7 @@ defmodule Logex.Runtime do
       end)
 
     {%{runtime | instances: Map.put(runtime.instances, name, state), globals: globals},
-     [{:ran, task, name, now} | events]}
+     Enum.reduce(faults, [{:ran, task, name, now} | events], &[{:fault, task, name, &1} | &2])}
   end
 
   defp value(global, globals) when is_binary(global), do: Map.fetch!(globals, global)
@@ -1419,8 +1496,8 @@ defmodule Logex.Runtime do
   # (decision 78). The one quotient outside a dint, -2147483648 / -1, is brought to the
   # limit with no power, as `add`'s sum is (decision 77); a remainder always fits. The
   # power out is otherwise true. De-energised, nothing is written and no power passes.
-  defp evaluate({op, _, [a, b, destination]}, {true, env}, _scan) when op in @divisions do
-    divided(op, integer(read(env, a)), integer(read(env, b)), destination, env)
+  defp evaluate({op, line, [a, b, destination]}, {true, env}, _scan) when op in @divisions do
+    divided({op, line}, integer(read(env, a)), integer(read(env, b)), destination, env)
   end
 
   defp evaluate({op, _, _}, {false, env}, _scan) when op in @divisions do
@@ -1584,7 +1661,7 @@ defmodule Logex.Runtime do
   # hand may name one its table lacks, or one of another type: nothing runs, as nothing runs
   # for a hand-built env a `ton` finds no timer in.
   defp called(
-         %Tag{type: %FbType{body: %Program{rungs: rungs, tags: own}} = type},
+         %Tag{type: %FbType{body: %Program{rungs: rungs, tags: own, file: file}} = type},
          instance,
          operands,
          env,
@@ -1596,6 +1673,7 @@ defmodule Logex.Runtime do
     inner = as_map(Map.get(blocked, instance))
     body = %{scan | tags: own, ons_blocked: inner}
     {state, env} = ran(instance, Enum.reduce(rungs, state, &rung(&1, &2, body)), env)
+    {state, env} = raised(Map.pop(state, @faults, []), instance, file, env)
     Enum.reduce(slots, Map.put(env, instance, state), &copy_out(&1, &2, state))
   end
 
@@ -1606,6 +1684,16 @@ defmodule Logex.Runtime do
   defp ran(instance, state, env) do
     {nested, state} = recorded(state)
     {state, Map.put(env, @ran, Map.put(as_map(Map.get(env, @ran)), instance, nested))}
+  end
+
+  # M3-3 (decision 99): the faults a body's scan met, taken out of its instance's map, so
+  # no state keeps one, and onto the routine's that ran it, newest first, each placed a
+  # level down, at the instance, in the body's file. A body that met none adds nothing.
+  defp raised({[], state}, _instance, _file, env), do: {state, env}
+
+  defp raised({faults, state}, instance, file, env) do
+    placed = Enum.flat_map(as_list(faults), &placed(&1, instance, file))
+    {state, Map.put(env, @faults, placed ++ as_list(Map.get(env, @faults)))}
   end
 
   # M2-5: a `cal`'s copy-in and copy-out, by the formal each operand fills.
@@ -1732,10 +1820,14 @@ defmodule Logex.Runtime do
   defp sum(:sub, a, b), do: a - b
   defp sum(:mul, a, b), do: a * b
 
-  # M3-3: a division, by a divisor that is 0 or not.
-  defp divided(_op, _a, 0, destination, env), do: {false, write(env, destination, 0)}
+  # M3-3: a division, by a divisor that is 0 or not. A zero divisor is a minor fault the
+  # scan reports (decision 99), recorded in the routine's env as `{symbol, line}` until the
+  # routine is done, which places it (`faulted/2`, `raised/4`).
+  defp divided(at, _a, 0, destination, env),
+    do:
+      {false, Map.put(write(env, destination, 0), @faults, [at | as_list(Map.get(env, @faults))])}
 
-  defp divided(op, a, b, destination, env) do
+  defp divided({op, _line}, a, b, destination, env) do
     {power, value} = bounded(quotient(op, a, b))
     {power, write(env, destination, value)}
   end
