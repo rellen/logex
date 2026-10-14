@@ -649,7 +649,7 @@ And a block that holds an instance of itself, `var inner seal` on line 6 of `sea
 refused in its own file, and the program that names it is compiled no further:
 
 ```
-belts.ld: line 12: unknown type `sael`: logex has `bool`, `dint` and `ton`, and the function block `seal` — did you mean `seal`?
+belts.ld: line 12: unknown type `sael`: logex has `bool`, `dint`, `ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`, and the function block `seal` — did you mean `seal`?
 belts.ld: line 18: `ote` writes `s1.run`, but `s1` is an instance of `seal`, whose members only its body writes
 ./seal.ld: line 6: `seal` cannot hold an instance of `seal`: a function block never holds an instance of itself
 ```

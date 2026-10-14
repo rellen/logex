@@ -2497,7 +2497,10 @@ names it breaks. Growth tests are in reductions.
   `tp` back from aside, where each resumes by `.tt`, not `.en`, and the reviewer's mutant
   reading `.en` for every timer survived: `config_edit_test.exs` now sets aside a `tof` in
   its delay and a `tp` in its pulse, their rungs false, and the configuration-edit walk
-  draws `t1` as any of the four timers. The suite is at 1035 tests (8 doctests).
+  draws `t1` as any of the four timers. An unknown type's two messages named only `ton`
+  among the built-in types, from a declaration line and from Elixir: each now lists every
+  type word, `Logex.FbType.builtins/0`'s among them, and suggests the nearest, `tpp` told
+  of `tp` and `:tof` of `Logex.FbType.tof()`. The suite is at 1036 tests (8 doctests).
 - **M3-3 · Integer arithmetic: `add sub mul div mod neg abs`.** IEC's names, and `neg`
   the vendors' (decision 79); `sqrt` waits for a real type. A result outside a dint is
   brought to the nearer limit and the instruction passes no power on that scan (decision

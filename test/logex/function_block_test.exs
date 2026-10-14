@@ -17,6 +17,10 @@ defmodule Logex.FunctionBlockTest do
 
   alias Logex.{Configuration, Diagnostic, Edit, FbType, Instance, Runtime, Scan, Tag}
 
+  # M3-2: logex's own type words, as an unknown type's message lists them: the elementary
+  # types, then every built-in function block type, each set in order.
+  @has "logex has `bool`, `dint`, `ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`"
+
   @seal """
   function_block seal
   var_input start bool
@@ -1314,23 +1318,23 @@ defmodule Logex.FunctionBlockTest do
           "cal s1 a a q\nxic s1.run ote q"
 
       assert errors(program, [block!(@seal)]) == [
-               "line 3: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
+               "line 3: unknown type `sael`: #{@has}, " <>
                  "and the function block `seal` — did you mean `seal`?"
              ]
 
       assert errors(String.replace(program, "sael", "seal")) == [
-               "line 3: unknown type `seal`: logex has `bool`, `dint` and `ton`"
+               "line 3: unknown type `seal`: #{@has}"
              ]
 
       # A block's name is matched exactly, as a tag's is.
       assert errors(String.replace(program, "sael", "Seal"), [block!(@seal)]) == [
-               "line 3: unknown type `Seal`: logex has `bool`, `dint` and `ton`, " <>
+               "line 3: unknown type `Seal`: #{@has}, " <>
                  "and the function block `seal` — did you mean `seal`? " <>
                  "(type names are case-sensitive)"
              ]
 
       assert errors("function_block m\n" <> program, [block!(@seal)], "m") == [
-               "line 4: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
+               "line 4: unknown type `sael`: #{@has}, " <>
                  "and the function block `seal` — did you mean `seal`?"
              ]
     end
@@ -3287,15 +3291,14 @@ defmodule Logex.FunctionBlockTest do
       dotted = write!(dir, "dotted.ld", "var s a.b\nvar_output q bool\nxic q ote q\n")
 
       assert formatted(Logex.compile_file(dotted)) == [
-               "#{dotted}: line 1: unknown type `a.b`: logex has `bool`, `dint` and `ton`"
+               "#{dotted}: line 1: unknown type `a.b`: #{@has}"
              ]
 
       write!(dir, "Function_Block.ld", "function_block Function_Block\nvar_input a bool\n")
       header = write!(dir, "header.ld", "var s Function_Block\nvar_output q bool\nxic q ote q\n")
 
       assert formatted(Logex.compile_file(header)) == [
-               "#{header}: line 1: unknown type `Function_Block`: logex has `bool`, `dint` " <>
-                 "and `ton`"
+               "#{header}: line 1: unknown type `Function_Block`: #{@has}"
              ]
     end
 

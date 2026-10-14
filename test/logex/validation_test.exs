@@ -15,6 +15,15 @@ defmodule Logex.ValidationTest do
   # M2-5: what Logex.Declarations.check/1 says an unknown function block type is not.
   @given "and the types Logex.compile/2 gives for a function block's file"
 
+  # M3-2: logex's own type words, as an unknown type's message lists them: the elementary
+  # types, then every built-in function block type, each set in order.
+  @has "logex has `bool`, `dint`, `ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`"
+
+  # The same from Elixir, each named as the value that declares it.
+  @has_elixir "logex has :bool, :dint, Logex.FbType.ctd(), Logex.FbType.ctu(), " <>
+                "Logex.FbType.ctud(), Logex.FbType.rto(), Logex.FbType.tof(), " <>
+                "Logex.FbType.ton() and Logex.FbType.tp()"
+
   alias Logex.Compiler
 
   # The operand-shape cases below are about instructions, not tags, so their tags are
@@ -420,7 +429,7 @@ defmodule Logex.ValidationTest do
                  "var\nvar_input i bool 1\nvar h ( xic a )\nvar retain r bool\nvar p q bool"
              ) == [
                "line 1: `b` needs a type: `var b bool` or `var b dint`",
-               "line 2: unknown type `int`: logex has `bool`, `dint` and `ton`",
+               "line 2: unknown type `int`: #{@has} — did you mean `dint`?",
                "line 3: `e` is a bool: its initial value must be 0 or 1, found `2`",
                "line 4: `f` is a dint: `3000000000` does not fit in 32 bits",
                "line 5: `ote` is an instruction and cannot name a tag",
@@ -505,11 +514,23 @@ defmodule Logex.ValidationTest do
              ]
     end
 
+    # M3-2: every built-in function block type is named, from Logex.FbType.builtins/0, and
+    # the nearest of logex's type words is suggested, a built-in or an elementary one.
+    test "an unknown type is told logex's type words, and the nearest of them" do
+      assert source_errors("var h tpp\nvar b bol\nvar c ctud2\nvar r rtoo\nvar t timer") == [
+               "line 1: unknown type `tpp`: #{@has} — did you mean `tp`?",
+               "line 2: unknown type `bol`: #{@has} — did you mean `bool`?",
+               "line 3: unknown type `ctud2`: #{@has} — did you mean `ctud`?",
+               "line 4: unknown type `rtoo`: #{@has} — did you mean `rto`?",
+               "line 5: unknown type `timer`: #{@has}"
+             ]
+    end
+
     test "two names before the type are named, however the line goes on" do
       assert source_errors("var p q bool 1\nvar p q r bool\nvar p q ote") == [
                "line 1: `var` declares one tag: found `p` and `q` before the type",
                "line 2: `var` declares one tag: found `p` and `q` before the type",
-               "line 3: unknown type `q`: logex has `bool`, `dint` and `ton`"
+               "line 3: unknown type `q`: #{@has}"
              ]
     end
 
@@ -666,11 +687,11 @@ defmodule Logex.ValidationTest do
     test "a program whose declarations were all wrong is not told it declares nothing" do
       # Since M2-5 `a`'s own use is excused, as the use of a line refused for its type.
       assert source_errors("var a int\nxic a ote a") == [
-               "line 1: unknown type `int`: logex has `bool`, `dint` and `ton`"
+               "line 1: unknown type `int`: #{@has} — did you mean `dint`?"
              ]
 
       assert source_errors("var a int\nxic a ote b") == [
-               "line 1: unknown type `int`: logex has `bool`, `dint` and `ton`",
+               "line 1: unknown type `int`: #{@has} — did you mean `dint`?",
                "line 2: `b` is not declared"
              ]
     end
@@ -687,18 +708,18 @@ defmodule Logex.ValidationTest do
                  "xic a ote b\nxic b ote a\n( xic c | xio d ) ote b\n" <>
                  "xic b ton t1 500\nxic t1.dn ote b\nxic b ote e\nvar e ints\nxic e ote b"
              ) == [
-               "line 1: unknown type `int`: logex has `bool`, `dint` and `ton`",
-               "line 2: unknown type `timer`: logex has `bool`, `dint` and `ton`",
-               "line 3: unknown type `int`: logex has `bool`, `dint` and `ton`",
-               "line 4: unknown type `foo`: logex has `bool`, `dint` and `ton`",
+               "line 1: unknown type `int`: #{@has} — did you mean `dint`?",
+               "line 2: unknown type `timer`: #{@has}",
+               "line 3: unknown type `int`: #{@has} — did you mean `dint`?",
+               "line 4: unknown type `foo`: #{@has}",
                "line 12: `var` after the first rung (line 6): declarations come first",
-               "line 12: unknown type `ints`: logex has `bool`, `dint` and `ton`"
+               "line 12: unknown type `ints`: #{@has} — did you mean `dint`?"
              ]
     end
 
     test "excuses its own name only, as written" do
       assert source_errors("var a int\nvar b bool\nxic A ote b\nxic a ote b") == [
-               "line 1: unknown type `int`: logex has `bool`, `dint` and `ton`",
+               "line 1: unknown type `int`: #{@has} — did you mean `dint`?",
                "line 3: `A` is not declared"
              ]
     end
@@ -1276,7 +1297,7 @@ defmodule Logex.ValidationTest do
              ) == [
                "line 1: `var` needs a tag name before the type `ton`, as in `var t1 ton`",
                "line 2: `var` declares one tag: found `p` and `q` before the type",
-               "line 3: unknown type `timer`: logex has `bool`, `dint` and `ton`",
+               "line 3: unknown type `timer`: #{@has}",
                "line 4: `t7.x` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`",
                "line 5: `ton` is an instruction and cannot name a tag"
              ]
@@ -1296,7 +1317,8 @@ defmodule Logex.ValidationTest do
       assert %Logex.Tag{name: "t1", type: ^ton, section: :var} = Logex.Tag.new!("t1", ton)
 
       for {args, message} <- [
-            {["t1", :ton], "unknown type :ton: logex has :bool, :dint and Logex.FbType.ton()"},
+            {["t1", :ton],
+             "unknown type :ton: #{@has_elixir} — did you mean `Logex.FbType.ton()`?"},
             {["t1", ton, :var_input],
              "`t1` is a ton: an instance is the program's own, declared with `var`, " <>
                "as in `var t1 ton`, not with `var_input`"},
@@ -2404,7 +2426,16 @@ xic a ton t1 7") == [
     test "raise ArgumentError for every rule they break, whatever the argument" do
       for {args, message} <- [
             {["x", :bool, :input], "unknown section :input"},
-            {["x", :int], "unknown type :int: logex has :bool, :dint and Logex.FbType.ton()"},
+            {["x", :int], "unknown type :int: #{@has_elixir} — did you mean `:dint`?"},
+            # M3-2: a type spelled as one of logex's, in any case, is told the value that
+            # declares it, and one near one, the nearest.
+            {["x", :tof],
+             "unknown type :tof: #{@has_elixir} — did you mean `Logex.FbType.tof()`?"},
+            {["x", :Tp], "unknown type :Tp: #{@has_elixir} — did you mean `Logex.FbType.tp()`?"},
+            {["x", "bool"], ~s(unknown type "bool": #{@has_elixir} — did you mean `:bool`?)},
+            {["x", :ctuu],
+             "unknown type :ctuu: #{@has_elixir} — did you mean `Logex.FbType.ctu()`?"},
+            {["x", {:tof}], "unknown type {:tof}: #{@has_elixir}"},
             {["ote", :int], "`ote` is an instruction and cannot name a tag"},
             {[{:a}, :bool, :var_input, 1], "{:a} is not a tag name"},
             # 0 is the default, and still not the program's to give.
@@ -2423,8 +2454,7 @@ xic a ton t1 7") == [
                "line can say until a negative literal lexes"},
             {["x", :bool, :var, -1],
              "`x` is a bool: its initial value must be 0 or 1, found `-1`"},
-            {["x", :int, :var, 5],
-             "unknown type :int: logex has :bool, :dint and Logex.FbType.ton()"},
+            {["x", :int, :var, 5], "unknown type :int: #{@has_elixir} — did you mean `:dint`?"},
             {[" a", :bool], ~s(" a" is not a tag name)},
             {["t1.dn", :bool],
              "`t1.dn` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`"},
@@ -2439,7 +2469,7 @@ xic a ton t1 7") == [
     test "are checked again as they enter the table, however they were built" do
       for {declared, message} <- [
             {[%Logex.Tag{name: "a", type: :real, section: :var}],
-             "unknown type :real: logex has :bool, :dint and Logex.FbType.ton()"},
+             "unknown type :real: #{@has_elixir}"},
             {[%Logex.Tag{name: "a", type: :bool, section: :var, initial: 7}],
              "`a` is a bool: its initial value must be 0 or 1, found `7`"},
             {[%Logex.Tag{name: "a", type: :dint, section: :var, initial: -7}],

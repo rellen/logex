@@ -6,7 +6,9 @@ defmodule Logex.Declarations do
 
       <section> <name> <type> [<initial>]     section: var | var_input | var_output
                                                        | var_external
-                                              type:    bool | dint | ton | a block's name
+                                              type:    bool | dint | a word of
+                                                       Logex.FbType.builtins/0, ton
+                                                       among them | a block's name
 
   The section and type words are data, in `@sections` and `@types`, and a function block
   type's word is `Logex.FbType.builtins/0`'s: a new section or type is a row there and a
@@ -414,22 +416,33 @@ defmodule Logex.Declarations do
 
   # M2-5: the function blocks this compile was given are named too, where it was given any,
   # with a did-you-mean among them, since a block's name is matched exactly; and the line's
-  # name is marked, so that its uses are excused (split/3).
+  # name is marked, so that its uses are excused (split/3). M3-2: the type words are
+  # logex's own, the elementary ones and each of Logex.FbType.builtins/0, and the
+  # did-you-mean is among them too, `tpp` told of `tp`. None of them differs from `type`
+  # only in case, since a type word is read in any case, so a case-sensitive one is a
+  # block's.
   defp unknown_type(false, name, type, {_kw, types}) do
     blocks = Enum.sort(for {block, %FbType{}} <- types, do: block)
 
     {:untyped, name,
-     "unknown type `#{type}`: logex has `bool`, `dint` and `ton`" <>
-       given(Enum.map(blocks, &"`#{&1}`")) <> suggest(type, blocks, & &1, "type names")}
+     "unknown type `#{type}`: logex has " <>
+       listed(Enum.map(type_words(), &"`#{&1}`")) <>
+       given(Enum.map(blocks, &"`#{&1}`")) <>
+       suggest(type, type_words() ++ blocks, & &1, "type names")}
   end
+
+  # logex's own type words: the elementary types, then the built-in function block types,
+  # each set in order, so a new built-in is named where it lands.
+  defp type_words,
+    do: Enum.sort(Map.keys(@types)) ++ Enum.sort(Map.keys(FbType.builtins()))
+
+  defp listed([one]), do: one
+  defp listed(words), do: Enum.join(Enum.drop(words, -1), ", ") <> " and " <> List.last(words)
 
   defp given([]), do: ""
   defp given([one]), do: ", and the function block #{one}"
 
-  defp given(names),
-    do:
-      ", and the function blocks " <>
-        Enum.join(Enum.drop(names, -1), ", ") <> " and " <> List.last(names)
+  defp given(names), do: ", and the function blocks " <> listed(names)
 
   defp recursive([block, block]),
     do:
@@ -497,8 +510,31 @@ defmodule Logex.Declarations do
 
   defp type(type) when type in @type_atoms, do: []
 
+  # M3-2: from Elixir, a type is an atom or a function block type's value, so each of
+  # logex's type words is named as the value that declares it, and a type spelled like one,
+  # `:tof` or `:int`, is told of it.
   defp type(type),
-    do: ["unknown type #{inspect(type)}: logex has :bool, :dint and Logex.FbType.ton()"]
+    do: [
+      "unknown type #{inspect(type)}: logex has " <>
+        listed(Enum.map(type_words(), &as_value/1)) <> spelled_as(type)
+    ]
+
+  defp as_value(word) when is_map_key(@types, word), do: inspect(Map.fetch!(@types, word))
+  defp as_value(word), do: "Logex.FbType.#{word}()"
+
+  defp spelled_as(type) when is_atom(type), do: spelled(Atom.to_string(type))
+  defp spelled_as(type) when is_binary(type), do: spelled(type)
+  defp spelled_as(_type), do: ""
+
+  # A word that is one of logex's type words, in any case, is told of it outright, as a
+  # declaration line reads it; any other, of the nearest, as suggest/4 finds it.
+  defp spelled(word) do
+    folded = String.downcase(word)
+    word_of(Enum.find(type_words(), &(&1 == folded)), word)
+  end
+
+  defp word_of(nil, word), do: suggest(word, type_words(), &as_value/1)
+  defp word_of(found, _word), do: " — did you mean `#{as_value(found)}`?"
 
   # A built-in function block type, exactly as Logex.FbType gives it; one this compile was
   # given, or a tag before held, by being that one, by value; or since M2-5 any user type

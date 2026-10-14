@@ -12,6 +12,10 @@ defmodule Logex.EndToEndTest do
   """
   use ExUnit.Case
 
+  # M3-2: logex's own type words, as an unknown type's message lists them: the elementary
+  # types, then every built-in function block type, each set in order.
+  @has "logex has `bool`, `dint`, `ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`"
+
   defp run(src, env) do
     {:ok, program} = compile(src)
     env_after(program, env)
@@ -1786,7 +1790,7 @@ defmodule Logex.EndToEndTest do
 
       # The line declares nothing, and s3's use is excused: one mistake, one message.
       assert formatted.(Logex.compile_file(unknown)) == [
-               "#{unknown}: line 12: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
+               "#{unknown}: line 12: unknown type `sael`: #{@has}, " <>
                  "and the function block `seal` — did you mean `seal`?"
              ]
 
@@ -1818,7 +1822,7 @@ defmodule Logex.EndToEndTest do
                  types: [seal]
                )
              ) == [
-               "line 1: unknown type `sael`: logex has `bool`, `dint` and `ton`, " <>
+               "line 1: unknown type `sael`: #{@has}, " <>
                  "and the function block `seal` — did you mean `seal`?",
                "line 3: `ote` writes `a`, a var_input (declared on line 2): " <>
                  "logic must not write an input"
