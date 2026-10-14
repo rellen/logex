@@ -253,10 +253,13 @@ defmodule Logex.WalkTest do
     end
 
     # A chain of n block types, each holding the next and running it: each level's facts
-    # are put once, from the top down, so 16x the depth cost 16.7x to 17.2x over the same
-    # 37 runs. The bound is a fifth above the highest; with each level's facts put by path
-    # as each level returned them, the walk was cubic in the depth, and 800 levels did not
-    # finish in a minute.
+    # are put once, from the top down, so 16x the depth, 20 levels to 320, cost 15.74x in
+    # each of 32 runs on Elixir 1.20.4, 16 alone and 16 beside three full suites. The bound
+    # is a fifth above the highest; with each level's facts put by path as each level
+    # returned them, 129.7x. The walk itself takes milliseconds: nearly all the test's time
+    # is building the chain, each level's compile checking every type below it again
+    # (decision 54), quadratic in the depth: 800 levels took 11 s alone, up to 36 s beside
+    # three full suites, and ran out ExUnit's minute four suites at once; 320 take 2 s.
     test "the walk stays linear in the depth of nesting" do
       chain = fn n ->
         deepest =
@@ -283,8 +286,8 @@ defmodule Logex.WalkTest do
         end)
       end
 
-      ratio = walk.(800) / walk.(50)
-      assert ratio < 20.6, "16x the depth took #{Float.round(ratio, 1)}x the reductions"
+      ratio = walk.(320) / walk.(20)
+      assert ratio < 18.9, "16x the depth took #{Float.round(ratio, 1)}x the reductions"
     end
   end
 end

@@ -3604,14 +3604,18 @@ defmodule Logex.FunctionBlockTest do
       %{top: top, v1: v1, v2: v2, state: state}
     end
 
-    # At 50 and 800 levels, 16x the depth. Over 96 runs of the suite on Elixir 1.20.4, 32
-    # alone, 32 two at once and 32 four at once, the scan took 15.78x, the compile 15.53x
-    # and the edit 16.33x to 17.19x, the highest four at once. The bound is a fifth above
-    # the highest; an edit whose plan built each nested block's whole initial state at
-    # every level grew about 160x.
+    # At 20 and 320 levels, 16x the depth. Over 32 runs on Elixir 1.20.4, 16 alone and 16
+    # beside three full suites, the scan took 14.99x, the compile 14.81x and the edit
+    # 15.01x to 15.68x. The bound is a fifth above the highest; an edit whose plan built
+    # each nested block's whole initial state at every level grew 77x to 80x, a scan that found
+    # each level's type by walking the table 183.3x, and a compile that searched the path
+    # down whole at every level 23.4x. Building the chain is most of the test's time, each
+    # level's compile checking every type below it again (decision 54), quadratic in the
+    # depth: 800 levels took 12 s alone and up to 38 s beside three full suites, near the
+    # minute ExUnit gives a test, and 320 take 2 s.
     test "a scan, a compile and an edit each stay linear" do
-      s = at_depth(50)
-      d = at_depth(800)
+      s = at_depth(20)
+      d = at_depth(320)
 
       compile = fn %{top: top} ->
         Logex.compile(@top <> "xic a ote z", name: "m", types: [top])
@@ -3632,7 +3636,7 @@ defmodule Logex.FunctionBlockTest do
           ] do
         ratio = reductions(fn -> fun.(d) end) / reductions(fn -> fun.(s) end)
 
-        assert ratio < 20.7,
+        assert ratio < 18.8,
                "16x the depth took #{Float.round(ratio, 1)}x the reductions for #{what}"
       end
     end
