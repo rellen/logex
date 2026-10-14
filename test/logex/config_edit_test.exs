@@ -1365,6 +1365,49 @@ defmodule Logex.ConfigEditTest do
     end
   end
 
+  # Decision 96: a kept instance's member input that its program type's candidate version
+  # writes no more keeps its value, and is reported by its path.
+  describe "a member input no logic writes any more keeps its value, by path (decision 96)" do
+    test "a counter's `r` and an rto's `r`, held at the switch, stay on" do
+      head =
+        "var_input clr bool\nvar_input go bool\nvar_output y bool\nvar boxes ctu\n" <>
+          "var lube rto\n\n"
+
+      tail = "xic go ctu boxes 3\nxic go rto lube 50\nxic boxes.q ote y\n"
+
+      {:ok, a} =
+        Logex.compile(head <> "xic clr ote boxes.r\nxic clr ote lube.r\n" <> tail, name: "a")
+
+      {:ok, a2} = Logex.compile(head <> tail, name: "a")
+
+      text =
+        "task fast interval 10 priority 1\nvar_global c bool at d.i.0\n" <>
+          "var_global g bool at d.i.1\nvar_global q bool at d.q.0\n" <>
+          "program p a with fast\n  p.clr c\n  p.go g\n  p.y q\n"
+
+      {:ok, original} = Configuration.compile("plant", text, %{"a" => a})
+      {:ok, candidate} = Configuration.compile("plant", text, %{"a" => a2})
+      {runtime, _} = cycles(Runtime.start(original), 2, %{"c" => 1, "g" => 1})
+      {edit, forecast} = accepted(runtime, candidate)
+      assert forecast == [{:unwritten, "p.boxes.r", 1}, {:unwritten, "p.lube.r", 1}]
+      {edit, runtime, report} = Edit.test(edit, runtime)
+      assert report == forecast
+
+      # The button let go and three boxes on a running motor: none counted, no time kept.
+      runtime =
+        Enum.reduce([0, 1, 0, 1, 0, 1], runtime, fn eye, runtime ->
+          elem(cycles(runtime, 1, %{"c" => 0, "g" => eye}), 0)
+        end)
+
+      assert {Runtime.get!(runtime, "p.boxes.r"), Runtime.get!(runtime, "p.boxes.cv")} == {1, 0}
+      assert {Runtime.get!(runtime, "p.lube.r"), Runtime.get!(runtime, "p.lube.acc")} == {1, 0}
+
+      # The original writes both again: its untest reports neither.
+      {_edit, _runtime, back} = Edit.untest(edit, runtime)
+      refute Enum.any?(back, &match?({:unwritten, _, _}, &1))
+    end
+  end
+
   describe "a shared global across a switch (decisions 45, 49 and 55)" do
     # The motor with its `estop` its own `var`, which a rung latches from `overtemp`, so
     # its value can differ from the global's.

@@ -11,11 +11,12 @@ defmodule Logex.Walk do
   - `instructions/1`: every instruction of a routine's rungs, in rung order;
   - `uses/2`: every tag operand, with what its slot does to it;
   - `writes/1`: which tags a program writes, and where;
+  - `member_writes/1`: which members of its instances it writes, and where (decision 96);
   - `presets/1`: which built-in instances a program runs, and at what preset (M3-1);
   - `timers/1`: which of them are timers;
   - `counters/1`: which of them are counters.
 
-  `writes/1`, `presets/1`, `timers/1` and `counters/1` know `cal`: a `cal` writes the instance it runs and each tag
+  `writes/1`, `member_writes/1`, `presets/1`, `timers/1` and `counters/1` know `cal`: a `cal` writes the instance it runs and each tag
   its block's var_outputs fill, as its slots say, and they reach into each block a `cal`
   runs, at any depth, naming what its body writes or runs by its path, `s1.t1`, as an
   access path does (§4.7). Each block type's body is read once a call, however many
@@ -76,6 +77,20 @@ defmodule Logex.Walk do
   level down, with the lines of the body's writes, in the block's own text.
   """
   def writes(%Program{} = program), do: reach(program, &written/2)
+
+  @doc """
+  Which members of its instances `program` writes (decision 96): each member an operand in
+  a `:write` slot names, by its path, `lube.r` for `ote lube.r`, to the lines of its writes,
+  in rung order, one line a write, as `writes/1` gives a tag's, where `writes/1` counts the
+  write as its instance's. The compiler lets logic write a member only where its type does
+  (`Logex.FbType`), so each is a built-in's: a counter's `r`, `ld` or `pv`, an `rto`'s `r`,
+  or a timer's `.pre` or `.acc`. A `cal`'s var_output filling a member writes it too.
+
+  It reaches into each block a `cal` runs, at any depth, as `writes/1` does: a member the
+  body writes is written by its path from the program, `s1.c.r` for the body's `c.r`.
+  `Logex.Edit` reads it, for a member input an edit leaves unwritten.
+  """
+  def member_writes(%Program{} = program), do: reach(program, &members_written/2)
 
   @doc """
   Which timers `program` runs: each timer a `ton` runs, or since M3-2 a `tof`, a `tp` or an `rto`, to
@@ -168,6 +183,25 @@ defmodule Logex.Walk do
     end)
     |> Map.new(fn {name, lines} -> {name, Enum.reverse(lines)} end)
   end
+
+  defp members_written(instructions, tags) do
+    instructions
+    |> Enum.flat_map(&member_operands(&1, tags))
+    |> Enum.reduce(%{}, fn {path, line}, writes ->
+      Map.update(writes, path, [line], &[line | &1])
+    end)
+    |> Map.new(fn {path, lines} -> {path, Enum.reverse(lines)} end)
+  end
+
+  # Each member an instruction's `:write` slots name, by its path, with the instruction's
+  # line.
+  defp member_operands({_symbol, line, operands} = instruction, tags),
+    do:
+      for(
+        {{:write, _type}, {:member, _, path}} <-
+          Enum.zip(Compiler.signature(instruction, tags), operands),
+        do: {Enum.join(path, "."), line}
+      )
 
   # The timers among the built-in instances a routine runs, those whose type keeps time,
   # and the counters.

@@ -702,6 +702,8 @@ defmodule Logex.ApiContractTest do
     :resume_undone,
     :resumed,
     :unread,
+    # Decision 96: a member input no logic of the program started writes any more.
+    :unwritten,
     # OE-2: a configuration's edit gives these too, and every kind above by path.
     :instance_added,
     :instance_back,
@@ -1276,7 +1278,21 @@ defmodule Logex.ApiContractTest do
       first_test? and
         Enum.any?(started, &(Map.has_key?(before.env, &1) and not Map.has_key?(from.tags, &1)))
     )
+
+    # Decision 96: `t1.pre`, which the program stopped moves a value into and the program
+    # started does not, where it declares `t1` a timer, keeps its value and is reported.
+    assert for({:unwritten, _, _} = entry <- report, do: entry) ==
+             unwritten(moves_pre?(from) and not moves_pre?(to) and ton?(to), later.env)
   end
+
+  defp moves_pre?(%Program{source: source}), do: source =~ ~r/ move \S+ t1\.pre$/m
+  defp ton?(%Program{tags: tags}), do: match?(%Tag{type: %Logex.FbType{name: "ton"}}, tags["t1"])
+
+  defp unwritten(true, env), do: [{:unwritten, "t1.pre", member_at(env["t1"], "pre")}]
+  defp unwritten(false, _env), do: []
+
+  defp member_at(%{} = instance, member), do: Map.get(instance, member, 0)
+  defp member_at(_not_an_instance, _member), do: 0
 
   # The tags a switch starts at their initial value, from the text and the state: one the
   # state lacks, and at the first test one the candidate adds or whose value does not fit.
@@ -2524,7 +2540,9 @@ defmodule Logex.ApiContractTest do
     {:nested, :preset_kept},
     {:nested, :pruned},
     {:nested, :resume_undone},
-    {:nested, :resumed}
+    {:nested, :resumed},
+    # Decision 96: a block's `.pre` its body moves a value into, and the other version not.
+    {:nested, :unwritten}
   ]
 
   # Under which chain of rungs each one-shot last ran, none known yet (below).
@@ -3986,6 +4004,8 @@ defmodule Logex.ApiContractTest do
     %{w | rt: rt, model: model, prev: prev, onsp: onsp, round: nil}
   end
 
+  defp ce_moves_pre?(%Program{source: source}), do: source =~ "move sp t1.pre"
+
   defp ce_ons_rung(%{source: source}),
     do: Enum.find(String.split(source, "\n"), &String.contains?(&1, " ons "))
 
@@ -4226,9 +4246,18 @@ defmodule Logex.ApiContractTest do
               ),
           do: entry
 
+    # Decision 96: a kept instance's `t1.pre`, which its type's stopped version moves `sp`
+    # into and the started one does not, keeps its value and is reported by its path.
+    unwritten =
+      for name <- kept,
+          type = Enum.find(to.instances, &(&1.name == name)).type,
+          ce_moves_pre?(from.programs[type]) and not ce_moves_pre?(to.programs[type]),
+          do: {:unwritten, "#{name}.t1.pre", later.instances[name].env["t1"]["pre"]}
+
     restated =
       Enum.sort(
-        dropped ++ tasks ++ globals ++ stopped ++ started ++ shared ++ ce_orders(from, to)
+        dropped ++
+          tasks ++ globals ++ stopped ++ started ++ shared ++ unwritten ++ ce_orders(from, to)
       )
 
     given =
@@ -4243,7 +4272,8 @@ defmodule Logex.ApiContractTest do
             :instance_pruned,
             :joined,
             :left,
-            :order
+            :order,
+            :unwritten
           ] or
             (not String.contains?(to_string(name), ".") and
                kind in [:added, :initial_changed, :held, :pruned]),

@@ -1261,9 +1261,16 @@ defmodule Logex.RuntimeTest do
       # M2-4: B5's one walk of a program's IR, which the compiler, Logex.Warnings,
       # Logex.Edit and Logex.Configuration read.
       # M3-1: presets/1, every built-in instance a program runs, and counters/1 beside
-      # timers/1.
-      assert Enum.sort(Logex.Walk.__info__(:functions)) ==
-               [counters: 1, instructions: 1, presets: 1, timers: 1, uses: 2, writes: 1]
+      # timers/1. Decision 96: member_writes/1, the members a program writes, by path.
+      assert Enum.sort(Logex.Walk.__info__(:functions)) == [
+               counters: 1,
+               instructions: 1,
+               member_writes: 1,
+               presets: 1,
+               timers: 1,
+               uses: 2,
+               writes: 1
+             ]
 
       # The two structs a host holds and builds; OE-1 gave both `ons_blocked`, and the
       # instance `switched`.

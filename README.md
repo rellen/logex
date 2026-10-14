@@ -202,7 +202,7 @@ These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5) an
 change the source language. Program organisation, `PLAN.md`'s Milestone 2, has landed
 whole ("A function block" and "A configuration", below):
 - **Bit access** with `.` (`word.3`), and negative integer literals, which lex.
-- **The rest of Milestone 3** (`PLAN.md` §3, decisions 67–95 in
+- **The rest of Milestone 3** (`PLAN.md` §3, decisions 67–96 in
   [`docs/organisation.md`](docs/organisation.md) §7), after the counters and the other
   timers, which have landed ("A counter" and "Three more timers", below): integer
   arithmetic `add sub mul div mod neg abs`, `sqrt` waiting for a real type; the pulse coils
@@ -1412,6 +1412,12 @@ drops at the counter's next run, which it does: the lamp goes out, and the box s
 the eye is not counted again. A counter the edit adds while its rung is true is reported
 `{:ons_blocked, "rejects.cu", 0}` and counts nothing at the switch; a preset changed alone
 blocks nothing, since no power on the rung reads it.
+
+An edit that leaves no rung writing a counter's `r`, `ld` or `pv`, an `rto`'s `r` or a
+timer's `.pre` leaves it as it was, as an output the edit stops driving holds. Tested while
+`reset_pb` is held, a `boxes_v3.ld` that is `boxes.ld` with no reset rung reports
+`{:unwritten, "boxes.r", 1}`, and the counter counts no box while `r` stays on, until a
+restart puts it to 0.
 
 An edit of a lone instance gives the host the duties above; one of a running plant, below,
 takes them over.

@@ -2485,9 +2485,9 @@ names it breaks. Growth tests are in reductions.
   a `tp` is IEC's TP, its edge memory `.en` on decision 21's block list by path (decision
   94); an `rto`'s `r` clears `.acc`, `.dn` and `.tt`, keeping `.pre`, and `.en` stays
   the rung's, where the conventional RES clears `.EN` too, and is a member kept across an
-  edit (decision 95), so
-  a reset held at a switch under a candidate that writes `r` no more stays held until a
-  restart. A `tof` blocks nothing: an edit that turns its rung false starts its delay. A
+  edit (decision 95), so a reset held at a switch under a candidate that writes `r` no
+  more stays held until a restart, which since decision 96 the switch reports
+  `:unwritten`. A `tof` blocks nothing: an edit that turns its rung false starts its delay. A
   new `tof` starts at rest with `.acc` 0, where the conventional prescan sets `.acc` to
   `.pre`. The forecasts reuse `:dn_drops` and `:dn_rises`, a `tp`'s `:dn_rises` its pulse
   ending, as decision 88 reused them for a counter. The walk found no defect in `lib/`.
@@ -2513,8 +2513,14 @@ names it breaks. Growth tests are in reductions.
   notes. Decision 95 and `docs/naming.md`'s `rto` said `r` clears what the conventional
   RES clears, which clears `.EN` too: logex keeps `.en`, a departure each now owns. §8 maps
   `.dn` to Q but for a `tp`. Asked after the review, the maintainer confirmed decision 93,
-  a `tof`'s `.dn` IEC's Q through the run-on, the one exception to decision 74's words. The
-  suite is at 1037 tests (8 doctests).
+  a `tof`'s `.dn` IEC's Q through the run-on, the one exception to decision 74's words.
+  Asked too what an edit does to a block's input it leaves no rung writing while it is on, a
+  reset held when its rung goes, the maintainer chose decision 96: it keeps its value, as an
+  output an edit stops driving does, and each switch reports it by its path, `{:unwritten,
+  "lube.r", 1}`, a new kind in `Logex.Edit`'s table and §4.9's, read from the new
+  `Logex.Walk.member_writes/1`, for a counter's `r`, `ld` and `pv`, an `rto`'s `r` and a
+  timer's `.pre`, in a configuration by each kept instance's path. The suite is at 1044
+  tests (8 doctests).
 - **M3-3 · Integer arithmetic: `add sub mul div mod neg abs`.** IEC's names, and `neg`
   the vendors' (decision 79); `sqrt` waits for a real type. A result outside a dint is
   brought to the nearer limit and the instruction passes no power on that scan (decision

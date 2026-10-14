@@ -1,8 +1,8 @@
 defmodule Logex.WalkTest do
   @moduledoc """
   B5's one walk of a program's IR (M2-4): every instruction, every use, which tags a
-  program writes and which timers it runs, from source, `cal` and the blocks it runs
-  included.
+  program writes, which members it writes (decision 96) and which timers it runs, from
+  source, `cal` and the blocks it runs included.
   """
   use ExUnit.Case, async: true
 
@@ -171,6 +171,89 @@ defmodule Logex.WalkTest do
     end
   end
 
+  # Decision 96: which members a program writes, each by its path, which an edit reads for
+  # a member input it leaves unwritten.
+  describe "member_writes/1" do
+    test "each member a write slot names, by its path, each line a write, in rung order, a " <>
+           "`cal`'s var_output filling one among them" do
+      seal = block!(@seal)
+
+      p =
+        program!(
+          """
+          var a bool
+          var n dint
+          var t1 ton
+          var c ctu
+          var l rto
+          var s1 seal
+          xic a ton t1 100
+          xic t1.dn move 7 t1.pre
+          xic a ote c.r move n c.pv
+          xic a ctu c 5
+          xic c.q otl l.r
+          xic a rto l 50
+          move 0 t1.acc
+          cal s1 a a l.r
+          xic t1.dn ote a
+          """,
+          [seal]
+        )
+
+      assert Walk.member_writes(p) == %{
+               "t1.pre" => [8],
+               "c.r" => [9],
+               "c.pv" => [9],
+               "l.r" => [11, 14],
+               "t1.acc" => [13]
+             }
+
+      # A read is no write, nor is an instance run.
+      assert Walk.member_writes(
+               program!("var a bool\nvar t1 ton\nxic a ton t1 5\nxic t1.dn ote a")
+             ) ==
+               %{}
+    end
+
+    test "it reaches into each block a `cal` runs, at any depth, by path, with the body's own " <>
+           "lines, and into none it does not run" do
+      hold =
+        block!("""
+        function_block hold
+        var_input clr bool
+        var_input go bool
+        var_output q bool
+        var c ctu
+        xic clr ote c.r
+        xic go ctu c 3
+        xic c.q ote q
+        """)
+
+      outer =
+        block!(
+          """
+          function_block outer
+          var_input go bool
+          var_output q bool
+          var h hold
+          var t ton
+          cal h go go q
+          xic go move 9 t.pre
+          xic go ton t 20
+          """,
+          [hold]
+        )
+
+      p =
+        program!(
+          "var_input go bool\nvar_output y bool\nvar o outer\nvar idle outer\ncal o go y\n",
+          [outer]
+        )
+
+      assert Walk.member_writes(p) == %{"o.h.c.r" => [6], "o.t.pre" => [7]}
+    end
+  end
+
   describe "timers/1" do
     test "each timer a `ton` runs, to the line and preset of the first, and none a `ton` does not run" do
       p =
@@ -244,6 +327,7 @@ defmodule Logex.WalkTest do
 
         reductions(fn ->
           Walk.writes(p)
+          Walk.member_writes(p)
           Walk.timers(p)
         end)
       end
@@ -282,6 +366,7 @@ defmodule Logex.WalkTest do
 
         reductions(fn ->
           Walk.writes(p)
+          Walk.member_writes(p)
           Walk.timers(p)
         end)
       end

@@ -183,6 +183,15 @@ defmodule Logex.Edit do
   Test, its forecast and assemble report the outputs the original drove and the candidate
   does not; untest, and cancel after an untest, report the reverse.
 
+  **A member input no longer written** (decision 96). A member input logic writes, a
+  counter's `r`, `ld` or `pv`, an `rto`'s `r` or a timer's `.pre`, of a built-in instance
+  the program started declares, at any depth, that the program stopped writes through an
+  instruction (`Logex.Walk.member_writes/1`) and the program started writes through none,
+  keeps its value, as a held output does, and each switch reports it by its path with the
+  value it keeps, whatever it is: `{:unwritten, "lube.r", 1}`, a reset held when the edit
+  removed its rung, which holds the timer at 0 until a restart. It asks nothing of the
+  host. A timer's `.acc`, its own output, is not reported.
+
   **Assemble** (from test) and **cancel** (after an untest) are not switches: each prunes
   the state to the tags of the program it keeps and reports its held outputs, and blocks
   no one-shot, so one the last switch blocked stays blocked until a scan runs it. Cancel
@@ -204,6 +213,7 @@ defmodule Logex.Edit do
   | `:resume_undone` | the milliseconds of the resume this edit's last switch made: `last` moves back by that many | a switch |
   | `:ons_blocked` | the storage bit's value, unchanged: its `ons` passes no power at the next scan that runs it; for a counter's edge memory, its value: its `ctu` or `ctd` counts no edge then | a switch |
   | `:held` | for an output the next program shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |
+  | `:unwritten` | the value it keeps: a member input logic writes that the program stopped writes and the program started does not (decision 96) | a switch |
   | `:pruned` | the value it had | assemble, cancel |
 
   The writes a report lists, `:added`, `:input`, `:preset`, `:resume_undone`, `:resumed`

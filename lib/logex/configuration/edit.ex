@@ -128,7 +128,9 @@ defmodule Logex.Configuration.Edit do
   and name, the kinds an open set a host must tolerate. A global, task or instance is
   named by its own name, since they share one namespace, and anything inside an instance
   by its path. Each kept instance's switch and prune give `Logex.Edit`'s kinds, by path,
-  `{:preset, "m1.t1", {5000, 6000}}`, as its moduledoc's table says. The configuration's:
+  `{:preset, "m1.t1", {5000, 6000}}`, as its moduledoc's table says, among them a member
+  input no logic of the instance's program writes any more, `{:unwritten, "m1.lube.r", 1}`
+  (decision 96). The configuration's:
 
   | Kind | Name | Detail | Given by |
   |---|---|---|---|

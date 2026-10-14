@@ -410,8 +410,10 @@ defmodule Logex.EditTest do
       {_, state} = run(v1, [{0, %{"sp" => -5}}])
       assert state.env["t1"]["pre"] == -5
 
-      # Kept, not started again: the ton the candidate adds then gives it its preset.
-      assert {_, %Instance{env: %{"t1" => t1}}, [{:preset, "t1", {-5, 50}}]} =
+      # Kept, not started again: the ton the candidate adds then gives it its preset, and
+      # no logic of the candidate writes `.pre` (decision 96).
+      assert {_, %Instance{env: %{"t1" => t1}},
+              [{:preset, "t1", {-5, 50}}, {:unwritten, "t1.pre", 50}]} =
                Edit.test(accept!(v1, v2, state), state)
 
       assert t1 == %{state.env["t1"] | "pre" => 50}
@@ -920,7 +922,13 @@ defmodule Logex.EditTest do
       {_, state} = drive(v2, state, [{10, %{"w" => 1}}])
       assert state.env["t1"]["pre"] == 3000
       {_edit, untested, report} = Edit.untest(edit, state)
-      assert report == [{:preset, "t1", {3000, 5000}}, {:resumed, "t1", 10}]
+
+      assert report == [
+               {:preset, "t1", {3000, 5000}},
+               {:resumed, "t1", 10},
+               {:unwritten, "t1.pre", 5000}
+             ]
+
       assert untested == %{state | env: rebuilt(state.env, report), switched: true}
       assert %{"pre" => 5000, "last" => 110} = untested.env["t1"]
     end
@@ -1874,11 +1882,14 @@ defmodule Logex.EditTest do
       assert %{"acc" => 10, "r" => 0, "en" => 1} = tested.env["l"]
       assert later.env["l"]["acc"] == 20
 
-      # Its reset held at the switch stays held under a candidate that writes `r` no more.
+      # Its reset held at the switch stays held under a candidate that writes `r` no more,
+      # which the switch reports (decision 96).
       unreset = String.replace(@lube, "xic g ote l.r\n", "")
       resetting = [{0, %{"go" => 1}}, {10, %{"g" => 1}}]
 
-      assert {[], tested, later, _} = timer_switched(@lube, unreset, resetting, [{10, %{}}])
+      assert {[{:unwritten, "l.r", 1}], tested, later, _} =
+               timer_switched(@lube, unreset, resetting, [{10, %{}}])
+
       assert tested.env["l"]["r"] == 1
       assert %{"acc" => 0, "r" => 1} = later.env["l"]
 
@@ -1934,6 +1945,119 @@ defmodule Logex.EditTest do
         assert report == resumed
         assert state.env["r"]["last"] < state.now or resumed != []
       end
+    end
+  end
+
+  # Decision 96: a member input logic writes, which an edit leaves no rung writing, keeps
+  # its value, as an output an edit stops driving does (decision 20), and the switch reports
+  # it, so whoever made the edit sees a reset left on.
+  describe "a member input an edit stops writing keeps its value, and is reported (decision 96)" do
+    @boxes_r "var_input clr bool\nvar_input eye bool\nvar boxes ctu\n"
+    @lube_r "var_input greased bool\nvar_input motor bool\nvar lube rto\n"
+
+    defp unwritten(report), do: for({:unwritten, _, _} = entry <- report, do: entry)
+
+    test "a counter's `r` held at the switch stays on, and the counter counts nothing" do
+      v1 = c!(@boxes_r <> "xic clr ote boxes.r\nxic eye ctu boxes 3")
+      v2 = c!(@boxes_r <> "xic eye ctu boxes 3")
+      {_, state} = run(v1, [{0, %{"clr" => 1}}])
+      {:ok, edit, forecast} = Edit.accept(v1, v2, state)
+      assert forecast == [{:unwritten, "boxes.r", 1}]
+      {edit, tested, report} = Edit.test(edit, state)
+      assert report == forecast
+      assert tested.env["boxes"]["r"] == 1
+
+      # The button let go and three boxes: none counted while `r` stays on.
+      steps = [{10, %{"clr" => 0, "eye" => 1}}, {10, %{"eye" => 0}}, {10, %{"eye" => 1}}]
+      {_, later} = drive(v2, tested, steps ++ [{10, %{"eye" => 0}}, {10, %{"eye" => 1}}])
+      assert %{"r" => 1, "cv" => 0} = later.env["boxes"]
+
+      # The original writes it again, so its untest reports none; a restart puts it to 0.
+      {_edit, _, back} = Edit.untest(edit, later)
+      assert unwritten(back) == []
+      restarted = Runtime.restart(v2, later, :warm)
+      {_, counted} = drive(v2, restarted, [{10, %{"eye" => 0}}, {10, %{"eye" => 1}}])
+      assert %{"r" => 0, "cv" => 1} = counted.env["boxes"]
+    end
+
+    test "an rto's `r` held at the switch stays on, and the timer stays at 0" do
+      v1 = c!(@lube_r <> "xic greased ote lube.r\nxic motor rto lube 50")
+      v2 = c!(@lube_r <> "xic motor rto lube 50")
+      {_, state} = run(v1, [{0, %{"greased" => 1, "motor" => 1}}, {10, %{}}])
+      {:ok, edit, forecast} = Edit.accept(v1, v2, state)
+      assert forecast == [{:unwritten, "lube.r", 1}]
+      {_edit, tested, ^forecast} = Edit.test(edit, state)
+      {_, later} = drive(v2, tested, [{10, %{"greased" => 0}} | List.duplicate({10, %{}}, 9)])
+      assert %{"r" => 1, "acc" => 0, "dn" => 0, "en" => 1} = later.env["lube"]
+    end
+
+    test "each is reported whatever its value, a counter's `ld` and `pv` and a timer's `.pre` " <>
+           "too, by path inside a block" do
+      src =
+        "var_input a bool\nvar_input eye bool\nvar hop ctd\nvar t1 ton\n" <>
+          "xic a ote hop.ld\nxic a move 7 hop.pv\nxic eye ctd hop 4\n" <>
+          "xic a move 9 t1.pre\nxic eye ton t1 40"
+
+      v2 =
+        c!(
+          "var_input a bool\nvar_input eye bool\nvar hop ctd\nvar t1 ton\n" <>
+            "xic eye ctd hop 4\nxic eye ton t1 40"
+        )
+
+      v1 = c!(src)
+      {_, state} = run(v1, [{0, %{}}])
+
+      assert unwritten(Edit.test(accept!(v1, v2, state), state) |> elem(2)) ==
+               [{:unwritten, "hop.ld", 0}, {:unwritten, "hop.pv", 4}, {:unwritten, "t1.pre", 40}]
+
+      {_, state} = run(v1, [{0, %{"a" => 1}}])
+
+      assert unwritten(Edit.test(accept!(v1, v2, state), state) |> elem(2)) ==
+               [{:unwritten, "hop.ld", 1}, {:unwritten, "hop.pv", 7}, {:unwritten, "t1.pre", 9}]
+
+      body = fn rung ->
+        {:ok, block} =
+          Logex.compile(
+            "function_block hold\nvar_input clr bool\nvar_input go bool\nvar_output q bool\n" <>
+              "var c ctu\n" <> rung <> "xic go ctu c 3\nxic c.q ote q",
+            name: "hold"
+          )
+
+        {:ok, program} =
+          Logex.compile("var_input x bool\nvar_output y bool\nvar h hold\ncal h x x y",
+            name: "m",
+            types: [block]
+          )
+
+        program
+      end
+
+      {w1, w2} = {body.("xic clr ote c.r\n"), body.("")}
+      {_, state} = run(w1, [{0, %{"x" => 1}}])
+
+      assert unwritten(Edit.test(accept!(w1, w2, state), state) |> elem(2)) == [
+               {:unwritten, "h.c.r", 1}
+             ]
+    end
+
+    test "one the candidate writes another way, one it no longer declares, and a timer's " <>
+           "`.acc` are not reported" do
+      v1 = c!(@boxes_r <> "xic clr ote boxes.r\nxic eye ctu boxes 3")
+      {_, state} = run(v1, [{0, %{"clr" => 1}}])
+
+      for other <- [
+            @boxes_r <> "xic clr otl boxes.r\nxio clr otu boxes.r\nxic eye ctu boxes 3",
+            "var_input clr bool\nvar_input eye bool\nvar_output lamp bool\nxic eye ote lamp"
+          ] do
+        v2 = c!(other)
+        assert {_, _, report} = Edit.test(accept!(v1, v2, state), state)
+        assert unwritten(report) == []
+      end
+
+      t1 = c!("var_input a bool\nvar t1 ton\nxic a move 5 t1.acc\nxic a ton t1 40")
+      t2 = c!("var_input a bool\nvar t1 ton\nxic a ton t1 40")
+      {_, state} = run(t1, [{0, %{"a" => 1}}])
+      assert {_, _, []} = Edit.test(accept!(t1, t2, state), state)
     end
   end
 

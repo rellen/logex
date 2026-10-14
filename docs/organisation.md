@@ -1273,6 +1273,12 @@ tag as a var. Test, its forecast and assemble report the outputs the original dr
 the candidate does not; untest, and cancel after an untest, report the reverse. The
 one-shot rules read `switched` too (fix F3).
 
+**A member input no longer written (decision 96).** A member input logic writes, a
+counter's `r`, `ld` or `pv`, an `rto`'s `r` or a timer's `.pre`, that F writes through an
+instruction and T through none, of an instance T declares, keeps its value, as a held
+output does, and each switch reports it by its path with that value, `{:unwritten,
+"lube.r", 1}`: a reset held when the edit removes its rung stays on until a restart.
+
 **Assemble and cancel** are not switches: they block no one-shot and move no `.pre`.
 Assemble prunes the state to the candidate's tags, and cancel after an untest to the
 original's. Each reports every tag it prunes, `{:pruned, n, v}` with the value it had,
@@ -1294,6 +1300,7 @@ and name. The kinds are an open set, which a host must tolerate:
 | `:ons_blocked` | the storage bit's value, unchanged | a switch |
 | `:initial_changed` | `{old, new}` initial values; the running value is kept | a switch |
 | `:held` | for an output the program that runs next still shows, the state's value, what its next scan gives, which can differ from what the point holds until then; otherwise the value the point last received | every step |
+| `:unwritten` | the value it keeps: a member input logic writes, a counter's `r`, `ld` or `pv`, an `rto`'s `r` or a timer's `.pre`, that the program stopped writes and no logic of the program started writes, by its path (decision 96) | a switch |
 | `:pruned` | the value it had | assemble, cancel |
 
 The writes a report lists, applied to the state before its step, give the state after it,
@@ -1347,8 +1354,8 @@ program instance that holds it, as a timer is:
 | Piece | A new instance | A scan | `restart/3` | A switch: kept | added | removed, then restored |
 |---|---|---|---|---|---|---|
 | `cv`, `ov`, `un` | 0 | IEC's body for the side its `ctu` or `ctd` runs (decisions 69–71) | 0 | kept | 0, by `initial_env/1` | frozen, then kept |
-| `pv` | the instruction's preset | written by logic, read at the next run | the preset | moved where logic left the old preset, else kept (decisions 23, 27), reported `:preset`, `:preset_kept`, with `q`'s forecast (decision 88) | the preset | frozen, then the new preset outright (decision 23) |
-| `r`, `ld` | 0 | written by logic, read at the next run (decision 84) | 0 | kept | 0 | frozen, then kept |
+| `pv` | the instruction's preset | written by logic, read at the next run | the preset | moved where logic left the old preset, else kept (decisions 23, 27), reported `:preset`, `:preset_kept`, with `q`'s forecast (decision 88); `:unwritten` where no logic writes it any more (decision 96) | the preset | frozen, then the new preset outright (decision 23) |
+| `r`, `ld` | 0 | written by logic, read at the next run (decision 84) | 0 | kept; `:unwritten` where no logic writes it any more (decision 96) | 0 | frozen, then kept |
 | `cu`, `cd`, the edge memories | 0 | the side's rung power | 0 | kept; blocked by path where its rung changed, the presets left out (decision 87) | 0, blocked | frozen, then blocked |
 | `q`, `qu`, `qd` | 0 | set from `cv` at every run | 0 | kept, set at the next run | 0 | frozen, then set at the next run |
 
@@ -1371,7 +1378,7 @@ preset outright. What differs is by type:
 | a `tp`'s members | IEC's TP, its pulse `.tt` (decisions 74, 75, 94) | kept; `:dn_rises` where `.pre` moves at or below `.acc` during the pulse | 0 | frozen, then resumed where `.tt` was set |
 | a `tp`'s `.en`, its edge memory | the rung's power | kept; blocked by path where its rung changed, the presets left out (decision 87) | 0, blocked | frozen, then blocked |
 | an `rto`'s members | the conventional RTO, `.acc` and `.dn` kept across a false rung (decisions 76, 95) | kept; `:dn_drops` and `:dn_rises` at its next run with its rung true | 0 | frozen, then resumed where `.en` was set |
-| an `rto`'s `r` | written by logic, read at the next run (decisions 90, 95) | kept | 0 | frozen, then kept |
+| an `rto`'s `r` | written by logic, read at the next run (decisions 90, 95) | kept; `:unwritten` where no logic writes it any more (decision 96) | 0 | frozen, then kept |
 
 In a block whose `cal` is false each is held with the rest, `last` with it, and catches up
 when the block next runs (decision 8). When M3-5's forward `jmp` lands, a timer in the
@@ -2609,8 +2616,9 @@ answers. Decisions 67–89 were taken on 2026-10-14 from Milestone 3's design (b
 routine choices. Decisions 90–92 were taken the same day, after M3-1's review, from three
 questions the maintainer was asked then: 90 one M3-2 had left open, 91 and 92 confirming
 what M3-1 built. Decisions 93–95 are M3-2's own routine choices, taken as it landed on
-2026-10-14, 93 confirmed by the maintainer the same day, after M3-2's review. All
-ninety-five are kept with their options so the reasons stay with them.
+2026-10-14, 93 confirmed by the maintainer the same day, after M3-2's review. Decision 96
+was taken the same day, after M3-2's review, from a question the maintainer was asked
+then. All ninety-six are kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3750,6 +3758,37 @@ the record keeps. After M3-2's review the maintainer confirmed 93, the same day.
     unless that run finds `r` set. *(Corrected 2026-10-14, after M3-2's review, which had
     read "as the conventional RES does" of `.acc`, `.dn` and `.tt` alone: RES clears every
     status bit of a TIMER, `.EN` among them, and logex keeps `.en`.)*
+
+**After M3-2's review, 2026-10-14.** Decision 96 is the maintainer's answer to a question
+asked after M3-2's review the same day, which decision 95's rule across an edit raised:
+what becomes of a block's input that an online edit leaves no rung writing.
+
+96. **A block's input an edit stops writing while it is on (M3-1, M3-2),** asked after
+    M3-2's review. Decision 76's lubrication timer is being greased, the "greased" button
+    held and `lube.r` on, when an online edit removes the rung `xic greased ote lube.r`. No
+    rung writes `lube.r` any more, so it stays on, and the timer stays at 0 until a
+    restart. A counter's `r` or `ld`, or a preset logic moved into a `pv` or a `.pre`, is
+    left so too.
+    - It keeps its value, as an output an edit stops driving does (decision 20), and the
+      edit's report names it as no longer written, so whoever made the edit sees it;
+    - it keeps its value, and nothing says so, as M3-2 built it;
+    - or the switch puts it back to 0, a write no logic made, which decision 21 keeps a
+      switch from making to a storage bit.
+
+    **Taken: kept, and reported.** A member input logic writes, a counter's `r`, `ld` or
+    `pv`, an `rto`'s `r` or a timer's `.pre`, of a built-in instance the program started
+    declares, at any depth, that the program stopped writes through an instruction
+    (`Logex.Walk.member_writes/1`) and the program started writes through none, keeps its
+    value, and a switch reports it by its path, `{:unwritten, "lube.r", 1}`, with the
+    value it keeps, whatever it is; so the forecast, the report a test taken now would
+    give, lists it too, and in a configuration each kept instance's come by path,
+    `{:unwritten, "m1.lube.r", 1}`. No existing kind fits: `:held` is an output's, a
+    point the host holds at its value at every step, and `:unread` a var_input's, which
+    the host stops sending; a member input is neither and asks nothing of the host, so it
+    is a kind of its own, `:unread`'s mirror, in `Logex.Edit`'s table and §4.9's. A
+    timer's `.acc`, which logic may write too (decision 9), is its own output, set at
+    every run, and is not reported. Nothing is blocked or written: the counter or timer
+    reads its kept input at its next run, as decision 91 reads any. *(Landed 2026-10-14.)*
 
 ---
 

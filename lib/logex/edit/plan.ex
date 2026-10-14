@@ -131,6 +131,8 @@ defmodule Logex.Edit.Plan do
       outputs: section(tags, :var_output),
       shared: shared(externals, tags),
       writes: Map.new(Walk.writes(program), fn {name, lines} -> {name, length(lines)} end),
+      # Decision 96: each member of an instance logic writes, by its path.
+      member_writes: Map.new(Walk.member_writes(program), fn {path, _lines} -> {path, true} end),
       ons: ons,
       ons_rungs: Map.new(ons, fn {key, _bits} -> {key, true} end),
       ons_bits: for({_key, bits} <- ons, bit <- bits, into: %{}, do: {bit_name(bit), true}),
@@ -190,6 +192,7 @@ defmodule Logex.Edit.Plan do
       live: for(name <- Map.keys(to.inputs), not is_map_key(from.inputs, name), do: name),
       unread: for(name <- Map.keys(from.inputs), not is_map_key(to.inputs, name), do: name),
       held: held,
+      unwritten: unwritten(from, to),
       shows: to.outputs,
       left: for(name <- Map.keys(watched), is_map_key(from.outputs, name), do: name),
       changed: changed(from, to),
@@ -225,6 +228,36 @@ defmodule Logex.Edit.Plan do
 
   defp drives?(facts, name),
     do: is_map_key(facts.outputs, name) and is_map_key(facts.writes, name)
+
+  # Decision 96: a member input that `from` writes and `to` does not, of a built-in instance
+  # `to` declares, at any depth: a counter's `r`, `ld` or `pv`, an `rto`'s `r`, or a timer's
+  # `.pre`, each an input logic may write (Logex.FbType). It keeps its value, as an output
+  # no program drives any more does (decision 20), and a switch reports it, by its path. A
+  # timer's `.acc`, which logic may write too, is its own output, set at every run.
+  defp unwritten(from, to),
+    do:
+      Enum.sort(
+        for path <- Map.keys(from.member_writes),
+            not is_map_key(to.member_writes, path),
+            input?(String.split(path, "."), to.tags),
+            do: path
+      )
+
+  defp input?([name | members], tags), do: input_in(Map.get(tags, name), members)
+
+  defp input_in(%Tag{type: %FbType{} = type}, members), do: input_of(type, members)
+  defp input_in(_not_an_instance, _members), do: false
+
+  defp input_of(%FbType{body: nil, members: members}, [member]),
+    do: Enum.any?(members, &match?(%Member{name: ^member, role: :input, write: true}, &1))
+
+  defp input_of(%FbType{body: %Program{}, members: members} = type, [member | inner]),
+    do: input_of(type_of(type, Enum.find(members, &(&1.name == member))), inner)
+
+  defp input_of(_type, _path), do: false
+
+  defp type_of(_type, nil), do: nil
+  defp type_of(type, %Member{} = member), do: FbType.type_of(type, member)
 
   # Decision 29: a bool or a dint both declare, of one type, whose initial value differs,
   # and that is no var_input of `to`, since a restart keeps a var_input's value. OE-2: nor
@@ -634,11 +667,17 @@ defmodule Logex.Edit.Plan do
         timed({name, name, from, to, rules}, record.pre, clock, acc)
       end)
 
+    # Decision 96: each member input no logic of the program started writes any more, with
+    # the value it keeps, read once the timer rules have moved any `.pre`.
+    unwritten = for path <- plan.unwritten, do: {:unwritten, path, bit_at(env, path)}
+
     {%{state | env: env, switched: true, ons_blocked: blocked, now: at},
-     %{record | shown: shown, pre: pre, scanned: scanned}, Enum.sort(timed ++ inside ++ report)}
+     %{record | shown: shown, pre: pre, scanned: scanned},
+     Enum.sort(timed ++ inside ++ report ++ unwritten)}
   end
 
-  # A storage bit's value, a bit inside an instance found by its path (M2-5).
+  # A storage bit's value, a bit inside an instance found by its path (M2-5); and since
+  # decision 96 a member's, by its path, `lube.r`.
   defp bit_at(env, bit), do: path_at(env, String.split(bit, "."))
 
   defp path_at(value, []), do: value
