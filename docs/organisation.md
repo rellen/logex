@@ -1832,7 +1832,9 @@ runtime as it is, and thrown away. A test taken later reads the resource as it i
 (decision 27).
 
 *Routine choices,* taken as recommended with the decisions: a removed element is cited
-with no line in the candidate, last, its line in the running configuration in the text;
+with no line in the candidate, last, its line in the running configuration in the text,
+the tasks removed before the located globals removed, each in the running
+configuration's order, whatever their lines;
 an instance's plan is built once per program type and direction, so a configuration of N
 instances of one type builds two plans; and a global the candidate removes, still read by
 an instance set aside, is kept unused until assemble, so the instance finds it if it

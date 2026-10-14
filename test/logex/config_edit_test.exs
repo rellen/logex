@@ -332,6 +332,41 @@ defmodule Logex.ConfigEditTest do
              ]
     end
 
+    test "the elements only the running configuration has: its tasks, then its located " <>
+           "globals, each in its order there, whatever their lines" do
+      # The running configuration declares `lamp_2` on its first line, before any task.
+      original =
+        "var_global lamp_2     bool at panel.q.3\n" <>
+          String.replace(plant_text(), "var_global lamp_2     bool at panel.q.3\n", "")
+
+      text =
+        plant_text()
+        |> String.replace("var_global lamp_2     bool at panel.q.3\n", "")
+        |> String.replace("  m2.run_lamp lamp_2\n", "")
+        |> String.replace("task slow interval 50 priority 2\n", "")
+        |> String.replace("program m2 motor with slow", "program m2 motor with fast")
+        |> String.replace("var_global sp_2       dint at drive.q.1\n", "")
+        |> String.replace("  m2.speed_sp sp_2\n", "")
+
+      runtime = running(10, plant(original))
+      assert {:error, diagnostics} = Edit.accept(runtime, plant(text))
+
+      assert Enum.map(diagnostics, &{&1.line, &1.message}) == [
+               {line(text, "program m2"),
+                "`m2` runs with `slow` in the running configuration and with `fast` in the " <>
+                  "candidate: an instance moves to another task only with a restart"},
+               {nil,
+                "task `slow` (line #{line(original, "task slow")} of the running " <>
+                  "configuration) is removed: a task is removed only with a restart"},
+               {nil,
+                "`lamp_2` at `panel.q.3` (line 1 of the running configuration) is removed: " <>
+                  "located I/O changes only with a restart"},
+               {nil,
+                "`sp_2` at `drive.q.1` (line #{line(original, "var_global sp_2")} of the " <>
+                  "running configuration) is removed: located I/O changes only with a restart"}
+             ]
+    end
+
     test "each, from Elixir data: no line, in the candidate's order, a removed element last" do
       {:ok, relay} =
         Logex.compile("var_input in bool\nvar_output out bool\nxic in ote out", name: "relay")

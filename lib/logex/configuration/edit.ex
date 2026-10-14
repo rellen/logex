@@ -39,9 +39,10 @@ defmodule Logex.Configuration.Edit do
   both, every type change `Logex.Edit` refuses, a member's by its path. The configuration's
   own refusals come first, each in the candidate's `file` at its element's line, in line
   order, an element only the running configuration has last, with no line, its line in the
-  running configuration named in its text; then each program type's, in the order of its
-  first such instance in the candidate, each in that type's own `file` (fix F15). A
-  candidate's warnings stop nothing.
+  running configuration named in its text, its removed tasks before its removed located
+  globals, each in its order there; then each program type's, in the order of its first
+  such instance in the candidate, each in that type's own `file` (fix F15). A candidate's
+  warnings stop nothing.
 
   **A switch**, `test/2` or `untest/2`, moves the resource from the configuration it stops
   to the one it starts, writes it in the resource, which then runs the latter, and prunes
@@ -349,7 +350,8 @@ defmodule Logex.Configuration.Edit do
   # ---- accept: what may change only with a restart (§4.9) ---------------------------------
 
   # The configuration's own refusals: each element of the candidate's in line order, then
-  # each only the running configuration has, in its order there. A configuration's lines
+  # each only the running configuration has, its tasks and then its located globals, each
+  # in its order there, whatever their lines in its text. A configuration's lines
   # are all numbers, from text, or all nil, from Elixir (Logex.Configuration.check/1), and
   # the sort is stable, so one from Elixir keeps the candidate's order. Each in the
   # candidate's file.
