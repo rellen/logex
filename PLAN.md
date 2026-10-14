@@ -2613,7 +2613,17 @@ names it breaks. Growth tests are in reductions.
   names `68e638b`, and the record regenerated on top of `68e638b` with (2) is byte for
   byte the one committed. Asked after the review, the maintainer confirmed that a `mod` by
   zero behaves as a `div` by zero, 0, no power and a reported fault, noted on decision 98.
-  The suite is at 1115 tests (8 doctests).
+
+  `0a3832a`'s bound held the right figure the wrong way: comparing accept at 50 and 200
+  rungs of a body at 100 instances weighs what accept does once a type against what it
+  does for each instance, so the type's walks, 67 reductions a rung at `d5df77e` and 436
+  after decision 96, moved it with no instance costing more, and another 2x of them would
+  have failed 1.64 with no regression. The test now compares accept's cost per rung of the
+  body at 100 and at 400 instances, (200 rungs less 50) over 150, which an instance's cost
+  drops out of and a type's is the same in: 0.99x to 1.31x over 48 runs, 16 alone and 32
+  four at once, bound 1.57; a body read again for each instance gives 3.87x, its
+  instructions alone walked again 3.5x, and the type's body read eight times, which
+  failed the old ratio at 1.77x, 1.02x to 1.13x. The suite is at 1115 tests (8 doctests).
 - **M3-4 · The coil one-shots: `osr`, `osf`.** IEC's transition-sensing coils in the
   conventional form, a storage bit and a pulse bit (decision 80), which pass on the power
   they receive; each storage bit under every rule an `ons` bit has, on decision 21's block
