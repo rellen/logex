@@ -1365,7 +1365,7 @@ preset outright. What differs is by type:
 
 | Piece | A scan | A switch: kept | added | removed, then restored, or back from aside |
 |---|---|---|---|---|
-| a `tof`'s members | IEC's TOF, `.dn` its Q (decision 93) | kept; `:dn_drops` where `.pre` moves at or below `.acc` during the delay | at rest, nothing blocked | frozen, then resumed from the switch where `.tt` was set |
+| a `tof`'s members | IEC's TOF, `.dn` its Q (decision 93) | kept; `:dn_drops` where `.pre` moves at or below `.acc` during the delay, and where it moves to 0 while the rung is true, `.dn` then dropping at its next run with the rung false | at rest, nothing blocked | frozen, then resumed from the switch where `.tt` was set |
 | a `tp`'s members | IEC's TP, its pulse `.tt` (decisions 74, 75, 94) | kept; `:dn_rises` where `.pre` moves at or below `.acc` during the pulse | 0 | frozen, then resumed where `.tt` was set |
 | a `tp`'s `.en`, its edge memory | the rung's power | kept; blocked by path where its rung changed, the presets left out (decision 87) | 0, blocked | frozen, then blocked |
 | an `rto`'s members | the conventional RTO, `.acc` and `.dn` kept across a false rung (decisions 76, 95) | kept; `:dn_drops` and `:dn_rises` at its next run with its rung true | 0 | frozen, then resumed where `.en` was set |
@@ -3655,12 +3655,19 @@ the record keeps.
     scan sees one (decision 69). Across an online edit a `tof` is a timer as a `ton` is
     (decision 23): its `.pre` moves by decisions 23 and 27, a change of type needs a
     restart, and one restored resumes from the switch where it was timing, which for a
-    `tof` is `.tt` set, not `.en`. A moved `.pre` changes `.dn` only during the delay: where
+    `tof` is `.tt` set, not `.en`. A moved `.pre` changes `.dn` during the delay: where
     `.acc` is at or past the new `.pre` there, `:dn_drops` says `.dn` drops at the timer's
-    next run, unless that run finds its rung true. Its falling edge needs no place on
-    decision 21's block list: an edit that turns its rung false starts the delay, `.dn`
-    staying set through it, as the rung falling would, where blocking it would stop the
-    fan at once.
+    next run, unless that run finds its rung true. It changes it too where the rung was
+    true at the timer's last run, `.en` set, and `.pre` moves to 0: the delay then ends on
+    the falling edge's own scan, so `:dn_drops`, `{0, 0}`, says `.dn` drops at the timer's
+    next run with its rung false, however many runs with its rung true come first, as a
+    `ton`'s and an `rto`'s forecasts are for a run with the rung true. Its falling edge
+    needs no place on decision 21's block list: an edit that turns its rung false starts
+    the delay, `.dn` staying set through it, as the rung falling would, where blocking it
+    would stop the fan at once. *(Corrected 2026-10-14, after M3-2's review, which had read
+    "only during the delay": the fan's run-on moved from 30 s to 0 while the motor runs
+    stops the fan the moment the motor stops, where the original runs it on 30 s more, and
+    the edit forecast nothing. It now forecasts `:dn_drops`.)*
 94. **A pulse timer's pulse, start to end (M3-2),** following decisions 74 and 75. A horn
     sounds for 3 seconds from a fault's rising edge: `xic fault tp horn_pulse 3000`, the
     horn worked by `xic horn_pulse.tt` on a rung below.

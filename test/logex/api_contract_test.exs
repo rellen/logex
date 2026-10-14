@@ -5419,6 +5419,7 @@ defmodule Logex.ApiContractTest do
     :preset_moved,
     :forecast_drops,
     :forecast_rises,
+    :forecast_waits,
     :round_trip,
     :retype_refused,
     :restarted
@@ -5774,7 +5775,10 @@ defmodule Logex.ApiContractTest do
       tm_forecast(kind, type, got[name], ran[name])
     end
 
-    forecast = Enum.reject(w.forecast, fn {_kind, name, _type} -> Map.has_key?(ran, name) end)
+    forecast =
+      Enum.reject(w.forecast, fn {kind, name, type} ->
+        Map.has_key?(ran, name) and not tm_pending(kind, type, got[name], ran[name])
+      end)
 
     %{
       w
@@ -5791,6 +5795,10 @@ defmodule Logex.ApiContractTest do
 
   defp tm_expected("tof", %{"tt" => 1, "acc" => acc, "pre" => pre}) when acc >= pre,
     do: [:dn_drops]
+
+  # A tof whose rung was true, its `.pre` moved to 0: its delay ends on the falling edge's
+  # own scan (decision 93).
+  defp tm_expected("tof", %{"en" => 1, "pre" => pre}) when pre <= 0, do: [:dn_drops]
 
   defp tm_expected("tp", %{"tt" => 1, "acc" => acc, "pre" => pre}) when acc >= pre,
     do: [:dn_rises]
@@ -5834,6 +5842,15 @@ defmodule Logex.ApiContractTest do
   end
 
   defp tm_forecast(_kind, _type, _timer, _run), do: :ok
+
+  # A tof's drop at a preset of 0 still holds after a run with its rung true, which keeps
+  # `.dn` set: it waits for the next run with its rung false.
+  defp tm_pending(:dn_drops, "tof", %{"pre" => pre}, {true, _r}) when pre <= 0 do
+    tm_reached(:forecast_waits)
+    true
+  end
+
+  defp tm_pending(_kind, _type, _timer, _run), do: false
 
   defp tm_eval(chain, image),
     do: Enum.all?(chain, fn {c, input} -> c == :xic == (image[input] == 1) end)

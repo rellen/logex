@@ -101,9 +101,12 @@ defmodule Logex.Edit do
 
   The other timers (M3-2, decisions 93 on) are timers by every rule above, each by its own
   type: a change of a timer's type, a `ton` made a `tof`, needs a restart. A `tof`'s `.dn`
-  changes with its `.pre` only during its delay, `.tt` 1: where `.acc` is at or past the
-  new `.pre` there, `:dn_drops` says `.dn` drops at its next run, unless that run finds its
-  rung true, which ends the delay with `.dn` set. A `tof` blocks nothing: an edit that turns
+  changes with its `.pre` during its delay, `.tt` 1: where `.acc` is at or past the new
+  `.pre` there, `:dn_drops` says `.dn` drops at its next run, unless that run finds its
+  rung true, which ends the delay with `.dn` set. It changes too where its rung was true at
+  its last run, `.en` 1, and `.pre` moves to 0: the delay then ends on the falling edge's
+  own scan, so `:dn_drops`, `{0, 0}`, says `.dn` drops at its next run with its rung false,
+  however many runs with its rung true come first. A `tof` blocks nothing: an edit that turns
   its rung false starts its delay, `.dn` held through it, as the rung falling would. A `tp`'s
   pulse changes with its `.pre` only while it runs, `.tt` 1: where `.acc` is at or past
   the new `.pre` there, `:dn_rises` says the pulse ends at its next run, `.tt` dropping and

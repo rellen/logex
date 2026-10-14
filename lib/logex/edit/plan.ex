@@ -892,11 +892,15 @@ defmodule Logex.Edit.Plan do
   # M3-1 (decision 88): a counter's done member, `q` or a ctud's `qu`, is `cv >= pv` at its
   # next run, whatever its rung, against the `cv` that run leaves, so the forecast holds
   # unless that run counts, resets or loads. A ctd's `q`, `cv <= 0`, moves with no preset.
-  # M3-2: a `tof`'s `.dn` changes with its preset only while its delay runs (`.tt` 1): there
-  # its next run ends the delay where `.acc` is at or past the new `.pre`, dropping `.dn`,
-  # unless that run finds its rung true, which keeps `.dn` set.
-  defp done(_to, %{"pre" => pre, "acc" => acc, "tt" => tt}, name, %{forecast: :off_delay}),
-    do: off_delay(tt, max(acc, 0), pre, name)
+  # M3-2: a `tof`'s `.dn` changes with its preset while its delay runs (`.tt` 1): there its
+  # next run ends the delay where `.acc` is at or past the new `.pre`, dropping `.dn`, unless
+  # that run finds its rung true, which keeps `.dn` set. And where its rung was true at its
+  # last run (`.en` 1), a `.pre` moved to 0 ends the delay on the falling edge's own scan, so
+  # `.dn` drops at its next run with its rung false, however many runs with its rung true
+  # come first (decision 93), as a `ton`'s and an `rto`'s forecasts are for a run with its
+  # rung true. `.en` is read with `Map.get/2`, as the runtime reads it.
+  defp done(_to, %{"pre" => pre, "acc" => acc, "tt" => tt} = value, name, %{forecast: :off_delay}),
+       do: off_delay({tt, Map.get(value, "en")}, max(acc, 0), pre, name)
 
   # M3-2: a `tp`'s `.pre` moves its pulse only while it runs (`.tt` 1): there its next run
   # ends the pulse where `.acc` is at or past the new `.pre`, `.dn` rising, unless that run
@@ -918,8 +922,9 @@ defmodule Logex.Edit.Plan do
 
   defp done(_to, _value, _name, %{forecast: :count}), do: []
 
-  defp off_delay(1, acc, pre, name) when acc >= pre, do: [{:dn_drops, name, {acc, pre}}]
-  defp off_delay(_tt, _acc, _pre, _name), do: []
+  defp off_delay({1, _en}, acc, pre, name) when acc >= pre, do: [{:dn_drops, name, {acc, pre}}]
+  defp off_delay({0, 1}, acc, pre, name) when pre <= 0, do: [{:dn_drops, name, {acc, pre}}]
+  defp off_delay(_timing, _acc, _pre, _name), do: []
 
   defp pulse_ends(1, acc, pre, name) when acc >= pre, do: [{:dn_rises, name, {acc, pre}}]
   defp pulse_ends(_tt, _acc, _pre, _name), do: []

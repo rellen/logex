@@ -540,7 +540,8 @@ the reset. A restart, warm or cold, starts it at 0 too, until `retain` lands.
 Each is a timer by every rule a `ton` keeps: one instruction runs it, nothing may follow
 it on its path, logic may move into `.pre` and `.acc`, and a `ton` made a `tof` is a
 change of type, which an online edit refuses. An edit that moves a preset
-forecasts each by its own rule: a `tof`'s `.dn` dropping during its delay, a `tp`'s pulse
+forecasts each by its own rule: a `tof`'s `.dn` dropping during its delay, or at the
+motor's stop where its preset goes to 0 while the motor runs, a `tp`'s pulse
 ending, an `rto`'s `.dn` at its next run with its rung true. A `tp` an edit adds while its
 fault is present sounds no horn at the switch. Under an event task each is a
 configuration warning in its own words: a `tof`'s delay and a `tp`'s pulse end only when

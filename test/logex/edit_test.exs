@@ -1623,8 +1623,8 @@ defmodule Logex.EditTest do
       assert %{"acc" => 40, "dn" => 0} = later.env["r"]
     end
 
-    test "a tof's `.pre` moved while its rung is true, or at rest, forecasts nothing, and " <>
-           "starts no delay at rest" do
+    test "a tof's `.pre` moved while its rung is true forecasts nothing, and its delay " <>
+           "runs to the new preset" do
       shorter = String.replace(@fan, "tof r 30", "tof r 5")
 
       assert {[{:preset, "r", {30, 5}}], _, later, _} =
@@ -1632,14 +1632,39 @@ defmodule Logex.EditTest do
 
       assert %{"dn" => 1, "acc" => 0} = later.env["r"]
 
-      # Energised, `.acc` is 0, at a preset of 0 too.
+      assert {_, _, later, _} =
+               timer_switched(@fan, shorter, [{0, %{"go" => 1}}], [{10, %{"go" => 0}}])
+
+      assert %{"dn" => 1, "tt" => 1, "acc" => 0} = later.env["r"]
+    end
+
+    test "a tof's `.pre` moved to 0 while its rung is true forecasts `.dn` dropping at its " <>
+           "next run with its rung false, the falling edge's own scan (decision 93)" do
       zero = String.replace(@fan, "tof r 30", "tof r 0")
+      on = [{0, %{"go" => 1}}]
 
-      assert {[{:preset, "r", {30, 0}}], _, later, _} =
-               timer_switched(@fan, zero, [{0, %{"go" => 1}}], [{10, %{}}])
+      assert {[{:dn_drops, "r", {0, 0}}, {:preset, "r", {30, 0}}], tested, later, _} =
+               timer_switched(@fan, zero, on, [{10, %{"go" => 0}}])
 
-      assert %{"dn" => 1} = later.env["r"]
+      assert %{"dn" => 1, "en" => 1, "tt" => 0, "pre" => 0} = tested.env["r"]
+      assert %{"dn" => 0, "tt" => 0, "acc" => 0} = later.env["r"]
 
+      # The original, run on from the same state, holds `.dn` through its 30 ms delay.
+      v1 = c!(@t <> @fan)
+      {_, state} = run(v1, on)
+      {_, original} = drive(v1, state, [{10, %{"go" => 0}}])
+      assert %{"dn" => 1, "tt" => 1} = original.env["r"]
+
+      # Runs with its rung true first keep `.dn` set, and the next false one drops it.
+      assert {_, _, later, _} =
+               timer_switched(@fan, zero, on, [{10, %{}}, {10, %{}}, {10, %{"go" => 0}}])
+
+      assert %{"dn" => 0, "tt" => 0} = later.env["r"]
+      assert {_, _, later, _} = timer_switched(@fan, zero, on, [{10, %{}}, {10, %{}}])
+      assert %{"dn" => 1, "en" => 1} = later.env["r"]
+    end
+
+    test "a tof's `.pre` moved at rest forecasts nothing, and starts no delay" do
       rested = @falling ++ [{10, %{}}, {10, %{}}]
 
       # At rest, `.acc` at 30, past a new preset of 10: no forecast, and `.dn` stays 0.
