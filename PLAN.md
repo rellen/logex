@@ -20,7 +20,7 @@ fix took the shape it did, so its present tense describes the code *before* thos
 §3's M2-6 and §3's OE-2 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
 first item, M2-1, landed the same day, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11,
 and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed and landed on
-2026-10-13 (§3).
+2026-10-13 (§3), and Milestone 3 was designed and decided on 2026-10-14 (§3, "Milestone 3").
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -2311,6 +2311,138 @@ first, lands green, and pins every rule with a test that fails when the rule is 
     the write into a shared global when a `var` becomes a `var_external` is OE-2's to
     design.
 
+### Milestone 3 — the missing instruction set
+
+**Designed and decided 2026-10-14** (`docs/organisation.md` §7, decisions 67–89;
+"decision N" in this section is that §7's). §8's domain gaps, in its order: counters, the
+other three timers, integer arithmetic, the coil one-shots `osr` and `osf`, and control
+flow. A design pass on `970dede` surveyed each item and built a throwaway spike of an up
+counter through `Logex.FbType`, the walks and the edit (never landed). The spike counted
+with no new mechanism and found six places that assume every built-in is a `ton`:
+`Logex.Edit.Plan` raised `FunctionClauseError` on a counter's preset change, reading a
+timer's `.en`; the path rule's message in `Logex.Compiler` names `ton`; the unrun warning
+says "is a ton"; `Logex.Walk.timers/1` feeds both the edit's preset rule and M2-6's
+event-task warning, so widened alone it would warn about counters; a counter an edit adds
+while its rung is true counted at once; and a counter in a frozen block misses an edge
+that comes and goes while it is frozen. The maintainer took the questions as recommended
+but three: IEC's three counter kinds (decision 67), IEC's member names (68), and a zero
+divisor reported to the host as a minor fault (78). 67 and 68 sent M3-1 back to IEC's
+counter model, whose routine choices are decisions 84–89.
+
+Each item surveys its words in `docs/naming.md` first, before any code, and lands as a
+gated series, each commit gated alone by `mix format --check-formatted`, `mix compile
+--force --warnings-as-errors` in both environments and `mix test --warnings-as-errors`,
+judged by exit code on Elixir 1.20.4, with its mutation table in its message, every rule
+it adds reverted alone and the suite judged by exit code, every survivor given a test.
+Each new mnemonic is reserved in any case, and each commit that adds one says which tag
+names it breaks. Growth tests are in reductions.
+
+**The order:** this design record, then M3-1 to M3-5.
+- **M3-1 first**, decisive by §8, and the item that makes every built-in stop being a
+  `ton`, with a type that keeps no time, so "has a preset" and "times" part from the
+  start.
+- **M3-2 next**, reusing that refactor.
+- **M3-3 third.** It is independent, but brings negative literals, which change the
+  golden record.
+- **M3-4 fourth**, reusing the edge rules M3-1 generalises.
+- **M3-5 last**, where dropping it would cost nothing else.
+
+- **M3-1 · Counters: `ctu`, `ctd`, and the type words `ctu`, `ctd` and `ctud`.** IEC's
+  three counters (decision 67), with IEC's members lowercased (decision 68): `var boxes
+  ctu`, `var hopper ctd`, `var stock ctud`, each a `var` with no initial value. Rung power
+  into `ctu boxes 12` is its count input `cu`, into `ctd hopper 40` its `cd`; the number is
+  the preset, the `pv` an instance starts with. The reset `r`, the load `ld` and `pv` are
+  input members, written by any instruction (`xic reset_pb ote boxes.r`) and read when
+  the counter's instruction next runs (decision 84); a `ctud` is run by one `ctu` and one
+  `ctd`, from two rungs, their presets agreeing (decision 85). Logic writes only `r`, `ld`
+  and `pv` (decision 86). A count needs a rising edge, never on the first scan (decision
+  69); a reset or load keeps the edge memory (70); the count stops at the dint's limits,
+  setting `ov` or `un` until a reset or load (71); nothing may follow a counter on its path
+  (73); a counter under an event task is a configuration warning (72); across an online
+  edit each counter's edge memory joins decision 21's block list by path, a rung compared
+  without its presets (87), and a moved `pv` forecasts `q` as `:dn_drops` and `:dn_rises`
+  (88); and a frozen block holds its counters (89). *Done when* a box counter in a `.ld`
+  file, a `ctu` on a photo-eye whose `q` lights a "case full" lamp at its preset and whose
+  `r` a button drives, counts every rising edge exactly once over seeded scans, none on the
+  first scan and none for a box on the eye at a reset; a `ctud` buffer count, `ctu` on the
+  infeed eye and `ctd` on the outfeed, and a `ctd` hopper loaded through `ld`, agree with
+  an oracle that knows nothing of logex; a count driven to the dint's top stops there with
+  `ov` on until a reset; and an online edit that raises the preset while boxes are
+  counted keeps the count, moves `pv`, forecasts `q`, and counts no box at the switch that
+  was not a real edge. Its landing order:
+  1. the survey: the stanzas `ctu`, `ctd` and `ctud`, and the Counters table's logex
+     column, IEC's model and names;
+  2. the refactor that stops treating every built-in as a `ton`, with no change in
+     behaviour, shown as M2-4 showed it for `Logex.Walk`: each built-in type described as
+     data, its instructions, preset member, done member and edge memories; the compiler's
+     preset, run and path rules over those instructions, each message in its instruction's
+     words; `Logex.Walk.presets/1` beside `Logex.Walk.timers/1`, the edit reading the
+     first, M2-6's warning the second; the unrun warning in its type's words; and the
+     edit's plan reading each type's preset member and forecast;
+  3. the counter types, their instructions and rules, the compiler's refusals and
+     warnings, the event-task warning, and the edit's rules for a counter;
+  4. the contract walk's generators gaining counters, with an oracle that knows nothing
+     of the implementation;
+  5. the Done-when in `end_to_end_test.exs`, from text and from files on disk;
+  6. the documents: README's instruction table and an example with a real run, CLAUDE.md's
+     Key Files, `docs/organisation.md` §4.9's rules for the new state, and this status.
+- **M3-2 · The other timers: `tof`, `tp`, `rto`.** Each an instruction and a type word,
+  as `ton` is, with the `ton`'s members `.pre .acc .dn .tt .en` (decision 68 keeps them for
+  timers), in milliseconds. `tp`'s pulse is `.tt`, `.dn` coming on as it ends (decision
+  74), and it fires on a rising edge, never on the first scan (75), its edge memory on the
+  block list as a counter's is (87); an `rto` keeps `.acc` across a false rung and starts
+  again at every restart until `retain` lands (76); nothing may follow any of them (73);
+  M2-6's event-task warning is widened to every timer, in its own words; and across an edit
+  each has its `.dn` forecast and resume trigger by type. *Open, for M3-2's design:* how an
+  `rto` is cleared, now that a counter resets through its `r` input (decision 84) and the
+  design's `res` instruction is gone with the conventional counter: an `r` input member as
+  on Siemens' TONR, or a `res` instruction. *Done when* a fan's `tof` runs it on for its
+  preset after the motor stops, two instances on 10 ms and 50 ms tasks stopping the fan
+  at the same logical time, as decision 6 measured `ton`; a `tp` sounds a horn for
+  exactly its preset from a fault's rising edge, whatever the fault does meanwhile, and not
+  for a fault present at start; an `rto` lubrication timer keeps its time across the motor
+  stopping and loses it only to its clear and a restart; and the event-task warning names
+  each.
+- **M3-3 · Integer arithmetic: `add sub mul div mod neg abs`.** IEC's names, and `neg`
+  the vendors' (decision 79); `sqrt` waits for a real type. A result outside a dint is
+  brought to the nearer limit and the instruction passes no power on that scan (decision
+  77); a zero divisor gives 0 and no power, and the cycle reports it to the host as an
+  event, a minor fault naming the instance, the file and the line, the plant running on
+  (78), the event's shape M3-3's to design; a literal zero divisor is refused. Negative
+  literals land first, a lexer rule with `Logex.Parser.well_formed!/1` and
+  `Logex.Declarations.check/1` widened and the golden record regenerated where `-`
+  appears, its diff read. *Done when* a fill valve's total, `add total flow total` on
+  every scan of a 100 ms task, agrees with an Elixir oracle over seeded flows and closes
+  the valve at a setpoint read with `ge`; a total driven past 2147483647, a `div` by a tag
+  that is 0, which the cycle reports as its event, and a `mod` of a negative operand each
+  give what their stanzas say; and no value outside a dint ever reaches a state.
+- **M3-4 · The coil one-shots: `osr`, `osf`.** IEC's transition-sensing coils in the
+  conventional form, a storage bit and a pulse bit (decision 80), which pass on the power
+  they receive; each storage bit under every rule an `ons` bit has, on decision 21's block
+  list, never firing on the first scan (69). *Done when* `osr` and `osf` give, on seeded
+  inputs, the pulses `ons` and `xio … ons` give on their own rungs, pass on the power they
+  receive, never fire on a first scan, and an edit that adds or changes one blocks it until
+  a scan runs it, as decision 21 blocks an `ons`.
+- **M3-5 · Control flow: forward `jmp` and `lbl`, and no MCR.** A forward jump only, a
+  label first on its rung, labels a routine's own namespace (decision 81); skipped rungs
+  freeze as a false `cal` freezes a block, a timer in them catching up when next run (82);
+  and no master control zone, ever (83). *Done when* a forward `jmp` over a manual-mode
+  section freezes that section's outputs, counters and timers exactly as a false `cal`
+  freezes a block; a backward jump, a missing label and a label not first on its rung are
+  each a located diagnostic; and a program with no `jmp` scans within a measured bound of
+  its cost before.
+
+**Milestone 3 is done when** a small bottling line written in `.ld` files runs under a
+`.logex` configuration through `Logex.Runtime.cycle/3`, against an oracle that knows
+nothing of logex: a conveyor whose `ctu` counts bottles into cases, reset through its `r`
+when a case leaves; a buffer whose `ctud` counts bottles in and out; a fan run on by a
+`tof` after the motor stops; a horn pulsed by a `tp` on a jam; a fill valve whose `add`ed
+total closes it at a setpoint, a zero divisor in its rate reported as a minor fault while
+the line runs on; an `osr` that steps a case counter; and a manual-mode section skipped by
+`jmp`. While it runs it is edited through `Logex.Configuration.Edit` to change the case
+size and the run-on time, with no count lost, no phantom count and no timer reset, and the
+Done-when tests check each piece against its rule.
+
 ---
 
 ## 4. Backlog
@@ -2900,7 +3032,9 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
 1. **Timers and counters (TON/TOF/RTO, CTU/CTD/RES)** — decisive. Essentially no real
    routine exists without them, and they are why the scan model matters. *`ton` landed with
    M1-6, as a declared instance on the injected clock; TOF, TP, RTO, RES and the counters
-   are open, and reuse its `%Logex.FbType{}`.*
+   are open, and reuse its `%Logex.FbType{}`.* *(Milestone 3, decided 2026-10-14: IEC's
+   counters `ctu`, `ctd` and `ctud` in M3-1, reset and loaded through their `r` and `ld`
+   inputs rather than a RES; `tof`, `tp` and `rto` in M3-2.)*
 2. **A scan loop and I/O image.** The input image, the clock and the first-scan bit landed
    with M1-5 (`put_inputs/3`, `%Logex.Scan{}`). The scheduler landed with M2-1:
    `Logex.Runtime.cycle/3` steps a configuration's resource by the time the host says has
@@ -2913,7 +3047,8 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    low cost. *Landed with M1-6, on dints.*
 5. **Math (ADD/SUB/MUL/DIV), one-shots (ONS/OSR/OSF), then control flow (JMP/LBL/MCR).**
    ONS is the canonical instruction that cannot exist without cross-scan state. *`ons`
-   landed with M1-6; OSR and OSF are open.* JMP/LBL
+   landed with M1-6; OSR and OSF are open.* *(Milestone 3: arithmetic in M3-3, `osr` and
+   `osf` in M3-4, forward `jmp`/`lbl` in M3-5, and no MCR, decision 83.)* JMP/LBL
    do *not* require abandoning the `Enum.reduce` over rungs — widening the accumulator
    from `env` to `{skip, env}` is enough for forward jumps; only backward jumps need an
    indexed loop.

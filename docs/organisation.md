@@ -2551,7 +2551,9 @@ throwaway spikes of the run-time pieces no design spike had built, one copy of a
 from the check of M2-5's fixes. Decisions 55–65 were taken on 2026-10-13, all as
 recommended, from OE-2's design (§4.9, "OE-2's design"). Decision 66 was taken on
 2026-10-14, as recommended, from the review of OE-2's landing, which found the case it
-answers. All sixty-six are kept with their options so the reasons stay with them.
+answers. Decisions 67–89 were taken on 2026-10-14 from Milestone 3's design (below):
+67, 68 and 78 against their recommendations, the others as recommended, 84–89 M3-1's own
+routine choices. All eighty-nine are kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3265,6 +3267,262 @@ choices are §4.9's rules.
     same name. Cancel from accept still changes nothing but the generation (decision 64),
     so what it leaves waits for the next edit's first test or a restart. Adopted.
     *(Landed 2026-10-14.)*
+
+**Milestone 3's design, decided 2026-10-14.** A design pass on `970dede` surveyed the
+missing instruction set (`PLAN.md` §8: counters, the other timers, integer arithmetic,
+the coil one-shots and control flow) and built a throwaway spike of an up counter through
+`Logex.FbType`, the walks and the edit. Decisions 67–83 are the maintainer's answers to
+its sixteen questions and to one follow-up, in the order the milestone lands them: three
+against the recommendation, 67, 68 and 78, the rest as recommended. Each is given with the
+plain-language example the maintainer was asked. Decisions 84–89 are M3-1's own routine
+choices, taken when 67 and 68 sent its design back to IEC's counter model, each with an
+alternative the record keeps.
+
+67. **Which kinds of counter (M3-1).** Picture a photo-eye on a conveyor that adds one for
+    each box, a buffer table where boxes are added at one end and taken off at the other,
+    and a hopper that starts full and counts portions down to empty.
+    - Two kinds, an up counter `ctu` and an up-and-down counter `ctud`, where the `ctd`
+      instruction runs only a `ctud`;
+    - IEC's three, `ctu`, `ctd` and `ctud` (Ed 3 §6.6.3.5.4, Table 45; Ed 2 Table 36):
+      the down counter starts from its preset, loaded, and is done at 0;
+    - or one kind that always counts both ways.
+
+    *Recommended: two kinds*, so that "done" and "reset" meant one thing on every counter.
+    **Taken: IEC's three.** `ctu` counts up and its `q` is on when `cv >= pv`, its reset `r`
+    putting `cv` to 0; `ctd` counts down, its load `ld` putting `cv` to `pv`, and its `q`
+    is on when `cv <= 0`; `ctud` counts both ways, `qu` on when `cv >= pv` and `qd` when
+    `cv <= 0`, with both `r` and `ld`. Each is a type word, `var hopper ctd`, and a change
+    of kind is a type change, which needs a restart.
+68. **What a counter's members are called (M3-1),** a follow-up to 67. The design gave the
+    conventional COUNTER's members, `.pre .acc .dn` with `.cu .cd .ov .un`, beside the
+    timer's `.pre .acc .dn`.
+    - The conventional names;
+    - or IEC's pin names, lowercased.
+
+    *Recommended: the conventional names*, as the timer has. **Taken: IEC's, lowercased:**
+    `cv` the count, `pv` the preset, `q` done (`qu` and `qd` on a `ctud`), `cu` and `cd`
+    the count inputs, and the reset and load as inputs, `r` and `ld`. IEC has no overflow
+    flag, so they come from the vendors by `docs/naming.md`'s rule 2: `ov` and `un`, the
+    conventional set's, the only family that has them (decision 71). Logex's timers keep
+    `.pre .acc .dn`: a counter reads `xic boxes.q`, a timer `xic t1.dn`.
+69. **The first scan, for everything edge-driven (M3-1, M3-2, M3-4).** A box is already
+    on the photo-eye when the controller starts.
+    - Not counted: the counter waits for the next box, as the one-shot `ons` already
+      waits;
+    - or counted at once, as IEC's R_TRIG fires at its first execution after a cold
+      restart (Ed 2 Table 35 NOTE).
+
+    *Recommend not counted.* Adopted, as one start-up rule: **nothing edge-driven fires on
+    an instance's first scan** since it started or restarted, `ons`, `ctu` and `ctd` now,
+    `tp` (decision 75), `osr` and `osf` when they land. It is the conventional prescan's
+    for a counter, which sets `.CU` true *"to prevent invalid increments during the first
+    program scan"* (general instructions ref., CTU, p.99).
+70. **A reset or load while the count input is high (M3-1).** The operator presses
+    "reset batch" while a box is still on the photo-eye.
+    - The box is not counted again: after the reset the count shows 0, and the next box to
+      arrive is box 1. A reset or load leaves the counter's memory of its count input,
+      `cu` and `cd`, as it was;
+    - or the reset makes the counter forget that the eye was blocked, so the box on the eye
+      counts at once.
+
+    *Recommend not counted again.* Adopted: the edge memory is kept, as IEC's own bodies
+    keep it, an R_TRIG called before the reset is tested (MatIEC `lib/counter.txt`). The
+    conventional RES clears the counter's status bits, its `.CU` and `.CD` among them
+    (general instructions ref., RES, pp.107–108), so a box on the eye would count again
+    there.
+71. **A counter at the dint's limit (M3-1).** A counter reaches its largest possible
+    number, a little over two billion.
+    - It stops there and raises an overflow flag, which stays on until someone resets it;
+    - or it rolls over to the most negative number and keeps counting, raising the same
+      flag, as the conventional family's up/down counter does (general instructions ref.,
+      CTUD, p.104: *"The counter then rolls over to -2,147,483,648"*).
+
+    *Recommend stopping.* Adopted: at 2147483647 a count up adds nothing and sets `ov`, and
+    at −2147483648 a count down subtracts nothing and sets `un`. Each flag stays on until a
+    reset or a load: `r` clears `ov` on a `ctu`, `ld` clears `un` on a `ctd`, and either
+    clears both on a `ctud`. IEC bounds its bodies by `PVmax` and `PVmin`, whose values are
+    *"Implementer specific"* (Ed 3 Table 45 NOTE); logex's are the dint's.
+72. **A counter under an event task (M3-1).** The e-stop's own event task counts how many
+    times the e-stop was pressed. The task runs only when the e-stop switches on, so the
+    counter only ever sees "pressed", never a new press, and its count stays at 0.
+    - Warn: the configuration's check points it out, and the plant still runs;
+    - or say nothing, as for a one-shot today.
+
+    *Recommend warning.* Adopted: a counter a program instance runs, at any depth, under a
+    task with a `single`, alone or with an interval, is a warning on the configuration's
+    `warnings`, as M2-6 warns for a `ton`, citing the counter's instruction. A one-shot
+    under an event task is still not warned about.
+73. **What follows a counter or timer on its line (M3-1, M3-2).** "Photo-eye, then counter,
+    then lamp" on one line, rather than the lamp on the next line worked by the counter's
+    done bit.
+    - Not allowed, as after `ton` today, so the program reads the done bit on a line below;
+    - allowed, the lamp following the photo-eye, as after an ordinary output;
+    - or allowed, the lamp following the done bit, as IEC draws its Q.
+
+    *Recommend not allowed, for now.* Adopted: nothing may follow a `ctu`, a `ctd` or any
+    timer on its path. Refusing keeps either reading open to a later change that breaks no
+    program. For the record, the conventional CTU and CTD set rung-condition-out to
+    rung-condition-in (general instructions ref., pp.95 and 99).
+74. **Which signal is a pulse timer's pulse (M3-2).** A horn should sound for 3 seconds
+    when a fault appears.
+    - Its "timing" bit, `.tt`, on for the 3 seconds, with `.dn` coming on when the pulse
+      ends;
+    - its "done" bit, `.dn`, on for the 3 seconds, IEC's Q;
+    - or a new member of its own.
+
+    *Recommend `.tt`.* Adopted: a `tp`'s pulse is `.tt`, and `.dn` comes on when the pulse
+    ends, so "done" never means "still running" on any timer.
+75. **A pulse timer on the first scan (M3-2).** The fault is already present when the
+    controller starts. Does the horn sound?
+    - No, by decision 69's one start-up rule; the fault lamp, driven by the fault itself,
+      still lights;
+    - or yes, as IEC's TP would.
+
+    *Recommend no.* Adopted: a `tp` does not fire on the first scan.
+76. **A retentive timer across a restart (M3-2).** A lubrication timer adds up how long
+    the conveyor motor has run, so the line is greased every 100 hours; the motor stopping
+    does not clear it.
+    - Back to zero on every restart, until a later "retain" feature lets the programmer
+      mark what survives one, for this timer or anything else;
+    - kept across a warm restart, for this kind of timer only;
+    - or that retain work first.
+
+    *Recommend back to zero.* Adopted: an `rto` starts again at every restart, warm or
+    cold, as every tag does, until `retain` lands.
+77. **Arithmetic past the dint's limit (M3-3).** The fill valve adds each delivery to a
+    running total, and the total passes the largest number logex holds.
+    - It wraps round to a huge negative number;
+    - it stops at the limit, silently;
+    - or it stops at the limit, and on that scan the instruction passes no power, so the
+      program can light an "overflow" lamp after it.
+
+    *Recommend stopping and passing no power.* Adopted: a result outside a dint is brought
+    to the nearer limit, and the instruction passes no power on that scan. No value
+    outside a dint ever reaches a state.
+78. **Dividing by zero (M3-3).** The line works out "boxes per minute", and just after
+    start-up the minutes are 0.
+    - The division gives 0 and passes no power on that scan;
+    - or it keeps its last answer and passes no power.
+
+    *Recommended: 0 and no power.* **Taken, with a report added:** a zero divisor gives 0
+    and no power on that scan, and the cycle reports it to the host as an event, a minor
+    fault naming the instance, the file and the line. The plant keeps running. A literal
+    zero divisor is refused when the program compiles. The event's shape is M3-3's to
+    design; this records only the rule.
+79. **Which calculations (M3-3).** Add, subtract, multiply, divide and remainder, the
+    README's promised negate and absolute value, and square root.
+    - All eight now;
+    - the first seven now, and square root when logex has numbers with fractions, since
+      IEC's SQRT takes a real.
+
+    *Recommend the seven.* Adopted: `add sub mul div mod neg abs` now, `sqrt` later. Each
+    new word stops being a tag name: a program with a tag called `add` or `mod` is renamed.
+80. **Pulse coils (M3-4).** A programmer wants a one-scan pulse when the start button is
+    pressed, while the rest of the line carries on seeing the button.
+    - Add both, `osr` for "switched on" and `osf` for "switched off", IEC's transition-
+      sensing coils (Ed 2 Table 62 features 8 and 9) in the conventional set's form, a
+      storage bit and a pulse bit;
+    - or leave them out, since `ons` on a line of its own does the job.
+
+    *Recommend adding both.* Adopted: `osr` and `osf`, each storage bit under every rule
+    an `ons` bit has.
+81. **Skipping ahead (M3-5).** Jump over a group of lines while the line is in manual mode.
+    - Yes, forward only: the skipped lines do not run that scan, and their outputs stay as
+      they were; a backward jump, which could loop for ever, is refused;
+    - or no: the manual-mode logic goes in a block, switched off as a whole.
+
+    *Recommend forward only, last in the milestone.* Adopted: a forward `jmp` to a `lbl`.
+82. **A timer in skipped lines (M3-5).** The fan's run-on timer is in the skipped section;
+    the line spends 10 seconds in manual mode with the timer half done.
+    - It catches up the 10 seconds when it next runs, as a timer in a switched-off block
+      does (decision 8);
+    - or it carries on from where it was.
+
+    *Recommend catching up.* Adopted: skipped rungs freeze as a false `cal` freezes a
+    block, and a timer in them catches up when next run.
+83. **A master control zone (M3-5).** One switch that forces a group of lines off. The
+    vendors disagree on its name and on what "off" means, the newest controllers of the
+    family that made it popular have dropped it, and IEC does not have it.
+    - Leave it out, for good: a contact at the head of each line, or a block switched off;
+    - or add it later.
+
+    *Recommend leaving it out.* Adopted: logex has no MCR, and `docs/naming.md`'s deferred
+    `mcs … mce` becomes "not added".
+84. **How a ladder program drives a counter's count, reset and load (M3-1),** the rework
+    67 and 68 asked for, under IEC's model. IEC lets a block's inputs be assigned apart
+    from its call, *"These separate assignments shall become effective with the next call
+    of the function block"* (Ed 3 §6.6.3.4.1, rule 3b; Table 42 features 6a and 6b,
+    `r--| MOVE |--YourCTU.CU` drawn beside the box), and logex's text has one power input
+    per instruction.
+    - The count input is the rung's power into the counter's instruction, `xic eye ctu
+      boxes 12`; the reset, the load and the preset are input members, written by any
+      instruction that writes a bool or a dint, `xic reset_pb ote boxes.r`, `move 20
+      boxes.pv`, which the counter reads when its instruction next runs;
+    - a `res` instruction, the conventional set's, which IEC does not have (reset is a
+      pin);
+    - or the reset as an operand of the instruction, `ctu boxes reset_pb 12`, a tag in
+      place of IEC's wired pin.
+
+    *Taken: the input members.* They are IEC's pins by IEC's own rule, need no new
+    instruction or slot, and take any rung condition. What an operator sees: while the
+    reset button is held the count stays at 0, and a box that arrives meanwhile is not
+    counted (IEC's R before the count); the reset shows on the scan the button is pressed
+    where its rung comes above the counter's, and on the next where it comes below, as the
+    rule says.
+85. **A `ctud`'s two count inputs, from two rungs (M3-1).** IEC's CTUD is one call with
+    both inputs; a ladder rung has one power flow.
+    - Two instructions on one `ctud`: `xic infeed ctu stock 50` on one rung drives its
+      `cu`, `xic outfeed ctd stock 50` on another its `cd`, each running IEC's body for its
+      own side where it stands in the scan, the reset and load included, its presets
+      agreeing;
+    - one `ctud` instruction whose power is `cu`, its `cd` an input member written on
+      another rung by a coil;
+    - or one instruction with the two inputs as operands.
+
+    *Taken: the two instructions,* the conventional ladder's idiom of a `CTU` and a `CTD`
+    on one counter, which keeps the two inputs symmetrical. Away from the limits, two edges
+    in one scan net zero, as IEC's `NOT (CU AND CD)` gives; at a limit the side that would
+    leave the dint is refused and flagged, and the other counts. `ctud` is a type word
+    only, and a `ctu` or `ctd` on a counter of the other kind, or two `ctu`s on one, is
+    refused.
+86. **Which members logic may write (M3-1).** IEC's outputs are read, never written, from
+    outside a block.
+    - The inputs `r`, `ld` and `pv`; never `cv`, `q`, `qu`, `qd`, `ov` or `un`, which
+      only the counter sets, nor `cu` and `cd`, which its rungs' power sets;
+    - or `cv` too, as decision 9 lets logic write a timer's `.acc`.
+
+    *Taken: the inputs only.* The count changes through `r` and `ld`, which also clear the
+    flags, so no write can leave `ov` on at a count of 3. Decision 9 stands for timers.
+   
+87. **A counter across an online edit (M3-1),** from the spike: a counter an edit adds
+    while its rung is true counted at once, and the block list blocked a preset-only
+    change.
+    - Each counter instruction's edge memory joins decision 21's block list, by its path,
+      `boxes.cu`, so that the next scan that runs it counts no edge: one the edit adds, or
+      whose rung it changes, a rung compared without the preset of any counter or timer on
+      it, which no power on the rung reads; no "written through nothing else" test, since
+      no logic writes an edge memory; reported `:ons_blocked`, with the memory's value. The
+      field keeps its name, since `%Logex.Instance{}` is public;
+    - or a list and a report kind of their own.
+
+    *Taken: decision 21's list.* A `ctud` blocks each side alone, so an edit of its infeed
+    rung loses no outfeed edge.
+88. **A counter's forecast after its preset moves (M3-1).** A `.pv` moved by decisions 23
+    and 27 changes `q` (`qu` on a `ctud`) at the counter's next run, whatever its rung.
+    - Report it as `:dn_drops` and `:dn_rises`, read as "the done output", `{cv, pv}`;
+    - or two new report kinds.
+
+    *Taken: the existing kinds,* documented as a counter's `q` where the instance is a
+    counter, so a host that knows them knows a counter's.
+89. **A counter in a frozen block (M3-1).** A block whose `cal` is false holds everything
+    in it (decision 8): a counter there neither counts nor sees its rung, so a box that
+    comes and goes while the block is frozen is never counted, and one still on the eye
+    when the block next runs counts then if the counter last saw the eye clear. The spike
+    measured the missed box.
+    - Keep decision 8's freeze, and say so where a counter is described;
+    - or run a frozen block's counters.
+
+    *Taken: the freeze,* one rule for everything in a block.
 
 ---
 
