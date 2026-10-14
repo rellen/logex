@@ -146,7 +146,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   it and last scanned. Its moduledoc gives every rule, report kind and host mistake; §4.9
   the reasons
 - `lib/logex/configuration/edit.ex` — a staged edit of a running configuration (OE-2,
-  `docs/organisation.md` §4.9, "OE-2's design"; decisions 55–65): `accept/2` takes the
+  `docs/organisation.md` §4.9, "OE-2's design"; decisions 55–66): `accept/2` takes the
   `%Logex.Runtime{}` that runs the original and a candidate configuration, checks the
   candidate as `start/1` does (decision 63) and refuses what changes only with a restart as
   `:edit` diagnostics, in the candidate's file at their lines, a removed element last,
@@ -325,7 +325,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   work is PLAN's M1-3, M1-5, M1-6, OE-1, Milestone 2 and OE-2; OE-1, Milestone 2,
   M2-1, M2-5, M2-2, M2-3, M2-4 and M2-6, and OE-2 have landed, Milestone 2 designed on
   2026-10-02, §4.10 and decisions 30–40, and OE-2 on 2026-10-13, §4.9's "OE-2's design"
-  and decisions 55–65). Read it before designing anything that names a program, schedules one, binds I/O, or changes a
+  and decisions 55–66). Read it before designing anything that names a program, schedules one, binds I/O, or changes a
   running controller (§4.9, online edit, decided 2026-10-01).
 - `docs/instruction-sets.md` — reference: IEC's LD elements and standard library by table number,
   Instruction List (withdrawn in Ed 4), and the free-software instruction sets. Read it before
