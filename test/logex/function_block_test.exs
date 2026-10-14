@@ -4099,8 +4099,15 @@ defmodule Logex.FunctionBlockTest do
     # Accept reads each block type's body once, however many instances run it, so at 100
     # instances, 4x the rungs of the block's body cost little more: 50 and 200 rungs took
     # 1.11x to 1.12x the reductions over 96 runs of the suite, 32 alone, 32 two at once and
-    # 32 four at once; with the body read again for each instance, 3.34x. The bound is a
-    # fifth above the highest.
+    # 32 four at once, when this test came; with the body read again for each instance,
+    # 3.34x. What accept does once for a body has grown since against what it does for each
+    # instance, and the figure with it: as one test run alone, 1.30x by OE-2's last commit
+    # and 1.36x after decision 96, on the bound of 1.35 that 1.12x had set. Over 112 runs of
+    # the suite after decision 96, with M3-3's arithmetic and without, 48 alone, 32 two at
+    # once and 32 four at once, it took 1.34x to 1.35x, and 1.36x as one test run alone; at
+    # 400 instances 4x the rungs take 1.12x, each rung costing about what it costs at 100,
+    # and the body read again for each instance gives 3.20x. The bound is a fifth above the
+    # highest.
     test "accept reads a block's body once, however many instances run it" do
       accept = fn r ->
         big =
@@ -4121,7 +4128,7 @@ defmodule Logex.FunctionBlockTest do
       end
 
       ratio = accept.(200) / accept.(50)
-      assert ratio < 1.35, "4x the body's rungs took #{Float.round(ratio, 2)}x the reductions"
+      assert ratio < 1.64, "4x the body's rungs took #{Float.round(ratio, 2)}x the reductions"
     end
   end
 
