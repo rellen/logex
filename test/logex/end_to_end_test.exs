@@ -3649,4 +3649,250 @@ defmodule Logex.EndToEndTest do
       phase_of_a_negative(plant)
     end
   end
+
+  # PLAN.md M3-4's Done-when, as worded on 2026-10-14: `osr` and `osf` give, on seeded
+  # inputs, the pulses `ons` and `xio … ons` give on their own rungs, pass on the power
+  # they receive, never fire on a first scan, and an edit that adds or changes one blocks
+  # it until a scan runs it, as decision 21 blocks an `ons`. A start button steps a
+  # sequence once a press, and a photo-eye says a box has left it; each from text and from
+  # files on disk, against an oracle in plain Elixir that knows nothing of logex, the edit
+  # a block's body's too, whose block is frozen at the switch (decision 32).
+  describe "the pulse coils (M3-4)" do
+    # Each coil beside its twin on a rung of its own, the falling one's storage bit
+    # declared 1, so a first scan with the eye clear would fire it.
+    @pulses_ld """
+    var_input start_pb bool
+    var_input eye bool
+    var_output step bool
+    var_output gone bool
+    var_output held_lamp bool
+    var_output on_eye bool
+    var_output ons_step bool
+    var_output ons_gone bool
+    var s1 bool
+    var s2 bool 1
+    var s3 bool
+    var s4 bool
+    xic start_pb osr s1 step ote held_lamp
+    xic eye osf s2 gone ote on_eye
+    xic start_pb ons s3 ote ons_step
+    xio eye ons s4 ote ons_gone
+    """
+
+    defp pulse_scans(program, inputs, state),
+      do:
+        Enum.map_reduce(inputs, state, fn input, state ->
+          Logex.Runtime.scan(program, Logex.Runtime.put_inputs(program, state, input), 10)
+        end)
+
+    # The oracle: a rise of an input since the last scan, never on the first; `before` the
+    # inputs the scan before the first saw, nil where there was none.
+    defp edges(inputs, name, way, before \\ nil) do
+      {edges, _} =
+        Enum.map_reduce(inputs, before, fn input, last ->
+          now = input[name]
+          {one(last != nil and edge?(way, last[name], now)), input}
+        end)
+
+      edges
+    end
+
+    defp edge?(:rise, last, now), do: last == 0 and now == 1
+    defp edge?(:fall, last, now), do: last == 1 and now == 0
+
+    defp one(true), do: 1
+    defp one(false), do: 0
+
+    defp pulses_checked(program) do
+      :rand.seed(:exsss, {2026, 10, 16})
+      # The button held and the eye clear at start: neither coil fires on the first scan.
+      inputs = [%{"start_pb" => 1, "eye" => 0}] ++ seeded(~w(start_pb eye), [], 500)
+      {outputs, _state} = pulse_scans(program, inputs, Logex.Runtime.instance(program))
+
+      assert hd(outputs) == %{
+               "step" => 0,
+               "gone" => 0,
+               "held_lamp" => 1,
+               "on_eye" => 0,
+               "ons_step" => 0,
+               "ons_gone" => 0
+             }
+
+      steps = edges(inputs, "start_pb", :rise)
+      gone = edges(inputs, "eye", :fall)
+      assert Enum.map(outputs, & &1["step"]) == steps
+      assert Enum.map(outputs, & &1["gone"]) == gone
+      assert Enum.map(outputs, & &1["step"]) == Enum.map(outputs, & &1["ons_step"])
+      assert Enum.map(outputs, & &1["gone"]) == Enum.map(outputs, & &1["ons_gone"])
+
+      # Each passes on the power it receives: the lamps follow the button and the eye.
+      assert Enum.map(outputs, & &1["held_lamp"]) == Enum.map(inputs, & &1["start_pb"])
+      assert Enum.map(outputs, & &1["on_eye"]) == Enum.map(inputs, & &1["eye"])
+      assert Enum.sum(steps) > 20 and Enum.sum(gone) > 20
+    end
+
+    test "M3-4's Done-when: `osr` and `osf` give the pulses `ons` and `xio … ons` give, " <>
+           "pass on the power they receive, and never fire on a first scan" do
+      {:ok, program} = Logex.compile(@pulses_ld, name: "pulses")
+      pulses_checked(program)
+    end
+
+    # The block: a coil and its twin, its body's rung changed by the candidate's version.
+    @pulser_ld """
+    function_block pulser
+    var_input in bool
+    var_output up bool
+    var_output ons_up bool
+    var s bool
+    var t bool
+    xic in osr s up
+    xic in ons t ote ons_up
+    """
+
+    @armed_ld """
+    function_block pulser
+    var_input in bool
+    var_input arm bool
+    var_output up bool
+    var_output ons_up bool
+    var s bool
+    var t bool
+    xic in xic arm osr s up
+    xic in xic arm ons t ote ons_up
+    """
+
+    @line_ld """
+    var_input start_pb bool
+    var_input on bool
+    var_input jog bool
+    var_output step bool
+    var_output ons_step bool
+    var_output up bool
+    var_output ons_up bool
+    var s1 bool
+    var s3 bool
+    var p pulser
+    xic start_pb osr s1 step
+    xic start_pb ons s3 ote ons_step
+    xic on cal p jog up ons_up
+    """
+
+    # The candidate: the button's coil and its twin gated by an enable, a coil and its twin
+    # added on the eye, a falling coil and its twin added on a jam sensor, its storage bit
+    # declared 1, so a jam clear at the switch would fire it, and the block's body gated by
+    # its new `arm`, which the `cal` fills.
+    @line_v2_ld """
+    var_input start_pb bool
+    var_input enable bool
+    var_input on bool
+    var_input jog bool
+    var_input eye bool
+    var_input jam bool
+    var_output step bool
+    var_output ons_step bool
+    var_output up bool
+    var_output ons_up bool
+    var_output left bool
+    var_output ons_left bool
+    var_output cleared bool
+    var_output ons_cleared bool
+    var s1 bool
+    var s3 bool
+    var s5 bool
+    var s6 bool
+    var s7 bool 1
+    var s8 bool
+    var p pulser
+    xic start_pb xic enable osr s1 step
+    xic start_pb xic enable ons s3 ote ons_step
+    xic on cal p jog on up ons_up
+    xic eye osr s5 left
+    xic eye ons s6 ote ons_left
+    xic jam osf s7 cleared
+    xio jam ons s8 ote ons_cleared
+    """
+
+    defp twins(outputs, a, b), do: Enum.map(outputs, & &1[a]) == Enum.map(outputs, & &1[b])
+
+    defp edit_checked(running, candidate) do
+      # The button, the eye and the jog low, then the block frozen: `p`'s bits as its last
+      # run left them, with `jog` low.
+      before = [%{"start_pb" => 0, "on" => 1, "jog" => 0}, %{"on" => 0}]
+      {_outputs, state} = pulse_scans(running, before, Logex.Runtime.instance(running))
+      {:ok, edit, forecast} = Logex.Edit.accept(running, candidate, state)
+      {edit, tested, report} = Logex.Edit.test(edit, state)
+      assert report == forecast
+
+      # Each coil the edit adds or changes is blocked with its twin, the block's by path.
+      assert for({:ons_blocked, bit, _} <- report, do: bit) ==
+               ["p.s", "p.t", "s1", "s3", "s5", "s6", "s7", "s8"]
+
+      # At the switch every one would pulse, unblocked: the button and the eye rise, the jam
+      # sensor is clear with its coil's storage bit at 1, and the jog rises while the block
+      # is frozen. None does; the block's stay listed while its `cal` is false, and give
+      # none when it first runs, where `jog` is already high.
+      switch = [
+        %{"start_pb" => 1, "enable" => 1, "eye" => 1, "jog" => 1},
+        %{},
+        %{"on" => 1},
+        %{}
+      ]
+
+      {outputs, later} = pulse_scans(candidate, switch, tested)
+
+      assert Enum.map(outputs, &{&1["step"], &1["left"], &1["cleared"], &1["up"]}) ==
+               [{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}]
+
+      assert twins(outputs, "step", "ons_step") and twins(outputs, "left", "ons_left") and
+               twins(outputs, "cleared", "ons_cleared") and twins(outputs, "up", "ons_up")
+
+      assert later.ons_blocked == []
+
+      # From then on each coil gives exactly its twin's pulses, and the program's the
+      # oracle's; the block's are held with it while its `cal` is false.
+      :rand.seed(:exsss, {2026, 10, 17})
+      inputs = seeded(~w(start_pb enable eye jam jog on), [], 400)
+      {outputs, _state} = pulse_scans(candidate, inputs, later)
+      gated = Enum.map(inputs, &%{"g" => one(&1["start_pb"] == 1 and &1["enable"] == 1)})
+
+      # The scan before the first saw the button, the enable and the eye high, the jam clear.
+      assert Enum.map(outputs, & &1["step"]) == edges(gated, "g", :rise, %{"g" => 1})
+      assert Enum.map(outputs, & &1["left"]) == edges(inputs, "eye", :rise, %{"eye" => 1})
+      assert Enum.map(outputs, & &1["cleared"]) == edges(inputs, "jam", :fall, %{"jam" => 0})
+      assert twins(outputs, "step", "ons_step") and twins(outputs, "left", "ons_left")
+      assert twins(outputs, "cleared", "ons_cleared")
+      assert twins(outputs, "up", "ons_up")
+      assert Enum.sum(Enum.map(outputs, & &1["up"])) > 5
+      {_program, _state, _report} = Logex.Edit.assemble(edit, later)
+    end
+
+    test "M3-4's Done-when: an edit that adds or changes a coil blocks it until a scan runs " <>
+           "it, as decision 21 blocks an `ons`, inside a frozen block too" do
+      {:ok, pulser} = Logex.compile(@pulser_ld, name: "pulser")
+      {:ok, armed} = Logex.compile(@armed_ld, name: "pulser")
+      {:ok, running} = Logex.compile(@line_ld, name: "line", types: [pulser])
+      {:ok, candidate} = Logex.compile(@line_v2_ld, name: "line", types: [armed])
+      edit_checked(running, candidate)
+    end
+
+    @tag :tmp_dir
+    test "M3-4's Done-when from files on disk, through compile_file/1", %{tmp_dir: dir} do
+      write = fn name, text ->
+        path = Path.join(dir, name)
+        File.write!(path, text)
+        path
+      end
+
+      {:ok, program} = Logex.compile_file(write.("pulses.ld", @pulses_ld))
+      pulses_checked(program)
+
+      # Two versions of the line, each in a folder of its own with its block beside it.
+      File.mkdir_p!(Path.join(dir, "v2"))
+      write.("pulser.ld", @pulser_ld)
+      write.("v2/pulser.ld", @armed_ld)
+      {:ok, running} = Logex.compile_file(write.("line.ld", @line_ld))
+      {:ok, candidate} = Logex.compile_file(write.("v2/line.ld", @line_v2_ld))
+      edit_checked(running, candidate)
+    end
+  end
 end
