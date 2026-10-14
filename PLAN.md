@@ -2595,7 +2595,11 @@ names it breaks. Growth tests are in reductions.
   98's warning rules were pinned by no test: a warning added for a divide by a literal 1,
   and none given for a `mul` of two literals, each left the suite green; the warnings
   test now holds `div d 1 d` and `mod d 1 d`, which draw none, and `mul 2 3 d`, which
-  draws its warning. The suite is at 1115 tests (8 doctests).
+  draws its warning. `state.faults`'s message was missing from `runtime_test.exs`'s table
+  of every message the runtime raises, and its check could move after the owner's with
+  the suite green: the table now holds it, and a state of another program whose faults
+  are no list raises the faults' message, as the block list's does. The suite is at 1115
+  tests (8 doctests).
 - **M3-4 · The coil one-shots: `osr`, `osf`.** IEC's transition-sensing coils in the
   conventional form, a storage bit and a pulse bit (decision 80), which pass on the power
   they receive; each storage bit under every rule an `ons` bit has, on decision 21's block

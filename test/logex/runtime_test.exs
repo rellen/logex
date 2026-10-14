@@ -195,14 +195,28 @@ defmodule Logex.RuntimeTest do
             {%{s | ons_blocked: [:s1]},
              "state.ons_blocked must be a list of storage bit names, got: [:s1]"},
             {%{s | ons_blocked: ["s1", 7]},
-             ~s|state.ons_blocked must be a list of storage bit names, got: ["s1", 7]|}
+             ~s|state.ons_blocked must be a list of storage bit names, got: ["s1", 7]|},
+            # M3-3 (decision 99): the last scan's faults, a proper list of them, whose
+            # values are not looked into, since the next scan replaces them.
+            {%{s | faults: nil}, "state.faults must be a list of %Logex.Fault{}, got: nil"},
+            {%{s | faults: :x}, "state.faults must be a list of %Logex.Fault{}, got: :x"},
+            {%{s | faults: [nil]}, "state.faults must be a list of %Logex.Fault{}, got: [nil]"},
+            {%{s | faults: [%{kind: :divide_by_zero}]},
+             "state.faults must be a list of %Logex.Fault{}, got: [%{kind: :divide_by_zero}]"},
+            {%{s | faults: [nil | :tail]},
+             "state.faults must be a list of %Logex.Fault{}, got: [nil | :tail]"}
           ] do
         raises(message, fn -> Runtime.call(m, state, %{}, %Scan{now: 0, first: true}) end)
       end
 
-      # The state's own fields are checked before its owner, the block list among them.
+      # The state's own fields are checked before its owner, the block list and the faults
+      # among them.
       raises("state.ons_blocked must be a list of storage bit names, got: [:s1]", fn ->
         Runtime.call(pump, %{s | ons_blocked: [:s1]}, %{}, %Scan{now: 0, first: true})
+      end)
+
+      raises("state.faults must be a list of %Logex.Fault{}, got: nil", fn ->
+        Runtime.call(pump, %{s | faults: nil}, %{}, %Scan{now: 0, first: true})
       end)
 
       raises("state.switched must be true or false, got: nil", fn ->
