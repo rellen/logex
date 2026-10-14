@@ -1451,8 +1451,10 @@ written as text.
   - `{:routine, {:rungs, rungs}}`, where `rungs` is a list;
   - a rung is `{:rung, elements}` with at least one element;
   - an element is `{:name, line, word}`, where `word` lexes as exactly one name token;
-    `{:int_lit, line, n}`, where `n` is a non-negative integer; or `{:branches, legs}`
-    with at least one leg, a leg being a list of elements, possibly empty;
+    `{:int_lit, line, n}`, where `n` is a non-negative integer *(landed with M3-3,
+    2026-10-14, decision 97: `n` is any integer, since `-5` lexes)*; or
+    `{:branches, legs}` with at least one leg, a leg being a list of elements, possibly
+    empty;
   - every line is a positive integer. Every name and literal of one rung, inside its
     groups too, carries one line, and the lines of successive rungs strictly increase. A
     rung of nothing but empty groups, `( )`, carries no line, but stands on a line of its
@@ -1464,12 +1466,18 @@ written as text.
   malformed tuple, so no `FunctionClauseError` or `Protocol.UndefinedError` escapes. The
   check is linear in the tree's size. It widens when `PLAN.md` §5's negative literals and
   line continuations land. Until then the compiler code that handles either cannot be
-  reached; it is kept, and documented, not deleted.
+  reached; it is kept, and documented, not deleted. *(Landed with M3-3, 2026-10-14, for
+  negative literals, decision 97: the check takes any integer, so a negative literal is no
+  longer among what it refuses, and a negative preset reaches the compiler from text,
+  refused at its line as one too large is. Line continuations have not landed, and the
+  code that cites an element at a line of its own is still unreached.)*
 - `Logex.Tag.new!/4` refuses any initial value on an instance, with the message a
   declaration line gets. The `%{"pre" => ms}` map M1-6 allowed is withdrawn: where a `ton`
   runs the timer, its preset silently replaced the map, and where none does, no text could
   give that `.pre` (decision 24). `new!/4` also refuses a negative initial value, in the
-  declaration line's style, until a negative literal lexes.
+  declaration line's style, until a negative literal lexes. *(Landed with M3-3,
+  2026-10-14, decision 97: a negative literal lexes, so `new!/4` takes a dint's negative
+  initial value, as `var tare dint -120` gives one, and a bool's is 0 or 1 as before.)*
 
 **Cost.** Accept builds both plans once, in time linear in the two programs, and a switch
 is linear in them too. *(Restated 2026-10-04, after the check of M2-5's fixes, for a
@@ -1562,11 +1570,16 @@ F3, the held values of F4) and still costs less than one scan.
   test's generator produces, passes it (a property). The hand-built trees in the suite
   that the parser could never produce become `ArgumentError` tests: `validation_test.exs`'s
   negative preset and its rung over two lines, and `printer_test.exs`'s group with no legs.
+  *(Landed with M3-3, 2026-10-14, decision 97: the parser can produce a negative preset
+  now, so its `ArgumentError` test is gone, and `validation_test.exs` refuses `ton t1 -1`
+  from source at its line instead, as one too large is; the rung over two lines is still
+  an `ArgumentError` test.)*
   A seeded property in `printer_test.exs` breaks a generated tree at any one node and
   expects only `ArgumentError`.
 - `runtime_test.exs`: the exact public surface, `Logex.Edit`'s and `Logex.Parser`'s
   included, the fields of `%Logex.Instance{}` and `%Logex.Scan{}`, and the messages of the
-  block list and of `switched`.
+  block list and of `switched`. *(And since M3-3 the messages of `faults`, decision 99,
+  checked before the state's owner, as the block list is.)*
 - *(M2-5, landed 2026-10-04.)* `function_block_test.exs` holds a test per rule of the
   edit of a program that holds function blocks, by path (decisions 31 and 32), among them
   a block frozen by a false `cal` across a switch, and its growth tests;
@@ -1974,7 +1987,9 @@ missing, and every unknown name stay diagnostics. The review of the landing adde
 more, each pinned: an element whose name is refused, a duplicate, a case twin or a name
 with `.` parts, still has every other field checked, as a `.ld` declaration line does;
 and a configuration or an element that lacks one of its struct's keys is the host's, as
-any value that is not the struct is.)*
+any value that is not the struct is.)* *(Changed 2026-10-14 by decision 97, M3-3: a line
+can say a negative number, so only a number that is not an integer is the host's, and a
+negative interval or priority is a diagnostic, in the file's words, as one too large is.)*
 - *The §4.4 checks land here.* Every check M2-1's data can express, over tasks, globals,
   located points, program instances and connections, lands with M2-1 in
   `Logex.Configuration.check/1`, the one validator, pinned by whole diagnostic lists from
@@ -2778,7 +2793,10 @@ options so the reasons stay with them.
     diagnostic that `Logex.Diagnostic`'s line rule does not allow; took two rungs on one
     line, losing the second-`ote` warning the text gives; and raised `FunctionClauseError`
     or `Protocol.UndefinedError` on a malformed tuple. `Tag.new!/4` refuses a negative
-    initial value and, by decision 24, the preset map.
+    initial value and, by decision 24, the preset map. *(Landed with M3-3, 2026-10-14,
+    decision 97: a negative literal lexes, so the entry check takes a negative integer and
+    `Tag.new!/4` a dint's negative initial value; of the two it refused here, only the
+    preset map is left.)*
 29. **A changed initial value of a kept bool or dint (E9):** it keeps its running value
     either way, and the new value applies at the next restart. Say nothing, or report it
     at every switch as `{:initial_changed, name, {old, new}}`, sorted with the rest of the
