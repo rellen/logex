@@ -313,6 +313,35 @@ defmodule Logex.EditTest do
   end
 
   describe "state moves by name" do
+    # M3-3: arithmetic keeps no state of its own, and what it writes is a tag's ordinary
+    # state: an edit that adds, changes or removes an `add` moves its total by name, as any
+    # dint, blocks nothing and reports nothing, and the next scan runs the candidate's.
+    test "a total an arithmetic instruction writes is a tag's, kept across a switch" do
+      v1 = c!("var_input flow dint\nvar_output total dint\nadd total flow total")
+
+      v2 =
+        c!(
+          "var_input flow dint\nvar_output total dint\nvar_output ok bool\n" <>
+            "var_output flow2 dint\nmul flow 2 flow2\nadd total flow2 total ote ok"
+        )
+
+      v3 = c!("var_input flow dint\nvar_output total dint")
+
+      {_, state} = run(v1, [{0, %{"flow" => 5}}, {10, %{}}])
+      assert state.env["total"] == 10
+      {edit, state, report} = Edit.test(accept!(v1, v2, state), state)
+      assert report == [{:added, "flow2", 0}, {:added, "ok", 0}]
+      assert state.ons_blocked == [] and state.env["total"] == 10
+      assert {%{"total" => 20, "flow2" => 10, "ok" => 1}, state} = Runtime.scan(v2, state, 10)
+      {_program, state, []} = Edit.assemble(edit, state)
+
+      {edit, state, report} = Edit.test(accept!(v2, v3, state), state)
+      assert report == [{:held, "flow2", 10}, {:held, "ok", 1}, {:held, "total", 20}]
+      assert {%{"total" => 20}, state} = Runtime.scan(v3, state, 10)
+      {_program, state, _} = Edit.assemble(edit, state)
+      refute Map.has_key?(state.env, "flow2")
+    end
+
     test "an added tag starts at its initial value, an added timer at its preset" do
       v1 = c!("var_input go bool\nvar_output y bool\nxic go ote y")
 

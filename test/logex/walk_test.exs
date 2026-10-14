@@ -126,6 +126,27 @@ defmodule Logex.WalkTest do
              }
     end
 
+    # M3-3: an arithmetic instruction reads its sources and writes its destination, by its
+    # slots, so a total that is its own source is read and written on one line.
+    test "an arithmetic instruction writes its destination, a member by its path, and reads " <>
+           "its sources" do
+      p =
+        program!("""
+        var_input flow dint
+        var total dint
+        var t1 ton
+        add total flow total
+        xic t1.dn ton t1 100
+        mul flow -2 t1.pre sub 0 t1.acc total
+        """)
+
+      assert Walk.writes(p) == %{"total" => [4, 6], "t1" => [5, 6]}
+      assert Walk.member_writes(p) == %{"t1.pre" => [6]}
+
+      assert for({access, name, 4, :add} <- Walk.uses(p.rungs, p.tags), do: {access, name}) ==
+               [value: "total", value: "flow", write: "total"]
+    end
+
     test "a `cal` writes its instance and each tag its var_outputs fill, and none it reads" do
       seal = block!(@seal)
 

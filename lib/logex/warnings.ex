@@ -8,7 +8,8 @@ defmodule Logex.Warnings do
   - a second `ote` on one tag: only the last one in the scan decides it;
   - an `ons` storage bit that another instruction writes (M1-6): the one-shot then fires
     on the wrong scans. A second `ons` on it is an error (`Logex.Compiler`);
-  - a comparison of two literals (M1-6): its result never changes;
+  - a comparison of two literals (M1-6): its result never changes; since M3-3 so is an
+    arithmetic instruction whose every source is a literal, which `move` says;
   - a timer no `ton` runs (M1-6): it never times; since M3-1 any built-in instance no
     instruction of its type runs, in its type's words, a counter no `ctu` or `ctd` runs:
     it never counts;
@@ -170,6 +171,19 @@ defmodule Logex.Warnings do
          warning(
            line,
            "`#{symbol}` compares two literals, `#{a}` and `#{b}`: its result never changes"
+         )
+       ]
+
+  # M3-3: an arithmetic instruction whose every source is a literal compiles, as IEC's
+  # ADD(2, 3) does, but its result never changes.
+  @arithmetic [:add, :sub, :mul]
+
+  defp constant({symbol, line, [{:int_lit, _, a}, {:int_lit, _, b}, _destination]})
+       when symbol in @arithmetic,
+       do: [
+         warning(
+           line,
+           "`#{symbol}` reads two literals, `#{a}` and `#{b}`: its result never changes"
          )
        ]
 

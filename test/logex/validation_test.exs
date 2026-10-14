@@ -1219,6 +1219,65 @@ defmodule Logex.ValidationTest do
     end
   end
 
+  # M3-3: IEC's arithmetic, `add`, `sub` and `mul` (decisions 77, 79 and 98).
+  describe "arithmetic (M3-3)" do
+    test "takes two dint sources, each a tag, a member or a literal, and a dint it writes" do
+      assert source_errors(
+               "var b bool\nvar d dint\nvar_input i dint\nvar t1 ton\nvar c ctu\n" <>
+                 "add b d d\nsub d 2147483648 d\nmul d -2147483649 d\nadd d d\n" <>
+                 "sub d 1 5\nmul d 1 b\nadd d 1 i\nsub d 1 t1.dn\nmul 2 d c.cv\nadd t1 1 d"
+             ) == [
+               "line 6: `add` reads a dint, but `b` is a bool (declared on line 1)",
+               "line 7: `sub` reads a dint: `2147483648` does not fit in 32 bits",
+               "line 8: `mul` reads a dint: `-2147483649` does not fit in 32 bits",
+               "line 9: `add` expects 3 operands (a value, then a value, then a tag), found 2",
+               "line 10: `sub` expects a tag, found `5`",
+               "line 11: `mul` writes a dint, but `b` is a bool (declared on line 1)",
+               "line 12: `add` writes `i`, a var_input (declared on line 3): logic must not " <>
+                 "write an input",
+               "line 13: `sub` writes a dint, but `t1.dn` is a bool",
+               "line 13: `sub` writes `t1.dn`, but logic may write only `.pre` and `.acc` of a ton",
+               "line 14: `mul` writes `c.cv`, but logic may write only `.r` and `.pv` of a ctu",
+               "line 15: `add` reads a dint, but `t1` is a ton (declared on line 4): name one " <>
+                 "of its members, as in `t1.acc`"
+             ]
+    end
+
+    # Decision 98: the power out is IEC's ENO, settled, so nothing on its path is refused,
+    # as after a `ton` (decision 73), and a source may be its destination.
+    test "anything may follow it on its path, and its destination may be a source" do
+      assert source_warnings(
+               "var_input flow dint\nvar_output total dint\nvar_output ok bool\n" <>
+                 "var t1 ton\nadd total flow total ote ok\n" <>
+                 "( sub total 1 total | mul total 2 total ) ton t1 10\n" <>
+                 "add 0 total total mul total -1 total xic t1.dn ote ok"
+             ) == [
+               "line 7: warning: `ok` already has an `ote` on line 5: the last one in the " <>
+                 "scan decides it"
+             ]
+    end
+
+    test "are reserved in any case" do
+      assert source_errors("var add dint\nvar SUB bool\nvar Mul dint") ==
+               for(
+                 {word, line} <- Enum.with_index(~w(add SUB Mul), 1),
+                 do: "line #{line}: `#{word}` is an instruction and cannot name a tag"
+               )
+
+      assert source_errors("var d dint\nADD d 1 d\nSub d 1 d\nmUL d 2 add d 1 d") == [
+               "line 4: `mUL` expects 3 operands (a value, then a value, then a tag), found 2 " <>
+                 "before the instruction `add`"
+             ]
+    end
+
+    test "two literal sources compile, with a warning, and one literal does not warn" do
+      assert source_warnings("var d dint\nadd 2 3 d\n( sub -1 1 d | mul 0 d d )\nadd d 1 d") == [
+               "line 2: warning: `add` reads two literals, `2` and `3`: its result never changes",
+               "line 3: warning: `sub` reads two literals, `-1` and `1`: its result never changes"
+             ]
+    end
+  end
+
   describe "timers declared (M1-6)" do
     test "`var t1 ton` declares a timer, the type word in any case" do
       assert {:ok, program} =

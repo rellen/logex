@@ -64,6 +64,13 @@ defmodule Logex.Compiler do
     # (decision 85).
     "ctu" => {:ctu, [{:instance, ["ctu", "ctud"]}, {:preset, :dint}]},
     "ctd" => {:ctd, [{:instance, ["ctd", "ctud"]}, {:preset, :dint}]},
+    # M3-3: IEC's arithmetic on dints (decision 79), two sources, each a tag, a member or a
+    # literal, then the destination it writes: `add total flow total`, `sub a b d` being
+    # a - b. Rung power is IEC's EN and the power out its ENO (decision 98): false where the
+    # result leaves the dint, which stops at the nearer limit (decision 77).
+    "add" => {:add, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
+    "sub" => {:sub, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
+    "mul" => {:mul, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
     # M2-5: `cal` runs an instance of a user function block. Its entry is a marker, not a
     # signature: the signature is the block's, built per compile from the instance's type
     # (Logex.FbType.signature/1), the instance, then the block's var_inputs and var_outputs

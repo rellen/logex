@@ -4873,6 +4873,51 @@ defmodule Logex.ConfigurationTest do
              ]
     end
 
+    # M3-3: an arithmetic instruction's destination is a write (Logex.Walk.writes/1, by its
+    # slot), so a total kept in a shared global meets every writer rule, and two totalisers
+    # adding into one global each add to what the other last wrote.
+    test "an arithmetic instruction's destination is a write through a var_external" do
+      {:ok, totaliser} =
+        Logex.compile("var_input flow dint\nvar_external total dint\nadd total flow total",
+          name: "totaliser"
+        )
+
+      instance = fn name -> %Instance{name: name, type: "totaliser"} end
+      flow = fn name, to -> %Connection{instance: name, member: "flow", to: to} end
+
+      point = %Configuration{
+        name: "plant",
+        programs: %{"totaliser" => totaliser},
+        globals: [%Global{name: "total", type: :dint, at: "drive.i.0"}],
+        instances: [instance.("t1")],
+        connections: [flow.("t1", 1)]
+      }
+
+      assert formatted(point) == [
+               "`totaliser` writes its var_external `total` on its line 3, but `total` is an " <>
+                 "input point: nothing writes an input point"
+             ]
+
+      shared =
+        Configuration.new!(
+          name: "plant",
+          programs: [totaliser],
+          globals: [%Global{name: "total", type: :dint}],
+          instances: [instance.("t1"), instance.("t2")],
+          connections: [flow.("t1", 1), flow.("t2", 2)]
+        )
+
+      assert Enum.map(shared.warnings, &Diagnostic.format/1) == [
+               "warning: `t2` writes `total` through its var_external, as `t1` does: each " <>
+                 "scan reads what the other last wrote, and the later write in a cycle stands"
+             ]
+
+      runtime = Logex.Runtime.start(shared)
+      {runtime, _, _} = Logex.Runtime.cycle(runtime, 0, %{})
+      {runtime, _, _} = Logex.Runtime.cycle(runtime, 0, %{})
+      assert Logex.Runtime.get!(runtime, "total") == 6
+    end
+
     test "one named in a connection is told it reaches its global itself" do
       config =
         shared(

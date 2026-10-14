@@ -238,6 +238,12 @@ defmodule Logex.Runtime do
 
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
 
+  # M3-3: the arithmetic of two sources whose result is brought into a dint (decision 77).
+  @sums [:add, :sub, :mul]
+
+  @dint_max 2_147_483_647
+  @dint_min -2_147_483_648
+
   # The resource (M2-1): the configuration it runs; `now`, its clock; `globals`, one value
   # for each global, the input points' among them; `instances`, each program instance's
   # state by name; `tasks`, each task's next due time and overlap count by name; and
@@ -1385,6 +1391,24 @@ defmodule Logex.Runtime do
     {false, env}
   end
 
+  # M3-3: `add`, `sub` and `mul` (docs/naming.md; IEC's ADD, SUB and MUL; decisions 77 and
+  # 98). Rung power is IEC's EN, and the power out its ENO. Energised, both sources are
+  # read, the result computed exactly, on Elixir's integers, and brought into the dint,
+  # then written: the power out is true, or false on the scan where the result left the
+  # dint and was brought to the nearer limit, -2147483648 or 2147483647, so no value outside
+  # a dint ever reaches a state. The sources are read before the write, so the destination
+  # may be one of them, `add total flow total`. De-energised, nothing is written and no
+  # power passes, as `move`. A source a hand-built env holds as no integer reads 0, so a
+  # scan never raises on one.
+  defp evaluate({op, _, [a, b, destination]}, {true, env}, _scan) when op in @sums do
+    {power, value} = bounded(sum(op, integer(read(env, a)), integer(read(env, b))))
+    {power, write(env, destination, value)}
+  end
+
+  defp evaluate({op, _, _}, {false, env}, _scan) when op in @sums do
+    {false, env}
+  end
+
   # The on-delay timer (docs/naming.md, `ton`; docs/organisation.md §4.6). Rung power is
   # its IN. `last` is the time this `ton` last ran, energised or not (decision 5), and
   # energised, `.acc` gains `now - last`, unless `.en` shows it was not already enabled:
@@ -1595,9 +1619,6 @@ defmodule Logex.Runtime do
 
   defp unblocked(false, env, _name), do: env
 
-  @dint_max 2_147_483_647
-  @dint_min -2_147_483_648
-
   # Whatever a hand-built env left in a counter, a well-formed one comes back: a member that
   # is not an integer reads 0, and a bit is read as a contact.
   defp count(kind, side, state, {power, edge}) do
@@ -1673,6 +1694,17 @@ defmodule Logex.Runtime do
       )
 
   defp bit(value), do: one(closed?(value))
+
+  # M3-3: the exact result of two sources, before it is brought into a dint.
+  defp sum(:add, a, b), do: a + b
+  defp sum(:sub, a, b), do: a - b
+  defp sum(:mul, a, b), do: a * b
+
+  # A result outside a dint is brought to the nearer limit, and passes no power on that
+  # scan (decision 77); one inside it passes power.
+  defp bounded(value) when value > @dint_max, do: {false, @dint_max}
+  defp bounded(value) when value < @dint_min, do: {false, @dint_min}
+  defp bounded(value), do: {true, value}
 
   # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is
   # complementary by construction, as `xic` and `xio` are (M1-4). Erlang's term order is

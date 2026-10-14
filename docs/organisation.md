@@ -2618,8 +2618,8 @@ questions the maintainer was asked then: 90 one M3-2 had left open, 91 and 92 co
 what M3-1 built. Decisions 93–95 are M3-2's own routine choices, taken as it landed on
 2026-10-14, 93 confirmed by the maintainer the same day, after M3-2's review. Decision 96
 was taken the same day, after M3-2's review, from a question the maintainer was asked
-then. Decision 97 is M3-3's own routine choice, taken as it landed on 2026-10-14. All
-ninety-seven are kept with their options so the reasons stay with them.
+then. Decisions 97 and 98 are M3-3's own routine choices, taken as it landed on
+2026-10-14. All ninety-eight are kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3791,9 +3791,9 @@ what becomes of a block's input that an online edit leaves no rung writing.
     every run, and is not reported. Nothing is blocked or written: the counter or timer
     reads its kept input at its next run, as decision 91 reads any. *(Landed 2026-10-14. Its scope confirmed by the maintainer the same day: the report names the member whatever its value, not only when it is on, since nothing resets the counter or timer any more either way, and a `pv` or `.pre` is reported beside `r` and `ld`.)*
 
-**M3-3's own choices, 2026-10-14.** Decision 97 is M3-3's routine choice, where neither
-the record nor IEC left a question for the maintainer, with the alternative the record
-keeps.
+**M3-3's own choices, 2026-10-14.** Decisions 97 and 98 are M3-3's routine choices, where
+neither the record nor IEC left a question for the maintainer, each with the alternative
+the record keeps.
 
 97. **How a negative literal is written, and where one goes (M3-3),** `PLAN.md` §5's rule
     landing first in M3-3. A level setpoint below a sensor's zero, `move -5 offset`, or a
@@ -3823,6 +3823,26 @@ keeps.
     no source in it held a `-` before a digit. logex has no infix operator, so a `-` can
     only be a sign; when infix arithmetic arrives, the sign moves to the grammar.
     *(Landed 2026-10-14.)*
+98. **What an arithmetic instruction passes on, and what may follow it on its line
+    (M3-3),** following decisions 73, 77 and 78. The fill valve's total, with a lamp on the
+    same line that shows the total is real: `xic fill add total flow total ote total_ok`.
+    - The power out is IEC's ENO, rung power its EN (Ed 3 §6.6.1.5, p.63; Table 18
+      feature 4, p.65, an ADD in LD whose ENO drives a coil): true where the result is a
+      dint's, false where it left the dint (decision 77) or the divisor was 0 (decision
+      78), and false on a false rung. It is settled, so anything may follow on its path,
+      the lamp here, or a second arithmetic instruction, which then runs only where the
+      first succeeded;
+    - rung-condition-in, as the conventional ladder passes it on, true or false, which
+      decisions 77 and 78 rule out by name;
+    - or nothing after it, as after a counter or a timer (decision 73).
+
+    *Recommend the first.* Adopted. Decision 73 refuses what follows an instruction whose
+    power out is not settled, so that either reading stays open to a later change; this
+    one's is settled by decisions 77 and 78, and IEC draws the very rung. What is warned
+    about stays small: every source a literal, `add 2 3 x`, compiles with a warning, as two
+    compared literals do (M1-6), since its result never changes; a destination that is a
+    source, `add total flow total`, is the instruction's commonest use and draws none; nor
+    does a divide by a literal 1, which is harmless. *(Landed 2026-10-14.)*
 
 ---
 
