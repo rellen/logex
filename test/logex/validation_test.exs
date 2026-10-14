@@ -1887,14 +1887,14 @@ xic a ton t1 7") == [
                  "xic a rto t1 5\nxic a ton l 5\nxic a rto l 5\nxic a rto l 5\n" <>
                  "xic a rto l 5 ote a\nxic a ote l.dn\nxic a ons l.r ote a"
              ) == [
-               "line 4: `rto` runs a rto, but `t1` is a ton (declared on line 2)",
-               "line 5: `ton` runs a ton, but `l` is a rto (declared on line 1)",
+               "line 4: `rto` runs an rto, but `t1` is a ton (declared on line 2)",
+               "line 5: `ton` runs a ton, but `l` is an rto (declared on line 1)",
                "line 7: `l` is already run by the `rto` on line 6: one `rto` runs a timer",
                "line 8: `l` is already run by the `rto` on line 6: one `rto` runs a timer",
-               "line 8: `ote a` follows `rto l` on its path: what passes on after a `rto` is not " <>
-                 "settled, so a `rto` ends its path; read the timer with `xic l.dn` on a rung below",
-               "line 9: `ote` writes `l.dn`, but logic may write only `.pre`, `.acc` and `.r` of a " <>
-                 "rto",
+               "line 8: `ote a` follows `rto l` on its path: what passes on after an `rto` is not " <>
+                 "settled, so an `rto` ends its path; read the timer with `xic l.dn` on a rung below",
+               "line 9: `ote` writes `l.dn`, but logic may write only `.pre`, `.acc` and `.r` of " <>
+                 "an rto",
                "line 10: `ons` keeps its storage bit in a bool of its own, not in `l.r`, a member " <>
                  "of `l`, which its instance reads"
              ]
@@ -1905,7 +1905,7 @@ xic a ton t1 7") == [
              ) == []
 
       assert source_warnings("var l rto\nvar_input a bool\nxic a ote l.r") == [
-               "line 1: warning: `l` is a rto, but no `rto` runs it: it never times"
+               "line 1: warning: `l` is an rto, but no `rto` runs it: it never times"
              ]
 
       assert source_errors("var rto bool\nvar RTO dint\nvar a bool\nxic a ote a") == [
@@ -1914,8 +1914,29 @@ xic a ton t1 7") == [
              ]
     end
 
+    # Every built-in type word, and each elementary one, takes its article by how it is
+    # said: `an rto`, said letter by letter, and `a` for each other. A new built-in fails
+    # here until its row is written (Logex.Declarations.a_or_an/2).
+    test "each of logex's type words takes its article by how it is said, `an rto`" do
+      words = ~w(bool dint) ++ Map.keys(Logex.FbType.builtins())
+
+      assert Map.new(words, &{&1, Logex.Declarations.a_or_an(&1)}) == %{
+               "bool" => "a bool",
+               "dint" => "a dint",
+               "ton" => "a ton",
+               "tof" => "a tof",
+               "tp" => "a tp",
+               "rto" => "an rto",
+               "ctu" => "a ctu",
+               "ctd" => "a ctd",
+               "ctud" => "a ctud"
+             }
+
+      assert Logex.Declarations.a_or_an("rto", "`rto`") == "an `rto`"
+    end
+
     test "from Elixir, a timer takes no preset: that is the number on its instruction" do
-      for type <- ~w(tof tp rto) do
+      for {type, named} <- [{"tof", "a tof"}, {"tp", "a tp"}, {"rto", "an rto"}] do
         tag = %Logex.Tag{
           name: "f",
           type: Logex.FbType.builtin(type),
@@ -1924,7 +1945,7 @@ xic a ton t1 7") == [
         }
 
         assert Logex.Declarations.check(tag) == [
-                 "`f` is a #{type}: its preset is the number on its `#{type}` instruction, " <>
+                 "`f` is #{named}: its preset is the number on its `#{type}` instruction, " <>
                    "as in `#{type} f 5000`, not an initial value on its declaration"
                ]
       end

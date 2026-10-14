@@ -394,8 +394,9 @@ defmodule Logex.Configuration.Text do
 
   defp unknown_type(%FbType{name: type}, _word, name),
     do:
-      "`#{name}` cannot be a `#{type}`: a global is a `bool` or a `dint`, and a #{type} " <>
-        "is declared inside a program, as in `var #{name} #{type}`"
+      "`#{name}` cannot be #{Declarations.a_or_an(type, "`#{type}`")}: a global is a " <>
+        "`bool` or a `dint`, and " <>
+        "#{Declarations.a_or_an(type)} is declared inside a program, as in `var #{name} #{type}`"
 
   defp unknown_type(nil, word, _name),
     do:

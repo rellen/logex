@@ -838,11 +838,14 @@ defmodule Logex.Compiler do
   defp follows({symbol, line, operands}, element, known) do
     message =
       "#{shown(element)} follows #{shown({symbol, line, Enum.take(operands, 1)})} on its " <>
-        "path: what passes on after a `#{symbol}` is not settled, so a `#{symbol}` ends its " <>
-        "path; " <> read_instance(symbol, operands, known)
+        "path: what passes on after #{quoted(symbol)} is not settled, so #{quoted(symbol)} " <>
+        "ends its path; " <> read_instance(symbol, operands, known)
 
     [diagnostic(line_of(element, line), message)]
   end
+
+  # M3-2: a mnemonic quoted with its article, by how it is said, `an `rto``.
+  defp quoted(symbol), do: Declarations.a_or_an(Atom.to_string(symbol), "`#{symbol}`")
 
   defp shown({:branches, _legs}), do: "a branch group"
   defp shown({symbol, _line, []}), do: "`#{symbol}`"
@@ -1788,8 +1791,8 @@ defmodule Logex.Compiler do
   defp example(member, tag), do: ": name one of its members, as in `#{tag.name}.#{member.name}`"
 
   defp a_type(:any), do: "a value"
-  defp a_type([_ | _] = types), do: Enum.map_join(types, " or ", &"a #{&1}")
-  defp a_type(type), do: "a #{type}"
+  defp a_type([_ | _] = types), do: Enum.map_join(types, " or ", &Declarations.a_or_an/1)
+  defp a_type(type), do: Declarations.a_or_an(to_string(type))
 
   defp check_member_type(diagnostics, {_access, :any}, _name, _member, _at), do: diagnostics
 
@@ -1828,7 +1831,9 @@ defmodule Logex.Compiler do
     do: "`#{tag.name}` is #{Declarations.instance_of(type)}, whose members only its body writes"
 
   defp unwritable(writable, type, _tag),
-    do: "logic may write only #{listed(Enum.map(writable, &"`.#{&1.name}`"))} of a #{type.name}"
+    do:
+      "logic may write only #{listed(Enum.map(writable, &"`.#{&1.name}`"))} of " <>
+        Declarations.a_or_an(type.name)
 
   defp check_type(diagnostics, _access, :any, _tag, _at), do: diagnostics
   defp check_type(diagnostics, _access, type, %Tag{type: type}, _at), do: diagnostics

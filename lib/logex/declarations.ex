@@ -61,11 +61,42 @@ defmodule Logex.Declarations do
 
   @doc """
   The words a message names an instance's type with (M2-5): `a ton` for a built-in type,
-  and `` an instance of `seal` `` for a user function block, whose name is any name, so it
-  takes no article of its own, as `an outer` or `a user` would want.
+  its article by `a_or_an/2` (`an rto`, M3-2), and `` an instance of `seal` `` for a user
+  function block, whose name is any name, so it takes no article of its own, as `an outer`
+  or `a user` would want.
   """
-  def instance_of(%FbType{name: name, body: nil}), do: "a #{name}"
+  def instance_of(%FbType{name: name, body: nil}), do: a_or_an(name)
   def instance_of(%FbType{name: name}), do: "an instance of `#{name}`"
+
+  # M3-2: the article each of logex's own type words takes, by how the word is said. An
+  # elementary type's is said as a word, `a bool`; a built-in function block type's is said
+  # letter by letter where it is no word, so `rto`, "R-T-O", takes `an`, as `tp` and `ctud`
+  # take `a`, and `ton` and `tof` are said as words. Every word of
+  # Logex.FbType.builtins/0 has its row, which validation_test.exs holds it to.
+  @articles %{
+    "bool" => "a",
+    "dint" => "a",
+    "ton" => "a",
+    "tof" => "a",
+    "tp" => "a",
+    "rto" => "an",
+    "ctu" => "a",
+    "ctd" => "a",
+    "ctud" => "a"
+  }
+
+  @doc """
+  A type word with its indefinite article, by how the word is said (M3-2): `a ton`,
+  `a tp`, `a ctud`, and `an rto`, said letter by letter. `shown` is the word as the message
+  writes it, `` an `rto` `` where it quotes the mnemonic. Each of logex's own type words,
+  the elementary ones and every word of `Logex.FbType.builtins/0`, has its row; any other,
+  which only a type built by hand can name, takes `a`. A user block's name is never given
+  one: `instance_of/1` names its instance's type `` an instance of `seal` ``, whatever its
+  sound.
+  """
+  def a_or_an(word, shown \\ nil)
+  def a_or_an(word, nil), do: a_or_an(word, word)
+  def a_or_an(word, shown), do: "#{Map.get(@articles, word, "a")} #{shown}"
 
   @doc """
   What a function block type given where a program goes is told, after its name (M2-5):
@@ -595,7 +626,8 @@ defmodule Logex.Declarations do
     {symbol, example} = preset_example(FbType.rules(type))
 
     [
-      "#{label(name)} is a #{tag.type.name}: its preset is the number on its `#{symbol}` " <>
+      "#{label(name)} is #{a_or_an(tag.type.name)}: its preset is the number on its " <>
+        "`#{symbol}` " <>
         "instruction, as in `#{symbol} #{display(name)} #{example}`, not an initial value on " <>
         "its declaration"
     ]

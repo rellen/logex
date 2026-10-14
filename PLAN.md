@@ -2500,7 +2500,10 @@ names it breaks. Growth tests are in reductions.
   draws `t1` as any of the four timers. An unknown type's two messages named only `ton`
   among the built-in types, from a declaration line and from Elixir: each now lists every
   type word, `Logex.FbType.builtins/0`'s among them, and suggests the nearest, `tpp` told
-  of `tp` and `:tof` of `Logex.FbType.tof()`. The suite is at 1036 tests (8 doctests).
+  of `tp` and `:tof` of `Logex.FbType.tof()`. The messages called an `rto` "a rto": a
+  type word's article is now by how it is said, from a table of logex's own type words, so
+  "an rto", and a user block's name still takes none of its own. The suite is at 1037
+  tests (8 doctests).
 - **M3-3 · Integer arithmetic: `add sub mul div mod neg abs`.** IEC's names, and `neg`
   the vendors' (decision 79); `sqrt` waits for a real type. A result outside a dint is
   brought to the nearer limit and the instruction passes no power on that scan (decision

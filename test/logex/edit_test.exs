@@ -1895,7 +1895,9 @@ defmodule Logex.EditTest do
       assert {:error, [%Diagnostic{stage: :edit, line: 3, message: message}]} =
                Edit.accept(v1, v2, Runtime.instance(v1))
 
-      assert message =~ "`l` is a ton in the running program and a rto in the candidate"
+      assert message ==
+               "`l` is a ton in the running program and an rto in the candidate: a tag's " <>
+                 "type changes only with a restart"
     end
 
     test "an rto the switch gives back resumes from the switch where its rung was true " <>

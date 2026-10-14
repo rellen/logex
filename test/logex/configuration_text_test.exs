@@ -330,6 +330,14 @@ defmodule Logex.Configuration.TextTest do
                "line 15, column 19: unexpected `DInt` after the declaration of `s`"
              ]
 
+      # M3-2: each built-in type with its article by how its word is said, `an rto`.
+      assert errors("var_global l rto\nvar_global h tp\n") == [
+               "line 1, column 14: `l` cannot be an `rto`: a global is a `bool` or a `dint`, " <>
+                 "and an rto is declared inside a program, as in `var l rto`",
+               "line 2, column 14: `h` cannot be a `tp`: a global is a `bool` or a `dint`, " <>
+                 "and a tp is declared inside a program, as in `var h tp`"
+             ]
+
       # Both an initial value and a location read: what they mean together is the
       # validator's to refuse, not the grammar's.
       assert Text.read("var_global g bool 1 at panel.q.0\nvar_global h dint 0") ==
