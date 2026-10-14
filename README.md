@@ -5,8 +5,9 @@ text into a named, stateless value, and runs it as instances, one scan at a time
 time the host injects. No dependencies and no generated code: the lexer and parser are
 written by hand, and the whole thing is twenty-five small modules.
 
-**Stage: early, and honest about it.** Fifteen instructions, among them an on-delay timer,
-a one-shot and six comparisons, parallel branches to arbitrary nesting depth,
+**Stage: early, and honest about it.** Twenty-nine instructions, among them four timers,
+two that run IEC's three counters, seven of integer arithmetic, a one-shot and two pulse
+coils, and six comparisons, parallel branches to arbitrary nesting depth,
 latch/unlatch that holds across scans, power flow that resets per rung, a typed tag table
 that every tag is declared in, function blocks of your own, each written once in a file of
 its own, instantiated as often as needed and run with `cal`, a public API
@@ -165,6 +166,8 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `otu xx` | bool tag, not a `var_input` | output unlatch — writes 0 on a true rung, leaves the tag alone otherwise |
 | `move 123 hh` | source, then a destination of the same type, not a `var_input` | copies a literal or a tag into a tag; a literal must fit the destination (`mov` until M1-2; it now gets a diagnostic pointing here) |
 | `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
+| `osr s1 pulse` | two bool tags it writes, each not a `var_input`: the storage bit, then the pulse bit, which may be a member logic may write | one-shot rising, IEC's positive transition-sensing coil in the conventional set's form — sets `pulse` for the one scan in which the power reaching it rises, and clears it on every other run, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last run. It passes that power on, so anything may follow it on its rung. A second `ons`, `osr` or `osf` on `s1` is an error, as is `s1` for its pulse bit too, and any other write to `s1` a warning; a second coil on `pulse`, an `ote` among them, is the second-`ote` warning |
+| `osf s1 pulse` | as `osr` | one-shot falling, IEC's negative transition-sensing coil — sets `pulse` for the one scan in which the power reaching it falls, which its run on the false rung sees, and is `osr` in every other rule |
 | `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two dints, each a tag, a member or a literal | compare — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`; none on a false rung. Two literals are a warning |
 | `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
 | `tof run_on 30000` | an off-delay timer (`var run_on tof`), then a preset in ms | off-delay timer, IEC's TOF — rung power is its IN. True: `.dn` set, `.acc` 0. The first false scan starts the delay, and `.dn` stays set until `.acc` reaches `.pre`, then drops; a true rung during the delay ends it with `.dn` still set. A new or restarted one is at rest, `.dn` 0. Read it with `xic run_on.dn` on a rung below |
@@ -211,13 +214,13 @@ These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5) an
 change the source language. Program organisation, `PLAN.md`'s Milestone 2, has landed
 whole ("A function block" and "A configuration", below):
 - **Bit access** with `.` (`word.3`).
-- **The rest of Milestone 3** (`PLAN.md` §3, decisions 67–99 in
+- **The rest of Milestone 3** (`PLAN.md` §3, decisions 67–103 in
   [`docs/organisation.md`](docs/organisation.md) §7), after the counters, the other
-  timers and integer arithmetic, which have landed ("A counter", "Three more timers" and
-  "Arithmetic", below), `sqrt` waiting for a real type: the pulse coils `osr osf`; and a
-  forward `jmp` to an `lbl`. IEC names wherever IEC names the operation; `neg`, `osr`,
-  `osf`, `jmp` and `lbl` are rule 2's, from a vendor, `docs/naming.md` saying which as
-  each lands. There is no `res`: a counter resets through its own `r` input, as
+  timers, integer arithmetic and the pulse coils, which have landed ("A counter", "Three
+  more timers", "Arithmetic" and "Two pulse coils", below), `sqrt` waiting for a real
+  type: a forward `jmp` to an `lbl`. IEC names wherever IEC names the operation; `neg`,
+  `osr`, `osf`, `jmp` and `lbl` are rule 2's, from a vendor, `docs/naming.md` saying which
+  as each lands. There is no `res`: a counter resets through its own `r` input, as
   IEC's does, and so does a retentive timer, `xic greased ote lube.r` (decision 90).
 
 ## An example
@@ -666,6 +669,91 @@ line 2, column 6: missing separator before `-`: "5-3" is neither a tag nor a num
 - A literal zero divisor is refused when the program compiles. A negative literal is its
   sign glued to its digits, `-5`, wherever a literal goes, and a sign begins a number, so
   `5-3` is an error rather than a number and then another: a difference is `sub`.
+
+### Two pulse coils
+
+`step.ld` — a start button that steps a sequence once a press, while a lamp on the same
+rung shows the button held, and a pulse when a box leaves a photo-eye:
+
+```
+var_input start_pb bool
+var_input eye bool
+var_output step bool
+var_output held_lamp bool
+var_output box_left bool
+var_output step_no dint
+var s1 bool
+var s2 bool
+
+xic start_pb osr s1 step ote held_lamp
+xic step add step_no 1 step_no
+xic eye osf s2 box_left
+```
+
+`step.exs` scans it once per line, 10 ms apart:
+
+```elixir
+{:ok, step} = Logex.compile_file("step.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(step, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(step, state, 10)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  state
+end
+
+Logex.Runtime.instance(step)
+|> scan.("start held at start", %{"start_pb" => 1})
+|> scan.("start released     ", %{"start_pb" => 0})
+|> scan.("start pressed      ", %{"start_pb" => 1})
+|> scan.("still held         ", %{})
+|> scan.("box on the eye     ", %{"eye" => 1})
+|> scan.("start released     ", %{"start_pb" => 0})
+|> scan.("box left the eye   ", %{"eye" => 0})
+|> scan.("start pressed      ", %{"start_pb" => 1})
+|> scan.("nothing new        ", %{})
+
+{:error, [diagnostic]} =
+  Logex.compile("var_input start_pb bool\nvar s1 bool\nxic start_pb osr s1 s1", name: "same")
+
+IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```
+$ mix run step.exs
+start held at start  %{"box_left" => 0, "held_lamp" => 1, "step" => 0, "step_no" => 0}
+start released       %{"box_left" => 0, "held_lamp" => 0, "step" => 0, "step_no" => 0}
+start pressed        %{"box_left" => 0, "held_lamp" => 1, "step" => 1, "step_no" => 1}
+still held           %{"box_left" => 0, "held_lamp" => 1, "step" => 0, "step_no" => 1}
+box on the eye       %{"box_left" => 0, "held_lamp" => 1, "step" => 0, "step_no" => 1}
+start released       %{"box_left" => 0, "held_lamp" => 0, "step" => 0, "step_no" => 1}
+box left the eye     %{"box_left" => 1, "held_lamp" => 0, "step" => 0, "step_no" => 1}
+start pressed        %{"box_left" => 0, "held_lamp" => 1, "step" => 1, "step_no" => 2}
+nothing new          %{"box_left" => 0, "held_lamp" => 1, "step" => 0, "step_no" => 2}
+line 3: `s1` is both the storage bit and the pulse bit of this `osr`: its pulse bit is another tag, which it sets for one scan on an edge
+```
+
+- `osr` is IEC's positive transition-sensing coil, in the form the conventional set
+  writes it: `s1`, its storage bit, holds the power the coil received when it last ran,
+  and `step`, its pulse bit, is set for the one scan in which that power rises, and
+  cleared at every other. The sequence steps once a press, however long the button is
+  held. `osf` is the negative one: `box_left` is set for the scan in which the eye
+  clears, which its run on the false rung sees.
+- Each passes on the power it receives, as a coil does in IEC and in the conventional set,
+  so anything may follow it on its rung: `held_lamp` follows the button, not the pulse.
+  That is what parts them from `ons`, which passes the pulse itself, so that the rest of
+  its rung sees one scan only.
+- Neither pulses on an instance's first scan, whatever its storage bit holds, so a button
+  already held at start steps nothing, as an `ons` fires nothing then.
+- A storage bit is under every rule an `ons`'s is: a second `ons`, `osr` or `osf` on it is
+  an error, any other write to it a warning, and an online edit that adds a coil or
+  changes its rung blocks its next pulse until a scan runs it, so an edit never makes a
+  pulse no edge made ("Changing a running program", below). Its storage bit is never its
+  pulse bit, which may be any bool logic writes, a counter's reset `boxes.r` among them,
+  and a second coil on one pulse bit, an `ote` among them, is the second-`ote` warning.
+- A coil in a function block whose `cal` is false is frozen with the rest of the block,
+  both its bits held, so a pulse it gave on the block's last run stays on until it next
+  runs. A coil under an event task is not warned about, as an `ons` is not.
 
 ### A function block
 
@@ -1165,8 +1253,8 @@ wrong.logex: line 9: `c1.estop` is a var_external of `conveyor`, which reaches t
   through one a global a connection drives, are warnings on the configuration's
   `warnings`, in the words true of each: each scan reads what the other last wrote, and
   the later write in a cycle stands, or an instance's own copy-out, after the scan,
-  stands, or, for a global that is an `ons`'s storage bit, the one-shot fires on the
-  wrong scans.
+  stands, or, for a global that is the storage bit of an `ons`, an `osr` or an `osf`,
+  the one-shot fires on the wrong scans.
 
 ### An event task
 
@@ -1531,7 +1619,11 @@ The count stays at 3, `pv` moves to 5, and the report forecasts that `q`, done a
 drops at the counter's next run, which it does: the lamp goes out, and the box still on
 the eye is not counted again. A counter the edit adds while its rung is true is reported
 `{:ons_blocked, "rejects.cu", 0}` and counts nothing at the switch; a preset changed alone
-blocks nothing, since no power on the rung reads it.
+blocks nothing, since no power on the rung reads it. A pulse coil is blocked as an `ons`
+is, by its storage bit: one the edit adds, or whose rung it changes, its kind or its pulse
+bit among the rung, is reported `{:ons_blocked, "s1", 0}` and sets no pulse at the switch,
+and its pulse bit is an ordinary bool, which an edit that removes the coil leaves as it
+was.
 
 An edit that leaves no rung writing a counter's `r`, `ld` or `pv`, an `rto`'s `r` or a
 timer's `.pre` leaves it as it was, as an output the edit stops driving holds. Tested while

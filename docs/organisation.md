@@ -1338,6 +1338,8 @@ instance already holds around the new piece:
   (M3-1, decision 87);
 - so is a `tp`'s edge memory, `.en`, by its path, `horn_pulse.en`, so its next run starts
   no pulse (M3-2, decision 94);
+- so is an `osr`'s or an `osf`'s storage bit, whose coil the edit adds or whose rung it
+  changes, by its name as an `ons`'s is, so its next run sets no pulse (M3-4, decision 80);
 - a var_input a switch makes live is reported as `:input`, because its value is the
   host's;
 - at the first test, a tag the candidate adds, or one whose value does not fit its type,
@@ -1399,13 +1401,29 @@ scan's minor faults (decision 99):
 |---|---|---|---|---|---|
 | `faults`, each a `%Logex.Fault{}` | `[]` | the scan's own, in order, `[]` for none | kept: neither is a scan | kept | reported as `{:fault, ...}` events by the cycle and dropped, so `[]` between cycles |
 
+M3-4's pulse coils, `osr` and `osf`, landed on 2026-10-14 (decisions 80 and 100–103), and
+keep no state of their own: their two bits are bools the program declares, a `var` or a
+`var_output`, under every rule above, started by `initial_env/1` and kept by name across a
+switch. What the coils add is each bit's part:
+
+| Piece | A new instance | A scan | `restart/3` | A switch: kept | added | removed, then restored |
+|---|---|---|---|---|---|---|
+| a coil's storage bit | its declared value | the power the coil receives, at every run | its declared value | kept; blocked by name where its rung changed, its kind and pulse bit among it, the presets left out, or where the program that last scanned also writes it another way (decisions 21, 80 and 87) | its declared value, blocked | kept, unused, then blocked |
+| a coil's pulse bit | its declared value | 1 on the run whose power rises (`osr`) or falls (`osf`), never on a first scan nor while its storage bit is blocked; 0 at every other run (decision 102) | its declared value | kept, and set at the coil's next run | its declared value | held, `:held` where it is a var_output (decision 20), then set at the next run |
+
+In a block whose `cal` is false both bits are held, so a pulse given at the body's last run
+stays on until it next runs (decision 102), and a blocked storage bit there stays listed
+until a scan runs it (decision 32). A coil under an event task is not warned about, as an
+`ons` is not (decision 103).
+
 An instance a configuration's edit sets aside and brings back (decision 57) is not
 "removed, then restored": it comes back as it was set aside, under the program it ran
 then, each of these timers resumed from the switch where its timing member was set, `.tt`
 for a `tof` and a `tp`, `.en` for an `rto`, as a `ton` is by `.en`. Nothing in it is
-blocked, a `tp`'s `.en` and a counter's `cu` and `cd` alike: no edit changed the rungs it
-runs, so each edge memory holds the power its rung last received, and an input that rose
-while the instance was aside is a real edge, which its first scan back pulses or counts.
+blocked, a `tp`'s `.en`, a counter's `cu` and `cd` and a pulse coil's storage bit alike:
+no edit changed the rungs it runs, so each edge memory holds the power its rung last
+received, and an input that rose while the instance was aside is a real edge, which its
+first scan back pulses or counts.
 
 *Milestone 2's state* (designed 2026-10-02, §4.10; M2-1's pieces landed with it on
 2026-10-02, and `Logex.Runtime`'s moduledoc gives their rules as built, and M2-5's on

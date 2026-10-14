@@ -17,11 +17,11 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
 §1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5, §3's M2-2 and M2-3, §3's M2-4,
-§3's M2-6, §3's OE-2, §3's M3-1, M3-2 and M3-3 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
+§3's M2-6, §3's OE-2, §3's M3-1, M3-2, M3-3 and M3-4 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
 first item, M2-1, landed the same day, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11,
 and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed and landed on
-2026-10-13 (§3), and Milestone 3 was designed and decided on 2026-10-14, its first three
-items, M3-1, M3-2 and M3-3, landing the same day (§3, "Milestone 3").
+2026-10-13 (§3), and Milestone 3 was designed and decided on 2026-10-14, its first four
+items, M3-1, M3-2, M3-3 and M3-4, landing the same day (§3, "Milestone 3").
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -2643,6 +2643,39 @@ names it breaks. Growth tests are in reductions.
   inputs, the pulses `ons` and `xio … ons` give on their own rungs, pass on the power they
   receive, never fire on a first scan, and an edit that adds or changes one blocks it until
   a scan runs it, as decision 21 blocks an `ons`.
+
+  **Status: DONE — landed 2026-10-14**, as M3-1's landing order with no refactor, a tidy
+  of two load-sensitive tests from M3-3's review before it: (0) the tidy, `b4be654`; (1)
+  the survey, the stanzas `osr` and `osf`, `2460ea0`; (2) the coils, `28470f9`; (3) the
+  contract walk, `082632a`; (4) the Done-when, `138f51d`; (5) the documents, the commit
+  after it, among them README's "Two pulse coils", whose output is a real run. 1159 tests
+  pass on Elixir 1.20.4 (8 of them doctests), up from 1115. (2)'s message records its
+  mutation table, every rule it adds reverted alone and the full suite judged by its exit
+  code: 41 rules, 41 red at once, no survivor. (3) and (4) add no rule: (2)'s 22 rows that
+  touch a scan or the edit turn the walk alone red on 20 and the Done-when alone on 20, the
+  other two, a storage bit a hand-built env holds as anything but 0 or 1, red in the full
+  suite. (0) measures "compiling stays linear in the program's size" in a process whose
+  heap starts at 4M words, where 2,000 tags take one major collection and not 61: 4.07x
+  to 4.36x over 32 runs, 16 alone and 16 four at once, so its bound is 5.24, down from
+  8.75, which the quadratic mutant, 13.46x, still fails, and the large heap reverted alone
+  fails it four at once; and gives the configuration-edit walk a timeout of 300 s, its
+  draws kept, after it passed 60 s twice in M3-3's mutation runs.
+
+  Readings and choices, each in its commit and in decisions 100–103: the coils are IEC's
+  transition-sensing coils in the conventional set's form, `osr s1 pulse`, the storage bit
+  first, each run writing the pulse bit and then the storage bit with the power it
+  receives; the power out is that power, settled by IEC and the conventional set alike,
+  so anything may follow a coil (decision 100), where nothing follows a counter or a timer;
+  the pulse bit may be a member logic may write, never the storage bit, and a second coil
+  on it is the second-`ote` warning (decision 101); `osf` sees its fall on its false rung's
+  run, and a frozen block holds both bits, so a pulse given at its body's last run stays on
+  until it next runs (decision 102); and a coil under an event task is not warned about, as
+  an `ons` is not, the record's reading of decisions 72 and 80, left to the maintainer
+  (decision 103). Every rule of an `ons` storage bit is a coil's: one one-shot of the three
+  to a bit, never a member, any other write a warning, the configuration's writer warning
+  naming its one-shot, and decision 21's block list by name, the whole rung compared without
+  presets, so a coil whose pulse bit alone changes is blocked too. The walk's first draft
+  found a gap in its own oracle, a restart's fresh bits, and none in `lib/`.
 - **M3-5 · Control flow: forward `jmp` and `lbl`, and no MCR.** A forward jump only, a
   label first on its rung, labels a routine's own namespace (decision 81); skipped rungs
   freeze as a false `cal` freezes a block, a timer in them catching up when next run (82);
@@ -3273,8 +3306,8 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
 5. **Math (ADD/SUB/MUL/DIV), one-shots (ONS/OSR/OSF), then control flow (JMP/LBL/MCR).**
    ONS is the canonical instruction that cannot exist without cross-scan state. *`ons`
    landed with M1-6; OSR and OSF are open.* *(Milestone 3: arithmetic in M3-3, landed
-   2026-10-14, `add sub mul div mod neg abs`; `osr` and `osf` in M3-4, forward `jmp`/`lbl`
-   in M3-5, and no MCR, decision 83.)* JMP/LBL
+   2026-10-14, `add sub mul div mod neg abs`; `osr` and `osf` in M3-4, landed 2026-10-14;
+   forward `jmp`/`lbl` in M3-5, and no MCR, decision 83.)* JMP/LBL
    do *not* require abandoning the `Enum.reduce` over rungs — widening the accumulator
    from `env` to `{skip, env}` is enough for forward jumps; only backward jumps need an
    indexed loop.
