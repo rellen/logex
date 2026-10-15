@@ -1415,8 +1415,9 @@ In a block whose `cal` is false both bits are held, so a pulse given at the body
 stays on until it next runs (decision 102), and a blocked storage bit there stays listed
 until a scan runs it (decision 32). A block whose first run comes after the instance's
 first scan reads each storage bit as declared there, so an `osr` whose rung is true pulses,
-and an `osf` whose storage bit is declared 1 pulses on a false rung (decision 102). A coil under an event task is not warned about, as an
-`ons` is not (decision 103).
+and an `osf` whose storage bit is declared 1 pulses on a false rung (decision 102). A coil
+under an event task is a configuration warning, as an `ons` is (decision 103, as the
+maintainer answered it on 2026-10-15).
 
 An instance a configuration's edit sets aside and brings back (decision 57) is not
 "removed, then restored": it comes back as it was set aside, under the program it ran
@@ -2672,8 +2673,9 @@ then. Decisions 97–99 are M3-3's own routine choices, taken as it landed on 20
 99 the shape of the report decision 78 left to M3-3, and 98's reading of a `mod` by zero
 confirmed by the maintainer the same day, after M3-3's review. Decisions 100–103 are
 M3-4's own routine choices, taken as it landed the same day, 102 confirmed by the
-maintainer on 2026-10-15, after M3-4's review. All one hundred and three are kept with their
-options so the reasons stay with them.
+maintainer on 2026-10-15, after M3-4's review, and 103's "no warning" superseded by the
+maintainer's answer the same day. All one hundred and three are kept with their options so
+the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3486,6 +3488,9 @@ questions asked after M3-1's review, the same day.
     task with a `single`, alone or with an interval, is a warning on the configuration's
     `warnings`, as M2-6 warns for a `ton`, citing the counter's instruction. A one-shot
     under an event task is still not warned about. *(Landed with M3-1, 2026-10-14.)*
+    *(Changed 2026-10-15 by decision 103, as the maintainer answered it after M3-4's
+    review: a one-shot under an event task, an `ons`, an `osr` or an `osf`, is a warning
+    too, in its own words, after the counters.)*
 73. **What follows a counter or timer on its line (M3-1, M3-2).** "Photo-eye, then counter,
     then lamp" on one line, rather than the lamp on the next line worked by the counter's
     done bit.
@@ -3573,7 +3578,9 @@ questions asked after M3-1's review, the same day.
     an `ons` bit has. *(Landed with M3-4, 2026-10-14: each passes on the power it receives,
     decision 100; its pulse bit may be a member logic may write, decision 101; `osf` pulses
     on its false rung's run, and a frozen block holds both bits, decision 102; and neither
-    is warned about under an event task, as `ons` is not, decision 103.)*
+    is warned about under an event task, as `ons` is not, decision 103.)* *(Changed
+    2026-10-15 by the maintainer's answer to decision 103: each is a warning under an
+    event task, as an `ons` now is.)*
 81. **Skipping ahead (M3-5).** Jump over a group of lines while the line is in manual mode.
     - Yes, forward only: the skipped lines do not run that scan, and their outputs stay as
       they were; a backward jump, which could loop for ever, is refused;
@@ -4049,7 +4056,20 @@ record answers one, 103, it says which decisions do.
      *Taken: no warning,* as decisions 72 and 80 read together, and the reversible way: a
      warning stops nothing, and adding one later breaks no program. Whether one-shots,
      `ons` with them, should be warned about as counters are is the maintainer's to
-     decide. *(Landed 2026-10-14.)*
+     decide. *(Landed 2026-10-14.)* *(Confirmed by the maintainer on 2026-10-15, after
+     M3-4's review, superseding "no warning": a warning for all three one-shots, `ons`
+     with the coils, as for a counter, each in its own words. The e-stop's own event task
+     runs `xic estop osr s1 pressed`; the configuration now tells it that an osr sees its
+     rung only at the task's runs, so a pulse between two runs is never seen, the pulse it
+     sets stays on until the task's next run, and a rung that is the task's trigger, as
+     `estop` is here, is true at every run and never pulses. An `ons` is told that a pulse
+     between two runs never fires it, and an `osf` that a drop between two runs is never
+     seen. Each one-shot a program instance runs under a task with a `single`, alone or
+     with an interval, at any depth, is a warning on the configuration's `warnings` at the
+     instance's line, a block's by its storage bit's path, `e.s`, after the instance's
+     timers and counters, citing the instruction's own file and line, from
+     `Logex.Walk.one_shots/1`, read once a program type as the timers are. It changes what
+     decision 72 said of an `ons`, and decision 80's landed note. Landed 2026-10-15.)*
 
 ---
 

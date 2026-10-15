@@ -2671,11 +2671,12 @@ names it breaks. Growth tests are in reductions.
   run, and a frozen block holds both bits, so a pulse given at its body's last run stays on
   until it next runs (decision 102); and a coil under an event task is not warned about, as
   an `ons` is not, the record's reading of decisions 72 and 80, left to the maintainer
-  (decision 103). Every rule of an `ons` storage bit is a coil's: one one-shot of the three
-  to a bit, never a member, any other write a warning, the configuration's writer warning
-  naming its one-shot, and decision 21's block list by name, the whole rung compared without
-  presets, so a coil whose pulse bit alone changes is blocked too. The walk's first draft
-  found a gap in its own oracle, a restart's fresh bits, and none in `lib/`.
+  (decision 103), who chose a warning after the review (below). Every rule of an `ons`
+  storage bit is a coil's: one one-shot of the three to a bit, never a member, any other
+  write a warning, the configuration's writer warning naming its one-shot, and decision
+  21's block list by name, the whole rung compared without presets, so a coil whose pulse
+  bit alone changes is blocked too. The walk's first draft found a gap in its own oracle,
+  a restart's fresh bits, and none in `lib/`.
 
   M3-4's review found no defect in `lib/`, and its fixes are the commits after (5). One
   rule of the block list was pinned for an `ons` and by no test for a coil: a storage bit
@@ -2713,7 +2714,17 @@ names it breaks. Growth tests are in reductions.
   M3-4 built; decision 102 and §7's opening record it, and `pulse_coil_test.exs`'s frozen
   block now reads the block's own pulse bits beside the program's tags, which the
   decision's alternative, a false `cal` clearing them, had changed with only the contract
-  walk red. The suite is at 1162 tests (8 doctests).
+  walk red. Asked too whether a one-shot under an event task should be warned of, as a
+  counter is, the maintainer chose a warning for all three, `ons` with the coils,
+  superseding decision 103's "no warning" and what decision 72 said of an `ons`: each
+  one-shot a program instance runs under a task with a `single`, at any depth, is a
+  warning on the configuration's `warnings` in its own words, after the instance's timers
+  and counters, a block's by its storage bit's path, citing its instruction's own file and
+  line, from a new fact, `Logex.Walk.one_shots/1`, read once a program type as the timers
+  are, so that the e-stop's own coil, `xic estop osr s1 pressed`, is told it never pulses.
+  `configuration_test.exs` pins it from text, from Elixir and from files on disk, and
+  `walk_test.exs` the fact, whose two growth tests walk it too, their bounds again a fifth
+  above the highest of 48 runs, 1.82 and 19.0. The suite is at 1167 tests (8 doctests).
 - **M3-5 · Control flow: forward `jmp` and `lbl`, and no MCR.** A forward jump only, a
   label first on its rung, labels a routine's own namespace (decision 81); skipped rungs
   freeze as a false `cal` freezes a block, a timer in them catching up when next run (82);

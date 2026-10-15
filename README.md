@@ -757,7 +757,9 @@ line 3: `s1` is both the storage bit and the pulse bit of this `osr`: its pulse 
   and a second coil on one pulse bit, an `ote` among them, is the second-`ote` warning.
 - A coil in a function block whose `cal` is false is frozen with the rest of the block,
   both its bits held, so a pulse it gave on the block's last run stays on until it next
-  runs. A coil under an event task is not warned about, as an `ons` is not.
+  runs. A coil under an event task is a configuration warning in its own words, as an
+  `ons` is ("An event task", below): it sees its rung only when the task runs, and the
+  pulse it sets stays on until the task next runs.
 
 ### A function block
 
@@ -1382,6 +1384,12 @@ wrong_trip.logex: line 3: the interval of `late` is 0: an interval is at least 1
   times only, so a host cycles at once after `start/1` and `restart/2`, whatever it says.
 - A ton in a program an event task runs times across the task's runs, which only the
   configuration knows, so the configuration warns of each, a block's timer by its path.
+  So it does of every other timer, of each counter after them, and of each one-shot after
+  those, an `ons`, an `osr` or an `osf`, each in its own words and a block's by its
+  storage bit's path: a counter or a one-shot sees its rung only when the task runs, so an
+  edge between two runs is never seen, and a rung that is the task's trigger is true at
+  every run, so that `xic estop osr s1 pressed` under the e-stop's own event task never
+  pulses; and the pulse a coil does set stays on until the task next runs.
 - A single names a bool global; a dint, another kind of name and no global are each a
   diagnostic at the task's line, a dotted one told the reading it has.
 

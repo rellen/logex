@@ -1277,12 +1277,14 @@ defmodule Logex.RuntimeTest do
       # M3-1: presets/1, every built-in instance a program runs, and counters/1 beside
       # timers/1. Decision 96: member_writes/1, the members a program writes, by path.
       # M3-4: one_shots/0 and storage_bits/1, every one-shot's storage bit, and uses_of/2,
-      # one instruction's uses.
+      # one instruction's uses; since its review one_shots/1, the one-shots a program runs,
+      # at any depth (decision 103).
       assert Enum.sort(Logex.Walk.__info__(:functions)) == [
                counters: 1,
                instructions: 1,
                member_writes: 1,
                one_shots: 0,
+               one_shots: 1,
                presets: 1,
                storage_bits: 1,
                timers: 1,

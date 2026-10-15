@@ -1,8 +1,8 @@
 defmodule Logex.WalkTest do
   @moduledoc """
   B5's one walk of a program's IR (M2-4): every instruction, every use, which tags a
-  program writes, which members it writes (decision 96) and which timers it runs, from
-  source, `cal` and the blocks it runs included.
+  program writes, which members it writes (decision 96), which timers it runs and which
+  one-shots (M3-4), from source, `cal` and the blocks it runs included.
   """
   use ExUnit.Case, async: true
 
@@ -318,6 +318,49 @@ defmodule Logex.WalkTest do
     end
   end
 
+  # M3-4: the one-shots a program runs, at any depth, which a configuration's event-task
+  # warning reads (decision 103).
+  describe "one_shots/1" do
+    test "each storage bit of an `ons`, `osr` or `osf`, to the line and symbol of its " <>
+           "one-shot, a coil's pulse bit none" do
+      p =
+        program!("""
+        var a bool
+        var s1 bool
+        var s2 bool
+        var s3 bool
+        var q bool
+        xic a osf s2 q ( ons s1 | xic q )
+        xic s1 osr s3 q
+        """)
+
+      assert Walk.one_shots(p) == %{"s1" => {6, :ons}, "s2" => {6, :osf}, "s3" => {7, :osr}}
+    end
+
+    test "the first one-shot in rung order, where a program built by hand has two" do
+      p = program!("var a bool\nvar s bool\nvar q bool\nxic a osr s q\n")
+      [{:rung, [xic, _osr]}] = p.rungs
+      second = {:ons, 5, [{:name, 5, "s"}]}
+      twice = %{p | rungs: p.rungs ++ [{:rung, [xic, second]}]}
+      assert Walk.one_shots(twice) == %{"s" => {4, :osr}}
+    end
+
+    test "it reaches into each block a `cal` runs, at any depth, by path, at the body's " <>
+           "one-shot" do
+      seal = block!(@seal)
+      pair = block!(@pair, [seal])
+
+      p =
+        program!(
+          "var_input go bool\nvar s9 bool\nvar p pair\nvar out bool\ncal p go out\n" <>
+            "xic go osf s9 out\n",
+          [pair]
+        )
+
+      assert Walk.one_shots(p) == %{"s9" => {6, :osf}, "p.s.edge" => {7, :ons}}
+    end
+  end
+
   describe "timers/1" do
     test "each timer a `ton` runs, to the line and preset of the first, and none a `ton` does not run" do
       p =
@@ -368,11 +411,12 @@ defmodule Logex.WalkTest do
           end
         )
 
-    # Each block type's own writes and timers are read once a call, however many instances
-    # run it: at 100 instances, 4x the rungs of the block's body cost little more, 1.49x to
-    # 1.50x over 37 runs on Elixir 1.20.4, 21 alone and 16 beside three full suites; with
-    # the body read again for each instance, about 4x. The bound is a fifth above the
-    # highest.
+    # Each block type's own writes, timers and one-shots are read once a call, however many
+    # instances run it: at 100 instances, 4x the rungs of the block's body cost little more,
+    # 1.49x to 1.50x over 37 runs on Elixir 1.20.4, 21 alone and 16 beside three full
+    # suites, and with one_shots/1 walked too since M3-4's review, 1.505x to 1.511x over 48,
+    # 16 alone, 16 beside two full suites and 16 beside three; with the body read again for
+    # each instance, about 4x. The bound is a fifth above the highest.
     test "a block's body is read once a call, however many instances run it" do
       walk = fn r ->
         big =
@@ -393,18 +437,20 @@ defmodule Logex.WalkTest do
           Walk.writes(p)
           Walk.member_writes(p)
           Walk.timers(p)
+          Walk.one_shots(p)
         end)
       end
 
       ratio = walk.(200) / walk.(50)
-      assert ratio < 1.8, "4x the body's rungs took #{Float.round(ratio, 2)}x the reductions"
+      assert ratio < 1.82, "4x the body's rungs took #{Float.round(ratio, 2)}x the reductions"
     end
 
     # A chain of n block types, each holding the next and running it: each level's facts
     # are put once, from the top down, so 16x the depth, 20 levels to 320, cost 15.74x in
-    # each of 32 runs on Elixir 1.20.4, 16 alone and 16 beside three full suites. The bound
-    # is a fifth above the highest; with each level's facts put by path as each level
-    # returned them, 129.7x. The walk itself takes milliseconds: nearly all the test's time
+    # each of 32 runs on Elixir 1.20.4, 16 alone and 16 beside three full suites, and with
+    # one_shots/1 walked too since M3-4's review, 15.79x to 15.83x over 48, 16 alone, 16
+    # beside two full suites and 16 beside three. The bound is a fifth above the highest;
+    # with each level's facts put by path as each level returned them, 129.7x. The walk itself takes milliseconds: nearly all the test's time
     # is building the chain, each level's compile checking every type below it again
     # (decision 54), quadratic in the depth: 800 levels took 11 s alone, up to 36 s beside
     # three full suites, and ran out ExUnit's minute four suites at once; 320 take 2 s.
@@ -432,11 +478,12 @@ defmodule Logex.WalkTest do
           Walk.writes(p)
           Walk.member_writes(p)
           Walk.timers(p)
+          Walk.one_shots(p)
         end)
       end
 
       ratio = walk.(320) / walk.(20)
-      assert ratio < 18.9, "16x the depth took #{Float.round(ratio, 1)}x the reductions"
+      assert ratio < 19.0, "16x the depth took #{Float.round(ratio, 1)}x the reductions"
     end
   end
 end

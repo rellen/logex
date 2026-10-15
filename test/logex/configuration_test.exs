@@ -3700,6 +3700,158 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  # M3-4 (decision 103, as the maintainer answered it on 2026-10-15): a one-shot an event
+  # task runs, an `ons`, an `osr` or an `osf`, at any depth, sees its rung only at the
+  # task's runs, each warned of in its own words, after the instance's counters.
+  describe "a one-shot under an event task (M3-4), a warning in its own words" do
+    @describetag :tmp_dir
+
+    @edge_ld """
+    function_block edge
+    var_input in bool
+    var_output up bool
+    var_output down bool
+    var s bool
+    var f bool
+    xic in ons s ote up
+    xic in osf f down
+    """
+
+    # The e-stop's own event task pulses a "pressed" bit, beside a block of one-shots, a
+    # counter and a timer.
+    @pressed_ld """
+    var_input estop bool
+    var_output pressed bool
+    var_output up bool
+    var_output down bool
+    var_output late bool
+    var s1 bool
+    var e edge
+    var presses ctu
+    var t9 ton
+    xic estop osr s1 pressed
+    cal e estop up down
+    xic estop ctu presses 10
+    xic estop ton t9 50
+    xic t9.dn xic presses.q ote late
+    """
+
+    @pressed_logex """
+    task trip single estop priority 0
+    task parts single estop interval 100 priority 1
+    task fast interval 10 priority 2
+    var_global estop bool at panel.i.0
+    program a pressed with trip
+    a.estop estop
+    program b pressed with parts
+    b.estop estop
+    program c pressed with fast
+    c.estop estop
+    program d pressed
+    d.estop estop
+    """
+
+    defp one_shot(instance, task, type, word, cited, bit),
+      do:
+        "`#{instance}` runs under the event task `#{task}`, and `#{type}` runs an `#{word}`" <>
+          "#{cited}, whose storage bit is `#{bit}`: " <> sees(word)
+
+    defp sees("ons"),
+      do:
+        "an ons sees its rung only at the task's runs, so a pulse between two runs never " <>
+          "fires it, and a rung that is the task's trigger is true at every run and never " <>
+          "fires it"
+
+    defp sees("osr"),
+      do:
+        "an osr sees its rung only at the task's runs, so a pulse between two runs is never " <>
+          "seen, the pulse it sets stays on until the task's next run, and a rung that is " <>
+          "the task's trigger is true at every run and never pulses"
+
+    defp sees("osf"),
+      do:
+        "an osf sees its rung only at the task's runs, so a drop between two runs is never " <>
+          "seen, the pulse it sets stays on until the task's next run, and a rung that is " <>
+          "the task's trigger is true at every run and never pulses"
+
+    test "each one-shot of each instance an event task runs, a block's by its path, after " <>
+           "its timers and counters, from files on disk",
+         %{tmp_dir: dir} do
+      for {name, text} <- [
+            {"edge.ld", @edge_ld},
+            {"pressed.ld", @pressed_ld},
+            {"events.logex", @pressed_logex}
+          ],
+          do: File.write!(Path.join(dir, name), text)
+
+      file = Path.join(dir, "events.logex")
+      assert {:ok, config} = Configuration.compile_file(file)
+
+      under = fn instance, task, line ->
+        at = "#{file}: line #{line}: warning: "
+
+        [
+          at <>
+            "`#{instance}` runs under the event task `#{task}`, and `pressed` runs the timer " <>
+            "`t9` on line 13 of `pressed.ld`: a ton times across the task's runs, and one " <>
+            "whose rung is true on two runs in a row counts the whole time between them",
+          at <>
+            "`#{instance}` runs under the event task `#{task}`, and `pressed` runs the " <>
+            "counter `presses` on line 12 of `pressed.ld`: a counter sees its rung only at " <>
+            "the task's runs, so a pulse between two runs is never counted, and a rung that " <>
+            "is the task's trigger is true at every run and never counts",
+          at <> one_shot(instance, task, "pressed", "osf", " on line 8 of `edge.ld`", "e.f"),
+          at <> one_shot(instance, task, "pressed", "ons", " on line 7 of `edge.ld`", "e.s"),
+          at <> one_shot(instance, task, "pressed", "osr", " on line 10 of `pressed.ld`", "s1")
+        ]
+      end
+
+      assert Enum.map(config.warnings, &Diagnostic.format/1) ==
+               under.("a", "trip", 5) ++ under.("b", "parts", 7)
+    end
+
+    # From Elixir data no type has a file: the program's own one-shots are cited on its
+    # line, and a block's by the block's name; a periodic task's instance and a task-less
+    # one are warned of nothing.
+    test "from text and from Elixir, in the same words, a block's cited by its name" do
+      {:ok, edge} = Logex.compile(@edge_ld, name: "edge")
+      {:ok, pressed} = Logex.compile(@pressed_ld, name: "pressed", types: [edge])
+
+      expected = [
+        one_shot("a", "trip", "pressed", "osf", " on line 8 of block `edge`", "e.f"),
+        one_shot("a", "trip", "pressed", "ons", " on line 7 of block `edge`", "e.s"),
+        one_shot("a", "trip", "pressed", "osr", " on its line 10", "s1")
+      ]
+
+      source = String.replace(@pressed_logex, "program b pressed with parts", "program b pressed")
+      warned = warned(source, %{"pressed" => pressed})
+
+      assert Enum.filter(warned, &(&1 =~ "storage bit")) ==
+               Enum.map(expected, &("line 5: warning: " <> &1))
+
+      config =
+        Configuration.new!(
+          name: "plant",
+          programs: [pressed],
+          tasks: [
+            %Configuration.Task{name: "trip", single: "estop", priority: 0},
+            task("fast", 10, 1)
+          ],
+          globals: [%Global{name: "estop", type: :bool, at: "panel.i.0"}],
+          instances: [
+            %Instance{name: "a", type: "pressed", task: "trip"},
+            %Instance{name: "c", type: "pressed", task: "fast"},
+            %Instance{name: "d", type: "pressed"}
+          ],
+          connections:
+            for(i <- ["a", "c", "d"], do: %Connection{instance: i, member: "estop", to: "estop"})
+        )
+
+      assert Enum.filter(Enum.map(config.warnings, & &1.message), &(&1 =~ "storage bit")) ==
+               expected
+    end
+  end
+
   describe "compile_file/1 (M2-2): a configuration file and its program types, on disk" do
     @describetag :tmp_dir
 
@@ -5106,8 +5258,8 @@ defmodule Logex.ConfigurationTest do
   # M3-4: the pulse coils in a configuration. A coil's pulse bit and storage bit are writes
   # (Logex.Walk.writes/1, by their slots), so through a var_external each meets every
   # writer rule of M2-4's, and a global a coil keeps its storage bit in is told so in the
-  # coil's words. A coil under an event task is no warning, as an `ons` is none (decision
-  # 103).
+  # coil's words. A coil under an event task is a warning, as an `ons` is (decision 103,
+  # as the maintainer answered it).
   describe "pulse coils in a configuration (M3-4)" do
     @coiled """
     var_input go bool
@@ -5126,8 +5278,8 @@ defmodule Logex.ConfigurationTest do
     xic t9.dn ote late
     """
 
-    test "a coil under an event task is no warning, as an `ons` is none, where a timer " <>
-           "beside it is (decision 103)" do
+    test "a coil under an event task is a warning in its own words, as an `ons` is, " <>
+           "after a timer beside it (decision 103)" do
       {:ok, coiled} = Logex.compile(@coiled, name: "coiled")
 
       source = """
@@ -5140,7 +5292,13 @@ defmodule Logex.ConfigurationTest do
       assert warned(source, %{"coiled" => coiled}) == [
                "line 3: warning: `a` runs under the event task `trip`, and `coiled` runs the " <>
                  "timer `t9` on its line 13: a ton times across the task's runs, and one whose " <>
-                 "rung is true on two runs in a row counts the whole time between them"
+                 "rung is true on two runs in a row counts the whole time between them",
+               "line 3: warning: " <>
+                 one_shot("a", "trip", "coiled", "osr", " on its line 10", "s1"),
+               "line 3: warning: " <>
+                 one_shot("a", "trip", "coiled", "osf", " on its line 11", "s2"),
+               "line 3: warning: " <>
+                 one_shot("a", "trip", "coiled", "ons", " on its line 12", "s3")
              ]
     end
 

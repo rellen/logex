@@ -13,13 +13,14 @@ defmodule Logex.Walk do
     instruction's;
   - `storage_bits/1`: each one-shot's storage bit, an `ons`'s, an `osr`'s or an `osf`'s
     (M3-4), and `one_shots/0`, the instructions that keep one;
+  - `one_shots/1`: which one-shots a program runs, at any depth (M3-4);
   - `writes/1`: which tags a program writes, and where;
   - `member_writes/1`: which members of its instances it writes, and where (decision 96);
   - `presets/1`: which built-in instances a program runs, and at what preset (M3-1);
   - `timers/1`: which of them are timers;
   - `counters/1`: which of them are counters.
 
-  `writes/1`, `member_writes/1`, `presets/1`, `timers/1` and `counters/1` know `cal`: a `cal` writes the instance it runs and each tag
+  `writes/1`, `member_writes/1`, `presets/1`, `timers/1`, `counters/1` and `one_shots/1` know `cal`: a `cal` writes the instance it runs and each tag
   its block's var_outputs fill, as its slots say, and they reach into each block a `cal`
   runs, at any depth, naming what its body writes or runs by its path, `s1.t1`, as an
   access path does (§4.7). Each block type's body is read once a call, however many
@@ -89,10 +90,12 @@ defmodule Logex.Walk do
   symbol}`: the bit it names, and its instruction's line and symbol (`one_shots/0`). A
   one-shot on a member, which the compiler refuses, is none.
   """
-  def storage_bits(rungs),
+  def storage_bits(rungs), do: bits_of(instructions(rungs))
+
+  defp bits_of(instructions),
     do:
       for(
-        {symbol, line, [{:name, _, bit} | _]} <- instructions(rungs),
+        {symbol, line, [{:name, _, bit} | _]} <- instructions,
         symbol in @one_shots,
         do: {bit, line, symbol}
       )
@@ -151,6 +154,17 @@ defmodule Logex.Walk do
   (decision 72).
   """
   def counters(%Program{} = program), do: reach(program, &counted/2)
+
+  @doc """
+  Which one-shots `program` runs (M3-4): each storage bit `storage_bits/1` gives, to
+  `{line, symbol}`, its instruction's line and symbol, `:ons`, `:osr` or `:osf`. A storage
+  bit has one one-shot in a program that compiles; where several name it, the first in
+  rung order is given. It reaches into each block a `cal` runs, as `timers/1` does: a
+  one-shot the body runs is run too, by its storage bit's path, `s1.edge`, at the line of
+  the body's instruction, in the block's own text. `Logex.Configuration.check/1`'s
+  event-task warning reads it beside `timers/1` and `counters/1`.
+  """
+  def one_shots(%Program{} = program), do: reach(program, &oned/2)
 
   # A routine's own facts, `own.(instructions, tags)`, a map of names to a list of lines
   # (writes) or a first run (timers); then, from the top down, each block its `cal`s run,
@@ -234,6 +248,13 @@ defmodule Logex.Walk do
           Enum.zip(Compiler.signature(instruction, tags), operands),
         do: {Enum.join(path, "."), line}
       )
+
+  # A routine's one-shots, each storage bit to its first one-shot's line and symbol.
+  defp oned(instructions, _tags),
+    do:
+      Enum.reduce(bits_of(instructions), %{}, fn {bit, line, symbol}, oned ->
+        Map.put_new(oned, bit, {line, symbol})
+      end)
 
   # The timers among the built-in instances a routine runs, those whose type keeps time,
   # and the counters.

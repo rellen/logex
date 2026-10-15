@@ -89,7 +89,11 @@ defmodule Logex.Configuration do
   sees its rung only at the task's runs (`Logex.Walk.counters/1`). Since M3-2, each timer
   in its own type's words: a tof's delay and a tp's pulse end only at one of the task's
   runs, a tp starts only on an edge between two runs, and an rto, as a ton, adds the whole
-  time between two runs whose rung is true.
+  time between two runs whose rung is true. Since M3-4, each one-shot such an instance
+  runs, an `ons`, an `osr` or an `osf`, a block's by its storage bit's path, so too, after
+  its counters, each in its own words, citing its instruction (`Logex.Walk.one_shots/1`,
+  decision 103): a one-shot sees its rung only at the task's runs, so an edge between two
+  runs is never seen, and the pulse a coil sets stays on until the task's next run.
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -2398,7 +2402,8 @@ defmodule Logex.Configuration do
   # between two of the task's runs where its rung was true on both, which only the
   # configuration knows is irregular, whether the task has a single alone or an interval
   # too. Each program type's timers are read once (Logex.Walk.timers/1), and each warning
-  # cites its `ton` in the text it is in.
+  # cites its `ton` in the text it is in; since M3-1 its counters so too, and since M3-4
+  # its one-shots (Logex.Walk.counters/1 and one_shots/1; decisions 72 and 103).
   defp timed(world) do
     events =
       for {name, {:task, _line, %Logex.Configuration.Task{single: single}}} <- world.names,
@@ -2418,27 +2423,37 @@ defmodule Logex.Configuration do
 
   defp timers_of({:ok, timers}, _program, memo), do: {timers, memo}
 
-  # Each timer, then each counter (M3-1, decision 72), with its citation, built once a
-  # program type: the routines down each path are read through a table of their typed
-  # tags, each routine's built once.
+  # Each timer, then each counter (M3-1, decision 72), then each one-shot (M3-4, decision
+  # 103), with its citation, built once a program type: the routines down each path are
+  # read through a table of their typed tags, each routine's built once.
   defp timers_of(:error, %Program{name: name} = program, memo) do
     {timers, tables} = citing(Walk.timers(program), :timer, program, %{})
-    {counters, _tables} = citing(Walk.counters(program), :counter, program, tables)
-    {timers ++ counters, Map.put(memo, name, timers ++ counters)}
+    {counters, tables} = citing(Walk.counters(program), :counter, program, tables)
+    {one_shots, _tables} = citing(Walk.one_shots(program), :one_shot, program, tables)
+    runs = timers ++ counters ++ one_shots
+    {runs, Map.put(memo, name, runs)}
   end
 
-  # Each with its type word, read in the routine whose text holds it (M3-2).
+  # Each with its word, read in the routine whose text holds it (M3-2): a timer's or a
+  # counter's type word, and a one-shot's mnemonic.
   defp citing(runs, kind, program, tables),
     do:
       runs
       |> Enum.sort()
-      |> Enum.map_reduce(tables, fn {path, {line, _preset}}, tables ->
+      |> Enum.map_reduce(tables, fn {path, {line, run}}, tables ->
         parts = String.split(path, ".")
         {holder, tables} = holder(parts, {:program, program}, tables)
-        {typed, tables} = typed_tags(Map.fetch(tables, key(holder)), holder, tables)
-        %Tag{type: %FbType{name: word}} = Map.fetch!(typed, List.last(parts))
+        {word, tables} = word(kind, run, List.last(parts), holder, tables)
         {{kind, path, cited(line, holder), word}, tables}
       end)
+
+  defp word(:one_shot, symbol, _name, _holder, tables), do: {Atom.to_string(symbol), tables}
+
+  defp word(_built_in, _preset, name, holder, tables) do
+    {typed, tables} = typed_tags(Map.fetch(tables, key(holder)), holder, tables)
+    %Tag{type: %FbType{name: word}} = Map.fetch!(typed, name)
+    {word, tables}
+  end
 
   # M3-2: in the words of the timer's own type.
   defp timer_warning({:timer, path, cited, word}, instance, program),
@@ -2462,6 +2477,37 @@ defmodule Logex.Configuration do
           "is never counted, and a rung that is the task's trigger is true at every run " <>
           "and never counts"
       )
+
+  # M3-4 (decision 103, as the maintainer answered it): a one-shot sees its rung only at
+  # the task's runs, so an edge between two runs is never seen, and a rung that is the
+  # task's own trigger is true at every run and gives none; a coil's pulse bit stays on
+  # until the task's next run. Each is said letter by letter, "an".
+  defp timer_warning({:one_shot, path, cited, word}, instance, program),
+    do:
+      warning(
+        instance.line,
+        "`#{instance.name}` runs under the event task `#{instance.task}`, and " <>
+          "`#{program.name}` runs an `#{word}`#{cited}, whose storage bit is `#{path}`: " <>
+          sees(word)
+      )
+
+  defp sees("ons"),
+    do:
+      "an ons sees its rung only at the task's runs, so a pulse between two runs never " <>
+        "fires it, and a rung that is the task's trigger is true at every run and never " <>
+        "fires it"
+
+  defp sees("osr"),
+    do:
+      "an osr sees its rung only at the task's runs, so a pulse between two runs is never " <>
+        "seen, the pulse it sets stays on until the task's next run, and a rung that is the " <>
+        "task's trigger is true at every run and never pulses"
+
+  defp sees("osf"),
+    do:
+      "an osf sees its rung only at the task's runs, so a drop between two runs is never " <>
+        "seen, the pulse it sets stays on until the task's next run, and a rung that is the " <>
+        "task's trigger is true at every run and never pulses"
 
   defp across("ton"),
     do:
