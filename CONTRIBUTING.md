@@ -303,7 +303,12 @@ choice, not an oversight to fix.
   (`Process.info(self(), :reductions)`), not time, so the bound holds on any machine:
   "compiling stays linear in the program's size" in `logex_test.exs` sees 4.3x to 4.9x for 4x
   the tags alone, and saw 14.2x. A new pass over rungs or tags must be reached by that test's
-  program, or get a test like it. **Growth in depth is a second axis**: M1-6's path pass
+  program, or get a test like it. **A large heap hides a copy**: `b4be654` moved that test
+  into a process whose heap no collection fills, to steady it on a busy machine, and a
+  walk that appended each rung with `++`, 12x the time, then grew only 5.3x to 6.4x and
+  passed its bound now and then, since `++` is charged few reductions and nothing copied
+  what it built again; in the VM's own heap it grew 12.4x to 12.9x. So the test measures
+  in both, each with a bound of its own. **Growth in depth is a second axis**: M1-6's path pass
   copied what it found in a group at every level of nesting, so a rung 8,000 groups deep
   took 2.9 s, and the size test, which never nests, stayed green. "compiling stays linear
   in the depth of nesting" reaches every walk into a group, the one that finds the first

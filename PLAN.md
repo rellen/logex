@@ -2690,7 +2690,19 @@ names it breaks. Growth tests are in reductions.
   difference from the conventional prescan. The behaviour is kept, one rule with `ons` and
   the counters (decision 89): decision 102 now records it, README, the two stanzas and the
   runtime's comment on `cal` say so, and `pulse_coil_test.exs` pins the `osf`'s pulse and
-  the `osr`'s. The suite is at 1161 tests (8 doctests).
+  the `osr`'s. `logex_test.exs`'s "compiling stays linear in the program's size" has
+  measured since (0) in a heap so large that its collections barely run, where a copy
+  costs few reductions: a `Logex.Walk.instructions/1` that appends each rung with `++`,
+  12x to 15x the time at 4x the tags, grew 5.27x to 6.42x there and passed its bound of
+  5.24 in three of five runs of the suite. The test is now two, the large heap's at 5.24
+  and the VM's own heap's, which grew 4.40x to 4.67x alone and 4.87x to 6.19x four at once
+  over 32 runs, bound 7.43: the `++` walk grows 12.4x to 12.9x there, the warnings'
+  quadratic pass 13.4x in either heap, a linear search for a one-shot's storage bit 7.2x
+  in the large heap and 7.6x in the VM's, and a count of the rungs at every rung 6.4x in
+  the large heap, each failing at least one. A `++` in `Logex.Warnings.of/2` alone, 4.3x
+  and 5.8x to 6.0x, still passes both. Over the same 32 runs the large heap's figure
+  reached 4.50x four at once, 16% under its bound of 5.24, which is kept. The suite is at
+  1162 tests (8 doctests).
 - **M3-5 · Control flow: forward `jmp` and `lbl`, and no MCR.** A forward jump only, a
   label first on its rung, labels a routine's own namespace (decision 81); skipped rungs
   freeze as a false `cal` freezes a block, a timer in them catching up when next run (82);

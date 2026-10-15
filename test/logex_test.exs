@@ -191,7 +191,7 @@ defmodule LogexTest do
   # contact, two errors, so the one-ton rule's and the path rule's reports are timed too,
   # and runs a timer no line declares, with a tag preset and a contact after it, so the
   # hints that look for a declared twin of it are.
-  defp reductions_to_compile(tags) do
+  defp reductions_to_compile(tags, heap) do
     names = for i <- 1..tags, do: "t#{i}"
     declarations = Enum.map(names, &"var #{&1} bool\nvar #{&1}_s bool\nvar #{&1}_t ton")
 
@@ -206,7 +206,7 @@ defmodule LogexTest do
     tons = Enum.map(names, &"ton #{&1}_t 60 xic #{&1}\nton zz #{&1} xic #{&1}")
     twice = Enum.join(declarations ++ rungs ++ tons, "\n")
 
-    in_a_large_heap(fn ->
+    in_a_process(heap, fn ->
       {:reductions, before} = Process.info(self(), :reductions)
       {:ok, _program} = Logex.compile(source, name: "big")
       {:error, _two_tons} = Logex.compile(twice, name: "big")
@@ -215,20 +215,26 @@ defmodule LogexTest do
     end)
   end
 
-  # A process of its own, whose heap starts large enough that the compile at 2,000 tags
-  # runs one major collection, not 61: each copies a heap that holds the program built so
-  # far, and is charged in reductions, more of them on a busy machine, which is what moved
-  # the figure, not the compile. 4M words, 32 MB.
-  defp in_a_large_heap(measure) do
+  # A process of its own, with a heap of the size given: `:large`, whose heap starts large
+  # enough that the compile at 2,000 tags runs one major collection, not 61, each copying
+  # a heap that holds the program built so far and charged in reductions, more of them on
+  # a busy machine, 4M words, 32 MB; or `:default`, the VM's, where those collections run.
+  defp in_a_process(heap, measure) do
     Task.await(
       Task.async(fn ->
-        Process.flag(:min_heap_size, 4_000_000)
-        :erlang.garbage_collect()
+        heap_of(heap)
         measure.()
       end),
       :infinity
     )
   end
+
+  defp heap_of(:large) do
+    Process.flag(:min_heap_size, 4_000_000)
+    :erlang.garbage_collect()
+  end
+
+  defp heap_of(:default), do: :ok
 
   # One rung nested `depth` groups deep, each with a second leg and a contact after it, and
   # a timer's contact, a comparison of two literals and a one-shot innermost, so every walk
@@ -337,14 +343,30 @@ defmodule LogexTest do
     # so far, 65 of them at 2,000 tags to 13 at 500, and a busy VM charges the same
     # collections more reductions, so that in the test's own process the figure reached
     # 7.29x with four suites at once, and its bound was 8.75. So each size compiles in a
-    # process of its own whose heap starts at 4M words (in_a_large_heap/1), where 2,000
-    # tags take one major collection and 11 minor ones, not 61 and 168, and 500 tags two
-    # minor ones: over 32 runs of the suite, 16 alone and 16 four at once, it grew 4.07x to
-    # 4.12x alone and 4.09x to 4.36x four at once, the collections left charged a little
-    # more on a busy machine. The bound is a fifth above that highest.
-    test "compiling stays linear in the program's size" do
-      ratio = reductions_to_compile(2000) / reductions_to_compile(500)
+    # process of its own whose heap starts at 4M words (in_a_process/2, `:large`), where
+    # 2,000 tags take one major collection and 11 minor ones, not 61 and 168, and 500 tags
+    # two minor ones: over 32 runs of the suite, 16 alone and 16 four at once, it grew
+    # 4.07x to 4.12x alone and 4.09x to 4.36x four at once, the collections left charged a
+    # little more on a busy machine. The bound is a fifth above that highest. Over 32 more
+    # at M3-4's review, as many each way, it grew 4.05x to 4.12x alone and 4.07x to 4.50x
+    # four at once, 16% under the bound.
+    test "compiling stays linear in the program's size, in a heap no collection moves" do
+      ratio = reductions_to_compile(2000, :large) / reductions_to_compile(500, :large)
       assert ratio < 5.24, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
+    end
+
+    # The large heap hides what a compile copies. A Logex.Walk.instructions/1 that appends
+    # each rung's instructions with `++`, quadratic in what it copies and 12x to 15x the
+    # time at 4x the tags, grew 5.27x to 6.42x there, where `++` is charged few reductions
+    # and no collection copies what it built, and passed 5.24 in three of five runs of the
+    # suite at M3-4's review; in the VM's own heap, where each collection copies it again,
+    # it grows 12.4x to 12.9x. So each size compiles again in a process of its own with the
+    # VM's heap (in_a_process/2, `:default`): over 32 runs of the suite, 16 alone and 16
+    # four at once, it grew 4.40x to 4.67x alone and 4.87x to 6.19x four at once. The bound
+    # is a fifth above that highest.
+    test "compiling stays linear in the program's size, in the VM's own heap" do
+      ratio = reductions_to_compile(2000, :default) / reductions_to_compile(500, :default)
+      assert ratio < 7.43, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
     end
 
     # And in its depth. At 500 and 8,000 levels a linear compile grows about 16x. A walk
