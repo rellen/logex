@@ -1523,6 +1523,29 @@ defmodule Logex.EditTest do
       assert {%{"pulse" => 1}, _} = drive(v1, state, [{10, %{"go" => 1}}, {10, %{"go" => 0}}])
     end
 
+    # As an `ons`'s (fix F7): the candidate's other write leaves the storage bit at a value
+    # that is not the power its coil last received, so the untest blocks the restored coil.
+    test "one whose storage bit the program that last scanned also writes another way is " <>
+           "blocked (fix F7)" do
+      for {coil, other, a, bit} <- [
+            {"xic a osr s9 pulse", "xic b otu s9", 1, 0},
+            {"xic a osf s9 pulse", "xic b otl s9", 0, 1}
+          ] do
+        v1 = c!(@p <> coil)
+        v2 = c!(@p <> coil <> "\n" <> other)
+        assert Enum.any?(v2.warnings, &(&1.message =~ "the one-shot then fires on the wrong"))
+        {_, state} = run(v1, [{0, %{"a" => a, "b" => 1}}, {10, %{}}])
+        # The original writes s9 through its coil alone, so the test blocks nothing.
+        {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
+        {%{"pulse" => 0}, state} = drive(v2, state, [{10, %{}}])
+        assert state.env["s9"] == bit, coil
+        {_edit, state, report} = Edit.untest(edit, state)
+        assert report == [{:ons_blocked, "s9", bit}], coil
+        # a has held its value throughout: no real edge, so no pulse.
+        assert {%{"pulse" => 0}, _} = drive(v1, state, [{10, %{}}]), coil
+      end
+    end
+
     test "one inside a block is blocked by its path until a scan runs its body, the block " <>
            "frozen meanwhile (decision 32)" do
       {:ok, edge} =

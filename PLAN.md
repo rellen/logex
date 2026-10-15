@@ -2676,6 +2676,14 @@ names it breaks. Growth tests are in reductions.
   naming its one-shot, and decision 21's block list by name, the whole rung compared without
   presets, so a coil whose pulse bit alone changes is blocked too. The walk's first draft
   found a gap in its own oracle, a restart's fresh bits, and none in `lib/`.
+
+  M3-4's review found no defect in `lib/`, and its fixes are the commits after (5). One
+  rule of the block list was pinned for an `ons` and by no test for a coil: a storage bit
+  the program that last scanned also writes another way is blocked, and a coil's taken for
+  a counter's edge memory, which no logic writes, left the suite green, so that an untest
+  gave a pulse no edge made. `edit_test.exs` now holds an `osr` and an `osf` whose storage
+  bit the candidate also writes, each blocked at the untest. The suite is at 1160 tests (8
+  doctests).
 - **M3-5 · Control flow: forward `jmp` and `lbl`, and no MCR.** A forward jump only, a
   label first on its rung, labels a routine's own namespace (decision 81); skipped rungs
   freeze as a false `cal` freezes a block, a timer in them catching up when next run (82);
