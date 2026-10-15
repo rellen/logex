@@ -2701,8 +2701,14 @@ names it breaks. Growth tests are in reductions.
   in the large heap and 7.6x in the VM's, and a count of the rungs at every rung 6.4x in
   the large heap, each failing at least one. A `++` in `Logex.Warnings.of/2` alone, 4.3x
   and 5.8x to 6.0x, still passes both. Over the same 32 runs the large heap's figure
-  reached 4.50x four at once, 16% under its bound of 5.24, which is kept. The suite is at
-  1162 tests (8 doctests).
+  reached 4.50x four at once, 16% under its bound of 5.24, which is kept. The readings
+  above credited decisions 100–103 with a coil's rung compared whole, so that one whose
+  pulse bit alone changes is blocked, which none of them recorded: decision 101 now does,
+  with its cost, one real press, where the press rises on the first scan after the switch,
+  and why it is kept though decision 87's reason for leaving presets out would leave the
+  pulse bit out too: one rule with `ons`, whose rung is compared whole, what its pulse
+  drives among it. README's coil under an edit says so. The suite is at 1162 tests (8
+  doctests).
 - **M3-5 · Control flow: forward `jmp` and `lbl`, and no MCR.** A forward jump only, a
   label first on its rung, labels a routine's own namespace (decision 81); skipped rungs
   freeze as a false `cal` freezes a block, a timer in them catching up when next run (82);

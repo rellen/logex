@@ -3991,7 +3991,20 @@ record answers one, 103, it says which decisions do.
      pulse bit compile, as two `ote`s on one tag do, since only the last in the scan
      decides it and a warning says so. A second one-shot on a storage bit, an `ons`, an
      `osr` or an `osf`, is an error in the words of the two, and a storage bit and pulse
-     bit that are one tag an error at the coil's line. *(Landed 2026-10-14.)*
+     bit that are one tag an error at the coil's line. *(Landed 2026-10-14.)* *(Added
+     2026-10-15, after M3-4's review, which found `PLAN.md` crediting it to decisions
+     100–103 and none of them recording it: an online edit compares a coil's rung whole,
+     the presets of any counter or timer on it left out (decision 87), and its pulse bit is
+     part of it, so an edit that changes only the pulse bit, `xic start_pb osr s1 step` to
+     `xic start_pb osr s1 next`, blocks the coil until a scan runs it. The cost is one real
+     press: a press that rises on the first scan after the switch sets no pulse, though the
+     storage bit holds the power the coil last received and an unblocked coil would set its
+     new pulse bit, and the next press pulses. Decision 87's reason for leaving presets out,
+     fewer real edges lost and none made up, would leave the pulse bit out too; it is kept
+     in for one rule with `ons`, whose rung is compared whole, what its pulse drives among
+     it, so an `ons` whose rung changes only in that, `ote step` to `ote next`, is blocked
+     too, and a storage bit's block never turns on which operand of its rung changed.
+     `edit_test.exs` pins it.)*
 102. **When `osf` sees its edge, and a coil in a frozen block (M3-4).** A "box left the
      eye" pulse, `xic eye osf s2 gone`, and the same coil inside a block whose `cal` is
      false while the box leaves.

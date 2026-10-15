@@ -1626,8 +1626,9 @@ the eye is not counted again. A counter the edit adds while its rung is true is 
 blocks nothing, since no power on the rung reads it. A pulse coil is blocked as an `ons`
 is, by its storage bit: one the edit adds, or whose rung it changes, its kind or its pulse
 bit among the rung, is reported `{:ons_blocked, "s1", 0}` and sets no pulse at the switch,
-and its pulse bit is an ordinary bool, which an edit that removes the coil leaves as it
-was.
+so an edit of its pulse bit alone loses a press that rises on that scan, as an edit of what
+an `ons` drives does; and its pulse bit is an ordinary bool, which an edit that removes the
+coil leaves as it was.
 
 An edit that leaves no rung writing a counter's `r`, `ld` or `pv`, an `rto`'s `r` or a
 timer's `.pre` leaves it as it was, as an output the edit stops driving holds. Tested while
