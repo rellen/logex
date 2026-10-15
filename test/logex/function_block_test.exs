@@ -2117,6 +2117,21 @@ defmodule Logex.FunctionBlockTest do
       refute Logex.Compiler.lowered?(relined(twice, same))
     end
 
+    # M3-5: a jump goes forward to a label of its body (decision 81), its operand a label in
+    # the IR, `{:label, line, name}`, which lowers again to itself.
+    test "a jump goes forward to a label of its body" do
+      jumps =
+        body(
+          "function_block jumps\nvar_input go bool\nvar_output q bool\nvar_output r bool\n" <>
+            "lbl top xic go ote q\nxic go jmp done\nlbl done xio go ote r"
+        )
+
+      [first, {:rung, [contact, {:jmp, l, [{:label, l, "done"}]}]}, last] = jumps.rungs
+      back = [first, {:rung, [contact, {:jmp, l, [{:label, l, "top"}]}]}, last]
+      assert Logex.Compiler.lowered?(jumps)
+      refute Logex.Compiler.lowered?(relined(jumps, back))
+    end
+
     test "nothing follows a ton on its path" do
       timed =
         body(

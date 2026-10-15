@@ -141,15 +141,20 @@ defmodule Logex.Edit do
   armed by writing 1 would echo into any rung that reads it. A switch lists bits in the
   instance's `ons_blocked` instead, and the next scan that runs each one's `ons` blocks it,
   as a first scan blocks every `ons` (`Logex.Instance`): it passes no power, and still
-  writes its bit. At the top level that is the next scan; inside a function block's
-  instance, the next whose `cal` runs its body (decision 32). Against the program that last
+  writes its bit. At the top level that is the next scan, or since M3-5 the next that does
+  not skip its rung (decision 106); inside a function block's instance, the next whose
+  `cal` runs its body and does not skip its rung (decision 32). Against the program that last
   scanned, a switch lists each `ons` of the program it starts that is not in an identical
   rung there, line numbers and the preset of every timer and counter on it ignored, or
   whose bit that program also writes through another instruction: an `ons` the edit adds,
   one whose rung it changes, and one whose bit may not hold the power the `ons` last
   received. An untouched `ons` is not listed, and keeps a real edge on the switch scan; so
   does one whose rung changes only in a `ton`'s preset, which no power on the rung reads,
-  and which blocked it before M3-1 (decision 87).
+  and which blocked it before M3-1 (decision 87). A rung's `lbl` and `jmp` are part of it
+  (M3-5, decision 106): an edit that labels a one-shot's rung, or adds a `jmp` to it,
+  blocks the one-shot. Labels are names, so a rung that moves leaves every jump as it
+  was, and a `jmp` an edit adds or removes freezes or frees its section from the switch,
+  which blocks nothing whose rung it leaves alone (decision 82).
   - The program that last scanned is the one the switch stops where a scan has run since
     the last switch (`Logex.Instance`'s `switched` is false), and otherwise the one this
     edit recorded at that switch.

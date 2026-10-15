@@ -6,6 +6,10 @@ defmodule Logex.Runtime do
   - `instance/1` makes an instance's state, every tag at its initial value.
   - `call/4` is one scan of one instance: copy the inputs in, run every rung, give the
     outputs back. It is what a configuration's scheduler calls for each instance it runs.
+    Since M3-5 a `jmp` whose rung is true skips the rungs after it up to the one its label
+    heads, `lbl`, once its own rung is done: a skipped rung runs nothing, so all it holds is
+    frozen, as in a function block whose `cal` is false, and a timer in it catches up when
+    it next runs (decisions 81, 82 and 104).
   - `put_inputs/3`, `scan/2` and `scan/3` are the task-less sugar: the implicit
     configuration of one instance, whose var_inputs are the host's input image.
   - `restart/3` starts an instance again, keeping its clock and the inputs that fit their
@@ -187,7 +191,8 @@ defmodule Logex.Runtime do
   and since M3-1 the counters' edge memories whose `ctu` or `ctd` it blocks, and since M3-4
   the storage bits whose `osr` or `osf` it blocks,
   which an edit's switch sets and only the runtime fills into a scan (`Logex.Scan`), and a
-  scan empties but for a bit inside an instance whose body it did not run (M2-5); and
+  scan empties but for a bit inside an instance whose body it did not run (M2-5), and since
+  M3-5 one on a rung a jump skipped (decision 106); and
   `switched`, which an edit's switch sets and a scan clears. Since M3-3 a third,
   `faults`, the minor faults of its last scan (decision 99), which each scan replaces and
   nothing else writes, is how a lone instance's host sees a zero divisor: after `call/4`,
@@ -213,9 +218,9 @@ defmodule Logex.Runtime do
   restarts a value that does not fit its type, refuses a type change, moves a timer's
   `.pre` to a changed preset where logic left it alone, resumes a timer it gives back
   its `ton` from the switch, and blocks each one-shot and counter it adds or changes until a scan runs
-  it, the next scan at the top level, where a plain swap's first scan can fire one whose
-  condition was already true; inside a function block's instance it does each of these by
-  the member's path (M2-5).
+  it, the next scan at the top level, or the next that does not skip its rung (decision
+  106), where a plain swap's first scan can fire one whose condition was already true;
+  inside a function block's instance it does each of these by the member's path (M2-5).
   `restart/3` starts every tag again but the `var_input`s whose values fit their types,
   and empties `ons_blocked`. A `%Logex.Program{}`, `%Logex.Instance{}` or `%Logex.Edit{}` built or
   edited by hand is outside this contract, and so is one that holds a block type whose body
@@ -252,7 +257,8 @@ defmodule Logex.Runtime do
     Instance,
     Program,
     Scan,
-    Tag
+    Tag,
+    Walk
   }
 
   alias Logex.FbType.Member
@@ -286,6 +292,21 @@ defmodule Logex.Runtime do
   # M3-3: the key under which a routine records the minor faults its scan met (decision
   # 99), an atom too, so no tag or member name can be it.
   @faults :faults
+
+  # M3-5: the key under which an energised `jmp` records its label until its rung is done
+  # (decision 104), an atom too; and the mark a skipped rung's edge memory gets in the record
+  # under `@ran`, which keeps it on the block list (decision 106).
+  @jump :jump
+  @skipped :skipped
+
+  # M3-5: the instructions whose edge memory a skipped rung must mark to keep it blocked:
+  # the one-shots, whose storage bits are leaves of the routine's own tree (Logex.Walk.
+  # one_shots/0), and a counter's two sides, a `ctu`'s `cu` and a `ctd`'s `cd` (counted/4),
+  # since a ctud's other side may run. A `tp`'s `en` needs no mark: one `tp` runs its
+  # instance, so a skipped one leaves its instance out of the record, and kept/4 keeps all
+  # its instance holds.
+  @one_shots Walk.one_shots()
+  @memories %{ctu: "cu", ctd: "cd"}
 
   @doc "A new instance of `program`: every tag at its initial value, before its first scan."
   def instance(program) do
@@ -551,7 +572,9 @@ defmodule Logex.Runtime do
   # this scan; one inside an instance runs only where a `cal` runs the instance's body, so
   # the bits of an instance whose `cal` was false, or that no `cal` runs, stay in the list
   # for the next scan, or the block would be used up unseen and the `ons` compare a changed
-  # rung against the bit the old one wrote: the false pulse decision 21 prevents.
+  # rung against the bit the old one wrote: the false pulse decision 21 prevents. M3-5
+  # (decision 106): so too for a rung a jump skipped, in the program or in a body that ran,
+  # whose one-shots, counters and pulse timers did not run either.
   defp run(
          %Instance{env: env, ons_blocked: blocked} = state,
          %Program{rungs: rungs, tags: tags, blocks: blocks} = program,
@@ -601,10 +624,11 @@ defmodule Logex.Runtime do
   defp as_list(_not_a_list), do: []
 
   # The bits of the tree whose `ons` did not run, by their paths, sorted: those inside an
-  # instance whose body did not run. Each `cal` that runs an instance's body records it in
-  # the env of the routine that runs it, under `@ran`, an atom, so no tag or member name
-  # can be it, and takes its body's record out of the instance's map (`called/5`); this
-  # takes the program's out, so no state keeps one.
+  # instance whose body did not run, and since M3-5 those on a rung a jump skipped. Each
+  # `cal` that runs an instance's body records it in the env of the routine that runs it,
+  # under `@ran`, an atom, so no tag or member name can be it, and takes its body's record
+  # out of the instance's map (`called/5`); a skipped rung marks each edge memory it holds
+  # there too (held/3); this takes the program's out, so no state keeps one.
   defp unrun(tree, env) do
     {ran, env} = recorded(env)
     {Enum.sort(kept(tree, ran, "", [])), env}
@@ -619,9 +643,14 @@ defmodule Logex.Runtime do
   defp kept(tree, ran, prefix, acc),
     do:
       Enum.reduce(tree, acc, fn
-        {_bit, true}, acc -> acc
+        {bit, true}, acc -> leaf(Map.get(ran, bit), prefix <> bit, acc)
         {instance, inner}, acc -> within(Map.fetch(ran, instance), inner, prefix <> instance, acc)
       end)
+
+  # A bit of a routine that ran, or an edge memory of a counter or pulse timer in one, is used
+  # up, unless a jump skipped its rung (M3-5, decision 106).
+  defp leaf(@skipped, path, acc), do: [path | acc]
+  defp leaf(_ran, _path, acc), do: acc
 
   defp within({:ok, ran}, inner, path, acc), do: kept(inner, as_map(ran), path <> ".", acc)
   defp within(:error, inner, path, acc), do: paths(inner, path, acc)
@@ -1378,8 +1407,53 @@ defmodule Logex.Runtime do
 
   defp rungs([{:rung, elements} | rest], env, scan) do
     {_power_flow, env} = series(elements, {true, env}, scan)
-    rungs(rest, env, scan)
+    jumped(env, rest, scan)
   end
+
+  # M3-5 (decisions 81, 82 and 104): a rung whose `jmp` was energised has recorded its label,
+  # and once the whole rung has run, as IEC's rule 3 has it, the rungs after it are skipped up
+  # to the one its label heads, which runs. The compiler gives every `jmp` a label on a later
+  # rung of its routine, so a skip always ends at one. A skipped rung runs nothing, so all it
+  # holds is frozen, as in a block whose `cal` is false: its outputs, its counters and
+  # one-shots, and its timers, which catch up when next run, since `last` is stamped only
+  # where a timer runs. The record is taken out of the env at once, so no state keeps one.
+  defp jumped(%{@jump => label} = env, rest, scan),
+    do: skipped(rest, label, Map.delete(env, @jump), scan)
+
+  defp jumped(env, rest, scan), do: rungs(rest, env, scan)
+
+  defp skipped([{:rung, [{:lbl, _, [{:label, _, label}]} | _]} | _] = rest, label, env, scan),
+    do: rungs(rest, env, scan)
+
+  # Decision 106: where the block list holds a memory of this routine, a skipped rung marks
+  # each it keeps, so that the scan keeps it listed until its instruction runs.
+  defp skipped([rung | rest], label, env, %Scan{ons_blocked: blocked} = scan)
+       when map_size(blocked) > 0,
+       do: skipped(rest, label, held(rung, env), scan)
+
+  defp skipped([_rung | rest], label, env, scan), do: skipped(rest, label, env, scan)
+
+  # A label no rung after the jump heads, which only a program built by hand can hold: the
+  # rest of the routine is skipped.
+  defp skipped([], _label, env, _scan), do: env
+
+  # M3-5 (decision 106): each edge memory a skipped rung's instructions keep, marked
+  # `@skipped` in the routine's record under `@ran`, where the tree would hold it: a
+  # one-shot's storage bit by its name, a counter side's memory under its instance's name.
+  # A mark the tree holds no memory for is never read (kept/4). A `cal` or a `tp` on the
+  # rung records no run, so all its instance holds is kept.
+  defp held(rung, env), do: Enum.reduce(Walk.instructions([rung]), env, &hold/2)
+
+  defp hold({symbol, _, [{:name, _, bit} | _]}, env) when symbol in @one_shots,
+    do: mark(env, [bit])
+
+  defp hold({symbol, _, [{:name, _, name} | _]}, env) when is_map_key(@memories, symbol),
+    do: mark(env, [name, Map.fetch!(@memories, symbol)])
+
+  defp hold(_instruction, env), do: env
+
+  defp mark(env, path),
+    do: Map.put(env, @ran, put_path(as_map(Map.get(env, @ran)), path, @skipped))
 
   defp series(elements, acc, scan), do: Enum.reduce(elements, acc, &element(&1, &2, scan))
 
@@ -1648,6 +1722,31 @@ defmodule Logex.Runtime do
     {false, counted(env, counter, {:down, false}, scan)}
   end
 
+  # M3-5: the forward jump (docs/naming.md, `jmp`; IEC's jump, Ed 2 §4.1.4 Table 58;
+  # decisions 81, 82 and 104). Energised, it records its label for the rung loop, which skips
+  # the rungs after this one up to the one the label heads once this rung is done, IEC's rule
+  # 3 (Ed 2 §4.1.3), and it passes on the power it receives, so anything may follow it.
+  # De-energised, nothing, and no power passes. The compiler gives a rung one `jmp`, and every
+  # `jmp` a label on a later rung of its routine (rungs/3).
+  defp evaluate({:jmp, _, [{:label, _, label}]}, {true, env}, _scan) do
+    {true, Map.put(env, @jump, label)}
+  end
+
+  defp evaluate({:jmp, _, _}, {false, env}, _scan) do
+    {false, env}
+  end
+
+  # M3-5: the label (docs/naming.md, `lbl`; IEC's network label, Ed 2 §4.1.2), first on the
+  # rung it names, where a skip ends (rungs/3): it passes on what it receives, always its
+  # rung's power, and does nothing else.
+  defp evaluate({:lbl, _, _}, {true, env}, _scan) do
+    {true, env}
+  end
+
+  defp evaluate({:lbl, _, _}, {false, env}, _scan) do
+    {false, env}
+  end
+
   # M2-5: `cal` runs an instance of a user function block (docs/organisation.md §4.3).
   # Rung power is its EN, and its ENO is the power out. Energised, each var_input operand
   # is read into the instance, the block's body runs over the instance's own map, with the
@@ -1774,8 +1873,10 @@ defmodule Logex.Runtime do
   defp memory(:up), do: "cu"
   defp memory(:down), do: "cd"
 
+  # A run is recorded without dropping a mark a skipped rung of the same instance left, a
+  # ctud's other side's (M3-5, decision 106).
   defp unblocked(true, env, name),
-    do: Map.put(env, @ran, Map.put(as_map(Map.get(env, @ran)), name, %{}))
+    do: Map.put(env, @ran, Map.update(as_map(Map.get(env, @ran)), name, %{}, &as_map/1))
 
   defp unblocked(false, env, _name), do: env
 

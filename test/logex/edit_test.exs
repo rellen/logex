@@ -2284,6 +2284,94 @@ defmodule Logex.EditTest do
     end
   end
 
+  describe "a jump across a switch (decisions 82 and 106)" do
+    @dj "var_input skip bool\nvar_input go bool\nvar_input b bool\nvar_output pulse bool\n" <>
+          "var_output y bool\nvar s9 bool\nvar boxes ctu\nvar t1 ton\n"
+
+    # Runs `src1` through `before`, tests `src2` over its state: the test's report, its
+    # state, and the candidate.
+    defp jump_switched(src1, src2, before) do
+      v1 = c!(@dj <> src1)
+      v2 = c!(@dj <> src2)
+      {_, state} = run(v1, before)
+      {:ok, edit, forecast} = Edit.accept(v1, v2, state)
+      {_edit, tested, report} = Edit.test(edit, state)
+      assert report == forecast
+      {report, tested, v2}
+    end
+
+    test "a one-shot whose rung the edit changes on a skipped rung stays blocked over every " <>
+           "scan that skips it, and its first run passes no power, though its condition rose " <>
+           "meanwhile" do
+      src1 = "xic skip jmp done\nxic go ons s9 ote pulse\nlbl done"
+      src2 = "xic skip jmp done\nxic go xio b ons s9 ote pulse\nlbl done"
+
+      {report, tested, v2} = jump_switched(src1, src2, [{0, %{"skip" => 1}}, {10, %{}}])
+      assert report == [{:ons_blocked, "s9", 0}]
+
+      {_, skipped} = drive(v2, tested, [{10, %{"go" => 1}}, {10, %{}}])
+      assert skipped.ons_blocked == ["s9"]
+
+      assert {%{"pulse" => 0}, %Instance{ons_blocked: []}} =
+               drive(v2, skipped, [{10, %{"skip" => 0}}])
+
+      # The same switch, its rung unchanged: no block, and the edge that rose while it was
+      # skipped is seen at its first run, as in a block whose `cal` was false.
+      {[], tested, v2} = jump_switched(src1, src1, [{0, %{"skip" => 1}}, {10, %{}}])
+      assert {%{"pulse" => 1}, _} = drive(v2, tested, [{10, %{"go" => 1}}, {10, %{"skip" => 0}}])
+    end
+
+    test "a counter whose rung the edit changes on a skipped rung stays blocked until it runs" do
+      src1 = "xic skip jmp done\nxic go ctu boxes 5\nlbl done"
+      src2 = "xic skip jmp done\nxic go xio b ctu boxes 5\nlbl done"
+      {report, tested, v2} = jump_switched(src1, src2, [{0, %{"skip" => 1}}, {10, %{}}])
+      assert report == [{:ons_blocked, "boxes.cu", 0}]
+      {_, skipped} = drive(v2, tested, [{10, %{"go" => 1}}])
+      assert skipped.ons_blocked == ["boxes.cu"]
+      {_, ran} = drive(v2, skipped, [{10, %{"skip" => 0}}])
+      assert {ran.ons_blocked, ran.env["boxes"]["cv"]} == {[], 0}
+    end
+
+    test "a jmp the edit adds freezes its section from the switch, a timer in it catching up " <>
+           "when it next runs, and blocks no one-shot whose rung it leaves alone" do
+      src1 = "xic go ons s9 ote pulse\nxic go ton t1 1000"
+      src2 = "xic skip jmp done\nxic go ons s9 ote pulse\nxic go ton t1 1000\nlbl done"
+      {report, tested, v2} = jump_switched(src1, src2, [{0, %{"go" => 1}}, {100, %{}}])
+      assert report == []
+      {_, frozen} = drive(v2, tested, [{100, %{"skip" => 1, "go" => 0}}, {100, %{}}])
+      assert Map.take(frozen.env, ~w(t1 s9)) == Map.take(tested.env, ~w(t1 s9))
+      {_, ran} = drive(v2, frozen, [{100, %{"skip" => 0, "go" => 1}}])
+      assert {ran.env["t1"]["acc"], ran.env["pulse"]} == {400, 0}
+    end
+
+    test "a label the edit puts on a one-shot's rung, or a jmp it adds to it, blocks the " <>
+           "one-shot: a rung is compared whole (decision 106)" do
+      src1 = "xic go ons s9 ote pulse\nxic go jmp done\nlbl done"
+
+      for src2 <- [
+            "lbl here xic go ons s9 ote pulse\nxic go jmp done\nlbl done",
+            "xic go ons s9 ote pulse jmp done\nxic go jmp done\nlbl done"
+          ] do
+        assert {[{:ons_blocked, "s9", 0}], _, _} = jump_switched(src1, src2, [{0, %{}}])
+      end
+    end
+
+    test "a rung the edit adds above a jump, or a label moved down, leaves every jump going " <>
+           "to its label by name, and blocks no one-shot whose rung is unchanged" do
+      src1 = "xic skip jmp done\nxic b ote y\nlbl done xic go ons s9 ote pulse"
+
+      src2 =
+        "xio b ote y\nxic skip jmp done\nxic b ote y\nxic b ote y\n" <>
+          "lbl done xic go ons s9 ote pulse"
+
+      {report, tested, v2} = jump_switched(src1, src2, [{0, %{}}, {10, %{}}])
+      assert for({:ons_blocked, _, _} = entry <- report, do: entry) == []
+
+      assert {%{"pulse" => 1, "y" => 0}, _} =
+               drive(v2, tested, [{10, %{"skip" => 1, "go" => 1, "b" => 1}}])
+    end
+  end
+
   describe "the report" do
     test "is sorted, past the 32 keys where a map stops being" do
       many = Enum.map_join(1..40, fn i -> "var x#{i} dint #{i}\n" end)

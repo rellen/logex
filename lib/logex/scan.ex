@@ -17,7 +17,8 @@ defmodule Logex.Scan do
     and gives the evaluator a tree of them: each bit of the routine running to `true`, and
     each instance holding a blocked bit to a tree of its own, so each `ons` looks its bit
     up rather than walking the list. After the scan the instance keeps the bits of the
-    instances whose bodies did not run (`Logex.Instance`). A counter's edge memory, since
+    instances whose bodies did not run, and since M3-5 those on rungs a jump skipped
+    (`Logex.Instance`, decision 106). A counter's edge memory, since
     M3-1, is under the counter's name, `boxes` to `%{"cu" => true}`, which its `ctu` or
     `ctd` looks up (decision 87). A pulse coil's storage bit, since M3-4, is under its own
     name, as an `ons`'s is (decision 80).

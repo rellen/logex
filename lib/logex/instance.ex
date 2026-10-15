@@ -24,7 +24,10 @@ defmodule Logex.Instance do
     M3-4 it lists a pulse coil's storage bit as it lists an `ons`'s, by name: its `osr` or
     `osf` sets no pulse at the next scan that runs it, and still writes both its bits
     (decision 80). The field keeps its name, the list naming every edge memory an edit
-    blocks.
+    blocks. Since M3-5 a scan keeps too each listed memory on a rung a jump skipped, in
+    the program or in a body that ran, until a scan runs its instruction (decision 106);
+    one that no rung of a routine the scan ran holds, which only a plain swap can leave, is
+    used up.
   - `switched` says whether an online edit has switched it to another program since its
     last scan (`Logex.Edit`): a switch sets it, and a scan clears it. It is how an edit
     knows whether the program it stops has scanned since the last switch, and so whether

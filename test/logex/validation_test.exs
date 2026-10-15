@@ -1349,6 +1349,179 @@ defmodule Logex.ValidationTest do
     end
   end
 
+  describe "jumps (M3-5)" do
+    test "are reserved in any case" do
+      assert source_errors("var jmp bool\nvar Lbl bool\nvar JMP bool") == [
+               "line 1: `jmp` is an instruction and cannot name a tag",
+               "line 2: `Lbl` is an instruction and cannot name a tag",
+               "line 3: `JMP` is an instruction and cannot name a tag"
+             ]
+    end
+
+    test "each takes one operand, a label: a name with no `.` and no reserved word, never a " <>
+           "literal (decision 105)" do
+      assert source_errors(
+               "var a bool\nlbl 5\nxic a jmp -2\nlbl bool\nlbl var_output\nxic a jmp a.b\n" <>
+                 "lbl\nxic a jmp ote a\nlbl a.b\nlbl a.b"
+             ) == [
+               "line 2: `lbl` expects a label, found `5`",
+               "line 3: `jmp` expects a label, found `-2`",
+               "line 4: `lbl` takes a label, found the type `bool`",
+               "line 5: `lbl` takes a label, found the keyword `var_output`",
+               "line 6: `jmp` takes a label, a name with no `.`, found `a.b`",
+               "line 7: `lbl` expects 1 operand (a label), found none",
+               "line 8: `jmp` expects 1 operand (a label), found none before the instruction `ote`",
+               "line 9: `lbl` takes a label, a name with no `.`, found `a.b`",
+               "line 10: `lbl` takes a label, a name with no `.`, found `a.b`"
+             ]
+    end
+
+    test "a label is a namespace of its own: it may share a tag's name, and is no use of it" do
+      assert source_warnings(
+               "var_input skip bool\nvar_output done bool\nvar spare bool\n" <>
+                 "xic skip jmp done\nxic skip ote done\nlbl done\nxic skip jmp spare\nlbl spare"
+             ) == ["line 3: warning: `spare` is declared but no rung uses it"]
+    end
+
+    test "a label stands first on its rung: elsewhere on it, after an instruction, on a leg or " <>
+           "after another, it is an error at its line, and it still labels its rung" do
+      assert source_errors(
+               "var a bool\nxic a lbl one\n( lbl two | xic a ) ote a\nlbl three lbl four\n" <>
+                 "xic a jmp five\nxic a ( xic a | lbl five ) ote a"
+             ) == [
+               "line 2: `lbl one` is not first on its rung: a label stands at the head of the " <>
+                 "rung it names, before any other instruction or branch group",
+               "line 3: `lbl two` is not first on its rung: a label stands at the head of the " <>
+                 "rung it names, before any other instruction or branch group",
+               "line 4: `lbl four` is not first on its rung: a label stands at the head of the " <>
+                 "rung it names, before any other instruction or branch group",
+               "line 6: `lbl five` is not first on its rung: a label stands at the head of the " <>
+                 "rung it names, before any other instruction or branch group"
+             ]
+    end
+
+    test "one label names one rung: a label used twice, or two that differ only in case, is " <>
+           "an error at the second" do
+      assert source_errors(
+               "var a bool\nxic a jmp done\nlbl done\nlbl done\nlbl Done\nlbl x xic a ( lbl x | xic a )"
+             ) == [
+               "line 4: `done` already labels the rung on line 3: a label names one rung",
+               "line 5: the labels `Done` and `done` (line 3) differ only in case: labels are " <>
+                 "case-sensitive, so these would be two labels",
+               "line 6: `lbl x` is not first on its rung: a label stands at the head of the " <>
+                 "rung it names, before any other instruction or branch group",
+               "line 6: `x` already labels this rung: a label names one rung"
+             ]
+    end
+
+    test "a jmp names a label of its routine, exactly, with the nearest suggested, and one " <>
+           "whose label was refused for its shape is told nothing more" do
+      assert source_errors(
+               "var a bool\nxic a jmp dne\nxic a jmp Done\nxic a jmp nowhere\nxic a jmp a.b\nlbl done"
+             ) == [
+               "line 2: `jmp dne` names no label: no rung of this program begins `lbl dne` " <>
+                 "— did you mean `done`?",
+               "line 3: `jmp Done` names no label: no rung of this program begins `lbl Done` " <>
+                 "— did you mean `done`? (labels are case-sensitive)",
+               "line 4: `jmp nowhere` names no label: no rung of this program begins " <>
+                 "`lbl nowhere`",
+               "line 5: `jmp` takes a label, a name with no `.`, found `a.b`"
+             ]
+    end
+
+    test "a jump goes forward only: one back, or to its own rung, is an error at its line " <>
+           "(decision 81)" do
+      assert source_errors(
+               "var a bool\nlbl top xic a ote a\nxic a jmp top\nlbl here xic a jmp here\n" <>
+                 "( xic a jmp there | xic a ) ote a\nlbl there"
+             ) == [
+               "line 3: `jmp top` jumps back, to the rung on line 2: a jump goes forward only, " <>
+                 "to a label on a later rung, since one back could loop for ever",
+               "line 4: `jmp here` jumps to its own rung: a jump goes forward only, to a label " <>
+                 "on a later rung, since one back could loop for ever"
+             ]
+    end
+
+    test "a rung holds one jmp: a second, in series or on another leg, is an error at its " <>
+           "line, and is not looked at further" do
+      assert source_errors(
+               "var a bool\nxic a jmp one jmp two\n( xic a jmp one | xio a jmp nowhere )\nlbl one"
+             ) == [
+               "line 2: `jmp two` is a second `jmp` in this rung, after `jmp one`: a rung holds " <>
+                 "one, since which of two would win is not settled",
+               "line 3: `jmp nowhere` is a second `jmp` in this rung, after `jmp one`: a rung " <>
+                 "holds one, since which of two would win is not settled"
+             ]
+    end
+
+    test "anything may follow a jmp or a lbl on its path, and a jmp may follow anything but " <>
+           "an instruction whose power out is not settled (decision 104)" do
+      assert source_warnings(
+               "var_input a bool\nvar_output y bool\nvar_output z bool\nvar_output w bool\n" <>
+                 "var t1 ton\nvar s bool\n" <>
+                 "lbl top xic a jmp done ote y ( xic a | xio a ) ote z\nxic a move 1 t1.pre\n" <>
+                 "lbl done xic a jmp end2 osr s w\nlbl end2 xic a ton t1 5"
+             ) == [
+               "line 7: warning: `top` labels this rung, but no `jmp` names it: nothing jumps here"
+             ]
+
+      assert [
+               "line 3: `jmp done` follows `ton t1` on its path: what passes on after a " <>
+                 "`ton` is not settled" <> _
+             ] = source_errors("var a bool\nvar t1 ton\nxic a ton t1 5 jmp done\nlbl done")
+    end
+
+    test "a label no jmp names compiles, with a warning at its line" do
+      assert source_warnings(
+               "var_input a bool\nvar_output y bool\nlbl first xic a ote y\nxic a jmp used\n" <>
+                 "lbl used\nlbl last"
+             ) == [
+               "line 3: warning: `first` labels this rung, but no `jmp` names it: nothing " <>
+                 "jumps here",
+               "line 6: warning: `last` labels this rung, but no `jmp` names it: nothing jumps here"
+             ]
+    end
+
+    test "a write on a rung a jump may skip is a write: two otes on one tag, one in a " <>
+           "skipped section, are the second-ote warning (decision 107)" do
+      assert source_warnings(
+               "var_input manual bool\nvar_input jog bool\nvar_input run bool\n" <>
+                 "var_output motor bool\nxio manual jmp auto\nxic jog ote motor\nlbl auto\n" <>
+                 "xic manual jmp done\nxic run ote motor\nlbl done"
+             ) == [
+               "line 9: warning: `motor` already has an `ote` on line 6: the last one in the " <>
+                 "scan decides it"
+             ]
+    end
+
+    test "a function block's labels are its body's own: a jump in it to a label of the " <>
+           "program, or the reverse, names no label (decision 105)" do
+      assert {:error, [diagnostic]} =
+               Logex.compile(
+                 "function_block skip\nvar_input a bool\nvar_output y bool\n" <>
+                   "xic a jmp done\nxic a ote y",
+                 name: "skip"
+               )
+
+      assert Logex.Diagnostic.format(diagnostic) ==
+               "line 4: `jmp done` names no label: no rung of this function block's body " <>
+                 "begins `lbl done`"
+
+      {:ok, block} =
+        Logex.compile(
+          "function_block skip\nvar_input a bool\nvar_output y bool\nlbl done xic a ote y",
+          name: "skip"
+        )
+
+      assert {:error, [%Logex.Diagnostic{line: 4, message: "`jmp done` names no label: " <> _}]} =
+               Logex.compile(
+                 "var_input a bool\nvar_output y bool\nvar s skip\nxic a jmp done\ncal s a y",
+                 name: "m",
+                 types: [block]
+               )
+    end
+  end
+
   describe "comparisons (M1-6)" do
     test "take two dints, each a tag or a literal that fits 32 bits" do
       assert source_errors(

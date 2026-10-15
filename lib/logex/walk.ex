@@ -53,7 +53,8 @@ defmodule Logex.Walk do
   Each tag operand of each instruction of `rungs`, in order, as `{access, name, line,
   symbol}`: its slot's access (`:read`, `:write`, `:value` or `:instance`), the tag it
   names, and its instruction's line and symbol. A member is a use of its instance, `t1.dn`
-  of `t1`, with its slot's access (M1-6), and a literal is no use. `tags` is the tag table
+  of `t1`, with its slot's access (M1-6), and a literal is no use, nor since M3-5 a label,
+  `jmp done`'s, which names no tag. `tags` is the tag table
   of the routine that holds the rungs, each instance's type itself
   (`Logex.Program.typed_tags/1`), from which a `cal`'s slots are its block's.
   """
@@ -74,6 +75,8 @@ defmodule Logex.Walk do
   defp tag_of({:name, _, name}), do: name
   defp tag_of({:member, _, [instance | _]}), do: instance
   defp tag_of({:int_lit, _, _}), do: nil
+  # M3-5: a label is a name of the routine's own, never a tag (decision 105).
+  defp tag_of({:label, _, _}), do: nil
 
   @doc """
   The instructions that keep an edge in a storage bit, a bool of the routine they stand in,

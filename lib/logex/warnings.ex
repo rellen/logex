@@ -15,7 +15,12 @@ defmodule Logex.Warnings do
   - a timer no `ton` runs (M1-6): it never times; since M3-1 any built-in instance no
     instruction of its type runs, in its type's words, a counter no `ctu` or `ctd` runs:
     it never counts;
-  - an instance of a user function block no `cal` runs (M2-5): it never runs.
+  - an instance of a user function block no `cal` runs (M2-5): it never runs;
+  - a label no `jmp` names (M3-5): nothing jumps to its rung.
+
+  A write on a rung a jump may skip is still a write (decision 107): two `ote`s on one tag,
+  one in a section a `jmp` skips and one outside it, are still two, the warning saying the
+  last one in the scan decides it, which is the one that ran last.
 
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
   """
@@ -46,7 +51,19 @@ defmodule Logex.Warnings do
     |> Kernel.++(second_otes(instructions, tags, owners))
     |> Kernel.++(storage_writes(instructions, tags, owners))
     |> Kernel.++(Enum.flat_map(instructions, &constant/1))
+    |> Kernel.++(unjumped(instructions))
     |> Enum.sort_by(& &1.line)
+  end
+
+  # M3-5 (decision 105): a label no `jmp` of its routine names. Its rung runs as any rung
+  # does, so the label does nothing, and is likely left from a jump removed or misspelled
+  # into another label. The labels a `jmp` names are gathered once.
+  defp unjumped(instructions) do
+    named = for {:jmp, _, [{:label, _, name}]} <- instructions, into: %{}, do: {name, true}
+
+    for {:lbl, line, [{:label, _, name}]} <- instructions,
+        not is_map_key(named, name),
+        do: warning(line, "`#{name}` labels this rung, but no `jmp` names it: nothing jumps here")
   end
 
   defp about(%Tag{} = tag, []),

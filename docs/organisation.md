@@ -2674,8 +2674,9 @@ then. Decisions 97–99 are M3-3's own routine choices, taken as it landed on 20
 confirmed by the maintainer the same day, after M3-3's review. Decisions 100–103 are
 M3-4's own routine choices, taken as it landed the same day, 102 confirmed by the
 maintainer on 2026-10-15, after M3-4's review, and 103's "no warning" superseded by the
-maintainer's answer the same day. All one hundred and three are kept with their options so
-the reasons stay with them.
+maintainer's answer the same day. Decisions 104–107 are M3-5's own routine choices, taken
+as it landed on 2026-10-15. All one hundred and seven are kept with their options so the
+reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3587,6 +3588,9 @@ questions asked after M3-1's review, the same day.
     - or no: the manual-mode logic goes in a block, switched off as a whole.
 
     *Recommend forward only, last in the milestone.* Adopted: a forward `jmp` to a `lbl`.
+    *(Landed with M3-5, 2026-10-15: `jmp done` and `lbl done`, the label first on its rung,
+    a jump back or to its own rung refused at its line; where they stand and what they pass
+    on, decision 104, and what a label is, decision 105.)*
 82. **A timer in skipped lines (M3-5).** The fan's run-on timer is in the skipped section;
     the line spends 10 seconds in manual mode with the timer half done.
     - It catches up the 10 seconds when it next runs, as a timer in a switched-off block
@@ -3594,7 +3598,14 @@ questions asked after M3-1's review, the same day.
     - or it carries on from where it was.
 
     *Recommend catching up.* Adopted: skipped rungs freeze as a false `cal` freezes a
-    block, and a timer in them catches up when next run.
+    block, and a timer in them catches up when next run. *(Landed with M3-5, 2026-10-15: a
+    skipped rung runs nothing, so its outputs hold, an `ote`'s among them, its counters and
+    one-shots keep their edge memory, a pulse bit stays as it was, a block its `cal` would
+    run stays frozen with its one-shots' blocks, and a timer, whose `last` only its own run
+    stamps, catches up; an edge that comes and goes while its rung is skipped is never
+    seen, and a section skipped since the first scan runs its edge instructions first on a
+    scan that is not a first scan, as a block does (decisions 89 and 102). An online edit's
+    block list keeps a skipped rung's memories, decision 106.)*
 83. **A master control zone (M3-5).** One switch that forces a group of lines off. The
     vendors disagree on its name and on what "off" means, the newest controllers of the
     family that made it popular have dropped it, and IEC does not have it.
@@ -3602,7 +3613,8 @@ questions asked after M3-1's review, the same day.
     - or add it later.
 
     *Recommend leaving it out.* Adopted: logex has no MCR, and `docs/naming.md`'s deferred
-    `mcs … mce` becomes "not added".
+    `mcs … mce` becomes "not added". *(Landed with M3-5, 2026-10-15: the Program control
+    table's row says so.)*
 84. **How a ladder program drives a counter's count, reset and load (M3-1),** the rework
     67 and 68 asked for, under IEC's model. IEC lets a block's inputs be assigned apart
     from its call, *"These separate assignments shall become effective with the next call
@@ -4071,6 +4083,102 @@ record answers one, 103, it says which decisions do.
      `Logex.Walk.one_shots/1`, read once a program type as the timers are. It changes what
      decision 72 said of an `ons`, and decision 80's landed note. Landed 2026-10-15.)*
 
+
+**M3-5's own choices, 2026-10-15.** Decisions 104–107 are M3-5's routine choices for the
+forward jump decisions 81 and 82 adopted, each with the alternative the record keeps; where
+the record answers one, it says which part of it does.
+
+104. **Where `jmp` and `lbl` stand, what they pass on, and when the jump is taken (M3-5),**
+     following decisions 73, 98 and 100. A line in manual mode skips its automatic rungs,
+     and the same line lights a lamp: `xic manual jmp manual_end ote manual_lamp`, the
+     section ending at `lbl manual_end`.
+     - The jump is taken once its rung is done, as IEC has it, *"The evaluation of a
+       network is not complete until the outputs of all of its elements have been
+       evaluated, even if the network contains one of the execution control elements"*
+       (Ed 2 §4.1.3 rule 3; Ed 3 §8.1.5 rule c): the rest of its rung runs, and then the
+       rungs after it up to the labelled one are skipped, and the labelled rung runs. A
+       `jmp` passes on the power it receives, as `ote` does, so anything may follow it, the
+       lamp here, and stands anywhere on its rung, a branch's leg among the places; a rung
+       holds one, since which of two would win is not settled. A `lbl` stands first on its
+       rung, as the conventional LBL must and as IEC writes a network label at its head,
+       and passes on the power it receives, always its rung's;
+     - or nothing after a `jmp` on its path, as IEC draws a jump at the end of its line,
+       the reversible refusal decision 73 makes after a counter or a timer;
+     - or the jump taken at once, the rest of its rung not run, as ClassicLadder's jump coil
+       ends its rung (`docs/instruction-sets.md` §5.4).
+
+     *Taken: the first,* the reading Milestone 3's design took and called settled: IEC's
+     rule 3 settles when the jump is taken, and a `jmp` on a line read as IEC's coils on
+     one vertical link, each seeing the line the jump sees, settles what follows it: an
+     `ote` after `jmp manual_end` in series sees what it would see beside the jump in a
+     branch, the power that reached the jump. The conventional set's execution table says
+     nothing of rung-condition-out after a JMP, nor of the rest of its rung (general
+     instructions ref., pp.673–675), `unverified` in `docs/naming.md`. De-energised, a
+     `jmp` does nothing and passes no power. A jump back, or to its own rung, is refused at
+     its line, so a scan stays one pass over the rungs (decision 81). The rung loop is one
+     recursion over a routine's rungs, a program's or a block body's, which a jump turns
+     into a skip that ends at its label's rung; a scan of a program with no jump costs
+     fewer reductions than before M3-5, 308 against 319 for the README motor and 39,126
+     against 41,126 for 1,000 rungs, the least of 50 scans each. *(Landed 2026-10-15.)*
+105. **What a label is (M3-5).** The manual section ends at `lbl manual_end`, and the
+     program has a tag `manual_end` too, the lamp that shows the section is done.
+     - A label is a name, never an integer, of a namespace of its own, so it may share a
+       tag's name, since no operand of a `jmp` or a `lbl` is ever a tag; no reserved word,
+       a mnemonic, a section word or a type word, which the next word of a rung would be
+       read as; one rung to a label in a routine, and two labels that differ only in case
+       refused, as two tags are, a `jmp` naming one in another case told of it. A label is
+       its routine's own, IEC's *"local to the program organization unit"* (Ed 2 §4.1.2),
+       so a jump in a function block's body goes to a label in that body, and a `jmp` that
+       names no label of its routine is refused at its line. A label no `jmp` names
+       compiles, with a warning: nothing jumps to its rung;
+     - or labels in the tags' namespace, so that `lbl manual_end` and the tag
+       `manual_end` cannot both be declared.
+
+     *Taken: the first,* as Milestone 3's design has it: a label and a tag are never read
+     in one place, IEC refuses a shared identifier only for a connector (Ed 2 §4.1.1, Ed 3
+     §8.1.3), and the conventional set's rule, unique within a routine, is about labels
+     alone. IEC also allows an unsigned integer, which logex would read as a literal; the
+     conventional set's labels are names, as logex's are. *(Landed 2026-10-15.)*
+106. **What a skipped rung leaves on an online edit's block list (M3-5),** following
+     decisions 21, 32 and 87. The line runs in auto, the manual section skipped, when an
+     online edit changes the rung of the section's step one-shot, `xic jog_pb ons s1 ote
+     step` to `xic jog_pb xio auto ons s1 ote step`; the switch blocks `s1` (decision 21).
+     - The block holds until a scan runs the one-shot: a storage bit, a counter's edge
+       memory or a pulse timer's, listed by a switch, on a rung a jump skips stays listed,
+       as one in a block whose `cal` is false does (decision 32), so the one-shot's first
+       run, when the line next goes to manual, passes no power. A scan marks each listed
+       memory a skipped rung holds, and keeps it; one its routine ran, and one no rung of
+       a routine that ran holds, which only a plain swap can leave, is used up as before;
+     - or the first scan uses the block up, as every scan used up the program's own bits
+       until M3-5: the one-shot's first run then compares its changed rung against the
+       bit the old rung wrote, the false pulse decision 21 prevents.
+
+     *Taken: the first,* decision 32's rule at the grain of a rung: the next scan that runs
+     the instruction blocks it. A ctud's two sides are kept or used up each by its own
+     rung, so a side a jump skips stays blocked while the other's runs. Nothing else an
+     edit does turns on a jump: labels are names, so a rung that moves leaves every jump as
+     it was; a `jmp` an edit adds freezes its section from the switch, and one it removes
+     frees it, by decision 82, its timers catching up and an edge that rose meanwhile seen
+     at its first run, as in a block; and a rung is compared whole, its `lbl` and `jmp`
+     among it, as decision 101 compares a coil's, so an edit that labels a one-shot's rung,
+     or adds a `jmp` to it, blocks the one-shot, losing at most one real edge.
+     *(Landed 2026-10-15.)*
+107. **What the walks and the warnings make of a skipped rung (M3-5).** The manual section
+     and the automatic one each drive the conveyor's motor, `ote motor` in each, a `jmp`
+     skipping one or the other on every scan.
+     - A rung a jump may skip is a rung: its writes are writes, `Logex.Walk`'s and the
+       configuration's checks by them, a write through a var_external to an input point
+       refused wherever it stands; the two `ote`s on one tag are the second-`ote` warning,
+       which says the last one in the scan decides it, the one that ran last; and a timer
+       or counter in a section is run by its instruction;
+     - or the walks read the jumps, so that two writers in sections that two jumps make
+       exclusive are not warned about.
+
+     *Taken: the first.* The walks read a program's text, not its runs, and which rungs a
+     scan skips is a fact of its inputs, so a walk that read the jumps would still guess;
+     a warning stops nothing. A program that wants one writer gives the motor one rung,
+     fed from each section's own bit.
+     *(Landed 2026-10-15.)*
 ---
 
 ## 8. Sources, and what is unverified

@@ -105,6 +105,8 @@ defmodule Logex.InstructionizeTest do
       add d f f sub d -1 f mul f d d
       div d f f mod d -3 f
       neg d f abs f d
+      xic a jmp past
+      lbl past xic a ote c
       """
 
       assert {:ok, %Logex.Program{rungs: rungs} = program} =

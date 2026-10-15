@@ -5025,6 +5025,30 @@ defmodule Logex.ConfigurationTest do
              ]
     end
 
+    # M3-5 (decision 107): a rung a jump may skip is a rung, and a write on it a write, so
+    # through a var_external to an input point it is refused as any write is.
+    test "a write through a var_external on a rung a jump may skip is a write" do
+      {:ok, manual} =
+        Logex.compile(
+          "var_input jog bool\nvar_external alarm bool\nxio jog jmp done\n" <>
+            "xic jog ote alarm\nlbl done",
+          name: "manual"
+        )
+
+      config = %Configuration{
+        name: "plant",
+        programs: %{"manual" => manual},
+        globals: [%Global{name: "alarm", type: :bool, at: "panel.i.0"}],
+        instances: [%Instance{name: "m", type: "manual"}],
+        connections: [%Connection{instance: "m", member: "jog", to: 0}]
+      }
+
+      assert formatted(config) == [
+               "`manual` writes its var_external `alarm` on its line 4, but `alarm` is an " <>
+                 "input point: nothing writes an input point"
+             ]
+    end
+
     # M3-3: an arithmetic instruction's destination is a write (Logex.Walk.writes/1, by its
     # slot), so a total kept in a shared global meets every writer rule, and two totalisers
     # adding into one global each add to what the other last wrote.

@@ -145,6 +145,49 @@ defmodule Logex.WalkTest do
     end
   end
 
+  # M3-5 (decisions 105 and 107): a label names no tag, so a `jmp` and a `lbl` use none, and a
+  # rung a jump may skip is walked as any rung is.
+  describe "a jump's rungs" do
+    test "a label is no use, though a tag shares its name, and a jmp and a lbl use no tag" do
+      p =
+        program!("""
+        var a bool
+        var done bool
+        xic a jmp done
+        lbl done xic a ote done
+        """)
+
+      assert Walk.uses(p.rungs, Program.typed_tags(p)) == [
+               {:read, "a", 3, :xic},
+               {:read, "a", 4, :xic},
+               {:write, "done", 4, :ote}
+             ]
+
+      assert symbols(Walk.instructions(p.rungs)) == [xic: 3, jmp: 3, lbl: 4, xic: 4, ote: 4]
+    end
+
+    test "what a rung a jump may skip writes or runs is written and run" do
+      p =
+        program!("""
+        var a bool
+        var b bool
+        var e bool
+        var t1 ton
+        var k ctu
+        xic a jmp done
+        xic a ons e ote b
+        xic a ton t1 100
+        xic a ctu k 3
+        lbl done
+        """)
+
+      assert Walk.writes(p) == %{"b" => [7], "e" => [7], "t1" => [8], "k" => [9]}
+      assert Walk.timers(p) == %{"t1" => {8, 100}}
+      assert Walk.counters(p) == %{"k" => {9, 3}}
+      assert Walk.one_shots(p) == %{"e" => {7, :ons}}
+    end
+  end
+
   describe "writes/1" do
     test "a write slot, a storage bit and an instance run are writes, each line a write, in rung order" do
       p =

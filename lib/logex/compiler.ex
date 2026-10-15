@@ -11,7 +11,9 @@ defmodule Logex.Compiler do
   warnings included, `{:ok, %Logex.FbType{}}` for a routine headed `function_block
   <name>`, or `{:error, [%Logex.Diagnostic{}]}`, every mistake in the routine, in line
   order. The function block types a routine may hold are given as its third argument,
-  each checked at full depth.
+  each checked at full depth. Since M3-5 it checks a routine's labels and jumps too: each
+  `lbl` first on its rung, one label to a rung, and each `jmp` naming a label of its own
+  routine on a later rung, one to a rung (decisions 81, 104 and 105).
 
   A host compiles through `Logex.compile/2` and `Logex.compile_file/1`. The stage
   functions stay public for the front end's golden record, the Elixir-side declarer and
@@ -31,7 +33,9 @@ defmodule Logex.Compiler do
   # M1-6 adds two: `{:instance, type}` is an instance of that function block type, which
   # the instruction runs, the only slot where an instance is named whole; `:preset` is a
   # literal number, 0 to 2147483647, of milliseconds for a timer and a count for a counter;
-  # since M3-1 an instance slot names a list where it runs instances of several types.
+  # since M3-1 an instance slot names a list where it runs instances of several types. M3-5
+  # adds `{:label, nil}`, a label of the routine's own, a namespace that holds no tag, which
+  # the IR keeps as `{:label, line, name}`.
   # Type: `:bool`, `:dint`, or `:any`,
   # which IEC's MOVE takes (`IN : ANY` -> `OUT : ANY`, docs/naming.md). A tag here may be
   # a member of an instance, `t1.acc`, which has the type its schema gives it (M1-6).
@@ -86,6 +90,11 @@ defmodule Logex.Compiler do
     # the destination. The most negative dint has no positive twin, so it alone overflows.
     "neg" => {:neg, [{:value, :dint}, {:write, :dint}]},
     "abs" => {:abs, [{:value, :dint}, {:write, :dint}]},
+    # M3-5: the forward jump (decisions 81 and 104): `jmp done` names the label that a later
+    # rung of its routine begins with, `lbl done`, and passes on the power it receives. A
+    # label is a name of the routine's own, never a tag (decision 105).
+    "jmp" => {:jmp, [{:label, nil}]},
+    "lbl" => {:lbl, [{:label, nil}]},
     # M2-5: `cal` runs an instance of a user function block. Its entry is a marker, not a
     # signature: the signature is the block's, built per compile from the instance's type
     # (Logex.FbType.signature/1), the instance, then the block's var_inputs and var_outputs
@@ -189,7 +198,9 @@ defmodule Logex.Compiler do
     errors = declaring ++ undeclared(found, tags, note?) ++ shared ++ timing
 
     {rungs, tags,
-     heading ++ header_tags(kind, tags) ++ externals(kind, tags) ++ errors ++ calls ++ paths}
+     heading ++
+       header_tags(kind, tags) ++
+       externals(kind, tags) ++ errors ++ calls ++ paths ++ jumps(rungs, kind)}
   end
 
   @doc """
@@ -301,7 +312,7 @@ defmodule Logex.Compiler do
     map_size(elem(known, 1)) == map_size(tags) and
       Enum.all?(rungs, &lowers_to_itself?(&1, known)) and
       shared_bits(instructions, tags) == [] and calls(instructions) == [] and timing == [] and
-      timed == tags and
+      jumps(rungs, :program) == [] and timed == tags and
       Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end) == [] and
       lines?(rungs, tags) and Enum.map(warnings, &fileless/1) == Logex.Warnings.of(rungs, tags)
   end
@@ -342,6 +353,8 @@ defmodule Logex.Compiler do
   defp ir_operand?({:member, line, path}) when is_integer(line) and line > 0,
     do: proper?(path, &is_binary/1)
 
+  defp ir_operand?({:label, line, name}) when is_integer(line) and line > 0, do: is_binary(name)
+
   defp ir_operand?(_operand), do: false
 
   # A rung back to the elements its text parses to, lowered again: the same IR, and no
@@ -356,6 +369,7 @@ defmodule Logex.Compiler do
     do: [{:name, line, Map.fetch!(@mnemonics, symbol)} | Enum.map(operands, &unlowered_operand/1)]
 
   defp unlowered_operand({:member, line, path}), do: {:name, line, Enum.join(path, ".")}
+  defp unlowered_operand({:label, line, name}), do: {:name, line, name}
   defp unlowered_operand(operand), do: operand
 
   # A timer's preset is the compiler's to give, from the `ton` that runs it.
@@ -914,6 +928,7 @@ defmodule Logex.Compiler do
   defp text({:name, _, name}), do: name
   defp text({:int_lit, _, value}), do: "#{value}"
   defp text({:member, _, path}), do: Enum.join(path, ".")
+  defp text({:label, _, name}), do: name
 
   # The member a rung below reads, the one the instance's type gives the instruction
   # (Logex.FbType.rules/1), or for a name not declared yet, the one the type the
@@ -1097,6 +1112,145 @@ defmodule Logex.Compiler do
     {first, [diagnostic(line, message) | diagnostics]}
   end
 
+  # M3-5 (decisions 81, 104 and 105): a routine's labels and jumps, over its lowered rungs in
+  # order. Each `lbl` labels its rung, and one that is not its rung's first element is an
+  # error at its line; a label used twice, or two that differ only in case, is an error at
+  # the second. Then each rung holds one `jmp`, a second an error at its line, and that one
+  # names a label of this routine, exactly, on a later rung: a jump back, or to its own rung,
+  # could loop for ever. A label or jump whose operand was reported already, a literal or a
+  # name no label can be, is passed over, so one mistake gives one message. Two walks of
+  # the rungs, with maps that are only looked up, so it stays linear.
+  defp jumps(rungs, kind) do
+    indexed = Enum.with_index(rungs)
+    {labels, _folded, diagnostics} = Enum.reduce(indexed, {%{}, %{}, []}, &labelled/2)
+    Enum.reverse(Enum.reduce(indexed, diagnostics, &jumps_in(&1, &2, {labels, kind})))
+  end
+
+  # Each `lbl` in turn, the one that heads its rung, if one does, first, as the walk gives
+  # them: a misplaced one is refused, and each labels its rung.
+  defp labelled({{:rung, elements} = rung, index}, acc) do
+    lbls = for {:lbl, _, _} = lbl <- Walk.instructions([rung]), do: lbl
+    {heads, others} = Enum.split(lbls, heads(elements))
+    acc = Enum.reduce(heads, acc, &label(&1, index, &2))
+    Enum.reduce(others, acc, &label(&1, index, misplaced(&1, &2)))
+  end
+
+  # How many of a rung's `lbl`s head it: its first element's, if that is one.
+  defp heads([{:lbl, _, _} | _]), do: 1
+  defp heads(_elements), do: 0
+
+  defp label({:lbl, line, [{:label, _, name}]}, index, acc),
+    do: label_named(label_word(name), {name, line, index}, acc)
+
+  defp label(_reported, _index, acc), do: acc
+
+  defp label_named(:label, {name, line, index}, {labels, folded, diagnostics}) do
+    key = String.downcase(name)
+
+    twin(
+      Map.fetch(labels, name),
+      Map.fetch(folded, key),
+      {name, line, index, key},
+      {labels, folded, diagnostics}
+    )
+  end
+
+  defp label_named(_reported, _label, acc), do: acc
+
+  defp twin({:ok, {first, _index}}, _folded, {name, line, _, _}, {labels, folded, diagnostics}) do
+    message = "`#{name}` already labels #{the_rung(first, line)}: a label names one rung"
+    {labels, folded, [diagnostic(line, message) | diagnostics]}
+  end
+
+  defp twin(:error, {:ok, other}, {name, line, _, _}, {labels, folded, diagnostics}) do
+    {first, _index} = Map.fetch!(labels, other)
+
+    message =
+      "the labels `#{name}` and `#{other}` (line #{first}) differ only in case: labels are " <>
+        "case-sensitive, so these would be two labels"
+
+    {labels, folded, [diagnostic(line, message) | diagnostics]}
+  end
+
+  defp twin(:error, :error, {name, line, index, key}, {labels, folded, diagnostics}),
+    do: {Map.put(labels, name, {line, index}), Map.put(folded, key, name), diagnostics}
+
+  defp the_rung(line, line), do: "this rung"
+  defp the_rung(first, _line), do: "the rung on line #{first}"
+
+  defp misplaced({:lbl, line, operands}, {labels, folded, diagnostics}) do
+    message =
+      "#{shown({:lbl, line, operands})} is not first on its rung: a label stands at the " <>
+        "head of the rung it names, before any other instruction or branch group"
+
+    {labels, folded, [diagnostic(line, message) | diagnostics]}
+  end
+
+  defp jumps_in({rung, index}, diagnostics, context),
+    do:
+      one_jmp(
+        for({:jmp, _, _} = jmp <- Walk.instructions([rung]), do: jmp),
+        index,
+        diagnostics,
+        context
+      )
+
+  defp one_jmp([], _index, diagnostics, _context), do: diagnostics
+
+  defp one_jmp([first | seconds], index, diagnostics, context) do
+    diagnostics = target(first, index, diagnostics, context)
+    Enum.reduce(seconds, diagnostics, &second_jmp(&1, first, &2))
+  end
+
+  defp target({:jmp, line, [{:label, _, name}]}, index, diagnostics, {labels, kind}),
+    do:
+      targeted(
+        label_word(name),
+        Map.fetch(labels, name),
+        {name, line, index},
+        {labels, kind},
+        diagnostics
+      )
+
+  defp target(_reported, _index, diagnostics, _context), do: diagnostics
+
+  defp targeted(:label, :error, {name, line, _index}, {labels, kind}, diagnostics) do
+    message =
+      "`jmp #{name}` names no label: no rung of this #{routine(kind)} begins `lbl #{name}`" <>
+        Declarations.suggest(name, Map.keys(labels), & &1, "labels")
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp targeted(:label, {:ok, {_at, to}}, {_name, _line, from}, _context, diagnostics)
+       when to > from,
+       do: diagnostics
+
+  defp targeted(:label, {:ok, {at, to}}, {name, line, from}, _context, diagnostics) do
+    message =
+      "`jmp #{name}` jumps #{backwards(to == from, at)}: a jump goes forward only, to a " <>
+        "label on a later rung, since one back could loop for ever"
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp targeted(_reported, _found, _jmp, _context, diagnostics), do: diagnostics
+
+  defp backwards(true, _at), do: "to its own rung"
+  defp backwards(false, at), do: "back, to the rung on line #{at}"
+
+  # A jump in a block's body goes to a label in that body (decision 105).
+  defp routine(:program), do: "program"
+  defp routine({:block, _name}), do: "function block's body"
+
+  defp second_jmp({:jmp, line, _operands} = jmp, first, diagnostics) do
+    message =
+      "#{shown(jmp)} is a second `jmp` in this rung, after #{shown(first)}: a rung holds " <>
+        "one, since which of two would win is not settled"
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
   defp lower_rung({:rung, elements}, diagnostics, known) do
     {ir, diagnostics} = lower(elements, [], diagnostics, known)
     {{:rung, ir}, diagnostics}
@@ -1144,7 +1298,8 @@ defmodule Logex.Compiler do
     diagnostics = check_tags(signature, operands, at, scope, diagnostics)
     diagnostics = check_preset(signature, operands, {symbol, at}, known, diagnostics)
     diagnostics = check_divisor(symbol, operands, at, diagnostics)
-    lower(rest, [{symbol, line, Enum.map(operands, &operand/1)} | ir], diagnostics, known)
+    lowered = {symbol, line, Enum.zip_with(signature, operands, &slot_operand/2)}
+    lower(rest, [lowered | ir], diagnostics, known)
   end
 
   defp lower_word(:error, key, {line, word}, {rest, ir, diagnostics, known}) do
@@ -1407,6 +1562,11 @@ defmodule Logex.Compiler do
   defp dotted([_one], line, name), do: {:name, line, name}
   defp dotted(path, line, _name), do: {:member, line, path}
 
+  # M3-5: in a label slot a name is a label, `{:label, line, name}`, never a tag or a member,
+  # whatever it holds; anything else lowers as any operand does.
+  defp slot_operand({:label, _}, {:name, line, name}), do: {:label, line, name}
+  defp slot_operand(_slot, operand), do: operand(operand)
+
   @migrated ~w(bst nxb bnd)
 
   # B1 made the branch delimiters punctuation, and the migration is otherwise silent: an
@@ -1473,6 +1633,7 @@ defmodule Logex.Compiler do
   defp kind({:value, _type}), do: "a value"
   defp kind({:instance, type}), do: a_type(type)
   defp kind({:preset, _type}), do: "a preset"
+  defp kind({:label, _type}), do: "a label"
 
   defp found(0), do: "none"
   defp found(count), do: "#{count}"
@@ -1498,6 +1659,7 @@ defmodule Logex.Compiler do
   defp check_kind({:value, _type}, {:int_lit, _, _}, _at, diagnostics), do: diagnostics
   defp check_kind({:instance, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
   defp check_kind({:preset, _type}, {:int_lit, _, _}, _at, diagnostics), do: diagnostics
+  defp check_kind({:label, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
 
   # A preset from a tag is not a preset: check_preset/4 names the `move` that is meant.
   defp check_kind({:preset, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
@@ -1610,6 +1772,12 @@ defmodule Logex.Compiler do
   # Reported by check_preset/4, and never looked up.
   defp check_tag({{:preset, _}, {:name, _, _}}, _at, _scope, diagnostics), do: diagnostics
 
+  # M3-5 (decision 105): a label is a name of its routine's own, never looked up as a tag: a
+  # name with no `.`, and no reserved word, of which take_operands/3 leaves a section or type
+  # word to reach here.
+  defp check_tag({{:label, _}, {:name, line, name}}, {_, word}, _scope, diagnostics),
+    do: label_shape(label_word(name), {line, word, name}, diagnostics)
+
   defp check_tag({slot, {:name, _, name} = operand}, at, scope, diagnostics),
     do: resolve(Declarations.reserved(name), lookup(name, scope), slot, operand, at, diagnostics)
 
@@ -1638,6 +1806,29 @@ defmodule Logex.Compiler do
     do: [
       diagnostic(line, "`#{word}` reads a dint: `#{value}` does not fit in 32 bits") | diagnostics
     ]
+
+  defp label_shape(:label, _at, diagnostics), do: diagnostics
+
+  defp label_shape(:dotted, {line, word, name}, diagnostics),
+    do: [
+      diagnostic(line, "`#{word}` takes a label, a name with no `.`, found `#{name}`")
+      | diagnostics
+    ]
+
+  defp label_shape(reserved, {line, word, name}, diagnostics),
+    do: [
+      diagnostic(line, "`#{word}` takes a label, found #{reserved_word(reserved)} `#{name}`")
+      | diagnostics
+    ]
+
+  # What a name in a label slot is: `:label`, `:dotted`, or the reserved word it is.
+  defp label_word(name), do: label_word(String.contains?(name, "."), name)
+
+  defp label_word(true, _name), do: :dotted
+  defp label_word(false, name), do: label_or(Declarations.reserved(name))
+
+  defp label_or(nil), do: :label
+  defp label_or(reserved), do: reserved
 
   # A name is a tag, or with `.` parts a member of an instance (M1-6), its part looked up
   # among the members its type lets a program name. A dotted name that is not a declared
