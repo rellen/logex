@@ -167,6 +167,23 @@ defmodule Logex.ApiContractTest do
   switch keeps every bit as it was; the writes each report lists rebuild the state; a test
   then an untest with no scan between gives every bit back; and a restart starts each at
   its declared value. Every accepted call is made twice and gives the same result.
+
+  M3-5: the compile walk's words and mistakes gain `jmp` and `lbl`, and its reach every
+  diagnostic and the warning they bring. An eleventh walk runs forward jumps over six
+  rungs in a random order, an `ote`, a one-shot, an `ons`, an `osr` or an `osf`, the two
+  sides of a ctud, a `ton` and a `cal` of a block whose body may jump over its own
+  one-shot, with up to three jumps among them, each to the label of a later rung or of a
+  last one, over random inputs, scan intervals, restarts and online edits that change a
+  chain, add, remove or retarget a jump, swap two rungs, change the one-shot's kind or
+  change the block's body. Its oracle restates the scan from the programs' text, rung by
+  rung over the input image, and knows nothing of the block list: a skipped rung changes
+  nothing it writes; a rung that runs does what its text says, the timer timing from the
+  time the walk last saw it run, so no skipped scan stamps it; and a one-shot or counter a
+  switch came before counts or pulses no edge unless it last ran under the same rung text,
+  however many scans skipped it since (decision 106), and a restart with no scan since
+  leaves every memory fresh, so an edge after it is real. A switch keeps every value, and
+  a test then an untest with no scan between gives the state back. Every accepted call is
+  made twice and gives the same result.
   """
   use ExUnit.Case, async: true
 
@@ -176,6 +193,7 @@ defmodule Logex.ApiContractTest do
   @words ~w(var var_input var_output var_external bool dint xic xio ote otl otu move a b c) ++
            ~w(start stop Motor) ++
            ~w(ton ons eq ne lt gt le ge t1 t1.dn t1.acc t1.pre t1.zz t1.et a.b s1 n d.3) ++
+           ~w(jmp lbl jmp lbl done top) ++
            ["(", "|", ")", "0", "1", "7", "1200", "3000000000", "retain", "\n", "\n"]
 
   # Words that are lex errors: in a soup they end the compile at the lexer.
@@ -217,7 +235,15 @@ defmodule Logex.ApiContractTest do
     "xic t9.dn ote a",
     "xic a ton t1 5 ote a",
     "xic a ons s1 ote b\nxio a ons s1",
-    "xic panel.i.0 ote a"
+    "xic panel.i.0 ote a",
+    "xic a jmp nowhere",
+    "lbl top xic a ote b\nxic b jmp top",
+    "lbl here xic a jmp here",
+    "xic a lbl inside",
+    "xic a jmp done jmp done\nlbl done",
+    "xic a jmp done\nlbl done\nlbl Done",
+    "lbl done\nlbl done",
+    "lbl bool"
   ]
 
   # M1-6's diagnostics, and since M2-2 a location in a rung, by a fragment of each, that
@@ -241,14 +267,23 @@ defmodule Logex.ApiContractTest do
     "not an initial value on its declaration",
     "an instance is the program's own",
     "needs a tag name before the type `ton`",
-    "is a location, written only after `at`"
+    "is a location, written only after `at`",
+    "names no label",
+    "jumps back, to the rung on line",
+    "jumps to its own rung",
+    "is not first on its rung",
+    "already labels",
+    "differ only in case: labels are",
+    "is a second `jmp` in this rung",
+    "takes a label"
   ]
 
   # And its warnings, which only a program that compiles gets.
   @m16_warnings [
     "compares two literals",
     "the storage bit of the `ons`",
-    "no `ton` runs it"
+    "no `ton` runs it",
+    "but no `jmp` names it"
   ]
 
   @junk [
@@ -378,7 +413,8 @@ defmodule Logex.ApiContractTest do
     do: [
       {[], ["eq 1 #{pick([1, 2])} ote c"]},
       {["var s2 bool"], ["xic a ons s2 ote b", "xio a ote s2"]},
-      {["var t2 ton"], ["xic t2.dn ote c"]}
+      {["var t2 ton"], ["xic t2.dn ote c"]},
+      {[], ["lbl spare xic a ote c"]}
     ]
 
   defp soup(words) do
@@ -6903,4 +6939,611 @@ defmodule Logex.ApiContractTest do
 
   defp pc_one(true), do: 1
   defp pc_one(false), do: 0
+
+  # ---- M3-5: the walk of forward jumps --------------------------------------------------
+
+  @jp_reach [
+    :jumped,
+    :not_taken,
+    :landed,
+    :jump_skipped,
+    :held_ote,
+    :passed_on,
+    :caught_up,
+    :counted,
+    :counted_down,
+    :side_skipped,
+    :coil_rose,
+    :coil_fell,
+    :late_edge,
+    :blocked_through_skip,
+    :edge_kept,
+    :block_skipped,
+    :block_frozen,
+    :jump_added,
+    :jump_removed,
+    :label_moved,
+    :round_trip,
+    :restarted
+  ]
+
+  @jp_inputs ~w(e1 e2 e3 m1 m2 m3)
+
+  # The block a `cal` runs, in three versions of its body: a jump on its `skip` over its
+  # one-shot, the one-shot alone, and a jump over the one-shot on its inverted input.
+  @jp_bodies %{
+    1 => ["xic skip jmp done", "xic go ons e ote q", "lbl done"],
+    2 => ["xic go ons e ote q"],
+    3 => ["xic skip jmp done", "xio go ons e ote q", "lbl done"]
+  }
+
+  test "forward jumps skip exactly the rungs their text says, a skipped rung frozen, its " <>
+         "timer catching up, and no edge an edit made, however many scans skip it" do
+    :rand.seed(:exsss, {2026, 10, 555})
+    Process.put(:jp_programs, %{})
+
+    # Sized from its rarest atom, a one-shot or counter whose rung an edit changed meeting
+    # an edge at its first run after a skip, about 22 a run at 400 walks, and never under 12
+    # over the seeds {n, 77, 7}, {n, 1, 1} and {7, n, 2026}, n to 22, at each of which the
+    # reach holds.
+    for _ <- 1..400 do
+      spec = jp_spec()
+      program = jp_program(spec)
+
+      w = %{
+        spec: spec,
+        p: program,
+        s: Runtime.instance(program),
+        e: nil,
+        c: nil,
+        clean: Map.new(jp_texts(spec), fn {mem, _text} -> {mem, true} end),
+        last: jp_texts(spec),
+        skips: %{},
+        ran_at: %{},
+        round: nil,
+        restarted: false
+      }
+
+      jp_walk(w, 60)
+    end
+
+    assert Process.get(:jp_reach, MapSet.new()) == MapSet.new(@jp_reach)
+  end
+
+  defp jp_reached(name), do: reached(:jp_reach, name)
+
+  # A program, drawn: six rungs in a random order, an `ote`, a one-shot, an `ons`, an
+  # `osr` or an `osf`, the two sides of a ctud, each with a `move` of its count after it,
+  # a `ton` and a `cal` of a block whose body may jump, each on a chain of contacts; and up
+  # to three jumps among them, each on `m1`, `m2` or `m3`, put before one of the six and
+  # going to the label of it or of a later one, or of a last rung of its own, now and then
+  # with an `ote` after it on its rung.
+  @jp_rungs [:y, :s, :c, :d, :t, :b]
+
+  defp jp_spec,
+    do: %{
+      order: Enum.shuffle(@jp_rungs),
+      chains: Map.new(@jp_rungs, &{&1, pc_chain()}),
+      jumps: for(_ <- 1..pick([0, 1, 2, 2, 3, 3]), do: jp_jump()),
+      one_shot: pick([:ons, :osr, :osf]),
+      b: pick([1, 2, 3])
+    }
+
+  defp jp_jump do
+    at = :rand.uniform(6) - 1
+
+    %{
+      at: at,
+      to: at + :rand.uniform(7 - at) - 1,
+      on: {pick([:xic, :xic, :xio]), pick(~w(m1 m2 m3))},
+      q: pick([true, false])
+    }
+  end
+
+  # The candidate: one or two changes an edit may make: a rung's chain, a jump added,
+  # removed or sent to another label, two rungs swapped, the one-shot's kind, or the
+  # block's version.
+  defp jp_candidate(spec),
+    do:
+      Enum.reduce(1..:rand.uniform(2), spec, fn _, spec -> jp_change(:rand.uniform(7), spec) end)
+
+  # A chain changed, the one-shot's twice as often as another's.
+  defp jp_change(1, spec), do: put_in(spec, [:chains, pick([:s | @jp_rungs])], pc_chain())
+
+  defp jp_change(2, %{jumps: jumps} = spec) when length(jumps) < 3,
+    do: %{spec | jumps: jumps ++ [jp_jump()]}
+
+  defp jp_change(3, %{jumps: [_ | _] = jumps} = spec),
+    do: %{spec | jumps: List.delete_at(jumps, :rand.uniform(length(jumps)) - 1)}
+
+  defp jp_change(4, %{jumps: [_ | _] = jumps} = spec) do
+    i = :rand.uniform(length(jumps)) - 1
+    j = Enum.at(jumps, i)
+    %{spec | jumps: List.replace_at(jumps, i, %{j | to: j.at + :rand.uniform(7 - j.at) - 1})}
+  end
+
+  defp jp_change(5, %{order: order} = spec) do
+    i = :rand.uniform(5) - 1
+    {a, b} = {Enum.at(order, i), Enum.at(order, i + 1)}
+    %{spec | order: order |> List.replace_at(i, b) |> List.replace_at(i + 1, a)}
+  end
+
+  defp jp_change(6, spec), do: %{spec | b: pick([1, 2, 3])}
+  defp jp_change(7, spec), do: %{spec | one_shot: pick([:ons, :osr, :osf])}
+  defp jp_change(_n, spec), do: jp_change(1, spec)
+
+  defp jp_body(version) do
+    {:ok, hop} =
+      Logex.compile(
+        "function_block hop\nvar_input skip bool\nvar_input go bool\nvar_output q bool\n" <>
+          "var e bool\n" <> Enum.join(@jp_bodies[version], "\n"),
+        name: "hop"
+      )
+
+    hop
+  end
+
+  defp jp_program(spec) do
+    known = Process.get(:jp_programs)
+
+    case known do
+      %{^spec => program} ->
+        program
+
+      _ ->
+        {:ok, program} =
+          Logex.compile(jp_source(spec), name: "jp", types: [jp_body(spec.b)])
+
+        Process.put(:jp_programs, Map.put(known, spec, program))
+        program
+    end
+  end
+
+  defp jp_source(spec) do
+    declarations =
+      Enum.map(@jp_inputs, &"var_input #{&1} bool") ++
+        Enum.map(~w(y p q1 q2 q3 bq), &"var_output #{&1} bool") ++
+        ["var_output ku dint", "var_output kd dint"] ++
+        ["var s bool", "var c ctud", "var t ton", "var b hop"]
+
+    Enum.join(declarations ++ Enum.map(jp_items(spec), & &1.text), "\n")
+  end
+
+  # The program's rungs, in order, each with what the oracle needs: the jumps put before
+  # each of the six, then that rung, labelled where a jump goes to it, and a last rung
+  # where one goes past them all.
+  defp jp_items(spec) do
+    targets = MapSet.new(spec.jumps, & &1.to)
+    numbered = Enum.with_index(spec.jumps, 1)
+
+    rungs =
+      for {which, pos} <- Enum.with_index(spec.order),
+          item <- jp_jumps_at(numbered, pos) ++ [jp_rung(which, pos, targets, spec)],
+          do: item
+
+    rungs ++
+      if(MapSet.member?(targets, 6), do: [%{kind: :end, label: "L6", text: "lbl L6"}], else: [])
+  end
+
+  defp jp_jumps_at(numbered, pos),
+    do:
+      for(
+        {%{at: ^pos} = j, i} <- numbered,
+        do: %{
+          kind: :jmp,
+          i: i,
+          on: j.on,
+          to: "L#{j.to}",
+          q: j.q,
+          label: nil,
+          text:
+            "#{elem(j.on, 0)} #{elem(j.on, 1)} jmp L#{j.to}" <>
+              if(j.q, do: " ote q#{i}", else: "")
+        }
+      )
+
+  defp jp_rung(which, pos, targets, spec) do
+    label = if MapSet.member?(targets, pos), do: "L#{pos}", else: nil
+    head = if label, do: "lbl #{label} ", else: ""
+
+    rung = head <> pc_chain_text(spec.chains[which]) <> jp_tail(which, spec)
+
+    %{
+      kind: which,
+      label: label,
+      chain: spec.chains[which],
+      one_shot: spec.one_shot,
+      rung: rung,
+      text: rung <> jp_after(which)
+    }
+  end
+
+  defp jp_tail(:y, _spec), do: " ote y"
+  defp jp_tail(:s, %{one_shot: :ons}), do: " ons s ote p"
+  defp jp_tail(:s, %{one_shot: coil}), do: " #{coil} s p"
+  defp jp_tail(:c, _spec), do: " ctu c 3"
+  defp jp_tail(:d, _spec), do: " ctd c 3"
+  defp jp_tail(:t, _spec), do: " ton t 200"
+  defp jp_tail(:b, _spec), do: " cal b m3 e1 bq"
+
+  # Each side of the counter is followed, on a rung of its own that no jump comes between,
+  # by a `move` of the count, so the oracle sees what each side did.
+  defp jp_after(:c), do: "\nmove c.cv ku"
+  defp jp_after(:d), do: "\nmove c.cv kd"
+  defp jp_after(_which), do: ""
+
+  # Each edge memory, by its path, to the text it runs under, its rung's whole, its label
+  # among it: the block's by its `cal` rung and its body's one-shot rung (decision 32).
+  defp jp_texts(spec) do
+    items =
+      Map.new(
+        for %{kind: kind, rung: rung} <- jp_items(spec),
+            kind in [:s, :c, :d, :b],
+            do: {kind, rung}
+      )
+
+    %{
+      "s" => items.s,
+      "c.cu" => items.c,
+      "c.cd" => items.d,
+      "b.e" => [items.b, Enum.find(@jp_bodies[spec.b], &(&1 =~ "ons"))]
+    }
+  end
+
+  defp jp_walk(w, 0), do: w
+
+  defp jp_walk(w, n),
+    do:
+      jp_walk(
+        jp_op(pick(~w(scan scan scan scan scan accept test untest assemble cancel restart)a), w),
+        n - 1
+      )
+
+  defp jp_running(%{e: nil} = w), do: {w.p, w.spec}
+  defp jp_running(%{e: edit} = w), do: jp_side(Edit.stage(edit), w)
+
+  defp jp_side(:testing, w), do: {Edit.running(w.e), w.c}
+  defp jp_side(_stage, w), do: {Edit.running(w.e), w.spec}
+
+  defp jp_op(:scan, w) do
+    {program, spec} = jp_running(w)
+    inputs = for name <- @jp_inputs, :rand.uniform(2) == 1, into: %{}, do: {name, pick([0, 1])}
+    before = Runtime.put_inputs(program, w.s, inputs)
+    dt = pick([10, 30, 100])
+    {:ok, {_outputs, later}} = attempt(fn -> Runtime.scan(program, before, dt) end)
+    w = jp_check_scan(w, spec, before, later)
+    %{w | s: later, round: nil, restarted: false}
+  end
+
+  defp jp_op(:restart, w) do
+    {program, spec} = jp_running(w)
+    s = Runtime.restart(program, w.s, pick([:cold, :warm]))
+    jp_reached(:restarted)
+    clean = Map.new(jp_texts(spec), fn {mem, _text} -> {mem, true} end)
+
+    %{
+      w
+      | s: s,
+        clean: clean,
+        last: jp_texts(spec),
+        skips: %{},
+        ran_at: %{},
+        round: nil,
+        restarted: true
+    }
+  end
+
+  defp jp_op(:accept, %{e: nil} = w) do
+    candidate = jp_candidate(w.spec)
+    if length(candidate.jumps) > length(w.spec.jumps), do: jp_reached(:jump_added)
+    if length(candidate.jumps) < length(w.spec.jumps), do: jp_reached(:jump_removed)
+
+    if length(candidate.jumps) == length(w.spec.jumps) and candidate.jumps != w.spec.jumps,
+      do: jp_reached(:label_moved)
+
+    {:ok, {:ok, edit, _forecast}} =
+      attempt(fn -> Edit.accept(w.p, jp_program(candidate), w.s) end)
+
+    %{w | e: edit, c: candidate}
+  end
+
+  defp jp_op(:test, %{e: e} = w) when e != nil,
+    do: jp_switch(Edit.stage(e) in [:accepted, :untested], :test, w)
+
+  defp jp_op(:untest, %{e: e} = w) when e != nil,
+    do: jp_switch(Edit.stage(e) == :testing, :untest, w)
+
+  defp jp_op(:assemble, %{e: e} = w) when e != nil,
+    do: jp_finish(Edit.stage(e) == :testing, :assemble, w)
+
+  defp jp_op(:cancel, %{e: e} = w) when e != nil,
+    do: jp_finish(Edit.stage(e) in [:accepted, :untested], :cancel, w)
+
+  defp jp_op(_op, w), do: w
+
+  defp jp_finish(false, _step, w), do: w
+
+  defp jp_finish(true, step, w) do
+    {:ok, {program, s, report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
+    assert s.env == pc_rebuilt(w.s.env, report)
+    spec = if step == :assemble, do: w.c, else: w.spec
+    %{w | p: program, s: s, e: nil, c: nil, spec: spec, round: nil}
+  end
+
+  defp jp_switch(false, _step, w), do: w
+
+  defp jp_switch(true, step, w) do
+    {:ok, {edit, s, report}} = attempt(fn -> apply(Edit, step, [w.e, w.s]) end)
+
+    # Both programs declare every tag, so a switch writes nothing: every value is kept.
+    assert s.env == pc_rebuilt(w.s.env, report) and s.env == w.s.env
+
+    # A test then an untest with no scan between gives the state back.
+    if step == :untest and w.round != nil do
+      assert s.env == w.round
+      jp_reached(:round_trip)
+    end
+
+    round = if step == :test, do: w.s.env, else: nil
+
+    # A restart with no scan since leaves every memory as a fresh instance's, so an edge
+    # one sees after it is a real one, whatever its rung's text was.
+    to = if step == :test, do: w.c, else: w.spec
+    last = if w.restarted, do: Map.merge(w.last, jp_texts(to)), else: w.last
+    %{w | e: edit, s: s, clean: %{}, last: last, round: round}
+  end
+
+  # The scan, restated from the text over the input image and the state before it: the
+  # rungs run top to bottom, and a `jmp` whose chain is true, once its rung is done, skips
+  # every rung up to the one its label heads, which runs. A skipped rung changes nothing it
+  # writes. A rung that runs does what its text says, a timer timing from the time this
+  # walk last saw it run; a one-shot or counter a switch came before counts or pulses no
+  # edge unless it last ran under the same text, and then may or may not, however many
+  # scans skipped it since: the edit's block list is the implementation's and no part of
+  # this oracle.
+  defp jp_check_scan(w, spec, before, later) do
+    image = Map.take(before.env, @jp_inputs)
+    ctx = %{before: before, later: later, image: image, texts: jp_texts(spec), spec: spec}
+    count = before.env["c"]["cv"]
+
+    {w, skip} =
+      Enum.reduce(jp_items(spec), {Map.merge(w, %{count: count, sides: %{}}), nil}, fn
+        item, {w, skip} -> jp_item(item, skip, w, ctx)
+      end)
+
+    assert skip == nil
+    jp_counter!(w.count, ctx)
+
+    # One side of the counter blocked and skipped while the other ran (decision 106).
+    for {mem, other} <- [{"c.cu", "c.cd"}, {"c.cd", "c.cu"}],
+        w.sides[mem] == :skipped and w.sides[other] == :ran and mem in before.ons_blocked,
+        do: jp_reached(:side_skipped)
+
+    Map.drop(w, [:count, :sides])
+  end
+
+  # The counter after the scan: the count its sides left, and its outputs from it; a
+  # counter neither side ran is as it was.
+  defp jp_counter!(count, ctx) do
+    now = ctx.later.env["c"]
+    assert now["cv"] == count
+
+    assert {now["qu"], now["qd"]} == {pc_one(count >= 3), pc_one(count <= 0)} or
+             now == ctx.before.env["c"]
+  end
+
+  defp jp_item(%{label: label} = item, skip, w, ctx) when skip != nil and label != skip do
+    jp_reached(:jump_skipped)
+    {jp_frozen(item, w, ctx), skip}
+  end
+
+  defp jp_item(item, skip, w, ctx) do
+    if skip != nil, do: jp_reached(:landed)
+    jp_run(item, w, ctx)
+  end
+
+  defp jp_cond(chain, image), do: pc_eval(chain, image)
+
+  defp jp_run(%{kind: :jmp} = j, w, ctx) do
+    on = jp_cond([j.on], ctx.image)
+
+    if j.q do
+      assert ctx.later.env["q#{j.i}"] == pc_one(on)
+      if on, do: jp_reached(:passed_on)
+    end
+
+    jp_reached(if on, do: :jumped, else: :not_taken)
+    {w, if(on, do: j.to, else: nil)}
+  end
+
+  defp jp_run(%{kind: :end}, w, _ctx), do: {w, nil}
+
+  defp jp_run(%{kind: :y, chain: chain}, w, ctx) do
+    assert ctx.later.env["y"] == pc_one(jp_cond(chain, ctx.image))
+    {w, nil}
+  end
+
+  # The one-shot: an `ons` and an `osr` see the power they receive rise, an `osf` see it
+  # fall, its storage bit holding the power its last run received.
+  defp jp_run(%{kind: :s, chain: chain, one_shot: kind}, w, ctx) do
+    on = jp_cond(chain, ctx.image)
+    stored = pc_closed?(ctx.before.env["s"])
+    got = ctx.later.env["p"]
+    edge? = if kind == :osf, do: not on and stored, else: on and not stored
+    jp_edge!("s", edge?, got, w, ctx)
+
+    if got == 1 and kind != :ons,
+      do: jp_reached(if(kind == :osr, do: :coil_rose, else: :coil_fell))
+
+    assert ctx.later.env["s"] == pc_one(on)
+    {jp_ran(w, "s", ctx), nil}
+  end
+
+  # Each side of the counter, what it did read from the `move` after it, against the
+  # count the scan had reached: a side counts by one on an edge where the oracle allows.
+  defp jp_run(%{kind: :c, chain: chain}, w, ctx) do
+    on = jp_cond(chain, ctx.image)
+    after_up = ctx.later.env["ku"]
+    counted = after_up - w.count
+    assert counted in [0, 1]
+    jp_edge!("c.cu", on and not pc_closed?(ctx.before.env["c"]["cu"]), counted, w, ctx)
+    if counted == 1, do: jp_reached(:counted)
+    assert ctx.later.env["c"]["cu"] == pc_one(on)
+    {%{jp_ran(w, "c.cu", ctx) | count: after_up}, nil}
+  end
+
+  defp jp_run(%{kind: :d, chain: chain}, w, ctx) do
+    on = jp_cond(chain, ctx.image)
+    after_down = ctx.later.env["kd"]
+    counted = w.count - after_down
+    assert counted in [0, 1]
+    jp_edge!("c.cd", on and not pc_closed?(ctx.before.env["c"]["cd"]), counted, w, ctx)
+    if counted == 1, do: jp_reached(:counted_down)
+    assert ctx.later.env["c"]["cd"] == pc_one(on)
+    {%{jp_ran(w, "c.cd", ctx) | count: after_down}, nil}
+  end
+
+  defp jp_run(%{kind: :t, chain: chain}, w, ctx) do
+    on = jp_cond(chain, ctx.image)
+    was = ctx.before.env["t"]
+    now = ctx.later.now
+    ran_at = Map.get(w.ran_at, "t", was["last"])
+    # No scan that skipped the timer stamped its `last`.
+    assert was["last"] == ran_at
+
+    acc =
+      if on and was["en"] == 1,
+        do: min(max(was["acc"], 0) + now - ran_at, 200),
+        else: 0
+
+    if on and was["en"] == 1 and now - ran_at > now - ctx.before.now, do: jp_reached(:caught_up)
+
+    expected =
+      if on,
+        do: %{
+          "pre" => 200,
+          "acc" => acc,
+          "dn" => pc_one(acc == 200),
+          "tt" => pc_one(acc != 200),
+          "en" => 1,
+          "last" => now
+        },
+        else: %{"pre" => 200, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => now}
+
+    assert ctx.later.env["t"] == expected
+    {%{w | ran_at: Map.put(w.ran_at, "t", now)}, nil}
+  end
+
+  defp jp_run(%{kind: :b, chain: chain}, w, ctx) do
+    if jp_cond(chain, ctx.image) do
+      jp_block(w, ctx)
+    else
+      {jp_frozen(%{kind: :b}, w, ctx), nil}
+    end
+  end
+
+  # The block's body: its one-shot skipped where its version jumps on `skip`, `m3`.
+  defp jp_block(w, ctx) do
+    jumps? = ctx.spec.b in [1, 3]
+
+    if jumps? and ctx.image["m3"] == 1 do
+      assert Map.take(ctx.later.env["b"], ~w(e q)) == Map.take(ctx.before.env["b"], ~w(e q))
+      assert ctx.later.env["bq"] == ctx.before.env["b"]["q"]
+      jp_reached(:block_skipped)
+      {jp_skipped(w, "b.e"), nil}
+    else
+      go = ctx.image["e1"] == 1
+      on = if ctx.spec.b == 3, do: not go, else: go
+      got = ctx.later.env["b"]["q"]
+      jp_edge!("b.e", on and not pc_closed?(ctx.before.env["b"]["e"]), got, w, ctx)
+      assert ctx.later.env["b"]["e"] == pc_one(on) and ctx.later.env["bq"] == got
+      {jp_ran(w, "b.e", ctx), nil}
+    end
+  end
+
+  # One run of an edge memory: what it gave, 1 or 0, where the oracle allows an edge.
+  defp jp_edge!(mem, edge?, got, w, ctx) do
+    same = Map.get(w.last, mem) == ctx.texts[mem]
+
+    allowed =
+      cond do
+        ctx.before.first -> [false]
+        Map.get(w.clean, mem, false) -> [true]
+        same -> [false, true]
+        true -> [false]
+      end
+
+    assert got in Enum.map(allowed, &pc_one(edge? and &1)), "#{mem}: #{got}"
+    skipped = Map.get(w.skips, mem, 0) > 0
+
+    if edge? and skipped and not same and not ctx.before.first and
+         not Map.get(w.clean, mem, false),
+       do: jp_reached(:blocked_through_skip)
+
+    if got == 1 and skipped and Map.get(w.clean, mem, false), do: jp_reached(:late_edge)
+    if got == 1 and not Map.get(w.clean, mem, false), do: jp_reached(:edge_kept)
+  end
+
+  defp jp_ran(w, mem, ctx),
+    do: %{
+      w
+      | clean: Map.put(w.clean, mem, true),
+        last: Map.put(w.last, mem, ctx.texts[mem]),
+        skips: Map.put(w.skips, mem, 0),
+        sides: Map.put(w.sides, mem, :ran)
+    }
+
+  defp jp_skipped(w, mem),
+    do: %{
+      w
+      | skips: Map.update(w.skips, mem, 1, &(&1 + 1)),
+        sides: Map.put(w.sides, mem, :skipped)
+    }
+
+  # A rung that does not run changes nothing it writes.
+  defp jp_frozen(%{kind: :jmp, i: i}, w, ctx) do
+    assert ctx.later.env["q#{i}"] == ctx.before.env["q#{i}"]
+    w
+  end
+
+  defp jp_frozen(%{kind: :end}, w, _ctx), do: w
+
+  defp jp_frozen(%{kind: :y, chain: chain}, w, ctx) do
+    assert ctx.later.env["y"] == ctx.before.env["y"]
+    if ctx.before.env["y"] != pc_one(jp_cond(chain, ctx.image)), do: jp_reached(:held_ote)
+    w
+  end
+
+  defp jp_frozen(%{kind: :s}, w, ctx) do
+    assert Map.take(ctx.later.env, ~w(s p)) == Map.take(ctx.before.env, ~w(s p))
+    jp_skipped(w, "s")
+  end
+
+  # A skipped side leaves its memory and its `move` alone; the other side may run.
+  defp jp_frozen(%{kind: :c}, w, ctx) do
+    assert {ctx.later.env["c"]["cu"], ctx.later.env["ku"]} ==
+             {ctx.before.env["c"]["cu"], ctx.before.env["ku"]}
+
+    jp_skipped(w, "c.cu")
+  end
+
+  defp jp_frozen(%{kind: :d}, w, ctx) do
+    assert {ctx.later.env["c"]["cd"], ctx.later.env["kd"]} ==
+             {ctx.before.env["c"]["cd"], ctx.before.env["kd"]}
+
+    jp_skipped(w, "c.cd")
+  end
+
+  defp jp_frozen(%{kind: :t}, w, ctx) do
+    assert ctx.later.env["t"] == ctx.before.env["t"]
+    w
+  end
+
+  defp jp_frozen(%{kind: :b}, w, ctx) do
+    assert ctx.later.env["b"] == ctx.before.env["b"] and
+             ctx.later.env["bq"] == ctx.before.env["bq"]
+
+    jp_reached(:block_frozen)
+    jp_skipped(w, "b.e")
+  end
 end
