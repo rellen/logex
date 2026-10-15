@@ -1957,16 +1957,21 @@ defmodule Logex.FunctionBlockTest do
     end
 
     # A scan records which instances holding a blocked bit ran under an atom key of the
-    # env, which it takes out again; one an env built by hand already holds raises nothing.
-    test "an env built by hand under the scan's own key runs: nothing escapes" do
+    # env, which it takes out again, so no state holds it. Until M3-5's review one an env
+    # built by hand already held was taken as part of the record; it would keep a bit
+    # listed whose `ons` ran, so the runtime refuses it, whatever it holds there.
+    test "an env built by hand under the scan's own key is refused" do
       program = program!(@runs_pulse, [block!(@pulse)])
       state = Runtime.instance(program)
 
-      for {junk, en, left} <- [{5, 1, []}, {%{"p" => 7}, 1, []}, {5, 0, ["p.edge"]}] do
+      for junk <- [5, %{"p" => 7}, %{"p" => %{"edge" => :skipped}}] do
         hand = %{state | env: Map.put(state.env, :ran, junk), ons_blocked: ["p.edge"]}
-        {outputs, later} = step(program, hand, %{"a" => 1, "en" => en}, 0)
-        assert outputs == %{"y" => 0}
-        assert later.ons_blocked == left and not Map.has_key?(later.env, :ran)
+
+        raises(
+          "state.env holds :ran, the runtime's own key for a record a scan keeps and takes " <>
+            "out before it ends: an env is keyed by tag names",
+          fn -> step(program, hand, %{"a" => 1, "en" => 1}, 0) end
+        )
       end
     end
   end

@@ -7,7 +7,9 @@ defmodule Logex.Instance do
   - `env` is every declared tag, keyed by name, at its current value: an integer, or for
     an instance of a function block such as a `ton`, a map from each member's name to its
     value (M1-6), and for a user block's instance, an instance it holds a map in that map
-    (M2-5).
+    (M2-5). A scan keeps its own records in it under atoms, `:faults`, `:jump` and `:ran`,
+    and takes them out before it ends, so no state holds one, and the runtime refuses an
+    env that does (M3-5's review).
   - `now` is the time of its last scan, in milliseconds (0 before the first).
   - `first` says whether its next scan is the first since it started or restarted.
   - `ons_blocked` lists the storage bits whose `ons` its next scan blocks: each passes no

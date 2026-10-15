@@ -208,12 +208,16 @@ defmodule Logex.Runtime do
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
   `first`; its `ons_blocked` is the runtime's, which `call/4` fills in with a map of the
   bits the instance's list names, so a host leaves it out. A state is matched to its program
-  by name, and its values are not checked each scan. Scanning a recompile of the same name
-  over a kept instance, a *plain swap*, stays in this contract: the instance keeps its
-  values until `restart/3`, so a tag the recompile adds reads 0, an added timer starting at
-  a `.pre` of 0, a tag whose type it changes keeps its old value, a timer's map reaching the
-  outputs and the contacts, and a timer whose `ton` it gives back catches up all the time it
-  was not run.
+  by name, and its values are not checked each scan. Its env's keys are tag names: a scan
+  keeps its own records in a routine's env under atoms no tag can be, `:faults`, `:jump` and
+  `:ran`, and takes each out before it ends, so an env holding one is refused, since it
+  would change the run; a block instance's map holding one has it dropped before its body
+  runs, as any value a hand-built env holds is read whatever it is. Scanning a recompile of
+  the same name over a kept instance, a *plain swap*, stays in this contract: the instance
+  keeps its values until `restart/3`, so a tag the recompile adds reads 0, an added timer
+  starting at a `.pre` of 0, a tag whose type it changes keeps its old value, a timer's map
+  reaching the outputs and the contacts, and a timer whose `ton` it gives back catches up
+  all the time it was not run.
   `Logex.Edit` moves a state to a new program by rule instead: it starts what is added,
   restarts a value that does not fit its type, refuses a type change, moves a timer's
   `.pre` to a changed preset where logic left it alone, resumes a timer it gives back
@@ -298,6 +302,13 @@ defmodule Logex.Runtime do
   # under `@ran`, which keeps it on the block list (decision 106).
   @jump :jump
   @skipped :skipped
+
+  # The keys a routine's env holds its records under while it runs, which the routine that
+  # ran it takes out when it is done, so that no state holds one between scans: an env a
+  # host hands in holding one is refused (state!/2), and a block instance's map holding one
+  # has it dropped before its body runs (members_of/1). A key the runtime adds joins them,
+  # and the guard of state!/2's refusal, which names each, since a guard reads no list.
+  @own_keys [@faults, @jump, @ran]
 
   # M3-5: the instructions whose edge memory a skipped rung must mark to keep it blocked:
   # the one-shots, whose storage bits are leaves of the routine's own tree (Logex.Walk.
@@ -609,7 +620,9 @@ defmodule Logex.Runtime do
   # `path`, nil for the program's, in its file. One placed already, a block's, is kept by the
   # program, and is a level further down from any other routine that ran that block: its
   # path gains the instance's name.
-  # What a hand-built env left under the key is no fault.
+  # What a program built by hand left under the key, writing a tag it names by the atom, is
+  # no fault: no env a host hands in holds the key (state!/2), and no body runs over a map
+  # that does (members_of/1).
   defp placed({symbol, line}, path, file) when is_atom(symbol) and is_integer(line),
     do: [%Fault{kind: :divide_by_zero, instruction: symbol, path: path, file: file, line: line}]
 
@@ -634,7 +647,8 @@ defmodule Logex.Runtime do
     {Enum.sort(kept(tree, ran, "", [])), env}
   end
 
-  # The record taken out of an env, a map whatever an env built by hand left under its key.
+  # The record taken out of an env, a map whatever a program built by hand left under its
+  # key: no env a host hands in holds it, and no body runs over a map that does.
   defp recorded(env) do
     {ran, env} = Map.pop(env, @ran, %{})
     {as_map(ran), env}
@@ -698,6 +712,14 @@ defmodule Logex.Runtime do
     do:
       raise(ArgumentError, "state.env must be a map of tag names to values, got: #{inspect(env)}")
 
+  # M3-5's review: a record of a scan's own, under a key no tag can be, would change the
+  # run: a `:jump` skips rungs, a `:faults` entry is a fault no divisor met, and a `:ran`
+  # mark keeps a memory blocked. No scan leaves one, so a host's env holding one is a
+  # mistake, checked with the env's shape, before the clock and the owner.
+  defp state!(%Instance{env: env}, _program)
+       when is_map_key(env, @faults) or is_map_key(env, @jump) or is_map_key(env, @ran),
+       do: raise(ArgumentError, own_keys(for key <- @own_keys, is_map_key(env, key), do: key))
+
   defp state!(%Instance{now: now}, _program) when not is_integer(now) or now < 0,
     do: raise(ArgumentError, "state.now must be #{ms()}, got: #{inspect(now)}")
 
@@ -746,6 +768,16 @@ defmodule Logex.Runtime do
         ArgumentError,
         "state.faults must be a list of %Logex.Fault{}, got: #{inspect(faults)}"
       )
+
+  defp own_keys([key]),
+    do:
+      "state.env holds #{inspect(key)}, the runtime's own key for a record a scan keeps " <>
+        "and takes out before it ends: an env is keyed by tag names"
+
+  defp own_keys(keys),
+    do:
+      "state.env holds #{and_list(Enum.map(keys, &inspect/1))}, the runtime's own keys for " <>
+        "records a scan keeps and takes out before it ends: an env is keyed by tag names"
 
   defp owner!(%Instance{type: name} = state, %Program{name: name}), do: state
 
@@ -1808,7 +1840,7 @@ defmodule Logex.Runtime do
        ) do
     [_instance | formals] = FbType.signature(type)
     slots = Enum.zip(formals, operands)
-    state = Enum.reduce(slots, as_map(Map.get(env, instance)), &copy_in(&1, &2, env))
+    state = Enum.reduce(slots, members_of(Map.get(env, instance)), &copy_in(&1, &2, env))
     inner = as_map(Map.get(blocked, instance))
     body = %{scan | tags: own, ons_blocked: inner}
     {state, env} = ran(instance, rungs(rungs, state, body), env)
@@ -1817,6 +1849,12 @@ defmodule Logex.Runtime do
   end
 
   defp called(_not_a_block, _instance, _operands, env, _scan), do: env
+
+  # The map a body runs over: its instance's members. One a hand-built env left holding a
+  # record of the runtime's own, which no member can be, has it dropped, so the body runs
+  # as its text says, as a counter's map is read whatever it holds: the values in a state
+  # are not checked each scan, and a block's instance is a value (M3-5's review).
+  defp members_of(instance), do: Map.drop(as_map(instance), @own_keys)
 
   # M2-5: an instance records that its body ran, with what its own body's `cal`s recorded,
   # so that the scan keeps the blocked bits of those that did not.

@@ -198,6 +198,12 @@ defmodule Logex.EditTest do
       raises("state.ons_blocked must be a list of storage bit names, got: nil", fn ->
         Edit.accept(v1, v2, %{s | ons_blocked: nil})
       end)
+
+      raises(
+        "state.env holds :jump, the runtime's own key for a record a scan keeps and takes " <>
+          "out before it ends: an env is keyed by tag names",
+        fn -> Edit.accept(v1, v2, %{s | env: Map.put(s.env, :jump, "done")}) end
+      )
     end
 
     test "accept checks the running program, the candidate, the name, then the state", %{
@@ -281,6 +287,14 @@ defmodule Logex.EditTest do
       raises("state.switched must be true or false, got: nil", fn ->
         Edit.test(edit, %{s | switched: nil})
       end)
+
+      for step <- [:test, :cancel] do
+        raises(
+          "state.env holds :faults, the runtime's own key for a record a scan keeps and " <>
+            "takes out before it ends: an env is keyed by tag names",
+          fn -> apply(Edit, step, [edit, %{s | env: Map.put(s.env, :faults, div: 3)}]) end
+        )
+      end
     end
 
     test "a step taken at the wrong stage", %{v1: v1, v2: v2, state: s} do

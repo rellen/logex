@@ -2789,8 +2789,8 @@ names it breaks. Growth tests are in reductions.
   an untest leaving every memory fresh, and none in `lib/`. `jmp` and `lbl` are reserved
   in any case, so a program with a tag of either name no longer compiles.
 
-  M3-5's review, on 2026-10-15, found a rule no test pinned, and its fixes are the commits
-  after (7). A skipped rung marks each listed memory wherever on it its instruction
+  M3-5's review, on 2026-10-15, found a rule no test pinned and a host mistake the runtime
+  ran on, and its fixes are the commits after (7). A skipped rung marks each listed memory wherever on it its instruction
   stands, a group's legs among the places, and a mark of its top-level series alone left
   the suite green. `jump_test.exs` now holds a one-shot on a group's second leg, one two
   groups deep, and a ctud's side on a leg while its other side runs, each kept listed
@@ -2798,8 +2798,20 @@ names it breaks. Growth tests are in reductions.
   each side and the `cal` on a leg of a group now and then, first or second, whose other
   leg passes no power, its edits moving a memory into a group or out. The walk's draw of a
   program with no jump, `1..0`, which Elixir reads as two steps down, gave two jumps, so
-  that no program was drawn without one, and gives none now. The suite is at 1224 tests
-  (8 doctests).
+  that no program was drawn without one, and gives none now. A host's env holding a key
+  the runtime keeps a scan's records under changed the run: `%{jump: "nowhere"}` skipped
+  every rung after the first, and `%{faults: [div: 3]}` gave a fault no divisor met, a
+  tolerance `fault_test.exs` and `function_block_test.exs` had pinned for `:faults` and
+  `:ran`. Every entry point that takes a state, `Logex.Edit`'s steps among them, now
+  refuses one whose env holds `:faults`, `:jump` or `:ran`, all it holds named in one
+  message `runtime_test.exs`'s table pins, checked with the env's shape, before the clock
+  and the owner: no state that `instance/1`, a scan, `restart/3`, an edit's switch or a
+  resource gives holds one, nor any key but a tag's name. A `cal` drops them from its
+  instance's map before its body runs, since the values in a state are not checked each
+  scan and an instance is one, read whatever it holds. The check is three lookups in a
+  guard, so the README motor's scan still costs 308 reductions; a key no tag is but none
+  of those is never read, and stays unchecked, since a check of every key would cost each
+  scan a step a tag. The suite is at 1228 tests (8 doctests).
 
 **Milestone 3 is done when** a small bottling line written in `.ld` files runs under a
 `.logex` configuration through `Logex.Runtime.cycle/3`, against an oracle that knows

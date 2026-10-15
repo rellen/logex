@@ -634,6 +634,61 @@ defmodule Logex.JumpTest do
     end
   end
 
+  # A record of a scan's own is kept under an atom no tag can be and taken out before the
+  # scan ends, so no state holds one: a host's env holding the jump's, which would skip
+  # rungs, is refused, and a block instance's map holding one, a value no scan checks, has
+  # it dropped, so the body runs as its text says (M3-5's review).
+  describe "a hand-built env" do
+    test "holding the jump's key is refused, so no record left in a state skips a rung" do
+      p = c!(@section)
+      state = Runtime.instance(p)
+
+      assert_raise ArgumentError,
+                   "state.env holds :jump, the runtime's own key for a record a scan keeps " <>
+                     "and takes out before it ends: an env is keyed by tag names",
+                   fn ->
+                     Runtime.call(
+                       p,
+                       %{state | env: Map.put(state.env, :jump, "done")},
+                       %{},
+                       %Scan{
+                         now: 0,
+                         first: true
+                       }
+                     )
+                   end
+    end
+
+    test "whose block instance holds a jump's or a run's record, runs the body as its text " <>
+           "says and uses its blocks up" do
+      {:ok, pulse} =
+        Logex.compile(
+          "function_block pulse\nvar_input go bool\nvar_output y bool\nvar_output z bool\n" <>
+            "var edge bool\nxic go ons edge ote y\nxic go ote z",
+          name: "pulse"
+        )
+
+      p =
+        c!(
+          "var_input go bool\nvar_output y bool\nvar_output z bool\nvar p pulse\ncal p go y z",
+          [pulse]
+        )
+
+      fresh = drive(p, [%{"go" => 0}])
+      records = %{jump: "nowhere", ran: %{"edge" => :skipped}}
+
+      held = %{
+        fresh
+        | env: Map.update!(fresh.env, "p", &Map.merge(&1, records)),
+          ons_blocked: ["p.edge"]
+      }
+
+      state = drive(p, [%{"go" => 1}], held)
+      assert {state.env["z"], state.env["y"], state.ons_blocked} == {1, 0, []}
+      assert Enum.all?(Map.keys(state.env["p"]), &is_binary/1)
+    end
+  end
+
   # A scan's cost in reductions, the least of three, since a busy VM can raise one: `src`
   # compiled, scanned once, its block list set to `blocked`, and scanned again with
   # `inputs`.

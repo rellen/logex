@@ -346,14 +346,15 @@ defmodule Logex.FaultTest do
     end
   end
 
-  # A state built by hand is outside the contract, but a scan of one never raises: what its
-  # env holds under the record's key, an atom no tag can be, is taken where it is a fault
-  # and dropped where it is none, and no state keeps the record.
+  # A record of a scan's own is kept under an atom no tag can be, and taken out before the
+  # scan ends, so no state holds one. A host's env holding the record's key is refused, as a
+  # fault under it would be one no divisor met; a block instance's map holding it, a value
+  # no scan checks, has it dropped, so its body's faults are its own (M3-5's review).
   describe "a hand-built env" do
-    test "holding anything under the record's key, gives faults and keeps no record" do
+    test "holding the record's key is refused, whatever it holds there" do
       p = c!(@rate)
 
-      for junk <- [:x, [:x, {1, 2}, nil], %{}, [fault(:div, 99)]] do
+      for junk <- [:x, [div: 3], %{}, [fault(:div, 99)]] do
         state = %Instance{
           type: "rate",
           env: %{"boxes" => 1, "minutes" => 0, faults: junk},
@@ -361,10 +362,48 @@ defmodule Logex.FaultTest do
           first: true
         }
 
-        {_, state} = Runtime.call(p, state, %{}, %Scan{now: 0, first: true})
-        refute Map.has_key?(state.env, :faults)
-        assert List.last(state.faults) == fault(:div, 5)
-        assert Enum.all?(state.faults, &match?(%Fault{}, &1))
+        assert_raise ArgumentError,
+                     "state.env holds :faults, the runtime's own key for a record a scan " <>
+                       "keeps and takes out before it ends: an env is keyed by tag names",
+                     fn -> Runtime.call(p, state, %{}, %Scan{now: 0, first: true}) end
+      end
+    end
+
+    test "whose block instance holds it under the key, gives the body's faults alone" do
+      {:ok, block} =
+        Logex.compile(
+          "function_block per\nvar_input n dint\nvar_input d dint\nvar_output q dint\n" <>
+            "div n d q",
+          name: "per"
+        )
+
+      p =
+        c!(
+          "var_input go bool\nvar_input d dint\nvar_output q dint\nvar s1 per\n" <>
+            "xic go cal s1 7 d q",
+          [block]
+        )
+
+      fresh = Runtime.instance(p)
+
+      for junk <- [:x, [div: 3], %{}, [fault(:div, 99)]] do
+        state = %{fresh | env: Map.update!(fresh.env, "s1", &Map.put(&1, :faults, junk))}
+
+        {_, state} =
+          Runtime.call(p, state, %{"go" => 1, "d" => 0}, %Scan{now: 0, first: true})
+
+        assert state.faults == [fault(:div, 5, "s1")]
+        assert Enum.all?(Map.keys(state.env["s1"]), &is_binary/1)
+
+        {_, state} =
+          Runtime.call(
+            p,
+            %{state | env: Map.update!(state.env, "s1", &Map.put(&1, :faults, junk))},
+            %{"d" => 7},
+            %Scan{now: 10, first: false}
+          )
+
+        assert state.faults == []
       end
     end
   end

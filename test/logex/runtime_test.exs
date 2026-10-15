@@ -175,6 +175,20 @@ defmodule Logex.RuntimeTest do
             {%{s | env: %Scan{now: 0, first: true}},
              "state.env must be a map of tag names to values, " <>
                "got: %Logex.Scan{now: 0, first: true, ons_blocked: [], tags: nil, blocks: nil}"},
+            # M3-5's review: the keys a scan keeps its own records under, which no tag can
+            # be, and which it takes out before it ends, so no state holds one.
+            {%{s | env: Map.put(s.env, :jump, "nowhere")},
+             "state.env holds :jump, the runtime's own key for a record a scan keeps and " <>
+               "takes out before it ends: an env is keyed by tag names"},
+            {%{s | env: Map.put(s.env, :faults, div: 3)},
+             "state.env holds :faults, the runtime's own key for a record a scan keeps and " <>
+               "takes out before it ends: an env is keyed by tag names"},
+            {%{s | env: Map.put(s.env, :ran, %{"s1" => :skipped})},
+             "state.env holds :ran, the runtime's own key for a record a scan keeps and " <>
+               "takes out before it ends: an env is keyed by tag names"},
+            {%{s | env: Map.merge(s.env, %{ran: nil, jump: nil, faults: nil})},
+             "state.env holds :faults, :jump and :ran, the runtime's own keys for records a " <>
+               "scan keeps and takes out before it ends: an env is keyed by tag names"},
             {%{s | now: nil},
              "state.now must be a non-negative integer of milliseconds, got: nil"},
             {%{s | now: -5}, "state.now must be a non-negative integer of milliseconds, got: -5"},
@@ -222,6 +236,49 @@ defmodule Logex.RuntimeTest do
       raises("state.switched must be true or false, got: nil", fn ->
         Runtime.call(pump, %{s | switched: nil}, %{}, %Scan{now: 0, first: true})
       end)
+
+      # The env's keys are checked with its shape: after the type, before the clock and
+      # the owner.
+      jumped = Map.put(s.env, :jump, "nowhere")
+
+      raises("state.type must be a program name, got: :motor", fn ->
+        Runtime.call(m, %{s | type: :motor, env: jumped}, %{}, %Scan{now: 0, first: true})
+      end)
+
+      for {state, program} <- [{%{s | env: jumped, now: -1}, m}, {%{s | env: jumped}, pump}] do
+        raises(
+          "state.env holds :jump, the runtime's own key for a record a scan keeps and " <>
+            "takes out before it ends: an env is keyed by tag names",
+          fn -> Runtime.call(program, state, %{}, %Scan{now: 0, first: true}) end
+        )
+      end
+    end
+
+    test "every entry point that takes a state refuses one whose env holds the runtime's " <>
+           "own key, and a key no tag is but none of those is never read",
+         %{motor: m, state: s} do
+      held = opaque(%{s | env: Map.put(s.env, :jump, "nowhere")})
+
+      for f <- [
+            fn -> Runtime.call(m, held, %{}, %Scan{now: 0, first: true}) end,
+            fn -> Runtime.put_inputs(m, held, %{}) end,
+            fn -> Runtime.scan(m, held) end,
+            fn -> Runtime.scan(m, held, 5) end,
+            fn -> Runtime.restart(m, held, :cold) end
+          ] do
+        raises(
+          "state.env holds :jump, the runtime's own key for a record a scan keeps and " <>
+            "takes out before it ends: an env is keyed by tag names",
+          f
+        )
+      end
+
+      other = %{s | env: Map.merge(s.env, %{:skipped => 1, 7 => 1})}
+
+      assert {%{"motor" => 1}, %{env: env}} =
+               Runtime.call(m, other, %{"start" => 1}, %Scan{now: 0, first: true})
+
+      assert {env[:skipped], env[7]} == {1, 1}
     end
 
     test "the values in a state's env are not checked, so M1-4's totality stays reachable", %{
