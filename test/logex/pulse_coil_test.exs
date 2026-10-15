@@ -287,16 +287,19 @@ defmodule Logex.PulseCoilTest do
         for {on, go} <- [{1, 0}, {1, 1}, {0, 1}, {0, 0}, {0, 1}, {1, 1}, {1, 0}, {0, 0}, {1, 0}],
             do: %{"on" => on, "go" => go}
 
-      assert trace(p, inputs, [["up"], ["down"], ["e", "sr"]]) == [
-               [0, 0, 0],
-               [1, 0, 1],
-               [1, 0, 1],
-               [1, 0, 1],
-               [1, 0, 1],
-               [0, 0, 1],
-               [0, 1, 0],
-               [0, 1, 0],
-               [0, 0, 0]
+      # The block's own pulse bits, its var_outputs, are held as the program's tags its
+      # `cal` fills are: the pulse is the block's, frozen with it, as the maintainer
+      # confirmed (decision 102).
+      assert trace(p, inputs, [["up"], ["down"], ["e", "sr"], ["e", "up"], ["e", "down"]]) == [
+               [0, 0, 0, 0, 0],
+               [1, 0, 1, 1, 0],
+               [1, 0, 1, 1, 0],
+               [1, 0, 1, 1, 0],
+               [1, 0, 1, 1, 0],
+               [0, 0, 1, 0, 0],
+               [0, 1, 0, 0, 1],
+               [0, 1, 0, 0, 1],
+               [0, 0, 0, 0, 0]
              ]
     end
 

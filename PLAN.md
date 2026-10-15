@@ -2707,8 +2707,13 @@ names it breaks. Growth tests are in reductions.
   with its cost, one real press, where the press rises on the first scan after the switch,
   and why it is kept though decision 87's reason for leaving presets out would leave the
   pulse bit out too: one rule with `ons`, whose rung is compared whole, what its pulse
-  drives among it. README's coil under an edit says so. The suite is at 1162 tests (8
-  doctests).
+  drives among it. README's coil under an edit says so. Asked after the review, the
+  maintainer confirmed decision 102's frozen pulse: a pulse inside a block whose `cal` is
+  false stays on until the block runs again, as everything in a frozen block holds, which
+  M3-4 built; decision 102 and §7's opening record it, and `pulse_coil_test.exs`'s frozen
+  block now reads the block's own pulse bits beside the program's tags, which the
+  decision's alternative, a false `cal` clearing them, had changed with only the contract
+  walk red. The suite is at 1162 tests (8 doctests).
 - **M3-5 · Control flow: forward `jmp` and `lbl`, and no MCR.** A forward jump only, a
   label first on its rung, labels a routine's own namespace (decision 81); skipped rungs
   freeze as a false `cal` freezes a block, a timer in them catching up when next run (82);

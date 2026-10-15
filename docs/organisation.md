@@ -2671,8 +2671,9 @@ was taken the same day, after M3-2's review, from a question the maintainer was 
 then. Decisions 97–99 are M3-3's own routine choices, taken as it landed on 2026-10-14,
 99 the shape of the report decision 78 left to M3-3, and 98's reading of a `mod` by zero
 confirmed by the maintainer the same day, after M3-3's review. Decisions 100–103 are
-M3-4's own routine choices, taken as it landed the same day. All one hundred and three are
-kept with their options so the reasons stay with them.
+M3-4's own routine choices, taken as it landed the same day, 102 confirmed by the
+maintainer on 2026-10-15, after M3-4's review. All one hundred and three are kept with their
+options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -4030,7 +4031,10 @@ record answers one, 103, it says which decisions do.
      online edit adds has its coils' storage bits on the block list by path until a scan
      runs its body (decision 32), so its first run pulses neither. The behaviour is kept,
      one rule with `ons` and the counters, and `pulse_coil_test.exs` pins the `osf`'s
-     pulse and the `osr`'s.)*
+     pulse and the `osr`'s.)* *(Confirmed by the maintainer on 2026-10-15, after M3-4's
+     review: a pulse inside a block whose `cal` is false freezes, its pulse bit staying on
+     until the block runs again, as everything in a frozen block holds. It is what M3-4
+     built, and `pulse_coil_test.exs` pins it.)*
 103. **A pulse coil under an event task (M3-4).** The e-stop's own event task pulses a
      "pressed" bit, `xic estop osr s1 pressed`; the task runs only when the e-stop
      switches on, so the coil sees "pressed" at every run and never pulses after the
