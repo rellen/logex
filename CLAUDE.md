@@ -95,7 +95,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   storage bit with the power it receives, read as a contact reads a bit, the pulse set on
   the run that power rises for `osr` or falls for `osf`, `osf`'s seen by its de-energised
   clause, never on a first scan nor where the block list holds the storage bit, as for
-  `ons`, and passing that power on (decisions 80 and 100 to 102).
+  `ons`, and passing that power on (decisions 80 and 100 to 102); in a block whose `cal` is
+  false both bits are held, so a pulse stays on until the body runs again, as the
+  maintainer confirmed, and a block whose first run comes after the instance's first scan
+  reads each storage bit as declared there, so an `osf` declared 1 pulses on a false rung
+  (decision 102).
   `lib/logex/instance.ex` and `lib/logex/scan.ex` hold its two structs, each with
   `ons_blocked` since OE-1: the storage bits whose `ons` the next scan blocks, the hook an
   online edit's switch uses to keep a new or changed one-shot from firing, a bit inside a
@@ -149,8 +153,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   event task runs, from `Logex.Walk.timers/1`, once a type, citing its `ton`'s own file
   and line, and since M3-1 each counter after them, from `Logex.Walk.counters/1`
   (decision 72); since M3-2 each timer in its own type's words, a `tof`, `tp` and `rto` as
-  well as a `ton`, read in the routine whose text holds it; a one-shot under an event task,
-  an `ons`, or since M3-4 an `osr` or an `osf`, none (decision 103). Since M3-4 the writer
+  well as a `ton`, read in the routine whose text holds it; and since M3-4's review each
+  one-shot after the counters, an `ons`, an `osr` or an `osf`, a block's by its storage
+  bit's path, from `Logex.Walk.one_shots/1`, once a type, in its own words, citing its
+  instruction's own file and line (decision 103, as the maintainer answered it on
+  2026-10-15, superseding its "no warning"). Since M3-4 the writer
   warnings name a global's one-shot, `ons`, `osr` or `osf`, the first writer's in line
   order whose storage bit it is, from `Logex.Walk.storage_bits/1`. Since M3-3 a negative number is
   one a configuration's line can say, so a negative interval or priority is told its range
@@ -198,8 +205,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   forecast follows its type's rule (`forecast`), and a `tp`'s `.en` is on the block list
   as a counter's edge memory is (decisions 93 to 95). Since M3-4 an `osr`'s or an `osf`'s
   storage bit is on it by name as an `ons`'s is, by every rule of an `ons`'s, its rung,
-  its kind and its pulse bit among it, compared without presets (decisions 80 and 87), and
-  its pulse bit an ordinary bool, held where an edit stops driving it. Its moduledoc gives every rule, report kind and host mistake; §4.9
+  its kind and its pulse bit among it, compared without presets (decisions 80 and 87), so
+  an edit of its pulse bit alone blocks it and may cost one real press (decision 101), one
+  whose storage bit the program that last scanned also writes another way blocked as an
+  `ons`'s is, and its pulse bit an ordinary bool, held where an edit stops driving it. Its moduledoc gives every rule, report kind and host mistake; §4.9
   the reasons
 - `lib/logex/configuration/edit.ex` — a staged edit of a running configuration (OE-2,
   `docs/organisation.md` §4.9, "OE-2's design"; decisions 55–66): `accept/2` takes the
@@ -268,16 +277,20 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   instruction in rung order, groups' legs included; `uses/2`, every tag operand with its
   slot's access, a member as its instance, and since M3-4 `uses_of/2`, one instruction's;
   since M3-4 `one_shots/0`, `ons`, `osr` and `osf`, the instructions that keep a storage
-  bit as their first operand, and `storage_bits/1`, each one-shot's bit with its line and
-  symbol, which the compiler, `Logex.Warnings`, `Logex.Edit` and the configuration read; `writes/1`, which tags a program writes, each
+  bit as their first operand, which the compiler, `Logex.Warnings` and `Logex.Edit` read,
+  and `storage_bits/1`, each one-shot's bit with its line and symbol, which
+  `Logex.Warnings` and the configuration's writer warnings read; `writes/1`, which tags a program writes, each
   to the lines of its writes, a `cal`'s instance and the tags its var_outputs fill among
   them; and `timers/1`, which timers it runs, each to the line and preset of its `ton`, or
   since M3-2 its `tof`, `tp` or `rto`. Since M3-1
   `presets/1`, every built-in instance it runs, which `Logex.Edit` reads, and `counters/1`,
   the counters among them, which M2-6's event-task warning reads beside `timers/1`, now the
   timers alone. Since M3-2 `member_writes/1`, the member inputs of built-in instances a
-  program writes through an instruction, which an edit reads for `:unwritten` (decision 96). The
-  last two reach into every block a `cal` runs, at any depth, by path (`p.s.t1`), each
+  program writes through an instruction, which an edit reads for `:unwritten` (decision 96).
+  Since M3-4's review `one_shots/1`, which one-shots a program runs, each storage bit to
+  the line and symbol of its `ons`, `osr` or `osf`, which the event-task warning reads
+  beside `timers/1` and `counters/1` (decision 103). `writes/1` and every fact after it
+  reach into every block a `cal` runs, at any depth, by path (`p.s.t1`), each
   block type read once a call. The compiler, `Logex.Warnings` and `Logex.Edit` read it in
   place of walks of their own, and `Logex.Configuration.check/1` what a program type
   writes through its var_externals
@@ -438,8 +451,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   an edit's rules or report, through "Changing a running program". M3-1's counters are its
   "A counter", and the counter in "Changing a running program"; M3-2's timers its "Three
   more timers"; M3-3's arithmetic, negative literals and the fault a zero divisor raises
-  its "Arithmetic"; M3-4's pulse coils its "Two pulse coils", and the coil in "Changing a
-  running program".
+  its "Arithmetic"; M3-4's pulse coils its "Two pulse coils", the coil in "Changing a
+  running program", and a one-shot's event-task warning in "An event task".
   Nothing tests this.
 - `CONTRIBUTING.md` — working practices, each one traced to something that broke
 - `PLAN.md` — reviewed findings and the ordered plan of work
@@ -452,7 +465,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   2026-10-02, §4.10 and decisions 30–40, and OE-2 on 2026-10-13, §4.9's "OE-2's design"
   and decisions 55–66; Milestone 3, the missing instruction set, decided on 2026-10-14, decisions 67–92, M3-1's
   counters landed, M3-2's timers, with decisions 93–96, M3-3's arithmetic, with
-  decisions 97–99, and M3-4's pulse coils, with decisions 100–103). Read it before designing anything that names a program, schedules one, binds I/O, or changes a
+  decisions 97–99, and M3-4's pulse coils, with decisions 100–103, 102 confirmed and 103
+  answered by the maintainer on 2026-10-15, after M3-4's review). Read it before designing anything that names a program, schedules one, binds I/O, or changes a
   running controller (§4.9, online edit, decided 2026-10-01).
 - `docs/instruction-sets.md` — reference: IEC's LD elements and standard library by table number,
   Instruction List (withdrawn in Ed 4), and the free-software instruction sets. Read it before

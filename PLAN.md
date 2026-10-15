@@ -2724,7 +2724,15 @@ names it breaks. Growth tests are in reductions.
   are, so that the e-stop's own coil, `xic estop osr s1 pressed`, is told it never pulses.
   `configuration_test.exs` pins it from text, from Elixir and from files on disk, and
   `walk_test.exs` the fact, whose two growth tests walk it too, their bounds again a fifth
-  above the highest of 48 runs, 1.82 and 19.0. The suite is at 1167 tests (8 doctests).
+  above the highest of 48 runs, 1.82 and 19.0. Two of the record's words were stale:
+  `docs/instruction-sets.md` §2.2 still had Ed 3's numbering from a secondary source
+  alone, where M3-4's survey read Table 76's features 8 and 9 in the standard, and it now
+  says so, in §10 too; and CLAUDE.md said the compiler and `Logex.Edit` read
+  `Logex.Walk.storage_bits/1`, where they read `one_shots/0` and only `Logex.Warnings` and
+  the configuration's writer warnings read the bits. CLAUDE.md's Key Files now say which
+  reads which, and bring the review's rules in: a block's later first run, the frozen
+  pulse confirmed, a pulse bit edited alone, `one_shots/1` and the one-shot event-task
+  warning. The suite is at 1167 tests (8 doctests).
 - **M3-5 · Control flow: forward `jmp` and `lbl`, and no MCR.** A forward jump only, a
   label first on its rung, labels a routine's own namespace (decision 81); skipped rungs
   freeze as a false `cal` freezes a block, a timer in them catching up when next run (82);

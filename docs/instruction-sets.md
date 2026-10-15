@@ -55,7 +55,9 @@ stream. That is also how the standard's own interchange format models it (see
 Ed 2:2003 numbering is confirmed from the standard's own text. Ed 3:2013 numbering is
 confirmed from a secondary source — the conventional set's own IEC-compliance tables,
 which cite table *and* feature numbers (see [§9](#9-sources) for why that document is
-cited without a URL).
+cited without a URL) — but for Table 76's features 8 and 9, the transition-sensing coils,
+which M3-4's survey of `osr` and `osf` read in the standard itself, §8.2.5, pp.218–219
+(`docs/naming.md`), where they are as the secondary source numbers them.
 
 | Element | Ed 2:2003 | Ed 3:2013 | What the standard says |
 |---|---|---|---|
@@ -81,8 +83,9 @@ Two structural notes. First, the Ed 2 Table 62 feature numbers skip 5, 6 and 7 �
 from Ed 1, the row naming.md already records under "retentive / memory coil". Second, the
 gap pattern in the Ed 3 compliance table (features 1, 3, 4, 8, 9 listed for T76; 2, 5, 6,
 7 absent) exactly matches Ed 2's Table 62, which is strong but not conclusive evidence
-that Ed 3 kept Ed 2's feature numbering inside renumbered tables. The two inferred cells
-above are flagged in §10 rather than asserted.
+that Ed 3 kept Ed 2's feature numbering inside renumbered tables; features 8 and 9, read
+in the standard since, kept it. The two inferred cells above are flagged in §10 rather
+than asserted.
 
 ### 2.3 The evaluation rules, verbatim
 
@@ -918,8 +921,9 @@ the primary sources — and survived both.
 
 1. **Ed 3:2013 Table 75 feature 4** (negative transition-sensing contact) and **Table 76
    feature 2** (negated coil). Inferred from the feature-number gaps in the conventional
-   set's compliance table, which lists only the features it implements. The Ed 3 table
-   itself was not read.
+   set's compliance table, which lists only the features it implements. Neither feature
+   was read in the Ed 3 table itself; Table 76's features 8 and 9 were, for M3-4's
+   survey.
 2. **Ed 4:2025 table numbers** for rails, links, contacts and coils, and the **clause
    number of the LD subclause in Ed 3 and Ed 4's restructured numbering**. The free preview
    stops at clause 3. Two web searches for a secondary confirmation returned mutually

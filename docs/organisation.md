@@ -4007,12 +4007,12 @@ record answers one, 103, it says which decisions do.
      `xic start_pb osr s1 next`, blocks the coil until a scan runs it. The cost is one real
      press: a press that rises on the first scan after the switch sets no pulse, though the
      storage bit holds the power the coil last received and an unblocked coil would set its
-     new pulse bit, and the next press pulses. Decision 87's reason for leaving presets out,
-     fewer real edges lost and none made up, would leave the pulse bit out too; it is kept
-     in for one rule with `ons`, whose rung is compared whole, what its pulse drives among
-     it, so an `ons` whose rung changes only in that, `ote step` to `ote next`, is blocked
-     too, and a storage bit's block never turns on which operand of its rung changed.
-     `edit_test.exs` pins it.)*
+     new pulse bit, and the next press pulses. Decision 87's reason for leaving presets
+     out, fewer real edges lost and none made up, would leave the pulse bit out too; it is
+     kept in for one rule with `ons`, whose rung is compared whole, what its pulse drives
+     among it, so an `ons` whose rung changes only in that, `ote step` to `ote next`, is
+     blocked too, and a storage bit's block never turns on which operand of its rung
+     changed. `edit_test.exs` pins it.)*
 102. **When `osf` sees its edge, and a coil in a frozen block (M3-4).** A "box left the
      eye" pulse, `xic eye osf s2 gone`, and the same coil inside a block whose `cal` is
      false while the box leaves.
