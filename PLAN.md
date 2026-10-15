@@ -2790,15 +2790,15 @@ names it breaks. Growth tests are in reductions.
   in any case, so a program with a tag of either name no longer compiles.
 
   M3-5's review, on 2026-10-15, found a rule no test pinned, a host mistake the runtime
-  ran on, a word a block's body took as a label, a suggestion of a jump back and words of
-  its own gone stale, and its fixes are the commits after (7). A skipped rung marks each
-  listed memory wherever on it its instruction stands, a group's legs among the places,
-  and a mark of its top-level series alone left the suite green. `jump_test.exs` now holds
-  a one-shot on a group's second leg, one two groups deep, and a ctud's side on a leg
-  while its other side runs, each kept listed through the skip and blocked at its first
-  run; and the contract walk puts the one-shot, each side and the `cal` on a leg of a
-  group now and then, first or second, whose other leg passes no power, its edits moving a
-  memory into a group or out. The walk's draw of a program with no jump, `1..0`, which
+  ran on, a word a block's body took as a label, a suggestion of a jump back, and words
+  gone stale, its own and older, and its fixes are the commits after (7). A skipped rung
+  marks each listed memory wherever on it its instruction stands, a group's legs among the
+  places, and a mark of its top-level series alone left the suite green. `jump_test.exs`
+  now holds a one-shot on a group's second leg, one two groups deep, and a ctud's side on
+  a leg while its other side runs, each kept listed through the skip and blocked at its
+  first run; and the contract walk puts the one-shot, each side and the `cal` on a leg of
+  a group now and then, first or second, whose other leg passes no power, its edits moving
+  a memory into a group or out. The walk's draw of a program with no jump, `1..0`, which
   Elixir reads as two steps down, gave two jumps, so that no program was drawn without
   one, and gives none now. A host's env holding a key the runtime keeps a scan's records
   under changed the run: `%{jump: "nowhere"}` skipped every rung after the first, and
@@ -2823,8 +2823,17 @@ names it breaks. Growth tests are in reductions.
   passages still said every rung runs at the top level: `call/4`'s doc, two comments in
   `Logex.Edit.Plan`, on the bits a scan leaves pending and on a timer's `last`, and in
   `docs/organisation.md` §4.9's block-list paragraph and decision 21's note, each now
-  saying what a skipped rung leaves, the two notes with a dated one of decision 106. The
-  suite is at 1230 tests (8 doctests).
+  saying what a skipped rung leaves, the two notes with a dated one of decision 106. Older
+  words were stale too: `docs/organisation.md`'s Status said the configuration file,
+  shared globals and event tasks were not yet implemented, and now says Milestones 1 to 3,
+  OE-1 and OE-2 have landed; `docs/instruction-sets.md` §7 had `cal` deferred, a `res`
+  that decision 84 dropped, `ret`, `shl` and `shr` with no marking though none exists, the
+  up/down counter as none and a counter's bounds unknown, and §8 called `res` planned; and
+  `docs/naming.md`'s Program control table had `cal` deferred and `ret` unmarked, which
+  are corrected in place, as each survey since M3-1 has corrected that table's logex
+  cells, the stanzas being what the file keeps append-only, and its `shl` and `shr` are
+  marked deferred with them, so that §7's column stays naming.md's. The suite is at 1230
+  tests (8 doctests).
 
 **Milestone 3 is done when** a small bottling line written in `.ld` files runs under a
 `.logex` configuration through `Logex.Runtime.cycle/3`, against an oracle that knows

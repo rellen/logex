@@ -744,10 +744,10 @@ column is naming.md's, not a new decision.
 | Cyclic / astable timer | — | — | — | `ELEM_TCY`, `OSC` | — | (none) |
 | Up counter | a `block` | `CU`,`R`,`PV` T54.8 | `CTU` (+4 typed) | `ELEM_CTU`, inline threshold | `ELE_COUNTER` `InputCountUp` | `ctu` |
 | Down counter | " | `CD`,`PV` T54.9 | `CTD` | `ELEM_CTD` | `InputCountDown` on the same block | `ctd` |
-| Up/down counter | " | `CU,CD,R,PV` T54.10 | `CTUD` | — (two elements on one name) | one block covers it | (none) — `ctu`+`ctd` |
+| Up/down counter | " | `CU,CD,R,PV` T54.10 | `CTUD` | — (two elements on one name) | one block covers it | `ctud`, a type word, run by a `ctu` and a `ctd` on one counter (decision 85) |
 | Circular counter | — | — | — | `ELEM_CTC` / `ELEM_CTR` | — | (none) |
-| Counter reset | the `R` **pin** (CTD has none) | `R` T54.8 | `R` pin | `ELEM_RES` (a separate instruction) | `InputReset` field | `res` |
-| Counter bound behavior | implementation-dependent `PVmin`/`PVmax` (T36 NOTE) | — | `CV < PV` guard | ? | **wraps at 0 / 9999** | ? |
+| Counter reset | the `R` **pin** (CTD has none) | `R` T54.8 | `R` pin | `ELEM_RES` (a separate instruction) | `InputReset` field | (none) — the `r` input, IEC's pin (decision 84) |
+| Counter bound behavior | implementation-dependent `PVmin`/`PVmax` (T36 NOTE) | — | `CV < PV` guard | ? | **wraps at 0 / 9999** | stops at the dint's limits, `ov`/`un` latched (decision 71) |
 | Edge-detect FB | `R_TRIG` / `F_TRIG`, T35 | `CLK` T54.6 | `R_TRIG`/`F_TRIG` (also injected for edge modifiers) | — (inline elements instead) | edge *contacts* instead | (none) |
 | Set-dominant bistable | `SR`, T34 f1 | `S1`,`R` T54.4 | `SR` | — (one coil; wiring decides) | — (S/R coils) | (none) |
 | Reset-dominant bistable | `RS`, T34 f2 | `S`,`R1` T54.5 | `RS` | — | — | (none) |
@@ -755,21 +755,21 @@ column is naming.md's, not a new decision.
 | Compare `<` | `LT`, T33 f5 | `LT` T52.17 | `LT` | `ELEM_LES` — **`LES`** | `ELE_COMPAR` | `lt` |
 | Add | `ADD`, T29 f1 (extensible) | `ADD` T52.8 | `ADD` (variadic) | `ELEM_ADD` (fixed arity) | `ELE_OUTPUT_OPERATE`, infix `+` | `add a b dst` |
 | Move | `MOVE`, T32 f1 / T24 f18 | `LD`+`ST` | `MOVE` | `ELEM_MOVE` — **`MOV`** | `ELE_OUTPUT_OPERATE` | `move` |
-| Shift left | `SHL`, T30 f1 | — | `SHL` | `ELEM_SHL` | — (no shift operator in the grammar) | `shl` |
-| Shift right | `SHR`, T30 f2 — **zero fill** | — | `SHR` | `ELEM_SHR` + `SR0` | — | `shr` (zero fill) |
+| Shift left | `SHL`, T30 f1 | — | `SHL` | `ELEM_SHL` | — (no shift operator in the grammar) | `shl` *(deferred)* |
+| Shift right | `SHR`, T30 f2 — **zero fill** | — | `SHR` | `ELEM_SHR` + `SR0` | — | `shr` (zero fill) *(deferred)* |
 | Absolute value | `ABS`, T28 f1 | — | `ABS` | — | `ABS()` in the expression grammar | `abs` |
 | Average | — | — | — | — | `MOY` / `AVG` | (none) |
 | Jump | Jump element, T58 f1–4 | `JMP`/`JMPC`/`JMPCN` | `<jump>` L1337 | `ELEM_GOTO` | `ELE_OUTPUT_JUMP` | `jmp`, forward only (decision 81) |
 | Label | Network label, §4.1.2 | `label:` Annex B.2.1 | `<label>` L1319 | `ELEM_LABEL` | rung number as the target | `lbl`, first on its rung |
-| Subroutine call | draw the block | `CAL`/`CALC`/`CALCN` | `<block>` | `ELEM_SUBPROG` / `ELEM_GOSUB` | `ELE_OUTPUT_CALL` | `cal` *(deferred)* |
-| Return | RETURN element, T58 f5–8 | `RET`/`RETC`/`RETCN` | `<return>` L1356 | `ELEM_RETURN` | — | `ret` |
+| Subroutine call | draw the block | `CAL`/`CALC`/`CALCN` | `<block>` | `ELEM_SUBPROG` / `ELEM_GOSUB` | `ELE_OUTPUT_CALL` | `cal`, a user function block's instance (M2-5); no routines |
+| Return | RETURN element, T58 f5–8 | `RET`/`RETC`/`RETCN` | `<return>` L1356 | `ELEM_RETURN` | — | `ret` *(deferred)* |
 | Master control zone | — (zero hits in Ed 2) | — | — | `ELEM_MASTER_RELAY` | — | (none) — not added, for good (decision 83) |
 | SFC / sequential | separate language | — | SFC is a MatIEC target language | — | `ELE_SEQ_STEP` / `_TRANSITION` (Grafcet, no action qualifiers) | (none) |
 
 ᵃ MatIEC has no LD front end. Contact/coil/rail/branch cells are Beremiz's editor and the
 PLCopen schema; function/FB cells are MatIEC's own libraries.
-ᵇ From [`docs/naming.md`](naming.md); *(proposed)*, *(planned)* and *(deferred)* are its
-markings. `xic`/`xio` were two independent positive tests until M1-4 made `xio` the negation of `xic`; they are now IEC's strict complement.
+ᵇ From [`docs/naming.md`](naming.md); *(proposed)* and *(deferred)* are its markings, and
+a name with neither has landed. `xic`/`xio` were two independent positive tests until M1-4 made `xio` the negation of `xic`; they are now IEC's strict complement.
 ᶜ LDmicro's `ElemContacts` struct has only `negated` and `set1` — no edge field. Its
 edge handling is the separate inline one-shot elements.
 
@@ -783,16 +783,19 @@ edge handling is the separate inline one-shot elements.
   T29 f1–5; `abs` and `sqrt` are Ed 3 T28 f1–2. When the naming rule says "use the IEC
   name", these are the rows it is talking about, and the stanzas can now cite the feature
   number rather than the family.
-- **Three planned mnemonics have no standard behind them, and the reasons differ.** `rto`
-  is not IEC because Table 37 defines exactly three timers and the standard's only
-  retention mechanism is the `RETAIN` qualifier on an instance (T33 f3a) — power-fail
-  retention, not accumulate-across-drops. `res` is not IEC because reset is a *pin* (and
-  CTD has not even got one), not an instruction. `neg` is not IEC because the standard has
-  only the ST unary minus. All three are vendor names, and now all three have free-software
-  precedent as well: LDmicro ships `ELEM_RTO` with exactly logex's accumulate-and-manual-
-  reset semantics, and `ELEM_RES` as a standalone instruction whose manual states the same
-  split logex assumes — *"TON and TOF timers are automatically reset … RTO timers and
-  CTU/CTD counters are not reset automatically."*
+- **Three mnemonics planned when this was written had no standard behind them, and the
+  reasons differ.** `rto` is not IEC because Table 37 defines exactly three timers and the
+  standard's only retention mechanism is the `RETAIN` qualifier on an instance (T33 f3a) —
+  power-fail retention, not accumulate-across-drops. `res` is not IEC because reset is a
+  *pin* (and CTD has not even got one), not an instruction. `neg` is not IEC because the
+  standard has only the ST unary minus. All three are vendor names, and all three have
+  free-software precedent as well: LDmicro ships `ELEM_RTO` with exactly logex's
+  accumulate-and-manual-reset semantics, and `ELEM_RES` as a standalone instruction whose
+  manual states the same split — *"TON and TOF timers are automatically reset … RTO
+  timers and CTU/CTD counters are not reset automatically."* Two of them landed, `rto`
+  with M3-2 and `neg` with M3-3. `res` did not, and will not: logex took IEC's pin, a
+  counter's `r` and `ld` written by logic (decision 84), and an `rto` is cleared by its
+  own `r` input too (decision 90).
 - **`ons`/`osr`/`osf` is where free-software practice contradicts the vendor practice
   naming.md recorded.** In the conventional set, `OSR`/`OSF` name the *coil* form (a
   storage bit plus an output bit) and `ONS` names the inline rung-condition one-shot.

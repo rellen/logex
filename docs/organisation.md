@@ -9,12 +9,19 @@ globals at I/O points and connections, built from Elixir data (`Logex.Configurat
 run as one resource (`Logex.Runtime.start/1` and `cycle/3`). User function blocks, M2-5,
 landed on 2026-10-04: a block's file, its instances run with `cal`, the blocks
 `Logex.compile_file/1` loads from beside a program, and the online edit of a program that
-holds them, by path (§4.3 and §4.10). The rest of the organisation, the configuration
-file, shared globals and event tasks, is not yet implemented.** On 2026-09-28 the
-maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
-hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
-1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
-the §6.1 changes, and §3's Milestone 2 the §6.2 items. The syntax below is decided, but
+holds them, by path (§4.3 and §4.10). The configuration file, `.logex`, read with the
+program types beside it (`Logex.Configuration.compile_file/1`), landed with M2-2 and M2-3
+on 2026-10-11, and globals shared through `var_external` and event tasks with M2-4 and
+M2-6 on 2026-10-12, so Milestone 2 is done. OE-2, the staged edit of a running
+configuration (`Logex.Configuration.Edit`), was designed and landed on 2026-10-13 (§4.9,
+decisions 55–66). Milestone 3, the missing instruction set, was decided on 2026-10-14
+(decisions 67–92) and landed by 2026-10-15: IEC's counters, the other timers, integer
+arithmetic, the pulse coils and the forward jump, M3-1 to M3-5 (decisions 93–107). So
+Milestones 1 to 3, OE-1 and OE-2 have landed.** On 2026-09-28 the maintainer adopted the
+direction in §1 (IEC's software model, in logex's dialect: the hierarchy, task-style
+execution and I/O mapping), deferred routines, and took decisions 1–14 in §7 as
+recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1
+changes, and §3's Milestone 2 the §6.2 items. The syntax below is decided, but
 each new word still gets its `docs/naming.md` stanza before its code lands, and a stanza
 may still change a spelling. It was written against `37b7932`; the rationale stays here,
 and the plan of record is `PLAN.md`.
