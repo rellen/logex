@@ -1429,6 +1429,20 @@ defmodule Logex.ValidationTest do
              ]
     end
 
+    test "a jmp's nearest label is suggested among the labels on later rungs alone, since " <>
+           "one back is refused" do
+      assert source_errors(
+               "var a bool\nlbl done xic a ote a\nxic a jmp donee\nxic a jmp Done\n" <>
+                 "lbl here xic a jmp her\nxic a jmp ender\nlbl end"
+             ) == [
+               "line 3: `jmp donee` names no label: no rung of this program begins `lbl donee`",
+               "line 4: `jmp Done` names no label: no rung of this program begins `lbl Done`",
+               "line 5: `jmp her` names no label: no rung of this program begins `lbl her`",
+               "line 6: `jmp ender` names no label: no rung of this program begins " <>
+                 "`lbl ender` — did you mean `end`?"
+             ]
+    end
+
     test "a jump goes forward only: one back, or to its own rung, is an error at its line " <>
            "(decision 81)" do
       assert source_errors(

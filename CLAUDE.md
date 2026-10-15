@@ -291,11 +291,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   word, never a tag nor a literal, of a namespace of its own (decision 105); and one pass
   over a routine's lowered rungs, `jumps/2`, refuses a `lbl` not first on its rung, which
   still labels it, a label used twice or two that differ only in case, a second `jmp` in
-  a rung, a `jmp` that names no label of its routine, the nearest suggested, and one back
-  or to its own rung (decisions 81 and 104), each at its line, a block's body its own
-  routine, and since M3-5's review, in a block's body, a label spelled as the word that
-  heads its file, in any case (§4.8, decision 105); `lowered?/1` holds a body's jumps to
-  the same rules.
+  a rung, a `jmp` that names no label of its routine, the nearest on a later rung
+  suggested (since M3-5's review), and one back or to its own rung (decisions 81 and
+  104), each at its line, a block's body its own routine, and since M3-5's review, in a
+  block's body, a label spelled as the word that heads its file, in any case (§4.8,
+  decision 105); `lowered?/1` holds a body's jumps to the same rules.
 - `lib/logex/warnings.ex` — the warnings a compiled program carries: a tag used by no
   rung, a `var_output` no rung writes, a second `ote` on one tag, and since M1-6 another
   write to an `ons` storage bit, a comparison of two literals, a timer no `ton` runs, and

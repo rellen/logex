@@ -858,9 +858,9 @@ line 4: `jmp top` jumps back, to the rung on line 3: a jump goes forward only, t
   runs.
 - A jump goes forward only, so a scan stays one pass over the rungs: a jump back, or to
   its own rung, is refused, since either could loop for ever (decision 81). So is a `jmp`
-  to a label its routine does not have, the nearest suggested, a `lbl` not first on its
-  rung, a label on two rungs, two labels that differ only in case, and a second `jmp` on
-  one rung. A label no `jmp` names is a warning.
+  to a label its routine does not have, the nearest on a later rung suggested, a `lbl`
+  not first on its rung, a label on two rungs, two labels that differ only in case, and a
+  second `jmp` on one rung. A label no `jmp` names is a warning.
 - A label is a name of its own, not a tag, and its routine's (decision 105): a function
   block's body jumps within itself, and no `jmp` reaches into a block or out of one.
 - The warnings read a rung a jump may skip as any rung, so an `ote motor` in each of two

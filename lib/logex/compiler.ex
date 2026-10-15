@@ -1219,10 +1219,14 @@ defmodule Logex.Compiler do
 
   defp target(_reported, _index, diagnostics, _context), do: diagnostics
 
-  defp targeted(:label, :error, {name, line, _index}, {labels, kind}, diagnostics) do
+  # The nearest label is suggested among those on a later rung alone, since one on an
+  # earlier rung or this one would be refused as a jump back.
+  defp targeted(:label, :error, {name, line, from}, {labels, kind}, diagnostics) do
+    later = for {label, {_at, to}} <- labels, to > from, do: label
+
     message =
       "`jmp #{name}` names no label: no rung of this #{routine(kind)} begins `lbl #{name}`" <>
-        Declarations.suggest(name, Map.keys(labels), & &1, "labels")
+        Declarations.suggest(name, later, & &1, "labels")
 
     [diagnostic(line, message) | diagnostics]
   end
