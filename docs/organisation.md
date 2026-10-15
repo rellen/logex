@@ -1413,7 +1413,9 @@ switch. What the coils add is each bit's part:
 
 In a block whose `cal` is false both bits are held, so a pulse given at the body's last run
 stays on until it next runs (decision 102), and a blocked storage bit there stays listed
-until a scan runs it (decision 32). A coil under an event task is not warned about, as an
+until a scan runs it (decision 32). A block whose first run comes after the instance's
+first scan reads each storage bit as declared there, so an `osr` whose rung is true pulses,
+and an `osf` whose storage bit is declared 1 pulses on a false rung (decision 102). A coil under an event task is not warned about, as an
 `ons` is not (decision 103).
 
 An instance a configuration's edit sets aside and brings back (decision 57) is not
@@ -4004,7 +4006,18 @@ record answers one, 103, it says which decisions do.
 
      *Recommend the first.* Adopted: one rule for everything in a block, which a block's
      own `ote` already meets, its tag held by a false `cal`; a program that must not see a
-     held pulse reads the block's enable beside it. *(Landed 2026-10-14.)*
+     held pulse reads the block's enable beside it. *(Landed 2026-10-14.)* *(Added
+     2026-10-15, after M3-4's review, which found it unrecorded: decision 69's first scan
+     is the instance's, so a block whose `cal` is first true after it runs its coils for
+     the first time on a scan that is not a first scan, and each reads its storage bit as
+     declared. An `osr` whose rung is true there pulses, a button held since start
+     stepping once at the block's first run, as an `ons` fires there and a counter counts
+     (decision 89); and an `osf` whose storage bit is declared 1 pulses on a false rung, a
+     fall that never happened, the one way a declared value makes an edge. A block an
+     online edit adds has its coils' storage bits on the block list by path until a scan
+     runs its body (decision 32), so its first run pulses neither. The behaviour is kept,
+     one rule with `ons` and the counters, and `pulse_coil_test.exs` pins the `osf`'s
+     pulse and the `osr`'s.)*
 103. **A pulse coil under an event task (M3-4).** The e-stop's own event task pulses a
      "pressed" bit, `xic estop osr s1 pressed`; the task runs only when the e-stop
      switches on, so the coil sees "pressed" at every run and never pulses after the

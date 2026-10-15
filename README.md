@@ -744,7 +744,11 @@ line 3: `s1` is both the storage bit and the pulse bit of this `osr`: its pulse 
   That is what parts them from `ons`, which passes the pulse itself, so that the rest of
   its rung sees one scan only.
 - Neither pulses on an instance's first scan, whatever its storage bit holds, so a button
-  already held at start steps nothing, as an `ons` fires nothing then.
+  already held at start steps nothing, as an `ons` fires nothing then. That scan is the
+  instance's: a coil in a function block whose `cal` is first true later reads its storage
+  bit as declared at the block's first run, so a button held since start steps once
+  there, as an `ons` fires, and an `osf` whose storage bit is declared 1 pulses on a false
+  rung, a fall that never happened.
 - A storage bit is under every rule an `ons`'s is: a second `ons`, `osr` or `osf` on it is
   an error, any other write to it a warning, and an online edit that adds a coil or
   changes its rung blocks its next pulse until a scan runs it, so an edit never makes a

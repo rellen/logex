@@ -299,5 +299,38 @@ defmodule Logex.PulseCoilTest do
                [0, 0, 0]
              ]
     end
+
+    test "inside a function block whose first run comes after the instance's first scan, " <>
+           "each reads its storage bit as declared: an osf declared 1 pulses on a false rung, " <>
+           "a fall that never happened, and an osr held true pulses (decision 102)" do
+      {:ok, edge} =
+        Logex.compile(
+          "function_block edge\nvar_input in bool\nvar_output up bool\nvar_output down bool\n" <>
+            "var sr bool\nvar sf bool 1\nxic in osr sr up\nxic in osf sf down",
+          name: "edge"
+        )
+
+      p =
+        c!(
+          "var_input on bool\nvar_input go bool\nvar_output up bool\nvar_output down bool\n" <>
+            "var e edge\nxic on cal e go up down",
+          [edge]
+        )
+
+      at = [["up"], ["down"]]
+
+      # `go` held at 0 from the start: the block's first run, at the second scan, sees `sf`
+      # at its declared 1, and its osf pulses.
+      assert trace(p, [%{"on" => 0, "go" => 0}, %{"on" => 1}, %{}], at) ==
+               [[0, 0], [0, 1], [0, 0]]
+
+      # `go` held at 1 from the start: `sr` is still its declared 0, and its osr pulses.
+      assert trace(p, [%{"on" => 0, "go" => 1}, %{"on" => 1}, %{}], at) ==
+               [[0, 0], [1, 0], [0, 0]]
+
+      # The same block run from the instance's first scan pulses neither (decision 69).
+      assert trace(p, [%{"on" => 1, "go" => 0}, %{}], at) == [[0, 0], [0, 0]]
+      assert trace(p, [%{"on" => 1, "go" => 1}, %{}], at) == [[0, 0], [0, 0]]
+    end
   end
 end

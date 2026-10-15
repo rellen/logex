@@ -2682,8 +2682,15 @@ names it breaks. Growth tests are in reductions.
   the program that last scanned also writes another way is blocked, and a coil's taken for
   a counter's edge memory, which no logic writes, left the suite green, so that an untest
   gave a pulse no edge made. `edit_test.exs` now holds an `osr` and an `osf` whose storage
-  bit the candidate also writes, each blocked at the untest. The suite is at 1160 tests (8
-  doctests).
+  bit the candidate also writes, each blocked at the untest. A coil in a block whose `cal`
+  is first true after the instance's first scan reads its storage bit as declared at the
+  block's first run, so an `osf` declared 1 pulses there on a false rung, a fall that never
+  happened, and an `osr` held true since start pulses, where README and `docs/naming.md`
+  said a button held at start steps nothing and called the declared value the one visible
+  difference from the conventional prescan. The behaviour is kept, one rule with `ons` and
+  the counters (decision 89): decision 102 now records it, README, the two stanzas and the
+  runtime's comment on `cal` say so, and `pulse_coil_test.exs` pins the `osf`'s pulse and
+  the `osr`'s. The suite is at 1161 tests (8 doctests).
 - **M3-5 · Control flow: forward `jmp` and `lbl`, and no MCR.** A forward jump only, a
   label first on its rung, labels a routine's own namespace (decision 81); skipped rungs
   freeze as a false `cal` freezes a block, a timer in them catching up when next run (82);

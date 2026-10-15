@@ -1654,8 +1654,11 @@ defmodule Logex.Runtime do
   # De-energised, nothing (decision 12): nothing is copied in, the body does not run and
   # nothing is written out, so the instance and every tag its outputs name keep their
   # values. A timer inside keeps its `.en` and `last` and catches up when the block next
-  # runs (decision 8), and an `ons` inside keeps its storage bit, so a block that first runs
-  # after the program's first scan can fire one on its first run.
+  # runs (decision 8), and an `ons`, `osr` or `osf` inside keeps its storage bit, at its
+  # declared value until the body first runs, so a block that first runs after the
+  # program's first scan can fire one on its first run: an `ons` or an `osr` whose rung is
+  # true there, and an `osf` whose storage bit is declared 1 on a false rung, a fall that
+  # never happened (decision 102).
   defp evaluate(
          {:cal, _, [{:name, _, instance} | operands]},
          {true, env},
