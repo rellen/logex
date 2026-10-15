@@ -483,6 +483,42 @@ defmodule Logex.JumpTest do
       assert tag(p, [%{"skip" => 0}], "pulse", state) == [1]
     end
 
+    test "so does a memory on a leg of a skipped rung's group, at any depth, and its next " <>
+           "run is blocked" do
+      p =
+        c!("""
+        var_input skip bool
+        var_input go bool
+        var_input b bool
+        var_output pulse bool
+        var_output deep bool
+        var_output lamp bool
+        var_output full bool
+        var s1 bool
+        var s2 bool
+        var stock ctud
+        xic b ctd stock 9
+        xic skip jmp done
+        ( xic b | xic go ons s1 ) ote pulse
+        ( xic b ote lamp | ( xic b | xic go ons s2 ote deep ) )
+        ( xic go ctu stock 9 | xic b ote full )
+        lbl done
+        """)
+
+      blocked = ["s1", "s2", "stock.cu"]
+      state = %{drive(p, [%{"skip" => 0, "go" => 0}]) | ons_blocked: blocked}
+
+      # The `ctd`'s run records the counter's, and the skipped `ctu`'s mark keeps its side.
+      state = drive(p, [%{"skip" => 1, "go" => 1}], state)
+      assert state.ons_blocked == blocked
+
+      # Their first run, `go` risen while they were skipped, sees no edge.
+      assert trace(p, [%{"skip" => 0}], [["pulse"], ["deep"], ["stock", "cv"]], state) ==
+               [[0, 0, 0]]
+
+      assert drive(p, [%{"skip" => 0}], state).ons_blocked == []
+    end
+
     test "so do a pulse coil's storage bits" do
       p =
         c!("""

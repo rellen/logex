@@ -173,9 +173,11 @@ defmodule Logex.ApiContractTest do
   rungs in a random order, an `ote`, a one-shot, an `ons`, an `osr` or an `osf`, the two
   sides of a ctud, a `ton` and a `cal` of a block whose body may jump over its own
   one-shot, with up to three jumps among them, each to the label of a later rung or of a
-  last one, over random inputs, scan intervals, restarts and online edits that change a
-  chain, add, remove or retarget a jump, swap two rungs, change the one-shot's kind or
-  change the block's body. Its oracle restates the scan from the programs' text, rung by
+  last one, the one-shot, each side and the `cal` now and then on a leg of a group whose
+  other leg passes no power, over random inputs, scan intervals, restarts and online edits
+  that change a chain, add, remove or retarget a jump, swap two rungs, change the
+  one-shot's kind, put a rung's memory in a group or take it out, or change the block's
+  body. Its oracle restates the scan from the programs' text, rung by
   rung over the input image, and knows nothing of the block list: a skipped rung changes
   nothing it writes; a rung that runs does what its text says, the timer timing from the
   time the walk last saw it run, so no skipped scan stamps it; and a one-shot or counter a
@@ -6943,6 +6945,7 @@ defmodule Logex.ApiContractTest do
   # ---- M3-5: the walk of forward jumps --------------------------------------------------
 
   @jp_reach [
+    :jumpless,
     :jumped,
     :not_taken,
     :landed,
@@ -6957,6 +6960,7 @@ defmodule Logex.ApiContractTest do
     :coil_fell,
     :late_edge,
     :blocked_through_skip,
+    :leg_held,
     :edge_kept,
     :block_skipped,
     :block_frozen,
@@ -6982,12 +6986,14 @@ defmodule Logex.ApiContractTest do
     :rand.seed(:exsss, {2026, 10, 555})
     Process.put(:jp_programs, %{})
 
-    # Sized from its rarest atom, a one-shot or counter whose rung an edit changed meeting
-    # an edge at its first run after a skip, about 22 a run at 400 walks, and never under 12
-    # over the seeds {n, 77, 7}, {n, 1, 1} and {7, n, 2026}, n to 22, at each of which the
-    # reach holds.
+    # Sized from its rarest atom, a one-shot or counter side on a group's leg whose rung an
+    # edit changed meeting an edge at its first run after a skip: 8 at this seed, about 6 a
+    # run at 400 walks and never under 2 over the seeds {n, 77, 7}, {n, 1, 1} and
+    # {7, n, 2026}, n to 22, at each of which the reach holds; on a leg or not, 28 here,
+    # about 20 a run and never under 10.
     for _ <- 1..400 do
       spec = jp_spec()
+      if spec.jumps == [], do: jp_reached(:jumpless)
       program = jp_program(spec)
 
       w = %{
@@ -7017,17 +7023,23 @@ defmodule Logex.ApiContractTest do
   # a `ton` and a `cal` of a block whose body may jump, each on a chain of contacts; and up
   # to three jumps among them, each on `m1`, `m2` or `m3`, put before one of the six and
   # going to the label of it or of a later one, or of a last rung of its own, now and then
-  # with an `ote` after it on its rung.
+  # with an `ote` after it on its rung. The one-shot, each side and the `cal`, with their
+  # chains, stand now and then on a leg of a group, first or second, whose other leg,
+  # `xic e3 xio e3`, passes no power, so the rung does what it would do without the group.
   @jp_rungs [:y, :s, :c, :d, :t, :b]
+  @jp_grouped [:s, :c, :d, :b]
 
   defp jp_spec,
     do: %{
       order: Enum.shuffle(@jp_rungs),
       chains: Map.new(@jp_rungs, &{&1, pc_chain()}),
-      jumps: for(_ <- 1..pick([0, 1, 2, 2, 3, 3]), do: jp_jump()),
+      jumps: for(_ <- 1..pick([0, 1, 2, 2, 3, 3])//1, do: jp_jump()),
       one_shot: pick([:ons, :osr, :osf]),
-      b: pick([1, 2, 3])
+      b: pick([1, 2, 3]),
+      legs: Map.new(@jp_grouped, &{&1, jp_leg()})
     }
+
+  defp jp_leg, do: pick([nil, 1, 2])
 
   defp jp_jump do
     at = :rand.uniform(6) - 1
@@ -7041,11 +7053,11 @@ defmodule Logex.ApiContractTest do
   end
 
   # The candidate: one or two changes an edit may make: a rung's chain, a jump added,
-  # removed or sent to another label, two rungs swapped, the one-shot's kind, or the
-  # block's version.
+  # removed or sent to another label, two rungs swapped, the one-shot's kind, the block's
+  # version, or a memory's rung put in a group, moved to its other leg or taken out.
   defp jp_candidate(spec),
     do:
-      Enum.reduce(1..:rand.uniform(2), spec, fn _, spec -> jp_change(:rand.uniform(7), spec) end)
+      Enum.reduce(1..:rand.uniform(2), spec, fn _, spec -> jp_change(:rand.uniform(8), spec) end)
 
   # A chain changed, the one-shot's twice as often as another's.
   defp jp_change(1, spec), do: put_in(spec, [:chains, pick([:s | @jp_rungs])], pc_chain())
@@ -7070,6 +7082,7 @@ defmodule Logex.ApiContractTest do
 
   defp jp_change(6, spec), do: %{spec | b: pick([1, 2, 3])}
   defp jp_change(7, spec), do: %{spec | one_shot: pick([:ons, :osr, :osf])}
+  defp jp_change(8, spec), do: put_in(spec, [:legs, pick(@jp_grouped)], jp_leg())
   defp jp_change(_n, spec), do: jp_change(1, spec)
 
   defp jp_body(version) do
@@ -7146,7 +7159,7 @@ defmodule Logex.ApiContractTest do
     label = if MapSet.member?(targets, pos), do: "L#{pos}", else: nil
     head = if label, do: "lbl #{label} ", else: ""
 
-    rung = head <> pc_chain_text(spec.chains[which]) <> jp_tail(which, spec)
+    rung = head <> jp_legs(spec.legs[which], pc_chain_text(spec.chains[which]), which, spec)
 
     %{
       kind: which,
@@ -7157,6 +7170,17 @@ defmodule Logex.ApiContractTest do
       text: rung <> jp_after(which)
     }
   end
+
+  # A memory and its chain, alone or on a leg of a group, its coil or `ote` after it.
+  defp jp_legs(nil, chain, which, spec), do: chain <> jp_tail(which, spec)
+
+  defp jp_legs(leg, chain, :s, %{one_shot: :ons}),
+    do: jp_group(leg, chain <> " ons s") <> " ote p"
+
+  defp jp_legs(leg, chain, which, spec), do: jp_group(leg, chain <> jp_tail(which, spec))
+
+  defp jp_group(1, memory), do: "( #{memory} | xic e3 xio e3 )"
+  defp jp_group(2, memory), do: "( xic e3 xio e3 | #{memory} )"
 
   defp jp_tail(:y, _spec), do: " ote y"
   defp jp_tail(:s, %{one_shot: :ons}), do: " ons s ote p"
@@ -7462,6 +7486,8 @@ defmodule Logex.ApiContractTest do
   end
 
   # One run of an edge memory: what it gave, 1 or 0, where the oracle allows an edge.
+  @jp_memories %{"s" => :s, "c.cu" => :c, "c.cd" => :d, "b.e" => :b}
+
   defp jp_edge!(mem, edge?, got, w, ctx) do
     same = Map.get(w.last, mem) == ctx.texts[mem]
 
@@ -7477,8 +7503,10 @@ defmodule Logex.ApiContractTest do
     skipped = Map.get(w.skips, mem, 0) > 0
 
     if edge? and skipped and not same and not ctx.before.first and
-         not Map.get(w.clean, mem, false),
-       do: jp_reached(:blocked_through_skip)
+         not Map.get(w.clean, mem, false) do
+      jp_reached(:blocked_through_skip)
+      if ctx.spec.legs[@jp_memories[mem]] != nil and mem != "b.e", do: jp_reached(:leg_held)
+    end
 
     if got == 1 and skipped and Map.get(w.clean, mem, false), do: jp_reached(:late_edge)
     if got == 1 and not Map.get(w.clean, mem, false), do: jp_reached(:edge_kept)

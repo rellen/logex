@@ -2789,6 +2789,18 @@ names it breaks. Growth tests are in reductions.
   an untest leaving every memory fresh, and none in `lib/`. `jmp` and `lbl` are reserved
   in any case, so a program with a tag of either name no longer compiles.
 
+  M3-5's review, on 2026-10-15, found a rule no test pinned, and its fixes are the commits
+  after (7). A skipped rung marks each listed memory wherever on it its instruction
+  stands, a group's legs among the places, and a mark of its top-level series alone left
+  the suite green. `jump_test.exs` now holds a one-shot on a group's second leg, one two
+  groups deep, and a ctud's side on a leg while its other side runs, each kept listed
+  through the skip and blocked at its first run; and the contract walk puts the one-shot,
+  each side and the `cal` on a leg of a group now and then, first or second, whose other
+  leg passes no power, its edits moving a memory into a group or out. The walk's draw of a
+  program with no jump, `1..0`, which Elixir reads as two steps down, gave two jumps, so
+  that no program was drawn without one, and gives none now. The suite is at 1224 tests
+  (8 doctests).
+
 **Milestone 3 is done when** a small bottling line written in `.ld` files runs under a
 `.logex` configuration through `Logex.Runtime.cycle/3`, against an oracle that knows
 nothing of logex: a conveyor whose `ctu` counts bottles into cases, reset through its `r`
