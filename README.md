@@ -5,9 +5,10 @@ text into a named, stateless value, and runs it as instances, one scan at a time
 time the host injects. No dependencies and no generated code: the lexer and parser are
 written by hand, and the whole thing is twenty-five small modules.
 
-**Stage: early, and honest about it.** Twenty-nine instructions, among them four timers,
+**Stage: early, and honest about it.** Thirty-one instructions, among them four timers,
 two that run IEC's three counters, seven of integer arithmetic, a one-shot and two pulse
-coils, and six comparisons, parallel branches to arbitrary nesting depth,
+coils, six comparisons and a forward jump to a label, parallel branches to arbitrary
+nesting depth,
 latch/unlatch that holds across scans, power flow that resets per rung, a typed tag table
 that every tag is declared in, function blocks of your own, each written once in a file of
 its own, instantiated as often as needed and run with `cal`, a public API
@@ -23,7 +24,7 @@ program types or built from Elixir data, and a printer that turns an AST back in
 so a routine round-trips, as a configuration file does too — all of that works and is
 tested end to end, and a program or a configuration with mistakes in it gets every one
 reported with its file and line rather than an exception, a misspelt tag included. What
-does not exist yet: counters, the other timers and math.
+does not exist yet: bit access, and a real type, which `sqrt` waits for.
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
 
@@ -69,6 +70,10 @@ Source syntax today:
   refused for now. No tag is declared with a `.`
 - a newline ends a rung: LF, CRLF or a lone CR
 - `(` … `|` … `)` open, separate and close a parallel branch group
+- a label, what `jmp auto` and `lbl auto` name, is a name with no `.` parts and no
+  reserved word, and never a tag: it is not declared, labels are their routine's own
+  namespace, so `lbl auto` may stand beside a tag `auto`, and they are case-sensitive, two
+  that differ only in case refused ("A forward jump", below)
 - a file whose first rung is `function_block seal`, comments and blank lines allowed
   before it, is a function block type, `seal`, named as its file is: its declarations
   are its members and its rungs its body. `Logex.compile/2` returns it as a
@@ -179,6 +184,8 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `div a b dst` `mod a b dst` | as `add` | divide, truncated toward zero (`div -7 2 q` is −3), and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. `div -2147483648 -1` stops at the top, with no power |
 | `neg a dst` `abs a dst` | a dint, a tag, a member or a literal, then a dint it writes | negate, absolute value — as `add`, one source: −2147483648 has no positive twin, so each gives 2147483647 for it, with no power |
 | `cal s1 a b q` | an instance of a function block, then a value for each of its var_inputs (a tag, a member or a literal of its type) and a tag for each of its var_outputs, which it writes, so not a `var_input`, in the block's declaration order | runs the instance: rung power is its EN, and passes on. True: copies `a` and `b` in, runs the block's rungs over the instance's state and copies its outputs out to `q`. False: copies nothing in or out and runs nothing, so the instance and `q` are frozen; a timer inside catches up when the block next runs. One `cal` runs an instance, and a `ton` is run by its `ton`, never by `cal` |
+| `jmp auto` | a label, a name declared nowhere | jump — true: once the rest of its rung has run, skips the rungs after its own up to the one `lbl auto` heads, which runs, and passes on the power it receives, so anything may follow it. False: skips nothing and passes no power. The label is on a later rung of the same routine: a jump back or to its own rung is refused, and a rung holds one `jmp`. A skipped rung runs nothing, so its coils hold and its counters, one-shots and timers are frozen, as in a block whose `cal` is false, a timer catching up when it next runs |
+| `lbl auto` | a label | label — first on its rung, which it names as a jump's target, and passes on the power it receives. A label names one rung of its routine, a block's body its own, and a label no `jmp` names is a warning |
 | `( … \| … )` | — | parallel branch group: the legs OR together, and every leg runs |
 
 Each instruction's operands are checked against this table and against their tags'
@@ -214,14 +221,15 @@ These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5) an
 change the source language. Program organisation, `PLAN.md`'s Milestone 2, has landed
 whole ("A function block" and "A configuration", below):
 - **Bit access** with `.` (`word.3`).
-- **The rest of Milestone 3** (`PLAN.md` §3, decisions 67–103 in
-  [`docs/organisation.md`](docs/organisation.md) §7), after the counters, the other
-  timers, integer arithmetic and the pulse coils, which have landed ("A counter", "Three
-  more timers", "Arithmetic" and "Two pulse coils", below), `sqrt` waiting for a real
-  type: a forward `jmp` to an `lbl`. IEC names wherever IEC names the operation; `neg`,
-  `osr`, `osf`, `jmp` and `lbl` are rule 2's, from a vendor, `docs/naming.md` saying which
-  as each lands. There is no `res`: a counter resets through its own `r` input, as
-  IEC's does, and so does a retentive timer, `xic greased ote lube.r` (decision 90).
+- **`sqrt`**, waiting for a real type. Milestone 3 (`PLAN.md` §3, decisions 67–107 in
+  [`docs/organisation.md`](docs/organisation.md) §7) has otherwise landed whole: the
+  counters, the other timers, integer arithmetic, the pulse coils and the forward jump
+  ("A counter", "Three more timers", "Arithmetic", "Two pulse coils" and "A forward
+  jump", below). IEC names wherever IEC names the operation; `neg`, `osr`, `osf`, `jmp`
+  and `lbl` are rule 2's, from a vendor, `docs/naming.md` saying which. There is no
+  `res`: a counter resets through its own `r` input, as IEC's does, and so does a
+  retentive timer, `xic greased ote lube.r` (decision 90). Nor is there a master control
+  zone, for good (decision 83).
 
 ## An example
 
@@ -760,6 +768,105 @@ line 3: `s1` is both the storage bit and the pulse bit of this `osr`: its pulse 
   runs. A coil under an event task is a configuration warning in its own words, as an
   `ons` is ("An event task", below): it sees its rung only when the task runs, and the
   pulse it sets stays on until the task next runs.
+
+### A forward jump
+
+`jog.ld` — a conveyor that runs on `run_pb` in auto and is jogged on a button in manual,
+with a lamp that shows the button held and another once it has been held for three
+seconds. While the line is in auto, a `jmp` skips the manual section:
+
+```
+var_input manual bool
+var_input jog_pb bool
+var_input run_pb bool
+var_output auto_lamp bool
+var_output jog_lamp bool
+var_output jog_long bool
+var_output motor bool
+var jog_t ton
+
+// in auto, jump over the manual section
+xio manual jmp auto ote auto_lamp
+xic jog_pb ote jog_lamp
+xic jog_pb ton jog_t 3000
+xic jog_t.dn ote jog_long
+lbl auto ( xic run_pb xio manual | xic manual xic jog_pb ) ote motor
+```
+
+`jog.exs` steps it as `delay.exs` does, printing the timer's `.acc` too, and then compiles
+a jump back:
+
+```elixir
+{:ok, jog} = Logex.compile_file("jog.ld")
+
+scan = fn state, elapsed, label, inputs ->
+  state = Logex.Runtime.put_inputs(jog, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(jog, state, elapsed)
+  acc = state.env["jog_t"]["acc"]
+  IO.puts("t=#{String.pad_leading("#{state.now}", 4)}  #{label}  #{inspect(outputs)}  acc=#{acc}")
+  state
+end
+
+Logex.Runtime.instance(jog)
+|> scan.(0, "auto, run on       ", %{"run_pb" => 1})
+|> scan.(100, "manual             ", %{"manual" => 1})
+|> scan.(100, "jog pressed        ", %{"jog_pb" => 1})
+|> scan.(1000, "jog held           ", %{})
+|> scan.(100, "auto, jog held     ", %{"manual" => 0})
+|> scan.(100, "jog let go in auto ", %{"jog_pb" => 0})
+|> scan.(2000, "auto               ", %{})
+|> scan.(100, "manual, jog pressed", %{"manual" => 1, "jog_pb" => 1})
+|> scan.(100, "jog let go         ", %{"jog_pb" => 0})
+
+{:error, [diagnostic]} =
+  Logex.compile("var_input a bool\nvar_output b bool\nlbl top xic a ote b\nxic a jmp top",
+    name: "loop"
+  )
+
+IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```
+$ mix run jog.exs
+t=   0  auto, run on         %{"auto_lamp" => 1, "jog_lamp" => 0, "jog_long" => 0, "motor" => 1}  acc=0
+t= 100  manual               %{"auto_lamp" => 0, "jog_lamp" => 0, "jog_long" => 0, "motor" => 0}  acc=0
+t= 200  jog pressed          %{"auto_lamp" => 0, "jog_lamp" => 1, "jog_long" => 0, "motor" => 1}  acc=0
+t=1200  jog held             %{"auto_lamp" => 0, "jog_lamp" => 1, "jog_long" => 0, "motor" => 1}  acc=1000
+t=1300  auto, jog held       %{"auto_lamp" => 1, "jog_lamp" => 1, "jog_long" => 0, "motor" => 1}  acc=1000
+t=1400  jog let go in auto   %{"auto_lamp" => 1, "jog_lamp" => 1, "jog_long" => 0, "motor" => 1}  acc=1000
+t=3400  auto                 %{"auto_lamp" => 1, "jog_lamp" => 1, "jog_long" => 0, "motor" => 1}  acc=1000
+t=3500  manual, jog pressed  %{"auto_lamp" => 0, "jog_lamp" => 1, "jog_long" => 1, "motor" => 1}  acc=3000
+t=3600  jog let go           %{"auto_lamp" => 0, "jog_lamp" => 0, "jog_long" => 0, "motor" => 0}  acc=0
+line 4: `jmp top` jumps back, to the rung on line 3: a jump goes forward only, to a label on a later rung, since one back could loop for ever
+```
+
+- `jmp auto` is IEC's jump to a network label, in the conventional set's words. On a true
+  rung it skips the rungs after its own up to the one `lbl auto` heads, which runs; on a
+  false rung it does nothing. The jump is taken once its own rung is done, and `jmp`
+  passes on the power it receives, so the `ote auto_lamp` after it lights while the line
+  is in auto (decision 104). `lbl` stands first on its rung and passes on the power it
+  receives.
+- A skipped rung runs nothing, so the section is frozen as a block whose `cal` is false
+  is (decision 82). The `ote` of `jog_lamp` writes neither 1 nor 0 while the line is in
+  auto, so the lamp stays lit though the button was let go at t=1400. The timer keeps its
+  `.acc` while it is skipped, and catches up when it next runs, as a frozen block's does:
+  `jog_t` never saw the button let go, and its first run back in manual, at t=3500, counts
+  the 2.3 s since it last ran, so `jog_long` lights at once. A counter or a one-shot on a
+  skipped rung keeps its memory of its rung, so an edge that comes and goes while it is
+  skipped is never counted, and a zero divisor there is no fault, since its `div` never
+  runs.
+- A jump goes forward only, so a scan stays one pass over the rungs: a jump back, or to
+  its own rung, is refused, since either could loop for ever (decision 81). So is a `jmp`
+  to a label its routine does not have, the nearest suggested, a `lbl` not first on its
+  rung, a label on two rungs, two labels that differ only in case, and a second `jmp` on
+  one rung. A label no `jmp` names is a warning.
+- A label is a name of its own, not a tag, and its routine's (decision 105): a function
+  block's body jumps within itself, and no `jmp` reaches into a block or out of one.
+- The warnings read a rung a jump may skip as any rung, so an `ote motor` in each of two
+  sections a jump makes exclusive is still the second-`ote` warning (decision 107): give
+  the motor one rung that reads each mode, as `jog.ld`'s last rung does.
+- `jmp` and `lbl` are mnemonics, reserved in any case, so a tag named `jmp` or `lbl`,
+  `Jmp` or `LBL` among them, no longer compiles.
 
 ### A function block
 
@@ -1637,6 +1744,16 @@ bit among the rung, is reported `{:ons_blocked, "s1", 0}` and sets no pulse at t
 so an edit of its pulse bit alone loses a press that rises on that scan, as an edit of what
 an `ons` drives does; and its pulse bit is an ordinary bool, which an edit that removes the
 coil leaves as it was.
+
+A jump changes what an edit does in one place, where a block holds: a one-shot, a
+counter's side or a pulse timer that a switch blocks on a rung a jump skips stays blocked
+through every skipped scan until a scan runs it, as one in a frozen block does (decision
+106), so a jog section edited while the line is in auto pulses or counts nothing at its
+first run back in manual that no real edge made. A rung is compared whole, its `lbl` and
+`jmp` among it, so an edit that labels a one-shot's rung, or adds a `jmp` to it, blocks
+the one-shot too. Labels are names, so an edit that moves rungs leaves every jump as it
+was; a `jmp` an edit adds freezes its section from the switch, and one it removes frees
+it, a timer there catching up.
 
 An edit that leaves no rung writing a counter's `r`, `ld` or `pv`, an `rto`'s `r` or a
 timer's `.pre` leaves it as it was, as an output the edit stops driving holds. Tested while

@@ -17,11 +17,12 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
 §1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5, §3's M2-2 and M2-3, §3's M2-4,
-§3's M2-6, §3's OE-2, §3's M3-1, M3-2, M3-3 and M3-4 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
+§3's M2-6, §3's OE-2, §3's M3-1, M3-2, M3-3, M3-4 and M3-5 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
 first item, M2-1, landed the same day, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11,
 and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed and landed on
 2026-10-13 (§3), and Milestone 3 was designed and decided on 2026-10-14, its first four
-items, M3-1, M3-2, M3-3 and M3-4, landing the same day (§3, "Milestone 3").
+items, M3-1, M3-2, M3-3 and M3-4, landing the same day and its last, M3-5, on 2026-10-15,
+so Milestone 3 is done (§3, "Milestone 3").
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -113,6 +114,15 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   reported to the host as a minor fault, a `%Logex.Fault{}` in a lone instance's state and
   a `{:fault, ...}` event of a cycle; and negative literals, `-5`, a sign glued to its
   digits.
+- The pulse coils (M3-4): IEC's transition-sensing coils in the conventional set's form,
+  `osr s1 pulse` and `osf s1 pulse`, a pulse for one scan on the rise or the fall of the
+  power the coil receives, never on a first scan, that power passed on, the storage bit
+  under every rule an `ons` bit keeps.
+- A forward jump (M3-5): `jmp auto`, once its rung is done, skips the rungs after it up to
+  the one `lbl auto` heads, which runs; a skipped rung runs nothing, frozen as a block
+  whose `cal` is false is, a timer in it catching up when next run; a jump back, to its
+  own rung or to a label its routine lacks, and a label not first on its rung, are each a
+  located diagnostic; and a label is a name of its routine's own, never a tag.
 - A staged online edit of a running configuration (OE-2): `Logex.Configuration.Edit`
   accepts a candidate configuration against the resource that runs the original, refusing
   what changes only with a restart at its line, then tests, untests, assembles or cancels
@@ -2743,6 +2753,42 @@ names it breaks. Growth tests are in reductions.
   each a located diagnostic; and a program with no `jmp` scans within a measured bound of
   its cost before.
 
+  **Status: DONE — landed 2026-10-15**, as M3-1's landing order with a refactor before
+  the jump, as M3-1 and M3-2 had, and Milestone 3's done sentence walked before the
+  documents: (1) the survey, the stanzas `jmp` and `lbl` and the master control zone's
+  row, "not added, for good", `47b5d46`; (2) one rung loop for a program's rungs and a
+  block's body, with no change in behaviour, `8dda93b`; (3) the jump, `dcadb6d`; (4) the
+  contract walk, `5035307`; (5) the Done-when, `7a514e7`; (6) Milestone 3's done sentence
+  in `logex_test.exs`, `825bb81`; (7) the documents, the commit after it, among them
+  README's "A forward jump", whose output is a real run. 1223 tests pass on Elixir 1.20.4
+  (8 of them doctests), up from 1167. (3)'s message records its mutation table, every
+  rule it adds reverted alone and the full suite judged by its exit code: 59 rules, 58 red
+  at once and one survivor, a `tp`'s mark on a skipped rung, whose rule was deleted, since
+  one `tp` runs its instance and a skipped one leaves the instance out of the scan's
+  record, which keeps all the instance holds. (2) adds no rule: a differential probe of
+  3,000 seeded programs, 852 of them compiling, and 800 seeded edits gave identical hashes
+  in its tree and its parent's. (4), (5) and (6) add no rule either: (3)'s 21 rows that
+  touch a scan turn the walk alone red on 15, the Done-when alone on 8 and the done
+  sentence alone on 6, the rest red in the full suite, by `jump_test.exs`'s programs built
+  by hand and its growth tests. A scan of a program with no jump costs fewer reductions
+  than before M3-5, the least of 50 scans: 308 against 319 for the README motor and 39,126
+  against 41,126 for 1,000 rungs. The Done-when bounds the rung loop's cost per rung
+  beside its instructions' at 1.207, the ratio a loop a fifth dearer than before would
+  give: 1.179 at `16d47ed` and 1.141 at (5), over 32 runs each.
+
+  Readings and choices, each in its commit and in decisions 104–107: the jump is taken
+  once its rung is done, IEC's rule 3, and `jmp` passes on the power it receives, so
+  anything may follow it, anywhere on its rung, one a rung (decision 104); a label is a
+  name, never a tag nor an integer, of its routine's own namespace, a twin in another case
+  refused and one no `jmp` names a warning (105); a memory an edit's switch blocks on a
+  rung a jump skips stays listed until a scan runs its instruction, as decision 32 keeps
+  one in a frozen block, and a rung is compared whole, its `lbl` and `jmp` among it (106);
+  and the walks and the warnings read a rung a jump may skip as any rung, so two `ote`s on
+  one tag in sections a jump makes exclusive are still the second-`ote` warning (107). The
+  contract walk's first draft found a gap in its own oracle, a restart between a test and
+  an untest leaving every memory fresh, and none in `lib/`. `jmp` and `lbl` are reserved
+  in any case, so a program with a tag of either name no longer compiles.
+
 **Milestone 3 is done when** a small bottling line written in `.ld` files runs under a
 `.logex` configuration through `Logex.Runtime.cycle/3`, against an oracle that knows
 nothing of logex: a conveyor whose `ctu` counts bottles into cases, reset through its `r`
@@ -2752,7 +2798,15 @@ total closes it at a setpoint, a zero divisor in its rate reported as a minor fa
 the line runs on; an `osr` that steps a case counter; and a manual-mode section skipped by
 `jmp`. While it runs it is edited through `Logex.Configuration.Edit` to change the case
 size and the run-on time, with no count lost, no phantom count and no timer reset, and the
-Done-when tests check each piece against its rule.
+Done-when tests check each piece against its rule. *(Done 2026-10-15, with M3-5:
+`test/logex_test.exs`, "Milestone 3's done sentence, as written in PLAN.md", walks it
+clause by clause from files on disk through `Logex.Configuration.compile_file/1`: a
+conveyor and a filler on a 10 ms and a 100 ms task, 1,200 seeded cycles against a model
+of the line in plain Elixir, every cycle's outputs, events and bottle count exact, edited
+after cycle 600 to a case of 24 and a run-on of 500 ms, the count kept, a bottle on the
+eye across the switch counted once, and the run-on in progress at the switch ending 500
+ms after the motor stopped. "The Done-when tests" are read as M3-1's to M3-5's in
+`end_to_end_test.exs`, beside each item's own test file.)*
 
 ---
 
@@ -3365,10 +3419,12 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    ONS is the canonical instruction that cannot exist without cross-scan state. *`ons`
    landed with M1-6; OSR and OSF are open.* *(Milestone 3: arithmetic in M3-3, landed
    2026-10-14, `add sub mul div mod neg abs`; `osr` and `osf` in M3-4, landed 2026-10-14;
-   forward `jmp`/`lbl` in M3-5, and no MCR, decision 83.)* JMP/LBL
+   forward `jmp`/`lbl` in M3-5, landed 2026-10-15, and no MCR, decision 83.)* JMP/LBL
    do *not* require abandoning the `Enum.reduce` over rungs — widening the accumulator
    from `env` to `{skip, env}` is enough for forward jumps; only backward jumps need an
-   indexed loop.
+   indexed loop. *(M3-5 replaced both reduces, a program's and a block body's, with one
+   recursion over the rungs, which a jump turns into a skip, the jump's record riding in
+   the env under an atom key; a scan with no jump costs fewer reductions than before.)*
 6. **Surface syntax: comments, negative literals, structured addressing.** See §5.
    *(Negative literals landed with M3-3, 2026-10-14.)*
 7. **Program organisation: configurations, tasks, program instances, I/O mapping.**

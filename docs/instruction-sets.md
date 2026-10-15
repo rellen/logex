@@ -759,11 +759,11 @@ column is naming.md's, not a new decision.
 | Shift right | `SHR`, T30 f2 — **zero fill** | — | `SHR` | `ELEM_SHR` + `SR0` | — | `shr` (zero fill) |
 | Absolute value | `ABS`, T28 f1 | — | `ABS` | — | `ABS()` in the expression grammar | `abs` |
 | Average | — | — | — | — | `MOY` / `AVG` | (none) |
-| Jump | Jump element, T58 f1–4 | `JMP`/`JMPC`/`JMPCN` | `<jump>` L1337 | `ELEM_GOTO` | `ELE_OUTPUT_JUMP` | `jmp` *(planned)* |
-| Label | Network label, §4.1.2 | `label:` Annex B.2.1 | `<label>` L1319 | `ELEM_LABEL` | rung number as the target | `lbl` *(planned)* |
+| Jump | Jump element, T58 f1–4 | `JMP`/`JMPC`/`JMPCN` | `<jump>` L1337 | `ELEM_GOTO` | `ELE_OUTPUT_JUMP` | `jmp`, forward only (decision 81) |
+| Label | Network label, §4.1.2 | `label:` Annex B.2.1 | `<label>` L1319 | `ELEM_LABEL` | rung number as the target | `lbl`, first on its rung |
 | Subroutine call | draw the block | `CAL`/`CALC`/`CALCN` | `<block>` | `ELEM_SUBPROG` / `ELEM_GOSUB` | `ELE_OUTPUT_CALL` | `cal` *(deferred)* |
 | Return | RETURN element, T58 f5–8 | `RET`/`RETC`/`RETCN` | `<return>` L1356 | `ELEM_RETURN` | — | `ret` |
-| Master control zone | — (zero hits in Ed 2) | — | — | `ELEM_MASTER_RELAY` | — | `mcs`…`mce` *(deferred)* |
+| Master control zone | — (zero hits in Ed 2) | — | — | `ELEM_MASTER_RELAY` | — | (none) — not added, for good (decision 83) |
 | SFC / sequential | separate language | — | SFC is a MatIEC target language | — | `ELE_SEQ_STEP` / `_TRANSITION` (Grafcet, no action qualifiers) | (none) |
 
 ᵃ MatIEC has no LD front end. Contact/coil/rail/branch cells are Beremiz's editor and the

@@ -1340,6 +1340,9 @@ instance already holds around the new piece:
   no pulse (M3-2, decision 94);
 - so is an `osr`'s or an `osf`'s storage bit, whose coil the edit adds or whose rung it
   changes, by its name as an `ons`'s is, so its next run sets no pulse (M3-4, decision 80);
+- each of those blocks, on a rung a forward `jmp` skips, stays listed through every
+  skipped scan until a scan runs its instruction, as one in a block whose `cal` is false
+  does, and a rung is compared whole, its `lbl` and `jmp` among it (M3-5, decision 106);
 - a var_input a switch makes live is reported as `:input`, because its value is the
   host's;
 - at the first test, a tag the candidate adds, or one whose value does not fit its type,
@@ -1386,8 +1389,8 @@ preset outright. What differs is by type:
 | an `rto`'s `r` | written by logic, read at the next run (decisions 90, 95) | kept; `:unwritten` where no logic writes it any more (decision 96) | 0 | frozen, then kept |
 
 In a block whose `cal` is false each is held with the rest, `last` with it, and catches up
-when the block next runs (decision 8). When M3-5's forward `jmp` lands, a timer in the
-rungs it skips is to freeze and catch up so too (decision 82).
+when the block next runs (decision 8). A timer in the rungs a forward `jmp` skips freezes
+and catches up so too (decision 82, landed with M3-5).
 
 M3-3's arithmetic, `add sub mul div mod neg abs`, landed on 2026-10-14 (decisions 77–79,
 97–99), and keeps no state of its own: what it writes is its destination's, a dint tag or
@@ -1418,6 +1421,25 @@ first scan reads each storage bit as declared there, so an `osr` whose rung is t
 and an `osf` whose storage bit is declared 1 pulses on a false rung (decision 102). A coil
 under an event task is a configuration warning, as an `ons` is (decision 103, as the
 maintainer answered it on 2026-10-15).
+
+M3-5's forward jump, `jmp` and `lbl`, landed on 2026-10-15 (decisions 81–83 and 104–107),
+and keeps no state of its own: the jump an energised `jmp` records lasts only until its
+rung is done, and a label is a name, not a piece of state. What a jump adds is a rung that
+does not run, which every piece above meets as it meets a block whose `cal` is false:
+
+| Piece, on a rung a jump skips | A scan that skips it | A switch |
+|---|---|---|
+| a coil's target, an `ote`'s among them, and any tag or member it writes | held, written neither 1 nor 0 | kept by name, as any |
+| a counter's side, a one-shot's storage bit, a `tp`'s `.en` | held, so an edge that comes and goes while it is skipped is never seen | blocked by name or path where its rung changed, its `lbl` and `jmp` among it, and kept listed through every skipped scan until a scan runs its instruction (decision 106) |
+| a timer's members, `last` among them | held, so it catches up when its instruction next runs (decision 82) | kept, as any timer |
+| a block instance its `cal` would run | frozen, its own block list kept (decision 32) | as any block instance |
+| a zero divisor | no fault: its `div` or `mod` never runs | — |
+
+A section skipped since the instance's first scan runs its edge instructions first on a
+scan that is not a first scan, as a block does (decisions 89 and 102). Nothing else an
+edit does turns on a jump: an edit that moves rungs leaves every jump as it was, one that
+adds a `jmp` freezes its section from the switch, and one that removes it frees it, its
+timers catching up and an edge that rose meanwhile seen at its first run, as in a block.
 
 An instance a configuration's edit sets aside and brings back (decision 57) is not
 "removed, then restored": it comes back as it was set aside, under the program it ran
