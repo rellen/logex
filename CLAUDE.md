@@ -40,9 +40,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `lib/logex/runtime.ex` — runs a program as instances (M1-5): `instance/1`, `call/4` (one
   scan of one instance, at a given `%Logex.Scan{}`), `put_inputs/3` with `scan/2,3` (the
   task-less sugar) and `restart/3`, with the host contract in its moduledoc: a host
-  mistake raises `ArgumentError`. The evaluator lives here too, private (B5): `rung/3`,
-  `series/3`, `element/3`, and the instruction clauses of `evaluate/3`, each threading the
-  scan's read-only `%Logex.Scan{}`.
+  mistake raises `ArgumentError`. The evaluator lives here too, private (B5): `rungs/3`,
+  the one rung loop, a program's and a block body's (M3-5), `series/3`, `element/3`, and
+  the instruction clauses of `evaluate/3`, each threading the scan's read-only
+  `%Logex.Scan{}`.
   Since M2-1 it also runs a configuration as one resource, `%Logex.Runtime{}`, opaque:
   `start/1`, `cycle/3` (time, the input image, the due tasks by priority, then due time,
   then declaration, each instance copied in, scanned by `call/4` and copied out, the

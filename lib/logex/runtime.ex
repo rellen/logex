@@ -559,7 +559,7 @@ defmodule Logex.Runtime do
        ) do
     tree = tree(blocked)
     scan = %Scan{now: now, first: first, ons_blocked: tree, tags: tags, blocks: blocks}
-    {unrun, env} = unrun(tree, Enum.reduce(rungs, env, &rung(&1, &2, scan)))
+    {unrun, env} = unrun(tree, rungs(rungs, env, scan))
     {faults, env} = faulted(env, program)
 
     {outputs(program, env),
@@ -1369,12 +1369,16 @@ defmodule Logex.Runtime do
   defp and_list([one]), do: one
   defp and_list(items), do: Enum.join(Enum.drop(items, -1), ", ") <> " and " <> List.last(items)
 
-  # The evaluator (B5): private, so no logic runs past the checks above. Each rung starts
-  # with power, and `{power_flow, env}` threads through its elements in order. The scan is
-  # read-only and the same for every instruction of every rung of one call (M1-6).
-  defp rung({:rung, elements}, env, scan) do
+  # The evaluator (B5): private, so no logic runs past the checks above. A routine's rungs,
+  # a program's or one run of a block's body, run in order, each over the env the one before
+  # it left: the one rung loop (M3-5). Each rung starts with power, and `{power_flow, env}`
+  # threads through its elements in order. The scan is read-only and the same for every
+  # instruction of every rung of one call (M1-6).
+  defp rungs([], env, _scan), do: env
+
+  defp rungs([{:rung, elements} | rest], env, scan) do
     {_power_flow, env} = series(elements, {true, env}, scan)
-    env
+    rungs(rest, env, scan)
   end
 
   defp series(elements, acc, scan), do: Enum.reduce(elements, acc, &element(&1, &2, scan))
@@ -1708,7 +1712,7 @@ defmodule Logex.Runtime do
     state = Enum.reduce(slots, as_map(Map.get(env, instance)), &copy_in(&1, &2, env))
     inner = as_map(Map.get(blocked, instance))
     body = %{scan | tags: own, ons_blocked: inner}
-    {state, env} = ran(instance, Enum.reduce(rungs, state, &rung(&1, &2, body)), env)
+    {state, env} = ran(instance, rungs(rungs, state, body), env)
     {state, env} = raised(Map.pop(state, @faults, []), instance, file, env)
     Enum.reduce(slots, Map.put(env, instance, state), &copy_out(&1, &2, state))
   end
