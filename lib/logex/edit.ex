@@ -151,10 +151,13 @@ defmodule Logex.Edit do
   received. An untouched `ons` is not listed, and keeps a real edge on the switch scan; so
   does one whose rung changes only in a `ton`'s preset, which no power on the rung reads,
   and which blocked it before M3-1 (decision 87). A rung's `lbl` and `jmp` are part of it
-  (M3-5, decision 106): an edit that labels a one-shot's rung, or adds a `jmp` to it,
-  blocks the one-shot. Labels are names, so a rung that moves leaves every jump as it
-  was, and a `jmp` an edit adds or removes freezes or frees its section from the switch,
-  which blocks nothing whose rung it leaves alone (decision 82).
+  (M3-5, decision 106): an edit that labels a one-shot's rung, a pulse coil's among them,
+  or adds a `jmp` to it, blocks the one-shot once, at the cost of a press that rises on
+  the first scan after the switch, as the maintainer confirmed after M3-5's review: one
+  rule with a coil's rung compared whole (decision 101). Labels are names, so a rung that
+  moves leaves every jump as it was, and a `jmp` an edit adds or removes freezes or frees
+  its section from the switch, which blocks nothing whose rung it leaves alone (decision
+  82).
   - The program that last scanned is the one the switch stops where a scan has run since
     the last switch (`Logex.Instance`'s `switched` is false), and otherwise the one this
     edit recorded at that switch.

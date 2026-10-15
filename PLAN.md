@@ -2791,49 +2791,57 @@ names it breaks. Growth tests are in reductions.
 
   M3-5's review, on 2026-10-15, found a rule no test pinned, a host mistake the runtime
   ran on, a word a block's body took as a label, a suggestion of a jump back, and words
-  gone stale, its own and older, and its fixes are the commits after (7). A skipped rung
-  marks each listed memory wherever on it its instruction stands, a group's legs among the
-  places, and a mark of its top-level series alone left the suite green. `jump_test.exs`
-  now holds a one-shot on a group's second leg, one two groups deep, and a ctud's side on
-  a leg while its other side runs, each kept listed through the skip and blocked at its
-  first run; and the contract walk puts the one-shot, each side and the `cal` on a leg of
-  a group now and then, first or second, whose other leg passes no power, its edits moving
-  a memory into a group or out. The walk's draw of a program with no jump, `1..0`, which
-  Elixir reads as two steps down, gave two jumps, so that no program was drawn without
-  one, and gives none now. A host's env holding a key the runtime keeps a scan's records
-  under changed the run: `%{jump: "nowhere"}` skipped every rung after the first, and
-  `%{faults: [div: 3]}` gave a fault no divisor met, a tolerance `fault_test.exs` and
-  `function_block_test.exs` had pinned for `:faults` and `:ran`. Every entry point that
-  takes a state, `Logex.Edit`'s steps among them, now refuses one whose env holds
-  `:faults`, `:jump` or `:ran`, all it holds named in one message `runtime_test.exs`'s
-  table pins, checked with the env's shape, before the clock and the owner: no state that
-  `instance/1`, a scan, `restart/3`, an edit's switch or a resource gives holds one, nor
-  any key but a tag's name. A `cal` drops them from its instance's map before its body
-  runs, since the values in a state are not checked each scan and an instance is one, read
-  whatever it holds. The check is three lookups in a guard, so the README motor's scan
-  still costs 308 reductions; a key no tag is but none of those is never read, and stays
-  unchecked, since a check of every key would cost each scan a step a tag. A block's body
-  took `lbl function_block` and `jmp function_block`, where the word that heads a block's
-  file is reserved in one, in any case (`docs/organisation.md` §4.8), as README and
-  decision 105 say: each is now an error at its line, `Function_Block` among the
-  spellings, as the word is for a tag there, a program's file still taking it, and
-  `Logex.Compiler.lowered?/1` holds a body to it. A `jmp` that names no label was told the
-  nearest label of its routine, one on an earlier rung or its own among them, which
-  followed gives "jumps back"; the nearest on a later rung alone is suggested now. Five
-  passages still said every rung runs at the top level: `call/4`'s doc, two comments in
-  `Logex.Edit.Plan`, on the bits a scan leaves pending and on a timer's `last`, and in
-  `docs/organisation.md` §4.9's block-list paragraph and decision 21's note, each now
-  saying what a skipped rung leaves, the two notes with a dated one of decision 106. Older
-  words were stale too: `docs/organisation.md`'s Status said the configuration file,
-  shared globals and event tasks were not yet implemented, and now says Milestones 1 to 3,
-  OE-1 and OE-2 have landed; `docs/instruction-sets.md` §7 had `cal` deferred, a `res`
-  that decision 84 dropped, `ret`, `shl` and `shr` with no marking though none exists, the
-  up/down counter as none and a counter's bounds unknown, and §8 called `res` planned; and
-  `docs/naming.md`'s Program control table had `cal` deferred and `ret` unmarked, which
-  are corrected in place, as each survey since M3-1 has corrected that table's logex
-  cells, the stanzas being what the file keeps append-only, and its `shl` and `shr` are
-  marked deferred with them, so that §7's column stays naming.md's. The suite is at 1230
-  tests (8 doctests).
+  gone stale, its own and older, and its fixes and the maintainer's two answers after it
+  are the commits after (7). A skipped rung marks each listed memory wherever on it its
+  instruction stands, a group's legs among the places, and a mark of its top-level series
+  alone left the suite green. `jump_test.exs` now holds a one-shot on a group's second
+  leg, one two groups deep, and a ctud's side on a leg while its other side runs, each
+  kept listed through the skip and blocked at its first run; and the contract walk puts
+  the one-shot, each side and the `cal` on a leg of a group now and then, first or second,
+  whose other leg passes no power, its edits moving a memory into a group or out. The
+  walk's draw of a program with no jump, `1..0`, which Elixir reads as two steps down,
+  gave two jumps, so that no program was drawn without one, and gives none now. A host's
+  env holding a key the runtime keeps a scan's records under changed the run: `%{jump:
+  "nowhere"}` skipped every rung after the first, and `%{faults: [div: 3]}` gave a fault
+  no divisor met, a tolerance `fault_test.exs` and `function_block_test.exs` had pinned
+  for `:faults` and `:ran`. Every entry point that takes a state, `Logex.Edit`'s steps
+  among them, now refuses one whose env holds `:faults`, `:jump` or `:ran`, all it holds
+  named in one message `runtime_test.exs`'s table pins, checked with the env's shape,
+  before the clock and the owner: no state that `instance/1`, a scan, `restart/3`, an
+  edit's switch or a resource gives holds one, nor any key but a tag's name. A `cal` drops
+  them from its instance's map before its body runs, since the values in a state are not
+  checked each scan and an instance is one, read whatever it holds. The check is three
+  lookups in a guard, so the README motor's scan still costs 308 reductions; a key no tag
+  is but none of those is never read, and stays unchecked, since a check of every key
+  would cost each scan a step a tag. A block's body took `lbl function_block` and `jmp
+  function_block`, where the word that heads a block's file is reserved in one, in any
+  case (`docs/organisation.md` §4.8), as README and decision 105 say: each is now an error
+  at its line, `Function_Block` among the spellings, as the word is for a tag there, a
+  program's file still taking it, and `Logex.Compiler.lowered?/1` holds a body to it. A
+  `jmp` that names no label was told the nearest label of its routine, one on an earlier
+  rung or its own among them, which followed gives "jumps back"; the nearest on a later
+  rung alone is suggested now. Five passages still said every rung runs at the top level:
+  `call/4`'s doc, two comments in `Logex.Edit.Plan`, on the bits a scan leaves pending and
+  on a timer's `last`, and in `docs/organisation.md` §4.9's block-list paragraph and
+  decision 21's note, each now saying what a skipped rung leaves, the two notes with a
+  dated one of decision 106. Older words were stale too: `docs/organisation.md`'s Status
+  said the configuration file, shared globals and event tasks were not yet implemented,
+  and now says Milestones 1 to 3, OE-1 and OE-2 have landed; `docs/instruction-sets.md` §7
+  had `cal` deferred, a `res` that decision 84 dropped, `ret`, `shl` and `shr` with no
+  marking though none exists, the up/down counter as none and a counter's bounds unknown,
+  and §8 called `res` planned; and `docs/naming.md`'s Program control table had `cal`
+  deferred and `ret` unmarked, which are corrected in place, as each survey since M3-1 has
+  corrected that table's logex cells, the stanzas being what the file keeps append-only,
+  and its `shl` and `shr` are marked deferred with them, so that §7's column stays
+  naming.md's. Asked after the review, the maintainer confirmed two of M3-5's choices,
+  which decisions 106 and 107 and §7's opening record, dated: two coils on one tag in
+  sections that jump over each other keep the second-`ote` warning, since the checks read
+  the program's text, not which rungs run (decision 107); and an edit that only adds a
+  `lbl` or a `jmp` to a one-shot's or a pulse coil's rung blocks it once, the rung
+  compared whole, one rule with decision 101, at the cost of one possible press (decision
+  106), which `edit_test.exs` now pins for an `osr` beside the `ons` it pinned, a press
+  that rises on the first scan after the switch pulsing nothing and the next one pulsing.
+  The suite is at 1231 tests (8 doctests).
 
 **Milestone 3 is done when** a small bottling line written in `.ld` files runs under a
 `.logex` configuration through `Logex.Runtime.cycle/3`, against an oracle that knows

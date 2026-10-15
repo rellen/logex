@@ -2710,8 +2710,9 @@ confirmed by the maintainer the same day, after M3-3's review. Decisions 100–1
 M3-4's own routine choices, taken as it landed the same day, 102 confirmed by the
 maintainer on 2026-10-15, after M3-4's review, and 103's "no warning" superseded by the
 maintainer's answer the same day. Decisions 104–107 are M3-5's own routine choices, taken
-as it landed on 2026-10-15. All one hundred and seven are kept with their options so the
-reasons stay with them.
+as it landed on 2026-10-15, 106's rung compared whole and 107's warning confirmed by the
+maintainer the same day, after M3-5's review. All one hundred and seven are kept with
+their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -4204,7 +4205,14 @@ the record answers one, it says which part of it does.
      at its first run, as in a block; and a rung is compared whole, its `lbl` and `jmp`
      among it, as decision 101 compares a coil's, so an edit that labels a one-shot's rung,
      or adds a `jmp` to it, blocks the one-shot, losing at most one real edge.
-     *(Landed 2026-10-15.)*
+     *(Landed 2026-10-15.)* *(Confirmed by the maintainer on 2026-10-15, after M3-5's
+     review: an edit that only adds a `lbl` or a `jmp` to a one-shot's rung or a pulse
+     coil's blocks it once. It is the rung compared whole, one rule with decision 101,
+     whose cost is one possible press: a press that rises on the first scan after the
+     switch sets no pulse, though nothing the coil reads changed, and the next press
+     pulses. Leaving the `lbl` and `jmp` out of the compare would save that press, at the
+     price of a second part of a rung that a block does not turn on, beside decision 87's
+     presets. `edit_test.exs` pins it for an `ons` and an `osr`.)*
 107. **What the walks and the warnings make of a skipped rung (M3-5).** The manual section
      and the automatic one each drive the conveyor's motor, `ote motor` in each, a `jmp`
      skipping one or the other on every scan.
@@ -4220,7 +4228,10 @@ the record answers one, it says which part of it does.
      scan skips is a fact of its inputs, so a walk that read the jumps would still guess;
      a warning stops nothing. A program that wants one writer gives the motor one rung,
      fed from each section's own bit.
-     *(Landed 2026-10-15.)*
+     *(Landed 2026-10-15.)* *(Confirmed by the maintainer on 2026-10-15, after M3-5's
+     review: two coils on one tag in sections that jump over each other keep the
+     second-`ote` warning. The checks read the program's text, not which rungs run, as
+     this decision has it. `validation_test.exs` pins it.)*
 ---
 
 ## 8. Sources, and what is unverified

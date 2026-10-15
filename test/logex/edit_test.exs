@@ -2370,6 +2370,39 @@ defmodule Logex.EditTest do
       end
     end
 
+    # Confirmed by the maintainer after M3-5's review (decision 106): an edit that only
+    # labels a pulse coil's rung, or adds a `jmp` to it, blocks the coil once, one rule with
+    # decision 101's rung compared whole, at the cost of one possible press.
+    test "a label or jmp the edit puts on a pulse coil's rung blocks it once: a press that " <>
+           "rises on the first scan after the switch sets no pulse, and the next sets one" do
+      src1 = "xic go osr s9 pulse\nxic go jmp done\nlbl done"
+
+      for src2 <- [
+            "lbl here xic go osr s9 pulse\nxic go jmp done\nlbl done",
+            "xic go osr s9 pulse jmp done\nxic go jmp done\nlbl done"
+          ] do
+        {report, tested, v2} = jump_switched(src1, src2, [{0, %{}}])
+        assert report == [{:ons_blocked, "s9", 0}]
+
+        presses = [{10, %{"go" => 1}}, {10, %{"go" => 0}}, {10, %{"go" => 1}}]
+        assert pulses(v2, tested, presses) == [0, 0, 1], src2
+      end
+
+      # Its rung unchanged, the coil is not blocked, and the first press pulses.
+      {[], tested, v1} = jump_switched(src1, src1, [{0, %{}}])
+      assert pulses(v1, tested, [{10, %{"go" => 1}}]) == [1]
+    end
+
+    defp pulses(program, state, steps) do
+      {pulses, _state} =
+        Enum.map_reduce(steps, state, fn step, state ->
+          {outputs, state} = drive(program, state, [step])
+          {outputs["pulse"], state}
+        end)
+
+      pulses
+    end
+
     test "a rung the edit adds above a jump, or a label moved down, leaves every jump going " <>
            "to its label by name, and blocks no one-shot whose rung is unchanged" do
       src1 = "xic skip jmp done\nxic b ote y\nlbl done xic go ons s9 ote pulse"

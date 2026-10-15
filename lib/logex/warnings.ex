@@ -20,7 +20,9 @@ defmodule Logex.Warnings do
 
   A write on a rung a jump may skip is still a write (decision 107): two `ote`s on one tag,
   one in a section a `jmp` skips and one outside it, are still two, the warning saying the
-  last one in the scan decides it, which is the one that ran last.
+  last one in the scan decides it, which is the one that ran last. The maintainer
+  confirmed it after M3-5's review, for sections that jump over each other too: the
+  warnings read the program's text, not which rungs run.
 
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
   """

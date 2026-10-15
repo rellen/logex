@@ -229,11 +229,12 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   whose storage bit the program that last scanned also writes another way blocked as an
   `ons`'s is, and its pulse bit an ordinary bool, held where an edit stops driving it.
   Since M3-5 a rung is compared whole, its `lbl` and `jmp` among it, so an edit that
-  labels a one-shot's rung or adds a `jmp` to it blocks the one-shot, and a memory blocked
-  on a rung a jump skips stays listed until a scan runs its instruction, a ctud's two sides
-  each by its own rung (decision 106); labels are names, so an edit that moves rungs leaves
-  every jump as it was. Its moduledoc gives every rule, report kind and host mistake; §4.9
-  the reasons
+  labels a one-shot's or a pulse coil's rung or adds a `jmp` to it blocks it once, at the
+  cost of one possible press, as the maintainer confirmed after M3-5's review, and a
+  memory blocked on a rung a jump skips stays listed until a scan runs its instruction, a
+  ctud's two sides each by its own rung (decision 106); labels are names, so an edit that
+  moves rungs leaves every jump as it was. Its moduledoc gives every rule, report kind and
+  host mistake; §4.9 the reasons
 - `lib/logex/configuration/edit.ex` — a staged edit of a running configuration (OE-2,
   `docs/organisation.md` §4.9, "OE-2's design"; decisions 55–66): `accept/2` takes the
   `%Logex.Runtime{}` that runs the original and a candidate configuration, checks the
@@ -309,7 +310,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   coil on it, an `ote` among them, is the second-`ote` warning, told the first in its words;
   since M3-5 a label no `jmp` names: nothing jumps to its rung (decision 105). A rung a
   jump may skip is read as any rung, so two `ote`s on one tag in sections a jump makes
-  exclusive are still the second-`ote` warning (decision 107)
+  exclusive are still the second-`ote` warning (decision 107, confirmed by the maintainer
+  after M3-5's review)
 - `lib/logex/walk.ex` — B5's one walk of a program's IR (M2-4): `instructions/1`, every
   instruction in rung order, groups' legs included; `uses/2`, every tag operand with its
   slot's access, a member as its instance, and since M3-4 `uses_of/2`, one instruction's;
@@ -511,7 +513,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   counters landed, M3-2's timers, with decisions 93–96, M3-3's arithmetic, with
   decisions 97–99, M3-4's pulse coils, with decisions 100–103, 102 confirmed and 103
   answered by the maintainer on 2026-10-15, after M3-4's review, and M3-5's forward jump,
-  with decisions 104–107, on 2026-10-15, so Milestone 3 is done). Read it before designing anything that names a program, schedules one, binds I/O, or changes a
+  with decisions 104–107, on 2026-10-15, 106 and 107 confirmed by the maintainer after
+  M3-5's review, so Milestone 3 is done). Read it before designing anything that names a program, schedules one, binds I/O, or changes a
   running controller (§4.9, online edit, decided 2026-10-01).
 - `docs/instruction-sets.md` — reference: IEC's LD elements and standard library by table number,
   Instruction List (withdrawn in Ed 4), and the free-software instruction sets. Read it before

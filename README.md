@@ -864,8 +864,10 @@ line 4: `jmp top` jumps back, to the rung on line 3: a jump goes forward only, t
 - A label is a name of its own, not a tag, and its routine's (decision 105): a function
   block's body jumps within itself, and no `jmp` reaches into a block or out of one.
 - The warnings read a rung a jump may skip as any rung, so an `ote motor` in each of two
-  sections a jump makes exclusive is still the second-`ote` warning (decision 107): give
-  the motor one rung that reads each mode, as `jog.ld`'s last rung does.
+  sections a jump makes exclusive is still the second-`ote` warning (decision 107, which
+  the maintainer confirmed after M3-5's review: the checks read the program's text, not
+  which rungs run): give the motor one rung that reads each mode, as `jog.ld`'s last rung
+  does.
 - `jmp` and `lbl` are mnemonics, reserved in any case, so a tag named `jmp` or `lbl`,
   `Jmp` or `LBL` among them, no longer compiles.
 
@@ -1751,10 +1753,12 @@ counter's side or a pulse timer that a switch blocks on a rung a jump skips stay
 through every skipped scan until a scan runs it, as one in a frozen block does (decision
 106), so a jog section edited while the line is in auto pulses or counts nothing at its
 first run back in manual that no real edge made. A rung is compared whole, its `lbl` and
-`jmp` among it, so an edit that labels a one-shot's rung, or adds a `jmp` to it, blocks
-the one-shot too. Labels are names, so an edit that moves rungs leaves every jump as it
-was; a `jmp` an edit adds freezes its section from the switch, and one it removes frees
-it, a timer there catching up.
+`jmp` among it, so an edit that labels a one-shot's or a pulse coil's rung, or adds a
+`jmp` to it, blocks it once too, at the cost of one press that rises on the first scan
+after the switch, as the maintainer confirmed after M3-5's review: one rule with a coil's
+rung compared whole (decision 101). Labels are names, so an edit that moves rungs leaves
+every jump as it was; a `jmp` an edit adds freezes its section from the switch, and one it
+removes frees it, a timer there catching up.
 
 An edit that leaves no rung writing a counter's `r`, `ld` or `pv`, an `rto`'s `r` or a
 timer's `.pre` leaves it as it was, as an output the edit stops driving holds. Tested while
