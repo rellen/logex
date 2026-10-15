@@ -71,9 +71,10 @@ Source syntax today:
 - a newline ends a rung: LF, CRLF or a lone CR
 - `(` … `|` … `)` open, separate and close a parallel branch group
 - a label, what `jmp auto` and `lbl auto` name, is a name with no `.` parts and no
-  reserved word, and never a tag: it is not declared, labels are their routine's own
-  namespace, so `lbl auto` may stand beside a tag `auto`, and they are case-sensitive, two
-  that differ only in case refused ("A forward jump", below)
+  reserved word, `function_block` among them in a function block's file, and never a tag:
+  it is not declared, labels are their routine's own namespace, so `lbl auto` may stand
+  beside a tag `auto`, and they are case-sensitive, two that differ only in case refused
+  ("A forward jump", below)
 - a file whose first rung is `function_block seal`, comments and blank lines allowed
   before it, is a function block type, `seal`, named as its file is: its declarations
   are its members and its rungs its body. `Logex.compile/2` returns it as a

@@ -293,7 +293,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   still labels it, a label used twice or two that differ only in case, a second `jmp` in
   a rung, a `jmp` that names no label of its routine, the nearest suggested, and one back
   or to its own rung (decisions 81 and 104), each at its line, a block's body its own
-  routine; `lowered?/1` holds a body's jumps to the same rules.
+  routine, and since M3-5's review, in a block's body, a label spelled as the word that
+  heads its file, in any case (§4.8, decision 105); `lowered?/1` holds a body's jumps to
+  the same rules.
 - `lib/logex/warnings.ex` — the warnings a compiled program carries: a tag used by no
   rung, a `var_output` no rung writes, a second `ote` on one tag, and since M1-6 another
   write to an `ons` storage bit, a comparison of two literals, a timer no `ton` runs, and
@@ -555,7 +557,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   any case and owes a `docs/naming.md` stanza, which `naming_test.exs` checks. A word that
   heads a file of another kind, an entry of `Logex.Declarations.kinds/0` (`function_block`,
   M2-5), owes a stanza too, which the same test checks; `Logex.Compiler` reserves it in
-  that kind of file only, in any case (`docs/organisation.md` §4.8). A word of a
+  that kind of file only, in any case (`docs/organisation.md` §4.8), as a tag's name, a
+  block's and, since M3-5's review, a label. A word of a
   configuration file's lines is a row of `Logex.Configuration.Text`'s, and owes one too.
   A user function block's name is no row and owes no stanza: it is a type word only where
   a compile is given the block, through `types:` or a tag's type, and is not reserved.

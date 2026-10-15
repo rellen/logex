@@ -1494,6 +1494,34 @@ defmodule Logex.ValidationTest do
              ]
     end
 
+    test "in a function block's file the word that heads it names no label, in any case, " <>
+           "as it names no tag there, and a program's file takes it (docs/organisation.md §4.8)" do
+      assert {:error, diagnostics} =
+               Logex.compile(
+                 "function_block skip\nvar_input a bool\nvar_output y bool\n" <>
+                   "xic a jmp function_block\nlbl Function_Block xic a ote y\n" <>
+                   "xic a jmp FUNCTION_BLOCK\nlbl FUNCTION_BLOCK",
+                 name: "skip"
+               )
+
+      assert Enum.map(diagnostics, &Logex.Diagnostic.format/1) == [
+               "line 4: `function_block` heads a function block's file and cannot name a " <>
+                 "label in one",
+               "line 5: `Function_Block` heads a function block's file and cannot name a " <>
+                 "label in one",
+               "line 6: `FUNCTION_BLOCK` heads a function block's file and cannot name a " <>
+                 "label in one",
+               "line 7: `FUNCTION_BLOCK` heads a function block's file and cannot name a " <>
+                 "label in one"
+             ]
+
+      for word <- ~w(function_block Function_Block) do
+        assert source_warnings(
+                 "var_input a bool\nvar_output y bool\nxic a jmp #{word}\nlbl #{word} xic a ote y"
+               ) == []
+      end
+    end
+
     test "a function block's labels are its body's own: a jump in it to a label of the " <>
            "program, or the reverse, names no label (decision 105)" do
       assert {:error, [diagnostic]} =

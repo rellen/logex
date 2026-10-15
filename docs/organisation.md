@@ -4160,7 +4160,12 @@ the record answers one, it says which part of it does.
      in one place, IEC refuses a shared identifier only for a connector (Ed 2 §4.1.1, Ed 3
      §8.1.3), and the conventional set's rule, unique within a routine, is about labels
      alone. IEC also allows an unsigned integer, which logex would read as a literal; the
-     conventional set's labels are names, as logex's are. *(Landed 2026-10-15.)*
+     conventional set's labels are names, as logex's are. *(Landed 2026-10-15.)* *(Added
+     2026-10-15, after M3-5's review, which found `lbl function_block` and `jmp
+     function_block` taken in a block's body: the word that heads a block's file is
+     reserved in one, in any case (§4.8), so it names no label there, as it names no tag,
+     each `lbl` and `jmp` that names it an error at its line, and a program's file takes it
+     as a label as it takes it as a tag. `validation_test.exs` pins it.)*
 106. **What a skipped rung leaves on an online edit's block list (M3-5),** following
      decisions 21, 32 and 87. The line runs in auto, the manual section skipped, when an
      online edit changes the rung of the section's step one-shot, `xic jog_pb ons s1 ote

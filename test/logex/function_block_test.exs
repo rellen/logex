@@ -2135,6 +2135,12 @@ defmodule Logex.FunctionBlockTest do
       back = [first, {:rung, [contact, {:jmp, l, [{:label, l, "top"}]}]}, last]
       assert Logex.Compiler.lowered?(jumps)
       refute Logex.Compiler.lowered?(relined(jumps, back))
+
+      # M3-5's review: a body's label is no word that heads a block's file, in any case.
+      {:rung, [{:lbl, m, _} | done]} = last
+      headed = {:rung, [{:lbl, m, [{:label, m, "Function_Block"}]} | done]}
+      jump = {:rung, [contact, {:jmp, l, [{:label, l, "Function_Block"}]}]}
+      refute Logex.Compiler.lowered?(relined(jumps, [first, jump, headed]))
     end
 
     test "nothing follows a ton on its path" do

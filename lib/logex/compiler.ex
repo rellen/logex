@@ -312,7 +312,7 @@ defmodule Logex.Compiler do
     map_size(elem(known, 1)) == map_size(tags) and
       Enum.all?(rungs, &lowers_to_itself?(&1, known)) and
       shared_bits(instructions, tags) == [] and calls(instructions) == [] and timing == [] and
-      jumps(rungs, :program) == [] and timed == tags and
+      jumps(rungs, {:block, nil}) == [] and timed == tags and
       Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end) == [] and
       lines?(rungs, tags) and Enum.map(warnings, &fileless/1) == Logex.Warnings.of(rungs, tags)
   end
@@ -1118,31 +1118,33 @@ defmodule Logex.Compiler do
   # the second. Then each rung holds one `jmp`, a second an error at its line, and that one
   # names a label of this routine, exactly, on a later rung: a jump back, or to its own rung,
   # could loop for ever. A label or jump whose operand was reported already, a literal or a
-  # name no label can be, is passed over, so one mistake gives one message. Two walks of
-  # the rungs, with maps that are only looked up, so it stays linear.
+  # name no label can be, is passed over, so one mistake gives one message. In a function
+  # block's body the word that heads its file names no label, in any case, as it names no
+  # tag there (docs/organisation.md §4.8), each `lbl` and `jmp` that names it an error at
+  # its line. Two walks of the rungs, with maps that are only looked up, so it stays linear.
   defp jumps(rungs, kind) do
     indexed = Enum.with_index(rungs)
-    {labels, _folded, diagnostics} = Enum.reduce(indexed, {%{}, %{}, []}, &labelled/2)
+    {labels, _folded, diagnostics} = Enum.reduce(indexed, {%{}, %{}, []}, &labelled(&1, &2, kind))
     Enum.reverse(Enum.reduce(indexed, diagnostics, &jumps_in(&1, &2, {labels, kind})))
   end
 
   # Each `lbl` in turn, the one that heads its rung, if one does, first, as the walk gives
   # them: a misplaced one is refused, and each labels its rung.
-  defp labelled({{:rung, elements} = rung, index}, acc) do
+  defp labelled({{:rung, elements} = rung, index}, acc, kind) do
     lbls = for {:lbl, _, _} = lbl <- Walk.instructions([rung]), do: lbl
     {heads, others} = Enum.split(lbls, heads(elements))
-    acc = Enum.reduce(heads, acc, &label(&1, index, &2))
-    Enum.reduce(others, acc, &label(&1, index, misplaced(&1, &2)))
+    acc = Enum.reduce(heads, acc, &label(&1, {index, kind}, &2))
+    Enum.reduce(others, acc, &label(&1, {index, kind}, misplaced(&1, &2)))
   end
 
   # How many of a rung's `lbl`s head it: its first element's, if that is one.
   defp heads([{:lbl, _, _} | _]), do: 1
   defp heads(_elements), do: 0
 
-  defp label({:lbl, line, [{:label, _, name}]}, index, acc),
-    do: label_named(label_word(name), {name, line, index}, acc)
+  defp label({:lbl, line, [{:label, _, name}]}, {index, kind}, acc),
+    do: label_named(label_in(name, kind), {name, line, index}, acc)
 
-  defp label(_reported, _index, acc), do: acc
+  defp label(_reported, _at, acc), do: acc
 
   defp label_named(:label, {name, line, index}, {labels, folded, diagnostics}) do
     key = String.downcase(name)
@@ -1154,6 +1156,9 @@ defmodule Logex.Compiler do
       {labels, folded, diagnostics}
     )
   end
+
+  defp label_named(:header, {name, line, _index}, {labels, folded, diagnostics}),
+    do: {labels, folded, [header_label(name, line) | diagnostics]}
 
   defp label_named(_reported, _label, acc), do: acc
 
@@ -1205,7 +1210,7 @@ defmodule Logex.Compiler do
   defp target({:jmp, line, [{:label, _, name}]}, index, diagnostics, {labels, kind}),
     do:
       targeted(
-        label_word(name),
+        label_in(name, kind),
         Map.fetch(labels, name),
         {name, line, index},
         {labels, kind},
@@ -1234,7 +1239,13 @@ defmodule Logex.Compiler do
     [diagnostic(line, message) | diagnostics]
   end
 
+  defp targeted(:header, _found, {name, line, _from}, _context, diagnostics),
+    do: [header_label(name, line) | diagnostics]
+
   defp targeted(_reported, _found, _jmp, _context, diagnostics), do: diagnostics
+
+  defp header_label(name, line),
+    do: diagnostic(line, "`#{name}` heads a function block's file and cannot name a label in one")
 
   defp backwards(true, _at), do: "to its own rung"
   defp backwards(false, at), do: "back, to the rung on line #{at}"
@@ -1821,7 +1832,17 @@ defmodule Logex.Compiler do
       | diagnostics
     ]
 
-  # What a name in a label slot is: `:label`, `:dotted`, or the reserved word it is.
+  # What a name in a label slot is: `:label`, `:dotted`, or the reserved word it is; and in
+  # a function block's body, `:header` for a label spelled as the word that heads its file,
+  # in any case, which the jumps pass refuses (§4.8).
+  defp label_in(name, {:block, _name}),
+    do: header_word?(String.downcase(name) in Declarations.kinds(), label_word(name))
+
+  defp label_in(name, :program), do: label_word(name)
+
+  defp header_word?(true, :label), do: :header
+  defp header_word?(_heads, word), do: word
+
   defp label_word(name), do: label_word(String.contains?(name, "."), name)
 
   defp label_word(true, _name), do: :dotted
