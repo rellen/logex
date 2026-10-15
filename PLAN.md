@@ -2702,7 +2702,8 @@ names it breaks. Growth tests are in reductions.
   in the large heap and 7.6x in the VM's, and a count of the rungs at every rung 6.4x in
   the large heap, each failing at least one. A `++` in `Logex.Warnings.of/2` alone, 4.3x
   and 5.8x to 6.0x, still passes both. Over the same 32 runs the large heap's figure
-  reached 4.50x four at once, 16% under its bound of 5.24, which is kept. The readings
+  reached 4.50x four at once, 16% under its bound of 5.24, so on landing the bound was
+  set a fifth above it, 5.40, as CONTRIBUTING's growth practice asks. The readings
   above credited decisions 100–103 with a coil's rung compared whole, so that one whose
   pulse bit alone changes is blocked, which none of them recorded: decision 101 now does,
   with its cost, one real press, where the press rises on the first scan after the switch,

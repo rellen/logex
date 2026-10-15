@@ -349,21 +349,22 @@ defmodule LogexTest do
     # 4.07x to 4.12x alone and 4.09x to 4.36x four at once, the collections left charged a
     # little more on a busy machine. The bound is a fifth above that highest. Over 32 more
     # at M3-4's review, as many each way, it grew 4.05x to 4.12x alone and 4.07x to 4.50x
-    # four at once, 16% under the bound.
+    # four at once, so the bound is now a fifth above that, 5.40, up from 5.24.
     test "compiling stays linear in the program's size, in a heap no collection moves" do
       ratio = reductions_to_compile(2000, :large) / reductions_to_compile(500, :large)
-      assert ratio < 5.24, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
+      assert ratio < 5.40, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
     end
 
     # The large heap hides what a compile copies. A Logex.Walk.instructions/1 that appends
     # each rung's instructions with `++`, quadratic in what it copies and 12x to 15x the
     # time at 4x the tags, grew 5.27x to 6.42x there, where `++` is charged few reductions
-    # and no collection copies what it built, and passed 5.24 in three of five runs of the
-    # suite at M3-4's review; in the VM's own heap, where each collection copies it again,
-    # it grows 12.4x to 12.9x. So each size compiles again in a process of its own with the
-    # VM's heap (in_a_process/2, `:default`): over 32 runs of the suite, 16 alone and 16
-    # four at once, it grew 4.40x to 4.67x alone and 4.87x to 6.19x four at once. The bound
-    # is a fifth above that highest.
+    # and no collection copies what it built, and passed the large heap's bound, then
+    # 5.24, in three of five runs of the suite at M3-4's review; in the VM's own heap,
+    # where each collection copies it again, it grows 12.4x to 12.9x. So each size
+    # compiles again in a process of its own with the VM's heap (in_a_process/2,
+    # `:default`): over 32 runs of the suite, 16 alone and 16 four at once, it grew
+    # 4.40x to 4.67x alone and 4.87x to 6.19x four at once. The bound is a fifth above
+    # that highest.
     test "compiling stays linear in the program's size, in the VM's own heap" do
       ratio = reductions_to_compile(2000, :default) / reductions_to_compile(500, :default)
       assert ratio < 7.43, "4x the tags took #{Float.round(ratio, 1)}x the reductions"
