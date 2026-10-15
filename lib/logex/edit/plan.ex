@@ -815,13 +815,13 @@ defmodule Logex.Edit.Plan do
 
   # Which program left the storage bits, the one each `ons` would read them from, and the
   # bits still blocked against it. A scan since the last switch (`switched` false): the
-  # program stopped, with what the scan left pending, which is nothing at the top level,
-  # since every rung runs, but a bit inside an instance whose body no scan has run since it
-  # was listed (M2-5): its bit is still the one an older rung wrote. No scan since, and
-  # that switch this edit's: what it recorded, so a test and an untest with no scan
-  # between lose no real edge (F3). No scan since an earlier edit's switch, whose program
-  # this edit cannot know: the program stopped is taken for it, with the earlier edit's
-  # blocks still pending (F2).
+  # program stopped, with what the scan left pending: a bit inside an instance whose body
+  # no scan has run since it was listed (M2-5), and since M3-5 one on a rung a jump
+  # skipped, at the top level too (decision 106), each bit still the one an older rung
+  # wrote. No scan since, and that switch this edit's: what it recorded, so a test and an
+  # untest with no scan between lose no real edge (F3). No scan since an earlier edit's
+  # switch, whose program this edit cannot know: the program stopped is taken for it, with
+  # the earlier edit's blocks still pending (F2).
   defp scanned(_known, %Instance{switched: false, ons_blocked: pending}, plan),
     do: {plan.stops, pending}
 
@@ -990,13 +990,13 @@ defmodule Logex.Edit.Plan do
   # ran (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes
   # `now`, so the time no `ton` ran it is not caught up (§4.9's Resume rule, decision 23).
   # The `last` it found is returned too, for the next switch to give back (F11). M2-5: a
-  # timer both programs run is never resumed. At the top level its `last` is `now` anyway,
-  # since a `ton` stamps it at every scan; inside a block whose `cal` was false it is
-  # earlier, and the timer catches up when the block next runs, as decision 8 wants. And
-  # "the program stopped did not run it" is asked of the program that last scanned, as
-  # the one-shots' rule asks it (F3): where that is the program started, a test and an
-  # untest with no scan between, the program started left the timer as it is, frozen or
-  # not, and no resume is due.
+  # timer both programs run is never resumed. Its `last` is `now` where the last scan ran
+  # its instruction, which stamps it at every run; inside a block whose `cal` was false, or
+  # since M3-5 on a rung a jump skipped, it is earlier, and the timer catches up when it
+  # next runs, as decisions 8 and 82 want. And "the program stopped did not run it" is
+  # asked of the program that last scanned, as the one-shots' rule asks it (F3): where
+  # that is the program started, a test and an untest with no scan between, the program
+  # started left the timer as it is, frozen or not, and no resume is due.
   #
   # M3-1: a timer's, by its kind (Logex.FbType.rules/1): a type that keeps no time has no
   # `last` to resume. M3-2: "timing" is the member the type's rules name, `times`, at 1.

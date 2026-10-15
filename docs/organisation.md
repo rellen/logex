@@ -1223,9 +1223,15 @@ bit up in it as it reads `first`: an `ons` whose bit is listed passes no power, 
 writes its bit. A scan empties the list, and so does a restart. *(Changed 2026-10-02 by
 decision 32: from M2-5 a scan keeps listed each bit inside a function block instance whose
 body it did not run, under a false `cal` or none, and a switch after it lists that bit
-again where the program it starts still has the `ons`. At the top level every rung runs,
-so a scan still empties the list there. Landed with M2-5, 2026-10-04: a `cal` records
-that its body ran, and the scan takes the record out.)* A switch lists:
+again where the program it starts still has the `ons`. At the top level every rung then
+ran, so a scan still emptied the list there. Landed with M2-5, 2026-10-04: a `cal` records
+that its body ran, and the scan takes the record out.)* *(Changed 2026-10-15 by decision
+106: from M3-5 a scan keeps listed too each memory on a rung a jump skipped, at the top
+level and in a body that ran, a storage bit, a counter's edge memory or a pulse timer's,
+until a scan runs its instruction; one that no rung of a routine the scan ran holds,
+which only a plain swap can leave, is used up as before. Landed with M3-5: a skipped rung
+marks each listed memory it holds in the scan's record, wherever on the rung its
+instruction stands.)* A switch lists:
 - each `ons` of T that is new, or whose rung differs with line numbers ignored, against
   the program that last scanned, and, since M3-1, with the preset of every `ton` and
   counter on it ignored too, which no power on the rung reads, so a preset changed alone
@@ -2788,10 +2794,12 @@ reasons stay with them.
     one whose condition changed. Holding every `ons` loses a genuine edge on rungs the
     edit never touched. Adopted: an untouched `ons` behaves normally. *(Changed 2026-10-02
     by decision 32: "for that one scan" becomes "until a scan runs it". At the top level
-    every rung runs, so nothing changes there; inside a function block a false `cal`
+    every rung then ran, so nothing changed there; inside a function block a false `cal`
     leaves its `ons` unrun.)* *(Changed 2026-10-14 by decision 87: "whose rung changed"
     is read with the preset of every `ton` and counter on the rung ignored too, so a
-    `ton`'s preset changed alone no longer blocks an `ons` on its rung.)*
+    `ton`'s preset changed alone no longer blocks an `ons` on its rung.)* *(Changed
+    2026-10-15 by decision 106: a rung a forward `jmp` skips leaves its `ons` unrun too, at
+    the top level as in a block, so the block holds there until a scan runs it.)*
 22. **Inputs across a switch (E2):** report each var_input that becomes live,
     `{:input, name, value}`, and each one the running program no longer reads,
     `{:unread, name, value}`, the host sending the real value of each live one before the

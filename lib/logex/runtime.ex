@@ -4,8 +4,8 @@ defmodule Logex.Runtime do
   the host injects time.
 
   - `instance/1` makes an instance's state, every tag at its initial value.
-  - `call/4` is one scan of one instance: copy the inputs in, run every rung, give the
-    outputs back. It is what a configuration's scheduler calls for each instance it runs.
+  - `call/4` is one scan of one instance: copy the inputs in, run the rungs in order, give
+    the outputs back. It is what a configuration's scheduler calls for each instance it runs.
     Since M3-5 a `jmp` whose rung is true skips the rungs after it up to the one its label
     heads, `lbl`, once its own rung is done: a skipped rung runs nothing, so all it holds is
     frozen, as in a function block whose `cal` is false, and a timer in it catches up when
@@ -326,8 +326,9 @@ defmodule Logex.Runtime do
   end
 
   @doc """
-  One scan of one instance, at `scan.now`: `inputs` are copied in, every rung runs, and
-  `{outputs, state}` comes back, the outputs being every `var_output`.
+  One scan of one instance, at `scan.now`: `inputs` are copied in, the rungs run in order,
+  a `jmp` whose rung is true skipping those after it up to the one its label heads (M3-5),
+  and `{outputs, state}` comes back, the outputs being every `var_output`.
   """
   def call(program, state, inputs, scan) do
     program!(program)
