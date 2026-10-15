@@ -3895,4 +3895,235 @@ defmodule Logex.EndToEndTest do
       edit_checked(running, candidate)
     end
   end
+
+  # PLAN.md M3-5's Done-when, as worded on 2026-10-14: a forward `jmp` over a manual-mode
+  # section freezes that section's outputs, counters and timers exactly as a false `cal`
+  # freezes a block; a backward jump, a missing label and a label not first on its rung are
+  # each a located diagnostic; and a program with no `jmp` scans within a measured bound of
+  # its cost before. A conveyor's manual section, a jog lamp, a jog step, a count of jogs
+  # and a jog timer, skipped by a `jmp` while the line is in auto, beside the same section
+  # as a block its `cal` runs only in manual; from text and from files on disk, against
+  # checks in plain Elixir that know nothing of logex.
+  describe "a forward jump (M3-5)" do
+    @jog_rungs """
+    xic jog_pb ote jog_lamp
+    xic jog_pb ons s_jog ote jog_step
+    xic jog_pb ctu jogs 99
+    xic jog_pb ton jog_t 3000
+    xic jog_t.dn ote jog_long
+    """
+
+    # The jump lights the auto lamp on its own rung, and the motor's rung is the one its
+    # label heads.
+    @jogged_ld """
+    var_input manual bool
+    var_input jog_pb bool
+    var_input run bool
+    var_output motor bool
+    var_output auto_lamp bool
+    var_output jog_lamp bool
+    var_output jog_step bool
+    var_output jog_long bool
+    var s_jog bool
+    var jogs ctu
+    var jog_t ton
+    xio manual jmp auto ote auto_lamp
+    #{@jog_rungs}lbl auto xic run xio manual ote motor
+    """
+
+    @jog_section_ld """
+    function_block jog_section
+    var_input jog_pb bool
+    var_output jog_lamp bool
+    var_output jog_step bool
+    var_output jog_long bool
+    var s_jog bool
+    var jogs ctu
+    var jog_t ton
+    #{@jog_rungs}
+    """
+
+    @called_ld """
+    var_input manual bool
+    var_input jog_pb bool
+    var_input run bool
+    var_output motor bool
+    var_output auto_lamp bool
+    var_output jog_lamp bool
+    var_output jog_step bool
+    var_output jog_long bool
+    var m jog_section
+    xio manual ote auto_lamp
+    xic manual cal m jog_pb jog_lamp jog_step jog_long
+    xic run xio manual ote motor
+    """
+
+    defp jog_scans(program, steps, state),
+      do:
+        Enum.map_reduce(steps, state, fn {ms, input}, state ->
+          {outputs, state} =
+            Logex.Runtime.scan(program, Logex.Runtime.put_inputs(program, state, input), ms)
+
+          {{outputs, state}, state}
+        end)
+
+    # The section's state in each program: its own tags in the one, its block's members in
+    # the other.
+    defp section(state, nil), do: Map.take(state.env, ~w(s_jog jogs jog_t))
+    defp section(state, block), do: Map.take(state.env[block], ~w(s_jog jogs jog_t))
+
+    defp jump_checked(jumped, called) do
+      :rand.seed(:exsss, {2026, 10, 18})
+      inputs = seeded(~w(manual jog_pb run), [], 600)
+      steps = Enum.map(inputs, &{Enum.random([10, 30, 100, 400]), &1})
+      {a, _} = jog_scans(jumped, steps, Logex.Runtime.instance(jumped))
+      {b, _} = jog_scans(called, steps, Logex.Runtime.instance(called))
+
+      # Scan for scan, the jumped section and the frozen block give the same outputs and
+      # hold the same one-shot, counter and timer.
+      for {{{out_a, state_a}, {out_b, state_b}}, i} <- Enum.with_index(Enum.zip(a, b)) do
+        assert out_a == out_b, "scan #{i}"
+        assert section(state_a, nil) == section(state_b, "m"), "scan #{i}"
+      end
+
+      # And they do what the line says: in manual the jog lamp follows the button and the
+      # motor stops; in auto the auto lamp is lit, the motor follows `run` and nothing of the
+      # section moves.
+      a
+      |> Enum.zip(inputs)
+      |> Enum.reduce(nil, fn {{outputs, state}, input}, last ->
+        assert outputs["motor"] == one(input["run"] == 1 and input["manual"] == 0)
+        assert outputs["auto_lamp"] == 1 - input["manual"]
+
+        if input["manual"] == 1,
+          do: assert(outputs["jog_lamp"] == input["jog_pb"]),
+          else: frozen!(last, {outputs, state})
+
+        {outputs, state}
+      end)
+
+      modes = inputs |> Enum.chunk_by(& &1["manual"]) |> length()
+      jogs = List.last(a) |> elem(1) |> then(& &1.env["jogs"]["cv"])
+      assert modes > 100 and jogs > 20
+    end
+
+    defp frozen!(nil, _now), do: :ok
+
+    defp frozen!({outputs, state}, {now_out, now_state}) do
+      assert Map.take(now_out, ~w(jog_lamp jog_step jog_long)) ==
+               Map.take(outputs, ~w(jog_lamp jog_step jog_long))
+
+      assert section(now_state, nil) == section(state, nil)
+    end
+
+    # The timer in the skipped section catches up the time the line spent in auto when it
+    # next runs (decision 82), as one in a frozen block does; an edge of the button while the
+    # line is in auto is never counted, and one still held when it returns to manual counts
+    # if the counter last saw it released.
+    defp catch_up_checked(program) do
+      steps = [
+        {0, %{"manual" => 1, "jog_pb" => 0}},
+        {100, %{"jog_pb" => 1}},
+        {100, %{}},
+        {100, %{"manual" => 0, "jog_pb" => 0}},
+        {500, %{"jog_pb" => 1}},
+        {500, %{"jog_pb" => 0}},
+        {100, %{"manual" => 1, "jog_pb" => 1}}
+      ]
+
+      {scans, _} = jog_scans(program, steps, Logex.Runtime.instance(program))
+
+      assert Enum.map(scans, fn {_, s} -> {s.env["jog_t"]["acc"], s.env["jogs"]["cv"]} end) ==
+               [{0, 0}, {0, 1}, {100, 1}, {100, 1}, {100, 1}, {100, 1}, {1300, 1}]
+    end
+
+    test "M3-5's Done-when: a forward jmp over a manual-mode section freezes its outputs, " <>
+           "counters and timers exactly as a false cal freezes a block" do
+      {:ok, jumped} = Logex.compile(@jogged_ld, name: "conveyor")
+      {:ok, section} = Logex.compile(@jog_section_ld, name: "jog_section")
+      {:ok, called} = Logex.compile(@called_ld, name: "conveyor", types: [section])
+      assert jumped.warnings == [] and called.warnings == []
+      jump_checked(jumped, called)
+      catch_up_checked(jumped)
+    end
+
+    # One mistake of each kind the Done-when names on a line of its own: a jump back to the
+    # rung `start` heads, a jump to a label no rung begins with, and a label after a contact.
+    @misjumped_ld """
+    var_input manual bool
+    var_input jog_pb bool
+    var_output jog_lamp bool
+    lbl start xic jog_pb ote jog_lamp
+    xio manual jmp start
+    xio manual jmp atuo
+    xic jog_pb lbl auto
+    lbl atuo2
+    """
+
+    test "M3-5's Done-when: a backward jump, a missing label and a label not first on its " <>
+           "rung are each a located diagnostic" do
+      assert {:error, diagnostics} = Logex.compile(@misjumped_ld, name: "conveyor")
+
+      assert Enum.map(diagnostics, &Logex.Diagnostic.format/1) == [
+               "line 5: `jmp start` jumps back, to the rung on line 4: a jump goes forward " <>
+                 "only, to a label on a later rung, since one back could loop for ever",
+               "line 6: `jmp atuo` names no label: no rung of this program begins `lbl atuo` " <>
+                 "— did you mean `atuo2`?",
+               "line 7: `lbl auto` is not first on its rung: a label stands at the head of " <>
+                 "the rung it names, before any other instruction or branch group"
+             ]
+    end
+
+    # The rung loop's own cost per rung beside its instructions': a scan of 400 rungs of
+    # `xic a ote y` against one of 200 rungs of two such pairs, the same instructions, the
+    # least of three counts each. On Elixir 1.20.4, over 32 runs each, 16 alone and 16
+    # beside three suites, the ratio was 1.179 at 16d47ed, before M3-5, its loop 8
+    # reductions a rung, and is 1.141 with the jump, 6 a rung: one recursion over the rungs
+    # took 3 off, and the jump's look after each rung puts 1 back. The bound is the ratio a
+    # loop a fifth dearer than before would give, 9.6 a rung, 1.207: a call more a rung,
+    # 2 reductions, gives 1.179, and two, 1.214.
+    test "M3-5's Done-when: a program with no jmp scans within a fifth of the rung loop's " <>
+           "cost before M3-5" do
+      decl = "var_input a bool\nvar_output y bool\n"
+      one = decl <> Enum.map_join(1..400, "\n", fn _ -> "xic a ote y" end)
+      two = decl <> Enum.map_join(1..200, "\n", fn _ -> "xic a ote y xic a ote y" end)
+      ratio = scan_reductions(one) / scan_reductions(two)
+      assert ratio < 1.207, "the loop's share of a scan rose to #{Float.round(ratio, 3)}"
+    end
+
+    defp scan_reductions(source) do
+      {:ok, p} = Logex.compile(source, name: "m")
+
+      {_, s} =
+        Logex.Runtime.call(p, Logex.Runtime.instance(p), %{}, %Logex.Scan{now: 0, first: true})
+
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          Logex.Runtime.call(p, s, %{"a" => 1}, %Logex.Scan{now: 10, first: false})
+          {:reductions, later} = Process.info(self(), :reductions)
+          later - before
+        end
+      )
+    end
+
+    @tag :tmp_dir
+    test "M3-5's Done-when from files on disk, through compile_file/1", %{tmp_dir: dir} do
+      write = fn name, text ->
+        path = Path.join(dir, name)
+        File.write!(path, text)
+        path
+      end
+
+      {:ok, jumped} = Logex.compile_file(write.("jogged.ld", @jogged_ld))
+      write.("jog_section.ld", @jog_section_ld)
+      {:ok, called} = Logex.compile_file(write.("conveyor.ld", @called_ld))
+      jump_checked(jumped, called)
+      catch_up_checked(jumped)
+
+      broken = write.("misjumped.ld", @misjumped_ld)
+      assert {:error, diagnostics} = Logex.compile_file(broken)
+      assert Enum.map(diagnostics, &{&1.file, &1.line}) == [{broken, 5}, {broken, 6}, {broken, 7}]
+    end
+  end
 end
