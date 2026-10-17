@@ -1,0 +1,11 @@
+    warning: variable "rt" is unused (there is a variable with the same name in the context, use the pin operator (^) to match on it or prefix this variable with underscore if it is not meant to be used)
+    │
+ 13 │   {rt, times} = Enum.reduce(1..50, {rt, []}, fn k, {rt, ts} ->
+    │    ~
+    │
+    └─ spike-runner/size.exs:13:4
+
+    1 motors: cycle/3 µs p50 16 max 65; per motor p50 16
+   10 motors: cycle/3 µs p50 91 max 168; per motor p50 9
+  100 motors: cycle/3 µs p50 1985 max 3188; per motor p50 19
+ 1000 motors: cycle/3 µs p50 26768 max 36269; per motor p50 26

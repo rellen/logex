@@ -1,0 +1,4 @@
+soak 40 s at 10 ms: cycles 1462, now 46180 ms, max late 692 ms, max wake-to-written 4 ms
+  gaps between output writes (ms): [{"0-10", 1022}, {"101-250", 70}, {"11-20", 195}, {"21-50", 78}, {"251-500", 46}, {"51-100", 48}, {">500", 3}]
+  runner cost per cycle µs (read+cycle+write): p50 209 p99 571 p99.9 3964 max 4258
+  overlaps: %{"fast" => 3157, "slow" => 463, "trip" => 0} events: 388

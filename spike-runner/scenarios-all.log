@@ -1,0 +1,105 @@
+
+### A
+t=   0 started, first cycle at once   running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=1200 sp_2=1200
+t=  10 both starts pressed            running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=1200 sp_2=1200
+t=  50 held to 50 ms                  running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+t=  60 released                       running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+t=  70 estop pressed (event task)     running k1=0 k2=1 lamp_1=0 lamp_2=1 sp_1=0 sp_2=1200
+t= 100 m2 sees estop at its scan      running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=0 sp_2=0
+snapshot k1_at_trip=1 k2_at_trip=1
+t= 110 estop released, reset pressed  running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=0 sp_2=0
+t= 120 reset released                 running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=0 sp_2=0
+t= 130 start 1 pressed                running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=0 sp_2=0
+t= 140 start 1 released               running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=0 sp_2=0
+stopped: panel %{[0] => 0, [1] => 0, [2] => 0, [3] => 0} closed=true
+
+### A again, compared
+t=   0 started, first cycle at once   running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=1200 sp_2=1200
+t=  10 both starts pressed            running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=1200 sp_2=1200
+t=  50 held to 50 ms                  running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+t=  60 released                       running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+t=  70 estop pressed (event task)     running k1=0 k2=1 lamp_1=0 lamp_2=1 sp_1=0 sp_2=1200
+t= 100 m2 sees estop at its scan      running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=0 sp_2=0
+snapshot k1_at_trip=1 k2_at_trip=1
+t= 110 estop released, reset pressed  running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=0 sp_2=0
+t= 120 reset released                 running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=0 sp_2=0
+t= 130 start 1 pressed                running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=0 sp_2=0
+t= 140 start 1 released               running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=0 sp_2=0
+stopped: panel %{[0] => 0, [1] => 0, [2] => 0, [3] => 0} closed=true
+A twice identical: true
+
+### B
+t=   0 started                        running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=1200 sp_2=1200
+t=  10 both starts pressed            running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=1200 sp_2=1200
+t=  50 held to 50 ms                  running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+t=  60 released                       running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+accept forecast: [{:interval, "slow", {50, 20}}, {:next_due, "slow", {100, 80}}]
+test report: [{:interval, "slow", {50, 20}}, {:next_due, "slow", {100, 80}}]
+t=  70 testing                        running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200  [{:edit, :accept, [{:interval, "slow", {50, 20}}, {:next_due, "slow", {100, 80}}]}, {:edit, :test, [{:interval, "slow", {50, 20}}, {:next_due, "slow", {100, 80}}]}]
+t=  90 testing, slow now every 20 ms  running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+assemble report: []
+t= 110 assembled                      running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200  [{:edit, :assemble, []}]
+status: %{status: :running, now: 110, edit: nil, trip: nil, forces: %{}, cycles: 12, max_late_ms: 0, max_cycle_ms: 0, overlaps: %{"fast" => 0, "slow" => 0, "trip" => 0}}
+stopped: panel %{[0] => 0, [1] => 0, [2] => 0, [3] => 0} closed=true
+
+### C
+t=   0 started                        running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=1200 sp_2=1200
+t=  10 starts pressed                 running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=1200 sp_2=1200
+t=  50 both running                   running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+t=  60 panel read takes 150 ms        tripped k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=0 sp_2=0  [trip: {:watchdog, {:cycle, 160, 100}}]
+panel writes after the trip: [%{[0] => 0, [1] => 0, [2] => 0, [3] => 0}]
+m1.fault, k1 as the resource last held them: {{:ok, 0}, {:ok, 1}}
+t=  60 200 ms later, still tripped    tripped k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=0 sp_2=0
+panel writes while tripped: 0
+t=  60 restarted cold                 running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200  [restart: :cold]
+t=  70 starts still held              running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+t=  80 starts released, pressed again running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+t=  90 start 1                        running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+stopped: panel %{[0] => 0, [1] => 0, [2] => 0, [3] => 0} closed=true
+
+### D
+t=   0 started                        running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=1200 sp_2=1200
+t=  10 start 1 pressed                running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=1200 sp_2=1200
+t=  10 drive read fails               tripped k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=0 sp_2=0  [trip: {:io, "drive", :econnreset}]
+t=  20 restarted                      running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=1200 sp_2=1200  [restart: :cold]
+t=  20 panel adapter raises           tripped k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=0 sp_2=0  [trip: {:io, "panel", {:raised, "sim panel: read raised"}}]
+t=  30 restarted warm                 running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=1200 sp_2=1200  [restart: :warm]
+t=  30 panel gives 7 for a bool       tripped k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=0 sp_2=0  [trip: {:io, "panel", {:bad_value, [0], 7}}]
+stopped: panel %{[0] => 0, [1] => 0, [2] => 0, [3] => 0} closed=true
+
+### E
+t=   0 started                        running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=1200 sp_2=1200
+t=  10 start 1 pressed                running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=1200 sp_2=1200
+t=  50 running                        running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+runner suspended 150 ms: panel %{[0] => 0, [1] => 0, [2] => 0, [3] => 0} drive %{[0] => 0, [1] => 0}
+t= 200 runner resumed                 tripped k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=0 sp_2=0  [{:overlap, "fast", 14}, {:overlap, "slow", 2}, {:trip, {:watchdog, {:cycle, 150, 100}}}]
+stopped: panel %{[0] => 0, [1] => 0, [2] => 0, [3] => 0} closed=true
+
+### F
+t=  10 start 1 pressed                running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=1200 sp_2=1200
+t=  50 running                        running k1=1 k2=1 lamp_1=1 lamp_2=1 sp_1=1200 sp_2=1200
+runner killed: panel %{[0] => 0, [1] => 0, [2] => 0, [3] => 0} closed=true; drive %{[0] => 0, [1] => 0} closed=true
+
+### G
+t=   0 started                        running k1=0 k2=0 lamp_1=0 lamp_2=0 sp_1=1200 sp_2=1200
+t=  10 start 1 pressed                running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=1200 sp_2=1200
+t=  10 panel read hangs               tripped k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=0 sp_2=0  [trip: {:io, "panel", {:timeout, 100}}]
+tripped after 102 ms of real time
+t=  20 restarted, panel opened again  running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=1200 sp_2=1200  [restart: :cold]
+stopped: panel %{[0] => 0, [1] => 0, [2] => 0, [3] => 0} closed=true
+
+### H
+get! of no path: ArgumentError: `m1` is a program instance of `motor`, which declares no `nope`
+force an output: ArgumentError: `k1` is not an input point: only an input point is forced
+force a bool to 2: ArgumentError: `pb_start_1` is a bool, forced to 0 or 1, got: 2
+test with no edit: ArgumentError: no edit is accepted on this runner
+restart :hot: ArgumentError: restart takes :cold or :warm, got: :hot
+t=  10 pb_start_1 forced to 1         running k1=1 k2=0 lamp_1=1 lamp_2=0 sp_1=1200 sp_2=1200
+alive after the mistakes: true, status %{"pb_start_1" => 1}
+stopped: panel %{[0] => 0, [1] => 0, [2] => 0, [3] => 0} closed=true
+
+### R
+real clock, 2 s: %{status: :running, now: 2000, cycles: 201, max_late_ms: 1, max_cycle_ms: 2, overlaps: %{"fast" => 0, "slow" => 0, "trip" => 0}}
+  runs by instance: %{"m1" => 200, "m2" => 40}; overlaps/trips: []
+  k1=1 after a 60 ms press
+  stopped: panel %{[0] => 0, [1] => 0, [2] => 0, [3] => 0} closed=true

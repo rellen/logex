@@ -10,3 +10,10 @@ Design notes live in scratchpad/runner/design.md (copied here as design.md when 
 - under a full mix test beside it: p50 1.8 ms, p99 126 ms, max 196 ms (normal priority);
   :high priority p50 0.5 ms, p99 167 ms, max 237 ms.
 - cycle/3 of the 4.4 plant: p50 ~0.1 ms, p99 0.2-0.4 ms, p99.9 up to 2-10 ms.
+
+## Runner prototype (runner.exs, scenarios.exs, soak.exs, size.exs)
+- scenarios A-H on a fake clock and R on the real clock: see scenarios-all.log.
+- soak idle 20 s: max gap 11-20 ms; one suite beside: 51-100 ms (4 of 3933); two suites:
+  119 of 1462 gaps over 100 ms, 3 over 500 ms, worst late 692 ms. Runner cost p50 ~0.21 ms.
+- cycle/3 per motor instance ~10-26 us: 100 motors 2 ms, 1000 motors 27 ms.
+- BEAM monotonic source here: clock_gettime CLOCK_MONOTONIC.
