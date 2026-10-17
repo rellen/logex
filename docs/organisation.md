@@ -17,7 +17,9 @@ configuration (`Logex.Configuration.Edit`), was designed and landed on 2026-10-1
 decisions 55–66). Milestone 3, the missing instruction set, was decided on 2026-10-14
 (decisions 67–92) and landed by 2026-10-15: IEC's counters, the other timers, integer
 arithmetic, the pulse coils and the forward jump, M3-1 to M3-5 (decisions 93–107). So
-Milestones 1 to 3, OE-1 and OE-2 have landed.** On 2026-09-28 the maintainer adopted the
+Milestones 1 to 3, OE-1 and OE-2 have landed. Milestone 4, the wall-clock runner, was
+designed and decided on 2026-10-17 (§4.11, decisions 108–121), and none of it has
+landed.** On 2026-09-28 the maintainer adopted the
 direction in §1 (IEC's software model, in logex's dialect: the hierarchy, task-style
 execution and I/O mapping), deferred routines, and took decisions 1–14 in §7 as
 recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1
@@ -175,10 +177,10 @@ CONTROLLER                                   CONFIGURATION (+ one implicit RESOU
 
 | Conventional element | IEC | Fit | What differs |
 |---|---|---|---|
-| Continuous task | program with no task | close | *"There can be only one continuous task"* (import/export ref., ch.14, p.313). That it runs at the lowest priority is **from memory** |
+| Continuous task | program with no task | close | *"There can be only one continuous task"* (import/export ref., ch.14, p.313). That it runs at the lowest priority is **from memory** *(Read 2026-10-17: "It always runs at the lowest priority. All other tasks interrupt the continuous task", the tasks, programs and routines manual, Sept 2025, p.13; and "When the continuous task completes a full scan, it restarts immediately", p.8. Milestone 4 runs it so, decisions 108 and 111.)* |
 | Periodic task | TASK with INTERVAL | close | Priority *"(1...15)"* in the import/export reference (p.313). The general instructions reference says *"Valid values 0...15."* (TASK object, p.276). Neither says which end is higher |
 | Event task | TASK with SINGLE | partial | The conventional family has a fixed list of hardware and software triggers. IEC has one Boolean rising edge |
-| Watchdog, overlap count | none | none | "watchdog" occurs zero times in either edition. The family counts overlaps: *"The number of times that the task was triggered while it was still executing"* (general instructions ref., TASK object, p.275) |
+| Watchdog, overlap count | none | none | "watchdog" occurs zero times in either edition. The family counts overlaps: *"The number of times that the task was triggered while it was still executing"* (general instructions ref., TASK object, p.275) *(Read 2026-10-17: each task has a watchdog of its own, 1 to 2,000,000 ms and 500 ms by default, timed from the task's start until all its programs have run, interruptions by other tasks included, the tasks, programs and routines manual, p.34. Milestone 4 takes it, decisions 109 and 110.)* |
 | Program | program type **and** instance | partial | *"A program can be scheduled under one task only"* (import/export ref., p.315). That there is therefore no type/instance split is an inference: the family reuses logic through add-on instructions, not through programs |
 | Controller-scope tag | VAR_GLOBAL | partial | *"Controller tags are seen by routines in any program"* (import/export ref., ch.8, p.204). IEC requires VAR_EXTERNAL |
 | Program tags and routines | one POU's VAR, one body | none | Program tags *"are seen only by routines under that program"* (same page), so routines share a scope. IEC has no routine |
@@ -640,7 +642,12 @@ The host binds devices by name when it starts the runner, for example
 IP addresses stay in Elixir, where they can be written. An unbound device, or a bound
 device with no points, is an error at start. This keeps the core deterministic. The
 configuration spike called adapters from inside its tick, which is pure only for a
-simulated device.
+simulated device. *(Decided 2026-10-17 by Milestone 4's design, §4.11: every callback
+gives `{:error, reason, state}` rather than raising, a point is a `%Logex.IO.Point{}` with
+its name and type, an optional `report/2` passes a device's changes on as they come
+(decisions 112 and 120), and an optional `close/1` is called once after the last write of
+zeros; each device runs in a process of its own, and the two binding mistakes above are
+the host's, raised at start.)*
 
 ### 4.6 Execution model
 
@@ -726,7 +733,12 @@ work after any pause.
 **The watchdog lives outside the core.** IEC defines none. A pure function cannot time
 itself, so the watchdog belongs to the wall-clock runner, the only code that reads
 `System.monotonic_time/1`. When backward `jmp` lands (PLAN §8 item 5), add a deterministic
-budget in the core: rung evaluations per scan.
+budget in the core: rung evaluations per scan. *(Decided 2026-10-17, §4.11: each task has
+its own watchdog, 500 ms unless its line sets one, the continuous task's per round
+(decisions 109–111), timed by the runner at the boundaries of the cycle's steps (decision
+118), and each device's heartbeat zeroes its outputs if the runner stops refreshing it
+(decision 119); a trip stops the plant with every output off once, confirming decision 14
+(decision 113).)*
 
 **Where timers get their time.** Every scan receives a read-only `%Logex.Scan{now:,
 first:}`, and `evaluate/3` threads it. Each timer instance keeps its own last-scanned time
@@ -784,7 +796,7 @@ instructions ref., ONS, p.73). `first` is per instance.
 
 | IEC | logex | Why |
 |---|---|---|
-| A task-less program is re-scheduled *"as soon as its execution terminates"* (rule 4) | once per cycle | In zero logical time, rule 4 is an infinite loop. The runner paces cycles. MatIEC also runs unbound instances once per tick |
+| A task-less program is re-scheduled *"as soon as its execution terminates"* (rule 4) | once per cycle | In zero logical time, rule 4 is an infinite loop. The runner paces cycles. MatIEC also runs unbound instances once per tick. *(Decided 2026-10-17 by decision 108: on the clock the runner makes rounds back to back while task-less programs exist, a share kept for its own work, so rule 4 holds there; a cycle still runs each once.)* |
 | SINGLE and INTERVAL take any `data_source` (B.1.7) | SINGLE is a bool global. INTERVAL is an integer constant in ms | Simplest checkable form. It can widen later without breaking anything |
 | Execution takes time, and preemption is allowed | zero-time, non-preemptive scans | Determinism. The Table 50 timelines therefore cannot be reproduced |
 | Instance order within a task is not specified | declaration order | the conventional family's rule, quoted above |
@@ -2086,7 +2098,8 @@ negative interval or priority is a diagnostic, in the file's words, as one too l
   instance whole, a task or the configuration, and a path that names one of those is told
   which it names: `get/2` as `{:error, reason}`, `get!/2` as an `ArgumentError` (decision
   41). How deep it reaches is decision 33's. `next_due_in/1` counts periodic
-  tasks only, not task-less instances, which a runner paces itself. An
+  tasks only, not task-less instances, which a runner paces itself *(decided 2026-10-17
+  by decision 108: back to back)*. An
   `{:overlap, task, missed}` event comes just before its task's scans.
 - *Restarting* (decision 38). `restart/2` restarts each instance through `restart/3`,
   keeps the clock and the input image, puts every other global back to its initial value
@@ -2103,9 +2116,11 @@ negative interval or priority is a diagnostic, in the file's words, as one too l
   edit sets aside, §4.9's "OE-2's design". Landed the same day, each in `Logex.Runtime`'s
   one-rule section.)*
 - *Not taken.* No `outputs` field on `%Logex.Program{}`, which would spare each scan its
-  walk of the tags. Revisit it with the runner.
+  walk of the tags. Revisit it with the runner. *(Revisited 2026-10-17, §4.11: still not
+  taken.)*
 - *Cost.* A cycle and `next_due_in/1` are linear in the tasks declared, whatever is due;
-  a queue by due time is the runner's to add if it is ever wanted. A refusal of many bad
+  a queue by due time is the runner's to add if it is ever wanted *(revisited 2026-10-17,
+  §4.11: not yet)*. A refusal of many bad
   keys against many names takes time quadratic in the two, from its did-you-mean pass, as
   the `.ld` compiler's refusals already do. That is accepted and documented, since only a
   host's own mistake pays it. Its message is linear in its problems, because each list of
@@ -2455,6 +2470,383 @@ missed as any late periodic task does.)*
     asserts its reach;
   - the commits land data and run time first, then the text (PLAN M2-6).
 
+### 4.11 Milestone 4's design: the wall-clock runner (decided 2026-10-17)
+
+**Designed and decided 2026-10-17; nothing has landed.** A design pass on `d3931bd`, on
+Elixir 1.20.4 / OTP 28 on a four-core Linux container, answered §5's "Wall-clock runner,
+`Logex.IO` adapters, watchdog", §4.5's adapter sketch, §4.6's "the watchdog belongs to the
+wall-clock runner", §4.10's two notes to revisit with the runner and decision 14's "decide
+with the runner". A throwaway spike built every piece, on the branch
+`backup/runner-design` (`spike-runner/`), never to land: its figures are receipts and pin
+nothing. The maintainer answered its questions on 2026-10-17, changing three: rounds run
+back to back with a share kept for the runner's own work (decision 108), and the watchdog
+is 500 ms unless set (109) and each task's own (110). Two more the maintainer asked
+outside the questions put: a configuration may declare its continuous task (111), and a
+device may report its inputs' changes (112). The rest were taken as recommended
+(113–117). Decisions 118–121 are this record's routine choices, each with the
+alternative it passes over; the rest of this section is routine too, each choice with its
+reason. Where a rule changes decided text above, that text is annotated
+where it stands. `PLAN.md` §3's Milestone 4 gives the items and their order.
+
+**Words.** A *round* is a cycle the runner makes on the clock: it takes the inputs, runs
+the timed tasks that are due and then the untimed programs through `cycle/3`'s rules, and
+writes the outputs. A *timed task* is one with an interval, a single or both. The
+*continuous task* is the one that runs the untimed programs, IEC's programs with no task
+association (Ed 2 §2.7.2 rule 4) and the conventional continuous task. The runner's *own
+work* is everything else it does: the host's calls, an edit's steps, the subscribers, and
+the care of its devices, opening, refreshing and zeroing them.
+
+**What it is.**
+
+| Piece | Kind | What it does |
+|---|---|---|
+| `Logex.Runner` | GenServer, one per resource, under the host's supervisor | Owns the `%Logex.Runtime{}`, the clock, the rounds, the devices, the watchdogs, the forces, the subscribers and the current edit |
+| `Logex.Runner.Device` | GenServer, one per bound device, linked to the runner, trapping exits; internal | Holds one adapter's state; reads it every poll period and takes its reports; writes each round's outputs; refreshes them; zeroes them once and latches on a trip, on its heartbeat, and when the runner dies |
+| `Logex.IO` | behaviour, with `%Logex.IO.Point{}` | The adapter contract (below) |
+| `Logex.IO.Sim` | adapter, with a small process of its own | An in-memory device for tests and demos, which can report its changes and act out each failure |
+| `Logex.Runner.Clock` | behaviour | `now_ms/1`, `wake_at/4` and `cancel/2`, so that a test can move time |
+| `Logex.Runner.Clock.Monotonic` | the default clock | `System.monotonic_time(:millisecond)` and `Process.send_after(pid, msg, at, abs: true)` |
+| `Logex.Runner.Clock.Manual` | a clock a test moves | `advance/2` delivers each timer due on the way, in time order, and returns once each receiver has handled its message; `pass/2` moves time inside a step |
+
+It lives in logex and uses only OTP and Elixir's standard library, so logex keeps no
+dependencies; an adapter for real hardware, Modbus TCP or a GPIO board, needs libraries
+and lives in the host's application or a package of its own, logex shipping only
+`Logex.IO.Sim`. It starts no application (`mix.exs` has `application: []`, `PLAN.md` B6):
+the host starts it under its own supervisor, its `child_spec/1` `restart: :temporary`
+(decision 115). It logs nothing, since everything it knows goes to its subscribers.
+
+**The core stays pure.** The runner is the only code in logex that reads a clock. It calls
+`Logex.Runtime`'s public API, `Logex.Configuration.Edit`'s steps, and two public rules,
+`Logex.Configuration.location/1`, to route each point to its device, and
+`Logex.Declarations.fits?/2`, to check each value a device gives. The core gains two
+things only: the configuration's words for a task's watchdog and the continuous task
+(decisions 110 and 111), and the cycle in steps, internal as `edited/2` is, so that the
+runner can time each task's run (decision 118). `cycle/3` and the host contract do not
+change; a host that drives the resource itself loses nothing.
+
+**The configuration's words** (decisions 109–111). A task line takes `watchdog <ms>`
+after its priority, 1 to 2147483647 ms, an interval's range, and 500 ms where it has none:
+`task fast interval 10 priority 1 watchdog 50`. One line may declare the continuous task,
+`task main continuous`, with a watchdog or none and no interval, single or priority; a
+program with no `with` runs in it, and one may name it, `program boxes counter with main`,
+meaning the same. Each word owes its `docs/naming.md` stanza before its code (CLAUDE.md,
+step 1), and a stanza may still change a spelling.
+
+**Rounds** (decision 108).
+- While the configuration has untimed programs, rounds run back to back, in all the time
+  the timed tasks leave, as IEC's rule 4 and the conventional continuous task have it. A
+  share of the time, 20% unless set, is kept for the runner's own work: after each 4 ms
+  of rounds the runner serves its mailbox for up to 1 ms, and goes back to rounds at once
+  when it has nothing to serve, the conventional system overhead time slice's rule (the
+  tasks, programs and routines manual, pp.31–33). A request is served whole, so a slot can
+  run over by one request. One scheduler, and so one core, is kept busy.
+- A timed task runs between rounds when it is due, never inside one, since logex never
+  preempts (§4.6): a round is one `cycle/3`, its due timed tasks first and then the
+  untimed programs, each once. A due task waits for the round in progress to end, so a
+  long untimed round delays a due timed task; a delay of a whole interval or more is
+  counted and reported as an overlap, as any late period is.
+- With no untimed program a round comes only when a timed task is due or an event's
+  trigger changes (decisions 112 and 120), and the share has no effect, as the
+  conventional one has none without a continuous task (p.31): the runner serves its
+  mailbox whenever it waits.
+- The first round runs at once after start and after a restart, whatever `next_due_in/1`
+  says (decision 50).
+- The runner keeps `anchor`, the monotonic millisecond its clock counts from, and
+  `logical`, the sum of the `elapsed_ms` it has passed, the resource's `now`. Each round
+  passes `elapsed = (wall - anchor) - logical`, never negative, so rounding to whole
+  milliseconds never accumulates; it sleeps to absolute deadlines, `anchor + next`,
+  never relative ones, which drifted 7% in the spike; and after a stop or a trip it sets
+  `anchor = wall - logical`, so the stopped time is not counted and the first round after
+  a restart gets 0 ms, rather than reporting every period of the outage as missed.
+
+**Devices** (decisions 112, 114 and 120). A point is a global with `at`: its device is the
+location's first part, its direction `i` or `q`, its address the integer fields, read by
+`Logex.Configuration.location/1`. OE-2's accept refuses a location added, removed or
+moved, so the binding is fixed for the runner's life (§4.9, "logex binds devices only at
+start"). The host binds each device by name, `io: %{"panel" => MyApp.PanelIO, "drive" =>
+{MyApp.ModbusIO, host: "10.0.0.5"}}`; a device the points name that no adapter is bound to,
+and a bound device no point is at, are the host's mistakes at start (§4.5).
+- **Reading.** Each device's process reads its adapter every poll period, 10 ms unless
+  set, and an adapter that can report a change as it happens passes each one on between
+  reads, as the conventional input module sends its data at its requested packet interval
+  and on a change of state (decision 120). The device sends the runner what changed; the
+  runner checks each value with `fits?/2` and its address against the device's input
+  points, and merges them into the next round's inputs, taken as the round starts
+  whatever the share, so every round sees one sample of every device. A change of an
+  event task's trigger makes a round at once where none is running, each change its own
+  round, and so does a change that logic writes, read after each round (decision 120).
+- **Writing.** After each round the runner gives each device whose outputs changed its
+  output points, every one by address, and waits for its answer, which the device gives
+  once its adapter has written them; a device with nothing new is refreshed with the
+  outputs it last had, without a wait, at least once a poll period (decision 119), so a
+  device's own loss-of-master state is never reached while the runner runs.
+- **Order.** Devices are opened, written and zeroed in device-name order, one after
+  another, so a run is deterministic; in parallel is later, once a real network adapter
+  has been measured.
+- **Failing.** Each callback runs in its device's process, guarded, so a raise, a throw
+  or an exit is an `{:error, ...}` there. An error returned, a raise, a value that does not
+  fit, an unknown address, no answer within the device's deadline, its heartbeat time
+  (decision 119), and its process going down are each an I/O fault, which trips the
+  runner (decision 114). A device stuck inside its adapter is killed and opened again at
+  the next restart; its outputs cannot be zeroed from software, and are what the device
+  does on losing its master.
+
+**The adapter behaviour**, §4.5's sketch revised so that every callback can fail without
+raising, a device can report its changes and be closed:
+
+```elixir
+defmodule Logex.IO do
+  @type address :: [non_neg_integer]           # panel.i.1.3 -> [1, 3]: location/1's third part
+  @type values :: %{address => integer}
+  # %Logex.IO.Point{name: "pb_start_1", direction: :input, address: [0], type: :bool}
+
+  @callback init(device :: String.t(), [Logex.IO.Point.t()], opts :: keyword) :: {:ok, state} | {:error, reason}
+  @callback read(state) :: {:ok, values, state} | {:error, reason, state}
+  @callback write(values, state) :: {:ok, state} | {:error, reason, state}
+  @callback report(message :: term, state) :: {:ok, values, state} | {:error, reason, state}
+  @callback close(state) :: :ok
+  @optional_callbacks report: 2, close: 1
+end
+```
+
+- `init/3` runs in the device's process, which is what an adapter that reports arranges
+  to be sent its device's messages to: a port's, a socket's, a process of its own.
+- `read/1` gives values for some or all of the device's input points; the image keeps
+  them, so an adapter may give only what changed (§4.6, step 2).
+- `write/2` is given every output point of the device, by address, a snapshot, so an
+  adapter may skip those that did not change; it returns its state, so a connection can
+  be opened again inside it.
+- `report/2` is called with each message the device's process receives that is not the
+  runner's, and gives the inputs it says changed, `%{}` for one it does not know; an
+  adapter without it is only read.
+- `close/1`, optional, is called once, after the last write of zeros.
+
+**The simulated device.** `Logex.IO.Sim` is an adapter whose device is a small process the
+test owns, `Logex.IO.Sim.start_link/1`, bound as `{Logex.IO.Sim, sim: sim}`: `set/2` and
+`set/3` set its inputs, `outputs/1` gives the last value written to each output,
+`writes/1` every write in order, so that "zeroed once" can be asserted, `reads/1` the
+reads made, and `closed?/1` whether it was closed. Started with `reports: true` it reports
+each input it is set to the device that opened it. `fail/3` acts out one failure on the
+next call of the callback it names: an error, a raise, a throw, an exit, a hang, a delay,
+on the manual clock it was started with or else in real time, or, for a read, a value of
+the test's choosing. It is the fixture of every runner test, and README's example runs on
+it.
+
+**The watchdogs** (decisions 109, 110, 111 and 119). Each task has its own watchdog time,
+500 ms unless its line sets one, `task fast interval 10 priority 1 watchdog 50`; the
+continuous task's is on its own line, `task main continuous watchdog 200`, or 500 ms.
+- **What is timed.** A timed task's run, from the start of its first instance's scan to
+  the end of its last, on the runner's clock, read at the boundaries of the cycle's steps
+  (decision 118); and each round of the continuous task, from the round's start, when it
+  takes its inputs, to the end of its last program's scan, the timed tasks run in that
+  round included, as the conventional watchdog counts the time of the tasks that
+  interrupt its task (the tasks, programs and routines manual, p.34). A task's wait for the round in
+  progress is not in its time.
+- **The runner's check.** After each step the runner compares the time against the
+  task's watchdog; over it, it trips (decision 113) before the round's outputs are
+  written, so a round that ran too long never reaches the plant. This replaces the
+  design's one gap between two writes, which had one watchdog to measure against.
+- **Each device's heartbeat.** A device that hears nothing from the runner for its
+  heartbeat time, the longest watchdog of any task the configuration runs plus one poll
+  period, writes 0 to every output once, latches and tells the runner, which trips when it
+  next runs, `{:watchdog, {:device, device, time}}`. The runner refreshes every device at
+  least once a poll period, between rounds, between two steps of a round and while it
+  waits, so it never misses one while it is well, and a runner stuck anywhere, in a round,
+  a request or a bug, leaves every device that answers at 0 within that time.
+
+**A trip** (decisions 113 and 114) has one path, whatever caused it: the runner stops
+scheduling, its wake cancelled and a stale one ignored; every output is written 0 once,
+through each device that answers, which latches and writes nothing more until a restart; it
+reports `{:trip, reason}` to each subscriber and `status/1` gives the reason until a
+restart; it keeps the resource as the last round computed it, which `get/2` reads, outputs
+the plant never received among them where the round tripped before its write; and it waits
+for `restart(runner, :cold | :warm)`, which opens again each device that went down,
+releases every latch, calls `Logex.Runtime.restart/2`, which keeps the input image and puts
+every other global back to its initial value, and runs the first round at once, the clock
+not counting the stopped time. `:warm` is `:cold` until `retain` lands. A trip's reason is
+one of:
+- `{:watchdog, {:task, task, took_ms, limit_ms}}`, `task` the continuous task's name, or
+  `:none` where the configuration declares none, as an event names it;
+- `{:watchdog, {:device, device, time_ms}}`, a device's heartbeat;
+- `{:io, device, cause}`, `cause` one of `:timeout`, `{:error, term}`, `{:raised,
+  message}`, `{:thrown, term}`, `{:exited, term}`, `{:bad_value, address, value}`,
+  `{:unknown_address, address}` and `{:down, reason}`;
+- `{:internal, message}`, an exception out of the core, which the host contract says
+  cannot happen: tripping rather than crashing keeps the state for diagnosis, and zeroes
+  the outputs either way.
+
+**What fails, and what happens.**
+
+| What fails | How it is seen | What happens |
+|---|---|---|
+| A task's run or a round outlasts its watchdog | the runner's check after each step | trip before the round's write |
+| The runner is stuck | each device's heartbeat | the devices zero and latch; the runner trips when it next runs |
+| An adapter's callback fails, or gives a bad value or address | guarded in the device's process; the runner's checks | trip, every other device zeroed |
+| An adapter hangs | no answer within the device's deadline | trip; the device's process killed, its outputs left to the device; opened again at a restart |
+| A device's process dies | the runner traps the exit | trip; opened again at a restart |
+| The runner crashes or is killed | each device traps its parent's exit | each device zeroes its outputs and closes; nothing starts it again (decision 115) |
+| The runner is stopped | `stop/2` | every output zeroed once, every device closed, before `stop/2` returns (decision 116) |
+| A subscriber is slow | — | nothing: events are sent, never awaited, so its own mailbox grows; `:ran` and `:round` are opt-in for that reason |
+| The VM, the machine or the power dies | — | nothing in software can act: outputs are what the I/O does on losing its master, which a plant should set to off |
+
+**Forcing** (decision 117). `force(runner, point, value)` makes the runner see an input
+point at `value` whatever its device says, merged over the device's values before each
+round, after the input latch, as §5 places forcing; it stays until `unforce/2`, across a
+restart, and `status/1` lists every force. `unforce/2` puts back the device's last value,
+which the runner keeps for each input point. A force of a trigger is a change of it
+(decision 120). An output point, or a value that does not fit, is the host's mistake.
+Output forcing waits for §5's forcing in `cycle/3`, which `force/3` will then call.
+
+**Edits.** Each step of a `Logex.Configuration.Edit` is a call to the runner, served
+between two rounds in its share; the runner holds the edit, one at a time, a second accept
+superseding the first as decision 66 allows, and its next round runs the resource the step
+returns. A step may be taken while tripped, so a program can be fixed and then restarted.
+Accept's work, which grows with the programs, is done in the caller's process, against the
+resource the runner hands it, so that no step costs a round more than a switch.
+
+**Its API**, every call through the runner's mailbox, so each runs between two rounds:
+
+| Function | Notes |
+|---|---|
+| `start_link(opts)`, `child_spec(opts)` | `configuration:`, `io:`, and optionally `clock:` (`{module, clock}`, the monotonic one unless set), `poll:` (ms, 10), `overhead:` (percent, 20, 10 to 90) and `name:` (decision 121). Checks every option, `Logex.Runtime.start/1`'s refusals and the bindings in the caller, before anything starts; opens every device, reads each once, and runs the first round at once. `{:ok, pid}`, or `{:error, {:io_init, device, reason}}` for a device that cannot be opened, which is the plant's state, not a host mistake |
+| `stop(runner, reason \\ :normal)` | zeroes every output once and closes every device before it returns |
+| `status(runner)` | `:running` or `:tripped`; `now`; the rounds run; the trip's reason; each task's overlaps; the forces; the edit's stage; each task's longest run against its watchdog, the latest wake, and the longest wait between two refreshes, in ms |
+| `get(runner, path)`, `get!(runner, path)` | as `Logex.Runtime.get/2` and `get!/2`, of the last round computed |
+| `subscribe(runner, kinds)`, `unsubscribe(runner)` | `{Logex.Runner, runner, event}` for each event of a kind named; a subscriber is monitored and dropped when it dies |
+| `force(runner, point, value)`, `unforce(runner, point)` | input points only |
+| `restart(runner, :cold \| :warm)` | `:ok`, or `{:error, {:io_init, device, reason}}` |
+| `accept(runner, candidate)`, `test/1`, `untest/1`, `assemble/1`, `cancel/1` | the edit's steps |
+
+Its events are an open set: the resource's own `{:overlap, task, missed}` and `{:fault,
+task, instance, fault}`, `{:trip, reason}`, `{:restart, :cold | :warm}` and `{:edit, step,
+report}`, sent by default; and, for a live display, the resource's `{:ran, task, instance,
+now}` and the runner's `{:round, now, outputs}`, sent only to a subscriber that names
+them.
+
+**Host mistakes** raise `ArgumentError` in the host's own process, with a message a test
+pins, and never crash the runner. At start: a missing or unknown option; a configuration
+`Logex.Runtime.start/1` refuses, in its words; a device the points name that no adapter is
+bound to, ``no adapter is bound to the device `drive`, which `sp_1` (drive.q.0) and `sp_2`
+(drive.q.1) are at``; a bound device no point is at, ``the device `panle` is bound, but no
+point is at it — did you mean `panel`?``; an adapter that does not implement `Logex.IO`; a
+poll period or a share out of its range; a clock that does not implement
+`Logex.Runner.Clock`. In a call, the runner rescues the `ArgumentError`, replies `{:raise,
+exception}`, and the function raises it in the caller: a path that names nothing, an
+output point or a value that does not fit forced, a step with no edit accepted, a restart
+that is neither cold nor warm.
+
+**How a test drives it.** The manual clock replaces the monotonic one and `Logex.IO.Sim`
+the plant, so a run is deterministic and repeats exactly from fresh processes. On §4.4's
+plant:
+
+```elixir
+{:ok, clock} = Logex.Runner.Clock.Manual.start_link()
+{:ok, panel} = Logex.IO.Sim.start_link(reports: true)
+{:ok, drive} = Logex.IO.Sim.start_link()
+
+{:ok, runner} =
+  Logex.Runner.start_link(
+    configuration: plant,
+    io: %{"panel" => {Logex.IO.Sim, sim: panel}, "drive" => {Logex.IO.Sim, sim: drive}},
+    clock: {Logex.Runner.Clock.Manual, clock}
+  )
+
+Logex.IO.Sim.set(panel, [0], 1)                  # pb_start_1, at panel.i.0
+Logex.Runner.Clock.Manual.advance(clock, 10)     # each timer due on the way, in time order
+assert Logex.IO.Sim.outputs(panel)[[0]] == 1     # k1, at panel.q.0
+```
+
+`advance/2` runs in the test's process. It takes each timer due on the way from the clock,
+earliest first and ties in the order they were set, sets the clock to its time, sends its
+message, and then calls the receiver through `:sys`, from the same process, so that it
+returns once the receiver has handled the message: the order holds by construction, one
+sender to one receiver, never by the order in which two senders' messages arrive, which the
+spike's clock relied on. What a receiver sends others while it handles one is its own to
+finish, as a call finishes, before it returns. A timer set while one is handled is
+delivered in the same `advance/2` where it falls inside it. Time that passes inside a step,
+as a slow device's, is `pass/2`, which delivers nothing until the next `advance/2`.
+
+**What it can promise**, to be said plainly in README: exact replay, since the runner adds
+nothing to the logic and a cycle is a function of its arguments, so a recorded run replays
+(`Logex.Runtime`'s moduledoc, "What it may rely on", item 6); no drift, every deadline
+absolute; lateness reported, as an overlap; and outputs at 0 when the runner trips, stops,
+dies or stops refreshing a device, wherever the device still answers. **What it cannot:**
+no hard deadline and no bounded jitter, since the BEAM runs on a general-purpose operating
+system and shares its schedulers; no edge shorter than the gap between two of its device's
+reads, unless the device reports it; and nothing once the VM stops. A host helps by giving
+the controller cores of its own, keeping heavy work out of its VM, and setting each task's
+watchdog from a soak on the target machine, which `status/1`'s longest runs make easy.
+Operating-system real-time priority and the VM's scheduler flags are left unmeasured, and
+their effect is **unverified**.
+
+**Receipts, the spike's**, each on the real §4.4 plant (`spike-runner/timing.exs`,
+`soak.exs` and `size.exs`), at the design's steady 10 ms beat, which decision 108 replaced,
+and so evidence of the BEAM's lateness rather than of rounds back to back, which M4-3
+measures:
+- absolute timers, idle: p50 0.19 ms late, p99 0.58 ms, max 3.4 ms, no early wake in
+  6,000; beside a full test suite p50 1.8 ms, p99 126 ms, max 196 ms; at process priority
+  `:high` the median better and the tail not, the competition being another operating
+  system process; relative timers, `send_after(10)` after each cycle: 11 ms a cycle,
+  1,067 ms of drift in 1,000 cycles and 106 periods falsely reported missed;
+- the longest gap between two output writes: under 20 ms idle over 20 s; under 100 ms
+  beside one test suite over 40 s; beside two, at a load of 8.4 on 4 cores, three over
+  500 ms, the latest wake 692 ms late;
+- the runner's own cost, from wake to the last write, two devices read and written: p50
+  0.21 to 0.24 ms, p99 0.52 to 0.57 ms, p99.9 2.3 to 4.0 ms, in all three runs; `cycle/3`
+  alone 9 to 26 µs per instance of §4.3's motor, 2.0 ms for 100 and 27 ms for 1,000.
+
+**Routine choices, each with what it passes over:**
+- the runner holds the edit, over the host passing `%Edit{}` in, which allows a step
+  against a stale edit that only the generation catches;
+- host mistakes relayed and raised in the caller, over raising in the server, which would
+  crash the plant for a typo;
+- a hung device killed and opened again, its outputs left to the device, over waiting on
+  it, which would wedge the runner;
+- an exception out of the core trips, over crashing, which loses the state;
+- `get/2` reads the resource after a trip, over reading the zeroed devices;
+- `:ran` and `:round` opt-in, over sending every event, which grows a slow subscriber's
+  mailbox at thousands a second;
+- no logging, over Logger, which B6 keeps out;
+- the timing arithmetic private to the runner and tested through the manual clock, over a
+  pure pacing module, one more public surface for a run that is already deterministic;
+- §4.10's two notes, revisited and still not taken: no `outputs` field on
+  `%Logex.Program{}`, since `cycle/3` already returns the output points and the runner's
+  whole cycle measured 0.2 ms; and no queue of tasks by due time, `next_due_in/1` being
+  linear in the tasks and called once a round, until a plant of hundreds of tasks is seen.
+
+**What logex is not**, to be stated in README, in `Logex.Runner`'s moduledoc and here.
+logex is not a safety controller, and must not implement a safety function: an emergency
+stop, a guard interlock, a light curtain, two-hand control, burner or pressure protection
+belong in hardwired circuits or a safety-rated controller designed and validated to the
+functional-safety standards that apply, against which logex makes no claim. The e-stop in
+§4.4's plant is a signal the program reads, which records the contactors at the trip; the
+e-stop that cuts their power must be wired to work with logex stopped, crashed or never
+started. logex is not hard real-time, its watchdogs being a backstop, not a guarantee, and
+it is not certified for any industrial use. The common deaths of a runner go to outputs
+off, a crash, a kill, a stop, a stuck runner and a device fault; a hung device and a dead
+VM do not, and the documents say so.
+
+**Risks.**
+- *Real time in CI*: every rule is tested on the manual clock, and a test on the real
+  clock asserts only liveness, with bounds a fifth above the two-suite soak's, since CI
+  shares its cores and CONTRIBUTING.md forbids skipping or quarantining a test.
+- *A suspended machine* (**unverified**): the BEAM here reads `CLOCK_MONOTONIC`
+  (`erlang:system_info(os_monotonic_time_source)`), which by clock_gettime(2)'s definition
+  does not count a suspension, so a laptop that sleeps would wake with no trip and no
+  overlap, its devices' heartbeats on the same clock. It must be tried on a real machine
+  before README says what a sleep does.
+- *A long request*: one the runner serves whole and that takes longer than the heartbeat
+  time trips the plant, which is why accept runs in the caller (decision 119).
+- *Plants larger than their watchdogs*: 1,000 motors cost 27 ms a cycle, so README gives
+  the measured cost per instance for a programmer to size each watchdog.
+- *Determinism of real devices*: exact replay holds given the same inputs, and a real
+  device samples when its adapter does.
+- *Not spiked, and worth a spike during the milestone*: a real network adapter outside
+  logex, for the cost of a device on a network and of reading devices in parallel;
+  operating-system real-time priority and the VM's flags against the tail; a suspended
+  laptop; and rounds back to back with the share, which the spike's steady beat did not
+  build.
+
 ---
 
 ## 5. Decided now, and deferred
@@ -2468,10 +2860,10 @@ missed as any late periodic task does.)*
 | Preemption | not adopted | It gives up determinism, and nothing is observable in zero logical time (§4.6) |
 | FB-to-task association (`FB1 WITH SLOW_1`, Table 49 f6b) | deferred | Rarely needed. It splits an FB's execution from its program's scan |
 | Direct representation `%IX0.0` and raw addresses in connections | not adopted; the fallback for §4.5 | One declared, named I/O list instead |
-| Wall-clock runner, `Logex.IO` adapters, watchdog | target, after Milestone 2 | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10) |
+| Wall-clock runner, `Logex.IO` adapters, watchdog | target, after Milestone 2; **designed and decided 2026-10-17** (§4.11, decisions 108–121), `PLAN.md`'s Milestone 4 | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
 | Restarting one program instance inside a resource | not adopted (Milestone 2's design, §4.10) | `restart/2` restarts the whole resource (decision 38). Restarting one instance would be another rule for the input image and the tasks, for a need no decided text states |
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
-| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3` |
+| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117; output forcing waits for this.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
@@ -2711,8 +3103,12 @@ M3-4's own routine choices, taken as it landed the same day, 102 confirmed by th
 maintainer on 2026-10-15, after M3-4's review, and 103's "no warning" superseded by the
 maintainer's answer the same day. Decisions 104–107 are M3-5's own routine choices, taken
 as it landed on 2026-10-15, 106's rung compared whole and 107's warning confirmed by the
-maintainer the same day, after M3-5's review. All one hundred and seven are kept with
-their options so the reasons stay with them.
+maintainer the same day, after M3-5's review. Decisions 108–121 were taken on
+2026-10-17 from Milestone 4's design (§4.11, and below): 108–117 the maintainer's
+answers, 108, 109 and 110 against their recommendations, 111 and 112 asked by the
+maintainer outside the questions put, the rest as recommended; and 118–121 the record's
+own routine choices. All one hundred and twenty-one are kept with their options so the
+reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -2771,7 +3167,9 @@ their options so the reasons stay with them.
     `t#`. *Recommend both.*
 14. **What a watchdog fault does to outputs,** when the runner exists: stop scheduling,
     zero the output image once, report, and require an explicit restart. Holding the last
-    outputs is the alternative. *Recommend zeroing; decide with the runner.*
+    outputs is the alternative. *Recommend zeroing; decide with the runner.* *(Confirmed
+    2026-10-17 by decision 113, with the five refinements of Milestone 4's design,
+    §4.11.)*
 15. **Declaring a controller from Elixir:** a Spark or macro DSL as the model, or one model
     held as data with text as its saved form. *Recommend data*: whatever a DSL declares is
     compiled into a module, so it cannot be the copy a running controller edits. Adopted,
@@ -4232,6 +4630,333 @@ the record answers one, it says which part of it does.
      review: two coils on one tag in sections that jump over each other keep the
      second-`ote` warning. The checks read the program's text, not which rungs run, as
      this decision has it. `validation_test.exs` pins it.)*
+
+**Milestone 4's design, decided 2026-10-17.** A design pass on `d3931bd` designed the
+wall-clock runner (§4.11) and built a throwaway spike of it on the branch
+`backup/runner-design`, never to land. Decisions 108–117 are the maintainer's answers to
+its questions, each given with the plain-language example the maintainer was asked, the
+plant in every one being the design's: a conveyor motor with a start button, a stop button
+and an emergency stop; a cooling fan that runs on for a minute after the conveyor stops; a
+photo-eye that counts boxes, and a "case full" lamp that lights at 12; a speed setting
+sent to the conveyor's drive over the network; the conveyor's logic due every 10 ms, the
+fan's twice a second, and the box counting and the lamp with no timing of their own. A
+*round* is the controller reading its inputs, running the logic once and writing its
+outputs. Three were taken against the recommendation, 108, 109 and 110; 111 and 112 the
+maintainer asked outside the questions the design put, as the conventional family does
+them; 113–117 as recommended. Decisions 118–121 are the record's own routine choices, taken
+the same day where the answers left a choice open, each with the alternative it passes
+over.
+
+108. **How often rounds happen (Milestone 4).** The conveyor's logic is due every 10 ms
+     and the fan's twice a second, but the box counter and its lamp should respond
+     quickly.
+     - A steady beat of the controller's own, every 10 ms unless the programmer picks
+       another, each timed job done when it is due: a box counted, and the lamp lit,
+       within about 10 ms whatever else the plant has, at about 2% of one core;
+     - a round only when a timed job is due: here still every 10 ms, for the conveyor, but
+       a plant with only the fan would check boxes twice a second, and one with no timed
+       job would need a beat set, as MatIEC insists;
+     - or rounds flat out, one after another, as IEC's rule 4 and the conventional
+       continuous task: the fastest response, and one core kept busy.
+
+     *Recommended: the steady beat.* **Taken: rounds back to back, with a share kept for
+     the controller's own work.** The box counter and the lamp run again as soon as their
+     round ends, IEC's *"shall be re-scheduled for execution as soon as its execution
+     terminates"* (Ed 2 §2.7.2 rule 4, p.115; Ed 3 §6.8.2 d)), as the conventional
+     continuous task does: *"The continuous task runs all the time. When the continuous
+     task completes a full scan, it restarts immediately"* (the tasks, programs and
+     routines manual, p.8). The runner's own work, the host's calls, the care of its
+     devices, an edit's steps and the subscribers, is kept a share of the time, 20%
+     unless set, one setting for the controller (decision 121), as the conventional
+     system overhead time slice is: *"the percentage of time (excluding the time for
+     periodic or event tasks) that the controller devotes to unscheduled communication"*,
+     and *"The controller performs unscheduled communication for up to 1 ms at a time and
+     then resumes the continuous task"* (p.13), at 20% four milliseconds of the continuous
+     task to one of the rest (p.32), and back to the continuous task at once when nothing
+     waits, its default (p.33). The conveyor's
+     and the fan's tasks run between rounds when due, never inside one, since logex never
+     preempts (§4.6). The cost, recorded: a long untimed round delays a due timed task, by
+     up to the round's length, and a delay of a whole interval or more is reported as an
+     overlap. While untimed programs exist, one core is kept busy. A configuration with no
+     untimed program makes a round only when a timed task is due or an event's trigger
+     changes (decision 112), and there the share has no effect, as the conventional one
+     has none *"if there is no continuous task"* (p.31). So a round is one `cycle/3`, its
+     due timed tasks and then the untimed programs once each, and rounds come back to
+     back; §4.6's row for rule 4 is annotated. *(Taken 2026-10-17.)*
+109. **The watchdog's default time (Milestone 4).** If the computer gets too busy, or
+     something gets stuck, the controller stops itself with everything switched off: the
+     watchdog. On the test computer the longest the controller went without updating its
+     outputs was 20 ms when it was otherwise idle, a tenth of a second beside one heavy
+     job, and about seven tenths beside two.
+     - No default: whoever sets up the controller writes down a time, or "no watchdog",
+       and it will not start without one;
+     - half a second unless set, which on a very busy computer could still stop the plant
+       now and then;
+     - a tenth of a second unless set, which on a busy computer may stop the plant now and
+       then for no fault of the program;
+     - or no watchdog unless set.
+
+     *Recommended: no default.* **Taken: half a second unless set, as the conventional
+     family's**: *"A watchdog time can range from 1…2,000,000 ms (2000 seconds). The
+     default is 500 ms."* (the tasks, programs and routines manual, p.34). It is set on
+     each task's line (decision 110), the continuous task's on its own (decision 111), a
+     whole number of milliseconds from 1 to 2147483647, an interval's range, since logex's
+     milliseconds are a dint's where the conventional range stops at 2,000,000. There is
+     no "no watchdog": every task has one, as every conventional task has. *(Taken
+     2026-10-17.)*
+110. **One watchdog for each task (Milestone 4).** The conveyor's outputs matter within a
+     twentieth of a second; the fan could wait two seconds.
+     - One time for the whole controller, set where the controller is started;
+     - a time for each task, written in the configuration file next to it: "the
+       conveyor's task must be done within 50 milliseconds, the fan's within 2 seconds",
+       `task fast interval 10 priority 1 watchdog 50`;
+     - or both.
+
+     *Recommended: one for the controller, since a cycle writes every output together.*
+     **Taken: one for each task, as the conventional family's**: *"Each task contains a
+     watchdog timer that specifies how long a task can run before triggering a major
+     fault"*, and *"The watchdog timer begins to run when the task is initiated and stops
+     when all the programs within the task have run … (The time includes interruptions by
+     other tasks.)"* (p.34). In logex a timed task's run is timed from the start of its
+     first instance's scan to the end of its last, on the runner's clock, which counts
+     whatever time the machine took from the runner meanwhile, as the conventional count
+     includes what interrupts the task; its wait for the round in progress, decision 108's
+     cost, is not in it, the run being timed from its start. An event task's line takes
+     one, as a periodic task's does. A task that outlasts its watchdog trips the
+     controller (decision 113) before its round's outputs reach the plant, and the trip
+     names the task. `watchdog` owes its `docs/naming.md` stanza before its code; IEC has
+     none (§3), so it is a vendor's word, by naming rule 2. A watchdog's rule across an
+     online edit, whether one may change while the plant runs as an interval may (decision
+     19), is M4-2's to settle with that survey. *(Taken 2026-10-17.)*
+111. **The continuous task (Milestone 4).** The box counter and the lamp have no timing of
+     their own, and their programmer wants them watched more closely than half a second.
+     Asked by the maintainer, as the conventional family has it: the configuration may
+     declare its one continuous task as a task line of its own, `task main continuous
+     watchdog 200`, and without the line the continuous task's watchdog is 500 ms
+     (decision 109). The conventional defaults are taken: one continuous task at most,
+     *"If used, there can be only one continuous task"* (p.8); no interval, single or
+     priority on it, *"You do not assign a priority to the continuous task. It always runs
+     at the lowest priority"* (p.13); the share controller-wide, never on its line
+     (decision 108); and a program with no timed task runs in it with no `with`, IEC's
+     program with no task association.
+
+     **Taken,** with three choices the record settles, each with the alternative it passes
+     over:
+     - *A `with` that names it* is taken, `program boxes counter with main`, and means
+       what no `with` means: it is the conventional programmer's way of putting a program
+       in the continuous task, and IEC's rule-4 program either way. The configuration
+       keeps what was written, so its text prints back as it was read, and an online edit
+       that adds `with main` or takes it away moves no instance to another task (decision
+       19). Refusing it, so that a program has one spelling, would turn a conventional
+       line away for no change in what runs.
+     - *Its name in events.* Where the line declares it, every instance it runs is
+       reported under its name, `{:ran, "main", "boxes", now}`, with `with main` or none,
+       and a trip of its watchdog names it; where none is declared, `:none`, as now, so no
+       configuration that runs today reports otherwise. Keeping `:none` everywhere would
+       give one task two names.
+     - *Its watchdog, per round.* Each round is timed from its start, when it takes its
+       inputs, to the end of the continuous task's last program's scan, the timed tasks
+       run in that round included, as the conventional continuous task's watchdog
+       restarts with each full scan (p.8) and counts the tasks that interrupt it (p.34).
+       So, where untimed programs exist, it bounds the whole round, from the inputs taken
+       to the outputs computed. Timing its programs alone would leave a round that grows
+       with the timed tasks in it unwatched as a whole.
+
+     A continuous line that runs no instance is the warning a task that runs no instance
+     is (M2-3), its watchdog then timing nothing; adding or removing the line while the
+     plant runs is adding or removing a task, refused while running (decision 19).
+     `continuous` owes its stanza before its code: IEC names no such task, so it is the
+     conventional family's word, by naming rule 2. *(Taken 2026-10-17.)*
+112. **Plants of event tasks alone, and devices that report changes (Milestone 4).** A
+     plant of the fan's half-second task and the e-stop's event task, with no untimed
+     program: between the fan's runs the controller has nothing to do until the e-stop
+     changes. Asked by the maintainer, as the conventional family does it:
+     - a device may tell the runner when an input changes, and an event task whose trigger
+       changed then runs at once, between rounds and never inside one, as the conventional
+       change-of-state trigger runs an event task when an input module reports a point
+       turning on or off (*"Module Input Data State Change"*, the tasks, programs and
+       routines manual, pp.37–42);
+     - a device that cannot report changes is read by the runner at a steady rate, its
+       poll period, 10 ms unless set, as the conventional input module sends its data at
+       its requested packet interval (p.42).
+
+     **Taken.** So `Logex.IO` gains an optional `report/2` (§4.11), and `Logex.IO.Sim`
+     reports its changes where it is started to, so that a test drives it on the manual
+     clock. A change of a trigger is a rise or a fall, and each makes a round, so that the
+     resource samples the 0 between two rises and the second is an edge (decision 39's
+     sample). How reading and reporting mix in one plant is decision 120. *(Taken
+     2026-10-17.)*
+113. **What a watchdog trip does (Milestone 4),** decision 14 asked again now that the
+     details are known.
+     - Everything goes off, once: the conveyor stops, the fan stops, the lamp goes out and
+       the drive's speed setting goes to zero; the controller then does nothing until
+       someone restarts it, and the last count and the last state of every signal can
+       still be read, to see what happened; the cost, the fan stops too, though it was
+       meant to run on;
+     - or everything stays as it was, the conveyor running at its speed and the lamp lit,
+       with no logic in control, until someone notices and restarts.
+
+     *Recommend the first.* **Adopted, confirming decision 14**: every output written 0
+     once, through each device that answers, scheduling stopped, the trip reported, an
+     explicit restart required, and the last state readable through `get/2`. Off is the
+     safe state of a plant wired to de-energise to trip, and holding leaves machines
+     running with nothing watching them; OpenPLC v3 zeroes every output when its runtime
+     stops (`disableOutputs(); updateBuffersOut();`, `main.cpp` and `utils.cpp` at
+     `b5d4135`), and IEC asks the system to *"initiate appropriate system- or
+     user-defined error handling procedures"* (Ed 2 §1.5.1 d) 4)), of which this is one.
+     Five refinements, as the design gave them: "once" is through each device's write, so
+     a hung device is left to its own state on losing its master; the resource is not
+     zeroed, so `get/2` reads the last round computed, outputs the plant never received
+     among them where the round tripped before its write, which `status/1` and README
+     say; one path serves a trip, a device fault, a stop and the runner's death; a
+     restart is cold or warm, never a resume, the clock not counting the stopped time;
+     and no output has a fault value of its own, a fan that should keep running being a
+     later item if a plant needs one. *(Taken 2026-10-17.)*
+114. **A device that fails or is lost (Milestone 4).** The drive's network cable comes
+     loose, or an input card stops answering.
+     - It is treated as the watchdog is: everything off, and wait for a restart;
+     - the controller carries on with the last values it read from that card for a short
+       grace time, a second say, then stops as in the first if the card is still silent:
+       a blip on the network does not stop the line, but during that second a press of
+       stop on that card is not seen;
+     - or it carries on with the last values for as long as it takes, and reports the
+       problem.
+
+     *Recommend the first.* **Adopted**: the controller cannot know whether someone
+     pressed stop, or the e-stop, on the card it can no longer hear, so it does not go on
+     driving the conveyor from what it last saw. An error returned, a raise, a throw or an
+     exit in an adapter, a value that does not fit its point, an address that is no
+     point's, no answer within the device's deadline and its process going down are each
+     an I/O fault, `{:io, device, cause}`, through decision 113's path. A grace time stays
+     a later option, for a plant on a flaky network. *(Taken 2026-10-17.)*
+115. **After a crash (Milestone 4).** The controller software itself crashes; whichever is
+     chosen, every output goes off on the way down.
+     - It stays stopped until someone starts it again, as after the watchdog;
+     - it starts again by itself straight away, from the beginning: the conveyor stays off
+       until someone presses start, but anything switched straight from a held switch,
+       a fan wired to a "fan on" switch, comes straight back on;
+     - or it starts again by itself, but waits with everything off until someone presses
+       restart on a screen.
+
+     *Recommend the first.* **Adopted**: `Logex.Runner`'s child spec is `restart:
+     :temporary`, so its supervisor does not start it again, and each device, trapping the
+     runner's exit, zeroes its outputs and closes. It is a trip's rule: nothing starts
+     again that no person asked to start. A host that wants a restart by itself may say so
+     in its own child spec, knowing that a cold start runs the program from its initial
+     values. *(Taken 2026-10-17.)*
+116. **A normal shutdown (Milestone 4).** Someone shuts the controller down normally, for
+     maintenance.
+     - Everything is switched off first, then it shuts down: the conveyor stops and the
+       lamp goes out;
+     - or the outputs are left as they were, the cards keeping whatever they were last
+       told or doing what they do when they lose contact.
+
+     *Recommend the first.* **Adopted**: `stop/2` writes 0 to every output once and
+     closes every device before it returns, as OpenPLC v3's runtime does, so a controller
+     that has shut down leaves no conveyor running behind it. The spike first left the
+     zeroing to the devices' own exit, and its `stop` returned while the panel still held
+     its contactor on. *(Taken 2026-10-17.)*
+117. **Forcing a signal for testing (Milestone 4).** A technician wants to check the "case
+     full" lamp without loading 12 boxes, so they make the controller see the photo-eye
+     as blocked and unblocked from a laptop, whatever the real eye says. Forcing an
+     output, telling the lamp to light whatever the program says, is the other kind.
+     - Forcing of inputs now: a forced input stays forced until it is taken off, even
+       across a restart, and the controller's status always lists what is forced; forcing
+       of outputs later, with the rest of forcing;
+     - forcing of inputs and outputs together, later;
+     - or no forcing at all, testing using a simulated card instead of the real one.
+
+     *Recommend the first.* **Adopted**: forcing an input only changes what the controller
+     reads, which the runner already supplies, merged over the device's values after the
+     input latch, as §5 places forcing, so it comes now and is not redone later.
+     `unforce/2` puts back the device's last value, which the runner keeps for each input
+     point; a force of a trigger is a change of it (decision 120); an output point, or a
+     value that does not fit, is the host's mistake. Output forcing waits for §5's forcing
+     in `cycle/3`. *(Taken 2026-10-17.)*
+118. **How a task's run is timed (Milestone 4),** following decision 110. One round runs
+     the conveyor's task, the fan's and the box counter, and the runner must tell how long
+     each took.
+     - The cycle in steps: `cycle/3` cut where each task's run ends, the steps internal to
+       `Logex.Runtime` as `edited/2` is, so that the runner reads its clock at the
+       boundary of each step; the steps composed are `cycle/3` exactly, which a test pins,
+       and the host contract does not change;
+     - or the whole cycle timed, and checked against the least watchdog of the tasks that
+       ran in it.
+
+     *Taken: the steps.* The second would trip the conveyor's 50 ms watchdog for a round
+     whose time went on the box counter, naming a task that was not slow. The core still
+     reads no clock: a step is a pure function of the resource, and only the runner times
+     it. *(Taken 2026-10-17.)*
+119. **How the watchdogs fit the outputs' refresh and each device's heartbeat (Milestone
+     4),** following decisions 110 and 111. The runner is stuck, by a bug or a machine
+     that has stopped giving it time, while the conveyor runs: its contactor must still go
+     off.
+     - The runner's own check, after each step against its task's watchdog and before the
+       round's outputs are written, in place of the design's one gap between two writes;
+       and a heartbeat in each device, which hears from the runner at least once a poll
+       period, between rounds, between two steps of a round and while the runner waits,
+       its refresh the outputs the device last had where nothing changed: a device that
+       hears nothing for its heartbeat time, the longest watchdog of any task the
+       configuration runs plus one poll period, writes 0 to every output once, latches and
+       tells the runner, which trips when it next runs, `{:watchdog, {:device, device,
+       time}}`;
+     - or the heartbeat at the sum of every task's watchdog, with no refresh between two
+       steps;
+     - or the design's gap check between two writes kept beside the watchdogs, at a time
+       of its own.
+
+     *Taken: the first.* No step may outlast the longest watchdog without tripping the
+     runner, and the runner looks for a refresh due only between steps, so a runner that
+     is well never misses a heartbeat, and one stuck anywhere, in a round, a request or a
+     bug, leaves every device that answers at 0 within that time. A device whose adapter
+     gives no answer within the same time is a fault (decision 114), so a device is given
+     as long to answer as the runner is to refresh it. The costs: the plant's longest
+     watchdog sets every device's heartbeat, so a fan task given two seconds leaves the
+     conveyor's contactor on for up to two seconds and a poll period when the runner is
+     stuck, though the conveyor's own watchdog still trips at 50 ms whenever the runner
+     runs; and a request the runner serves whole between rounds that takes longer than the
+     heartbeat time trips the plant, so accept's work, which grows with the programs, is
+     done in the caller's process. The sum is slower to zero, and a gap check of its own
+     is a second time for one rule. *(Taken 2026-10-17.)*
+120. **How reading and reporting mix in one plant (Milestone 4),** following decision 112.
+     The panel's card reports each button as it changes; the drive's cannot report.
+     - Every device is read every poll period, and one that reports passes each change on
+       as it comes, between reads, as the conventional input module sends its data at its
+       packet interval and on a change of state: *"You must specify an RPI regardless of
+       whether you enable COS. If a change does not occur within the RPI, the module sends
+       its data at the RPI"* (the tasks, programs and routines manual, p.42);
+     - or a device that reports is never read, only one that cannot being read.
+
+     *Taken: the first.* A report shortens the wait for a change, and the steady read puts
+     right a report that was lost and shows that the device still answers, so an input
+     card that stops answering is a fault (decision 114) whether or not it reports. Each
+     device's process does its own reading and takes its own reports, and sends the
+     runner what changed; the runner merges every device's changes into the next round's
+     inputs as the round starts, so every round sees one sample of every device, and a
+     change to any other input is merged to its latest value. A change of a trigger is
+     kept as itself: each makes a round of its own, in the order it came, so a press and
+     release of the e-stop between two rounds still runs its event task once, IEC's
+     *"upon each rising edge of the SINGLE input"* (Ed 2 §2.7.2 rule 1); and a trigger
+     that logic writes is read after each round, a change of it making a round at once,
+     the next cycle the runner makes of `Logex.Runtime`'s rule 1. A pulse shorter than the
+     poll period on a device that cannot report is not seen, as the conventional manual
+     warns of an input shorter than its task's scan (p.46). One poll period serves the
+     plant, a runner option (decision 121); one for each device, as the conventional
+     packet interval is each module's, is later, if a plant needs it. *(Taken
+     2026-10-17.)*
+121. **Where the share and the poll period are set (Milestone 4).** The plant runs on one
+     machine in the lab and on another on the line.
+     - Options of the runner, in Elixir, where its devices are bound: `overhead:`, the
+       share in percent, 20 unless set, 10 to 90, the span of the conventional table
+       (p.32), and `poll:`, in milliseconds, 10 unless set;
+     - or lines of the configuration file, each a new word with its survey.
+
+     *Taken: the runner's options.* Each says how this machine and its devices run the
+     plant, not what the plant does: a configuration's text is the plant's logic and its
+     schedule, and replays exactly on any machine, as §4.5 keeps a device's address and
+     options in Elixir. A task's watchdog is on its line (decision 110), since it is the
+     task's own. The conventional share's own range is **unverified** beyond its table.
+     *(Taken 2026-10-17.)*
 ---
 
 ## 8. Sources, and what is unverified
@@ -4257,6 +4982,13 @@ the record answers one, it says which part of it does.
 - The general instructions reference, Sept 2025: the TASK object for GSV/SSV, TON
   (its TIMER structure and prescan), ONS, and a CPS example.
 - The ladder-diagram programming manual, July 2022, ch.1.
+- For Milestone 4's design (§4.11, decisions 108–121): the tasks, programs and routines
+  manual, Sept 2025, p.8 (the continuous task, one at most, restarting at once), p.13 (its
+  lowest priority, and the system overhead time slice), pp.31–33 (the time slice, its
+  table and its default), p.34 (each task's watchdog) and pp.37–46 (event tasks, the change
+  of state and the requested packet interval); and the design considerations reference,
+  Sept 2025, pp.19, 24 and 34–36 (the newest controllers run communications on a core of
+  their own, with no time slice).
 - For Milestone 2's design: the add-on instructions manual, Sept 2025, p.21 (instructions
   nested up to 16 levels deep, decision 32; the design considerations reference says the
   same on p.15), p.23 (local tags not reachable from outside, decision 33) and p.79 (a
@@ -4273,7 +5005,8 @@ numbers").**
 - MatIEC `lib/timer.txt`, `TON`, at `7680ed8`.
 - OpenPLC v3 `webserver/core/main.cpp` (the cycle), `webserver/core/ladder.h` (the
   hardware layer) and `utils/glue_generator_src/glue_generator.cpp` (`updateTime`), at
-  `b5d4135`.
+  `b5d4135`; for Milestone 4's design, `webserver/core/utils.cpp` too (`sleep_until`, an
+  absolute `clock_nanosleep`, and `disableOutputs`).
 - Beremiz `editors/ResourceEditor.py`, the task editor, whose Interval cell is editable
   only when a task's triggering is cyclic and whose Single cell only when it is an
   interrupt (decision 39), at `5e3a749`.
@@ -4301,11 +5034,16 @@ numbers").**
 **Unverified or from memory. Do not repeat these as fact.**
 - **From memory:**
   - that the conventional family's continuous task runs at the lowest priority and is
-    preempted by periodic and event tasks;
+    preempted by periodic and event tasks *(read since, 2026-10-17: the tasks, programs
+    and routines manual, p.13)*;
   - that a lower priority number is higher there;
   - that an unscheduled program does not run;
   - that its logic may `move` into a timer's `.pre` and `.acc`;
-  - what its controller does to outputs on a watchdog fault.
+  - what its controller does to outputs on a watchdog fault *(still: the tasks, programs
+    and routines manual says only that a major fault occurs and that, depending on the
+    controller's fault handler, the controller might shut down, p.34)*.
+- **Not tried:** what a machine that suspends does to the runner's monotonic clock and its
+  devices' heartbeats (§4.11, "Risks").
 - **Inferred, not stated by the sources:**
   - that the conventional family has no program type/instance split, inferred from *"A
     program can be scheduled under one task only"*;

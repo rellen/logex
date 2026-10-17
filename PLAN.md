@@ -22,7 +22,8 @@ first item, M2-1, landed the same day, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026
 and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed and landed on
 2026-10-13 (§3), and Milestone 3 was designed and decided on 2026-10-14, its first four
 items, M3-1, M3-2, M3-3 and M3-4, landing the same day and its last, M3-5, on 2026-10-15,
-so Milestone 3 is done (§3, "Milestone 3").
+so Milestone 3 is done (§3, "Milestone 3"). Milestone 4, the wall-clock runner, was
+designed and decided on 2026-10-17 (§3, "Milestone 4").
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -1983,7 +1984,7 @@ counted and reported; time injected in milliseconds, never read from a clock; re
 words scoped by file kind. Once a wall-clock runner exists, a watchdog fault is to stop
 scheduling, zero the output image once, report, and require an explicit restart: the
 recommended choice, confirmed when the runner is designed (`docs/organisation.md` §7,
-decision 14). *(Since 2026-10-02 a priority is 0 to 65535, decision 37, and an event
+decision 14). *(Confirmed 2026-10-17 by decision 113, Milestone 4's design.)* *(Since 2026-10-02 a priority is 0 to 65535, decision 37, and an event
 task's due time, for the tie-break, is the cycle's `now`.)*
 
 **Milestone 2 is done when** a configuration file on disk instantiates one `.ld` program
@@ -2862,6 +2863,187 @@ eye across the switch counted once, and the run-on in progress at the switch end
 ms after the motor stopped. "The Done-when tests" are read as M3-1's to M3-5's in
 `end_to_end_test.exs`, beside each item's own test file.)*
 
+### Milestone 4 — the wall-clock runner
+
+**Designed and decided 2026-10-17** (`docs/organisation.md` §4.11 and §7, decisions
+108–121; "decision N" in this section is that §7's). §8's second domain gap: a runner that
+runs a configuration's resource on the real clock, through device adapters, with a
+watchdog, the one piece of logex that reads a clock. A design pass on `d3931bd` designed
+it and built a throwaway spike of every piece, on the branch `backup/runner-design`
+(`spike-runner/`), never landed. The maintainer changed three of its answers: rounds run
+back to back while untimed programs exist, a share of the time, 20% unless set, kept for
+the runner's own work, as IEC's rule 4 and the conventional continuous task with its
+system overhead time slice (decision 108), not on a steady beat; a watchdog is 500 ms
+unless set (109), not required; and each task has its own, on its line (110), not one for
+the controller. Two the maintainer added, outside the questions put: a configuration may
+declare its one continuous task, `task main continuous watchdog 200` (111); and a device
+may report its inputs' changes, an event task whose trigger changed running at once
+between rounds, a device that cannot report read every poll period, 10 ms unless set
+(112). The rest the maintainer took as recommended: a
+watchdog trip zeroes every output once, stops, reports and waits for a restart, the last
+state readable, confirming decision 14 (113); a failing device trips (114); a crashed
+runner stays down (115); a normal stop zeroes every output first (116); and input forcing
+comes now, kept across a restart and listed in the status (117). Decisions 118–121 are the
+record's routine choices where the answers left one open: the cycle in steps, so that the
+runner times each task's run (118); each device's heartbeat at the longest watchdog plus a
+poll period, the runner refreshing every device at least once a poll period (119); every
+device read every poll period, a reporting one passing its changes on between reads, and
+each change of a trigger its own round (120); and the share and the poll period options of
+the runner, not words of the configuration file (121).
+
+Each item lands as a gated series, each commit gated alone by `mix format
+--check-formatted`, `mix compile --force --warnings-as-errors` in both environments and
+`mix test --warnings-as-errors`, judged by exit code on Elixir 1.20.4, with its mutation
+table in its message, every rule it adds reverted alone in a copy of its commit and the
+suite judged by its exit code, every survivor given a test. Throughout:
+- **`Logex.Runtime` stays pure** and never reads a clock; nothing compiles to BEAM; a host
+  mistake raises an `ArgumentError` whose message a test pins; and each new public module
+  joins `runtime_test.exs`'s exact-surface pin.
+- **Every rule is tested on the manual clock.** A test on the real clock asserts liveness
+  only, short, with bounds far from what load can reach, since CI shares its cores and
+  CONTRIBUTING.md forbids skipping or quarantining a test.
+- **Growth is tested in reductions**: a round's work linear in the points and the tasks,
+  `start_link/1`'s checks linear in the devices and points.
+- **A configuration file's new words** (M4-2) are surveyed first, and carried through the
+  reader, the printer, the round trip, its totality and growth tests,
+  `configuration_text_test.exs` and `naming_test.exs`.
+
+**The order:** this design record, then M4-1 to M4-7. M4-1 first, since it needs nothing;
+M4-2 next, the configuration's words the runner reads; M4-3 the runner on them; M4-4 its
+watchdogs and faults; M4-5 its edits and forcing; M4-6 the contract walk over all of it;
+and M4-7 the documents.
+
+- **M4-1 · The clock, the I/O contract and the simulated device.**
+  `Logex.Runner.Clock`, the behaviour a clock implements, `now_ms/1`, `wake_at/4` and
+  `cancel/2`, with two clocks: `Logex.Runner.Clock.Monotonic`, `System.monotonic_time/1`
+  in milliseconds and `Process.send_after/4` to an absolute time; and
+  `Logex.Runner.Clock.Manual`, a process a test moves, its `advance/2` delivering each
+  timer due on the way in time order, ties in the order they were set, and returning once
+  each receiver has handled its message, by a call to the receiver from the process that
+  sent it, and its `pass/2` moving time inside a step and delivering nothing.
+  `Logex.IO`, the adapter behaviour, `init/3`, `read/1`, `write/2`, and the optional
+  `report/2` and `close/1`, each failing by returning `{:error, reason, state}` rather than
+  raising, with `%Logex.IO.Point{}`, a point's name, direction, address and type.
+  `Logex.IO.Sim`, an in-memory device in a process of its own: its inputs set, its outputs
+  and every write recorded, its reads counted, its changes reported to the device that
+  opened it where it was started to, and one failure acted out on the call it names: an
+  error, a raise, a throw, an exit, a hang, a delay on the manual clock, or a value of the
+  test's choosing. And the grouping of a configuration's located points by device,
+  `Logex.IO.points/1`, with `Logex.IO.bind!/2`, a host's bindings checked against it,
+  every mistake at once, as `start_link/1` will check them. *Done when* the manual clock
+  delivers timers in time order, ties in the order they were set, a timer set while one is
+  handled within the same advance, and returns from `advance/2` only once each receiver
+  has handled its message, by construction; the monotonic clock wakes a process no sooner
+  than its time, live; `Logex.IO.Sim` reads, writes, records every write, reports each
+  change to the device that opened it and acts out each failure; and §4.4's plant's
+  points, from files on disk, group as `panel` with eight inputs and four outputs and
+  `drive` with two outputs, each binding mistake raised with its pinned message. Its
+  landing order:
+  1. the clock;
+  2. the behaviour and the simulated device;
+  3. the grouping, with its host mistakes pinned;
+  4. the documents: CLAUDE.md's Key Files and this status.
+- **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
+  stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
+  `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line
+  takes `watchdog <ms>` after its priority, 1 to 2147483647 ms, 500 unless set (decisions
+  109 and 110); one line may declare the continuous task, `task main continuous`, with a
+  watchdog or none and no interval, single or priority, a second refused (decision 111).
+  `Logex.Configuration.Task` gains `watchdog` and `continuous`, `name` alone enforced,
+  since a continuous task has no priority, and `check/1` says what a line can say, from
+  Elixir data as from text, a task with no priority still shown one of its own kind. A
+  program with no `with` runs in the continuous task, and `with main` means the same
+  (decision 111). In the core, a continuous task's instances run with the task-less ones,
+  last, once a cycle, reported under its name; `next_due_in/1` counts it not; and
+  `overlaps/1` lists it at 0, as an event-only task. `Logex.Configuration.Edit` refuses the
+  line added or removed while running, as any task, moves nothing for `with main` added or
+  taken away, and settles a watchdog's rule across an edit, with its report if one may
+  change. *Done when* §4.4's plant, every task line with a watchdog and a box counter in
+  its continuous task, `task main continuous watchdog 200` and `program boxes counter`,
+  reads, prints back exactly, compiles with no warning and cycles as before, the box
+  counter's runs reported under `main`; each refusal is pinned as a whole list from source
+  and from data; the round trip, its totality and its growth hold with the new words; and
+  an online edit that adds `with main` moves nothing.
+- **M4-3 · The runner: start, rounds, devices, stop, read, subscribe.** *Done when* §4.4's
+  plant with M4-2's box counter, loaded from files on disk through
+  `Logex.Configuration.compile_file/1`, runs through `Logex.Runner` on the manual clock and
+  two simulated devices, the panel reporting its changes and the drive only read, over a
+  seeded sequence of presses and waits, and every round's outputs, events and `get/2`
+  values equal those of `Logex.Runtime.cycle/3` called directly with the same
+  `elapsed_ms` and inputs, an oracle that knows nothing of the runner. The run must also:
+  - repeat exactly from fresh processes;
+  - run its first round at once after start;
+  - run rounds back to back while the box counter exists, the runner's own work served
+    within its share, and with the box counter taken out, round only at due times and at
+    each change of `estop`, a press and release between two due times running `trip`
+    once, at once;
+  - keep 100,000 periodic rounds on their grid with no drift;
+  - leave every output at 0, written once, when stopped (decision 116);
+  - raise every host mistake of §4.11, with its pinned message, in the caller, with the
+    runner still alive.
+
+  A real-clock test runs the plant for 2 s and asserts liveness and an orderly stop. Its
+  landing order:
+  1. the cycle in steps (decision 118), internal to `Logex.Runtime`, its composition
+     pinned against `cycle/3` over seeded configurations;
+  2. `start_link/1` and its host mistakes, relayed calls among them;
+  3. the device processes: reading every poll period, reports, writes and refreshes
+     (decisions 119 and 120);
+  4. the rounds (decision 108), back to back with the share, between due times otherwise,
+     each change of a trigger its own round;
+  5. stop, status, `get/2` and subscriptions;
+  6. the oracle test from files on disk.
+- **M4-4 · The watchdogs and the fault path.** *Done when* each of these is a test on the
+  manual clock, a hung device's deadline in real time and short:
+  - a timed task whose run outlasts its watchdog trips before its round's write, naming
+    it, and so does a round that outlasts the continuous task's (decisions 110 and 111);
+  - a stuck runner's devices zero themselves within their heartbeat time (decision 119);
+  - each kind of I/O fault trips, naming its device (decision 114);
+  - a killed runner's devices zero and close (decision 115);
+  - a hung device is killed, and opened again at a restart.
+
+  In each, every device that answers is written 0 exactly once and nothing after; the
+  resource is kept for `get/2`; and `restart/2`, cold and warm, resumes with the first
+  round at once and the clock not counting the stopped time (decision 113). The manual
+  clock gains what it needs to make time pass inside a task's run, where M4-1's `pass/2`
+  cannot reach it. Its landing order:
+  1. the trip and restart;
+  2. each task's watchdog and the continuous task's per round;
+  3. the devices' heartbeat;
+  4. the I/O faults;
+  5. the runner's death.
+- **M4-5 · Edits and forcing through the runner.** *Done when* §4.4's plant, edited while
+  it runs through `Logex.Runner`'s accept, test, untest, assemble and cancel, gives every
+  report and every round's outputs that the same steps give taken over the resource
+  directly; `slow` cut to 20 ms moves its next due time as decision 40 says, with no round
+  lost or added; accept's work is done in the caller's process (decision 119); and
+  forcing (decision 117) holds a forced input against its device and across a restart,
+  a forced trigger making a round, refuses an output point or a value that does not fit
+  in the caller, lists every force in the status, and on `unforce/2` puts back the
+  device's last value.
+- **M4-6 · The contract walk.** `api_contract_test.exs` gains a runner walk on the manual
+  clock: seeded configurations with and without untimed programs, simulated devices that
+  report and that do not, random waits and presses, injected faults, edits, forces and
+  restarts, checked against a model that calls `cycle/3` directly with the recorded times
+  and inputs, and a model of the watchdogs and the trip that knows nothing of the runner.
+  *Done when* its reach is asserted, every event kind and trip reason reached.
+- **M4-7 · The documents.** README's "Running a plant on the clock", with a real run, and
+  "What logex is not", plainly; CLAUDE.md's Key Files; `docs/organisation.md` §4.5's
+  adapter contract, §4.6's watchdog paragraph, §5's row and decision 14's annotation, as
+  landed; and this status.
+
+**Milestone 4 is done when** §4.4's plant, loaded from files on disk with a box counter in
+its continuous task, runs on the real clock through bound devices, its untimed programs
+back to back with the runner's share kept, each timed task on its grid as closely as the
+machine allows and every late period reported; a host test drives the same plant on a
+manual clock with simulated devices, one reporting its changes and one only read, and its
+outputs and events are exactly those `cycle/3` gives for the same times and inputs; with
+no untimed program the plant rounds only when a task is due or a trigger changes; a task
+that outlasts its watchdog, a device that fails, and a runner that is stopped, stuck or
+killed each leave every output that can still be written at 0, written once, and nothing
+runs again until the host restarts it; a forced input holds across a restart; and an
+online edit is stepped through the running runner between rounds.
+
 ---
 
 ## 4. Backlog
@@ -3465,7 +3647,7 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    passed, merging the input points that changed into a kept image, running the due
    tasks' instances by priority and returning every output point. A wall-clock runner,
    the only code that will read a clock, comes after Milestone 2 (`docs/organisation.md`
-   §5).
+   §5). *(Milestone 4, designed and decided 2026-10-17, §3: decisions 108–121.)*
 3. **A tag table with types.** Landed with M1-3.
 4. **Comparisons (`eq ne lt gt le ge` — IEC names, see `docs/naming.md`)** — high value,
    low cost. *Landed with M1-6, on dints.*
