@@ -1,0 +1,7 @@
+Finished in 60.6 seconds (59.6s async, 1.0s sync)
+
+Result: 1231 passed (8 doctests, 1223 tests)
+
+real	1m1.543s
+user	1m59.534s
+sys	0m12.894s

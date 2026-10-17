@@ -1,0 +1,40 @@
+== abs: 1000 cycles at 10 ms ==
+  wake lateness µs  min 122  p50 192  p90 278  p99 583  p99.9 3419  max 3419
+  early wakes (before deadline): 0
+  late > 1 ms: 4, > 2 ms: 3, > 5 ms: 0
+  wake-to-wake µs   min 6814  p50 9999  p90 10082  p99 10400  p99.9 13188  max 13188
+  elapsed_ms given  [{7, 1}, {8, 2}, {9, 1}, {10, 992}, {11, 1}, {12, 2}, {13, 1}]
+  cycle/3 cost µs   min 60  p50 112  p90 164  p99 240  p99.9 2165  max 2165
+  overlap periods reported: 0
+  logical clock at end: 10000 ms, wall: 10004 ms
+
+== rel: 1000 cycles at 10 ms ==
+  wake lateness µs  min 1516  p50 515233  p90 968169  p99 1058181  p99.9 1067201  max 1067201
+  early wakes (before deadline): 0
+  late > 1 ms: 1000, > 2 ms: 999, > 5 ms: 996
+  wake-to-wake µs   min 10541  p50 11000  p90 11060  p99 12942  p99.9 25381  max 25381
+  elapsed_ms given  [{11, 977}, {12, 13}, {13, 2}, {14, 1}, {15, 3}, {16, 1}, {18, 1}, {20, 1}, {25, 1}]
+  cycle/3 cost µs   min 52  p50 96  p90 153  p99 378  p99.9 3788  max 3788
+  overlap periods reported: 106
+  logical clock at end: 11067 ms, wall: 11071 ms
+
+== abs_gc: 1000 cycles at 10 ms ==
+  wake lateness µs  min 44  p50 228  p90 346  p99 839  p99.9 6500  max 6500
+  early wakes (before deadline): 0
+  late > 1 ms: 9, > 2 ms: 4, > 5 ms: 1
+  wake-to-wake µs   min 4339  p50 10000  p90 10111  p99 10590  p99.9 16267  max 16267
+  elapsed_ms given  [{4, 1}, {6, 1}, {8, 2}, {9, 5}, {10, 982}, {11, 5}, {12, 2}, {14, 1}, {16, 1}]
+  cycle/3 cost µs   min 65  p50 111  p90 204  p99 350  p99.9 1574  max 1574
+  overlap periods reported: 0
+  logical clock at end: 10000 ms, wall: 10008 ms
+
+== abs_high: 1000 cycles at 10 ms ==
+  wake lateness µs  min 106  p50 211  p90 260  p99 629  p99.9 7324  max 7324
+  early wakes (before deadline): 0
+  late > 1 ms: 7, > 2 ms: 1, > 5 ms: 1
+  wake-to-wake µs   min 2861  p50 10000  p90 10058  p99 10441  p99.9 17104  max 17104
+  elapsed_ms given  [{3, 1}, {9, 6}, {10, 986}, {11, 6}, {17, 1}]
+  cycle/3 cost µs   min 65  p50 92  p90 147  p99 192  p99.9 4706  max 4706
+  overlap periods reported: 0
+  logical clock at end: 10000 ms, wall: 10006 ms
+
