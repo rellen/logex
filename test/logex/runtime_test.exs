@@ -1487,6 +1487,42 @@ defmodule Logex.RuntimeTest do
                terminate: 2,
                wake_at: 4
              ]
+
+      # M4-1: the adapter behaviour, with a point as plain data, and the simulated device,
+      # an adapter whose device is a GenServer of its own.
+      assert Logex.IO.__info__(:functions) == []
+
+      assert Enum.sort(Logex.IO.behaviour_info(:callbacks)) ==
+               [close: 1, init: 3, read: 1, report: 2, write: 2]
+
+      assert Enum.sort(Map.keys(Logex.IO.Point.__struct__())) ==
+               [:__struct__, :address, :direction, :name, :type]
+
+      assert Logex.IO.Point.__info__(:functions) == [__struct__: 0, __struct__: 1]
+
+      assert Enum.sort(Logex.IO.Sim.__info__(:functions)) == [
+               child_spec: 1,
+               close: 1,
+               closed?: 1,
+               code_change: 3,
+               fail: 3,
+               handle_call: 3,
+               handle_cast: 2,
+               handle_info: 2,
+               init: 1,
+               init: 3,
+               outputs: 1,
+               read: 1,
+               reads: 1,
+               report: 2,
+               set: 2,
+               set: 3,
+               start_link: 0,
+               start_link: 1,
+               terminate: 2,
+               write: 2,
+               writes: 1
+             ]
     end
   end
 end
