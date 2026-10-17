@@ -1451,6 +1451,42 @@ defmodule Logex.RuntimeTest do
                within: 2,
                writable: 1
              ]
+
+      # M4-1: the clock the wall-clock runner reads, a behaviour whose three checks, hidden,
+      # give both clocks one message a rule, and its two clocks, the manual one a GenServer.
+      assert Enum.sort(Logex.Runner.Clock.__info__(:functions)) ==
+               [receiver!: 1, time!: 1, timer!: 1]
+
+      assert Enum.sort(Logex.Runner.Clock.behaviour_info(:callbacks)) ==
+               [cancel: 2, now_ms: 1, wake_at: 4]
+
+      {:docs_v1, _, _, _, _, _, clock_docs} = Code.fetch_docs(Logex.Runner.Clock)
+
+      assert Enum.sort(
+               for {{:function, name, arity}, _, _, :hidden, _} <- clock_docs, do: {name, arity}
+             ) ==
+               [receiver!: 1, time!: 1, timer!: 1]
+
+      assert Enum.sort(Logex.Runner.Clock.Monotonic.__info__(:functions)) ==
+               [cancel: 2, now_ms: 1, wake_at: 4]
+
+      assert Enum.sort(Logex.Runner.Clock.Manual.__info__(:functions)) == [
+               advance: 2,
+               cancel: 2,
+               child_spec: 1,
+               code_change: 3,
+               handle_call: 3,
+               handle_cast: 2,
+               handle_info: 2,
+               init: 1,
+               now_ms: 1,
+               pass: 2,
+               pending: 1,
+               start_link: 0,
+               start_link: 1,
+               terminate: 2,
+               wake_at: 4
+             ]
     end
   end
 end
