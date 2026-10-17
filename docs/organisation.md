@@ -18,8 +18,9 @@ decisions 55–66). Milestone 3, the missing instruction set, was decided on 202
 (decisions 67–92) and landed by 2026-10-15: IEC's counters, the other timers, integer
 arithmetic, the pulse coils and the forward jump, M3-1 to M3-5 (decisions 93–107). So
 Milestones 1 to 3, OE-1 and OE-2 have landed. Milestone 4, the wall-clock runner, was
-designed and decided on 2026-10-17 (§4.11, decisions 108–121), and none of it has
-landed.** On 2026-09-28 the maintainer adopted the
+designed and decided on 2026-10-17 (§4.11, decisions 108–121), and its first item,
+M4-1, the clocks, the adapter behaviour and the simulated device, landed the same
+day.** On 2026-09-28 the maintainer adopted the
 direction in §1 (IEC's software model, in logex's dialect: the hierarchy, task-style
 execution and I/O mapping), deferred routines, and took decisions 1–14 in §7 as
 recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1
@@ -2472,7 +2473,9 @@ missed as any late periodic task does.)*
 
 ### 4.11 Milestone 4's design: the wall-clock runner (decided 2026-10-17)
 
-**Designed and decided 2026-10-17; nothing has landed.** A design pass on `d3931bd`, on
+**Designed and decided 2026-10-17; M4-1 landed the same day** (`PLAN.md` M4-1): the
+clocks, `Logex.IO` with `%Logex.IO.Point{}`, `points/1` and `bind!/2`, and
+`Logex.IO.Sim`. A design pass on `d3931bd`, on
 Elixir 1.20.4 / OTP 28 on a four-core Linux container, answered §5's "Wall-clock runner,
 `Logex.IO` adapters, watchdog", §4.5's adapter sketch, §4.6's "the watchdog belongs to the
 wall-clock runner", §4.10's two notes to revisit with the runner and decision 14's "decide
@@ -2765,6 +2768,11 @@ spike's clock relied on. What a receiver sends others while it handles one is it
 finish, as a call finishes, before it returns. A timer set while one is handled is
 delivered in the same `advance/2` where it falls inside it. Time that passes inside a step,
 as a slow device's, is `pass/2`, which delivers nothing until the next `advance/2`.
+*(Landed with M4-1, 2026-10-17, as this paragraph says. The monotonic clock brings a time
+already past to now, since the VM refuses an absolute time from before it started, which
+its liveness test found; and a simulated device's `set/3` reports from the caller, which
+then waits through `:sys` for the device to handle the report, so that the sim's own
+process never waits on a device, which may be calling it.)*
 
 **What it can promise**, to be said plainly in README: exact replay, since the runner adds
 nothing to the logic and a cycle is a function of its arguments, so a recorded run replays

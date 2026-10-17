@@ -2943,6 +2943,29 @@ and M4-7 the documents.
   2. the behaviour and the simulated device;
   3. the grouping, with its host mistakes pinned;
   4. the documents: CLAUDE.md's Key Files and this status.
+
+  **Status: DONE — landed 2026-10-17**, as the four commits of its landing order, after
+  the design record: (1) the clock, `587ac41`; (2) the behaviour and the simulated device,
+  `29c23c5`; (3) the grouping, `5d09f89`; (4) the documents, the commit after it. 1284 tests
+  pass on Elixir 1.20.4 (8 of them doctests), up from 1231. Each of (1) to (3) records its
+  mutation table, every rule it adds reverted alone in a worktree of its commit and the
+  full suite judged by its exit code: (1) 31 rules, 30 red and one survivor, a timer set
+  relative to now rather than absolute, which fires at the same time but for the
+  microseconds between the read and the call, kept on that argument alone; (2) 55, all
+  red; (3) 28, all red. `Logex.Runtime` is unchanged.
+
+  Found while landing, each in its commit: the VM refuses an absolute timer from before it
+  started, so the monotonic clock brings a time already past to now, as the behaviour says
+  a past time is sent at once; `{:ok, %{}, ^state} =` in an assertion matches any map,
+  which let a mutant through, and the tests compare values whole; and a wait shorter than
+  its default is caught by slow receivers only while the machine keeps up, so each default
+  wait is pinned by a test that waits it out. Chosen while landing, beyond the design: the
+  simulated device's `set/3` reports from the caller, not from the sim's own process, so
+  that the sim never waits on a device that may be calling it, by construction rather
+  than for a deadlock seen; the reporting callback is `report/2`, not `handle_info/2`, so
+  that an adapter that is also a GenServer meets no clash; the manual clock's `wait:` and
+  `pending/1`, the simulated device's `wait:` and `reads/1`; and `bind!/2`'s order of
+  mistakes, a key that is no device's name first.
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
   `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line
