@@ -1488,9 +1488,10 @@ defmodule Logex.RuntimeTest do
                wake_at: 4
              ]
 
-      # M4-1: the adapter behaviour, with a point as plain data, and the simulated device,
-      # an adapter whose device is a GenServer of its own.
-      assert Logex.IO.__info__(:functions) == []
+      # M4-1: the adapter behaviour, with a point as plain data, a configuration's points
+      # by device and a host's bindings checked against them, and the simulated device, an
+      # adapter whose device is a GenServer of its own.
+      assert Enum.sort(Logex.IO.__info__(:functions)) == [bind!: 2, points: 1]
 
       assert Enum.sort(Logex.IO.behaviour_info(:callbacks)) ==
                [close: 1, init: 3, read: 1, report: 2, write: 2]

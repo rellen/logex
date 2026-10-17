@@ -18,7 +18,7 @@ defmodule Logex.IOTest do
   defmodule Device do
     use GenServer
 
-    def start(opts, slow \\ nil), do: GenServer.start(__MODULE__, {opts, slow})
+    def start(opts, slow \\ nil), do: GenServer.start_link(__MODULE__, {opts, slow})
     def read(pid), do: GenServer.call(pid, :read)
     def reported(pid), do: GenServer.call(pid, :reported)
 
@@ -462,6 +462,366 @@ defmodule Logex.IOTest do
                        "%Logex.IO.Point{}, got: #{inspect(points)}",
                      fn -> Sim.init("panel", opaque(points), sim: sim) end
       end
+    end
+  end
+
+  # §4.4's plant, cut from docs/organisation.md with §4.3's motor and seal-in block, as
+  # config_edit_test.exs cuts it.
+  defp document, do: File.read!("docs/organisation.md")
+
+  defp cut(after_text) do
+    [_before, rest] = String.split(document(), after_text, parts: 2)
+    [_before, block] = String.split(rest, "```\n", parts: 2)
+    [text, _after] = String.split(block, "```", parts: 2)
+    text
+  end
+
+  defp plant_text do
+    [_before, rest] = String.split(document(), "```\n// plant.", parts: 2)
+    [plant, _after] = String.split("// plant." <> rest, "```", parts: 2)
+    plant
+  end
+
+  @snapshot_ld """
+  var_input a bool
+  var_input b bool
+  var_output a_was bool
+  var_output b_was bool
+
+  xic a ote a_was
+  xic b ote b_was
+  """
+
+  # The plant written to disk and loaded from there, as a host loads it.
+  defp plant_on_disk(dir) do
+    for {name, text} <- [
+          {"seal.ld", cut("**A function block type** is")},
+          {"motor.ld", cut("**The motor, rewritten to use it**")},
+          {"snapshot.ld", @snapshot_ld},
+          {"plant.logex", plant_text()}
+        ],
+        do: File.write!(Path.join(dir, name), text)
+
+    assert {:ok, plant} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+    plant
+  end
+
+  defp input(name, address, type \\ :bool),
+    do: %Point{name: name, direction: :input, address: address, type: type}
+
+  defp output(name, address, type \\ :bool),
+    do: %Point{name: name, direction: :output, address: address, type: type}
+
+  defp panel_points,
+    do: [
+      input("estop", [7]),
+      input("pb_start_1", [0]),
+      input("pb_stop_1", [1]),
+      input("tt_1", [2]),
+      input("pb_start_2", [3]),
+      input("pb_stop_2", [4]),
+      input("tt_2", [5]),
+      input("pb_reset", [6]),
+      output("k1", [0]),
+      output("k2", [1]),
+      output("lamp_1", [2]),
+      output("lamp_2", [3])
+    ]
+
+  defp drive_points, do: [output("sp_1", [0], :dint), output("sp_2", [1], :dint)]
+
+  @blink_ld """
+  var_output lamp bool
+
+  xio lamp ote lamp
+  """
+
+  # A small configuration from text, with one instance of a program that blinks its lamp.
+  defp configured(text) do
+    {:ok, blink} = Logex.compile(@blink_ld, name: "blink")
+    assert {:ok, config} = Logex.Configuration.compile("rack", text, %{"blink" => blink})
+    config
+  end
+
+  # A module that has an adapter's init/3 and read/1, and no write/2.
+  defmodule HalfAdapter do
+    def init(_device, _points, _opts), do: {:ok, nil}
+    def read(state), do: {:ok, %{}, state}
+  end
+
+  describe "a configuration's points, by device" do
+    @describetag :tmp_dir
+
+    test "§4.4's plant, from files on disk, groups as panel, eight inputs and four outputs, " <>
+           "and drive, two outputs, each in the configuration's order",
+         %{tmp_dir: dir} do
+      assert Logex.IO.points(plant_on_disk(dir)) == %{
+               "panel" => panel_points(),
+               "drive" => drive_points()
+             }
+
+      assert Enum.count(panel_points(), &(&1.direction == :input)) == 8
+      assert Enum.count(panel_points(), &(&1.direction == :output)) == 4
+    end
+
+    test "an address several fields deep, and no device where no global is located" do
+      config =
+        configured("""
+        var_global eye bool at rack.i.1.3
+        var_global hold bool
+        var_global lamp bool at rack.q.0
+        var_global speed dint at rack.i.0
+        program m blink
+          m.lamp lamp
+        """)
+
+      assert Logex.IO.points(config) == %{
+               "rack" => [input("eye", [1, 3]), output("lamp", [0]), input("speed", [0], :dint)]
+             }
+
+      assert Logex.IO.points(configured("var_global lamp bool\nprogram m blink\n  m.lamp lamp\n")) ==
+               %{}
+    end
+
+    test "a configuration Logex.Runtime.start/1 refuses raises in its words" do
+      {:ok, blink} = Logex.compile(@blink_ld, name: "blink")
+
+      config = %Logex.Configuration{
+        name: "rack",
+        programs: %{"blink" => blink},
+        instances: [%Logex.Configuration.Instance{name: "m", type: "nope"}]
+      }
+
+      message = assert_raise(ArgumentError, fn -> Logex.Runtime.start(config) end).message
+      assert message =~ "nope"
+      assert_raise ArgumentError, message, fn -> Logex.IO.points(config) end
+      assert_raise ArgumentError, message, fn -> Logex.IO.bind!(config, %{}) end
+
+      assert_raise ArgumentError, "expected a %Logex.Configuration{}, got: :nope", fn ->
+        Logex.IO.points(opaque(:nope))
+      end
+    end
+  end
+
+  # A configuration of `devices` devices, `dev1` and on, each with ten input points, built
+  # from Elixir data, and one instance of the blinking program.
+  defp many(devices, name \\ &"dev#{&1}") do
+    {:ok, blink} = Logex.compile(@blink_ld, name: "blink")
+
+    globals =
+      for device <- 1..devices,
+          address <- 0..9,
+          do: %Logex.Configuration.Global{
+            name: "p#{device}_#{address}",
+            type: :bool,
+            at: "#{name.(device)}.i.#{address}"
+          }
+
+    Logex.Configuration.new!(
+      name: "many",
+      programs: [blink],
+      globals: globals ++ [%Logex.Configuration.Global{name: "lamp", type: :bool}],
+      instances: [%Logex.Configuration.Instance{name: "m", type: "blink"}],
+      connections: [%Logex.Configuration.Connection{instance: "m", member: "lamp", to: "lamp"}]
+    )
+  end
+
+  describe "a host's bindings" do
+    @describetag :tmp_dir
+
+    test "give each device with its adapter, its options and its points, in device-name " <>
+           "order",
+         %{tmp_dir: dir} do
+      sim = sim()
+
+      assert Logex.IO.bind!(plant_on_disk(dir), %{"panel" => {Sim, sim: sim}, "drive" => Sim}) ==
+               [{"drive", Sim, [], drive_points()}, {"panel", Sim, [sim: sim], panel_points()}]
+
+      assert Logex.IO.bind!(
+               configured("var_global lamp bool\nprogram m blink\n  m.lamp lamp\n"),
+               %{}
+             ) ==
+               []
+    end
+
+    test "every mistake comes in one ArgumentError, a line each, a key that is no device's " <>
+           "name first, then in device-name order",
+         %{tmp_dir: dir} do
+      io = %{:panel => Sim, "panle" => Sim, "drive" => 42}
+
+      assert_raise ArgumentError,
+                   Enum.join(
+                     [
+                       "io names each device by a string, got: :panel — did you mean \"panel\"?",
+                       "the device `drive` is bound to 42: an adapter is a module that " <>
+                         "implements Logex.IO, or {module, options}",
+                       "no adapter is bound to the device `panel`, which `estop` (panel.i.7), " <>
+                         "`pb_start_1` (panel.i.0), `pb_stop_1` (panel.i.1), `tt_1` " <>
+                         "(panel.i.2), `pb_start_2` (panel.i.3), `pb_stop_2` (panel.i.4), " <>
+                         "`tt_2` (panel.i.5), `pb_reset` (panel.i.6), `k1` (panel.q.0), `k2` " <>
+                         "(panel.q.1), `lamp_1` (panel.q.2) and `lamp_2` (panel.q.3) are at",
+                       "the device `panle` is bound, but no point is at it — did you mean " <>
+                         "`panel`?"
+                     ],
+                     "\n"
+                   ),
+                   fn -> Logex.IO.bind!(plant_on_disk(dir), opaque(io)) end
+    end
+
+    test "a device no adapter is bound to is told the points at it" do
+      config =
+        configured("""
+        var_global lamp bool at drive.q.2
+        var_global sp_1 dint at drive.q.0
+        var_global sp_2 dint at drive.q.1.4
+        program m blink
+          m.lamp lamp
+        """)
+
+      assert_raise ArgumentError,
+                   "no adapter is bound to the device `drive`, which `lamp` (drive.q.2), `sp_1` " <>
+                     "(drive.q.0) and `sp_2` (drive.q.1.4) are at",
+                   fn -> Logex.IO.bind!(config, %{}) end
+
+      two =
+        configured("""
+        var_global lamp bool at drive.q.2
+        var_global sp_1 dint at drive.q.0
+        program m blink
+          m.lamp lamp
+        """)
+
+      assert_raise ArgumentError,
+                   "no adapter is bound to the device `drive`, which `lamp` (drive.q.2) and " <>
+                     "`sp_1` (drive.q.0) are at",
+                   fn -> Logex.IO.bind!(two, %{}) end
+
+      lone = configured("var_global lamp bool at drive.q.2\nprogram m blink\n  m.lamp lamp\n")
+
+      assert_raise ArgumentError,
+                   "no adapter is bound to the device `drive`, which `lamp` (drive.q.2) is at",
+                   fn -> Logex.IO.bind!(lone, %{}) end
+    end
+
+    test "more than 32 devices come back in name order" do
+      names = for device <- 1..40, do: "dev#{device}"
+      bound = Logex.IO.bind!(many(40), Map.new(names, &{&1, Sim}))
+      assert Enum.map(bound, &elem(&1, 0)) == Enum.sort(names)
+    end
+
+    test "more than 32 mistakes come in order: keys that are no names, then devices by name" do
+      names = Enum.sort(for device <- 1..40, do: "dev#{device}")
+      keys = for key <- 1..40, do: String.to_atom("key#{key}")
+
+      lines =
+        for(key <- Enum.sort(keys), do: "io names each device by a string, got: #{inspect(key)}") ++
+          for name <- names do
+            points =
+              for address <- 0..9,
+                  do: "`p#{String.trim_leading(name, "dev")}_#{address}` (#{name}.i.#{address})"
+
+            "no adapter is bound to the device `#{name}`, which " <>
+              Enum.join(Enum.drop(points, -1), ", ") <> " and #{List.last(points)} are at"
+          end
+
+      assert_raise ArgumentError, Enum.join(lines, "\n"), fn ->
+        Logex.IO.bind!(many(40), Map.new(keys, &{&1, Sim}))
+      end
+    end
+
+    test "among more than 32 devices the nearest is suggested, the first in name order " <>
+           "where several are as near" do
+      # `d0` is as near to each of `d00` to `d09`, and nearer than any other.
+      config = many(40, &"d#{String.pad_leading(Integer.to_string(&1 - 1), 2, "0")}")
+      io = Map.new(0..39, &{"d#{String.pad_leading(Integer.to_string(&1), 2, "0")}", Sim})
+
+      assert_raise ArgumentError,
+                   "the device `d0` is bound, but no point is at it — did you mean `d00`?",
+                   fn -> Logex.IO.bind!(config, Map.put(io, "d0", Sim)) end
+    end
+
+    test "a device bound that no point is at is told the nearest device, a case twin among " <>
+           "them, or none" do
+      config = configured("var_global lamp bool at panel.q.0\nprogram m blink\n  m.lamp lamp\n")
+
+      for {name, hint} <- [
+            {"panle", " — did you mean `panel`?"},
+            {"Panel", " — did you mean `panel`? (devices are case-sensitive)"},
+            {"drive", ""}
+          ] do
+        assert_raise ArgumentError,
+                     "the device `#{name}` is bound, but no point is at it#{hint}",
+                     fn -> Logex.IO.bind!(config, %{"panel" => Sim, name => Sim}) end
+      end
+    end
+
+    test "an adapter is a module that implements Logex.IO, alone or with a keyword list of " <>
+           "options" do
+      config = configured("var_global lamp bool at panel.q.0\nprogram m blink\n  m.lamp lamp\n")
+
+      for {binding, message} <- [
+            {{Sim, :fast}, "the device `panel`'s adapter options are a keyword list, got: :fast"},
+            {{Sim, [1]}, "the device `panel`'s adapter options are a keyword list, got: [1]"},
+            {Nope.Adapter, "the device `panel` is bound to `Nope.Adapter`, which is no module"},
+            {Enum,
+             "the device `panel` is bound to `Enum`, which does not implement Logex.IO: it " <>
+               "has no init/3, read/1 or write/2"},
+            {{HalfAdapter, []},
+             "the device `panel` is bound to `Logex.IOTest.HalfAdapter`, which does not " <>
+               "implement Logex.IO: it has no write/2"},
+            {"Logex.IO.Sim",
+             "the device `panel` is bound to \"Logex.IO.Sim\": an adapter is a module that " <>
+               "implements Logex.IO, or {module, options}"},
+            {{"Sim", []},
+             "the device `panel` is bound to {\"Sim\", []}: an adapter is a module that " <>
+               "implements Logex.IO, or {module, options}"}
+          ] do
+        assert_raise ArgumentError, message, fn ->
+          Logex.IO.bind!(config, %{"panel" => opaque(binding)})
+        end
+      end
+
+      assert_raise ArgumentError,
+                   "the device `panel`'s adapter options are a keyword list, got: :fast\n" <>
+                     "the device `panel` is bound to `Nope.Adapter`, which is no module",
+                   fn -> Logex.IO.bind!(config, %{"panel" => opaque({Nope.Adapter, :fast})}) end
+
+      for io <- [[panel: Sim], MapSet.new()] do
+        assert_raise ArgumentError,
+                     "io binds each device by its name to its adapter, a map such as " <>
+                       "%{\"panel\" => MyApp.PanelIO}, got: #{inspect(io)}",
+                     fn -> Logex.IO.bind!(config, opaque(io)) end
+      end
+
+      assert_raise ArgumentError, "io names each device by a string, got: 1", fn ->
+        Logex.IO.bind!(config, opaque(%{1 => Sim, "panel" => Sim}))
+      end
+    end
+  end
+
+  describe "the bindings' growth" do
+    # bind!/2's reductions, in a process of its own, the least of three counts.
+    defp bound(devices) do
+      config = many(devices)
+      io = Map.new(1..devices, &{"dev#{&1}", Sim})
+
+      for _ <- 1..3, reduce: :infinity do
+        least ->
+          task =
+            Task.async(fn ->
+              {:reductions, before} = Process.info(self(), :reductions)
+              Logex.IO.bind!(config, io)
+              {:reductions, after_} = Process.info(self(), :reductions)
+              after_ - before
+            end)
+
+          min(least, Task.await(task, :infinity))
+      end
+    end
+
+    test "checking a host's bindings stays linear in the devices and their points" do
+      ratio = bound(800) / bound(50)
+      assert ratio < 20, "16x the devices took #{Float.round(ratio, 1)}x the reductions"
     end
   end
 end

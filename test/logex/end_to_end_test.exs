@@ -4126,4 +4126,151 @@ defmodule Logex.EndToEndTest do
       assert Enum.map(diagnostics, &{&1.file, &1.line}) == [{broken, 5}, {broken, 6}, {broken, 7}]
     end
   end
+
+  describe "the clock, the I/O contract and the simulated device (M4-1)" do
+    alias Logex.IO.Sim
+    alias Logex.Runner.Clock.Manual
+
+    # A device's process, as the runner's will be: it opens its adapter with its points in
+    # its own process, reads it on the clock every 10 ms where it has input points, takes
+    # each report, writes what it is given, and keeps each input change it saw with the
+    # clock's time then.
+    defmodule PolledDevice do
+      use GenServer
+
+      def start(args), do: GenServer.start_link(__MODULE__, args)
+      def seen(pid), do: GenServer.call(pid, :seen)
+      def write(pid, values), do: GenServer.call(pid, {:write, values})
+
+      @impl true
+      def init({clock, adapter, device, points, opts}) do
+        {:ok, state} = adapter.init(device, points, opts)
+        inputs? = Enum.any?(points, &(&1.direction == :input))
+
+        s = %{
+          clock: clock,
+          adapter: adapter,
+          state: state,
+          image: %{},
+          seen: [],
+          inputs?: inputs?
+        }
+
+        {:ok, read(s)}
+      end
+
+      @impl true
+      def handle_call(:seen, _from, s), do: {:reply, Enum.reverse(s.seen), s}
+
+      def handle_call({:write, values}, _from, s) do
+        {:ok, state} = s.adapter.write(values, s.state)
+        {:reply, :ok, %{s | state: state}}
+      end
+
+      @impl true
+      def handle_info(:poll, s), do: {:noreply, read(s)}
+
+      def handle_info(message, s) do
+        {:ok, changed, state} = s.adapter.report(message, s.state)
+        {:noreply, changes(%{s | state: state}, changed, :report)}
+      end
+
+      # A read, where the device has inputs, and the next one set 10 ms on.
+      defp read(%{inputs?: false} = s), do: s
+
+      defp read(s) do
+        {:ok, values, state} = s.adapter.read(s.state)
+        Manual.wake_at(s.clock, self(), :poll, Manual.now_ms(s.clock) + 10)
+        changes(%{s | state: state}, values, :read)
+      end
+
+      defp changes(s, values, how) do
+        now = Manual.now_ms(s.clock)
+
+        new =
+          for {address, value} <- Enum.sort(values),
+              Map.get(s.image, address) != value,
+              do: {now, how, address, value}
+
+        %{s | image: Map.merge(s.image, values), seen: Enum.reverse(new) ++ s.seen}
+      end
+    end
+
+    # The plant's files, as the M2-6 and OE-2 tests above cut them.
+    @tag :tmp_dir
+    test "M4-1's Done-when: §4.4's plant from files on disk, its points grouped and bound " <>
+           "to two simulated devices, read and written on the manual clock",
+         %{tmp_dir: dir} do
+      files = [
+        {"seal.ld", cut("**A function block type** is")},
+        {"motor.ld", cut("**The motor, rewritten to use it**")},
+        {"snapshot.ld", @snapshot_ld},
+        {"plant.logex", whole_plant()}
+      ]
+
+      for {name, text} <- files, do: File.write!(Path.join(dir, name), text)
+      assert {:ok, plant} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      # The grouping: the panel's eight inputs and four outputs, the drive's two outputs.
+      assert [
+               {"drive", Sim, [sim: ^drive], drive_points},
+               {"panel", Sim, [sim: ^panel], panel_points}
+             ] =
+               Logex.IO.bind!(plant, %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}})
+
+      directions = &Enum.frequencies(Enum.map(&1, fn point -> point.direction end))
+      assert directions.(panel_points) == %{input: 8, output: 4}
+      assert directions.(drive_points) == %{output: 2}
+      assert Enum.map(drive_points, &{&1.name, &1.type}) == [{"sp_1", :dint}, {"sp_2", :dint}]
+
+      {:ok, panel_device} = PolledDevice.start({clock, Sim, "panel", panel_points, [sim: panel]})
+      {:ok, drive_device} = PolledDevice.start({clock, Sim, "drive", drive_points, [sim: drive]})
+
+      # The panel reports a press at once, before the clock moves; a release 15 ms on is
+      # reported at 15, between two reads; the drive, with no input, is never read.
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 15)
+      Sim.set(panel, [0], 0)
+      Manual.advance(clock, 15)
+
+      assert PolledDevice.seen(panel_device) ==
+               for(address <- 0..7, do: {0, :read, [address], 0}) ++
+                 [{0, :report, [0], 1}, {15, :report, [0], 0}]
+
+      # Read every 10 ms in time order, at 0, 10, 20 and 30; the poll timers each device set
+      # all delivered, none left behind.
+      assert Sim.reads(panel) == 4
+      assert Sim.reads(drive) == 0
+      assert Manual.pending(clock) == [{40, panel_device, :poll}]
+
+      # A held input is read on the next poll whatever reports: a sim that does not report.
+      {:ok, quiet} = Sim.start_link(clock: clock)
+      {:ok, quiet_device} = PolledDevice.start({clock, Sim, "panel", panel_points, [sim: quiet]})
+      Sim.set(quiet, [7], 1)
+      Manual.advance(clock, 10)
+      assert {40, :read, [7], 1} in PolledDevice.seen(quiet_device)
+
+      # Writes are recorded in order; a write the drive takes 25 ms over passes on the
+      # clock and delivers nothing, the reads due meanwhile coming at the next advance.
+      PolledDevice.write(panel_device, %{[0] => 1, [1] => 0, [2] => 1, [3] => 0})
+      Sim.fail(drive, :write, {:delay, 25})
+      PolledDevice.write(drive_device, %{[0] => 1200, [1] => 0})
+      assert Manual.now_ms(clock) == 65
+      assert Sim.reads(panel) == 5
+      Manual.advance(clock, 0)
+      assert Sim.reads(panel) == 6
+      PolledDevice.write(panel_device, %{[0] => 0, [1] => 0, [2] => 0, [3] => 0})
+
+      assert Sim.writes(panel) == [
+               %{[0] => 1, [1] => 0, [2] => 1, [3] => 0},
+               %{[0] => 0, [1] => 0, [2] => 0, [3] => 0}
+             ]
+
+      assert Sim.outputs(drive) == %{[0] => 1200, [1] => 0}
+    end
+  end
 end

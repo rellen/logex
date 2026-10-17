@@ -37,6 +37,10 @@ defmodule Logex.IO do
   device, or no answer in time, is an I/O fault all the same, which trips the runner
   (decision 114).
 
+  `points/1` groups a configuration's points by device, what each adapter's `init/3` is
+  given, and `bind!/2` checks a host's bindings against them, as `Logex.Runner` checks
+  them at start: every device a point is at bound, every device bound with a point at it.
+
   `Logex.IO.Sim` is the one adapter logex ships, an in-memory device for tests and demos;
   an adapter for real hardware needs libraries, and lives in the host's application or a
   package of its own.
@@ -69,4 +73,187 @@ defmodule Logex.IO do
   @callback close(state) :: :ok
 
   @optional_callbacks report: 2, close: 1
+
+  alias Logex.{Configuration, Declarations, Diagnostic}
+  alias Logex.Configuration.Global
+  alias Logex.IO.Point
+
+  # The callbacks an adapter cannot do without.
+  @required [init: 3, read: 1, write: 2]
+
+  @doc """
+  The located points of a configuration, grouped by device, `%{device =>
+  [%Logex.IO.Point{}]}`, each device's points in the order the configuration declares
+  them: what each device's adapter is opened with. A global with `at` is a point, its
+  device the location's first part and its address its integer fields
+  (`Logex.Configuration.location/1`). A configuration with no located global has no
+  device.
+
+  The configuration is checked as `Logex.Runtime.start/1` checks it, and one it refuses
+  raises `ArgumentError` in the same words.
+  """
+  def points(configuration) do
+    configured!(configuration)
+
+    configuration.globals
+    |> Enum.flat_map(&point/1)
+    |> Enum.group_by(fn {device, _point} -> device end, fn {_device, point} -> point end)
+  end
+
+  defp point(%Global{at: nil}), do: []
+
+  defp point(%Global{name: name, at: at, type: type}) do
+    {:ok, {device, io, address}} = Configuration.location(at)
+    [{device, %Point{name: name, direction: direction(io), address: address, type: type}}]
+  end
+
+  defp direction("i"), do: :input
+  defp direction("q"), do: :output
+
+  defp configured!(configuration), do: refused!(Configuration.check(configuration))
+
+  defp refused!([]), do: :ok
+
+  defp refused!(diagnostics),
+    do: raise(ArgumentError, Enum.map_join(diagnostics, "\n", &Diagnostic.format/1))
+
+  @doc """
+  A host's bindings, checked against a configuration's devices, as `Logex.Runner` checks
+  them at start: `io` maps each device's name to its adapter, a module that implements
+  this behaviour, or `{module, options}`, its options a keyword list. Gives each device
+  with its adapter, its options and its points, `{device, module, options, points}`, in
+  device-name order, so that the devices are opened in one order.
+
+  Every device the points name is bound, and every device bound has a point at it
+  (`docs/organisation.md` §4.5). A mistake is the host's, and every mistake comes in one
+  `ArgumentError`, a line each, in device-name order, a key that is not a device's name
+  first: a device no adapter is bound to, naming the points at it; a device bound that no
+  point is at, with a did-you-mean among the devices; a binding that is no adapter; an
+  adapter's options that are no keyword list; and an adapter that does not implement this
+  behaviour, naming the callbacks it lacks. The configuration is checked first, as
+  `points/1` checks it.
+  """
+  def bind!(configuration, io) do
+    devices = points(configuration)
+    io = io!(io)
+
+    problems =
+      Enum.flat_map(unnamed(io), &unnamed_key(&1, devices)) ++
+        Enum.flat_map(
+          names(devices, io),
+          &device(&1, Map.fetch(devices, &1), Map.fetch(io, &1), devices)
+        )
+
+    bound!(problems, devices, io)
+  end
+
+  defp io!(io) when is_map(io) and not is_struct(io), do: io
+
+  defp io!(other),
+    do:
+      raise(
+        ArgumentError,
+        "io binds each device by its name to its adapter, a map such as " <>
+          "%{\"panel\" => MyApp.PanelIO}, got: #{inspect(other)}"
+      )
+
+  defp unnamed(io), do: Enum.sort(for key <- Map.keys(io), not is_binary(key), do: key)
+
+  defp names(devices, io),
+    do:
+      Enum.sort(Enum.uniq(Map.keys(devices) ++ for(key <- Map.keys(io), is_binary(key), do: key)))
+
+  defp unnamed_key(key, devices),
+    do: ["io names each device by a string, got: #{inspect(key)}" <> named(key, devices)]
+
+  # An atom that spells a device's name is told the string.
+  defp named(key, devices) when is_atom(key),
+    do: spelled(Map.has_key?(devices, Atom.to_string(key)), Atom.to_string(key))
+
+  defp named(_key, _devices), do: ""
+
+  defp spelled(true, name), do: " — did you mean #{inspect(name)}?"
+  defp spelled(false, _name), do: ""
+
+  # A device's problems: its points and its binding, each found or not.
+  defp device(name, {:ok, points}, :error, _devices),
+    do: ["no adapter is bound to the device `#{name}`, which " <> at(name, points)]
+
+  defp device(name, :error, {:ok, _binding}, devices),
+    do: [
+      "the device `#{name}` is bound, but no point is at it" <>
+        Declarations.suggest(name, Enum.sort(Map.keys(devices)), & &1, "devices")
+    ]
+
+  defp device(name, {:ok, _points}, {:ok, binding}, _devices), do: adapter(name, binding)
+
+  # Each point named with its location, as the configuration spells it.
+  defp at(device, [%Point{} = point]), do: "#{shown(device, point)} is at"
+  defp at(device, points), do: listed(Enum.map(points, &shown(device, &1))) <> " are at"
+
+  defp shown(device, %Point{name: name, direction: direction, address: address}),
+    do:
+      "`#{name}` (#{Enum.join([device, letter(direction) | Enum.map(address, &Integer.to_string/1)], ".")})"
+
+  defp letter(:input), do: "i"
+  defp letter(:output), do: "q"
+
+  defp listed([one, two]), do: "#{one} and #{two}"
+  defp listed([one | rest]), do: one <> ", " <> listed(rest)
+
+  defp adapter(name, {module, opts}) when is_atom(module) and is_list(opts),
+    do: options(name, Keyword.keyword?(opts), opts) ++ implemented(name, module)
+
+  defp adapter(name, {module, opts}) when is_atom(module),
+    do: options(name, false, opts) ++ implemented(name, module)
+
+  defp adapter(name, module) when is_atom(module), do: implemented(name, module)
+
+  defp adapter(name, other),
+    do: [
+      "the device `#{name}` is bound to #{inspect(other)}: an adapter is a module that " <>
+        "implements Logex.IO, or {module, options}"
+    ]
+
+  defp options(_name, true, _opts), do: []
+
+  defp options(name, false, opts),
+    do: ["the device `#{name}`'s adapter options are a keyword list, got: #{inspect(opts)}"]
+
+  defp implemented(name, module), do: lacking(name, module, Code.ensure_loaded?(module))
+
+  defp lacking(name, module, false),
+    do: ["the device `#{name}` is bound to `#{inspect(module)}`, which is no module"]
+
+  defp lacking(name, module, true),
+    do:
+      missing(
+        name,
+        module,
+        for({f, a} <- @required, not function_exported?(module, f, a), do: "#{f}/#{a}")
+      )
+
+  defp missing(_name, _module, []), do: []
+
+  defp missing(name, module, callbacks),
+    do: [
+      "the device `#{name}` is bound to `#{inspect(module)}`, which does not implement " <>
+        "Logex.IO: it has no " <> either(callbacks)
+    ]
+
+  defp either([one]), do: one
+  defp either([one, two]), do: "#{one} or #{two}"
+  defp either([one | rest]), do: one <> ", " <> either(rest)
+
+  defp bound!([], devices, io),
+    do:
+      for(
+        name <- Enum.sort(Map.keys(devices)),
+        do: entry(name, Map.fetch!(io, name), Map.fetch!(devices, name))
+      )
+
+  defp bound!(problems, _devices, _io), do: raise(ArgumentError, Enum.join(problems, "\n"))
+
+  defp entry(name, {module, opts}, points), do: {name, module, opts, points}
+  defp entry(name, module, points), do: {name, module, [], points}
 end
