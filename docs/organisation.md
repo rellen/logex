@@ -19,11 +19,11 @@ decisions 55–66). Milestone 3, the missing instruction set, was decided on 202
 arithmetic, the pulse coils and the forward jump, M3-1 to M3-5 (decisions 93–107). So
 Milestones 1 to 3, OE-1 and OE-2 have landed. Milestone 4, the wall-clock runner, was
 designed and decided on 2026-10-17 (§4.11, decisions 108–121), and its first item,
-M4-1, the clocks, the adapter behaviour and the simulated device, landed the same
-day.** On 2026-09-28 the maintainer adopted the
-direction in §1 (IEC's software model, in logex's dialect: the hierarchy, task-style
-execution and I/O mapping), deferred routines, and took decisions 1–14 in §7 as
-recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1
+M4-1, the clocks, the adapter behaviour and the simulated device, landed the same day;
+its review's answers followed on 2026-10-18 (decisions 122–124).** On 2026-09-28 the
+maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
+hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
+1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1
 changes, and §3's Milestone 2 the §6.2 items. The syntax below is decided, but
 each new word still gets its `docs/naming.md` stanza before its code lands, and a stanza
 may still change a spelling. It was written against `37b7932`; the rationale stays here,
@@ -800,7 +800,7 @@ instructions ref., ONS, p.73). `first` is per instance.
 
 | IEC | logex | Why |
 |---|---|---|
-| A task-less program is re-scheduled *"as soon as its execution terminates"* (rule 4) | once per cycle | In zero logical time, rule 4 is an infinite loop. The runner paces cycles. MatIEC also runs unbound instances once per tick. *(Decided 2026-10-17 by decision 108: on the clock the runner makes rounds back to back while task-less programs exist, a share kept for its own work, so rule 4 holds there; a cycle still runs each once.)* |
+| A task-less program is re-scheduled *"as soon as its execution terminates"* (rule 4) | once per cycle | In zero logical time, rule 4 is an infinite loop. The runner paces cycles. MatIEC also runs unbound instances once per tick. *(Decided 2026-10-17 by decision 108: on the clock the runner makes rounds back to back while task-less programs exist, a share kept for its own work, so rule 4 holds there, to the clock's millisecond, one round a millisecond at most, decision 122; a cycle still runs each once.)* |
 | SINGLE and INTERVAL take any `data_source` (B.1.7) | SINGLE is a bool global. INTERVAL is an integer constant in ms | Simplest checkable form. It can widen later without breaking anything |
 | Execution takes time, and preemption is allowed | zero-time, non-preemptive scans | Determinism. The Table 50 timelines therefore cannot be reproduced |
 | Instance order within a task is not specified | declaration order | the conventional family's rule, quoted above |
@@ -2490,8 +2490,10 @@ is 500 ms unless set (109) and each task's own (110). Two more the maintainer as
 outside the questions put: a configuration may declare its continuous task (111), and a
 device may report its inputs' changes (112). The rest were taken as recommended
 (113–117). Decisions 118–121 are this record's routine choices, each with the
-alternative it passes over; the rest of this section is routine too, each choice with its
-reason. Where a rule changes decided text above, that text is annotated
+alternative it passes over, and so are 122–124, taken on 2026-10-18 after M4-1's review
+found the record silent on how rounds run on a clock that does not move, on a trigger
+logic writes and on where a test waits; the rest of this section is routine too, each
+choice with its reason. Where a rule changes decided text above, that text is annotated
 where it stands. `PLAN.md` §3's Milestone 4 gives the items and their order.
 
 **Words.** A *round* is a cycle the runner makes on the clock: it takes the inputs, runs
@@ -2538,21 +2540,37 @@ program with no `with` runs in it, and one may name it, `program boxes counter w
 meaning the same. Each word owes its `docs/naming.md` stanza before its code (CLAUDE.md,
 step 1), and a stanza may still change a spelling.
 
-**Rounds** (decision 108).
+**Rounds** (decisions 108 and 122).
 - While the configuration has untimed programs, rounds run back to back, in all the time
-  the timed tasks leave, as IEC's rule 4 and the conventional continuous task have it. A
-  share of the time, 20% unless set, is kept for the runner's own work: after each 4 ms
-  of rounds the runner serves its mailbox for up to 1 ms, and goes back to rounds at once
-  when it has nothing to serve, the conventional system overhead time slice's rule (the
-  tasks, programs and routines manual, pp.31–33). A request is served whole, so a slot can
-  run over by one request. One scheduler, and so one core, is kept busy.
-- A timed task runs between rounds when it is due, never inside one, since logex never
-  preempts (§4.6): a round is one `cycle/3`, its due timed tasks first and then the
-  untimed programs, each once. A due task waits for the round in progress to end, so a
-  long untimed round delays a due timed task; a delay of a whole interval or more is
-  counted and reported as an overlap, as any late period is.
+  the timed tasks leave, as IEC's rule 4 and the conventional continuous task have it, to
+  the clock's resolution (decision 122): a round starts at a millisecond of the runner's
+  clock, and the next starts at the millisecond after the one it began in, or at once
+  where it took a millisecond or more, a wake on the clock either way. So at most one
+  round runs a clock millisecond, on the monotonic clock and the manual one alike, and on
+  the manual clock `advance(clock, n)` runs exactly n rounds; up to one core is kept busy,
+  all of it only where rounds fill their milliseconds.
+- A share of the time, `overhead:`, 20% unless set, is kept for the runner's own work,
+  the conventional system overhead time slice's rule (the tasks, programs and routines
+  manual, pp.31–33): of the time the runner spends on the continuous task's programs and
+  on its own work while both have work, its own work gets the share, the timed tasks' runs
+  left out of both, as the conventional rule leaves out periodic and event tasks (p.13).
+  It is served in slots: after C ms of the continuous task's rounds the runner serves its
+  own work for up to S ms, C = max(1, round((100 − p)/p)) and S = max(1, round(p/(100 −
+  p))) for a share of p%, 9 and 1 at 10%, 4 and 1 at 20%, 1 and 1 at 50%, 1 and 9 at 90%,
+  the conventional table (the design considerations reference, p.35). A round counts from
+  its start to the next round's, a millisecond at least; a request is served whole, so a
+  slot can run over by one request; with nothing of its own to serve the runner goes back
+  to rounds at once (p.33); and in the rest of a millisecond a round did not fill it
+  serves its own work freely. On the manual clock a round fills no time unless something
+  passes time inside it, so own work waiting is served before the next round.
+- A due timed task runs at the start of the next round, its first step, never preempting
+  one, since logex never preempts (§4.6): a round is one `cycle/3`, its due timed tasks
+  first and then the untimed programs, each once. A task that falls due while a round is
+  in progress waits for it to end, so a long untimed round delays a due timed task; a
+  delay of a whole interval or more is counted and reported as an overlap, as any late
+  period is.
 - With no untimed program a round comes only when a timed task is due or an event's
-  trigger changes (decisions 112 and 120), and the share has no effect, as the
+  trigger changes (decisions 112, 120 and 123), and the share has no effect, as the
   conventional one has none without a continuous task (p.31): the runner serves its
   mailbox whenever it waits.
 - The first round runs at once after start and after a restart, whatever `next_due_in/1`
@@ -2575,12 +2593,18 @@ and a bound device no point is at, are the host's mistakes at start (§4.5).
 - **Reading.** Each device's process reads its adapter every poll period, 10 ms unless
   set, and an adapter that can report a change as it happens passes each one on between
   reads, as the conventional input module sends its data at its requested packet interval
-  and on a change of state (decision 120). The device sends the runner what changed; the
-  runner checks each value with `fits?/2` and its address against the device's input
-  points, and merges them into the next round's inputs, taken as the round starts
-  whatever the share, so every round sees one sample of every device. A change of an
-  event task's trigger makes a round at once where none is running, each change its own
-  round, and so does a change that logic writes, read after each round (decision 120).
+  and on a change of state (decision 120). The device passes what changed on to the
+  runner by a call (decision 124); the runner checks each value with `fits?/2` and its
+  address against the device's input points, and merges them into the next round's
+  inputs, taken as the round starts whatever the share, so every round sees one sample of
+  every device. A change of an event task's trigger that a device reports makes a round
+  at once where none is running, each change its own round, and the runner answers the
+  device once that round has run and its outputs are written, otherwise once the change
+  is merged; while it waits the device answers the runner's own requests to it, so that
+  neither waits on the other. A change of a trigger that logic writes, read after each
+  round, makes its round at the next clock millisecond, a wake as a back-to-back round
+  is, so that two event tasks that write each other's trigger cannot hold the runner in
+  rounds that take no time (decision 123).
 - **Writing.** After each round the runner gives each device whose outputs changed its
   output points, every one by address, and waits for its answer, which the device gives
   once its adapter has written them; a device with nothing new is refreshed with the
@@ -2783,6 +2807,13 @@ spike's clock relied on. What a receiver sends others while it handles one is it
 finish, as a call finishes, before it returns. A timer set while one is handled is
 delivered in the same `advance/2` where it falls inside it. Time that passes inside a step,
 as a slow device's, is `pass/2`, which delivers nothing until the next `advance/2`.
+`Logex.IO.Sim.set/3` returns once the device that opened the sim has handled its report,
+and the device passes a change on by a call the runner answers once the round it causes
+has run, so `set/3` returns after that round and its writes, by construction, and a test
+that presses the e-stop then reads the outputs `trip` wrote (decision 124); a change that
+makes no round is merged by the time `set/3` returns, and the next round, which the
+next `advance/2` brings, takes it. Rounds back to back come one a clock millisecond
+(decision 122), so a run repeats exactly from fresh processes.
 *(Landed with M4-1, 2026-10-17, as this paragraph says. The monotonic clock brings a time
 already past to now, since the VM refuses an absolute time from before it started, which
 its liveness test found; and a simulated device's `set/3` reports from the caller, which
@@ -2883,7 +2914,7 @@ VM do not, and the documents say so.
 | Preemption | not adopted | It gives up determinism, and nothing is observable in zero logical time (§4.6) |
 | FB-to-task association (`FB1 WITH SLOW_1`, Table 49 f6b) | deferred | Rarely needed. It splits an FB's execution from its program's scan |
 | Direct representation `%IX0.0` and raw addresses in connections | not adopted; the fallback for §4.5 | One declared, named I/O list instead |
-| Wall-clock runner, `Logex.IO` adapters, watchdog | target, after Milestone 2; **designed and decided 2026-10-17** (§4.11, decisions 108–121), `PLAN.md`'s Milestone 4 | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
+| Wall-clock runner, `Logex.IO` adapters, watchdog | target, after Milestone 2; **designed and decided 2026-10-17** (§4.11, decisions 108–121, and 122–124 after M4-1's review, 2026-10-18), `PLAN.md`'s Milestone 4 | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
 | Restarting one program instance inside a resource | not adopted (Milestone 2's design, §4.10) | `restart/2` restarts the whole resource (decision 38). Restarting one instance would be another rule for the input image and the tasks, for a need no decided text states |
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
 | VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117; output forcing waits for this.)* |
@@ -3130,8 +3161,10 @@ maintainer the same day, after M3-5's review. Decisions 108–121 were taken on
 2026-10-17 from Milestone 4's design (§4.11, and below): 108–117 the maintainer's
 answers, 108, 109 and 110 against their recommendations, 111 and 112 asked by the
 maintainer outside the questions put, the rest as recommended; and 118–121 the record's
-own routine choices. All one hundred and twenty-one are kept with their options so the
-reasons stay with them.
+own routine choices. Decisions 122–124 were taken on 2026-10-18, after M4-1's review
+(below), the record's own routine choices on what the review found the record left open.
+All one hundred and twenty-four are kept with their options so the reasons stay with
+them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -3642,7 +3675,10 @@ in the places below. Their routine answers are §4.10's rules under M2-4 and M2-
       turn holds at 0 for ever, a livelock in zero time.
 
     *Recommend periodic due times only, the loop restated.* A pending edge's hazard is a
-    runner's concern, and the runner is not designed. Adopted. *(Landed 2026-10-12.)*
+    runner's concern, and the runner is not designed. Adopted. *(Landed 2026-10-12. The
+    hazard closed on 2026-10-18 by decision 123: the runner makes a trigger logic writes
+    its round at the next clock millisecond, so two that raise each other's triggers
+    round once a millisecond and leave the runner serving its mailbox between.)*
 51. **A late host's edge cycle (M2-6).** For a task with `single` and `interval`, the
     periodic due times that came between the last cycle, whose sample was 0, and this
     one, whose sample is 1: skipped and not counted, as decision 39 reads by this cycle's
@@ -4705,7 +4741,14 @@ over.
      changes (decision 112), and there the share has no effect, as the conventional one
      has none *"if there is no continuous task"* (p.31). So a round is one `cycle/3`, its
      due timed tasks and then the untimed programs once each, and rounds come back to
-     back; §4.6's row for rule 4 is annotated. *(Taken 2026-10-17.)*
+     back; §4.6's row for rule 4 is annotated. *(Taken 2026-10-17. Amended 2026-10-18,
+     after M4-1's review, by decision 122: rounds back to back are one a clock millisecond
+     at most, so that they are defined on the manual clock, the share is served in slots
+     whose formula covers 10% to 90% and is a share of the continuous task's time and the
+     runner's own, the timed tasks' runs left out, and the conveyor's and the fan's tasks
+     run "at the start of the next round when due, never preempting one" where this
+     decision says "between rounds when due, never inside one"; one core is kept busy
+     only where rounds fill their milliseconds.)*
 109. **The watchdog's default time (Milestone 4).** If the computer gets too busy, or
      something gets stuck, the controller stops itself with everything switched off: the
      watchdog. On the test computer the longest the controller went without updating its
@@ -4808,7 +4851,11 @@ over.
      clock. A change of a trigger is a rise or a fall, and each makes a round, so that the
      resource samples the 0 between two rises and the second is an edge (decision 39's
      sample). How reading and reporting mix in one plant is decision 120. *(Taken
-     2026-10-17.)*
+     2026-10-17. "At once, between rounds and never inside one" reads, after M4-1's
+     review, at once where no round is running, and otherwise at the start of the next
+     round, never preempting one (decision 122); a trigger logic writes rounds at the next
+     clock millisecond (decision 123), and a device passes its changes on by a call
+     (decision 124).)*
 113. **What a watchdog trip does (Milestone 4),** decision 14 asked again now that the
      details are known.
      - Everything goes off, once: the conveyor stops, the fan stops, the lamp goes out and
@@ -4966,7 +5013,10 @@ over.
      warns of an input shorter than its task's scan (p.46). One poll period serves the
      plant, a runner option (decision 121); one for each device, as the conventional
      packet interval is each module's, is later, if a plant needs it. *(Taken
-     2026-10-17.)*
+     2026-10-17. Amended 2026-10-18, after M4-1's review: a change of a trigger that logic
+     writes makes its round at the next clock millisecond, not at once (decision 123); and
+     a device passes what changed on by a call, answered once the change is merged or its
+     round has run, not by a message (decision 124).)*
 121. **Where the share and the poll period are set (Milestone 4).** The plant runs on one
      machine in the lab and on another on the line.
      - Options of the runner, in Elixir, where its devices are bound: `overhead:`, the
@@ -4980,6 +5030,114 @@ over.
      options in Elixir. A task's watchdog is on its line (decision 110), since it is the
      task's own. The conventional share's own range is **unverified** beyond its table.
      *(Taken 2026-10-17.)*
+
+**After M4-1's review, decided 2026-10-18.** The review of M4-1's landing found the
+record silent on four things the runner must do the same way on either clock, and loose
+on others. Decisions 122–124 are the record's own routine choices on what it left open,
+each with the alternative it passes over, the plant the design's: the conveyor's logic
+due every 10 ms, the fan's twice a second, the e-stop's event task, and the box counter
+and the "case full" lamp with no timing of their own.
+
+122. **How rounds run back to back on a clock, and the share's slots (Milestone 4),**
+     following decision 108. The box counter and the lamp run round after round. On the
+     test's clock, which moves only when the test moves it, a round takes no time at all:
+     "start the next round as soon as the last ends" runs rounds without end while the
+     clock stands still, and "after each 4 ms of rounds, up to 1 ms for the runner's own
+     work" counts time that never passes. On that clock a receiver that set its next
+     round for the time it was at took 49,989 deliveries in a second without the clock
+     moving, and rounds set for themselves after one `advance/2` came out 19,772, 2,658
+     and 2,658 in three fresh runs.
+     - Each back-to-back round a wake on the runner's clock at the millisecond after the
+       one the round before began in, or at once where that round took a millisecond or
+       more: at most one round a clock millisecond, on the monotonic clock and the manual
+       one alike, `advance(clock, n)` running n;
+     - rounds flat out on the monotonic clock, and one a millisecond on the manual one,
+       which would test a rule the runner does not run;
+     - or a round each poll period, the steady beat decision 108 passed over.
+
+     *Taken: the first.* A round's time is whole milliseconds, its `elapsed_ms` too, so a
+     second round inside one millisecond runs the logic again on the same time and the
+     same inputs but for a device's change, and a change of a trigger already makes a
+     round of its own (decisions 112, 120 and 124). IEC's rule 4 and the conventional
+     continuous task are kept to the clock's resolution: a round that fills its
+     millisecond is followed at once, one that does not by the next millisecond. So the
+     cost decision 108 recorded, one core kept busy, becomes up to one core: rounds of
+     0.2 ms keep a fifth of one, and only rounds that fill their milliseconds keep one
+     busy. A run on the manual clock repeats exactly, the rounds an advance runs being the
+     milliseconds it moves on. The share is a share of the time the runner spends on the
+     continuous task's programs and on its own work while both have work, the timed
+     tasks' runs left out of both, as the conventional rule leaves out *"the time for
+     periodic or event tasks"* (p.13), and it is served in slots: after C ms of the
+     continuous task's rounds, up to S ms of the runner's own work, C = max(1, round((100
+     − p)/p)) and S = max(1, round(p/(100 − p))) for a share of p percent, 10% giving 9
+     and 1, 20% 4 and 1, 25% 3 and 1, 33% 2 and 1, 50% 1 and 1, 66% 1 and 2, 75% 1 and 3,
+     80% 1 and 4 and 90% 1 and 9, the conventional table, *"ContinuousTime=(100/
+     SystemOverheadTimeSlice%) - 1"*, the continuous task given *"at least 1 ms of
+     execution time"* (the design considerations reference, p.35). A round counts from
+     its start to the next round's, so a millisecond at least, and a request is served
+     whole, so a slot can run over by one request; with nothing of its own to serve the
+     runner goes back to rounds at once (p.33), and in the rest of a millisecond a round
+     did not fill it serves its own work freely, time no round wants. On the manual clock
+     a round fills no time unless something passes time inside it, so own work waiting is
+     served before the next round. And "between rounds" is said plainly: a due timed task
+     runs at the start of the next round, never preempting one (§4.6), the first steps of
+     that round. *(Taken 2026-10-18, after M4-1's review.)*
+123. **A trigger that logic writes (Milestone 4),** following decisions 50 and 120. A
+     plant of two event tasks and no untimed program, each task's program setting the
+     other's trigger and clearing its own: each round changes a trigger, and under
+     decision 120, a change logic writes making a round at once, the runner would round
+     for ever without waiting, every cycle at an elapsed 0 and `next_due_in/1`
+     `:infinity`, and serve no host's call, no edit and no stop: the livelock in zero
+     time decision 50 named and left to the runner.
+     - A change of a trigger that logic writes makes its round at the next clock
+       millisecond, a wake as a back-to-back round is (decision 122), not at once; one a
+       device reports, or a force, still makes its round at once;
+     - at once, with the share applied to event rounds, which has no effect where no
+       untimed program exists (decision 108) and would be a second rule for one hazard;
+     - or at once, the configuration's author trusted not to write such a pair.
+
+     *Taken: the first.* Such rounds then come one a clock millisecond at most, the runner
+     serving its mailbox between them, so the two tasks toggle once a millisecond and a
+     host's call is served; on the manual clock `advance(clock, n)` runs n of them. IEC's
+     rule 1 runs an event task *"upon each rising edge of the SINGLE input"* (Ed 2 §2.7.2),
+     sampled when the resource next evaluates it, which logex's resource does at each
+     cycle, so the round a millisecond on is the next cycle the runner makes, as decision
+     120 and `Logex.Runtime`'s rule 1 have it. The cost: a millisecond more for an event
+     task whose trigger logic sets. A device's change and a force come from outside and
+     stay at once, one round each, as many as there are changes. Decision 50's hazard is
+     closed. *(Taken 2026-10-18, after M4-1's review.)*
+124. **How a device passes on what changed, and where a test waits (Milestone 4),**
+     following decision 120. A test presses the e-stop on the simulated panel, and the
+     e-stop's event task must run at once: the test must know when that round has run
+     before it looks at the outputs. `Logex.IO.Sim.set/3` returns once the panel's device
+     process has handled the report, but under decision 120 the device then sent the
+     runner a message, which the runner took in its own time, so the test had nothing to
+     wait on: in a model, a loop of 200 sets, each followed by a read of the outputs,
+     found 33 of the 200 rounds run when it ended.
+     - The device passes each change on by a call to the runner, which answers once it has
+       merged the change into the next round's inputs and, for a change of an event
+       task's trigger, once the round it makes has run and its outputs are written; while
+       it waits the device answers the runner's own requests to it, a write, a refresh or
+       a zeroing, so that neither waits on the other, and its wait is bounded as its
+       heartbeat is (decision 119). So `set/3` returns once the runner
+       has taken the change and run the round it causes, by construction, as `advance/2`
+       returns once each receiver has handled its message;
+     - a message, as decided, and `settle/1`, a call of the runner's a test makes after a
+       set, answered once each device has passed on what it had, by a marker each device
+       sends after it, one sender to one receiver;
+     - or a message, and the test waits for the round's event.
+
+     *Taken: the first.* It defines a real run's order as well as a test's: a device's
+     changes reach the runner one at a time, in the order the device saw them, each taken
+     before the next is passed on, so each change of a trigger is its own round by
+     construction (decision 120), and a burst of reports waits in the device's mailbox
+     rather than the runner's. `settle/1` would be a call only tests make, and would leave
+     a real run's order between a device's changes and the runner's rounds to two
+     mailboxes; an event comes only for a change that makes a round. The cost: a device
+     that reports is held while the runner takes each change, a round at most, so a
+     flood of changes is taken at the pace the runner can use them. *(Taken 2026-10-18,
+     after M4-1's review.)*
+
 ---
 
 ## 8. Sources, and what is unverified

@@ -2866,9 +2866,9 @@ ms after the motor stopped. "The Done-when tests" are read as M3-1's to M3-5's i
 ### Milestone 4 — the wall-clock runner
 
 **Designed and decided 2026-10-17** (`docs/organisation.md` §4.11 and §7, decisions
-108–121; "decision N" in this section is that §7's). §8's second domain gap: a runner that
-runs a configuration's resource on the real clock, through device adapters, with a
-watchdog, the one piece of logex that reads a clock. A design pass on `d3931bd` designed
+108–121, and 122–124 after M4-1's review; "decision N" in this section is that §7's).
+§8's second domain gap: a runner that runs a configuration's resource on the real clock,
+through device adapters, with a watchdog, the one piece of logex that reads a clock. A design pass on `d3931bd` designed
 it and built a throwaway spike of every piece, on the branch `backup/runner-design`
 (`spike-runner/`), never landed. The maintainer changed three of its answers: rounds run
 back to back while untimed programs exist, a share of the time, 20% unless set, kept for
@@ -2889,7 +2889,14 @@ runner times each task's run (118); each device's heartbeat at the longest watch
 poll period, the runner refreshing every device at least once a poll period (119); every
 device read every poll period, a reporting one passing its changes on between reads, and
 each change of a trigger its own round (120); and the share and the poll period options of
-the runner, not words of the configuration file (121).
+the runner, not words of the configuration file (121). After M4-1's review, on 2026-10-18,
+the record took three more where it had been silent: rounds back to back one a clock
+millisecond at most, so that they are defined on a clock that does not move, and the
+share served in the conventional table's slots, a share of the continuous task's time and
+the runner's own, from 10% to 90% (122); a trigger logic writes rounding at the next
+millisecond, which closes decision 50's livelock (123); and a device passing its changes
+on by a call the runner answers once the round they cause has run, so that a test's
+`Logex.IO.Sim.set/3` returns after that round by construction (124).
 
 Each item lands as a gated series, each commit gated alone by `mix format
 --check-formatted`, `mix compile --force --warnings-as-errors` in both environments and
@@ -3023,6 +3030,29 @@ and M4-7 the documents.
   above is qualified. A growth test with names no did-you-mean is looked for pins the rest
   at n log n: 16x the devices and bindings take 16.8x the reductions, bound at 24, where
   the sort for each took 38.4x. The suite is at 1303 tests (8 doctests).
+
+  The review also found the design record silent on four things the runner must do the
+  same way on either clock, and its answers are decisions 122–124, taken on 2026-10-18
+  with M4-3's Done-when and landing order above changed to match. Rounds back to back had
+  no defined behaviour on the manual clock, where a round takes no time: a receiver that
+  set its next wake for the time it was at took 49,989 deliveries in a second with the
+  clock at 0, and rounds after one `advance/2` came out 19,772, 2,658 and 2,658 in three
+  fresh runs. A back-to-back round is now a wake at the millisecond after the one the
+  round before began in, or at once where it took a millisecond or more, so at most one
+  round runs a clock millisecond, on either clock, and `advance(clock, n)` runs n; the
+  share is served in slots by the conventional formula, from 10% to 90%, a share of the
+  continuous task's time and the runner's own with the timed tasks' runs left out, as the
+  conventional rule quoted leaves out periodic and event tasks; and "between rounds" reads
+  "at the start of the next round, never preempting one", where the record had also said
+  a round runs its due timed tasks first (122). Two event tasks that write each other's
+  trigger rounded at once for ever in zero time under decision 120, the livelock decision
+  50 left to the runner; a change logic writes now makes its round at the next
+  millisecond (123). And a round a report causes gave a test nothing to wait on: in a
+  model, 200 sets each followed by a read of the outputs found 33 rounds run; a device now
+  passes each change on by a call the runner answers once the change is merged or the
+  round it makes has run and been written, so `Logex.IO.Sim.set/3` returns after that
+  round by construction, and a real run takes each device's changes one at a time, in
+  order (124).
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
   `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line
@@ -3053,10 +3083,17 @@ and M4-7 the documents.
   `elapsed_ms` and inputs, an oracle that knows nothing of the runner. The run must also:
   - repeat exactly from fresh processes;
   - run its first round at once after start;
-  - run rounds back to back while the box counter exists, the runner's own work served
-    within its share, and with the box counter taken out, round only at due times and at
-    each change of `estop`, a press and release between two due times running `trip`
-    once, at once;
+  - run one round each clock millisecond while the box counter exists, `advance(clock,
+    n)` running exactly n (decision 122), the runner's own work served within its share,
+    its slots, C ms of rounds and then up to S ms of its own work, pinned at 10%, 20%, 50%
+    and 90% where rounds fill their milliseconds, a slow drive's write passing time inside
+    them; and with the box counter taken out, round only at due times and at each change
+    of `estop`, a press and release between two due times running `trip` once, at once,
+    each `Logex.IO.Sim.set/3` returning once its round has run and its outputs are
+    written (decision 124);
+  - make the round of a trigger logic writes at the next clock millisecond, two event
+    tasks that write each other's trigger rounding once a millisecond and a host's call
+    served between (decision 123);
   - keep 100,000 periodic rounds on their grid with no drift;
   - leave every output at 0, written once, when stopped (decision 116);
   - raise every host mistake of §4.11, with its pinned message, in the caller, with the
@@ -3067,10 +3104,12 @@ and M4-7 the documents.
   1. the cycle in steps (decision 118), internal to `Logex.Runtime`, its composition
      pinned against `cycle/3` over seeded configurations;
   2. `start_link/1` and its host mistakes, relayed calls among them;
-  3. the device processes: reading every poll period, reports, writes and refreshes
-     (decisions 119 and 120);
-  4. the rounds (decision 108), back to back with the share, between due times otherwise,
-     each change of a trigger its own round;
+  3. the device processes: reading every poll period, reports passed on by a call the
+     runner answers once the round they cause has run (decision 124), writes and
+     refreshes (decisions 119 and 120);
+  4. the rounds (decisions 108 and 122), one a clock millisecond with the share's slots,
+     between due times otherwise, each change of a trigger its own round, at once from a
+     device and at the next millisecond from logic (decision 123);
   5. stop, status, `get/2` and subscriptions;
   6. the oracle test from files on disk.
 - **M4-4 · The watchdogs and the fault path.** *Done when* each of these is a test on the
@@ -3727,7 +3766,8 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    passed, merging the input points that changed into a kept image, running the due
    tasks' instances by priority and returning every output point. A wall-clock runner,
    the only code that will read a clock, comes after Milestone 2 (`docs/organisation.md`
-   §5). *(Milestone 4, designed and decided 2026-10-17, §3: decisions 108–121.)*
+   §5). *(Milestone 4, designed and decided 2026-10-17, §3: decisions 108–121, and
+   122–124 after M4-1's review, 2026-10-18.)*
 3. **A tag table with types.** Landed with M1-3.
 4. **Comparisons (`eq ne lt gt le ge` — IEC names, see `docs/naming.md`)** — high value,
    low cost. *Landed with M1-6, on dints.*
