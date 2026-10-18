@@ -1573,7 +1573,7 @@ defmodule Logex.RuntimeTest do
                handle_info: 2,
                init: 1,
                open: 1,
-               refresh: 2,
+               refresh: 3,
                release: 1,
                start_link: 1,
                terminate: 2,

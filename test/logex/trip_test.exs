@@ -53,7 +53,10 @@ defmodule Logex.TripTest do
   # A stand-in that makes time pass inside a task's run, where nothing else can on the
   # manual clock: after each step the core ran, the input `<task>_ms`, `none_ms` for the
   # untimed programs where no continuous task is declared, is passed on the runner's clock,
-  # which the test put in this module's table beside the runner.
+  # which the test put in this module's table beside the runner. And `<task>_stuck` is a
+  # runner stuck in the step that long: the clock advanced from inside it, every timer on
+  # the way delivered to the devices, which the runner cannot answer meanwhile, and what
+  # each simulated device was written by then recorded in the table, `{runner, :seen}`.
   defmodule Slow do
     def cycle_steps(runtime, elapsed, inputs), do: Runtime.cycle_steps(runtime, elapsed, inputs)
     def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
@@ -62,8 +65,17 @@ defmodule Logex.TripTest do
       {runtime, events} = Runtime.cycle_step(runtime, step)
       clock = :ets.lookup(Logex.TripTest, self())
       passed(clock, Runtime.get(runtime, "#{named(task)}_ms"))
+      stuck(clock, Runtime.get(runtime, "#{named(task)}_stuck"))
       {runtime, events}
     end
+
+    defp stuck([{runner, clock}], {:ok, ms}) when ms > 0 do
+      Manual.advance(clock, ms)
+      [{_key, sims}] = :ets.lookup(Logex.TripTest, {runner, :sims})
+      :ets.insert(Logex.TripTest, {{runner, :seen}, Enum.map(sims, &Sim.writes/1)})
+    end
+
+    defp stuck(_clock, _ms), do: :ok
 
     defp named(:none), do: "none"
     defp named(task), do: task
@@ -308,7 +320,7 @@ defmodule Logex.TripTest do
       assert Sim.writes(panel) == written
       assert Sim.reads(panel) == reads + 20
       :erlang.trace(device, false, [:receive])
-      refute_received {:trace, ^device, :receive, {:"$gen_cast", {:refresh, _}}}
+      refute_received {:trace, ^device, :receive, {:"$gen_cast", {:refresh, _, _}}}
       flush_traces(device)
     end
 
@@ -349,8 +361,11 @@ defmodule Logex.TripTest do
   defp slow(text, extra \\ []) do
     rig = rig(configured(text), Keyword.merge([steps: Slow], extra))
     :ets.insert(__MODULE__, {rig.runner, rig.clock})
+    :ets.insert(__MODULE__, {{rig.runner, :sims}, [rig.drive, rig.panel]})
     rig
   end
+
+  defp seen(runner), do: :ets.lookup_element(__MODULE__, {runner, :seen}, 2)
 
   describe "the watchdogs (decisions 110, 111, 126 and 128)" do
     test "a timed task's run that outlasts its watchdog trips before its round's write, " <>
@@ -467,6 +482,189 @@ defmodule Logex.TripTest do
       assert Runner.status(runner).status == :running
     end
   end
+
+  # The conveyor on its 50 ms watchdog, with the panel and the drive: y on the panel, z
+  # on the drive, each its output, and the input that says how long its step is stuck.
+  @conveyor """
+  task fast interval 10 priority 1 watchdog 50
+
+  var_global x          bool at panel.i.0
+  var_global fast_stuck dint at panel.i.1
+  var_global fast_ms    dint at panel.i.2
+  var_global y          bool at panel.q.0
+  var_global z          bool at drive.q.0
+
+  program r relay with fast
+    r.in  x
+    r.out y
+
+  program s relay with fast
+    s.in  x
+    s.out z
+  """
+
+  describe "each device's deadline, carried by every refresh (decision 125)" do
+    test "a runner stuck in the conveyor's 50 ms step leaves every device at 0 within 50 " <>
+           "ms and a poll period of the step's start, not before" do
+      for {stuck, zeroed} <- [{59, false}, {60, true}] do
+        %{runner: runner, clock: clock, panel: panel, drive: drive} =
+          slow(@conveyor, poll: 10)
+
+        Sim.set(panel, [0], 1)
+        Manual.advance(clock, 600)
+        assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+
+        # The step at 610 is stuck, the devices polled and their deadlines met meanwhile:
+        # each device's one wake has moved on, at 560, to the idle watchdog's deadline then,
+        # 1060, and the step's refresh brings it sooner, to 670.
+        Sim.set(panel, [1], stuck)
+        Manual.advance(clock, 10)
+        [drive_seen, panel_seen] = seen(runner)
+
+        assert {List.last(drive_seen), List.last(panel_seen)} ==
+                 {%{[0] => b(not zeroed)}, %{[0] => b(not zeroed)}}
+
+        # Either way the step outlasted its watchdog, and the runner trips once it is back,
+        # each device written 0 once, by its latch or by the trip, and nothing after.
+        assert Runner.status(runner).trip == {:watchdog, {:task, "fast", stuck, 50}}
+        Manual.advance(clock, 1000)
+        assert [%{[0] => 0}, %{[0] => 1} | _] = Enum.reverse(Sim.writes(panel))
+        assert [%{[0] => 0}, %{[0] => 1} | _] = Enum.reverse(Sim.writes(drive))
+      end
+    end
+
+    test "a step that takes exactly its watchdog leaves a poll period's margin: no " <>
+           "device latches, and the runner runs on" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} = slow(@conveyor, poll: 10)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Sim.set(panel, [1], 50)
+      Manual.advance(clock, 10)
+      [drive_seen, panel_seen] = seen(runner)
+      assert {List.last(drive_seen), List.last(panel_seen)} == {%{[0] => 1}, %{[0] => 1}}
+      Sim.set(panel, [1], 0)
+      Manual.advance(clock, 1000)
+      assert %{status: :running, runs: %{"fast" => {50, 50}}} = Runner.status(runner)
+      refute %{[0] => 0} in Enum.drop(Sim.writes(panel), 2)
+      refute %{[0] => 0} in Enum.drop(Sim.writes(drive), 2)
+    end
+
+    test "a runner stuck in its own work leaves every device at 0 within its idle " <>
+           "watchdog and a poll period, and trips when it next runs, before any round" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@conveyor), poll: 10, idle: 100, steps: Runtime)
+
+      Runner.subscribe(runner)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 20)
+      %{rounds: rounds} = Runner.status(runner)
+
+      # Its last refresh, the write's at 20, carried 20 + 100 + 10.
+      :sys.suspend(runner)
+      Manual.advance(clock, 109)
+
+      assert {List.last(Sim.writes(panel)), List.last(Sim.writes(drive))} ==
+               {%{[0] => 1}, %{[0] => 1}}
+
+      Manual.advance(clock, 1)
+
+      assert {List.last(Sim.writes(panel)), List.last(Sim.writes(drive))} ==
+               {%{[0] => 0}, %{[0] => 0}}
+
+      # Its wakes waited in its mailbox; it trips on the first device's notice, the drive's,
+      # the first in device-name order, and runs no round.
+      :sys.resume(runner)
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, "drive", 110}}}}, 5000
+      assert %{status: :tripped, rounds: ^rounds} = Runner.status(runner)
+      assert [%{[0] => 0}, %{[0] => 1} | _] = Enum.reverse(Sim.writes(panel))
+      assert [%{[0] => 0}, %{[0] => 1} | _] = Enum.reverse(Sim.writes(drive))
+      refute_received {Runner, ^runner, {:trip, _}}
+    end
+
+    test "a restart after a device latched releases it, and its deadline is heard again" do
+      %{runner: runner, clock: clock, panel: panel} =
+        rig(configured(@conveyor), poll: 10, idle: 100, steps: Runtime)
+
+      Sim.set(panel, [0], 1)
+      :sys.suspend(runner)
+      Manual.advance(clock, 200)
+      :sys.resume(runner)
+      assert {:watchdog, {:device, _, 110}} = Runner.status(runner).trip
+      assert Runner.restart(runner, :cold) == :ok
+      Manual.advance(clock, 1000)
+      assert %{status: :running} = Runner.status(runner)
+      assert List.last(Sim.writes(panel)) == %{[0] => 1}
+    end
+  end
+
+  # A stand-in whose event task's step waits, on the real clock, until the panel has
+  # written its 0 or two seconds have passed, and records which in the table.
+  defmodule Waits do
+    def cycle_steps(runtime, elapsed, inputs), do: Runtime.cycle_steps(runtime, elapsed, inputs)
+    def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
+
+    def cycle_step(runtime, {:timed, "e", _run} = step) do
+      [{_key, panel}] = :ets.lookup(Logex.TripTest, {self(), :panel})
+      :ets.insert(Logex.TripTest, {{self(), :seen}, zero(panel, 200)})
+      Runtime.cycle_step(runtime, step)
+    end
+
+    def cycle_step(runtime, step), do: Runtime.cycle_step(runtime, step)
+
+    defp zero(_panel, 0), do: :never
+    defp zero(panel, tries), do: zeroed(List.last(Sim.writes(panel)), panel, tries)
+
+    defp zeroed(%{[0] => 0}, _panel, _tries), do: :zeroed
+
+    defp zeroed(_last, panel, tries) do
+      Process.sleep(10)
+      zero(panel, tries - 1)
+    end
+  end
+
+  # The panel's outputs once the runner has written y = 1, on the real clock.
+  defp written(_panel, 0), do: :never
+  defp written(panel, tries), do: written(Sim.outputs(panel), panel, tries)
+
+  defp written(%{[0] => 1} = outputs, _panel, _tries), do: outputs
+
+  defp written(_outputs, panel, tries) do
+    Process.sleep(10)
+    written(panel, tries - 1)
+  end
+
+  describe "a device waiting on the runner for its own change (decision 124)" do
+    # On the real clock, short: the panel's change makes a round at once, whose step is
+    # stuck while the panel waits for the runner's answer; the panel hears its deadline,
+    # 20 ms and a poll period, there, and zeroes itself.
+    test "latches on its deadline while it waits" do
+      text =
+        "task e single t priority 0 watchdog 20\nvar_global t bool at panel.i.0\n" <>
+          "var_global y bool at panel.q.0\nvar_global w bool at panel.i.1\n" <>
+          "program r relay with fast\n  r.in w\n  r.out y\ntask fast interval 10 priority 1\n"
+
+      {:ok, panel} = Sim.start_link(reports: true)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(text),
+          io: %{"panel" => {Sim, sim: panel}},
+          poll: 10,
+          steps: Waits
+        )
+
+      :ets.insert(__MODULE__, {{runner, :panel}, panel})
+      Sim.set(panel, [1], 1)
+      assert written(panel, 200) == %{[0] => 1}
+      Sim.set(panel, [0], 1)
+      assert :ets.lookup_element(__MODULE__, {runner, :seen}, 2) == :zeroed
+      assert {:watchdog, {:task, "e", _took, 20}} = Runner.status(runner).trip
+      Runner.stop(runner)
+    end
+  end
+
+  defp b(true), do: 1
+  defp b(false), do: 0
 
   describe "restart/2 (decision 113)" do
     test "cold and warm each release the latches, restart the resource and run the " <>

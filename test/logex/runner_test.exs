@@ -212,9 +212,19 @@ defmodule Logex.RunnerTest do
     collected(device, [])
   end
 
+  # A device traced from now: what it was sent before, which it may not yet have taken
+  # from its queue as the trace begins, is collected and passed over, so that only what
+  # it is sent after is seen (since M4-4, which found a refresh from the runner's start
+  # seen by a test that traced the device after it, under load).
+  defp traced(device) do
+    :erlang.trace(device, true, [:receive])
+    refreshes(device)
+    :ok
+  end
+
   defp collected(device, deadlines) do
     receive do
-      {:trace, ^device, :receive, {:"$gen_cast", {:refresh, deadline}}} ->
+      {:trace, ^device, :receive, {:"$gen_cast", {:refresh, deadline, _at}}} ->
         collected(device, [deadline | deadlines])
 
       {:trace, ^device, :receive, {:system, _from, :get_status}} ->
@@ -892,7 +902,7 @@ defmodule Logex.RunnerTest do
       {opts, %{clock: clock, panel: panel}} = plant_rig(counted(text), poll: 7, idle: 300)
       {:ok, runner} = Runner.start_link(opts)
       %{"panel" => panel_device, "drive" => drive_device} = devices(runner)
-      for device <- [panel_device, drive_device], do: :erlang.trace(device, true, [:receive])
+      for device <- [panel_device, drive_device], do: traced(device)
 
       # A rise of `e` at 2: the event task's step, 40 and 7 on, and the write's, 300 and 7.
       Manual.pass(clock, 2)
@@ -910,7 +920,7 @@ defmodule Logex.RunnerTest do
       {opts, %{clock: clock, panel: panel}} = plant_rig()
       {:ok, runner} = Runner.start_link(opts)
       %{"drive" => drive_device} = devices(runner)
-      :erlang.trace(drive_device, true, [:receive])
+      traced(drive_device)
       Manual.pass(clock, 2)
       Sim.set(panel, [1], 1)
       assert refreshes(drive_device) == [2 + 510, 2 + 510]
@@ -1003,9 +1013,12 @@ defmodule Logex.RunnerTest do
       Manual.advance(clock, 6)
       assert {rounds(runner), Manual.now_ms(clock)} == {5, 15}
 
-      # Each at once, at the time the last ended: no wake was late, and one is pending.
+      # Each at once, at the time the last ended: no wake was late, and one is pending,
+      # beside the device's poll and its deadline (M4-4, decision 125).
       assert :sys.get_state(runner).latest_wake == 0
-      assert [{15, ^runner, _wake}, {_poll, _device, _}] = Manual.pending(clock)
+
+      assert [{15, ^runner, _wake}, {_poll, device, _}, {_deadline, device, _}] =
+               Manual.pending(clock)
 
       # A round is owed, at 15, so a host's call would wait for the share's slot, which
       # the next advance brings: the count is read from the runner's state.
@@ -1047,7 +1060,7 @@ defmodule Logex.RunnerTest do
           {opts, %{clock: clock, panel: panel}} = plant_rig(counted(), poll: 50)
           {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {module, clock}))
           %{"drive" => drive} = devices(runner)
-          :erlang.trace(drive, true, [:receive])
+          traced(drive)
 
           Manual.advance(clock, 13)
           Sim.set(panel, [1], 1)
@@ -1295,7 +1308,7 @@ defmodule Logex.RunnerTest do
       {opts, %{clock: clock}} = rig()
       {:ok, runner} = Runner.start_link(opts)
       %{"panel" => panel} = devices(runner)
-      :erlang.trace(panel, true, [:receive])
+      traced(panel)
       Manual.pass(clock, 3)
       assert Runner.get!(runner, "y") == 0
       assert refreshes(panel) == [3 + 510]
@@ -1319,7 +1332,7 @@ defmodule Logex.RunnerTest do
         )
 
       %{"slow" => slow} = devices(runner)
-      :erlang.trace(slow, true, [:receive])
+      traced(slow)
       request = :gen_server.send_request(runner, {:get!, "b.n"})
       queued(runner, 1)
       Manual.advance(clock, 0)
@@ -1346,7 +1359,7 @@ defmodule Logex.RunnerTest do
         )
 
       %{"drive" => device} = devices(runner)
-      :erlang.trace(device, true, [:receive])
+      traced(device)
       request = :gen_server.send_request(runner, {:get!, "b.n"})
       queued(runner, 1)
       Manual.advance(clock, 0)
@@ -1413,7 +1426,7 @@ defmodule Logex.RunnerTest do
       {opts, %{clock: clock}} = plant_rig(counted(), poll: 3, idle: 100)
       {:ok, runner} = Runner.start_link(opts)
       %{"drive" => drive} = devices(runner)
-      :erlang.trace(drive, true, [:receive])
+      traced(drive)
 
       # Waiting from 0 for the round at 10: refreshed at 3, 6 and 9; then the round's step,
       # 500 ms and 3 on, and its write's.
@@ -1721,7 +1734,7 @@ defmodule Logex.RunnerTest do
       Manual.advance(clock, 50)
       assert Sim.reads(panel) == 6
       assert Sim.writes(panel) == []
-      Logex.Runner.Device.refresh(device, 1_000)
+      Logex.Runner.Device.refresh(device, 1_000, 50)
       Logex.Runner.Device.write(device, %{[0] => 1})
       Manual.advance(clock, 20)
       assert Sim.writes(panel) == List.duplicate(%{[0] => 1}, 3)
@@ -1807,13 +1820,13 @@ defmodule Logex.RunnerTest do
 
     # A runner suspended after its first round refreshes nothing more: its last deadline
     # is the write's, 500 ms and a poll period on, and the panel writes again at each poll
-    # before it, never after.
+    # before it, never after, where it latches and writes 0 once (M4-4, decision 125).
     test "a device whose last refresh's deadline has passed writes nothing again" do
       {opts, %{clock: clock, panel: panel}} = rig()
       {:ok, runner} = Runner.start_link(opts)
       :sys.suspend(runner)
       Manual.advance(clock, 600)
-      assert length(Sim.writes(panel)) == 1 + 50
+      assert Sim.writes(panel) == List.duplicate(%{[0] => 0}, 1 + 50) ++ [%{[0] => 0}]
       :sys.resume(runner)
     end
 

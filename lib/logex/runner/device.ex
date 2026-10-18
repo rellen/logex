@@ -29,6 +29,15 @@ defmodule Logex.Runner.Device do
   #   latched, writing nothing more, a round's write and a poll's write again among it,
   #   until `release/1`, a restart's; a close of a latched device writes no 0 again, so
   #   that every output is written 0 exactly once whatever comes after the trip.
+  # - Its heartbeat (decision 125): a refresh carries the deadline by which it will hear
+  #   from the runner again, and the time it was sent. A device that hears nothing by the
+  #   deadline its last refresh carried, a wake on the runner's clock at it, latches as a
+  #   trip's zero does and tells the runner, `{Logex.Runner.Device, pid, {:latched, name,
+  #   ms}}`, `ms` the time from that refresh to its deadline, which the runner trips on when
+  #   it next runs. One wake is kept, set again only where a refresh brings the deadline
+  #   sooner, and moved on to the last deadline where it comes before it; and a device
+  #   waiting on the runner for its own change takes its wake there too, so that a runner
+  #   stuck while it takes the change is seen.
 
   use GenServer
 
@@ -38,7 +47,7 @@ defmodule Logex.Runner.Device do
 
   def open(device), do: GenServer.call(device, :open, :infinity)
   def write(device, values), do: GenServer.call(device, {:write, values}, :infinity)
-  def refresh(device, deadline), do: GenServer.cast(device, {:refresh, deadline})
+  def refresh(device, deadline, at), do: GenServer.cast(device, {:refresh, deadline, at})
   def close(device), do: GenServer.call(device, :close, :infinity)
   def zero(device), do: GenServer.call(device, :zero, :infinity)
   def release(device), do: GenServer.call(device, :release, :infinity)
@@ -59,6 +68,8 @@ defmodule Logex.Runner.Device do
          image: %{},
          next: nil,
          deadline: nil,
+         heard: nil,
+         timer: nil,
          written: nil,
          latched: false,
          zeros:
@@ -75,10 +86,13 @@ defmodule Logex.Runner.Device do
   def handle_call(:zero, _from, state), do: {:reply, :ok, latched(state)}
 
   def handle_call(:release, _from, state),
-    do: {:reply, :ok, %{state | latched: false}}
+    do: {:reply, :ok, %{disarmed(state) | latched: false, deadline: nil}}
 
   @impl GenServer
-  def handle_cast({:refresh, deadline}, state), do: {:noreply, %{state | deadline: deadline}}
+  def handle_cast({:refresh, _deadline, _at}, %{latched: true} = state), do: {:noreply, state}
+
+  def handle_cast({:refresh, deadline, at}, state),
+    do: {:noreply, armed(%{state | deadline: deadline, heard: at})}
 
   @impl GenServer
   def handle_info({__MODULE__, :poll, at}, %{next: at} = state) do
@@ -87,6 +101,11 @@ defmodule Logex.Runner.Device do
   end
 
   def handle_info({__MODULE__, :poll, _stale}, state), do: {:noreply, state}
+
+  def handle_info({__MODULE__, :deadline, at}, %{timer: {_timer, at}} = state),
+    do: {:noreply, expired(%{state | timer: nil})}
+
+  def handle_info({__MODULE__, :deadline, _stale}, state), do: {:noreply, state}
 
   def handle_info(message, %{module: module} = state),
     do: {:noreply, reported(function_exported?(module, :report, 2), message, state)}
@@ -169,6 +188,10 @@ defmodule Logex.Runner.Device do
       {:DOWN, ^ref, :process, _runner, _reason} ->
         state
 
+      {__MODULE__, :deadline, _at} = deadline ->
+        {:noreply, state} = handle_info(deadline, state)
+        awaiting(ref, state)
+
       {:"$gen_call", from, request} ->
         answered(handle_call(request, from, state), from, ref)
 
@@ -186,6 +209,42 @@ defmodule Logex.Runner.Device do
   defp answered({:stop, reason, reply, _state}, from, _ref) do
     GenServer.reply(from, reply)
     exit(reason)
+  end
+
+  # The one wake on the deadline: set where none is, or where a refresh brings the
+  # deadline sooner than it; a later deadline keeps it, and it moves on when it comes.
+  defp armed(%{timer: nil, deadline: deadline} = state), do: arm(deadline, state)
+
+  defp armed(%{timer: {timer, at}, deadline: deadline} = state) when deadline < at do
+    {mod, clock} = state.clock
+    mod.cancel(clock, timer)
+    arm(deadline, state)
+  end
+
+  defp armed(state), do: state
+
+  # A release's: no deadline is heard until the next refresh.
+  defp disarmed(%{timer: nil} = state), do: state
+
+  defp disarmed(%{timer: {timer, _at}, clock: {mod, clock}} = state) do
+    mod.cancel(clock, timer)
+    %{state | timer: nil}
+  end
+
+  defp arm(at, %{clock: {mod, clock}} = state),
+    do: %{state | timer: {mod.wake_at(clock, self(), {__MODULE__, :deadline, at}, at), at}}
+
+  # The wake came: a deadline later than now moves it on; one reached, with no refresh
+  # since that brought a later one, latches the device, which tells the runner.
+  defp expired(%{clock: {mod, clock}, deadline: deadline} = state),
+    do: expire(mod.now_ms(clock) >= deadline, state)
+
+  defp expire(false, state), do: armed(state)
+  defp expire(true, %{latched: true} = state), do: state
+
+  defp expire(true, %{runner: runner, name: name} = state) do
+    send(runner, {__MODULE__, self(), {:latched, name, state.deadline - state.heard}})
+    latched(state)
   end
 
   # A trip's latch: every output written 0 once, and nothing more until a release.

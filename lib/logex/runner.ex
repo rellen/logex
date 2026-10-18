@@ -302,6 +302,11 @@ defmodule Logex.Runner do
 
   def handle_info({__MODULE__, :wake, _stale}, state), do: {:noreply, state}
 
+  # A device's notice, from its own process: it has latched on its deadline (decision
+  # 125), which trips the runner. A notice from a process that is no longer its device's is
+  # passed over.
+  def handle_info({Device, pid, notice}, state), do: {:noreply, noticed(pid, notice, state)}
+
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state),
     do: {:noreply, %{state | subscribers: Map.delete(state.subscribers, pid)}}
 
@@ -613,7 +618,17 @@ defmodule Logex.Runner do
   # `{:internal, message}`, the resource kept as the last step that finished left it.
   defp rounded(%{status: :tripped} = state), do: state
 
-  defp rounded(%{anchor: anchor, logical: logical} = state) do
+  # A device's notice that came while the runner was stuck is taken first, so that a
+  # runner that comes back after its devices latched trips before it runs anything.
+  defp rounded(state) do
+    receive do
+      {Device, pid, notice} -> rounded(noticed(pid, notice, state))
+    after
+      0 -> a_round(state)
+    end
+  end
+
+  defp a_round(%{anchor: anchor, logical: logical} = state) do
     start = now(state)
     elapsed = max(start - anchor - logical, 0)
     steps = state.steps
@@ -640,7 +655,7 @@ defmodule Logex.Runner do
 
   defp stepped({kind, task, _run} = step, {:ok, state, timed, events, times}) do
     begun = now(state)
-    state = refresh(state, begun + watchdog(task, state) + state.poll)
+    state = refresh(state, begun, watchdog(task, state))
     steps = state.steps
 
     stepped(
@@ -745,11 +760,21 @@ defmodule Logex.Runner do
 
   # ---- the trip and the restart ----------------------------------------------------------
 
+  defp noticed(pid, {_kind, name, _detail} = notice, %{pids: pids} = state)
+       when :erlang.map_get(name, pids) == pid,
+       do: tripped(state, reason(notice))
+
+  defp noticed(_pid, _notice, state), do: state
+
+  defp reason({:latched, name, ms}), do: {:watchdog, {:device, name, ms}}
+
   # A trip's one path, whatever caused it (decision 113): scheduling stopped, its wake
   # cancelled and any that comes stale; every output written 0 once, through each device,
   # in device-name order, which latches; `{:trip, reason}` sent to the subscribers; and the
   # host's requests that waited answered, every one from now on served at once. The
   # resource is kept as the last round computed it, for get/2.
+  defp tripped(%{status: :tripped} = state, _reason), do: state
+
   defp tripped(state, reason) do
     cancel(state.wake, state.clock)
     state = %{state | status: :tripped, trip: reason, wake: nil, next_round: nil, written: %{}}
@@ -875,11 +900,15 @@ defmodule Logex.Runner do
   # Every device refreshed, without a wait, carrying its deadline: a step's, or `:idle`'s,
   # the idle watchdog and a poll period from now (decisions 125 and 128); the longest wait
   # between two refreshes kept for the status.
-  defp refresh(%{status: :tripped} = state, _deadline), do: state
-  defp refresh(state, :idle), do: refresh(state, now(state) + state.idle + state.poll)
+  defp refresh(state, :idle), do: refresh(state, now(state), state.idle)
 
-  defp refresh(%{devices: devices, refreshed: last} = state, deadline) do
-    Enum.each(devices, fn {_name, pid, _points} -> Device.refresh(pid, deadline) end)
+  # Every device refreshed at `at`, its deadline `span` and a poll period on: a step's
+  # watchdog from its start, or the idle watchdog from now (decisions 125 and 128).
+  defp refresh(%{status: :tripped} = state, _at, _span), do: state
+
+  defp refresh(%{devices: devices, refreshed: last} = state, at, span) do
+    deadline = at + span + state.poll
+    Enum.each(devices, fn {_name, pid, _points} -> Device.refresh(pid, deadline, at) end)
     now = now(state)
     %{state | refreshed: now, refresh_gap: max(state.refresh_gap, now - last)}
   end
