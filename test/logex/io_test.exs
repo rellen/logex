@@ -100,6 +100,16 @@ defmodule Logex.IOTest do
   # deliberate mistake draws no warning (as runtime_test.exs's opaque/1).
   defp opaque(value), do: :erlang.binary_to_term(:erlang.term_to_binary(value))
 
+  # Returns once `pid` is in Process.sleep/1, looking every millisecond.
+  defp asleep(pid), do: asleep(pid, Process.info(pid, :current_function))
+
+  defp asleep(_pid, {:current_function, {Process, :sleep, 1}}), do: :ok
+
+  defp asleep(pid, _elsewhere) do
+    Process.sleep(1)
+    asleep(pid)
+  end
+
   describe "Logex.IO, the behaviour" do
     test "is five callbacks, report/2 and close/1 optional" do
       assert Enum.sort(Logex.IO.behaviour_info(:callbacks)) ==
@@ -131,6 +141,12 @@ defmodule Logex.IOTest do
   end
 
   describe "the simulated device" do
+    test "starts linked to the caller" do
+      sim = sim()
+      assert {:links, links} = Process.info(self(), :links)
+      assert sim in links
+    end
+
     test "reads every input point of its device, 0 until set, and counts its reads" do
       sim = sim()
       state = opened(sim)
@@ -186,6 +202,19 @@ defmodule Logex.IOTest do
       Sim.set(sim, [9], 1)
       assert List.last(Device.reported(pid)) == %{}
       assert Device.read(pid) == %{[0] => 1, [1] => 0, [2, 1] => 900}
+    end
+
+    test "an input never set reads 0, so setting it to 0 changes nothing and reports nothing" do
+      sim = sim(reports: true)
+      pid = device(sim: sim)
+
+      Sim.set(sim, [0], 0)
+      Sim.set(sim, %{[1] => 0, [2, 1] => 0})
+      assert Device.reported(pid) == []
+
+      # One of several set to what it was is left out of the report.
+      Sim.set(sim, %{[0] => 0, [1] => 1})
+      assert Device.reported(pid) == [%{[1] => 1}]
     end
 
     test "set/3 returns only once the device has handled the report, however long it takes" do
@@ -315,6 +344,18 @@ defmodule Logex.IOTest do
       refute_received :due
     end
 
+    test "a delay is acted out before its call: a write that sleeps its delay has written " <>
+           "nothing yet" do
+      sim = sim()
+      state = opened(sim)
+      Sim.fail(sim, :write, {:delay, 60_000})
+      task = Task.async(fn -> Sim.write(%{[0] => 1, [1] => 5}, state) end)
+      asleep(task.pid)
+
+      assert Sim.writes(sim) == []
+      Task.shutdown(task, :brutal_kill)
+    end
+
     test "a delay without a clock sleeps in real time, no less" do
       sim = sim()
       state = opened(sim)
@@ -361,6 +402,17 @@ defmodule Logex.IOTest do
                      "it, to handle its report: a device is an OTP process, as the runner's " <>
                      "are, which answers :sys once it has handled what it was sent",
                    fn -> Sim.set(sim, [0], 1) end
+    end
+
+    test "waits only wait: for the device: one that answers later is still the test's " <>
+           "mistake" do
+      sim = sim(reports: true, wait: 20)
+      # The device takes a second of real time over the report, well within 5000 ms.
+      device([sim: sim], {self(), 1_000})
+
+      assert_raise ArgumentError, ~r/^Logex.IO.Sim waited 20 ms for /, fn ->
+        Sim.set(sim, [0], 1)
+      end
     end
 
     test "a device that is down is passed over by set/3" do
@@ -792,6 +844,31 @@ defmodule Logex.IOTest do
                      "the device `#{name}` is bound, but no point is at it#{hint}",
                      fn -> Logex.IO.bind!(config, %{"panel" => Sim, name => Sim}) end
       end
+    end
+
+    test "an adapter not yet loaded is loaded to be checked", %{tmp_dir: dir} do
+      # A module compiled to a file beside the code path, and not loaded, as an adapter of a
+      # host's application may be until something calls it.
+      [{module, binary}] =
+        Code.compile_string("""
+        defmodule Logex.IOTest.NotYetLoaded do
+          def init(_device, _points, _opts), do: {:ok, nil}
+          def read(state), do: {:ok, %{}, state}
+          def write(_values, state), do: {:ok, state}
+        end
+        """)
+
+      :code.delete(module)
+      :code.purge(module)
+      File.write!(Path.join(dir, "#{module}.beam"), binary)
+      Code.prepend_path(dir)
+      on_exit(fn -> Code.delete_path(dir) end)
+      refute :code.is_loaded(module)
+
+      config = configured("var_global lamp bool at panel.q.0\nprogram m blink\n  m.lamp lamp\n")
+
+      assert [{"panel", ^module, [], [%Point{name: "lamp"}]}] =
+               Logex.IO.bind!(config, %{"panel" => module})
     end
 
     test "an adapter is a module that implements Logex.IO, alone or with a keyword list of " <>

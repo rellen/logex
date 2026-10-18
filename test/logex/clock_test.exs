@@ -123,6 +123,12 @@ defmodule Logex.ClockTest do
   end
 
   describe "the manual clock" do
+    test "starts linked to the caller" do
+      clock = clock()
+      assert {:links, links} = Process.info(self(), :links)
+      assert clock in links
+    end
+
     test "starts at 0, or at now:, and advance/2 and pass/2 move it on by their spans" do
       assert Manual.now_ms(clock()) == 0
 
@@ -150,6 +156,18 @@ defmodule Logex.ClockTest do
       Manual.advance(clock, 5)
       assert Receiver.seen(pid) == [b: 10, c: 20, a: 30]
       assert Manual.pending(clock) == []
+    end
+
+    test "pending/1 lists the timers not yet delivered in the order advance/2 delivers them" do
+      clock = clock()
+      pid = receiver(clock)
+
+      for {message, at} <- [c: 30, a: 10, b: 10, d: 20],
+          do: Manual.wake_at(clock, pid, message, at)
+
+      assert Manual.pending(clock) == [{10, pid, :a}, {10, pid, :b}, {20, pid, :d}, {30, pid, :c}]
+      Manual.advance(clock, 30)
+      assert Receiver.seen(pid) == [a: 10, b: 10, d: 20, c: 30]
     end
 
     test "delivers timers due at one time in the order they were set, across receivers" do
@@ -319,6 +337,18 @@ defmodule Logex.ClockTest do
                      "receiver of its timers is an OTP process, as a GenServer is, which " <>
                      "answers :sys once it has handled what it was sent",
                    fn -> Manual.advance(clock, 1) end
+    end
+
+    test "waits only wait: for a receiver: one that answers later is still the host's " <>
+           "mistake" do
+      clock = clock(wait: 20)
+      # It takes a second of real time over :tick, well within the 5000 ms waited unless set.
+      pid = receiver(clock, %{tick: {:sleep, 1_000}})
+      Manual.wake_at(clock, pid, :tick, 1)
+
+      assert_raise ArgumentError, ~r/^the manual clock waited 20 ms for /, fn ->
+        Manual.advance(clock, 1)
+      end
     end
 
     test "refuses options, spans and clocks that are not its own, each with its message" do

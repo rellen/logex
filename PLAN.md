@@ -2976,7 +2976,14 @@ and M4-7 the documents.
   reason `:timeout` while it handled its message was told it had not answered, since its
   exit has a wait's shape, and the advance stopped there, its later timers undelivered;
   each is passed over now, as one down for any other reason is, and only one still alive
-  that has not answered is the mistake. The suite is at 1288 tests (8 doctests).
+  that has not answered is the mistake. Eight of the review's mutants left the suite
+  green, each a rule no test reached: an input never set taken as changed when set to 0,
+  a delay acted out after its call rather than before, an adapter's module not loaded
+  before its callbacks were looked for, `pending/1` in the reverse of delivery order, the
+  clock's `wait:` and the sim's ignored for 5000 ms, and the clock and the sim started
+  unlinked; a test now kills each, the waits by a receiver that answers after a second,
+  well within 5000 ms, and the delay by a write found asleep with nothing written. The
+  suite is at 1296 tests (8 doctests).
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
   `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line
