@@ -3147,6 +3147,14 @@ and M4-7 the documents.
   reaches every kind; and a test helper named as one of `end_to_end_test.exs`'s own made
   the suite abort on its warnings with every test green, which the gate's exit code
   caught.
+
+  M4-2's review, on 2026-10-18, found an edit's cost grown with the continuous task, and
+  its fixes are the commits after (7). Decision 62's orders looked for the continuous
+  task, in the original and in the candidate, once an instance, so accept, test and
+  untest took time in the tasks times the instances: 4x of both took 10.09x the
+  reductions in the review's probe, 3.98x before M4-2. Each is looked for once an edit
+  now, and `config_edit_test.exs`'s growth tests gain the tasks and instances grown
+  together, bound at 4.83. The suite is at 1332 tests (9 doctests).
 - **M4-3 · The runner: start, rounds, devices, stop, read, subscribe.** *Done when* §4.4's
   plant with M4-2's box counter, loaded from files on disk through
   `Logex.Configuration.compile_file/1`, runs through `Logex.Runner` on the manual clock and

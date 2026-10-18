@@ -1882,6 +1882,68 @@ defmodule Logex.ConfigEditTest do
       assert ratio < 4.84, "4x the types took #{Float.round(ratio, 2)}x the reductions"
     end
 
+    # Tasks and instances grown together, each task running one instance and as many
+    # instances running in the continuous task, declared last, the candidate moving one
+    # of those to the end: decision 62's orders are found once an edit, not once an
+    # instance and task.
+    defp tasked(n) do
+      {:ok, relay} =
+        Logex.compile("var_input in bool\nvar_output out bool\nxic in ote out",
+          name: "relay"
+        )
+
+      config = fn untimed ->
+        timed = for i <- 1..n, do: {"m#{i}", "t#{i}"}
+
+        Configuration.new!(
+          name: "plant",
+          programs: [relay],
+          tasks:
+            for(i <- 1..n, do: %Configuration.Task{name: "t#{i}", interval: 10, priority: 1}) ++
+              [%Configuration.Task{name: "main", continuous: true}],
+          instances:
+            for(
+              {name, task} <- timed ++ untimed,
+              do: %Configuration.Instance{name: name, type: "relay", task: task}
+            ),
+          connections:
+            for(
+              {name, _task} <- timed ++ untimed,
+              do: %Configuration.Connection{instance: name, member: "in", to: 0}
+            )
+        )
+      end
+
+      [first | rest] = for i <- 1..n, do: {"u#{i}", nil}
+      {config.([first | rest]), config.(rest ++ [first])}
+    end
+
+    defp reductions_to_test({original, candidate}) do
+      runtime = Runtime.start(original)
+
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          {:ok, edit, _} = Edit.accept(runtime, candidate)
+          {edit, rt, _} = Edit.test(edit, runtime)
+          {_edit, _rt, report} = Edit.untest(edit, rt)
+          {:reductions, later} = Process.info(self(), :reductions)
+          assert [{:order, "main", _}] = report
+          later - before
+        end
+      )
+    end
+
+    # Over 32 runs on Elixir 1.20.4, 16 alone and 16 beside three full suites, 4x the tasks
+    # and instances took 4.01x to 4.02x, and 6.85x with the continuous task looked for once
+    # an instance; the bound is a fifth above the highest.
+    test "accept, test and untest stay linear in the tasks and instances grown together" do
+      ratio = reductions_to_test(tasked(200)) / reductions_to_test(tasked(50))
+
+      assert ratio < 4.83,
+             "4x the tasks and instances took #{Float.round(ratio, 2)}x the reductions"
+    end
+
     test "accept and its steps stay linear in a program's size" do
       ratio = reductions_to_edit(grown(1, 2, 800)) / reductions_to_edit(grown(1, 2, 200))
       assert ratio < 4.86, "4x the program took #{Float.round(ratio, 2)}x the reductions"

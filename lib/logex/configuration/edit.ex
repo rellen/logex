@@ -922,8 +922,9 @@ defmodule Logex.Configuration.Edit do
   # every name there in its new order.
   defp orders(from, to) do
     tasks = Enum.map(to.tasks, & &1.name)
-    was = Enum.group_by(from.instances, &ordered_on(&1.task, untimed(from)), & &1.name)
-    now = Enum.group_by(to.instances, &ordered_on(&1.task, untimed(to)), & &1.name)
+    {untimed_was, untimed_now} = {untimed(from), untimed(to)}
+    was = Enum.group_by(from.instances, &ordered_on(&1.task, untimed_was), & &1.name)
+    now = Enum.group_by(to.instances, &ordered_on(&1.task, untimed_now), & &1.name)
 
     ordered(:tasks, Enum.map(from.tasks, & &1.name), tasks) ++
       Enum.flat_map(now, fn {task, names} -> ordered(task, Map.get(was, task, []), names) end)
