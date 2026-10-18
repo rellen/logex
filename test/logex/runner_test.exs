@@ -557,14 +557,20 @@ defmodule Logex.RunnerTest do
       end
     end
 
-    test "a call that reaches the runner as it stops, unanswered, raises the same" do
-      {opts, _rig} = rig()
-      {:ok, runner} = Runner.start_link(opts)
-      :sys.suspend(runner)
-      waiting = Task.async(fn -> outcome(fn -> Runner.status(runner) end) end)
-      holding(runner, &call?/1)
-      Runner.stop(runner)
-      assert Task.await(waiting) == {:raised, "the runner #{inspect(runner)} is not running"}
+    test "a call that reaches the runner as it stops, unanswered, raises the same, " <>
+           "whatever the stop's reason" do
+      for reason <- [:normal, :shutdown, {:shutdown, :x}, :abandoned] do
+        {opts, _rig} = rig()
+        {:ok, runner} = Runner.start_link(opts)
+        Process.unlink(runner)
+        :sys.suspend(runner)
+        waiting = Task.async(fn -> outcome(fn -> Runner.status(runner) end) end)
+        holding(runner, &call?/1)
+        ExUnit.CaptureLog.capture_log(fn -> Runner.stop(runner, reason) end)
+
+        assert Task.await(waiting) == {:raised, "the runner #{inspect(runner)} is not running"},
+               inspect(reason)
+      end
     end
 
     # A call none of its functions makes, and a device's change from another process.

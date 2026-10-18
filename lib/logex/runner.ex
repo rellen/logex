@@ -232,17 +232,15 @@ defmodule Logex.Runner do
         ":trip, :restart, :edit, :ran and :round, got: #{inspect(kinds)}"
 
   # A host's call, a mistake in it raised here, in the caller; and a runner that goes down
-  # before it answers, stopped as its call waited, is one that is not running.
+  # before it answers, stopped as its call waited for whatever reason the stop gave, or
+  # gone before it, is one that is not running: the call never waits, so its exit can only
+  # be the runner's going down.
   defp call(runner, request), do: relayed(asked(runner!(runner), request))
 
   defp asked(runner, request) do
     GenServer.call(runner, request, :infinity)
   catch
-    :exit, {reason, {GenServer, :call, _args}} when reason in [:noproc, :normal, :shutdown] ->
-      gone(runner)
-
-    :exit, {{:shutdown, _reason}, {GenServer, :call, _args}} ->
-      gone(runner)
+    :exit, {_reason, {GenServer, :call, _args}} -> gone(runner)
   end
 
   defp gone(runner), do: {:raise, ArgumentError.exception(not_running(runner))}
