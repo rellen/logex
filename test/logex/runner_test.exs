@@ -1718,9 +1718,69 @@ defmodule Logex.RunnerTest do
       Manual.advance(clock, 50)
       assert Sim.reads(panel) == 6
       assert Sim.writes(panel) == []
+      Logex.Runner.Device.refresh(device, 1_000)
       Logex.Runner.Device.write(device, %{[0] => 1})
       Manual.advance(clock, 20)
       assert Sim.writes(panel) == List.duplicate(%{[0] => 1}, 3)
+    end
+
+    # A device written but never refreshed has heard no deadline, and writes nothing
+    # again at its polls: the runner refreshes a device before it writes it, so only the
+    # device's process alone, opened and written by the test, can be in this state.
+    test "a device written but never refreshed writes nothing again at any poll" do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+
+      [{"panel", _module, _options, points}] =
+        Logex.IO.bind!(relayed(), %{"panel" => {Sim, sim: panel}})
+
+      {:ok, device} =
+        Logex.Runner.Device.start_link(%{
+          name: "panel",
+          module: Sim,
+          opts: [sim: panel],
+          points: points,
+          runner: self(),
+          clock: {Manual, clock},
+          poll: 10
+        })
+
+      assert {:ok, _values} = Logex.Runner.Device.open(device)
+      Logex.Runner.Device.write(device, %{[0] => 1})
+      Manual.advance(clock, 50)
+      assert Sim.reads(panel) == 6
+      assert Sim.writes(panel) == [%{[0] => 1}]
+    end
+
+    # A poll writes again after its read: a read that passes a change on, a rise of an
+    # event task's trigger at a device that does not report, runs the round it causes,
+    # whose write comes first, and the poll then writes the round's value again, not the
+    # one before it. `e` set at 12 is read at the poll at 20: the round at 0's 0, the poll
+    # at 10's 0, the round at 20's 1 and the poll at 20's 1.
+    test "a poll writes again after its read, the values of the round the read caused" do
+      config =
+        configured(
+          "task trip single e priority 0\n" <>
+            "var_global e bool at panel.i.0\nvar_global q bool at panel.q.0\n" <>
+            "program r relay with trip\n  r.in e\n  r.out q\n",
+          %{"relay" => @relay}
+        )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock}
+        )
+
+      Manual.advance(clock, 12)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 8)
+      assert Enum.map(Sim.writes(panel), & &1[[0]]) == [0, 0, 1, 1]
+      Runner.stop(runner)
     end
 
     test "a device with no output point is never written, at any poll" do

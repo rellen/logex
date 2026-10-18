@@ -15,7 +15,8 @@ defmodule Logex.Runner.Device do
   #   has not passed: a fixed timer, as Logix re-sends a module's outputs at its RPI, so
   #   that a device hears from its master once a poll period while the runner is well
   #   (decision 130); one never written, which is one with no output point too, since a
-  #   round never writes it, writes nothing.
+  #   round never writes it, writes nothing, and so does one never refreshed, which has
+  #   heard no deadline.
   # - It passes what changed since it last passed anything on to the runner by a call,
   #   one at a time and in the order it saw them, which the runner answers once it has
   #   merged the change and run the round it causes (decision 124). While it waits it
@@ -109,8 +110,10 @@ defmodule Logex.Runner.Device do
   end
 
   # The outputs last written, written again at every poll, whatever a round wrote within
-  # the period, while the last refresh's deadline has not passed (decision 130).
+  # the period, while the last refresh's deadline has not passed (decision 130); a device
+  # never refreshed has heard no deadline, so writes nothing again.
   defp rewritten(%{written: nil} = state), do: state
+  defp rewritten(%{deadline: nil} = state), do: state
 
   defp rewritten(%{clock: {mod, clock}, deadline: deadline} = state),
     do: rewrite(mod.now_ms(clock) < deadline, state)
