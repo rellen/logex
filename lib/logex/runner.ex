@@ -326,11 +326,26 @@ defmodule Logex.Runner do
   defp requested(false, request, state), do: answered(request, refresh(state, :idle))
   defp requested(true, request, state), do: %{state | queue: :queue.in(request, state.queue)}
 
-  defp answered({from, request}, state) do
+  # Each request answered; one that took longer than the idle watchdog, served whole,
+  # trips the runner once it is answered, `{:watchdog, {:idle, ms}}` (decision 128). A
+  # restart is the tripped runner's own, its first round timed by its steps' watchdogs.
+  defp answered({from, {:restart, _mode} = request}, state) do
     {reply, state} = served(request, state)
     GenServer.reply(from, reply)
     state
   end
+
+  defp answered({from, request}, state) do
+    begun = now(state)
+    {reply, state} = served(request, state)
+    GenServer.reply(from, reply)
+    idled(now(state) - begun, state)
+  end
+
+  defp idled(took, %{status: :running, idle: idle} = state) when took > idle,
+    do: tripped(state, {:watchdog, {:idle, took}})
+
+  defp idled(_took, state), do: state
 
   # Each request, a host's mistake in it given back to be raised in the caller.
   defp served(request, state) do
@@ -619,11 +634,11 @@ defmodule Logex.Runner do
     state = %{state | runtime: runtime, logical: state.logical + elapsed, pending: %{}}
 
     steps
-    |> Enum.reduce_while({:ok, state, 0, []}, &stepped/2)
+    |> Enum.reduce_while({:ok, state, 0, [], []}, &stepped/2)
     |> computed(start)
   end
 
-  defp stepped({kind, task, _run} = step, {:ok, state, timed, events}) do
+  defp stepped({kind, task, _run} = step, {:ok, state, timed, events, times}) do
     begun = now(state)
     state = refresh(state, begun + watchdog(task, state) + state.poll)
     steps = state.steps
@@ -633,33 +648,66 @@ defmodule Logex.Runner do
       kind,
       task,
       begun,
-      {state, timed, events}
+      {state, timed, events, times}
     )
   end
 
-  defp stepped({:internal, _message} = reason, _kind, _task, _begun, {state, _timed, events}),
+  defp stepped({:internal, _message} = reason, _kind, _task, _begun, {state, _, events, _}),
     do: {:halt, {:trip, reason, state, events}}
 
-  defp stepped({:ok, {runtime, ran}}, kind, task, begun, {state, timed, events}) do
+  # A step that ran, timed and checked: a timed task's run that outlasts its watchdog trips
+  # before the round's write, naming it (decision 110); the continuous task's programs are
+  # its round's, checked as the round ends (decision 111).
+  defp stepped({:ok, {runtime, ran}}, kind, task, begun, {state, timed, events, times}) do
     took = now(state) - begun
+    state = ran(%{state | runtime: runtime}, task, took)
+    events = Enum.reverse(ran, events)
+    limit = watchdog(task, state)
 
-    {:cont,
-     {:ok, ran(%{state | runtime: runtime}, task, took), timed + timed(kind, took),
-      Enum.reverse(ran, events)}}
+    checked(
+      kind == :timed and took > limit,
+      {:watchdog, {:task, task, took, limit}},
+      {:ok, state, timed + timed(kind, took), events, [{task, took} | times]}
+    )
   end
 
+  defp checked(false, _reason, acc), do: {:cont, acc}
+
+  defp checked(true, reason, {:ok, state, _timed, events, _times}),
+    do: {:halt, {:trip, reason, state, events}}
+
   # A round that tripped is published as far as it ran, and then its trip; one whose
-  # steps all ran is timed, its outputs computed and written.
+  # steps all ran is timed against the continuous task's watchdog, from its start to the
+  # end of its last program's scan, the timed tasks' runs in it included, its trip naming
+  # each step with its time (decisions 111 and 126), and its outputs computed and written.
   defp computed({:trip, reason, state, events}, _start) do
     published(state, Enum.reverse(events))
     tripped(state, reason)
   end
 
-  defp computed({:ok, state, timed, events}, start) do
-    state = ran(state, state.continuous, now(state) - start)
+  defp computed({:ok, state, timed, events, times}, start) do
+    took = now(state) - start
+    state = ran(state, state.continuous, took)
+    over(round_over(state.continuous, took, times, state), {state, timed, events}, start)
+  end
+
+  defp round_over(nil, _took, _times, _state), do: nil
+
+  defp round_over(task, took, times, state),
+    do: round_over(took > watchdog(task, state), task, took, times, state)
+
+  defp round_over(false, _task, _took, _times, _state), do: nil
+
+  defp round_over(true, task, took, times, state),
+    do: {:watchdog, {:round, task, took, watchdog(task, state), Enum.reverse(times)}}
+
+  defp over(nil, {state, timed, events}, start) do
     steps = state.steps
     outputs(core(fn -> steps.cycle_outputs(state.runtime) end), start, timed, events, state)
   end
+
+  defp over(reason, {state, _timed, events}, _start),
+    do: computed({:trip, reason, state, events}, nil)
 
   defp outputs({:internal, _message} = reason, _start, _timed, events, state),
     do: computed({:trip, reason, state, events}, nil)

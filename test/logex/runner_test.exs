@@ -1143,7 +1143,10 @@ defmodule Logex.RunnerTest do
       config =
         configured("var_global x bool at panel.i.0\nprogram b count\n", %{"count" => @count})
 
-      for {share, slots} <- [{50, List.duplicate(1, 40)}, {90, [9, 9, 9, 9, 4]}] do
+      # Each request takes 3 ms on this clock: the slot's reading before it and, since
+      # M4-4, two that time it against the idle watchdog (decision 128); so a slot of 9 ms
+      # serves three.
+      for {share, slots} <- [{50, List.duplicate(1, 40)}, {90, List.duplicate(3, 13) ++ [1]}] do
         {:ok, clock} = Manual.start_link()
         {:ok, panel} = Sim.start_link(clock: clock)
 

@@ -50,6 +50,51 @@ defmodule Logex.TripTest do
     defp blow(_value, _where), do: :ok
   end
 
+  # A stand-in that makes time pass inside a task's run, where nothing else can on the
+  # manual clock: after each step the core ran, the input `<task>_ms`, `none_ms` for the
+  # untimed programs where no continuous task is declared, is passed on the runner's clock,
+  # which the test put in this module's table beside the runner.
+  defmodule Slow do
+    def cycle_steps(runtime, elapsed, inputs), do: Runtime.cycle_steps(runtime, elapsed, inputs)
+    def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
+
+    def cycle_step(runtime, {_kind, task, _run} = step) do
+      {runtime, events} = Runtime.cycle_step(runtime, step)
+      clock = :ets.lookup(Logex.TripTest, self())
+      passed(clock, Runtime.get(runtime, "#{named(task)}_ms"))
+      {runtime, events}
+    end
+
+    defp named(:none), do: "none"
+    defp named(task), do: task
+
+    defp passed([{_runner, clock}], {:ok, ms}) when ms > 0, do: Manual.pass(clock, ms)
+    defp passed(_clock, _ms), do: :ok
+  end
+
+  # A clock whose every reading takes `ms`, the manual clock's: so that the runner's own
+  # work takes time.
+  defmodule Ticks do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms({clock, ms}) do
+      Manual.pass(clock, ms)
+      Manual.now_ms(clock)
+    end
+
+    @impl true
+    def wake_at({clock, _ms}, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel({clock, _ms}, timer), do: Manual.cancel(clock, timer)
+  end
+
+  setup_all do
+    :ets.new(__MODULE__, [:named_table, :public, :set])
+    :ok
+  end
+
   # One var_input copied to one var_output, and a counter of its own runs.
   @relay "var_input in bool\nvar_output out bool\nxic in ote out"
   @count "var_output n dint\nadd n 1 n"
@@ -297,6 +342,129 @@ defmodule Logex.TripTest do
           fn -> Runner.start_link(opts ++ [steps: steps]) end
         )
       end
+    end
+  end
+
+  # A runner on the slow stand-in, its clock in the table for it.
+  defp slow(text, extra \\ []) do
+    rig = rig(configured(text), Keyword.merge([steps: Slow], extra))
+    :ets.insert(__MODULE__, {rig.runner, rig.clock})
+    rig
+  end
+
+  describe "the watchdogs (decisions 110, 111, 126 and 128)" do
+    test "a timed task's run that outlasts its watchdog trips before its round's write, " <>
+           "naming it; one that takes exactly its watchdog does not" do
+      text =
+        "task fast interval 10 priority 1 watchdog 50\nvar_global x bool at panel.i.0\n" <>
+          "var_global fast_ms dint at panel.i.1\nvar_global y bool at panel.q.0\n" <>
+          "program r relay with fast\n  r.in x\n  r.out y\n"
+
+      %{runner: runner, clock: clock, panel: panel} = slow(text)
+      Runner.subscribe(runner)
+      Sim.set(panel, [1], 50)
+      Manual.advance(clock, 10)
+      assert %{status: :running, runs: %{"fast" => {50, 50}}} = Runner.status(runner)
+
+      # The next round, late, takes 51 ms: y = 1 is computed and never written.
+      Sim.set(panel, %{[0] => 1, [1] => 51})
+      Manual.advance(clock, 50)
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:task, "fast", 51, 50}}}}
+      assert Runner.status(runner).trip == {:watchdog, {:task, "fast", 51, 50}}
+      assert Runner.get!(runner, "y") == 1
+      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}]
+      assert Runner.status(runner).runs["fast"] == {51, 50}
+    end
+
+    test "an event task's run is watched as a periodic one's" do
+      text =
+        "task e single t priority 0 watchdog 20\nvar_global t bool at panel.i.0\n" <>
+          "var_global e_ms dint at panel.i.1\nvar_global hits dint at panel.q.0\n" <>
+          "program c count with e\n  c.n hits\n"
+
+      %{runner: runner, panel: panel} = slow(text)
+      Sim.set(panel, [1], 20)
+      Sim.set(panel, [0], 1)
+      assert Runner.status(runner).status == :running
+      Sim.set(panel, %{[0] => 0, [1] => 21})
+      Sim.set(panel, [0], 1)
+      assert Runner.status(runner).trip == {:watchdog, {:task, "e", 21, 20}}
+      assert Runner.get!(runner, "hits") == 2
+      assert List.last(Sim.writes(panel)) == %{[0] => 0}
+    end
+
+    test "a round that outlasts the continuous task's watchdog trips, naming each step " <>
+           "with its time, a slow timed task's among them; one of exactly it does not" do
+      text =
+        "task main continuous watchdog 200\ntask fan interval 1000 priority 2 watchdog 2000\n" <>
+          "var_global fan_ms dint at panel.i.0\nvar_global main_ms dint at panel.i.1\n" <>
+          "var_global a dint\nvar_global b dint\n" <>
+          "program f count with fan\n  f.n a\nprogram m count\n  m.n b\n"
+
+      %{runner: runner, clock: clock, panel: panel} = slow(text)
+      Sim.set(panel, [0], 150)
+      Manual.advance(clock, 999)
+      Sim.set(panel, [1], 50)
+
+      # At 1000 the fan's run, 150 ms, and the box counter's, 50, make the round's 200.
+      # A round is owed, so a host's call would wait for the share's slot: the runner's
+      # state is read through :sys.
+      Manual.advance(clock, 1)
+
+      assert %{status: :running, longest: %{"main" => 200, "fan" => 150}} =
+               :sys.get_state(runner)
+
+      # Back to back, 50 ms a round, to 2000, where the fan's run takes 151.
+      Sim.set(panel, [0], 151)
+      Manual.advance(clock, 800)
+
+      assert Runner.status(runner).trip ==
+               {:watchdog, {:round, "main", 201, 200, [{"fan", 151}, {"main", 50}]}}
+
+      assert Runner.status(runner).now == 2000
+    end
+
+    test "a round where no continuous task is declared is named :none, 500 ms" do
+      text =
+        "task fan interval 1000 priority 2\nvar_global none_ms dint at panel.i.0\n" <>
+          "var_global b dint\nprogram m count\n  m.n b\n"
+
+      %{runner: runner, clock: clock, panel: panel} = slow(text)
+      Sim.set(panel, [0], 500)
+      Manual.advance(clock, 1)
+      assert :sys.get_state(runner).status == :running
+      Sim.set(panel, [0], 501)
+      Manual.advance(clock, 0)
+      assert Runner.status(runner).trip == {:watchdog, {:round, :none, 501, 500, [{:none, 501}]}}
+    end
+
+    test "a host's request served whole that takes longer than the idle watchdog trips " <>
+           "once answered; a restart is not timed by it" do
+      start = fn idle ->
+        {:ok, clock} = Manual.start_link()
+        {:ok, panel} = Sim.start_link(clock: clock)
+
+        {:ok, runner} =
+          Runner.start_link(
+            configuration: configured(),
+            io: %{"panel" => {Sim, sim: panel}},
+            clock: {Ticks, {clock, 3}},
+            poll: 1_000_000,
+            idle: idle
+          )
+
+        runner
+      end
+
+      runner = start.(3)
+      assert Runner.get(runner, "x") == {:ok, 0}
+      assert Runner.status(runner).status == :running
+
+      runner = start.(2)
+      assert Runner.get(runner, "x") == {:ok, 0}
+      assert Runner.status(runner).trip == {:watchdog, {:idle, 3}}
+      assert Runner.restart(runner, :cold) == :ok
+      assert Runner.status(runner).status == :running
     end
   end
 
