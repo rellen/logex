@@ -29,7 +29,9 @@ defmodule Logex.Runner do
   of its own, linked to the runner, which holds its adapter's state and calls its
   callbacks; the runner opens them in device-name order, reads each once, and runs the
   first round at once, so a device that cannot be opened is `start_link/1`'s
-  `{:error, {:io_init, device, reason}}`, every device opened before it closed again.
+  `{:error, {:io_init, device, reason}}`, every device opened before it closed again. It
+  does so before it handles anything sent to it, so a call or a stop by its name that
+  comes first waits until its devices are open and its first round has run.
   - Each device reads its adapter every poll period on the runner's clock, from the time
     it was opened, on a grid that never drifts, and gives each other message its process
     receives to the adapter's `report/2`, where it has one: so a device that reports
@@ -86,7 +88,11 @@ defmodule Logex.Runner do
   **A host's calls** go through the runner's mailbox, so each is served between two
   rounds. A mistake in one is the host's: the runner rescues the `ArgumentError`, replies
   with it, and the function raises it in the caller, the runner running on. A runner is
-  given by its pid, or by the name it was started under.
+  given by its pid, or by the name it was started under; a call still waiting when the
+  runner stops raises in its caller that the runner is not running, as a call to a
+  runner already stopped does. Anything else sent to the runner changes nothing: a
+  message or a cast is passed over, and a call that is none of its functions' is the
+  caller's mistake, answered with the `ArgumentError` `Logex.Runner has no request ...`.
 
   - `get/2` and `get!/2` read the resource as `Logex.Runtime.get/2` and `get!/2` do, of the
     last round computed, a path that names nothing being `{:error, reason}` from the one
@@ -139,17 +145,8 @@ defmodule Logex.Runner do
   """
   def start_link(opts) do
     {start, name} = options!(opts)
-    started(GenServer.start_link(__MODULE__, start, name))
+    GenServer.start_link(__MODULE__, start, name)
   end
-
-  # The runner opens its devices once it is running, by a call, so that a device that
-  # cannot be opened stops it normally and is told to the caller, whom its link would kill
-  # were it refused from init/1.
-  defp started({:ok, runner}), do: opened(GenServer.call(runner, :open, :infinity), runner)
-  defp started(other), do: other
-
-  defp opened(:ok, runner), do: {:ok, runner}
-  defp opened({:error, _reason} = error, _runner), do: error
 
   @doc "The value at an access path, as `Logex.Runtime.get/2` gives it: `{:ok, value}` or `{:error, reason}`."
   def get(runner, path), do: call(runner, {:get, path})
@@ -201,23 +198,43 @@ defmodule Logex.Runner do
       "a runner's events are subscribed by a list of their kinds, among :overlap, :fault, " <>
         ":trip, :restart, :edit, :ran and :round, got: #{inspect(kinds)}"
 
-  # A host's call, a mistake in it raised here, in the caller.
-  defp call(runner, request), do: relayed(GenServer.call(runner!(runner), request, :infinity))
+  # A host's call, a mistake in it raised here, in the caller; and a runner that goes down
+  # before it answers, stopped as its call waited, is one that is not running.
+  defp call(runner, request), do: relayed(asked(runner!(runner), request))
+
+  defp asked(runner, request) do
+    GenServer.call(runner, request, :infinity)
+  catch
+    :exit, {reason, {GenServer, :call, _args}} when reason in [:noproc, :normal, :shutdown] ->
+      gone(runner)
+
+    :exit, {{:shutdown, _reason}, {GenServer, :call, _args}} ->
+      gone(runner)
+  end
+
+  defp gone(runner), do: {:raise, ArgumentError.exception(not_running(runner))}
+
+  defp not_running(runner), do: "the runner #{inspect(runner)} is not running"
 
   defp relayed({:raise, exception}), do: raise(exception)
   defp relayed(reply), do: reply
 
+  # The devices are opened, and the first round run, inside init/1, so that nothing a
+  # host sends, a call or a stop by the runner's name, is handled before they are: it
+  # waits in the mailbox until they are open. A device that cannot be opened is init/1's
+  # {:error, reason}, which start_link/1 returns, the runner exiting normally, so that
+  # its link does not kill the caller.
   @impl GenServer
-  def init(start), do: {:ok, start}
+  def init(start), do: opening(start.devices, [], %{}, start)
 
+  # A device's changes, by address, from that device's own process: merged into the next
+  # round's inputs, and each change of an event task's trigger its own round, in address
+  # order, answered once each has run and its outputs are written (decisions 120 and
+  # 124), whatever the share.
   @impl GenServer
-  def handle_call(:open, _from, start), do: opening(start.devices, [], %{}, start)
-
-  # A device's changes, by address: merged into the next round's inputs, and each change of
-  # an event task's trigger its own round, in address order, answered once each has run and
-  # its outputs are written (decisions 120 and 124), whatever the share.
-  def handle_call({:changes, device, changes}, _from, state),
-    do: {:reply, :ok, changed(device, changes, state)}
+  def handle_call({:changes, device, changes}, {pid, _tag}, %{pids: pids} = state)
+      when :erlang.map_get(device, pids) == pid,
+      do: {:reply, :ok, changed(device, changes, state)}
 
   # A host's request is the runner's own work: served at once where no round is owed, and
   # otherwise queued for the share's slot (decision 122).
@@ -233,16 +250,23 @@ defmodule Logex.Runner do
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state),
     do: {:noreply, %{state | subscribers: Map.delete(state.subscribers, pid)}}
 
-  # Anything else sent to the runner is no request of its, and changes nothing.
+  # Anything else sent to the runner is no request of its, and changes nothing: a message
+  # or a cast, and a call, which is answered as a host's mistake (see serve/2).
   def handle_info(_other, state), do: {:noreply, state}
 
-  # A stop: every output written 0 once and every device closed, in device-name order
-  # (decision 116). A runner that never opened its devices has none to close.
   @impl GenServer
-  def terminate(_reason, %{rounds: _rounds, devices: devices}),
-    do: Enum.each(devices, fn {_name, pid, _points} -> Device.close(pid) end)
+  def handle_cast(_other, state), do: {:noreply, state}
 
-  def terminate(_reason, _start), do: :ok
+  # A stop: each host's request still waiting answered as one to a runner that is not
+  # running, raised in its caller, and then every output written 0 once and every device
+  # closed, in device-name order (decision 116).
+  @impl GenServer
+  def terminate(_reason, %{devices: devices, queue: queue}) do
+    for {from, _request} <- :queue.to_list(queue),
+        do: GenServer.reply(from, gone(self()))
+
+    Enum.each(devices, fn {_name, pid, _points} -> Device.close(pid) end)
+  end
 
   defp requested(false, request, state), do: answered(request, refresh(state, :idle))
   defp requested(true, request, state), do: %{state | queue: :queue.in(request, state.queue)}
@@ -273,6 +297,14 @@ defmodule Logex.Runner do
     demonitor(Map.get(subscribers, pid))
     {:ok, %{state | subscribers: Map.delete(subscribers, pid)}}
   end
+
+  defp serve(other, _state),
+    do:
+      raise(
+        ArgumentError,
+        "Logex.Runner has no request #{inspect(other)}: a runner is called through " <>
+          "get/2, get!/2, status/1, subscribe/2, unsubscribe/1 and stop/2"
+      )
 
   defp demonitor(nil), do: :ok
   defp demonitor({ref, _kinds}), do: Process.demonitor(ref, [:flush])
@@ -323,15 +355,15 @@ defmodule Logex.Runner do
 
   defp opening([], opened, read, start) do
     state = running(Enum.reverse(opened), start)
-    {:reply, :ok, rounded(merged(Enum.flat_map(read, &named(&1, state)), state))}
+    {:ok, rounded(merged(Enum.flat_map(read, &named(&1, state)), state))}
   end
 
   defp reading({:ok, values}, {name, _pid, _points} = device, rest, opened, read, start),
     do: opening(rest, [device | opened], Map.put(read, name, values), start)
 
-  defp reading({:error, reason}, {name, _pid, _points}, _rest, opened, _read, start) do
+  defp reading({:error, reason}, {name, _pid, _points}, _rest, opened, _read, _start) do
     for {_name, pid, _points} <- Enum.reverse(opened), do: Device.close(pid)
-    {:stop, :normal, {:error, {:io_init, name, reason}}, start}
+    {:error, {:io_init, name, reason}}
   end
 
   # The runner's state, once its devices are open: the anchor its clock counts from and
@@ -353,6 +385,7 @@ defmodule Logex.Runner do
 
     Map.merge(start, %{
       devices: devices,
+      pids: Map.new(devices, fn {name, pid, _points} -> {name, pid} end),
       anchor: now(start),
       logical: 0,
       rounds: 0,
@@ -795,8 +828,7 @@ defmodule Logex.Runner do
   defp started!({:dictionary, dictionary}, runner),
     do: ours!(List.keyfind(dictionary, :"$initial_call", 0), runner)
 
-  defp started!(nil, runner),
-    do: raise(ArgumentError, "the runner #{inspect(runner)} is not running")
+  defp started!(nil, runner), do: raise(ArgumentError, not_running(runner))
 
   defp ours!({_key, {__MODULE__, :init, 1}}, runner), do: runner
   defp ours!(_other, runner), do: raise(ArgumentError, expected(runner) <> ", another process")

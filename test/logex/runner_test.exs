@@ -64,6 +64,22 @@ defmodule Logex.RunnerTest do
     def cancel(_clock, _timer), do: :ok
   end
 
+  # A name for GenServer's `{:via, module, name}`, whose registration, made in the new
+  # runner's own process before its init/1 runs, sends the runner the messages it is given:
+  # so that a host's call or stop is in the runner's mailbox before anything else is.
+  defmodule Early do
+    import Kernel, except: [send: 2]
+
+    def register_name({key, messages}, pid) do
+      Enum.each(messages, &Kernel.send(pid, &1))
+      :global.register_name(key, pid)
+    end
+
+    def unregister_name({key, _messages}), do: :global.unregister_name(key)
+    def whereis_name({key, _messages}), do: :global.whereis_name(key)
+    def send({key, _messages}, message), do: :global.send(key, message)
+  end
+
   # The growth tests' bounds, each a fifth above the highest of 32 runs (see "growth").
   @both_bound 4.33
   @instances_bound 4.24
@@ -402,6 +418,185 @@ defmodule Logex.RunnerTest do
     end
   end
 
+  # The runner's mailbox, polled until it holds a message `held?` takes.
+  defp holding(pid, held?) do
+    {:messages, messages} = Process.info(pid, :messages)
+    holding(Enum.any?(messages, held?), pid, held?)
+  end
+
+  defp holding(true, _pid, _held?), do: :ok
+
+  defp holding(false, pid, held?) do
+    Process.sleep(1)
+    holding(pid, held?)
+  end
+
+  # The runner's queue of host requests, polled until it holds `n`.
+  defp queued(runner, n), do: queued(:queue.len(:sys.get_state(runner).queue) == n, runner, n)
+
+  defp queued(true, _runner, _n), do: :ok
+
+  defp queued(false, runner, n) do
+    Process.sleep(1)
+    queued(runner, n)
+  end
+
+  defp call?({:"$gen_call", _from, _request}), do: true
+  defp call?(_other), do: false
+
+  # What a call raised, or what it gave.
+  defp outcome(fun) do
+    {:gave, fun.()}
+  rescue
+    error in ArgumentError -> {:raised, Exception.message(error)}
+  catch
+    kind, reason -> {kind, reason}
+  end
+
+  describe "what comes first, last, or from no host" do
+    test "a call by its name that comes before its devices are open waits for them and " <>
+           "its first round" do
+      {opts, %{panel: panel}} = rig()
+      Sim.set(panel, [0], 1)
+      ref = make_ref()
+      key = {__MODULE__, ref}
+      name = {:via, Early, {key, [{:"$gen_call", {self(), ref}, :status}]}}
+
+      assert {:ok, runner} = Runner.start_link(opts ++ [name: name])
+      assert_receive {^ref, %{status: :running, rounds: 1}}
+      assert Runner.get!(name, "y") == 1
+      assert Process.alive?(runner)
+    end
+
+    # start_link/1 gives the runner, which stops once its first round has run, every
+    # output 0 once and every device closed.
+    test "a stop by its name that comes before its devices are open" do
+      {opts, %{panel: panel}} = rig()
+      Sim.set(panel, [0], 1)
+      ref = make_ref()
+      stop = {:system, {self(), ref}, {:terminate, :normal}}
+      name = {:via, Early, {{__MODULE__, ref}, [stop]}}
+
+      assert {:ok, runner} = Runner.start_link(opts ++ [name: name])
+      assert_receive {^ref, :ok}
+
+      # Gone normally, or already gone when the monitor was set.
+      monitor = Process.monitor(runner)
+
+      assert_receive {:DOWN, ^monitor, :process, ^runner, reason}
+                     when reason in [:normal, :noproc]
+
+      assert Sim.writes(panel) == [%{[0] => 1}, %{[0] => 0}]
+      assert Sim.closed?(panel)
+    end
+
+    test "a request still waiting at a stop raises in its caller that the runner is not " <>
+           "running, whatever the stop's reason" do
+      config =
+        configured("var_global x bool at panel.i.0\nprogram b count\n", %{
+          "count" => "var_output n dint\nadd n 1 n"
+        })
+
+      for reason <- [:normal, :shutdown, :abandoned] do
+        {opts, %{clock: clock, panel: panel}} = rig(config)
+        {:ok, runner} = Runner.start_link(opts)
+        Process.unlink(runner)
+
+        # Time passed and no wake delivered: a round is owed, so the request waits.
+        Manual.pass(clock, 5)
+        waiting = Task.async(fn -> outcome(fn -> Runner.get(runner, "b.n") end) end)
+        queued(runner, 1)
+
+        ExUnit.CaptureLog.capture_log(fn -> Runner.stop(runner, reason) end)
+
+        assert Task.await(waiting) == {:raised, "the runner #{inspect(runner)} is not running"}
+        assert Sim.closed?(panel)
+      end
+    end
+
+    test "a call that reaches the runner as it stops, unanswered, raises the same" do
+      {opts, _rig} = rig()
+      {:ok, runner} = Runner.start_link(opts)
+      :sys.suspend(runner)
+      waiting = Task.async(fn -> outcome(fn -> Runner.status(runner) end) end)
+      holding(runner, &call?/1)
+      Runner.stop(runner)
+      assert Task.await(waiting) == {:raised, "the runner #{inspect(runner)} is not running"}
+    end
+
+    # A call none of its functions makes, and a device's change from another process.
+    test "a cast or a message is passed over, and a call it does not make is the caller's " <>
+           "mistake" do
+      {opts, %{panel: panel}} = rig()
+      {:ok, runner} = Runner.start_link(opts)
+      GenServer.cast(runner, :x)
+      GenServer.cast(runner, {:changes, "panel", %{[0] => 1}})
+      send(runner, {:changes, "panel", %{[0] => 1}})
+
+      for request <- [:foo, :open, {:changes, "panel", %{[0] => 1}}, {:changes, :x, :y}] do
+        assert {:raise, %ArgumentError{message: message}} = GenServer.call(runner, request)
+
+        assert message ==
+                 "Logex.Runner has no request #{inspect(request)}: a runner is called " <>
+                   "through get/2, get!/2, status/1, subscribe/2, unsubscribe/1 and stop/2"
+      end
+
+      assert Process.alive?(runner)
+      assert %{rounds: 1, status: :running} = Runner.status(runner)
+      assert Runner.get!(runner, "x") == 0
+      assert Sim.writes(panel) == [%{[0] => 0}]
+    end
+
+    # Starts and stops by one name while another process polls the runner by that name:
+    # the starter is never taken down with the runner, and the poller is told each time
+    # that the runner is running or that it is not.
+    test "a host polling it by name across starts and stops takes neither it nor its " <>
+           "starter down" do
+      name = :"runner_#{System.unique_integer([:positive])}"
+      poller = spawn_link(fn -> polling(name, MapSet.new()) end)
+
+      for _ <- 1..100 do
+        {opts, _rig} = rig()
+
+        {starter, monitor} =
+          spawn_monitor(fn ->
+            {:ok, runner} = Runner.start_link(opts ++ [name: name])
+            :ok = Runner.stop(runner)
+          end)
+
+        assert_receive {:DOWN, ^monitor, :process, ^starter, :normal}, 5_000
+      end
+
+      send(poller, {:report, self()})
+      assert_receive {:polled, polled}, 5_000
+
+      assert MapSet.subset?(
+               polled,
+               MapSet.new([
+                 :running,
+                 "no runner is running under the name #{inspect(name)}",
+                 :gone
+               ])
+             ),
+             inspect(polled)
+    end
+  end
+
+  # A poller's outcomes, each a status that is running, the name unused, or the runner
+  # gone as it was called.
+  defp polling(name, polled) do
+    receive do
+      {:report, test} -> send(test, {:polled, polled})
+    after
+      0 -> polling(name, MapSet.put(polled, polled_once(outcome(fn -> Runner.status(name) end))))
+    end
+  end
+
+  defp polled_once({:gave, %{status: :running}}), do: :running
+  defp polled_once({:raised, "the runner " <> _not_running}), do: :gone
+  defp polled_once({:raised, message}), do: message
+  defp polled_once(other), do: other
+
   describe "the devices (decisions 120, 124 and 125)" do
     test "each opened in device-name order and read once at start, and the first round " <>
            "run at once, every device with an output written" do
@@ -421,9 +616,15 @@ defmodule Logex.RunnerTest do
       {opts, %{panel: panel, drive: drive}} = plant_rig()
       Sim.fail(panel, :init, {:error, :unplugged})
       Process.flag(:trap_exit, true)
+      name = :"runner_#{System.unique_integer([:positive])}"
 
-      assert Runner.start_link(opts) == {:error, {:io_init, "panel", :unplugged}}
-      assert_receive {:EXIT, _runner, :normal}
+      # The runner's normal exit is start_link/1's to take: no exit signal reaches the
+      # caller, and its name is free again.
+      assert Runner.start_link(opts ++ [name: name]) ==
+               {:error, {:io_init, "panel", :unplugged}}
+
+      assert GenServer.whereis(name) == nil
+      refute_received {:EXIT, _runner, _reason}
 
       # `drive` comes first, so it was opened, and is closed again, its output zeroed once.
       assert Sim.closed?(drive)
