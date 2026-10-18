@@ -2642,13 +2642,15 @@ and a bound device no point is at, are the host's mistakes at start (§4.5).
   period. Whether a refresh should also write the adapter again, so that a device whose
   outputs never change still hears from its master, was put to the maintainer, who
   answered the same day, decision 130: each device writes its last outputs again at its
-  poll, at most once a poll period and only where nothing was written within one, while
-  its last refresh's deadline has not passed, a device with no output point never
-  written; so the refresh carries the deadline and the poll the outputs. And after
-  M4-3's verification, decision 132: a poll in the millisecond a round is due, which
-  has not run, leaves that write to the round, the runner telling every device after
-  each round when the next is due, so that no stale write comes just before the round's
-  own.)*
+  poll, while its last refresh's deadline has not passed, a device never written, one
+  with no output point among them, writing nothing; so the refresh carries the deadline
+  and the poll the outputs. After M4-3's verification decision 132 made a poll in a
+  round's millisecond leave its write to the round; the maintainer answered it the same
+  day, "Fixed timer as Logix", superseding it and decision 130's "where nothing was
+  written within a poll period": each device writes its last outputs again at every poll,
+  on its poll grid, whether or not a round wrote to it within the period, as Logix
+  re-sends outputs at the RPI, and the rounds write as before, so a device costs one
+  adapter write a poll period beside each round's.)*
 - **Order.** Devices are opened, written and zeroed in device-name order, one after
   another, so a run is deterministic; in parallel is later, once a real network adapter
   has been measured. *(A tie, noted after M4-3's review: a device's poll that changes an
@@ -5493,7 +5495,8 @@ same day.
      the review refined it: the write again is made by the device's own process at its
      poll, after its read, never by a refresh, so it costs one adapter write a poll period
      for a device whose outputs do not change, and nothing more for one a round writes
-     within each poll period; a device with no output point is never written; a device
+     within each poll period *(superseded, below: a fixed timer)*; a device with no
+     output point is never written; a device
      that has not yet been written, before the first round's write, has nothing to write
      again; and a device whose last refresh's deadline has passed writes nothing again,
      so that it never holds a stuck runner's outputs past the deadline decision 125 gives
@@ -5502,6 +5505,28 @@ same day.
      outputs, and a device's own loss-of-master time, set longer than a poll period, is
      never reached while the runner is well. *(Answered and taken 2026-10-18, after M4-3's
      review.)*
+
+     **Amended: a fixed timer,** the maintainer, 2026-10-18, after M4-3's verification
+     (decision 132), "Fixed timer as Logix", superseding "where nothing was written
+     within a poll period" and "nothing more for one a round writes within each poll
+     period" above. Each device writes the outputs it last wrote again at every poll, on
+     its poll grid, after its read, whether or not a round wrote to it within the
+     period; the rounds write a device where its outputs changed, as before, with no
+     pairing of a poll with a round, no write skipped and no word from the runner to a
+     device after a round. The rest stands: a device never written, one with no output
+     point among them, writes nothing at a poll; one whose last refresh's deadline has
+     passed writes nothing again, so a stuck runner's outputs are not held past the
+     deadline M4-4's latch acts on; and at a stop every output is written 0 once, the
+     last write. IEC 61131-3 says nothing of a controller's traffic with its I/O. Logix
+     sends a module's data at its RPI whether or not it changed, which the manual saved
+     for this record says of an input module (p.42, above), and re-sends a controller's
+     outputs at the RPI in the same way, as the maintainer answers; that an output
+     module falls back to its safe state after missing several RPIs stays
+     **unverified**, by the maintainer's answer "Leave unverified". The cost: one adapter
+     write a device a poll period, plus each round's; a poll in a round's millisecond,
+     handled first, writes the last value just before the round writes the new one, as
+     the maintainer accepts. *(Answered and taken
+     2026-10-18, after M4-3's verification.)*
 131. **A host's call on the manual clock waits for its slot (Milestone 4),** following
      decision 122, asked as M4-3 landed. A test runs the box counter on the manual clock
      with a slow drive whose every write passes 3 ms, and calls `get!/2` from the test's
@@ -5542,8 +5567,12 @@ same day.
 **After M4-3's verification, 2026-10-18.** The verification of the fixes to M4-3's review
 found one rule of decision 130's that its words did not hold at a boundary.
 
-132. **A poll's write again in a round's millisecond (Milestone 4),** following decision
-     130. A toggle runs on a 10 ms task and the panel is polled every 10 ms, the default.
+132. **A poll's write again in a round's millisecond (Milestone 4),** *superseded
+     2026-10-18 by the maintainer's answer, "Fixed timer as Logix", decision 130's
+     amendment: no poll leaves its write to a round, and the mechanism below,
+     `Device.due/2`, the runner's cast after each round and the wake at the poll's
+     millisecond, is gone; its text is kept as it was taken.* Following decision 130. A
+     toggle runs on a 10 ms task and the panel is polled every 10 ms, the default.
      Each round falls in the millisecond of a poll, which is handled first; a poll period
      has passed since the last round's write, so the device wrote its old outputs again,
      and the round then wrote the new ones: twice the writes the device needs, each a
@@ -5575,7 +5604,9 @@ found one rule of decision 130's that its words did not hold at a boundary.
      with 102 writes, the zeros and the 50 between rounds that decision 130 asks for among
      them, where 150 came, 98 of them repeats, and a 10 ms task 101 rounds with 102
      writes, none repeated.
-     *(Taken 2026-10-18, after M4-3's verification; the maintainer may choose the second.)*
+     *(Taken 2026-10-18, after M4-3's verification; the maintainer may choose the second.
+     The maintainer answered the same day with neither: a fixed timer, decision 130's
+     amendment, which supersedes this decision.)*
 
 ---
 
@@ -5615,7 +5646,11 @@ found one rule of decision 130's that its words did not hold at a boundary.
   the time slice's formula and table, decision 122) and p.31 (the I/O force tables among
   a controller's I/O memory, decision 127). **Unverified:** that the conventional family
   keeps forces in the project through a power cycle, with a "forces on" indicator,
-  which neither manual says (decision 127).
+  which neither manual says (decision 127); and that an output module falls back to its
+  safe state after missing several RPIs, left unverified by the maintainer's answer,
+  "Leave unverified" (decision 130's amendment, which takes from the maintainer that a
+  controller's outputs are re-sent at the RPI, as the manual says an input module's
+  data is, p.42).
 - For Milestone 2's design: the add-on instructions manual, Sept 2025, p.21 (instructions
   nested up to 16 levels deep, decision 32; the design considerations reference says the
   same on p.15), p.23 (local tags not reachable from outside, decision 33) and p.79 (a

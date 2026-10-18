@@ -25,8 +25,9 @@ items, M3-1, M3-2, M3-3 and M3-4, landing the same day and its last, M3-5, on 20
 so Milestone 3 is done (§3, "Milestone 3"). Milestone 4, the wall-clock runner, was
 designed and decided on 2026-10-17 (§3, "Milestone 4"), its first item, M4-1, landing the
 same day, its second, M4-2, on 2026-10-18, and its third, M4-3, the same day, with the
-answers to its review and the maintainer's two answers, decisions 130 and 131, and the
-answers to the verification of those, decision 132.
+answers to its review and the maintainer's two answers, decisions 130 and 131, the
+answers to the verification of those, decision 132, and the maintainer's answer to that,
+a fixed timer, which amends decision 130 and supersedes decision 132.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -3300,6 +3301,26 @@ and M4-7 the documents.
   9 rules, all red. 1408 tests pass on Elixir 1.20.4 (9 of them doctests), up from 1404.
   Decision 132 was taken without the maintainer, who may prefer its second option, the
   rule as landed with its cost stated.
+
+  **The maintainer's answer, 2026-10-18,** "Fixed timer as Logix", replacing decision
+  132: each device re-sends its last outputs every poll period on its poll grid, whether
+  or not a round wrote to it within the period, as Logix re-sends outputs at the RPI, and
+  the rounds write as before. Two commits on it, each gated:
+  (1) `2203fa1`, decision 132's mechanism removed, `Device.due/2`, the runner's cast
+  after each round and the wake at the poll's millisecond, and decision 130's skip with
+  it: a device writes again at every poll once written, while its last refresh's
+  deadline has not passed, one with no output point never written; tests that count a
+  device a round writes every millisecond, 31 + 3 writes over 30 ms, and every 5, 10 or
+  20 ms exactly, a device's process never written writing nothing at its polls, and busy
+  devices' 201 writes each over 1,000 ms at 1, 4 and 16 devices beside the idle ones'
+  101; 9 rules, all red;
+  (2) the documents, the commit after it: decision 130 amended and 132 marked
+  superseded in `docs/organisation.md` §7, with IEC's silence on a controller's I/O
+  traffic, Logix's re-send at the RPI, an output module's fallback after missed RPIs
+  left unverified, and the cost, one adapter write a device a poll period, plus each
+  round's; §4.11, the moduledocs, README's "On the clock", re-run, its output the same,
+  and CLAUDE.md brought to it. 1407 tests pass on Elixir 1.20.4 (9 of them doctests),
+  down from 1408: decision 132's four tests gone, three new.
 - **M4-4 · The watchdogs and the fault path.** *Done when* each of these is a test on the
   manual clock, a hung device's deadline in real time and short:
   - a timed task whose run outlasts its watchdog trips before its round's write, naming

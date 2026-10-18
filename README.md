@@ -1713,13 +1713,12 @@ closed: true
 - A device that reports passes each change on by a call the runner answers once it has
   merged it, and, for a trigger, once the round it makes has run and its outputs are
   written: so `Logex.IO.Sim.set/3` returns after that round. Each device is also read
-  every poll period, and written where its outputs changed; where nothing was written
-  to it within a poll period, it writes its last outputs again at its poll (decision
-  130), so a drive that turns its outputs off when its master goes quiet never does
-  while the runner is well; a poll in the millisecond a round is due leaves that write
-  to the round, made at its end only where the round wrote nothing, so no write comes
-  just before a round replaces it (decision 132). A device with no output point is never
-  written.
+  every poll period, and written where its outputs changed; and at every poll it writes
+  its last outputs again, whether or not a round wrote to it within the period, a fixed
+  timer, as Logix re-sends outputs at the RPI (decision 130): so a drive that turns its
+  outputs off when its master goes quiet never does while the runner is well, at the
+  cost of one write a device a poll period beside each round's. A device never written,
+  one with no output point among them, is written nothing at a poll.
 - The e-stop is no trigger here: merged at 22, it reached the conveyor at its next run,
   at 30, which latched its fault and stopped it.
 - `status/1` gives each task's longest run against its watchdog, `0` on a clock that
