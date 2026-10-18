@@ -594,7 +594,7 @@ defmodule Logex.RunnerTest do
 
         assert message ==
                  "Logex.Runner has no request #{inspect(request)}: a runner is called " <>
-                   "through get/2, get!/2, status/1, subscribe/2, unsubscribe/1 and stop/2"
+                   "through get/2, get!/2, status/1, subscribe/2, unsubscribe/1, restart/2 and stop/2"
       end
 
       assert Process.alive?(runner)

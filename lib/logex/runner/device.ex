@@ -25,6 +25,10 @@ defmodule Logex.Runner.Device do
   #   `refresh/2` tells it the deadline by which it will hear from the runner again, without
   #   a wait (decision 125); `close/1` writes 0 to every output once, closes the adapter,
   #   and stops (decision 116).
+  # - `zero/1` is a trip's (M4-4, decision 113): every output written 0 once, and the device
+  #   latched, writing nothing more, a round's write and a poll's write again among it,
+  #   until `release/1`, a restart's; a close of a latched device writes no 0 again, so
+  #   that every output is written 0 exactly once whatever comes after the trip.
 
   use GenServer
 
@@ -36,6 +40,8 @@ defmodule Logex.Runner.Device do
   def write(device, values), do: GenServer.call(device, {:write, values}, :infinity)
   def refresh(device, deadline), do: GenServer.cast(device, {:refresh, deadline})
   def close(device), do: GenServer.call(device, :close, :infinity)
+  def zero(device), do: GenServer.call(device, :zero, :infinity)
+  def release(device), do: GenServer.call(device, :release, :infinity)
 
   @impl GenServer
   def init(%{name: name, module: module, opts: opts, points: points, runner: runner} = args),
@@ -54,6 +60,7 @@ defmodule Logex.Runner.Device do
          next: nil,
          deadline: nil,
          written: nil,
+         latched: false,
          zeros:
            Map.new(for(%Point{direction: :output, address: address} <- points, do: {address, 0}))
        }}
@@ -61,9 +68,14 @@ defmodule Logex.Runner.Device do
   @impl GenServer
   def handle_call(:open, _from, state), do: opened(init_adapter(state), state)
 
+  def handle_call({:write, _values}, _from, %{latched: true} = state), do: {:reply, :ok, state}
   def handle_call({:write, values}, _from, state), do: {:reply, :ok, wrote(values, state)}
 
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, closed(zeroed(state))}
+  def handle_call(:zero, _from, state), do: {:reply, :ok, latched(state)}
+
+  def handle_call(:release, _from, state),
+    do: {:reply, :ok, %{state | latched: false}}
 
   @impl GenServer
   def handle_cast({:refresh, deadline}, state), do: {:noreply, %{state | deadline: deadline}}
@@ -112,6 +124,7 @@ defmodule Logex.Runner.Device do
   # The outputs last written, written again at every poll, whatever a round wrote within
   # the period, while the last refresh's deadline has not passed (decision 130); a device
   # never refreshed has heard no deadline, so writes nothing again.
+  defp rewritten(%{latched: true} = state), do: state
   defp rewritten(%{written: nil} = state), do: state
   defp rewritten(%{deadline: nil} = state), do: state
 
@@ -175,7 +188,13 @@ defmodule Logex.Runner.Device do
     exit(reason)
   end
 
-  # Every output written 0, once; a device with none is written nothing.
+  # A trip's latch: every output written 0 once, and nothing more until a release.
+  defp latched(%{latched: true} = state), do: state
+  defp latched(state), do: %{zeroed(state) | latched: true}
+
+  # Every output written 0, once; a device with none is written nothing, and a latched
+  # one was written its 0 when it latched.
+  defp zeroed(%{latched: true} = state), do: state
   defp zeroed(%{zeros: zeros} = state) when map_size(zeros) == 0, do: state
 
   defp zeroed(%{module: module, adapter: adapter, zeros: zeros} = state) do

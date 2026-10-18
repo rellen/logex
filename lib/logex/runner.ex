@@ -155,7 +155,11 @@ defmodule Logex.Runner do
   alias Logex.IO.Point
   alias Logex.Runner.{Clock, Device}
 
-  @options [:configuration, :io, :clock, :poll, :overhead, :idle, :name]
+  # `steps:` is hidden (M4-4): a module of a test's standing in for Logex.Runtime's
+  # steps, the one seam through which a test reaches a fault no host can cause, an
+  # exception out of the core, `{:internal, message}` (docs/organisation.md §4.11).
+  @options [:configuration, :io, :clock, :poll, :overhead, :idle, :name, :steps]
+  @steps [cycle_steps: 3, cycle_step: 2, cycle_outputs: 1]
 
   # The events a subscriber may name, and those it gets unless it names them (§4.11).
   @kinds [:overlap, :fault, :trip, :restart, :edit, :ran, :round]
@@ -192,13 +196,15 @@ defmodule Logex.Runner do
   def stop(runner, reason \\ :normal), do: GenServer.stop(runner!(runner), reason, :infinity)
 
   @doc """
-  The runner's status, a map: `status`, `:running`; `now`, the resource's time; `rounds`,
-  the rounds run; `trip`, nil; `overlaps`, each task's (`Logex.Runtime.overlaps/1`);
+  The runner's status, a map: `status`, `:running`, or `:tripped` from a trip until a
+  restart; `now`, the resource's time; `rounds`, the rounds run, a round that tripped
+  not among them; `trip`, the trip's reason, nil while running; `overlaps`, each task's
+  (`Logex.Runtime.overlaps/1`);
   `forces`, `%{}`; `edit`, nil; `runs`, each task's longest run against its watchdog,
   `{ms, watchdog_ms}`, a timed task's run and the continuous task's round, under its name
   or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most a round's wake came after its time, in ms; and
-  `refresh_gap`, the longest wait between two refreshes of the devices, in ms. M4-4 gives
-  `trip` its reasons and `status` `:tripped`, and M4-5 the forces and the edit.
+  `refresh_gap`, the longest wait between two refreshes of the devices, in ms. M4-5 gives
+  the forces and the edit.
   """
   def status(runner), do: call(runner, :status)
 
@@ -216,6 +222,22 @@ defmodule Logex.Runner do
 
   @doc "Stops sending the caller the runner's events."
   def unsubscribe(runner), do: call(runner, {:unsubscribe, self()})
+
+  @doc """
+  Starts a tripped runner again, `:cold` or `:warm`, `:warm` being `:cold` until `retain`
+  lands (decision 113): every device's latch released, the resource restarted
+  (`Logex.Runtime.restart/2`, which keeps the input image and puts every other global
+  back to its initial value), `{:restart, mode}` sent to the subscribers, and the first
+  round run at once, before it returns, the clock not counting the time it was stopped,
+  so that round's elapsed time is 0. `:ok`; a runner that is running is the host's
+  mistake.
+  """
+  def restart(runner, mode), do: call(runner, {:restart, mode!(mode)})
+
+  defp mode!(mode) when mode in [:cold, :warm], do: mode
+
+  defp mode!(other),
+    do: raise(ArgumentError, "a runner restarts :cold or :warm, got: #{inspect(other)}")
 
   # A proper list of kinds, each one of the seven: an improper list is told as any other
   # that is not one, before a subtraction that cannot take it.
@@ -331,12 +353,21 @@ defmodule Logex.Runner do
     {:ok, %{state | subscribers: Map.delete(subscribers, pid)}}
   end
 
+  defp serve({:restart, _mode}, %{status: :running}),
+    do:
+      raise(
+        ArgumentError,
+        "the runner is running: restart/2 starts a runner again once it has tripped"
+      )
+
+  defp serve({:restart, mode}, state), do: {:ok, restarted(mode, state)}
+
   defp serve(other, _state),
     do:
       raise(
         ArgumentError,
         "Logex.Runner has no request #{inspect(other)}: a runner is called through " <>
-          "get/2, get!/2, status/1, subscribe/2, unsubscribe/1 and stop/2"
+          "get/2, get!/2, status/1, subscribe/2, unsubscribe/1, restart/2 and stop/2"
       )
 
   defp demonitor(nil), do: :ok
@@ -344,10 +375,10 @@ defmodule Logex.Runner do
 
   defp status_of(state),
     do: %{
-      status: :running,
+      status: state.status,
       now: state.logical,
       rounds: state.rounds,
-      trip: nil,
+      trip: state.trip,
       overlaps: Runtime.overlaps(state.runtime),
       forces: %{},
       edit: nil,
@@ -464,6 +495,8 @@ defmodule Logex.Runner do
           )
         ),
       used: 0,
+      status: :running,
+      trip: nil,
       queue: :queue.new(),
       subscribers: %{},
       next_round: nil,
@@ -560,26 +593,85 @@ defmodule Logex.Runner do
   # from the step's start, and before the write with the idle watchdog's, and each device
   # whose outputs changed written, in device-name order, its answer awaited (decisions
   # 118, 125 and 128). Then the share's count, the next round planned, and the requests
-  # that waited served in the rest of the millisecond.
+  # that waited served in the rest of the millisecond. A tripped runner runs none
+  # (decision 113); an exception out of the core, the cycle's steps, trips it
+  # `{:internal, message}`, the resource kept as the last step that finished left it.
+  defp rounded(%{status: :tripped} = state), do: state
+
   defp rounded(%{anchor: anchor, logical: logical} = state) do
     start = now(state)
     elapsed = max(start - anchor - logical, 0)
-    {runtime, steps} = Runtime.cycle_steps(state.runtime, elapsed, state.pending)
+    steps = state.steps
 
-    {state, timed, events} =
-      Enum.reduce(steps, {%{state | runtime: runtime}, 0, []}, &stepped/2)
+    begun(
+      core(fn -> steps.cycle_steps(state.runtime, elapsed, state.pending) end),
+      start,
+      elapsed,
+      state
+    )
+  end
 
+  defp begun({:internal, _message} = reason, _start, _elapsed, state), do: tripped(state, reason)
+
+  # The resource's clock has moved on and its image taken the inputs, so `logical` and
+  # `pending` follow it whatever the round's end.
+  defp begun({:ok, {runtime, steps}}, start, elapsed, state) do
+    state = %{state | runtime: runtime, logical: state.logical + elapsed, pending: %{}}
+
+    steps
+    |> Enum.reduce_while({:ok, state, 0, []}, &stepped/2)
+    |> computed(start)
+  end
+
+  defp stepped({kind, task, _run} = step, {:ok, state, timed, events}) do
+    begun = now(state)
+    state = refresh(state, begun + watchdog(task, state) + state.poll)
+    steps = state.steps
+
+    stepped(
+      core(fn -> steps.cycle_step(state.runtime, step) end),
+      kind,
+      task,
+      begun,
+      {state, timed, events}
+    )
+  end
+
+  defp stepped({:internal, _message} = reason, _kind, _task, _begun, {state, _timed, events}),
+    do: {:halt, {:trip, reason, state, events}}
+
+  defp stepped({:ok, {runtime, ran}}, kind, task, begun, {state, timed, events}) do
+    took = now(state) - begun
+
+    {:cont,
+     {:ok, ran(%{state | runtime: runtime}, task, took), timed + timed(kind, took),
+      Enum.reverse(ran, events)}}
+  end
+
+  # A round that tripped is published as far as it ran, and then its trip; one whose
+  # steps all ran is timed, its outputs computed and written.
+  defp computed({:trip, reason, state, events}, _start) do
+    published(state, Enum.reverse(events))
+    tripped(state, reason)
+  end
+
+  defp computed({:ok, state, timed, events}, start) do
     state = ran(state, state.continuous, now(state) - start)
-    outputs = Runtime.cycle_outputs(state.runtime)
+    steps = state.steps
+    outputs(core(fn -> steps.cycle_outputs(state.runtime) end), start, timed, events, state)
+  end
+
+  defp outputs({:internal, _message} = reason, _start, _timed, events, state),
+    do: computed({:trip, reason, state, events}, nil)
+
+  defp outputs({:ok, outputs}, start, timed, events, state) do
     state = written(refresh(state, :idle), outputs)
     finish = now(state)
     {logic, again} = logic(state)
 
     state = %{
       state
-      | logical: logical + elapsed,
-        pending: %{},
-        rounds: state.rounds + 1,
+      | rounds: state.rounds + 1,
         logic: logic,
         used: used(state, finish - start - timed)
     }
@@ -592,14 +684,59 @@ defmodule Logex.Runner do
     |> freely()
   end
 
-  defp stepped({kind, task, _run} = step, {state, timed, events}) do
-    begun = now(state)
-    state = refresh(state, begun + watchdog(task, state) + state.poll)
-    {runtime, ran} = Runtime.cycle_step(state.runtime, step)
-    took = now(state) - begun
+  # The core called, an exception out of it given back as the trip it causes: it cannot
+  # happen through the host contract, so tripping rather than crashing keeps the state for
+  # diagnosis, and zeroes the outputs either way (§4.11).
+  defp core(fun) do
+    {:ok, fun.()}
+  rescue
+    exception -> {:internal, Exception.message(exception)}
+  catch
+    kind, reason -> {:internal, Exception.format_banner(kind, reason)}
+  end
 
-    {ran(%{state | runtime: runtime}, task, took), timed + timed(kind, took),
-     Enum.reverse(ran, events)}
+  # ---- the trip and the restart ----------------------------------------------------------
+
+  # A trip's one path, whatever caused it (decision 113): scheduling stopped, its wake
+  # cancelled and any that comes stale; every output written 0 once, through each device,
+  # in device-name order, which latches; `{:trip, reason}` sent to the subscribers; and the
+  # host's requests that waited answered, every one from now on served at once. The
+  # resource is kept as the last round computed it, for get/2.
+  defp tripped(state, reason) do
+    cancel(state.wake, state.clock)
+    state = %{state | status: :tripped, trip: reason, wake: nil, next_round: nil, written: %{}}
+    Enum.each(state.devices, fn {_name, pid, _points} -> :ok = Device.zero(pid) end)
+    published(state, [{:trip, reason}])
+    drained(:queue.out(state.queue), state)
+  end
+
+  defp drained({:empty, _queue}, state), do: state
+
+  defp drained({{:value, request}, queue}, state) do
+    state = answered(request, %{state | queue: queue})
+    drained(:queue.out(state.queue), state)
+  end
+
+  # A restart (decision 113): every latch released, the resource restarted, which keeps
+  # its clock and its input image, the triggers logic writes sampled again, the anchor
+  # moved so that the time stopped is not counted, and the first round run at once.
+  defp restarted(mode, state) do
+    Enum.each(state.devices, fn {_name, pid, _points} -> :ok = Device.release(pid) end)
+    runtime = Runtime.restart(state.runtime, mode)
+    at = now(state)
+
+    state = %{
+      state
+      | runtime: runtime,
+        status: :running,
+        trip: nil,
+        anchor: at - state.logical,
+        refreshed: at,
+        logic: Map.new(state.logic, fn {name, _value} -> {name, Runtime.get!(runtime, name)} end)
+    }
+
+    published(state, [{:restart, mode}])
+    rounded(state)
   end
 
   defp timed(:timed, took), do: took
@@ -690,6 +827,7 @@ defmodule Logex.Runner do
   # Every device refreshed, without a wait, carrying its deadline: a step's, or `:idle`'s,
   # the idle watchdog and a poll period from now (decisions 125 and 128); the longest wait
   # between two refreshes kept for the status.
+  defp refresh(%{status: :tripped} = state, _deadline), do: state
   defp refresh(state, :idle), do: refresh(state, now(state) + state.idle + state.poll)
 
   defp refresh(%{devices: devices, refreshed: last} = state, deadline) do
@@ -745,9 +883,11 @@ defmodule Logex.Runner do
     overhead = share!(Keyword.get(opts, :overhead, 20))
     idle = ms!(Keyword.get(opts, :idle, 500), :idle)
     devices = Logex.IO.bind!(configuration, io)
+    steps = steps!(Keyword.get(opts, :steps, Runtime))
 
     {%{
        configuration: configuration,
+       steps: steps,
        runtime: runtime,
        devices: devices,
        clock: clock,
@@ -837,6 +977,28 @@ defmodule Logex.Runner do
         ArgumentError,
         "the runner's clock `#{inspect(module)}` does not implement Logex.Runner.Clock: it " <>
           "has no " <> Enum.join(callbacks, ", ")
+      )
+
+  # The hidden seam: a module with the three steps of Logex.Runtime's it stands in for.
+  defp steps!(module) when is_atom(module),
+    do:
+      stands_in!(
+        Code.ensure_loaded?(module) and Enum.all?(@steps, &exported?(module, &1)),
+        module
+      )
+
+  defp steps!(other), do: stands_in!(false, other)
+
+  defp exported?(module, {function, arity}), do: function_exported?(module, function, arity)
+
+  defp stands_in!(true, module), do: module
+
+  defp stands_in!(false, other),
+    do:
+      raise(
+        ArgumentError,
+        "the runner's steps: is a module with cycle_steps/3, cycle_step/2 and " <>
+          "cycle_outputs/1, standing in for Logex.Runtime's, got: #{inspect(other)}"
       )
 
   defp ms!(ms, _key) when ms in @interval, do: ms
