@@ -1059,4 +1059,245 @@ defmodule Logex.RunnerTest do
       assert Manual.now_ms(clock) == 999_993
     end
   end
+
+  describe "stop/2, status/1 and subscriptions" do
+    test "stop/2 writes every output 0 once and closes every device before it returns " <>
+           "(decision 116)" do
+      {opts, %{panel: panel, drive: drive, clock: clock}} = plant_rig()
+      {:ok, runner} = Runner.start_link(opts)
+      Sim.set(panel, %{[0] => 1, [1] => 1})
+      Manual.advance(clock, 10)
+      assert Sim.outputs(panel) == %{[0] => 1}
+
+      assert Runner.stop(runner) == :ok
+      refute Process.alive?(runner)
+      assert List.last(Sim.writes(panel)) == %{[0] => 0}
+      assert List.last(Sim.writes(drive)) == %{[0] => 0}
+      assert Enum.count(Sim.writes(panel), &(&1 == %{[0] => 0})) == 2
+      assert Enum.count(Sim.writes(drive), &(&1 == %{[0] => 0})) == 2
+      assert Sim.closed?(panel) and Sim.closed?(drive)
+      reads = Sim.reads(panel)
+
+      # Nothing after: no read, no write.
+      Manual.advance(clock, 50)
+      assert Sim.reads(panel) == reads
+      assert List.last(Sim.writes(panel)) == %{[0] => 0}
+
+      # Its reason is a GenServer's, and a runner that is none is told so.
+      {opts, _rig} = plant_rig()
+      {:ok, runner} = Runner.start_link(opts)
+      Process.flag(:trap_exit, true)
+      assert Runner.stop(runner, :shutdown) == :ok
+      assert_receive {:EXIT, ^runner, :shutdown}
+
+      raises("the runner #{inspect(runner)} is not running", fn -> Runner.stop(runner) end)
+    end
+
+    test "status/1 at start" do
+      {opts, _rig} = plant_rig(counted(), poll: 4)
+      {:ok, runner} = Runner.start_link(opts)
+
+      assert Runner.status(runner) == %{
+               status: :running,
+               now: 0,
+               rounds: 1,
+               trip: nil,
+               overlaps: %{"fast" => 0, "trip" => 0},
+               forces: %{},
+               edit: nil,
+               runs: %{"fast" => {0, 500}, "trip" => {0, 500}},
+               latest_wake: 0,
+               refresh_gap: 0
+             }
+    end
+
+    test "status/1's runs: each timed task's longest step and the continuous task's " <>
+           "longest round, against its watchdog" do
+      text =
+        "task main continuous watchdog 200\ntask fast interval 10 priority 1 watchdog 50\n" <>
+          "task idle interval 1000000 priority 2\n" <>
+          "var_global x bool at panel.i.0\nprogram b count\nprogram c count with fast\n" <>
+          "program d count with idle\n"
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(text, %{"count" => @count}),
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {TickClock, clock}
+        )
+
+      # Rounds are always owed on this clock, so the request waits for its slot.
+      status = fn -> waited(:gen_server.send_request(runner, :status), clock) end
+      %{runs: runs} = status.()
+      assert %{"main" => {main, 200}, "fast" => {fast, 50}, "idle" => {idle, 500}} = runs
+      assert map_size(runs) == 3
+
+      # Each step reads the clock twice and refreshes once on the ticking clock, and the
+      # round holds two steps more.
+      assert fast > 0 and idle > 0 and main > fast + idle
+      Manual.advance(clock, 30)
+      assert %{"main" => {^main, 200}, "idle" => {^idle, 500}} = status.().runs
+
+      # Untimed programs and no continuous line: under :none, 500 ms.
+      {opts, _rig} =
+        rig(configured("var_global x bool at panel.i.0\nprogram b count\n", %{"count" => @count}))
+
+      {:ok, runner} = Runner.start_link(opts)
+      assert Runner.status(runner).runs == %{none: {0, 500}}
+    end
+
+    test "status/1's latest wake and longest wait between two refreshes, in ms" do
+      config =
+        configured(
+          "task fast interval 10 priority 1\nvar_global q bool at slow.q.0\n" <>
+            "program t toggle with fast\n  t.q q\n",
+          %{"toggle" => @toggle}
+        )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, slow} = Sim.start_link(clock: clock)
+      Sim.fail(slow, :write, {:delay, 14})
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"slow" => {Sim, sim: slow}},
+          clock: {Manual, clock},
+          poll: 20
+        )
+
+      # The first round's write took 14 ms: the round due at 10 woke at 14, 4 late, after
+      # a wait of 14 ms since the last refresh, before its write.
+      Manual.advance(clock, 0)
+      assert %{latest_wake: 4, refresh_gap: 14, rounds: 2, now: 14} = Runner.status(runner)
+
+      # Each the longest: later wakes are on time, and later waits 10 ms.
+      Manual.advance(clock, 30)
+      assert %{latest_wake: 4, refresh_gap: 14, rounds: 5, now: 40} = Runner.status(runner)
+    end
+
+    test "subscribe/2: the resource's overlaps and faults by default, `:ran` and `:round` " <>
+           "where named, each as {Logex.Runner, runner, event}" do
+      text =
+        "task fast interval 10 priority 1\nvar_global q bool at slow.q.0\n" <>
+          "program t toggle with fast\n  t.q q\nprogram z zero with fast\n"
+
+      config =
+        configured(text, %{
+          "toggle" => @toggle,
+          "zero" => "var_output n dint\nvar d dint\ndiv 1 d n"
+        })
+
+      {:ok, clock} = Manual.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"slow" => {SlowIO, clock: clock, ms: 25}},
+          clock: {Manual, clock},
+          poll: 1000
+        )
+
+      assert Runner.subscribe(runner) == :ok
+      forwarding(runner, [:ran, :round])
+
+      # The first round's write took 25 ms, so the round at 25 runs the task due at 10 and
+      # misses the one at 20.
+      Manual.advance(clock, 0)
+      assert_received {Runner, ^runner, {:overlap, "fast", 1}}
+
+      assert_received {Runner, ^runner,
+                       {:fault, "fast", "z", %Logex.Fault{kind: :divide_by_zero}}}
+
+      refute_received {Runner, ^runner, {:ran, _, _, _}}
+
+      assert Runner.status(runner).overlaps == %{"fast" => 1}
+
+      # In the order they happened, the round's last.
+      assert for(_ <- 1..3, do: receive(do: ({:forwarded, event} -> event))) == [
+               {:ran, "fast", "t", 25},
+               {:ran, "fast", "z", 25},
+               {:round, 25, %{"q" => 0}}
+             ]
+
+      refute_received {:forwarded, _}
+
+      # Subscribing again replaces the kinds; unsubscribing stops them.
+      assert Runner.subscribe(runner, [:round]) == :ok
+      Manual.advance(clock, 0)
+      assert_received {Runner, ^runner, {:round, 50, %{"q" => 1}}}
+      refute_received {Runner, ^runner, {:fault, _, _, _}}
+      assert Runner.unsubscribe(runner) == :ok
+      Manual.advance(clock, 0)
+      refute_received {Runner, ^runner, _}
+      assert_receive {:forwarded, {:round, 75, _}}
+    end
+
+    test "a subscriber that goes down is dropped" do
+      {opts, %{clock: clock}} = plant_rig()
+      {:ok, runner} = Runner.start_link(opts)
+
+      gone =
+        spawn(fn ->
+          Runner.subscribe(runner, [:round])
+        end)
+
+      ref = Process.monitor(gone)
+      assert_receive {:DOWN, ^ref, :process, ^gone, _}
+      :sys.get_state(runner)
+      assert :sys.get_state(runner).subscribers == %{}
+      Manual.advance(clock, 10)
+      assert Process.alive?(runner)
+    end
+
+    test "subscribe/2's host mistakes, raised in the caller" do
+      {opts, _rig} = plant_rig()
+      {:ok, runner} = Runner.start_link(opts)
+
+      for kinds <- [:ran, [:ran, :rounds], ["ran"]] do
+        raises(
+          "a runner's events are subscribed by a list of their kinds, among :overlap, " <>
+            ":fault, :trip, :restart, :edit, :ran and :round, got: #{inspect(kinds)}",
+          fn -> Runner.subscribe(runner, kinds) end
+        )
+      end
+
+      raises("expected a runner from Logex.Runner.start_link/1, got: 42", fn ->
+        Runner.unsubscribe(42)
+      end)
+
+      raises("no runner is running under the name :x", fn -> Runner.status(:x) end)
+      assert Process.alive?(runner)
+
+      # Anything else sent to it changes nothing.
+      send(runner, :junk)
+      assert Runner.status(runner).rounds == 1
+    end
+  end
+
+  # A subscriber of its own, which passes each event it is sent on to the test, tagged.
+  defp forwarding(runner, kinds) do
+    test = self()
+
+    pid =
+      spawn_link(fn ->
+        :ok = Runner.subscribe(runner, kinds)
+        send(test, :subscribed)
+        forward(test)
+      end)
+
+    assert_receive :subscribed
+    pid
+  end
+
+  defp forward(test) do
+    receive do
+      {Runner, _runner, event} -> send(test, {:forwarded, event})
+    end
+
+    forward(test)
+  end
 end

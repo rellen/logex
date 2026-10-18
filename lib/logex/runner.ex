@@ -88,9 +88,20 @@ defmodule Logex.Runner do
   with it, and the function raises it in the caller, the runner running on. A runner is
   given by its pid, or by the name it was started under.
 
-  - `get/2` and `get!/2` read the resource as `Logex.Runtime.get/2` and `get!/2` do, a
-    path that names nothing being `{:error, reason}` from the one and a raise from the
-    other, and a path that is not a string a raise from both.
+  - `get/2` and `get!/2` read the resource as `Logex.Runtime.get/2` and `get!/2` do, of the
+    last round computed, a path that names nothing being `{:error, reason}` from the one
+    and a raise from the other, and a path that is not a string a raise from both.
+  - `status/1` gives the runner's state, its rounds, each task's overlaps and longest run
+    against its watchdog, the latest wake and the longest wait between two refreshes.
+  - `subscribe/2` sends the caller each event of the kinds it names, as `{Logex.Runner,
+    runner, event}`: the resource's `{:overlap, task, missed}` and `{:fault, task,
+    instance, fault}` by default, with the trips, restarts and edits M4-4 and M4-5 bring,
+    and, only where named, the resource's `{:ran, task, instance, now}` and the runner's
+    `{:round, now, outputs}`, each round's output points. A subscriber is monitored and
+    dropped when it goes down. `unsubscribe/1` stops them.
+  - `stop/2` writes every output 0 once, through each device, and closes every device, in
+    device-name order, before it returns (decision 116). It is served at once, whatever
+    the share.
 
   **What logex is not.** logex is not a safety controller, and must not implement a
   safety function: an emergency stop, a guard interlock, a light curtain, two-hand
@@ -109,6 +120,10 @@ defmodule Logex.Runner do
   alias Logex.Runner.{Clock, Device}
 
   @options [:configuration, :io, :clock, :poll, :overhead, :idle, :name]
+
+  # The events a subscriber may name, and those it gets unless it names them (§4.11).
+  @kinds [:overlap, :fault, :trip, :restart, :edit, :ran, :round]
+  @default_kinds [:overlap, :fault, :trip, :restart, :edit]
 
   # A poll period and the idle watchdog are an interval's range, as a watchdog is
   # (decision 109); the share is the conventional table's span (decision 121).
@@ -142,6 +157,50 @@ defmodule Logex.Runner do
   @doc "The value at an access path, as `Logex.Runtime.get!/2` gives it, raising `ArgumentError` with its reason."
   def get!(runner, path), do: call(runner, {:get!, path})
 
+  @doc """
+  Stops the runner: every output written 0 once, through each device, and every device
+  closed, in device-name order, before it returns (decision 116). A reason other than
+  `:normal`, `:shutdown` or `{:shutdown, term}` is an abnormal exit, as for any GenServer.
+  """
+  def stop(runner, reason \\ :normal), do: GenServer.stop(runner!(runner), reason, :infinity)
+
+  @doc """
+  The runner's status, a map: `status`, `:running`; `now`, the resource's time; `rounds`,
+  the rounds run; `trip`, nil; `overlaps`, each task's (`Logex.Runtime.overlaps/1`);
+  `forces`, `%{}`; `edit`, nil; `runs`, each task's longest run against its watchdog,
+  `{ms, watchdog_ms}`, a timed task's run and the continuous task's round, under its name
+  or `:none`; `latest_wake`, the most a round's wake came after its time, in ms; and
+  `refresh_gap`, the longest wait between two refreshes of the devices, in ms. M4-4 gives
+  `trip` its reasons and `status` `:tripped`, and M4-5 the forces and the edit.
+  """
+  def status(runner), do: call(runner, :status)
+
+  @doc """
+  Subscribes the caller to the runner's events of the kinds named, each sent as
+  `{Logex.Runner, runner, event}`: `:overlap` and `:fault`, the resource's own, and
+  `:trip`, `:restart` and `:edit` by default; `:ran`, the resource's `{:ran, task,
+  instance, now}`, and `:round`, the runner's `{:round, now, outputs}` after each round,
+  only where named, since a live display's events come at thousands a second. A
+  subscriber is monitored, and dropped when it goes down; subscribing again replaces the
+  kinds. Events are sent, never awaited.
+  """
+  def subscribe(runner, kinds \\ @default_kinds),
+    do: call(runner, {:subscribe, self(), kinds!(kinds)})
+
+  @doc "Stops sending the caller the runner's events."
+  def unsubscribe(runner), do: call(runner, {:unsubscribe, self()})
+
+  defp kinds!(kinds) when is_list(kinds), do: kinds!(kinds -- @kinds, kinds)
+  defp kinds!(other), do: raise(ArgumentError, kinds_told(other))
+
+  defp kinds!([], kinds), do: kinds
+  defp kinds!(_unknown, kinds), do: raise(ArgumentError, kinds_told(kinds))
+
+  defp kinds_told(kinds),
+    do:
+      "a runner's events are subscribed by a list of their kinds, among :overlap, :fault, " <>
+        ":trip, :restart, :edit, :ran and :round, got: #{inspect(kinds)}"
+
   # A host's call, a mistake in it raised here, in the caller.
   defp call(runner, request), do: relayed(GenServer.call(runner!(runner), request, :infinity))
 
@@ -171,6 +230,20 @@ defmodule Logex.Runner do
 
   def handle_info({__MODULE__, :wake, _stale}, state), do: {:noreply, state}
 
+  def handle_info({:DOWN, _ref, :process, pid, _reason}, state),
+    do: {:noreply, %{state | subscribers: Map.delete(state.subscribers, pid)}}
+
+  # Anything else sent to the runner is no request of its, and changes nothing.
+  def handle_info(_other, state), do: {:noreply, state}
+
+  # A stop: every output written 0 once and every device closed, in device-name order
+  # (decision 116). A runner that never opened its devices has none to close.
+  @impl GenServer
+  def terminate(_reason, %{rounds: _rounds, devices: devices}),
+    do: Enum.each(devices, fn {_name, pid, _points} -> Device.close(pid) end)
+
+  def terminate(_reason, _start), do: :ok
+
   defp requested(false, request, state), do: answered(request, refresh(state, :idle))
   defp requested(true, request, state), do: %{state | queue: :queue.in(request, state.queue)}
 
@@ -189,6 +262,44 @@ defmodule Logex.Runner do
 
   defp serve({:get, path}, %{runtime: runtime} = state), do: {Runtime.get(runtime, path), state}
   defp serve({:get!, path}, %{runtime: runtime} = state), do: {Runtime.get!(runtime, path), state}
+  defp serve(:status, state), do: {status_of(state), state}
+
+  defp serve({:subscribe, pid, kinds}, %{subscribers: subscribers} = state) do
+    demonitor(Map.get(subscribers, pid))
+    {:ok, %{state | subscribers: Map.put(subscribers, pid, {Process.monitor(pid), kinds})}}
+  end
+
+  defp serve({:unsubscribe, pid}, %{subscribers: subscribers} = state) do
+    demonitor(Map.get(subscribers, pid))
+    {:ok, %{state | subscribers: Map.delete(subscribers, pid)}}
+  end
+
+  defp demonitor(nil), do: :ok
+  defp demonitor({ref, _kinds}), do: Process.demonitor(ref, [:flush])
+
+  defp status_of(state),
+    do: %{
+      status: :running,
+      now: state.logical,
+      rounds: state.rounds,
+      trip: nil,
+      overlaps: Runtime.overlaps(state.runtime),
+      forces: %{},
+      edit: nil,
+      runs: Map.new(state.longest, fn {task, ms} -> {task, {ms, watchdog(task, state)}} end),
+      latest_wake: state.latest_wake,
+      refresh_gap: state.refresh_gap
+    }
+
+  # Each event of a kind its subscriber named, sent, never awaited.
+  defp published(%{subscribers: subscribers}, events),
+    do:
+      for(
+        {pid, {_ref, kinds}} <- subscribers,
+        event <- events,
+        elem(event, 0) in kinds,
+        do: send(pid, {__MODULE__, self(), event})
+      )
 
   # ---- the devices -----------------------------------------------------------------------
 
@@ -264,8 +375,9 @@ defmodule Logex.Runner do
   # `:none` where none is declared, `continuous`, nil for none; the share's slots, C ms of
   # rounds and S ms of the runner's own work; the triggers logic writes, each event task's
   # single that is no input point, at their values as the first round finds them; and the
-  # count the share keeps, the requests waiting for it, the next round, the one wake, each
-  # task's longest run, the latest wake and the longest wait between two refreshes.
+  # count the share keeps, the requests waiting for it, the subscribers with the kinds of
+  # event each named, the next round, the one wake, each task's longest run, the latest
+  # wake and the longest wait between two refreshes.
   defp scheduling(state, %Configuration{tasks: tasks, instances: instances}) do
     named = Enum.find_value(tasks, :none, &(&1.continuous && &1.name))
     timed = for %Configuration.Task{continuous: false, name: name} <- tasks, do: name
@@ -287,6 +399,7 @@ defmodule Logex.Runner do
         ),
       used: 0,
       queue: :queue.new(),
+      subscribers: %{},
       next_round: nil,
       wake: nil,
       token: 0,
@@ -384,8 +497,8 @@ defmodule Logex.Runner do
     elapsed = max(start - anchor - logical, 0)
     {runtime, steps} = Runtime.cycle_steps(state.runtime, elapsed, state.pending)
 
-    {state, timed} =
-      Enum.reduce(steps, {%{state | runtime: runtime}, 0}, &stepped/2)
+    {state, timed, events} =
+      Enum.reduce(steps, {%{state | runtime: runtime}, 0, []}, &stepped/2)
 
     state = ran(state, state.continuous, now(state) - start)
     outputs = Runtime.cycle_outputs(state.runtime)
@@ -393,7 +506,7 @@ defmodule Logex.Runner do
     finish = now(state)
     {logic, again} = logic(state)
 
-    %{
+    state = %{
       state
       | logical: logical + elapsed,
         pending: %{},
@@ -401,16 +514,22 @@ defmodule Logex.Runner do
         logic: logic,
         used: used(state, finish - start - timed)
     }
+
+    published(state, Enum.reverse(events, [{:round, state.logical, outputs}]))
+
+    state
     |> planned(start, finish, state.untimed or again)
     |> freely()
   end
 
-  defp stepped({kind, task, _run} = step, {state, timed}) do
+  defp stepped({kind, task, _run} = step, {state, timed, events}) do
     begun = now(state)
     state = refresh(state, begun + watchdog(task, state) + state.poll)
-    {runtime, _events} = Runtime.cycle_step(state.runtime, step)
+    {runtime, ran} = Runtime.cycle_step(state.runtime, step)
     took = now(state) - begun
-    {ran(%{state | runtime: runtime}, task, took), timed + timed(kind, took)}
+
+    {ran(%{state | runtime: runtime}, task, took), timed + timed(kind, took),
+     Enum.reverse(ran, events)}
   end
 
   defp timed(:timed, took), do: took

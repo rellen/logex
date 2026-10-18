@@ -1552,7 +1552,13 @@ defmodule Logex.RuntimeTest do
                handle_info: 2,
                init: 1,
                start_link: 1,
-               terminate: 2
+               status: 1,
+               stop: 1,
+               stop: 2,
+               subscribe: 1,
+               subscribe: 2,
+               terminate: 2,
+               unsubscribe: 1
              ]
 
       # M4-3: each bound device's process, internal (no moduledoc), which the runner starts.
