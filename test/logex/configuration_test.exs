@@ -1087,11 +1087,18 @@ defmodule Logex.ConfigurationTest do
       assert Configuration.watchdog(watched(task("a", 10, 1), 50)) == 50
       assert Configuration.watchdog(task("a", 10, 1)) == 500
       assert Configuration.watchdog(continuous("main")) == 500
+      assert Configuration.watchdog(watched(task("a", 10, 1), 1)) == 1
+      assert Configuration.watchdog(watched(task("a", 10, 1), 2_147_483_647)) == 2_147_483_647
 
-      for other <- [watched(task("a", 10, 1), 1.5), %Global{name: "g", type: :bool}, 50] do
+      # A watchdog check/1 tells its range is no watchdog here either.
+      out_of_range = for ms <- [0, -5, 2_147_483_648], do: watched(continuous("main"), ms)
+
+      for other <-
+            [watched(task("a", 10, 1), 1.5), %Global{name: "g", type: :bool}, 50] ++
+              out_of_range do
         message =
-          "expected a %Logex.Configuration.Task{} whose watchdog is an integer or nil, got: " <>
-            inspect(other)
+          "expected a %Logex.Configuration.Task{} whose watchdog is 1 to 2147483647 ms or " <>
+            "nil, got: " <> inspect(other)
 
         assert_raise ArgumentError, message, fn -> Configuration.watchdog(opaque(other)) end
       end

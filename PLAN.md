@@ -3161,7 +3161,10 @@ and M4-7 the documents.
   was reported as a reorder of every task, `{:order, :tasks, names}`, though it is never
   due and takes part in no tie, decision 62's reason for reporting the tasks' order; the
   tasks' order is the timed tasks' now, a note on decision 129, and such a move reports
-  nothing. The suite is at 1333 tests (9 doctests).
+  nothing. `Logex.Configuration.watchdog/1` gave back a watchdog of 0 or -5, which no
+  check had passed, as a task's; it raises for one outside 1 to 2147483647 ms now, as for
+  one that is no integer, since every caller reads a checked task. The suite is at 1333
+  tests (9 doctests).
 - **M4-3 · The runner: start, rounds, devices, stop, read, subscribe.** *Done when* §4.4's
   plant with M4-2's box counter, loaded from files on disk through
   `Logex.Configuration.compile_file/1`, runs through `Logex.Runner` on the manual clock and

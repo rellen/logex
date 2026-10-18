@@ -1589,7 +1589,9 @@ defmodule Logex.Configuration do
   rule for it, as `initial/1` is a global's (M4-2, decisions 109 and 110). Every task has
   one, the continuous task's bounding each of its rounds (decision 111), and the runner
   reads it at each step it times; `Logex.Runtime` reads no clock and so none, and
-  `Logex.Configuration.Edit` reports a change of it (decision 129).
+  `Logex.Configuration.Edit` reports a change of it (decision 129). A watchdog outside 1
+  to 2147483647 ms is a diagnostic of `check/1`, and given here, from a task no check has
+  passed, is the host's mistake, raised.
 
       iex> Logex.Configuration.watchdog(%Logex.Configuration.Task{name: "fast", interval: 10, priority: 1})
       500
@@ -1598,15 +1600,15 @@ defmodule Logex.Configuration do
   """
   def watchdog(%Logex.Configuration.Task{watchdog: nil}), do: 500
 
-  def watchdog(%Logex.Configuration.Task{watchdog: watchdog}) when is_integer(watchdog),
+  def watchdog(%Logex.Configuration.Task{watchdog: watchdog}) when watchdog in @interval,
     do: watchdog
 
   def watchdog(other),
     do:
       raise(
         ArgumentError,
-        "expected a %Logex.Configuration.Task{} whose watchdog is an integer or nil, got: " <>
-          inspect(other)
+        "expected a %Logex.Configuration.Task{} whose watchdog is 1 to 2147483647 ms or " <>
+          "nil, got: " <> inspect(other)
       )
 
   @doc """

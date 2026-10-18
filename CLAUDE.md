@@ -188,7 +188,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   negative initial value and constant are taken (decision 97). Since M4-2
   (`docs/organisation.md` §4.11, decisions 109 to 111) a task has `watchdog`, 1 to
   2147483647 ms or nil for 500, which `watchdog/1`, the one rule for it, gives and the
-  runner will read, and `continuous`, false unless set, `name` alone enforced: `check/1`
+  runner will read, raising, since M4-2's review, for a watchdog out of that range as for
+  one that is no integer, and `continuous`, false unless set, `name` alone enforced: `check/1`
   tells a watchdog of 0 that every task has one and one out of range its range, refuses
   a second continuous task, told the first, and one given a single, an interval or a
   priority, all of them in one diagnostic shown `task main continuous watchdog 200`, and
