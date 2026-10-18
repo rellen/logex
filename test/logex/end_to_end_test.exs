@@ -4273,4 +4273,185 @@ defmodule Logex.EndToEndTest do
       assert Sim.outputs(drive) == %{[0] => 1200, [1] => 0}
     end
   end
+
+  # PLAN.md M4-2's Done-when, as it is worded: §4.4's plant, every task line with a
+  # watchdog, and a box counter in its continuous task, `task main continuous watchdog 200`
+  # and `program boxes counter`, from a configuration file's text and from files on disk.
+  # It reads, prints back exactly, compiles with no warning and cycles as before, the box
+  # counter's runs reported under `main`; and an online edit that adds `with main` moves
+  # nothing.
+  describe "watchdogs and the continuous task in the plant (M4-2)" do
+    @describetag :tmp_dir
+
+    alias Logex.Configuration
+    alias Logex.Configuration.{Edit, Text}
+
+    # A box counter: a photo-eye adds one for each box, the case-full lamp lights at twelve,
+    # and the reset button empties the count, README's `boxes.ld` at a case of twelve.
+    @counter_ld """
+    var_input eye bool
+    var_input reset_pb bool
+    var_output full_lamp bool
+    var boxes ctu
+
+    xic reset_pb ote boxes.r
+    xic eye ctu boxes 12
+    xic boxes.q ote full_lamp
+    """
+
+    @boxes """
+
+    task main continuous watchdog 200
+
+    var_global eye_1     bool at panel.i.8
+    var_global case_full bool at panel.q.4
+
+    program boxes counter
+      boxes.eye       eye_1
+      boxes.reset_pb  pb_reset
+      boxes.full_lamp case_full
+    """
+
+    # §4.4's plant as written, each task line given a watchdog, and the box counter.
+    defp watched_plant do
+      whole_plant()
+      |> String.replace(
+        "task fast interval 10 priority 1",
+        "task fast interval 10 priority 1 watchdog 50"
+      )
+      |> String.replace(
+        "task slow interval 50 priority 2",
+        "task slow interval 50 priority 2 watchdog 2000"
+      )
+      |> String.replace(
+        "task trip single estop priority 0",
+        "task trip single estop priority 0 watchdog 20"
+      )
+      |> Kernel.<>(@boxes)
+    end
+
+    defp counter_programs do
+      {programs, files} = shared_programs()
+      {:ok, counter} = Logex.compile(@counter_ld, name: "counter")
+      {Map.put(programs, "counter", counter), Map.put(files, "counter.ld", @counter_ld)}
+    end
+
+    # The plant cycled every 10 ms from 0, both motors started, the e-stop at each value of
+    # `trace` in turn and the eye at each of `eyes`: each cycle's runs and lamp, and the
+    # resource at the end.
+    defp boxed(plant, trace, eyes) do
+      Enum.zip(trace, eyes)
+      |> Enum.with_index()
+      |> Enum.map_reduce(Logex.Runtime.start(plant), fn {{estop, eye}, cycle}, runtime ->
+        inputs = Map.merge(started(cycle * 10), %{"estop" => estop, "eye_1" => eye})
+        {runtime, outputs, events} = Logex.Runtime.cycle(runtime, min(cycle, 1) * 10, inputs)
+
+        {{for({:ran, task, instance, _} <- events, do: {task, instance}), outputs["case_full"]},
+         runtime}
+      end)
+    end
+
+    defp the_watched_done_when(plant, text) do
+      # It reads and prints back exactly, and compiles with no warning.
+      assert plant.warnings == []
+      assert Text.print(plant) == printed_as(text)
+
+      assert Enum.find(plant.tasks, &(&1.name == "main")) == %Configuration.Task{
+               name: "main",
+               continuous: true,
+               watchdog: 200,
+               line: watched_line(text, "task main")
+             }
+
+      assert Enum.map(plant.tasks, &Configuration.watchdog/1) == [50, 2000, 20, 200]
+
+      # It cycles as before, the box counter last in every cycle under `main`; the oracle
+      # knows nothing of logex: the lamp is on once twelve rising edges of the eye have
+      # come after the first cycle, which counts none.
+      :rand.seed(:exsss, {2026, 10, 18})
+      trace = [0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1] ++ List.duplicate(0, 49)
+      eyes = for _ <- trace, do: Enum.random([0, 1])
+      {cycles, _runtime} = boxed(plant, trace, eyes)
+
+      rises =
+        for {[before, now], cycle} <-
+              Enum.with_index(Enum.chunk_every([0 | trace], 2, 1, :discard)),
+            before == 0 and now == 1,
+            do: cycle
+
+      counted =
+        eyes
+        |> Enum.chunk_every(2, 1, :discard)
+        |> Enum.map(fn [before, now] -> if(before == 0 and now == 1, do: 1, else: 0) end)
+        |> Enum.scan(&+/2)
+
+      for {{runs, lamp}, cycle} <- Enum.with_index(cycles) do
+        due = [{"fast", "m1"}] ++ if(rem(cycle, 5) == 0, do: [{"slow", "m2"}], else: [])
+        due = if cycle in rises, do: [{"trip", "snap"} | due], else: due
+        assert runs == due ++ [{"main", "boxes"}], "cycle #{cycle + 1}"
+        boxes = if cycle == 0, do: 0, else: Enum.at(counted, cycle - 1)
+        assert lamp == if(boxes >= 12, do: 1, else: 0), "cycle #{cycle + 1}"
+      end
+
+      assert Enum.any?(cycles, &match?({_, 1}, &1)) and Enum.any?(cycles, &match?({_, 0}, &1))
+
+      # An online edit that adds `with main` moves nothing: no report, and the next cycles
+      # run as they did.
+      runtime = Logex.Runtime.start(plant)
+      {runtime, _, _} = Logex.Runtime.cycle(runtime, 0, started(0))
+
+      with_main =
+        String.replace(text, "program boxes counter\n", "program boxes counter with main\n")
+
+      {:ok, candidate} = Configuration.compile("plant", with_main, plant.programs)
+      assert {:ok, edit, []} = Edit.accept(runtime, candidate)
+      assert {edit, tested, []} = Edit.test(edit, runtime)
+      assert {_candidate, assembled, []} = Edit.assemble(edit, tested)
+
+      Enum.reduce(
+        [{10, started(10)}, {10, %{"eye_1" => 1}}, {10, %{"eye_1" => 0}}, {10, %{"estop" => 1}}],
+        {runtime, assembled},
+        fn {elapsed, inputs}, {kept, edited} ->
+          {kept, kept_outputs, kept_events} = Logex.Runtime.cycle(kept, elapsed, inputs)
+          {edited, edited_outputs, edited_events} = Logex.Runtime.cycle(edited, elapsed, inputs)
+          assert {edited_outputs, edited_events} == {kept_outputs, kept_events}
+
+          assert Logex.Runtime.get!(edited, "boxes.boxes.cv") ==
+                   Logex.Runtime.get!(kept, "boxes.boxes.cv")
+
+          {kept, edited}
+        end
+      )
+    end
+
+    # The text as print/1 writes it: lowercase keywords, one space, no comment, no indent.
+    defp printed_as(text) do
+      text
+      |> String.split("\n")
+      |> Enum.map(&(&1 |> String.replace(~r{//.*}, "") |> String.split() |> Enum.join(" ")))
+      |> Enum.join("\n")
+      |> String.trim_trailing()
+      |> Kernel.<>("\n")
+    end
+
+    defp watched_line(text, start),
+      do: 1 + Enum.find_index(String.split(text, "\n"), &String.starts_with?(&1, start))
+
+    test "M4-2's Done-when, from a configuration file's text" do
+      {programs, _files} = counter_programs()
+      assert {:ok, plant} = Configuration.compile("plant", watched_plant(), programs)
+      the_watched_done_when(plant, watched_plant())
+    end
+
+    test "M4-2's Done-when, from files on disk", %{tmp_dir: dir} do
+      {_programs, files} = counter_programs()
+
+      for {name, text} <-
+            Map.merge(files, %{"snapshot.ld" => @snapshot_ld, "plant.logex" => watched_plant()}),
+          do: File.write!(Path.join(dir, name), text)
+
+      assert {:ok, plant} = Configuration.compile_file(Path.join(dir, "plant.logex"))
+      the_watched_done_when(plant, watched_plant())
+    end
+  end
 end
