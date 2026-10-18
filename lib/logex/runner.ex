@@ -151,7 +151,7 @@ defmodule Logex.Runner do
 
   use GenServer, restart: :temporary
 
-  alias Logex.{Configuration, Runtime}
+  alias Logex.{Configuration, Declarations, Runtime}
   alias Logex.IO.Point
   alias Logex.Runner.{Clock, Device}
 
@@ -280,7 +280,10 @@ defmodule Logex.Runner do
   # {:error, reason}, which start_link/1 returns, the runner exiting normally, so that
   # its link does not kill the caller.
   @impl GenServer
-  def init(start), do: opening(start.devices, [], %{}, start)
+  def init(start) do
+    Process.flag(:trap_exit, true)
+    opening(start.devices, [], [], start)
+  end
 
   # A device's changes, by address, from that device's own process: merged into the next
   # round's inputs, and each change of an event task's trigger its own round, in address
@@ -289,7 +292,7 @@ defmodule Logex.Runner do
   @impl GenServer
   def handle_call({:changes, device, changes}, {pid, _tag}, %{pids: pids} = state)
       when :erlang.map_get(device, pids) == pid,
-      do: {:reply, :ok, changed(device, changes, state)}
+      do: {:reply, :ok, changed(device, vetted(device, changes, state), state)}
 
   # A host's request is the runner's own work: served at once where no round is owed, and
   # otherwise queued for the share's slot (decision 122).
@@ -307,6 +310,11 @@ defmodule Logex.Runner do
   # passed over.
   def handle_info({Device, pid, notice}, state), do: {:noreply, noticed(pid, notice, state)}
 
+  # A device's process gone down, which the runner traps: an I/O fault (decision 114), the
+  # device opened again at the next restart. One it killed, or that stopped as it was
+  # closed, is already none of its devices.
+  def handle_info({:EXIT, pid, reason}, state), do: {:noreply, exited(pid, reason, state)}
+
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state),
     do: {:noreply, %{state | subscribers: Map.delete(state.subscribers, pid)}}
 
@@ -321,11 +329,12 @@ defmodule Logex.Runner do
   # running, raised in its caller, and then every output written 0 once and every device
   # closed, in device-name order (decision 116).
   @impl GenServer
-  def terminate(_reason, %{devices: devices, queue: queue}) do
+  def terminate(_reason, %{queue: queue} = state) do
     for {from, _request} <- :queue.to_list(queue),
         do: GenServer.reply(from, gone(self()))
 
-    Enum.each(devices, fn {_name, pid, _points} -> Device.close(pid) end)
+    each_live(state, &Device.close/2)
+    :ok
   end
 
   defp requested(false, request, state), do: answered(request, refresh(state, :idle))
@@ -380,7 +389,7 @@ defmodule Logex.Runner do
         "the runner is running: restart/2 starts a runner again once it has tripped"
       )
 
-  defp serve({:restart, mode}, state), do: {:ok, restarted(mode, state)}
+  defp serve({:restart, mode}, state), do: restarted(mode, state)
 
   defp serve(other, _state),
     do:
@@ -422,7 +431,20 @@ defmodule Logex.Runner do
   # Each device opened in device-name order, its process linked to the runner, and read
   # once; the first that cannot be opened closes every one opened before it.
   defp opening([{name, module, opts, points} | rest], opened, read, start) do
-    {:ok, pid} =
+    {:ok, pid} = device(name, {module, opts}, points, start)
+
+    device = {name, pid, points}
+    timeout = start.idle + start.poll
+    reading(asked(pid, &Device.open/2, timeout), device, rest, opened, read, start)
+  end
+
+  defp opening([], opened, read, start) do
+    state = running(Enum.reverse(opened), start)
+    first_read(Enum.find_value(read, &misread(&1, state)), read, state)
+  end
+
+  defp device(name, {module, opts}, points, start),
+    do:
       Device.start_link(%{
         name: name,
         module: module,
@@ -433,21 +455,35 @@ defmodule Logex.Runner do
         poll: start.poll
       })
 
-    device = {name, pid, points}
-    reading(Device.open(pid), device, rest, opened, read, start)
-  end
-
-  defp opening([], opened, read, start) do
-    state = running(Enum.reverse(opened), start)
-    {:ok, rounded(merged(Enum.flat_map(read, &named(&1, state)), state))}
-  end
-
   defp reading({:ok, values}, {name, _pid, _points} = device, rest, opened, read, start),
-    do: opening(rest, [device | opened], Map.put(read, name, values), start)
+    do: opening(rest, [device | opened], [{name, values} | read], start)
 
-  defp reading({:error, reason}, {name, _pid, _points}, _rest, opened, _read, _start) do
-    for {_name, pid, _points} <- Enum.reverse(opened), do: Device.close(pid)
+  defp reading({:error, reason}, {name, _pid, _points}, _rest, opened, _read, start) do
+    timeout = start.idle + start.poll
+
+    for {_name, pid, _points} <- Enum.reverse(opened),
+        do: asked(pid, &Device.close/2, timeout)
+
     {:error, {:io_init, name, reason}}
+  end
+
+  # The first reads, checked as every change is: a value that does not fit, or an address
+  # that is no input point's, is a device that cannot be opened (decision 114).
+  defp misread({device, values}, state), do: misfit(vetted(device, values, state), device)
+
+  defp misfit({:ok, _changes}, _device), do: nil
+  defp misfit({:fault, cause}, device), do: {device, cause}
+
+  defp first_read(nil, read, state) do
+    changes =
+      Enum.flat_map(read, fn {device, values} -> elem(vetted(device, values, state), 1) end)
+
+    {:ok, rounded(merged(changes, state))}
+  end
+
+  defp first_read({device, cause}, _read, state) do
+    each_live(state, &Device.close/2)
+    {:error, {:io_init, device, cause}}
   end
 
   # The runner's state, once its devices are open: the anchor its clock counts from and
@@ -468,12 +504,19 @@ defmodule Logex.Runner do
       )
 
     Map.merge(start, %{
+      bindings:
+        Map.new(start.devices, fn {name, module, opts, _points} -> {name, {module, opts}} end),
       devices: devices,
       pids: Map.new(devices, fn {name, pid, _points} -> {name, pid} end),
       anchor: now(start),
       logical: 0,
       rounds: 0,
-      addresses: Map.new(inputs, fn {device, point} -> {{device, point.address}, point.name} end),
+      addresses:
+        Map.new(inputs, fn {device, point} ->
+          {{device, point.address}, {point.name, point.type}}
+        end),
+      down: MapSet.new(),
+      deadline: nil,
       outputs:
         Map.new(devices, fn {name, _pid, points} ->
           {name,
@@ -543,20 +586,34 @@ defmodule Logex.Runner do
   # of the runner's own work, 4 and 1 at 20% (decision 122).
   defp slots(p), do: {max(1, round((100 - p) / p)), max(1, round(p / (100 - p)))}
 
-  defp named({device, values}, state),
-    do:
-      for({address, value} <- values, do: {Map.fetch!(state.addresses, {device, address}), value})
+  # A device's values checked, in address order, each against the device's input points
+  # (decision 114): `{:ok, changes}`, each by its global's name, or `{:fault, cause}` for
+  # the first address that is no input point's, `{:unknown_address, address}`, or value
+  # that does not fit its point, `{:bad_value, address, value}`.
+  defp vetted(device, values, state),
+    do: Enum.reduce_while(Enum.sort(values), {:ok, []}, &check(device, &1, &2, state))
+
+  defp check(device, {address, value}, {:ok, changes}, state),
+    do: fit(Map.fetch(state.addresses, {device, address}), address, value, changes)
+
+  defp fit(:error, address, _value, _changes), do: {:halt, {:fault, {:unknown_address, address}}}
+
+  defp fit({:ok, {name, type}}, address, value, changes),
+    do: fitting(Declarations.fits?(type, value), name, address, value, changes)
+
+  defp fitting(true, name, _address, value, changes),
+    do: {:cont, {:ok, changes ++ [{name, value}]}}
+
+  defp fitting(false, _name, address, value, _changes),
+    do: {:halt, {:fault, {:bad_value, address, value}}}
 
   defp merged(changes, state), do: %{state | pending: Enum.into(changes, state.pending)}
 
-  defp changed(device, changes, state) do
+  defp changed(device, {:fault, cause}, state), do: tripped(state, {:io, device, cause})
+
+  defp changed(_device, {:ok, changes}, state) do
     {triggers, others} =
-      changes
-      |> Enum.sort()
-      |> Enum.map(fn {address, value} ->
-        {Map.fetch!(state.addresses, {device, address}), value}
-      end)
-      |> Enum.split_with(fn {name, _value} -> MapSet.member?(state.triggers, name) end)
+      Enum.split_with(changes, fn {name, _value} -> MapSet.member?(state.triggers, name) end)
 
     Enum.reduce(triggers, merged(others, state), &rounded(merged([&1], &2)))
   end
@@ -727,8 +784,13 @@ defmodule Logex.Runner do
   defp outputs({:internal, _message} = reason, _start, _timed, events, state),
     do: computed({:trip, reason, state, events}, nil)
 
-  defp outputs({:ok, outputs}, start, timed, events, state) do
-    state = written(refresh(state, :idle), outputs)
+  defp outputs({:ok, outputs}, start, timed, events, state),
+    do: delivered(written(refresh(state, :idle), outputs), outputs, start, timed, events)
+
+  defp delivered({:trip, reason, state}, _outputs, _start, _timed, events),
+    do: computed({:trip, reason, state, events}, nil)
+
+  defp delivered({:ok, state}, outputs, start, timed, events) do
     finish = now(state)
     {logic, again} = logic(state)
 
@@ -767,6 +829,58 @@ defmodule Logex.Runner do
   defp noticed(_pid, _notice, state), do: state
 
   defp reason({:latched, name, ms}), do: {:watchdog, {:device, name, ms}}
+  defp reason({:fault, name, cause}), do: {:io, name, cause}
+
+  # A device's process down: marked so, to be opened again at a restart, and the trip.
+  defp exited(pid, reason, state), do: exited(device_of(pid, state), pid, reason, state)
+
+  defp exited(nil, _pid, _reason, state), do: state
+
+  defp exited(name, _pid, reason, state),
+    do: tripped(went_down(name, state), {:io, name, {:down, reason}})
+
+  defp device_of(pid, state),
+    do:
+      Enum.find_value(state.devices, fn {name, device, _} ->
+        device == pid and live(name, state)
+      end)
+
+  defp live(name, %{down: down}), do: not MapSet.member?(down, name) and name
+
+  defp went_down(name, state), do: %{state | down: MapSet.put(state.down, name)}
+
+  # A call to a device's process, answered within `timeout` ms: one that does not answer
+  # in time is killed, `{:error, :timeout}`, and one that goes down meanwhile is
+  # `{:error, {:down, reason}}` (decisions 114 and 125).
+  defp asked(pid, call, timeout) do
+    call.(pid, timeout)
+  catch
+    :exit, {:timeout, _call} ->
+      Process.exit(pid, :kill)
+      {:error, :timeout}
+
+    :exit, {reason, _call} ->
+      {:error, {:down, reason}}
+  end
+
+  # Each device whose process is up, in device-name order, called with the runner's own
+  # time to answer, the idle watchdog and a poll period (decision 128); one that does not
+  # answer is marked down.
+  defp each_live(state, call) do
+    timeout = state.idle + state.poll
+
+    Enum.reduce(state.devices, state, fn {name, pid, _points}, state ->
+      each_device(MapSet.member?(state.down, name), name, pid, call, timeout, state)
+    end)
+  end
+
+  defp each_device(true, _name, _pid, _call, _timeout, state), do: state
+
+  defp each_device(false, name, pid, call, timeout, state),
+    do: device_answered(asked(pid, call, timeout), name, state)
+
+  defp device_answered(:ok, _name, state), do: state
+  defp device_answered({:error, _reason}, name, state), do: went_down(name, state)
 
   # A trip's one path, whatever caused it (decision 113): scheduling stopped, its wake
   # cancelled and any that comes stale; every output written 0 once, through each device,
@@ -778,7 +892,7 @@ defmodule Logex.Runner do
   defp tripped(state, reason) do
     cancel(state.wake, state.clock)
     state = %{state | status: :tripped, trip: reason, wake: nil, next_round: nil, written: %{}}
-    Enum.each(state.devices, fn {_name, pid, _points} -> :ok = Device.zero(pid) end)
+    state = each_live(state, &Device.zero/2)
     published(state, [{:trip, reason}])
     drained(:queue.out(state.queue), state)
   end
@@ -793,8 +907,49 @@ defmodule Logex.Runner do
   # A restart (decision 113): every latch released, the resource restarted, which keeps
   # its clock and its input image, the triggers logic writes sampled again, the anchor
   # moved so that the time stopped is not counted, and the first round run at once.
-  defp restarted(mode, state) do
-    Enum.each(state.devices, fn {_name, pid, _points} -> :ok = Device.release(pid) end)
+  defp restarted(mode, state),
+    do: reopened(reopen(Enum.filter(state.devices, &down?(&1, state)), state), mode)
+
+  defp down?({name, _pid, _points}, state), do: MapSet.member?(state.down, name)
+
+  # Each device that went down opened again, in device-name order, and read once, its
+  # values checked; the first that cannot be opened leaves the runner tripped.
+  defp reopen([], state), do: {:ok, state}
+
+  defp reopen([{name, _old, points} | rest], state) do
+    {:ok, pid} = device(name, Map.fetch!(state.bindings, name), points, state)
+    timeout = state.idle + state.poll
+    reopen_read(asked(pid, &Device.open/2, timeout), name, pid, points, rest, state)
+  end
+
+  defp reopen_read({:ok, values}, name, pid, points, rest, state),
+    do: reopen_checked(vetted(name, values, state), name, pid, points, rest, state)
+
+  defp reopen_read({:error, reason}, name, _pid, _points, _rest, state),
+    do: {{:error, {:io_init, name, reason}}, state}
+
+  defp reopen_checked({:ok, changes}, name, pid, points, rest, state) do
+    devices = List.keyreplace(state.devices, name, 0, {name, pid, points})
+
+    reopen(rest, %{
+      merged(changes, state)
+      | devices: devices,
+        pids: Map.put(state.pids, name, pid),
+        down: MapSet.delete(state.down, name)
+    })
+  end
+
+  defp reopen_checked({:fault, cause}, name, pid, _points, _rest, state) do
+    asked(pid, &Device.close/2, state.idle + state.poll)
+    {{:error, {:io_init, name, cause}}, state}
+  end
+
+  defp reopened({:ok, state}, mode),
+    do: {:ok, released(mode, each_live(state, &Device.release/2))}
+
+  defp reopened({error, state}, _mode), do: {error, state}
+
+  defp released(mode, state) do
     runtime = Runtime.restart(state.runtime, mode)
     at = now(state)
 
@@ -868,12 +1023,16 @@ defmodule Logex.Runner do
     %{
       state
       | token: token,
-        wake: {module.wake_at(clock, self(), {__MODULE__, :wake, token}, at), token, at}
+        wake:
+          {clocked(fn -> module.wake_at(clock, self(), {__MODULE__, :wake, token}, at) end),
+           token, at}
     }
   end
 
   defp cancel(nil, _clock), do: :ok
-  defp cancel({timer, _token, _at}, {module, clock}), do: module.cancel(clock, timer)
+
+  defp cancel({timer, _token, _at}, {module, clock}),
+    do: clocked(fn -> module.cancel(clock, timer) end)
 
   # The requests that waited, served while no round is owed, every device refreshed first
   # where one waits, as before any of the runner's own work (decision 125).
@@ -910,11 +1069,17 @@ defmodule Logex.Runner do
     deadline = at + span + state.poll
     Enum.each(devices, fn {_name, pid, _points} -> Device.refresh(pid, deadline, at) end)
     now = now(state)
-    %{state | refreshed: now, refresh_gap: max(state.refresh_gap, now - last)}
+    %{state | refreshed: now, deadline: deadline, refresh_gap: max(state.refresh_gap, now - last)}
   end
 
+  # Each device whose outputs changed written, in device-name order, its answer awaited
+  # within the deadline its last refresh carried: a write that fails, or answers late, is
+  # an I/O fault, and the devices after it are not written (decision 114).
   defp written(%{devices: devices} = state, outputs),
-    do: Enum.reduce(devices, state, &write(&1, &2, outputs))
+    do:
+      Enum.reduce_while(devices, {:ok, state}, fn device, {:ok, state} ->
+        write(device, state, outputs)
+      end)
 
   defp write({name, pid, _points}, state, outputs) do
     values =
@@ -931,14 +1096,44 @@ defmodule Logex.Runner do
     )
   end
 
-  defp wrote(false, _name, _pid, _values, state), do: state
+  defp wrote(false, _name, _pid, _values, state), do: {:cont, {:ok, state}}
 
   defp wrote(true, name, pid, values, state) do
-    :ok = Device.write(pid, values)
-    %{state | written: Map.put(state.written, name, values)}
+    timeout = max(state.deadline - now(state), 0)
+    answer = asked(pid, &Device.write(&1, values, &2), timeout)
+    in_time(answer, now(state) < state.deadline, name, pid, values, state)
   end
 
-  defp now(%{clock: {module, clock}}), do: module.now_ms(clock)
+  defp in_time(:ok, true, name, _pid, values, state),
+    do: {:cont, {:ok, %{state | written: Map.put(state.written, name, values)}}}
+
+  defp in_time(:ok, false, name, pid, _values, state) do
+    Process.exit(pid, :kill)
+    {:halt, {:trip, {:io, name, :timeout}, went_down(name, state)}}
+  end
+
+  defp in_time({:error, :timeout}, _in_time, name, _pid, _values, state),
+    do: {:halt, {:trip, {:io, name, :timeout}, went_down(name, state)}}
+
+  defp in_time({:error, {:down, reason}}, _in_time, name, _pid, _values, state),
+    do: {:halt, {:trip, {:io, name, {:down, reason}}, went_down(name, state)}}
+
+  defp in_time({:error, cause}, _in_time, name, _pid, _values, state),
+    do: {:halt, {:trip, {:io, name, cause}, state}}
+
+  defp now(%{clock: {module, clock}}), do: clocked(fn -> module.now_ms(clock) end)
+
+  # A clock that has gone down, or fails, stops the runner, a shutdown, every device zeroed
+  # and closed as at a stop: a runner cannot run without its clock, and a test's manual
+  # clock goes down with the test that started it, before the runner has taken its
+  # parent's exit.
+  defp clocked(call) do
+    call.()
+  rescue
+    exception -> exit({:shutdown, {:clock, Exception.message(exception)}})
+  catch
+    :exit, reason -> exit({:shutdown, {:clock, reason}})
+  end
 
   # The options, checked in the caller in order: the list, each key, each once, the two it
   # needs, and then each value, the configuration first, so that its bindings are checked

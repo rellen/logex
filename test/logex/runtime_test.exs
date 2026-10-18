@@ -1567,18 +1567,23 @@ defmodule Logex.RuntimeTest do
       assert Enum.sort(Logex.Runner.Device.__info__(:functions)) == [
                child_spec: 1,
                close: 1,
+               close: 2,
                code_change: 3,
                handle_call: 3,
                handle_cast: 2,
                handle_info: 2,
                init: 1,
                open: 1,
+               open: 2,
                refresh: 3,
                release: 1,
+               release: 2,
                start_link: 1,
                terminate: 2,
                write: 2,
-               zero: 1
+               write: 3,
+               zero: 1,
+               zero: 2
              ]
 
       assert {:docs_v1, _, _, _, :hidden, _, _} = Code.fetch_docs(Logex.Runner.Device)

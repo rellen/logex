@@ -111,10 +111,11 @@ defmodule Logex.RunnerTest do
     def send({key, _messages}, message), do: :global.send(key, message)
   end
 
-  # The growth tests' bounds, each a fifth above the highest of 32 runs (see "growth").
+  # The growth tests' bounds, each a fifth above the highest of 32 runs (see "growth"):
+  # the devices' since M4-4, whose writes are each timed against their deadline.
   @both_bound 4.33
   @instances_bound 4.24
-  @devices_bound 1.28
+  @devices_bound 1.39
 
   # One var_input copied to one var_output.
   @relay "var_input in bool\nvar_output out bool\nxic in ote out"
@@ -2166,7 +2167,11 @@ defmodule Logex.RunnerTest do
   # the devices. Linear in both (PLAN.md Milestone 4's growth rule): measured at 3.60x for
   # 4x the instances and the devices together, 3.53x for the instances alone and 1.06x for
   # the devices alone, deterministic to a few hundred reductions; each bound is a fifth
-  # above the highest of 32 runs, half of them beside three full suites.
+  # above the highest of 32 runs, half of them beside three full suites. Since M4-4 each
+  # device's write is answered within its deadline and read against the clock twice
+  # (decision 125), and the devices alone take 1.16x, at most 1.156 in 32 runs beside a
+  # mutation run's three suites, its bound 1.39; the others stay within theirs, at most
+  # 3.597 and 3.438.
   describe "growth" do
     defp crowd(n, d) do
       toggle = program("var_input in bool\nvar_output q bool\nxio q ote q", "toggle")

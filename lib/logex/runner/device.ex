@@ -38,6 +38,17 @@ defmodule Logex.Runner.Device do
   #   sooner, and moved on to the last deadline where it comes before it; and a device
   #   waiting on the runner for its own change takes its wake there too, so that a runner
   #   stuck while it takes the change is seen.
+  # - Its faults (decision 114): every callback is called guarded, so that an error given
+  #   back, `{:error, reason, state}`, a raise, a throw, an exit, or a value of a shape the
+  #   behaviour does not give, is a cause, `{:error, reason}`, `{:raised, message}`,
+  #   `{:thrown, term}` or `{:exited, term}`, a shape the behaviour does not give being
+  #   `{:raised, message}` with a message that says so. A read's, a report's or a poll's
+  #   write again tells the runner, `{Logex.Runner.Device, pid, {:fault, name, cause}}`; a
+  #   round's write answers `{:error, cause}`; and either way the device latches, its 0
+  #   written once where its adapter still takes it. An open that fails is `{:error,
+  #   reason}`, init/3's own reason or the cause, and the process stops; a zero or a close
+  #   that fails is passed over, the last the device can do. Each call of the runner's
+  #   takes a timeout, the runner's to keep (decision 125).
 
   use GenServer
 
@@ -45,12 +56,15 @@ defmodule Logex.Runner.Device do
 
   def start_link(args), do: GenServer.start_link(__MODULE__, args)
 
-  def open(device), do: GenServer.call(device, :open, :infinity)
-  def write(device, values), do: GenServer.call(device, {:write, values}, :infinity)
+  def open(device, timeout \\ :infinity), do: GenServer.call(device, :open, timeout)
+
+  def write(device, values, timeout \\ :infinity),
+    do: GenServer.call(device, {:write, values}, timeout)
+
   def refresh(device, deadline, at), do: GenServer.cast(device, {:refresh, deadline, at})
-  def close(device), do: GenServer.call(device, :close, :infinity)
-  def zero(device), do: GenServer.call(device, :zero, :infinity)
-  def release(device), do: GenServer.call(device, :release, :infinity)
+  def close(device, timeout \\ :infinity), do: GenServer.call(device, :close, timeout)
+  def zero(device, timeout \\ :infinity), do: GenServer.call(device, :zero, timeout)
+  def release(device, timeout \\ :infinity), do: GenServer.call(device, :release, timeout)
 
   @impl GenServer
   def init(%{name: name, module: module, opts: opts, points: points, runner: runner} = args),
@@ -80,7 +94,7 @@ defmodule Logex.Runner.Device do
   def handle_call(:open, _from, state), do: opened(init_adapter(state), state)
 
   def handle_call({:write, _values}, _from, %{latched: true} = state), do: {:reply, :ok, state}
-  def handle_call({:write, values}, _from, state), do: {:reply, :ok, wrote(values, state)}
+  def handle_call({:write, values}, _from, state), do: written(wrote(values, state))
 
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, closed(zeroed(state))}
   def handle_call(:zero, _from, state), do: {:reply, :ok, latched(state)}
@@ -95,10 +109,8 @@ defmodule Logex.Runner.Device do
     do: {:noreply, armed(%{state | deadline: deadline, heard: at})}
 
   @impl GenServer
-  def handle_info({__MODULE__, :poll, at}, %{next: at} = state) do
-    {:ok, values, adapter} = state.module.read(state.adapter)
-    {:noreply, polled(rewritten(passed(values, %{state | adapter: adapter})))}
-  end
+  def handle_info({__MODULE__, :poll, at}, %{next: at} = state),
+    do: {:noreply, polled(read(adapted(:read, [state.adapter], state), state))}
 
   def handle_info({__MODULE__, :poll, _stale}, state), do: {:noreply, state}
 
@@ -110,35 +122,107 @@ defmodule Logex.Runner.Device do
   def handle_info(message, %{module: module} = state),
     do: {:noreply, reported(function_exported?(module, :report, 2), message, state)}
 
-  defp init_adapter(%{module: module, name: name, points: points, opts: opts}),
-    do: module.init(name, points, opts)
+  defp init_adapter(%{name: name, points: points, opts: opts} = state),
+    do: adapted(:init, [name, points, opts], state)
 
   # Opened, the adapter is read once, all it gives taken as changed, and its first poll is
-  # one period on.
-  defp opened({:ok, adapter}, %{module: module} = state) do
-    {:ok, values, adapter} = module.read(adapter)
+  # one period on; an init/3 or a first read that fails stops the device.
+  defp opened({:ok, adapter}, state), do: first_read(adapted(:read, [adapter], state), state)
+
+  defp opened({:fault, {:init, reason}, _adapter}, state),
+    do: {:stop, :normal, {:error, reason}, state}
+
+  defp opened({:fault, cause, _adapter}, state), do: {:stop, :normal, {:error, cause}, state}
+
+  defp first_read({:ok, values, adapter}, state) do
     {mod, clock} = state.clock
 
     {:reply, {:ok, values},
-     polled(%{state | adapter: adapter, image: values, next: mod.now_ms(clock)})}
+     polled(%{
+       state
+       | adapter: adapter,
+         image: values,
+         next: clocked(fn -> mod.now_ms(clock) end)
+     })}
   end
 
-  defp opened({:error, reason}, state), do: {:stop, :normal, {:error, reason}, state}
+  defp first_read({:fault, cause, _adapter}, state), do: {:stop, :normal, {:error, cause}, state}
+
+  # A poll's read: what changed passed on and the outputs written again, or the fault.
+  defp read({:ok, values, adapter}, state),
+    do: rewritten(passed(values, %{state | adapter: adapter}))
+
+  defp read({:fault, cause, adapter}, state), do: faulted(cause, %{state | adapter: adapter})
+
+  # A callback called guarded (decision 114): its result in the behaviour's shape, or the
+  # cause of its failure, with the adapter's state it gave back or, where it gave none,
+  # the state it was called with.
+  defp adapted(callback, args, %{module: module, adapter: adapter}) do
+    shaped(callback, apply(module, callback, args), module, adapter)
+  rescue
+    exception -> {:fault, {:raised, Exception.message(exception)}, adapter}
+  catch
+    :throw, thrown -> {:fault, {:thrown, thrown}, adapter}
+    :exit, reason -> {:fault, {:exited, reason}, adapter}
+  end
+
+  defp shaped(:init, {:ok, adapter}, _module, _old), do: {:ok, adapter}
+  defp shaped(:init, {:error, reason}, _module, old), do: {:fault, {:init, reason}, old}
+
+  defp shaped(callback, {:ok, values, adapter}, _module, _old)
+       when callback in [:read, :report] and is_map(values),
+       do: {:ok, values, adapter}
+
+  defp shaped(:write, {:ok, adapter}, _module, _old), do: {:ok, adapter}
+
+  defp shaped(callback, {:error, reason, adapter}, _module, _old) when callback != :init,
+    do: {:fault, {:error, reason}, adapter}
+
+  defp shaped(callback, other, module, old),
+    do: {:fault, {:raised, misshaped(callback, other, module)}, old}
+
+  defp misshaped(callback, other, module),
+    do:
+      "#{inspect(module)}.#{callback}/#{arity(callback)} gave #{inspect(other)}, which is " <>
+        "none of Logex.IO's results"
+
+  defp arity(:init), do: 3
+  defp arity(:write), do: 2
+  defp arity(:report), do: 2
+  defp arity(:read), do: 1
+
+  # A fault of the device's own, a read's, a report's or a write again's: the runner told,
+  # which trips, and the device latched, its 0 written once where its adapter takes it. A
+  # latched device has told it already, or was latched by a trip.
+  defp faulted(_cause, %{latched: true} = state), do: state
+
+  defp faulted(cause, %{runner: runner, name: name} = state) do
+    send(runner, {__MODULE__, self(), {:fault, name, cause}})
+    latched(state)
+  end
+
+  # A round's write: answered :ok, or with its cause, the device latched.
+  defp written({:ok, state}), do: {:reply, :ok, state}
+  defp written({:fault, cause, state}), do: {:reply, {:error, cause}, latched(state)}
 
   # The next poll, a period on from the last on its grid, past now: a poll that came late
   # skips the reads it missed rather than make up for them.
   defp polled(%{clock: {mod, clock}, next: last, poll: poll} = state) do
-    now = mod.now_ms(clock)
+    now = clocked(fn -> mod.now_ms(clock) end)
     next = last + poll * (div(max(now - last, 0), poll) + 1)
-    mod.wake_at(clock, self(), {__MODULE__, :poll, next}, next)
+    clocked(fn -> mod.wake_at(clock, self(), {__MODULE__, :poll, next}, next) end)
     %{state | next: next}
   end
 
-  # The outputs written.
-  defp wrote(values, %{module: module, adapter: adapter} = state) do
-    {:ok, adapter} = module.write(values, adapter)
-    %{state | adapter: adapter, written: values}
-  end
+  # The outputs written, or the write's fault.
+  defp wrote(values, state),
+    do: wrote(adapted(:write, [values, state.adapter], state), values, state)
+
+  defp wrote({:ok, adapter}, values, state),
+    do: {:ok, %{state | adapter: adapter, written: values}}
+
+  defp wrote({:fault, cause, adapter}, _values, state),
+    do: {:fault, cause, %{state | adapter: adapter}}
 
   # The outputs last written, written again at every poll, whatever a round wrote within
   # the period, while the last refresh's deadline has not passed (decision 130); a device
@@ -148,17 +232,21 @@ defmodule Logex.Runner.Device do
   defp rewritten(%{deadline: nil} = state), do: state
 
   defp rewritten(%{clock: {mod, clock}, deadline: deadline} = state),
-    do: rewrite(mod.now_ms(clock) < deadline, state)
+    do: rewrite(clocked(fn -> mod.now_ms(clock) end) < deadline, state)
 
-  defp rewrite(true, state), do: wrote(state.written, state)
+  defp rewrite(true, state), do: again(wrote(state.written, state))
   defp rewrite(false, state), do: state
+
+  defp again({:ok, state}), do: state
+  defp again({:fault, cause, state}), do: faulted(cause, state)
 
   defp reported(false, _message, state), do: state
 
-  defp reported(true, message, %{module: module, adapter: adapter} = state) do
-    {:ok, values, adapter} = module.report(message, adapter)
-    passed(values, %{state | adapter: adapter})
-  end
+  defp reported(true, message, state),
+    do: report(adapted(:report, [message, state.adapter], state), state)
+
+  defp report({:ok, values, adapter}, state), do: passed(values, %{state | adapter: adapter})
+  defp report({:fault, cause, adapter}, state), do: faulted(cause, %{state | adapter: adapter})
 
   # What changed since the device last passed anything on, passed on to the runner.
   defp passed(values, %{image: image} = state),
@@ -217,7 +305,7 @@ defmodule Logex.Runner.Device do
 
   defp armed(%{timer: {timer, at}, deadline: deadline} = state) when deadline < at do
     {mod, clock} = state.clock
-    mod.cancel(clock, timer)
+    clocked(fn -> mod.cancel(clock, timer) end)
     arm(deadline, state)
   end
 
@@ -227,17 +315,21 @@ defmodule Logex.Runner.Device do
   defp disarmed(%{timer: nil} = state), do: state
 
   defp disarmed(%{timer: {timer, _at}, clock: {mod, clock}} = state) do
-    mod.cancel(clock, timer)
+    clocked(fn -> mod.cancel(clock, timer) end)
     %{state | timer: nil}
   end
 
   defp arm(at, %{clock: {mod, clock}} = state),
-    do: %{state | timer: {mod.wake_at(clock, self(), {__MODULE__, :deadline, at}, at), at}}
+    do: %{
+      state
+      | timer:
+          {clocked(fn -> mod.wake_at(clock, self(), {__MODULE__, :deadline, at}, at) end), at}
+    }
 
   # The wake came: a deadline later than now moves it on; one reached, with no refresh
   # since that brought a later one, latches the device, which tells the runner.
   defp expired(%{clock: {mod, clock}, deadline: deadline} = state),
-    do: expire(mod.now_ms(clock) >= deadline, state)
+    do: expire(clocked(fn -> mod.now_ms(clock) end) >= deadline, state)
 
   defp expire(false, state), do: armed(state)
   defp expire(true, %{latched: true} = state), do: state
@@ -256,16 +348,36 @@ defmodule Logex.Runner.Device do
   defp zeroed(%{latched: true} = state), do: state
   defp zeroed(%{zeros: zeros} = state) when map_size(zeros) == 0, do: state
 
-  defp zeroed(%{module: module, adapter: adapter, zeros: zeros} = state) do
-    {:ok, adapter} = module.write(zeros, adapter)
-    %{state | adapter: adapter}
-  end
+  defp zeroed(%{zeros: zeros} = state),
+    do: zero_written(adapted(:write, [zeros, state.adapter], state), state)
 
-  defp closed(%{module: module, adapter: adapter} = state) do
-    closing(function_exported?(module, :close, 1), module, adapter)
+  # A zero that fails is passed over: the device has nothing more it can do.
+  defp zero_written({:ok, adapter}, state), do: %{state | adapter: adapter}
+  defp zero_written({:fault, _cause, adapter}, state), do: %{state | adapter: adapter}
+
+  defp closed(%{module: module} = state) do
+    closing(function_exported?(module, :close, 1), state)
     state
   end
 
-  defp closing(true, module, adapter), do: module.close(adapter)
-  defp closing(false, _module, _adapter), do: :ok
+  # A close that fails is passed over, the last call an adapter is given.
+  defp closing(true, %{module: module, adapter: adapter}) do
+    module.close(adapter)
+  rescue
+    _exception -> :ok
+  catch
+    _kind, _reason -> :ok
+  end
+
+  defp closing(false, _state), do: :ok
+
+  # The runner's clock gone down, or failing, stops the device, a shutdown, as it stops
+  # the runner.
+  defp clocked(call) do
+    call.()
+  rescue
+    exception -> exit({:shutdown, {:clock, Exception.message(exception)}})
+  catch
+    :exit, reason -> exit({:shutdown, {:clock, reason}})
+  end
 end

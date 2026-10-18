@@ -102,6 +102,42 @@ defmodule Logex.TripTest do
     def cancel({clock, _ms}, timer), do: Manual.cancel(clock, timer)
   end
 
+  # An adapter whose read gives what no callback of Logex.IO gives, and whose close raises.
+  defmodule BadIO do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, opts), do: {:ok, Map.new(opts)}
+
+    @impl true
+    def read(%{read: :bad}), do: :nope
+    def read(state), do: {:ok, %{}, state}
+
+    @impl true
+    def write(_values, state), do: {:ok, state}
+
+    @impl true
+    def close(_state), do: raise("no close")
+  end
+
+  # A manual clock that goes down as it is read from `at` on: an exit out of a call to it,
+  # as a clock gone down while it is read gives.
+  defmodule GoneClock do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms({clock, at}), do: gone(Manual.now_ms(clock), at)
+
+    @impl true
+    def wake_at({clock, _at}, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel({clock, _at}, timer), do: Manual.cancel(clock, timer)
+
+    defp gone(now, at) when now >= at, do: exit(:gone)
+    defp gone(now, _at), do: now
+  end
+
   setup_all do
     :ets.new(__MODULE__, [:named_table, :public, :set])
     :ok
@@ -594,6 +630,300 @@ defmodule Logex.TripTest do
       Manual.advance(clock, 1000)
       assert %{status: :running} = Runner.status(runner)
       assert List.last(Sim.writes(panel)) == %{[0] => 1}
+    end
+  end
+
+  # An e-stop's event task, whose round, at once, writes the drive and the panel.
+  @stopped """
+  task e single t priority 0
+
+  var_global t bool at panel.i.0
+  var_global y bool at panel.q.0
+  var_global z bool at drive.q.0
+
+  program r relay with e
+    r.in  t
+    r.out y
+
+  program s relay with e
+    s.in  t
+    s.out z
+  """
+
+  # The conveyor with an input on the drive too, so that both devices are read.
+  @read_both @conveyor <> "var_global d bool at drive.i.0\n"
+
+  defp device_pid(runner, name),
+    do: :sys.get_state(runner).devices |> List.keyfind(name, 0) |> elem(1)
+
+  # The trip's 0 written once, after the last value, and nothing after.
+  defp zeroed_once(sim, last) do
+    assert [%{[0] => 0}, %{[0] => ^last} | _] = Enum.reverse(Sim.writes(sim))
+  end
+
+  describe "the I/O faults (decision 114)" do
+    test "each kind of fault in a poll's read trips, naming its device, every device " <>
+           "written 0 once and nothing after" do
+      raised = "the simulated device \"drive\" raised in read, as fail/3 told it"
+
+      for {how, cause} <- [
+            {{:error, :eio}, {:error, :eio}},
+            {:raise, {:raised, raised}},
+            {:throw, {:thrown, {Sim, :read}}},
+            {:exit, {:exited, {Sim, :read}}},
+            {{:value, [0], 7}, {:bad_value, [0], 7}},
+            {{:value, [9], 1}, {:unknown_address, [9]}}
+          ] do
+        %{runner: runner, clock: clock, panel: panel, drive: drive} =
+          rig(configured(@read_both), poll: 10, steps: Runtime)
+
+        Runner.subscribe(runner)
+        Sim.set(panel, [0], 1)
+        Manual.advance(clock, 10)
+        Sim.fail(drive, :read, how)
+        Manual.advance(clock, 10)
+        assert_receive {Runner, ^runner, {:trip, {:io, "drive", ^cause}}}, 5000
+        assert Runner.status(runner).trip == {:io, "drive", cause}
+        Manual.advance(clock, 100)
+        zeroed_once(panel, 1)
+        zeroed_once(drive, 1)
+        assert Runner.get!(runner, "y") == 1
+      end
+    end
+
+    test "a report's fault trips, naming its device" do
+      %{runner: runner, panel: panel} = rig(configured(@read_both), steps: Runtime)
+      Sim.fail(panel, :report, :raise)
+      Sim.set(panel, [0], 1)
+
+      assert Runner.status(runner).trip ==
+               {:io, "panel",
+                {:raised, "the simulated device \"panel\" raised in report, as fail/3 told it"}}
+    end
+
+    test "a round's write that fails trips, the devices after it not written, and the " <>
+           "device that failed zeroed where it still takes a write" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@conveyor), steps: Runtime)
+
+      Sim.fail(drive, :write, {:error, :eio})
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).trip == {:io, "drive", {:error, :eio}}
+      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 0}]
+      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}]
+      assert Runner.get!(runner, "y") == 1
+    end
+
+    test "a poll's write again that fails trips" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@conveyor), poll: 10, steps: Runtime)
+
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Sim.fail(drive, :write, :throw)
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).trip == {:io, "drive", {:thrown, {Sim, :write}}}
+      zeroed_once(panel, 1)
+      zeroed_once(drive, 1)
+    end
+
+    test "a result the behaviour does not give is a raise, in its words; a close that " <>
+           "fails is passed over" do
+      {:ok, clock} = Manual.start_link()
+
+      config =
+        configured(
+          "task fast interval 10 priority 1\nvar_global x bool at panel.i.0\n" <>
+            "var_global y bool at panel.q.0\nprogram r relay with fast\n  r.in x\n  r.out y\n"
+        )
+
+      start = fn read ->
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {BadIO, read: read}},
+          clock: {Manual, clock}
+        )
+      end
+
+      assert start.(:bad) ==
+               {:error,
+                {:io_init, "panel",
+                 {:raised,
+                  "Logex.TripTest.BadIO.read/1 gave :nope, which is none of Logex.IO's results"}}}
+
+      {:ok, runner} = start.(:good)
+      assert Runner.stop(runner) == :ok
+    end
+
+    test "a device that does not answer a round's write within its deadline is killed, " <>
+           "the deadline in real time and short, and opened again at a restart" do
+      %{runner: runner, panel: panel, drive: drive} =
+        rig(configured(@stopped), idle: 30, poll: 10, steps: Runtime)
+
+      # The e-stop's round, at once, writes the drive, which hangs: the runner waits its
+      # deadline, 30 ms and a poll period, in real time on the manual clock.
+      old = device_pid(runner, "drive")
+      Sim.fail(drive, :write, :hang)
+      {took, :ok} = :timer.tc(fn -> Sim.set(panel, [0], 1) end, :millisecond)
+      assert took >= 40 and took < 2000
+      assert Runner.status(runner).trip == {:io, "drive", :timeout}
+      refute Process.alive?(old)
+
+      # Its outputs are left to the device; every other device is zeroed.
+      assert Sim.writes(drive) == [%{[0] => 0}]
+      zeroed_once(panel, 0)
+
+      assert Runner.restart(runner, :cold) == :ok
+      assert device_pid(runner, "drive") != old
+      assert Sim.outputs(drive) == %{[0] => 1}
+      assert Runner.status(runner).status == :running
+    end
+
+    test "an answer later than the deadline on the runner's clock is no answer" do
+      %{runner: runner, panel: panel, drive: drive} =
+        rig(configured(@stopped), poll: 10, steps: Runtime)
+
+      old = device_pid(runner, "drive")
+      Sim.fail(drive, :write, {:delay, 510})
+      Sim.set(panel, [0], 1)
+      assert Runner.status(runner).trip == {:io, "drive", :timeout}
+      refute Process.alive?(old)
+
+      # One a millisecond sooner is in time.
+      %{runner: runner, panel: panel, drive: drive} =
+        rig(configured(@stopped), poll: 10, steps: Runtime)
+
+      Sim.fail(drive, :write, {:delay, 509})
+      Sim.set(panel, [0], 1)
+      assert Runner.status(runner).status == :running
+    end
+
+    test "a device's process that goes down trips, and is opened again at a restart" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@conveyor), steps: Runtime)
+
+      Runner.subscribe(runner)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Process.exit(device_pid(runner, "drive"), :kill)
+      assert_receive {Runner, ^runner, {:trip, {:io, "drive", {:down, :killed}}}}, 5000
+      zeroed_once(panel, 1)
+      assert List.last(Sim.writes(drive)) == %{[0] => 1}
+
+      assert Runner.restart(runner, :warm) == :ok
+      assert Process.alive?(device_pid(runner, "drive"))
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).status == :running
+    end
+
+    test "a device that cannot be opened at a restart leaves the runner tripped, and a " <>
+           "restart after it opens it" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@conveyor), steps: Runtime)
+
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Process.exit(device_pid(runner, "drive"), :kill)
+      Runner.status(runner)
+      Sim.fail(drive, :init, {:error, :refused})
+      assert Runner.restart(runner, :cold) == {:error, {:io_init, "drive", :refused}}
+      assert Runner.status(runner).trip == {:io, "drive", {:down, :killed}}
+      assert Runner.restart(runner, :cold) == :ok
+      assert Sim.outputs(drive) == %{[0] => 1}
+    end
+
+    test "a device that cannot be opened at start, for each kind of fault, every device " <>
+           "opened before it closed" do
+      raised = "the simulated device \"panel\" raised in init, as fail/3 told it"
+
+      for {callback, how, reason} <- [
+            {:init, {:error, :refused}, :refused},
+            {:init, :raise, {:raised, raised}},
+            {:init, :exit, {:exited, {Sim, :init}}},
+            {:init, :hang, :timeout},
+            {:read, {:error, :eio}, {:error, :eio}},
+            {:read, {:value, [0], 2}, {:bad_value, [0], 2}},
+            {:read, {:value, [7], 0}, {:unknown_address, [7]}}
+          ] do
+        {:ok, clock} = Manual.start_link()
+        {:ok, panel} = Sim.start_link(clock: clock)
+        {:ok, drive} = Sim.start_link(clock: clock)
+        Sim.fail(panel, callback, how)
+
+        assert Runner.start_link(
+                 configuration: configured(@read_both),
+                 io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+                 clock: {Manual, clock},
+                 idle: 20
+               ) == {:error, {:io_init, "panel", reason}}
+
+        assert Sim.closed?(drive)
+      end
+    end
+
+    test "a runner whose clock goes down stops, a shutdown, every device zeroed and closed" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@conveyor), steps: Runtime)
+
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      ref = Process.monitor(runner)
+      Process.flag(:trap_exit, true)
+      Process.unlink(clock)
+      Process.exit(clock, :kill)
+
+      assert_raise ArgumentError, ~r/is not running/, fn -> Runner.status(runner) end
+      assert_receive {:DOWN, ^ref, :process, ^runner, {:shutdown, {:clock, _reason}}}, 5000
+      zeroed_once(panel, 1)
+      zeroed_once(drive, 1)
+      assert Sim.closed?(panel) and Sim.closed?(drive)
+    end
+
+    test "a clock that exits as it is read stops the runner, a shutdown" do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(@relayed),
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {GoneClock, {clock, 5}},
+          poll: 1_000_000
+        )
+
+      ref = Process.monitor(runner)
+      Process.flag(:trap_exit, true)
+      Manual.advance(clock, 10)
+      assert_receive {:DOWN, ^ref, :process, ^runner, {:shutdown, {:clock, :gone}}}, 5000
+    end
+
+    test "a device whose own read fails zeroes itself at once, whatever the runner does" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@read_both), poll: 10, steps: Runtime)
+
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      :sys.suspend(runner)
+      Sim.fail(drive, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      zeroed_once(drive, 1)
+      assert List.last(Sim.writes(panel)) == %{[0] => 1}
+      :sys.resume(runner)
+      assert Runner.status(runner).trip == {:io, "drive", {:error, :eio}}
+      zeroed_once(panel, 1)
+    end
+
+    test "a fault while tripped changes no reason" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@read_both), poll: 10, steps: Runtime)
+
+      Sim.fail(drive, :read, {:error, :first})
+      Manual.advance(clock, 10)
+      Sim.fail(panel, :read, {:error, :second})
+      Manual.advance(clock, 10)
+      Process.exit(device_pid(runner, "panel"), :kill)
+      assert Runner.status(runner).trip == {:io, "drive", {:error, :first}}
     end
   end
 
