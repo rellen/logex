@@ -120,6 +120,39 @@ defmodule Logex.TripTest do
     def close(_state), do: raise("no close")
   end
 
+  # A stand-in whose cycle_steps/3 gives what the core never gives, where the input `boom`
+  # is 6: the runner itself then crashes, outside any call of the core's.
+  defmodule Garbage do
+    def cycle_steps(_runtime, _elapsed, %{"boom" => 6}), do: :garbage
+    def cycle_steps(runtime, elapsed, inputs), do: Runtime.cycle_steps(runtime, elapsed, inputs)
+    def cycle_step(runtime, step), do: Runtime.cycle_step(runtime, step)
+    def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
+  end
+
+  # An adapter that refuses to open and tells the test, the parent of the runner that
+  # started the device's process, of any write or close it is given after.
+  defmodule RefusingIO do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, opts), do: {:error, {:refused, opts[:test]}}
+
+    @impl true
+    def read(state), do: {:ok, %{}, state}
+
+    @impl true
+    def write(values, state), do: told({:written, values}, {:ok, state})
+
+    @impl true
+    def close(_state), do: told(:closed, :ok)
+
+    defp told(message, result) do
+      [_runner, test | _] = Process.get(:"$ancestors")
+      send(test, message)
+      result
+    end
+  end
+
   # A manual clock that goes down as it is read from `at` on: an exit out of a call to it,
   # as a clock gone down while it is read gives.
   defmodule GoneClock do
@@ -142,6 +175,10 @@ defmodule Logex.TripTest do
     :ets.new(__MODULE__, [:named_table, :public, :set])
     :ok
   end
+
+  # The growth test's bound, a fifth above the highest of 38 runs, 4.233, each beside a
+  # mutation run's three suites (see "growth").
+  @trip_bound 5.08
 
   # One var_input copied to one var_output, and a counter of its own runs.
   @relay "var_input in bool\nvar_output out bool\nxic in ote out"
@@ -990,6 +1027,148 @@ defmodule Logex.TripTest do
       assert :ets.lookup_element(__MODULE__, {runner, :seen}, 2) == :zeroed
       assert {:watchdog, {:task, "e", _took, 20}} = Runner.status(runner).trip
       Runner.stop(runner)
+    end
+  end
+
+  describe "the runner's death (decision 115)" do
+    # Each device's process goes down with its runner, which is logged.
+    @tag :capture_log
+    test "a killed runner's devices write every output 0 once and close" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@conveyor), steps: Runtime)
+
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      devices = for name <- ["drive", "panel"], do: Process.monitor(device_pid(runner, name))
+      Process.flag(:trap_exit, true)
+      Process.exit(runner, :kill)
+      assert_receive {:EXIT, ^runner, :killed}, 5000
+      for ref <- devices, do: assert_receive({:DOWN, ^ref, :process, _pid, :killed}, 5000)
+
+      zeroed_once(panel, 1)
+      zeroed_once(drive, 1)
+      assert Sim.closed?(panel) and Sim.closed?(drive)
+    end
+
+    @tag :capture_log
+    test "a tripped runner killed closes its devices and writes no 0 again" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@relayed <> "var_global z bool at drive.q.0\n"))
+
+      Sim.set(panel, %{[0] => 1, [1] => 5})
+      Manual.advance(clock, 10)
+      zeroed = {Sim.writes(panel), Sim.writes(drive)}
+      devices = for name <- ["drive", "panel"], do: Process.monitor(device_pid(runner, name))
+      Process.flag(:trap_exit, true)
+      Process.exit(runner, :kill)
+      for ref <- devices, do: assert_receive({:DOWN, ^ref, :process, _pid, :killed}, 5000)
+      assert {Sim.writes(panel), Sim.writes(drive)} == zeroed
+      assert Sim.closed?(panel) and Sim.closed?(drive)
+    end
+
+    test "a device that was never opened is neither zeroed nor closed as it stops" do
+      {:ok, clock} = Manual.start_link()
+
+      config =
+        configured(
+          "task fast interval 10 priority 1\nvar_global y bool at panel.q.0\n" <>
+            "var_global x bool\nprogram r relay with fast\n  r.in x\n  r.out y\n"
+        )
+
+      assert Runner.start_link(
+               configuration: config,
+               io: %{"panel" => {RefusingIO, test: self()}},
+               clock: {Manual, clock}
+             ) == {:error, {:io_init, "panel", {:refused, self()}}}
+
+      refute_received {:written, _values}
+      refute_received :closed
+    end
+
+    # The device's process goes down as its adapter's close raises, which is logged.
+    @tag :capture_log
+    test "a close that raises is passed over, and no 0 is written again as the device stops" do
+      %{runner: runner, clock: clock, panel: panel} = rig(configured(@conveyor), steps: Runtime)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Sim.fail(panel, :close, :raise)
+      assert Runner.stop(runner) == :ok
+      zeroed_once(panel, 1)
+    end
+
+    @tag :capture_log
+    test "a runner that crashes zeroes and closes every device, and its supervisor does " <>
+           "not start it again" do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+      opts = [
+        configuration: configured(),
+        io: %{"panel" => {Sim, sim: panel}},
+        clock: {Manual, clock},
+        steps: Garbage
+      ]
+
+      {:ok, supervisor} = Supervisor.start_link([{Runner, opts}], strategy: :one_for_one)
+      [{Runner, runner, :worker, [Runner]}] = Supervisor.which_children(supervisor)
+      ref = Process.monitor(runner)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Sim.set(panel, [1], 6)
+      Manual.advance(clock, 10)
+      assert_receive {:DOWN, ^ref, :process, ^runner, {:function_clause, _stack}}, 5000
+      zeroed_once(panel, 1)
+      assert Sim.closed?(panel)
+      assert Supervisor.which_children(supervisor) == []
+    end
+  end
+
+  describe "growth" do
+    # d devices, each with one output the relay drives, and the panel's `boom`.
+    defp crowd(d) do
+      outputs = for k <- 1..d, do: "var_global y#{k} bool at dev#{k}.q.0\n"
+
+      relays =
+        for k <- 1..d, do: "program r#{k} relay with fast\n  r#{k}.in x\n  r#{k}.out y#{k}\n"
+
+      configured(
+        "task fast interval 10 priority 1\nvar_global x bool at panel.i.0\n" <>
+          "var_global boom dint at panel.i.1\n" <> Enum.join(outputs) <> Enum.join(relays)
+      )
+    end
+
+    # The runner's reductions over the round that trips, every device zeroed.
+    defp trip_cost(d) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+      io =
+        Map.new(1..d, fn k ->
+          {:ok, sim} = Sim.start_link(clock: clock)
+          {"dev#{k}", {Sim, sim: sim}}
+        end)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: crowd(d),
+          io: Map.put(io, "panel", {Sim, sim: panel}),
+          clock: {Manual, clock},
+          poll: 1_000_000,
+          steps: Boom
+        )
+
+      Sim.set(panel, [1], 5)
+      {:reductions, before} = Process.info(runner, :reductions)
+      Manual.advance(clock, 10)
+      {:reductions, later} = Process.info(runner, :reductions)
+      {:internal, _message} = Runner.status(runner).trip
+      Runner.stop(runner)
+      later - before
+    end
+
+    test "a trip's work is linear in the devices" do
+      ratio = trip_cost(32) / trip_cost(8)
+      assert ratio < @trip_bound, "4x the devices took #{Float.round(ratio, 2)}x"
     end
   end
 

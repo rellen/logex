@@ -49,6 +49,10 @@ defmodule Logex.Runner.Device do
   #   reason}`, init/3's own reason or the cause, and the process stops; a zero or a close
   #   that fails is passed over, the last the device can do. Each call of the runner's
   #   takes a timeout, the runner's to keep (decision 125).
+  # - Its runner's death (decision 115): it traps exits, so that its runner going down, a
+  #   crash or a kill, stops it through terminate/2, which writes every output 0 once,
+  #   where it is not latched already, and closes the adapter, as a close does; one closed
+  #   already does neither again.
 
   use GenServer
 
@@ -67,28 +71,32 @@ defmodule Logex.Runner.Device do
   def release(device, timeout \\ :infinity), do: GenServer.call(device, :release, timeout)
 
   @impl GenServer
-  def init(%{name: name, module: module, opts: opts, points: points, runner: runner} = args),
-    do:
-      {:ok,
-       %{
-         name: name,
-         module: module,
-         opts: opts,
-         points: points,
-         runner: runner,
-         clock: args.clock,
-         poll: args.poll,
-         adapter: nil,
-         image: %{},
-         next: nil,
-         deadline: nil,
-         heard: nil,
-         timer: nil,
-         written: nil,
-         latched: false,
-         zeros:
-           Map.new(for(%Point{direction: :output, address: address} <- points, do: {address, 0}))
-       }}
+  def init(%{name: name, module: module, opts: opts, points: points, runner: runner} = args) do
+    Process.flag(:trap_exit, true)
+
+    {:ok,
+     %{
+       name: name,
+       module: module,
+       opts: opts,
+       points: points,
+       runner: runner,
+       clock: args.clock,
+       poll: args.poll,
+       adapter: nil,
+       image: %{},
+       next: nil,
+       deadline: nil,
+       heard: nil,
+       timer: nil,
+       written: nil,
+       latched: false,
+       open: false,
+       closed: false,
+       zeros:
+         Map.new(for(%Point{direction: :output, address: address} <- points, do: {address, 0}))
+     }}
+  end
 
   @impl GenServer
   def handle_call(:open, _from, state), do: opened(init_adapter(state), state)
@@ -141,6 +149,7 @@ defmodule Logex.Runner.Device do
      polled(%{
        state
        | adapter: adapter,
+         open: true,
          image: values,
          next: clocked(fn -> mod.now_ms(clock) end)
      })}
@@ -357,7 +366,18 @@ defmodule Logex.Runner.Device do
 
   defp closed(%{module: module} = state) do
     closing(function_exported?(module, :close, 1), state)
-    state
+    %{state | closed: true}
+  end
+
+  # Its runner gone down, or any stop: every output 0 once and the adapter closed, where a
+  # close has not done both already (decision 115).
+  @impl GenServer
+  def terminate(_reason, %{open: false}), do: :ok
+  def terminate(_reason, %{closed: true}), do: :ok
+
+  def terminate(_reason, state) do
+    closed(zeroed(state))
+    :ok
   end
 
   # A close that fails is passed over, the last call an adapter is given.
