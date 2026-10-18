@@ -3439,6 +3439,8 @@ defmodule Logex.ConfigurationTest do
     count = Enum.random(1..3)
     snapshot? = Enum.random([true, false])
 
+    # M4-2: each task with a watchdog now and then, and the continuous task among them now
+    # and then, which an instance with no task runs, and one `with` it too.
     tasks =
       Enum.take(
         Enum.shuffle([
@@ -3446,10 +3448,12 @@ defmodule Logex.ConfigurationTest do
           task("slow", 50, 2),
           task("t0", 2_147_483_647, 0),
           %Configuration.Task{name: "trip", single: "go", priority: 0},
-          %Configuration.Task{name: "parts", single: "tt_1", interval: 1000, priority: 2}
+          %Configuration.Task{name: "parts", single: "tt_1", interval: 1000, priority: 2},
+          %Configuration.Task{name: "main", continuous: true}
         ]),
         Enum.random(0..3)
       )
+      |> Enum.map(&%{&1 | watchdog: Enum.random([nil, nil, 1, 200, 2_147_483_647])})
 
     on_task = fn -> Enum.random([nil | Enum.map(tasks, & &1.name)]) end
 
@@ -4805,7 +4809,8 @@ defmodule Logex.ConfigurationTest do
     # item's words, names, paths and locations good and bad, numbers in and out of range,
     # the delimiters, and a few that do not lex.
     @vocabulary ~w(var_global VAR_GLOBAL program Program at AT bool Dint task Task interval
-                   PRIORITY with With single fast m m2 m.start m.stop m.motor m.sp m.fault m.t1
+                   PRIORITY with With single continuous Continuous watchdog WATCHDOG main
+                   fast m m2 m.start m.stop m.motor m.sp m.fault m.t1
                    m.t1.pre m.x.y m2.start pb
                    pb2 k sp seal Seal x.y panel.i.0 panel.I.0 panel.q.00 Panel.q.1 panel.q.0
                    drive.q.1.0 0 1 7 2147483647 2147483648 99999999999 -1 -7 -2147483648
@@ -5957,6 +5962,35 @@ defmodule Logex.ConfigurationTest do
 
       ratio = compile.(1000) / compile.(250)
       assert ratio < 4.97, "4x the tasks took #{Float.round(ratio, 2)}x the reductions"
+    end
+
+    # M4-2: task lines with a watchdog, in any case, of every kind, and continuous ones,
+    # the first the configuration's and each after it told so, with refused ones: a
+    # watchdog of 0 and one out of range, a continuous task given inputs, and a line broken
+    # where the watchdog's number goes, none looked up among the names for a did-you-mean.
+    # 4.09x to 4.19x over 32 runs on Elixir 1.20.4, 16 of the test alone and 16 in a full
+    # suite beside a run of this file; the bound a fifth above the highest.
+    defp watched(i),
+      do: [
+        "var_global pb_#{i} bool at panel.i.#{i}",
+        "task f_#{i} interval 10 priority 1 watchdog 50",
+        "TASK e_#{i} SINGLE pb_#{i} PRIORITY 0 WATCHDOG 20",
+        "task c_#{i} Continuous watchdog 200",
+        "task z_#{i} interval 10 priority 1 watchdog 0",
+        "task o_#{i} interval 10 priority 1 watchdog 2147483648",
+        "task g_#{i} continuous interval 10 priority 2",
+        "task b_#{i} interval 10 priority 1 watchdog fast"
+      ]
+
+    test "compile/3 stays linear in a file's task lines with a watchdog and continuous ones, " <>
+           "refused ones among them" do
+      compile = fn n ->
+        text = source(n, [&watched/1])
+        reductions(fn -> {:error, [_ | _]} = compiled(text, %{}) end)
+      end
+
+      ratio = compile.(1000) / compile.(250)
+      assert ratio < 5.03, "4x the tasks took #{Float.round(ratio, 2)}x the reductions"
     end
   end
 end

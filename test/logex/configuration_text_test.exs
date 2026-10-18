@@ -798,11 +798,12 @@ defmodule Logex.Configuration.TextTest do
 
     test "everything read/1 reads, entries!/1 takes, and it prints back to the same text's " <>
            "entries" do
-      # Every line of one to four words from a small vocabulary, M2-2's, M2-3's and M2-6's
-      # words among them: read/1 never raises, and what it reads is what a line can say.
+      # Every line of one to four words from a small vocabulary, M2-2's, M2-3's, M2-6's and
+      # M4-2's words among them: read/1 never raises, and what it reads is what a line can
+      # say.
       vocabulary =
         ~w(task var_global program Interval priority AT bool dint with single x m1.a panel.i.0 5) ++
-          ["("]
+          ~w[continuous WatchDog (]
 
       sources =
         for n <- 1..4,
@@ -924,8 +925,11 @@ defmodule Logex.Configuration.TextTest do
       4 ->
         %Logex.Configuration.Task{
           name: pick.(),
+          single: Enum.random([nil, nil, pick.()]),
           interval: Enum.random([nil, 0, 10, 2_147_483_648]),
-          priority: Enum.random([nil, 0, 1, 65_536])
+          priority: Enum.random([nil, 0, 1, 65_536]),
+          watchdog: Enum.random([nil, 0, 50, -5, 2_147_483_648]),
+          continuous: Enum.random([false, false, true])
         }
 
       3 ->
@@ -1016,6 +1020,8 @@ defmodule Logex.Configuration.TextTest do
           name: Enum.random(["t", junk()]),
           interval: junk(),
           priority: Enum.random([1, junk()]),
+          watchdog: Enum.random([nil, 50, junk()]),
+          continuous: Enum.random([false, true, junk()]),
           line: Enum.random([nil, 4, junk()])
         }
 
