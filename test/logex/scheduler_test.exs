@@ -1373,6 +1373,125 @@ defmodule Logex.SchedulerTest do
     end
   end
 
+  # M4-3, decision 118: the cycle in steps, internal to Logex.Runtime as edited/2 is, so
+  # that the runner times each task's run. Composed, the steps are cycle/3 exactly, over
+  # seeded configurations of periodic, event and continuous tasks and task-less
+  # instances, with a one-shot that a trigger logic writes; each timed step gives its own
+  # task's events alone, in the order cycle/3 gives them, and the untimed step, where any
+  # untimed instance exists, the untimed instances' under the continuous task's name.
+  describe "the cycle in steps (M4-3)" do
+    defp stepped(runtime, elapsed, inputs) do
+      {runtime, steps} = Runtime.cycle_steps(runtime, elapsed, inputs)
+
+      {runtime, events} =
+        Enum.reduce(steps, {runtime, []}, fn step, {runtime, events} ->
+          {runtime, ran} = Runtime.cycle_step(runtime, step)
+          {runtime, events ++ [{elem(step, 0), elem(step, 1), ran}]}
+        end)
+
+      {runtime, Runtime.cycle_outputs(runtime), events}
+    end
+
+    defp seeded_config do
+      relay = program(@relay, "relay")
+      pulse = program(@pulse, "pulse")
+      continuous = Enum.random([nil, "main"])
+
+      tasks =
+        for(
+          name <- Enum.take(Enum.shuffle(~w(fast mid slow)), Enum.random(0..3)),
+          do: seeded_task(Enum.random([:periodic, :event, :both]), name)
+        ) ++ if(continuous, do: [%Configuration.Task{name: "main", continuous: true}], else: [])
+
+      instances =
+        for name <- Enum.take(Enum.shuffle(~w(a b c d e)), Enum.random(1..5)),
+            do: %Instance{
+              name: name,
+              type: Enum.random(~w(relay pulse)),
+              task: Enum.random([nil | Enum.map(tasks, & &1.name)])
+            }
+
+      Configuration.new!(
+        name: "plant",
+        programs: [relay, pulse],
+        tasks: tasks,
+        globals: [
+          %Global{name: "x", type: :bool, at: "panel.i.0"},
+          %Global{name: "z", type: :bool, at: "panel.i.1"},
+          %Global{name: "g", type: :bool}
+        ],
+        instances: instances,
+        connections:
+          Enum.flat_map(instances, fn %Instance{name: name} ->
+            [
+              %Connection{instance: name, member: "in", to: Enum.random(~w(x z g))},
+              %Connection{instance: name, member: "out", to: Enum.random(["g", nil])}
+            ]
+            |> Enum.reject(&(&1.to == nil))
+          end)
+          |> Enum.uniq_by(&{&1.member == "out", &1.to, &1.member == "out" or &1.instance})
+      )
+    end
+
+    defp seeded_task(:periodic, name),
+      do: task(name, Enum.random([5, 10, 15]), Enum.random([0, 1, 1, 2]))
+
+    defp seeded_task(:event, name),
+      do: %Configuration.Task{name: name, single: Enum.random(~w(x g)), priority: 1}
+
+    defp seeded_task(:both, name),
+      do: %{seeded_task(:periodic, name) | single: Enum.random(~w(x g))}
+
+    test "composed, are cycle/3 exactly, each timed step its own task's events and the " <>
+           "untimed step the untimed instances'" do
+      :rand.seed(:exsss, {2026, 10, 18})
+
+      for _ <- 1..150 do
+        config = seeded_config()
+        timed = for %Configuration.Task{continuous: false, name: name} <- config.tasks, do: name
+        untimed = Enum.find_value(config.tasks, :none, &(&1.continuous && &1.name))
+
+        untimed_instances =
+          for %Instance{task: task, name: name} <- config.instances,
+              task not in timed,
+              do: name
+
+        Enum.reduce(1..12, {Runtime.start(config), Runtime.start(config)}, fn _, {whole, cut} ->
+          elapsed = Enum.random([0, 0, 1, 5, 10, 25])
+          inputs = Map.new(Enum.take_random(~w(x z), Enum.random(0..2)), &{&1, Enum.random(0..1)})
+          {whole, outputs, events} = Runtime.cycle(whole, elapsed, inputs)
+          {cut, cut_outputs, steps} = stepped(cut, elapsed, inputs)
+
+          assert cut_outputs == outputs
+          assert Enum.flat_map(steps, &elem(&1, 2)) == events
+          assert cut == whole
+
+          # One step for each timed task that ran, in the order it ran, holding its own
+          # events alone, and the untimed step last, only where an untimed instance is.
+          {timed_steps, untimed_steps} = Enum.split_with(steps, &(elem(&1, 0) == :timed))
+
+          for {:timed, name, ran} <- timed_steps do
+            assert name in timed
+            assert Enum.all?(ran, &(elem(&1, 1) == name))
+          end
+
+          assert for({:timed, name, [_ | _]} <- timed_steps, do: name) ==
+                   Enum.dedup(for event <- events, elem(event, 1) in timed, do: elem(event, 1))
+
+          assert untimed_steps ==
+                   for(
+                     _ <- [untimed_instances],
+                     untimed_instances != [],
+                     do: {:untimed, untimed, Enum.filter(events, &(elem(&1, 1) == untimed))}
+                   )
+
+          assert steps == timed_steps ++ untimed_steps
+          {whole, cut}
+        end)
+      end
+    end
+  end
+
   describe "growth" do
     # A cycle of n instances, each on a task of its own, all due, each copying an input
     # point in and an output point out. Counted in reductions, the least of three.

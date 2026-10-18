@@ -16,6 +16,9 @@ defmodule Logex.Runtime do
     types.
   - `start/1`, `cycle/3`, `next_due_in/1`, `overlaps/1`, `get/2`, `get!/2` and `restart/2` run a
     configuration (`Logex.Configuration`) as one resource, `%Logex.Runtime{}`, below.
+    Since M4-3 `cycle/3` is the composition of three internal steps, hidden as `edited/2`
+    is, which `Logex.Runner` calls so that it can read its clock between a cycle's task
+    runs (decision 118): the host contract does not change.
 
   **A configuration** (M2-1, `docs/organisation.md` §4.6). `start/1` makes the resource at
   time 0: every global at its initial value, every program instance as `instance/1` makes
@@ -425,20 +428,59 @@ defmodule Logex.Runtime do
   the outputs being every output point. See the moduledoc for its order.
   """
   def cycle(runtime, elapsed_ms, inputs) do
+    {runtime, steps} = cycle_steps(runtime, elapsed_ms, inputs)
+
+    {runtime, events} =
+      Enum.reduce(steps, {runtime, []}, fn step, {runtime, events} ->
+        {runtime, ran} = cycle_step(runtime, step)
+        {runtime, Enum.reverse(ran, events)}
+      end)
+
+    {runtime, cycle_outputs(runtime), Enum.reverse(events)}
+  end
+
+  @doc false
+  # M4-3, decision 118: the cycle in steps, internal as edited/2 is, so that the wall-clock
+  # runner can read its clock between them and time each task's run; cycle/3 is exactly
+  # their composition. cycle_steps/3 is a cycle's first three steps, the clock moved on, the
+  # input image merged and every trigger sampled, and gives each run the cycle makes, in
+  # the order it makes them: each due timed task, `{:timed, task, run}`, and then, where
+  # any exists, the untimed instances, `{:untimed, task, run}`, under the continuous task's
+  # name or `:none` (decision 111). Each step is a pure function of the resource, read by
+  # no clock: cycle_step/2 runs one, giving its events in order, and cycle_outputs/1 is the
+  # output points after the last.
+  def cycle_steps(runtime, elapsed_ms, inputs) do
     %__MODULE__{now: now} = runtime = runtime!(runtime)
     elapsed = elapsed!(elapsed_ms)
     runtime = %{runtime | now: now + elapsed, globals: image!(runtime, inputs)}
     {runtime, due} = due(runtime)
-    {runtime, events} = Enum.reduce(due, {runtime, []}, &run_task/2)
 
-    {untimed, instances} = runtime.wiring.untimed
-
-    {runtime, events} =
-      Enum.reduce(instances, {runtime, events}, &scanned(&1, untimed, &2))
-
-    {runtime, Map.new(runtime.wiring.outputs, &{&1, Map.fetch!(runtime.globals, &1)}),
-     Enum.reverse(events)}
+    {runtime,
+     Enum.map(due, fn {name, _trigger, _priority, _index, _instances} = task ->
+       {:timed, name, task}
+     end) ++ untimed_step(runtime.wiring.untimed)}
   end
+
+  defp untimed_step({_task, []}), do: []
+  defp untimed_step({task, instances}), do: [{:untimed, task, instances}]
+
+  @doc false
+  # One step cycle_steps/3 gave, run: `{runtime, events}`, its events in the order they
+  # happened.
+  def cycle_step(%__MODULE__{} = runtime, {:timed, _name, task}) do
+    {runtime, events} = run_task(task, {runtime, []})
+    {runtime, Enum.reverse(events)}
+  end
+
+  def cycle_step(%__MODULE__{} = runtime, {:untimed, task, instances}) do
+    {runtime, events} = Enum.reduce(instances, {runtime, []}, &scanned(&1, task, &2))
+    {runtime, Enum.reverse(events)}
+  end
+
+  @doc false
+  # The output points, every one, after a cycle's last step.
+  def cycle_outputs(%__MODULE__{wiring: wiring, globals: globals}),
+    do: Map.new(wiring.outputs, &{&1, Map.fetch!(globals, &1)})
 
   @doc """
   The milliseconds until a periodic due time next comes, or `:infinity` when no task has

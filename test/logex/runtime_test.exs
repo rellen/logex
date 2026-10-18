@@ -1253,13 +1253,17 @@ defmodule Logex.RuntimeTest do
 
       # M2-1: the scheduler, and its resource, `%Logex.Runtime{}`, opaque as an edit is.
       # OE-2: edited/2, internal (no doc), the one writer of a configuration edit's step
-      # into the resource.
+      # into the resource. M4-3: the cycle in steps, internal too (decision 118), which the
+      # runner times: cycle_steps/3, cycle_step/2 and cycle_outputs/1.
       assert Enum.sort(Runtime.__info__(:functions)) ==
                [
                  __struct__: 0,
                  __struct__: 1,
                  call: 4,
                  cycle: 3,
+                 cycle_outputs: 1,
+                 cycle_step: 2,
+                 cycle_steps: 3,
                  edited: 2,
                  get: 2,
                  get!: 2,
@@ -1403,6 +1407,12 @@ defmodule Logex.RuntimeTest do
 
       assert [{{:function, :edited, 2}, _, _, :hidden, _}] =
                for({{_, :edited, _}, _, _, _, _} = doc <- docs, do: doc)
+
+      assert Enum.sort(
+               for {{:function, name, arity}, _, _, :hidden, _} <- docs,
+                   name in [:cycle_steps, :cycle_step, :cycle_outputs],
+                   do: {name, arity}
+             ) == [cycle_outputs: 1, cycle_step: 2, cycle_steps: 3]
 
       # OE-2: the staged edit of a running configuration, whose struct is opaque.
       assert Enum.sort(Logex.Configuration.Edit.__info__(:functions)) == [
