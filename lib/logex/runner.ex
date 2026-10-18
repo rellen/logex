@@ -48,6 +48,41 @@ defmodule Logex.Runner do
     period from the step's start, and before the write, carrying the idle watchdog's and
     one poll period from then (decisions 125 and 128): a refresh calls no adapter.
 
+  **Its rounds** (decisions 108, 122 and 123). A *round* takes the inputs, runs the cycle's
+  steps, the due timed tasks and then the untimed programs (`Logex.Runtime.cycle/3`, cut
+  into its steps, decision 118), and writes the outputs. The runner keeps `anchor`, the
+  time on its clock it counts from, and the resource's `now`, the sum of the elapsed
+  times it has passed, and each round passes the time since the last, the clock less the
+  anchor less `now`, so that rounding to whole milliseconds never accumulates; it sleeps
+  to absolute times on its clock, never relative ones, so its rounds keep their grid.
+  - The first round runs at once after start.
+  - While the configuration has untimed programs, the continuous task's or a program
+    with no task, rounds run back to back, to the clock's resolution: the next round at
+    the millisecond after the one the last began in, or at once where it took a
+    millisecond or more, a wake on the clock either way. So at most one round runs a
+    clock millisecond, and on the manual clock `advance(clock, n)` runs n where rounds
+    take no time.
+  - A periodic task's due time is a wake of its own, at the next due time on the
+    runner's clock (`Logex.Runtime.next_due_in/1`), a round's first steps, never
+    preempting one; with no untimed program a round comes only then, or when a device
+    changes a trigger. A trigger logic writes, an event task's single that is no input
+    point, changed by a round, makes the next round at the next clock millisecond, so
+    that two event tasks that write each other's trigger round once a millisecond.
+  - The share, `overhead:`, is served in the conventional table's slots: after C ms of
+    the continuous task's rounds the runner serves its own work, the host's requests that
+    waited, for up to S ms, C = max(1, round((100 − p)/p)) and S = max(1, round(p/(100 −
+    p))) for a share of p%, 9 and 1 at 10%, 4 and 1 at 20%, 1 and 1 at 50%, 1 and 9 at
+    90%. A round counts from its start to its end, a millisecond at least, the timed
+    tasks' runs in it left out; a slot serves its first request whatever the time, and
+    each whole, so it may run over by one; and in the rest of a millisecond a round did
+    not fill the runner serves its requests freely. A host's request is served at once
+    where no round is owed, and with no untimed program always: so on the manual clock,
+    where a round takes no time unless something passes time inside it, a request is
+    served before the next round, and one made while a round is owed waits for the
+    advance that runs it and its slot.
+  - While it waits for a round longer than a poll period, the runner refreshes every
+    device at least once a poll period, with the idle watchdog's deadline.
+
   **A host's calls** go through the runner's mailbox, so each is served between two
   rounds. A mistake in one is the host's: the runner rescues the `ArgumentError`, replies
   with it, and the function raises it in the caller, the runner running on. A runner is
@@ -121,21 +156,39 @@ defmodule Logex.Runner do
 
   # A device's changes, by address: merged into the next round's inputs, and each change of
   # an event task's trigger its own round, in address order, answered once each has run and
-  # its outputs are written (decisions 120 and 124).
+  # its outputs are written (decisions 120 and 124), whatever the share.
   def handle_call({:changes, device, changes}, _from, state),
     do: {:reply, :ok, changed(device, changes, state)}
 
-  def handle_call(request, _from, state), do: {:reply, served(request, state), state}
+  # A host's request is the runner's own work: served at once where no round is owed, and
+  # otherwise queued for the share's slot (decision 122).
+  def handle_call(request, from, state),
+    do: {:noreply, requested(owed?(state), {from, request}, state)}
+
+  @impl GenServer
+  def handle_info({__MODULE__, :wake, token}, %{wake: {_timer, token, at}} = state),
+    do: {:noreply, woken(state, at)}
+
+  def handle_info({__MODULE__, :wake, _stale}, state), do: {:noreply, state}
+
+  defp requested(false, request, state), do: answered(request, refresh(state, :idle))
+  defp requested(true, request, state), do: %{state | queue: :queue.in(request, state.queue)}
+
+  defp answered({from, request}, state) do
+    {reply, state} = served(request, state)
+    GenServer.reply(from, reply)
+    state
+  end
 
   # Each request, a host's mistake in it given back to be raised in the caller.
   defp served(request, state) do
     serve(request, state)
   rescue
-    error in ArgumentError -> {:raise, error}
+    error in ArgumentError -> {{:raise, error}, state}
   end
 
-  defp serve({:get, path}, %{runtime: runtime}), do: Runtime.get(runtime, path)
-  defp serve({:get!, path}, %{runtime: runtime}), do: Runtime.get!(runtime, path)
+  defp serve({:get, path}, %{runtime: runtime} = state), do: {Runtime.get(runtime, path), state}
+  defp serve({:get!, path}, %{runtime: runtime} = state), do: {Runtime.get!(runtime, path), state}
 
   # ---- the devices -----------------------------------------------------------------------
 
@@ -203,7 +256,58 @@ defmodule Logex.Runner do
       written: %{},
       watchdogs: watchdogs(start.configuration)
     })
+    |> scheduling(start.configuration)
   end
+
+  # What the rounds' timing reads, once a configuration (decisions 108, 122 and 123):
+  # whether it has untimed programs, which run under the continuous task's name, or
+  # `:none` where none is declared, `continuous`, nil for none; the share's slots, C ms of
+  # rounds and S ms of the runner's own work; the triggers logic writes, each event task's
+  # single that is no input point, at their values as the first round finds them; and the
+  # count the share keeps, the requests waiting for it, the next round, the one wake, each
+  # task's longest run, the latest wake and the longest wait between two refreshes.
+  defp scheduling(state, %Configuration{tasks: tasks, instances: instances}) do
+    named = Enum.find_value(tasks, :none, &(&1.continuous && &1.name))
+    timed = for %Configuration.Task{continuous: false, name: name} <- tasks, do: name
+    untimed = Enum.any?(instances, &(&1.task not in timed))
+    continuous = continuous(untimed, named)
+
+    Map.merge(state, %{
+      untimed: untimed,
+      continuous: continuous,
+      slots: slots(state.overhead),
+      logic:
+        Map.new(
+          for(
+            %Configuration.Task{single: single} <- tasks,
+            single != nil,
+            not MapSet.member?(state.triggers, single),
+            do: {single, Runtime.get!(state.runtime, single)}
+          )
+        ),
+      used: 0,
+      queue: :queue.new(),
+      next_round: nil,
+      wake: nil,
+      token: 0,
+      refreshed: state.anchor,
+      refresh_gap: 0,
+      latest_wake: 0,
+      longest:
+        Map.new(
+          for(%Configuration.Task{name: name} <- tasks, do: name) ++ List.wrap(continuous),
+          &{&1, 0}
+        )
+    })
+  end
+
+  defp continuous(false, :none), do: nil
+  defp continuous(_untimed, named), do: named
+
+  # The conventional table's slots for a share of p percent: C = max(1, round((100 - p) /
+  # p)) ms of the continuous task's rounds, then up to S = max(1, round(p / (100 - p))) ms
+  # of the runner's own work, 4 and 1 at 20% (decision 122).
+  defp slots(p), do: {max(1, round((100 - p) / p)), max(1, round(p / (100 - p)))}
 
   defp named({device, values}, state),
     do:
@@ -223,37 +327,158 @@ defmodule Logex.Runner do
     Enum.reduce(triggers, merged(others, state), &rounded(merged([&1], &2)))
   end
 
-  # ---- a round ---------------------------------------------------------------------------
+  # ---- the rounds ------------------------------------------------------------------------
 
-  # One round: the inputs taken, each step of the cycle run, every device refreshed before
-  # each with that step's deadline, its task's watchdog and a poll period from the step's
-  # start, and before the write with the idle watchdog's, and each device whose outputs
-  # changed written, in device-name order, its answer awaited (decisions 118, 125 and 128).
+  # A wake: a round where one is due, and otherwise the refresh a wait makes at least once
+  # a poll period. A round's wake that came late is kept in the status, the latest.
+  defp woken(state, at) do
+    now = now(state)
+    wake(due?(state.next_round, now), now - at, state)
+  end
+
+  defp due?(nil, _now), do: false
+  defp due?(at, now), do: now >= at
+
+  defp wake(true, late, state),
+    do: rounded(slot(%{state | latest_wake: max(state.latest_wake, late)}))
+
+  defp wake(false, _late, state), do: scheduled(refresh(state, :idle))
+
+  # Decision 122's slots: after C ms of the continuous task's rounds the runner serves its
+  # own work for up to S ms, each request whole, before the next round, and goes back to
+  # rounds at once where none waits. Only a configuration with untimed programs is served
+  # in slots: one without serves its requests whenever it waits (decision 108).
+  defp slot(%{untimed: true, used: used, slots: {c, s}} = state) when used >= c do
+    state = refresh(state, :idle)
+    %{popped(:queue.out(state.queue), now(state) + s, state) | used: 0}
+  end
+
+  defp slot(state), do: state
+
+  # Requests served while the time lasts, each whole, so the last may run over: up to a
+  # slot's end, its first served whatever the time, or, after a round, in the rest of a
+  # millisecond no round wants.
+  defp serving(state, until), do: serve_next(now(state) < until, until, state)
+
+  defp serve_next(false, _until, state), do: state
+  defp serve_next(true, until, state), do: popped(:queue.out(state.queue), until, state)
+
+  defp popped({:empty, _queue}, _until, state), do: state
+
+  defp popped({{:value, request}, queue}, until, state),
+    do: serving(answered(request, %{state | queue: queue}), until)
+
+  # A round is owed where the configuration has untimed programs and its time has come: a
+  # host's request then waits for the share's slot.
+  defp owed?(%{untimed: true, next_round: at} = state) when at != nil, do: now(state) >= at
+  defp owed?(_state), do: false
+
+  # One round: the inputs taken, each step of the cycle run and timed, every device
+  # refreshed before each with that step's deadline, its task's watchdog and a poll period
+  # from the step's start, and before the write with the idle watchdog's, and each device
+  # whose outputs changed written, in device-name order, its answer awaited (decisions
+  # 118, 125 and 128). Then the share's count, the next round planned, and the requests
+  # that waited served in the rest of the millisecond.
   defp rounded(%{anchor: anchor, logical: logical} = state) do
     start = now(state)
     elapsed = max(start - anchor - logical, 0)
     {runtime, steps} = Runtime.cycle_steps(state.runtime, elapsed, state.pending)
-    runtime = Enum.reduce(steps, runtime, &stepped(&1, &2, state))
-    outputs = Runtime.cycle_outputs(runtime)
-    refresh(state, now(state) + state.idle + state.poll)
 
-    written(
-      %{
-        state
-        | runtime: runtime,
-          logical: logical + elapsed,
-          pending: %{},
-          rounds: state.rounds + 1
-      },
-      outputs
-    )
+    {state, timed} =
+      Enum.reduce(steps, {%{state | runtime: runtime}, 0}, &stepped/2)
+
+    state = ran(state, state.continuous, now(state) - start)
+    outputs = Runtime.cycle_outputs(state.runtime)
+    state = written(refresh(state, :idle), outputs)
+    finish = now(state)
+    {logic, again} = logic(state)
+
+    %{
+      state
+      | logical: logical + elapsed,
+        pending: %{},
+        rounds: state.rounds + 1,
+        logic: logic,
+        used: used(state, finish - start - timed)
+    }
+    |> planned(start, finish, state.untimed or again)
+    |> freely()
   end
 
-  defp stepped({_kind, task, _run} = step, runtime, state) do
-    refresh(state, now(state) + watchdog(task, state) + state.poll)
-    {runtime, _events} = Runtime.cycle_step(runtime, step)
-    runtime
+  defp stepped({kind, task, _run} = step, {state, timed}) do
+    begun = now(state)
+    state = refresh(state, begun + watchdog(task, state) + state.poll)
+    {runtime, _events} = Runtime.cycle_step(state.runtime, step)
+    took = now(state) - begun
+    {ran(%{state | runtime: runtime}, task, took), timed + timed(kind, took)}
   end
+
+  defp timed(:timed, took), do: took
+  defp timed(:untimed, _took), do: 0
+
+  # Each task's longest run, a timed task's step and the continuous task's round.
+  defp ran(state, nil, _took), do: state
+
+  defp ran(state, task, took),
+    do: %{state | longest: Map.update!(state.longest, task, &max(&1, took))}
+
+  # The share's count: a round of the continuous task's from its start to its end, a
+  # millisecond at least, the timed tasks' runs in it left out (decision 122).
+  defp used(%{untimed: true, used: used}, took), do: used + max(took, 1)
+  defp used(%{used: used}, _took), do: used
+
+  # A trigger logic writes, an event task's single that is no input point: one that a round
+  # changed makes the next round at the next millisecond (decision 123).
+  defp logic(%{logic: logic, runtime: runtime}) do
+    now = Map.new(logic, fn {name, _value} -> {name, Runtime.get!(runtime, name)} end)
+    {now, now != logic}
+  end
+
+  # The next round: at the millisecond after the one this round began in, or at once where
+  # it took a millisecond or more, while untimed programs exist or logic changed a trigger
+  # (decisions 122 and 123); at the next periodic due time, on the runner's clock, which
+  # counts from `anchor` (§4.11); the earlier, a wake either way.
+  defp planned(state, start, finish, again) do
+    next =
+      earliest(
+        back_to_back(again, start, finish),
+        due(Runtime.next_due_in(state.runtime), state)
+      )
+
+    scheduled(%{state | next_round: next})
+  end
+
+  defp back_to_back(false, _start, _finish), do: nil
+  defp back_to_back(true, start, finish) when finish > start, do: finish
+  defp back_to_back(true, start, _finish), do: start + 1
+
+  defp due(:infinity, _state), do: nil
+  defp due(ms, %{anchor: anchor, logical: logical}), do: anchor + logical + ms
+
+  defp earliest(nil, at), do: at
+  defp earliest(at, nil), do: at
+  defp earliest(one, other), do: min(one, other)
+
+  # The one wake: the next round, or sooner the refresh a wait makes a poll period after
+  # the last, its token making any earlier wake stale.
+  defp scheduled(%{clock: {module, clock}, token: token} = state) do
+    cancel(state.wake, state.clock)
+    at = earliest(state.next_round, state.refreshed + state.poll)
+    token = token + 1
+
+    %{
+      state
+      | token: token,
+        wake: {module.wake_at(clock, self(), {__MODULE__, :wake, token}, at), token, at}
+    }
+  end
+
+  defp cancel(nil, _clock), do: :ok
+  defp cancel({timer, _token, _at}, {module, clock}), do: module.cancel(clock, timer)
+
+  # The requests that waited, served while no round is owed.
+  defp freely(%{untimed: true, next_round: at} = state), do: serving(state, at)
+  defp freely(state), do: state
 
   defp watchdog(task, %{watchdogs: watchdogs}), do: Map.fetch!(watchdogs, task)
 
@@ -267,8 +492,16 @@ defmodule Logex.Runner do
         &{&1.name, Configuration.watchdog(&1)}
       )
 
-  defp refresh(%{devices: devices}, deadline),
-    do: Enum.each(devices, fn {_name, pid, _points} -> Device.refresh(pid, deadline) end)
+  # Every device refreshed, without a wait, carrying its deadline: a step's, or `:idle`'s,
+  # the idle watchdog and a poll period from now (decisions 125 and 128); the longest wait
+  # between two refreshes kept for the status.
+  defp refresh(state, :idle), do: refresh(state, now(state) + state.idle + state.poll)
+
+  defp refresh(%{devices: devices, refreshed: last} = state, deadline) do
+    Enum.each(devices, fn {_name, pid, _points} -> Device.refresh(pid, deadline) end)
+    now = now(state)
+    %{state | refreshed: now, refresh_gap: max(state.refresh_gap, now - last)}
+  end
 
   defp written(%{devices: devices} = state, outputs),
     do: Enum.reduce(devices, state, &write(&1, &2, outputs))

@@ -13,6 +13,57 @@ defmodule Logex.RunnerTest do
   alias Logex.Runner
   alias Logex.Runner.Clock.Manual
 
+  # A device whose every write takes `ms` on the manual clock, as a slow drive's does, and
+  # which has nothing to read: so a round that writes it fills its milliseconds.
+  defmodule SlowIO do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, opts), do: {:ok, Map.new(opts)}
+
+    @impl true
+    def read(state), do: {:ok, %{}, state}
+
+    @impl true
+    def write(_values, %{clock: clock, ms: ms} = state) do
+      Manual.pass(clock, ms)
+      {:ok, state}
+    end
+  end
+
+  # A clock whose every reading takes a millisecond, the manual clock's: so that the
+  # runner's own work, a host's request among it, takes time, as on a real machine.
+  defmodule TickClock do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms(clock) do
+      Manual.pass(clock, 1)
+      Manual.now_ms(clock)
+    end
+
+    @impl true
+    def wake_at(clock, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel(clock, timer), do: Manual.cancel(clock, timer)
+  end
+
+  # A clock whose cancel/2 stops nothing, as a real clock's cannot stop a message already
+  # sent: every wake the runner set comes, the ones it superseded among them.
+  defmodule NoCancelClock do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms(clock), do: Manual.now_ms(clock)
+
+    @impl true
+    def wake_at(clock, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel(_clock, _timer), do: :ok
+  end
+
   # One var_input copied to one var_output.
   @relay "var_input in bool\nvar_output out bool\nxic in ote out"
 
@@ -596,6 +647,416 @@ defmodule Logex.RunnerTest do
       Manual.pass(clock, 2)
       Sim.set(panel, [1], 1)
       assert refreshes(drive_device) == [2 + 510, 2 + 510]
+    end
+  end
+
+  # The runner's count of the rounds it has run, from its state: `status/1` is step 5's.
+  defp rounds(runner), do: :sys.get_state(runner).rounds
+
+  # A counter of its own runs, `n`, and an output that changes at every run, `q`.
+  @count "var_output n dint\nadd n 1 n"
+  @toggle "var_output q bool\nxio q ote q"
+
+  defp configured(text, programs) do
+    {:ok, config} =
+      Configuration.compile(
+        "plant",
+        text,
+        Map.new(programs, fn {name, source} -> {name, program(source, name)} end)
+      )
+
+    config
+  end
+
+  # A request's answer, the clock moved one wake at a time until it comes.
+  defp waited(request, clock),
+    do: answer(:gen_server.wait_response(request, 0), request, clock)
+
+  defp answer({:reply, value}, _request, _clock), do: value
+
+  defp answer(:timeout, request, clock) do
+    Manual.advance(clock, 0)
+    waited(request, clock)
+  end
+
+  # How many of the requests each slot served, one wake at a time, until all are.
+  defp slotted([], _clock, slots), do: Enum.reverse(slots)
+
+  defp slotted(requests, clock, slots) do
+    Manual.advance(clock, 0)
+    left = Enum.filter(requests, &(:gen_server.wait_response(&1, 0) == :timeout))
+    slotted(left, clock, record(length(requests) - length(left), slots))
+  end
+
+  defp record(0, slots), do: slots
+  defp record(served, slots), do: [served | slots]
+
+  describe "the rounds (decisions 108, 122 and 123)" do
+    test "while untimed programs exist, one round each clock millisecond, advance(n) " <>
+           "running n, the first at once" do
+      config =
+        configured(
+          "task main continuous\nvar_global x bool at panel.i.0\nprogram b count\n",
+          %{"count" => @count}
+        )
+
+      {opts, %{clock: clock}} = rig(config)
+      {:ok, runner} = Runner.start_link(opts)
+      assert Runner.get!(runner, "b.n") == 1
+
+      for n <- [1, 10, 37, 0, 252] do
+        before = Runner.get!(runner, "b.n")
+        Manual.advance(clock, n)
+        assert Runner.get!(runner, "b.n") == before + n
+      end
+    end
+
+    test "a round that takes a millisecond or more is followed at once, a wake on the clock" do
+      config =
+        configured(
+          "var_global q bool at slow.q.0\nprogram t toggle\n  t.q q\nprogram b count\n",
+          %{"toggle" => @toggle, "count" => @count}
+        )
+
+      {:ok, clock} = Manual.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"slow" => {SlowIO, clock: clock, ms: 3}},
+          clock: {Manual, clock}
+        )
+
+      # The first round took 3 ms, so the next is due at once, at 3, and runs at the next
+      # advance, however short: each round from then on starts where the last ended.
+      assert {rounds(runner), Manual.now_ms(clock)} == {1, 3}
+      Manual.advance(clock, 0)
+      assert {rounds(runner), Manual.now_ms(clock)} == {2, 6}
+      Manual.advance(clock, 6)
+      assert {rounds(runner), Manual.now_ms(clock)} == {5, 15}
+
+      # Each at once, at the time the last ended: no wake was late, and one is pending.
+      assert :sys.get_state(runner).latest_wake == 0
+      assert [{15, ^runner, _wake}, {_poll, _device, _}] = Manual.pending(clock)
+
+      # A round is owed, at 15, so a host's call would wait for the share's slot, which
+      # the next advance brings: the count is read from the runner's state.
+      assert Logex.Runtime.get!(:sys.get_state(runner).runtime, "b.n") == 5
+    end
+
+    test "with no untimed program, a round only at a due time or a trigger's change" do
+      text = String.replace(@counted, "program c count with trip", "program c count with trip\n")
+      {opts, %{clock: clock, panel: panel}} = plant_rig(counted(text))
+      {:ok, runner} = Runner.start_link(opts)
+
+      # At 0, 10, 20 and 30: the relay's due times.
+      Manual.advance(clock, 35)
+      assert rounds(runner) == 4
+
+      # A press and release between two due times: two rounds at once, `trip` run once,
+      # each planning the next round again, its earlier wake cancelled.
+      Sim.set(panel, [1], 1)
+      assert {rounds(runner), Runner.get!(runner, "hits")} == {5, 1}
+      assert [{40, ^runner, _}] = Enum.filter(Manual.pending(clock), &(elem(&1, 1) == runner))
+      Sim.set(panel, [1], 0)
+      assert {rounds(runner), Runner.get!(runner, "hits")} == {6, 1}
+
+      # And the due times go on as before, on their grid.
+      Manual.advance(clock, 5)
+      assert rounds(runner) == 7
+      Manual.advance(clock, 9)
+      assert rounds(runner) == 7
+      Manual.advance(clock, 1)
+      assert rounds(runner) == 8
+    end
+
+    # A wake the runner superseded, which a real clock may deliver all the same, is stale by
+    # its token and does nothing: the runs, rounds and refreshes are those of a clock that
+    # cancels it.
+    test "a superseded wake that comes all the same changes nothing" do
+      [cancelled, delivered] =
+        for module <- [Manual, NoCancelClock] do
+          {opts, %{clock: clock, panel: panel}} = plant_rig(counted(), poll: 50)
+          {:ok, runner} = Runner.start_link(Keyword.put(opts, :clock, {module, clock}))
+          %{"drive" => drive} = devices(runner)
+          :erlang.trace(drive, true, [:receive])
+
+          Manual.advance(clock, 13)
+          Sim.set(panel, [1], 1)
+          Sim.set(panel, [1], 0)
+          Manual.advance(clock, 30)
+          {rounds(runner), Runner.get!(runner, "hits"), refreshes(drive)}
+        end
+
+      assert delivered == cancelled
+      assert {7, 1, _refreshes} = delivered
+    end
+
+    test "a trigger logic writes makes its round at the next clock millisecond: two event " <>
+           "tasks that write each other's trigger round once a millisecond, a call served " <>
+           "between" do
+      text = """
+      task a single ga priority 0
+      task b single gb priority 0
+
+      var_global ga bool 1
+      var_global gb bool
+      var_global x  bool at panel.i.0
+
+      program pa flip_a with a
+      program pb flip_b with b
+      """
+
+      config =
+        configured(text, %{
+          "flip_a" => "var_external ga bool\nvar_external gb bool\nmove 1 gb\nmove 0 ga",
+          "flip_b" => "var_external ga bool\nvar_external gb bool\nmove 1 ga\nmove 0 gb"
+        })
+
+      {opts, %{clock: clock}} = rig(config)
+      {:ok, runner} = Runner.start_link(opts)
+
+      # `ga` starts at 1, so `a` runs in the first round, which sets `gb`: `b` runs at 1,
+      # setting `ga` again, `a` at 2, and so on, a call served at each.
+      assert {rounds(runner), Runner.get!(runner, "gb")} == {1, 1}
+
+      for ms <- 1..6 do
+        Manual.advance(clock, 1)
+        assert rounds(runner) == 1 + ms
+        assert Runner.get!(runner, "ga") == rem(ms, 2)
+      end
+
+      Manual.advance(clock, 100)
+      assert rounds(runner) == 107
+    end
+
+    # Each round writes the slow device, which takes 1 ms, so rounds fill their
+    # milliseconds and a host's request waits for a slot. A request sent once the runner
+    # has run r rounds is served after C x ceil(r / C): the slot comes after every C ms of
+    # rounds, the first counted from start (decision 122). The request is sent with
+    # :gen_server.send_request/2, the runner's own request for get!/2, so that the test can
+    # move the clock while it waits.
+    test "the share's slots: after C ms of rounds that fill their milliseconds the runner " <>
+           "serves the requests that waited, at 10%, 20%, 50% and 90%" do
+      config =
+        configured(
+          "var_global q bool at slow.q.0\nprogram t toggle\n  t.q q\nprogram b count\n",
+          %{"toggle" => @toggle, "count" => @count}
+        )
+
+      # 15% and 40% round C, 5.67 to 6 and 1.5 to 2.
+      for {share, c} <- [{10, 9}, {15, 6}, {20, 4}, {40, 2}, {50, 1}, {90, 1}] do
+        {:ok, clock} = Manual.start_link()
+
+        {:ok, runner} =
+          Runner.start_link(
+            configuration: config,
+            io: %{"slow" => {SlowIO, clock: clock, ms: 1}},
+            clock: {Manual, clock},
+            overhead: share
+          )
+
+        for gap <- [0, 3, 1, 8, 2, 13, 0, 5] do
+          Enum.each(1..gap//1, fn _ -> Manual.advance(clock, 0) end)
+          r = rounds(runner)
+          request = :gen_server.send_request(runner, {:get!, "b.n"})
+          served = waited(request, clock)
+          assert served == c * div(r + c - 1, c), "#{share}%: sent after #{r} rounds"
+        end
+      end
+    end
+
+    # A slot serves its requests for up to S ms, each whole, its first whatever the time:
+    # on a clock whose every reading takes a millisecond, each request served takes the
+    # one reading made after it, so a slot of S ms serves S of a queue of forty, one at
+    # 50% and nine at 90%, and the rest wait for the slots after.
+    test "a slot serves the runner's own work for up to S ms, each request whole" do
+      config =
+        configured("var_global x bool at panel.i.0\nprogram b count\n", %{"count" => @count})
+
+      for {share, slots} <- [{50, List.duplicate(1, 40)}, {90, [9, 9, 9, 9, 4]}] do
+        {:ok, clock} = Manual.start_link()
+        {:ok, panel} = Sim.start_link(clock: clock)
+
+        {:ok, runner} =
+          Runner.start_link(
+            configuration: config,
+            io: %{"panel" => {Sim, sim: panel}},
+            clock: {TickClock, clock},
+            overhead: share
+          )
+
+        requests = for _ <- 1..40, do: :gen_server.send_request(runner, {:get!, "b.n"})
+        assert slotted(requests, clock, []) == slots, "#{share}%"
+      end
+    end
+
+    # The share is of the continuous task's time and the runner's own: a timed task's runs
+    # in a round are left out of the round's count (decision 122). On the ticking clock a
+    # task due in every round takes time in each, and the slots come as they come without
+    # it.
+    test "the timed tasks' runs are left out of the share's count" do
+      served =
+        for text <- [
+              "var_global x bool at panel.i.0\nprogram b count\n",
+              "task t interval 1 priority 1\nvar_global x bool at panel.i.0\n" <>
+                "program b count\nprogram c count with t\n"
+            ] do
+          {:ok, clock} = Manual.start_link()
+          {:ok, panel} = Sim.start_link(clock: clock)
+
+          {:ok, runner} =
+            Runner.start_link(
+              configuration: configured(text, %{"count" => @count}),
+              io: %{"panel" => {Sim, sim: panel}},
+              clock: {TickClock, clock},
+              overhead: 10
+            )
+
+          for _ <- 1..4,
+              do: waited(:gen_server.send_request(runner, {:get!, "b.n"}), clock)
+        end
+
+      assert [alone, beside] = served
+      assert alone == beside
+    end
+
+    # A request that waited for a round is served in the rest of the millisecond the next
+    # round does not fill, before the share's slot would come.
+    test "a request that waited is served in the rest of a millisecond no round wants" do
+      config =
+        configured(
+          "var_global q bool at drive.q.0\nprogram t toggle\n  t.q q\nprogram b count\n",
+          %{"toggle" => @toggle, "count" => @count}
+        )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, drive} = Sim.start_link(clock: clock)
+      Sim.fail(drive, :write, {:delay, 2})
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"drive" => {Sim, sim: drive}},
+          clock: {Manual, clock}
+        )
+
+      # The first round's write took 2 ms, so the next is owed at 2, and the request waits;
+      # the round at 2 takes none, and the request is served before the next, at 3, long
+      # before the slot 4 ms of rounds bring.
+      assert {rounds(runner), Manual.now_ms(clock)} == {1, 2}
+      request = :gen_server.send_request(runner, {:get!, "b.n"})
+      assert :gen_server.wait_response(request, 0) == :timeout
+      Manual.advance(clock, 0)
+      assert :gen_server.wait_response(request, 0) == {:reply, 2}
+    end
+
+    # A round that takes no time counts a millisecond: the first, whose write takes none,
+    # counts one, and the request sent after the second, each after it taking 1 ms, is
+    # served at the slot after the fourth.
+    test "a round counts a millisecond at least" do
+      config =
+        configured(
+          "var_global q bool at drive.q.0\nprogram t toggle\n  t.q q\nprogram b count\n",
+          %{"toggle" => @toggle, "count" => @count}
+        )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"drive" => {Sim, sim: drive}},
+          clock: {Manual, clock}
+        )
+
+      for _ <- 1..10, do: Sim.fail(drive, :write, {:delay, 1})
+      Manual.advance(clock, 1)
+      assert {rounds(runner), Manual.now_ms(clock)} == {2, 2}
+      assert waited(:gen_server.send_request(runner, {:get!, "b.n"}), clock) == 4
+    end
+
+    test "with no untimed program, a request is served at once, a round owed or not" do
+      config =
+        configured(
+          "task fast interval 10 priority 1\nvar_global q bool at slow.q.0\n" <>
+            "program t toggle with fast\n  t.q q\n",
+          %{"toggle" => @toggle}
+        )
+
+      {:ok, clock} = Manual.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"slow" => {SlowIO, clock: clock, ms: 15}},
+          clock: {Manual, clock}
+        )
+
+      # The first round took 15 ms, so the round due at 10 is owed; the call is served.
+      assert Manual.now_ms(clock) == 15
+      assert Runner.get!(runner, "t.q") == 1
+    end
+
+    test "while it waits, every device refreshed at least once a poll period, with the " <>
+           "idle watchdog's deadline" do
+      {opts, %{clock: clock}} = plant_rig(counted(), poll: 3, idle: 100)
+      {:ok, runner} = Runner.start_link(opts)
+      %{"drive" => drive} = devices(runner)
+      :erlang.trace(drive, true, [:receive])
+
+      # Waiting from 0 for the round at 10: refreshed at 3, 6 and 9; then the round's step,
+      # 500 ms and 3 on, and its write's.
+      Manual.advance(clock, 10)
+      assert refreshes(drive) == [3 + 103, 6 + 103, 9 + 103, 10 + 503, 10 + 103]
+    end
+
+    test "the due times are on the runner's clock, from the time it started" do
+      {:ok, clock} = Manual.start_link(now: 7_003)
+      {:ok, panel} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: relayed(),
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock}
+        )
+
+      assert rounds(runner) == 1
+      Manual.advance(clock, 9)
+      assert rounds(runner) == 1
+      Manual.advance(clock, 1)
+      assert rounds(runner) == 2
+
+      assert Enum.filter(Manual.pending(clock), &(elem(&1, 1) == runner)) ==
+               [{7_023, runner, {Runner, :wake, :sys.get_state(runner).token}}]
+    end
+
+    test "rounds on a periodic task keep their grid, absolute, a slow write's time not " <>
+           "counted: 100,000 rounds, every one on time" do
+      config =
+        configured(
+          "task fast interval 10 priority 1\nvar_global q bool at slow.q.0\n" <>
+            "program t toggle with fast\n  t.q q\nprogram b count with fast\n",
+          %{"toggle" => @toggle, "count" => @count}
+        )
+
+      {:ok, clock} = Manual.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"slow" => {SlowIO, clock: clock, ms: 3}},
+          clock: {Manual, clock},
+          poll: 100_000
+        )
+
+      Manual.advance(clock, 999_990)
+      assert Runner.get!(runner, "b.n") == 100_000
+      assert rounds(runner) == 100_000
+      assert Logex.Runtime.overlaps(:sys.get_state(runner).runtime) == %{"fast" => 0}
+      assert Manual.now_ms(clock) == 999_993
     end
   end
 end
