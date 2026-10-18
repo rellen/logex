@@ -178,6 +178,13 @@ defmodule Logex.IOTest do
       assert_received {:handled, %{[0] => 1}}
     end
 
+    test "takes the longest wait the VM can wait, and waits it for the device" do
+      sim = sim(reports: true, wait: 4_294_967_295)
+      pid = device(sim: sim)
+      assert Sim.set(sim, [0], 1) == :ok
+      assert Device.reported(pid) == [%{[0] => 1}]
+    end
+
     test "a sim that does not report sends nothing: its device is only read" do
       sim = sim()
       pid = device(sim: sim)
@@ -360,7 +367,11 @@ defmodule Logex.IOTest do
             {[clock: :nope],
              "expected a manual clock from Logex.Runner.Clock.Manual.start_link/1, got: :nope"},
             {[wait: 0],
-             "Logex.IO.Sim's wait: is a whole number of milliseconds, 1 or more, got: 0"}
+             "Logex.IO.Sim's wait: is a whole number of milliseconds, 1 to 4294967295, the " <>
+               "longest the VM waits, got: 0"},
+            {[wait: 4_294_967_296],
+             "Logex.IO.Sim's wait: is a whole number of milliseconds, 1 to 4294967295, the " <>
+               "longest the VM waits, got: 4294967296"}
           ],
           do: assert_raise(ArgumentError, message, fn -> Sim.start_link(opaque(opts)) end)
 

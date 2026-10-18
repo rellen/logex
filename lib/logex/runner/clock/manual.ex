@@ -11,7 +11,8 @@ defmodule Logex.Runner.Clock.Manual do
       :ok = Logex.Runner.Clock.Manual.advance(clock, 10)   # pid has handled :tick
 
   - `start_link/1` starts it at time 0, or at `now:`; `wait:` is how long `advance/2`
-    waits for a receiver, 5000 ms unless set.
+    waits for a receiver, 5000 ms unless set, from 1 ms to 4294967295, the longest the VM
+    waits for an answer.
   - `advance/2` moves time on by a number of milliseconds and delivers each timer due on
     the way, the earliest first and timers due at one time in the order they were set,
     the clock reading each one's time while it is handled. It runs in the caller's
@@ -45,9 +46,12 @@ defmodule Logex.Runner.Clock.Manual do
 
   @options [:now, :wait]
 
+  # The longest a process waits for an answer, 2^32 - 1 ms: a call refuses a longer one.
+  @longest 4_294_967_295
+
   @doc """
   Starts a manual clock linked to the caller, at time 0 or `now:`, waiting `wait:` ms,
-  5000 unless set, for each receiver `advance/2` delivers to.
+  5000 unless set, 1 to 4294967295, for each receiver `advance/2` delivers to.
   """
   def start_link(opts \\ []) do
     %{now: now, wait: wait} = options!(opts)
@@ -207,14 +211,14 @@ defmodule Logex.Runner.Clock.Manual do
         "the manual clock's now: is a whole number of milliseconds, got: #{inspect(other)}"
       )
 
-  defp wait!(wait) when is_integer(wait) and wait > 0, do: wait
+  defp wait!(wait) when wait in 1..@longest, do: wait
 
   defp wait!(other),
     do:
       raise(
         ArgumentError,
-        "the manual clock's wait: is a whole number of milliseconds, 1 or more, got: " <>
-          inspect(other)
+        "the manual clock's wait: is a whole number of milliseconds, 1 to #{@longest}, the " <>
+          "longest the VM waits, got: " <> inspect(other)
       )
 
   defp span!(ms, _function) when is_integer(ms) and ms >= 0, do: ms

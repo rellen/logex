@@ -2966,6 +2966,13 @@ and M4-7 the documents.
   that an adapter that is also a GenServer meets no clash; the manual clock's `wait:` and
   `pending/1`, the simulated device's `wait:` and `reads/1`; and `bind!/2`'s order of
   mistakes, a key that is no device's name first.
+
+  M4-1's review, on 2026-10-17, found host mistakes taken or misread, rules no test
+  pinned and words gone loose in its design record, and its fixes are the commits after
+  (4). A `wait:` longer than the VM waits for an answer, 2^32 − 1 ms, was taken by the
+  manual clock and the simulated device, and then escaped `advance/2` and `set/3` as an
+  `ErlangError`; each refuses it at start now, in its words, and takes 4294967295. The
+  suite is at 1286 tests (8 doctests).
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
   `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line

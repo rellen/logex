@@ -15,7 +15,8 @@ defmodule Logex.IO.Sim do
     (decision 112); without it the device is only read. `clock:` is a manual clock
     (`Logex.Runner.Clock.Manual`) on which a delay passes, a delay sleeping in real time
     without one; `wait:` is how long `set/3` waits for the device that opened it to handle
-    a report, 5000 ms unless set.
+    a report, 5000 ms unless set, from 1 ms to 4294967295, the longest the VM waits for an
+    answer.
   - `set/3` sets one input, at its address, and `set/2` several, a map of addresses to
     values, unset inputs reading 0. Where the sim reports, the inputs that changed are
     sent to the device that opened it as one report, from the caller, which waits until
@@ -54,9 +55,13 @@ defmodule Logex.IO.Sim do
   @options [:reports, :clock, :wait]
   @callbacks [:init, :read, :write, :report, :close]
 
+  # The longest a process waits for an answer, 2^32 - 1 ms: a call refuses a longer one.
+  @longest 4_294_967_295
+
   @doc """
   Starts a simulated device linked to the caller: `reports:` true or false, false unless
-  set; `clock:` a manual clock for its delays, or nil; `wait:` ms, 5000 unless set.
+  set; `clock:` a manual clock for its delays, or nil; `wait:` ms, 5000 unless set, 1 to
+  4294967295.
   """
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, options!(opts))
 
@@ -301,14 +306,14 @@ defmodule Logex.IO.Sim do
     clock
   end
 
-  defp wait!(wait) when is_integer(wait) and wait > 0, do: wait
+  defp wait!(wait) when wait in 1..@longest, do: wait
 
   defp wait!(other),
     do:
       raise(
         ArgumentError,
-        "Logex.IO.Sim's wait: is a whole number of milliseconds, 1 or more, got: " <>
-          inspect(other)
+        "Logex.IO.Sim's wait: is a whole number of milliseconds, 1 to #{@longest}, the " <>
+          "longest the VM waits, got: " <> inspect(other)
       )
 
   # A sim is a process this module started, by its pid.

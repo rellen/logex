@@ -271,6 +271,14 @@ defmodule Logex.ClockTest do
       end
     end
 
+    test "takes the longest wait the VM can wait, and waits it for a receiver" do
+      clock = clock(wait: 4_294_967_295)
+      pid = receiver(clock)
+      Manual.wake_at(clock, pid, :tick, 1)
+      assert Manual.advance(clock, 1) == :ok
+      assert Receiver.seen(pid) == [tick: 1]
+    end
+
     test "a receiver that does not answer :sys within wait: is the host's mistake" do
       clock = clock(wait: 20)
       plain = spawn_link(fn -> receive do: (:never -> :ok) end)
@@ -291,10 +299,14 @@ defmodule Logex.ClockTest do
             {[speed: 2], "the manual clock takes now: and wait:, got: :speed"},
             {[now: 1.5], "the manual clock's now: is a whole number of milliseconds, got: 1.5"},
             {[wait: 0],
-             "the manual clock's wait: is a whole number of milliseconds, 1 or more, got: 0"},
+             "the manual clock's wait: is a whole number of milliseconds, 1 to 4294967295, " <>
+               "the longest the VM waits, got: 0"},
+            {[wait: 4_294_967_296],
+             "the manual clock's wait: is a whole number of milliseconds, 1 to 4294967295, " <>
+               "the longest the VM waits, got: 4294967296"},
             {[now: 0, wait: :forever],
-             "the manual clock's wait: is a whole number of milliseconds, 1 or more, got: " <>
-               ":forever"}
+             "the manual clock's wait: is a whole number of milliseconds, 1 to 4294967295, " <>
+               "the longest the VM waits, got: :forever"}
           ],
           do: assert_raise(ArgumentError, message, fn -> Manual.start_link(opaque(opts)) end)
 

@@ -436,8 +436,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   where its time falls inside it; `pass/2` is time passing inside a step, delivering
   nothing, the clock never going back; `pending/1` lists the rest. A receiver is an OTP
   process; one that is down is passed over, the caller may be one, and one that does not
-  answer within `wait:` is the host's mistake. Its timers are a gb_tree, so delivering n
-  is n log n. `Logex.Runtime` reads no clock, and only the runner will
+  answer within `wait:`, 1 to 4294967295 ms, the longest the VM waits, is the host's
+  mistake. Its timers are a gb_tree, so delivering n is n log n. `Logex.Runtime` reads
+  no clock, and only the runner will
 - `lib/logex/io.ex` — `Logex.IO` (M4-1, `docs/organisation.md` §4.5 and §4.11), the
   adapter behaviour: `init/3`, a device's name, its points and the options it was bound
   with, run in the device's process, `{:ok, state}` or `{:error, reason}`; `read/1`, some
