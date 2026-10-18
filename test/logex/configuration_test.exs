@@ -889,6 +889,206 @@ defmodule Logex.ConfigurationTest do
     end
   end
 
+  # M4-2: a task's watchdog and the configuration's continuous task (docs/organisation.md
+  # §4.11, decisions 109 to 111), from Elixir data. The same checks from source are the
+  # task lines'.
+  describe "a task's watchdog and the continuous task (M4-2)" do
+    defp watched(task, watchdog), do: %{task | watchdog: watchdog}
+
+    defp continuous(name, watchdog \\ nil),
+      do: %Configuration.Task{name: name, continuous: true, watchdog: watchdog}
+
+    # Every diagnostic check/1 gives, unformatted, for these tasks and instances.
+    defp checked_tasks(seal, tasks) do
+      fields = Keyword.put(base(seal), :tasks, tasks)
+
+      config = %Configuration{
+        name: "plant",
+        programs: %{"seal" => seal},
+        tasks: fields[:tasks],
+        globals: fields[:globals],
+        instances: fields[:instances],
+        connections: fields[:connections]
+      }
+
+      Enum.map(Configuration.check(config), & &1.message)
+    end
+
+    test "a watchdog of 1 to 2147483647 ms, or none, on any kind of task, and one continuous " <>
+           "task with a watchdog or none, are accepted",
+         %{seal: seal} do
+      tasks = [
+        watched(task("fast", 10, 1), 50),
+        watched(%Configuration.Task{name: "trip", single: "pb2", priority: 0}, 1),
+        watched(task("slow", 500, 2), 2_147_483_647),
+        task("idle", 1000, 3),
+        continuous("main", 200)
+      ]
+
+      instances = [%Instance{name: "m", type: "seal", task: "fast"}]
+      config = Configuration.new!(Keyword.merge(base(seal), tasks: tasks, instances: instances))
+      assert config.tasks == tasks
+      assert Configuration.check(config) == []
+      assert checked_tasks(seal, [continuous("main")]) == []
+
+      # A struct literal enforces a task's name alone: a continuous task has no priority.
+      assert %Configuration.Task{name: "main"} ==
+               %Configuration.Task{
+                 name: "main",
+                 single: nil,
+                 interval: nil,
+                 priority: nil,
+                 watchdog: nil,
+                 continuous: false,
+                 line: nil
+               }
+    end
+
+    # Decision 109: every task has a watchdog, 500 ms where it sets none, so 0 is no "no
+    # watchdog"; the range is an interval's. A negative one a line can say (decision 97).
+    test "a watchdog out of 1 to 2147483647 ms is told its range", %{seal: seal} do
+      tasks = [
+        watched(task("a", 10, 1), 0),
+        watched(task("b", 10, 1), -5),
+        watched(task("c", 10, 1), 2_147_483_648),
+        watched(continuous("d"), 0),
+        watched(%Configuration.Task{name: "e", single: "pb2", priority: 0}, -1)
+      ]
+
+      assert checked_tasks(seal, tasks) == [
+               "the watchdog of `a` is 0: a watchdog is at least 1 ms, and a task that sets " <>
+                 "none has 500",
+               "the watchdog of `b` is `-5` ms: a watchdog is 1 to 2147483647 ms",
+               "the watchdog of `c` is `2147483648` ms: a watchdog is 1 to 2147483647 ms",
+               "the watchdog of `d` is 0: a watchdog is at least 1 ms, and a task that sets " <>
+                 "none has 500",
+               "the watchdog of `e` is `-1` ms: a watchdog is 1 to 2147483647 ms"
+             ]
+    end
+
+    # Decision 111: the conventional continuous task takes no period, trigger or priority,
+    # and every one it was given is named in one diagnostic, in IEC's order; its other
+    # rules, a single's global among them, are a timed task's and not read.
+    test "a continuous task takes no single, interval or priority", %{seal: seal} do
+      tasks = [
+        %{continuous("a") | priority: 1},
+        %{continuous("b") | interval: 0, priority: 70_000},
+        %{continuous("c") | single: "nowhere", interval: 10, priority: 1},
+        %{continuous("d") | single: "pb2"}
+      ]
+
+      for task <- tasks do
+        assert [message] = checked_tasks(seal, [task])
+        assert message =~ ~r/\A`#{task.name}` is the continuous task, which takes no /
+      end
+
+      assert Enum.map(tasks, &checked_tasks(seal, [&1])) == [
+               [
+                 "`a` is the continuous task, which takes no `priority`: it runs every " <>
+                   "program instance with no timed task, after the due tasks"
+               ],
+               [
+                 "`b` is the continuous task, which takes no `interval` or `priority`: it " <>
+                   "runs every program instance with no timed task, after the due tasks"
+               ],
+               [
+                 "`c` is the continuous task, which takes no `single`, `interval` or " <>
+                   "`priority`: it runs every program instance with no timed task, after the " <>
+                   "due tasks"
+               ],
+               [
+                 "`d` is the continuous task, which takes no `single`: it runs every program " <>
+                   "instance with no timed task, after the due tasks"
+               ]
+             ]
+    end
+
+    # One at most, as the conventional family's: the first in line order is the
+    # configuration's, and each after it is told it.
+    test "a second continuous task is told the first", %{seal: seal} do
+      tasks = [task("fast", 10, 1), continuous("main"), continuous("more", 50), continuous("x")]
+
+      assert checked_tasks(seal, tasks) == [
+               "`more` is a second continuous task: a configuration has one at most, and " <>
+                 "`main` is its continuous task",
+               "`x` is a second continuous task: a configuration has one at most, and `main` " <>
+                 "is its continuous task"
+             ]
+
+      # A second one with inputs is told both, and the first's own are its own.
+      tasks = [%{continuous("main") | priority: 1}, %{continuous("more") | interval: 10}]
+
+      assert checked_tasks(seal, tasks) == [
+               "`main` is the continuous task, which takes no `priority`: it runs every " <>
+                 "program instance with no timed task, after the due tasks",
+               "`more` is a second continuous task: a configuration has one at most, and " <>
+                 "`main` is its continuous task",
+               "`more` is the continuous task, which takes no `interval`: it runs every " <>
+                 "program instance with no timed task, after the due tasks"
+             ]
+    end
+
+    # Decision 111: an instance with no `with`, and one `with` the continuous task, run in
+    # it, so it runs no instance only where every instance has a timed task, which is the
+    # warning any task that runs none is.
+    test "it runs every instance with no timed task, and is told so where it runs none",
+         %{seal: seal} do
+      warned = fn tasks, instances ->
+        fields = Keyword.merge(base(seal), tasks: tasks, instances: instances)
+
+        for %Diagnostic{message: "task " <> _} = warning <- Configuration.new!(fields).warnings,
+            do: Diagnostic.format(warning)
+      end
+
+      fast = task("fast", 10, 1)
+
+      assert warned.([fast, continuous("main")], [%Instance{name: "m", type: "seal"}]) ==
+               ["warning: task `fast` runs no instance"]
+
+      assert warned.([fast, continuous("main")], [
+               %Instance{name: "m", type: "seal", task: "main"}
+             ]) == ["warning: task `fast` runs no instance"]
+
+      assert warned.([fast, continuous("main")], [
+               %Instance{name: "m", type: "seal", task: "fast"}
+             ]) == ["warning: task `main` runs no instance"]
+    end
+
+    # Decision 36: what no line can say. A line says a task is continuous by a word or its
+    # absence, and gives a watchdog as a number.
+    test "a watchdog that is not an integer, or a continuous that is not a boolean, is the " <>
+           "host's mistake",
+         %{seal: seal} do
+      tasks = [
+        watched(task("a", 10, 1), 1.5),
+        %{task("b", 10, 1) | continuous: nil},
+        %{continuous("c") | continuous: "yes", watchdog: :w}
+      ]
+
+      assert refused(Keyword.put(base(seal), :tasks, tasks)) == [
+               "task `a`: a watchdog is 1 to 2147483647 ms, found 1.5",
+               "task `b`: continuous is true or false, found nil",
+               "task `c`: a watchdog is 1 to 2147483647 ms, found :w",
+               ~s|task `c`: continuous is true or false, found "yes"|
+             ]
+    end
+
+    # The one rule for a task's watchdog, as initial/1 is a global's (decisions 109, 110).
+    test "watchdog/1 is a task's watchdog, 500 where it sets none, and refuses anything else" do
+      assert Configuration.watchdog(watched(task("a", 10, 1), 50)) == 50
+      assert Configuration.watchdog(task("a", 10, 1)) == 500
+      assert Configuration.watchdog(continuous("main")) == 500
+
+      for other <- [watched(task("a", 10, 1), 1.5), %Global{name: "g", type: :bool}, 50] do
+        message =
+          "expected a %Logex.Configuration.Task{} whose watchdog is an integer or nil, got: " <>
+            inspect(other)
+
+        assert_raise ArgumentError, message, fn -> Configuration.watchdog(opaque(other)) end
+      end
+    end
+  end
+
   describe "a global's initial value" do
     # initial/1 is the one rule for a global's value where nothing has set it; its
     # doctests give its values.
@@ -4463,7 +4663,9 @@ defmodule Logex.ConfigurationTest do
               "a connection is to a global, by its name, or to a constant",
               "a global's name is not `at`, `bool` or `dint`, in any case: a line reads that " <>
                 "word as its keyword",
-              "a number is an integer"
+              "a number is an integer",
+              "a task's watchdog is nil and it is not continuous: a task line takes " <>
+                "`single`, `interval` and `priority`"
             ]
             |> Enum.map(&Regex.escape/1)
             |> Enum.join("|")

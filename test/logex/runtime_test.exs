@@ -1276,6 +1276,7 @@ defmodule Logex.RuntimeTest do
 
       # M2-1: the configuration, its one validator and its constructor from Elixir; M2-2:
       # its compile from a configuration file's text, and from its file on disk.
+      # M4-2: watchdog/1, the one rule for a task's watchdog.
       assert Enum.sort(Logex.Configuration.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,
@@ -1284,7 +1285,8 @@ defmodule Logex.RuntimeTest do
                compile_file: 1,
                initial: 1,
                location: 1,
-               new!: 1
+               new!: 1,
+               watchdog: 1
              ]
 
       assert Enum.sort(Map.keys(Logex.Configuration.__struct__())) ==
@@ -1296,7 +1298,8 @@ defmodule Logex.RuntimeTest do
                [entries!: 1, keywords: 0, print: 1, read: 1]
 
       for {module, keys} <- [
-            {Logex.Configuration.Task, [:interval, :line, :name, :priority, :single]},
+            {Logex.Configuration.Task,
+             [:continuous, :interval, :line, :name, :priority, :single, :watchdog]},
             {Logex.Configuration.Global, [:at, :initial, :line, :name, :type]},
             {Logex.Configuration.Instance, [:line, :name, :task, :type]},
             {Logex.Configuration.Connection, [:instance, :line, :member, :to]}
@@ -1305,11 +1308,12 @@ defmodule Logex.RuntimeTest do
 
       # M2-6: a task needs an interval, a single or both, which check/1 says, so a struct
       # literal enforces its name and its priority only; struct/1 above ignores which.
+      # M4-2: a continuous task has no priority, so its name alone.
       enforced =
         for %{field: field, required: true} <- Logex.Configuration.Task.__info__(:struct),
             do: field
 
-      assert Enum.sort(enforced) == [:name, :priority]
+      assert Enum.sort(enforced) == [:name]
 
       # M2-5: an instruction's slots, the one lookup of Logex.Warnings and Logex.Edit;
       # instructionize/3, which takes the function blocks a routine may declare instances

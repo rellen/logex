@@ -1257,6 +1257,122 @@ defmodule Logex.SchedulerTest do
     end
   end
 
+  # M4-2 (docs/organisation.md §4.11, decision 111): the configuration's continuous task,
+  # which runs the untimed instances, those with no task and those `with` it alike, where
+  # the task-less ones ran, and is never due; a watchdog, which no cycle reads.
+  describe "the continuous task (M4-2)" do
+    defp main(watchdog),
+      do: %Configuration.Task{name: "main", continuous: true, watchdog: watchdog}
+
+    # `boxes` with the continuous task's name and `free` with no task, declared around
+    # `timed`, on the 10 ms task, so that the untimed instances run in the order declared,
+    # not those of one spelling before the other's.
+    defp continuous(tasks) do
+      Configuration.new!(
+        name: "plant",
+        programs: [program(@relay, "relay")],
+        tasks: tasks,
+        instances: [
+          %Instance{name: "boxes", type: "relay", task: "main"},
+          %Instance{name: "timed", type: "relay", task: "t"},
+          %Instance{name: "free", type: "relay"}
+        ],
+        connections:
+          for(i <- ~w(free timed boxes), do: %Connection{instance: i, member: "in", to: 0})
+      )
+    end
+
+    test "its instances, with no task or `with` it, run last, once in every cycle, in the " <>
+           "order declared, each reported under its name" do
+      config = continuous([main(200), task("t", 10, 0)])
+
+      assert Enum.map(events_of(config, [0, 0, 5, 5]), &ran/1) == [
+               [{"t", "timed", 0}, {"main", "boxes", 0}, {"main", "free", 0}],
+               [{"main", "boxes", 0}, {"main", "free", 0}],
+               [{"main", "boxes", 5}, {"main", "free", 5}],
+               [{"t", "timed", 10}, {"main", "boxes", 10}, {"main", "free", 10}]
+             ]
+    end
+
+    # Where it comes in the task lines is no order of its own: it is never due.
+    test "it is never due, wherever it is declared, nor counted by next_due_in/1" do
+      for tasks <- [[main(nil), task("t", 10, 0)], [task("t", 10, 0), main(nil)]] do
+        runtime = Runtime.start(continuous(tasks))
+        assert Runtime.next_due_in(runtime) == 0
+        {runtime, _outputs, events} = Runtime.cycle(runtime, 0, %{})
+        assert ran(events) == [{"t", "timed", 0}, {"main", "boxes", 0}, {"main", "free", 0}]
+        assert Runtime.next_due_in(runtime) == 10
+      end
+
+      # With no timed task, nothing is ever due: a runner paces its own rounds.
+      alone =
+        Configuration.new!(
+          name: "plant",
+          programs: [program(@relay, "relay")],
+          tasks: [main(50)],
+          instances: [%Instance{name: "boxes", type: "relay"}],
+          connections: [%Connection{instance: "boxes", member: "in", to: 0}]
+        )
+
+      runtime = Runtime.start(alone)
+      assert Runtime.next_due_in(runtime) == :infinity
+      {runtime, _outputs, events} = Runtime.cycle(runtime, 1000, %{})
+      assert ran(events) == [{"main", "boxes", 1000}]
+      assert Runtime.next_due_in(runtime) == :infinity
+      assert Runtime.next_due_in(Runtime.restart(runtime, :cold)) == :infinity
+    end
+
+    test "it never overlaps, and overlaps/1 lists it at 0, across a restart too" do
+      runtime = Runtime.start(continuous([main(nil), task("t", 10, 0)]))
+      assert Runtime.overlaps(runtime) == %{"main" => 0, "t" => 0}
+      {runtime, _outputs, events} = Runtime.cycle(runtime, 35, %{})
+      assert {:overlap, "t", 3} in events
+      refute Enum.any?(events, &match?({:overlap, "main", _}, &1))
+      assert Runtime.overlaps(runtime) == %{"main" => 0, "t" => 3}
+      assert Runtime.overlaps(Runtime.restart(runtime, :cold)) == %{"main" => 0, "t" => 0}
+    end
+
+    # Logex.Runtime reads no clock and so no watchdog: a configuration runs as it did,
+    # whatever its tasks' watchdogs, and the untimed instances' runs differ only in the
+    # name they are reported under.
+    test "a watchdog changes nothing a cycle does, and without the line the same instances " <>
+           "run as task-less, under :none" do
+      timed = fn watchdog -> %{task("t", 10, 0) | watchdog: watchdog} end
+      steps = [0, 10, 25, 0, 5]
+      quiet = events_of(continuous([main(nil), timed.(nil)]), steps)
+
+      for {main_watchdog, t_watchdog} <- [{1, 1}, {200, 50}, {2_147_483_647, 500}],
+          do:
+            assert(
+              events_of(continuous([main(main_watchdog), timed.(t_watchdog)]), steps) == quiet
+            )
+
+      none =
+        Configuration.new!(
+          name: "plant",
+          programs: [program(@relay, "relay")],
+          tasks: [task("t", 10, 0)],
+          instances: [
+            %Instance{name: "boxes", type: "relay"},
+            %Instance{name: "timed", type: "relay", task: "t"},
+            %Instance{name: "free", type: "relay"}
+          ],
+          connections:
+            for(i <- ~w(free timed boxes), do: %Connection{instance: i, member: "in", to: 0})
+        )
+
+      renamed =
+        for events <- quiet,
+            do:
+              Enum.map(events, fn
+                {:ran, "main", instance, now} -> {:ran, :none, instance, now}
+                event -> event
+              end)
+
+      assert events_of(none, steps) == renamed
+    end
+  end
+
   describe "growth" do
     # A cycle of n instances, each on a task of its own, all due, each copying an input
     # point in and an output point out. Counted in reductions, the least of three.

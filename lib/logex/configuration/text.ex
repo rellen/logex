@@ -759,6 +759,7 @@ defmodule Logex.Configuration.Text do
     optional_keyword!(entry.single, @input_words, "a task's single", entry)
     count!(interval, entry)
     count!(priority, entry)
+    unsaid_yet!(entry)
   end
 
   defp fields!(%Global{name: name, type: type, initial: initial, at: at} = entry) do
@@ -780,6 +781,18 @@ defmodule Logex.Configuration.Text do
     path!(instance, member, entry)
     to!(to, entry)
   end
+
+  # M4-2: no line says a task's watchdog, or that it is continuous, until the reader reads
+  # the two words, so print/1 never drops either.
+  defp unsaid_yet!(%{watchdog: nil, continuous: false}), do: :ok
+
+  defp unsaid_yet!(entry),
+    do:
+      unsaid!(
+        "a task's watchdog is nil and it is not continuous: a task line takes `single`, " <>
+          "`interval` and `priority`",
+        entry
+      )
 
   defp type!(type, _entry) when type in [:bool, :dint], do: :ok
   defp type!(_type, entry), do: unsaid!("a global's type is :bool or :dint", entry)

@@ -41,7 +41,10 @@ defmodule Logex.Runtime do
      a cycle that samples 0 running one that came while the image held 1 (decision 52).
      Due tasks run by priority, 0 first, then the earlier due time, then the order the
      configuration declares them; each runs its instances in the configuration's order,
-     and the task-less instances run last, once each, in every cycle.
+     and the untimed instances run last, once each, in every cycle, in that order too:
+     those with no task and, since M4-2, those of the configuration's continuous task,
+     with `with` naming it or none, which means the same (decision 111). The continuous
+     task is never due and never overlaps, and is listed at 0.
   4. A scan copies each connected var_input in, from its global or constant, and each
      var_external's global into the instance's state (M2-4), runs the instance through
      `call/4`, splits each var_external off again into its global, and then copies each
@@ -56,7 +59,8 @@ defmodule Logex.Runtime do
   6. The outputs are every output point, after every scan of the cycle.
 
   The events, in the order they happened, are `{:ran, task, instance, now}`, `task` being
-  `:none` for a task-less instance, `{:overlap, task, missed}`, just before its task's
+  the continuous task's name for an untimed instance where the configuration declares one
+  (M4-2, decision 111), and `:none` where it declares none, `{:overlap, task, missed}`, just before its task's
   scans, and since M3-3 `{:fault, task, instance, fault}`, a `%Logex.Fault{}`, each minor
   fault the scan met, a zero divisor, just after its scan's `{:ran, ...}`, in the order
   they happened (decision 99): the plant runs on. They are an open set: a host tolerates a
@@ -146,6 +150,8 @@ defmodule Logex.Runtime do
     so no edit starts one by this rule. A task an edit keeps keeps its overlap count and
     its due time, except that an interval the edit changes makes it next due at
     `min(next_due, now + new interval)`, at test and again at untest (decision 40);
+    the continuous task (M4-2) is never due and keeps an overlap count of 0, and no edit
+    adds or removes it, or makes a task continuous or timed (decision 129);
   - a task's trigger (M2-6), the last sample of its `single`, is 0 at `start/1` and by
     `restart/2`, so a trigger already 1 fires in the next cycle, and a cycle samples it
     once, after the input merge and before any scan. An edit's switch keeps it, so a
@@ -425,8 +431,10 @@ defmodule Logex.Runtime do
     {runtime, due} = due(runtime)
     {runtime, events} = Enum.reduce(due, {runtime, []}, &run_task/2)
 
+    {untimed, instances} = runtime.wiring.untimed
+
     {runtime, events} =
-      Enum.reduce(runtime.wiring.taskless, {runtime, events}, &scanned(&1, :none, &2))
+      Enum.reduce(instances, {runtime, events}, &scanned(&1, untimed, &2))
 
     {runtime, Map.new(runtime.wiring.outputs, &{&1, Map.fetch!(runtime.globals, &1)}),
      Enum.reverse(events)}
@@ -485,7 +493,12 @@ defmodule Logex.Runtime do
 
   # A task's state: its next periodic due time, nil for a task with no interval; its
   # overlap count; and, for a task with a single (M2-6), its trigger's last sample, 0 at
-  # start/1 and by restart/2, so a trigger already 1 fires in the next cycle.
+  # start/1 and by restart/2, so a trigger already 1 fires in the next cycle. The
+  # continuous task (M4-2) has no due time and never overlaps: overlaps/1 lists it at 0,
+  # and next_due_in/1 counts it not.
+  defp task_state(%Configuration.Task{continuous: true}, _due),
+    do: %{next_due: nil, overlaps: 0}
+
   defp task_state(%Configuration.Task{single: nil}, due), do: %{next_due: due, overlaps: 0}
 
   defp task_state(%Configuration.Task{interval: nil}, _due),
@@ -965,12 +978,16 @@ defmodule Logex.Runtime do
   defp configured!(diagnostics),
     do: raise(ArgumentError, Enum.map_join(diagnostics, "\n", &Diagnostic.format/1))
 
-  # What a cycle reads of the configuration, derived once: the tasks in declaration order,
-  # each with its instances in theirs; the task-less instances; each instance's type and
+  # What a cycle reads of the configuration, derived once: the timed tasks in declaration
+  # order, each with its instances in theirs; the untimed instances, those with no task and,
+  # since M4-2, those of the continuous task, in theirs, under the continuous task's name,
+  # or `:none` where the configuration declares none (decision 111); each instance's type and
   # its connections in and out; the input points' types and the output points' names; the
   # globals by name; and each instance's var_externals, by name (M2-4).
   defp wiring(%Configuration{} = config) do
-    by_task = Enum.group_by(config.instances, & &1.task, & &1.name)
+    {continuous, timed} = Enum.split_with(config.tasks, & &1.continuous)
+    untimed = untimed(continuous)
+    by_task = Enum.group_by(config.instances, &timed_task(&1.task, untimed), & &1.name)
     types = Map.new(config.instances, &{&1.name, &1.type})
 
     sections =
@@ -984,13 +1001,13 @@ defmodule Logex.Runtime do
 
     %{
       tasks:
-        config.tasks
+        timed
         |> Enum.with_index()
         |> Enum.map(fn {task, index} ->
           {task.name, {task.single, task.interval}, task.priority, index,
            Map.get(by_task, task.name, [])}
         end),
-      taskless: Map.get(by_task, nil, []),
+      untimed: {untimed, Map.get(by_task, nil, [])},
       types: types,
       copy_in: grouped(config.instances, Map.get(sections, :var_input, [])),
       copy_out: grouped(config.instances, Map.get(sections, :var_output, [])),
@@ -1004,6 +1021,15 @@ defmodule Logex.Runtime do
 
   defp externals(%Program{tags: tags}),
     do: for({name, %Tag{section: :var_external}} <- tags, do: name)
+
+  # M4-2: the name the untimed instances run under, and an instance's timed task, nil for
+  # one that runs with them: with no task, or `with` the continuous task, which means the
+  # same (decision 111). The configuration declares one continuous task at most.
+  defp untimed([]), do: :none
+  defp untimed([%Configuration.Task{name: name}]), do: name
+
+  defp timed_task(task, task), do: nil
+  defp timed_task(task, _untimed), do: task
 
   defp section(config, types, connection) do
     %Tag{section: section} =

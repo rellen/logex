@@ -583,6 +583,14 @@ defmodule Logex.Configuration.TextTest do
             {%{fast | single: "Interval"},
              "a task's single is not `interval`, `priority` or `single`, in any case: a line " <>
                "reads that word as its keyword"},
+            # M4-2: no line says a watchdog, or a continuous task, until the reader reads
+            # the two words.
+            {%{fast | watchdog: 50},
+             "a task's watchdog is nil and it is not continuous: a task line takes `single`, " <>
+               "`interval` and `priority`"},
+            {%Logex.Configuration.Task{name: "main", continuous: true},
+             "a task's watchdog is nil and it is not continuous: a task line takes `single`, " <>
+               "`interval` and `priority`"},
             # A keyword a line reads in a task's name place.
             {%{fast | name: "INTERVAL"},
              "a task's name is not `interval`, `priority` or `single`, in any case: a line reads " <>

@@ -44,6 +44,12 @@ defmodule Logex.Configuration do
     did-you-mean among the bool globals. A task with no priority is shown one of its own
     kind, its single, its interval or both, each its own where a line can say it, and
     named as every task example is, `t` where its name is none a line can declare;
+  - since M4-2 (decisions 109 to 111), a task's watchdog is 1 to 2147483647 ms, an
+    interval's range, or none, for 500: every task has one, so 0 is told it is no "no
+    watchdog"; and a configuration declares one continuous task at most, the first in
+    line order, each after it told so, which takes no single, interval or priority, all
+    it was given named in one diagnostic, and runs every instance with no timed task, an
+    instance with no task among them;
   - a global's initial value fits its type, and a located global takes none; a location
     is `<device>.i.<address>` for an input point or `<device>.q.<address>` for an output
     point, its device a name, its address one or more whole numbers with no leading zero,
@@ -71,7 +77,8 @@ defmodule Logex.Configuration do
 
   Its warnings: a global nothing uses, where an instance's var_external and a task's
   single use their global; an output point that something reads and nothing drives,
-  which stays at 0, where a write through a var_external drives it; a task that runs no instance; and, since M2-4, two
+  which stays at 0, where a write through a var_external drives it; a task that runs no
+  instance, the continuous task where every instance has a timed one (M4-2); and, since M2-4, two
   instances that write one global through a var_external, and an instance that writes
   through one a global a connection drives (decision 48), each in the words true of it:
   each scan reads what the other last wrote and the later write in a cycle stands; an
@@ -105,8 +112,9 @@ defmodule Logex.Configuration do
   `Map.delete/2` can make one; a line that is not a positive integer or nil; lines that
   are neither all nil, as from Elixir, nor rising in each list, one element a line, as a
   file's are; a name, a location, a type or a task that the lexer does not read as one
-  name token; a task's single that is neither nil nor one name token; a number that is not
-  an integer; a global's type that is neither `:bool` nor `:dint`; and a connection's
+  name token; a task's single that is neither nil nor one name token; a task's continuous
+  that is neither true nor false (M4-2); a number that is not an integer, a watchdog's
+  among them; a global's type that is neither `:bool` nor `:dint`; and a connection's
   instance that is not a name, or with its member makes no one path. A negative number was
   one too, until a negative literal lexed (M3-3, decision 97): a line can say one now, so
   a negative interval or priority is a diagnostic, in the file's words, as one too large is.
@@ -149,17 +157,27 @@ defmodule Logex.Configuration do
     ms from the start; one or both, nil for none. Its instances run once in every cycle
     in which it is due, in the order of the configuration's `instances`; with both, at
     most once a cycle, on an edge or periodically while its trigger is 0 (decision 39,
-    `Logex.Runtime`). Only `name` and `priority` are enforced, since a task needs either
-    of the other two, which `Logex.Configuration.check/1` says.
+    `Logex.Runtime`).
+
+    Since M4-2 (`docs/organisation.md` §4.11, decisions 109 to 111), `watchdog`, the
+    milliseconds a run may take, 1 to 2147483647, or nil for 500
+    (`Logex.Configuration.watchdog/1`), which the runner reads and `Logex.Runtime` does
+    not; and `continuous`, true for the configuration's one continuous task, which takes
+    no `single`, `interval` or `priority` and runs every instance with no timed task,
+    those with no task among them, after the due tasks, once a cycle. Only `name` is
+    enforced, since a timed task needs an interval or a single, and a priority, and a
+    continuous task none of them, which `Logex.Configuration.check/1` says.
     """
-    @enforce_keys [:name, :priority]
-    defstruct [:name, :single, :interval, :priority, line: nil]
+    @enforce_keys [:name]
+    defstruct [:name, :single, :interval, :priority, watchdog: nil, continuous: false, line: nil]
 
     @type t :: %__MODULE__{
             name: String.t(),
             single: String.t() | nil,
             interval: pos_integer | nil,
-            priority: 0..65_535,
+            priority: 0..65_535 | nil,
+            watchdog: pos_integer | nil,
+            continuous: boolean,
             line: pos_integer | nil
           }
   end
@@ -906,7 +924,9 @@ defmodule Logex.Configuration do
     do:
       named(task) ++
         trigger_word(task.single, name) ++
-        counted(task.interval, interval_rule(name)) ++ counted(task.priority, priority_rule(name))
+        counted(task.interval, interval_rule(name)) ++
+        counted(task.priority, priority_rule(name)) ++
+        counted(task.watchdog, watchdog_rule(name)) ++ flag(task.continuous, name)
 
   defp said(%Global{} = global),
     do: named(global) ++ global_type(global) ++ global_initial(global) ++ global_at(global)
@@ -948,6 +968,15 @@ defmodule Logex.Configuration do
   defp counted(value, rule), do: [rule <> ", found #{inspect(value)}"]
 
   defp interval_rule(name), do: "task #{label(name)}: an interval is 1 to 2147483647 ms"
+  defp watchdog_rule(name), do: "task #{label(name)}: a watchdog is 1 to 2147483647 ms"
+
+  # M4-2: a task is the continuous task or not, which a line says by a word or its
+  # absence, so anything but a boolean is the host's.
+  defp flag(continuous, _name) when is_boolean(continuous), do: []
+
+  defp flag(continuous, name),
+    do: ["task #{label(name)}: continuous is true or false, found #{inspect(continuous)}"]
+
   defp priority_rule(name), do: "task #{label(name)}: a priority is 0, the highest, to 65535"
 
   defp global_type(%Global{type: type}) when type in [:bool, :dint], do: []
@@ -1214,26 +1243,106 @@ defmodule Logex.Configuration do
   # global nothing uses counts (M2-6).
   defp tasks(tasks, world) do
     bools = Enum.sort(for {name, {:global, _, %Global{type: :bool}}} <- world.names, do: name)
-    world = Map.put(world, :bools, bools)
+    indexed = Enum.with_index(tasks)
+    first = Enum.find(indexed, &match?({%{continuous: true}, _index}, &1))
+    world = Map.merge(world, %{bools: bools, continuous: first})
 
     {problems, used} =
-      Enum.map_reduce(tasks, MapSet.new(), fn task, used ->
-        {problems, triggers} = trigger(task, world)
-        {interval(task) ++ priority(task) ++ problems, MapSet.union(used, triggers)}
-      end)
+      Enum.map_reduce(indexed, MapSet.new(), fn task, used -> task_problems(task, used, world) end)
 
     {Enum.concat(problems), used}
   end
 
+  # M4-2 (decision 111): the continuous task takes none of a timed task's inputs, so none
+  # of their rules, and is one at most; every task's watchdog is checked alike. A task
+  # whose `continuous` is the host's mistake is read as neither kind.
+  defp task_problems({%{continuous: continuous} = task, _index}, used, _world)
+       when not is_boolean(continuous),
+       do: {watched(task), used}
+
+  defp task_problems({%{continuous: true} = task, index}, used, world),
+    do: {second(world.continuous, index, task) ++ untimed(task) ++ watched(task), used}
+
+  defp task_problems({task, _index}, used, world) do
+    {problems, triggers} = trigger(task, world)
+
+    {interval(task, world.continuous) ++ priority(task) ++ problems ++ watched(task),
+     MapSet.union(used, triggers)}
+  end
+
+  # The first continuous task in line order is the configuration's; each after it is told
+  # so, as the conventional family's one continuous task is (p.8).
+  defp second({_first, index}, index, _task), do: []
+
+  defp second({first, _index}, _other, task),
+    do: [
+      diagnostic(
+        task.line,
+        "`#{task.name}` is a second continuous task: a configuration has one at most, and " <>
+          "`#{first.name}`#{where(first)} is its continuous task"
+      )
+    ]
+
+  # A continuous task has no interval, single or priority (decision 111): it runs every
+  # instance no timed task runs, at the lowest priority, once each round.
+  defp untimed(task) do
+    given =
+      for {word, value} <- [single: task.single, interval: task.interval, priority: task.priority],
+          value != nil,
+          do: "`#{word}`"
+
+    untimed_given(given, task)
+  end
+
+  defp untimed_given([], _task), do: []
+
+  defp untimed_given(given, task),
+    do: [
+      diagnostic(
+        task.line,
+        "`#{task.name}` is the continuous task, which takes no #{or_listed(given)}: it runs " <>
+          "every program instance with no timed task, after the due tasks"
+      )
+    ]
+
+  defp or_listed([one]), do: one
+  defp or_listed([one, two]), do: "#{one} or #{two}"
+  defp or_listed([one | rest]), do: "#{one}, " <> or_listed(rest)
+
+  # A watchdog a line can hold, an integer or none, is a diagnostic outside 1 to
+  # 2147483647 ms, an interval's range (decision 109): every task has one, 500 ms where it
+  # sets none, so 0 is no "no watchdog".
+  defp watched(%{watchdog: watchdog}) when watchdog == nil or watchdog in @interval, do: []
+
+  defp watched(%{name: name, watchdog: 0, line: line}),
+    do: [
+      diagnostic(
+        line,
+        "the watchdog of `#{name}` is 0: a watchdog is at least 1 ms, and a task that sets " <>
+          "none has 500"
+      )
+    ]
+
+  defp watched(%{name: name, watchdog: watchdog, line: line}) when is_integer(watchdog),
+    do: [
+      diagnostic(
+        line,
+        "the watchdog of `#{name}` is `#{watchdog}` ms: a watchdog is 1 to 2147483647 ms"
+      )
+    ]
+
+  defp watched(_task), do: []
+
   # An interval or a priority a line can hold, an integer or none, is a
   # diagnostic outside its range, in the configuration file's words; anything else was the
   # host's mistake. A task needs an interval, a single or both (M2-6).
-  defp interval(%{interval: interval}) when is_integer(interval) and interval in @interval,
-    do: []
+  defp interval(%{interval: interval}, _continuous)
+       when is_integer(interval) and interval in @interval,
+       do: []
 
   # Its examples name the task only where its name is one a line can declare (§4.10,
   # M2-6), and `t` otherwise.
-  defp interval(%{name: name, single: nil, interval: nil, line: line}),
+  defp interval(%{name: name, single: nil, interval: nil, line: line}, _continuous),
     do: [
       diagnostic(
         line,
@@ -1242,6 +1351,8 @@ defmodule Logex.Configuration do
           "`task #{example(name)} single estop priority 0`"
       )
     ]
+
+  defp interval(task, _continuous), do: interval(task)
 
   # IEC reads an interval of 0 as no periodic scheduling (rule 2), and MatIEC runs such a
   # task every tick: an instance that runs every cycle has no task (§4.4, "Tasks"), and an
@@ -1452,6 +1563,31 @@ defmodule Logex.Configuration do
         ArgumentError,
         "expected a %Logex.Configuration.Global{} whose initial value is an integer or nil, " <>
           "got: #{inspect(other)}"
+      )
+
+  @doc """
+  A task's watchdog, in milliseconds: its `watchdog`, or 500 where it sets none, the one
+  rule for it, as `initial/1` is a global's (M4-2, decisions 109 and 110). Every task has
+  one, the continuous task's bounding each of its rounds (decision 111), and the runner
+  reads it at each step it times; `Logex.Runtime` reads no clock and so none, and
+  `Logex.Configuration.Edit` reports a change of it (decision 129).
+
+      iex> Logex.Configuration.watchdog(%Logex.Configuration.Task{name: "fast", interval: 10, priority: 1})
+      500
+      iex> Logex.Configuration.watchdog(%Logex.Configuration.Task{name: "main", continuous: true, watchdog: 200})
+      200
+  """
+  def watchdog(%Logex.Configuration.Task{watchdog: nil}), do: 500
+
+  def watchdog(%Logex.Configuration.Task{watchdog: watchdog}) when is_integer(watchdog),
+    do: watchdog
+
+  def watchdog(other),
+    do:
+      raise(
+        ArgumentError,
+        "expected a %Logex.Configuration.Task{} whose watchdog is an integer or nil, got: " <>
+          inspect(other)
       )
 
   @doc """
@@ -2322,7 +2458,8 @@ defmodule Logex.Configuration do
   # through one drives it; and the two writer warnings (decision 48), which only the IR
   # shows (§4.4).
   defp warnings({tasks, globals, instances}, wiring, externals, triggers) do
-    running = MapSet.new(instances, & &1.task)
+    continuous = Enum.find_value(tasks, &continuous_name/1)
+    running = MapSet.new(instances, &(&1.task || continuous))
     used = wiring.used |> MapSet.union(externals.used) |> MapSet.union(triggers)
 
     (Enum.flat_map(tasks, &idle(MapSet.member?(running, &1.name), &1)) ++
@@ -2562,6 +2699,11 @@ defmodule Logex.Configuration do
     do: " on line #{line} of block `#{name}`"
 
   defp cited(line, {:block, body}), do: in_type(line, body)
+
+  # M4-2: the continuous task runs every instance no timed task runs, those with no `with`
+  # among them, so it runs none only where every instance has a timed task.
+  defp continuous_name(%{continuous: true, name: name}), do: name
+  defp continuous_name(_timed), do: nil
 
   defp idle(true, _task), do: []
   defp idle(false, task), do: [warning(task.line, "task `#{task.name}` runs no instance")]
