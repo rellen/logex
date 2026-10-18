@@ -2588,8 +2588,19 @@ watchdog's rule across an online edit is decision 129's.)*
   left: a slot serves its first request whatever the time, so that a slot whose start
   is read late still serves one, "each served whole"; and a host's request is served at
   once where no round is owed, so that on the manual clock one made while a round is
-  owed, after a round that passed time, waits for the advance that runs it. `stop/2` is
-  served at once, whatever the share.)*
+  owed, after a round that passed time, waits for its slot. `stop/2` is served at once,
+  whatever the share. After M4-3's review the same day: the slot comes at the end of the
+  round that completes its C ms, so that on the manual clock it comes in the advance
+  that runs that round, `advance(clock, 0)` among them, never later, and a test makes
+  such a call from another process (decision 131); every device is refreshed before the
+  runner serves its own work, in the rest of a millisecond too where a request waits;
+  and "a round counts from its start to the next round's" is built as from its start to
+  its end, a millisecond at least, the two the same but where the runner's own work, a
+  request served in the rest of a millisecond, runs past the millisecond: that time is
+  the runner's own, and counting it as the round's would bring the next slot sooner and
+  give its own work more than its share. A continuous line that runs no instance times
+  no round, its watchdog timing nothing, as decision 111 says, so a round of timed tasks
+  alone is no round of the continuous task's, which M4-4's round watchdog reads.)*
 - The runner keeps `anchor`, the monotonic millisecond its clock counts from, and
   `logical`, the sum of the `elapsed_ms` it has passed, the resource's `now`. Each round
   passes `elapsed = (wall - anchor) - logical`, never negative, so rounding to whole
@@ -2629,10 +2640,18 @@ and a bound device no point is at, are the host's mistakes at start (§4.5).
   2026-10-18: a refresh is a message to the device's process carrying its deadline, and
   calls no adapter; the adapter is written where its outputs changed and read every poll
   period. Whether a refresh should also write the adapter again, so that a device whose
-  outputs never change still hears from its master, is put to the maintainer.)*
+  outputs never change still hears from its master, was put to the maintainer, who
+  answered the same day, decision 130: each device writes its last outputs again at its
+  poll, at most once a poll period and only where nothing was written within one, while
+  its last refresh's deadline has not passed, a device with no output point never
+  written; so the refresh carries the deadline and the poll the outputs.)*
 - **Order.** Devices are opened, written and zeroed in device-name order, one after
   another, so a run is deterministic; in parallel is later, once a real network adapter
-  has been measured.
+  has been measured. *(A tie, noted after M4-3's review: a device's poll that changes an
+  event task's trigger and a round due at the same millisecond come in the order their
+  wakes were set on the clock, which the refreshes' wakes shift, so either may go first;
+  both orders keep every rule here, and a run on the manual clock still repeats exactly,
+  the order being the same from fresh processes.)*
 - **Failing.** Each callback runs in its device's process, guarded, so a raise, a throw or
   an exit is an `{:error, ...}` there. An error returned, a raise, a value that does not
   fit, an unknown address, no answer within the device's deadline, the one its last
@@ -5162,7 +5181,9 @@ and the "case full" lamp with no timing of their own.
      80% 1 and 4 and 90% 1 and 9, the conventional table, *"ContinuousTime=(100/
      SystemOverheadTimeSlice%) - 1"*, the continuous task given *"at least 1 ms of
      execution time"* (the design considerations reference, p.35). A round counts from
-     its start to the next round's, so a millisecond at least, and a request is served
+     its start to the next round's, so a millisecond at least (read, after M4-3's review,
+     as from its start to its end, a millisecond at least: the runner's own work that runs
+     past a millisecond is not the round's, §4.11's landing note), and a request is served
      whole, so a slot can run over by one request; with nothing of its own to serve the
      runner goes back to rounds at once (p.33), and in the rest of a millisecond a round
      did not fill it serves its own work freely, time no round wants. On the manual clock
@@ -5266,7 +5287,9 @@ and the "case full" lamp with no timing of their own.
      119's cost, the plant's longest watchdog setting every device's heartbeat whatever
      step the runner is in, is gone. *(Taken 2026-10-18, after M4-1's review. Its bound
      between steps, the continuous task's watchdog, was replaced the same day by the
-     runner's own idle watchdog, decision 128.)*
+     runner's own idle watchdog, decision 128. The outputs decision 119 has a refresh
+     carry are, since M4-3's review, written again by each device at its poll, at most
+     once a poll period, decision 130.)*
 126. **What a round's watchdog trip names (Milestone 4),** following decisions 111 and 118.
      One round runs the conveyor's task, the fan's and the box counter; the fan's run
      takes 300 ms, well within its own 2 s, and the round outlasts the continuous task's

@@ -24,7 +24,8 @@ and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed and l
 items, M3-1, M3-2, M3-3 and M3-4, landing the same day and its last, M3-5, on 2026-10-15,
 so Milestone 3 is done (§3, "Milestone 3"). Milestone 4, the wall-clock runner, was
 designed and decided on 2026-10-17 (§3, "Milestone 4"), its first item, M4-1, landing the
-same day, its second, M4-2, on 2026-10-18, and its third, M4-3, the same day.
+same day, its second, M4-2, on 2026-10-18, and its third, M4-3, the same day, with the
+answers to its review and the maintainer's two answers, decisions 130 and 131.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -3243,6 +3244,44 @@ and M4-7 the documents.
   `forces:`, forcing and the edit's steps through the runner M4-5's, `forces:` until then
   an unknown option. A device's callback that fails, a value that does not fit and an
   unknown address crash the runner until M4-4 trips on them.
+
+  **Its review, and the maintainer's two answers, 2026-10-18.** A review of `a2ad82c`
+  matched the rounds, events and writes against an independent scheduler over 1,600
+  random plants, the 8 that differed all one tie, and found five defects and eleven
+  surviving mutants;
+  the maintainer answered M4-3's two questions the same day. Six commits on it, each
+  gated and each with its mutation table:
+  (1) `46714c3`, the devices opened inside `init/1` rather than by a call after start, so
+  a host's call by the runner's name that came first no longer crashed the runner and
+  its starter (F1, 33 of 300 starts in the review's probe), and a stop that came first
+  gives `{:ok, pid}` and then stops; each request still queued at a stop, or left
+  unanswered as the runner goes down, raises that the runner is not running (F2); a cast
+  or a message is passed over and a call none of its functions makes is the caller's
+  mistake (F5); 6 rules, all red;
+  (2) `935193c`, an improper list of kinds and a repeated option each told in their own
+  words (F4); 3 rules, all red;
+  (3) `67be539`, decisions 130 and 131 recorded, and a slot served at the end of the
+  round that completes its C ms, so that on the manual clock a call whose slot a round
+  completes is answered in the advance that runs that round, `advance(clock, 0)` among
+  them (F3, kept apart from the rule decision 131 keeps), with a refresh before the rest
+  of a millisecond is served where a request waits; 6 rules, 5 red and 1 equivalent;
+  (4) `9fd1270`, decision 130 built: each device writes its last outputs again at its
+  poll, at most once a poll period, where nothing was written within one and its last
+  deadline has not passed; 6 rules, 5 red and 1 red with the next commit's test;
+  (5) `20f885e`, a test for each of the review's survivors, and a continuous line that
+  runs no instance timing no round, as decision 111 says, so M4-4's round watchdog reads
+  only rounds that run untimed programs; 12 rules, 11 red and 1 equivalent, the elapsed
+  time's clamp at 0, which a monotonic clock never needs;
+  (6) the documents, the commit after it: decision 122's "a round counts from its start
+  to the next round's" read as from its start to its end, a millisecond at least, which
+  the code did, since the runner's own work that runs past a millisecond is its own and
+  counting it as the round's would give its own work more than its share; and §4.11's
+  sentence on a tie, a poll that changes a trigger and a round due in the same
+  millisecond going in either order, a run still repeating exactly.
+  1404 tests pass on Elixir 1.20.4 (9 of them doctests), up from 1382. The review's three
+  equivalences hold for M4-3 and are to be looked at again when M4-5's forcing and edits
+  through the runner land: a round's inputs kept, C's floor of 1, and the share's count
+  with no untimed program.
 - **M4-4 · The watchdogs and the fault path.** *Done when* each of these is a test on the
   manual clock, a hung device's deadline in real time and short:
   - a timed task whose run outlasts its watchdog trips before its round's write, naming

@@ -231,7 +231,7 @@ whole ("A function block" and "A configuration", below):
   `res`: a counter resets through its own `r` input, as IEC's does, and so does a
   retentive timer, `xic greased ote lube.r` (decision 90). Nor is there a master control
   zone, for good (decision 83).
-- **The wall-clock runner**, `PLAN.md`'s Milestone 4 (decisions 108–129 in
+- **The wall-clock runner**, `PLAN.md`'s Milestone 4 (decisions 108–131 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11), whose
   configuration words have landed, a task's `watchdog` and the `continuous` task
   ("Watchdogs and the continuous task", below), and so has the runner's first part,
@@ -1629,7 +1629,7 @@ wrong_packing.logex: line 4, column 36: `priority` goes before `watchdog`, as in
 ### On the clock
 
 `Logex.Runner` runs a configuration's resource on a clock, through the devices its points
-are at (`docs/organisation.md` §4.11, decisions 108 to 128; `PLAN.md` M4-3). Each device
+are at (`docs/organisation.md` §4.11, decisions 108 to 131; `PLAN.md` M4-3). Each device
 is bound by name to an adapter (`Logex.IO`), and runs in a process of its own; logex ships
 one adapter, `Logex.IO.Sim`, an in-memory device a test sets and reads. With the manual
 clock, `Logex.Runner.Clock.Manual`, a run is deterministic and repeats exactly: time moves
@@ -1713,7 +1713,10 @@ closed: true
 - A device that reports passes each change on by a call the runner answers once it has
   merged it, and, for a trigger, once the round it makes has run and its outputs are
   written: so `Logex.IO.Sim.set/3` returns after that round. Each device is also read
-  every poll period, and written only where its outputs changed.
+  every poll period, and written where its outputs changed; where nothing was written
+  to it within a poll period, it writes its last outputs again at its poll (decision
+  130), so a drive that turns its outputs off when its master goes quiet never does
+  while the runner is well. A device with no output point is never written.
 - The e-stop is no trigger here: merged at 22, it reached the conveyor at its next run,
   at 30, which latched its fault and stopped it.
 - `status/1` gives each task's longest run against its watchdog, `0` on a clock that

@@ -49,6 +49,11 @@ defmodule Logex.Runner do
     round, the refresh carrying that step's deadline, its task's watchdog and one poll
     period from the step's start, and before the write, carrying the idle watchdog's and
     one poll period from then (decisions 125 and 128): a refresh calls no adapter.
+  - At each poll, after its read, a device writes the outputs it last wrote again where
+    nothing was written to it within a poll period, while its last refresh's deadline
+    has not passed, so that a device whose outputs never change still hears from its
+    master once a poll period (decision 130); a device with no output point is never
+    written.
 
   **Its rounds** (decisions 108, 122 and 123). A *round* takes the inputs, runs the cycle's
   steps, the due timed tasks and then the untimed programs (`Logex.Runtime.cycle/3`, cut
@@ -75,7 +80,8 @@ defmodule Logex.Runner do
     waited, for up to S ms, C = max(1, round((100 − p)/p)) and S = max(1, round(p/(100 −
     p))) for a share of p%, 9 and 1 at 10%, 4 and 1 at 20%, 1 and 1 at 50%, 1 and 9 at
     90%. A round counts from its start to its end, a millisecond at least, the timed
-    tasks' runs in it left out; the slot comes at the end of the round that completes C
+    tasks' runs in it left out, so that the runner's own work never counts as the
+    round's; the slot comes at the end of the round that completes C
     ms; it serves its first request whatever the time, and each whole, so it may run over
     by one; and in the rest of a millisecond a round did not fill the runner serves its
     requests freely. A host's request is served at once where no round is owed, and with
@@ -188,7 +194,7 @@ defmodule Logex.Runner do
   the rounds run; `trip`, nil; `overlaps`, each task's (`Logex.Runtime.overlaps/1`);
   `forces`, `%{}`; `edit`, nil; `runs`, each task's longest run against its watchdog,
   `{ms, watchdog_ms}`, a timed task's run and the continuous task's round, under its name
-  or `:none`; `latest_wake`, the most a round's wake came after its time, in ms; and
+  or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most a round's wake came after its time, in ms; and
   `refresh_gap`, the longest wait between two refreshes of the devices, in ms. M4-4 gives
   `trip` its reasons and `status` `:tripped`, and M4-5 the forces and the edit.
   """
