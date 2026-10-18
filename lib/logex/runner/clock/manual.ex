@@ -35,7 +35,13 @@ defmodule Logex.Runner.Clock.Manual do
   `wait:` is the host's mistake, an `ArgumentError`, and one that is down, or goes down
   while it handles its message, with whatever reason, `:timeout` among them, is passed
   over, as a real timer's message to a dead process is lost. The process that advances may be a receiver too: its message is then
-  in its own mailbox when `advance/2` goes on. One process advances a clock at a time.
+  in its own mailbox when `advance/2` goes on. One process advances a clock at a time, but
+  for one case: a receiver may advance it while it handles a message an advance delivered,
+  time passing inside a step with the timers on the way delivered, where `pass/2` delivers
+  none. Its advance delivers from its own process, every other receiver's timer handled as
+  ever and its own left in its mailbox, and the advance that delivered to it goes on from
+  there once it has handled its message (M4-4: a runner stuck in a task's run, its devices
+  hearing their deadlines meanwhile).
   """
 
   use GenServer

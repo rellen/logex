@@ -49,6 +49,7 @@ defmodule Logex.ClockTest do
     defp act(nil, _state), do: :ok
     defp act({:wake, message, at}, state), do: Manual.wake_at(state.clock, self(), message, at)
     defp act({:pass, ms}, state), do: Manual.pass(state.clock, ms)
+    defp act({:advance, ms}, state), do: Manual.advance(state.clock, ms)
     defp act({:sleep, ms}, _state), do: Process.sleep(ms)
     defp act(:down, _state), do: :down
   end
@@ -252,6 +253,25 @@ defmodule Logex.ClockTest do
 
       Manual.advance(clock, 0)
       assert Receiver.seen(pid) == [a: 10, b: 110, c: 110]
+    end
+
+    # M4-4: a runner stuck in a task's run, its devices hearing their deadlines meanwhile.
+    test "time a receiver advances while it handles one message: the timers on the way, " <>
+           "every other receiver's, come in it, its own in its mailbox, and the advance " <>
+           "it handles goes on from there" do
+      clock = clock()
+      stuck = receiver(clock, %{a: {:advance, 100}})
+      other = receiver(clock)
+      Manual.wake_at(clock, stuck, :a, 10)
+      Manual.wake_at(clock, other, :b, 40)
+      Manual.wake_at(clock, stuck, :c, 60)
+      Manual.wake_at(clock, other, :d, 150)
+
+      Manual.advance(clock, 20)
+      assert Receiver.seen(other) == [b: 40]
+      assert Manual.now_ms(clock) == 110
+      assert Manual.pending(clock) == [{150, other, :d}]
+      assert Receiver.seen(stuck) == [a: 10, c: 110]
     end
 
     test "cancel/2 stops a timer not yet delivered, and is :ok for one delivered or unknown" do
