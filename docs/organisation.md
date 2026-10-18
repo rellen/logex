@@ -3205,8 +3205,10 @@ own routine choices. Decisions 122–126 were taken on 2026-10-18, after M4-1's 
 or loose, 125 superseding 119 in its rule and its cost; and decision 127 is the
 maintainer's answer of the same day, forces kept in a file across a crash, given outside
 any question put, with the record's choices on how; and decision 128 the maintainer's
-answer of that day on the runner's own bound between steps. All one hundred and twenty-eight are
-kept with their options so the reasons stay with them.
+answer of that day on the runner's own bound between steps. Decision 129 is M4-2's own
+routine choice, taken as it landed on 2026-10-18, the rule across an online edit that
+decision 110 left to it. All one hundred and twenty-nine are kept with their options so
+the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -5349,6 +5351,49 @@ question put, as decisions 111 and 112 were.
      maintainer confirmed the same day decision 122's one round a millisecond at most, on
      the real clock as on the manual one, and M4-4's one hidden start option through which
      a test reaches `{:internal, message}`.)*
+129. **A watchdog and the continuous task across an online edit (M4-2),** following
+     decisions 19, 40, 62, 110 and 111, which left a watchdog's rule to M4-2 (decision
+     110). The conveyor's task runs with a 50 ms watchdog, and its programmer, having
+     watched `status/1`'s longest runs, wants 30 ms without stopping the plant; another
+     edit gives the box counter's program `with main`, which it ran in already, or moves
+     it onto the conveyor's task.
+     - A watchdog changed only with a restart, as CODESYS refuses any change to its task
+       configuration in an online change (*Command: Online Change*, Table 106);
+     - or changed while the plant runs, as an interval and a priority are (decision 19,
+       the conventional family's rules), and reported.
+
+     **Taken: changed while running, and reported,** the record's choice, since decision
+     19 took the conventional family's rules for a running task and the conventional
+     family changes a task's watchdog while the controller runs: logic writes it, the
+     task object's `Watchdog` taking SSV (the general instructions reference, Sept 2025,
+     TASK object, p.276). A watchdog is configuration the runner reads at each step of a
+     round, with no state in the resource, as a priority is read at each cycle's sort
+     (decision 62), so a switch writes nothing for it and reports it, `{:watchdog, task,
+     {old, new}}`, each in milliseconds and 500 for a line that sets none, so that
+     `watchdog 500` written on a line that had none reports nothing; the round after the
+     switch is timed against the new one, as the conveyor's next run would be. Its
+     forecast is a test's report, as every kind's is. The continuous task's rules follow
+     decision 111's and decision 19's, each with what it passes over:
+     - *its line added or removed* while the plant runs is adding or removing a task,
+       refused at accept in the words of any task's (decision 111), over taking it as
+       naming what already ran, which would change the name every event reports;
+     - *a task made continuous, or a continuous task made timed,* keeping its name, is
+       refused at accept, *"task `main` is continuous in the running configuration and
+       periodic in the candidate: a task's kind changes only with a restart"*, as a
+       `single` added or removed is (§4.9), since every instance on it would move to or
+       from the untimed programs, which decision 19 refuses for one instance;
+     - *`with main` added or taken away* moves nothing, as decision 111 says, and reports
+       nothing: an instance with no `with` and one `with main` run in one place in one
+       order, so accept compares each instance's task as it runs, the continuous task's
+       instances and the task-less ones one, and decision 62's order is reported under the
+       continuous task's name, or `:none` where none is declared, the two together;
+     - *an instance moved between the continuous task and a timed one* is moved to or
+       from no task, refused as decision 19 refuses any move, in its words, the continuous
+       task named where it is declared, *"with `main`"*, and *"with no task"* where not.
+
+     Neither IEC, which has no watchdog and declares no task for the untimed programs, nor
+     the conventional pages read say what an online edit of a continuous task's type or of
+     its programs' order does. *(Taken 2026-10-18, with M4-2.)*
 
 ---
 
