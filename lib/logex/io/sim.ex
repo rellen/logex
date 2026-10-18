@@ -38,12 +38,17 @@ defmodule Logex.IO.Sim do
     A close cannot give an error back, nor a value.
 
   **The adapter's side** is `Logex.IO`'s callbacks. `check/3` gives the mistakes in the
-  options it is bound with, which are `sim:` alone, a sim that is running, so that
-  `Logex.IO.bind!/2` raises them in the host's process; `init/3` refuses the same, the
-  first of them, and opens the sim for the device's process that calls it, which is the
-  one it reports to; `read/1` gives every input point of the device, by address;
-  `write/2` records what it is given; `report/2` gives the input points among a report of
-  its own and `%{}` for any other message; and `close/1` marks the device closed.
+  options it is bound with, which are `sim:` alone, a sim that is running and that no
+  other device holds open, so that `Logex.IO.bind!/2` raises them in the host's process;
+  `init/3` refuses the same, the first of them, and opens the sim for the device's process
+  that calls it, which is the one it reports to; `read/1` gives every input point of the
+  device, by address; `write/2` records what it is given; `report/2` gives the input
+  points among a report of its own and `%{}` for any other message; and `close/1` marks
+  the device closed.
+
+  A sim is one device's: once a device's process has opened it, another may open it only
+  once the first has closed it or gone down, so that two devices bound to one sim never
+  share its inputs and outputs. The process that opened it may open it again.
 
   A mistake of the test's, an option, a sim, an address, a value or a failure that is not
   one, raises `ArgumentError` with a message a test pins.
@@ -173,7 +178,7 @@ defmodule Logex.IO.Sim do
   end
 
   defp opened(sim, device, points) do
-    GenServer.call(sim, {:opened, self()})
+    open!(GenServer.call(sim, {:opened, self(), device}), sim)
 
     {:ok,
      %{
@@ -183,6 +188,16 @@ defmodule Logex.IO.Sim do
        outputs: for(%Point{direction: :output, address: address} <- points, do: address)
      }}
   end
+
+  # A sim another device opened meanwhile, though no device held it when its options were
+  # checked, is refused as the check refuses it.
+  defp open!(:ok, _sim), do: :ok
+  defp open!({:held, pid, device}, sim), do: raise(ArgumentError, holding(sim, pid, device))
+
+  defp holding(sim, pid, device),
+    do:
+      "the simulated device #{inspect(sim)} is the device `#{device}`'s, opened by " <>
+        "#{inspect(pid)}, which has not closed it: a sim is one device's"
 
   # The next failure told to a callback, taken, with the clock a delay passes on.
   defp take(sim, callback), do: GenServer.call(sim, {:take, callback})
@@ -221,6 +236,7 @@ defmodule Logex.IO.Sim do
        reads: 0,
        closed: false,
        reporter: nil,
+       device: nil,
        failures: %{}
      })}
   end
@@ -254,8 +270,10 @@ defmodule Logex.IO.Sim do
      counted(callback, %{state | failures: Map.put(state.failures, callback, rest)})}
   end
 
-  def handle_call({:opened, pid}, _from, state),
-    do: {:reply, :ok, %{state | reporter: pid, closed: false}}
+  def handle_call({:opened, pid, device}, _from, state),
+    do: opening(holder(state), pid, device, state)
+
+  def handle_call(:holder, _from, state), do: {:reply, holder(state), state}
 
   def handle_call({:inputs, addresses}, _from, state),
     do: {:reply, Map.new(addresses, &{&1, Map.get(state.inputs, &1, 0)}), state}
@@ -272,6 +290,23 @@ defmodule Logex.IO.Sim do
 
   defp counted(:read, state), do: %{state | reads: state.reads + 1}
   defp counted(_callback, state), do: state
+
+  # Who holds the sim open: the process that opened it, while it is alive and has not
+  # closed it, with the device it opened it for; nil for none.
+  defp holder(%{reporter: pid, closed: false, device: device}) when is_pid(pid),
+    do: alive(Process.alive?(pid), pid, device)
+
+  defp holder(_state), do: nil
+
+  defp alive(true, pid, device), do: {pid, device}
+  defp alive(false, _pid, _device), do: nil
+
+  # Opened by the process that holds it, or by any once none does.
+  defp opening({holder, held}, pid, _device, state) when holder != pid,
+    do: {:reply, {:held, holder, held}, state}
+
+  defp opening(_holder, pid, device, state),
+    do: {:reply, :ok, %{state | reporter: pid, device: device, closed: false}}
 
   # The device a sim reports to: the one that opened it, where it reports and an input
   # changed.
@@ -349,15 +384,17 @@ defmodule Logex.IO.Sim do
   defp first!([], value), do: value
   defp first!([mistake | _rest], _value), do: raise(ArgumentError, mistake)
 
-  # The options it is bound with, `sim:` alone, a sim that is running: each mistake in them,
-  # the sim's first, and then each other key.
+  # The options it is bound with, `sim:` alone, a sim that is running and that no other
+  # device holds open: each mistake in them, the sim's first, and then each other key.
   defp misbound(opts) when is_list(opts),
     do: bound(Keyword.keyword?(opts) and Keyword.has_key?(opts, :sim), opts)
 
   defp misbound(opts), do: bound(false, opts)
 
   defp bound(true, opts) do
-    unsimulated(Keyword.fetch!(opts, :sim)) ++
+    sim = Keyword.fetch!(opts, :sim)
+
+    simulated(unsimulated(sim), sim) ++
       for key <- Enum.uniq(Keyword.keys(opts)) -- [:sim],
           do: "Logex.IO.Sim is bound with sim: alone, got: #{inspect(key)}"
   end
@@ -367,6 +404,14 @@ defmodule Logex.IO.Sim do
       "Logex.IO.Sim is bound with its sim, {Logex.IO.Sim, sim: sim}, got the options " <>
         inspect(opts)
     ]
+
+  defp simulated([], sim), do: free(GenServer.call(sim, :holder), sim)
+  defp simulated(mistakes, _sim), do: mistakes
+
+  # Held by none, or by the very process that asks, which may open it again.
+  defp free(nil, _sim), do: []
+  defp free({pid, _device}, _sim) when pid == self(), do: []
+  defp free({pid, device}, sim), do: [holding(sim, pid, device)]
 
   # The sim init/3 opens, its options' first mistake raised.
   defp bound!(opts), do: Keyword.fetch!(first!(misbound(opts), opts), :sim)

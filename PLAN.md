@@ -3001,8 +3001,15 @@ and M4-7 the documents.
   `bind!/2` calls in the host's process for an adapter that implements the behaviour and
   has keyword options, each line it gives one of the one `ArgumentError`, and a check that
   gives no list of messages told so; `Logex.IO.Sim`'s holds its options to `sim:` alone, a
-  sim that runs, and `init/3` raises the first of the same. The suite is at 1300 tests (8
-  doctests).
+  sim that runs, and `init/3` raises the first of the same. One sim bound to two devices
+  passed `bind!/2`, its reports reaching only the device that opened it last and both
+  devices' outputs written over each other, a takeover `io_test.exs` had pinned; a sim
+  is one device's now: another device's process may open it only once the first has
+  closed it or gone down, the process that opened it may open it again, `check/3` refuses
+  a sim another device holds open, and the sim refuses an open that came second, in one
+  message naming the device that holds it. One `bind!/2` that binds one sim to two
+  devices still passes, since neither has opened it, and the second device's `init/3`
+  raises. The suite is at 1302 tests (8 doctests).
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
   `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line

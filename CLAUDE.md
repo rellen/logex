@@ -461,8 +461,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
 - `lib/logex/io/sim.ex` — `Logex.IO.Sim` (M4-1), the one adapter logex ships, a
   simulated device in a GenServer of its own, the fixture of every runner test, bound as
   `{Logex.IO.Sim, sim: sim}`, which its `check/3` and `init/3` hold it to, `sim:` alone
-  and a sim that runs: `start_link/1` (`reports:`, `clock:` a manual clock, `wait:`),
-  `set/2` and `set/3` its
+  and a sim that runs and that no other device holds open, a sim being one device's, so
+  that another device's process opens it only once the first has closed it or gone down:
+  `start_link/1` (`reports:`, `clock:` a manual clock, `wait:`), `set/2` and `set/3` its
   inputs, `outputs/1`, `writes/1`, `reads/1` and `closed?/1`. Where it reports, the inputs
   a set changes go as one report to the device that opened it, from the caller, which
   waits through `:sys` until that device has handled it, by construction, a device that is

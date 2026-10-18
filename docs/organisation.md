@@ -2638,7 +2638,12 @@ end
 test owns, `Logex.IO.Sim.start_link/1`, bound as `{Logex.IO.Sim, sim: sim}`: `set/2` and
 `set/3` set its inputs, `outputs/1` gives the last value written to each output,
 `writes/1` every write in order, so that "zeroed once" can be asserted, `reads/1` the
-reads made, and `closed?/1` whether it was closed. Started with `reports: true` it reports
+reads made, and `closed?/1` whether it was closed. A sim is one device's: another device's
+process opens it only once the first has closed it or gone down, which its `check/3`
+says at start where it can and its `init/3` where two open it at once. *(Added on
+2026-10-18, after M4-1's review, which found one sim bound to `panel` and `drive` taken,
+its reports reaching the last device to open it and the two devices' outputs written
+over each other.)* Started with `reports: true` it reports
 each input it is set to the device that opened it. `fail/3` acts out one failure on the
 next call of the callback it names: an error, a raise, a throw, an exit, a hang, a delay,
 on the manual clock it was started with or else in real time, or, for a read, a value of

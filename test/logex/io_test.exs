@@ -21,6 +21,7 @@ defmodule Logex.IOTest do
     def start(opts, slow \\ nil), do: GenServer.start_link(__MODULE__, {opts, slow})
     def read(pid), do: GenServer.call(pid, :read)
     def reported(pid), do: GenServer.call(pid, :reported)
+    def close(pid), do: GenServer.call(pid, :close)
 
     @impl true
     def init({opts, slow}) do
@@ -35,6 +36,7 @@ defmodule Logex.IOTest do
     end
 
     def handle_call(:reported, _from, s), do: {:reply, Enum.reverse(s.reported), s}
+    def handle_call(:close, _from, s), do: {:reply, Logex.IO.Sim.close(s.adapter), s}
 
     @impl true
     def handle_info(message, s) do
@@ -99,6 +101,16 @@ defmodule Logex.IOTest do
   # A value passed through a function the type checker cannot see through, so that a
   # deliberate mistake draws no warning (as runtime_test.exs's opaque/1).
   defp opaque(value), do: :erlang.binary_to_term(:erlang.term_to_binary(value))
+
+  # Returns once a message waits in `pid`'s mailbox, looking every millisecond.
+  defp queued(pid), do: queued(pid, Process.info(pid, :message_queue_len))
+
+  defp queued(_pid, {:message_queue_len, n}) when n > 0, do: :ok
+
+  defp queued(pid, _empty) do
+    Process.sleep(1)
+    queued(pid)
+  end
 
   # Returns once `pid` is in Process.sleep/1, looking every millisecond.
   defp asleep(pid), do: asleep(pid, Process.info(pid, :current_function))
@@ -242,10 +254,11 @@ defmodule Logex.IOTest do
       assert Device.read(pid) == %{[0] => 1, [1] => 0, [2, 1] => 0}
     end
 
-    test "reports to the process that opened it last, and to the one that sets, in its " <>
-           "own mailbox" do
+    test "reports to the process that opened it last, once the first has closed it, and " <>
+           "to the one that sets, in its own mailbox" do
       sim = sim(reports: true)
       first = device(sim: sim)
+      assert Device.close(first) == :ok
       state = opened(sim)
 
       Sim.set(sim, [1], 1)
@@ -253,6 +266,67 @@ defmodule Logex.IOTest do
       assert report == {Sim, sim, %{[1] => 1}}
       assert Sim.report(report, state) == {:ok, %{[1] => 1}, state}
       assert Device.reported(first) == []
+    end
+
+    test "is one device's: another may open it only once the first has closed it or gone " <>
+           "down, and the first may open it again" do
+      sim = sim(reports: true)
+      first = device(sim: sim)
+
+      held =
+        "the simulated device #{inspect(sim)} is the device `panel`'s, opened by " <>
+          "#{inspect(first)}, which has not closed it: a sim is one device's"
+
+      assert_raise ArgumentError, held, fn -> Sim.init("drive", points(), sim: sim) end
+      assert Sim.check("drive", points(), sim: sim) == [held]
+
+      config = configured("var_global horn bool at drive.q.0\nprogram m blink\n  m.lamp horn\n")
+
+      assert_raise ArgumentError, "the device `drive`'s adapter options: " <> held, fn ->
+        Logex.IO.bind!(config, %{"drive" => {Sim, sim: sim}})
+      end
+
+      # Its inputs and reports stayed the first device's.
+      Sim.set(sim, [0], 1)
+      assert Device.reported(first) == [%{[0] => 1}]
+
+      # Closed, it may be opened by another, which may open it again; gone down, too.
+      assert Device.close(first) == :ok
+      assert Sim.check("drive", points(), sim: sim) == []
+      state = opened(sim)
+      assert opened(sim) == state
+      again = Task.async(fn -> catch_error(Sim.init("panel", points(), sim: sim)) end)
+      assert %ArgumentError{message: "the simulated device " <> _held} = Task.await(again)
+
+      {:ok, other} = Sim.start_link(reports: true)
+      gone = device(sim: other)
+      GenServer.stop(gone)
+      assert Sim.check("drive", points(), sim: other) == []
+      assert {:ok, _state} = Sim.init("drive", points(), sim: other)
+    end
+
+    test "two devices that open it at once: the one whose open comes second is refused" do
+      {:ok, clock} = Manual.start_link()
+      sim = sim(clock: clock)
+      # The first takes its time inside init/3, past its check, on a clock held still.
+      Sim.fail(sim, :init, {:delay, 5})
+      :sys.suspend(clock)
+      first = Task.async(fn -> catch_error(Sim.init("drive", points(), sim: sim)) end)
+      queued(clock)
+
+      # The second opens it meanwhile, and the first's open is refused once it goes on.
+      state = opened(sim)
+      :sys.resume(clock)
+
+      assert Task.await(first) ==
+               %ArgumentError{
+                 message:
+                   "the simulated device #{inspect(sim)} is the device `panel`'s, opened by " <>
+                     "#{inspect(self())}, which has not closed it: a sim is one device's"
+               }
+
+      Sim.set(sim, [0], 1)
+      assert Sim.read(state) == {:ok, %{[0] => 1, [1] => 0, [2, 1] => 0}, state}
     end
 
     test "report/2 gives nothing for a message that is not its own sim's report" do
