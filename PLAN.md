@@ -23,7 +23,8 @@ and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed and l
 2026-10-13 (§3), and Milestone 3 was designed and decided on 2026-10-14, its first four
 items, M3-1, M3-2, M3-3 and M3-4, landing the same day and its last, M3-5, on 2026-10-15,
 so Milestone 3 is done (§3, "Milestone 3"). Milestone 4, the wall-clock runner, was
-designed and decided on 2026-10-17 (§3, "Milestone 4").
+designed and decided on 2026-10-17 (§3, "Milestone 4"), its first item, M4-1, landing the
+same day and its second, M4-2, on 2026-10-18.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -130,6 +131,11 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   it between two cycles: each kept instance moved by its program type's one plan,
   instances started, set aside and brought back, globals started and held, every step
   reported, and a stale edit refused by the resource's generation.
+- Watchdogs and the continuous task (M4-2): a task line takes `watchdog <ms>` after its
+  priority, 500 ms unless set, and one line may declare the continuous task, `task main
+  continuous watchdog 200`, which runs every instance with no timed task, `with main` or
+  none, after the due tasks, each run reported under its name; a watchdog changes while
+  the plant runs, and the runner that reads it is M4-3's.
 
 These were each verified directly:
 
@@ -3109,6 +3115,38 @@ and M4-7 the documents.
   counter's runs reported under `main`; each refusal is pinned as a whole list from source
   and from data; the round trip, its totality and its growth hold with the new words; and
   an online edit that adds `with main` moves nothing.
+
+  **Status: DONE — landed 2026-10-18**, as seven commits, M2-6's pattern: (1) the two
+  stanzas and decision 129, the rule across an edit that decision 110 left to M4-2,
+  `8fefe54`; (2) the fields, `check/1`'s rows and the core from Elixir data, `06a81d2`;
+  (3) the reader, `entries!/1`, the printer and the reserved words, every check again
+  from source, `f68cc25`; (4) the round trip, totality and growth with the new words,
+  `847a091`; (5) the edit rules, with the contract walk, `6499982`; (6) the Done-when from
+  text and from files on disk, `1e8047d`; (7) the documents, the commit after it. 1331
+  tests pass on Elixir 1.20.4 (9 of them doctests), up from 1303. Each of (2), (3) and (5)
+  records its mutation table, every rule it adds reverted alone in a worktree of its
+  commit and the full suite judged by its exit code: (2) 26 rules, 25 red and one
+  equivalent survivor, the continuous task among a cycle's timed tasks, which its own
+  rule of no due time never lets run; (3) 24, all red; (5) 12, all red, each failing the
+  contract walk too. `Logex.Runtime` changed as this item says, and no more: a
+  continuous task's instances run with the task-less ones under its name, it is never
+  due, and it is listed at 0; it reads no watchdog.
+
+  Chosen while landing, each in its commit: `Logex.Configuration.watchdog/1`, the one rule
+  for a task's watchdog, as `initial/1` is a global's, joining the public surface;
+  `continuous` straight after the name, a word with no value, and `watchdog` after the
+  priority, each once, out of order shown a line with it in place; a continuous task
+  given inputs told them all in one diagnostic; a task whose `continuous` is the host's
+  mistake read as neither kind; a task with no interval, single or priority offered the
+  continuous task where none is declared; a task that needs a priority shown its own
+  watchdog; and, decision 129, a watchdog changed while running, reported in ms, 500 for
+  none, the continuous line's change a task's, a task's kind change its one refusal, and
+  the untimed instances one place and one order under the continuous task's name. Found
+  while landing: the contract walk's new draws moved its seeded stream, and its old seed
+  no longer reached a `tp`'s resume in 500 configurations, so it takes another that
+  reaches every kind; and a test helper named as one of `end_to_end_test.exs`'s own made
+  the suite abort on its warnings with every test green, which the gate's exit code
+  caught.
 - **M4-3 · The runner: start, rounds, devices, stop, read, subscribe.** *Done when* §4.4's
   plant with M4-2's box counter, loaded from files on disk through
   `Logex.Configuration.compile_file/1`, runs through `Logex.Runner` on the manual clock and

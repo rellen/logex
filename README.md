@@ -231,11 +231,10 @@ whole ("A function block" and "A configuration", below):
   `res`: a counter resets through its own `r` input, as IEC's does, and so does a
   retentive timer, `xic greased ote lube.r` (decision 90). Nor is there a master control
   zone, for good (decision 83).
-- **The wall-clock runner**, `PLAN.md`'s Milestone 4 (decisions 108–128 in
-  [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11): a
-  configuration file's task line will take `watchdog <ms>`, 500 ms where it has none, and
-  one line may declare the continuous task, `task main continuous`, in which a program
-  with no `with` runs; and `Logex.Runner` will run a configuration on the real clock
+- **The wall-clock runner**, `PLAN.md`'s Milestone 4 (decisions 108–129 in
+  [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11), whose
+  configuration words have landed, a task's `watchdog` and the `continuous` task
+  ("Watchdogs and the continuous task", below): `Logex.Runner` will run a configuration on the real clock
   through device adapters (`Logex.IO`), its untimed programs back to back, one round a
   clock millisecond at most, an input forced from the host staying forced across a
   restart and, kept in a file the host names, across a crash.
@@ -989,7 +988,7 @@ belts.ld: line 18: `ote` writes `s1.run`, but `s1` is an instance of `seal`, who
 ## A configuration
 
 A configuration runs instances of one or more programs as one resource: each instance on a
-periodic task, on an event task or on none, its `var_input`s and `var_output`s connected to globals, and the
+periodic task, on an event task, or on none, in the continuous task where one is declared, its `var_input`s and `var_output`s connected to globals, and the
 globals located at the host's input and output points or not
 ([`docs/organisation.md`](docs/organisation.md) §4.4 to §4.6). It is written as a
 configuration file (`.logex`), which `Logex.Configuration.compile_file/1` reads, loading
@@ -1510,6 +1509,118 @@ wrong_trip.logex: line 3: the interval of `late` is 0: an interval is at least 1
   pulses; and the pulse a coil does set stays on until the task next runs.
 - A single names a bool global; a dint, another kind of name and no global are each a
   diagnostic at the task's line, a dotted one told the reading it has.
+
+### Watchdogs and the continuous task
+
+Each task has a watchdog, the longest a run of it may take, 500 ms unless its line sets
+one after its priority, and a configuration may declare its one continuous task, which runs
+every program instance with no timed task ([`docs/organisation.md`](docs/organisation.md)
+§4.11, decisions 109 to 111). `packing.logex` runs the conveyor of `conveyor.ld`, above,
+on a 10 ms task that must finish within 50 ms, and the box counter of `boxes.ld`, above, in
+the continuous task, `main`, watched to 200 ms:
+
+```
+// packing.logex -- a conveyor on a 10 ms task, and a box counter in the continuous task
+task fast interval 10 priority 1 watchdog 50
+task main continuous watchdog 200
+
+var_global estop      bool at panel.i.7
+var_global pb_start_1 bool at panel.i.0
+var_global pb_reset   bool at panel.i.2
+var_global eye        bool at panel.i.8
+var_global k1         bool at panel.q.0
+var_global case_full  bool at panel.q.4
+
+program c1 conveyor with fast
+  c1.start pb_start_1
+  c1.stop  0
+  c1.reset pb_reset
+  c1.motor k1
+
+program b1 boxes
+  b1.eye       eye
+  b1.reset_pb  pb_reset
+  b1.full_lamp case_full
+```
+
+`packing.exs` starts the conveyor and passes three boxes, 5 ms apart; then it loads
+`wrong_packing.logex`, which has a mistake on each of its task lines:
+
+```
+task fast interval 10 priority 1 watchdog 0
+task main continuous priority 2
+task more continuous
+task fast2 interval 10 watchdog 50 priority 1
+var_global eye bool at panel.i.8
+program b1 boxes
+  b1.eye eye
+  b1.reset_pb 0
+```
+
+```elixir
+{:ok, plant} = Logex.Configuration.compile_file("packing.logex")
+IO.puts(Enum.map_join(plant.tasks, ", ", &"#{&1.name} #{Logex.Configuration.watchdog(&1)} ms"))
+
+steps = [
+  {"started      ", 0, %{"pb_start_1" => 1}},
+  {"a box        ", 5, %{"pb_start_1" => 0, "eye" => 1}},
+  {"gone         ", 5, %{"eye" => 0}},
+  {"a box        ", 5, %{"eye" => 1}},
+  {"gone         ", 5, %{"eye" => 0}},
+  {"the third box", 5, %{"eye" => 1}}
+]
+
+Enum.reduce(steps, {Logex.Runtime.start(plant), 0}, fn {label, elapsed, inputs}, {rt, now} ->
+  {rt, out, events} = Logex.Runtime.cycle(rt, elapsed, inputs)
+  ran = for {:ran, task, instance, _now} <- events, do: "#{task}:#{instance}"
+  IO.puts("t=#{String.pad_leading("#{now + elapsed}", 2)}  #{label}  k1=#{out["k1"]} case_full=#{out["case_full"]}  ran #{Enum.join(ran, ", ")}")
+  {rt, now + elapsed}
+end)
+
+IO.inspect(Logex.Runtime.next_due_in(Logex.Runtime.start(plant)), label: "next_due_in after start")
+IO.inspect(Logex.Runtime.overlaps(Logex.Runtime.start(plant)), label: "overlaps")
+
+{:error, diagnostics} = Logex.Configuration.compile_file("wrong_packing.logex")
+Enum.each(diagnostics, &IO.puts(Logex.Diagnostic.format(&1)))
+```
+
+```
+$ mix run packing.exs
+fast 50 ms, main 200 ms
+t= 0  started        k1=1 case_full=0  ran fast:c1, main:b1
+t= 5  a box          k1=1 case_full=0  ran main:b1
+t=10  gone           k1=1 case_full=0  ran fast:c1, main:b1
+t=15  a box          k1=1 case_full=0  ran main:b1
+t=20  gone           k1=1 case_full=0  ran fast:c1, main:b1
+t=25  the third box  k1=1 case_full=1  ran main:b1
+next_due_in after start: 0
+overlaps: %{"fast" => 0, "main" => 0}
+wrong_packing.logex: line 1: the watchdog of `fast` is 0: a watchdog is at least 1 ms, and a task that sets none has 500
+wrong_packing.logex: line 2: `main` is the continuous task, which takes no `priority`: it runs every program instance with no timed task, after the due tasks, as in `task main continuous watchdog 200`
+wrong_packing.logex: line 3: `more` is a second continuous task: a configuration has one at most, and `main` (line 2) is its continuous task
+wrong_packing.logex: line 4, column 36: `priority` goes before `watchdog`, as in `task fast interval 10 priority 1 watchdog 50`
+```
+
+- `task main continuous` declares the continuous task, `watchdog` its time; it takes no
+  `interval`, `single` or `priority`, and a configuration has one at most. `continuous`
+  comes straight after the name and `watchdog` last, after IEC's three; both are reserved
+  in a configuration file only, in any case, as `single` is.
+- `program b1 boxes`, with no `with`, runs in it, and `program b1 boxes with main` means
+  the same. Its instances run where task-less ones did, after every due task, once a
+  cycle, in the order of the `program` lines, and each run is reported under its name,
+  `main:b1`, where without the line it is `:none`. It is never due: `next_due_in/1` counts
+  only `fast` here, and `overlaps/1` lists `main` at 0.
+- `Logex.Runtime` reads no clock and so no watchdog: a cycle runs as it did whatever the
+  watchdogs, and `Logex.Configuration.watchdog/1` gives each task's, 500 where its line
+  sets none, for the runner to come (`PLAN.md` M4-3 and M4-4), which times a timed task's
+  run and each round of the continuous task against it.
+- From Elixir data a task is `%Logex.Configuration.Task{name: "main", continuous: true,
+  watchdog: 200}`, checked in the same words.
+- An online edit (`Logex.Configuration.Edit`, "A running plant", below) may change a
+  watchdog while the plant runs, reported `{:watchdog, "fast", {50, 30}}`, as an interval
+  and a priority may (decision 129); `with main` added or taken away moves nothing; the
+  continuous line added or removed, a task made continuous or timed, and an instance
+  moved between a timed task and the continuous one are refused until a restart.
 
 ## Changing a running program
 

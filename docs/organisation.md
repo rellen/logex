@@ -1796,6 +1796,7 @@ duty. The new kinds, and OE-1's given at the configuration's level:
 | `:interval` | task | `{old, new}` ms | a switch | fact |
 | `:next_due` | task | `{from, to}` ms | a switch | write: decision 40 |
 | `:priority` | task | `{old, new}` | a switch | fact |
+| `:watchdog` | task | `{old, new}` ms, 500 for none (M4-2, decision 129) | a switch | fact |
 | `:joined` | `instance.tag` | `{own, global}`: the instance's own value, nil where it had none, and the global's | a switch | write: the own value dropped, the instance reading the global from its next scan (decision 55) |
 | `:left` | `instance.tag` | the global's value | a switch | write: a var_external become the instance's own tag, at the global's value (decision 45) |
 | `:order` | task, `:none` for the task-less instances, or `:tasks` | the names in their new order | a switch | fact (decision 62) |
@@ -1867,7 +1868,8 @@ or added is a change of location. A candidate's warnings stop nothing.
 | a task removed | no line, last, naming its line in the running configuration | ``task `slow` (line 3 of the running configuration) is removed: a task is removed only with a restart`` |
 | a task's `single` added, removed or changed | its `task` line | ``task `trip`'s single changes from `estop` to `pb_reset`: a task's single changes only with a restart`` |
 | an event task's interval added or removed | its `task` line | ``task `trip` has a single, and its interval is added: an event task's interval is added or removed only with a restart`` |
-| a kept instance moved to another task, or to or from none | its `program` line | ``` `m2` runs with `slow` in the running configuration and with `fast` in the candidate: an instance moves to another task only with a restart``` |
+| a task made continuous, or a continuous one made timed (M4-2, decision 129) | its `task` line, its one refusal | ``task `main` is continuous in the running configuration and periodic in the candidate: a task's kind changes only with a restart`` |
+| a kept instance moved to another task, or to or from none, the continuous task named where declared and `with main` no move (decision 129) | its `program` line | ``` `m2` runs with `slow` in the running configuration and with `fast` in the candidate: an instance moves to another task only with a restart``` |
 | a global's type | its `var_global` line | ``` `sp_2` is a dint global in the running configuration and a bool in the candidate: a global's type changes only with a restart``` |
 | located I/O: a located global added, removed or moved, or a location added to or taken from a global | its line, or none for one removed | ``` `sp_2` is at `drive.q.1` in the running configuration and at `drive.q.2` in the candidate: located I/O changes only with a restart``` |
 | a tag's or member's type, in a program type a kept instance runs | that type's own file and line (fix F15) | OE-1's own messages, once a type |
@@ -2540,7 +2542,12 @@ after its priority, 1 to 2147483647 ms, an interval's range, and 500 ms where it
 `task main continuous`, with a watchdog or none and no interval, single or priority; a
 program with no `with` runs in it, and one may name it, `program boxes counter with main`,
 meaning the same. Each word owes its `docs/naming.md` stanza before its code (CLAUDE.md,
-step 1), and a stanza may still change a spelling.
+step 1), and a stanza may still change a spelling. *(Landed with M4-2, 2026-10-18, as
+written, the spellings unchanged: `continuous` straight after the task's name and before
+IEC's inputs, `watchdog` after them, each once; `Logex.Configuration.watchdog/1` the one
+rule for a task's watchdog; a continuous task's instances run in a cycle with the
+task-less ones, last, under its name, never due and listed at 0 by `overlaps/1`; and a
+watchdog's rule across an online edit is decision 129's.)*
 
 **Rounds** (decisions 108 and 122).
 - While the configuration has untimed programs, rounds run back to back, in all the time
@@ -4837,7 +4844,8 @@ over.
      names the task. `watchdog` owes its `docs/naming.md` stanza before its code; IEC has
      none (§3), so it is a vendor's word, by naming rule 2. A watchdog's rule across an
      online edit, whether one may change while the plant runs as an interval may (decision
-     19), is M4-2's to settle with that survey. *(Taken 2026-10-17.)*
+     19), is M4-2's to settle with that survey. *(Taken 2026-10-17. Settled with M4-2 on
+     2026-10-18 by decision 129: it may, and a switch reports it.)*
 111. **The continuous task (Milestone 4).** The box counter and the lamp have no timing of
      their own, and their programmer wants them watched more closely than half a second.
      Asked by the maintainer, as the conventional family has it: the configuration may
@@ -4881,7 +4889,12 @@ over.
      timed task's slow run in it is seen where the round's watchdog counts it (decision
      126); and a continuous line that runs no instance still sets the deadline the runner's
      refreshes carry while it serves its own work or waits (decision 125), so its watchdog
-     times no round but bounds the runner's time between them.)*
+     times no round but bounds the runner's time between them.)* *(Landed with M4-2,
+     2026-10-18, in the configuration and the core: the line, one at most, no interval,
+     single or priority, `with main` meaning no `with`, its runs reported under its name,
+     and its line added or removed refused while running; decision 129 adds that a task
+     made continuous or timed is refused too, and that `with main` added or taken away
+     moves nothing.)*
 112. **Plants of event tasks alone, and devices that report changes (Milestone 4).** A
      plant of the fan's half-second task and the e-stop's event task, with no untimed
      program: between the fan's runs the controller has nothing to do until the e-stop
