@@ -1720,11 +1720,32 @@ closed: true
   does not move inside a round; `get/2` reads the resource; `subscribe/2` sends the
   resource's events and the runner's `{:round, now, outputs}`; and `stop/2` writes every
   output 0 once and closes every device before it returns.
-- The share is served in slots, the conventional table's: at 20%, after 4 ms of rounds
-  that fill their milliseconds, up to 1 ms of the host's requests. On the manual clock a
-  round takes no time unless something passes time inside it, so a request is served
-  before the next round; one made while a round is owed waits for the advance that runs
-  it.
+- The share is served in slots, the conventional table's: at 20%, at the end of each
+  4 ms of rounds that fill their milliseconds, up to 1 ms of the host's requests. On the
+  manual clock a round takes no time unless something passes time inside it, so a
+  request is served before the next round. One made while a round is owed, after a round
+  that passed time, a slow drive's write, waits for its slot, as on the real clock
+  (decision 131): it comes in the advance that runs the round completing those 4 ms,
+  `advance(clock, 0)` among them, and never later. So a test that would call from the
+  process that moves the clock calls from another, and moves the clock on until the call
+  is answered:
+
+  ```elixir
+  task = Task.async(fn -> Runner.get!(runner, "b1.count") end)
+
+  answered = fn answered ->
+    case Task.yield(task, 10) do
+      {:ok, value} ->
+        value
+
+      nil ->
+        Manual.advance(clock, 0)              # one owed round; at most 4 bring the slot
+        answered.(answered)
+    end
+  end
+
+  answered.(answered)
+  ```
 - The watchdogs' trips and device faults are M4-4's, and forcing and edits through the
   runner M4-5's (`PLAN.md`).
 

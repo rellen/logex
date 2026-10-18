@@ -1057,8 +1057,9 @@ defmodule Logex.RunnerTest do
 
     # Each round writes the slow device, which takes 1 ms, so rounds fill their
     # milliseconds and a host's request waits for a slot. A request sent once the runner
-    # has run r rounds is served after C x ceil(r / C): the slot comes after every C ms of
-    # rounds, the first counted from start (decision 122). The request is sent with
+    # has run r rounds is served after C x (floor(r / C) + 1): the slot comes at the end of
+    # the round that completes every C ms of rounds, the first counted from start (decision
+    # 122), so one sent just after a slot waits for the next (decision 131). The request is sent with
     # :gen_server.send_request/2, the runner's own request for get!/2, so that the test can
     # move the clock while it waits.
     test "the share's slots: after C ms of rounds that fill their milliseconds the runner " <>
@@ -1086,7 +1087,7 @@ defmodule Logex.RunnerTest do
           r = rounds(runner)
           request = :gen_server.send_request(runner, {:get!, "b.n"})
           served = waited(request, clock)
-          assert served == c * div(r + c - 1, c), "#{share}%: sent after #{r} rounds"
+          assert served == c * (div(r, c) + 1), "#{share}%: sent after #{r} rounds"
         end
       end
     end
@@ -1174,6 +1175,143 @@ defmodule Logex.RunnerTest do
       assert :gen_server.wait_response(request, 0) == :timeout
       Manual.advance(clock, 0)
       assert :gen_server.wait_response(request, 0) == {:reply, 2}
+    end
+
+    # The review's probe: the first round's write passed 3 ms, so the next round is owed,
+    # and a call made from another process waits. At 20% C is 4, and the round the next
+    # advance runs, at 3, completes 6 ms of rounds: its slot, at its end, serves the call
+    # in that advance, advance(clock, 0) though it is, never at a later one.
+    test "a call whose slot a round completes is served in the advance that runs the " <>
+           "round, advance(clock, 0) among them (decision 131)" do
+      config =
+        configured(
+          "var_global q bool at slow.q.0\nprogram t toggle\n  t.q q\nprogram b count\n",
+          %{"toggle" => @toggle, "count" => @count}
+        )
+
+      {:ok, clock} = Manual.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"slow" => {SlowIO, clock: clock, ms: 3}},
+          clock: {Manual, clock}
+        )
+
+      assert Manual.now_ms(clock) == 3
+      task = Task.async(fn -> Runner.get!(runner, "b.n") end)
+      queued(runner, 1)
+      Manual.advance(clock, 0)
+      assert Task.yield(task, 1_000) == {:ok, 2}
+    end
+
+    # The moduledoc's way for a test to make a call on the manual clock, word for word: at
+    # 10% C is 9, so the ninth advance after a slot brings the next.
+    test "a call from another process, the clock advanced until it is answered" do
+      config =
+        configured(
+          "var_global q bool at slow.q.0\nprogram t toggle\n  t.q q\nprogram boxes count\n",
+          %{"toggle" => @toggle, "count" => @count}
+        )
+
+      {:ok, clock} = Manual.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"slow" => {SlowIO, clock: clock, ms: 1}},
+          clock: {Manual, clock},
+          overhead: 10
+        )
+
+      task = Task.async(fn -> Logex.Runner.get!(runner, "boxes.n") end)
+
+      answered = fn answered ->
+        case Task.yield(task, 10) do
+          {:ok, value} ->
+            value
+
+          nil ->
+            Logex.Runner.Clock.Manual.advance(clock, 0)
+            answered.(answered)
+        end
+      end
+
+      assert answered.(answered) == 9
+    end
+
+    # Decision 125: every device is refreshed, with the idle watchdog's deadline, before
+    # the runner serves its own work, whichever way it serves it: at once, in a slot, or
+    # in the rest of a millisecond.
+    test "a refresh before a request served at once, before a slot, and before the rest " <>
+           "of a millisecond is served" do
+      # At once: no untimed program, so no round is ever owed.
+      {opts, %{clock: clock}} = rig()
+      {:ok, runner} = Runner.start_link(opts)
+      %{"panel" => panel} = devices(runner)
+      :erlang.trace(panel, true, [:receive])
+      Manual.pass(clock, 3)
+      assert Runner.get!(runner, "y") == 0
+      assert refreshes(panel) == [3 + 510]
+
+      # In a slot: at 50% every round's end is a slot, the step's and the write's
+      # refreshes at the round's start, and the slot's after the write's 1 ms.
+      config =
+        configured(
+          "var_global q bool at slow.q.0\nprogram t toggle\n  t.q q\nprogram b count\n",
+          %{"toggle" => @toggle, "count" => @count}
+        )
+
+      {:ok, clock} = Manual.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"slow" => {SlowIO, clock: clock, ms: 1}},
+          clock: {Manual, clock},
+          overhead: 50
+        )
+
+      %{"slow" => slow} = devices(runner)
+      :erlang.trace(slow, true, [:receive])
+      request = :gen_server.send_request(runner, {:get!, "b.n"})
+      queued(runner, 1)
+      Manual.advance(clock, 0)
+      assert :gen_server.wait_response(request, 0) == {:reply, 2}
+      assert refreshes(slow) == [1 + 510, 1 + 510, 2 + 510]
+
+      # In the rest of a millisecond: the first round's write took 2 ms, the round at 2
+      # takes none, and the request is served before the round at 3, after a refresh.
+      config =
+        configured(
+          "var_global q bool at drive.q.0\nprogram t toggle\n  t.q q\nprogram b count\n",
+          %{"toggle" => @toggle, "count" => @count}
+        )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, drive} = Sim.start_link(clock: clock)
+      Sim.fail(drive, :write, {:delay, 2})
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"drive" => {Sim, sim: drive}},
+          clock: {Manual, clock}
+        )
+
+      %{"drive" => device} = devices(runner)
+      :erlang.trace(device, true, [:receive])
+      request = :gen_server.send_request(runner, {:get!, "b.n"})
+      queued(runner, 1)
+      Manual.advance(clock, 0)
+      assert :gen_server.wait_response(request, 0) == {:reply, 2}
+      assert refreshes(device) == [2 + 510, 2 + 510, 2 + 510]
+
+      # And where none waits, the rest of a millisecond refreshes nothing: each round of no
+      # time its step's refresh and its write's, and the round at 3, the fourth of the
+      # share's count, its slot's, no more.
+      Manual.advance(clock, 2)
+      assert refreshes(device) == [3 + 510, 3 + 510, 3 + 510, 4 + 510, 4 + 510]
     end
 
     # A round that takes no time counts a millisecond: the first, whose write takes none,

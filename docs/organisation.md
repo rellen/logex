@@ -5169,7 +5169,9 @@ and the "case full" lamp with no timing of their own.
      a round fills no time unless something passes time inside it, so own work waiting is
      served before the next round. And "between rounds" is said plainly: a due timed task
      runs at the start of the next round, never preempting one (§4.6), the first steps of
-     that round. *(Taken 2026-10-18, after M4-1's review.)*
+     that round. *(Taken 2026-10-18, after M4-1's review. After M4-3's review the same
+     day: a slot comes at the end of the round that completes its C ms, so that on the
+     manual clock it comes in the advance that runs that round, decision 131.)*
 123. **A trigger that logic writes (Milestone 4),** following decisions 50 and 120. A
      plant of two event tasks and no untimed program, each task's program setting the
      other's trigger and clearing its own: each round changes a trigger, and under
@@ -5427,6 +5429,89 @@ question put, as decisions 111 and 112 were.
      was reported as a reorder of every task, which `scheduler_test.exs` already said was
      no order of its own.
 
+**The maintainer's answers after M4-3's review, 2026-10-18.** M4-3 put two questions as it
+landed; its review recommended an answer to each, and the maintainer answered both the
+same day.
+
+130. **Writing each device's outputs again every poll period (Milestone 4),** following
+     decisions 119 and 125, asked as M4-3 landed. The conveyor runs for an hour with its
+     contactor on and the drive's speed steady. No output changes, so the runner, which
+     writes a device only where its outputs changed, writes neither after the first
+     round; a drive or a remote I/O card that turns its outputs off when it has heard
+     nothing from its master for a while, as many do, stops the conveyor while logex is
+     well. Decisions 119 and 125 said a device is refreshed "with the outputs it last
+     had", which as landed was not so: a refresh was a message to the device's process,
+     carrying its deadline, which called no adapter.
+     - Each device writes its outputs again, the values it last wrote, at most once a
+       poll period, when nothing was written to it within one: an operator sees the same
+       outputs, and a device that watches for its master hears from it at least once a
+       poll period, as long as the runner is well;
+     - every refresh writes the device again, as decision 119's words read: the same
+       outputs, but a write before every step of every round, thousands a second while
+       rounds run back to back, each one over the network for a real adapter;
+     - or a device written only where its outputs changed, as landed, so a quiet plant
+       says nothing to its I/O for as long as it stays quiet, and the host must set each
+       device's own timeout longer than the plant ever stays quiet, which may be hours.
+
+     IEC 61131-3 says nothing of how a controller talks to its I/O, and so nothing of a
+     repeated write. The conventional family sends a module's data cyclically at its
+     requested packet interval, the RPI, whether or not it changed, *"If a change does not
+     occur within the RPI, the module sends its data at the RPI"* (the tasks, programs
+     and routines manual, p.42, of an input module, decision 120); that a controller's
+     outputs go out at the RPI in the same way, and that an output module drops them when
+     several RPIs pass with nothing heard, is the maintainer's account, and
+     **unverified** for outputs in the manuals saved for this record.
+
+     **Taken: the first,** as the maintainer answered, "Re-write each poll", in the form
+     the review refined it: the write again is made by the device's own process at its
+     poll, after its read, never by a refresh, so it costs one adapter write a poll period
+     for a device whose outputs do not change, and nothing more for one a round writes
+     within each poll period; a device with no output point is never written; a device
+     that has not yet been written, before the first round's write, has nothing to write
+     again; and a device whose last refresh's deadline has passed writes nothing again,
+     so that it never holds a stuck runner's outputs past the deadline decision 125 gives
+     it, which M4-4's latch then acts on. So "refreshed with the outputs it last had",
+     decisions 119 and 125, holds, the refresh carrying the deadline and the poll the
+     outputs, and a device's own loss-of-master time, set longer than a poll period, is
+     never reached while the runner is well. *(Answered and taken 2026-10-18, after M4-3's
+     review.)*
+131. **A host's call on the manual clock waits for its slot (Milestone 4),** following
+     decision 122, asked as M4-3 landed. A test runs the box counter on the manual clock
+     with a slow drive whose every write passes 3 ms, and calls `get!/2` from the test's
+     own process: a round is owed, so the call waits for the share's slot, and the slot
+     comes only as the clock moves, which nothing moves while the test waits in its call.
+     The test hangs. As landed, a slot came at the start of the wake after the round that
+     completed its C ms of rounds, so even `advance(clock, 0)`, which ran that round, left
+     the call waiting for another advance (the review's F3).
+     - The rule kept: a call waits for its slot on the manual clock as on the monotonic
+       one, a test making it from another process and moving the clock on until it is
+       answered, and a slot coming at the end of the round that completes its C ms, in the
+       advance that runs that round, never at a later one;
+     - a call that comes while a round is owed runs the owed round at once, the round's
+       wake going stale, and is then served by the slot rules, as the review proposed: the
+       same on the monotonic clock, and on the manual clock no call waits for an advance;
+     - or every call served at once on the manual clock, a rule the monotonic clock does
+       not run.
+
+     IEC 61131-3 says nothing of a controller's communication with its programming
+     station or its host. The conventional family serves unscheduled communication in the
+     system overhead time slice, after the continuous task's share of time, and goes back
+     to the continuous task at once where nothing waits (the tasks, programs and routines
+     manual, pp.31–33, decisions 108 and 122); it has no clock a test moves.
+
+     **Taken: the rule kept,** as the maintainer answered, "Keep the rule": a run on the
+     manual clock follows the monotonic clock's rules, one rule for both, so that a test
+     tests the rule the plant runs, and the hang is a test's to avoid, which `Logex.Runner`'s
+     moduledoc and README's "On the clock" say how: make the call from another process,
+     `Task.async/1`, and advance the clock until it is answered, at most C rounds, 4 at
+     20%. The defect the review found is fixed with it: the slot is served at the end of
+     the round that completes C ms, in the advance that runs that round, `advance(clock,
+     0)` among them, so a call whose slot has come never waits for a later advance. The
+     cost: a call that comes just after a slot waits C ms of rounds for the next, where as
+     landed it was served at the next wake, a difference of no time on the monotonic
+     clock, whose next wake is at once. *(Answered and taken 2026-10-18, after M4-3's
+     review.)*
+
 ---
 
 ## 8. Sources, and what is unverified
@@ -5455,7 +5540,7 @@ question put, as decisions 111 and 112 were.
 - The general instructions reference, Sept 2025: the TASK object for GSV/SSV, TON
   (its TIMER structure and prescan), ONS, and a CPS example.
 - The ladder-diagram programming manual, July 2022, ch.1.
-- For Milestone 4's design (§4.11, decisions 108–128): the tasks, programs and routines
+- For Milestone 4's design (§4.11, decisions 108–131): the tasks, programs and routines
   manual, Sept 2025, p.8 (the continuous task, one at most, restarting at once), p.13 (its
   lowest priority, and the system overhead time slice), pp.31–33 (the time slice, its
   table and its default), p.34 (each task's watchdog) and pp.37–46 (event tasks, the change

@@ -75,13 +75,35 @@ defmodule Logex.Runner do
     waited, for up to S ms, C = max(1, round((100 − p)/p)) and S = max(1, round(p/(100 −
     p))) for a share of p%, 9 and 1 at 10%, 4 and 1 at 20%, 1 and 1 at 50%, 1 and 9 at
     90%. A round counts from its start to its end, a millisecond at least, the timed
-    tasks' runs in it left out; a slot serves its first request whatever the time, and
-    each whole, so it may run over by one; and in the rest of a millisecond a round did
-    not fill the runner serves its requests freely. A host's request is served at once
-    where no round is owed, and with no untimed program always: so on the manual clock,
-    where a round takes no time unless something passes time inside it, a request is
-    served before the next round, and one made while a round is owed waits for the
-    advance that runs it and its slot.
+    tasks' runs in it left out; the slot comes at the end of the round that completes C
+    ms; it serves its first request whatever the time, and each whole, so it may run over
+    by one; and in the rest of a millisecond a round did not fill the runner serves its
+    requests freely. A host's request is served at once where no round is owed, and with
+    no untimed program always. Every device is refreshed before the runner serves its own
+    work, whichever way.
+  - **On the manual clock** (decision 131) the same rules run: a round takes no time
+    unless something passes time inside it, so a request is served before the next
+    round; but one made while a round is owed, after a round that passed time, waits for
+    its slot, which comes in the advance that runs the round completing C ms of rounds,
+    `advance(clock, 0)` among them, never later. A test that calls from the process that
+    moves the clock would wait for ever, so it calls from another and moves the clock on
+    until the call is answered:
+
+        task = Task.async(fn -> Logex.Runner.get!(runner, "boxes.n") end)
+
+        answered = fn answered ->
+          case Task.yield(task, 10) do
+            {:ok, value} -> value
+            nil ->
+              Logex.Runner.Clock.Manual.advance(clock, 0)
+              answered.(answered)
+          end
+        end
+
+        answered.(answered)
+
+    Each `advance(clock, 0)` runs the one round owed, so at most C of them, 4 at 20%,
+    bring the slot.
   - While it waits for a round longer than a poll period, the runner refreshes every
     device at least once a poll period, with the idle watchdog's deadline.
 
@@ -490,15 +512,16 @@ defmodule Logex.Runner do
   defp due?(nil, _now), do: false
   defp due?(at, now), do: now >= at
 
-  defp wake(true, late, state),
-    do: rounded(slot(%{state | latest_wake: max(state.latest_wake, late)}))
+  defp wake(true, late, state), do: rounded(%{state | latest_wake: max(state.latest_wake, late)})
 
   defp wake(false, _late, state), do: scheduled(refresh(state, :idle))
 
-  # Decision 122's slots: after C ms of the continuous task's rounds the runner serves its
-  # own work for up to S ms, each request whole, before the next round, and goes back to
-  # rounds at once where none waits. Only a configuration with untimed programs is served
-  # in slots: one without serves its requests whenever it waits (decision 108).
+  # Decision 122's slots: after C ms of the continuous task's rounds, at the end of the
+  # round that completes them, the runner serves its own work for up to S ms, each request
+  # whole, before the next round, and goes back to rounds at once where none waits; so on
+  # the manual clock a slot comes in the advance that runs that round, never at a later one
+  # (decision 131). Only a configuration with untimed programs is served in slots: one
+  # without serves its requests whenever it waits (decision 108).
   defp slot(%{untimed: true, used: used, slots: {c, s}} = state) when used >= c do
     state = refresh(state, :idle)
     %{popped(:queue.out(state.queue), now(state) + s, state) | used: 0}
@@ -557,6 +580,7 @@ defmodule Logex.Runner do
 
     state
     |> planned(start, finish, state.untimed or again)
+    |> slot()
     |> freely()
   end
 
@@ -633,9 +657,15 @@ defmodule Logex.Runner do
   defp cancel(nil, _clock), do: :ok
   defp cancel({timer, _token, _at}, {module, clock}), do: module.cancel(clock, timer)
 
-  # The requests that waited, served while no round is owed.
-  defp freely(%{untimed: true, next_round: at} = state), do: serving(state, at)
+  # The requests that waited, served while no round is owed, every device refreshed first
+  # where one waits, as before any of the runner's own work (decision 125).
+  defp freely(%{untimed: true, next_round: at, queue: queue} = state),
+    do: free(:queue.is_empty(queue) or now(state) >= at, at, state)
+
   defp freely(state), do: state
+
+  defp free(true, _at, state), do: state
+  defp free(false, at, state), do: serving(refresh(state, :idle), at)
 
   defp watchdog(task, %{watchdogs: watchdogs}), do: Map.fetch!(watchdogs, task)
 
