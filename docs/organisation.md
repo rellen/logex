@@ -20,7 +20,8 @@ arithmetic, the pulse coils and the forward jump, M3-1 to M3-5 (decisions 93–1
 Milestones 1 to 3, OE-1 and OE-2 have landed. Milestone 4, the wall-clock runner, was
 designed and decided on 2026-10-17 (§4.11, decisions 108–121), and its first item, M4-1,
 the clocks, the adapter behaviour and the simulated device, landed the same day; its
-review's answers followed on 2026-10-18 (decisions 122–126).** On 2026-09-28 the
+review's answers followed on 2026-10-18 (decisions 122–126), with the maintainer's answer
+on forces (decision 127).** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -2477,25 +2478,25 @@ missed as any late periodic task does.)*
 ### 4.11 Milestone 4's design: the wall-clock runner (decided 2026-10-17)
 
 **Designed and decided 2026-10-17; M4-1 landed the same day** (`PLAN.md` M4-1): the
-clocks, `Logex.IO` with `%Logex.IO.Point{}`, `points/1` and `bind!/2`, and
-`Logex.IO.Sim`. A design pass on `d3931bd`, on
-Elixir 1.20.4 / OTP 28 on a four-core Linux container, answered §5's "Wall-clock runner,
-`Logex.IO` adapters, watchdog", §4.5's adapter sketch, §4.6's "the watchdog belongs to the
-wall-clock runner", §4.10's two notes to revisit with the runner and decision 14's "decide
-with the runner". A throwaway spike built every piece, on the branch
-`backup/runner-design` (`spike-runner/`), never to land: its figures are receipts and pin
-nothing. The maintainer answered its questions on 2026-10-17, changing three: rounds run
-back to back with a share kept for the runner's own work (decision 108), and the watchdog
-is 500 ms unless set (109) and each task's own (110). Two more the maintainer asked
-outside the questions put: a configuration may declare its continuous task (111), and a
-device may report its inputs' changes (112). The rest were taken as recommended
-(113–117). Decisions 118–121 are this record's routine choices, each with the
+clocks, `Logex.IO` with `%Logex.IO.Point{}`, `points/1` and `bind!/2`, and `Logex.IO.Sim`.
+A design pass on `d3931bd`, on Elixir 1.20.4 / OTP 28 on a four-core Linux container,
+answered §5's "Wall-clock runner, `Logex.IO` adapters, watchdog", §4.5's adapter sketch,
+§4.6's "the watchdog belongs to the wall-clock runner", §4.10's two notes to revisit with
+the runner and decision 14's "decide with the runner". A throwaway spike built every
+piece, on the branch `backup/runner-design` (`spike-runner/`), never to land: its figures
+are receipts and pin nothing. The maintainer answered its questions on 2026-10-17,
+changing three: rounds run back to back with a share kept for the runner's own work
+(decision 108), and the watchdog is 500 ms unless set (109) and each task's own (110). Two
+more the maintainer asked outside the questions put: a configuration may declare its
+continuous task (111), and a device may report its inputs' changes (112); and on
+2026-10-18 a third, forces kept in a file across a crash (127). The rest were taken as
+recommended (113–117). Decisions 118–121 are this record's routine choices, each with the
 alternative it passes over, and so are 122–126, taken on 2026-10-18 after M4-1's review
 found the record silent on how rounds run on a clock that does not move, on a trigger
 logic writes and on where a test waits, and loose on the heartbeat's margin and on what a
-round's trip names; the rest of this section is routine too, each choice with its
-reason. Where a rule changes decided text above, that text is annotated
-where it stands. `PLAN.md` §3's Milestone 4 gives the items and their order.
+round's trip names; the rest of this section is routine too, each choice with its reason.
+Where a rule changes decided text above, that text is annotated where it stands. `PLAN.md`
+§3's Milestone 4 gives the items and their order.
 
 **Words.** A *round* is a cycle the runner makes on the clock: it takes the inputs, runs
 the timed tasks that are due and then the untimed programs through `cycle/3`'s rules, and
@@ -2747,18 +2748,32 @@ one of:
 | An adapter's callback fails, or gives a bad value or address | guarded in the device's process; the runner's checks | trip, every other device zeroed |
 | An adapter hangs | no answer within the device's deadline | trip; the device's process killed, its outputs left to the device; opened again at a restart |
 | A device's process dies | the runner traps the exit | trip; opened again at a restart |
-| The runner crashes or is killed | each device traps its parent's exit | each device zeroes its outputs and closes; nothing starts it again (decision 115) |
+| The runner crashes or is killed | each device traps its parent's exit | each device zeroes its outputs and closes; nothing starts it again (decision 115); its forces stay in their file, for the runner the host starts next (decision 127) |
 | The runner is stopped | `stop/2` | every output zeroed once, every device closed, before `stop/2` returns (decision 116) |
 | A subscriber is slow | — | nothing: events are sent, never awaited, so its own mailbox grows; `:ran` and `:round` are opt-in for that reason |
 | The VM, the machine or the power dies | — | nothing in software can act: outputs are what the I/O does on losing its master, which a plant should set to off |
 
-**Forcing** (decision 117). `force(runner, point, value)` makes the runner see an input
-point at `value` whatever its device says, merged over the device's values before each
-round, after the input latch, as §5 places forcing; it stays until `unforce/2`, across a
-restart, and `status/1` lists every force. `unforce/2` puts back the device's last value,
-which the runner keeps for each input point. A force of a trigger is a change of it
-(decision 120). An output point, or a value that does not fit, is the host's mistake.
-Output forcing waits for §5's forcing in `cycle/3`, which `force/3` will then call.
+**Forcing** (decisions 117 and 127). `force(runner, point, value)` makes the runner see an
+input point at `value` whatever its device says, merged over the device's values before
+each round, after the input latch, as §5 places forcing; it stays until `unforce/2` or
+`unforce_all/1`, across a restart and, kept in a file, across a crash and a fresh start,
+and `status/1` lists every force. `unforce/2` puts back the device's last value, which the
+runner keeps for each input point, and `unforce_all/1` takes every force off. A force of
+a trigger is a change of it (decision 120). An output point, or a value that does not
+fit, is the host's mistake. Output forcing waits for §5's forcing in `cycle/3`, which
+`force/3` will then call.
+- *The file* is the host's to name, `forces:` a path, an option of `start_link/1`; a
+  runner started without one takes no force, so that every force there is survives a
+  crash. Each force and unforce writes the whole set before it returns, to a file beside
+  it, flushed to the disk and renamed over it, so a crash leaves the old set or the new;
+  a write that fails changes nothing and returns `{:error, {:forces, reason}}`. Its format
+  is M4-5's, text a person can read.
+- *It is read at every start,* by `start_link/1` in the caller before anything starts,
+  and by `restart/2`; a file that does not exist is no force. A force the configuration
+  cannot take, on a point it no longer has, on an output point or of a value that does
+  not fit, or a file that cannot be read, is the host's mistake at start, every such
+  force named, and the runner does not start; at a restart it stays tripped. A host
+  clears every force with `unforce_all/1`, or, with no runner, by deleting the file.
 
 **Edits.** Each step of a `Logex.Configuration.Edit` is a call to the runner, served
 between two rounds in its share; the runner holds the edit, one at a time, a second accept
@@ -2771,12 +2786,12 @@ resource the runner hands it, so that no step costs a round more than a switch.
 
 | Function | Notes |
 |---|---|
-| `start_link(opts)`, `child_spec(opts)` | `configuration:`, `io:`, and optionally `clock:` (`{module, clock}`, the monotonic one unless set), `poll:` (ms, 10), `overhead:` (percent, 20, 10 to 90) and `name:` (decision 121). Checks every option, `Logex.Runtime.start/1`'s refusals and the bindings in the caller, before anything starts; opens every device, reads each once, and runs the first round at once. `{:ok, pid}`, or `{:error, {:io_init, device, reason}}` for a device that cannot be opened, which is the plant's state, not a host mistake |
+| `start_link(opts)`, `child_spec(opts)` | `configuration:`, `io:`, and optionally `clock:` (`{module, clock}`, the monotonic one unless set), `poll:` (ms, 10), `overhead:` (percent, 20, 10 to 90), `forces:` (a path, decision 127) and `name:` (decision 121). Checks every option, `Logex.Runtime.start/1`'s refusals, the bindings and the forces file in the caller, before anything starts; opens every device, reads each once, and runs the first round at once. `{:ok, pid}`, or `{:error, {:io_init, device, reason}}` for a device that cannot be opened, which is the plant's state, not a host mistake |
 | `stop(runner, reason \\ :normal)` | zeroes every output once and closes every device before it returns |
-| `status(runner)` | `:running` or `:tripped`; `now`; the rounds run; the trip's reason; each task's overlaps; the forces; the edit's stage; each task's longest run against its watchdog, the latest wake, and the longest wait between two refreshes, in ms |
+| `status(runner)` | `:running` or `:tripped`; `now`; the rounds run; the trip's reason; each task's overlaps; the forces, always, every one with its value, those read from the file at a start among them; the edit's stage; each task's longest run against its watchdog, the latest wake, and the longest wait between two refreshes, in ms |
 | `get(runner, path)`, `get!(runner, path)` | as `Logex.Runtime.get/2` and `get!/2`, of the last round computed |
 | `subscribe(runner, kinds)`, `unsubscribe(runner)` | `{Logex.Runner, runner, event}` for each event of a kind named; a subscriber is monitored and dropped when it dies |
-| `force(runner, point, value)`, `unforce(runner, point)` | input points only |
+| `force(runner, point, value)`, `unforce(runner, point)`, `unforce_all(runner)` | input points only; each writes the forces file whole before it returns, `{:error, {:forces, reason}}` where it cannot, and a runner started without `forces:` takes no force (decision 127) |
 | `restart(runner, :cold \| :warm)` | `:ok`, or `{:error, {:io_init, device, reason}}` |
 | `accept(runner, candidate)`, `test/1`, `untest/1`, `assemble/1`, `cancel/1` | the edit's steps |
 
@@ -2792,11 +2807,13 @@ pins, and never crash the runner. At start: a missing or unknown option; a confi
 bound to, ``no adapter is bound to the device `drive`, which `sp_1` (drive.q.0) and `sp_2`
 (drive.q.1) are at``; a bound device no point is at, ``the device `panle` is bound, but no
 point is at it — did you mean `panel`?``; an adapter that does not implement `Logex.IO`;
-options its adapter's `check/3` refuses; a poll period or a share out of its range; a clock that does not implement
-`Logex.Runner.Clock`. In a call, the runner rescues the `ArgumentError`, replies `{:raise,
-exception}`, and the function raises it in the caller: a path that names nothing, an
-output point or a value that does not fit forced, a step with no edit accepted, a restart
-that is neither cold nor warm.
+options its adapter's `check/3` refuses; a poll period or a share out of its range; a
+clock that does not implement `Logex.Runner.Clock`; a forces file that cannot be read, or
+holds a force the configuration cannot take (decision 127). In a call, the runner rescues
+the `ArgumentError`, replies `{:raise, exception}`, and the function raises it in the
+caller: a path that names nothing, an output point or a value that does not fit forced, a
+force on a runner started without `forces:`, a step with no edit accepted, a restart that
+is neither cold nor warm, and at a restart a forces file it can no longer take.
 
 **How a test drives it.** The manual clock replaces the monotonic one and `Logex.IO.Sim`
 the plant, so a run is deterministic and repeats exactly from fresh processes. On §4.4's
@@ -2936,10 +2953,10 @@ VM do not, and the documents say so.
 | Preemption | not adopted | It gives up determinism, and nothing is observable in zero logical time (§4.6) |
 | FB-to-task association (`FB1 WITH SLOW_1`, Table 49 f6b) | deferred | Rarely needed. It splits an FB's execution from its program's scan |
 | Direct representation `%IX0.0` and raw addresses in connections | not adopted; the fallback for §4.5 | One declared, named I/O list instead |
-| Wall-clock runner, `Logex.IO` adapters, watchdog | target, after Milestone 2; **designed and decided 2026-10-17** (§4.11, decisions 108–121, and 122–126 after M4-1's review, 2026-10-18), `PLAN.md`'s Milestone 4 | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
+| Wall-clock runner, `Logex.IO` adapters, watchdog | target, after Milestone 2; **designed and decided 2026-10-17** (§4.11, decisions 108–121, and 122–127 after M4-1's review, 2026-10-18), `PLAN.md`'s Milestone 4 | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
 | Restarting one program instance inside a resource | not adopted (Milestone 2's design, §4.10) | `restart/2` restarts the whole resource (decision 38). Restarting one instance would be another rule for the input image and the tasks, for a need no decided text states |
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
-| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117; output forcing waits for this.)* |
+| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
@@ -3185,8 +3202,10 @@ answers, 108, 109 and 110 against their recommendations, 111 and 112 asked by th
 maintainer outside the questions put, the rest as recommended; and 118–121 the record's
 own routine choices. Decisions 122–126 were taken on 2026-10-18, after M4-1's review
 (below), the record's own routine choices on what the review found the record left open
-or loose, 125 superseding 119 in its rule and its cost. All one hundred and twenty-six
-are kept with their options so the reasons stay with them.
+or loose, 125 superseding 119 in its rule and its cost; and decision 127 is the
+maintainer's answer of the same day, forces kept in a file across a crash, given outside
+any question put, with the record's choices on how. All one hundred and twenty-seven are
+kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -4969,7 +4988,9 @@ over.
      `unforce/2` puts back the device's last value, which the runner keeps for each input
      point; a force of a trigger is a change of it (decision 120); an output point, or a
      value that does not fit, is the host's mistake. Output forcing waits for §5's forcing
-     in `cycle/3`. *(Taken 2026-10-17.)*
+     in `cycle/3`. *(Taken 2026-10-17. Extended on 2026-10-18 by the maintainer's answer,
+     decision 127: forces are kept in a file the host names, so that a forced input comes
+     back forced after a crash and a fresh start, not only after a restart.)*
 118. **How a task's run is timed (Milestone 4),** following decision 110. One round runs
      the conveyor's task, the fan's and the box counter, and the runner must tell how long
      each took.
@@ -5239,6 +5260,66 @@ and the "case full" lamp with no timing of their own.
      limit_ms}}`, names the task that was slow. The steps cost nothing new: the runner
      times each step already (decision 118). *(Taken 2026-10-18, after M4-1's review.)*
 
+**The maintainer's answer on forces, 2026-10-18.** Given after M4-1's review, outside any
+question put, as decisions 111 and 112 were.
+
+127. **Forces after a crash (Milestone 4),** following decisions 115 and 117. The
+     technician has forced the photo-eye "blocked" to check the "case full" lamp, and the
+     controller software crashes. Decision 115 keeps it down until someone starts it
+     again, and decision 117 keeps a force across a restart; but a restart is the same
+     runner's, and after a crash the host starts a new one, whose forces would be none, so
+     the photo-eye would come back reading the real eye. **Answered by the maintainer:
+     forces survive a crash, kept in a file, as the conventional family does.** A forced
+     input is kept outside the controller, so after a crash and a fresh start it comes
+     back still forced, and the status lists it. IEC 61131-3 says nothing of forcing:
+     "forc" occurs in the extracted text of neither edition. That the conventional family
+     keeps forces in the project through a power cycle, with a "forces on" indicator, is
+     the maintainer's account and **unverified**: of the conventional manuals saved for
+     this record, the design considerations reference lists *"I/O force tables"* among a
+     controller's I/O memory (p.31), and neither it nor the tasks, programs and routines
+     manual says what a power cycle does to them or names an indicator.
+
+     **Taken,** with the record's choices on how, each with the alternative it passes
+     over:
+     - *Who names the file:* the host, `forces:` a path, an option of `start_link/1`, as
+       `poll:` and `overhead:` are the runner's (decision 121): where a machine keeps its
+       state is the machine's, not the plant's logic, and logex writes no file it is not
+       told to. A runner started without one takes no force, `force/3` then the host's
+       mistake, "the runner keeps no forces file, so a force would not survive a crash:
+       start it with forces: a path", so that every force there is survives a crash, as
+       the answer says. Forces held in memory alone where no file is named, decision 117
+       as taken, would let a force vanish with a crash, the case the answer rules out.
+     - *How it is written:* on each force and each unforce, before the call returns, the
+       whole set written to a file beside it, flushed to the disk, and renamed over it,
+       so that a crash at any moment leaves the old set or the new, never part of one,
+       rename being atomic within one file system. A write that fails changes nothing,
+       the force not taken or not taken off, and the call returns `{:error, {:forces,
+       reason}}`, the plant's state, as a full disk is, not a host mistake. Its format is
+       M4-5's to settle: text a person can read, one force a line, written by the runner
+       alone. Writing at a stop alone would lose every force a crash came before.
+     - *When it is read:* at every start, `start_link/1` reading it in the caller before
+       anything starts, and `restart/2`, so that the file is what is forced at each start;
+       a file that does not exist is no force. A restart reads what the runner last wrote,
+       so it keeps the forces it had, as decision 117 keeps them.
+     - *A force the configuration cannot take,* on a point it no longer has, on one that
+       is an output, or of a value that does not fit its point, and a file that cannot be
+       read: refused at start as the host's mistake, every such force named in one
+       `ArgumentError`, the runner not started; at `restart/2` the same refusal is raised
+       in the caller and the runner stays tripped. Reported and dropped, the alternative,
+       would take off a force a technician set, with no one at the plant told but a
+       subscriber, the input going from the forced value to the real one at a start
+       nobody watched. The configuration a file was written for is not recorded in it:
+       a point is a force's by its name.
+     - *Clearing every force:* `unforce_all/1`, which takes every force off, each input
+       back to its device's last value, and writes the file empty; with no runner, the
+       host deletes the file, a file that does not exist being no force.
+     - *The status always lists them:* `status/1`'s forces, every one with its value,
+       empty when none, from the first round after a start, those read from the file
+       among them, so that a display can show "forces on" while any is.
+
+     It is recorded only: forcing is built in its own item, M4-5 (`PLAN.md`). *(Answered
+     and taken 2026-10-18.)*
+
 ---
 
 ## 8. Sources, and what is unverified
@@ -5255,6 +5336,9 @@ and the "case full" lamp with no timing of their own.
     Table 33 with Annex B.1.5.2, Table 10 note d (p.31) and Table 50 (p.116); Ed 3
     Table 10 note d (p.32), §6.6.3.2 rule 11 (p.100, PRIVATE the default), §6.6.3.4.2
     with its Figure 13 (p.108) and Table 63 (p.182).
+  - For decision 127, searched on 2026-10-18: "forc" occurs in the extracted text of
+    neither Ed 2 nor Ed 3, so IEC 61131-3 says nothing of forcing; the other parts of IEC
+    61131 were not read.
 - Ed 4 (2025) was not read beyond its publisher preview, so **its organisation clauses are
   unverified**.
 
@@ -5264,13 +5348,17 @@ and the "case full" lamp with no timing of their own.
 - The general instructions reference, Sept 2025: the TASK object for GSV/SSV, TON
   (its TIMER structure and prescan), ONS, and a CPS example.
 - The ladder-diagram programming manual, July 2022, ch.1.
-- For Milestone 4's design (§4.11, decisions 108–121): the tasks, programs and routines
+- For Milestone 4's design (§4.11, decisions 108–127): the tasks, programs and routines
   manual, Sept 2025, p.8 (the continuous task, one at most, restarting at once), p.13 (its
   lowest priority, and the system overhead time slice), pp.31–33 (the time slice, its
   table and its default), p.34 (each task's watchdog) and pp.37–46 (event tasks, the change
-  of state and the requested packet interval); and the design considerations reference,
-  Sept 2025, pp.19, 24 and 34–36 (the newest controllers run communications on a core of
-  their own, with no time slice).
+  of state and the requested packet interval, p.46 its warning of an overlap, decision
+  120); and the design considerations reference, Sept 2025, pp.19, 24 and 34–36 (the
+  newest controllers run communications on a core of their own, with no time slice; p.35
+  the time slice's formula and table, decision 122) and p.31 (the I/O force tables among
+  a controller's I/O memory, decision 127). **Unverified:** that the conventional family
+  keeps forces in the project through a power cycle, with a "forces on" indicator,
+  which neither manual says (decision 127).
 - For Milestone 2's design: the add-on instructions manual, Sept 2025, p.21 (instructions
   nested up to 16 levels deep, decision 32; the design considerations reference says the
   same on p.15), p.23 (local tags not reachable from outside, decision 33) and p.79 (a

@@ -231,13 +231,14 @@ whole ("A function block" and "A configuration", below):
   `res`: a counter resets through its own `r` input, as IEC's does, and so does a
   retentive timer, `xic greased ote lube.r` (decision 90). Nor is there a master control
   zone, for good (decision 83).
-- **The wall-clock runner**, `PLAN.md`'s Milestone 4 (decisions 108–126 in
+- **The wall-clock runner**, `PLAN.md`'s Milestone 4 (decisions 108–127 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11): a
   configuration file's task line will take `watchdog <ms>`, 500 ms where it has none, and
   one line may declare the continuous task, `task main continuous`, in which a program
   with no `with` runs; and `Logex.Runner` will run a configuration on the real clock
   through device adapters (`Logex.IO`), its untimed programs back to back, one round a
-  clock millisecond at most.
+  clock millisecond at most, an input forced from the host staying forced across a
+  restart and, kept in a file the host names, across a crash.
 
 ## An example
 

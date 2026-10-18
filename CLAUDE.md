@@ -575,10 +575,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   M3-5's review, so Milestone 3 is done; Milestone 4, the wall-clock runner, designed
   and decided on 2026-10-17, §4.11 and decisions 108–121, its first item, M4-1, the
   clocks, the adapter behaviour and the simulated device, landed the same day, and the
-  record's answers to M4-1's review, decisions 122–126, on 2026-10-18). Read it
-  before designing anything that names a program, schedules one, binds I/O, changes a
-  running controller (§4.9, online edit, decided 2026-10-01), or runs one on the clock
-  (§4.11).
+  record's answers to M4-1's review, decisions 122–126, on 2026-10-18, with the
+  maintainer's answer the same day, forces kept in a file across a crash, decision 127).
+  Read it before designing anything that names a program, schedules one, binds I/O,
+  changes a running controller (§4.9, online edit, decided 2026-10-01), or runs one on
+  the clock (§4.11).
 - `docs/instruction-sets.md` — reference: IEC's LD elements and standard library by table number,
   Instruction List (withdrawn in Ed 4), and the free-software instruction sets. Read it before
   writing a naming.md stanza; it carries the IEC feature numbers a stanza should cite.

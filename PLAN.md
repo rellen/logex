@@ -2866,7 +2866,7 @@ ms after the motor stopped. "The Done-when tests" are read as M3-1's to M3-5's i
 ### Milestone 4 — the wall-clock runner
 
 **Designed and decided 2026-10-17** (`docs/organisation.md` §4.11 and §7, decisions
-108–121, and 122–126 after M4-1's review; "decision N" in this section is that §7's). §8's
+108–121, and 122–127 after M4-1's review; "decision N" in this section is that §7's). §8's
 second domain gap: a runner that runs a configuration's resource on the real clock,
 through device adapters, with a watchdog, the one piece of logex that reads a clock. A
 design pass on `d3931bd` designed it and built a throwaway spike of every piece, on the
@@ -2900,7 +2900,10 @@ on by a call the runner answers once the round they cause has run, so that a tes
 looser rules: every device refreshed before every step, each refresh carrying that step's
 own deadline, its watchdog plus a poll period, which supersedes decision 119's rule and
 its cost (125); and a round's watchdog trip naming each of its steps with its time, so
-that a slow timed task in the round is seen (126).
+that a slow timed task in the round is seen (126). And the maintainer answered once more
+the same day, outside any question put: forces survive a crash, kept in a file, as the
+conventional family does, so that a runner started after a crash comes back with every
+input that was forced still forced and listed (127), with the record's choices on how.
 
 Each item lands as a gated series, each commit gated alone by `mix format
 --check-formatted`, `mix compile --force --warnings-as-errors` in both environments and
@@ -3076,7 +3079,15 @@ and M4-7 the documents.
   one for each grid time. And §4.11 said the simulated device reports each input it is
   set to, where it reports changes, and gives a value of the test's choosing for a read
   alone, where a report takes one too, and decision 120 paraphrased p.46 as a warning of
-  a pulse unseen, where it warns of an overlap; each is corrected.
+  a pulse unseen, where it warns of an overlap; each is corrected. Asked nothing, the
+  maintainer answered once more on 2026-10-18: forces survive a crash, kept in a file, as
+  the conventional family does (127). It is recorded, with M4-5's Done-when and the done
+  sentence to match, and built with M4-5: the host names the file, `forces:`, and a runner
+  without one takes no force; each force and unforce writes it whole and atomically;
+  every start reads it, a force the configuration cannot take refused there as the host's
+  mistake; `unforce_all/1` clears it; and the status always lists every force. IEC 61131-3
+  says nothing of forcing, and the conventional family's keeping of forces through a
+  power cycle, with a "forces on" indicator, is unverified in the manuals saved.
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
   `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line
@@ -3172,7 +3183,20 @@ and M4-7 the documents.
   forcing (decision 117) holds a forced input against its device and across a restart,
   a forced trigger making a round, refuses an output point or a value that does not fit
   in the caller, lists every force in the status, and on `unforce/2` puts back the
-  device's last value.
+  device's last value. Forces are kept in a file (decision 127): `start_link/1` takes
+  `forces:`, a path, and a runner started without it refuses `force/3` as the host's
+  mistake; each force and unforce writes the whole set before it returns, to a file
+  beside it, flushed and renamed over it, a write that fails changing nothing and
+  returning `{:error, {:forces, reason}}`; every start reads it, `start_link/1` in the
+  caller and `restart/2`, a file that does not exist being no force, so that a runner
+  killed while the photo-eye is forced, and started again from the same file, comes back
+  with it forced and listed in `status/1`; a force in the file on a point the
+  configuration no longer has, on an output point or of a value that does not fit, and
+  a file that cannot be read, are refused at start as the host's mistake, every such
+  force named, the runner not started, and at `restart/2` raised in the caller with the
+  runner left tripped; and `unforce_all/1` takes every force off and writes the file
+  empty, a host with no runner deleting the file. The file's format, text a person can
+  read, is this item's to settle.
 - **M4-6 · The contract walk.** `api_contract_test.exs` gains a runner walk on the manual
   clock: seeded configurations with and without untimed programs, simulated devices that
   report and that do not, random waits and presses, injected faults, edits, forces and
@@ -3191,17 +3215,18 @@ its continuous task, runs on the real clock through bound devices, its untimed p
 back to back, one round a clock millisecond at most, with the runner's share kept, and
 each timed task's runs never before their times on its grid, its runs and the periods it
 reports missed together one for each grid time passed; a host test drives the same plant
-on a manual clock with simulated devices, one reporting its changes and one only read,
-and its outputs and events are exactly those `cycle/3` gives for the same times and
-inputs; with no untimed program the plant rounds only when a task is due or a trigger
-changes; a task that outlasts its watchdog, a device that fails, and a runner that is
-stopped, stuck or killed each leave every output that can still be written at 0, written
-once; a tripped runner runs nothing again until the host restarts it, and one stopped or
-killed is gone, its child spec `restart: :temporary`, so that the host starts a new one;
-a forced input holds across a restart; and an online edit is stepped through the running
-runner between rounds. *(Reworded 2026-10-18, after M4-1's review: "each timed task on
-its grid as closely as the machine allows" could not be tested, and "nothing runs again
-until the host restarts it" said a stopped or killed runner could be restarted.)*
+on a manual clock with simulated devices, one reporting its changes and one only read, and
+its outputs and events are exactly those `cycle/3` gives for the same times and inputs;
+with no untimed program the plant rounds only when a task is due or a trigger changes; a
+task that outlasts its watchdog, a device that fails, and a runner that is stopped, stuck
+or killed each leave every output that can still be written at 0, written once; a tripped
+runner runs nothing again until the host restarts it, and one stopped or killed is gone,
+its child spec `restart: :temporary`, so that the host starts a new one; a forced input
+holds across a restart and, kept in its file, across a crash and a fresh start; and an
+online edit is stepped through the running runner between rounds. *(Reworded 2026-10-18,
+after M4-1's review: "each timed task on its grid as closely as the machine allows" could
+not be tested, and "nothing runs again until the host restarts it" said a stopped or
+killed runner could be restarted.)*
 
 ---
 
@@ -3807,7 +3832,7 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    tasks' instances by priority and returning every output point. A wall-clock runner,
    the only code that will read a clock, comes after Milestone 2 (`docs/organisation.md`
    §5). *(Milestone 4, designed and decided 2026-10-17, §3: decisions 108–121, and
-   122–126 after M4-1's review, 2026-10-18.)*
+   122–127 after M4-1's review, 2026-10-18.)*
 3. **A tag table with types.** Landed with M1-3.
 4. **Comparisons (`eq ne lt gt le ge` — IEC names, see `docs/naming.md`)** — high value,
    low cost. *Landed with M1-6, on dints.*
