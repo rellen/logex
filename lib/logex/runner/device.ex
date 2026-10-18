@@ -10,6 +10,11 @@ defmodule Logex.Runner.Device do
   #   opened, each read on a grid that never drifts (decision 120); and it gives each
   #   message it is sent that is not the runner's to the adapter's report/2, where the
   #   adapter has one (decision 112).
+  # - At each poll, after the read, it writes the outputs it last wrote again where
+  #   nothing was written within a poll period and its last refresh's deadline has not
+  #   passed, so that a device whose outputs never change still hears from its master
+  #   once a poll period while the runner is well (decision 130); one never written, and
+  #   one with no output point, writes nothing.
   # - It passes what changed since it last passed anything on to the runner by a call,
   #   one at a time and in the order it saw them, which the runner answers once it has
   #   merged the change and run the round it causes (decision 124). While it waits it
@@ -46,6 +51,8 @@ defmodule Logex.Runner.Device do
          image: %{},
          next: nil,
          deadline: nil,
+         written: nil,
+         written_at: nil,
          zeros:
            Map.new(for(%Point{direction: :output, address: address} <- points, do: {address, 0}))
        }}
@@ -53,10 +60,7 @@ defmodule Logex.Runner.Device do
   @impl GenServer
   def handle_call(:open, _from, state), do: opened(init_adapter(state), state)
 
-  def handle_call({:write, values}, _from, %{module: module, adapter: adapter} = state) do
-    {:ok, adapter} = module.write(values, adapter)
-    {:reply, :ok, %{state | adapter: adapter}}
-  end
+  def handle_call({:write, values}, _from, state), do: {:reply, :ok, wrote(values, state)}
 
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, closed(zeroed(state))}
 
@@ -66,7 +70,7 @@ defmodule Logex.Runner.Device do
   @impl GenServer
   def handle_info({__MODULE__, :poll, at}, %{next: at} = state) do
     {:ok, values, adapter} = state.module.read(state.adapter)
-    {:noreply, polled(passed(values, %{state | adapter: adapter}))}
+    {:noreply, polled(rewritten(passed(values, %{state | adapter: adapter})))}
   end
 
   def handle_info({__MODULE__, :poll, _stale}, state), do: {:noreply, state}
@@ -97,6 +101,23 @@ defmodule Logex.Runner.Device do
     mod.wake_at(clock, self(), {__MODULE__, :poll, next}, next)
     %{state | next: next}
   end
+
+  # The outputs written, and when, on the runner's clock.
+  defp wrote(values, %{module: module, adapter: adapter, clock: {mod, clock}} = state) do
+    {:ok, adapter} = module.write(values, adapter)
+    %{state | adapter: adapter, written: values, written_at: mod.now_ms(clock)}
+  end
+
+  # The outputs last written, written again where nothing was written within a poll
+  # period, while the last refresh's deadline has not passed (decision 130).
+  defp rewritten(%{written: nil} = state), do: state
+  defp rewritten(%{clock: {mod, clock}} = state), do: rewrite(mod.now_ms(clock), state)
+
+  defp rewrite(now, %{written_at: at, poll: poll, deadline: deadline} = state)
+       when now - at >= poll and now < deadline,
+       do: wrote(state.written, state)
+
+  defp rewrite(_now, state), do: state
 
   defp reported(false, _message, state), do: state
 

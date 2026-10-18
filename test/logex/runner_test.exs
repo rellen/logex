@@ -1423,6 +1423,131 @@ defmodule Logex.RunnerTest do
     end
   end
 
+  describe "the outputs written again each poll period (decision 130)" do
+    test "a device whose outputs do not change is written them again once a poll period, " <>
+           "from its last write" do
+      for {poll, again} <- [{10, 3}, {7, 4}] do
+        {opts, %{clock: clock, panel: panel}} = rig(relayed(), poll: poll)
+        Sim.set(panel, [0], 1)
+        {:ok, _runner} = Runner.start_link(opts)
+        Manual.advance(clock, 30)
+        assert Sim.writes(panel) == List.duplicate(%{[0] => 1}, 1 + again), "poll #{poll}"
+      end
+
+      # The values last written: a change written by a round is what comes again. `x` set
+      # at 12 reaches `y` in the round at 20, whose write follows the poll at 20, which
+      # wrote 0 again; the poll at 30 writes the 1.
+      {opts, %{clock: clock, panel: panel}} = rig()
+      {:ok, _runner} = Runner.start_link(opts)
+      Manual.advance(clock, 12)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 8)
+      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}, %{[0] => 0}, %{[0] => 1}]
+      Manual.advance(clock, 10)
+      assert Enum.drop(Sim.writes(panel), 3) == [%{[0] => 1}, %{[0] => 1}]
+    end
+
+    test "a device a round writes within each poll period is written nothing more" do
+      config =
+        configured(
+          "var_global q bool at panel.q.0\nprogram t toggle\n  t.q q\n",
+          %{"toggle" => @toggle}
+        )
+
+      {opts, %{clock: clock, panel: panel}} = rig(config)
+      {:ok, runner} = Runner.start_link(opts)
+      Manual.advance(clock, 30)
+      assert length(Sim.writes(panel)) == rounds(runner)
+      assert rounds(runner) == 31
+    end
+
+    test "a device with no output point is never written, at any poll" do
+      text =
+        String.replace(
+          @counted,
+          "var_global e    bool at panel.i.1",
+          "var_global e    bool at keys.i.0"
+        )
+
+      {opts, %{clock: clock}} = plant_rig(counted(text))
+      {:ok, keys} = Sim.start_link(clock: clock)
+
+      {:ok, _runner} =
+        Runner.start_link(Keyword.update!(opts, :io, &Map.put(&1, "keys", {Sim, sim: keys})))
+
+      Manual.advance(clock, 50)
+      assert Sim.reads(keys) == 6
+      assert Sim.writes(keys) == []
+    end
+
+    # A runner suspended after its first round refreshes nothing more: its last deadline
+    # is the write's, 500 ms and a poll period on, and the panel writes again at each poll
+    # before it, never after.
+    test "a device whose last refresh's deadline has passed writes nothing again" do
+      {opts, %{clock: clock, panel: panel}} = rig()
+      {:ok, runner} = Runner.start_link(opts)
+      :sys.suspend(runner)
+      Manual.advance(clock, 600)
+      assert length(Sim.writes(panel)) == 1 + 50
+      :sys.resume(runner)
+    end
+
+    # Idle devices cost one write each a poll period, however many there are: d devices
+    # whose outputs never change, over 1,000 ms at a poll period of 10 ms, are written 101
+    # times each, the first round's and one each period.
+    test "idle devices cost one write each a poll period" do
+      for d <- [1, 4, 16] do
+        {:ok, clock} = Manual.start_link()
+
+        sims =
+          Map.new(0..(d - 1), fn k ->
+            {:ok, sim} = Sim.start_link(clock: clock)
+            {"dev#{k}", sim}
+          end)
+
+        {:ok, runner} =
+          Runner.start_link(
+            configuration: idle_crowd(d),
+            io: Map.new(sims, fn {name, sim} -> {name, {Sim, sim: sim}} end),
+            clock: {Manual, clock}
+          )
+
+        Manual.advance(clock, 1_000)
+
+        assert Enum.map(sims, fn {_name, sim} -> length(Sim.writes(sim)) end) ==
+                 List.duplicate(101, d)
+
+        Runner.stop(runner)
+      end
+    end
+  end
+
+  # d devices, each with one output a 10 ms task's program holds at 0.
+  defp idle_crowd(d) do
+    hold = program("var_output q bool\nxic q ote q", "hold")
+
+    Configuration.new!(
+      name: "plant",
+      programs: [hold],
+      tasks: [%Configuration.Task{name: "slow", interval: 10, priority: 1}],
+      globals:
+        for(
+          k <- 0..(d - 1),
+          do: %Configuration.Global{name: "q#{k}", type: :bool, at: "dev#{k}.q.0"}
+        ),
+      instances:
+        for(
+          k <- 0..(d - 1),
+          do: %Configuration.Instance{name: "h#{k}", type: "hold", task: "slow"}
+        ),
+      connections:
+        for(
+          k <- 0..(d - 1),
+          do: %Configuration.Connection{instance: "h#{k}", member: "q", to: "q#{k}"}
+        )
+    )
+  end
+
   describe "stop/2, status/1 and subscriptions" do
     test "stop/2 writes every output 0 once and closes every device before it returns " <>
            "(decision 116)" do
@@ -1431,13 +1556,15 @@ defmodule Logex.RunnerTest do
       Sim.set(panel, %{[0] => 1, [1] => 1})
       Manual.advance(clock, 10)
       assert Sim.outputs(panel) == %{[0] => 1}
+      before = {Sim.writes(panel), Sim.writes(drive)}
 
+      # One write each at the stop, every output 0, and nothing else.
       assert Runner.stop(runner) == :ok
       refute Process.alive?(runner)
-      assert List.last(Sim.writes(panel)) == %{[0] => 0}
-      assert List.last(Sim.writes(drive)) == %{[0] => 0}
-      assert Enum.count(Sim.writes(panel), &(&1 == %{[0] => 0})) == 2
-      assert Enum.count(Sim.writes(drive), &(&1 == %{[0] => 0})) == 2
+
+      assert {Sim.writes(panel), Sim.writes(drive)} ==
+               {elem(before, 0) ++ [%{[0] => 0}], elem(before, 1) ++ [%{[0] => 0}]}
+
       assert Sim.closed?(panel) and Sim.closed?(drive)
       reads = Sim.reads(panel)
 
