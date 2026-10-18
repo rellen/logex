@@ -4454,4 +4454,256 @@ defmodule Logex.EndToEndTest do
       the_watched_done_when(plant, watched_plant())
     end
   end
+
+  # PLAN.md M4-3's Done-when, as it is worded: §4.4's plant with M4-2's box counter, loaded
+  # from files on disk, runs through Logex.Runner on the manual clock and two simulated
+  # devices, the panel reporting its changes and the drive only read, over a seeded
+  # sequence of presses and waits, and every round's outputs, events and get/2 values equal
+  # those of Logex.Runtime.cycle/3 called directly with the same elapsed_ms and inputs, an
+  # oracle that knows nothing of the runner; and the run repeats exactly from fresh
+  # processes. The oracle's rounds are the rule the runner keeps: one each clock
+  # millisecond, the box counter being untimed, and one at once for each change of the
+  # e-stop, the trigger of `trip`, every other change taken by the next.
+  describe "the runner on the plant (M4-3)" do
+    @describetag :tmp_dir
+
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    @paths ~w(k1 k2 lamp_1 lamp_2 sp_1 sp_2 case_full k1_at_trip k2_at_trip estop eye_1 pb_reset) ++
+             ~w(boxes.boxes.cv m1.motor m2.motor)
+
+    defp plant_on_disk(dir) do
+      {_programs, files} = counter_programs()
+
+      for {name, text} <-
+            Map.merge(files, %{"snapshot.ld" => @snapshot_ld, "plant.logex" => watched_plant()}),
+          do: File.write!(Path.join(dir, name), text)
+
+      {:ok, plant} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      plant
+    end
+
+    # A seeded sequence of presses and waits: a press sets one of the panel's inputs, the
+    # photo-eye most often, and a wait moves the clock on; halfway, every fault's cause is
+    # taken away, the reset button pressed and released, which empties the case and
+    # clears the motors' faults, and both conveyors started.
+    defp presses(seed, n) do
+      :rand.seed(:exsss, seed)
+
+      inputs =
+        ~w(pb_start_1 pb_start_1 pb_stop_1 tt_1 pb_start_2 pb_start_2 pb_stop_2 tt_2) ++
+          ~w(estop estop) ++ List.duplicate("eye_1", 16)
+
+      random = fn ->
+        case :rand.uniform(5) do
+          kind when kind <= 3 -> {:wait, Enum.random(0..25)}
+          _press -> {:press, Enum.random(inputs), Enum.random(0..1)}
+        end
+      end
+
+      half = for _ <- 1..div(n, 2), do: random.()
+      rest = for _ <- 1..div(n, 2), do: random.()
+      half ++ restarted() ++ rest
+    end
+
+    # Every fault's cause taken away, the faults reset and both conveyors started.
+    defp restarted,
+      do:
+        for(name <- ~w(estop tt_1 tt_2 pb_stop_1 pb_stop_2), do: {:press, name, 0}) ++
+          [{:press, "pb_reset", 1}, {:wait, 55}, {:press, "pb_reset", 0}, {:wait, 1}] ++
+          [{:press, "pb_start_1", 1}, {:press, "pb_start_2", 1}, {:wait, 55}] ++
+          [{:press, "pb_start_1", 0}, {:press, "pb_start_2", 0}]
+
+    # The run through the runner: each step's events, as a subscriber gets them, the
+    # devices' outputs and the values get/2 reads, in order.
+    defp through_runner(plant, steps) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+      points = Logex.IO.points(plant)
+      address = Map.new(for {_device, ps} <- points, p <- ps, do: {p.name, p.address})
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: plant,
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock}
+        )
+
+      :ok = Runner.subscribe(runner, [:overlap, :fault, :ran, :round])
+
+      # The first round ran at start, before the subscription: it is told by get/2 alone.
+      first = observed(runner, [], panel, drive)
+
+      {log, _} =
+        Enum.map_reduce(steps, nil, fn step, nil ->
+          step_runner(step, clock, panel, address)
+          {observed(runner, drained(runner), panel, drive), nil}
+        end)
+
+      Runner.stop(runner)
+      [first | log]
+    end
+
+    defp step_runner({:wait, ms}, clock, _panel, _address), do: Manual.advance(clock, ms)
+
+    defp step_runner({:press, name, value}, _clock, panel, address),
+      do: Sim.set(panel, Map.fetch!(address, name), value)
+
+    # Every event the runner has sent: a :sys call answered after them, from the same
+    # process, marks the end.
+    defp drained(runner) do
+      :sys.get_state(runner)
+      drain(runner, [])
+    end
+
+    defp drain(runner, events) do
+      receive do
+        {Runner, ^runner, event} -> drain(runner, [event | events])
+      after
+        0 -> Enum.reverse(events)
+      end
+    end
+
+    defp observed(runner, events, panel, drive),
+      do:
+        {events, Sim.outputs(panel), Sim.outputs(drive),
+         Map.new(@paths, &{&1, Runner.get(runner, &1)})}
+
+    # The oracle: Logex.Runtime.cycle/3 called directly, with the elapsed times and the
+    # inputs the runner's rules give, and the devices' outputs by address.
+    defp through_oracle(plant, steps) do
+      points = Logex.IO.points(plant)
+      inputs = for {_device, ps} <- points, %{direction: :input} = p <- ps, do: p.name
+      image = Map.new(inputs, &{&1, 0})
+      {runtime, outputs, _events} = Logex.Runtime.cycle(Logex.Runtime.start(plant), 0, image)
+
+      model = %{
+        runtime: runtime,
+        now: 0,
+        last: 0,
+        image: image,
+        pending: %{},
+        outputs: outputs,
+        points: points
+      }
+
+      {log, _model} =
+        Enum.map_reduce(steps, model, fn step, model ->
+          {events, model} = step_oracle(step, model)
+          {oracle_seen(events, model), model}
+        end)
+
+      [oracle_seen([], model) | log]
+    end
+
+    defp step_oracle({:wait, ms}, model) do
+      Enum.reduce(1..ms//1, {[], model}, fn _, {events, model} ->
+        {round, model} = oracle_round(%{model | now: model.now + 1})
+        {events ++ round, model}
+      end)
+    end
+
+    defp step_oracle({:press, name, value}, %{image: image} = model) do
+      oracle_pressed(Map.fetch!(image, name) == value, name, value, model)
+    end
+
+    defp oracle_pressed(true, _name, _value, model), do: {[], model}
+
+    defp oracle_pressed(false, "estop", value, model),
+      do:
+        oracle_round(%{
+          model
+          | image: Map.put(model.image, "estop", value),
+            pending: Map.put(model.pending, "estop", value)
+        })
+
+    defp oracle_pressed(false, name, value, model),
+      do:
+        {[],
+         %{
+           model
+           | image: Map.put(model.image, name, value),
+             pending: Map.put(model.pending, name, value)
+         }}
+
+    defp oracle_round(%{runtime: runtime, now: now, last: last, pending: pending} = model) do
+      {runtime, outputs, events} = Logex.Runtime.cycle(runtime, now - last, pending)
+
+      {events ++ [{:round, now, outputs}],
+       %{model | runtime: runtime, last: now, pending: %{}, outputs: outputs}}
+    end
+
+    defp oracle_seen(events, %{runtime: runtime, outputs: outputs, points: points}) do
+      by_device = fn device ->
+        for %{direction: :output} = p <- Map.fetch!(points, device),
+            into: %{},
+            do: {p.address, Map.fetch!(outputs, p.name)}
+      end
+
+      {events, by_device.("panel"), by_device.("drive"),
+       Map.new(@paths, &{&1, Logex.Runtime.get(runtime, &1)})}
+    end
+
+    test "M4-3's Done-when: the plant through the runner on the manual clock, round for " <>
+           "round the oracle's, from files on disk, repeating exactly",
+         %{tmp_dir: dir} do
+      plant = plant_on_disk(dir)
+      assert plant.warnings == []
+      steps = presses({2026, 10, 18}, 600)
+
+      runner_log = through_runner(plant, steps)
+      oracle_log = through_oracle(plant, steps)
+      assert length(runner_log) == length(oracle_log)
+
+      for {{ran, want}, index} <- Enum.with_index(Enum.zip(runner_log, oracle_log)) do
+        assert ran == want, "step #{index}: #{inspect(Enum.at([nil | steps], index))}"
+      end
+
+      # It reached what it is about: the conveyors run and stop, `trip` runs, a case
+      # fills, and the drive's speed is set.
+      events = Enum.flat_map(runner_log, &elem(&1, 0))
+
+      assert Enum.any?(events, &match?({:ran, "trip", "snap", _}, &1))
+      assert Enum.any?(events, &match?({:round, _, %{"k1" => 1}}, &1))
+      assert Enum.any?(events, &match?({:round, _, %{"case_full" => 1}}, &1))
+      assert Enum.any?(runner_log, &match?({_, _, %{[0] => 1200}, _}, &1))
+      rounds = Enum.count(events, &match?({:round, _, _}, &1))
+      assert rounds > 2_000
+
+      # From fresh processes, exactly again.
+      assert through_runner(plant, steps) == runner_log
+    end
+
+    # On the real clock, liveness only, with bounds far from what load can reach: CI
+    # shares its cores (§4.11, "Risks"). Both conveyors started, the plant runs for 2 s,
+    # rounding and keeping its clock, and then stops in order, every output zeroed once.
+    test "on the real clock the plant runs for 2 s and stops in order", %{tmp_dir: dir} do
+      plant = plant_on_disk(dir)
+      {:ok, panel} = Sim.start_link(reports: true)
+      {:ok, drive} = Sim.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: plant,
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}}
+        )
+
+      Sim.set(panel, %{[0] => 1, [3] => 1})
+      Process.sleep(2_000)
+      status = Runner.status(runner)
+      assert %{status: :running, trip: nil} = status
+      assert status.rounds >= 20
+      assert status.now >= 500
+      assert Runner.get!(runner, "k1") == 1
+
+      assert Runner.stop(runner) == :ok
+      refute Process.alive?(runner)
+      assert List.last(Sim.writes(panel)) == %{[0] => 0, [1] => 0, [2] => 0, [3] => 0, [4] => 0}
+      assert List.last(Sim.writes(drive)) == %{[0] => 0, [1] => 0}
+      assert Sim.closed?(panel) and Sim.closed?(drive)
+    end
+  end
 end

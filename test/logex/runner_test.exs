@@ -64,6 +64,11 @@ defmodule Logex.RunnerTest do
     def cancel(_clock, _timer), do: :ok
   end
 
+  # The growth tests' bounds, each a fifth above the highest of 32 runs (see "growth").
+  @both_bound 4.33
+  @instances_bound 4.24
+  @devices_bound 1.28
+
   # One var_input copied to one var_output.
   @relay "var_input in bool\nvar_output out bool\nxic in ote out"
 
@@ -1299,5 +1304,80 @@ defmodule Logex.RunnerTest do
     end
 
     forward(test)
+  end
+
+  # The runner's cost a round, in reductions of its own process over 20 rounds, against the
+  # instances and the devices: each instance an untimed toggle whose output point changes
+  # every round, so that every device is written in every round, its points spread over
+  # the devices. Linear in both (PLAN.md Milestone 4's growth rule): measured at 3.60x for
+  # 4x the instances and the devices together, 3.53x for the instances alone and 1.06x for
+  # the devices alone, deterministic to a few hundred reductions; each bound is a fifth
+  # above the highest of 32 runs, half of them beside three full suites.
+  describe "growth" do
+    defp crowd(n, d) do
+      toggle = program("var_input in bool\nvar_output q bool\nxio q ote q", "toggle")
+
+      Configuration.new!(
+        name: "plant",
+        programs: [toggle],
+        tasks: [%Configuration.Task{name: "main", continuous: true}],
+        globals:
+          Enum.flat_map(1..n, fn i ->
+            at = "dev#{rem(i - 1, d)}.%s.#{div(i - 1, d)}"
+
+            [
+              %Configuration.Global{
+                name: "x#{i}",
+                type: :bool,
+                at: String.replace(at, "%s", "i")
+              },
+              %Configuration.Global{name: "y#{i}", type: :bool, at: String.replace(at, "%s", "q")}
+            ]
+          end),
+        instances: for(i <- 1..n, do: %Configuration.Instance{name: "r#{i}", type: "toggle"}),
+        connections:
+          Enum.flat_map(1..n, fn i ->
+            [
+              %Configuration.Connection{instance: "r#{i}", member: "in", to: "x#{i}"},
+              %Configuration.Connection{instance: "r#{i}", member: "q", to: "y#{i}"}
+            ]
+          end)
+      )
+    end
+
+    defp round_cost(n, d) do
+      {:ok, clock} = Manual.start_link()
+
+      io =
+        Map.new(0..(d - 1), fn k ->
+          {:ok, sim} = Sim.start_link(clock: clock)
+          {"dev#{k}", {Sim, sim: sim}}
+        end)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: crowd(n, d),
+          io: io,
+          clock: {Manual, clock},
+          poll: 1_000_000
+        )
+
+      Manual.advance(clock, 5)
+      {:reductions, before} = Process.info(runner, :reductions)
+      Manual.advance(clock, 20)
+      {:reductions, later} = Process.info(runner, :reductions)
+      Runner.stop(runner)
+      later - before
+    end
+
+    test "a round's work is linear in the instances and the devices" do
+      base = round_cost(20, 2)
+      both = round_cost(80, 8) / base
+      instances = round_cost(80, 2) / base
+      devices = round_cost(20, 8) / base
+      assert both < @both_bound, "4x both took #{Float.round(both, 2)}x"
+      assert instances < @instances_bound, "4x the instances took #{Float.round(instances, 2)}x"
+      assert devices < @devices_bound, "4x the devices took #{Float.round(devices, 2)}x"
+    end
   end
 end
