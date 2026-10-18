@@ -103,7 +103,9 @@ defmodule Logex.Configuration.Edit do
     configurations have there change their order among themselves: `{:order, task,
     names}`, `task` `:none` for the task-less instances, or the continuous task's name,
     under which they and the instances `with` it are one order (decision 129), and `:tasks`
-    for the tasks themselves, `names` every name there in its new order;
+    for the timed tasks, the continuous task's place among them no order, since it is
+    never due and takes part in no tie (decision 129), `names` every name there in its
+    new order;
   - the wiring is derived again from the configuration started, so a var_input's new
     connection is read at its instance's next scan.
 
@@ -921,14 +923,18 @@ defmodule Logex.Configuration.Edit do
   # the names both configurations have there change their order among themselves, with
   # every name there in its new order.
   defp orders(from, to) do
-    tasks = Enum.map(to.tasks, & &1.name)
     {untimed_was, untimed_now} = {untimed(from), untimed(to)}
     was = Enum.group_by(from.instances, &ordered_on(&1.task, untimed_was), & &1.name)
     now = Enum.group_by(to.instances, &ordered_on(&1.task, untimed_now), & &1.name)
 
-    ordered(:tasks, Enum.map(from.tasks, & &1.name), tasks) ++
+    ordered(:tasks, timed(from.tasks), timed(to.tasks)) ++
       Enum.flat_map(now, fn {task, names} -> ordered(task, Map.get(was, task, []), names) end)
   end
+
+  # Decision 129: the continuous task is never due and takes part in no tie, so its
+  # place among the task lines is no order; the tasks' order is the timed tasks'.
+  defp timed(tasks),
+    do: for(%Configuration.Task{continuous: false, name: name} <- tasks, do: name)
 
   # Decision 129: the untimed instances, with no task or `with` the continuous task, are
   # one order, under its name, or `:none` where none is declared.

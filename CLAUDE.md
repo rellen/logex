@@ -270,7 +270,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   removed as any task, a task made continuous or timed as its kind, once, and an instance
   moved between a timed task and the continuous one, while an instance with no task and
   one `with` the continuous task are one place and one order, under its name, so `with
-  main` added or taken away moves nothing.
+  main` added or taken away moves nothing; and since M4-2's review the tasks' order is
+  the timed tasks', the continuous task never due nor in a tie, so its line moved among
+  the task lines reports nothing.
   A step checks the edit, the runtime, the generation, the configuration the resource
   runs, then the stage. Its moduledoc gives every rule and report kind
 - `lib/logex/compiler.ex` — the stages: `tokenize/1` and `parse/1` delegate to the two

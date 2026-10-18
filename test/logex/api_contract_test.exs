@@ -4655,9 +4655,11 @@ defmodule Logex.ApiContractTest do
     end
 
     {was, now} = {by_task.(from), by_task.(to)}
+    # Decision 129's note: the continuous task's place among the tasks is no order.
+    timed = fn config -> for t <- config.tasks, !t.continuous, do: t.name end
 
     lists =
-      [{:tasks, Enum.map(from.tasks, & &1.name), Enum.map(to.tasks, & &1.name)}] ++
+      [{:tasks, timed.(from), timed.(to)}] ++
         for {task, names} <- now, do: {task, Map.get(was, task, []), names}
 
     for {name, old, new} <- lists,

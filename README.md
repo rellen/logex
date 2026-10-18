@@ -1618,7 +1618,8 @@ wrong_packing.logex: line 4, column 36: `priority` goes before `watchdog`, as in
   watchdog: 200}`, checked in the same words.
 - An online edit (`Logex.Configuration.Edit`, "A running plant", below) may change a
   watchdog while the plant runs, reported `{:watchdog, "fast", {50, 30}}`, as an interval
-  and a priority may (decision 129); `with main` added or taken away moves nothing; the
+  and a priority may (decision 129); `with main` added or taken away moves nothing, and
+  so does the continuous line moved among the task lines, which is no order; the
   continuous line added or removed, a task made continuous or timed, and an instance
   moved between a timed task and the continuous one are refused until a restart.
 

@@ -1799,7 +1799,7 @@ duty. The new kinds, and OE-1's given at the configuration's level:
 | `:watchdog` | task | `{old, new}` ms, 500 for none (M4-2, decision 129) | a switch | fact |
 | `:joined` | `instance.tag` | `{own, global}`: the instance's own value, nil where it had none, and the global's | a switch | write: the own value dropped, the instance reading the global from its next scan (decision 55) |
 | `:left` | `instance.tag` | the global's value | a switch | write: a var_external become the instance's own tag, at the global's value (decision 45) |
-| `:order` | task, `:none` for the task-less instances, or `:tasks` | the names in their new order | a switch | fact (decision 62) |
+| `:order` | task, `:none` for the task-less instances, or `:tasks` | the names in their new order, `:tasks` the timed tasks alone (decision 129) | a switch | fact (decision 62) |
 
 The writes a report lists, applied to the resource before its step, give the resource
 after it, exactly, with each instance's `switched` and block list as OE-1 states them and
@@ -5407,6 +5407,15 @@ question put, as decisions 111 and 112 were.
      Neither IEC, which has no watchdog and declares no task for the untimed programs, nor
      the conventional pages read say what an online edit of a continuous task's type or of
      its programs' order does. *(Taken 2026-10-18, with M4-2.)*
+
+     *Note, after M4-2's review the same day:* the continuous task's place among the task
+     lines is no order of the tasks. Decision 62 reports the tasks' order because it
+     breaks ties of priority and due time (decision 11), and the continuous task is never
+     due and takes part in no tie, so `{:order, :tasks, names}` compares the timed tasks
+     alone and names them alone: a candidate that only moves the continuous line reports
+     nothing, and its test and untest leave the plant as it was. As landed, the line moved
+     was reported as a reorder of every task, which `scheduler_test.exs` already said was
+     no order of its own.
 
 ---
 

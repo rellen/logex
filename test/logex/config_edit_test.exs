@@ -1580,6 +1580,25 @@ defmodule Logex.ConfigEditTest do
 
     defp untimed_plant, do: plant_text() <> @untimed
 
+    # Ten cycles' outputs and events, a motor started, stopped and tripped among them.
+    defp traced(runtime) do
+      inputs = [
+        %{"pb_start_1" => 1},
+        %{"pb_start_1" => 0},
+        %{"pb_stop_2" => 1},
+        %{"estop" => 1},
+        %{}
+      ]
+
+      {trace, _runtime} =
+        Enum.map_reduce(inputs ++ inputs, runtime, fn image, runtime ->
+          {runtime, outputs, events} = Runtime.cycle(runtime, 10, image)
+          {{outputs, events}, runtime}
+        end)
+
+      trace
+    end
+
     defp ran_in(runtime) do
       {_runtime, _, events} = Runtime.cycle(runtime, 10, %{})
       for {:ran, task, instance, _} <- events, do: {task, instance}
@@ -1705,6 +1724,45 @@ defmodule Logex.ConfigEditTest do
       runtime = running(20, plant(text))
       {_edit, forecast} = accepted(runtime, plant(untimed_plant()))
       assert forecast == []
+    end
+
+    # Decision 129's note: the continuous task is never due and takes part in no tie, so
+    # its place among the task lines is no order of the tasks.
+    test "the continuous line moved among the task lines reports nothing, and test then " <>
+           "untest leaves the plant as it was" do
+      runtime = running(20, plant(untimed_plant()))
+      before = ran_in(runtime)
+
+      moved =
+        String.replace(
+          plant_text(),
+          "task fast interval 10 priority 1",
+          "task main continuous watchdog 200\ntask fast interval 10 priority 1"
+        ) <> String.replace(@untimed, "task main continuous watchdog 200\n", "")
+
+      assert moved != untimed_plant()
+      {edit, forecast} = accepted(runtime, plant(moved))
+      assert forecast == []
+      {edit, tested, report} = Edit.test(edit, runtime)
+      assert report == []
+      assert ran_in(tested) == before
+      {_edit, untested, report} = Edit.untest(edit, tested)
+      assert report == []
+      assert untested.generation == runtime.generation + 2
+      assert traced(tested) == traced(runtime)
+      assert traced(untested) == traced(runtime)
+
+      # Moved among the timed tasks too, only theirs is the tasks' order.
+      reordered =
+        String.replace(
+          moved,
+          "task fast interval 10 priority 1\ntask slow interval 50 priority 2",
+          "task slow interval 50 priority 2\ntask fast interval 10 priority 1"
+        )
+
+      assert reordered != moved
+      {_edit, forecast} = accepted(runtime, plant(reordered))
+      assert forecast == [{:order, :tasks, ["slow", "fast", "trip"]}]
     end
 
     test "an instance moved between a timed task and the continuous one is refused, the " <>

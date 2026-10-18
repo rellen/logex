@@ -3157,7 +3157,11 @@ and M4-7 the documents.
   together, bound at 4.83. A mutant of `check/1` that skipped the watchdog of a task
   whose `continuous` is the host's mistake left the suite green, since the one task
   pinned had a watchdog that is a host's mistake too; a task with `continuous: "yes"` and
-  a watchdog of 0 is now told both. The suite is at 1332 tests (9 doctests).
+  a watchdog of 0 is now told both. The continuous line moved among the task lines
+  was reported as a reorder of every task, `{:order, :tasks, names}`, though it is never
+  due and takes part in no tie, decision 62's reason for reporting the tasks' order; the
+  tasks' order is the timed tasks' now, a note on decision 129, and such a move reports
+  nothing. The suite is at 1333 tests (9 doctests).
 - **M4-3 · The runner: start, rounds, devices, stop, read, subscribe.** *Done when* §4.4's
   plant with M4-2's box counter, loaded from files on disk through
   `Logex.Configuration.compile_file/1`, runs through `Logex.Runner` on the manual clock and
