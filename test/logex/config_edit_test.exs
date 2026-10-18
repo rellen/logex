@@ -1568,6 +1568,238 @@ defmodule Logex.ConfigEditTest do
     end
   end
 
+  # Decision 129 (M4-2): a task's watchdog changes while the plant runs and is reported;
+  # the continuous task's line is a task's, added or removed only with a restart, as is a
+  # task made continuous or timed; and an instance with no `with` and one `with` the
+  # continuous task run in one place, so `with main` added or taken away moves nothing.
+  # The plant is §4.4's with two more instances of `motor` and its continuous line.
+  describe "a watchdog and the continuous task across an edit (decision 129)" do
+    @untimed "\ntask main continuous watchdog 200\n\n" <>
+               "program m3 motor\n  m3.start 0\n  m3.stop 0\n  m3.overtemp 0\n  m3.reset 0\n\n" <>
+               "program m4 motor\n  m4.start 0\n  m4.stop 0\n  m4.overtemp 0\n  m4.reset 0\n"
+
+    defp untimed_plant, do: plant_text() <> @untimed
+
+    defp ran_in(runtime) do
+      {_runtime, _, events} = Runtime.cycle(runtime, 10, %{})
+      for {:ran, task, instance, _} <- events, do: {task, instance}
+    end
+
+    test "a watchdog changed is reported, in ms, 500 for none, and changes no cycle" do
+      runtime = running(40)
+
+      text =
+        plant_text()
+        |> String.replace(
+          "task fast interval 10 priority 1",
+          "task fast interval 10 priority 1 watchdog 30"
+        )
+        |> String.replace(
+          "task slow interval 50 priority 2",
+          "task slow interval 50 priority 2 watchdog 500"
+        )
+        |> String.replace(
+          "task trip single estop priority 0",
+          "task trip single estop priority 0 watchdog 5"
+        )
+
+      {edit, forecast} = accepted(runtime, plant(text))
+      watched = for {:watchdog, _, _} = entry <- forecast, do: entry
+      assert watched == [{:watchdog, "fast", {500, 30}}, {:watchdog, "trip", {500, 5}}]
+
+      {edit, tested, report} = Edit.test(edit, runtime)
+      assert for({:watchdog, _, _} = entry <- report, do: entry) == watched
+      assert ran_in(tested) == ran_in(runtime)
+
+      {_edit, _runtime, report} = Edit.untest(edit, tested)
+
+      assert for({:watchdog, _, _} = entry <- report, do: entry) ==
+               [{:watchdog, "fast", {30, 500}}, {:watchdog, "trip", {5, 500}}]
+
+      # A continuous task's own, from its line's 200.
+      runtime = running(20, plant(untimed_plant()))
+      candidate = plant(String.replace(untimed_plant(), "continuous watchdog 200", "continuous"))
+      {_edit, forecast} = accepted(runtime, candidate)
+      assert {:watchdog, "main", {200, 500}} in forecast
+    end
+
+    test "the continuous line added or removed is refused as any task's, from source" do
+      runtime =
+        running(
+          20,
+          plant(
+            plant_text() <> String.replace(@untimed, "task main continuous watchdog 200\n", "")
+          )
+        )
+
+      text = untimed_plant()
+      assert {:error, diagnostics} = Edit.accept(runtime, plant(text))
+
+      assert Enum.map(diagnostics, &{&1.line, &1.message}) == [
+               {line(text, "task main"),
+                "task `main` is added: a task is added only with a restart"}
+             ]
+
+      runtime = running(20, plant(untimed_plant()))
+      text = plant_text() <> String.replace(@untimed, "task main continuous watchdog 200\n", "")
+      assert {:error, diagnostics} = Edit.accept(runtime, plant(text))
+
+      assert Enum.map(diagnostics, &{&1.line, &1.message}) == [
+               {nil,
+                "task `main` (line #{line(untimed_plant(), "task main")} of the running " <>
+                  "configuration) is removed: a task is removed only with a restart"}
+             ]
+    end
+
+    test "a task made continuous, or a continuous one made timed, is refused as its kind, " <>
+           "once, from source" do
+      for {line_now, kind} <- [
+            {"task main interval 20 priority 3", "periodic"},
+            {"task main single estop priority 3", "an event task"}
+          ] do
+        # `m3` names the task in both and `m4` none: neither is told it moved, the task's
+        # own refusal being the one mistake.
+        with_main = String.replace(untimed_plant(), "program m3 motor
+", "program m3 motor with main
+")
+        text = String.replace(with_main, "task main continuous watchdog 200", line_now)
+        assert {:error, diagnostics} = Edit.accept(running(20, plant(with_main)), plant(text))
+
+        assert Enum.map(diagnostics, &{&1.line, &1.message}) == [
+                 {line(text, "task main"),
+                  "task `main` is continuous in the running configuration and #{kind} in the " <>
+                    "candidate: a task's kind changes only with a restart"}
+               ]
+      end
+
+      runtime = running(20)
+
+      text =
+        String.replace(plant_text(), "task trip single estop priority 0", "task trip continuous")
+
+      text = String.replace(text, "program snap snapshot with trip", "program snap snapshot")
+      assert {:error, diagnostics} = Edit.accept(runtime, plant(text))
+
+      assert Enum.map(diagnostics, &{&1.line, &1.message}) == [
+               {line(text, "task trip"),
+                "task `trip` is an event task in the running configuration and continuous in " <>
+                  "the candidate: a task's kind changes only with a restart"}
+             ]
+    end
+
+    test "`with main` added or taken away moves nothing and reports no order" do
+      runtime = running(20, plant(untimed_plant()))
+      before = ran_in(runtime)
+      assert {"main", "m3"} in before and {"main", "m4"} in before
+
+      text = String.replace(untimed_plant(), "program m3 motor\n", "program m3 motor with main\n")
+      {edit, forecast} = accepted(runtime, plant(text))
+      assert forecast == []
+      {edit, tested, report} = Edit.test(edit, runtime)
+      assert report == []
+      assert ran_in(tested) == before
+      {_config, assembled, []} = Edit.assemble(edit, tested)
+      assert ran_in(assembled) == before
+
+      # And taken away again.
+      runtime = running(20, plant(text))
+      {_edit, forecast} = accepted(runtime, plant(untimed_plant()))
+      assert forecast == []
+    end
+
+    test "an instance moved between a timed task and the continuous one is refused, the " <>
+           "continuous task named" do
+      runtime = running(20, plant(untimed_plant()))
+
+      text =
+        untimed_plant()
+        |> String.replace("program m1 motor with fast", "program m1 motor with main")
+        |> String.replace("program m2 motor with slow", "program m2 motor")
+        |> String.replace("program m3 motor\n", "program m3 motor with fast\n")
+
+      assert {:error, diagnostics} = Edit.accept(runtime, plant(text))
+
+      assert Enum.map(diagnostics, &{&1.line, &1.message}) == [
+               {line(text, "program m1"),
+                "`m1` runs with `fast` in the running configuration and with `main` in the " <>
+                  "candidate: an instance moves to another task only with a restart"},
+               {line(text, "program m2"),
+                "`m2` runs with `slow` in the running configuration and with `main` in the " <>
+                  "candidate: an instance moves to another task only with a restart"},
+               {line(text, "program m3"),
+                "`m3` runs with `main` in the running configuration and with `fast` in the " <>
+                  "candidate: an instance moves to another task only with a restart"}
+             ]
+    end
+
+    test "the untimed instances, with no task or `with main`, are one order, under its name" do
+      runtime = running(20, plant(untimed_plant()))
+
+      swapped =
+        (plant_text() <>
+           String.replace(@untimed, ~r/(program m3.*?\n)\n(program m4.*)/s, "\\2\n\\1"))
+        |> String.replace("program m4 motor\n", "program m4 motor with main\n")
+
+      {edit, forecast} = accepted(runtime, plant(swapped))
+      assert {:order, "main", ["m4", "m3"]} in forecast
+      {_edit, tested, _report} = Edit.test(edit, runtime)
+      assert for({"main", instance} <- ran_in(tested), do: instance) == ["m4", "m3"]
+    end
+
+    test "each, from Elixir data" do
+      {:ok, relay} =
+        Logex.compile("var_input in bool\nvar_output out bool\nxic in ote out", name: "relay")
+
+      config = fn tasks, instances ->
+        Configuration.new!(
+          name: "plant",
+          programs: [relay],
+          tasks: tasks,
+          globals: [%Configuration.Global{name: "x", type: :bool, at: "p.i.0"}],
+          instances:
+            for(
+              {name, task} <- instances,
+              do: %Configuration.Instance{name: name, type: "relay", task: task}
+            ),
+          connections:
+            for(
+              {name, _} <- instances,
+              do: %Configuration.Connection{instance: name, member: "in", to: "x"}
+            )
+        )
+      end
+
+      main = %Configuration.Task{name: "main", continuous: true}
+      fast = %Configuration.Task{name: "fast", interval: 10, priority: 1}
+      runtime = Runtime.start(config.([main, fast], [{"a", nil}, {"b", "main"}, {"c", "fast"}]))
+
+      # A watchdog, and `with main` added and taken away.
+      candidate =
+        config.([%{main | watchdog: 40}, fast], [{"a", "main"}, {"b", nil}, {"c", "fast"}])
+
+      assert {:ok, _edit, [{:watchdog, "main", {500, 40}}]} = Edit.accept(runtime, candidate)
+
+      # The continuous task made periodic: its kind, once, and `c` moved to no task, where
+      # the candidate declares no continuous task.
+      candidate =
+        config.(
+          [%Configuration.Task{name: "main", interval: 10, priority: 2}, fast],
+          [{"a", nil}, {"b", "main"}, {"c", nil}]
+        )
+
+      assert {:error, diagnostics} = Edit.accept(runtime, candidate)
+
+      assert Enum.map(diagnostics, &{&1.line, &1.message}) == [
+               {nil,
+                "task `main` is continuous in the running configuration and periodic in the " <>
+                  "candidate: a task's kind changes only with a restart"},
+               {nil,
+                "`c` runs with `fast` in the running configuration and with no task in the " <>
+                  "candidate: an instance moves to another task only with a restart"}
+             ]
+    end
+  end
+
   # Fix F16 for the plant: accept and every step stay linear in the instances of one type,
   # which share one plan, in the program types, each its own plan, and in a program's
   # size. Each measure is the least of three counts of reductions for accept, test,

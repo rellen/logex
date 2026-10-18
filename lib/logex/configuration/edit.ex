@@ -31,9 +31,13 @@ defmodule Logex.Configuration.Edit do
   away (decision 27); a test taken later reads the resource as it is then.
 
   It refuses, as `{:error, diagnostics}` at stage `:edit`, what may change only with a
-  restart: a task added or removed; a task's `single` added, removed or changed; an event
-  task's interval added or removed; an instance both configurations run as one type moved
-  to another task, or to or from none; a global's type; located I/O, a located global
+  restart: a task added or removed, the continuous task's line among them; a task made
+  continuous, or a continuous one made timed, keeping its name, which is that task's one
+  refusal, so no instance that names it is told it moved (decision 129); a task's `single`
+  added, removed or changed; an event task's interval added or removed; an instance both
+  configurations run as one type moved to another task, or to or from none, an instance
+  with no task and one `with` the continuous task being in one place, so that `with main`
+  added or taken away moves nothing, and the continuous task named where it is declared; a global's type; located I/O, a located global
   added, removed or moved, or a location added to or taken from a global, a device being
   only its points' prefix; and, in each program type an instance runs as that type in
   both, every type change `Logex.Edit` refuses, a member's by its path. The configuration's
@@ -90,11 +94,16 @@ defmodule Logex.Configuration.Edit do
     where that moves it; its trigger's last sample is kept, so no switch fires an event;
   - a task whose priority changed is reported, `{:priority, task, {old, new}}`: the next
     cycle's sort reads it, so it needs no state;
+  - a task whose watchdog changed is reported, `{:watchdog, task, {old, new}}`, in ms, 500
+    for none, so `watchdog 500` written where a line had none reports nothing: the runner
+    reads it at each step it times, and the resource holds no state for it (M4-2,
+    decision 129);
   - the order of the instances on each task, and of the tasks, is configuration, not
     state, so a reorder is allowed (decision 62) and reported where the names both
     configurations have there change their order among themselves: `{:order, task,
-    names}`, `task` `:none` for the task-less instances and `:tasks` for the tasks
-    themselves, `names` every name there in its new order;
+    names}`, `task` `:none` for the task-less instances, or the continuous task's name,
+    under which they and the instances `with` it are one order (decision 129), and `:tasks`
+    for the tasks themselves, `names` every name there in its new order;
   - the wiring is derived again from the configuration started, so a var_input's new
     connection is read at its instance's next scan.
 
@@ -145,6 +154,7 @@ defmodule Logex.Configuration.Edit do
   | `:interval` | task | `{old, new}`, in ms | a switch |
   | `:next_due` | task | `{from, to}`, in ms: decision 40's move | a switch |
   | `:priority` | task | `{old, new}` | a switch |
+  | `:watchdog` | task | `{old, new}`, in ms, 500 for none: the runner's to read (decision 129) | a switch |
   | `:joined` | `instance.tag` | `{own, global}`: the own value dropped, nil for none, and the global it reads | a switch |
   | `:left` | `instance.tag` | the global's value, now the instance's own | a switch |
   | `:order` | task, `:none` or `:tasks` | the names there in their new order | a switch |
@@ -363,11 +373,16 @@ defmodule Logex.Configuration.Edit do
     instances = by_name(original.instances)
     kept_tasks = by_name(candidate.tasks)
     kept_globals = by_name(candidate.globals)
+    untimed = {untimed(original), untimed(candidate), rekinded(tasks, candidate.tasks)}
 
     lined =
       for(t <- candidate.tasks, m <- task(Map.get(tasks, t.name), t), do: {t.line, m}) ++
         for(g <- candidate.globals, m <- global(Map.get(globals, g.name), g), do: {g.line, m}) ++
-        for(i <- candidate.instances, m <- moved(Map.get(instances, i.name), i), do: {i.line, m})
+        for(
+          i <- candidate.instances,
+          m <- moved(Map.get(instances, i.name), i, untimed),
+          do: {i.line, m}
+        )
 
     gone =
       for(t <- original.tasks, not is_map_key(kept_tasks, t.name), do: removed_task(t)) ++
@@ -388,8 +403,23 @@ defmodule Logex.Configuration.Edit do
   defp task(nil, %Configuration.Task{name: name}),
     do: ["task `#{name}` is added: a task is added only with a restart"]
 
-  defp task(%Configuration.Task{} = was, %Configuration.Task{} = task),
-    do: single(was.single, task.single, task.name) ++ interval(was, task)
+  # Decision 129: a task made continuous, or a continuous one made timed, is refused as one
+  # change, its kind's, and its single and interval are then not compared.
+  defp task(
+         %Configuration.Task{continuous: same} = was,
+         %Configuration.Task{continuous: same} = task
+       ),
+       do: single(was.single, task.single, task.name) ++ interval(was, task)
+
+  defp task(was, task),
+    do: [
+      "task `#{task.name}` is #{kind(was)} in the running configuration and #{kind(task)} " <>
+        "in the candidate: a task's kind changes only with a restart"
+    ]
+
+  defp kind(%Configuration.Task{continuous: true}), do: "continuous"
+  defp kind(%Configuration.Task{single: nil}), do: "periodic"
+  defp kind(%Configuration.Task{}), do: "an event task"
 
   defp single(same, same, _name), do: []
 
@@ -462,26 +492,63 @@ defmodule Logex.Configuration.Edit do
     do: "`#{name}` at `#{at}`#{running_line(line)} is removed: #{located()}"
 
   # An instance both configurations run as one program type, on another task. One retyped
-  # is a new instance, which may run on any task (decision 61).
-  defp moved(%Configuration.Instance{type: type, task: task}, %Configuration.Instance{
-         type: type,
-         task: task
-       }),
-       do: []
-
+  # is a new instance, which may run on any task (decision 61). Decision 129: an instance
+  # with no task and one `with` the continuous task run in one place, so each is compared
+  # as it runs, `with main` added or taken away no move, and one moved to or from the
+  # continuous task is told it by the continuous task's name.
   defp moved(
          %Configuration.Instance{type: type, task: was},
-         %Configuration.Instance{type: type} = i
+         %Configuration.Instance{type: type} = i,
+         {was_untimed, untimed, rekinded}
        ),
-       do: [
-         "`#{i.name}` runs #{with_task(was)} in the running configuration and " <>
-           "#{with_task(i.task)} in the candidate: an instance moves to another task only " <>
-           "with a restart"
-       ]
+       do:
+         runs_on(
+           MapSet.member?(rekinded, was) or MapSet.member?(rekinded, i.task),
+           {runs(was, was_untimed), runs(i.task, untimed)},
+           i
+         )
 
-  defp moved(_added_or_retyped, _instance), do: []
+  defp moved(_added_or_retyped, _instance, _untimed), do: []
 
-  defp with_task(nil), do: "with no task"
+  # The tasks made continuous or timed, whose own refusal is the one mistake: an instance
+  # that names one is not told it moved as well.
+  defp rekinded(was, tasks),
+    do:
+      MapSet.new(
+        for %{name: name, continuous: continuous} <- tasks,
+            match?(%{continuous: other} when other != continuous, Map.get(was, name)),
+            do: name
+      )
+
+  defp runs_on(true, _places, _instance), do: []
+  defp runs_on(false, {was, task}, instance), do: placed(was, task, instance)
+
+  defp placed(same, same, _instance), do: []
+
+  # With the untimed instances in both, whatever the continuous task is called: a change of
+  # the continuous task's line is the task's own refusal, one mistake one message.
+  defp placed({:untimed, _was}, {:untimed, _now}, _instance), do: []
+
+  defp placed(was, task, i),
+    do: [
+      "`#{i.name}` runs #{with_task(was)} in the running configuration and " <>
+        "#{with_task(task)} in the candidate: an instance moves to another task only " <>
+        "with a restart"
+    ]
+
+  # Where an instance runs: on its timed task, or with the untimed instances, under the
+  # continuous task's name, or `:none` where none is declared.
+  defp runs(nil, untimed), do: {:untimed, untimed}
+  defp runs(untimed, untimed), do: {:untimed, untimed}
+  defp runs(task, _untimed), do: task
+
+  defp untimed(%Configuration{tasks: tasks}), do: Enum.find_value(tasks, :none, &continuous/1)
+
+  defp continuous(%Configuration.Task{continuous: true, name: name}), do: name
+  defp continuous(_timed), do: nil
+
+  defp with_task({:untimed, :none}), do: "with no task"
+  defp with_task({:untimed, task}), do: "with `#{task}`"
   defp with_task(task), do: "with `#{task}`"
 
   # Fix F5: each program type an instance runs as that type in both, once, in the order of
@@ -827,7 +894,7 @@ defmodule Logex.Configuration.Edit do
     {states, reports} =
       Enum.reduce(to.tasks, {states, []}, fn task, {states, reports} ->
         old = Map.fetch!(was, task.name)
-        retimed(old, task, now, {states, priority(old, task) ++ reports})
+        retimed(old, task, now, {states, priority(old, task) ++ watchdog(old, task) ++ reports})
       end)
 
     {states, reports ++ orders(from, to)}
@@ -840,6 +907,14 @@ defmodule Logex.Configuration.Edit do
   defp priority(%{priority: old}, %{name: name, priority: new}),
     do: [{:priority, name, {old, new}}]
 
+  # Decision 129: a watchdog is read by the runner at each step of a round, with no state
+  # in the resource, so a changed one needs no state, and is reported, in ms, 500 for none.
+  defp watchdog(old, task),
+    do: watchdog_moved(Configuration.watchdog(old), Configuration.watchdog(task), task.name)
+
+  defp watchdog_moved(same, same, _name), do: []
+  defp watchdog_moved(old, new, name), do: [{:watchdog, name, {old, new}}]
+
   # Decision 62: the order of the instances on each task, `:none` for the task-less ones,
   # is their execution order, and the order of the tasks breaks ties of priority and due
   # time (decision 11). Neither is state, so a reorder is allowed; one is reported wherever
@@ -847,12 +922,19 @@ defmodule Logex.Configuration.Edit do
   # every name there in its new order.
   defp orders(from, to) do
     tasks = Enum.map(to.tasks, & &1.name)
-    was = Enum.group_by(from.instances, &(&1.task || :none), & &1.name)
-    now = Enum.group_by(to.instances, &(&1.task || :none), & &1.name)
+    was = Enum.group_by(from.instances, &ordered_on(&1.task, untimed(from)), & &1.name)
+    now = Enum.group_by(to.instances, &ordered_on(&1.task, untimed(to)), & &1.name)
 
     ordered(:tasks, Enum.map(from.tasks, & &1.name), tasks) ++
       Enum.flat_map(now, fn {task, names} -> ordered(task, Map.get(was, task, []), names) end)
   end
+
+  # Decision 129: the untimed instances, with no task or `with` the continuous task, are
+  # one order, under its name, or `:none` where none is declared.
+  defp ordered_on(task, untimed), do: untimed_key(runs(task, untimed))
+
+  defp untimed_key({:untimed, untimed}), do: untimed
+  defp untimed_key(task), do: task
 
   defp ordered(name, was, now) do
     both = Map.new(was, &{&1, true})

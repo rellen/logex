@@ -767,7 +767,9 @@ defmodule Logex.ApiContractTest do
     :left,
     :next_due,
     :order,
-    :priority
+    :priority,
+    # Decision 129 (M4-2): a task's watchdog, which a switch writes nothing for.
+    :watchdog
   ]
 
   # The kinds only a configuration's edit gives, which the walk of a lone instance's edit
@@ -782,7 +784,8 @@ defmodule Logex.ApiContractTest do
     :left,
     :next_due,
     :order,
-    :priority
+    :priority,
+    :watchdog
   ]
 
   @timer_kinds [:dn_drops, :dn_rises, :preset, :preset_kept, :resume_undone, :resumed]
@@ -3279,6 +3282,7 @@ defmodule Logex.ApiContractTest do
 
   # What accept refuses, by the words of each message, as the walk predicts it.
   @ce_diagnostics [
+    :kind,
     :task_added,
     :task_removed,
     :single,
@@ -3315,7 +3319,8 @@ defmodule Logex.ApiContractTest do
     :superseded_aside,
     :superseded_global,
     :superseded_named_again,
-    :stale_superseded
+    :stale_superseded,
+    :with_main
   ]
 
   # The longest walk of the suite, 16.8 s to 18.2 s over 32 runs of the suite on four
@@ -3326,7 +3331,10 @@ defmodule Logex.ApiContractTest do
   @tag timeout: 300_000
   test "a configuration's edit refuses every host mistake with a documented ArgumentError, " <>
          "and each step's writes rebuild the resource, which then runs as its rules say" do
-    :rand.seed(:exsss, {2026, 10, 13})
+    # M4-2's draws, a watchdog, `with main` and a task's kind, moved the seeded stream, and
+    # {2026, 10, 13} no longer reached a `tp`'s resume in 500 configurations; this seed
+    # reaches every kind and every refusal.
+    :rand.seed(:exsss, {2026, 10, 19})
 
     for _ <- 1..500 do
       spec = ce_spec()
@@ -3465,15 +3473,27 @@ defmodule Logex.ApiContractTest do
   ]
 
   defp ce_spec do
-    tasks = [
-      %{name: "fast", single: nil, interval: 10, priority: pick([1, 2])},
-      %{name: "slow", single: nil, interval: pick([20, 30]), priority: pick([1, 2, 3])},
-      %{name: "ev", single: "i0", interval: pick([nil, 20]), priority: pick([0, 2])}
-    ]
+    # M4-2: each task with a watchdog or none, and half the time the continuous task,
+    # `main`, which an instance with no task runs, and one `with main` too.
+    main =
+      if :rand.uniform(2) == 1,
+        do: [%{name: "main", continuous: true, single: nil, interval: nil, priority: nil}],
+        else: []
+
+    tasks =
+      for task <-
+            [
+              %{name: "fast", single: nil, interval: 10, priority: pick([1, 2])},
+              %{name: "slow", single: nil, interval: pick([20, 30]), priority: pick([1, 2, 3])},
+              %{name: "ev", single: "i0", interval: pick([nil, 20]), priority: pick([0, 2])}
+            ] ++ main,
+          do: Map.merge(%{continuous: false, watchdog: pick([nil, 50, 500])}, task)
+
+    on = ["fast", "slow", "slow", "ev", nil] ++ Enum.map(main, & &1.name)
 
     instances =
       for name <- Enum.take(Enum.shuffle(~w(m1 m2 m3 m4)), 1 + :rand.uniform(3)),
-          do: %{name: name, type: pick(~w(a b)), task: pick(["fast", "slow", "slow", "ev", nil])}
+          do: %{name: name, type: pick(~w(a b)), task: pick(on)}
 
     spec = %{
       tasks: tasks,
@@ -3553,9 +3573,11 @@ defmodule Logex.ApiContractTest do
       for t <- spec.tasks,
           do:
             "task #{t.name}" <>
+              if(t.continuous, do: " continuous", else: "") <>
               if(t.single, do: " single #{t.single}", else: "") <>
               if(t.interval, do: " interval #{t.interval}", else: "") <>
-              " priority #{t.priority}"
+              if(t.priority, do: " priority #{t.priority}", else: "") <>
+              if(t.watchdog, do: " watchdog #{t.watchdog}", else: "")
 
     globals =
       for g <- spec.globals,
@@ -3607,6 +3629,8 @@ defmodule Logex.ApiContractTest do
     :priority,
     :reorder,
     :reorder_tasks,
+    :watchdog,
+    :with_main,
     :global_add,
     :global_remove,
     :initial,
@@ -3614,6 +3638,7 @@ defmodule Logex.ApiContractTest do
   ]
 
   @ce_refused [
+    :kind,
     :task_add,
     :task_remove,
     :single,
@@ -3709,9 +3734,37 @@ defmodule Logex.ApiContractTest do
     %{spec | tasks: tasks}
   end
 
+  # The continuous task takes no priority (decision 111), so its own is left out.
   defp ce_change(:priority, spec) do
     i = :rand.uniform(length(spec.tasks)) - 1
-    %{spec | tasks: List.update_at(spec.tasks, i, &%{&1 | priority: pick([0, 1, 2, 3])})}
+
+    tasks =
+      List.update_at(spec.tasks, i, fn
+        %{continuous: true} = task -> task
+        task -> %{task | priority: pick([0, 1, 2, 3])}
+      end)
+
+    %{spec | tasks: tasks}
+  end
+
+  # Decision 129: a watchdog changes while running, and `with main` added or taken away
+  # moves nothing.
+  defp ce_change(:watchdog, spec) do
+    i = :rand.uniform(length(spec.tasks)) - 1
+    %{spec | tasks: List.update_at(spec.tasks, i, &%{&1 | watchdog: pick([nil, 30, 50, 500])})}
+  end
+
+  defp ce_change(:with_main, spec) do
+    main? = Enum.any?(spec.tasks, & &1.continuous)
+
+    instances =
+      Enum.map(spec.instances, fn
+        %{task: nil} = i when main? -> %{i | task: "main"}
+        %{task: "main"} = i -> %{i | task: nil}
+        i -> i
+      end)
+
+    %{spec | instances: instances}
   end
 
   defp ce_change(:reorder, spec), do: %{spec | instances: Enum.shuffle(spec.instances)}
@@ -3742,9 +3795,54 @@ defmodule Logex.ApiContractTest do
 
   defp ce_change(:rewire, spec), do: spec
 
-  # Refused at accept.
+  # Refused at accept. Decision 129: a task made continuous or timed, its name kept: `main`
+  # made periodic where it is declared, `slow` made continuous where it is not.
+  defp ce_change(:kind, spec) do
+    case Enum.any?(spec.tasks, & &1.continuous) do
+      true ->
+        %{
+          spec
+          | tasks:
+              Enum.map(
+                spec.tasks,
+                &if(&1.continuous,
+                  do: %{&1 | continuous: false, interval: 25, priority: 4},
+                  else: &1
+                )
+              )
+        }
+
+      false ->
+        %{
+          spec
+          | tasks:
+              Enum.map(
+                spec.tasks,
+                &if(&1.name == "slow",
+                  do: %{&1 | continuous: true, interval: nil, priority: nil},
+                  else: &1
+                )
+              )
+        }
+    end
+  end
+
   defp ce_change(:task_add, spec),
-    do: %{spec | tasks: spec.tasks ++ [%{name: "extra", single: nil, interval: 5, priority: 3}]}
+    do: %{
+      spec
+      | tasks:
+          spec.tasks ++
+            [
+              %{
+                name: "extra",
+                single: nil,
+                interval: 5,
+                priority: 3,
+                continuous: false,
+                watchdog: nil
+              }
+            ]
+    }
 
   defp ce_change(:task_remove, spec) do
     instances = Enum.map(spec.instances, &if(&1.task == "slow", do: %{&1 | task: nil}, else: &1))
@@ -3828,10 +3926,19 @@ defmodule Logex.ApiContractTest do
     globals = Map.new(o.globals, &{&1.name, &1})
     instances = Map.new(o.instances, &{&1.name, &1})
 
+    # Decision 129, restated: an instance runs untimed where it has no task or names the
+    # continuous task, and one that names a task whose kind changed is told nothing more.
+    untimed = fn config -> Enum.find_value(config.tasks, :none, &(&1.continuous && &1.name)) end
+
+    rekinded =
+      for t <- c.tasks, w = tasks[t.name], w != nil, w.continuous != t.continuous, do: t.name
+
+    places = {untimed.(o), untimed.(c), rekinded}
+
     own =
       Enum.flat_map(c.tasks, &ce_task(Map.get(tasks, &1.name), &1)) ++
         Enum.flat_map(c.globals, &ce_global(Map.get(globals, &1.name), &1)) ++
-        Enum.flat_map(c.instances, &ce_moved(Map.get(instances, &1.name), &1))
+        Enum.flat_map(c.instances, &ce_moved(Map.get(instances, &1.name), &1, places))
 
     kept_tasks = MapSet.new(c.tasks, & &1.name)
     kept_globals = MapSet.new(c.globals, & &1.name)
@@ -3870,6 +3977,19 @@ defmodule Logex.ApiContractTest do
 
   defp ce_task(nil, t),
     do: [{:task_added, t.line, "task `#{t.name}` is added: a task is added only with a restart"}]
+
+  defp ce_task(%{continuous: was} = w, %{continuous: now} = t) when was != now do
+    kind = fn
+      %{continuous: true} -> "continuous"
+      %{single: nil} -> "periodic"
+      _ -> "an event task"
+    end
+
+    [
+      {:kind, t.line,
+       "task `#{t.name}` is #{kind.(w)} in the running configuration and #{kind.(t)} in the candidate: a task's kind changes only with a restart"}
+    ]
+  end
 
   defp ce_task(was, t) do
     single =
@@ -3939,15 +4059,35 @@ defmodule Logex.ApiContractTest do
     typed ++ located
   end
 
-  defp ce_moved(%{type: type, task: was}, %{type: type, task: task} = i) when was != task,
-    do: [
-      {:moved, i.line,
-       "`#{i.name}` runs #{ce_with(was)} in the running configuration and #{ce_with(task)} in the candidate: an instance moves to another task only with a restart"}
-    ]
+  defp ce_moved(%{type: type, task: was}, %{type: type, task: task} = i, {o, c, rekinded}) do
+    {from, to} = {ce_place(was, o), ce_place(task, c)}
 
-  defp ce_moved(_was, _instance), do: []
+    cond do
+      was in rekinded or task in rekinded ->
+        []
 
-  defp ce_with(nil), do: "with no task"
+      match?({{:untimed, _}, {:untimed, _}}, {from, to}) ->
+        []
+
+      from == to ->
+        []
+
+      true ->
+        [
+          {:moved, i.line,
+           "`#{i.name}` runs #{ce_with(from)} in the running configuration and #{ce_with(to)} in the candidate: an instance moves to another task only with a restart"}
+        ]
+    end
+  end
+
+  defp ce_moved(_was, _instance, _places), do: []
+
+  defp ce_place(nil, untimed), do: {:untimed, untimed}
+  defp ce_place(untimed, untimed), do: {:untimed, untimed}
+  defp ce_place(task, _untimed), do: task
+
+  defp ce_with({:untimed, :none}), do: "with no task"
+  defp ce_with({:untimed, task}), do: "with `#{task}`"
   defp ce_with(task), do: "with `#{task}`"
 
   # ---- the walk ----------------------------------------------------------------------------
@@ -4116,6 +4256,19 @@ defmodule Logex.ApiContractTest do
               do: i
 
         ce_reach(:retyped_elsewhere, retyped != [])
+
+        # Decision 129: `with main` added or taken away, an instance kept on its type.
+        ce_reach(
+          :with_main,
+          Enum.any?(candidate.instances, fn i ->
+            Enum.any?(
+              w.rt.config.instances,
+              &(&1.name == i.name and &1.type == i.type and &1.task != i.task and
+                  Enum.sort([&1.task, i.task]) == Enum.sort([nil, "main"]))
+            )
+          end)
+        )
+
         ce_reach(:superseded, w.e != nil)
         sup = if w.e, do: [w.e | w.sup], else: w.sup
         %{w | e: edit, c: {candidate, spec}, o: w.rt.config, round: nil, sup: sup}
@@ -4249,6 +4402,12 @@ defmodule Logex.ApiContractTest do
           o.priority != t.priority,
           do: {:priority, t.name, {o.priority, t.priority}}
         ) ++
+        for(
+          t <- to.tasks,
+          o = was[t.name],
+          (o.watchdog || 500) != (t.watchdog || 500),
+          do: {:watchdog, t.name, {o.watchdog || 500, t.watchdog || 500}}
+        ) ++
         for t <- to.tasks,
             o = was[t.name],
             o.interval != t.interval,
@@ -4325,6 +4484,7 @@ defmodule Logex.ApiContractTest do
           kind in [
             :interval,
             :priority,
+            :watchdog,
             :next_due,
             :instance_stopped,
             :instance_added,
@@ -4482,7 +4642,18 @@ defmodule Logex.ApiContractTest do
 
   # Decision 62, restated: the names both have on a task, or of the tasks, in another order.
   defp ce_orders(from, to) do
-    by_task = fn config -> Enum.group_by(config.instances, &(&1.task || :none), & &1.name) end
+    # Decision 129: the untimed instances, with no task or `with` the continuous task, are
+    # one order, under its name or :none.
+    by_task = fn config ->
+      untimed = Enum.find_value(config.tasks, :none, &(&1.continuous && &1.name))
+
+      Enum.group_by(
+        config.instances,
+        &if(&1.task in [nil, untimed], do: untimed, else: &1.task),
+        & &1.name
+      )
+    end
+
     {was, now} = {by_task.(from), by_task.(to)}
 
     lists =
@@ -4802,7 +4973,11 @@ defmodule Logex.ApiContractTest do
                ce_attempt(fn -> ConfigEdit.test(w.e, ce_opaque(:nope)) end)
 
       other =
-        Runtime.start(%{w.rt.config | tasks: Enum.map(w.rt.config.tasks, &%{&1 | priority: 9})})
+        Runtime.start(%{
+          w.rt.config
+          | tasks:
+              Enum.map(w.rt.config.tasks, &if(&1.continuous, do: &1, else: %{&1 | priority: 9}))
+        })
 
       other = %{other | generation: w.rt.generation}
       assert {:refused, :configuration, _} = ce_attempt(fn -> ConfigEdit.test(w.e, other) end)
@@ -4865,11 +5040,15 @@ defmodule Logex.ApiContractTest do
         )
       end)
 
+    # M4-2: the untimed instances, with no task or `with` the continuous task, last, under
+    # its name, or :none where none is declared.
+    untimed = Enum.find_value(config.tasks, :none, &(&1.continuous && &1.name))
+
     {model, events} =
       Enum.reduce(
-        for(i <- config.instances, i.task == nil, do: i),
+        for(i <- config.instances, i.task in [nil, untimed], do: i),
         {model, events},
-        &ce_model_scan(config, &1, :none, &2)
+        &ce_model_scan(config, &1, untimed, &2)
       )
 
     outputs =
