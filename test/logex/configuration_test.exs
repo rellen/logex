@@ -1070,6 +1070,16 @@ defmodule Logex.ConfigurationTest do
                "task `c`: a watchdog is 1 to 2147483647 ms, found :w",
                ~s|task `c`: continuous is true or false, found "yes"|
              ]
+
+      # A watchdog a line can say, out of its range, is still checked on a task whose
+      # `continuous` is the host's mistake.
+      tasks = [%{continuous("d") | continuous: "yes", watchdog: 0}]
+
+      assert refused(Keyword.put(base(seal), :tasks, tasks)) == [
+               ~s|task `d`: continuous is true or false, found "yes"|,
+               "the watchdog of `d` is 0: a watchdog is at least 1 ms, and a task that sets " <>
+                 "none has 500"
+             ]
     end
 
     # The one rule for a task's watchdog, as initial/1 is a global's (decisions 109, 110).

@@ -3154,7 +3154,10 @@ and M4-7 the documents.
   untest took time in the tasks times the instances: 4x of both took 10.09x the
   reductions in the review's probe, 3.98x before M4-2. Each is looked for once an edit
   now, and `config_edit_test.exs`'s growth tests gain the tasks and instances grown
-  together, bound at 4.83. The suite is at 1332 tests (9 doctests).
+  together, bound at 4.83. A mutant of `check/1` that skipped the watchdog of a task
+  whose `continuous` is the host's mistake left the suite green, since the one task
+  pinned had a watchdog that is a host's mistake too; a task with `continuous: "yes"` and
+  a watchdog of 0 is now told both. The suite is at 1332 tests (9 doctests).
 - **M4-3 · The runner: start, rounds, devices, stop, read, subscribe.** *Done when* §4.4's
   plant with M4-2's box counter, loaded from files on disk through
   `Logex.Configuration.compile_file/1`, runs through `Logex.Runner` on the manual clock and
