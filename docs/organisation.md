@@ -2700,9 +2700,9 @@ ms.
   by which the device must hear from the runner again. The runner refreshes every device
   before every step of a round, the deadline that step's task's watchdog plus one poll
   period from the step's start, and before it serves its own work, writes a round's
-  outputs or waits, the continuous task's watchdog plus one poll period, the continuous
-  task being the one whose share that time is (decision 122), refreshing again at least
-  once a poll period while it waits. A device that hears nothing by the deadline its last
+  outputs or waits, the runner's own idle watchdog, `idle:` (500 ms unless set), plus
+  one poll period (decision 128, which replaced the continuous task's watchdog here),
+  refreshing again at least once a poll period while it waits. A device that hears nothing by the deadline its last
   refresh carried writes 0 to every output once, latches and tells the runner, which
   trips when it next runs, `{:watchdog, {:device, device, time}}`. A runner that is well
   never misses one, each step ending within its watchdog or tripping and the poll period
@@ -2786,7 +2786,7 @@ resource the runner hands it, so that no step costs a round more than a switch.
 
 | Function | Notes |
 |---|---|
-| `start_link(opts)`, `child_spec(opts)` | `configuration:`, `io:`, and optionally `clock:` (`{module, clock}`, the monotonic one unless set), `poll:` (ms, 10), `overhead:` (percent, 20, 10 to 90), `forces:` (a path, decision 127) and `name:` (decision 121). Checks every option, `Logex.Runtime.start/1`'s refusals, the bindings and the forces file in the caller, before anything starts; opens every device, reads each once, and runs the first round at once. `{:ok, pid}`, or `{:error, {:io_init, device, reason}}` for a device that cannot be opened, which is the plant's state, not a host mistake |
+| `start_link(opts)`, `child_spec(opts)` | `configuration:`, `io:`, and optionally `clock:` (`{module, clock}`, the monotonic one unless set), `poll:` (ms, 10), `overhead:` (percent, 20, 10 to 90), `idle:` (ms, 500, the idle watchdog, decision 128), `forces:` (a path, decision 127) and `name:` (decision 121). Checks every option, `Logex.Runtime.start/1`'s refusals, the bindings and the forces file in the caller, before anything starts; opens every device, reads each once, and runs the first round at once. `{:ok, pid}`, or `{:error, {:io_init, device, reason}}` for a device that cannot be opened, which is the plant's state, not a host mistake |
 | `stop(runner, reason \\ :normal)` | zeroes every output once and closes every device before it returns |
 | `status(runner)` | `:running` or `:tripped`; `now`; the rounds run; the trip's reason; each task's overlaps; the forces, always, every one with its value, those read from the file at a start among them; the edit's stage; each task's longest run against its watchdog, the latest wake, and the longest wait between two refreshes, in ms |
 | `get(runner, path)`, `get!(runner, path)` | as `Logex.Runtime.get/2` and `get!/2`, of the last round computed |
@@ -2928,8 +2928,8 @@ VM do not, and the documents say so.
   overlap, its devices' heartbeats on the same clock. It must be tried on a real machine
   before README says what a sleep does.
 - *A long request*: one the runner serves whole and that takes longer than the
-  continuous task's watchdog and a poll period trips the plant, which is why accept runs
-  in the caller (decisions 119 and 125).
+  runner's idle watchdog and a poll period trips the plant, which is why accept runs
+  in the caller (decisions 119, 125 and 128).
 - *Plants larger than their watchdogs*: 1,000 motors cost 27 ms a cycle, so README gives
   the measured cost per instance for a programmer to size each watchdog.
 - *Determinism of real devices*: exact replay holds given the same inputs, and a real
@@ -3204,7 +3204,8 @@ own routine choices. Decisions 122–126 were taken on 2026-10-18, after M4-1's 
 (below), the record's own routine choices on what the review found the record left open
 or loose, 125 superseding 119 in its rule and its cost; and decision 127 is the
 maintainer's answer of the same day, forces kept in a file across a crash, given outside
-any question put, with the record's choices on how. All one hundred and twenty-seven are
+any question put, with the record's choices on how; and decision 128 the maintainer's
+answer of that day on the runner's own bound between steps. All one hundred and twenty-eight are
 kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
@@ -5236,7 +5237,9 @@ and the "case full" lamp with no timing of their own.
      whole that takes longer than the continuous task's watchdog and a poll period trips
      the plant, so accept's work stays in the caller's process (decision 119). Decision
      119's cost, the plant's longest watchdog setting every device's heartbeat whatever
-     step the runner is in, is gone. *(Taken 2026-10-18, after M4-1's review.)*
+     step the runner is in, is gone. *(Taken 2026-10-18, after M4-1's review. Its bound
+     between steps, the continuous task's watchdog, was replaced the same day by the
+     runner's own idle watchdog, decision 128.)*
 126. **What a round's watchdog trip names (Milestone 4),** following decisions 111 and 118.
      One round runs the conveyor's task, the fan's and the box counter; the fan's run
      takes 300 ms, well within its own 2 s, and the round outlasts the continuous task's
@@ -5318,7 +5321,34 @@ question put, as decisions 111 and 112 were.
        among them, so that a display can show "forces on" while any is.
 
      It is recorded only: forcing is built in its own item, M4-5 (`PLAN.md`). *(Answered
-     and taken 2026-10-18.)*
+     and taken 2026-10-18. The maintainer confirmed the same day that a runner started
+     without `forces:` refuses to force, and that a force the configuration cannot take
+     refuses the start, as recorded above.)*
+
+128. **The bound on the runner's own time between steps (Milestone 4),** following
+     decision 125, asked after M4-1's review. Between rounds the runner waits, serves a
+     screen's request or writes outputs, and no task's step is running, so no task's
+     watchdog is the deadline each device's refresh carries then. If the runner freezes
+     there while the fan's task waits for its next run, the conveyor's contactor stays on
+     until that deadline. A fixed short bound would trip a busy machine for no fault: the
+     spike measured wakes up to 692 ms late under load.
+     - The continuous task's watchdog plus one poll period, 510 ms by default, as decision
+       125 had it;
+     - the shortest watchdog of any task, the conveyor's 50 ms, tighter but tripping a
+       busy machine more often;
+     - or a setting of its own.
+
+     **Taken: a setting of its own,** as the maintainer answered on 2026-10-18. The runner
+     takes `idle:`, in milliseconds, 500 unless set, an option of the runner beside
+     `poll:` and `overhead:` (decision 121), since how long a machine may keep the runner
+     from its own work is the machine's, not the plant's: each device's deadline between
+     steps is `idle:` plus one poll period, and a request the runner serves whole that
+     takes longer trips the plant, `{:watchdog, {:idle, time}}`. The continuous task's
+     watchdog bounds its rounds alone (decision 111). Neither IEC nor the Logix pages
+     read cover this. *(Taken 2026-10-18; built with the runner, M4-3 and M4-4. The
+     maintainer confirmed the same day decision 122's one round a millisecond at most, on
+     the real clock as on the manual one, and M4-4's one hidden start option through which
+     a test reaches `{:internal, message}`.)*
 
 ---
 
@@ -5348,7 +5378,7 @@ question put, as decisions 111 and 112 were.
 - The general instructions reference, Sept 2025: the TASK object for GSV/SSV, TON
   (its TIMER structure and prescan), ONS, and a CPS example.
 - The ladder-diagram programming manual, July 2022, ch.1.
-- For Milestone 4's design (§4.11, decisions 108–127): the tasks, programs and routines
+- For Milestone 4's design (§4.11, decisions 108–128): the tasks, programs and routines
   manual, Sept 2025, p.8 (the continuous task, one at most, restarting at once), p.13 (its
   lowest priority, and the system overhead time slice), pp.31–33 (the time slice, its
   table and its default), p.34 (each task's watchdog) and pp.37–46 (event tasks, the change

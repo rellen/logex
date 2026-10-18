@@ -2866,7 +2866,7 @@ ms after the motor stopped. "The Done-when tests" are read as M3-1's to M3-5's i
 ### Milestone 4 — the wall-clock runner
 
 **Designed and decided 2026-10-17** (`docs/organisation.md` §4.11 and §7, decisions
-108–121, and 122–127 after M4-1's review; "decision N" in this section is that §7's). §8's
+108–121, and 122–128 after M4-1's review; "decision N" in this section is that §7's). §8's
 second domain gap: a runner that runs a configuration's resource on the real clock,
 through device adapters, with a watchdog, the one piece of logex that reads a clock. A
 design pass on `d3931bd` designed it and built a throwaway spike of every piece, on the
@@ -3155,8 +3155,8 @@ and M4-7 the documents.
     126);
   - a stuck runner's devices zero themselves by the deadline their last refresh carried,
     a runner stuck in the conveyor's 50 ms step within 50 ms and a poll period of its
-    start, not the plant's longest watchdog, and one stuck in its own work within the
-    continuous task's watchdog and a poll period, a step that takes exactly its watchdog
+    start, not the plant's longest watchdog, and one stuck in its own work within its
+    idle watchdog, `idle:`, and a poll period (decision 128), a step that takes exactly its watchdog
     leaving a poll period's margin (decision 125);
   - each kind of I/O fault trips, naming its device (decision 114);
   - a killed runner's devices zero and close (decision 115);
@@ -3832,7 +3832,7 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    tasks' instances by priority and returning every output point. A wall-clock runner,
    the only code that will read a clock, comes after Milestone 2 (`docs/organisation.md`
    §5). *(Milestone 4, designed and decided 2026-10-17, §3: decisions 108–121, and
-   122–127 after M4-1's review, 2026-10-18.)*
+   122–128 after M4-1's review, 2026-10-18.)*
 3. **A tag table with types.** Landed with M1-3.
 4. **Comparisons (`eq ne lt gt le ge` — IEC names, see `docs/naming.md`)** — high value,
    low cost. *Landed with M1-6, on dints.*

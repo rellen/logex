@@ -576,7 +576,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   and decided on 2026-10-17, §4.11 and decisions 108–121, its first item, M4-1, the
   clocks, the adapter behaviour and the simulated device, landed the same day, and the
   record's answers to M4-1's review, decisions 122–126, on 2026-10-18, with the
-  maintainer's answer the same day, forces kept in a file across a crash, decision 127).
+  maintainer's answers the same day, forces kept in a file across a crash, decision 127,
+  and the runner's own idle watchdog, `idle:`, decision 128).
   Read it before designing anything that names a program, schedules one, binds I/O,
   changes a running controller (§4.9, online edit, decided 2026-10-01), or runs one on
   the clock (§4.11).
