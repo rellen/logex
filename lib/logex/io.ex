@@ -120,7 +120,11 @@ defmodule Logex.IO do
   defp direction("i"), do: :input
   defp direction("q"), do: :output
 
-  defp configured!(configuration), do: refused!(Configuration.check(configuration))
+  defp configured!(%Configuration{} = configuration),
+    do: refused!(Configuration.check(configuration))
+
+  # Anything else Logex.Runtime.start/1 refuses itself, so in its own words.
+  defp configured!(other), do: Logex.Runtime.start(other)
 
   defp refused!([]), do: :ok
 

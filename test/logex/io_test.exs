@@ -870,9 +870,18 @@ defmodule Logex.IOTest do
       assert_raise ArgumentError, message, fn -> Logex.IO.points(config) end
       assert_raise ArgumentError, message, fn -> Logex.IO.bind!(config, %{}) end
 
-      assert_raise ArgumentError, "expected a %Logex.Configuration{}, got: :nope", fn ->
-        Logex.IO.points(opaque(:nope))
+      # Something that is no configuration, and a struct that lacks its keys.
+      for not_one <- [:nope, %{name: "rack"}, %{__struct__: Logex.Configuration}] do
+        message =
+          assert_raise(ArgumentError, fn -> Logex.Runtime.start(opaque(not_one)) end).message
+
+        assert_raise ArgumentError, message, fn -> Logex.IO.points(opaque(not_one)) end
+        assert_raise ArgumentError, message, fn -> Logex.IO.bind!(opaque(not_one), %{}) end
       end
+
+      assert_raise ArgumentError,
+                   "expected a %Logex.Configuration{} from Logex.Configuration.new!/1, got: :nope",
+                   fn -> Logex.IO.points(opaque(:nope)) end
     end
   end
 

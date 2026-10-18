@@ -3009,7 +3009,11 @@ and M4-7 the documents.
   a sim another device holds open, and the sim refuses an open that came second, in one
   message naming the device that holds it. One `bind!/2` that binds one sim to two
   devices still passes, since neither has opened it, and the second device's `init/3`
-  raises. The suite is at 1302 tests (8 doctests).
+  raises. `Logex.IO.points/1`'s doc said a configuration `Logex.Runtime.start/1` refuses
+  raises in its words, but a value that is no configuration was refused in
+  `Logex.Configuration.check/1`'s; `start/1` itself refuses it now, so `points/1` and
+  `bind!/2` give its words, which `io_test.exs` pins for a value that is no struct, a map
+  and a struct that lacks its keys. The suite is at 1302 tests (8 doctests).
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
   `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line
