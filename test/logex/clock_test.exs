@@ -428,6 +428,16 @@ defmodule Logex.ClockTest do
     end
   end
 
+  # Wakes `pid` at `past` again and again until the monotonic clock reads `until`.
+  defp waking(pid, past, until), do: waking(pid, past, until, Monotonic.now_ms(nil))
+
+  defp waking(_pid, _past, until, now) when now >= until, do: :ok
+
+  defp waking(pid, past, until, _now) do
+    Monotonic.wake_at(nil, pid, :past, past)
+    waking(pid, past, until)
+  end
+
   describe "the monotonic clock, on the real clock, for liveness only" do
     test "reads the VM's monotonic time in milliseconds, and never goes back" do
       before = System.monotonic_time(:millisecond)
@@ -448,6 +458,19 @@ defmodule Logex.ClockTest do
       Monotonic.wake_at(nil, self(), :past, Monotonic.now_ms(nil) - 1_000_000_000_000)
       assert_receive :past, 5_000
       refute_received :soon
+    end
+
+    test "a wake at a time already past never raises, however the millisecond ticks" do
+      # The clock is read once a wake: read twice, as now and again for a relative time, a
+      # time past would come out a millisecond before now where the tick fell between the
+      # two reads, which the VM refuses. The wakes go on for 200 ms of the clock, some
+      # hundreds of ticks, to a process that is down, which costs nothing to deliver to.
+      gone = spawn(fn -> :ok end)
+      ref = Process.monitor(gone)
+      assert_receive {:DOWN, ^ref, :process, ^gone, _reason}, 5_000
+
+      past = Monotonic.now_ms(nil) - 1_000
+      assert waking(gone, past, Monotonic.now_ms(nil) + 200) == :ok
     end
 
     test "a time later than the VM can time is the host's mistake" do

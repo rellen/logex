@@ -2950,9 +2950,9 @@ and M4-7 the documents.
   pass on Elixir 1.20.4 (8 of them doctests), up from 1231. Each of (1) to (3) records its
   mutation table, every rule it adds reverted alone in a worktree of its commit and the
   full suite judged by its exit code: (1) 31 rules, 30 red and one survivor, a timer set
-  relative to now rather than absolute, which fires at the same time but for the
-  microseconds between the read and the call, kept on that argument alone; (2) 55, all
-  red; (3) 28, all red. `Logex.Runtime` is unchanged.
+  relative to now rather than absolute, kept on an argument M4-1's review found half
+  right, corrected below; (2) 55, all red; (3) 28, all red. `Logex.Runtime` is
+  unchanged.
 
   Found while landing, each in its commit: the VM refuses an absolute timer from before it
   started, so the monotonic clock brings a time already past to now, as the behaviour says
@@ -2982,8 +2982,19 @@ and M4-7 the documents.
   before its callbacks were looked for, `pending/1` in the reverse of delivery order, the
   clock's `wait:` and the sim's ignored for 5000 ms, and the clock and the sim started
   unlinked; a test now kills each, the waits by a receiver that answers after a second,
-  well within 5000 ms, and the delay by a write found asleep with nothing written. The
-  suite is at 1296 tests (8 doctests).
+  well within 5000 ms, and the delay by a write found asleep with nothing written. (1)'s
+  survivor was kept as firing when the absolute timer does, but for the microseconds
+  between the read of now and the call. That holds for a relative timer that reads now
+  once, `max(at - now, 0)`, which shows only drift, never more than the time from the
+  read to the call: it survives still, since only a trace of the call, which sees
+  `[abs: true]` given to `:erlang.send_after/4`, can tell it, and such a test would pin the
+  implementation rather than a behaviour. The mutant (1) tabled read now twice, `max(at,
+  now) - now`, which comes out a millisecond below 0 wherever the tick falls between the
+  two reads, and the VM refuses it, so a wake raised: 9 of 200,000 at a past time in the
+  review's probe. `clock_test.exs` now wakes a process at a past time for 200 ms of the
+  clock and finds no raise, which that mutant fails in every run. (1)'s commit message
+  stands as landed, and this is its correction. The suite is at 1297 tests (8
+  doctests).
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
   `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line
