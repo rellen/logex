@@ -49,16 +49,13 @@ defmodule Logex.Runner do
     round, the refresh carrying that step's deadline, its task's watchdog and one poll
     period from the step's start, and before the write, carrying the idle watchdog's and
     one poll period from then (decisions 125 and 128): a refresh calls no adapter.
-  - At each poll, after its read, a device writes the outputs it last wrote again where
-    nothing was written to it within a poll period, while its last refresh's deadline
-    has not passed, so that a device whose outputs never change still hears from its
-    master once a poll period (decision 130); a device with no output point is never
-    written. A poll that finds a round due, come due less than a poll period before it
-    and not yet run, leaves that write to the round: after each round the runner tells
-    every device, without a wait, when the next is due, which tells it too that the
-    round has ended, and the device then writes again only where the round wrote nothing
-    to it since the poll, the write counted from the poll, so that no write comes just
-    before a round replaces it (decision 132).
+  - At each poll, after its read, a device writes the outputs it last wrote again,
+    whether or not a round wrote to it within the poll period, while its last refresh's
+    deadline has not passed: a fixed timer, as Logix re-sends a module's outputs at its
+    RPI, so that every device hears from its master once a poll period while the runner
+    is well, at the cost of one adapter write a device a poll period beside each round's
+    (decision 130); a device never written, a device with no output point among them,
+    is written nothing at a poll.
 
   **Its rounds** (decisions 108, 122 and 123). A *round* takes the inputs, runs the cycle's
   steps, the due timed tasks and then the untimed programs (`Logex.Runtime.cycle/3`, cut
@@ -629,8 +626,7 @@ defmodule Logex.Runner do
   # The next round: at the millisecond after the one this round began in, or at once where
   # it took a millisecond or more, while untimed programs exist or logic changed a trigger
   # (decisions 122 and 123); at the next periodic due time, on the runner's clock, which
-  # counts from `anchor` (§4.11); the earlier, a wake either way. Every device is told it,
-  # which tells it too that the round is done (decision 132).
+  # counts from `anchor` (§4.11); the earlier, a wake either way.
   defp planned(state, start, finish, again) do
     next =
       earliest(
@@ -638,7 +634,6 @@ defmodule Logex.Runner do
         due(Runtime.next_due_in(state.runtime), state)
       )
 
-    Enum.each(state.devices, fn {_name, pid, _points} -> Device.due(pid, next) end)
     scheduled(%{state | next_round: next})
   end
 
