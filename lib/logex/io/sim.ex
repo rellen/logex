@@ -21,7 +21,9 @@ defmodule Logex.IO.Sim do
     values, unset inputs reading 0. Where the sim reports, the inputs that changed are
     sent to the device that opened it as one report, from the caller, which waits until
     the device has handled it, so that a test that sets an input and then moves the clock
-    finds the device's change made, by construction.
+    finds the device's change made, by construction. A device that is down, or goes down
+    while it handles the report, with whatever reason, `:timeout` among them, is passed
+    over; one still alive that does not answer within `wait:` is the test's mistake.
   - `outputs/1` gives the last value written to each output, `writes/1` every write in
     order, so that "zeroed once" can be asserted, `reads/1` the number of reads made,
     failed ones among them, and `closed?/1` whether the device was closed since it was
@@ -104,14 +106,19 @@ defmodule Logex.IO.Sim do
 
   defp reported(nil, _report, _wait), do: :ok
 
+  # A device that stops with the reason :timeout exits the call as a wait does, so only a
+  # device still alive has not answered.
   defp reported(pid, report, wait) do
     send(pid, report)
     :sys.get_state(pid, wait)
     :ok
   catch
-    :exit, {:timeout, _} -> raise ArgumentError, unanswered(pid, wait)
+    :exit, {:timeout, _} -> unanswered!(Process.alive?(pid), pid, wait)
     :exit, _down -> :ok
   end
+
+  defp unanswered!(true, pid, wait), do: raise(ArgumentError, unanswered(pid, wait))
+  defp unanswered!(false, _pid, _wait), do: :ok
 
   defp unanswered(pid, wait),
     do:

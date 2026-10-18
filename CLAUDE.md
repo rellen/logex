@@ -435,9 +435,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   one sender to one receiver; a timer set while one is handled comes in the same advance
   where its time falls inside it; `pass/2` is time passing inside a step, delivering
   nothing, the clock never going back; `pending/1` lists the rest. A receiver is an OTP
-  process; one that is down is passed over, the caller may be one, and one that does not
-  answer within `wait:`, 1 to 4294967295 ms, the longest the VM waits, is the host's
-  mistake. Its timers are a gb_tree, so delivering n is n log n. `Logex.Runtime` reads
+  process; one that is down, or goes down with whatever reason, `:timeout` among them, is
+  passed over, the caller may be one, and one still alive that does not answer within
+  `wait:`, 1 to 4294967295 ms, the longest the VM waits, is the host's mistake. Its timers are a gb_tree, so delivering n is n log n. `Logex.Runtime` reads
   no clock, and only the runner will
 - `lib/logex/io.ex` — `Logex.IO` (M4-1, `docs/organisation.md` §4.5 and §4.11), the
   adapter behaviour: `init/3`, a device's name, its points and the options it was bound
@@ -460,7 +460,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `start_link/1` (`reports:`, `clock:` a manual clock, `wait:`), `set/2` and `set/3` its
   inputs, `outputs/1`, `writes/1`, `reads/1` and `closed?/1`. Where it reports, the inputs
   a set changes go as one report to the device that opened it, from the caller, which
-  waits through `:sys` until that device has handled it, by construction. `fail/3` acts
+  waits through `:sys` until that device has handled it, by construction, a device that is
+  down, or goes down with whatever reason, passed over. `fail/3` acts
   out one failure on the next call of the callback it names, in the order told: an error,
   a raise, a throw, an exit, a hang, a delay on its manual clock or slept without one,
   and, for a read or a report, a value of the test's choosing. Every mistake a test can

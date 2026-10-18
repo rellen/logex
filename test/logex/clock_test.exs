@@ -53,6 +53,22 @@ defmodule Logex.ClockTest do
     defp act(:down, _state), do: :down
   end
 
+  # A receiver that goes down, with the reason it was started with, while it handles :tick:
+  # once the :sys call that waits for it has come, so that the caller is waiting when it
+  # goes, and by an exit signal to itself, so that OTP writes no crash report.
+  defmodule StopsWith do
+    use GenServer
+
+    @impl true
+    def init(reason), do: {:ok, reason}
+
+    @impl true
+    def handle_info(:tick, reason) do
+      receive do: ({:system, _from, _request} -> Process.exit(self(), reason))
+      Process.sleep(:infinity)
+    end
+  end
+
   # A receiver that only counts what it is sent, for the growth test.
   defmodule Sink do
     use GenServer
@@ -251,6 +267,20 @@ defmodule Logex.ClockTest do
       assert Manual.advance(clock, 10) == :ok
       refute Process.alive?(falls)
       assert Receiver.seen(stays) == [after: 7]
+    end
+
+    test "passes over a receiver that stops with the reason :timeout, which exits the " <>
+           "call as a wait does" do
+      clock = clock()
+      {:ok, stops} = GenServer.start(StopsWith, :timeout)
+      stays = receiver(clock)
+      Manual.wake_at(clock, stops, :tick, 1)
+      Manual.wake_at(clock, stays, :after, 2)
+
+      assert Manual.advance(clock, 2) == :ok
+      refute Process.alive?(stops)
+      assert Receiver.seen(stays) == [after: 2]
+      assert Manual.now_ms(clock) == 2
     end
 
     test "the process that advances may receive its own timers, in its mailbox when " <>

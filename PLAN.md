@@ -2971,8 +2971,12 @@ and M4-7 the documents.
   pinned and words gone loose in its design record, and its fixes are the commits after
   (4). A `wait:` longer than the VM waits for an answer, 2^32 − 1 ms, was taken by the
   manual clock and the simulated device, and then escaped `advance/2` and `set/3` as an
-  `ErlangError`; each refuses it at start now, in its words, and takes 4294967295. The
-  suite is at 1286 tests (8 doctests).
+  `ErlangError`; each refuses it at start now, in its words, and takes 4294967295. A
+  receiver of the manual clock, or a device a sim reports to, that went down with the
+  reason `:timeout` while it handled its message was told it had not answered, since its
+  exit has a wait's shape, and the advance stopped there, its later timers undelivered;
+  each is passed over now, as one down for any other reason is, and only one still alive
+  that has not answered is the mistake. The suite is at 1288 tests (8 doctests).
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
   `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line

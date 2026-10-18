@@ -51,6 +51,25 @@ defmodule Logex.IOTest do
     end
   end
 
+  # A device's process that opens the sim and goes down with the reason :timeout while it
+  # handles its first report, as one whose adapter's own call timed out may: once the :sys
+  # call that waits for it has come, so that set/3 is waiting when it goes, and by an exit
+  # signal to itself, so that OTP writes no crash report.
+  defmodule StopsOnReport do
+    use GenServer
+
+    def start(sim), do: GenServer.start(__MODULE__, sim)
+
+    @impl true
+    def init(sim), do: Logex.IO.Sim.init("panel", Logex.IOTest.points(), sim: sim)
+
+    @impl true
+    def handle_info(_report, _state) do
+      receive do: ({:system, _from, _request} -> Process.exit(self(), :timeout))
+      Process.sleep(:infinity)
+    end
+  end
+
   # The panel's points: three inputs, one of them a dint two fields deep, and two outputs.
   def points,
     do: [
@@ -351,6 +370,15 @@ defmodule Logex.IOTest do
       assert Sim.set(sim, [0], 1) == :ok
       assert {:ok, values, _state} = Sim.read(opened(sim))
       assert values == %{[0] => 1, [1] => 0, [2, 1] => 0}
+    end
+
+    test "a device that stops with the reason :timeout while it handles the report is " <>
+           "passed over by set/3" do
+      sim = sim(reports: true)
+      {:ok, pid} = StopsOnReport.start(sim)
+      assert Sim.set(sim, [0], 1) == :ok
+      refute Process.alive?(pid)
+      assert {:ok, %{[0] => 1, [1] => 0, [2, 1] => 0}, _state} = Sim.read(opened(sim))
     end
 
     test "refuses options, sims, addresses, values and failures that are not ones, each " <>

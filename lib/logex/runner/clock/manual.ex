@@ -33,8 +33,8 @@ defmodule Logex.Runner.Clock.Manual do
   A receiver is an OTP process, a GenServer as the runner's and each device's are, which
   answers `:sys` once it has handled what it was sent; one that does not answer within
   `wait:` is the host's mistake, an `ArgumentError`, and one that is down, or goes down
-  while it handles its message, is passed over, as a real timer's message to a dead
-  process is lost. The process that advances may be a receiver too: its message is then
+  while it handles its message, with whatever reason, `:timeout` among them, is passed
+  over, as a real timer's message to a dead process is lost. The process that advances may be a receiver too: its message is then
   in its own mailbox when `advance/2` goes on. One process advances a clock at a time.
   """
 
@@ -104,13 +104,20 @@ defmodule Logex.Runner.Clock.Manual do
 
   # The caller sent the message, so a call from it through `:sys` is answered only once the
   # receiver has handled it. A receiver that is down, or the caller itself, needs no wait.
+  # One that stops with the reason :timeout exits the call as a wait does, so only a
+  # receiver still alive has not answered.
   defp handled(pid, message, wait) do
     :sys.get_state(pid, wait)
     :ok
   catch
-    :exit, {:timeout, _} -> raise ArgumentError, unanswered(pid, message, wait)
+    :exit, {:timeout, _} -> unanswered!(Process.alive?(pid), pid, message, wait)
     :exit, _down -> :ok
   end
+
+  defp unanswered!(true, pid, message, wait),
+    do: raise(ArgumentError, unanswered(pid, message, wait))
+
+  defp unanswered!(false, _pid, _message, _wait), do: :ok
 
   defp unanswered(pid, message, wait),
     do:
