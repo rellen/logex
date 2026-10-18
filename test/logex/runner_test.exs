@@ -215,6 +215,25 @@ defmodule Logex.RunnerTest do
       )
     end
 
+    test "an option given more than once, the first repeated named" do
+      {opts, _rig} = rig()
+
+      raises("Logex.Runner takes each option once, got :name more than once", fn ->
+        Runner.start_link(opts ++ [poll: 5, name: :a1, name: :a2, poll: 6])
+      end)
+
+      raises("Logex.Runner takes each option once, got :poll more than once", fn ->
+        Runner.start_link(opts ++ [poll: 5, poll: 5, poll: 5])
+      end)
+
+      # An unknown key repeated is told as unknown.
+      raises(
+        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle: and name:, " <>
+          "got: :pole",
+        fn -> Runner.start_link(opts ++ [pole: 1, pole: 2]) end
+      )
+    end
+
     test "a missing configuration: or io:" do
       {opts, _rig} = rig()
 
@@ -1463,7 +1482,7 @@ defmodule Logex.RunnerTest do
       {opts, _rig} = plant_rig()
       {:ok, runner} = Runner.start_link(opts)
 
-      for kinds <- [:ran, [:ran, :rounds], ["ran"]] do
+      for kinds <- [:ran, [:ran, :rounds], ["ran"], [:round | :ran], [:ran, :round | :overlap]] do
         raises(
           "a runner's events are subscribed by a list of their kinds, among :overlap, " <>
             ":fault, :trip, :restart, :edit, :ran and :round, got: #{inspect(kinds)}",

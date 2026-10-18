@@ -187,8 +187,13 @@ defmodule Logex.Runner do
   @doc "Stops sending the caller the runner's events."
   def unsubscribe(runner), do: call(runner, {:unsubscribe, self()})
 
-  defp kinds!(kinds) when is_list(kinds), do: kinds!(kinds -- @kinds, kinds)
+  # A proper list of kinds, each one of the seven: an improper list is told as any other
+  # that is not one, before a subtraction that cannot take it.
+  defp kinds!(kinds) when is_list(kinds), do: proper_kinds!(List.improper?(kinds), kinds)
   defp kinds!(other), do: raise(ArgumentError, kinds_told(other))
+
+  defp proper_kinds!(false, kinds), do: kinds!(kinds -- @kinds, kinds)
+  defp proper_kinds!(true, kinds), do: raise(ArgumentError, kinds_told(kinds))
 
   defp kinds!([], kinds), do: kinds
   defp kinds!(_unknown, kinds), do: raise(ArgumentError, kinds_told(kinds))
@@ -682,16 +687,18 @@ defmodule Logex.Runner do
 
   defp now(%{clock: {module, clock}}), do: module.now_ms(clock)
 
-  # The options, checked in the caller in order: the list, each key, the two it needs, and
-  # then each value, the configuration first, so that its bindings are checked against a
-  # configuration that starts.
+  # The options, checked in the caller in order: the list, each key, each once, the two it
+  # needs, and then each value, the configuration first, so that its bindings are checked
+  # against a configuration that starts.
   defp options!(opts) when is_list(opts), do: listed!(Keyword.keyword?(opts), opts)
   defp options!(opts), do: raise(ArgumentError, takes(opts))
 
   defp listed!(false, opts), do: raise(ArgumentError, takes(opts))
 
   defp listed!(true, opts) do
-    known!(Keyword.keys(opts) -- @options)
+    keys = Keyword.keys(opts)
+    known!(Enum.reject(keys, &(&1 in @options)))
+    once!(keys -- Enum.uniq(keys))
     configuration = needed!(Keyword.fetch(opts, :configuration), :configuration)
     io = needed!(Keyword.fetch(opts, :io), :io)
     runtime = Runtime.start(configuration)
@@ -725,6 +732,17 @@ defmodule Logex.Runner do
         ArgumentError,
         "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle: and name:, " <>
           "got: #{inspect(key)}"
+      )
+
+  # A key given twice, the first repeated named: which of two values was meant is the
+  # host's to say.
+  defp once!([]), do: :ok
+
+  defp once!([key | _]),
+    do:
+      raise(
+        ArgumentError,
+        "Logex.Runner takes each option once, got #{inspect(key)} more than once"
       )
 
   defp needed!({:ok, value}, _key), do: value
