@@ -824,6 +824,20 @@ defmodule Logex.ValidationTest do
                source_compile("var_input single bool\nvar_output out bool\nxic single ote out")
     end
 
+    # M4-2: `continuous` and `watchdog`, a task line's words too.
+    test "`continuous` and `watchdog`, a task line's words, name no var_external, in any case" do
+      assert source_errors(
+               "var_external continuous bool\nvar_external WATCHDOG dint\nvar_output k bool\n" <>
+                 "xic k ote k"
+             ) ==
+               ["line 1: `continuous` #{@keyword}", "line 2: `WATCHDOG` #{@keyword}"]
+
+      assert {:ok, %Logex.Program{}} =
+               source_compile(
+                 "var_input watchdog bool\nvar_output continuous bool\nxic watchdog ote continuous"
+               )
+    end
+
     test "a configuration file's keyword still names a tag of any other section" do
       assert {:ok, %Logex.Program{}} =
                source_compile(

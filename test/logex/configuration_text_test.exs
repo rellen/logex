@@ -179,6 +179,15 @@ defmodule Logex.Configuration.TextTest do
                )
     end
 
+    test "`continuous` and `watchdog` belong on a `task` line, and neither starts one (M4-2)" do
+      assert errors("continuous\nWatchdog 50") == [
+               "line 1, column 1: a line cannot start with `continuous`: it goes on a `task` " <>
+                 "line, as in `task fast interval 10 priority 1`",
+               "line 2, column 1: a line cannot start with `Watchdog`: it goes on a `task` " <>
+                 "line, as in `task fast interval 10 priority 1`"
+             ]
+    end
+
     test "`interval` and `priority` belong on a `task` line, `with` on a `program` line, " <>
            "and none starts one" do
       assert errors("interval 10\nPriority 1\nwith fast\nWITH") == [
@@ -229,9 +238,9 @@ defmodule Logex.Configuration.TextTest do
                "line 4, column 6: `task` needs a name before `Priority`, as in " <>
                  "`task fast interval 10 priority 1`",
                "line 5, column 32: unexpected `every` on the line of task `t5`: a task takes " <>
-                 "`single`, `interval` and `priority`",
+                 "`continuous`, `single`, `interval`, `priority` and `watchdog`",
                "line 6, column 32: unexpected `7` on the line of task `t6`: a task takes " <>
-                 "`single`, `interval` and `priority`",
+                 "`continuous`, `single`, `interval`, `priority` and `watchdog`",
                "line 7, column 21: `interval` is given twice on the line of task `t7`",
                "line 8, column 20: `interval` goes before `priority`, as in " <>
                  "`task fast interval 10 priority 1`",
@@ -244,7 +253,7 @@ defmodule Logex.Configuration.TextTest do
                "line 13, column 19: `interval` takes a number of milliseconds, as in " <>
                  "`interval 10`, found `priority`",
                "line 14, column 22: unexpected `with` on the line of task `t14`: a task takes " <>
-                 "`single`, `interval` and `priority`",
+                 "`continuous`, `single`, `interval`, `priority` and `watchdog`",
                "line 15, column 22: `single` goes before `interval`, as in " <>
                  "`task parts single part_in interval 1000 priority 2`",
                "line 16, column 19: `single` is given twice on the line of task `t16`",
@@ -284,6 +293,87 @@ defmodule Logex.Configuration.TextTest do
                   %Logex.Configuration.Task{name: "w", single: "with", priority: nil, line: 4},
                   %Logex.Configuration.Task{name: "e", single: "Estop", priority: nil, line: 5}
                 ]}
+    end
+
+    # M4-2 (decisions 109 to 111): `continuous`, a word with no value, before every input,
+    # and `watchdog`, a number of milliseconds, after them, each once; what they say is
+    # check/1's to judge, a continuous task with an interval or a watchdog of 0 among it.
+    test "a task line's `continuous` and `watchdog`: read in their places, in any case" do
+      source = """
+      task main continuous watchdog 200
+      task fast interval 10 priority 1 watchdog 50
+      task trip SINGLE estop Priority 0 WATCHDOG 20
+      task bg Continuous
+      task odd continuous single x interval 5 priority 1 watchdog -9
+      task w watchdog 0
+      """
+
+      task = &struct(Logex.Configuration.Task, &1)
+
+      assert Text.read(source) ==
+               {:ok,
+                [
+                  task.(name: "main", continuous: true, watchdog: 200, line: 1),
+                  task.(name: "fast", interval: 10, priority: 1, watchdog: 50, line: 2),
+                  task.(name: "trip", single: "estop", priority: 0, watchdog: 20, line: 3),
+                  task.(name: "bg", continuous: true, line: 4),
+                  task.(
+                    name: "odd",
+                    continuous: true,
+                    single: "x",
+                    interval: 5,
+                    priority: 1,
+                    watchdog: -9,
+                    line: 5
+                  ),
+                  task.(name: "w", watchdog: 0, line: 6)
+                ]}
+    end
+
+    test "`continuous` comes first and `watchdog` last of a task's words, once each" do
+      source = """
+      task m1 watchdog 200 continuous
+      task m2 continuous Continuous
+      task m3 interval 10 watchdog 5 priority 1
+      task m4 watchdog
+      task m5 watchdog fast
+      task m6 watchdog 5 Watchdog 6
+      task m7 priority 1 continuous
+      task watchdog 5
+      task Continuous
+      task m10 single continuous priority 1
+      task m11 watchdog 5 7
+      task m12 single watchdog 5
+      task m13 single estop watchdog 5 single x
+      """
+
+      assert errors(source) == [
+               "line 1, column 22: `continuous` goes before `watchdog`, as in " <>
+                 "`task main continuous watchdog 200`",
+               "line 2, column 20: `continuous` is given twice on the line of task `m2`",
+               "line 3, column 32: `priority` goes before `watchdog`, as in " <>
+                 "`task fast interval 10 priority 1 watchdog 50`",
+               "line 4, column 9: `watchdog` takes a number of milliseconds, as in `watchdog 50`",
+               "line 5, column 18: `watchdog` takes a number of milliseconds, as in " <>
+                 "`watchdog 50`, found `fast`",
+               "line 6, column 20: `watchdog` is given twice on the line of task `m6`",
+               "line 7, column 20: `continuous` goes before `priority`, as in " <>
+                 "`task main continuous watchdog 200`",
+               "line 8, column 6: `task` needs a name before `watchdog`, as in " <>
+                 "`task fast interval 10 priority 1`",
+               "line 9, column 6: `task` needs a name before `Continuous`, as in " <>
+                 "`task fast interval 10 priority 1`",
+               "line 10, column 17: `single` takes a bool global's name, as in `single estop`, " <>
+                 "found `continuous`",
+               "line 11, column 21: unexpected `7` on the line of task `m11`: a task takes " <>
+                 "`continuous`, `single`, `interval`, `priority` and `watchdog`",
+               "line 12, column 17: `single` takes a bool global's name, as in `single estop`, " <>
+                 "found `watchdog`",
+               "line 13, column 34: `single` is given twice on the line of task `m13`"
+             ]
+
+      # A broken task line still declares its task, as M2-3's does.
+      assert {:error, _, [{:declared, 1, %{kind: :task, name: "m1"}} | _]} = Text.read(source)
     end
 
     test "a global line: a name, a type, then an initial value, a location, or both" do
@@ -501,6 +591,17 @@ defmodule Logex.Configuration.TextTest do
         %Logex.Configuration.Task{name: "t", interval: nil, priority: nil},
         %Logex.Configuration.Task{name: "trip", single: "estop", priority: 0},
         %Logex.Configuration.Task{name: "parts", single: "m1.q", interval: 1000, priority: 2},
+        # M4-2: `continuous` straight after the name, `watchdog` last.
+        %Logex.Configuration.Task{name: "main", continuous: true, watchdog: 200},
+        %Logex.Configuration.Task{
+          name: "all",
+          continuous: true,
+          single: "x",
+          interval: 5,
+          priority: 3,
+          watchdog: 9
+        },
+        %Logex.Configuration.Task{name: "slow", interval: 50, priority: 2, watchdog: 500},
         %Global{name: "k1", type: :bool, at: "panel.q.0"},
         %Global{name: "sp", type: :dint, initial: 1200},
         %Global{name: "g", type: :bool, initial: 1, at: "panel.q.1"},
@@ -515,6 +616,9 @@ defmodule Logex.Configuration.TextTest do
       task t
       task trip single estop priority 0
       task parts single m1.q interval 1000 priority 2
+      task main continuous watchdog 200
+      task all continuous single x interval 5 priority 3 watchdog 9
+      task slow interval 50 priority 2 watchdog 500
       var_global k1 bool at panel.q.0
       var_global sp dint 1200
       var_global g bool 1 at panel.q.1
@@ -580,24 +684,20 @@ defmodule Logex.Configuration.TextTest do
             # as the next input.
             {%{fast | single: "a b"}, "a name lexes as one name token"},
             {%{fast | single: :estop}, "a name lexes as one name token"},
-            {%{fast | single: "Interval"},
-             "a task's single is not `interval`, `priority` or `single`, in any case: a line " <>
-               "reads that word as its keyword"},
-            # M4-2: no line says a watchdog, or a continuous task, until the reader reads
-            # the two words.
-            {%{fast | watchdog: 50},
-             "a task's watchdog is nil and it is not continuous: a task line takes `single`, " <>
-               "`interval` and `priority`"},
-            {%Logex.Configuration.Task{name: "main", continuous: true},
-             "a task's watchdog is nil and it is not continuous: a task line takes `single`, " <>
-               "`interval` and `priority`"},
+            {%{fast | single: "Interval"}, single_rule()},
+            # M4-2: a watchdog is a number, a continuous task true or false, and neither
+            # word names a task or a single.
+            {%{fast | watchdog: 1.5}, "a number is an integer"},
+            {%{fast | watchdog: "50"}, "a number is an integer"},
+            {%{fast | continuous: nil}, "a task's continuous is true or false"},
+            {%{fast | continuous: "true"}, "a task's continuous is true or false"},
+            {%{fast | name: "Watchdog"}, name_rule()},
+            {%{fast | name: "CONTINUOUS"}, name_rule()},
+            {%{fast | single: "watchdog"}, single_rule()},
+            {%{fast | single: "Continuous"}, single_rule()},
             # A keyword a line reads in a task's name place.
-            {%{fast | name: "INTERVAL"},
-             "a task's name is not `interval`, `priority` or `single`, in any case: a line reads " <>
-               "that word as its keyword"},
-            {%{fast | name: "priority"},
-             "a task's name is not `interval`, `priority` or `single`, in any case: a line reads " <>
-               "that word as its keyword"},
+            {%{fast | name: "INTERVAL"}, name_rule()},
+            {%{fast | name: "priority"}, name_rule()},
             {%{start | instance: "m1.x"},
              "a connection's instance has no `.`: its first `.` begins the member"},
             {%{start | member: "start."}, "a name lexes as one name token"},
@@ -636,6 +736,9 @@ defmodule Logex.Configuration.TextTest do
         # M3-3 (decision 97): a negative number lexes, so a line can say one in each place
         # a number goes, for check/1 to judge.
         %Logex.Configuration.Task{name: "slow", interval: -10, priority: -1},
+        # M4-2: a watchdog a line can say, for check/1 to judge, and a continuous task.
+        %Logex.Configuration.Task{name: "w", priority: 1, watchdog: -5, continuous: true},
+        %Logex.Configuration.Task{name: "x", watchdog: 0},
         %Global{name: "offset", type: :dint, initial: -2_147_483_648},
         %Connection{instance: "m1", member: "sp", to: -5}
       ]
@@ -765,8 +868,18 @@ defmodule Logex.Configuration.TextTest do
         assert [_] = errors("var_global #{shown} dint"), "#{shown} was taken as a global's name"
       end
 
-      for word <- ["interval", "priority"], shown <- [word, String.upcase(word)] do
+      for word <- ["interval", "priority", "watchdog"], shown <- [word, String.upcase(word)] do
         assert [_] = errors("task #{shown} 10"), "#{shown} was taken as a task's name"
+      end
+
+      # M4-2: `continuous` names no task and no single, and is read as itself after a name.
+      for shown <- ["continuous", "CONTINUOUS"] do
+        assert [_] = errors("task #{shown}"), "#{shown} was taken as a task's name"
+        assert [_] = errors("task t single #{shown}"), "#{shown} was taken as a single"
+
+        assert {:ok, [%Logex.Configuration.Task{continuous: true}]} =
+                 Text.read("task main #{shown}"),
+               "#{shown} did not make the task continuous"
       end
 
       for shown <- ["with", "WITH"] do
@@ -825,6 +938,17 @@ defmodule Logex.Configuration.TextTest do
   end
 
   defp lined({entry, line}), do: %{entry | line: line}
+
+  # The words a line reads in a task's name place and its single's, M4-2's among them.
+  defp name_rule,
+    do:
+      "a task's name is not `continuous`, `interval`, `priority`, `single` or `watchdog`, in " <>
+        "any case: a line reads that word as its keyword"
+
+  defp single_rule,
+    do:
+      "a task's single is not `continuous`, `interval`, `priority`, `single` or `watchdog`, " <>
+        "in any case: a line reads that word as its keyword"
 
   defp words(_vocabulary, 0), do: [[]]
 

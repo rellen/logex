@@ -689,7 +689,8 @@ defmodule Logex.ConfigurationTest do
                "the priority of `b` is `2147483648`: a priority is 0 to 65535, and 0 is the " <>
                  "highest",
                "task `c` needs an interval or a single, as in " <>
-                 "`task c interval 10 priority 1` or `task c single estop priority 0`",
+                 "`task c interval 10 priority 1` or `task c single estop priority 0`" <>
+                 ", or is the continuous task, as in `task c continuous`",
                "task `c` needs a priority, as in `task c interval 10 priority 1`: 0 is the " <>
                  "highest",
                "the priority of `d` is `-1`: a priority is 0 to 65535, and 0 is the highest",
@@ -778,7 +779,8 @@ defmodule Logex.ConfigurationTest do
                  "is the highest",
                "task `p` needs a priority, as in `task p interval 25 priority 1`: 0 is the highest",
                "task `n` needs an interval or a single, as in `task n interval 10 priority 1` " <>
-                 "or `task n single estop priority 0`",
+                 "or `task n single estop priority 0`, or is the continuous task, as in " <>
+                 "`task n continuous`",
                "task `n` needs a priority, as in `task n interval 10 priority 1`: 0 is the highest",
                "task `u.v` needs a priority, as in `task t single pb2 priority 1`: 0 is the " <>
                  "highest",
@@ -983,25 +985,24 @@ defmodule Logex.ConfigurationTest do
       end
 
       assert Enum.map(tasks, &checked_tasks(seal, [&1])) == [
-               [
-                 "`a` is the continuous task, which takes no `priority`: it runs every " <>
-                   "program instance with no timed task, after the due tasks"
-               ],
-               [
-                 "`b` is the continuous task, which takes no `interval` or `priority`: it " <>
-                   "runs every program instance with no timed task, after the due tasks"
-               ],
-               [
-                 "`c` is the continuous task, which takes no `single`, `interval` or " <>
-                   "`priority`: it runs every program instance with no timed task, after the " <>
-                   "due tasks"
-               ],
-               [
-                 "`d` is the continuous task, which takes no `single`: it runs every program " <>
-                   "instance with no timed task, after the due tasks"
-               ]
+               [takes_no("a", "`priority`")],
+               [takes_no("b", "`interval` or `priority`")],
+               [takes_no("c", "`single`, `interval` or `priority`")],
+               [takes_no("d", "`single`")]
+             ]
+
+      # Its example is named as every task example is, `t` for a name no line declares.
+      assert checked_tasks(seal, [%{continuous("Task") | priority: 1}]) == [
+               "`Task` is a keyword and cannot name a task",
+               takes_no("Task", "`priority`", "t")
              ]
     end
+
+    defp takes_no(name, given, example \\ nil),
+      do:
+        "`#{name}` is the continuous task, which takes no #{given}: it runs every program " <>
+          "instance with no timed task, after the due tasks, as in " <>
+          "`task #{example || name} continuous watchdog 200`"
 
     # One at most, as the conventional family's: the first in line order is the
     # configuration's, and each after it is told it.
@@ -1019,12 +1020,10 @@ defmodule Logex.ConfigurationTest do
       tasks = [%{continuous("main") | priority: 1}, %{continuous("more") | interval: 10}]
 
       assert checked_tasks(seal, tasks) == [
-               "`main` is the continuous task, which takes no `priority`: it runs every " <>
-                 "program instance with no timed task, after the due tasks",
+               takes_no("main", "`priority`"),
                "`more` is a second continuous task: a configuration has one at most, and " <>
                  "`main` is its continuous task",
-               "`more` is the continuous task, which takes no `interval`: it runs every " <>
-                 "program instance with no timed task, after the due tasks"
+               takes_no("more", "`interval`")
              ]
     end
 
@@ -1656,7 +1655,8 @@ defmodule Logex.ConfigurationTest do
                "plant.logex: line 3: `u.v` cannot name a task: `.` is kept for a path, as in " <>
                  "`m1.start`, and a location, as in `panel.i.0`",
                "plant.logex: line 3: task `u.v` needs an interval or a single, as in " <>
-                 "`task t interval 10 priority 1` or `task t single estop priority 0`",
+                 "`task t interval 10 priority 1` or `task t single estop priority 0`" <>
+                 ", or is the continuous task, as in `task t continuous`",
                "plant.logex: line 3: task `u.v` needs a priority, as in " <>
                  "`task t interval 10 priority 1`: 0 is the highest",
                "plant.logex: line 5: `g` is declared twice: first on line 4, as a global",
@@ -2024,7 +2024,8 @@ defmodule Logex.ConfigurationTest do
                "line 11: task `p` needs a priority, as in `task p interval 25 priority 1`: 0 is " <>
                  "the highest",
                "line 12: task `n` needs an interval or a single, as in " <>
-                 "`task n interval 10 priority 1` or `task n single estop priority 0`",
+                 "`task n interval 10 priority 1` or `task n single estop priority 0`, or is " <>
+                 "the continuous task, as in `task n continuous`",
                "line 12: task `n` needs a priority, as in `task n interval 10 priority 1`: 0 is " <>
                  "the highest",
                "line 13: `u.v` cannot name a task: `.` is kept for a path, as in `m1.start`, " <>
@@ -2112,6 +2113,85 @@ defmodule Logex.ConfigurationTest do
       assert warned(accepted, %{"seal" => seal}) == [
                "line 4: warning: `sp` is declared but nothing uses it",
                "line 9: warning: task `tq` runs no instance"
+             ]
+    end
+
+    # M4-2: every check of a task's watchdog and of the continuous task, from source, in
+    # the words the data gives (`describe "a task's watchdog and the continuous task
+    # (M4-2)"`), each at its task's line; a task that needs a priority shown its own
+    # watchdog, and one with nothing, where a continuous task is declared, not offered one.
+    test "a task's watchdog and the continuous task", %{seal: seal} do
+      source =
+        @base <>
+          """
+          task wa interval 10 priority 1 watchdog 0
+          task wb interval 10 priority 1 watchdog -5
+          task wc interval 10 priority 1 watchdog 2147483648
+          task main continuous priority 1 watchdog 0
+          task more continuous interval 10
+          task odd continuous single nowhere interval 0 priority 70000
+          task wd interval 10 watchdog 50
+          task we single pb2 watchdog 2147483648
+          task tx
+          """
+
+      continuous = fn name, given ->
+        "`#{name}` is the continuous task, which takes no #{given}: it runs every program " <>
+          "instance with no timed task, after the due tasks, as in " <>
+          "`task #{name} continuous watchdog 200`"
+      end
+
+      second =
+        &("line #{&1}: `#{&2}` is a second continuous task: a configuration has one at most, " <>
+            "and `main` (line 12) is its continuous task")
+
+      assert errors(source, %{"seal" => seal}) == [
+               "line 9: the watchdog of `wa` is 0: a watchdog is at least 1 ms, and a task " <>
+                 "that sets none has 500",
+               "line 10: the watchdog of `wb` is `-5` ms: a watchdog is 1 to 2147483647 ms",
+               "line 11: the watchdog of `wc` is `2147483648` ms: a watchdog is 1 to " <>
+                 "2147483647 ms",
+               "line 12: " <> continuous.("main", "`priority`"),
+               "line 12: the watchdog of `main` is 0: a watchdog is at least 1 ms, and a task " <>
+                 "that sets none has 500",
+               second.(13, "more"),
+               "line 13: " <> continuous.("more", "`interval`"),
+               second.(14, "odd"),
+               "line 14: " <> continuous.("odd", "`single`, `interval` or `priority`"),
+               "line 15: task `wd` needs a priority, as in " <>
+                 "`task wd interval 10 priority 1 watchdog 50`: 0 is the highest",
+               "line 16: task `we` needs a priority, as in `task we single pb2 priority 1`: 0 " <>
+                 "is the highest",
+               "line 16: the watchdog of `we` is `2147483648` ms: a watchdog is 1 to " <>
+                 "2147483647 ms",
+               "line 17: task `tx` needs an interval or a single, as in " <>
+                 "`task tx interval 10 priority 1` or `task tx single estop priority 0`",
+               "line 17: task `tx` needs a priority, as in `task tx interval 10 priority 1`: 0 " <>
+                 "is the highest"
+             ]
+
+      # The continuous task runs `m`, which has no `with`, or `with` it: no warning that it
+      # runs none, and the timed task beside it is the one that runs none.
+      for with <- ["", " with main"] do
+        accepted =
+          String.replace(@base, "program m seal", "program m seal" <> with) <>
+            "task main continuous watchdog 200\ntask fast interval 10 priority 1 watchdog 50\n"
+
+        assert warned(accepted, %{"seal" => seal}) == [
+                 "line 2: warning: `pb2` is declared but nothing uses it",
+                 "line 4: warning: `sp` is declared but nothing uses it",
+                 "line 10: warning: task `fast` runs no instance"
+               ]
+      end
+
+      assert warned(
+               String.replace(@base, "program m seal", "program m seal with fast") <>
+                 "task main continuous\ntask fast interval 10 priority 1\n",
+               %{"seal" => seal}
+             ) == [
+               "line 2: warning: `pb2` is declared but nothing uses it",
+               "line 4: warning: `sp` is declared but nothing uses it",
+               "line 9: warning: task `main` runs no instance"
              ]
     end
 
@@ -2309,7 +2389,8 @@ defmodule Logex.ConfigurationTest do
                "line 2: the priority of `b` is `2147483648`: a priority is 0 to 65535, and 0 is " <>
                  "the highest",
                "line 3: task `c` needs an interval or a single, as in " <>
-                 "`task c interval 10 priority 1` or `task c single estop priority 0`",
+                 "`task c interval 10 priority 1` or `task c single estop priority 0`" <>
+                 ", or is the continuous task, as in `task c continuous`",
                "line 3: task `c` needs a priority, as in `task c interval 10 priority 1`: 0 is " <>
                  "the highest",
                "line 4: task `d` needs an interval or a single, as in " <>
@@ -2423,6 +2504,40 @@ defmodule Logex.ConfigurationTest do
 
       assert refused(Keyword.put(base(seal), :tasks, [task("Single", 10, 0)])) ==
                ["`Single` is a keyword and cannot name a task"]
+    end
+
+    # M4-2: `continuous` and `watchdog` belong on a `task` line, as `single` does.
+    test "`continuous` and `watchdog` name no task, global, instance or program type",
+         %{seal: seal} do
+      for word <- ["continuous", "watchdog"] do
+        upper = String.upcase(word)
+        capital = String.capitalize(word)
+
+        source =
+          """
+          #{word} 5
+          task #{word} interval 10 priority 1
+          var_global #{capital} bool
+          program #{upper} seal
+          program m #{word}
+          var_global pb bool at panel.i.0
+          """ <> wired(["m"])
+
+        programs = %{"seal" => seal, word => %{seal | name: word}}
+
+        assert errors(source, programs) == [
+                 "line 1, column 1: a line cannot start with `#{word}`: it goes on a `task` " <>
+                   "line, as in `task fast interval 10 priority 1`",
+                 "line 2, column 6: `task` needs a name before `#{word}`, as in " <>
+                   "`task fast interval 10 priority 1`",
+                 "line 3: `#{capital}` is a keyword and cannot name a global",
+                 "line 4: `#{upper}` is a keyword and cannot name an instance",
+                 "line 5: `#{word}` is a keyword and cannot name a program type"
+               ]
+
+        assert refused(Keyword.put(base(seal), :tasks, [task(capital, 10, 0)])) ==
+                 ["`#{capital}` is a keyword and cannot name a task"]
+      end
     end
 
     test "an instance names a program type given", %{seal: seal} do
@@ -3187,8 +3302,8 @@ defmodule Logex.ConfigurationTest do
             # A word a line reads as its keyword in that place, in any case.
             {%{config | tasks: [%{fast | name: "Priority"}]},
              unsaid(
-               "a task's name is not `interval`, `priority` or `single`, in any case: a line " <>
-                 "reads that word as its keyword",
+               "a task's name is not `continuous`, `interval`, `priority`, `single` or " <>
+                 "`watchdog`, in any case: a line reads that word as its keyword",
                %{fast | name: "Priority"}
              )},
             {%{config | instances: [%{m | type: "WITH"}]},
@@ -4652,10 +4767,10 @@ defmodule Logex.ConfigurationTest do
                 "its struct's keys",
               "a line is a positive integer, or nil for an entry built in Elixir",
               "a global's type is :bool or :dint",
-              "a task's name is not `interval`, `priority` or `single`, in any case: a line reads " <>
-                "that word as its keyword",
-              "a task's single is not `interval`, `priority` or `single`, in any case: a line " <>
-                "reads that word as its keyword",
+              "a task's name is not `continuous`, `interval`, `priority`, `single` or " <>
+                "`watchdog`, in any case: a line reads that word as its keyword",
+              "a task's single is not `continuous`, `interval`, `priority`, `single` or " <>
+                "`watchdog`, in any case: a line reads that word as its keyword",
               "a program's type is not `with`, in any case: a line reads that word as its " <>
                 "keyword",
               "a name lexes as one name token",
@@ -4664,8 +4779,7 @@ defmodule Logex.ConfigurationTest do
               "a global's name is not `at`, `bool` or `dint`, in any case: a line reads that " <>
                 "word as its keyword",
               "a number is an integer",
-              "a task's watchdog is nil and it is not continuous: a task line takes " <>
-                "`single`, `interval` and `priority`"
+              "a task's continuous is true or false"
             ]
             |> Enum.map(&Regex.escape/1)
             |> Enum.join("|")

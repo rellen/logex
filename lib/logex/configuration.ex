@@ -42,8 +42,11 @@ defmodule Logex.Configuration do
     one with no interval; a single names a bool global, located or not, whose rising edge
     makes the task due, read where a global is wanted, as a connection's is, its
     did-you-mean among the bool globals. A task with no priority is shown one of its own
-    kind, its single, its interval or both, each its own where a line can say it, and
-    named as every task example is, `t` where its name is none a line can declare;
+    kind, its single, its interval or both, each its own where a line can say it, and its
+    watchdog where it has one a line can say (M4-2), and named as every task example is,
+    `t` where its name is none a line can declare; one with neither an interval, a single
+    nor a priority, where the configuration declares no continuous task, is shown that
+    too;
   - since M4-2 (decisions 109 to 111), a task's watchdog is 1 to 2147483647 ms, an
     interval's range, or none, for 500: every task has one, so 0 is told it is no "no
     watchdog"; and a configuration declares one continuous task at most, the first in
@@ -1301,7 +1304,8 @@ defmodule Logex.Configuration do
       diagnostic(
         task.line,
         "`#{task.name}` is the continuous task, which takes no #{or_listed(given)}: it runs " <>
-          "every program instance with no timed task, after the due tasks"
+          "every program instance with no timed task, after the due tasks, as in " <>
+          "`task #{example(task.name)} continuous watchdog 200`"
       )
     ]
 
@@ -1341,18 +1345,25 @@ defmodule Logex.Configuration do
        do: []
 
   # Its examples name the task only where its name is one a line can declare (§4.10,
-  # M2-6), and `t` otherwise.
-  defp interval(%{name: name, single: nil, interval: nil, line: line}, _continuous),
+  # M2-6), and `t` otherwise. A task with no priority either, where the configuration
+  # declares no continuous task, may be meant for it, and is shown it too (M4-2).
+  defp interval(%{name: name, single: nil, interval: nil, line: line} = task, continuous),
     do: [
       diagnostic(
         line,
         "task `#{name}` needs an interval or a single, as in " <>
           "`task #{example(name)} interval 10 priority 1` or " <>
-          "`task #{example(name)} single estop priority 0`"
+          "`task #{example(name)} single estop priority 0`" <>
+          or_continuous(task.priority, continuous, name)
       )
     ]
 
   defp interval(task, _continuous), do: interval(task)
+
+  defp or_continuous(nil, nil, name),
+    do: ", or is the continuous task, as in `task #{example(name)} continuous`"
+
+  defp or_continuous(_priority, _continuous, _name), do: ""
 
   # IEC reads an interval of 0 as no periodic scheduling (rule 2), and MatIEC runs such a
   # task every tick: an instance that runs every cycle has no task (§4.4, "Tasks"), and an
@@ -1395,7 +1406,8 @@ defmodule Logex.Configuration do
       diagnostic(
         line,
         "task `#{name}` needs a priority, as in " <>
-          "`task #{example(name)}#{shown_kind(task)} priority 1`: 0 is the highest"
+          "`task #{example(name)}#{shown_kind(task)} priority 1" <>
+          "#{shown_watchdog(task.watchdog)}`: 0 is the highest"
       )
     ]
 
@@ -1422,6 +1434,13 @@ defmodule Logex.Configuration do
 
   defp shown_kind(%{single: single, interval: interval}),
     do: " single #{shown_single(single)} interval #{shown_interval(interval)}"
+
+  # After the priority, the task's own watchdog where a line can say it (M4-2), and none
+  # where it has none or one out of range, which is told so already.
+  defp shown_watchdog(watchdog) when is_integer(watchdog) and watchdog in @interval,
+    do: " watchdog #{watchdog}"
+
+  defp shown_watchdog(_watchdog), do: ""
 
   defp shown_interval(interval) when is_integer(interval) and interval in @interval, do: interval
   defp shown_interval(_interval), do: 10

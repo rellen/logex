@@ -99,11 +99,13 @@ defmodule Logex.NamingTest do
   test "a configuration file's words are those of the items that have landed" do
     # M2-2: `var_global <name> <type> [at <location>]` and `program <instance> <type>`;
     # M2-3: `task <name> interval <ms> priority <p>` and `program <instance> <type> with
-    # <task>`; M2-6: `task <name> single <global> [interval <ms>] priority <p>`.
+    # <task>`; M2-6: `task <name> single <global> [interval <ms>] priority <p>`; M4-2:
+    # `task <name> continuous [watchdog <ms>]` and `... priority <p> watchdog <ms>`.
     assert Enum.sort(Logex.Configuration.Text.keywords()) ==
              [
                "at",
                "bool",
+               "continuous",
                "dint",
                "interval",
                "priority",
@@ -111,6 +113,7 @@ defmodule Logex.NamingTest do
                "single",
                "task",
                "var_global",
+               "watchdog",
                "with"
              ]
   end
