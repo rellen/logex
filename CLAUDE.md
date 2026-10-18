@@ -457,7 +457,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   is no device's name first: a device no adapter is bound to, with the points at it; a
   device bound that no point is at, with a did-you-mean; a binding or options that are no
   adapter's; an adapter that lacks `init/3`, `read/1` or `write/2`, or is no module; and
-  each line an adapter's `check/3` gives, or a check that gives no list of them
+  each line an adapter's `check/3` gives, or a check that gives no list of them; linear
+  but for a sort of the names and the did-you-mean, quadratic in the devices and the
+  bindings no point is at, as `Logex.Configuration`'s refusals are
 - `lib/logex/io/sim.ex` — `Logex.IO.Sim` (M4-1), the one adapter logex ships, a
   simulated device in a GenServer of its own, the fixture of every runner test, bound as
   `{Logex.IO.Sim, sim: sim}`, which its `check/3` and `init/3` hold it to, `sim:` alone

@@ -2903,7 +2903,9 @@ suite judged by its exit code, every survivor given a test. Throughout:
   only, short, with bounds far from what load can reach, since CI shares its cores and
   CONTRIBUTING.md forbids skipping or quarantining a test.
 - **Growth is tested in reductions**: a round's work linear in the points and the tasks,
-  `start_link/1`'s checks linear in the devices and points.
+  `start_link/1`'s checks linear in the devices and points, but for a sort of the names,
+  n log n, and a refusal's did-you-mean, quadratic in the names it is told against and the
+  devices, which only a host's mistake pays, as §4.10 accepts for a configuration's.
 - **A configuration file's new words** (M4-2) are surveyed first, and carried through the
   reader, the printer, the round trip, its totality and growth tests,
   `configuration_text_test.exs` and `naming_test.exs`.
@@ -3013,7 +3015,14 @@ and M4-7 the documents.
   raises in its words, but a value that is no configuration was refused in
   `Logex.Configuration.check/1`'s; `start/1` itself refuses it now, so `points/1` and
   `bind!/2` give its words, which `io_test.exs` pins for a value that is no struct, a map
-  and a struct that lacks its keys. The suite is at 1302 tests (8 doctests).
+  and a struct that lacks its keys. `bind!/2`'s refusal of many devices bound that no
+  point is at took time quadratic in them and the devices, its did-you-mean's and a sort
+  of the devices' names for each, 1,000 of each in 1.28 s and 2,000 in 5.6 s, though PLAN
+  said linear and the doc said nothing; it sorts the names once a call now, its doc says
+  what the did-you-mean costs, as `Logex.Configuration`'s does, and the plan's growth rule
+  above is qualified. A growth test with names no did-you-mean is looked for pins the rest
+  at n log n: 16x the devices and bindings take 16.8x the reductions, bound at 24, where
+  the sort for each took 38.4x. The suite is at 1303 tests (8 doctests).
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
   `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line

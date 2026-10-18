@@ -1207,5 +1207,39 @@ defmodule Logex.IOTest do
       ratio = bound(800) / bound(50)
       assert ratio < 20, "16x the devices took #{Float.round(ratio, 1)}x the reductions"
     end
+
+    # A refusal of as many bindings that no point is at as there are devices, each named by
+    # a binary that is not valid UTF-8, for which no did-you-mean is looked for: what is
+    # left is n log n, the sort of the names once a call. A sort of the devices' names for
+    # each such binding made it 38x.
+    defp refused(devices) do
+      config = many(devices)
+
+      io =
+        Map.merge(
+          Map.new(1..devices, &{"dev#{&1}", Plain}),
+          Map.new(1..devices, &{<<0xFF, &1::32>>, Plain})
+        )
+
+      for _ <- 1..3, reduce: :infinity do
+        least ->
+          task =
+            Task.async(fn ->
+              {:reductions, before} = Process.info(self(), :reductions)
+              assert_raise ArgumentError, fn -> Logex.IO.bind!(config, io) end
+              {:reductions, after_} = Process.info(self(), :reductions)
+              after_ - before
+            end)
+
+          min(least, Task.await(task, :infinity))
+      end
+    end
+
+    test "a refusal of bindings no point is at costs its did-you-means and n log n besides" do
+      ratio = refused(1600) / refused(100)
+
+      assert ratio < 24,
+             "16x the devices and bindings took #{Float.round(ratio, 1)}x the reductions"
+    end
   end
 end

@@ -147,19 +147,26 @@ defmodule Logex.IO do
   behaviour, naming the callbacks it lacks; and, for one that does and has `check/3`, each
   mistake its check gives in its options, or a check that gives no list of messages. The
   configuration is checked first, as `points/1` checks it.
+
+  Its time is linear in the devices, their points and the bindings, but for a sort of the
+  names, n log n, and the did-you-mean of a device bound that no point is at, which is
+  matched against every device's name: many such bindings among many devices take time
+  quadratic in the two, as `Logex.Configuration`'s refusals do. Only a host's mistake pays
+  it, and its message is linear in its problems.
   """
   def bind!(configuration, io) do
     devices = points(configuration)
     io = io!(io)
+    sorted = Enum.sort(Map.keys(devices))
 
     problems =
       Enum.flat_map(unnamed(io), &unnamed_key(&1, devices)) ++
         Enum.flat_map(
           names(devices, io),
-          &device(&1, Map.fetch(devices, &1), Map.fetch(io, &1), devices)
+          &device(&1, Map.fetch(devices, &1), Map.fetch(io, &1), sorted)
         )
 
-    bound!(problems, devices, io)
+    bound!(problems, sorted, devices, io)
   end
 
   defp io!(io) when is_map(io) and not is_struct(io), do: io
@@ -190,17 +197,18 @@ defmodule Logex.IO do
   defp spelled(true, name), do: " — did you mean #{inspect(name)}?"
   defp spelled(false, _name), do: ""
 
-  # A device's problems: its points and its binding, each found or not.
-  defp device(name, {:ok, points}, :error, _devices),
+  # A device's problems: its points and its binding, each found or not; `sorted` is the
+  # devices' names, sorted once a call, among which a did-you-mean is looked for.
+  defp device(name, {:ok, points}, :error, _sorted),
     do: ["no adapter is bound to the device `#{name}`, which " <> at(name, points)]
 
-  defp device(name, :error, {:ok, _binding}, devices),
+  defp device(name, :error, {:ok, _binding}, sorted),
     do: [
       "the device `#{name}` is bound, but no point is at it" <>
-        Declarations.suggest(name, Enum.sort(Map.keys(devices)), & &1, "devices")
+        Declarations.suggest(name, sorted, & &1, "devices")
     ]
 
-  defp device(name, {:ok, points}, {:ok, binding}, _devices), do: adapter(name, binding, points)
+  defp device(name, {:ok, points}, {:ok, binding}, _sorted), do: adapter(name, binding, points)
 
   # Each point named with its location, as the configuration spells it.
   defp at(device, [%Point{} = point]), do: "#{shown(device, point)} is at"
@@ -292,14 +300,11 @@ defmodule Logex.IO do
   defp either([one, two]), do: "#{one} or #{two}"
   defp either([one | rest]), do: one <> ", " <> either(rest)
 
-  defp bound!([], devices, io),
-    do:
-      for(
-        name <- Enum.sort(Map.keys(devices)),
-        do: entry(name, Map.fetch!(io, name), Map.fetch!(devices, name))
-      )
+  defp bound!([], sorted, devices, io),
+    do: for(name <- sorted, do: entry(name, Map.fetch!(io, name), Map.fetch!(devices, name)))
 
-  defp bound!(problems, _devices, _io), do: raise(ArgumentError, Enum.join(problems, "\n"))
+  defp bound!(problems, _sorted, _devices, _io),
+    do: raise(ArgumentError, Enum.join(problems, "\n"))
 
   defp entry(name, {module, opts}, points), do: {name, module, opts, points}
   defp entry(name, module, points), do: {name, module, [], points}
