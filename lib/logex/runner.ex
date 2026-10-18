@@ -25,6 +25,29 @@ defmodule Logex.Runner do
   pins, and never a crash of the runner. Its child spec is `restart: :temporary`
   (decision 115): nothing starts it again that no person asked to start.
 
+  **Its devices** (decisions 112, 120, 124 and 125). Each bound device runs in a process
+  of its own, linked to the runner, which holds its adapter's state and calls its
+  callbacks; the runner opens them in device-name order, reads each once, and runs the
+  first round at once, so a device that cannot be opened is `start_link/1`'s
+  `{:error, {:io_init, device, reason}}`, every device opened before it closed again.
+  - Each device reads its adapter every poll period on the runner's clock, from the time
+    it was opened, on a grid that never drifts, and gives each other message its process
+    receives to the adapter's `report/2`, where it has one: so a device that reports
+    passes each change on as it comes, between reads, and one that cannot is read.
+  - What changed since it last passed anything on, it passes on to the runner by a call,
+    one change at a time, in order. The runner merges it into the next round's inputs, and
+    a change of an event task's trigger, an input point that is a task's `single`, makes a
+    round at once, each such change its own, in address order; it answers once those
+    rounds have run and their outputs are written, so that `Logex.IO.Sim.set/3` returns
+    after them, by construction. While it waits the device answers the runner's own
+    requests to it, so that neither waits on the other.
+  - After each round every device whose outputs changed is given every one of its output
+    points, by address, and the runner waits for its answer, which comes once its adapter
+    has written them. Every device is refreshed, without a wait, before each step of a
+    round, the refresh carrying that step's deadline, its task's watchdog and one poll
+    period from the step's start, and before the write, carrying the idle watchdog's and
+    one poll period from then (decisions 125 and 128): a refresh calls no adapter.
+
   **A host's calls** go through the runner's mailbox, so each is served between two
   rounds. A mistake in one is the host's: the runner rescues the `ArgumentError`, replies
   with it, and the function raises it in the caller, the runner running on. A runner is
@@ -46,8 +69,9 @@ defmodule Logex.Runner do
 
   use GenServer, restart: :temporary
 
-  alias Logex.Runner.Clock
-  alias Logex.Runtime
+  alias Logex.{Configuration, Runtime}
+  alias Logex.IO.Point
+  alias Logex.Runner.{Clock, Device}
 
   @options [:configuration, :io, :clock, :poll, :overhead, :idle, :name]
 
@@ -58,12 +82,24 @@ defmodule Logex.Runner do
 
   @doc """
   Starts a runner linked to the caller, every option checked first in the caller (see the
-  moduledoc): `{:ok, pid}`.
+  moduledoc), opens every device in device-name order, reads each once and runs the first
+  round at once: `{:ok, pid}`, or `{:error, {:io_init, device, reason}}` for a device that
+  cannot be opened, which is the plant's state, not a host mistake, every device opened
+  before it closed again and the runner gone.
   """
   def start_link(opts) do
     {start, name} = options!(opts)
-    GenServer.start_link(__MODULE__, start, name)
+    started(GenServer.start_link(__MODULE__, start, name))
   end
+
+  # The runner opens its devices once it is running, by a call, so that a device that
+  # cannot be opened stops it normally and is told to the caller, whom its link would kill
+  # were it refused from init/1.
+  defp started({:ok, runner}), do: opened(GenServer.call(runner, :open, :infinity), runner)
+  defp started(other), do: other
+
+  defp opened(:ok, runner), do: {:ok, runner}
+  defp opened({:error, _reason} = error, _runner), do: error
 
   @doc "The value at an access path, as `Logex.Runtime.get/2` gives it: `{:ok, value}` or `{:error, reason}`."
   def get(runner, path), do: call(runner, {:get, path})
@@ -81,6 +117,14 @@ defmodule Logex.Runner do
   def init(start), do: {:ok, start}
 
   @impl GenServer
+  def handle_call(:open, _from, start), do: opening(start.devices, [], %{}, start)
+
+  # A device's changes, by address: merged into the next round's inputs, and each change of
+  # an event task's trigger its own round, in address order, answered once each has run and
+  # its outputs are written (decisions 120 and 124).
+  def handle_call({:changes, device, changes}, _from, state),
+    do: {:reply, :ok, changed(device, changes, state)}
+
   def handle_call(request, _from, state), do: {:reply, served(request, state), state}
 
   # Each request, a host's mistake in it given back to be raised in the caller.
@@ -92,6 +136,166 @@ defmodule Logex.Runner do
 
   defp serve({:get, path}, %{runtime: runtime}), do: Runtime.get(runtime, path)
   defp serve({:get!, path}, %{runtime: runtime}), do: Runtime.get!(runtime, path)
+
+  # ---- the devices -----------------------------------------------------------------------
+
+  # Each device opened in device-name order, its process linked to the runner, and read
+  # once; the first that cannot be opened closes every one opened before it.
+  defp opening([{name, module, opts, points} | rest], opened, read, start) do
+    {:ok, pid} =
+      Device.start_link(%{
+        name: name,
+        module: module,
+        opts: opts,
+        points: points,
+        runner: self(),
+        clock: start.clock,
+        poll: start.poll
+      })
+
+    device = {name, pid, points}
+    reading(Device.open(pid), device, rest, opened, read, start)
+  end
+
+  defp opening([], opened, read, start) do
+    state = running(Enum.reverse(opened), start)
+    {:reply, :ok, rounded(merged(Enum.flat_map(read, &named(&1, state)), state))}
+  end
+
+  defp reading({:ok, values}, {name, _pid, _points} = device, rest, opened, read, start),
+    do: opening(rest, [device | opened], Map.put(read, name, values), start)
+
+  defp reading({:error, reason}, {name, _pid, _points}, _rest, opened, _read, start) do
+    for {_name, pid, _points} <- Enum.reverse(opened), do: Device.close(pid)
+    {:stop, :normal, {:error, {:io_init, name, reason}}, start}
+  end
+
+  # The runner's state, once its devices are open: the anchor its clock counts from and
+  # `logical`, the resource's `now`, the sum of the elapsed_ms it has passed (§4.11); each
+  # device with its points, an input point by its device and address and each device's
+  # output points by address; the trigger every event task samples that is an input point,
+  # whose change a device makes its own round; the next round's inputs, `pending`; what
+  # each device was last written; and each task's watchdog.
+  defp running(devices, start) do
+    points = for {name, _pid, points} <- devices, point <- points, do: {name, point}
+    inputs = for {name, %Point{direction: :input} = point} <- points, do: {name, point}
+
+    singles =
+      MapSet.new(
+        for %Configuration.Task{single: single} <- start.configuration.tasks,
+            single != nil,
+            do: single
+      )
+
+    Map.merge(start, %{
+      devices: devices,
+      anchor: now(start),
+      logical: 0,
+      rounds: 0,
+      addresses: Map.new(inputs, fn {device, point} -> {{device, point.address}, point.name} end),
+      outputs:
+        Map.new(devices, fn {name, _pid, points} ->
+          {name,
+           for(%Point{direction: :output} = point <- points, do: {point.address, point.name})}
+        end),
+      triggers: MapSet.new(for {_device, point} <- inputs, point.name in singles, do: point.name),
+      pending: %{},
+      written: %{},
+      watchdogs: watchdogs(start.configuration)
+    })
+  end
+
+  defp named({device, values}, state),
+    do:
+      for({address, value} <- values, do: {Map.fetch!(state.addresses, {device, address}), value})
+
+  defp merged(changes, state), do: %{state | pending: Enum.into(changes, state.pending)}
+
+  defp changed(device, changes, state) do
+    {triggers, others} =
+      changes
+      |> Enum.sort()
+      |> Enum.map(fn {address, value} ->
+        {Map.fetch!(state.addresses, {device, address}), value}
+      end)
+      |> Enum.split_with(fn {name, _value} -> MapSet.member?(state.triggers, name) end)
+
+    Enum.reduce(triggers, merged(others, state), &rounded(merged([&1], &2)))
+  end
+
+  # ---- a round ---------------------------------------------------------------------------
+
+  # One round: the inputs taken, each step of the cycle run, every device refreshed before
+  # each with that step's deadline, its task's watchdog and a poll period from the step's
+  # start, and before the write with the idle watchdog's, and each device whose outputs
+  # changed written, in device-name order, its answer awaited (decisions 118, 125 and 128).
+  defp rounded(%{anchor: anchor, logical: logical} = state) do
+    start = now(state)
+    elapsed = max(start - anchor - logical, 0)
+    {runtime, steps} = Runtime.cycle_steps(state.runtime, elapsed, state.pending)
+    runtime = Enum.reduce(steps, runtime, &stepped(&1, &2, state))
+    outputs = Runtime.cycle_outputs(runtime)
+    refresh(state, now(state) + state.idle + state.poll)
+
+    written(
+      %{
+        state
+        | runtime: runtime,
+          logical: logical + elapsed,
+          pending: %{},
+          rounds: state.rounds + 1
+      },
+      outputs
+    )
+  end
+
+  defp stepped({_kind, task, _run} = step, runtime, state) do
+    refresh(state, now(state) + watchdog(task, state) + state.poll)
+    {runtime, _events} = Runtime.cycle_step(runtime, step)
+    runtime
+  end
+
+  defp watchdog(task, %{watchdogs: watchdogs}), do: Map.fetch!(watchdogs, task)
+
+  # Each task's watchdog by its name, the one rule's (decision 110), read once a
+  # configuration; the untimed instances' under the continuous task's name, or `:none`
+  # where none is declared, 500 ms then (decision 111).
+  defp watchdogs(%Configuration{tasks: tasks}),
+    do:
+      Map.new(
+        [%Configuration.Task{name: :none, continuous: true} | tasks],
+        &{&1.name, Configuration.watchdog(&1)}
+      )
+
+  defp refresh(%{devices: devices}, deadline),
+    do: Enum.each(devices, fn {_name, pid, _points} -> Device.refresh(pid, deadline) end)
+
+  defp written(%{devices: devices} = state, outputs),
+    do: Enum.reduce(devices, state, &write(&1, &2, outputs))
+
+  defp write({name, pid, _points}, state, outputs) do
+    values =
+      Map.new(Map.fetch!(state.outputs, name), fn {address, global} ->
+        {address, Map.fetch!(outputs, global)}
+      end)
+
+    wrote(
+      map_size(values) > 0 and Map.get(state.written, name) != values,
+      name,
+      pid,
+      values,
+      state
+    )
+  end
+
+  defp wrote(false, _name, _pid, _values, state), do: state
+
+  defp wrote(true, name, pid, values, state) do
+    :ok = Device.write(pid, values)
+    %{state | written: Map.put(state.written, name, values)}
+  end
+
+  defp now(%{clock: {module, clock}}), do: module.now_ms(clock)
 
   # The options, checked in the caller in order: the list, each key, the two it needs, and
   # then each value, the configuration first, so that its bindings are checked against a

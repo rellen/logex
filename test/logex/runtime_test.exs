@@ -1554,6 +1554,24 @@ defmodule Logex.RuntimeTest do
                start_link: 1,
                terminate: 2
              ]
+
+      # M4-3: each bound device's process, internal (no moduledoc), which the runner starts.
+      assert Enum.sort(Logex.Runner.Device.__info__(:functions)) == [
+               child_spec: 1,
+               close: 1,
+               code_change: 3,
+               handle_call: 3,
+               handle_cast: 2,
+               handle_info: 2,
+               init: 1,
+               open: 1,
+               refresh: 2,
+               start_link: 1,
+               terminate: 2,
+               write: 2
+             ]
+
+      assert {:docs_v1, _, _, _, :hidden, _, _} = Code.fetch_docs(Logex.Runner.Device)
     end
   end
 end

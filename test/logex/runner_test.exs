@@ -54,6 +54,74 @@ defmodule Logex.RunnerTest do
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
 
+  # The relay on the 10 ms task, and an event task on the panel's `e` counting its rises
+  # into `hits`, the drive's one output: a trigger at a device that reports.
+  @counted """
+  task fast interval 10 priority 1
+  task trip single e priority 0
+
+  var_global x    bool at panel.i.0
+  var_global e    bool at panel.i.1
+  var_global y    bool at panel.q.0
+  var_global hits dint at drive.q.0
+
+  program r relay with fast
+    r.in  x
+    r.out y
+
+  program c count with trip
+    c.n hits
+  """
+
+  defp counted(text \\ @counted) do
+    programs = %{
+      "relay" => program(@relay, "relay"),
+      "count" => program("var_output n dint\nadd n 1 n", "count")
+    }
+
+    {:ok, config} = Configuration.compile("plant", text, programs)
+    config
+  end
+
+  # The panel that reports and the drive that does not, on one manual clock.
+  defp plant_rig(config \\ counted(), extra \\ []) do
+    {:ok, clock} = Manual.start_link()
+    {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+    {:ok, drive} = Sim.start_link(clock: clock)
+
+    {[
+       configuration: config,
+       io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+       clock: {Manual, clock}
+     ] ++ extra, %{clock: clock, panel: panel, drive: drive}}
+  end
+
+  # The runner's device processes, by name, from its state: the refreshes they are sent
+  # are internal, and these tests trace them.
+  defp devices(runner),
+    do: Map.new(:sys.get_state(runner).devices, fn {name, pid, _} -> {name, pid} end)
+
+  # Every refresh a device was sent since it was traced, its deadline, in order: the
+  # trace of a :sys call made last marks the end, so that none is missed, one that no
+  # simulated device makes.
+  defp refreshes(device) do
+    :sys.get_status(device)
+    collected(device, [])
+  end
+
+  defp collected(device, deadlines) do
+    receive do
+      {:trace, ^device, :receive, {:"$gen_cast", {:refresh, deadline}}} ->
+        collected(device, [deadline | deadlines])
+
+      {:trace, ^device, :receive, {:system, _from, :get_status}} ->
+        Enum.reverse(deadlines)
+
+      {:trace, ^device, :receive, _other} ->
+        collected(device, deadlines)
+    end
+  end
+
   describe "start_link/1's host mistakes, each raised in the caller before anything starts" do
     test "options that are no keyword list" do
       for opts <- [:x, [1], %{configuration: nil}] do
@@ -275,6 +343,259 @@ defmodule Logex.RunnerTest do
       end)
 
       assert Process.alive?(runner)
+    end
+  end
+
+  describe "the devices (decisions 120, 124 and 125)" do
+    test "each opened in device-name order and read once at start, and the first round " <>
+           "run at once, every device with an output written" do
+      {opts, %{panel: panel, drive: drive}} = plant_rig()
+      Sim.set(panel, %{[0] => 1})
+      assert {:ok, runner} = Runner.start_link(opts)
+
+      # The relay, due at 0, saw `x` at 1 in the first round, before the clock moved.
+      assert {Sim.reads(panel), Sim.reads(drive)} == {1, 1}
+      assert Sim.writes(panel) == [%{[0] => 1}]
+      assert Sim.writes(drive) == [%{[0] => 0}]
+      assert Runner.get!(runner, "r.out") == 1
+    end
+
+    test "a device that cannot be opened is {:error, {:io_init, device, reason}}, every " <>
+           "device opened before it closed and zeroed, and the runner gone" do
+      {opts, %{panel: panel, drive: drive}} = plant_rig()
+      Sim.fail(panel, :init, {:error, :unplugged})
+      Process.flag(:trap_exit, true)
+
+      assert Runner.start_link(opts) == {:error, {:io_init, "panel", :unplugged}}
+      assert_receive {:EXIT, _runner, :normal}
+
+      # `drive` comes first, so it was opened, and is closed again, its output zeroed once.
+      assert Sim.closed?(drive)
+      assert Sim.writes(drive) == [%{[0] => 0}]
+      assert Sim.writes(panel) == []
+
+      # The first fails, and none after it is opened.
+      {opts, %{panel: panel, drive: drive}} = plant_rig()
+      Sim.fail(drive, :init, {:error, :no_route})
+      assert Runner.start_link(opts) == {:error, {:io_init, "drive", :no_route}}
+      assert {Sim.reads(panel), Sim.reads(drive)} == {0, 0}
+      refute Sim.closed?(panel)
+    end
+
+    test "each read every poll period from its opening, on a grid, 10 ms unless set" do
+      for {extra, reads} <- [{[], 4}, {[poll: 5], 7}, {[poll: 7], 5}] do
+        {opts, %{clock: clock, panel: panel, drive: drive}} = plant_rig(counted(), extra)
+        {:ok, _runner} = Runner.start_link(opts)
+        Manual.advance(clock, 30)
+        assert {Sim.reads(panel), Sim.reads(drive)} == {reads, reads}, inspect(extra)
+      end
+    end
+
+    test "a change a device that does not report reads is passed on at its next poll, " <>
+           "a trigger's making its round then" do
+      # No periodic task, so that every round is a trigger's.
+      text =
+        @counted
+        |> String.replace("task fast interval 10 priority 1\n", "")
+        |> String.replace("program r relay with fast", "program r relay with trip")
+
+      {opts, %{clock: clock}} = plant_rig(counted(text))
+      {:ok, quiet} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(Keyword.put(opts, :io, %{opts[:io] | "panel" => {Sim, sim: quiet}}))
+
+      Sim.set(quiet, [1], 1)
+      Manual.advance(clock, 9)
+      assert Runner.get!(runner, "hits") == 0
+      Manual.advance(clock, 1)
+      assert Runner.get!(runner, "hits") == 1
+
+      # Read again at each poll, it has not changed, and makes no round.
+      rounds = :sys.get_state(runner).rounds
+      Manual.advance(clock, 20)
+      assert Runner.get!(runner, "hits") == 1
+      assert :sys.get_state(runner).rounds == rounds
+    end
+
+    test "a device with no output point is never written, nor zeroed" do
+      text =
+        @counted
+        |> String.replace("var_global e    bool at panel.i.1", "var_global e    bool at keys.i.0")
+
+      {opts, %{clock: clock}} = plant_rig(counted(text))
+      {:ok, keys} = Sim.start_link(reports: true, clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(Keyword.update!(opts, :io, &Map.put(&1, "keys", {Sim, sim: keys})))
+
+      Sim.set(keys, [0], 1)
+      assert Runner.get!(runner, "hits") == 1
+      assert Sim.reads(keys) == 1
+      assert Sim.writes(keys) == []
+
+      # Closed when a device after it cannot be opened, it is written nothing then either.
+      {opts, %{clock: clock, panel: panel}} = plant_rig(counted(text))
+      {:ok, keys} = Sim.start_link(clock: clock)
+      Sim.fail(panel, :init, {:error, :unplugged})
+      io = Map.put(opts[:io], "keys", {Sim, sim: keys})
+
+      assert {:error, {:io_init, "panel", :unplugged}} =
+               Runner.start_link(Keyword.put(opts, :io, io))
+
+      assert Sim.closed?(keys)
+      assert Sim.writes(keys) == []
+    end
+
+    test "a round passes the time since the last, on the runner's clock" do
+      text =
+        @counted
+        |> String.replace(
+          "program c count with trip\n  c.n hits",
+          "program c clocked with trip\n  c.n hits"
+        )
+
+      programs = %{
+        "relay" => program(@relay, "relay"),
+        "clocked" =>
+          program("var_output n dint\nvar t ton\nxio t.dn ton t 100000\nadd t.acc 0 n", "clocked")
+      }
+
+      {:ok, config} = Configuration.compile("plant", text, programs)
+      {opts, %{clock: clock, panel: panel}} = plant_rig(config)
+      {:ok, runner} = Runner.start_link(opts)
+
+      # The timer starts at the rise at 2, and reads 5 ms at the rise at 7.
+      Manual.pass(clock, 2)
+      Sim.set(panel, [1], 1)
+      Sim.set(panel, [1], 0)
+      Manual.pass(clock, 5)
+      Sim.set(panel, [1], 1)
+      assert Runner.get!(runner, "hits") == 5
+    end
+
+    test "a change of an event task's trigger makes a round at once, each its own, and " <>
+           "set/3 returns once it has run and its outputs are written" do
+      {opts, %{panel: panel, drive: drive}} = plant_rig()
+      {:ok, runner} = Runner.start_link(opts)
+
+      Sim.set(panel, [1], 1)
+      assert Runner.get!(runner, "hits") == 1
+      assert Sim.outputs(drive) == %{[0] => 1}
+
+      # A fall is a change too, its own round, which runs no event task; and the next rise
+      # another.
+      Sim.set(panel, [1], 0)
+      Sim.set(panel, [1], 1)
+      assert Runner.get!(runner, "hits") == 2
+      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}, %{[0] => 2}]
+    end
+
+    test "a change of another input is merged, makes no round, and the next round takes " <>
+           "it, with the trigger's own change" do
+      {opts, %{panel: panel}} = plant_rig()
+      {:ok, runner} = Runner.start_link(opts)
+
+      Sim.set(panel, [0], 1)
+      assert Runner.get!(runner, "x") == 0
+      assert Sim.writes(panel) == [%{[0] => 0}]
+
+      # One report with both: the trigger's round takes `x` too, and the relay, not due
+      # at 0 once it has run, leaves `y` as it was.
+      Sim.set(panel, %{[1] => 1})
+      assert Runner.get!(runner, "x") == 1
+      assert Runner.get!(runner, "hits") == 1
+    end
+
+    test "each change of a trigger in one report its own round, in address order" do
+      text =
+        @counted
+        |> String.replace(
+          "task trip single e priority 0",
+          "task trip single e priority 1\ntask two single f priority 0"
+        )
+        |> String.replace(
+          "var_global e    bool at panel.i.1",
+          "var_global e    bool at panel.i.1\nvar_global f    bool at panel.i.2\nvar_global seen dint"
+        )
+        |> Kernel.<>("\nprogram d copy with two\n  d.a hits\n  d.b seen\n")
+
+      programs = %{
+        "relay" => program(@relay, "relay"),
+        "count" => program("var_output n dint\nadd n 1 n", "count"),
+        "copy" => program("var_input a dint\nvar_output b dint\nadd a 0 b", "copy")
+      }
+
+      {:ok, config} = Configuration.compile("plant", text, programs)
+      {opts, %{panel: panel, drive: drive}} = plant_rig(config)
+      {:ok, runner} = Runner.start_link(opts)
+
+      # Both rise in one report: `e`'s round first, at [1], counting 1, and then `f`'s, at
+      # [2], which copies the count it finds; in one round `two`, of the higher priority,
+      # would copy it before `trip` counted.
+      Sim.set(panel, %{[2] => 1, [1] => 1})
+      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}]
+      assert {Runner.get!(runner, "hits"), Runner.get!(runner, "seen")} == {1, 1}
+    end
+
+    test "a device written only where its outputs changed, waited for, and answering the " <>
+           "runner's write while it waits on its own change" do
+      text =
+        String.replace(
+          @counted,
+          "program r relay with fast\n  r.in  x",
+          "program r relay with trip\n  r.in  e"
+        )
+
+      {opts, %{panel: panel}} = plant_rig(counted(text))
+      {:ok, _runner} = Runner.start_link(opts)
+      assert Sim.writes(panel) == [%{[0] => 0}]
+
+      # The panel's own change makes a round that writes the panel, which answers the write
+      # while it waits for that round: `y` follows `e`.
+      Sim.set(panel, [1], 1)
+      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 1}]
+
+      # A fall runs no event task, so `y` stays 1, and the panel is not written again.
+      Sim.set(panel, [1], 0)
+      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 1}]
+    end
+
+    test "every device refreshed before each step with its deadline, its task's watchdog " <>
+           "and a poll period from the step's start, and before the write with the idle " <>
+           "watchdog's" do
+      text =
+        String.replace(
+          @counted,
+          "task trip single e priority 0",
+          "task trip single e priority 0 watchdog 40"
+        )
+
+      {opts, %{clock: clock, panel: panel}} = plant_rig(counted(text), poll: 7, idle: 300)
+      {:ok, runner} = Runner.start_link(opts)
+      %{"panel" => panel_device, "drive" => drive_device} = devices(runner)
+      for device <- [panel_device, drive_device], do: :erlang.trace(device, true, [:receive])
+
+      # A rise of `e` at 2: the event task's step, 40 and 7 on, and the write's, 300 and 7.
+      Manual.pass(clock, 2)
+      Sim.set(panel, [1], 1)
+      assert refreshes(panel_device) == [2 + 47, 2 + 307]
+      assert refreshes(drive_device) == [2 + 47, 2 + 307]
+
+      # A fall runs no step: the write's alone.
+      Manual.pass(clock, 3)
+      Sim.set(panel, [1], 0)
+      assert refreshes(drive_device) == [5 + 307]
+
+      # A watchdog left unset is 500 ms, and the idle watchdog 500 ms and the poll period
+      # 10 ms unless set.
+      {opts, %{clock: clock, panel: panel}} = plant_rig()
+      {:ok, runner} = Runner.start_link(opts)
+      %{"drive" => drive_device} = devices(runner)
+      :erlang.trace(drive_device, true, [:receive])
+      Manual.pass(clock, 2)
+      Sim.set(panel, [1], 1)
+      assert refreshes(drive_device) == [2 + 510, 2 + 510]
     end
   end
 end
