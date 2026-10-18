@@ -25,7 +25,8 @@ items, M3-1, M3-2, M3-3 and M3-4, landing the same day and its last, M3-5, on 20
 so Milestone 3 is done (§3, "Milestone 3"). Milestone 4, the wall-clock runner, was
 designed and decided on 2026-10-17 (§3, "Milestone 4"), its first item, M4-1, landing the
 same day, its second, M4-2, on 2026-10-18, and its third, M4-3, the same day, with the
-answers to its review and the maintainer's two answers, decisions 130 and 131.
+answers to its review and the maintainer's two answers, decisions 130 and 131, and the
+answers to the verification of those, decision 132.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -3282,6 +3283,23 @@ and M4-7 the documents.
   equivalences hold for M4-3 and are to be looked at again when M4-5's forcing and edits
   through the runner land: a round's inputs kept, C's floor of 1, and the share's count
   with no untimed program.
+
+  **Its verification, 2026-10-18.** A verification of those six commits re-ran the
+  review's probes and 27 mutants, 26 red and the elapsed time's clamp equivalent, and
+  found two low defects. Two commits on it, each gated and with its mutation table:
+  (1) `a5d0b1a`, a call that reached the runner unanswered as `stop/2` stopped it with a
+  reason of its own, `:abandoned`, exited its caller, an exit escaping the API: every
+  reason the runner goes down with is now the runner not running, as the moduledoc says;
+  1 rule, red;
+  (2) `7cbe97b`, decision 132: a poll in the millisecond a round is due wrote the old
+  outputs again just before the round wrote the new ones, twice the writes a 10 ms task
+  on the default poll needs; a poll that finds a round due, come due less than a poll
+  period before it and not yet run, now leaves its write to that round, the runner
+  telling every device after each round when the next is due, and the device writing
+  again at the round's end only where the round wrote nothing, counted from the poll;
+  9 rules, all red. 1408 tests pass on Elixir 1.20.4 (9 of them doctests), up from 1404.
+  Decision 132 was taken without the maintainer, who may prefer its second option, the
+  rule as landed with its cost stated.
 - **M4-4 · The watchdogs and the fault path.** *Done when* each of these is a test on the
   manual clock, a hung device's deadline in real time and short:
   - a timed task whose run outlasts its watchdog trips before its round's write, naming
