@@ -2866,24 +2866,24 @@ ms after the motor stopped. "The Done-when tests" are read as M3-1's to M3-5's i
 ### Milestone 4 — the wall-clock runner
 
 **Designed and decided 2026-10-17** (`docs/organisation.md` §4.11 and §7, decisions
-108–121, and 122–124 after M4-1's review; "decision N" in this section is that §7's).
-§8's second domain gap: a runner that runs a configuration's resource on the real clock,
-through device adapters, with a watchdog, the one piece of logex that reads a clock. A design pass on `d3931bd` designed
-it and built a throwaway spike of every piece, on the branch `backup/runner-design`
-(`spike-runner/`), never landed. The maintainer changed three of its answers: rounds run
-back to back while untimed programs exist, a share of the time, 20% unless set, kept for
-the runner's own work, as IEC's rule 4 and the conventional continuous task with its
-system overhead time slice (decision 108), not on a steady beat; a watchdog is 500 ms
-unless set (109), not required; and each task has its own, on its line (110), not one for
-the controller. Two the maintainer added, outside the questions put: a configuration may
-declare its one continuous task, `task main continuous watchdog 200` (111); and a device
-may report its inputs' changes, an event task whose trigger changed running at once
-between rounds, a device that cannot report read every poll period, 10 ms unless set
-(112). The rest the maintainer took as recommended: a
-watchdog trip zeroes every output once, stops, reports and waits for a restart, the last
-state readable, confirming decision 14 (113); a failing device trips (114); a crashed
-runner stays down (115); a normal stop zeroes every output first (116); and input forcing
-comes now, kept across a restart and listed in the status (117). Decisions 118–121 are the
+108–121, and 122–126 after M4-1's review; "decision N" in this section is that §7's). §8's
+second domain gap: a runner that runs a configuration's resource on the real clock,
+through device adapters, with a watchdog, the one piece of logex that reads a clock. A
+design pass on `d3931bd` designed it and built a throwaway spike of every piece, on the
+branch `backup/runner-design` (`spike-runner/`), never landed. The maintainer changed
+three of its answers: rounds run back to back while untimed programs exist, a share of the
+time, 20% unless set, kept for the runner's own work, as IEC's rule 4 and the conventional
+continuous task with its system overhead time slice (decision 108), not on a steady beat;
+a watchdog is 500 ms unless set (109), not required; and each task has its own, on its
+line (110), not one for the controller. Two the maintainer added, outside the questions
+put: a configuration may declare its one continuous task, `task main continuous watchdog
+200` (111); and a device may report its inputs' changes, an event task whose trigger
+changed running at once between rounds, a device that cannot report read every poll
+period, 10 ms unless set (112). The rest the maintainer took as recommended: a watchdog
+trip zeroes every output once, stops, reports and waits for a restart, the last state
+readable, confirming decision 14 (113); a failing device trips (114); a crashed runner
+stays down (115); a normal stop zeroes every output first (116); and input forcing comes
+now, kept across a restart and listed in the status (117). Decisions 118–121 are the
 record's routine choices where the answers left one open: the cycle in steps, so that the
 runner times each task's run (118); each device's heartbeat at the longest watchdog plus a
 poll period, the runner refreshing every device at least once a poll period (119); every
@@ -2891,12 +2891,16 @@ device read every poll period, a reporting one passing its changes on between re
 each change of a trigger its own round (120); and the share and the poll period options of
 the runner, not words of the configuration file (121). After M4-1's review, on 2026-10-18,
 the record took three more where it had been silent: rounds back to back one a clock
-millisecond at most, so that they are defined on a clock that does not move, and the
-share served in the conventional table's slots, a share of the continuous task's time and
-the runner's own, from 10% to 90% (122); a trigger logic writes rounding at the next
+millisecond at most, so that they are defined on a clock that does not move, and the share
+served in the conventional table's slots, a share of the continuous task's time and the
+runner's own, from 10% to 90% (122); a trigger logic writes rounding at the next
 millisecond, which closes decision 50's livelock (123); and a device passing its changes
 on by a call the runner answers once the round they cause has run, so that a test's
-`Logex.IO.Sim.set/3` returns after that round by construction (124).
+`Logex.IO.Sim.set/3` returns after that round by construction (124). Two more replace
+looser rules: every device refreshed before every step, each refresh carrying that step's
+own deadline, its watchdog plus a poll period, which supersedes decision 119's rule and
+its cost (125); and a round's watchdog trip naming each of its steps with its time, so
+that a slow timed task in the round is seen (126).
 
 Each item lands as a gated series, each commit gated alone by `mix format
 --check-formatted`, `mix compile --force --warnings-as-errors` in both environments and
@@ -3052,7 +3056,27 @@ and M4-7 the documents.
   passes each change on by a call the runner answers once the change is merged or the
   round it makes has run and been written, so `Logex.IO.Sim.set/3` returns after that
   round by construction, and a real run takes each device's changes one at a time, in
-  order (124).
+  order (124). Decision 119's heartbeat refreshed a device only when a refresh was due and
+  only between steps, so in a model a step that took exactly its watchdog, 9 ms after the
+  last refresh, left 1 ms before the device latched, and a runner stuck in the conveyor's
+  task held its contactor for the fan's 2 s; every device is now refreshed before every
+  step, each refresh carrying that step's own deadline, so a stuck conveyor's step zeroes
+  every device at its 50 ms and a poll period, the poll period the margin, and the record
+  says why a heartbeat for each device fails with no preemption (125, superseding 119's
+  rule and cost, with M4-4's Done-when). Decision 118 passed over timing the whole cycle
+  because it would trip naming a task that was not slow, which decision 111's watchdog
+  for each round does when a timed task in it is slow; a round's trip now names each of
+  its steps with its time (126). M4-6's Done-when asked for every trip reason, among them
+  `{:internal, message}`, which the host contract makes unreachable; it is left out of the
+  walk, and M4-4 reaches it through one hidden option, a seam named there. The
+  milestone's done sentence had a stopped or killed runner restarted, though such a
+  runner is gone, and asked for each timed task "on its grid as closely as the machine
+  allows", which no test can check; it says the host starts a new runner, and that no
+  run comes before its grid time and that runs and periods reported missed together make
+  one for each grid time. And §4.11 said the simulated device reports each input it is
+  set to, where it reports changes, and gives a value of the test's choosing for a read
+  alone, where a report takes one too, and decision 120 paraphrased p.46 as a warning of
+  a pulse unseen, where it warns of an overlap; each is corrected.
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
   `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line
@@ -3106,7 +3130,7 @@ and M4-7 the documents.
   2. `start_link/1` and its host mistakes, relayed calls among them;
   3. the device processes: reading every poll period, reports passed on by a call the
      runner answers once the round they cause has run (decision 124), writes and
-     refreshes (decisions 119 and 120);
+     refreshes, each refresh carrying its deadline (decisions 120 and 125);
   4. the rounds (decisions 108 and 122), one a clock millisecond with the share's slots,
      between due times otherwise, each change of a trigger its own round, at once from a
      device and at the next millisecond from logic (decision 123);
@@ -3115,11 +3139,20 @@ and M4-7 the documents.
 - **M4-4 · The watchdogs and the fault path.** *Done when* each of these is a test on the
   manual clock, a hung device's deadline in real time and short:
   - a timed task whose run outlasts its watchdog trips before its round's write, naming
-    it, and so does a round that outlasts the continuous task's (decisions 110 and 111);
-  - a stuck runner's devices zero themselves within their heartbeat time (decision 119);
+    it, and so does a round that outlasts the continuous task's (decisions 110 and 111),
+    naming each of its steps with its time, a slow timed task's among them (decision
+    126);
+  - a stuck runner's devices zero themselves by the deadline their last refresh carried,
+    a runner stuck in the conveyor's 50 ms step within 50 ms and a poll period of its
+    start, not the plant's longest watchdog, and one stuck in its own work within the
+    continuous task's watchdog and a poll period, a step that takes exactly its watchdog
+    leaving a poll period's margin (decision 125);
   - each kind of I/O fault trips, naming its device (decision 114);
   - a killed runner's devices zero and close (decision 115);
-  - a hung device is killed, and opened again at a restart.
+  - a hung device is killed, and opened again at a restart;
+  - an exception out of the core trips `{:internal, message}`, reached through one hidden
+    option of `start_link/1` that stands a module of the test's in for `Logex.Runtime`'s
+    steps, the one seam the runner has for a fault no host can cause.
 
   In each, every device that answers is written 0 exactly once and nothing after; the
   resource is kept for `get/2`; and `restart/2`, cold and warm, resumes with the first
@@ -3128,7 +3161,7 @@ and M4-7 the documents.
   cannot reach it. Its landing order:
   1. the trip and restart;
   2. each task's watchdog and the continuous task's per round;
-  3. the devices' heartbeat;
+  3. the devices' deadlines, carried by every refresh (decision 125);
   4. the I/O faults;
   5. the runner's death.
 - **M4-5 · Edits and forcing through the runner.** *Done when* §4.4's plant, edited while
@@ -3145,7 +3178,9 @@ and M4-7 the documents.
   report and that do not, random waits and presses, injected faults, edits, forces and
   restarts, checked against a model that calls `cycle/3` directly with the recorded times
   and inputs, and a model of the watchdogs and the trip that knows nothing of the runner.
-  *Done when* its reach is asserted, every event kind and trip reason reached.
+  *Done when* its reach is asserted, every event kind and every trip reason reached but
+  `{:internal, message}`, which the host contract makes unreachable from a walk and M4-4
+  reaches through its seam.
 - **M4-7 · The documents.** README's "Running a plant on the clock", with a real run, and
   "What logex is not", plainly; CLAUDE.md's Key Files; `docs/organisation.md` §4.5's
   adapter contract, §4.6's watchdog paragraph, §5's row and decision 14's annotation, as
@@ -3153,15 +3188,20 @@ and M4-7 the documents.
 
 **Milestone 4 is done when** §4.4's plant, loaded from files on disk with a box counter in
 its continuous task, runs on the real clock through bound devices, its untimed programs
-back to back with the runner's share kept, each timed task on its grid as closely as the
-machine allows and every late period reported; a host test drives the same plant on a
-manual clock with simulated devices, one reporting its changes and one only read, and its
-outputs and events are exactly those `cycle/3` gives for the same times and inputs; with
-no untimed program the plant rounds only when a task is due or a trigger changes; a task
-that outlasts its watchdog, a device that fails, and a runner that is stopped, stuck or
-killed each leave every output that can still be written at 0, written once, and nothing
-runs again until the host restarts it; a forced input holds across a restart; and an
-online edit is stepped through the running runner between rounds.
+back to back, one round a clock millisecond at most, with the runner's share kept, and
+each timed task's runs never before their times on its grid, its runs and the periods it
+reports missed together one for each grid time passed; a host test drives the same plant
+on a manual clock with simulated devices, one reporting its changes and one only read,
+and its outputs and events are exactly those `cycle/3` gives for the same times and
+inputs; with no untimed program the plant rounds only when a task is due or a trigger
+changes; a task that outlasts its watchdog, a device that fails, and a runner that is
+stopped, stuck or killed each leave every output that can still be written at 0, written
+once; a tripped runner runs nothing again until the host restarts it, and one stopped or
+killed is gone, its child spec `restart: :temporary`, so that the host starts a new one;
+a forced input holds across a restart; and an online edit is stepped through the running
+runner between rounds. *(Reworded 2026-10-18, after M4-1's review: "each timed task on
+its grid as closely as the machine allows" could not be tested, and "nothing runs again
+until the host restarts it" said a stopped or killed runner could be restarted.)*
 
 ---
 
@@ -3767,7 +3807,7 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    tasks' instances by priority and returning every output point. A wall-clock runner,
    the only code that will read a clock, comes after Milestone 2 (`docs/organisation.md`
    §5). *(Milestone 4, designed and decided 2026-10-17, §3: decisions 108–121, and
-   122–124 after M4-1's review, 2026-10-18.)*
+   122–126 after M4-1's review, 2026-10-18.)*
 3. **A tag table with types.** Landed with M1-3.
 4. **Comparisons (`eq ne lt gt le ge` — IEC names, see `docs/naming.md`)** — high value,
    low cost. *Landed with M1-6, on dints.*

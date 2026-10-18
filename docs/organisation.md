@@ -18,13 +18,13 @@ decisions 55–66). Milestone 3, the missing instruction set, was decided on 202
 (decisions 67–92) and landed by 2026-10-15: IEC's counters, the other timers, integer
 arithmetic, the pulse coils and the forward jump, M3-1 to M3-5 (decisions 93–107). So
 Milestones 1 to 3, OE-1 and OE-2 have landed. Milestone 4, the wall-clock runner, was
-designed and decided on 2026-10-17 (§4.11, decisions 108–121), and its first item,
-M4-1, the clocks, the adapter behaviour and the simulated device, landed the same day;
-its review's answers followed on 2026-10-18 (decisions 122–124).** On 2026-09-28 the
+designed and decided on 2026-10-17 (§4.11, decisions 108–121), and its first item, M4-1,
+the clocks, the adapter behaviour and the simulated device, landed the same day; its
+review's answers followed on 2026-10-18 (decisions 122–126).** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
-1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6 the §6.1
-changes, and §3's Milestone 2 the §6.2 items. The syntax below is decided, but
+1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
+the §6.1 changes, and §3's Milestone 2 the §6.2 items. The syntax below is decided, but
 each new word still gets its `docs/naming.md` stanza before its code lands, and a stanza
 may still change a spelling. It was written against `37b7932`; the rationale stays here,
 and the plan of record is `PLAN.md`.
@@ -741,8 +741,8 @@ budget in the core: rung evaluations per scan. *(Decided 2026-10-17, §4.11: eac
 its own watchdog, 500 ms unless its line sets one, the continuous task's per round
 (decisions 109–111), timed by the runner at the boundaries of the cycle's steps (decision
 118), and each device's heartbeat zeroes its outputs if the runner stops refreshing it
-(decision 119); a trip stops the plant with every output off once, confirming decision 14
-(decision 113).)*
+(decision 119), by the deadline its last refresh carried (decision 125); a trip stops the
+plant with every output off once, confirming decision 14 (decision 113).)*
 
 **Where timers get their time.** Every scan receives a read-only `%Logex.Scan{now:,
 first:}`, and `evaluate/3` threads it. Each timer instance keeps its own last-scanned time
@@ -2490,10 +2490,11 @@ is 500 ms unless set (109) and each task's own (110). Two more the maintainer as
 outside the questions put: a configuration may declare its continuous task (111), and a
 device may report its inputs' changes (112). The rest were taken as recommended
 (113–117). Decisions 118–121 are this record's routine choices, each with the
-alternative it passes over, and so are 122–124, taken on 2026-10-18 after M4-1's review
+alternative it passes over, and so are 122–126, taken on 2026-10-18 after M4-1's review
 found the record silent on how rounds run on a clock that does not move, on a trigger
-logic writes and on where a test waits; the rest of this section is routine too, each
-choice with its reason. Where a rule changes decided text above, that text is annotated
+logic writes and on where a test waits, and loose on the heartbeat's margin and on what a
+round's trip names; the rest of this section is routine too, each choice with its
+reason. Where a rule changes decided text above, that text is annotated
 where it stands. `PLAN.md` §3's Milestone 4 gives the items and their order.
 
 **Words.** A *round* is a cycle the runner makes on the clock: it takes the inputs, runs
@@ -2607,19 +2608,20 @@ and a bound device no point is at, are the host's mistakes at start (§4.5).
   rounds that take no time (decision 123).
 - **Writing.** After each round the runner gives each device whose outputs changed its
   output points, every one by address, and waits for its answer, which the device gives
-  once its adapter has written them; a device with nothing new is refreshed with the
-  outputs it last had, without a wait, at least once a poll period (decision 119), so a
-  device's own loss-of-master state is never reached while the runner runs.
+  once its adapter has written them; every device is refreshed with the outputs it last
+  had, without a wait, before every step and at least once a poll period while the runner
+  waits, each refresh carrying its next deadline (decision 125), so a device's own
+  loss-of-master state is never reached while the runner runs.
 - **Order.** Devices are opened, written and zeroed in device-name order, one after
   another, so a run is deterministic; in parallel is later, once a real network adapter
   has been measured.
-- **Failing.** Each callback runs in its device's process, guarded, so a raise, a throw
-  or an exit is an `{:error, ...}` there. An error returned, a raise, a value that does not
-  fit, an unknown address, no answer within the device's deadline, its heartbeat time
-  (decision 119), and its process going down are each an I/O fault, which trips the
-  runner (decision 114). A device stuck inside its adapter is killed and opened again at
-  the next restart; its outputs cannot be zeroed from software, and are what the device
-  does on losing its master.
+- **Failing.** Each callback runs in its device's process, guarded, so a raise, a throw or
+  an exit is an `{:error, ...}` there. An error returned, a raise, a value that does not
+  fit, an unknown address, no answer within the device's deadline, the one its last
+  refresh carried (decision 125), and its process going down are each an I/O fault, which
+  trips the runner (decision 114). A device stuck inside its adapter is killed and opened
+  again at the next restart; its outputs cannot be zeroed from software, and are what the
+  device does on losing its master.
 
 **The adapter behaviour**, §4.5's sketch revised so that every callback can fail without
 raising, a device can report its changes and be closed:
@@ -2662,39 +2664,52 @@ end
 test owns, `Logex.IO.Sim.start_link/1`, bound as `{Logex.IO.Sim, sim: sim}`: `set/2` and
 `set/3` set its inputs, `outputs/1` gives the last value written to each output,
 `writes/1` every write in order, so that "zeroed once" can be asserted, `reads/1` the
-reads made, and `closed?/1` whether it was closed. A sim is one device's: another device's
-process opens it only once the first has closed it or gone down, which its `check/3`
-says at start where it can and its `init/3` where two open it at once. *(Added on
-2026-10-18, after M4-1's review, which found one sim bound to `panel` and `drive` taken,
-its reports reaching the last device to open it and the two devices' outputs written
-over each other.)* Started with `reports: true` it reports
-each input it is set to the device that opened it. `fail/3` acts out one failure on the
-next call of the callback it names: an error, a raise, a throw, an exit, a hang, a delay,
-on the manual clock it was started with or else in real time, or, for a read, a value of
-the test's choosing. It is the fixture of every runner test, and README's example runs on
-it.
+reads made, and `closed?/1` whether it was closed. Started with `reports: true` it
+reports each change of an input to the device that opened it, the inputs one `set/2`
+changes as one report, and an input set to the value it had is no change. `fail/3` acts
+out one failure on the next call of the callback it names: an error, a raise, a throw, an
+exit, a hang, a delay, on the manual clock it was started with or else in real time, or,
+for a read or a report, a value of the test's choosing. A sim is one device's: another
+device's process opens it only once the first has closed it or gone down, which its
+`check/3` says at start where it can and its `init/3` where two open it at once. It is
+the fixture of every runner test, and README's example runs on it. *(Corrected on
+2026-10-18, after M4-1's review, which found that this paragraph said the sim reports
+each input it is set to, where it reports changes, and a value of the test's choosing for
+a read alone, where a report takes one too; and which found one sim bound to `panel` and
+`drive` taken, its reports reaching the last device to open it and the two devices'
+outputs written over each other, which is refused now.)*
 
-**The watchdogs** (decisions 109, 110, 111 and 119). Each task has its own watchdog time,
-500 ms unless its line sets one, `task fast interval 10 priority 1 watchdog 50`; the
-continuous task's is on its own line, `task main continuous watchdog 200`, or 500 ms.
+**The watchdogs** (decisions 109, 110, 111, 119, 125 and 126). Each task has its own
+watchdog time, 500 ms unless its line sets one, `task fast interval 10 priority 1 watchdog
+50`; the continuous task's is on its own line, `task main continuous watchdog 200`, or 500
+ms.
 - **What is timed.** A timed task's run, from the start of its first instance's scan to
   the end of its last, on the runner's clock, read at the boundaries of the cycle's steps
   (decision 118); and each round of the continuous task, from the round's start, when it
   takes its inputs, to the end of its last program's scan, the timed tasks run in that
   round included, as the conventional watchdog counts the time of the tasks that
-  interrupt its task (the tasks, programs and routines manual, p.34). A task's wait for the round in
-  progress is not in its time.
+  interrupt its task (the tasks, programs and routines manual, p.34), its trip naming each
+  step with its time, so that the slow one is seen (decision 126). A task's wait for the
+  round in progress is not in its time.
 - **The runner's check.** After each step the runner compares the time against the
   task's watchdog; over it, it trips (decision 113) before the round's outputs are
   written, so a round that ran too long never reaches the plant. This replaces the
   design's one gap between two writes, which had one watchdog to measure against.
-- **Each device's heartbeat.** A device that hears nothing from the runner for its
-  heartbeat time, the longest watchdog of any task the configuration runs plus one poll
-  period, writes 0 to every output once, latches and tells the runner, which trips when it
-  next runs, `{:watchdog, {:device, device, time}}`. The runner refreshes every device at
-  least once a poll period, between rounds, between two steps of a round and while it
-  waits, so it never misses one while it is well, and a runner stuck anywhere, in a round,
-  a request or a bug, leaves every device that answers at 0 within that time.
+- **Each device's heartbeat** (decision 125). Every refresh carries a deadline, the time
+  by which the device must hear from the runner again. The runner refreshes every device
+  before every step of a round, the deadline that step's task's watchdog plus one poll
+  period from the step's start, and before it serves its own work, writes a round's
+  outputs or waits, the continuous task's watchdog plus one poll period, the continuous
+  task being the one whose share that time is (decision 122), refreshing again at least
+  once a poll period while it waits. A device that hears nothing by the deadline its last
+  refresh carried writes 0 to every output once, latches and tells the runner, which
+  trips when it next runs, `{:watchdog, {:device, device, time}}`. A runner that is well
+  never misses one, each step ending within its watchdog or tripping and the poll period
+  the margin, and a runner stuck in the conveyor's 50 ms step leaves every device that
+  answers at 0 within 50 ms and a poll period, not within the plant's longest watchdog.
+  Without preemption a step holds every refresh, so the deadline is the step's, carried
+  to every device; one for each device, from the tasks that drive its points, would latch
+  the panel under a fan run that is well.
 
 **A trip** (decisions 113 and 114) has one path, whatever caused it: the runner stops
 scheduling, its wake cancelled and a stale one ignored; every output is written 0 once,
@@ -2707,22 +2722,28 @@ releases every latch, calls `Logex.Runtime.restart/2`, which keeps the input ima
 every other global back to its initial value, and runs the first round at once, the clock
 not counting the stopped time. `:warm` is `:cold` until `retain` lands. A trip's reason is
 one of:
-- `{:watchdog, {:task, task, took_ms, limit_ms}}`, `task` the continuous task's name, or
-  `:none` where the configuration declares none, as an event names it;
+- `{:watchdog, {:task, task, took_ms, limit_ms}}`, a timed task's run;
+- `{:watchdog, {:round, task, took_ms, limit_ms, steps}}`, a round of the continuous task,
+  `task` its name, or `:none` where the configuration declares none, as an event names it,
+  and `steps` each step the round ran, in the order run, `{task, ms}`, the continuous
+  task's programs under its own name, so that a timed task's slow run is seen (decision
+  126);
 - `{:watchdog, {:device, device, time_ms}}`, a device's heartbeat;
 - `{:io, device, cause}`, `cause` one of `:timeout`, `{:error, term}`, `{:raised,
   message}`, `{:thrown, term}`, `{:exited, term}`, `{:bad_value, address, value}`,
   `{:unknown_address, address}` and `{:down, reason}`;
 - `{:internal, message}`, an exception out of the core, which the host contract says
   cannot happen: tripping rather than crashing keeps the state for diagnosis, and zeroes
-  the outputs either way.
+  the outputs either way. No host can cause it, so a test reaches it through one seam, a
+  hidden option of `start_link/1` that stands a module of the test's in for
+  `Logex.Runtime`'s steps (`PLAN.md` M4-4).
 
 **What fails, and what happens.**
 
 | What fails | How it is seen | What happens |
 |---|---|---|
 | A task's run or a round outlasts its watchdog | the runner's check after each step | trip before the round's write |
-| The runner is stuck | each device's heartbeat | the devices zero and latch; the runner trips when it next runs |
+| The runner is stuck | each device's deadline, which its last refresh carried | the devices zero and latch; the runner trips when it next runs |
 | An adapter's callback fails, or gives a bad value or address | guarded in the device's process; the runner's checks | trip, every other device zeroed |
 | An adapter hangs | no answer within the device's deadline | trip; the device's process killed, its outputs left to the device; opened again at a restart |
 | A device's process dies | the runner traps the exit | trip; opened again at a restart |
@@ -2889,8 +2910,9 @@ VM do not, and the documents say so.
   does not count a suspension, so a laptop that sleeps would wake with no trip and no
   overlap, its devices' heartbeats on the same clock. It must be tried on a real machine
   before README says what a sleep does.
-- *A long request*: one the runner serves whole and that takes longer than the heartbeat
-  time trips the plant, which is why accept runs in the caller (decision 119).
+- *A long request*: one the runner serves whole and that takes longer than the
+  continuous task's watchdog and a poll period trips the plant, which is why accept runs
+  in the caller (decisions 119 and 125).
 - *Plants larger than their watchdogs*: 1,000 motors cost 27 ms a cycle, so README gives
   the measured cost per instance for a programmer to size each watchdog.
 - *Determinism of real devices*: exact replay holds given the same inputs, and a real
@@ -2914,7 +2936,7 @@ VM do not, and the documents say so.
 | Preemption | not adopted | It gives up determinism, and nothing is observable in zero logical time (§4.6) |
 | FB-to-task association (`FB1 WITH SLOW_1`, Table 49 f6b) | deferred | Rarely needed. It splits an FB's execution from its program's scan |
 | Direct representation `%IX0.0` and raw addresses in connections | not adopted; the fallback for §4.5 | One declared, named I/O list instead |
-| Wall-clock runner, `Logex.IO` adapters, watchdog | target, after Milestone 2; **designed and decided 2026-10-17** (§4.11, decisions 108–121, and 122–124 after M4-1's review, 2026-10-18), `PLAN.md`'s Milestone 4 | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
+| Wall-clock runner, `Logex.IO` adapters, watchdog | target, after Milestone 2; **designed and decided 2026-10-17** (§4.11, decisions 108–121, and 122–126 after M4-1's review, 2026-10-18), `PLAN.md`'s Milestone 4 | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
 | Restarting one program instance inside a resource | not adopted (Milestone 2's design, §4.10) | `restart/2` restarts the whole resource (decision 38). Restarting one instance would be another rule for the input image and the tasks, for a need no decided text states |
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
 | VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117; output forcing waits for this.)* |
@@ -3161,10 +3183,10 @@ maintainer the same day, after M3-5's review. Decisions 108–121 were taken on
 2026-10-17 from Milestone 4's design (§4.11, and below): 108–117 the maintainer's
 answers, 108, 109 and 110 against their recommendations, 111 and 112 asked by the
 maintainer outside the questions put, the rest as recommended; and 118–121 the record's
-own routine choices. Decisions 122–124 were taken on 2026-10-18, after M4-1's review
-(below), the record's own routine choices on what the review found the record left open.
-All one hundred and twenty-four are kept with their options so the reasons stay with
-them.
+own routine choices. Decisions 122–126 were taken on 2026-10-18, after M4-1's review
+(below), the record's own routine choices on what the review found the record left open
+or loose, 125 superseding 119 in its rule and its cost. All one hundred and twenty-six
+are kept with their options so the reasons stay with them.
 
 1. **Adopt this direction and Milestone 2's order** (M2-1…M2-6, with M2-5 free to move
    earlier). *Recommend yes.* Adopted. *(Ordered 2026-10-02 by decision 30: M2-1, M2-5,
@@ -4832,7 +4854,12 @@ over.
      is (M2-3), its watchdog then timing nothing; adding or removing the line while the
      plant runs is adding or removing a task, refused while running (decision 19).
      `continuous` owes its stanza before its code: IEC names no such task, so it is the
-     conventional family's word, by naming rule 2. *(Taken 2026-10-17.)*
+     conventional family's word, by naming rule 2. *(Taken 2026-10-17. After M4-1's
+     review, 2026-10-18: a round's trip names each of its steps with its time, so that a
+     timed task's slow run in it is seen where the round's watchdog counts it (decision
+     126); and a continuous line that runs no instance still sets the deadline the runner's
+     refreshes carry while it serves its own work or waits (decision 125), so its watchdog
+     times no round but bounds the runner's time between them.)*
 112. **Plants of event tasks alone, and devices that report changes (Milestone 4).** A
      plant of the fan's half-second task and the e-stop's event task, with no untimed
      program: between the fan's runs the controller has nothing to do until the e-stop
@@ -4956,7 +4983,10 @@ over.
      *Taken: the steps.* The second would trip the conveyor's 50 ms watchdog for a round
      whose time went on the box counter, naming a task that was not slow. The core still
      reads no clock: a step is a pure function of the resource, and only the runner times
-     it. *(Taken 2026-10-17.)*
+     it. *(Taken 2026-10-17. M4-1's review found decision 111's watchdog for each round
+     doing what this argument rejects, tripping `main` for a round whose time went on a
+     slow timed task in it; decision 126 reconciles the two on 2026-10-18, the round's
+     trip naming each step with its time, the steps being this decision's.)*
 119. **How the watchdogs fit the outputs' refresh and each device's heartbeat (Milestone
      4),** following decisions 110 and 111. The runner is stuck, by a bug or a machine
      that has stopped giving it time, while the conveyor runs: its contactor must still go
@@ -4987,7 +5017,12 @@ over.
      runs; and a request the runner serves whole between rounds that takes longer than the
      heartbeat time trips the plant, so accept's work, which grows with the programs, is
      done in the caller's process. The sum is slower to zero, and a gap check of its own
-     is a second time for one rule. *(Taken 2026-10-17.)*
+     is a second time for one rule. *(Taken 2026-10-17. Superseded on 2026-10-18, after
+     M4-1's review, by decision 125, in its rule and its cost: every device is refreshed
+     before every step, each refresh carrying that step's own deadline, its watchdog plus a
+     poll period, so the margin is a poll period and a stuck conveyor's step zeroes every
+     device at its own 50 ms, not at the plant's longest watchdog. Its first refinement
+     stands: a device is given as long to answer as its deadline.)*
 120. **How reading and reporting mix in one plant (Milestone 4),** following decision 112.
      The panel's card reports each button as it changes; the drive's cannot report.
      - Every device is read every poll period, and one that reports passes each change on
@@ -5009,14 +5044,18 @@ over.
      *"upon each rising edge of the SINGLE input"* (Ed 2 §2.7.2 rule 1); and a trigger
      that logic writes is read after each round, a change of it making a round at once,
      the next cycle the runner makes of `Logex.Runtime`'s rule 1. A pulse shorter than the
-     poll period on a device that cannot report is not seen, as the conventional manual
-     warns of an input shorter than its task's scan (p.46). One poll period serves the
+     poll period on a device that cannot report is not seen; the conventional manual's
+     nearest warning is of an overlap, for an input under change of state shorter than its
+     task's scan: *"Make sure the duration of the input is longer than the scan time of
+     the task. Otherwise an overlap could occur"* (p.46). One poll period serves the
      plant, a runner option (decision 121); one for each device, as the conventional
      packet interval is each module's, is later, if a plant needs it. *(Taken
      2026-10-17. Amended 2026-10-18, after M4-1's review: a change of a trigger that logic
      writes makes its round at the next clock millisecond, not at once (decision 123); and
      a device passes what changed on by a call, answered once the change is merged or its
-     round has run, not by a message (decision 124).)*
+     round has run, not by a message (decision 124). Corrected the same day: its
+     paraphrase of p.46 said the conventional manual warns of an input shorter than its
+     task's scan going unseen, where p.46 warns of an overlap, and it now quotes it.)*
 121. **Where the share and the poll period are set (Milestone 4).** The plant runs on one
      machine in the lab and on another on the line.
      - Options of the runner, in Elixir, where its devices are bound: `overhead:`, the
@@ -5034,7 +5073,9 @@ over.
 **After M4-1's review, decided 2026-10-18.** The review of M4-1's landing found the
 record silent on four things the runner must do the same way on either clock, and loose
 on others. Decisions 122–124 are the record's own routine choices on what it left open,
-each with the alternative it passes over, the plant the design's: the conveyor's logic
+and 125 and 126 on a heartbeat with a millisecond of margin and a round's trip that names
+a task that was not slow, each with the alternative it passes over, the plant the
+design's: the conveyor's logic
 due every 10 ms, the fan's twice a second, the e-stop's event task, and the box counter
 and the "case full" lamp with no timing of their own.
 
@@ -5118,8 +5159,8 @@ and the "case full" lamp with no timing of their own.
        merged the change into the next round's inputs and, for a change of an event
        task's trigger, once the round it makes has run and its outputs are written; while
        it waits the device answers the runner's own requests to it, a write, a refresh or
-       a zeroing, so that neither waits on the other, and its wait is bounded as its
-       heartbeat is (decision 119). So `set/3` returns once the runner
+       a zeroing, so that neither waits on the other, and its wait is bounded by the
+       deadline its last refresh carried (decision 125). So `set/3` returns once the runner
        has taken the change and run the round it causes, by construction, as `advance/2`
        returns once each receiver has handled its message;
      - a message, as decided, and `settle/1`, a call of the runner's a test makes after a
@@ -5137,6 +5178,66 @@ and the "case full" lamp with no timing of their own.
      that reports is held while the runner takes each change, a round at most, so a
      flood of changes is taken at the pace the runner can use them. *(Taken 2026-10-18,
      after M4-1's review.)*
+125. **The heartbeat: a deadline each refresh carries (Milestone 4),** following decision
+     119, which it supersedes in its rule and its cost. The runner is stuck while the
+     conveyor's task runs, and the conveyor's contactor must go off. Under decision 119 a
+     device's heartbeat was the plant's longest watchdog plus a poll period, refreshed
+     only when a refresh was due and only between steps: in a model, a step that took
+     exactly its watchdog, starting 9 ms after the last refresh, left 1 ms before the
+     device latched; and a runner stuck in the conveyor's 50 ms task kept the contactor on
+     for the fan's 2 s and a poll period.
+     - Every device refreshed before every step, the refresh carrying that step's own
+       deadline, its task's watchdog plus one poll period from the step's start; and
+       before the runner serves its own work, writes a round's outputs or waits, the
+       continuous task's watchdog plus one poll period, the continuous task being the one
+       whose share that time is (decision 122), refreshed again at least once a poll
+       period while it waits; a device that hears nothing by the deadline its last refresh
+       carried writes 0 to every output once, latches and tells the runner;
+     - a heartbeat for each device from the watchdogs of the tasks that drive its points,
+       the panel's from the conveyor's 50 ms and the drive's from the fan's 2 s;
+     - or decision 119 as taken.
+
+     *Taken: the first.* A runner stuck in the conveyor's step leaves every device that
+     answers at 0 within 50 ms and a poll period of the step's start, in the fan's step
+     within 2 s and a poll period, and in its own work or a wait within the continuous
+     task's watchdog, 500 ms unless its line sets one (decision 111), and a poll period. A
+     runner that is well never misses a deadline: each step ends within its watchdog or
+     trips, the next refresh comes before the next step, and the poll period is the
+     margin, never less. A heartbeat for each device fails because logex never preempts:
+     while the fan's task runs, for up to its 2 s, no refresh reaches the panel either, so
+     a panel deadline of 50 ms and a poll period would latch it under a fan run that is
+     well; the deadline must cover whatever step the runner is in, so it is that step's,
+     carried to every device. The costs: a refresh, a message to each device, before every
+     step, so a round of three steps and two devices sends six, at one round a millisecond
+     at most, which M4-3 measures; a stuck fan's step still holds the conveyor's contactor
+     for the fan's 2 s, since no step can run while another does, and the conveyor's
+     watchdog does not count its wait (decision 110); and a request the runner serves
+     whole that takes longer than the continuous task's watchdog and a poll period trips
+     the plant, so accept's work stays in the caller's process (decision 119). Decision
+     119's cost, the plant's longest watchdog setting every device's heartbeat whatever
+     step the runner is in, is gone. *(Taken 2026-10-18, after M4-1's review.)*
+126. **What a round's watchdog trip names (Milestone 4),** following decisions 111 and 118.
+     One round runs the conveyor's task, the fan's and the box counter; the fan's run
+     takes 300 ms, well within its own 2 s, and the round outlasts the continuous task's
+     200 ms watchdog. Decision 118 passed over timing the whole cycle against the least
+     watchdog because it would trip naming a task that was not slow, and decision 111's
+     watchdog for each round trips for the fan's time just so, naming `main`.
+     - The trip names the round's steps, `{:watchdog, {:round, task, took_ms, limit_ms,
+       steps}}`, `task` the continuous task's name or `:none` and `steps` each step the
+       round ran, in the order run, `{task, ms}`, the timed tasks' runs and the continuous
+       task's programs under its own name, so that the slow one is seen;
+     - the trip names the continuous task alone, as decided, decision 111 owning that its
+       count includes the timed tasks', as the conventional one includes *"interruptions
+       by other tasks"* (p.34);
+     - or the timed tasks' runs left out of the round's time, which leaves a round that
+       grows with them unwatched, decision 111's own reason against it.
+
+     *Taken: the first.* The continuous task's watchdog still counts the timed tasks' runs
+     in its round, as the conventional one does, so it trips where a round as a whole runs
+     too long; and the trip says where the time went, what decision 118 asked of a
+     watchdog, while a timed task's own trip, `{:watchdog, {:task, task, took_ms,
+     limit_ms}}`, names the task that was slow. The steps cost nothing new: the runner
+     times each step already (decision 118). *(Taken 2026-10-18, after M4-1's review.)*
 
 ---
 
