@@ -24,7 +24,7 @@ and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed and l
 items, M3-1, M3-2, M3-3 and M3-4, landing the same day and its last, M3-5, on 2026-10-15,
 so Milestone 3 is done (§3, "Milestone 3"). Milestone 4, the wall-clock runner, was
 designed and decided on 2026-10-17 (§3, "Milestone 4"), its first item, M4-1, landing the
-same day and its second, M4-2, on 2026-10-18.
+same day, its second, M4-2, on 2026-10-18, and its third, M4-3, the same day.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -3203,6 +3203,46 @@ and M4-7 the documents.
      device and at the next millisecond from logic (decision 123);
   5. stop, status, `get/2` and subscriptions;
   6. the oracle test from files on disk.
+
+  **Status: DONE — landed 2026-10-18**, as seven commits, the six of its landing order
+  and the documents: (1) the cycle in steps, `7d0da34`; (2) `start_link/1` and its host
+  mistakes, `da746ee`; (3) the devices, `f7fd5de`; (4) the rounds, `7d37c85`; (5) stop,
+  status and subscriptions, `56bf766`; (6) the oracle test from files on disk, with the
+  real-clock test and the growth test, `a8819a8`; (7) the documents, the commit after it.
+  1382 tests pass on Elixir 1.20.4 (9 of them doctests), up from 1333. Each of (1) to (5)
+  records its mutation table, every rule it adds reverted alone in a worktree of its
+  commit and the full suite judged by its exit code: (1) 12 rules, all red; (2) 24, all
+  red; (3) 30, 29 red and one equivalent, a round's inputs kept for the next, which the
+  image holds already; (4) 27, 25 red and two equivalent, C without its floor of 1,
+  which the count of at least 1 at every wake makes no slot of, and a count kept with
+  no untimed program, which no slot reads; (5) 25, all red. Eight survivors of the first
+  runs were each given a test in its commit and are red: a value read again passed on as
+  a change, a device with no output zeroed by an empty write, one round for two triggers
+  in one report, C truncated rather than rounded, an earlier wake not cancelled, a stale
+  wake taken, the status's overlaps and its longest refresh gap. The growth test bounds
+  the runner's reductions over 20 rounds at 4.33 for 4x the instances and the devices,
+  4.24 for the instances and 1.28 for the devices, a fifth above the highest of 32 runs,
+  half beside three suites, 3.605, 3.533 and 1.066. `Logex.Runtime` changed as (1) says
+  and no more: `cycle/3` is the composition of three hidden steps.
+
+  Chosen while landing, each in its commit: the devices opened by a call once the runner
+  is running, since a refusal from `init/1` kills the linked caller, so a device that
+  cannot be opened stops the runner normally; `get/2` and `get!/2` in (2), the relayed
+  calls it pins, ahead of (5); a refresh is a message to the device's process carrying its
+  deadline and calls no adapter, which is written where its outputs changed and read
+  every poll period, put to the maintainer; a device with no output point is never
+  written nor zeroed; a slot serves its first request whatever the time, since one that
+  looked first served nothing on a clock whose reading takes time; a host's request is
+  served at once where no round is owed and always with no untimed program, so on the
+  manual clock one made while a round is owed waits for the advance that runs it;
+  `stop/2` is served at once; subscribing to a kind that is none of the seven is the
+  host's mistake; anything else sent to the runner changes nothing; and the status's
+  keys, `status`, `now`, `rounds`, `trip`, `overlaps`, `forces`, `edit`, `runs`,
+  `latest_wake` and `refresh_gap`. Left as PLAN gives them: the trips, every I/O fault and
+  the runner's death, a deadline acted on, `restart/2` and the hidden seam are M4-4's;
+  `forces:`, forcing and the edit's steps through the runner M4-5's, `forces:` until then
+  an unknown option. A device's callback that fails, a value that does not fit and an
+  unknown address crash the runner until M4-4 trips on them.
 - **M4-4 · The watchdogs and the fault path.** *Done when* each of these is a test on the
   manual clock, a hung device's deadline in real time and short:
   - a timed task whose run outlasts its watchdog trips before its round's write, naming

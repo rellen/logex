@@ -2584,6 +2584,12 @@ watchdog's rule across an online edit is decision 129's.)*
   mailbox whenever it waits.
 - The first round runs at once after start and after a restart, whatever `next_due_in/1`
   says (decision 50).
+  *(Landed with M4-3, 2026-10-18, as these bullets say, with two readings the record
+  left: a slot serves its first request whatever the time, so that a slot whose start
+  is read late still serves one, "each served whole"; and a host's request is served at
+  once where no round is owed, so that on the manual clock one made while a round is
+  owed, after a round that passed time, waits for the advance that runs it. `stop/2` is
+  served at once, whatever the share.)*
 - The runner keeps `anchor`, the monotonic millisecond its clock counts from, and
   `logical`, the sum of the `elapsed_ms` it has passed, the resource's `now`. Each round
   passes `elapsed = (wall - anchor) - logical`, never negative, so rounding to whole
@@ -2619,7 +2625,11 @@ and a bound device no point is at, are the host's mistakes at start (§4.5).
   once its adapter has written them; every device is refreshed with the outputs it last
   had, without a wait, before every step and at least once a poll period while the runner
   waits, each refresh carrying its next deadline (decision 125), so a device's own
-  loss-of-master state is never reached while the runner runs.
+  loss-of-master state is never reached while the runner runs. *(Landed with M4-3,
+  2026-10-18: a refresh is a message to the device's process carrying its deadline, and
+  calls no adapter; the adapter is written where its outputs changed and read every poll
+  period. Whether a refresh should also write the adapter again, so that a device whose
+  outputs never change still hears from its master, is put to the maintainer.)*
 - **Order.** Devices are opened, written and zeroed in device-name order, one after
   another, so a run is deterministic; in parallel is later, once a real network adapter
   has been measured.

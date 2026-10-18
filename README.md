@@ -3,7 +3,7 @@
 A Ladder Logic compiler and interpreter in Elixir. It compiles a ladder program written as
 text into a named, stateless value, and runs it as instances, one scan at a time, with the
 time the host injects. No dependencies and no generated code: the lexer and parser are
-written by hand, and the whole thing is twenty-five small modules.
+written by hand, and the whole thing is twenty-nine small modules.
 
 **Stage: early, and honest about it.** Thirty-one instructions, among them four timers,
 two that run IEC's three counters, seven of integer arithmetic, a one-shot and two pulse
@@ -234,10 +234,12 @@ whole ("A function block" and "A configuration", below):
 - **The wall-clock runner**, `PLAN.md`'s Milestone 4 (decisions 108–129 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11), whose
   configuration words have landed, a task's `watchdog` and the `continuous` task
-  ("Watchdogs and the continuous task", below): `Logex.Runner` will run a configuration on the real clock
-  through device adapters (`Logex.IO`), its untimed programs back to back, one round a
-  clock millisecond at most, an input forced from the host staying forced across a
-  restart and, kept in a file the host names, across a crash.
+  ("Watchdogs and the continuous task", below), and so has the runner's first part,
+  M4-3 ("On the clock", below): `Logex.Runner` runs a configuration on a clock through
+  device adapters (`Logex.IO`), its untimed programs back to back, one round a clock
+  millisecond at most. Still to land: the watchdogs' trips and device faults (M4-4), and
+  edits and forcing through the runner, an input forced from the host staying forced
+  across a restart and, kept in a file the host names, across a crash (M4-5).
 
 ## An example
 
@@ -1612,8 +1614,9 @@ wrong_packing.logex: line 4, column 36: `priority` goes before `watchdog`, as in
   only `fast` here, and `overlaps/1` lists `main` at 0.
 - `Logex.Runtime` reads no clock and so no watchdog: a cycle runs as it did whatever the
   watchdogs, and `Logex.Configuration.watchdog/1` gives each task's, 500 where its line
-  sets none, for the runner to come (`PLAN.md` M4-3 and M4-4), which times a timed task's
-  run and each round of the continuous task against it.
+  sets none, for the runner (`Logex.Runner`, "On the clock", below), whose trips on
+  them are `PLAN.md`'s M4-4, and which times a timed task's run and each round of the
+  continuous task against them.
 - From Elixir data a task is `%Logex.Configuration.Task{name: "main", continuous: true,
   watchdog: 200}`, checked in the same words.
 - An online edit (`Logex.Configuration.Edit`, "A running plant", below) may change a
@@ -1622,6 +1625,108 @@ wrong_packing.logex: line 4, column 36: `priority` goes before `watchdog`, as in
   so does the continuous line moved among the task lines, which is no order; the
   continuous line added or removed, a task made continuous or timed, and an instance
   moved between a timed task and the continuous one are refused until a restart.
+
+### On the clock
+
+`Logex.Runner` runs a configuration's resource on a clock, through the devices its points
+are at (`docs/organisation.md` §4.11, decisions 108 to 128; `PLAN.md` M4-3). Each device
+is bound by name to an adapter (`Logex.IO`), and runs in a process of its own; logex ships
+one adapter, `Logex.IO.Sim`, an in-memory device a test sets and reads. With the manual
+clock, `Logex.Runner.Clock.Manual`, a run is deterministic and repeats exactly: time moves
+only when the test moves it. `on_the_clock.exs` runs `packing.logex`, above, on a manual
+clock and a simulated panel that reports its changes, starts the conveyor, passes three
+boxes and presses the e-stop:
+
+```elixir
+alias Logex.Runner
+alias Logex.Runner.Clock.Manual
+alias Logex.IO.Sim
+
+{:ok, plant} = Logex.Configuration.compile_file("packing.logex")
+{:ok, clock} = Manual.start_link()
+{:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+{:ok, runner} =
+  Runner.start_link(
+    configuration: plant,
+    io: %{"panel" => {Sim, sim: panel}},
+    clock: {Manual, clock}
+  )
+
+show = fn label ->
+  %{now: now, rounds: rounds} = Runner.status(runner)
+  out = Sim.outputs(panel)
+  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  rounds=#{String.pad_leading("#{rounds}", 2)}  k1=#{out[[0]]} case_full=#{out[[4]]}  boxes=#{Runner.get!(runner, "b1.count")}")
+end
+
+show.("started        ")
+Sim.set(panel, [0], 1)                      # pb_start_1, reported and merged at once
+Manual.advance(clock, 10)                   # a round each millisecond, the conveyor's at 10
+show.("start pressed  ")
+Sim.set(panel, [0], 0)
+
+for _box <- 1..3 do
+  Sim.set(panel, [8], 1)                    # a box on the eye...
+  Manual.advance(clock, 2)
+  Sim.set(panel, [8], 0)                    # ...and past it
+  Manual.advance(clock, 2)
+end
+
+show.("three boxes    ")
+:ok = Runner.subscribe(runner, [:ran])
+Sim.set(panel, [7], 1)                      # the e-stop, which the conveyor reads at 30
+Manual.advance(clock, 10)
+show.("e-stop at 22   ")
+IO.inspect(for({Runner, ^runner, {:ran, "fast", i, at}} <- Process.info(self(), :messages) |> elem(1), do: {i, at}), label: "the conveyor ran")
+IO.inspect(Map.take(Runner.status(runner), [:runs, :overlaps, :latest_wake]))
+
+:ok = Runner.stop(runner)
+IO.inspect(Enum.take(Sim.writes(panel), -2), label: "the last two writes")
+IO.inspect(Sim.closed?(panel), label: "closed")
+```
+
+```
+$ mix run on_the_clock.exs
+t= 0  started          rounds= 1  k1=0 case_full=0  boxes=0
+t=10  start pressed    rounds=11  k1=1 case_full=0  boxes=0
+t=22  three boxes      rounds=23  k1=1 case_full=1  boxes=3
+t=32  e-stop at 22     rounds=33  k1=0 case_full=1  boxes=3
+the conveyor ran: [{"c1", 30}]
+%{
+  runs: %{"fast" => {0, 50}, "main" => {0, 200}},
+  overlaps: %{"fast" => 0, "main" => 0},
+  latest_wake: 0
+}
+the last two writes: [%{[0] => 0, [4] => 1}, %{[0] => 0, [4] => 0}]
+closed: true
+```
+
+- `start_link/1` checks every option in the caller, the configuration and the bindings
+  among them, so a host's mistake is an `ArgumentError` there; it opens each device,
+  reads it once and runs the first round at once. Optional: `clock:` (the monotonic one
+  unless set), `poll:` (each device's poll period, 10 ms), `overhead:` (the share kept
+  for the runner's own work, 20%, 10 to 90), `idle:` (500 ms) and `name:`.
+- The box counter is untimed, so rounds run back to back, one each clock millisecond:
+  `advance(clock, 10)` ran ten, the conveyor's task in the one at 10. With no untimed
+  program a round comes only at a due time or when a device changes an event task's
+  trigger, at once. Due times are absolute on the runner's clock, so they never drift.
+- A device that reports passes each change on by a call the runner answers once it has
+  merged it, and, for a trigger, once the round it makes has run and its outputs are
+  written: so `Logex.IO.Sim.set/3` returns after that round. Each device is also read
+  every poll period, and written only where its outputs changed.
+- The e-stop is no trigger here: merged at 22, it reached the conveyor at its next run,
+  at 30, which latched its fault and stopped it.
+- `status/1` gives each task's longest run against its watchdog, `0` on a clock that
+  does not move inside a round; `get/2` reads the resource; `subscribe/2` sends the
+  resource's events and the runner's `{:round, now, outputs}`; and `stop/2` writes every
+  output 0 once and closes every device before it returns.
+- The share is served in slots, the conventional table's: at 20%, after 4 ms of rounds
+  that fill their milliseconds, up to 1 ms of the host's requests. On the manual clock a
+  round takes no time unless something passes time inside it, so a request is served
+  before the next round; one made while a round is owed waits for the advance that runs
+  it.
+- The watchdogs' trips and device faults are M4-4's, and forcing and edits through the
+  runner M4-5's (`PLAN.md`).
 
 ## Changing a running program
 
