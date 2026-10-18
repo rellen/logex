@@ -131,13 +131,72 @@ defmodule Logex.Runner do
     against its watchdog, the latest wake and the longest wait between two refreshes.
   - `subscribe/2` sends the caller each event of the kinds it names, as `{Logex.Runner,
     runner, event}`: the resource's `{:overlap, task, missed}` and `{:fault, task,
-    instance, fault}` by default, with the trips, restarts and edits M4-4 and M4-5 bring,
-    and, only where named, the resource's `{:ran, task, instance, now}` and the runner's
+    instance, fault}` and the runner's `{:trip, reason}` and `{:restart, mode}` by
+    default, with the edits M4-5 brings, and, only where named, the resource's `{:ran, task, instance, now}` and the runner's
     `{:round, now, outputs}`, each round's output points. A subscriber is monitored and
     dropped when it goes down. `unsubscribe/1` stops them.
   - `stop/2` writes every output 0 once, through each device, and closes every device, in
     device-name order, before it returns (decision 116). It is served at once, whatever
     the share.
+  - `restart/2` starts a tripped runner again (below); a runner that is running is the
+    host's mistake.
+
+  **Its trips** (M4-4; decisions 110, 111, 113 to 115, 125, 126 and 128). A trip has one
+  path, whatever caused it: scheduling stops, its wake cancelled; every output is written
+  0 once through each device that answers, in device-name order, which latches and writes
+  nothing more, a round's write and a poll's write again among it, until a restart;
+  `{:trip, reason}` goes to the subscribers and `status/1` gives `:tripped` and the reason;
+  the host's requests that waited are answered, and every one after is served at once; a
+  device's change is merged into the next round's inputs and makes no round; and the
+  resource is kept as the last round computed it, for `get/2`, outputs the plant never
+  received among them where the round tripped before its write. A runner tripped already
+  keeps its first reason. The reasons:
+  - `{:watchdog, {:task, task, took_ms, limit_ms}}`: a timed task's run, from the start of
+    its first instance's scan to the end of its last, longer than its task's watchdog,
+    checked after its step and before the round's write (decision 110);
+  - `{:watchdog, {:round, task, took_ms, limit_ms, steps}}`: a round of the continuous
+    task, from the inputs taken to the end of its last program's scan, the timed tasks'
+    runs in it included, longer than the continuous task's watchdog, `task` its name or
+    `:none`, 500 ms, where none is declared, and `steps` each step the round ran, in
+    order, `{task, ms}` (decisions 111 and 126);
+  - `{:watchdog, {:idle, ms}}`: a host's request served whole, from its start to its end,
+    longer than the idle watchdog, the trip made once it is answered (decision 128);
+  - `{:watchdog, {:device, device, ms}}`: a device that heard nothing from the runner by
+    the deadline its last refresh carried, `ms` from that refresh to it, which writes every
+    output 0 once and latches by itself and tells the runner, which trips when it next
+    runs, before any round (decision 125). Every device is refreshed before each step
+    with that step's deadline, its task's watchdog and a poll period from its start, and
+    before the runner's own work, a write or a wait with the idle watchdog's and a poll
+    period, so a runner that is well never misses one, and one stuck in the conveyor's
+    50 ms step leaves every device that answers at 0 within 50 ms and a poll period;
+  - `{:io, device, cause}`: an I/O fault (decision 114). Every callback is called guarded
+    in its device's process: an `{:error, reason, state}` it gives is `{:error, reason}`,
+    a raise `{:raised, message}`, a throw `{:thrown, term}`, an exit `{:exited, term}`,
+    and a result of no shape `Logex.IO` gives `{:raised, message}`, a message that says
+    so; a read's or a report's value that does not fit its point is `{:bad_value,
+    address, value}` and an address that is no input point's `{:unknown_address,
+    address}`; a device that does not answer the runner within the deadline its last
+    refresh carried, on the runner's clock, is `:timeout`, and is killed, its outputs left
+    to what it does on losing its master; and a device's process that goes down, which
+    the runner traps, is `{:down, reason}`. A device whose own read, report or write again
+    fails tells the runner and latches, its 0 written where its adapter still takes it;
+    a round's write that fails trips at once, the devices after it not written;
+  - `{:internal, message}`: an exception out of the core, which the host contract says
+    cannot happen; tripping rather than crashing keeps the state for diagnosis. No host
+    can cause it: a test reaches it through one hidden option of `start_link/1`, which
+    stands a module of the test's in for `Logex.Runtime`'s steps.
+
+  `restart(runner, :cold | :warm)`, `:warm` being `:cold` until `retain` lands, opens
+  again each device that went down, in device-name order, `{:error, {:io_init, device,
+  reason}}` for one that cannot be opened, the runner left tripped; releases every latch;
+  restarts the resource (`Logex.Runtime.restart/2`), which keeps its input image and puts
+  every other global back to its initial value; sends `{:restart, mode}`; and runs the
+  first round at once, before it returns, the clock not counting the time it was
+  stopped. A runner that crashes, is killed or loses its clock is gone (decision 115):
+  each device traps its exit and writes every output 0 once, where it had not, and closes;
+  its child spec is `restart: :temporary`, so nothing starts it again, and the host starts
+  a new one. A clock that goes down or fails stops it as a shutdown, `{:shutdown,
+  {:clock, reason}}`, its devices zeroed and closed as at a stop.
 
   **What logex is not.** logex is not a safety controller, and must not implement a
   safety function: an emergency stop, a guard interlock, a light curtain, two-hand
@@ -175,7 +234,10 @@ defmodule Logex.Runner do
   moduledoc), opens every device in device-name order, reads each once and runs the first
   round at once: `{:ok, pid}`, or `{:error, {:io_init, device, reason}}` for a device that
   cannot be opened, which is the plant's state, not a host mistake, every device opened
-  before it closed again and the runner gone.
+  before it closed again and the runner gone: `reason` init/3's own, or the cause of an
+  init/3 or a first read that raised, threw, exited, gave no result `Logex.IO` gives or a
+  value that does not fit, or `:timeout` for one that did not answer within the idle
+  watchdog and a poll period, as an I/O fault's (M4-4).
   """
   def start_link(opts) do
     {start, name} = options!(opts)

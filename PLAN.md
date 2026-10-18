@@ -27,7 +27,9 @@ designed and decided on 2026-10-17 (§3, "Milestone 4"), its first item, M4-1, l
 same day, its second, M4-2, on 2026-10-18, and its third, M4-3, the same day, with the
 answers to its review and the maintainer's two answers, decisions 130 and 131, the
 answers to the verification of those, decision 132, and the maintainer's answer to that,
-a fixed timer, which amends decision 130 and supersedes decision 132.
+a fixed timer, which amends decision 130 and supersedes decision 132; and its fourth,
+M4-4, the watchdogs and the fault path, the same day, with three questions put to the
+maintainer (§3, M4-4).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -3349,6 +3351,109 @@ and M4-7 the documents.
   3. the devices' deadlines, carried by every refresh (decision 125);
   4. the I/O faults;
   5. the runner's death.
+
+  **Status: DONE — landed 2026-10-18**, as seven commits, the five of its landing order,
+  the manual clock's rule and the documents: (1) the trip and restart, with the hidden
+  seam, `ef03273`; (2) each task's watchdog, the continuous task's round and the idle
+  watchdog, `eddad44`; (3) the devices' deadlines, `9b0df68`; (4) the I/O faults,
+  `b38dc72`; (5) the runner's death, with the trip's growth test, `58636bc`; (6) the manual
+  clock advanced by a receiver as it handles a message, `3057a81`; (7) the documents, the
+  commit after it. 1453 tests pass on Elixir 1.20.4 (9 of them doctests), up from 1409,
+  most of them in `test/logex/trip_test.exs`. Each of (1) to (5) records its mutation
+  table, every rule it adds reverted alone in a worktree of its commit and the full suite
+  judged by its exit code: (1) 30 rules, 29 red and one equivalent there, a zero of a
+  latched device writing 0 again, which nothing could do until (3)'s deadlines latch a
+  device before a trip, and red there; (2) 16, all red; (3) 16, all red; (4) 28, 27 red and
+  one equivalent there, a close's raise not caught, red with (5)'s `terminate/2`; (5) 7,
+  all red. Six survivors of the first runs were each given a test in their commit and are red: a
+  trigger's change while tripped, a trip no wake brought, a stuck step after a device's
+  wake had moved on, a device waiting on the runner for its own change (on the real clock,
+  short), a device's own fault zeroing it with the runner suspended, and a clock that
+  exits as it is read; and two pieces of code no rule needed were taken out of (1), a
+  release that forgot what its device last wrote and the share's count set to 0 at a
+  restart. The growth test bounds a trip's work at 5.08 for 4x the devices, a fifth above
+  the highest of 38 runs, 4.233; M4-3's round test of the devices alone is bound at 1.39
+  now, a fifth above 1.156, the highest of 32 runs, since each device's write is answered
+  within its deadline. `Logex.Runtime` is unchanged.
+
+  Chosen while landing, each in its commit and in §4.11's landing note: the hidden option
+  is `steps:`, a module with `cycle_steps/3`, `cycle_step/2` and `cycle_outputs/1`, an
+  exception's message its own and a throw's or an exit's its banner; a test makes time
+  pass inside a task's run through it, a stand-in that passes the manual clock, or, for a
+  runner stuck in a step, advances it from inside the runner, which (6) makes the clock's
+  rule; a tripped runner merges a device's changes into the next round's inputs, so the
+  restart's first round takes them, keeps its first reason, and refreshes no device; a
+  round that trips is not counted among the rounds; a request is timed against the idle
+  watchdog from its start to its end, reading the clock twice, so M4-3's slot test on a
+  clock whose every reading takes a millisecond serves three requests a 9 ms slot where
+  it served nine, and a restart is not timed so; a device's refresh carries the time it
+  was sent, `{:watchdog, {:device, device, ms}}` naming the span from it to the deadline;
+  a device keeps one wake on its deadline, set again only where a refresh brings it
+  sooner; a round's first act is to take a device's notice that waited, so a runner back
+  from being stuck trips before it runs anything; a result of no shape `Logex.IO` gives
+  is `{:raised, message}`; a device that answers after its deadline on the runner's clock
+  is `:timeout` and killed; an init/3 or first read that raises, throws, exits, hangs or
+  gives a value that does not fit is `{:io_init, device, cause}`, init/3's own reason
+  given as before; a clock that goes down or fails stops the runner and each device as a
+  shutdown, `{:shutdown, {:clock, reason}}`, which also ends a test's runner quietly when
+  the test's manual clock goes down with it; and a device whose adapter was never opened
+  is neither zeroed nor closed as it stops. Found while landing: a test that traced a
+  device after the runner's start could see a refresh sent before it, still in the
+  device's queue, and failed 2 of about 15 full runs under load; each trace now passes
+  over what was sent before it. And the waits for an asynchronous event in
+  `trip_test.exs` take 5 s, not ExUnit's 100 ms, which a killed runner's devices
+  outlasted beside three suites.
+
+  **Provisional, and put to the maintainer** (each a question below): a restart of a
+  runner that is running is the host's mistake; a device stuck inside its own read or
+  report is seen only at the runner's next request to it; and a device whose own callback
+  failed is zeroed through its adapter too.
+
+  *Questions for the maintainer, 2026-10-18.* Words used: a *trip* is the runner
+  stopping itself after a fault, every output switched off once and nothing run until a
+  *restart*, the host's call that starts it again from the program's initial values; a
+  *device* is one I/O card or drive the runner talks to through its *adapter*, the code
+  for that hardware; the plant is §4.4's, a conveyor on the panel card, a fan, and the
+  "case full" lamp, with the drive's speed on the drive.
+  1. *A restart while nothing has tripped.* The conveyor and the fan are running and the
+     lamp is lit, and an engineer's program calls `restart/2`. (a) As landed: refused,
+     the engineer's program told "the runner is running", and the plant runs on
+     untouched. (b) A trip and a restart in one: for a moment every output goes off, the
+     conveyor and the fan stop and the lamp goes out, and then the program starts from
+     its initial values, the conveyor staying off until start is pressed. (c) The
+     program's values reset without the outputs being switched off first: the conveyor
+     drops out on the next round, as its seal-in resets, the fan goes off if its program
+     starts it off, and nothing is written 0 in between. IEC 61131-3 describes a cold
+     and a warm restart as ways a resource starts, and says nothing of one already
+     running; the conventional family has no restart of a running controller, the nearest
+     being a change to Program mode and back, its outputs in their Program-mode state
+     meanwhile (from memory, **unverified** in the manuals saved). Recommended: (a).
+  2. *A card stuck while it is being read.* The panel card's adapter hangs in the middle of
+     reading the buttons, while the conveyor runs steadily and no output changes. (a) As
+     landed: the runner notices only when it next needs the panel, a change of its
+     outputs, a trip, a restart or a stop, and until then runs on the panel's last
+     inputs, so a press of stop on that card is not seen, the conveyor running on, while
+     the card's own outputs, which it writes again at every poll, stop being written and
+     go to whatever the card does when its master goes quiet. (b) Each device tells the
+     runner that it has read at every poll, and the runner trips `{:io, "panel",
+     :timeout}` for one that has not by its deadline: the conveyor, fan and lamp go off
+     within the deadline, about half a second, at one message a device a poll period.
+     (c) The runner asks each device once a poll period and waits for its answer: the same
+     outcome, but the runner waiting on every device every poll period. IEC 61131-3 says
+     nothing of how a controller talks to its I/O; the conventional family faults a
+     connection to an I/O module that misses several of its packet intervals, four by
+     default, which matches (b) (from memory, **unverified** in the manuals saved).
+     Recommended: (b).
+  3. *The card that failed.* The drive's network cable comes loose and the runner's write
+     of the drive's speed fails; the record's table says "every other device zeroed".
+     (a) As landed: the drive is written its 0 too where it still takes a write, as well
+     as the panel, so where the cable is only flaky the drive's speed goes to 0. (b) The
+     failed device is left alone, its outputs to what the drive does when its master goes
+     quiet, the panel alone written 0: the drive keeps its last speed until its own
+     timeout. IEC 61131-3 says nothing of it; in the conventional family a faulted
+     module's outputs go to the fault state configured on the module, the module doing it
+     rather than the controller (from memory, **unverified**). Recommended: (a), every
+     output that can still be written at 0, the milestone's done sentence.
 - **M4-5 · Edits and forcing through the runner.** *Done when* §4.4's plant, edited while
   it runs through `Logex.Runner`'s accept, test, untest, assemble and cancel, gives every
   report and every round's outputs that the same steps give taken over the resource
