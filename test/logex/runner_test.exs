@@ -15,6 +15,24 @@ defmodule Logex.RunnerTest do
 
   # A device whose every write takes `ms` on the manual clock, as a slow drive's does, and
   # which has nothing to read: so a round that writes it fills its milliseconds.
+  # A device whose every write takes real time, then tells the test what it wrote.
+  defmodule SleepyIO do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, opts), do: {:ok, Map.new(opts)}
+
+    @impl true
+    def read(state), do: {:ok, %{}, state}
+
+    @impl true
+    def write(values, %{to: to, ms: ms} = state) do
+      Process.sleep(ms)
+      send(to, {:written, values})
+      {:ok, state}
+    end
+  end
+
   defmodule SlowIO do
     @behaviour Logex.IO
 
@@ -1629,16 +1647,17 @@ defmodule Logex.RunnerTest do
       end
 
       # The values last written: a change written by a round is what comes again. `x` set
-      # at 12 reaches `y` in the round at 20, whose write follows the poll at 20, which
-      # wrote 0 again; the poll at 30 writes the 1.
+      # at 12 reaches `y` in the round at 20; the poll at 20, in the millisecond that round
+      # is due, leaves its write to it, which writes the 1 (decision 132), and the poll at
+      # 30 leaves its to the round at 30, which writes nothing, so it writes the 1 again.
       {opts, %{clock: clock, panel: panel}} = rig()
       {:ok, _runner} = Runner.start_link(opts)
       Manual.advance(clock, 12)
       Sim.set(panel, [0], 1)
       Manual.advance(clock, 8)
-      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}, %{[0] => 0}, %{[0] => 1}]
+      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}, %{[0] => 1}]
       Manual.advance(clock, 10)
-      assert Enum.drop(Sim.writes(panel), 3) == [%{[0] => 1}, %{[0] => 1}]
+      assert Enum.drop(Sim.writes(panel), 2) == [%{[0] => 1}, %{[0] => 1}]
     end
 
     test "a device a round writes within each poll period is written nothing more" do
@@ -1676,14 +1695,122 @@ defmodule Logex.RunnerTest do
 
     # A runner suspended after its first round refreshes nothing more: its last deadline
     # is the write's, 500 ms and a poll period on, and the panel writes again at each poll
-    # before it, never after.
+    # before it, never after. The poll at 10, in the millisecond the next round is due,
+    # leaves its write to that round, which never comes; the poll at 20, a poll period
+    # after that round came due, writes again, as each after it does, to 500.
     test "a device whose last refresh's deadline has passed writes nothing again" do
       {opts, %{clock: clock, panel: panel}} = rig()
       {:ok, runner} = Runner.start_link(opts)
       :sys.suspend(runner)
       Manual.advance(clock, 600)
-      assert length(Sim.writes(panel)) == 1 + 50
+      assert length(Sim.writes(panel)) == 1 + 49
       :sys.resume(runner)
+    end
+
+    # A toggle on a task whose rounds fall on the panel's polls: each poll in a round's
+    # millisecond leaves its write to the round, which writes the new value, so nothing is
+    # written that the round is about to replace; at 20 ms the poll between two rounds
+    # writes the last value again (decision 132).
+    test "a poll in the millisecond a round is due leaves its write to that round" do
+      for {interval, writes} <- [
+            {10, [1, 0, 1, 0, 1]},
+            {20, [1, 1, 0, 0, 1]},
+            {5, [1, 0, 1, 0, 1, 0, 1, 0, 1]}
+          ] do
+        config =
+          configured(
+            "task blink interval #{interval} priority 1\n" <>
+              "var_global q bool at panel.q.0\nprogram t toggle with blink\n  t.q q\n",
+            %{"toggle" => @toggle}
+          )
+
+        {opts, %{clock: clock, panel: panel}} = rig(config)
+        {:ok, runner} = Runner.start_link(opts)
+        Manual.advance(clock, 40)
+        assert Enum.map(Sim.writes(panel), & &1[[0]]) == writes, "interval #{interval}"
+        Runner.stop(runner)
+      end
+    end
+
+    # The poll at 10 leaves the panel's write to the round at 10, which writes the slow
+    # device: its write, told to take 600 ms, ends past the deadline the round's write
+    # gave the panel, 510, so at the round's end the panel writes nothing again.
+    test "a poll's write left to a round is not made past the deadline" do
+      config =
+        configured(
+          "task fast interval 10 priority 1\nvar_global q bool at slow.q.0\n" <>
+            "var_global x bool at panel.i.0\nvar_global y bool at panel.q.0\n" <>
+            "program r relay with fast\n  r.in x\n  r.out y\n" <>
+            "program t toggle with fast\n  t.q q\n",
+          %{"toggle" => @toggle, "relay" => @relay}
+        )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+      {:ok, slow} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}, "slow" => {Sim, sim: slow}},
+          clock: {Manual, clock}
+        )
+
+      Sim.fail(slow, :write, {:delay, 600})
+      Manual.advance(clock, 10)
+      assert Manual.now_ms(clock) == 610
+      assert Sim.writes(panel) == [%{[0] => 0}]
+      Runner.stop(runner)
+    end
+
+    # The poll at 10 leaves the panel's write to the round at 10, which writes nothing,
+    # so the panel writes again at the round's end; its write takes 50 ms of real time,
+    # and `advance/2` returns only once it is made, by the wake the poll set at its own
+    # millisecond, after the round's.
+    test "a write left to a round is made before the advance that runs the round returns" do
+      {:ok, clock} = Manual.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: relayed(),
+          io: %{"panel" => {SleepyIO, to: self(), ms: 50}},
+          clock: {Manual, clock}
+        )
+
+      assert_received {:written, %{[0] => 0}}
+      Manual.advance(clock, 10)
+      assert_received {:written, %{[0] => 0}}
+      Runner.stop(runner)
+    end
+
+    # The slow device's write takes 3 ms, so a round from 20 ends at 23, and the panel,
+    # whose outputs never change, writes again at the round's end the write its poll at
+    # 20 left to it. It counts from the poll, so the poll at 40 writes again too, on the
+    # grid: four writes to 60, at 0, 23, 43 and 63, not three.
+    test "a poll's write left to a round counts from the poll" do
+      config =
+        configured(
+          "task fast interval 10 priority 1\nvar_global q bool at slow.q.0\n" <>
+            "var_global x bool at panel.i.0\nvar_global y bool at panel.q.0\n" <>
+            "program r relay with fast\n  r.in x\n  r.out y\n" <>
+            "program t toggle with fast\n  t.q q\n",
+          %{"toggle" => @toggle, "relay" => @relay}
+        )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}, "slow" => {SlowIO, clock: clock, ms: 3}},
+          clock: {Manual, clock},
+          poll: 20
+        )
+
+      Manual.advance(clock, 60 - Manual.now_ms(clock))
+      assert length(Sim.writes(panel)) == 4
+      Runner.stop(runner)
     end
 
     # Idle devices cost one write each a poll period, however many there are: d devices

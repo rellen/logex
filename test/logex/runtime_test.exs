@@ -1566,6 +1566,7 @@ defmodule Logex.RuntimeTest do
                child_spec: 1,
                close: 1,
                code_change: 3,
+               due: 2,
                handle_call: 3,
                handle_cast: 2,
                handle_info: 2,

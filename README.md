@@ -231,7 +231,7 @@ whole ("A function block" and "A configuration", below):
   `res`: a counter resets through its own `r` input, as IEC's does, and so does a
   retentive timer, `xic greased ote lube.r` (decision 90). Nor is there a master control
   zone, for good (decision 83).
-- **The wall-clock runner**, `PLAN.md`'s Milestone 4 (decisions 108–131 in
+- **The wall-clock runner**, `PLAN.md`'s Milestone 4 (decisions 108–132 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11), whose
   configuration words have landed, a task's `watchdog` and the `continuous` task
   ("Watchdogs and the continuous task", below), and so has the runner's first part,
@@ -1716,7 +1716,10 @@ closed: true
   every poll period, and written where its outputs changed; where nothing was written
   to it within a poll period, it writes its last outputs again at its poll (decision
   130), so a drive that turns its outputs off when its master goes quiet never does
-  while the runner is well. A device with no output point is never written.
+  while the runner is well; a poll in the millisecond a round is due leaves that write
+  to the round, made at its end only where the round wrote nothing, so no write comes
+  just before a round replaces it (decision 132). A device with no output point is never
+  written.
 - The e-stop is no trigger here: merged at 22, it reached the conveyor at its next run,
   at 30, which latched its fault and stopped it.
 - `status/1` gives each task's longest run against its watchdog, `0` on a clock that

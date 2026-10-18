@@ -2644,7 +2644,11 @@ and a bound device no point is at, are the host's mistakes at start (§4.5).
   answered the same day, decision 130: each device writes its last outputs again at its
   poll, at most once a poll period and only where nothing was written within one, while
   its last refresh's deadline has not passed, a device with no output point never
-  written; so the refresh carries the deadline and the poll the outputs.)*
+  written; so the refresh carries the deadline and the poll the outputs. And after
+  M4-3's verification, decision 132: a poll in the millisecond a round is due, which
+  has not run, leaves that write to the round, the runner telling every device after
+  each round when the next is due, so that no stale write comes just before the round's
+  own.)*
 - **Order.** Devices are opened, written and zeroed in device-name order, one after
   another, so a run is deterministic; in parallel is later, once a real network adapter
   has been measured. *(A tie, noted after M4-3's review: a device's poll that changes an
@@ -5535,6 +5539,44 @@ same day.
      clock, whose next wake is at once. *(Answered and taken 2026-10-18, after M4-3's
      review.)*
 
+**After M4-3's verification, 2026-10-18.** The verification of the fixes to M4-3's review
+found one rule of decision 130's that its words did not hold at a boundary.
+
+132. **A poll's write again in a round's millisecond (Milestone 4),** following decision
+     130. A toggle runs on a 10 ms task and the panel is polled every 10 ms, the default.
+     Each round falls in the millisecond of a poll, which is handled first; a poll period
+     has passed since the last round's write, so the device wrote its old outputs again,
+     and the round then wrote the new ones: twice the writes the device needs, each a
+     value about to be replaced (21 rounds gave 41 writes, 20 of them stale), against
+     decision 130's "nothing more for one a round writes within each poll period".
+     - A poll that finds a round due, come due less than a poll period before it and not
+       yet run, leaves its write to that round: the runner tells every device, after each
+       round, when the next is due, which also tells it that the round has ended, after
+       the round's writes; and the device then writes its outputs again only where the
+       round wrote nothing to it since the poll and its deadline has not passed, the
+       write counted from the poll, so that the next comes a poll period after it, on the
+       grid;
+     - the rule as landed, a write again at every poll where nothing was written within a
+       poll period, with its cost stated, a stale write before each round that falls on a
+       poll;
+     - or a write again only where more than a poll period has passed, which an idle
+       device then hears every second poll.
+
+     IEC 61131-3 says nothing of how a controller talks to its I/O (decision 130).
+
+     **Taken: the first.** One cast a device a round, which calls no adapter; a round due
+     longer than a poll period ago, a runner stuck in a step, is not waited for, so a stuck
+     runner's device still writes again until its deadline, decision 130's rule; a round
+     that never comes costs that one poll's write. On the manual clock the device sets a
+     wake at the poll's own millisecond, after the round's, so that the round's end is
+     taken before `advance/2` goes on, by construction; on the monotonic clock a round
+     whose wake comes after the poll's in the same millisecond, the common case, is waited
+     for, and the stale writes go: a 20 ms task on a 10 ms poll ran 51 rounds in a second
+     with 102 writes, the zeros and the 50 between rounds that decision 130 asks for among
+     them, where 150 came, 98 of them repeats, and a 10 ms task 101 rounds with 102
+     writes, none repeated.
+     *(Taken 2026-10-18, after M4-3's verification; the maintainer may choose the second.)*
+
 ---
 
 ## 8. Sources, and what is unverified
@@ -5563,7 +5605,7 @@ same day.
 - The general instructions reference, Sept 2025: the TASK object for GSV/SSV, TON
   (its TIMER structure and prescan), ONS, and a CPS example.
 - The ladder-diagram programming manual, July 2022, ch.1.
-- For Milestone 4's design (§4.11, decisions 108–131): the tasks, programs and routines
+- For Milestone 4's design (§4.11, decisions 108–132): the tasks, programs and routines
   manual, Sept 2025, p.8 (the continuous task, one at most, restarting at once), p.13 (its
   lowest priority, and the system overhead time slice), pp.31–33 (the time slice, its
   table and its default), p.34 (each task's watchdog) and pp.37–46 (event tasks, the change
