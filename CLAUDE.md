@@ -444,8 +444,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   with, run in the device's process, `{:ok, state}` or `{:error, reason}`; `read/1`, some
   or all of its input points; `write/2`, every output point, by address; and two optional
   callbacks, `report/2`, the inputs a message the device's process received says changed
-  (decisions 112 and 120), and `close/1`, once, after the last zeros. A callback fails by
-  giving `{:error, reason, state}`, never by raising (decision 114). `points/1` groups a
+  (decisions 112 and 120), and `close/1`, once, after the last zeros, with a third since
+  M4-1's review, `check/3`, given what `init/3` will be, in the host's process, and giving
+  the host's mistakes in the options, a line each. A callback fails by giving `{:error,
+  reason, state}`, never by raising (decision 114). `points/1` groups a
   configuration's located points by device, each device's in the configuration's order,
   each a `%Logex.IO.Point{}` (`lib/logex/io/point.ex`: name, direction, address, type),
   the configuration checked as `Logex.Runtime.start/1` checks it, in its words; and
@@ -454,10 +456,13 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   device-name order, or one `ArgumentError` with every mistake, a line each, a key that
   is no device's name first: a device no adapter is bound to, with the points at it; a
   device bound that no point is at, with a did-you-mean; a binding or options that are no
-  adapter's; and an adapter that lacks `init/3`, `read/1` or `write/2`, or is no module
+  adapter's; an adapter that lacks `init/3`, `read/1` or `write/2`, or is no module; and
+  each line an adapter's `check/3` gives, or a check that gives no list of them
 - `lib/logex/io/sim.ex` — `Logex.IO.Sim` (M4-1), the one adapter logex ships, a
-  simulated device in a GenServer of its own, the fixture of every runner test:
-  `start_link/1` (`reports:`, `clock:` a manual clock, `wait:`), `set/2` and `set/3` its
+  simulated device in a GenServer of its own, the fixture of every runner test, bound as
+  `{Logex.IO.Sim, sim: sim}`, which its `check/3` and `init/3` hold it to, `sim:` alone
+  and a sim that runs: `start_link/1` (`reports:`, `clock:` a manual clock, `wait:`),
+  `set/2` and `set/3` its
   inputs, `outputs/1`, `writes/1`, `reads/1` and `closed?/1`. Where it reports, the inputs
   a set changes go as one report to the device that opened it, from the caller, which
   waits through `:sys` until that device has handled it, by construction, a device that is

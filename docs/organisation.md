@@ -648,7 +648,10 @@ gives `{:error, reason, state}` rather than raising, a point is a `%Logex.IO.Poi
 its name and type, an optional `report/2` passes a device's changes on as they come
 (decisions 112 and 120), and an optional `close/1` is called once after the last write of
 zeros; each device runs in a process of its own, and the two binding mistakes above are
-the host's, raised at start.)*
+the host's, raised at start. Added on 2026-10-18, after M4-1's review: an optional
+`check/3` checks an adapter's own options in the host's process at start, so that a typo
+in them is the host's mistake there too, and `Logex.IO.Sim`'s holds it to its sim,
+`{Logex.IO.Sim, sim: panel}`, so the bare `Logex.IO.Sim` above is refused.)*
 
 ### 4.6 Execution model
 
@@ -2608,7 +2611,8 @@ defmodule Logex.IO do
   @callback write(values, state) :: {:ok, state} | {:error, reason, state}
   @callback report(message :: term, state) :: {:ok, values, state} | {:error, reason, state}
   @callback close(state) :: :ok
-  @optional_callbacks report: 2, close: 1
+  @callback check(device :: String.t(), [Logex.IO.Point.t()], opts :: keyword) :: [String.t()]
+  @optional_callbacks report: 2, close: 1, check: 3
 end
 ```
 
@@ -2623,6 +2627,12 @@ end
   runner's, and gives the inputs it says changed, `%{}` for one it does not know; an
   adapter without it is only read.
 - `close/1`, optional, is called once, after the last write of zeros.
+- `check/3`, optional, is given what `init/3` will be, in the host's process, when the
+  bindings are checked at start (`Logex.IO.bind!/2`), and gives the host's mistakes in the
+  options, a line each; it reaches no device, so a typo in a host's options is an
+  `ArgumentError` in the host's process rather than `{:io_init, ...}` or an I/O fault, the
+  plant's state. *(Added on 2026-10-18, after M4-1's review, which found `{Logex.IO.Sim, []}`
+  taken at bind time and refused only inside `init/3`, in the device's process.)*
 
 **The simulated device.** `Logex.IO.Sim` is an adapter whose device is a small process the
 test owns, `Logex.IO.Sim.start_link/1`, bound as `{Logex.IO.Sim, sim: sim}`: `set/2` and
@@ -2731,8 +2741,8 @@ pins, and never crash the runner. At start: a missing or unknown option; a confi
 `Logex.Runtime.start/1` refuses, in its words; a device the points name that no adapter is
 bound to, ``no adapter is bound to the device `drive`, which `sp_1` (drive.q.0) and `sp_2`
 (drive.q.1) are at``; a bound device no point is at, ``the device `panle` is bound, but no
-point is at it — did you mean `panel`?``; an adapter that does not implement `Logex.IO`; a
-poll period or a share out of its range; a clock that does not implement
+point is at it — did you mean `panel`?``; an adapter that does not implement `Logex.IO`;
+options its adapter's `check/3` refuses; a poll period or a share out of its range; a clock that does not implement
 `Logex.Runner.Clock`. In a call, the runner rescues the `ArgumentError`, replies `{:raise,
 exception}`, and the function raises it in the caller: a path that names nothing, an
 output point or a value that does not fit forced, a step with no edit accepted, a restart

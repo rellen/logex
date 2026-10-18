@@ -37,11 +37,13 @@ defmodule Logex.IO.Sim do
     device's own, a value that need not fit its point at an address that need not be one.
     A close cannot give an error back, nor a value.
 
-  **The adapter's side** is `Logex.IO`'s callbacks. `init/3` takes `sim:` among its
-  options and opens the sim for the device's process that calls it, which is the one it
-  reports to; `read/1` gives every input point of the device, by address; `write/2`
-  records what it is given; `report/2` gives the input points among a report of its own
-  and `%{}` for any other message; and `close/1` marks the device closed.
+  **The adapter's side** is `Logex.IO`'s callbacks. `check/3` gives the mistakes in the
+  options it is bound with, which are `sim:` alone, a sim that is running, so that
+  `Logex.IO.bind!/2` raises them in the host's process; `init/3` refuses the same, the
+  first of them, and opens the sim for the device's process that calls it, which is the
+  one it reports to; `read/1` gives every input point of the device, by address;
+  `write/2` records what it is given; `report/2` gives the input points among a report of
+  its own and `%{}` for any other message; and `close/1` marks the device closed.
 
   A mistake of the test's, an option, a sim, an address, a value or a failure that is not
   one, raises `ArgumentError` with a message a test pins.
@@ -125,6 +127,9 @@ defmodule Logex.IO.Sim do
       "Logex.IO.Sim waited #{wait} ms for #{inspect(pid)}, the device that opened it, to " <>
         "handle its report: a device is an OTP process, as the runner's are, which answers " <>
         ":sys once it has handled what it was sent"
+
+  @impl Logex.IO
+  def check(_device, _points, opts), do: misbound(opts)
 
   @impl Logex.IO
   def init(device, points, opts) do
@@ -323,37 +328,48 @@ defmodule Logex.IO.Sim do
           "longest the VM waits, got: " <> inspect(other)
       )
 
-  # A sim is a process this module started, by its pid.
-  defp sim!(sim) when is_pid(sim), do: started!(Process.info(sim, :dictionary), sim)
-  defp sim!(other), do: raise(ArgumentError, expected(other))
+  # A sim is a process this module started, by its pid: what is wrong with one, `[]` for
+  # none, and the sim itself where nothing is.
+  defp sim!(sim), do: first!(unsimulated(sim), sim)
 
-  defp started!({:dictionary, dictionary}, sim),
-    do: ours!(List.keyfind(dictionary, :"$initial_call", 0), sim)
+  defp unsimulated(sim) when is_pid(sim), do: started(Process.info(sim, :dictionary), sim)
+  defp unsimulated(other), do: [expected(other)]
 
-  defp started!(nil, sim),
-    do: raise(ArgumentError, "the simulated device #{inspect(sim)} is not running")
+  defp started({:dictionary, dictionary}, sim),
+    do: ours(List.keyfind(dictionary, :"$initial_call", 0), sim)
 
-  defp ours!({_key, {__MODULE__, :init, 1}}, sim), do: sim
-  defp ours!(_other, sim), do: raise(ArgumentError, expected(sim) <> ", another process")
+  defp started(nil, sim), do: ["the simulated device #{inspect(sim)} is not running"]
+
+  defp ours({_key, {__MODULE__, :init, 1}}, _sim), do: []
+  defp ours(_other, sim), do: [expected(sim) <> ", another process"]
 
   defp expected(other),
     do: "expected a simulated device from Logex.IO.Sim.start_link/1, got: #{inspect(other)}"
 
-  # The options it is bound with: `sim:` among them.
-  defp bound!(opts) when is_list(opts),
-    do: binding!(Keyword.keyword?(opts) and Keyword.has_key?(opts, :sim), opts)
+  defp first!([], value), do: value
+  defp first!([mistake | _rest], _value), do: raise(ArgumentError, mistake)
 
-  defp bound!(opts), do: binding!(false, opts)
+  # The options it is bound with, `sim:` alone, a sim that is running: each mistake in them,
+  # the sim's first, and then each other key.
+  defp misbound(opts) when is_list(opts),
+    do: bound(Keyword.keyword?(opts) and Keyword.has_key?(opts, :sim), opts)
 
-  defp binding!(true, opts), do: sim!(Keyword.fetch!(opts, :sim))
+  defp misbound(opts), do: bound(false, opts)
 
-  defp binding!(false, opts),
-    do:
-      raise(
-        ArgumentError,
-        "Logex.IO.Sim is bound with its sim, {Logex.IO.Sim, sim: sim}, got the options " <>
-          inspect(opts)
-      )
+  defp bound(true, opts) do
+    unsimulated(Keyword.fetch!(opts, :sim)) ++
+      for key <- Enum.uniq(Keyword.keys(opts)) -- [:sim],
+          do: "Logex.IO.Sim is bound with sim: alone, got: #{inspect(key)}"
+  end
+
+  defp bound(false, opts),
+    do: [
+      "Logex.IO.Sim is bound with its sim, {Logex.IO.Sim, sim: sim}, got the options " <>
+        inspect(opts)
+    ]
+
+  # The sim init/3 opens, its options' first mistake raised.
+  defp bound!(opts), do: Keyword.fetch!(first!(misbound(opts), opts), :sim)
 
   defp points!(points), do: each_point!(points?(points), points)
 

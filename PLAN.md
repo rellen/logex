@@ -2993,7 +2993,15 @@ and M4-7 the documents.
   two reads, and the VM refuses it, so a wake raised: 9 of 200,000 at a past time in the
   review's probe. `clock_test.exs` now wakes a process at a past time for 200 ms of the
   clock and finds no raise, which that mutant fails in every run. (1)'s commit message
-  stands as landed, and this is its correction. The suite is at 1297 tests (8
+  stands as landed, and this is its correction. An adapter's own options could not be
+  checked when the bindings were: `{Logex.IO.Sim, []}` and `{Logex.IO.Sim, sim: :x}` each
+  bound, and were refused only inside `init/3`, in the device's process, where §4.11 makes
+  a raise `{:io_init, ...}` or an I/O fault, a host's typo reported as the plant's state.
+  `Logex.IO` has a sixth callback, `check/3`, optional, given what `init/3` will be, which
+  `bind!/2` calls in the host's process for an adapter that implements the behaviour and
+  has keyword options, each line it gives one of the one `ArgumentError`, and a check that
+  gives no list of messages told so; `Logex.IO.Sim`'s holds its options to `sim:` alone, a
+  sim that runs, and `init/3` raises the first of the same. The suite is at 1300 tests (8
   doctests).
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in

@@ -1490,11 +1490,12 @@ defmodule Logex.RuntimeTest do
 
       # M4-1: the adapter behaviour, with a point as plain data, a configuration's points
       # by device and a host's bindings checked against them, and the simulated device, an
-      # adapter whose device is a GenServer of its own.
+      # adapter whose device is a GenServer of its own; since M4-1's review an adapter's
+      # optional check/3 of its own options, which the simulated device has.
       assert Enum.sort(Logex.IO.__info__(:functions)) == [bind!: 2, points: 1]
 
       assert Enum.sort(Logex.IO.behaviour_info(:callbacks)) ==
-               [close: 1, init: 3, read: 1, report: 2, write: 2]
+               [check: 3, close: 1, init: 3, read: 1, report: 2, write: 2]
 
       assert Enum.sort(Map.keys(Logex.IO.Point.__struct__())) ==
                [:__struct__, :address, :direction, :name, :type]
@@ -1502,6 +1503,7 @@ defmodule Logex.RuntimeTest do
       assert Logex.IO.Point.__info__(:functions) == [__struct__: 0, __struct__: 1]
 
       assert Enum.sort(Logex.IO.Sim.__info__(:functions)) == [
+               check: 3,
                child_spec: 1,
                close: 1,
                closed?: 1,

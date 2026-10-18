@@ -30,6 +30,12 @@ defmodule Logex.IO do
     reads (decisions 112 and 120), and one that does not is only read.
   - `close/1`, optional, is called once, after the last write of zeros, when the runner
     stops or dies.
+  - `check/3`, optional, is given what `init/3` will be, in the host's process, when
+    `bind!/2` checks the bindings, and gives the host's mistakes in the options, a line
+    each, `[]` for none, so that a typo in them is an `ArgumentError` at start rather than
+    an I/O fault in the device's process (§4.11). It checks what the host wrote, and
+    reaches no device: one that cannot be opened is `init/3`'s `{:error, reason}`. It runs
+    as the host's own code, so what it raises is raised there.
 
   A callback that fails says so, `{:error, reason, state}`, and does not raise: a device
   that does not answer is the plant's state, not a bug. A raise, a throw or an exit in a
@@ -72,7 +78,11 @@ defmodule Logex.IO do
   @doc "Closes the device, after the last write of zeros."
   @callback close(state) :: :ok
 
-  @optional_callbacks report: 2, close: 1
+  @doc "The host's mistakes in the options `init/3` will be given, a line each, `[]` for none."
+  @callback check(device :: String.t(), points :: [Logex.IO.Point.t()], opts :: keyword) ::
+              [String.t()]
+
+  @optional_callbacks report: 2, close: 1, check: 3
 
   alias Logex.{Configuration, Declarations, Diagnostic}
   alias Logex.Configuration.Global
@@ -129,9 +139,10 @@ defmodule Logex.IO do
   `ArgumentError`, a line each, in device-name order, a key that is not a device's name
   first: a device no adapter is bound to, naming the points at it; a device bound that no
   point is at, with a did-you-mean among the devices; a binding that is no adapter; an
-  adapter's options that are no keyword list; and an adapter that does not implement this
-  behaviour, naming the callbacks it lacks. The configuration is checked first, as
-  `points/1` checks it.
+  adapter's options that are no keyword list; an adapter that does not implement this
+  behaviour, naming the callbacks it lacks; and, for one that does and has `check/3`, each
+  mistake its check gives in its options, or a check that gives no list of messages. The
+  configuration is checked first, as `points/1` checks it.
   """
   def bind!(configuration, io) do
     devices = points(configuration)
@@ -185,7 +196,7 @@ defmodule Logex.IO do
         Declarations.suggest(name, Enum.sort(Map.keys(devices)), & &1, "devices")
     ]
 
-  defp device(name, {:ok, _points}, {:ok, binding}, _devices), do: adapter(name, binding)
+  defp device(name, {:ok, points}, {:ok, binding}, _devices), do: adapter(name, binding, points)
 
   # Each point named with its location, as the configuration spells it.
   defp at(device, [%Point{} = point]), do: "#{shown(device, point)} is at"
@@ -201,23 +212,55 @@ defmodule Logex.IO do
   defp listed([one, two]), do: "#{one} and #{two}"
   defp listed([one | rest]), do: one <> ", " <> listed(rest)
 
-  defp adapter(name, {module, opts}) when is_atom(module) and is_list(opts),
-    do: options(name, Keyword.keyword?(opts), opts) ++ implemented(name, module)
+  defp adapter(name, {module, opts}, points) when is_atom(module) and is_list(opts),
+    do: adapted(name, module, points, opts, Keyword.keyword?(opts))
 
-  defp adapter(name, {module, opts}) when is_atom(module),
-    do: options(name, false, opts) ++ implemented(name, module)
+  defp adapter(name, {module, opts}, _points) when is_atom(module),
+    do: unlisted(name, opts) ++ implemented(name, module)
 
-  defp adapter(name, module) when is_atom(module), do: implemented(name, module)
+  defp adapter(name, module, points) when is_atom(module),
+    do: adapted(name, module, points, [], true)
 
-  defp adapter(name, other),
+  defp adapter(name, other, _points),
     do: [
       "the device `#{name}` is bound to #{inspect(other)}: an adapter is a module that " <>
         "implements Logex.IO, or {module, options}"
     ]
 
-  defp options(_name, true, _opts), do: []
+  # Options that are a keyword list, given to an adapter that implements this behaviour, are
+  # its own to check, where it has check/3.
+  defp adapted(name, module, points, opts, true),
+    do: checked(name, module, points, opts, implemented(name, module))
 
-  defp options(name, false, opts),
+  defp adapted(name, module, _points, opts, false),
+    do: unlisted(name, opts) ++ implemented(name, module)
+
+  defp checked(name, module, points, opts, []),
+    do: own(name, module, function_exported?(module, :check, 3), points, opts)
+
+  defp checked(_name, _module, _points, _opts, lacking), do: lacking
+
+  defp own(_name, _module, false, _points, _opts), do: []
+
+  defp own(name, module, true, points, opts),
+    do: told(name, module, module.check(name, points, opts))
+
+  defp told(name, module, lines), do: lines(name, module, lines, messages?(lines))
+
+  defp lines(name, _module, lines, true),
+    do: for(line <- lines, do: "the device `#{name}`'s adapter options: #{line}")
+
+  defp lines(name, module, other, false),
+    do: [
+      "the device `#{name}` is bound to `#{inspect(module)}`, whose check/3 gives a list of " <>
+        "messages, got: #{inspect(other)}"
+    ]
+
+  defp messages?([]), do: true
+  defp messages?([line | lines]) when is_binary(line), do: messages?(lines)
+  defp messages?(_other), do: false
+
+  defp unlisted(name, opts),
     do: ["the device `#{name}`'s adapter options are a keyword list, got: #{inspect(opts)}"]
 
   defp implemented(name, module), do: lacking(name, module, Code.ensure_loaded?(module))

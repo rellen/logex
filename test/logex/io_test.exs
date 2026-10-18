@@ -111,11 +111,12 @@ defmodule Logex.IOTest do
   end
 
   describe "Logex.IO, the behaviour" do
-    test "is five callbacks, report/2 and close/1 optional" do
+    test "is six callbacks, report/2, close/1 and check/3 optional" do
       assert Enum.sort(Logex.IO.behaviour_info(:callbacks)) ==
-               [close: 1, init: 3, read: 1, report: 2, write: 2]
+               [check: 3, close: 1, init: 3, read: 1, report: 2, write: 2]
 
-      assert Enum.sort(Logex.IO.behaviour_info(:optional_callbacks)) == [close: 1, report: 2]
+      assert Enum.sort(Logex.IO.behaviour_info(:optional_callbacks)) ==
+               [check: 3, close: 1, report: 2]
     end
 
     test "a point is its name, direction, address and type, each enforced" do
@@ -433,6 +434,67 @@ defmodule Logex.IOTest do
       assert {:ok, %{[0] => 1, [1] => 0, [2, 1] => 0}, _state} = Sim.read(opened(sim))
     end
 
+    test "check/3 gives each mistake in the options it is bound with, which bind!/2 raises " <>
+           "in the host's process and init/3 the first of in the device's" do
+      sim = sim()
+      {:ok, stopped} = Sim.start_link()
+      GenServer.stop(stopped)
+      {:ok, other} = Agent.start_link(fn -> nil end)
+      config = configured("var_global lamp bool at panel.q.0\nprogram m blink\n  m.lamp lamp\n")
+
+      assert Sim.check("panel", points(), sim: sim) == []
+
+      assert [{"panel", Sim, [sim: sim], _points}] =
+               Logex.IO.bind!(config, %{"panel" => {Sim, sim: sim}})
+
+      assert {:ok, _state} = Sim.init("panel", points(), sim: sim)
+
+      for {opts, [first | _rest] = mistakes} <- [
+            {[],
+             [
+               "Logex.IO.Sim is bound with its sim, {Logex.IO.Sim, sim: sim}, got the options []"
+             ]},
+            {[simulator: sim],
+             [
+               "Logex.IO.Sim is bound with its sim, {Logex.IO.Sim, sim: sim}, got the options " <>
+                 "[simulator: #{inspect(sim)}]"
+             ]},
+            {[sim: :panel],
+             ["expected a simulated device from Logex.IO.Sim.start_link/1, got: :panel"]},
+            {[sim: stopped], ["the simulated device #{inspect(stopped)} is not running"]},
+            {[sim: other],
+             [
+               "expected a simulated device from Logex.IO.Sim.start_link/1, got: " <>
+                 "#{inspect(other)}, another process"
+             ]},
+            {[sim: sim, reports: true, clock: nil],
+             [
+               "Logex.IO.Sim is bound with sim: alone, got: :reports",
+               "Logex.IO.Sim is bound with sim: alone, got: :clock"
+             ]},
+            {[sim: :panel, reports: true],
+             [
+               "expected a simulated device from Logex.IO.Sim.start_link/1, got: :panel",
+               "Logex.IO.Sim is bound with sim: alone, got: :reports"
+             ]}
+          ] do
+        assert Sim.check("panel", points(), opaque(opts)) == mistakes
+        lines = for mistake <- mistakes, do: "the device `panel`'s adapter options: " <> mistake
+
+        assert_raise ArgumentError, Enum.join(lines, "\n"), fn ->
+          Logex.IO.bind!(config, %{"panel" => {Sim, opaque(opts)}})
+        end
+
+        assert_raise ArgumentError, first, fn -> Sim.init("panel", points(), opaque(opts)) end
+      end
+
+      # Bound alone, it is given no options, and so no sim.
+      assert_raise ArgumentError,
+                   "the device `panel`'s adapter options: Logex.IO.Sim is bound with its sim, " <>
+                     "{Logex.IO.Sim, sim: sim}, got the options []",
+                   fn -> Logex.IO.bind!(config, %{"panel" => Sim}) end
+    end
+
     test "refuses options, sims, addresses, values and failures that are not ones, each " <>
            "with its message" do
       for {opts, message} <- [
@@ -634,6 +696,52 @@ defmodule Logex.IOTest do
     config
   end
 
+  # An adapter that implements every callback Logex.IO requires, and checks nothing.
+  defmodule Plain do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, _opts), do: {:ok, nil}
+
+    @impl true
+    def read(state), do: {:ok, %{}, state}
+
+    @impl true
+    def write(_values, state), do: {:ok, state}
+  end
+
+  # An adapter whose check/3 tells the test what it was given and in which process, and
+  # gives back what its options say to.
+  defmodule Checked do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, _opts), do: {:ok, nil}
+
+    @impl true
+    def read(state), do: {:ok, %{}, state}
+
+    @impl true
+    def write(_values, state), do: {:ok, state}
+
+    @impl true
+    def check(device, points, opts) do
+      send(Keyword.fetch!(opts, :test), {:checked, self(), device, points, opts})
+      Keyword.get(opts, :gives, [])
+    end
+  end
+
+  # A module with a check/3 that would tell the test it was called, and no write/2.
+  defmodule HalfChecked do
+    def init(_device, _points, _opts), do: {:ok, nil}
+    def read(state), do: {:ok, %{}, state}
+
+    def check(device, points, opts) do
+      send(Keyword.fetch!(opts, :test), {:checked, self(), device, points, opts})
+      []
+    end
+  end
+
   # A module that has an adapter's init/3 and read/1, and no write/2.
   defmodule HalfAdapter do
     def init(_device, _points, _opts), do: {:ok, nil}
@@ -725,8 +833,8 @@ defmodule Logex.IOTest do
          %{tmp_dir: dir} do
       sim = sim()
 
-      assert Logex.IO.bind!(plant_on_disk(dir), %{"panel" => {Sim, sim: sim}, "drive" => Sim}) ==
-               [{"drive", Sim, [], drive_points()}, {"panel", Sim, [sim: sim], panel_points()}]
+      assert Logex.IO.bind!(plant_on_disk(dir), %{"panel" => {Sim, sim: sim}, "drive" => Plain}) ==
+               [{"drive", Plain, [], drive_points()}, {"panel", Sim, [sim: sim], panel_points()}]
 
       assert Logex.IO.bind!(
                configured("var_global lamp bool\nprogram m blink\n  m.lamp lamp\n"),
@@ -738,7 +846,7 @@ defmodule Logex.IOTest do
     test "every mistake comes in one ArgumentError, a line each, a key that is no device's " <>
            "name first, then in device-name order",
          %{tmp_dir: dir} do
-      io = %{:panel => Sim, "panle" => Sim, "drive" => 42}
+      io = %{:panel => Plain, "panle" => Plain, "drive" => 42}
 
       assert_raise ArgumentError,
                    Enum.join(
@@ -796,7 +904,7 @@ defmodule Logex.IOTest do
 
     test "more than 32 devices come back in name order" do
       names = for device <- 1..40, do: "dev#{device}"
-      bound = Logex.IO.bind!(many(40), Map.new(names, &{&1, Sim}))
+      bound = Logex.IO.bind!(many(40), Map.new(names, &{&1, Plain}))
       assert Enum.map(bound, &elem(&1, 0)) == Enum.sort(names)
     end
 
@@ -816,7 +924,7 @@ defmodule Logex.IOTest do
           end
 
       assert_raise ArgumentError, Enum.join(lines, "\n"), fn ->
-        Logex.IO.bind!(many(40), Map.new(keys, &{&1, Sim}))
+        Logex.IO.bind!(many(40), Map.new(keys, &{&1, Plain}))
       end
     end
 
@@ -824,7 +932,7 @@ defmodule Logex.IOTest do
            "where several are as near" do
       # `d0` is as near to each of `d00` to `d09`, and nearer than any other.
       config = many(40, &"d#{String.pad_leading(Integer.to_string(&1 - 1), 2, "0")}")
-      io = Map.new(0..39, &{"d#{String.pad_leading(Integer.to_string(&1), 2, "0")}", Sim})
+      io = Map.new(0..39, &{"d#{String.pad_leading(Integer.to_string(&1), 2, "0")}", Plain})
 
       assert_raise ArgumentError,
                    "the device `d0` is bound, but no point is at it — did you mean `d00`?",
@@ -842,8 +950,85 @@ defmodule Logex.IOTest do
           ] do
         assert_raise ArgumentError,
                      "the device `#{name}` is bound, but no point is at it#{hint}",
-                     fn -> Logex.IO.bind!(config, %{"panel" => Sim, name => Sim}) end
+                     fn -> Logex.IO.bind!(config, %{"panel" => Plain, name => Plain}) end
       end
+    end
+
+    test "an adapter's check/3 is given what init/3 will be, in the host's process, and " <>
+           "each line it gives is one of the one ArgumentError" do
+      config = configured("var_global lamp bool at panel.q.0\nprogram m blink\n  m.lamp lamp\n")
+      [lamp] = Logex.IO.points(config)["panel"]
+      test = self()
+
+      assert Logex.IO.bind!(config, %{"panel" => {Checked, test: test}}) ==
+               [{"panel", Checked, [test: test], [lamp]}]
+
+      assert_received {:checked, ^test, "panel", [^lamp], [test: ^test]}
+
+      assert_raise ArgumentError,
+                   "the device `panel`'s adapter options: no host 10.0.0.5 is configured\n" <>
+                     "the device `panel`'s adapter options: unit: is 1 to 247, got: 300",
+                   fn ->
+                     Logex.IO.bind!(config, %{
+                       "panel" =>
+                         {Checked,
+                          test: test,
+                          gives: ["no host 10.0.0.5 is configured", "unit: is 1 to 247, got: 300"]}
+                     })
+                   end
+
+      for gives <- [:ok, ["fine", :nope], ["a" | "b"]] do
+        assert_raise ArgumentError,
+                     "the device `panel` is bound to `Logex.IOTest.Checked`, whose check/3 " <>
+                       "gives a list of messages, got: #{inspect(gives)}",
+                     fn ->
+                       Logex.IO.bind!(config, %{"panel" => {Checked, test: test, gives: gives}})
+                     end
+      end
+    end
+
+    test "an adapter's check/3 is not called where its options are no keyword list or its " <>
+           "module lacks a callback, and its lines come in device-name order among the rest" do
+      config =
+        configured("""
+        var_global lamp bool at panel.q.0
+        var_global horn bool at drive.q.0
+        program m blink
+          m.lamp lamp
+        """)
+
+      test = self()
+
+      assert_raise ArgumentError,
+                   "the device `drive`'s adapter options: drive's\n" <>
+                     "the device `panel` is bound to `Logex.IOTest.HalfChecked`, which does not " <>
+                     "implement Logex.IO: it has no write/2\n" <>
+                     "the device `pnael` is bound, but no point is at it — did you mean `panel`?",
+                   fn ->
+                     Logex.IO.bind!(
+                       config,
+                       opaque(%{
+                         "panel" => {HalfChecked, test: test},
+                         "drive" => {Checked, test: test, gives: ["drive's"]},
+                         "pnael" => {Checked, test: test, gives: ["never asked"]}
+                       })
+                     )
+                   end
+
+      assert_received {:checked, ^test, "drive", _points, _opts}
+      refute_received {:checked, _pid, _device, _points, _opts}
+
+      assert_raise ArgumentError,
+                   "the device `panel`'s adapter options are a keyword list, got: [1]",
+                   fn ->
+                     Logex.IO.bind!(
+                       config,
+                       opaque(%{"panel" => {Checked, [1]}, "drive" => {Checked, test: test}})
+                     )
+                   end
+
+      assert_received {:checked, ^test, "drive", _points, _opts}
+      refute_received {:checked, _pid, _device, _points, _opts}
     end
 
     test "an adapter not yet loaded is loaded to be checked", %{tmp_dir: dir} do
@@ -910,7 +1095,7 @@ defmodule Logex.IOTest do
       end
 
       assert_raise ArgumentError, "io names each device by a string, got: 1", fn ->
-        Logex.IO.bind!(config, opaque(%{1 => Sim, "panel" => Sim}))
+        Logex.IO.bind!(config, opaque(%{1 => Plain, "panel" => Plain}))
       end
     end
   end
@@ -919,7 +1104,7 @@ defmodule Logex.IOTest do
     # bind!/2's reductions, in a process of its own, the least of three counts.
     defp bound(devices) do
       config = many(devices)
-      io = Map.new(1..devices, &{"dev#{&1}", Sim})
+      io = Map.new(1..devices, &{"dev#{&1}", Plain})
 
       for _ <- 1..3, reduce: :infinity do
         least ->
