@@ -474,8 +474,10 @@ defmodule Logex.Runner do
     })
   end
 
-  defp continuous(false, :none), do: nil
-  defp continuous(_untimed, named), do: named
+  # A continuous line that runs no instance times no round: its watchdog then times
+  # nothing (decision 111), and a round of timed tasks alone is no round of its.
+  defp continuous(false, _named), do: nil
+  defp continuous(true, named), do: named
 
   # The conventional table's slots for a share of p percent: C = max(1, round((100 - p) /
   # p)) ms of the continuous task's rounds, then up to S = max(1, round(p / (100 - p))) ms

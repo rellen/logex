@@ -31,6 +31,30 @@ defmodule Logex.RunnerTest do
     end
   end
 
+  # A device that logs each write and its close to an agent, in the order they come: so
+  # that the order between devices can be asserted. `fail: true` refuses to open.
+  defmodule LogIO do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(device, _points, opts), do: opened(Keyword.get(opts, :fail, false), device, opts)
+
+    defp opened(true, _device, _opts), do: {:error, :refused}
+    defp opened(false, device, opts), do: {:ok, %{log: opts[:log], device: device}}
+
+    @impl true
+    def read(state), do: {:ok, %{}, state}
+
+    @impl true
+    def write(values, %{log: log} = state) do
+      Agent.update(log, &[{:write, state.device, values} | &1])
+      {:ok, state}
+    end
+
+    @impl true
+    def close(%{log: log, device: device}), do: Agent.update(log, &[{:close, device} | &1])
+  end
+
   # A clock whose every reading takes a millisecond, the manual clock's: so that the
   # runner's own work, a host's request among it, takes time, as on a real machine.
   defmodule TickClock do
@@ -776,11 +800,16 @@ defmodule Logex.RunnerTest do
       assert Runner.get!(runner, "x") == 0
       assert Sim.writes(panel) == [%{[0] => 0}]
 
-      # One report with both: the trigger's round takes `x` too, and the relay, not due
-      # at 0 once it has run, leaves `y` as it was.
+      # The trigger's round takes `x` too, and the relay, not due at 0 once it has run,
+      # leaves `y` as it was.
       Sim.set(panel, %{[1] => 1})
       assert Runner.get!(runner, "x") == 1
       assert Runner.get!(runner, "hits") == 1
+
+      # One report with both: `x`'s change is merged before the trigger's round, which
+      # takes it.
+      Sim.set(panel, %{[0] => 0, [1] => 0})
+      assert Runner.get!(runner, "x") == 0
     end
 
     test "each change of a trigger in one report its own round, in address order" do
@@ -1420,6 +1449,165 @@ defmodule Logex.RunnerTest do
       assert rounds(runner) == 100_000
       assert Logex.Runtime.overlaps(:sys.get_state(runner).runtime) == %{"fast" => 0}
       assert Manual.now_ms(clock) == 999_993
+    end
+  end
+
+  describe "the review's survivors, each a test" do
+    # Decision 116's order, at a stop and when a device cannot be opened: each device
+    # written its zeros and closed before the next, in device-name order.
+    test "devices zeroed and closed in device-name order, at a stop and at an io_init" do
+      {:ok, log} = Agent.start_link(fn -> [] end)
+      {:ok, clock} = Manual.start_link()
+      io = Map.new(0..2, &{"dev#{&1}", {LogIO, log: log}})
+
+      {:ok, runner} =
+        Runner.start_link(configuration: idle_crowd(3), io: io, clock: {Manual, clock})
+
+      Agent.update(log, fn _ -> [] end)
+      Runner.stop(runner)
+
+      assert Enum.reverse(Agent.get(log, & &1)) ==
+               Enum.flat_map(0..2, &[{:write, "dev#{&1}", %{[0] => 0}}, {:close, "dev#{&1}"}])
+
+      # The third cannot be opened: the two before it, in their order.
+      Agent.update(log, fn _ -> [] end)
+      io = Map.put(io, "dev2", {LogIO, log: log, fail: true})
+
+      assert {:error, {:io_init, "dev2", :refused}} =
+               Runner.start_link(configuration: idle_crowd(3), io: io, clock: {Manual, clock})
+
+      assert Enum.reverse(Agent.get(log, & &1)) ==
+               Enum.flat_map(0..1, &[{:write, "dev#{&1}", %{[0] => 0}}, {:close, "dev#{&1}"}])
+    end
+
+    test "subscribing again and unsubscribing leave one monitor and then none" do
+      {opts, _rig} = plant_rig()
+      {:ok, runner} = Runner.start_link(opts)
+      monitors = fn -> length(elem(Process.info(runner, :monitors), 1)) end
+      assert monitors.() == 0
+      :ok = Runner.subscribe(runner)
+      :ok = Runner.subscribe(runner, [:round])
+      :ok = Runner.subscribe(runner, [:ran])
+      assert monitors.() == 1
+      :ok = Runner.unsubscribe(runner)
+      assert monitors.() == 0
+    end
+
+    # A trigger logic writes is compared, after the first round, with its value before it:
+    # `g`, declared 1 and left at 1 by the first round, which its task's run sees as
+    # already high, is no change, and makes no round.
+    test "a trigger logic writes starts at its declared value" do
+      text = """
+      task t single g priority 0
+      var_global g bool 1
+      var_global x bool at panel.i.0
+      program c count with t
+      """
+
+      {opts, %{clock: clock}} = rig(configured(text, %{"count" => @count}))
+      {:ok, runner} = Runner.start_link(opts)
+      assert Runner.get!(runner, "c.n") == 1
+      Manual.advance(clock, 20)
+      assert rounds(runner) == 1
+    end
+
+    # The continuous task's round is timed from its start to the end of its last program,
+    # the timed tasks' steps in it included (decisions 111 and 126): on the ticking clock
+    # its longest round with two timed steps in it is at least its longest without them,
+    # plus each one's run.
+    test "the continuous task's round includes its timed steps' runs" do
+      runs = fn text ->
+        {:ok, clock} = Manual.start_link()
+        {:ok, panel} = Sim.start_link(clock: clock)
+
+        {:ok, runner} =
+          Runner.start_link(
+            configuration: configured(text, %{"count" => @count}),
+            io: %{"panel" => {Sim, sim: panel}},
+            clock: {TickClock, clock}
+          )
+
+        waited(:gen_server.send_request(runner, :status), clock).runs
+      end
+
+      head = "task main continuous\nvar_global x bool at panel.i.0\nprogram b count\n"
+      %{"main" => {alone, 500}} = runs.(head)
+
+      %{"main" => {beside, 500}, "fast" => {fast, 500}, "slow" => {slow, 500}} =
+        runs.(
+          head <>
+            "task fast interval 10 priority 1\ntask slow interval 1000000 priority 2\n" <>
+            "program c count with fast\nprogram d count with slow\n"
+        )
+
+      assert fast > 0 and slow > 0
+      assert beside >= alone + fast + slow
+    end
+
+    # A continuous line that runs no instance times no round (decision 111): the rounds
+    # of timed tasks alone are not its, so its longest round stays 0.
+    test "a continuous task that runs no instance times no round" do
+      text =
+        "task main continuous watchdog 200\ntask fast interval 10 priority 1\n" <>
+          "var_global x bool at panel.i.0\nprogram c count with fast\n"
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(text, %{"count" => @count}),
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {TickClock, clock}
+        )
+
+      Manual.advance(clock, 30)
+      assert %{"main" => {0, 200}, "fast" => {fast, 500}} = Runner.status(runner).runs
+      assert fast > 0
+    end
+
+    # The runner refreshes every device during the round a device's change makes, the
+    # device that made it among them, which takes each refresh while it waits: so its
+    # deadline is the last, the write's, when set/3 returns.
+    test "a device waiting on its own change takes the refreshes sent meanwhile" do
+      {opts, %{clock: clock, panel: panel}} = plant_rig()
+      {:ok, runner} = Runner.start_link(opts)
+      %{"panel" => device} = devices(runner)
+      assert :sys.get_state(device).deadline == 0 + 510
+      Manual.pass(clock, 2)
+      Sim.set(panel, [1], 1)
+      assert :sys.get_state(device).deadline == 2 + 510
+    end
+
+    # The slow device's every write takes 13 ms, so the first round ends at 13, past the
+    # panel's first poll, at 10, which comes late: the polls after it keep their grid, at
+    # 20, 30 and 40, not 23 and 33. And the panel, written at 0, is written again at the
+    # late poll, at 13, and so not at 20, within a poll period of it, but at 30 and 40:
+    # at most once a poll period (decision 130).
+    test "the polls after a late one keep their grid" do
+      config =
+        configured(
+          "task fast interval 100 priority 1\nvar_global q bool at slow.q.0\n" <>
+            "var_global x bool at panel.i.0\nvar_global y bool at panel.q.0\n" <>
+            "program r relay with fast\n  r.in x\n  r.out y\n" <>
+            "program t toggle with fast\n  t.q q\n",
+          %{"toggle" => @toggle, "relay" => @relay}
+        )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+
+      {:ok, _runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}, "slow" => {SlowIO, clock: clock, ms: 13}},
+          clock: {Manual, clock}
+        )
+
+      assert Manual.now_ms(clock) == 13
+      Manual.advance(clock, 27)
+      assert Sim.reads(panel) == 5
+      assert length(Sim.writes(panel)) == 4
     end
   end
 
