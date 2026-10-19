@@ -1772,6 +1772,31 @@ defmodule Logex.TripTest do
       assert length(Sim.writes(panel)) == 3
     end
 
+    test "a device the trip latched sends no notice at its last deadline, so that a " <>
+           "restart taken after it does not trip on one from before" do
+      %{runner: runner, clock: clock, panel: panel} =
+        rig(configured(@conveyor), poll: 10, idle: 500, steps: Runtime)
+
+      Runner.subscribe(runner)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 30)
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      assert_receive {Runner, ^runner, {:trip, {:io, "panel", {:error, :eio}}}}
+      Sim.set(panel, [0], 0)
+
+      # The host's restart waits in the busy runner's mailbox while time passes the
+      # latched panel's last deadline; the restart is taken first, and its first round
+      # finds no notice from before it.
+      :sys.suspend(runner)
+      task = Task.async(fn -> Runner.restart(runner, :cold) end)
+      restart_waiting(runner)
+      Manual.advance(clock, 600)
+      :sys.resume(runner)
+      assert Task.await(task) == :ok
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+    end
+
     test "its host mistakes, raised in the caller with the runner still alive" do
       %{runner: runner, clock: clock, panel: panel} = rig()
 
@@ -1809,6 +1834,16 @@ defmodule Logex.TripTest do
 
   defp waited({:message_queue_len, 0}, runner), do: waiting(runner)
   defp waited(_len, _runner), do: :ok
+
+  # Waits until a host's restart waits in the runner's mailbox.
+  defp restart_waiting(runner),
+    do: restart_waited(Process.info(runner, :messages), runner)
+
+  defp restart_waited({:messages, messages}, runner),
+    do: restart_found(Enum.any?(messages, &match?({:"$gen_call", _, {:restart, _}}, &1)), runner)
+
+  defp restart_found(true, _runner), do: :ok
+  defp restart_found(false, runner), do: restart_waiting(runner)
 
   # Waits until the runner holds a request in its queue.
   defp wait_queued(runner), do: queued(:queue.is_empty(:sys.get_state(runner).queue), runner)

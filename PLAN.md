@@ -3428,8 +3428,16 @@ and M4-7 the documents.
   as each round begins and at each wait's refresh, `2f1576d`; (5) a device that answered a
   round's write after its deadline on the runner's clock was killed, its outputs left at
   what it had just written: it is `:timeout` still, and written its 0 by the trip,
-  `3fe9f97`; and (6) each rule the review found untested a test, `e6f6ca4`. 1470 tests
-  pass on Elixir 1.20.4 (9 of them doctests), up from 1453.
+  `3fe9f97`; and (6) each rule the review found untested a test, `e6f6ca4`. A
+  verification of the fixes then found (6) had taken out one piece of code that a rule
+  needs, a latched device sending no notice at its later deadline, called equivalent
+  below: a device the trip latched still told the runner once its last deadline passed,
+  which a tripped runner passes over, but which a host's restart waiting in a busy
+  runner's mailbox meanwhile is taken before, so that the restart answered `:ok` and its
+  first round tripped `{:watchdog, {:device, device, ms}}` on a deadline from before it,
+  on the manual clock every time and on the real clock 6 restarts in 800; (7) puts the
+  clause back with that case as its test. 1471 tests pass on Elixir 1.20.4 (9 of them
+  doctests), up from 1453.
 
   The mutation tables of the landing's (1) to (5), above, overstate: three of their rows
   counted red only because a slow test timed out under load beside a parallel mutation
@@ -3442,12 +3450,13 @@ and M4-7 the documents.
   does not fit, and a notice from a process that is not its device's. Every mutation row
   of the fixes' commits was judged by `trip_test.exs`'s exit code alone, one mutant at a
   time, and all thirty again by the full suite's, one mutant at a time, at the fixes' (6):
-  every one red, each failing the test its row names, none red by a slow test alone. Four
+  every one red, each failing the test its row names, none red by a slow test alone. Three
   pieces of code were taken out as equivalent, each a rule's second place: a device marked
   down in a write that timed out or went down, where the trip's zero finds it so (the
-  review's N10, in the fixes' (5)), a latched device's later wake, a release's forgotten
-  deadline, and a device latching itself on a round's write that failed, which the trip
-  that write makes latches at once (each in the fixes' (6)); and the fixes' (4) left out a
+  review's N10, in the fixes' (5)), a release's forgotten deadline, and a device latching
+  itself on a round's write that failed, which the trip that write makes latches at once
+  (each in the fixes' (6)). (6) took out a fourth, a latched device's later wake, as
+  equivalent too, and it is not, as (7) above gives; and the fixes' (4) left out a
   fifth, the silent device marked down, for the same reason. Its table gives its B11, a
   "back" from a process no longer its device's, as equivalent; (6) gives it a test, and it
   is red there. The trip's growth test stays at 5.08, its highest of 48 runs 4.168;

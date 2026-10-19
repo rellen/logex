@@ -36,7 +36,9 @@ defmodule Logex.Runner.Device do
   #   deadline its last refresh carried, a wake on the runner's clock at it, latches as a
   #   trip's zero does and tells the runner, `{Logex.Runner.Device, pid, at, {:latched,
   #   name, ms}}`, `at` the time on the runner's clock it latched and `ms` the time from
-  #   that refresh to its deadline, which the runner trips on when it next runs. One wake
+  #   that refresh to its deadline, which the runner trips on when it next runs; one
+  #   latched already, by a trip's zero or its own fault, tells it nothing, so that no
+  #   notice raised while the runner is tripped trips it again after a restart. One wake
   #   is kept, set again only where a refresh brings the deadline sooner, and moved on to
   #   the last deadline where it comes before it; and a device
   #   waiting on the runner for its own change takes its wake there too, so that a runner
@@ -389,6 +391,11 @@ defmodule Logex.Runner.Device do
   end
 
   defp expire(false, _now, state), do: armed(state)
+
+  # A device latched already, by a trip's zero or its own fault, tells the runner nothing
+  # more: a notice raised while the runner is tripped would otherwise wait in its mailbox
+  # behind a host's restart and trip the restarted runner on a deadline from before it.
+  defp expire(true, _now, %{latched: true} = state), do: state
 
   defp expire(true, now, %{runner: runner, name: name} = state) do
     send(runner, {__MODULE__, self(), now, {:latched, name, state.deadline - state.heard}})

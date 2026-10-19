@@ -2748,7 +2748,9 @@ ms.
   one poll period (decision 128, which replaced the continuous task's watchdog here),
   refreshing again at least once a poll period while it waits. A device that hears nothing by the deadline its last
   refresh carried writes 0 to every output once, latches and tells the runner, which
-  trips when it next runs, `{:watchdog, {:device, device, time}}`. A runner that is well
+  trips when it next runs, `{:watchdog, {:device, device, time}}`; one a trip latched
+  already tells it nothing, so that a restart that waited while its deadline passed
+  finds no notice from before it. A runner that is well
   never misses one, each step ending within its watchdog or tripping and the poll period
   the margin, and a runner stuck in the conveyor's 50 ms step leaves every device that
   answers at 0 within 50 ms and a poll period, not within the plant's longest watchdog.
