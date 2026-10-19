@@ -26,7 +26,9 @@ the same day (decisions 128–131), and the findings of M4-4's review were fixed
 2026-10-19, §4.11's landing note, the maintainer answering its five questions the same
 day (decisions 133–137); and M4-5, forcing and an online edit through the runner, landed
 the same day, its review's findings fixed the same day, four of its readings put to the
-maintainer and answered the same day (§4.11's landing note, decisions 138–141).** On 2026-09-28 the
+maintainer and answered the same day (§4.11's landing note, decisions 138–141); and M4-6,
+the contract walk over the runner, the same day, with the fix it found (decision 114's
+note).** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -3037,6 +3039,17 @@ it is not certified for any industrial use. The common deaths of a runner go to 
 off, a crash, a kill, a stop, a stuck runner and a device fault; a hung device and a dead
 VM do not, and the documents say so.
 
+**The contract walk** *(M4-6, landed 2026-10-19).* `api_contract_test.exs`'s runner walk,
+`Logex.ApiContractTest.RunnerWalk`, runs the runner on the manual clock over seeded
+configurations, half with untimed programs, devices that report and that are only read,
+waits, presses, forces, edits, restarts, a crash, and injected faults, through the hidden
+seam `steps:`, which tells the walk each round's elapsed time and inputs. It is checked
+against `cycle/3` called with those, every round's events, outputs and resource, and
+against the rules restated: when each scheduled round comes, what each input reads, and
+which trip each fault gives. Its reach is every event kind and every trip reason but
+`{:internal, message}`. It found one bug, a device that took a change the runner refused
+(decision 114's note), and one question, whether a restart reads every device first.
+
 **Risks.**
 - *Real time in CI*: every rule is tested on the manual clock, and a test on the real
   clock asserts only liveness, with bounds a fifth above the two-suite soak's, since CI
@@ -5078,7 +5091,14 @@ over.
      since its review a device that hangs inside its own read or report, which no request
      of the runner's reaches while its outputs do not change, is seen by its telling the
      runner after each read and report that it is back from its adapter, the bound the
-     idle watchdog and a poll period, decision 134.)*
+     idle watchdog and a poll period, decision 134. Since M4-6, whose walk found it, a
+     change the runner refuses, a value that does not fit or an address that is no input
+     point's, is not taken by the device either, so that its next read passes it on again:
+     a card that goes on giving a bad value trips the runner again after each restart,
+     where until then it tripped it once and the runner ran on with the last value it had
+     taken, and a good change refused beside a bad one is read at the first read after the
+     restart. Whether a restart should read every device before its first round is put to
+     the maintainer, `PLAN.md` M4-6.)*
 115. **After a crash (Milestone 4).** The controller software itself crashes; whichever is
      chosen, every output goes off on the way down.
      - It stays stopped until someone starts it again, as after the watchdog;

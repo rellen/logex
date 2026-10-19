@@ -34,7 +34,8 @@ each with the option recommended and built, decisions 133 to 137 (§3, M4-4); an
 fifth, M4-5, edits and forcing through the runner, on 2026-10-19, its review's
 findings fixed the same day, four of its choices put to the maintainer, who answered them
 the same day, decisions 138 to 141, the second with the option recommended, then built
-(§3, M4-5).
+(§3, M4-5); and its sixth, M4-6, the contract walk over the runner, the same day, with a
+fix to the devices it found and one question put to the maintainer (§3, M4-6).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -3809,6 +3810,88 @@ and M4-7 the documents.
   *Done when* its reach is asserted, every event kind and every trip reason reached but
   `{:internal, message}`, which the host contract makes unreachable from a walk and M4-4
   reaches through its seam.
+
+  **Status: DONE — landed 2026-10-19**, as three commits: (1) the fix the walk found,
+  `81fedcb`; (2) the walk, `c591faa`; (3) these documents. 1531 tests pass on Elixir
+  1.20.4 (9 of them doctests), up from 1529.
+
+  The walk is `Logex.ApiContractTest.RunnerWalk`, a module of its own in
+  `api_contract_test.exs`, so that it runs beside `Logex.ApiContractTest` rather than
+  after its eleven walks: 30 seeded configurations of a fast task, now and then a slow
+  one, an event task on a panel's or a drive's input, one on a trigger logic writes and
+  the continuous task, half with an untimed counter; each device reporting or only read;
+  a forces file or none; and 70 steps each of waits, presses, forces and unforces, an
+  online edit's steps, host mistakes, restarts, a crash and a fresh start from the forces
+  file, and injected faults, a step slow by about a watchdog, a slow request, the runner
+  stuck, a device killed or hung, and every way `Logex.IO.Sim` fails a read, a report or
+  a write. The hidden seam, `steps:`, stands in a module that runs each step as the core
+  does and tells the walk the elapsed time and inputs the runner gave the core; the model
+  calls `cycle/3` with them, and each round's events, outputs and resource, each edit's
+  report at the step's time, each restart and, after every step, `status/1`, `get/2` and
+  each device's outputs must be the model's. The times and inputs are checked too, by
+  the rules restated: the elapsed time the clock's since the last round, a forced input
+  its force, a reporting device's input its value now and a read device's one it held
+  within two poll periods, a scheduled round exactly when decisions 122 and 123 or the
+  next due time put it, and a force of a trigger its round at once (decision 138). A
+  model of the watchdogs and the trip gives each injected fault's reason, and every
+  output is 0 once at a trip and nothing is written until the restart. The first walk
+  runs again from fresh processes and repeats exactly. Its reach is asserted: every event
+  kind, every trip reason but `{:internal, message}`, and 41 kinds of round, step, fault
+  and mistake. It takes 5 to 9 s and leaves the suite's wall time where it was, 63 to
+  67 s (67 to 72 s before), running beside the other modules; no step reads the real
+  clock. At this seed every atom is reached; over 30 other seed families every walk
+  passed and 21 reached every atom, the rest missing one or two of the rarest.
+
+  Its mutation table (`c591faa`'s message): 58 mutants of `lib/`, each applied alone in a
+  copy and the full suite judged by its exit code, 57 red and one green, equivalent (a
+  round's inputs kept for the next, merged again at the same values). The walk fails 47
+  of them, and every one but one also fails a per-rule test, mostly in `trip_test.exs`,
+  `runner_test.exs`, `force_test.exs` and `runner_edit_test.exs`, which the table names;
+  the one only the walk catches is a round that trips the continuous task's watchdog
+  recording no longest run in `status/1`. The fix's three rules, reverted, fail the walk
+  alone once the fix's own test is taken out. The ten it misses are each caught by a
+  per-rule test, most of them out of the walk's reach by design: a write delayed, a
+  host's call waiting for a slot, two bad addresses in one read, or equivalent on the
+  manual clock.
+
+  **The bug it found** (fixed in `81fedcb`, with a test in `trip_test.exs` that fails on
+  its parent). A device took every change it passed on into the image it compares its
+  reads with, whether the runner took the change or refused it as an I/O fault (decision
+  114). So a card that goes on giving a value that does not fit, a broken encoder on the
+  drive, tripped the runner once; after the restart its reads matched that image, nothing
+  was passed on, and the runner ran on with the last speed it had taken, never tripping
+  again. And a report refused for one bad value lost the good change beside it for good.
+  The runner now answers a refused change `{:error, cause}`, and the device takes only a
+  change the runner answered `:ok`, so its next read passes a refused one on again.
+  Decision 114 makes each read's bad value a fault, so the record was not silent.
+
+  **A question for the maintainer** (provisional: built as (a), as the record says). A
+  *trip* stops the plant: every output switched off once, nothing run until a person
+  presses restart. A *round* is one pass of the controller over its programs: the inputs
+  read, the programs run, the outputs written. A *device* is an I/O card the controller
+  reads and writes; one that cannot report its changes is read every *poll period*, 10 ms
+  unless set.
+  1. *Whether a restart reads every device before its first round.* The conveyor runs,
+     the fan with it and the run lamp lit, and the drive's card starts giving a speed no
+     dint holds. The controller trips: the conveyor, the fan and the lamp go off. The
+     operator presses restart without the card mended. (a) As built: the restart lets
+     every card go and runs its first round at once on the last values the controller
+     took, so the conveyor's contactor and the fan pull in and the lamp lights; at the
+     drive card's next read, within a poll period, the bad value trips the controller
+     again and everything goes off. The operator sees the plant start and stop again in
+     10 ms, a click of the contactors, and the trip screen again. (b) A restart reads
+     every card once before its first round, as a start does, and one whose read fails or
+     gives a value that does not fit leaves the controller tripped with its first reason,
+     the restart answered with the card's fault, as a card that cannot be opened again
+     answers it now (decision 136): nothing switches on, and the operator is told which
+     card is at fault. (c) As (a), but the first round's outputs held back until every
+     card has been read once since the restart: nothing switches on, the restart is taken
+     and then trips again within a poll period. IEC 61131-3 says nothing of a restart
+     after an I/O fault. In Logix a module whose connection faulted is reconnected before
+     its inputs are used, and a major fault is cleared before the controller goes back to
+     run (from memory, **unverified** in the manuals saved). Recommended: (b), the
+     same rule as a start, which the record has; nothing is switched on from a value the
+     controller knows may be bad.
 - **M4-7 · The documents.** README's "Running a plant on the clock", with a real run, and
   "What logex is not", plainly; CLAUDE.md's Key Files; `docs/organisation.md` §4.5's
   adapter contract, §4.6's watchdog paragraph, §5's row and decision 14's annotation, as
