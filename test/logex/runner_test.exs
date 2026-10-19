@@ -1730,7 +1730,8 @@ defmodule Logex.RunnerTest do
           points: points,
           runner: self(),
           clock: {Manual, clock},
-          poll: 10
+          poll: 10,
+          restarts: 0
         })
 
       assert {:ok, _values} = Logex.Runner.Device.open(device)
@@ -1761,7 +1762,8 @@ defmodule Logex.RunnerTest do
           points: points,
           runner: self(),
           clock: {Manual, clock},
-          poll: 10
+          poll: 10,
+          restarts: 0
         })
 
       assert {:ok, _values} = Logex.Runner.Device.open(device)

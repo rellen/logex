@@ -473,13 +473,13 @@ defmodule Logex.TripTest do
         rig(configured(text), poll: 10, idle: 100, steps: Runtime)
 
       # A fault in its words trips nothing.
-      send(runner, {Logex.Runner.Device, self(), 0, {:fault, "panel", {:error, :forged}}})
+      send(runner, {Logex.Runner.Device, self(), 0, 0, {:fault, "panel", {:error, :forged}}})
       Manual.advance(clock, 20)
       assert Runner.status(runner).status == :running
 
       # Nor does a "back" keep a device heard: the panel held after its read at 20 is
       # silent from 131 whatever the forged notice says.
-      send(runner, {Logex.Runner.Device, self(), 1_000_000, {:back, "panel", nil}})
+      send(runner, {Logex.Runner.Device, self(), 0, 1_000_000, {:back, "panel", nil}})
       Runner.status(runner)
       :sys.suspend(device_pid(runner, "panel"))
       Manual.advance(clock, 111)
@@ -827,6 +827,17 @@ defmodule Logex.TripTest do
       Manual.advance(clock, 1000)
       assert %{status: :running} = Runner.status(runner)
       assert List.last(Sim.writes(panel)) == %{[0] => 1}
+
+      # And a device that latches after the restart trips it, its notice carrying the
+      # count of restarts its release gave it; so does a fault of its own after a second.
+      :sys.suspend(runner)
+      Manual.advance(clock, 200)
+      :sys.resume(runner)
+      assert {:watchdog, {:device, _, 110}} = Runner.status(runner).trip
+      assert Runner.restart(runner, :cold) == :ok
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).trip == {:io, "panel", {:error, :eio}}
     end
   end
 
@@ -1003,7 +1014,7 @@ defmodule Logex.TripTest do
 
     test "a device's process that goes down trips, and is opened again at a restart" do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
-        rig(configured(@conveyor), steps: Runtime)
+        rig(configured(@conveyor), poll: 10, steps: Runtime)
 
       Runner.subscribe(runner)
       Sim.set(panel, [0], 1)
@@ -1017,6 +1028,11 @@ defmodule Logex.TripTest do
       assert Process.alive?(device_pid(runner, "drive"))
       Manual.advance(clock, 10)
       assert Runner.status(runner).status == :running
+
+      # Opened again with the restart's count, its own fault after it trips the runner.
+      Sim.fail(drive, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).trip == {:io, "drive", {:error, :eio}}
     end
 
     test "a device that cannot be opened at a restart leaves the runner tripped, and a " <>
@@ -1772,8 +1788,8 @@ defmodule Logex.TripTest do
       assert length(Sim.writes(panel)) == 3
     end
 
-    test "a device the trip latched sends no notice at its last deadline, so that a " <>
-           "restart taken after it does not trip on one from before" do
+    test "a device the trip latched notices its last deadline with the count of restarts " <>
+           "from before, so that a restart taken after it does not trip on it" do
       %{runner: runner, clock: clock, panel: panel} =
         rig(configured(@conveyor), poll: 10, idle: 500, steps: Runtime)
 
@@ -1795,6 +1811,83 @@ defmodule Logex.TripTest do
       :sys.resume(runner)
       assert Task.await(task) == :ok
       assert %{status: :running, trip: nil} = Runner.status(runner)
+    end
+
+    test "a restart a trip serves from its queue trips on no notice taken with the one " <>
+           "that made the trip, two devices latching in one millisecond" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} = relayed_both()
+      Runner.subscribe(runner)
+
+      # The host's restart waits in the stuck runner's mailbox, a round owed, so that it is
+      # queued for the share's slot; then both devices latch at their deadline, 111, each
+      # notice behind it. The drive's trips the runner, whose trip serves the restart; the
+      # panel's, taken with it and raised before that restart's release, trips nothing.
+      :sys.suspend(runner)
+      task = Task.async(fn -> Runner.restart(runner, :cold) end)
+      restart_waiting(runner)
+      Manual.advance(clock, 110)
+      zeroed_once(panel, 1)
+      zeroed_once(drive, 1)
+      :sys.resume(runner)
+      assert Task.await(task) == :ok
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, "drive", 110}}}}
+      assert_receive {Runner, ^runner, {:restart, :cold}}
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      Manual.advance(clock, 50)
+      assert %{status: :running} = Runner.status(runner)
+      refute_received {Runner, ^runner, {:trip, _}}
+
+      assert {List.last(Sim.writes(panel)), List.last(Sim.writes(drive))} ==
+               {%{[0] => 1}, %{[0] => 1}}
+    end
+
+    test "a restart a trip serves from its queue trips on no notice that came while the " <>
+           "trip ran, from a device not yet latched as the trip began" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} = relayed_both()
+      Runner.subscribe(runner)
+
+      # As above, but the drive's process is held, so that its wake at 111 waits for it and
+      # the panel's notice alone trips the runner. The drive is let go once the trip waits
+      # on its zero: it latches at its wake first, its notice coming in as the trip runs,
+      # behind the restart the trip serves.
+      :sys.suspend(runner)
+      task = Task.async(fn -> Runner.restart(runner, :cold) end)
+      restart_waiting(runner)
+      drive_device = device_pid(runner, "drive")
+      :sys.suspend(drive_device)
+      Manual.advance(clock, 110)
+      zeroed_once(panel, 1)
+      :sys.resume(runner)
+      zero_waiting(drive_device)
+      :sys.resume(drive_device)
+      assert Task.await(task) == :ok
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, "panel", 110}}}}
+      assert_receive {Runner, ^runner, {:restart, :cold}}
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Enum.take(Sim.writes(drive), -3) == [%{[0] => 1}, %{[0] => 0}, %{[0] => 1}]
+      Manual.advance(clock, 50)
+      assert %{status: :running} = Runner.status(runner)
+      refute_received {Runner, ^runner, {:trip, _}}
+    end
+
+    test "a restart a trip serves from its queue finds each device heard as late as the " <>
+           "notices taken with the trip's say, so that none is taken for hung" do
+      %{runner: runner, clock: clock} = relayed_both()
+      Runner.subscribe(runner)
+
+      # Both devices latch at 111 and go on reading, each read's "back" waiting in the
+      # stuck runner's mailbox to 300; the restart the trip serves runs its first round
+      # with each device heard at 300, not at the latch, 189 ms and more before it.
+      :sys.suspend(runner)
+      task = Task.async(fn -> Runner.restart(runner, :cold) end)
+      restart_waiting(runner)
+      Manual.advance(clock, 299)
+      :sys.resume(runner)
+      assert Task.await(task) == :ok
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, _, 110}}}}
+      assert_receive {Runner, ^runner, {:restart, :cold}}
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      refute_received {Runner, ^runner, {:trip, _}}
     end
 
     test "its host mistakes, raised in the caller with the runner still alive" do
@@ -1820,6 +1913,30 @@ defmodule Logex.TripTest do
       end)
     end
   end
+
+  # The relay copying the panel's x to the panel's y and the drive's z, untimed, so that a
+  # round is always owed, on a 10 ms poll and a 100 ms idle watchdog; its first rounds
+  # written by 1, each device's deadline then 111.
+  defp relayed_both do
+    text =
+      "var_global x bool at panel.i.0\nvar_global y bool at panel.q.0\n" <>
+        "var_global z bool at drive.q.0\n" <>
+        "program r relay\n  r.in x\n  r.out y\nprogram s relay\n  s.in x\n  s.out z\n"
+
+    rig = rig(configured(text), poll: 10, idle: 100, steps: Runtime)
+    Sim.set(rig.panel, [0], 1)
+    Manual.advance(rig.clock, 1)
+    rig
+  end
+
+  # Waits until a trip's zero waits in a held device's mailbox.
+  defp zero_waiting(device), do: zero_waited(Process.info(device, :messages), device)
+
+  defp zero_waited({:messages, messages}, device),
+    do: zero_found(Enum.any?(messages, &match?({:"$gen_call", _, :zero}, &1)), device)
+
+  defp zero_found(true, _device), do: :ok
+  defp zero_found(false, device), do: zero_waiting(device)
 
   defp flush_traces(device) do
     receive do

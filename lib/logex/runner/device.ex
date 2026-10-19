@@ -27,34 +27,35 @@ defmodule Logex.Runner.Device do
   #   and stops (decision 116).
   # - `zero/1` is a trip's (M4-4, decision 113): every output written 0 once, and the device
   #   latched, writing nothing more, a round's write and a poll's write again among it,
-  #   until `release/1`, a restart's, which forgets what it last wrote, so that nothing is
+  #   until `release/2`, a restart's, which forgets what it last wrote, so that nothing is
   #   written again before the restart's first round writes; a close of a latched device
   #   writes no 0 again, so that every output is written 0 exactly once whatever comes
-  #   after the trip.
+  #   after the trip. A release gives it the runner's count of restarts, 0 from its
+  #   opening, which every notice it sends the runner carries as `restarts`, so that the
+  #   runner passes over a latch or a fault raised before the restart it released for.
   # - Its heartbeat (decision 125): a refresh carries the deadline by which it will hear
   #   from the runner again, and the time it was sent. A device that hears nothing by the
   #   deadline its last refresh carried, a wake on the runner's clock at it, latches as a
-  #   trip's zero does and tells the runner, `{Logex.Runner.Device, pid, at, {:latched,
-  #   name, ms}}`, `at` the time on the runner's clock it latched and `ms` the time from
-  #   that refresh to its deadline, which the runner trips on when it next runs; one
-  #   latched already, by a trip's zero or its own fault, tells it nothing, so that no
-  #   notice raised while the runner is tripped trips it again after a restart. One wake
-  #   is kept, set again only where a refresh brings the deadline sooner, and moved on to
-  #   the last deadline where it comes before it; and a device
-  #   waiting on the runner for its own change takes its wake there too, so that a runner
-  #   stuck while it takes the change is seen.
+  #   trip's zero does and tells the runner, `{Logex.Runner.Device, pid, restarts, at,
+  #   {:latched, name, ms}}`, `at` the time on the runner's clock it latched and `ms` the
+  #   time from that refresh to its deadline, which the runner trips on when it next runs,
+  #   a latched one too, which the runner, tripped already or restarted since, passes
+  #   over. One wake is kept, set again only where a refresh brings the deadline sooner,
+  #   and moved on to the last deadline where it comes before it; and a device waiting on
+  #   the runner for its own change takes its wake there too, so that a runner stuck while
+  #   it takes the change is seen.
   # - Back from its adapter (decision 114): after each read and each report, whatever its
   #   result, and at each poll while it waits on the runner, the device tells the runner,
-  #   `{Logex.Runner.Device, pid, at, {:back, name, nil}}`, so that the runner sees one hung
-  #   inside its own read or report, which no request of the runner's reaches while its
-  #   outputs do not change.
+  #   `{Logex.Runner.Device, pid, restarts, at, {:back, name, nil}}`, so that the runner
+  #   sees one hung inside its own read or report, which no request of the runner's
+  #   reaches while its outputs do not change.
   # - Its faults (decision 114): every callback is called guarded, so that an error given
   #   back, `{:error, reason, state}`, a raise, a throw, an exit, or a value of a shape the
   #   behaviour does not give, is a cause, `{:error, reason}`, `{:raised, message}`,
   #   `{:thrown, term}` or `{:exited, term}`, a shape the behaviour does not give being
   #   `{:raised, message}` with a message that says so. A read's, a report's or a poll's
-  #   write again tells the runner, `{Logex.Runner.Device, pid, at, {:fault, name, cause}}`,
-  #   `at` the time on the runner's clock it failed, and latches, its 0 written once where
+  #   write again tells the runner, `{Logex.Runner.Device, pid, restarts, at, {:fault,
+  #   name, cause}}`, `at` the time on the runner's clock it failed, and latches, its 0 written once where
   #   its adapter still takes it; a round's write answers `{:error, cause}`, and the
   #   runner's trip latches it, as every device. An open that fails is `{:error,
   #   reason}`, init/3's own reason or the cause, and the process stops; a zero or a close
@@ -79,7 +80,9 @@ defmodule Logex.Runner.Device do
   def refresh(device, deadline, at), do: GenServer.cast(device, {:refresh, deadline, at})
   def close(device, timeout \\ :infinity), do: GenServer.call(device, :close, timeout)
   def zero(device, timeout \\ :infinity), do: GenServer.call(device, :zero, timeout)
-  def release(device, timeout \\ :infinity), do: GenServer.call(device, :release, timeout)
+
+  def release(device, restarts, timeout \\ :infinity),
+    do: GenServer.call(device, {:release, restarts}, timeout)
 
   @impl GenServer
   def init(%{name: name, module: module, opts: opts, points: points, runner: runner} = args) do
@@ -94,6 +97,7 @@ defmodule Logex.Runner.Device do
        runner: runner,
        clock: args.clock,
        poll: args.poll,
+       restarts: args.restarts,
        adapter: nil,
        image: %{},
        next: nil,
@@ -120,9 +124,10 @@ defmodule Logex.Runner.Device do
 
   # A release forgets what the device last wrote, so that a poll's write again writes
   # nothing until the restart's first round has written its own outputs: a restart is
-  # never a resume (decision 113).
-  def handle_call(:release, _from, state),
-    do: {:reply, :ok, %{disarmed(state) | latched: false, written: nil}}
+  # never a resume (decision 113). It takes the runner's count of restarts, which every
+  # notice after it carries, so that the runner passes over one raised before it.
+  def handle_call({:release, restarts}, _from, state),
+    do: {:reply, :ok, %{disarmed(state) | latched: false, written: nil, restarts: restarts}}
 
   @impl GenServer
   def handle_cast({:refresh, _deadline, _at}, %{latched: true} = state), do: {:noreply, state}
@@ -231,7 +236,8 @@ defmodule Logex.Runner.Device do
   defp faulted(cause, %{runner: runner, name: name, clock: {mod, clock}} = state) do
     send(
       runner,
-      {__MODULE__, self(), clocked(fn -> mod.now_ms(clock) end), {:fault, name, cause}}
+      {__MODULE__, self(), state.restarts, clocked(fn -> mod.now_ms(clock) end),
+       {:fault, name, cause}}
     )
 
     latched(state)
@@ -252,7 +258,7 @@ defmodule Logex.Runner.Device do
   end
 
   # Back from its adapter, a read or a report given back whatever its result: the runner
-  # told, `{Logex.Runner.Device, pid, at, {:back, name, nil}}`, at the time on its clock,
+  # told, `{Logex.Runner.Device, pid, restarts, at, {:back, name, nil}}`, at the time on its clock,
   # so that it sees a device hung inside its own read or report (decision 114), which no
   # request of the runner's reaches while its outputs do not change; the cost, a message
   # a device a poll period, and one a report.
@@ -262,7 +268,12 @@ defmodule Logex.Runner.Device do
   end
 
   defp told_back(%{clock: {mod, clock}, runner: runner, name: name} = state) do
-    send(runner, {__MODULE__, self(), clocked(fn -> mod.now_ms(clock) end), {:back, name, nil}})
+    send(
+      runner,
+      {__MODULE__, self(), state.restarts, clocked(fn -> mod.now_ms(clock) end),
+       {:back, name, nil}}
+    )
+
     state
   end
 
@@ -392,13 +403,15 @@ defmodule Logex.Runner.Device do
 
   defp expire(false, _now, state), do: armed(state)
 
-  # A device latched already, by a trip's zero or its own fault, tells the runner nothing
-  # more: a notice raised while the runner is tripped would otherwise wait in its mailbox
-  # behind a host's restart and trip the restarted runner on a deadline from before it.
-  defp expire(true, _now, %{latched: true} = state), do: state
-
+  # A device latched already, by a trip's zero or its own fault, latches no more; it tells
+  # the runner all the same, and a notice raised before a restart's release is one the
+  # restarted runner passes over, by the count of restarts it carries.
   defp expire(true, now, %{runner: runner, name: name} = state) do
-    send(runner, {__MODULE__, self(), now, {:latched, name, state.deadline - state.heard}})
+    send(
+      runner,
+      {__MODULE__, self(), state.restarts, now, {:latched, name, state.deadline - state.heard}}
+    )
+
     latched(state)
   end
 

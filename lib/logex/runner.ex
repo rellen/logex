@@ -153,7 +153,11 @@ defmodule Logex.Runner do
   keeps its first reason; the devices' notices that waited for it, a latch or a fault of
   their own, are taken together, in the order of the time each was raised, ties in
   device-name order, so that two devices that latch in one millisecond trip it for the
-  same reason on every run. The reasons:
+  same reason on every run, and each is acted on before the trip, which may serve a
+  restart that waited, so that its first round finds every device heard as late as they
+  say. A notice carries the count of restarts its device had been released for, and one
+  raised before the last restart's release, taken with the notice that made the trip or
+  come in behind a restart the trip served, trips nothing. The reasons:
   - `{:watchdog, {:task, task, took_ms, limit_ms}}`: a timed task's run, from the start of
     its first instance's scan to the end of its last, longer than its task's watchdog,
     checked after its step and before the round's write (decision 110);
@@ -383,8 +387,9 @@ defmodule Logex.Runner do
 
   # A device's notice, from its own process: it has latched on its deadline (decision
   # 125), or its own callback failed (decision 114), which trips the runner. A notice from
-  # a process that is no longer its device's is passed over.
-  def handle_info({Device, _pid, _at, _notice} = notice, state),
+  # a process that is no longer its device's is passed over, and so is one raised before
+  # the device answered the last restart's release (see noticed/2).
+  def handle_info({Device, _pid, _restarts, _at, _notice} = notice, state),
     do: {:noreply, noticed([notice], state)}
 
   # A device's process gone down, which the runner traps: an I/O fault (decision 114), the
@@ -508,7 +513,7 @@ defmodule Logex.Runner do
   # Each device opened in device-name order, its process linked to the runner, and read
   # once; the first that cannot be opened closes every one opened before it.
   defp opening([{name, module, opts, points} | rest], opened, read, start) do
-    {:ok, pid} = device(name, {module, opts}, points, start)
+    {:ok, pid} = device(name, {module, opts}, points, start, 0)
 
     device = {name, pid, points}
     timeout = start.idle + start.poll
@@ -520,7 +525,9 @@ defmodule Logex.Runner do
     first_read(Enum.find_value(read, &misread(&1, state)), read, state)
   end
 
-  defp device(name, {module, opts}, points, start),
+  # Each device's process, given the count of restarts its notices carry: 0 at the start,
+  # and a restart's own for one it opens again.
+  defp device(name, {module, opts}, points, start, restarts),
     do:
       Device.start_link(%{
         name: name,
@@ -529,7 +536,8 @@ defmodule Logex.Runner do
         points: points,
         runner: self(),
         clock: start.clock,
-        poll: start.poll
+        poll: start.poll,
+        restarts: restarts
       })
 
   defp reading({:ok, values}, {name, _pid, _points} = device, rest, opened, read, start),
@@ -636,6 +644,7 @@ defmodule Logex.Runner do
           )
         ),
       used: 0,
+      restarts: 0,
       status: :running,
       trip: nil,
       queue: :queue.new(),
@@ -758,7 +767,7 @@ defmodule Logex.Runner do
   # runner that comes back after its devices latched trips before it runs anything.
   defp rounded(state) do
     receive do
-      {Device, _pid, _at, _notice} = notice -> rounded(noticed([notice], state))
+      {Device, _pid, _restarts, _at, _notice} = notice -> rounded(noticed([notice], state))
     after
       0 -> heard_from(silent(state), state, &a_round/1)
     end
@@ -905,28 +914,46 @@ defmodule Logex.Runner do
   # time on the runner's clock its device raised it, ties in device-name order: the trip
   # names the first, so that two devices that latch in one millisecond, whose notices
   # come in whichever order their processes ran, trip the runner for one reason, the same
-  # on every run on the manual clock.
+  # on every run on the manual clock. Every notice taken is acted on before the trip, which
+  # may serve a host's restart that waited: so that none taken with it is acted on after
+  # that restart, a "back" among them, which would leave its device unheard as the
+  # restart's first round begins.
+  #
+  # Each notice carries the count of restarts its device had heard as it raised it, the
+  # count its last release, or its opening, gave it: one raised before the last restart's
+  # release, which may wait in the mailbox behind a restart served inside the trip it
+  # raced, or be taken with the notice that made that trip, never trips the restarted
+  # runner. A "back" is a fact whenever it was raised, so it counts whatever its count.
   defp noticed(taken, state) do
     receive do
-      {Device, _pid, _at, _notice} = notice -> noticed([notice | taken], state)
+      {Device, _pid, _restarts, _at, _notice} = notice -> noticed([notice | taken], state)
     after
       0 ->
         taken
         |> Enum.reverse()
-        |> Enum.sort_by(fn {Device, _pid, at, {_kind, name, _detail}} -> {at, name} end)
-        |> Enum.reduce(state, &notice/2)
+        |> Enum.sort_by(fn {Device, _pid, _restarts, at, {_kind, name, _detail}} ->
+          {at, name}
+        end)
+        |> Enum.reduce({state, nil}, &notice/2)
+        |> tripped_by()
     end
   end
 
-  defp notice({Device, pid, at, {:back, name, nil}}, %{pids: pids} = state)
+  defp notice({Device, pid, _restarts, at, {:back, name, nil}}, {%{pids: pids} = state, trip})
        when :erlang.map_get(name, pids) == pid,
-       do: %{state | heard: Map.put(state.heard, name, at)}
+       do: {%{state | heard: Map.put(state.heard, name, at)}, trip}
 
-  defp notice({Device, pid, _at, {_kind, name, _detail} = notice}, %{pids: pids} = state)
+  defp notice(
+         {Device, pid, restarts, _at, {_kind, name, _detail} = notice},
+         {%{pids: pids, restarts: restarts} = state, nil}
+       )
        when :erlang.map_get(name, pids) == pid,
-       do: tripped(state, reason(notice))
+       do: {state, reason(notice)}
 
-  defp notice(_notice, state), do: state
+  defp notice(_notice, acc), do: acc
+
+  defp tripped_by({state, nil}), do: state
+  defp tripped_by({state, reason}), do: tripped(state, reason)
 
   # A device hung inside its own adapter (decision 114): one that has told the runner it is
   # back from its adapter, after a read or a report or by answering a round's write in
@@ -1032,7 +1059,8 @@ defmodule Logex.Runner do
   # clock and its input image, the triggers logic writes sampled again, the anchor moved
   # so that the time stopped is not counted, and the first round run at once.
   defp restarted(mode, state) do
-    state = each_live(state, &Device.release/2)
+    restarts = state.restarts + 1
+    state = each_live(%{state | restarts: restarts}, &Device.release(&1, restarts, &2))
     reopened(reopen(Enum.filter(state.devices, &down?(&1, state)), state), mode)
   end
 
@@ -1043,7 +1071,7 @@ defmodule Logex.Runner do
   defp reopen([], state), do: {:ok, state}
 
   defp reopen([{name, _old, points} | rest], state) do
-    {:ok, pid} = device(name, Map.fetch!(state.bindings, name), points, state)
+    {:ok, pid} = device(name, Map.fetch!(state.bindings, name), points, state, state.restarts)
     timeout = state.idle + state.poll
     reopen_read(asked(pid, &Device.open/2, timeout), name, pid, points, rest, state)
   end

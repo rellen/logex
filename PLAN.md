@@ -3436,8 +3436,24 @@ and M4-7 the documents.
   runner's mailbox meanwhile is taken before, so that the restart answered `:ok` and its
   first round tripped `{:watchdog, {:device, device, ms}}` on a deadline from before it,
   on the manual clock every time and on the real clock 6 restarts in 800; (7) puts the
-  clause back with that case as its test. 1471 tests pass on Elixir 1.20.4 (9 of them
-  doctests), up from 1453.
+  clause back with that case as its test. A second verification then found the wider
+  case (7) left: a restart a trip serves from its queue, one the host asked for while a
+  round was owed, is answered inside that trip, and a latch or a fault raised by a device
+  not yet latched as the trip began, taken with the notice that made it or come in while
+  it ran, tripped the restarted runner after `restart/2` had answered `:ok`; and a "back"
+  taken with the trip's notice, acted on only after the restart's first round, left its
+  device unheard there, killed as hung, `{:io, device, :timeout}`, on the manual clock
+  every time and on the real clock 20 restarts in 20. (8) gives every notice the count of
+  restarts its device was released for, 0 from its opening, the runner passing over one
+  from before its last restart, and acts on every notice taken together before the trip;
+  the count makes (7)'s clause a rule's second place, so (8) takes it out. Its mutation
+  table, each mutant judged by the full suite's exit code, one at a time: the count not
+  checked, red in two tests, the notice that came in while the trip ran and (7)'s; the
+  trip made inside the batch, red in the "back" taken with it; the runner's count not
+  moved at a restart, red in the same two as the first; a release that does not give the
+  device the count, red in a device latching after a restart; a device opened again at a
+  restart given 0, red in its fault after it; and the whole fix reverted, red in the three
+  new tests. 1474 tests pass on Elixir 1.20.4 (9 of them doctests), up from 1453.
 
   The mutation tables of the landing's (1) to (5), above, overstate: three of their rows
   counted red only because a slow test timed out under load beside a parallel mutation
