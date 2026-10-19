@@ -22,7 +22,8 @@ designed and decided on 2026-10-17 (§4.11, decisions 108–121), and its first 
 the clocks, the adapter behaviour and the simulated device, landed the same day; its
 review's answers followed on 2026-10-18 (decisions 122–126), with the maintainer's answer
 on forces (decision 127); M4-2, M4-3 and M4-4, the watchdogs and the fault path, landed
-the same day (decisions 128–131).** On 2026-09-28 the
+the same day (decisions 128–131), and the findings of M4-4's review were fixed on
+2026-10-19, §4.11's landing note.** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -2788,24 +2789,39 @@ each provisional until the maintainer answers, `PLAN.md` M4-4: the hidden option
 of the three guarded, an exception's `message` its own and a throw's or an exit's its
 banner; a restart of a runner that is running is the host's mistake; a device whose own
 callback failed is zeroed through its adapter too, where it still takes a write, so that
-every output that can still be written is, the table's "every other device zeroed"
-read as the others besides it; `{:watchdog, {:device, device, ms}}` names the time from
-the device's last refresh to its deadline, the heartbeat it was given; a result of no
-shape `Logex.IO` gives is `{:raised, message}`, a message saying so, the cause list
-having no word of its own for it; a device that answers after its deadline on the
-runner's clock is `:timeout` and killed, as on the real clock it would have been; a
-device stuck inside its own read or report is seen at the runner's next request to it, a
-round's write, a trip's zero, a restart's release or a stop's close, not by its polls
-stopping; init/3's own `{:error, reason}` is given as `{:io_init, device, reason}`, as
-M4-3 gave it, and an init/3 or first read that raised, threw, exited, hung or gave a
-value that does not fit as its cause; a clock that goes down or fails stops the runner,
-a shutdown, its devices zeroed and closed as at a stop; a host's request is timed from
-its start to its end against the idle watchdog, a restart not, and trips once it is
-answered; a tripped runner keeps its first reason and merges a device's changes into
-the next round's inputs, so the restart's first round takes them; and a test makes time
-pass inside a task's run through the seam, a stand-in that passes the manual clock or,
-for a stuck runner, advances it from inside the runner, which the manual clock allows a
-receiver handling a message, its timers on the way delivered to the devices.)*
+every output that can still be written is, the table's "every other device zeroed" read as
+the others besides it; `{:watchdog, {:device, device, ms}}` names the time from the
+device's last refresh to its deadline, the heartbeat it was given; a result of no shape
+`Logex.IO` gives is `{:raised, message}`, a message saying so, the cause list having no
+word of its own for it; a device that answers after its deadline on the runner's clock is
+`:timeout`, and, having answered, is not killed but written its 0 by the trip (since
+M4-4's review); a device stuck inside its own read or report, which decision 114 already
+makes a fault, is seen by its polls stopping (since M4-4's review): each device tells the
+runner after every read and report, whatever its result, and at each poll while it waits
+on the runner, that it is back from its adapter, a message a device a poll period, a
+round's write answered in time counting too, and the runner, as each round begins and at
+each wait's refresh, kills and trips `{:io, device, :timeout}` on the first device in
+device-name order not heard within the idle watchdog and a poll period, the time it gives
+any call of its own to a device; a device's notices that waited for the runner are taken
+together, in the order of the time each was raised, ties in device-name order, so that a
+run on the manual clock trips for one reason; a restart releases every latch first, a
+device that does not answer killed, and then opens again every device down, so a device
+that hung or died while the runner was tripped is opened again by the same restart, and
+one that cannot be opened leaves every device that answers latched again, written 0 once
+more, as a restart that trips again does; a release forgets what the device last wrote, so
+that no poll writes the outputs from before the trip again before the restart's first
+round writes its own; a close answered while a device waits on the runner for its own
+change stops it closed, so that it is zeroed and closed once; init/3's own `{:error,
+reason}` is given as `{:io_init, device, reason}`, as M4-3 gave it, and an init/3 or first
+read that raised, threw, exited, hung or gave a value that does not fit as its cause; a
+clock that goes down or fails stops the runner, a shutdown, its devices zeroed and closed
+as at a stop; a host's request is timed from its start to its end against the idle
+watchdog, a restart not, and trips once it is answered; a tripped runner keeps its first
+reason and merges a device's changes into the next round's inputs, so the restart's first
+round takes them; and a test makes time pass inside a task's run through the seam, a
+stand-in that passes the manual clock or, for a stuck runner, advances it from inside the
+runner, which the manual clock allows a receiver handling a message, its timers on the way
+delivered to the devices.)*
 
 **What fails, and what happens.**
 
@@ -2814,7 +2830,7 @@ receiver handling a message, its timers on the way delivered to the devices.)*
 | A task's run or a round outlasts its watchdog | the runner's check after each step | trip before the round's write |
 | The runner is stuck | each device's deadline, which its last refresh carried | the devices zero and latch; the runner trips when it next runs |
 | An adapter's callback fails, or gives a bad value or address | guarded in the device's process; the runner's checks | trip, every other device zeroed |
-| An adapter hangs | no answer within the device's deadline | trip; the device's process killed, its outputs left to the device; opened again at a restart |
+| An adapter hangs | no answer within the device's deadline; inside its own read or report, not heard from within `idle:` and a poll period | trip; the device's process killed, its outputs left to the device; opened again at a restart, as one that hangs or dies while the runner is tripped is |
 | A device's process dies | the runner traps the exit | trip; opened again at a restart |
 | The runner crashes or is killed | each device traps its parent's exit | each device zeroes its outputs and closes; nothing starts it again (decision 115); its forces stay in their file, for the runner the host starts next (decision 127) |
 | The runner is stopped | `stop/2` | every output zeroed once, every device closed, before `stop/2` returns (decision 116) |
@@ -5021,7 +5037,11 @@ over.
      exit in an adapter, a value that does not fit its point, an address that is no
      point's, no answer within the device's deadline and its process going down are each
      an I/O fault, `{:io, device, cause}`, through decision 113's path. A grace time stays
-     a later option, for a plant on a flaky network. *(Taken 2026-10-17.)*
+     a later option, for a plant on a flaky network. *(Taken 2026-10-17. Built with M4-4;
+     since its review a device that hangs inside its own read or report, which no request
+     of the runner's reaches while its outputs do not change, is seen by its telling the
+     runner after each read and report that it is back from its adapter, the bound the
+     idle watchdog and a poll period, provisional, `PLAN.md` M4-4.)*
 115. **After a crash (Milestone 4).** The controller software itself crashes; whichever is
      chosen, every output goes off on the way down.
      - It stays stopped until someone starts it again, as after the watchdog;

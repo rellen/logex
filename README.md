@@ -1760,6 +1760,11 @@ conveyor, and makes the panel's next read fail:
 
 ```elixir
 :ok = Runner.subscribe(runner)
+
+status = fn keys ->                         # the fields named, in the order named
+  IO.inspect(for(key <- keys, do: {key, Map.fetch!(Runner.status(runner), key)}))
+end
+
 Sim.set(panel, [0], 1)                      # start pressed
 Manual.advance(clock, 10)
 Sim.set(panel, [0], 0)
@@ -1767,26 +1772,26 @@ Sim.set(panel, [0], 0)
 Sim.fail(panel, :read, {:error, :eio})      # the panel's next read, at its poll at 20, fails
 Manual.advance(clock, 15)
 IO.inspect(for({Runner, ^runner, event} <- Process.info(self(), :messages) |> elem(1), do: event), label: "events")
-IO.inspect(Map.take(Runner.status(runner), [:status, :trip, :now, :rounds]))
+status.([:status, :trip, :now, :rounds])
 IO.inspect(Runner.get!(runner, "k1"), label: "k1 in the resource")
 IO.inspect(Enum.take(Sim.writes(panel), -2), label: "the panel's last two writes")
 
 Manual.advance(clock, 1000)                 # tripped: nothing runs, nothing is written
-IO.inspect(Map.take(Runner.status(runner), [:status, :now, :rounds]))
+status.([:status, :now, :rounds])
 
 :ok = Runner.restart(runner, :cold)         # the latch released, the first round at once
-IO.inspect(Map.take(Runner.status(runner), [:status, :trip, :now, :rounds]))
+status.([:status, :trip, :now, :rounds])
 IO.inspect(Sim.outputs(panel), label: "the panel's outputs")
 ```
 
 ```
 $ mix run a_trip.exs
 events: [trip: {:io, "panel", {:error, :eio}}]
-%{status: :tripped, now: 19, rounds: 20, trip: {:io, "panel", {:error, :eio}}}
+[status: :tripped, trip: {:io, "panel", {:error, :eio}}, now: 19, rounds: 20]
 k1 in the resource: 1
 the panel's last two writes: [%{[0] => 1, [4] => 0}, %{[0] => 0, [4] => 0}]
-%{status: :tripped, now: 19, rounds: 20}
-%{status: :running, now: 19, rounds: 21, trip: nil}
+[status: :tripped, now: 19, rounds: 20]
+[status: :running, trip: nil, now: 19, rounds: 21]
 the panel's outputs: %{[0] => 0, [4] => 0}
 ```
 
@@ -1800,23 +1805,37 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   and so latched itself; `{:io, device, cause}`, an adapter's callback that gave an
   error, raised, threw, exited or gave no result the behaviour gives, a value that does
   not fit its point, an address that is no point's, a device that did not answer within
-  its deadline, `:timeout`, or whose process went down; and `{:internal, message}`, an
-  exception out of the core, which no host can cause.
+  its deadline, `:timeout`, a device hung inside its own read or report, `:timeout` too,
+  or one whose process went down; and `{:internal, message}`, an exception out of the
+  core, which no host can cause. A device's notices that waited for the runner, a latch
+  or a fault of its own, are taken in the order they were raised, ties in device-name
+  order, so a run on the manual clock trips for the same reason every time.
 - Every check is made before the round's write, so a round that ran too long, or a
   device that failed, never reaches the plant: here `k1` is 1 in the resource, the round
   at 19's, and 0 at the panel. A device that does not answer is killed, its outputs left
   to what the device does on losing its master, and opened again at the next restart.
+  Each device tells the runner after every read and report that it is back from its
+  adapter, a message a device a poll period; one the runner has not heard from within
+  `idle:` and a poll period, checked as each round begins and at each wait's refresh, is
+  hung, and is killed and trips the runner, so a stop pressed on a card stuck inside its
+  read is never taken for "not pressed" for longer than that. One that answers a round's
+  write late is `:timeout` too, but answered, so the trip writes it its 0.
 - Each device's deadline is the step's: its task's watchdog and a poll period from the
   step's start, or the idle watchdog and a poll period while the runner serves its own
   work or waits. So a runner stuck in the conveyor's 50 ms step leaves every device that
   answers at 0 within 50 ms and a poll period, whatever the fan's watchdog, and the
   runner trips when it next runs.
-- `restart(runner, :cold | :warm)` opens again each device that went down, releases every
-  latch, restarts the resource, which keeps its input image and puts every other global
-  back to its initial value, and runs the first round at once, the stopped time not
-  counted: the conveyor stays off until start is pressed again. A runner that crashes or
-  is killed is gone, its devices writing every output 0 once and closing as it goes
-  (decision 115); its child spec is `restart: :temporary`, so the host starts a new one.
+- `restart(runner, :cold | :warm)` releases every latch, a device that does not answer its
+  release killed, opens again each device that went down, those among them, restarts the
+  resource, which keeps its input image and puts every other global back to its initial
+  value, and runs the first round at once, the stopped time not counted: the conveyor
+  stays off until start is pressed again. A released device writes nothing again until
+  that round has written its own outputs, so a restart never puts back, even for a moment,
+  what the plant had before the trip; and a device that cannot be opened leaves the runner
+  tripped, every device latched again and written 0 once more. A runner that crashes or is
+  killed is gone, its devices writing every output 0 once and closing as it goes
+  (decision 115), a device waiting on it for its own change among them; its child spec
+  is `restart: :temporary`, so the host starts a new one.
 - Forcing and edits through the runner are M4-5's (`PLAN.md`).
 
 ## Changing a running program
