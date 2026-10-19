@@ -4706,4 +4706,316 @@ defmodule Logex.EndToEndTest do
       assert Sim.closed?(panel) and Sim.closed?(drive)
     end
   end
+
+  # PLAN.md M4-5's Done-when, as it is worded: §4.4's plant with M4-2's box counter, from
+  # files on disk, edited while it runs through Logex.Runner's accept, test, untest,
+  # assemble and cancel, every report and every round's outputs those the same steps give
+  # taken over the resource directly, by an oracle that knows nothing of the runner;
+  # `slow` cut to 20 ms next due as decision 40 says, no round lost or added; and forcing
+  # (decisions 117 and 127), the photo-eye forced, across a restart, a crash and a fresh
+  # start from its forces file. Accept's work in the caller's process (decision 119) is
+  # pinned in `runner_edit_test.exs`.
+  describe "edits and forcing through the runner (M4-5)" do
+    @describetag :tmp_dir
+
+    alias Logex.Configuration.Edit, as: ConfigEdit
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    # The candidate, from files on disk beside the plant's: `slow` cut from 50 to 20 ms
+    # and the case cut from twelve boxes to six.
+    defp candidate_on_disk(dir) do
+      dir = Path.join(dir, "candidate")
+      File.mkdir_p!(dir)
+      {_programs, files} = counter_programs()
+
+      plant =
+        String.replace(
+          watched_plant(),
+          "task slow interval 50 priority 2 watchdog 2000",
+          "task slow interval 20 priority 2 watchdog 2000"
+        )
+
+      for {name, text} <-
+            Map.merge(files, %{
+              "counter.ld" => String.replace(@counter_ld, "ctu boxes 12", "ctu boxes 6"),
+              "snapshot.ld" => @snapshot_ld,
+              "plant.logex" => plant
+            }),
+          do: File.write!(Path.join(dir, name), text)
+
+      {:ok, candidate} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      candidate
+    end
+
+    # M4-3's seeded presses and waits, with an edit's steps among them: the candidate
+    # accepted, tested, untested, tested again and assembled; then the original accepted
+    # back and cancelled from accept; and accepted, tested, untested and cancelled.
+    defp edited_steps(seed) do
+      edits = [
+        {100, {:edit, :accept, :candidate}},
+        {160, {:edit, :test}},
+        {260, {:edit, :untest}},
+        {300, {:edit, :test}},
+        {360, {:edit, :assemble}},
+        {420, {:edit, :accept, :original}},
+        {440, {:edit, :cancel}},
+        {480, {:edit, :accept, :original}},
+        {500, {:edit, :test}},
+        {540, {:edit, :untest}},
+        {560, {:edit, :cancel}}
+      ]
+
+      steps =
+        Enum.reduce(Enum.reverse(edits), presses(seed, 600), fn {at, step}, steps ->
+          List.insert_at(steps, at, step)
+        end)
+
+      # The first test taken a millisecond after one of `slow`'s runs, every 50 ms from 0,
+      # so that its next due time, 49 ms on, is moved to 20 ms on.
+      {before, rest} = Enum.split(steps, Enum.find_index(steps, &(&1 == {:edit, :test})))
+      before ++ [{:wait, rem(51 - rem(waited(before), 50), 50)} | rest]
+    end
+
+    defp waited(steps), do: Enum.sum(for {:wait, ms} <- steps, do: ms)
+
+    defp through_runner_edited(plant, configs, steps) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+      points = Logex.IO.points(plant)
+      address = Map.new(for {_device, ps} <- points, p <- ps, do: {p.name, p.address})
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: plant,
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock}
+        )
+
+      :ok = Runner.subscribe(runner, [:overlap, :fault, :ran, :round, :edit])
+      first = {nil, observed(runner, [], panel, drive)}
+
+      log =
+        Enum.map(steps, fn step ->
+          reply = edit_runner(step, runner, configs, clock, panel, address)
+          {reply, observed(runner, drained(runner), panel, drive)}
+        end)
+
+      Runner.stop(runner)
+      [first | log]
+    end
+
+    defp edit_runner({:edit, :accept, which}, runner, configs, _clock, _panel, _address),
+      do: Runner.accept(runner, Map.fetch!(configs, which))
+
+    defp edit_runner({:edit, step}, runner, _configs, _clock, _panel, _address),
+      do: apply(Runner, step, [runner])
+
+    defp edit_runner(step, _runner, _configs, clock, panel, address) do
+      step_runner(step, clock, panel, address)
+      nil
+    end
+
+    # The oracle: M4-3's, Logex.Runtime.cycle/3 called directly, and each edit's step
+    # taken over its resource directly with Logex.Configuration.Edit.
+    defp through_oracle_edited(plant, configs, steps) do
+      points = Logex.IO.points(plant)
+      inputs = for {_device, ps} <- points, %{direction: :input} = p <- ps, do: p.name
+      image = Map.new(inputs, &{&1, 0})
+      {runtime, outputs, _events} = Logex.Runtime.cycle(Logex.Runtime.start(plant), 0, image)
+
+      model = %{
+        runtime: runtime,
+        now: 0,
+        last: 0,
+        image: image,
+        pending: %{},
+        outputs: outputs,
+        points: points,
+        edit: nil
+      }
+
+      {log, _model} =
+        Enum.map_reduce(steps, model, fn step, model ->
+          {reply, events, model} = edit_oracle(step, configs, model)
+          {{reply, oracle_seen(events, model)}, model}
+        end)
+
+      [{nil, oracle_seen([], model)} | log]
+    end
+
+    defp edit_oracle({:edit, :accept, which}, configs, model) do
+      {:ok, edit, forecast} = ConfigEdit.accept(model.runtime, Map.fetch!(configs, which))
+      {{:ok, forecast}, [{:edit, :accept, forecast}], %{model | edit: edit}}
+    end
+
+    defp edit_oracle({:edit, step}, _configs, model) when step in [:test, :untest] do
+      {edit, runtime, report} = apply(ConfigEdit, step, [model.edit, model.runtime])
+      {{:ok, report}, [{:edit, step, report}], %{model | edit: edit, runtime: runtime}}
+    end
+
+    defp edit_oracle({:edit, step}, _configs, model) when step in [:assemble, :cancel] do
+      {_kept, runtime, report} = apply(ConfigEdit, step, [model.edit, model.runtime])
+      {{:ok, report}, [{:edit, step, report}], %{model | edit: nil, runtime: runtime}}
+    end
+
+    defp edit_oracle(step, _configs, model) do
+      {events, model} = step_oracle(step, model)
+      {nil, events, model}
+    end
+
+    test "M4-5's Done-when: the plant edited through the runner, every report and round " <>
+           "the same steps give over the resource directly, from files on disk",
+         %{tmp_dir: dir} do
+      plant = plant_on_disk(dir)
+      candidate = candidate_on_disk(dir)
+      configs = %{original: plant, candidate: candidate}
+      steps = edited_steps({2026, 10, 19})
+
+      runner_log = through_runner_edited(plant, configs, steps)
+      oracle_log = through_oracle_edited(plant, configs, steps)
+      assert length(runner_log) == length(oracle_log)
+
+      for {{ran, want}, index} <- Enum.with_index(Enum.zip(runner_log, oracle_log)) do
+        assert ran == want, "step #{index}: #{inspect(Enum.at([nil | steps], index))}"
+      end
+
+      # Every step was taken and reported, the candidate's first test moving `slow`'s next
+      # due time within 20 ms of the resource's time (decision 40).
+      replies = for {{:ok, report}, _seen} <- runner_log, do: report
+      assert length(replies) == 11
+      events = Enum.flat_map(runner_log, fn {_reply, {events, _, _, _}} -> events end)
+
+      assert [{:edit, :accept, _}, {:edit, :test, tested} | _] =
+               for({:edit, _, _} = event <- events, do: event)
+
+      assert {:interval, "slow", {50, 20}} in tested
+      assert {:preset, "boxes.boxes", {12, 6}} in tested
+
+      {test_at, untest_at} =
+        {Enum.find_index(steps, &(&1 == {:edit, :test})),
+         Enum.find_index(steps, &(&1 == {:edit, :untest}))}
+
+      now = waited(Enum.take(steps, test_at))
+      assert rem(now, 50) == 1
+      assert {:next_due, "slow", {now + 49, now + 20}} in tested
+      to = now + 20
+
+      # From the test to the untest, `slow` runs every 20 ms from where decision 40 put
+      # it, one round each millisecond throughout, none lost or added.
+      window =
+        runner_log
+        |> Enum.slice((test_at + 1)..untest_at)
+        |> Enum.flat_map(fn {_reply, {events, _, _, _}} -> events end)
+
+      slow_runs = for {:ran, "slow", "m2", at} <- window, do: at
+      assert hd(slow_runs) == to
+
+      assert Enum.chunk_every(slow_runs, 2, 1, :discard)
+             |> Enum.all?(fn [a, b] -> b - a == 20 end)
+
+      # A round every millisecond, and one more at once for each change of the e-stop.
+      round_times = Enum.uniq(for {:round, at, _} <- window, do: at)
+      assert round_times == Enum.to_list(hd(round_times)..List.last(round_times))
+
+      # From fresh processes, exactly again.
+      assert through_runner_edited(plant, configs, steps) == runner_log
+    end
+
+    test "M4-5's Done-when: the photo-eye forced, against its device, across a restart, " <>
+           "a crash and a fresh start from its forces file",
+         %{tmp_dir: dir} do
+      plant = plant_on_disk(dir)
+      file = Path.join(dir, "forces")
+      points = Logex.IO.points(plant)
+      address = Map.new(for {_device, ps} <- points, p <- ps, do: {p.name, p.address})
+
+      start = fn ->
+        {:ok, clock} = Manual.start_link()
+        {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+        {:ok, drive} = Sim.start_link(clock: clock)
+
+        {:ok, runner} =
+          Runner.start_link(
+            configuration: plant,
+            io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+            clock: {Manual, clock},
+            forces: file
+          )
+
+        {runner, clock, panel}
+      end
+
+      {runner, clock, panel} = start.()
+      eye = Map.fetch!(address, "eye_1")
+
+      # A box on the eye, counted; then the eye forced blocked while its device says clear
+      # and blocked again: no box counted, the controller reading 1 throughout.
+      Sim.set(panel, eye, 1)
+      Manual.advance(clock, 5)
+      Sim.set(panel, eye, 0)
+      Manual.advance(clock, 5)
+      assert Runner.get!(runner, "boxes.boxes.cv") == 1
+      assert Runner.force(runner, "eye_1", 1) == :ok
+      Manual.advance(clock, 5)
+      assert Runner.get!(runner, "boxes.boxes.cv") == 2
+
+      for value <- [0, 1, 0] do
+        Sim.set(panel, eye, value)
+        Manual.advance(clock, 5)
+      end
+
+      assert {Runner.get!(runner, "eye_1"), Runner.get!(runner, "boxes.boxes.cv")} == {1, 2}
+      assert Runner.status(runner).forces == %{"eye_1" => 1}
+      assert File.read!(file) == "eye_1 1\n"
+
+      # The e-stop forced: its task runs at once, before force/3 returns.
+      Runner.subscribe(runner, [:ran])
+      assert Runner.force(runner, "estop", 1) == :ok
+      assert_received {Runner, ^runner, {:ran, "trip", "snap", _now}}
+      assert Runner.unforce(runner, "estop") == :ok
+
+      # Refused in the caller: an output point, and a value that does not fit.
+      assert_raise ArgumentError,
+                   "`k1` is an output point, at `panel.q.0`: only an input point is forced",
+                   fn -> Runner.force(runner, "k1", 1) end
+
+      assert_raise ArgumentError, "`eye_1` is a bool, forced to 0 or 1, got: 2", fn ->
+        Runner.force(runner, "eye_1", 2)
+      end
+
+      # Tripped by a value that does not fit, and restarted: still forced.
+      Sim.set(panel, Map.fetch!(address, "pb_reset"), 7)
+      assert %{status: :tripped} = Runner.status(runner)
+      Sim.set(panel, Map.fetch!(address, "pb_reset"), 0)
+      assert Runner.restart(runner, :cold) == :ok
+      assert %{status: :running, forces: %{"eye_1" => 1}} = Runner.status(runner)
+      assert Runner.get!(runner, "eye_1") == 1
+
+      # Killed: a fresh runner from the same file comes back with the eye forced, listed.
+      Process.flag(:trap_exit, true)
+      Process.exit(runner, :kill)
+      assert_receive {:EXIT, ^runner, :killed}
+      {runner, clock, panel} = start.()
+      assert %{forces: %{"eye_1" => 1}, rounds: 1} = Runner.status(runner)
+      assert Runner.get!(runner, "eye_1") == 1
+
+      # Unforced: the device's last value, which the fresh sim says is 0.
+      assert Runner.unforce(runner, "eye_1") == :ok
+      Manual.advance(clock, 1)
+      assert Runner.get!(runner, "eye_1") == 0
+      Sim.set(panel, eye, 1)
+      Manual.advance(clock, 1)
+      assert Runner.get!(runner, "eye_1") == 1
+
+      # Every force off, the file written empty.
+      Runner.force(runner, "eye_1", 0)
+      assert Runner.unforce_all(runner) == :ok
+      assert File.read!(file) == ""
+      assert Runner.status(runner).forces == %{}
+      Runner.stop(runner)
+    end
+  end
 end

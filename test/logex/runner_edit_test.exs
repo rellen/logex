@@ -17,6 +17,24 @@ defmodule Logex.RunnerEditTest do
   alias Logex.Runner
   alias Logex.Runner.Clock.Manual
 
+  # A device whose every write takes `ms` on the manual clock, as a slow drive's does, and
+  # which has nothing to read: so a round that writes it fills its milliseconds.
+  defmodule SlowIO do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, opts), do: {:ok, Map.new(opts)}
+
+    @impl true
+    def read(state), do: {:ok, %{}, state}
+
+    @impl true
+    def write(_values, %{clock: clock, ms: ms} = state) do
+      Manual.pass(clock, ms)
+      {:ok, state}
+    end
+  end
+
   defp program(source, name) do
     {:ok, program} = Logex.compile(source, name: name)
     program
@@ -277,6 +295,47 @@ defmodule Logex.RunnerEditTest do
       assert rounds(drained(runner)) == [110]
     end
 
+    # Each round that runs `b` writes the slow device, which takes 1 ms, so rounds fill
+    # their milliseconds and a host's request waits for the share's slot. The share counts
+    # the continuous task's rounds alone (decision 122), so the timed task's rounds before
+    # the edit count none, and the first slot comes C = 4 rounds after the edit, at 20%.
+    test "an untimed program an edit adds is served its slots from its first round" do
+      text = """
+      task tick interval 10 priority 1
+      var_global q0 bool at slow.q.0
+      var_global q1 bool at slow.q.1
+      program t toggle with tick
+        t.q q0
+      """
+
+      toggle = program("var_output q bool\nxio q ote q", "toggle")
+      count = program("var_output n dint\nadd n 1 n", "count")
+      programs = %{"toggle" => toggle, "count" => count}
+      {:ok, config} = Configuration.compile("plant", text, programs)
+
+      {:ok, candidate} =
+        Configuration.compile(
+          "plant",
+          text <> "program b toggle\n  b.q q1\nprogram n count\n",
+          programs
+        )
+
+      {:ok, clock} = Manual.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"slow" => {SlowIO, clock: clock, ms: 1}},
+          clock: {Manual, clock}
+        )
+
+      Manual.advance(clock, 100)
+      {:ok, _} = Runner.accept(runner, candidate)
+      {:ok, _} = Runner.test(runner)
+      request = :gen_server.send_request(runner, {:get!, "n.n"})
+      assert waited(request, clock) == 4
+    end
+
     test "the watchdogs read are the configuration's the resource runs (decision 129)" do
       %{runner: runner} = started()
 
@@ -391,6 +450,16 @@ defmodule Logex.RunnerEditTest do
     end
   end
 
+  defp waited(request, clock),
+    do: answer(:gen_server.wait_response(request, 0), request, clock)
+
+  defp answer({:reply, value}, _request, _clock), do: value
+
+  defp answer(:timeout, request, clock) do
+    Manual.advance(clock, 0)
+    waited(request, clock)
+  end
+
   defp wait_until(check) do
     check.() || (Process.sleep(1) && wait_until(check))
   end
@@ -406,6 +475,64 @@ defmodule Logex.RunnerEditTest do
       {:trace, pid, :call, {Edit, function, _args}} -> collected([{pid, function} | calls])
     after
       100 -> calls
+    end
+  end
+
+  describe "growth" do
+    # The bound, a fifth above the highest of 52 runs, 18 of them beside two suites, 1.416:
+    # the runner's own work for an accept hardly grows with the programs, the candidate
+    # checked and accepted in the caller's own process (decision 119).
+    @accept_bound 1.70
+
+    defp crowd(n) do
+      relay = program("var_input in bool\nvar_output q bool\nxic in ote q", "relay")
+
+      Configuration.new!(
+        name: "plant",
+        programs: [relay],
+        tasks: [%Configuration.Task{name: "fast", interval: 10, priority: 1}],
+        globals:
+          Enum.flat_map(1..n, fn i ->
+            [
+              %Configuration.Global{name: "x#{i}", type: :bool, at: "dev.i.#{i}"},
+              %Configuration.Global{name: "y#{i}", type: :bool, at: "dev.q.#{i}"}
+            ]
+          end),
+        instances:
+          for(i <- 1..n, do: %Configuration.Instance{name: "r#{i}", type: "relay", task: "fast"}),
+        connections:
+          Enum.flat_map(1..n, fn i ->
+            [
+              %Configuration.Connection{instance: "r#{i}", member: "in", to: "x#{i}"},
+              %Configuration.Connection{instance: "r#{i}", member: "q", to: "y#{i}"}
+            ]
+          end)
+      )
+    end
+
+    defp accept_cost(n) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, sim} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: crowd(n),
+          io: %{"dev" => {Sim, sim: sim}},
+          clock: {Manual, clock},
+          poll: 1_000_000
+        )
+
+      candidate = crowd(n)
+      {:reductions, before} = Process.info(runner, :reductions)
+      {:ok, _forecast} = Runner.accept(runner, candidate)
+      {:reductions, later} = Process.info(runner, :reductions)
+      Runner.stop(runner)
+      later - before
+    end
+
+    test "the runner's work for an accept hardly grows with the programs" do
+      ratio = accept_cost(200) / accept_cost(50)
+      assert ratio < @accept_bound, "4x the instances took #{ratio}x of the runner's work"
     end
   end
 end

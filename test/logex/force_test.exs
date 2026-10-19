@@ -648,4 +648,74 @@ defmodule Logex.ForceTest do
       assert File.read!(file) == "level 2147483647\n"
     end
   end
+
+  describe "growth" do
+    # The bounds, each a fifth above the highest of 52 runs, 18 of them beside two suites:
+    # 3.333 for a force's write, 3.844 for rounds that merge every force.
+    @write_bound 4.0
+    @rounds_bound 4.61
+
+    # n relays on a 10 ms task, each from an input point of one device to an output point.
+    defp crowd(n) do
+      relay = program("var_input in bool\nvar_output q bool\nxic in ote q", "relay")
+
+      Configuration.new!(
+        name: "plant",
+        programs: [relay],
+        tasks: [%Configuration.Task{name: "fast", interval: 10, priority: 1}],
+        globals:
+          Enum.flat_map(1..n, fn i ->
+            [
+              %Configuration.Global{name: "x#{i}", type: :bool, at: "dev.i.#{i}"},
+              %Configuration.Global{name: "y#{i}", type: :bool, at: "dev.q.#{i}"}
+            ]
+          end),
+        instances:
+          for(i <- 1..n, do: %Configuration.Instance{name: "r#{i}", type: "relay", task: "fast"}),
+        connections:
+          Enum.flat_map(1..n, fn i ->
+            [
+              %Configuration.Connection{instance: "r#{i}", member: "in", to: "x#{i}"},
+              %Configuration.Connection{instance: "r#{i}", member: "q", to: "y#{i}"}
+            ]
+          end)
+      )
+    end
+
+    defp reductions(pid), do: elem(Process.info(pid, :reductions), 1)
+
+    # Every input point forced: the runner's work for ten forces more, each writing the
+    # whole set, and for 20 rounds that merge every force.
+    defp forcing_cost(n, dir) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, sim} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: crowd(n),
+          io: %{"dev" => {Sim, sim: sim}},
+          clock: {Manual, clock},
+          poll: 1_000_000,
+          forces: Path.join(dir, "forces#{n}")
+        )
+
+      for i <- 1..n, do: :ok = Runner.force(runner, "x#{i}", 1)
+      Manual.advance(clock, 10)
+      before = reductions(runner)
+      for _ <- 1..10, do: :ok = Runner.force(runner, "x1", 0)
+      written = reductions(runner) - before
+      before = reductions(runner)
+      Manual.advance(clock, 200)
+      rounds = reductions(runner) - before
+      Runner.stop(runner)
+      {written, rounds}
+    end
+
+    test "a force's write and a round's merge are linear in the forces", %{tmp_dir: dir} do
+      {written, rounds} = forcing_cost(50, dir)
+      {written4, rounds4} = forcing_cost(200, dir)
+      assert written4 / written < @write_bound, "4x the forces took #{written4 / written}x"
+      assert rounds4 / rounds < @rounds_bound, "4x the forces took #{rounds4 / rounds}x"
+    end
+  end
 end
