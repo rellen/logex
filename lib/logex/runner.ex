@@ -189,10 +189,13 @@ defmodule Logex.Runner do
     can cause it: a test reaches it through one hidden option of `start_link/1`, which
     stands a module of the test's in for `Logex.Runtime`'s steps.
 
-  `restart(runner, :cold | :warm)`, `:warm` being `:cold` until `retain` lands, opens
-  again each device that went down, in device-name order, `{:error, {:io_init, device,
-  reason}}` for one that cannot be opened, the runner left tripped; releases every latch;
-  restarts the resource (`Logex.Runtime.restart/2`), which keeps its input image and puts
+  `restart(runner, :cold | :warm)`, `:warm` being `:cold` until `retain` lands, releases
+  every latch, in device-name order, a device that does not answer within the idle
+  watchdog and a poll period killed, as one that hung while the runner was tripped; opens
+  again each device that went down, those among them, in device-name order, `{:error,
+  {:io_init, device, reason}}` for one that cannot be opened, the runner left tripped with
+  its first reason and every device that answers latched again, written 0 once more, as
+  a restart that trips again is; restarts the resource (`Logex.Runtime.restart/2`), which keeps its input image and puts
   every other global back to its initial value; sends `{:restart, mode}`; and runs the
   first round at once, before it returns, the clock not counting the time it was
   stopped. A runner that crashes, is killed or loses its clock is gone (decision 115):
@@ -290,7 +293,8 @@ defmodule Logex.Runner do
 
   @doc """
   Starts a tripped runner again, `:cold` or `:warm`, `:warm` being `:cold` until `retain`
-  lands (decision 113): every device's latch released, the resource restarted
+  lands (decision 113): every device's latch released, each device that went down, or
+  does not answer its release, opened again, the resource restarted
   (`Logex.Runtime.restart/2`, which keeps the input image and puts every other global
   back to its initial value), `{:restart, mode}` sent to the subscribers, and the first
   round run at once, before it returns, the clock not counting the time it was stopped,
@@ -987,11 +991,15 @@ defmodule Logex.Runner do
     drained(:queue.out(state.queue), state)
   end
 
-  # A restart (decision 113): every latch released, the resource restarted, which keeps
-  # its clock and its input image, the triggers logic writes sampled again, the anchor
-  # moved so that the time stopped is not counted, and the first round run at once.
-  defp restarted(mode, state),
-    do: reopened(reopen(Enum.filter(state.devices, &down?(&1, state)), state), mode)
+  # A restart (decision 113): every latch released, a device that does not answer its
+  # release killed and marked down, as one that hung or went down while the runner was
+  # tripped; every device down opened again; the resource restarted, which keeps its
+  # clock and its input image, the triggers logic writes sampled again, the anchor moved
+  # so that the time stopped is not counted, and the first round run at once.
+  defp restarted(mode, state) do
+    state = each_live(state, &Device.release/2)
+    reopened(reopen(Enum.filter(state.devices, &down?(&1, state)), state), mode)
+  end
 
   defp down?({name, _pid, _points}, state), do: MapSet.member?(state.down, name)
 
@@ -1027,10 +1035,12 @@ defmodule Logex.Runner do
     {{:error, {:io_init, name, cause}}, state}
   end
 
-  defp reopened({:ok, state}, mode),
-    do: {:ok, released(mode, each_live(state, &Device.release/2))}
+  defp reopened({:ok, state}, mode), do: {:ok, released(mode, state)}
 
-  defp reopened({error, state}, _mode), do: {error, state}
+  # A device that cannot be opened leaves the runner tripped, every device that answers
+  # latched again, its 0 written once more, as a restart that trips again does: one
+  # released and one opened again before it alike.
+  defp reopened({error, state}, _mode), do: {error, each_live(state, &Device.zero/2)}
 
   defp released(mode, state) do
     runtime = Runtime.restart(state.runtime, mode)

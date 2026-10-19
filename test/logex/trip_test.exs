@@ -937,6 +937,66 @@ defmodule Logex.TripTest do
       assert Sim.outputs(drive) == %{[0] => 1}
     end
 
+    test "a device that hangs while the runner is tripped is killed at the restart's " <>
+           "release and opened again, its inputs read, the deadline in real time and short" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@read_both), poll: 10, idle: 30, steps: Runtime)
+
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      assert {:io, "panel", {:error, :eio}} = Runner.status(runner).trip
+
+      # The drive's process held, as one hung in its adapter is, and its stop pressed.
+      old = device_pid(runner, "drive")
+      :sys.suspend(old)
+      Sim.set(drive, [0], 1)
+      assert Runner.restart(runner, :cold) == :ok
+      refute Process.alive?(old)
+      assert device_pid(runner, "drive") != old
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Runner.get!(runner, "d") == 1
+      refute MapSet.member?(:sys.get_state(runner).down, "drive")
+    end
+
+    test "a device that cannot be opened again after the others' release latches them " <>
+           "again, each written 0 once more, a released one and one opened again alike" do
+      # The panel released, the drive killed while tripped and refused at its opening.
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@read_both), poll: 10, steps: Runtime)
+
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      Process.exit(device_pid(runner, "drive"), :kill)
+      Runner.status(runner)
+      Sim.fail(drive, :init, {:error, :refused})
+      written = Sim.writes(panel)
+      assert Runner.restart(runner, :cold) == {:error, {:io_init, "drive", :refused}}
+      assert :sys.get_state(device_pid(runner, "panel")).latched
+      Manual.advance(clock, 100)
+      assert Sim.writes(panel) == written ++ [%{[0] => 0}]
+      assert Runner.status(runner).trip == {:io, "panel", {:error, :eio}}
+
+      # The drive opened again, the panel then held and refused: the drive is written 0.
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@read_both), poll: 10, idle: 30, steps: Runtime)
+
+      Runner.subscribe(runner)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Process.exit(device_pid(runner, "drive"), :kill)
+      assert_receive {Runner, ^runner, {:trip, {:io, "drive", {:down, :killed}}}}, 5000
+      assert List.last(Sim.writes(drive)) == %{[0] => 1}
+      :sys.suspend(device_pid(runner, "panel"))
+      Sim.fail(panel, :init, {:error, :refused})
+      assert Runner.restart(runner, :cold) == {:error, {:io_init, "panel", :refused}}
+      zeroed_once(drive, 1)
+      assert Runner.status(runner).trip == {:io, "drive", {:down, :killed}}
+    end
+
     test "a device that cannot be opened at start, for each kind of fault, every device " <>
            "opened before it closed" do
       raised = "the simulated device \"panel\" raised in init, as fail/3 told it"
