@@ -1705,7 +1705,8 @@ closed: true
   among them, so a host's mistake is an `ArgumentError` there; it opens each device,
   reads it once and runs the first round at once. Optional: `clock:` (the monotonic one
   unless set), `poll:` (each device's poll period, 10 ms), `overhead:` (the share kept
-  for the runner's own work, 20%, 10 to 90), `idle:` (500 ms) and `name:`.
+  for the runner's own work, 20%, 10 to 90), `idle:` (500 ms), `forces:` (the file its
+  forces are kept in, below) and `name:`.
 - The box counter is untimed, so rounds run back to back, one each clock millisecond:
   `advance(clock, 10)` ran ten, the conveyor's task in the one at 10. With no untimed
   program a round comes only at a due time or when a device changes an event task's
@@ -1841,7 +1842,126 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   every output 0 once and closing as it goes (decision 115), a device waiting on it for
   its own change among them; its child spec is `restart: :temporary`, so the host starts a
   new one.
-- Forcing and edits through the runner are M4-5's (`PLAN.md`).
+
+Forcing and an online edit go through the runner too (M4-5, decisions 117, 119 and 127).
+`forced_and_edited.exs` runs `packing.logex` with its forces kept in `packing.forces`,
+forces the photo-eye, starts a fresh runner from the same file, and then cuts the
+conveyor's task to 5 ms through an edit stepped while it runs, `faster/packing.logex`
+being `packing.logex` with `interval 5`:
+
+```elixir
+alias Logex.Runner
+alias Logex.Runner.Clock.Manual
+alias Logex.IO.Sim
+
+{:ok, plant} = Logex.Configuration.compile_file("packing.logex")
+File.rm("packing.forces")
+
+start = fn ->
+  {:ok, clock} = Manual.start_link()
+  {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+  {:ok, runner} =
+    Runner.start_link(
+      configuration: plant,
+      io: %{"panel" => {Sim, sim: panel}},
+      clock: {Manual, clock},
+      forces: "packing.forces"                # where the forces are kept, across a crash
+    )
+
+  {runner, clock, panel}
+end
+
+{runner, clock, panel} = start.()
+
+show = fn runner, label ->
+  %{now: now, forces: forces} = Runner.status(runner)
+  IO.puts("t=#{String.pad_leading("#{now}", 2)}  #{label}  eye=#{Runner.get!(runner, "eye")} boxes=#{Runner.get!(runner, "b1.count")}  forces=#{inspect(forces)}")
+end
+
+:ok = Runner.force(runner, "eye", 1)           # the photo-eye forced blocked
+Manual.advance(clock, 2)
+show.(runner, "eye forced     ")
+Sim.set(panel, [8], 1)                         # the real eye: blocked, then clear
+Sim.set(panel, [8], 0)
+Manual.advance(clock, 2)
+show.(runner, "eye moved      ")
+IO.inspect(File.read!("packing.forces"), label: "packing.forces")
+
+:ok = Runner.stop(runner)                      # a fresh runner from the same file
+{runner, clock, _panel} = start.()
+show.(runner, "a fresh start  ")
+
+:ok = Runner.unforce(runner, "eye")            # the device's last value, 0, read again
+Manual.advance(clock, 1)
+show.(runner, "eye unforced   ")
+
+try do
+  Runner.force(runner, "k1", 1)
+rescue
+  error in ArgumentError -> IO.puts("force k1: " <> error.message)
+end
+
+# An edit, stepped through the runner between rounds: the conveyor's task cut to 5 ms.
+{:ok, faster} = Logex.Configuration.compile_file("faster/packing.logex")
+:ok = Runner.subscribe(runner, [:edit])
+{:ok, forecast} = Runner.accept(runner, faster)
+IO.inspect(forecast, label: "forecast")
+{:ok, report} = Runner.test(runner)
+IO.inspect(report, label: "test")
+IO.inspect(Runner.status(runner).edit, label: "stage")
+:ok = Runner.subscribe(runner, [:ran])
+Manual.advance(clock, 12)
+IO.inspect(for({Runner, ^runner, {:ran, "fast", _, at}} <- Process.info(self(), :messages) |> elem(1), do: at), label: "the conveyor ran at")
+{:ok, report} = Runner.assemble(runner)
+IO.inspect(report, label: "assemble")
+IO.inspect(Runner.status(runner).edit, label: "stage")
+:ok = Runner.stop(runner)
+File.rm("packing.forces")
+```
+
+```
+$ mix run forced_and_edited.exs
+t= 2  eye forced       eye=1 boxes=1  forces=%{"eye" => 1}
+t= 4  eye moved        eye=1 boxes=1  forces=%{"eye" => 1}
+packing.forces: "eye 1\n"
+t= 0  a fresh start    eye=1 boxes=0  forces=%{"eye" => 1}
+t= 1  eye unforced     eye=0 boxes=0  forces=%{}
+force k1: `k1` is an output point, at `panel.q.0`: only an input point is forced
+forecast: [{:interval, "fast", {10, 5}}, {:next_due, "fast", {10, 6}}]
+test: [{:interval, "fast", {10, 5}}, {:next_due, "fast", {10, 6}}]
+stage: :testing
+the conveyor ran at: [6, 11]
+assemble: []
+stage: nil
+```
+
+- `force(runner, point, value)` makes the runner read an input point at `value`, whatever
+  its device says, from the next round until `unforce/2` or `unforce_all/1`: the eye
+  moved and no box was counted. It holds across a restart and, kept in the file, across
+  a crash: every start reads the file, so the fresh runner came back with the eye forced
+  and listed in `status/1`, its first round reading it, and counting nothing, since no
+  counter counts on a first scan. `unforce/2` puts back the device's last value, which
+  the runner keeps for each input point.
+- Each force and unforce writes the whole set to the file before it returns, `name
+  value` a line, to a file beside it renamed over it, so a crash leaves the old set or
+  the new; a write that fails changes nothing and gives `{:error, {:forces, reason}}`. A
+  runner started without `forces:` takes no force, and an output point, or a value that
+  does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
+  a force on a point the configuration does not have as an input, is refused, every
+  such force named, and the runner does not start; with no runner, deleting the file
+  clears every force.
+- A force or an unforce that changes what an event task's trigger reads is a change of
+  it, and makes its round at once, before the call returns.
+- `accept/2`, `test/1`, `untest/1`, `assemble/1` and `cancel/1` are
+  `Logex.Configuration.Edit`'s steps, each served between two rounds, the runner holding
+  the edit: each gives the report the same step gives taken over the resource directly,
+  and the next round runs what it switched to. Accept's work is done in the caller's
+  process, against the resource the runner hands it, so a large plant's accept never
+  holds up a round. After each step the rounds read the watchdogs and the untimed
+  programs of the configuration that runs, and a cut interval is next due as decision 40
+  says, `min(next due, now + new interval)`: the conveyor, last run at 0, ran at 6 and 11.
+  A step may be taken while tripped, and a restart keeps the edit's stage.
 
 ## Changing a running program
 

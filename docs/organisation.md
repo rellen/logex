@@ -24,7 +24,8 @@ review's answers followed on 2026-10-18 (decisions 122–126), with the maintain
 on forces (decision 127); M4-2, M4-3 and M4-4, the watchdogs and the fault path, landed
 the same day (decisions 128–131), and the findings of M4-4's review were fixed on
 2026-10-19, §4.11's landing note, the maintainer answering its five questions the same
-day (decisions 133–137).** On 2026-09-28 the
+day (decisions 133–137); and M4-5, forcing and an online edit through the runner, landed
+the same day, four of its readings put to the maintainer (§4.11's landing note).** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -2855,7 +2856,7 @@ fit, is the host's mistake. Output forcing waits for §5's forcing in `cycle/3`,
   crash. Each force and unforce writes the whole set before it returns, to a file beside
   it, flushed to the disk and renamed over it, so a crash leaves the old set or the new;
   a write that fails changes nothing and returns `{:error, {:forces, reason}}`. Its format
-  is M4-5's, text a person can read.
+  is M4-5's, text a person can read: one force a line, `name value` (M4-5).
 - *It is read at every start,* by `start_link/1` in the caller before anything starts,
   and by `restart/2`; a file that does not exist is no force. A force the configuration
   cannot take, on a point it no longer has, on an output point or of a value that does
@@ -2869,6 +2870,26 @@ superseding the first as decision 66 allows, and its next round runs the resourc
 returns. A step may be taken while tripped, so a program can be fixed and then restarted.
 Accept's work, which grows with the programs, is done in the caller's process, against the
 resource the runner hands it, so that no step costs a round more than a switch.
+*(Landed with M4-5, 2026-10-19, forcing and the edits as these paragraphs say, with the
+readings the record left: the forces file holds one force a line, `name value`, in name
+order, the empty file for none, written to `<path>.tmp` beside it, flushed and renamed
+over it, and read back exactly so, a last line with no newline read, anything else
+refused at the start, `<path>: line <n>: ...` a line each in `force/3`'s words; a restart
+reads it before it releases anything, a point it no longer forces reading its device's
+last value again; the runner keeps each input point's last value from its device, the
+input image's until a device gives one; a force or an unforce that changes what a trigger
+reads makes its round at once, before the call returns, timed by its steps and not the
+idle watchdog, and a device's change of a forced trigger makes none; a runner started
+without `forces:` refuses `unforce/2` and `unforce_all/1` in `force/3`'s words, and an
+unforce of a point not forced writes the set again; the edit's steps give `{:ok,
+report}`, accept asking the runner for its resource with the count of steps it has taken,
+the edit it gives held only where no step came between and otherwise accepted again, a
+refused accept leaving the edit held as it was; after each step the rounds read each
+task's watchdog and the untimed programs of the configuration the resource runs, and the
+next round is planned again from the last; and decision 40's `now` is the resource's, the
+last round's, so with no untimed program a cut served long after the last round may fall
+due at once and report a period missed. Four of these are provisional and put to the
+maintainer, `PLAN.md` M4-5.)*
 
 **Its API**, every call through the runner's mailbox, so each runs between two rounds:
 
