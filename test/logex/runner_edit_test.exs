@@ -292,8 +292,12 @@ defmodule Logex.RunnerEditTest do
       Manual.advance(clock, 50)
       Sim.set(panel, [1], 5)
       assert Runner.status(runner).status == :tripped
-      {:ok, _} = Runner.accept(runner, faster())
-      {:ok, _} = Runner.test(runner)
+      Runner.subscribe(runner, [:edit])
+      {:ok, forecast} = Runner.accept(runner, faster())
+      {:ok, report} = Runner.test(runner)
+
+      # Each step's event is sent while tripped, as while running.
+      assert drained(runner) == [{:edit, :accept, forecast}, {:edit, :test, report}]
       Sim.set(panel, [1], 0)
       assert Runner.restart(runner, :cold) == :ok
 
@@ -633,10 +637,11 @@ defmodule Logex.RunnerEditTest do
   end
 
   describe "growth" do
-    # The bound, a fifth above the highest of 52 runs, 18 of them beside two suites, 1.416:
+    # The bound, a fifth above the highest of 118 runs, 52 when it landed, 16 at its review
+    # and 50 after the review's fixes, 32 of them beside two suites, 1.450:
     # the runner's own work for an accept hardly grows with the programs, the candidate
     # checked and accepted in the caller's own process (decision 119).
-    @accept_bound 1.70
+    @accept_bound 1.74
 
     defp crowd(n) do
       relay = program("var_input in bool\nvar_output q bool\nxic in ote q", "relay")

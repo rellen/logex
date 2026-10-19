@@ -33,6 +33,25 @@ defmodule Logex.ForceTest do
     def cycle_step(runtime, step), do: Runtime.cycle_step(runtime, step)
   end
 
+  # A stand-in for Logex.Runtime's steps whose step of the task `trip` takes 505 ms of the
+  # manual clock the test that started the runner put in this module's table under its
+  # own pid: so a first round that runs `trip` trips the runner before it is counted.
+  defmodule SlowFirst do
+    alias Logex.Runtime
+
+    def cycle_steps(runtime, elapsed, inputs), do: Runtime.cycle_steps(runtime, elapsed, inputs)
+    def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
+
+    def cycle_step(runtime, {_kind, "trip", _run} = step) do
+      [starter | _] = Process.get(:"$ancestors")
+      [{_starter, clock}] = :ets.lookup(Logex.ForceTest, starter)
+      Manual.pass(clock, 505)
+      Runtime.cycle_step(runtime, step)
+    end
+
+    def cycle_step(runtime, step), do: Runtime.cycle_step(runtime, step)
+  end
+
   # A panel whose reads give nothing: no input point has a value from its device.
   defmodule QuietIO do
     @behaviour Logex.IO
@@ -119,6 +138,8 @@ defmodule Logex.ForceTest do
   end
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
+
+  defp wait_until(check), do: check.() || (Process.sleep(1) && wait_until(check))
 
   # Every event the runner has sent since the last call.
   defp events(runner) do
@@ -241,6 +262,30 @@ defmodule Logex.ForceTest do
       assert %{status: :running, forces: %{"x" => 1}} = Runner.status(runner)
       assert Runner.get!(runner, "y") == 1
       assert List.last(Sim.writes(panel)) == %{[0] => 1}
+    end
+
+    # The panel's process killed, the runner tripped; the panel's `x` then 1, which the
+    # restart's opening reads, and then unforced: the value put back is the one read at
+    # the opening, not the one from before the crash.
+    test "a device opened again at a restart is kept as its last value, which an unforce " <>
+           "puts back",
+         %{tmp_dir: dir} do
+      %{runner: runner, clock: clock, panel: panel} = started(dir)
+      Runner.force(runner, "x", 1)
+      Manual.advance(clock, 10)
+
+      [{"panel", pid, _points}] =
+        Enum.filter(:sys.get_state(runner).devices, &(elem(&1, 0) == "panel"))
+
+      Process.exit(pid, :kill)
+      wait_until(fn -> Runner.status(runner).status == :tripped end)
+
+      Sim.set(panel, [0], 1)
+      assert Runner.restart(runner, :warm) == :ok
+      Manual.advance(clock, 10)
+      assert Runner.unforce(runner, "x") == :ok
+      Manual.advance(clock, 20)
+      assert Runner.get!(runner, "y") == 1
     end
 
     test "is taken while tripped, and the restart's first round reads it", %{tmp_dir: dir} do
@@ -449,6 +494,27 @@ defmodule Logex.ForceTest do
       %{runner: runner} = started(dir)
       assert %{forces: %{}} = Runner.status(runner)
       assert Runner.get!(runner, "y") == 0
+    end
+
+    test "listed in the status from the start, though the first round trips before it " <>
+           "is counted",
+         %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "forces"), "e 1\n")
+      {:ok, clock} = Manual.start_link()
+      :ets.insert(__MODULE__, {self(), clock})
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: plant(),
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock},
+          forces: Path.join(dir, "forces"),
+          steps: SlowFirst
+        )
+
+      assert %{status: :tripped, rounds: 0, forces: %{"e" => 1}} = Runner.status(runner)
     end
 
     test "a trigger forced in the file is read by the first round", %{tmp_dir: dir} do
@@ -718,10 +784,11 @@ defmodule Logex.ForceTest do
   end
 
   describe "growth" do
-    # The bounds, each a fifth above the highest of 52 runs, 18 of them beside two suites:
-    # 3.333 for a force's write, 3.844 for rounds that merge every force.
-    @write_bound 4.0
-    @rounds_bound 4.61
+    # The bounds, each a fifth above the highest of 118 runs, 52 when forcing landed, 16 at
+    # its review and 50 after the review's fixes, 32 of them beside two suites: 3.391 for a
+    # force's write, 3.852 for rounds that merge every force.
+    @write_bound 4.07
+    @rounds_bound 4.63
 
     # n relays on a 10 ms task, each from an input point of one device to an output point.
     defp crowd(n) do
