@@ -210,6 +210,20 @@ defmodule Logex.TripTest do
     end
   end
 
+  # An adapter whose every read gives the values it was bound with, `values:`.
+  defmodule Values do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, opts), do: {:ok, Map.new(opts)}
+
+    @impl true
+    def read(%{values: values} = state), do: {:ok, values, state}
+
+    @impl true
+    def write(_values, state), do: {:ok, state}
+  end
+
   setup_all do
     :ets.new(__MODULE__, [:named_table, :public, :set])
     :ok
@@ -447,6 +461,29 @@ defmodule Logex.TripTest do
       assert Runner.stop(runner) == :ok
       assert {Sim.writes(panel), Sim.writes(drive)} == zeroed
       assert Sim.closed?(panel) and Sim.closed?(drive)
+    end
+
+    test "a message shaped as a device's notice, from a process that is not that " <>
+           "device's, is passed over" do
+      text =
+        "var_global x bool at panel.i.0\nvar_global y bool at panel.q.0\n" <>
+          "program r relay\n  r.in x\n  r.out y\n"
+
+      %{runner: runner, clock: clock} =
+        rig(configured(text), poll: 10, idle: 100, steps: Runtime)
+
+      # A fault in its words trips nothing.
+      send(runner, {Logex.Runner.Device, self(), 0, {:fault, "panel", {:error, :forged}}})
+      Manual.advance(clock, 20)
+      assert Runner.status(runner).status == :running
+
+      # Nor does a "back" keep a device heard: the panel held after its read at 20 is
+      # silent from 131 whatever the forged notice says.
+      send(runner, {Logex.Runner.Device, self(), 1_000_000, {:back, "panel", nil}})
+      Runner.status(runner)
+      :sys.suspend(device_pid(runner, "panel"))
+      Manual.advance(clock, 111)
+      assert Runner.status(runner).trip == {:io, "panel", :timeout}
     end
 
     test "the hidden option's mistake, raised in the caller" do
@@ -691,6 +728,49 @@ defmodule Logex.TripTest do
       assert [%{[0] => 0}, %{[0] => 1} | _] = Enum.reverse(Sim.writes(panel))
       assert [%{[0] => 0}, %{[0] => 1} | _] = Enum.reverse(Sim.writes(drive))
       refute_received {Runner, ^runner, {:trip, _}}
+    end
+
+    test "a device's wake that comes before the deadline its last refresh carried moves " <>
+           "on to it, the device latching at its deadline's millisecond, not one before" do
+      text =
+        "var_global x bool at panel.i.0\nvar_global y bool at panel.q.0\n" <>
+          "program r relay\n  r.in x\n  r.out y\n"
+
+      %{runner: runner, clock: clock, panel: panel} =
+        rig(configured(text), poll: 10, idle: 100, steps: Runtime)
+
+      # The round at 0 carried 110, the panel's wake set there; the round at 1, writing
+      # y = 1, carried 111, a later deadline, which keeps that wake.
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 1)
+      :sys.suspend(runner)
+      Manual.advance(clock, 109)
+      assert List.last(Sim.writes(panel)) == %{[0] => 1}
+      Manual.advance(clock, 1)
+      zeroed_once(panel, 1)
+      :sys.resume(runner)
+      assert Runner.status(runner).trip == {:watchdog, {:device, "panel", 110}}
+    end
+
+    test "a poll's write again whose read ends at its deadline's millisecond writes nothing" do
+      text =
+        "var_global x bool at panel.i.0\nvar_global y bool at panel.q.0\n" <>
+          "program r relay\n  r.in x\n  r.out y\n"
+
+      %{runner: runner, clock: clock, panel: panel} =
+        rig(configured(text), poll: 10, idle: 100, steps: Runtime)
+
+      # The deadline is 111, as above; the poll at 110 reads for 1 ms, to 111.
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 1)
+      :sys.suspend(runner)
+      Manual.advance(clock, 99)
+      written = length(Sim.writes(panel))
+      Sim.fail(panel, :read, {:delay, 1})
+      Manual.advance(clock, 10)
+      Manual.advance(clock, 1)
+      assert Enum.drop(Sim.writes(panel), written) == [%{[0] => 0}]
+      :sys.resume(runner)
     end
 
     test "two devices that latch in one millisecond trip for the first in device-name " <>
@@ -1128,6 +1208,95 @@ defmodule Logex.TripTest do
       Sim.fail(panel, :init, {:error, :refused})
       assert Runner.restart(runner, :cold) == {:error, {:io_init, "panel", :refused}}
       zeroed_once(drive, 1)
+      assert Runner.status(runner).trip == {:io, "drive", {:down, :killed}}
+    end
+
+    test "a device latched by its own fault while a round runs takes no write of that " <>
+           "round's" do
+      # The drive polls every 7 ms, at 21 inside the round at 20, which is stuck 30 ms.
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        slow(@conveyor <> "var_global d bool at drive.i.0\n", poll: 7)
+
+      Manual.advance(clock, 15)
+      Sim.set(panel, %{[0] => 1, [1] => 30})
+      Sim.fail(drive, :read, {:error, :eio})
+      Manual.advance(clock, 5)
+
+      # The round computed z = 1 and wrote the panel; the drive, latched at 21, took
+      # nothing, and the runner tripped on its notice as the next round began.
+      assert Runner.get!(runner, "z") == 1
+      zeroed_once(panel, 1)
+      assert List.last(Sim.writes(drive)) == %{[0] => 0}
+      refute %{[0] => 1} in Sim.writes(drive)
+      assert Runner.status(runner).trip == {:io, "drive", {:error, :eio}}
+    end
+
+    test "of two faults in one read, the first address's is named" do
+      # Forty inputs, more than a small map holds in order.
+      points = for k <- 0..39, do: "var_global i#{k} bool at dev.i.#{k}\n"
+
+      config =
+        configured(
+          Enum.join(points) <> "var_global o bool\nprogram r relay\n  r.in i0\n  r.out o\n"
+        )
+
+      values = Map.new(0..39, &{[&1], 0})
+      {:ok, clock} = Manual.start_link()
+
+      for {bad, first} <- [
+            {%{[3] => 7, [31] => 9}, {:bad_value, [3], 7}},
+            {%{[17] => 2, [40] => 1}, {:bad_value, [17], 2}},
+            {%{[39] => 5, [41] => 1}, {:bad_value, [39], 5}}
+          ] do
+        assert Runner.start_link(
+                 configuration: config,
+                 io: %{"dev" => {Values, values: Map.merge(values, bad)}},
+                 clock: {Manual, clock}
+               ) == {:error, {:io_init, "dev", first}}
+      end
+    end
+
+    test "a device's zero at a trip is given the idle watchdog and a poll period to answer" do
+      text = @relayed <> "var_global z bool at drive.q.0\n"
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link()
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(text),
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock},
+          poll: 200,
+          idle: 200,
+          steps: Boom
+        )
+
+      # The drive's zero sleeps 300 ms in real time, within 200 and 200.
+      old = device_pid(runner, "drive")
+      Sim.fail(drive, :write, {:delay, 300})
+      Sim.set(panel, [1], 5)
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).trip == {:internal, "boom in the outputs"}
+      assert Process.alive?(old)
+      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 0}]
+    end
+
+    test "a device opened again at a restart whose first read does not fit leaves the " <>
+           "runner tripped" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@read_both), steps: Runtime)
+
+      Runner.subscribe(runner)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Process.exit(device_pid(runner, "drive"), :kill)
+      assert_receive {Runner, ^runner, {:trip, {:io, "drive", {:down, :killed}}}}, 5000
+      Sim.fail(drive, :read, {:value, [0], 7})
+
+      assert Runner.restart(runner, :cold) ==
+               {:error, {:io_init, "drive", {:bad_value, [0], 7}}}
+
       assert Runner.status(runner).trip == {:io, "drive", {:down, :killed}}
     end
 
