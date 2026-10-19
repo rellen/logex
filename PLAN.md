@@ -32,7 +32,8 @@ M4-4, the watchdogs and the fault path, the same day, its review's findings fixe
 2026-10-19, with five questions put to the maintainer, who answered them the same day,
 each with the option recommended and built, decisions 133 to 137 (§3, M4-4); and its
 fifth, M4-5, edits and forcing through the runner, on 2026-10-19, its review's
-findings fixed the same day, four of its choices provisional and put to the maintainer
+findings fixed the same day, four of its choices put to the maintainer, who answered them
+the same day, decisions 138 to 141, the second with the option recommended, then built
 (§3, M4-5).
 
 Every claim below was reproduced by executing code against a scratch copy of the
@@ -3665,13 +3666,14 @@ and M4-7 the documents.
   count of steps it has taken, and the runner holds the edit accept gives only where no
   step came between; and after each step the rounds read the watchdogs and the untimed
   programs of the configuration the resource runs, and the next round is planned again
-  from the last. The following are **provisional**, the record silent, each the option
-  closest to the record and to Logix, and put to the maintainer below: a forced
-  trigger's round, and since the review the order of several triggers' rounds across
-  devices; decision 40's `now` with no untimed program; the forces file a person reads;
-  and two hosts stepping one edit.
+  from the last. Four more, the record silent, were built as the option closest to the
+  record and to Logix and put to the maintainer below: a forced trigger's round, and
+  since the review the order of several triggers' rounds across devices; decision 40's
+  `now` with no untimed program; the forces file a person reads; and two hosts stepping
+  one edit. The maintainer answered all four on 2026-10-19, decisions 138 to 141 (below).
 
-  **Questions for the maintainer.** In each, a *round* is one pass of the controller over
+  **Questions for the maintainer** (answered 2026-10-19, each answer after its question).
+  In each, a *round* is one pass of the controller over
   its programs, reading the inputs, running the programs that are due and writing the
   outputs; a *trigger* is the input an *event task* watches, a task that runs when its
   trigger goes from off to on, here the e-stop button that runs the `trip` task, which
@@ -3710,7 +3712,9 @@ and M4-7 the documents.
      caused it. In Logix a force changes the input as the program sees it from the next
      scan, and whether an event task triggered by a forced input runs at once, or in what
      order several do, is not in the manuals saved (**unverified**). Recommended: (a), the
-     review agreeing, with one round per trigger changed.
+     review agreeing, with one round per trigger changed. *Answered: (a), as built, one
+     round per trigger changed, in device-name then address order, a force that changes
+     nothing making no round (decision 138).*
   2. *A task's interval cut while no untimed program runs.* The fan's task runs every
      50 ms, last at 50 ms, so it is next due at 100; the plant has no continuous task, so
      the controller's own clock stands at 50, the fan's last run, until its next run. At
@@ -3732,6 +3736,9 @@ and M4-7 the documents.
      Recommended: (c), the screen showing no alarm the edit itself made and no round
      added, if a change to the edit's switch is acceptable, the review agreeing; (a) is
      what the record's rule says as written, and stays built until the maintainer says.
+     *Answered: (c), then built (decision 139): the step's time on the runner's clock,
+     given to the switch; used alone, `Logex.Configuration.Edit`'s `now` is the
+     resource's unless the host gives the milliseconds since its last cycle.*
   3. *The forces file a person reads.* The file sits beside the plant's files, one force
      a line, `eye_1 1`, the photo-eye that counts boxes on the conveyor held on. (a) As
      built: the runner reads exactly what it writes, so a person who opens it sees every
@@ -3746,6 +3753,8 @@ and M4-7 the documents.
      Logix forces are kept in the project and changed only through the programming
      software, never by editing a file (**unverified**). Recommended: (a), the review
      agreeing: a strict file is the safest for a list that decides what the plant reads.
+     *Answered: (a), as built, and an unforce of a point not forced accepted (decision
+     140).*
   4. *Two engineers stepping one edit.* Engineer A accepts a change to the fan's
      interval from one laptop while engineer B, from another, takes a step of the edit
      the controller already holds. (a) As built: A's accept is worked out on A's laptop
@@ -3762,6 +3771,31 @@ and M4-7 the documents.
      controller online (**unverified**). Recommended: (a), the review agreeing, since it
      gives exactly what the same steps taken over the resource directly give
      (`Logex.Configuration.Edit`'s rule that a second accept supersedes the first).
+     *Answered: (a), as built: an overtaken accept is redone against the plant as it
+     now is (decision 141).*
+
+  **The maintainer's answers** (2026-10-19), recorded as decisions 138 to 141 in
+  `docs/organisation.md` §7, decision 40 amended to point to 139. Questions 1, 3 and 4
+  were answered with what was built. Question 2's (c) was built in one commit, `5792089`:
+  `Logex.Configuration.Edit`'s `accept/3`, `test/3` and `untest/3` take the step's time
+  as `elapsed_ms`, the milliseconds since the resource's last cycle, counted and refused
+  as `Logex.Runtime.cycle/3`'s, checked after the runtime, and decision 40's `now` is the
+  resource's `now` plus it, the step moving no clock, a resumed timer's time still the
+  resource's (decision 56). Used alone it is 0 unless given, so a direct call keeps the
+  resource's `now`, the reading since OE-2, the record's answer for a host that holds the
+  only clock; through `Logex.Runner` each step and accept's forecast are given the time
+  since the last round on the runner's clock, 0 while tripped. The maintainer's example
+  is a test on the manual clock, the fan cut to 20 ms at 95 next due at 100 with no
+  overlap and no extra round, and the test that pinned the missed period now pins the
+  cut counted from the edit. Its mutation table, every rule reverted alone in a copy of
+  the tree and the full suite judged by its exit code, three at a time: 11 rules, all
+  red, each failing a test of its own that names it (decision 40 reading the resource's
+  `now`; accept's forecast, test's and untest's time ignored, each alone; the time not
+  checked; untest checking the generation before it, and accept the candidate before it;
+  the runner's step time 0 while running, read on the clock while tripped, not handed to
+  accept, and not passed to a step); run three at a time, some rows also failed a slow
+  real-clock test by its timeout, as an unmutated copy did once, which is not counted.
+  1528 tests pass on Elixir 1.20.4 (9 of them doctests), up from 1524.
 - **M4-6 · The contract walk.** `api_contract_test.exs` gains a runner walk on the manual
   clock: seeded configurations with and without untimed programs, simulated devices that
   report and that do not, random waits and presses, injected faults, edits, forces and

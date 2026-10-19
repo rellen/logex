@@ -1843,7 +1843,8 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   its own change among them; its child spec is `restart: :temporary`, so the host starts a
   new one.
 
-Forcing and an online edit go through the runner too (M4-5, decisions 117, 119 and 127).
+Forcing and an online edit go through the runner too (M4-5, decisions 117, 119, 127 and
+138 to 141).
 `forced_and_edited.exs` runs `packing.logex` with its forces kept in `packing.forces`,
 forces the photo-eye, starts a fresh runner from the same file, and then cuts the
 conveyor's task to 5 ms through an edit stepped while it runs, `faster/packing.logex`
@@ -1949,20 +1950,24 @@ stage: nil
   runner started without `forces:` takes no force, and an output point, or a value that
   does not fit, is the host's mistake, raised in the caller. A file a start cannot take,
   a force on a point the configuration does not have as an input, is refused, every
-  such force named, and the runner does not start; with no runner, deleting the file
-  clears every force.
+  such force named, and the runner does not start; the file is read exactly as the runner
+  writes it, a comment or a blank line refused, and an unforce of a point not forced is
+  accepted (decision 140); with no runner, deleting the file clears every force.
 - A force or an unforce that changes what an event task's trigger reads is a change of
   it, and makes its round at once, before the call returns; `unforce_all/1` that changes
   several makes one for each, in device-name and then address order, as a device's
-  changes do.
+  changes do; one that changes nothing makes none (decision 138).
 - `accept/2`, `test/1`, `untest/1`, `assemble/1` and `cancel/1` are
   `Logex.Configuration.Edit`'s steps, each served between two rounds, the runner holding
   the edit: each gives the report the same step gives taken over the resource directly,
   and the next round runs what it switched to. Accept's work is done in the caller's
   process, against the resource the runner hands it, so a large plant's accept never
-  holds up a round. After each step the rounds read the watchdogs and the untimed
-  programs of the configuration that runs, and a cut interval is next due as decision 40
-  says, `min(next due, now + new interval)`: the conveyor, last run at 0, ran at 6 and 11.
+  holds up a round, and done again where another host's step came between (decision
+  141). After each step the rounds read the watchdogs and the untimed programs of the
+  configuration that runs, and a cut interval is next due as decision 40 says, `min(next
+  due, now + new interval)`, `now` the time the step is taken by the runner's clock, so
+  that a plant with no untimed program, whose resource stands at its last round, misses
+  no period for an edit (decision 139): the conveyor, last run at 0, ran at 6 and 11.
   A step may be taken while tripped, and a restart keeps the edit's stage.
 
 ## Changing a running program
@@ -2376,7 +2381,8 @@ moved/trip.logex: line 12: `c1` runs with `fast` in the running configuration an
 - **Test** switched the plant between two cycles, with no instance restarted: `c1` kept
   its state and stayed sealed in. The new global `horn` started at its initial value, and
   `c1` reads and writes it from its next scan, `:joined` with no value of its own. `fast`
-  is next due within its new interval of the switch, at 15 ms, not 20. `snap` is set
+  is next due within its new interval of the switch, at 15 ms, not 20, the switch's time
+  the resource's, since no `elapsed_ms` was given to `test/3` (decision 139). `snap` is set
   aside, its state kept, and `k1_at_trip`, which nothing drives any more, holds its
   value. The e-stop's edge at 20 ms runs no snapshot: the candidate's `trip` runs no
   instance.

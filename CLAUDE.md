@@ -277,9 +277,12 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   one `with` the continuous task are one place and one order, under its name, so `with
   main` added or taken away moves nothing; and since M4-2's review the tasks' order is
   the timed tasks', the continuous task never due nor in a tie, so its line moved among
-  the task lines reports nothing.
-  A step checks the edit, the runtime, the generation, the configuration the resource
-  runs, then the stage. Its moduledoc gives every rule and report kind
+  the task lines reports nothing. Since M4-5 (decision 139) `accept/3`, `test/3` and
+  `untest/3` take the step's time, `elapsed_ms` since the resource's last cycle, 0 unless
+  given, refused in `Logex.Runtime.cycle/3`'s words, decision 40's `now` the resource's
+  plus it, moving no clock; `Logex.Runner` gives the time since its last round.
+  A step checks the edit, the runtime, its `elapsed_ms`, the generation, the configuration
+  the resource runs, then the stage. Its moduledoc gives every rule and report kind
 - `lib/logex/compiler.ex` — the stages: `tokenize/1` and `parse/1` delegate to the two
   modules below; `instructionize/2` first checks its routine against
   `Logex.Parser.well_formed!/1` and raises `ArgumentError` on a tree no text could say
@@ -580,25 +583,26 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   keeps for each input point, a force or an unforce that changes what a trigger reads
   making its round at once, before the call returns, each trigger it changes its own,
   in device-name and then address order, and a device's change of a forced trigger
-  none; `status/1` lists every force; each force and unforce writes the whole set
+  none (decision 138); `status/1` lists every force; each force and unforce writes the whole set
   to the file before it returns, `name value` a line in name order, to `<path>.tmp`
   beside it, flushed and renamed over it, a write that fails changing nothing,
   `{:error, {:forces, reason}}`; every start reads it, `start_link/1` in the caller and
   `restart/2` before it releases anything, a file that does not exist no force, one that
   cannot be read, a line that is no force, a point forced twice and a force the
   configuration cannot take the host's mistake, every one named a line each, the runner
-  not started or left tripped; a runner without `forces:` takes no force, and an output
+  not started or left tripped, the file read exactly as written (decision 140); a runner without `forces:` takes no force, and an output
   point or a value that does not fit is refused. And it steps an online edit
   (§4.11, "Edits"): `accept/2`, `test/1`, `untest/1`, `assemble/1` and `cancel/1`, each a
   call between two rounds, the runner holding the edit, a second accept superseding the
   first; accept's work done in the caller's process against the resource the runner
   hands it with its count of steps, held only where no step came between and otherwise
-  done again (decision 119); each step `{:ok, report}`, `{:edit, step, report}` sent and
+  done again (decisions 119 and 141); each step `{:ok, report}`, `{:edit, step, report}` sent and
   `status/1`'s `edit` the stage; after each step the rounds reading the configuration
   the resource runs, its watchdogs (decision 129) and untimed programs, a step that
   leaves none serving at once, in order, every request that waited for a slot, and the next
   round planned again from the last, so that a cut interval is next due where decision
-  40 moves it, on the resource's time. Four readings are provisional, `PLAN.md` M4-5.
+  40 moves it, its `now` the step's time on the runner's clock, given to the switch as
+  `elapsed_ms` since the last round, 0 while tripped (decision 139).
   `lib/logex/runner/device.ex`, `Logex.Runner.Device`, internal (no moduledoc), one
   GenServer for each bound device, linked to its runner: `open/1` calls the adapter's
   `init/3` and reads it once; it reads every poll period on the runner's clock, on a grid
@@ -750,7 +754,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   2026-10-18, and its third, M4-3, the runner itself, the same day, and its fourth, M4-4,
   the watchdogs and the fault path, the same day, its review's findings fixed on
   2026-10-19 and its five questions answered by the maintainer the same day, decisions
-  133–137).
+  133–137, and its fifth, M4-5, forcing and edits through the runner, the same day, its
+  four questions answered by the maintainer the same day, decisions 138–141).
   Read it before designing anything that names a program, schedules one, binds I/O,
   changes a running controller (§4.9, online edit, decided 2026-10-01), or runs one on
   the clock (§4.11).
