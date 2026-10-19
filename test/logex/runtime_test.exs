@@ -1542,10 +1542,11 @@ defmodule Logex.RuntimeTest do
              ]
 
       # M4-3: the wall-clock runner, a GenServer, its every call through its mailbox; and
-      # M4-4's restart/2.
+      # M4-4's restart/2; and M4-5's forcing.
       assert Enum.sort(Logex.Runner.__info__(:functions)) == [
                child_spec: 1,
                code_change: 3,
+               force: 3,
                get: 2,
                get!: 2,
                handle_call: 3,
@@ -1560,6 +1561,8 @@ defmodule Logex.RuntimeTest do
                subscribe: 1,
                subscribe: 2,
                terminate: 2,
+               unforce: 2,
+               unforce_all: 1,
                unsubscribe: 1
              ]
 

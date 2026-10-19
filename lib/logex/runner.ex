@@ -18,7 +18,9 @@ defmodule Logex.Runner do
   `poll:`, each device's poll period in ms, 10 unless set, `overhead:`, the share of the
   time kept for the runner's own work in percent, 10 to 90, 20 unless set (decisions 108,
   121 and 122), `idle:`, the runner's idle watchdog in ms, 500 unless set (decision 128),
-  and `name:`, a name to register it under, as `GenServer.start_link/3` takes one. It
+  `forces:`, the path of the file its forces are kept in (decision 127), none unless set,
+  a runner without one taking no force, and `name:`, a name to register it under, as
+  `GenServer.start_link/3` takes one. It
   checks every option in the caller before anything starts, the configuration as
   `Logex.Runtime.start/1` checks it and the bindings as `Logex.IO.bind!/2` does, so a
   host's mistake is an `ArgumentError` in the host's own process, with a message a test
@@ -135,11 +137,31 @@ defmodule Logex.Runner do
     default, with the edits M4-5 brings, and, only where named, the resource's `{:ran, task, instance, now}` and the runner's
     `{:round, now, outputs}`, each round's output points. A subscriber is monitored and
     dropped when it goes down. `unsubscribe/1` stops them.
+  - `force/3`, `unforce/2` and `unforce_all/1` force an input point, below.
   - `stop/2` writes every output 0 once, through each device, and closes every device, in
     device-name order, before it returns (decision 116). It is served at once, whatever
     the share.
   - `restart/2` starts a tripped runner again (below); a runner that is running is the
     host's mistake (decision 133).
+
+  **Forcing** (M4-5; decisions 117 and 127). `force(runner, point, value)` makes the
+  runner read an input point, by its name, at `value`, whatever its device says: every
+  force is merged over the devices' changes into each round's inputs, after the input
+  latch (§5), from the next round until `unforce/2` or `unforce_all/1`, across a restart
+  and, kept in the forces file, across a crash and a fresh start. The runner keeps each
+  input point's last value from its device, the input image's until a device gives one,
+  and `unforce/2` puts it back, the next round reading it. A force or an unforce that
+  changes what an event task's trigger reads is a change of it, and makes its round at
+  once, before the call returns (decision 120), and a device's change of a forced trigger
+  makes none. `status/1` lists every force. The forces file is the host's to name,
+  `forces:`, and each force and unforce writes the whole set to it before it returns:
+  one force a line, `name value`, in name order, the empty file for none, written to
+  `<path>.tmp` beside it, flushed to the disk and renamed over it, so that a crash at any
+  moment leaves the old set or the new; a write that fails changes nothing and gives
+  `{:error, {:forces, reason}}`. A runner started without `forces:` takes no force, an
+  output point or a name that is no input point's is forced by no one, and a value that
+  does not fit its point is refused, each the host's mistake. Output forcing waits for
+  §5's forcing in `cycle/3`.
 
   **Its trips** (M4-4; decisions 110, 111, 113 to 115, 125, 126, 128 and 133 to 137). A
   trip has one path, whatever caused it: scheduling stops, its wake cancelled; every
@@ -236,7 +258,7 @@ defmodule Logex.Runner do
   # `steps:` is hidden (M4-4): a module of a test's standing in for Logex.Runtime's
   # steps, the one seam through which a test reaches a fault no host can cause, an
   # exception out of the core, `{:internal, message}` (docs/organisation.md §4.11).
-  @options [:configuration, :io, :clock, :poll, :overhead, :idle, :name, :steps]
+  @options [:configuration, :io, :clock, :poll, :overhead, :idle, :forces, :name, :steps]
   @steps [cycle_steps: 3, cycle_step: 2, cycle_outputs: 1]
 
   # The events a subscriber may name, and those it gets unless it names them (§4.11).
@@ -281,11 +303,11 @@ defmodule Logex.Runner do
   restart; `now`, the resource's time; `rounds`, the rounds run, a round that tripped
   not among them; `trip`, the trip's reason, nil while running; `overlaps`, each task's
   (`Logex.Runtime.overlaps/1`);
-  `forces`, `%{}`; `edit`, nil; `runs`, each task's longest run against its watchdog,
+  `forces`, every force, by its point's name, with its value; `edit`, nil; `runs`, each task's longest run against its watchdog,
   `{ms, watchdog_ms}`, a timed task's run and the continuous task's round, under its name
   or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most a round's wake came after its time, in ms; and
   `refresh_gap`, the longest wait between two refreshes of the devices, in ms. M4-5 gives
-  the forces and the edit.
+  the edit.
   """
   def status(runner), do: call(runner, :status)
 
@@ -303,6 +325,33 @@ defmodule Logex.Runner do
 
   @doc "Stops sending the caller the runner's events."
   def unsubscribe(runner), do: call(runner, {:unsubscribe, self()})
+
+  @doc """
+  Forces an input point, by its name, to `value`, whatever its device says, from the next
+  round until it is unforced, across a restart and, kept in the forces file, across a
+  crash and a fresh start (decisions 117 and 127): the whole set of forces is written to
+  the file before it returns, `:ok`, or `{:error, {:forces, reason}}` where it cannot be,
+  the force not taken. A force that changes what an event task's trigger reads is a change
+  of it, and makes its round at once, before it returns (decision 120). A runner started
+  without `forces:`, an output point, a name that is no input point and a value that does
+  not fit are the host's mistakes.
+  """
+  def force(runner, point, value), do: call(runner, {:force, point, value})
+
+  @doc """
+  Takes the force off an input point, by its name, so that the next round reads its
+  device's last value again (decision 117), the whole set of forces written to the file
+  before it returns: `:ok`, or `{:error, {:forces, reason}}`, the force not taken off. A
+  trigger that reads another value makes its round at once, as a force does.
+  """
+  def unforce(runner, point), do: call(runner, {:unforce, point})
+
+  @doc """
+  Takes every force off, each input point back to its device's last value, and writes the
+  forces file empty (decision 127): `:ok`, or `{:error, {:forces, reason}}`, no force
+  taken off.
+  """
+  def unforce_all(runner), do: call(runner, :unforce_all)
 
   @doc """
   Starts a tripped runner again, `:cold` or `:warm`, `:warm` being `:cold` until `retain`
@@ -436,9 +485,17 @@ defmodule Logex.Runner do
   defp answered({from, request}, state) do
     begun = now(state)
     {reply, state} = served(request, state)
+    took = now(state) - begun
+    state = kicked(state)
     GenServer.reply(from, reply)
-    idled(now(state) - begun, state)
+    idled(took, state)
   end
+
+  # A force or unforce that changed what a trigger reads makes a round at once, before its
+  # call returns, a force of a trigger being a change of it (decisions 117 and 120); the
+  # round is timed by its steps' watchdogs, not the idle watchdog's.
+  defp kicked(%{kick: false} = state), do: state
+  defp kicked(state), do: rounded(%{state | kick: false})
 
   defp idled(took, %{status: :running, idle: idle} = state) when took > idle,
     do: tripped(state, {:watchdog, {:idle, took}})
@@ -466,6 +523,27 @@ defmodule Logex.Runner do
     {:ok, %{state | subscribers: Map.delete(subscribers, pid)}}
   end
 
+  # Forcing (decisions 117 and 127): an input point held at a value, whatever its device
+  # says, until it is unforced; each force and unforce writes the whole set to the forces
+  # file before it returns, a write that fails changing nothing.
+  defp serve({:force, name, value}, state) do
+    filed!(state)
+    type = input!(input(name, state))
+    fits!(Declarations.fits?(type, value), name, type, value)
+    kept(state, Map.put(state.forces, name, value), [name])
+  end
+
+  defp serve({:unforce, name}, state) do
+    filed!(state)
+    input!(input(name, state))
+    kept(state, Map.delete(state.forces, name), [name])
+  end
+
+  defp serve(:unforce_all, state) do
+    filed!(state)
+    kept(state, %{}, Map.keys(state.forces))
+  end
+
   defp serve({:restart, _mode}, %{status: :running}),
     do:
       raise(
@@ -480,8 +558,136 @@ defmodule Logex.Runner do
       raise(
         ArgumentError,
         "Logex.Runner has no request #{inspect(other)}: a runner is called through " <>
-          "get/2, get!/2, status/1, subscribe/2, unsubscribe/1, restart/2 and stop/2"
+          "get/2, get!/2, status/1, subscribe/2, unsubscribe/1, force/3, unforce/2, " <>
+          "unforce_all/1, restart/2 and stop/2"
       )
+
+  defp filed!(%{file: nil}),
+    do:
+      raise(
+        ArgumentError,
+        "the runner keeps no forces file, so a force would not survive a crash: start it " <>
+          "with forces: a path"
+      )
+
+  defp filed!(_state), do: :ok
+
+  # An input point, by its name: `{:ok, type}`, or what the name is instead, told.
+  defp input(name, %{types: types} = state) when is_binary(name),
+    do: input_of(Map.fetch(types, name), name, state)
+
+  defp input(other, _state),
+    do:
+      {:error,
+       "a force names an input point by its name, a string, as in \"eye_1\", got: " <>
+         inspect(other)}
+
+  defp input_of({:ok, type}, _name, _state), do: {:ok, type}
+
+  defp input_of(:error, name, state),
+    do: {:error, not_input(Map.fetch(state.located, name), name, state)}
+
+  defp not_input({:ok, at}, name, _state),
+    do: "`#{name}` is an output point, at `#{at}`: only an input point is forced"
+
+  defp not_input(:error, name, %{configuration: configuration, types: types}),
+    do: no_input(Map.keys(types), name, configuration)
+
+  defp no_input([], name, configuration),
+    do:
+      "`#{name}` is no input point of `#{configuration.name}`, which has none: only an " <>
+        "input point is forced"
+
+  defp no_input(names, name, configuration),
+    do:
+      "`#{name}` is no input point of `#{configuration.name}`" <>
+        Declarations.suggest(name, Enum.sort(names), & &1, "names")
+
+  defp input!({:ok, type}), do: type
+  defp input!({:error, message}), do: raise(ArgumentError, message)
+
+  defp fits!(true, _name, _type, _value), do: :ok
+  defp fits!(false, name, type, value), do: raise(ArgumentError, misfit(name, type, value))
+
+  defp misfit(name, :bool, value),
+    do: "`#{name}` is a bool, forced to 0 or 1, got: #{inspect(value)}"
+
+  defp misfit(name, :dint, value),
+    do:
+      "`#{name}` is a dint, forced to an integer from -2147483648 to 2147483647, got: " <>
+        inspect(value)
+
+  # The new set of forces, written whole to the file before it is taken (decision 127):
+  # a write that fails changes nothing, `{:error, {:forces, reason}}`. Each input point
+  # unforced reads its device's last value again; a trigger whose reading changed makes a
+  # round (decision 120).
+  defp kept(state, forces, names), do: taken(stored(state.file, forces), forces, names, state)
+
+  defp taken({:error, reason}, _forces, _names, state), do: {{:error, {:forces, reason}}, state}
+
+  defp taken(:ok, forces, names, state) do
+    before = Enum.map(names, &seen(&1, state))
+    unforced = Enum.reject(names, &Map.has_key?(forces, &1))
+
+    state = %{
+      state
+      | forces: forces,
+        pending: Enum.into(Map.take(state.values, unforced), state.pending)
+    }
+
+    after_ = Enum.map(names, &seen(&1, state))
+
+    kick =
+      Enum.any?(
+        Enum.zip([names, before, after_]),
+        fn {name, was, is} -> was != is and MapSet.member?(state.triggers, name) end
+      )
+
+    {:ok, %{state | kick: kick}}
+  end
+
+  # What the next round reads at an input point: its force, else its device's change not
+  # yet taken, else the input image.
+  defp seen(name, %{forces: forces, pending: pending, runtime: runtime}),
+    do:
+      Map.get_lazy(forces, name, fn ->
+        Map.get_lazy(pending, name, fn -> Runtime.get!(runtime, name) end)
+      end)
+
+  # The forces file, written whole: one force a line, `name value`, in name order, to a file
+  # beside it, flushed to the disk and renamed over it, so that a crash at any moment leaves
+  # the old set or the new (decision 127); a write that fails leaves the file as it was.
+  defp stored(path, forces) do
+    beside = path <> ".tmp"
+
+    text =
+      for {name, value} <- Enum.sort(forces), do: [name, ?\s, Integer.to_string(value), ?\n]
+
+    renamed(written_out(:file.open(beside, [:write, :raw, :binary]), text), beside, path)
+  end
+
+  defp written_out({:ok, io}, text), do: synced(:file.write(io, text), io)
+  defp written_out(error, _text), do: error
+
+  defp synced(:ok, io), do: closed(:file.sync(io), io)
+  defp synced(error, io), do: closed(error, io)
+
+  defp closed(:ok, io), do: :file.close(io)
+
+  defp closed(error, io) do
+    :file.close(io)
+    error
+  end
+
+  defp renamed(:ok, beside, path), do: discarded(:file.rename(beside, path), beside)
+  defp renamed(error, beside, _path), do: discarded(error, beside)
+
+  defp discarded(:ok, _beside), do: :ok
+
+  defp discarded(error, beside) do
+    :file.delete(beside)
+    error
+  end
 
   defp demonitor(nil), do: :ok
   defp demonitor({ref, _kinds}), do: Process.demonitor(ref, [:flush])
@@ -493,7 +699,7 @@ defmodule Logex.Runner do
       rounds: state.rounds,
       trip: state.trip,
       overlaps: Runtime.overlaps(state.runtime),
-      forces: %{},
+      forces: state.forces,
       edit: nil,
       runs: Map.new(state.longest, fn {task, ms} -> {task, {ms, watchdog(task, state)}} end),
       latest_wake: state.latest_wake,
@@ -612,6 +818,21 @@ defmodule Logex.Runner do
         end),
       triggers: MapSet.new(for {_device, point} <- inputs, point.name in singles, do: point.name),
       pending: %{},
+      values:
+        Map.new(inputs, fn {_device, point} ->
+          {point.name, Runtime.get!(start.runtime, point.name)}
+        end),
+      types: Map.new(inputs, fn {_device, point} -> {point.name, point.type} end),
+      located:
+        Map.new(
+          for(
+            %Configuration.Global{at: at, name: name} <- start.configuration.globals,
+            at != nil,
+            do: {name, at}
+          )
+        ),
+      forces: %{},
+      kick: false,
       written: %{},
       watchdogs: watchdogs(start.configuration)
     })
@@ -696,16 +917,27 @@ defmodule Logex.Runner do
   defp fitting(false, _name, address, value, _changes),
     do: {:halt, {:fault, {:bad_value, address, value}}}
 
-  defp merged(changes, state), do: %{state | pending: Enum.into(changes, state.pending)}
+  # A device's changes, merged into the next round's inputs and kept as each input point's
+  # last value from its device, which an unforce puts back (decision 117).
+  defp merged(changes, state),
+    do: %{
+      state
+      | pending: Enum.into(changes, state.pending),
+        values: Enum.into(changes, state.values)
+    }
 
   defp changed(device, {:fault, cause}, state), do: tripped(state, {:io, device, cause})
 
   defp changed(_device, {:ok, changes}, state) do
-    {triggers, others} =
-      Enum.split_with(changes, fn {name, _value} -> MapSet.member?(state.triggers, name) end)
+    {triggers, others} = Enum.split_with(changes, &unforced_trigger?(&1, state))
 
     Enum.reduce(triggers, merged(others, state), &rounded(merged([&1], &2)))
   end
+
+  # A trigger's change makes its round, but not one forced: what the controller reads
+  # stays the force's (decision 117).
+  defp unforced_trigger?({name, _value}, state),
+    do: MapSet.member?(state.triggers, name) and not Map.has_key?(state.forces, name)
 
   # ---- the rounds ------------------------------------------------------------------------
 
@@ -781,12 +1013,17 @@ defmodule Logex.Runner do
     steps = state.steps
 
     begun(
-      core(fn -> steps.cycle_steps(state.runtime, elapsed, state.pending) end),
+      core(fn -> steps.cycle_steps(state.runtime, elapsed, inputs(state)) end),
       start,
       elapsed,
       state
     )
   end
+
+  # A round's inputs: the devices' changes since the last, and every force merged over
+  # them, after the input latch, so that a forced input holds against its device (§5,
+  # decision 117).
+  defp inputs(%{pending: pending, forces: forces}), do: Map.merge(pending, forces)
 
   defp begun({:internal, _message} = reason, _start, _elapsed, state), do: tripped(state, reason)
 
@@ -1317,6 +1554,7 @@ defmodule Logex.Runner do
     poll = ms!(Keyword.get(opts, :poll, 10), :poll)
     overhead = share!(Keyword.get(opts, :overhead, 20))
     idle = ms!(Keyword.get(opts, :idle, 500), :idle)
+    file = file!(Keyword.get(opts, :forces))
     devices = Logex.IO.bind!(configuration, io)
     steps = steps!(Keyword.get(opts, :steps, Runtime))
 
@@ -1328,14 +1566,15 @@ defmodule Logex.Runner do
        clock: clock,
        poll: poll,
        overhead: overhead,
-       idle: idle
+       idle: idle,
+       file: file
      }, Keyword.take(opts, [:name])}
   end
 
   defp takes(opts),
     do:
       "Logex.Runner.start_link/1 takes a keyword list of options, configuration:, io:, " <>
-        "clock:, poll:, overhead:, idle: and name:, got: " <> inspect(opts)
+        "clock:, poll:, overhead:, idle:, forces: and name:, got: " <> inspect(opts)
 
   defp known!([]), do: :ok
 
@@ -1343,7 +1582,8 @@ defmodule Logex.Runner do
     do:
       raise(
         ArgumentError,
-        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle: and name:, " <>
+        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, forces: " <>
+          "and name:, " <>
           "got: #{inspect(key)}"
       )
 
@@ -1444,6 +1684,18 @@ defmodule Logex.Runner do
         ArgumentError,
         "the runner's #{key}: is a whole number of milliseconds, 1 to 2147483647, got: " <>
           inspect(other)
+      )
+
+  # The forces file (decision 127): a path, or none, a runner that takes no force.
+  defp file!(nil), do: nil
+  defp file!(path) when is_binary(path) and path != "", do: path
+
+  defp file!(other),
+    do:
+      raise(
+        ArgumentError,
+        "the runner's forces: is the path of the file its forces are kept in, a string, " <>
+          "got: #{inspect(other)}"
       )
 
   defp share!(share) when share in @share, do: share

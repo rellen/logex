@@ -243,7 +243,7 @@ defmodule Logex.RunnerTest do
       for opts <- [:x, [1], %{configuration: nil}] do
         raises(
           "Logex.Runner.start_link/1 takes a keyword list of options, configuration:, io:, " <>
-            "clock:, poll:, overhead:, idle: and name:, got: #{inspect(opts)}",
+            "clock:, poll:, overhead:, idle:, forces: and name:, got: #{inspect(opts)}",
           fn -> Runner.start_link(opts) end
         )
       end
@@ -253,7 +253,7 @@ defmodule Logex.RunnerTest do
       {opts, _rig} = rig()
 
       raises(
-        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle: and name:, " <>
+        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, forces: and name:, " <>
           "got: :pole",
         fn -> Runner.start_link(opts ++ [pole: 10, period: 5]) end
       )
@@ -272,7 +272,7 @@ defmodule Logex.RunnerTest do
 
       # An unknown key repeated is told as unknown.
       raises(
-        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle: and name:, " <>
+        "Logex.Runner takes configuration:, io:, clock:, poll:, overhead:, idle:, forces: and name:, " <>
           "got: :pole",
         fn -> Runner.start_link(opts ++ [pole: 1, pole: 2]) end
       )
@@ -607,7 +607,8 @@ defmodule Logex.RunnerTest do
 
         assert message ==
                  "Logex.Runner has no request #{inspect(request)}: a runner is called " <>
-                   "through get/2, get!/2, status/1, subscribe/2, unsubscribe/1, restart/2 and stop/2"
+                   "through get/2, get!/2, status/1, subscribe/2, unsubscribe/1, force/3, unforce/2, " <>
+                   "unforce_all/1, restart/2 and stop/2"
       end
 
       assert Process.alive?(runner)
