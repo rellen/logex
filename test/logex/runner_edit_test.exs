@@ -180,25 +180,27 @@ defmodule Logex.RunnerEditTest do
       Manual.advance(clock, 60)
       assert Runner.status(runner).edit == nil
 
+      # The resource is at 50, its last round's, and the clock at 60: each step is taken
+      # 10 ms after the last round, decision 139's step time.
       runtime = resource(runner)
-      {:ok, edit, forecast} = Edit.accept(runtime, faster())
+      {:ok, edit, forecast} = Edit.accept(runtime, faster(), 10)
       assert Runner.accept(runner, faster()) == {:ok, forecast}
       assert {:interval, "slow", {50, 20}} in forecast
       assert Runner.status(runner).edit == :accepted
       assert resource(runner) == runtime
 
-      {edit, runtime, report} = Edit.test(edit, runtime)
+      {edit, runtime, report} = Edit.test(edit, runtime, 10)
       assert Runner.test(runner) == {:ok, report}
       assert resource(runner) == runtime
-      assert {:next_due, "slow", {100, 70}} in report
+      assert {:next_due, "slow", {100, 80}} in report
       assert Runner.status(runner).edit == :testing
 
-      {edit, runtime, report} = Edit.untest(edit, runtime)
+      {edit, runtime, report} = Edit.untest(edit, runtime, 10)
       assert Runner.untest(runner) == {:ok, report}
       assert resource(runner) == runtime
       assert Runner.status(runner).edit == :untested
 
-      {edit, runtime, report} = Edit.test(edit, runtime)
+      {edit, runtime, report} = Edit.test(edit, runtime, 10)
       assert Runner.test(runner) == {:ok, report}
       {kept, runtime, report} = Edit.assemble(edit, runtime)
       assert kept == faster()
@@ -251,7 +253,7 @@ defmodule Logex.RunnerEditTest do
     test "an accept that another step overtook is done again against the resource as it " <>
            "is then" do
       %{runner: runner} = started()
-      {edits, runtime} = GenServer.call(runner, :resource)
+      {edits, runtime, _elapsed} = GenServer.call(runner, :resource)
       {:ok, edit, forecast} = Edit.accept(runtime, faster())
       {:ok, _} = Runner.accept(runner, faster())
       {:ok, _} = Runner.cancel(runner)
@@ -317,38 +319,73 @@ defmodule Logex.RunnerEditTest do
       Manual.advance(clock, 60)
       assert rounds(drained(runner)) == [50]
 
+      # Cut at 60 by the clock, 10 ms after the last round: next due at 60 + 20 = 80
+      # (decision 139).
       {:ok, _} = Runner.accept(runner, faster())
       assert {:ok, report} = Runner.test(runner)
-      assert {:next_due, "slow", {100, 70}} in report
+      assert {:next_due, "slow", {100, 80}} in report
       Manual.advance(clock, 50)
       events = drained(runner)
-      assert rounds(events) == [70, 90, 110]
-      assert for({:ran, "slow", "r", at} <- events, do: at) == [70, 90, 110]
+      assert rounds(events) == [80, 100]
+      assert for({:ran, "slow", "r", at} <- events, do: at) == [80, 100]
 
-      # Untested at 110, `slow` is 50 again: still next due at 130, within 50 of the
-      # resource's 110, and every 50 from there.
+      # Untested at 110, `slow` is 50 again: still next due at 120, within 50 of the
+      # clock's 110, and every 50 from there.
       assert {:ok, report} = Runner.untest(runner)
       assert {:interval, "slow", {20, 50}} in report
       refute Enum.any?(report, &match?({:next_due, _, _}, &1))
       Manual.advance(clock, 100)
-      assert rounds(drained(runner)) == [130, 180]
+      assert rounds(drained(runner)) == [120, 170]
     end
 
-    test "with no untimed program, decision 40 reads the resource's time, the last " <>
-           "round's: a cut served long after it may fall due at once, a period missed" do
+    # The maintainer's example (decision 139): the fan last ran at 50 and is next due at
+    # 100, no untimed program, so the resource stands at 50; the interval cut to 20 ms at
+    # 95 by the clock is next due at min(100, 95 + 20) = 100, with no missed period and no
+    # extra round.
+    test "with no untimed program, decision 40's now is the step's time by the runner's " <>
+           "clock: a cut served long after the last round neither misses a period nor " <>
+           "adds a round" do
       %{runner: runner, clock: clock} = started()
-      Runner.subscribe(runner, [:round, :overlap])
+      Runner.subscribe(runner, [:round, :overlap, :ran])
       Manual.advance(clock, 95)
       assert rounds(drained(runner)) == [50]
+      assert resource(runner).now == 50
 
-      # The resource is at 50: `slow` next due at 70, which the clock has passed.
-      {:ok, _} = Runner.accept(runner, faster())
+      {:ok, forecast} = Runner.accept(runner, faster())
+      assert {:interval, "slow", {50, 20}} in forecast
+      refute Enum.any?(forecast, &match?({:next_due, _, _}, &1))
+      assert {:ok, report} = Runner.test(runner)
+      assert {:interval, "slow", {50, 20}} in report
+      refute Enum.any?(report, &match?({:next_due, _, _}, &1))
+
+      Manual.advance(clock, 4)
+      assert drained(runner) == []
+      Manual.advance(clock, 1)
+
+      assert [{:ran, "slow", "r", 100}, {:ran, "slow", "n", 100}, {:round, 100, _}] =
+               drained(runner)
+
+      Manual.advance(clock, 40)
+      events = drained(runner)
+      assert rounds(events) == [120, 140]
+      refute Enum.any?(events, &match?({:overlap, _, _}, &1))
+      assert Runner.status(runner).overlaps == %{"slow" => 0, "trip" => 0}
+    end
+
+    test "a step taken while tripped is timed at the resource's own time, the clock not " <>
+           "counting the time it is stopped" do
+      %{runner: runner, clock: clock, panel: panel} = started()
+      Manual.advance(clock, 50)
+      Sim.set(panel, [1], 5)
+      assert Runner.status(runner).status == :tripped
+      Manual.advance(clock, 500)
+      assert resource(runner).now == 50
+
+      # The resource is at 50: from a step at 50 + 20 = 70, whatever the clock says.
+      {:ok, forecast} = Runner.accept(runner, faster())
+      assert {:next_due, "slow", {100, 70}} in forecast
       assert {:ok, report} = Runner.test(runner)
       assert {:next_due, "slow", {100, 70}} in report
-      Manual.advance(clock, 0)
-      assert drained(runner) == [{:overlap, "slow", 1}, {:round, 95, %{"runs" => 3, "y" => 0}}]
-      Manual.advance(clock, 15)
-      assert rounds(drained(runner)) == [110]
     end
 
     # Each round that runs `b` writes the slow device, which takes 1 ms, so rounds fill

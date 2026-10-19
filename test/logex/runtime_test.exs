@@ -1414,17 +1414,21 @@ defmodule Logex.RuntimeTest do
                    do: {name, arity}
              ) == [cycle_outputs: 1, cycle_step: 2, cycle_steps: 3]
 
-      # OE-2: the staged edit of a running configuration, whose struct is opaque.
+      # OE-2: the staged edit of a running configuration, whose struct is opaque; since
+      # M4-5, accept, test and untest take the step's time too (decision 139).
       assert Enum.sort(Logex.Configuration.Edit.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,
                accept: 2,
+               accept: 3,
                assemble: 2,
                cancel: 2,
                running: 1,
                stage: 1,
                test: 2,
-               untest: 2
+               test: 3,
+               untest: 2,
+               untest: 3
              ]
 
       # OE-1: the definition of a well-formed tree, which instructionize/2 checks on entry.

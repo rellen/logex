@@ -91,7 +91,12 @@ defmodule Logex.Configuration.Edit do
     `{:initial_changed, name, {old, new}}` (decision 44);
   - a task whose interval changed is next due at `min(next_due, now + new interval)`
     (decision 40), `{:interval, task, {old, new}}`, and `{:next_due, task, {from, to}}`
-    where that moves it; its trigger's last sample is kept, so no switch fires an event;
+    where that moves it, `now` the step's time: the resource's, plus the `elapsed_ms`
+    since its last cycle that `test/3` and `untest/3` take, and `accept/3` for its
+    forecast, 0 unless given, so that a host whose clock has moved on since the last
+    cycle, as `Logex.Runner`'s has, counts the new interval from the edit (decision 139);
+    the step moves no clock, the resource's `now` and a resumed timer's staying the
+    resource's; its trigger's last sample is kept, so no switch fires an event;
   - a task whose priority changed is reported, `{:priority, task, {old, new}}`: the next
     cycle's sort reads it, so it needs no state;
   - a task whose watchdog changed is reported, `{:watchdog, task, {old, new}}`, in ms, 500
@@ -171,11 +176,12 @@ defmodule Logex.Configuration.Edit do
   it again under the same name (decision 66). The other kinds state facts.
 
   **Host mistakes** raise `ArgumentError`, each with a message a test pins. Accept checks
-  the runtime, with `Logex.Runtime`'s own message; then the candidate, as
+  the runtime, with `Logex.Runtime`'s own message; then its `elapsed_ms`, a non-negative
+  integer, in `Logex.Runtime.cycle/3`'s words; then the candidate, as
   `Logex.Runtime.start/1` checks a configuration, with its messages, a candidate that
   `Logex.Configuration.check/1` refuses among them (decision 63); then that the candidate
   keeps the running configuration's name. A step checks the edit, then the runtime, then
-  that the edit is current, its generation and then the configuration the resource runs,
+  a switch's `elapsed_ms`, as accept does, then that the edit is current, its generation and then the configuration the resource runs,
   then the stage, in OE-1's words. The generation (decision 60) is moved on by every step
   but accept, so a step on an edit that has ended, or one another edit has stepped past,
   is refused. Two resources started from one configuration are equal, plain data, so an
@@ -193,18 +199,29 @@ defmodule Logex.Configuration.Edit do
 
   @doc """
   Accepts `candidate` against `runtime`, the resource that runs the original:
-  `{:ok, edit, forecast}`, the forecast being the report a test taken now would give, or
+  `{:ok, edit, forecast}`, the forecast being the report a test taken `elapsed_ms` after
+  the resource's last cycle would give (decision 139), or
   `{:error, diagnostics}` when the candidate changes what may change only with a restart.
   Nothing is changed.
   """
-  def accept(runtime, candidate) do
+  def accept(runtime, candidate, elapsed_ms \\ 0) do
     %Runtime{config: original} = runtime = runtime!(runtime)
+    at = at!(runtime, elapsed_ms)
     candidate!(candidate)
     named!(original, candidate)
-    accepted(refused(original, candidate) ++ retyped(original, candidate), runtime, candidate)
+
+    accepted(
+      refused(original, candidate) ++ retyped(original, candidate),
+      {runtime, at},
+      candidate
+    )
   end
 
-  defp accepted([], %Runtime{config: original, generation: generation} = runtime, candidate) do
+  defp accepted(
+         [],
+         {%Runtime{config: original, generation: generation} = runtime, at},
+         candidate
+       ) do
     edit = %__MODULE__{
       original: original,
       candidate: candidate,
@@ -215,38 +232,48 @@ defmodule Logex.Configuration.Edit do
       generation: generation
     }
 
-    {_changes, _records, forecast} = switch(edit, runtime, :test)
+    {_changes, _records, forecast} = switch(edit, {runtime, at}, :test)
     {:ok, edit, forecast}
   end
 
   defp accepted(diagnostics, _runtime, _candidate), do: {:error, diagnostics}
 
-  @doc "Runs the candidate in the resource, from accept or after an untest."
-  def test(edit, runtime) do
+  @doc """
+  Runs the candidate in the resource, from accept or after an untest, `elapsed_ms` after
+  the resource's last cycle, the step's time for decision 139.
+  """
+  def test(edit, runtime, elapsed_ms \\ 0) do
     edit = edit!(edit)
-    tested(edit, current!(edit, runtime!(runtime)))
+    runtime = runtime!(runtime)
+    at = at!(runtime, elapsed_ms)
+    tested(edit, {current!(edit, runtime), at})
   end
 
-  defp tested(%__MODULE__{stage: stage} = edit, runtime) when stage in [:accepted, :untested],
-    do: stepped(edit, runtime, :test, :testing)
+  defp tested(%__MODULE__{stage: stage} = edit, timed) when stage in [:accepted, :untested],
+    do: stepped(edit, timed, :test, :testing)
 
-  defp tested(edit, _runtime), do: stage!(edit, "test", "accepted or untested")
+  defp tested(edit, _timed), do: stage!(edit, "test", "accepted or untested")
 
-  @doc "Runs the original in the resource again, from test."
-  def untest(edit, runtime) do
+  @doc """
+  Runs the original in the resource again, from test, `elapsed_ms` after the resource's
+  last cycle, as `test/3` takes it.
+  """
+  def untest(edit, runtime, elapsed_ms \\ 0) do
     edit = edit!(edit)
-    untested(edit, current!(edit, runtime!(runtime)))
+    runtime = runtime!(runtime)
+    at = at!(runtime, elapsed_ms)
+    untested(edit, {current!(edit, runtime), at})
   end
 
-  defp untested(%__MODULE__{stage: :testing} = edit, runtime),
-    do: stepped(edit, runtime, :untest, :untested)
+  defp untested(%__MODULE__{stage: :testing} = edit, timed),
+    do: stepped(edit, timed, :untest, :untested)
 
-  defp untested(edit, _runtime), do: stage!(edit, "untest", "under test")
+  defp untested(edit, _timed), do: stage!(edit, "untest", "under test")
 
   # A switch, written into the resource by Logex.Runtime.edited/2, which moves its
   # generation on; the edit expects the new one.
-  defp stepped(edit, runtime, direction, stage) do
-    {changes, records, report} = switch(edit, runtime, direction)
+  defp stepped(edit, {runtime, _at} = timed, direction, stage) do
+    {changes, records, report} = switch(edit, timed, direction)
     %Runtime{generation: generation} = runtime = Runtime.edited(runtime, changes)
     {%{edit | stage: stage, records: records, generation: generation}, runtime, report}
   end
@@ -304,6 +331,18 @@ defmodule Logex.Configuration.Edit do
     Runtime.overlaps(runtime)
     runtime
   end
+
+  # Decision 139: the step's time, `elapsed_ms` after the resource's last cycle, counted as
+  # Logex.Runtime.cycle/3 counts it, in its words; 0, the resource's own time, by default.
+  defp at!(%Runtime{now: now}, elapsed_ms) when is_integer(elapsed_ms) and elapsed_ms >= 0,
+    do: now + elapsed_ms
+
+  defp at!(_runtime, other),
+    do:
+      raise(
+        ArgumentError,
+        "elapsed_ms must be a non-negative integer of milliseconds, got: #{inspect(other)}"
+      )
 
   # Decision 63: one rule for handing a configuration to a running resource, start/1's, its
   # messages for something that is no configuration, for a host mistake check/1 raises, and
@@ -640,7 +679,7 @@ defmodule Logex.Configuration.Edit do
   # Logex.Runtime.edited/2 writes, each kept instance's record, and the report. Globals
   # first, so that a kept instance's merge sees every global the configuration started
   # declares.
-  defp switch(edit, %Runtime{} = runtime, direction) do
+  defp switch(edit, {%Runtime{} = runtime, at}, direction) do
     {from, to} = sides(edit, direction)
     first? = direction == :test and edit.stage == :accepted
     {left, aside, dropped} = superseded(first?, from, runtime)
@@ -670,7 +709,7 @@ defmodule Logex.Configuration.Edit do
 
     started_names = for %{name: name, type: type} <- to.instances, froms[name] != type, do: name
 
-    {tasks, timed} = tasks(from, to, runtime)
+    {tasks, timed} = tasks(from, to, runtime, at)
 
     changes = %{
       config: to,
@@ -887,10 +926,12 @@ defmodule Logex.Configuration.Edit do
     do: {values, [{:initial_changed, global.name, {old, new}} | reports]}
 
   # Decision 40: a task whose interval changed is next due at min(next_due, now + new),
-  # its trigger's last sample kept, so no switch fires an event. No task is added or
-  # removed, and an event task keeps its interval or its lack of one, both refused at
-  # accept, so each task is in both, and one with a changed interval has one in both.
-  defp tasks(from, to, %Runtime{tasks: states, now: now}) do
+  # its trigger's last sample kept, so no switch fires an event, `now` the step's time,
+  # the resource's own and `elapsed_ms` since, the wall clock's through the runner
+  # (decision 139). No task is added or removed, and an event task keeps its interval or
+  # its lack of one, both refused at accept, so each task is in both, and one with a
+  # changed interval has one in both.
+  defp tasks(from, to, %Runtime{tasks: states}, now) do
     was = by_name(from.tasks)
 
     {states, reports} =

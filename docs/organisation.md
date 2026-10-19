@@ -26,7 +26,7 @@ the same day (decisions 128–131), and the findings of M4-4's review were fixed
 2026-10-19, §4.11's landing note, the maintainer answering its five questions the same
 day (decisions 133–137); and M4-5, forcing and an online edit through the runner, landed
 the same day, its review's findings fixed the same day, four of its readings put to the
-maintainer (§4.11's landing note).** On 2026-09-28 the
+maintainer and answered the same day (§4.11's landing note, decisions 138–141).** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -1830,8 +1830,9 @@ configuration, then the stage, as OE-1 checks the edit, the state, then the stag
 *What may change while running.*
 - **A task's interval**, a periodic task's or an event task's that has one, and its
   **priority**. A changed interval makes the task next due at `min(next_due, now + new
-  interval)`, at test and again, with the old interval, at untest (decision 40), reported
-  as `:interval` and, where it moves, `:next_due`. A priority is read at each cycle's
+  interval)`, at test and again, with the old interval, at untest (decision 40), `now` the
+  step's time, the resource's unless the host gives the milliseconds since its last cycle
+  (decision 139), reported as `:interval` and, where it moves, `:next_due`. A priority is read at each cycle's
   sort, so it needs no state: `:priority`.
 - **The order** of tasks and of instances, which is configuration, not state: allowed and
   reported, `:order` (decision 62).
@@ -2849,7 +2850,7 @@ each round, after the input latch, as §5 places forcing; it stays until `unforc
 `unforce_all/1`, across a restart and, kept in a file, across a crash and a fresh start,
 and `status/1` lists every force. `unforce/2` puts back the device's last value, which the
 runner keeps for each input point, and `unforce_all/1` takes every force off. A force of
-a trigger is a change of it (decision 120). An output point, or a value that does not
+a trigger is a change of it, its round at once (decisions 120 and 138). An output point, or a value that does not
 fit, is the host's mistake. Output forcing waits for §5's forcing in `cycle/3`, which
 `force/3` will then call.
 - *The file* is the host's to name, `forces:` a path, an option of `start_link/1`; a
@@ -2857,7 +2858,8 @@ fit, is the host's mistake. Output forcing waits for §5's forcing in `cycle/3`,
   crash. Each force and unforce writes the whole set before it returns, to a file beside
   it, flushed to the disk and renamed over it, so a crash leaves the old set or the new;
   a write that fails changes nothing and returns `{:error, {:forces, reason}}`. Its format
-  is M4-5's, text a person can read: one force a line, `name value` (M4-5).
+  is M4-5's, text a person can read: one force a line, `name value` (M4-5), read exactly
+  so (decision 140).
 - *It is read at every start,* by `start_link/1` in the caller before anything starts,
   and by `restart/2`; a file that does not exist is no force. A force the configuration
   cannot take, on a point it no longer has, on an output point or of a value that does
@@ -2875,7 +2877,8 @@ resource the runner hands it, so that no step costs a round more than a switch.
 readings the record left: the forces file holds one force a line, `name value`, in name
 order, the empty file for none, written to `<path>.tmp` beside it, flushed and renamed
 over it, and read back exactly so, a last line with no newline read, anything else
-refused at the start, `<path>: line <n>: ...` a line each in `force/3`'s words; a restart
+refused at the start, `<path>: line <n>: ...` a line each in `force/3`'s words (decision
+140); a restart
 reads it before it releases anything, a point it no longer forces reading its device's
 last value again; the runner keeps each input point's last value from its device, the
 input image's until a device gives one; a force or an unforce that changes what a trigger
@@ -2883,19 +2886,20 @@ reads makes its round at once, before the call returns, timed by its steps and n
 idle watchdog, each trigger one changes its own round, as `unforce_all/1` may change
 several, in device-name and then address order, each reading those before it at their
 new values and those after it as they were (since the review), and a device's change of
-a forced trigger makes none; a runner started without `forces:` refuses `unforce/2` and
+a forced trigger makes none (decision 138); a runner started without `forces:` refuses `unforce/2` and
 `unforce_all/1` in `force/3`'s words, and an unforce of a point not forced writes the set
-again; the edit's steps give `{:ok,
-report}`, accept asking the runner for its resource with the count of steps it has taken,
-the edit it gives held only where no step came between and otherwise accepted again, a
+again (decision 140); the edit's steps give `{:ok, report}`, accept asking the runner for
+its resource with the count of steps it has taken and the step's time, the edit it gives
+held only where no step came between and otherwise accepted again (decision 141), a
 refused accept leaving the edit held as it was; after each step the rounds read each
 task's watchdog and the untimed programs of the configuration the resource runs, a step
 that leaves none serving at once, in order, every request that waited for the share's
 slot, which no slot would serve again (since the review), and the next round is planned
-again from the last; and decision 40's `now` is the resource's, the last round's, so with
-no untimed program a cut served long after the last round may fall due at once and report
-a period missed. Four of these are provisional and put to the
-maintainer, `PLAN.md` M4-5.)*
+again from the last; and decision 40's `now` is the step's time on the runner's clock,
+given to the switch, so that with no untimed program a cut served long after the last
+round is counted from the edit, no period missed and no round added (decision 139). The
+maintainer answered the four readings the record left on 2026-10-19, decisions 138 to
+141.)*
 
 **Its API**, every call through the runner's mailbox, so each runs between two rounds:
 
@@ -3722,7 +3726,9 @@ the rules in §4.10.
     *Recommend `min(next_due, now + new interval)`.* It bounds the wait by the new
     interval, adds no run and adds no state. §4.6's "the phase never drifts" describes
     steady running, and no decided text fixes `next_due` across an interval change.
-    Adopted.
+    Adopted. *(Since decision 139, 2026-10-19, `now` is the step's time: the resource's
+    own and the milliseconds since its last cycle a host gives, 0 unless given, and
+    through `Logex.Runner` the time the edit is taken by its clock.)*
 
 **After M2-1 landed, decided 2026-10-04.** Four questions M2-1's landing and its reviews
 left open: one about the API that landed, one for M2-2, and two that §4.9's table had left
@@ -5456,7 +5462,8 @@ question put, as decisions 111 and 112 were.
      It is recorded only: forcing is built in its own item, M4-5 (`PLAN.md`). *(Answered
      and taken 2026-10-18. The maintainer confirmed the same day that a runner started
      without `forces:` refuses to force, and that a force the configuration cannot take
-     refuses the start, as recorded above.)*
+     refuses the start, as recorded above. Built with M4-5, 2026-10-19, its format one
+     force a line, `name value`, read exactly as written, decision 140.)*
 
 128. **The bound on the runner's own time between steps (Milestone 4),** following
      decision 125, asked after M4-1's review. Between rounds the runner waits, serves a
@@ -5808,6 +5815,117 @@ on the drive.
 
      **Taken: the heartbeat the device was given,** the time after which the plant
      actually went off, the same on every run (the maintainer, 2026-10-19).
+
+**The maintainer's answers after M4-5's review, 2026-10-19.** M4-5 landed with four
+readings the record left open, each the option closest to the record and to Logix, the
+review agreeing with each, put to the maintainer as a question (`PLAN.md` M4-5). The
+maintainer answered all four the same day: three with the option built, and the second
+with the option recommended, which was then built. The plant is §4.4's: a conveyor on the
+panel card, its fan's task every 50 ms, the e-stop that runs the `trip` task, and the
+photo-eye that counts boxes.
+
+138. **When a forced trigger runs its task (Milestone 4),** following decisions 117, 120
+     and 127. The conveyor runs, and a technician forces the e-stop on from a laptop to
+     test the trip lamp.
+     - The `trip` task runs once, at once, when the force changes what the controller
+       reads, off to on, before the laptop's call returns, so the lamp is lit by the time
+       the laptop says "done"; forcing it on again while it already reads on runs
+       nothing, and presses of the real button change nothing while it is forced; where
+       one call changes several triggers, as "unforce all" can, each runs its own round,
+       one after the other, before the call returns, first by the device's name and then
+       by the input's address on it, each round seeing the triggers before it at their
+       new values and those after it as they were;
+     - every force of a trigger makes a round at once, even to the value it already
+       reads: an extra round in which nothing new happens, the round counter moving;
+     - or a force waits for the controller's next round on its schedule, the trip lamp
+       lighting up to one fan period, 50 ms, later, after the laptop's call has returned;
+       and for several triggers in one call, one round in which all of them change
+       together, their tasks then running in priority order.
+
+     IEC 61131-3 says nothing of forcing, and an event task in IEC runs on its trigger's
+     rising edge, whatever caused it. In the conventional family a force changes the
+     input as the program sees it from the next scan; whether an event task triggered by
+     a forced input runs at once, or in what order several do, is not in the manuals
+     saved (**unverified**).
+
+     **Taken: at once, a round for each trigger changed,** in device-name and then
+     address order, before the call returns, a force that changes nothing making no round
+     (the maintainer, 2026-10-19), as built: several triggers one call changes are the
+     several changes from one device decision 120 already rounds one at a time.
+139. **A task's interval cut while no untimed program runs (Milestone 4),** following
+     decisions 40, 108 and 119. The fan's task runs every 50 ms, last at 50, so it is
+     next due at 100; the plant has no continuous task, so the controller's own clock
+     stands at 50, the fan's last run, until its next run. At 95 ms by the wall clock an
+     engineer cuts the fan to 20 ms, and decision 40 sets the next due time to the earlier
+     of the one it had and "now plus the new interval".
+     - "Now" read on the controller's own clock, 50: the earlier of 100 and 70, which the
+       wall clock has passed, so the fan runs at once, at 95, and the status screen shows
+       one missed period, though nothing ran late;
+     - "now" the wall clock's, 95, the runner first bringing the controller's clock up to
+       it by a round that runs no program: the fan runs at 100 as it would have, no missed
+       period shown, and one round more in the log;
+     - or "now" the wall clock's, 95, given to the edit's switch as a new argument: next
+       due at the earlier of 100 and 115, 100, unchanged, no missed period and no extra
+       round.
+
+     With an untimed program, as §4.4's box counter in the continuous task, rounds come
+     every millisecond, the controller's clock keeps up with the wall clock, and the three
+     agree. IEC 61131-3 says nothing of a task's interval changed while running. In the
+     conventional family a periodic task's period may be changed online, and when the new
+     one takes effect is not in the manuals saved (**unverified**).
+
+     **Taken: the wall clock's, given to the switch** (the maintainer, 2026-10-19): the
+     screen shows no alarm the edit itself made, and no round is added.
+     `Logex.Configuration.Edit`'s `test/3` and `untest/3` take the step's time as `elapsed_ms`,
+     the milliseconds since the resource's last cycle, counted as `Logex.Runtime.cycle/3`
+     counts them and refused in its words, and `accept/3` takes it for its forecast;
+     decision 40's `now` is the resource's `now` plus it. The step moves no clock: the
+     resource's `now`, which the next cycle's `elapsed_ms` counts from, and the time a
+     timer resumes from (decision 56) stay the resource's. Used alone, without the
+     runner, `elapsed_ms` is 0 unless given, so decision 40's `now` is the resource's
+     own, as it has been since OE-2: a host that cycles the resource itself holds the
+     only clock there is, and says where it stands if it wants to. `Logex.Runner` gives
+     each step the time since its last round on its clock, the time the edit is taken,
+     and 0 while tripped, its clock not counting the time it is stopped; accept, done in
+     the caller, is given it with the resource it is handed.
+140. **The forces file a person reads (Milestone 4),** following decision 127. The file
+     sits beside the plant's files, one force a line, `eye_1 1`, the photo-eye held on.
+     - Read exactly as the runner writes it: a person who opens it sees every force, but
+       one who adds a comment or a blank line, or writes `eye_1 01`, finds the next start
+       refused, the line named, the plant not started, until the line is put right or the
+       file deleted; a last line with no newline is read;
+     - or comments and blank lines read and passed over, so that a person may annotate
+       it, though the runner's next write, at the next force, drops what was added.
+
+     Beside it, either way: a runner started with no file refuses "unforce" and "unforce
+     all" as it refuses a force, in the same words, though it has nothing to take off;
+     and an unforce of an input that is not forced is accepted and writes the set again.
+     IEC 61131-3 says nothing of forcing. In the conventional family forces are kept in
+     the project and changed only through the programming software, never by editing a
+     file (**unverified**).
+
+     **Taken: read exactly as the runner writes it,** and an unforce of a point not
+     forced accepted (the maintainer, 2026-10-19), as built: a strict file is the safest
+     for a list that decides what the plant reads.
+141. **Two engineers stepping one edit (Milestone 4),** following decisions 60, 66 and
+     119. Engineer A accepts a change to the fan's interval from one laptop while
+     engineer B, from another, takes a step of the edit the controller already holds.
+     - A's accept is worked out on A's laptop against the plant as it was; if B's step
+       came first, the controller says so, and A's accept is worked out again against the
+       plant as it is now, so that A's laptop shows a forecast that is true when the edit
+       is held, and B's edit is replaced by A's, as a second accept replaces a first;
+       where B's step was a test, the plant now runs B's new version, which A's edit
+       takes as its "old" version, the one A's untest would bring back; a change the
+       controller refuses leaves whatever edit was held as it was;
+     - or A is told the plant moved on, and accepts again by hand, seeing the plant as it
+       now is before choosing.
+
+     IEC 61131-3 says nothing of online edits. The conventional family's programming
+     software lets one workstation at a time edit a controller online (**unverified**).
+
+     **Taken: an overtaken accept redone against the plant as it now is** (the
+     maintainer, 2026-10-19), as built: it gives exactly what the same steps taken over
+     the resource directly give, a second accept superseding the first (decision 66).
 
 ---
 

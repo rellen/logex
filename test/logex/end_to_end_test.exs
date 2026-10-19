@@ -4883,7 +4883,8 @@ defmodule Logex.EndToEndTest do
       end
 
       # Every step was taken and reported, the candidate's first test moving `slow`'s next
-      # due time within 20 ms of the resource's time (decision 40).
+      # due time within 20 ms of the step's time (decision 40), the resource's, since the
+      # box counter rounds every millisecond (decision 139).
       replies = for {{:ok, report}, _seen} <- runner_log, do: report
       assert length(replies) == 11
       events = Enum.flat_map(runner_log, fn {_reply, {events, _, _, _}} -> events end)

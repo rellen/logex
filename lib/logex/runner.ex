@@ -152,10 +152,10 @@ defmodule Logex.Runner do
   input point's last value from its device, the input image's until a device gives one,
   and `unforce/2` puts it back, the next round reading it. A force or an unforce that
   changes what an event task's trigger reads is a change of it, and makes its round at
-  once, before the call returns (decision 120), each trigger it changes, as
+  once, before the call returns (decisions 120 and 138), each trigger it changes, as
   `unforce_all/1` may change several, its own round, in device-name and then address
-  order, as a device's changes are; and a device's change of a forced trigger makes
-  none. `status/1` lists every force. The forces file is the host's to name, `forces:`,
+  order, as a device's changes are; one that changes nothing makes none, and a device's
+  change of a forced trigger makes none. `status/1` lists every force. The forces file is the host's to name, `forces:`,
   and each force and unforce writes the whole set to it before it returns:
   one force a line, `name value`, in name order, the empty file for none, written to
   `<path>.tmp` beside it, flushed to the disk and renamed over it, so that a crash at any
@@ -168,7 +168,9 @@ defmodule Logex.Runner do
   configuration cannot take, on a point it does not have as an input point or of a value
   that does not fit, are the host's mistake, every one named in one `ArgumentError`, a
   line each, `<path>: line <n>: ...`, the runner not started, or at a restart left
-  tripped. A point a restart's file no longer forces reads its device's last value
+  tripped: the file is read exactly as the runner writes it, a last line with no newline
+  read, and an unforce of a point not forced is accepted, writing the set again
+  (decision 140). A point a restart's file no longer forces reads its device's last value
   again. With no runner, the host clears every force by deleting the file. A runner
   started without `forces:` takes no force, an
   output point or a name that is no input point's is forced by no one, and a value that
@@ -180,17 +182,20 @@ defmodule Logex.Runner do
   at a time: `accept/2` gives `{:ok, forecast}` or `{:error, diagnostics}`, a second
   accept superseding the first (decision 66), a refused one leaving the edit held as it
   was; `test/1`, `untest/1`, `assemble/1` and `cancel/1` each give `{:ok, report}`, the
-  report the same step gives taken over the resource directly, and its next round runs
-  the resource the step returns. Accept's work, which grows with the programs, is done in
-  the caller's process, against the resource the runner hands it (decision 119), and done
-  again where another step was taken meanwhile. After each step the rounds read the
-  configuration the resource runs: each task's watchdog (decision 129), and whether it
-  has untimed programs, an instance an edit adds with no task rounding back to back and
-  one it sets aside no more, and a step that leaves none followed at once by every
-  request that waited for the share's slot, in order, as each is served from then on;
-  and the next round is planned again from the last, so that a task whose interval
-  changed is next due where decision 40 moves it, no round lost or added. Each step sends `{:edit, step, report}`, accept's its forecast, and `status/1`
-  gives the stage. A step may be taken while tripped, so that a program can be fixed and
+  report the same step gives taken over the resource directly at the same time, and its
+  next round runs the resource the step returns. Accept's work, which grows with the
+  programs, is done in the caller's process, against the resource the runner hands it
+  (decision 119), and done again where another step was taken meanwhile (decision 141).
+  After each step the rounds read the configuration the resource runs: each task's
+  watchdog (decision 129), and whether it has untimed programs, an instance an edit adds
+  with no task rounding back to back and one it sets aside no more, and a step that
+  leaves none followed at once by every request that waited for the share's slot, in
+  order, as each is served from then on; and the next round is planned again from the
+  last, so that a task whose interval changed is next due where decision 40 moves it,
+  its `now` the step's time on the runner's clock, given to the switch as the time since
+  the last round, 0 while tripped, so that with no untimed program a cut served long
+  after the last round misses no period and adds no round (decision 139). Each step
+  sends `{:edit, step, report}`, accept's its forecast, and `status/1` gives the stage. A step may be taken while tripped, so that a program can be fixed and
   then restarted, and a restart keeps the stage (decision 65). A step with no edit held,
   and one its stage refuses, are the host's mistakes, the latter in
   `Logex.Configuration.Edit`'s words, and so is each of accept's, raised in the caller.
@@ -365,7 +370,7 @@ defmodule Logex.Runner do
   crash and a fresh start (decisions 117 and 127): the whole set of forces is written to
   the file before it returns, `:ok`, or `{:error, {:forces, reason}}` where it cannot be,
   the force not taken. A force that changes what an event task's trigger reads is a change
-  of it, and makes its round at once, before it returns (decision 120). A runner started
+  of it, and makes its round at once, before it returns (decisions 120 and 138). A runner started
   without `forces:`, an output point, a name that is no input point and a value that does
   not fit are the host's mistakes.
   """
@@ -390,18 +395,19 @@ defmodule Logex.Runner do
 
   @doc """
   Accepts `candidate` against the configuration the runner runs, as
-  `Logex.Configuration.Edit.accept/2` does: `{:ok, forecast}`, the runner then holding
-  the edit, a second accept superseding the first, or `{:error, diagnostics}`, the edit
-  it held kept. Accept's work, which grows with the programs, is done in the caller's
+  `Logex.Configuration.Edit.accept/3` does at the time the runner hands it, the time
+  since its last round (decision 139): `{:ok, forecast}`, the runner then holding the
+  edit, a second accept superseding the first, or `{:error, diagnostics}`, the edit it
+  held kept. Accept's work, which grows with the programs, is done in the caller's
   process, against the resource the runner hands it, so that the runner's rounds wait on
   it no longer than on a request; where another step was taken meanwhile, it is done
-  again against the resource as it is then. `{:edit, :accept, forecast}` goes to the
+  again against the resource as it is then (decision 141). `{:edit, :accept, forecast}` goes to the
   subscribers. Its host mistakes are `Logex.Configuration.Edit.accept/2`'s, raised in the
   caller.
   """
   def accept(runner, candidate) do
-    {edits, runtime} = call(runner, :resource)
-    accepting(Edit.accept(runtime, candidate), edits, runner, candidate)
+    {edits, runtime, elapsed} = call(runner, :resource)
+    accepting(Edit.accept(runtime, candidate, elapsed), edits, runner, candidate)
   end
 
   defp accepting({:ok, edit, forecast}, edits, runner, candidate),
@@ -414,13 +420,17 @@ defmodule Logex.Runner do
 
   @doc """
   Runs the candidate of the edit the runner holds, from accept or after an untest, as
-  `Logex.Configuration.Edit.test/2` does, between two rounds: `{:ok, report}`, the next
-  round running the resource it switched. A runner that holds no edit, and a step its
+  `Logex.Configuration.Edit.test/3` does, between two rounds, at the time since the last
+  round (decision 139): `{:ok, report}`, the next round running the resource it
+  switched. A runner that holds no edit, and a step its
   stage refuses, are the host's mistakes.
   """
   def test(runner), do: call(runner, {:edit, :test})
 
-  @doc "Runs the original again, from test, as `Logex.Configuration.Edit.untest/2` does: `{:ok, report}`."
+  @doc """
+  Runs the original again, from test, as `Logex.Configuration.Edit.untest/3` does at the
+  time since the last round, as `test/1` does: `{:ok, report}`.
+  """
   def untest(runner), do: call(runner, {:edit, :untest})
 
   @doc """
@@ -644,7 +654,7 @@ defmodule Logex.Runner do
   # handed it with the count of steps the runner has taken, which the edit it accepted is
   # held by only where no step came between, a second accept superseding the first
   # (decision 66); each other step is taken here, between two rounds, on the edit held.
-  defp serve(:resource, state), do: {{state.edits, state.runtime}, state}
+  defp serve(:resource, state), do: {{state.edits, state.runtime, step_time(state)}, state}
 
   defp serve({:accept, edits, edit, forecast}, %{edits: edits} = state) do
     published(state, [{:edit, :accept, forecast}])
@@ -661,7 +671,7 @@ defmodule Logex.Runner do
       )
 
   defp serve({:edit, step}, %{edit: edit} = state) when step in [:test, :untest] do
-    {edit, runtime, report} = apply(Edit, step, [edit, state.runtime])
+    {edit, runtime, report} = apply(Edit, step, [edit, state.runtime, step_time(state)])
     {{:ok, report}, edited(state, step, edit, Edit.running(edit), runtime, report)}
   end
 
@@ -714,6 +724,14 @@ defmodule Logex.Runner do
     published(state, [{:edit, step, report}])
     replanned(state)
   end
+
+  # Decision 139: a switch's time, decision 40's `now`, is the step's on the runner's clock,
+  # the time since the last round, so that a cut served long after it is counted from the
+  # edit, and none while tripped, the clock not counting the time it is stopped.
+  defp step_time(%{status: :running, anchor: anchor, logical: logical} = state),
+    do: max(now(state) - anchor - logical, 0)
+
+  defp step_time(_tripped), do: 0
 
   defp replanned(%{status: :running, last: {start, finish, again}} = state),
     do: planned(state, start, finish, state.untimed or again)

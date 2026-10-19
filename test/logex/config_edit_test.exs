@@ -68,6 +68,14 @@ defmodule Logex.ConfigEditTest do
     end)
   end
 
+  # `n` cycles of 10 ms, and when `slow` ran in them.
+  defp slow_runs(runtime, n) do
+    Enum.reduce(1..n, {runtime, []}, fn _, {runtime, ats} ->
+      {runtime, _, events} = Runtime.cycle(runtime, 10, %{})
+      {runtime, ats ++ for({:ran, "slow", "m2", at} <- events, do: at)}
+    end)
+  end
+
   defp accepted(runtime, candidate) do
     assert {:ok, edit, forecast} = Edit.accept(runtime, candidate)
     {edit, forecast}
@@ -93,6 +101,25 @@ defmodule Logex.ConfigEditTest do
       # The runtime is checked before the candidate.
       assert_raise ArgumentError, ~r/^expected a %Logex.Runtime{}/, fn ->
         Edit.accept(opaque(:nope), opaque(:nope))
+      end
+    end
+
+    test "a step's time that is no non-negative integer of milliseconds, in " <>
+           "Logex.Runtime.cycle/3's words (decision 139)" do
+      for bad <- [-1, 1.5, :soon] do
+        assert_raise ArgumentError,
+                     "elapsed_ms must be a non-negative integer of milliseconds, got: " <>
+                       inspect(bad),
+                     fn -> Edit.accept(running(10), plant(), opaque(bad)) end
+      end
+
+      # After the runtime, and before the candidate.
+      assert_raise ArgumentError, ~r/^expected a %Logex.Runtime{}/, fn ->
+        Edit.accept(opaque(:nope), plant(), opaque(-1))
+      end
+
+      assert_raise ArgumentError, ~r/^elapsed_ms must be/, fn ->
+        Edit.accept(running(10), opaque(:nope), opaque(-1))
       end
     end
 
@@ -181,6 +208,30 @@ defmodule Logex.ConfigEditTest do
       assert_raise ArgumentError,
                    "expected a %Logex.Runtime{} from Logex.Runtime.start/1, got: :nope",
                    fn -> Edit.cancel(edit, opaque(:nope)) end
+    end
+
+    test "a step's time that is no non-negative integer of milliseconds, test's and " <>
+           "untest's, after the runtime and before the generation (decision 139)" do
+      runtime = running(10)
+      {edit, _} = accepted(runtime, plant())
+
+      assert_raise ArgumentError,
+                   "elapsed_ms must be a non-negative integer of milliseconds, got: -1",
+                   fn -> Edit.test(edit, runtime, opaque(-1)) end
+
+      {tested, testing, _} = Edit.test(edit, runtime)
+
+      assert_raise ArgumentError,
+                   "elapsed_ms must be a non-negative integer of milliseconds, got: :soon",
+                   fn -> Edit.untest(tested, testing, opaque(:soon)) end
+
+      assert_raise ArgumentError, ~r/^expected a %Logex.Runtime{}/, fn ->
+        Edit.test(edit, opaque(:nope), opaque(-1))
+      end
+
+      assert_raise ArgumentError, ~r/^elapsed_ms must be/, fn ->
+        Edit.untest(tested, runtime, opaque(-1))
+      end
     end
 
     test "an edit that has ended: the generation has moved (decisions 60 and 64)" do
@@ -843,6 +894,47 @@ defmodule Logex.ConfigEditTest do
       assert {:next_due, "slow", {50, 50}} not in report
       {_runtime, _, events} = Runtime.cycle(runtime, 20, %{})
       assert {:ran, "slow", "m2", 50} in events
+    end
+
+    test "decision 40's now is the step's time, the resource's and elapsed_ms since, the " <>
+           "resource's own by default (decision 139)" do
+      # `slow` ran at 0, next due at 50; the resource is at 10.
+      runtime = running(10)
+      shorter = plant(String.replace(plant_text(), "interval 50", "interval 20"))
+
+      # 15 ms after the last cycle: min(50, 25 + 20) = 45; 0 by default: 30.
+      assert {:ok, _, forecast} = Edit.accept(runtime, shorter, 15)
+      assert {:next_due, "slow", {50, 45}} in forecast
+      assert {:ok, _, forecast} = Edit.accept(runtime, shorter)
+      assert {:next_due, "slow", {50, 30}} in forecast
+
+      # Cut 35 ms after the last cycle, at 45: min(50, 45 + 20) keeps 50, so the next
+      # cycle at 50 runs it on time, no period missed; the step moves no clock.
+      {edit, _} = accepted(runtime, shorter)
+      {edit, runtime, report} = Edit.test(edit, runtime, 35)
+      assert {:interval, "slow", {50, 20}} in report
+      refute Enum.any?(report, &match?({:next_due, _, _}, &1))
+      assert runtime.now == 10
+      {runtime, events} = slow_runs(runtime, 4)
+      assert events == [50]
+      assert Runtime.overlaps(runtime)["slow"] == 0
+
+      # Untested 5 ms after that cycle, at 55, back to 50 ms: min(70, 55 + 50) keeps 70.
+      {_edit, runtime, report} = Edit.untest(edit, runtime, 5)
+      assert {:interval, "slow", {20, 50}} in report
+      refute Enum.any?(report, &match?({:next_due, _, _}, &1))
+      assert {_runtime, [70, 120]} = slow_runs(runtime, 7)
+
+      # Untest's own time: lengthened to 200 ms and run at 50, `slow` is next due at 250;
+      # untested 30 ms after that cycle, at 80, back to 50 ms: min(250, 80 + 50) = 130,
+      # where the resource's own 50 would give 100.
+      longer = plant(String.replace(plant_text(), "interval 50", "interval 200"))
+      {edit, _} = accepted(running(10), longer)
+      {edit, runtime, _} = Edit.test(edit, running(10))
+      {runtime, [50]} = slow_runs(runtime, 4)
+      {_edit, runtime, report} = Edit.untest(edit, runtime, 30)
+      assert {:next_due, "slow", {250, 130}} in report
+      assert {_runtime, [130]} = slow_runs(runtime, 8)
     end
 
     test "only the first test starts again a tag the candidate adds" do
