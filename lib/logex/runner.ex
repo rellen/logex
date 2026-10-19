@@ -179,8 +179,10 @@ defmodule Logex.Runner do
     so; a read's or a report's value that does not fit its point is `{:bad_value,
     address, value}` and an address that is no input point's `{:unknown_address,
     address}`; a device that does not answer the runner within the deadline its last
-    refresh carried, on the runner's clock, is `:timeout`, and is killed, its outputs left
-    to what it does on losing its master; so is one hung inside its own read or report,
+    refresh carried, in real time, is `:timeout`, and is killed, its outputs left to what
+    it does on losing its master; one that answers a round's write after that deadline on
+    the runner's clock is `:timeout` too, and is written its 0 by the trip, as every
+    device that answers is; so is one hung inside its own read or report,
     which has not told the runner it is back from its adapter, after a read or a report,
     at a poll while it waits on the runner or by answering a round's write in time, within
     the idle watchdog and a poll period, seen as each round begins and at each wait's
@@ -1243,16 +1245,11 @@ defmodule Logex.Runner do
                heard: Map.put(state.heard, name, answered)
            }}}
 
-  defp in_time(:ok, _late, name, pid, _values, state) do
-    Process.exit(pid, :kill)
-    {:halt, {:trip, {:io, name, :timeout}, went_down(name, state)}}
-  end
-
-  defp in_time({:error, :timeout}, _answered, name, _pid, _values, state),
-    do: {:halt, {:trip, {:io, name, :timeout}, went_down(name, state)}}
-
-  defp in_time({:error, {:down, reason}}, _answered, name, _pid, _values, state),
-    do: {:halt, {:trip, {:io, name, {:down, reason}}, went_down(name, state)}}
+  # One that answered after its deadline on the runner's clock answered all the same, so it
+  # is no hung device: it is `:timeout`, and the trip's zero writes it its 0 as it does
+  # every device that answers. One killed, or gone down, the trip's zero finds down.
+  defp in_time(:ok, _late, name, _pid, _values, state),
+    do: {:halt, {:trip, {:io, name, :timeout}, state}}
 
   defp in_time({:error, cause}, _answered, name, _pid, _values, state),
     do: {:halt, {:trip, {:io, name, cause}, state}}

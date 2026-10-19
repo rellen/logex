@@ -897,7 +897,8 @@ defmodule Logex.TripTest do
       assert Runner.status(runner).status == :running
     end
 
-    test "an answer later than the deadline on the runner's clock is no answer" do
+    test "an answer later than the deadline on the runner's clock is no answer, the " <>
+           "device that gave it written its 0 by the trip" do
       %{runner: runner, panel: panel, drive: drive} =
         rig(configured(@stopped), poll: 10, steps: Runtime)
 
@@ -905,7 +906,11 @@ defmodule Logex.TripTest do
       Sim.fail(drive, :write, {:delay, 510})
       Sim.set(panel, [0], 1)
       assert Runner.status(runner).trip == {:io, "drive", :timeout}
-      refute Process.alive?(old)
+      assert Process.alive?(old)
+      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}, %{[0] => 0}]
+      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}]
+      assert Runner.restart(runner, :cold) == :ok
+      assert device_pid(runner, "drive") == old
 
       # One a millisecond sooner is in time.
       %{runner: runner, panel: panel, drive: drive} =
