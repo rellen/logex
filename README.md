@@ -1771,8 +1771,8 @@ Sim.set(panel, [0], 0)
 
 Sim.fail(panel, :read, {:error, :eio})      # the panel's next read, at its poll at 20, fails
 Manual.advance(clock, 15)
+status.([:status, :trip, :now, :rounds])    # a call, answered once the runner has tripped
 IO.inspect(for({Runner, ^runner, event} <- Process.info(self(), :messages) |> elem(1), do: event), label: "events")
-status.([:status, :trip, :now, :rounds])
 IO.inspect(Runner.get!(runner, "k1"), label: "k1 in the resource")
 IO.inspect(Enum.take(Sim.writes(panel), -2), label: "the panel's last two writes")
 
@@ -1786,8 +1786,8 @@ IO.inspect(Sim.outputs(panel), label: "the panel's outputs")
 
 ```
 $ mix run a_trip.exs
-events: [trip: {:io, "panel", {:error, :eio}}]
 [status: :tripped, trip: {:io, "panel", {:error, :eio}}, now: 19, rounds: 20]
+events: [trip: {:io, "panel", {:error, :eio}}]
 k1 in the resource: 1
 the panel's last two writes: [%{[0] => 1, [4] => 0}, %{[0] => 0, [4] => 0}]
 [status: :tripped, now: 19, rounds: 20]

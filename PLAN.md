@@ -3464,7 +3464,10 @@ and M4-7 the documents.
   fifth above its highest of 48 runs, 3.643 and 1.165, since each round begins by checking
   every device heard. README's `a_trip.exs` re-run, its status fields now printed as a
   keyword list in the order named, since a map's keys came out in a different order on a
-  re-run (the review's finding 8).
+  re-run (the review's finding 8); and its status asked before its events are read, since the
+  events, read straight from the mailbox, came empty once in some sixty re-runs, the trip
+  made by the runner after the advance that failed the read had returned, and the status
+  call is answered only once the runner has taken the panel's notice and tripped.
 
   **Provisional, and put to the maintainer** (each a question below): a restart of a
   runner that is running is the host's mistake (question 1); a device hung inside its own
