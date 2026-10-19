@@ -38,8 +38,11 @@ defmodule Logex.Runner do
     it was opened, on a grid that never drifts, and gives each other message its process
     receives to the adapter's `report/2`, where it has one: so a device that reports
     passes each change on as it comes, between reads, and one that cannot is read.
-  - What changed since it last passed anything on, it passes on to the runner by a call,
-    one change at a time, in order. The runner merges it into the next round's inputs, and
+  - What changed since the runner last took a change of it, it passes on to the runner by
+    a call, one change at a time, in order; a change the runner refuses, holding a value
+    that does not fit or an address that is no input point's (an I/O fault, below), is not
+    taken, and the device passes it on again at its next read, so that one that goes on
+    giving it trips the runner again once restarted. The runner merges it into the next round's inputs, and
     a change of an event task's trigger, an input point that is a task's `single`, makes a
     round at once, each such change its own, in address order; it answers once those
     rounds have run and their outputs are written, so that `Logex.IO.Sim.set/3` returns
@@ -516,13 +519,21 @@ defmodule Logex.Runner do
   # 124), whatever the share.
   @impl GenServer
   def handle_call({:changes, device, changes}, {pid, _tag}, %{pids: pids} = state)
-      when :erlang.map_get(device, pids) == pid,
-      do: {:reply, :ok, changed(device, vetted(device, changes, state), state)}
+      when :erlang.map_get(device, pids) == pid do
+    vetted = vetted(device, changes, state)
+    {:reply, took(vetted), changed(device, vetted, state)}
+  end
 
   # A host's request is the runner's own work: served at once where no round is owed, and
   # otherwise queued for the share's slot (decision 122).
   def handle_call(request, from, state),
     do: {:noreply, requested(owed?(state), {from, request}, state)}
+
+  # The device's answer: a change taken, or one refused, which the device passes on again
+  # at its next read, so that a device that goes on giving it trips the runner again once
+  # it is restarted (decision 114).
+  defp took({:ok, _changes}), do: :ok
+  defp took({:fault, cause}), do: {:error, cause}
 
   @impl GenServer
   def handle_info({__MODULE__, :wake, token}, %{wake: {_timer, token, at}} = state),

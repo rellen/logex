@@ -607,8 +607,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   GenServer for each bound device, linked to its runner: `open/1` calls the adapter's
   `init/3` and reads it once; it reads every poll period on the runner's clock, on a grid
   from its opening, and gives every other message to the adapter's `report/2`; what
-  changed since it last passed anything on it passes to the runner by a call, one change
-  at a time, answering the runner's own requests while it waits (decision 124); `write/2`
+  changed since the runner last took a change of it it passes to the runner by a call, one
+  change at a time, answering the runner's own requests while it waits (decision 124), a
+  change the runner refuses for a value that does not fit or an address that is no input
+  point's not taken, so that the next read passes it on again and a device that goes on
+  giving it trips the runner again once restarted (fix found by M4-6's walk); `write/2`
   writes, answered once written; at each poll, after its read, it writes its last
   outputs again, whether or not a round wrote within the period, a fixed timer as
   Logix's RPI, while its last deadline has not passed, one never written or with no

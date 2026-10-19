@@ -17,9 +17,11 @@ defmodule Logex.Runner.Device do
   #   (decision 130); one never written, which is one with no output point too, since a
   #   round never writes it, writes nothing, and so does one never refreshed, which has
   #   heard no deadline.
-  # - It passes what changed since it last passed anything on to the runner by a call,
-  #   one at a time and in the order it saw them, which the runner answers once it has
-  #   merged the change and run the round it causes (decision 124). While it waits it
+  # - It passes what changed since the runner last took a change of it on to the runner
+  #   by a call, one at a time and in the order it saw them, which the runner answers once
+  #   it has merged the change and run the round it causes (decision 124), or refuses, for
+  #   a value that does not fit or an address that is no input point's (decision 114): a
+  #   change refused is not taken, so the next read passes it on again. While it waits it
   #   answers the runner's own requests to it, so that neither waits on the other.
   # - `write/2` writes the outputs a round gave, answered once the adapter has written them;
   #   `refresh/2` tells it the deadline by which it will hear from the runner again, without
@@ -311,7 +313,7 @@ defmodule Logex.Runner.Device do
   defp report({:ok, values, adapter}, state), do: passed(values, %{state | adapter: adapter})
   defp report({:fault, cause, adapter}, state), do: faulted(cause, %{state | adapter: adapter})
 
-  # What changed since the device last passed anything on, passed on to the runner.
+  # What changed since the runner last took a change of the device, passed on to it.
   defp passed(values, %{image: image} = state),
     do:
       changed(
@@ -321,18 +323,24 @@ defmodule Logex.Runner.Device do
 
   defp changed(changes, state) when map_size(changes) == 0, do: state
 
-  defp changed(changes, %{runner: runner, name: name, image: image} = state) do
-    state = %{state | image: Map.merge(image, changes)}
+  defp changed(changes, %{runner: runner, name: name} = state) do
     ref = Process.monitor(runner)
     send(runner, {:"$gen_call", {self(), ref}, {:changes, name, changes}})
-    awaiting(ref, state)
+    awaiting(ref, changes, state)
   end
 
   # Waiting for the runner's answer, the runner's own requests answered meanwhile, so that
-  # neither waits on the other (decision 124).
-  defp awaiting(ref, state) do
+  # neither waits on the other (decision 124). A change the runner took is what the device
+  # last passed on; one it refused, a value that does not fit or an address that is no
+  # input point's (decision 114), is not, so that the next read passes it on again and a
+  # device that goes on giving it trips the runner again once it is restarted.
+  defp awaiting(ref, changes, state) do
     receive do
       {^ref, :ok} ->
+        Process.demonitor(ref, [:flush])
+        %{state | image: Map.merge(state.image, changes)}
+
+      {^ref, {:error, _cause}} ->
         Process.demonitor(ref, [:flush])
         state
 
@@ -341,28 +349,28 @@ defmodule Logex.Runner.Device do
 
       {__MODULE__, :deadline, _at} = deadline ->
         {:noreply, state} = handle_info(deadline, state)
-        awaiting(ref, state)
+        awaiting(ref, changes, state)
 
       # A poll while it waits reads nothing, its read waiting for the next, but tells the
       # runner the device is not inside its adapter, as every read does.
       {__MODULE__, :poll, at} when at == :erlang.map_get(:next, state) ->
-        awaiting(ref, polled(told_back(state)))
+        awaiting(ref, changes, polled(told_back(state)))
 
       {:"$gen_call", from, request} ->
-        answered(handle_call(request, from, state), from, ref)
+        answered(handle_call(request, from, state), from, ref, changes)
 
       {:"$gen_cast", request} ->
         {:noreply, state} = handle_cast(request, state)
-        awaiting(ref, state)
+        awaiting(ref, changes, state)
     end
   end
 
-  defp answered({:reply, reply, state}, from, ref) do
+  defp answered({:reply, reply, state}, from, ref, changes) do
     GenServer.reply(from, reply)
-    awaiting(ref, state)
+    awaiting(ref, changes, state)
   end
 
-  defp answered({:stop, reason, reply, state}, from, _ref) do
+  defp answered({:stop, reason, reply, state}, from, _ref, _changes) do
     GenServer.reply(from, reply)
     throw({__MODULE__, :stop, reason, state})
   end

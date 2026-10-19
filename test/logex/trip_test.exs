@@ -909,6 +909,44 @@ defmodule Logex.TripTest do
                 {:raised, "the simulated device \"panel\" raised in report, as fail/3 told it"}}
     end
 
+    # Found by M4-6's walk: a device took a change the runner refused as passed on, so a
+    # value that does not fit, read again after a restart, was never passed on again and
+    # the runner ran on with the last value it took; and a report the runner refused lost
+    # the good change beside the bad one for good.
+    test "a device that goes on giving a value that does not fit trips the runner again " <>
+           "after each restart, and a change refused with it is passed on at the next read" do
+      for bad <- [{:value, [0], 2}, {:value, [7], 1}] do
+        %{runner: runner, clock: clock, panel: panel} = rig(configured(), poll: 10)
+        cause = (bad == {:value, [0], 2} && {:bad_value, [0], 2}) || {:unknown_address, [7]}
+        for _ <- 1..3, do: Sim.fail(panel, :read, bad)
+
+        for _ <- 1..3 do
+          Manual.advance(clock, 10)
+          assert Runner.status(runner).trip == {:io, "panel", cause}
+          assert Runner.restart(runner, :cold) == :ok
+        end
+
+        # Put right, it is read as it is.
+        Manual.advance(clock, 10)
+        assert %{status: :running} = Runner.status(runner)
+        Sim.set(panel, [0], 1)
+        Manual.advance(clock, 10)
+        assert Runner.get!(runner, "x") == 1
+      end
+
+      # A report the runner refuses for a value that does not fit holds a good change
+      # beside it, which the next read passes on once the runner is restarted.
+      %{runner: runner, clock: clock, panel: panel} = rig(configured(), poll: 10)
+      Sim.fail(panel, :report, {:value, [1], 2_147_483_648})
+      Sim.set(panel, [0], 1)
+      assert Runner.status(runner).trip == {:io, "panel", {:bad_value, [1], 2_147_483_648}}
+      assert Runner.get!(runner, "x") == 0
+      assert Runner.restart(runner, :cold) == :ok
+      Manual.advance(clock, 10)
+      assert %{status: :running} = Runner.status(runner)
+      assert Runner.get!(runner, "x") == 1
+    end
+
     test "a round's write that fails trips, the devices after it not written, and the " <>
            "device that failed zeroed where it still takes a write" do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
