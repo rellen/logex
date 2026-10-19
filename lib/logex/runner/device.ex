@@ -124,7 +124,7 @@ defmodule Logex.Runner.Device do
 
   @impl GenServer
   def handle_info({__MODULE__, :poll, at}, %{next: at} = state),
-    do: {:noreply, polled(read(adapted(:read, [state.adapter], state), state))}
+    do: waited(fn -> polled(read(adapted(:read, [state.adapter], state), state)) end)
 
   def handle_info({__MODULE__, :poll, _stale}, state), do: {:noreply, state}
 
@@ -134,7 +134,16 @@ defmodule Logex.Runner.Device do
   def handle_info({__MODULE__, :deadline, _stale}, state), do: {:noreply, state}
 
   def handle_info(message, %{module: module} = state),
-    do: {:noreply, reported(function_exported?(module, :report, 2), message, state)}
+    do: waited(fn -> reported(function_exported?(module, :report, 2), message, state) end)
+
+  # A poll or a report, which may wait on the runner for the change it passes on: a close
+  # answered while it waits stops the device with the state the close left, closed, so
+  # that terminate/2 zeroes and closes nothing again (decisions 115 and 116).
+  defp waited(handled) do
+    {:noreply, handled.()}
+  catch
+    :throw, {__MODULE__, :stop, reason, state} -> {:stop, reason, state}
+  end
 
   defp init_adapter(%{name: name, points: points, opts: opts} = state),
     do: adapted(:init, [name, points, opts], state)
@@ -313,9 +322,9 @@ defmodule Logex.Runner.Device do
     awaiting(ref, state)
   end
 
-  defp answered({:stop, reason, reply, _state}, from, _ref) do
+  defp answered({:stop, reason, reply, state}, from, _ref) do
     GenServer.reply(from, reply)
-    exit(reason)
+    throw({__MODULE__, :stop, reason, state})
   end
 
   # The one wake on the deadline: set where none is, or where a refresh brings the

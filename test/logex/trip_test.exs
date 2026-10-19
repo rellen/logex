@@ -171,6 +171,32 @@ defmodule Logex.TripTest do
     defp gone(now, _at), do: now
   end
 
+  # The simulated device, its adapter's closes counted in this module's table by its sim.
+  defmodule Closes do
+    @behaviour Logex.IO
+
+    @impl true
+    def check(device, points, opts), do: Sim.check(device, points, opts)
+
+    @impl true
+    def init(device, points, opts), do: Sim.init(device, points, opts)
+
+    @impl true
+    def read(state), do: Sim.read(state)
+
+    @impl true
+    def write(values, state), do: Sim.write(values, state)
+
+    @impl true
+    def report(message, state), do: Sim.report(message, state)
+
+    @impl true
+    def close(%{sim: sim} = state) do
+      :ets.update_counter(Logex.TripTest, {:closes, sim}, 1, {{:closes, sim}, 0})
+      Sim.close(state)
+    end
+  end
+
   setup_all do
     :ets.new(__MODULE__, [:named_table, :public, :set])
     :ok
@@ -1107,6 +1133,73 @@ defmodule Logex.TripTest do
       assert Sim.closed?(panel) and Sim.closed?(drive)
     end
 
+    test "a stop while a device waits on the runner for its change zeroes and closes it " <>
+           "once, the change a report's or a poll's" do
+      text =
+        "task fast interval 10 priority 1\nvar_global x bool at panel.i.0\n" <>
+          "var_global w dint at panel.i.2\nvar_global y bool at panel.q.0\n" <>
+          "program r relay with fast\n  r.in x\n  r.out y\n"
+
+      for {reports, poll} <- [{true, 1_000_000}, {false, 10}] do
+        {:ok, clock} = Manual.start_link()
+        {:ok, panel} = Sim.start_link(reports: reports, clock: clock)
+
+        {:ok, runner} =
+          Runner.start_link(
+            configuration: configured(text),
+            io: %{"panel" => {Closes, sim: panel}},
+            clock: {Manual, clock},
+            poll: poll
+          )
+
+        Sim.set(panel, [0], 1)
+        Manual.advance(clock, 10)
+        assert List.last(Sim.writes(panel)) == %{[0] => 1}
+
+        # The runner held, the panel's change waits in its mailbox, the panel waiting on
+        # it, the change reported as it is set or read at the poll at 20; the stop is
+        # served all the same, and closes the panel while it waits.
+        :sys.suspend(runner)
+        spawn(fn -> Sim.set(panel, [2], 5) end)
+        spawn(fn -> Manual.advance(clock, 10) end)
+        waiting(runner)
+        assert Runner.stop(runner) == :ok
+        zeroed_once(panel, 1)
+        assert :ets.lookup_element(__MODULE__, {:closes, panel}, 2) == 1
+      end
+    end
+
+    @tag :capture_log
+    test "a runner that crashes in a round a device's change made zeroes and closes that " <>
+           "device once" do
+      text =
+        "task e single t priority 0\nvar_global t bool at panel.i.0\n" <>
+          "var_global boom dint at panel.i.1\nvar_global x bool at panel.i.2\n" <>
+          "var_global y bool at panel.q.0\nprogram r relay with e\n  r.in x\n  r.out y\n"
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(text),
+          io: %{"panel" => {Closes, sim: panel}},
+          clock: {Manual, clock},
+          poll: 1_000_000,
+          steps: Garbage
+        )
+
+      Process.unlink(runner)
+      ref = Process.monitor(runner)
+      Sim.set(panel, %{[1] => 6, [2] => 1})
+      Sim.set(panel, [0], 1)
+      assert_receive {:DOWN, ^ref, :process, ^runner, {:function_clause, _stack}}, 5000
+      assert Sim.closed?(panel)
+      # The first round's 0, its relay not run, and the close's, once.
+      assert Sim.writes(panel) == [%{[0] => 0}, %{[0] => 0}]
+      assert :ets.lookup_element(__MODULE__, {:closes, panel}, 2) == 1
+    end
+
     test "a device that was never opened is neither zeroed nor closed as it stops" do
       {:ok, clock} = Manual.start_link()
 
@@ -1347,6 +1440,12 @@ defmodule Logex.TripTest do
       0 -> :ok
     end
   end
+
+  # Waits until a message waits in the runner's mailbox.
+  defp waiting(runner), do: waited(Process.info(runner, :message_queue_len), runner)
+
+  defp waited({:message_queue_len, 0}, runner), do: waiting(runner)
+  defp waited(_len, _runner), do: :ok
 
   # Waits until the runner holds a request in its queue.
   defp wait_queued(runner), do: queued(:queue.is_empty(:sys.get_state(runner).queue), runner)
