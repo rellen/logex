@@ -1282,6 +1282,29 @@ defmodule Logex.TripTest do
       assert Runner.get!(runner, "hits") == 1
     end
 
+    test "a restart's first round writes again nothing written before the trip, a poll " <>
+           "inside it among it: a restart is never a resume" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} = slow(@conveyor, poll: 10)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 30)
+      Sim.fail(panel, :read, {:error, :eio})
+      Manual.advance(clock, 10)
+      assert {:io, "panel", {:error, :eio}} = Runner.status(runner).trip
+      zeroed_once(panel, 1)
+      zeroed_once(drive, 1)
+      tripped = {length(Sim.writes(panel)), length(Sim.writes(drive))}
+
+      # x released while tripped, and the restart's first round stuck 15 ms, the devices
+      # polled meanwhile with the step's deadline heard: none writes its 1 again, and the
+      # round writes its own 0.
+      Sim.set(panel, %{[0] => 0, [1] => 15})
+      assert Runner.restart(runner, :cold) == :ok
+      {panel_at, drive_at} = tripped
+      assert Enum.drop(Sim.writes(panel), panel_at) == [%{[0] => 0}]
+      assert Enum.drop(Sim.writes(drive), drive_at) == [%{[0] => 0}]
+      assert Runner.status(runner).status == :running
+    end
+
     test "a restart that trips again zeroes once more, and once" do
       %{runner: runner, clock: clock, panel: panel} = rig()
       Sim.set(panel, %{[0] => 1, [1] => 5})

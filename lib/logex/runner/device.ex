@@ -27,8 +27,10 @@ defmodule Logex.Runner.Device do
   #   and stops (decision 116).
   # - `zero/1` is a trip's (M4-4, decision 113): every output written 0 once, and the device
   #   latched, writing nothing more, a round's write and a poll's write again among it,
-  #   until `release/1`, a restart's; a close of a latched device writes no 0 again, so
-  #   that every output is written 0 exactly once whatever comes after the trip.
+  #   until `release/1`, a restart's, which forgets what it last wrote, so that nothing is
+  #   written again before the restart's first round writes; a close of a latched device
+  #   writes no 0 again, so that every output is written 0 exactly once whatever comes
+  #   after the trip.
   # - Its heartbeat (decision 125): a refresh carries the deadline by which it will hear
   #   from the runner again, and the time it was sent. A device that hears nothing by the
   #   deadline its last refresh carried, a wake on the runner's clock at it, latches as a
@@ -108,8 +110,11 @@ defmodule Logex.Runner.Device do
   def handle_call(:close, _from, state), do: {:stop, :normal, :ok, closed(zeroed(state))}
   def handle_call(:zero, _from, state), do: {:reply, :ok, latched(state)}
 
+  # A release forgets what the device last wrote, so that a poll's write again writes
+  # nothing until the restart's first round has written its own outputs: a restart is
+  # never a resume (decision 113).
   def handle_call(:release, _from, state),
-    do: {:reply, :ok, %{disarmed(state) | latched: false, deadline: nil}}
+    do: {:reply, :ok, %{disarmed(state) | latched: false, deadline: nil, written: nil}}
 
   @impl GenServer
   def handle_cast({:refresh, _deadline, _at}, %{latched: true} = state), do: {:noreply, state}
