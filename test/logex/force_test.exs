@@ -354,6 +354,168 @@ defmodule Logex.ForceTest do
     end
   end
 
+  describe "the forces file, read at every start (decision 127)" do
+    test "a runner killed while an input is forced, started again from the same file, " <>
+           "comes back with it forced and listed, from its first round",
+         %{tmp_dir: dir} do
+      %{runner: runner, clock: clock, panel: panel, file: file} = started(dir)
+      Runner.force(runner, "x", 1)
+      Runner.force(runner, "level", -3)
+      Manual.advance(clock, 10)
+      assert Sim.outputs(panel) == %{[0] => 1}
+
+      # The crash: the runner is gone, and its devices zero their outputs.
+      Process.flag(:trap_exit, true)
+      Process.exit(runner, :kill)
+      assert_receive {:EXIT, ^runner, :killed}
+      assert File.read!(file) == "level -3\nx 1\n"
+
+      # A fresh start from the same file: forced, listed, and read by the first round.
+      %{runner: runner} = started(dir)
+      assert %{forces: %{"x" => 1, "level" => -3}, rounds: 1} = Runner.status(runner)
+      assert {Runner.get!(runner, "y"), Runner.get!(runner, "seen")} == {1, -3}
+
+      # Deleted with no runner, the file is no force at the next start.
+      Runner.stop(runner)
+      File.rm!(file)
+      %{runner: runner} = started(dir)
+      assert %{forces: %{}} = Runner.status(runner)
+      assert Runner.get!(runner, "y") == 0
+    end
+
+    test "a trigger forced in the file is read by the first round", %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "forces"), "e 1\n")
+      %{runner: runner, drive: drive} = started(dir)
+      assert Runner.get!(runner, "hits") == 1
+      assert Sim.outputs(drive) == %{[0] => 1}
+    end
+
+    test "a last line with no newline is a line", %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "forces"), "level 4\nx 1")
+      %{runner: runner} = started(dir)
+      assert Runner.status(runner).forces == %{"level" => 4, "x" => 1}
+    end
+
+    test "every force the configuration cannot take, and every line that is no force, " <>
+           "named in one refusal, the runner not started",
+         %{tmp_dir: dir} do
+      file = Path.join(dir, "forces")
+
+      File.write!(
+        file,
+        Enum.join(
+          ["levle 1", "y 1", "x 2", "x 1", "level 5000000000", "nonsense", "level 01"] ++
+            ["", "level  2", "e 1", "e 0", "seen 1"],
+          "\n"
+        ) <> "\n"
+      )
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      raises(
+        Enum.join(
+          [
+            "#{file}: line 1: `levle` is no input point of `plant` — did you mean `level`?",
+            "#{file}: line 2: `y` is an output point, at `panel.q.0`: only an input point is forced",
+            "#{file}: line 3: `x` is a bool, forced to 0 or 1, got: 2",
+            "#{file}: line 4: `x` is forced on line 3 already",
+            "#{file}: line 5: `level` is a dint, forced to an integer from -2147483648 to " <>
+              "2147483647, got: 5000000000",
+            "#{file}: line 6: `nonsense` is no force: a line holds an input point's name and " <>
+              "its value, as `eye_1 1`",
+            "#{file}: line 7: `level 01` is no force: a line holds an input point's name and " <>
+              "its value, as `eye_1 1`",
+            "#{file}: line 8: `` is no force: a line holds an input point's name and its " <>
+              "value, as `eye_1 1`",
+            "#{file}: line 9: `level  2` is no force: a line holds an input point's name and " <>
+              "its value, as `eye_1 1`",
+            "#{file}: line 11: `e` is forced on line 10 already",
+            "#{file}: line 12: `seen` is no input point of `plant`"
+          ],
+          "\n"
+        ),
+        fn ->
+          Runner.start_link(
+            configuration: plant(),
+            io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+            clock: {Manual, clock},
+            forces: file
+          )
+        end
+      )
+
+      # Nothing started: no device was opened.
+      assert {Sim.reads(panel), Sim.writes(panel), Sim.writes(drive)} == {0, [], []}
+    end
+
+    test "a file that cannot be read refuses the start", %{tmp_dir: dir} do
+      file = Path.join(dir, "forces")
+      File.mkdir!(file)
+
+      raises("#{file}: the forces file cannot be read: illegal operation on a directory", fn ->
+        started(dir)
+      end)
+    end
+
+    test "restart/2 reads it again: a force it cannot take raised in the caller, the " <>
+           "runner left tripped; then taken as it says",
+         %{tmp_dir: dir} do
+      %{runner: runner, clock: clock, panel: panel, file: file} = started(dir)
+      Runner.force(runner, "x", 1)
+      Sim.set(panel, %{[0] => 0, [2] => 8})
+      Manual.advance(clock, 10)
+      Sim.set(panel, [1], 5)
+      Sim.set(panel, [1], 0)
+      assert %{status: :tripped} = Runner.status(runner)
+      writes = Sim.writes(panel)
+
+      File.write!(file, "x 1\ny 1\n")
+
+      raises(
+        "#{file}: line 2: `y` is an output point, at `panel.q.0`: only an input point is forced",
+        fn -> Runner.restart(runner, :cold) end
+      )
+
+      assert %{status: :tripped, forces: %{"x" => 1}} = Runner.status(runner)
+      assert Sim.writes(panel) == writes
+
+      # Edited to force `level` alone: the restart's first round reads `x` from its device
+      # again, and `level` forced.
+      File.write!(file, "level 2\n")
+      assert Runner.restart(runner, :cold) == :ok
+      assert %{status: :running, forces: %{"level" => 2}} = Runner.status(runner)
+      assert {Runner.get!(runner, "y"), Runner.get!(runner, "seen")} == {0, 2}
+
+      # One that cannot be read leaves it tripped too.
+      Sim.set(panel, [1], 5)
+      Sim.set(panel, [1], 0)
+      File.rm!(file)
+      File.mkdir!(file)
+
+      raises("#{file}: the forces file cannot be read: illegal operation on a directory", fn ->
+        Runner.restart(runner, :cold)
+      end)
+
+      assert %{status: :tripped, forces: %{"level" => 2}} = Runner.status(runner)
+      File.rmdir!(file)
+      assert Runner.restart(runner, :cold) == :ok
+      assert Runner.get!(runner, "seen") == 8
+      Runner.force(runner, "level", 2)
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "seen") == 2
+
+      # Deleted, it is no force at the next restart: `level` back to its device's 8.
+      Sim.set(panel, [1], 5)
+      Sim.set(panel, [1], 0)
+      File.rm!(file)
+      assert Runner.restart(runner, :warm) == :ok
+      assert Runner.status(runner).forces == %{}
+      assert Runner.get!(runner, "seen") == 8
+    end
+  end
+
   describe "a forced trigger's round, timed by its steps" do
     test "is not the request's: a force is timed against the idle watchdog without it",
          %{tmp_dir: dir} do

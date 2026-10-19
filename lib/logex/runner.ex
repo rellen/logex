@@ -158,7 +158,17 @@ defmodule Logex.Runner do
   one force a line, `name value`, in name order, the empty file for none, written to
   `<path>.tmp` beside it, flushed to the disk and renamed over it, so that a crash at any
   moment leaves the old set or the new; a write that fails changes nothing and gives
-  `{:error, {:forces, reason}}`. A runner started without `forces:` takes no force, an
+  `{:error, {:forces, reason}}`. Every start reads it, `start_link/1` in the caller,
+  after the configuration and the bindings, and `restart/2` before it releases anything,
+  so that a runner killed while an input is forced, and started again from the same file,
+  comes back with it forced and listed: a file that does not exist is no force; one that
+  cannot be read, a line that is no force, a point forced twice, and a force the
+  configuration cannot take, on a point it does not have as an input point or of a value
+  that does not fit, are the host's mistake, every one named in one `ArgumentError`, a
+  line each, `<path>: line <n>: ...`, the runner not started, or at a restart left
+  tripped. A point a restart's file no longer forces reads its device's last value
+  again. With no runner, the host clears every force by deleting the file. A runner
+  started without `forces:` takes no force, an
   output point or a name that is no input point's is forced by no one, and a value that
   does not fit its point is refused, each the host's mistake. Output forcing waits for
   §5's forcing in `cycle/3`.
@@ -361,7 +371,8 @@ defmodule Logex.Runner do
   back to its initial value), `{:restart, mode}` sent to the subscribers, and the first
   round run at once, before it returns, the clock not counting the time it was stopped,
   so that round's elapsed time is 0. `:ok`; a runner that is running is the host's
-  mistake (decision 133).
+  mistake (decision 133). It reads the forces file again first, as every start does
+  (decision 127): a force it cannot take is raised here, the runner left tripped.
   """
   def restart(runner, mode), do: call(runner, {:restart, mode!(mode)})
 
@@ -551,7 +562,19 @@ defmodule Logex.Runner do
         "the runner is running: restart/2 starts a runner again once it has tripped"
       )
 
-  defp serve({:restart, mode}, state), do: restarted(mode, state)
+  # A restart reads the forces file again, as every start does (decision 127): a force it
+  # cannot take is raised in the caller, the runner left tripped; a point no longer forced
+  # reads its device's last value again.
+  defp serve({:restart, mode}, state) do
+    forces = read_forces(state.file, state)
+    unforced = Map.keys(state.forces) -- Map.keys(forces)
+
+    restarted(mode, %{
+      state
+      | forces: forces,
+        pending: Enum.into(Map.take(state.values, unforced), state.pending)
+    })
+  end
 
   defp serve(other, _state),
     do:
@@ -653,6 +676,112 @@ defmodule Logex.Runner do
       Map.get_lazy(forces, name, fn ->
         Map.get_lazy(pending, name, fn -> Runtime.get!(runtime, name) end)
       end)
+
+  # The forces file read at a start, `start_link/1`'s in the caller and `restart/2`'s
+  # (decision 127): a file that does not exist is no force; one that cannot be read, a
+  # line that is no force, a point forced twice, and a force the configuration cannot
+  # take are the host's mistakes, every one named, a line each, the runner not started or
+  # left tripped.
+  defp read_forces(nil, _points), do: %{}
+  defp read_forces(path, points), do: forces_read(File.read(path), path, points)
+
+  defp forces_read({:error, :enoent}, _path, _points), do: %{}
+
+  defp forces_read({:error, reason}, path, _points),
+    do:
+      raise(
+        ArgumentError,
+        "#{path}: the forces file cannot be read: #{:file.format_error(reason)}"
+      )
+
+  defp forces_read({:ok, text}, path, points) do
+    {forces, _lines, problems} =
+      text
+      |> String.split("\n")
+      |> unended()
+      |> Enum.with_index(1)
+      |> Enum.reduce({%{}, %{}, []}, &force_line(&1, &2, points))
+
+    forces_taken(Enum.reverse(problems), path, forces)
+  end
+
+  # The text after the last newline, empty in a file the runner wrote, is no line.
+  defp unended(lines), do: unended(List.last(lines), lines)
+  defp unended("", lines), do: Enum.drop(lines, -1)
+  defp unended(_last, lines), do: lines
+
+  defp force_line({text, line}, acc, points),
+    do: force_read(parsed(String.split(text, " ")), text, line, acc, points)
+
+  defp parsed([name, value]), do: valued(Integer.parse(value), name, value)
+  defp parsed(_parts), do: :error
+
+  defp valued({integer, ""}, name, value),
+    do: spelled(Integer.to_string(integer) == value, name, integer)
+
+  defp valued(_other, _name, _value), do: :error
+
+  defp spelled(true, name, integer), do: {:ok, name, integer}
+  defp spelled(false, _name, _integer), do: :error
+
+  defp force_read(:error, text, line, {forces, lines, problems}, _points),
+    do:
+      {forces, lines,
+       [
+         {line,
+          "`#{text}` is no force: a line holds an input point's name and its value, as " <>
+            "`eye_1 1`"}
+         | problems
+       ]}
+
+  defp force_read({:ok, name, value}, _text, line, {forces, lines, problems}, points),
+    do:
+      once(
+        Map.fetch(lines, name),
+        name,
+        value,
+        line,
+        {forces, Map.put_new(lines, name, line), problems},
+        points
+      )
+
+  defp once({:ok, first}, name, _value, line, {forces, lines, problems}, _points),
+    do: {forces, lines, [{line, "`#{name}` is forced on line #{first} already"} | problems]}
+
+  defp once(:error, name, value, line, {forces, lines, problems}, points),
+    do:
+      taken_from_file(
+        force_problem(input(name, points), name, value),
+        name,
+        value,
+        line,
+        {forces, lines, problems}
+      )
+
+  defp force_problem({:ok, type}, name, value),
+    do: fitting_force(Declarations.fits?(type, value), name, type, value)
+
+  defp force_problem({:error, message}, _name, _value), do: message
+
+  defp fitting_force(true, _name, _type, _value), do: nil
+  defp fitting_force(false, name, type, value), do: misfit(name, type, value)
+
+  defp taken_from_file(nil, name, value, _line, {forces, lines, problems}),
+    do: {Map.put(forces, name, value), lines, problems}
+
+  defp taken_from_file(problem, _name, _value, line, {forces, lines, problems}),
+    do: {forces, lines, [{line, problem} | problems]}
+
+  defp forces_taken([], _path, forces), do: forces
+
+  defp forces_taken(problems, path, _forces),
+    do:
+      raise(
+        ArgumentError,
+        Enum.map_join(problems, "\n", fn {line, problem} ->
+          "#{path}: line #{line}: #{problem}"
+        end)
+      )
 
   # The forces file, written whole: one force a line, `name value`, in name order, to a file
   # beside it, flushed to the disk and renamed over it, so that a crash at any moment leaves
@@ -822,16 +951,6 @@ defmodule Logex.Runner do
         Map.new(inputs, fn {_device, point} ->
           {point.name, Runtime.get!(start.runtime, point.name)}
         end),
-      types: Map.new(inputs, fn {_device, point} -> {point.name, point.type} end),
-      located:
-        Map.new(
-          for(
-            %Configuration.Global{at: at, name: name} <- start.configuration.globals,
-            at != nil,
-            do: {name, at}
-          )
-        ),
-      forces: %{},
       kick: false,
       written: %{},
       watchdogs: watchdogs(start.configuration)
@@ -1558,7 +1677,28 @@ defmodule Logex.Runner do
     devices = Logex.IO.bind!(configuration, io)
     steps = steps!(Keyword.get(opts, :steps, Runtime))
 
+    points = %{
+      configuration: configuration,
+      types:
+        Map.new(
+          for {_device, _module, _opts, points} <- devices,
+              %Point{direction: :input} = point <- points,
+              do: {point.name, point.type}
+        ),
+      located:
+        Map.new(
+          for(
+            %Configuration.Global{at: at, name: name} <- configuration.globals,
+            at != nil,
+            do: {name, at}
+          )
+        )
+    }
+
     {%{
+       forces: read_forces(file, points),
+       types: points.types,
+       located: points.located,
        configuration: configuration,
        steps: steps,
        runtime: runtime,
