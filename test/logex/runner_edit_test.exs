@@ -338,6 +338,32 @@ defmodule Logex.RunnerEditTest do
       assert rounds(drained(runner)) == [120, 170]
     end
 
+    # An untest is timed by the runner's clock as a test is (decision 139): lengthened to
+    # 200 at 60, `slow` runs at 100 and is next due at 300; untested at 230 by the clock,
+    # 130 ms after the resource's 100, it is next due at min(300, 230 + 50) = 280. Timed at
+    # the resource's 100 it would be due at 150, at once, a period missed.
+    test "an untest is timed at the step's time by the runner's clock, as a test is" do
+      %{runner: runner, clock: clock} = started()
+      Runner.subscribe(runner, [:round, :overlap])
+      Manual.advance(clock, 60)
+
+      longer =
+        configured(String.replace(@plant, "interval 50 priority 1", "interval 200 priority 1"))
+
+      {:ok, _} = Runner.accept(runner, longer)
+      {:ok, _} = Runner.test(runner)
+      Manual.advance(clock, 170)
+      assert rounds(drained(runner)) == [50, 100]
+      assert resource(runner).now == 100
+
+      assert {:ok, report} = Runner.untest(runner)
+      assert {:next_due, "slow", {300, 280}} in report
+      Manual.advance(clock, 100)
+      events = drained(runner)
+      refute Enum.any?(events, &match?({:overlap, _, _}, &1))
+      assert rounds(events) == [280, 330]
+    end
+
     # The maintainer's example (decision 139): the fan last ran at 50 and is next due at
     # 100, no untimed program, so the resource stands at 50; the interval cut to 20 ms at
     # 95 by the clock is next due at min(100, 95 + 20) = 100, with no missed period and no

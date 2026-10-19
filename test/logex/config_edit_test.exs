@@ -232,6 +232,26 @@ defmodule Logex.ConfigEditTest do
       assert_raise ArgumentError, ~r/^elapsed_ms must be/, fn ->
         Edit.untest(tested, runtime, opaque(-1))
       end
+
+      # Test and untest each check the step's time before the generation: on an edit
+      # that has ended, the time is told first.
+      {_assembled, ended, _} = Edit.assemble(tested, testing)
+
+      assert_raise ArgumentError, ~r/^this edit expects the resource at generation 0/, fn ->
+        Edit.test(edit, ended)
+      end
+
+      assert_raise ArgumentError,
+                   "elapsed_ms must be a non-negative integer of milliseconds, got: -1",
+                   fn -> Edit.test(edit, ended, opaque(-1)) end
+
+      assert_raise ArgumentError, ~r/^this edit expects the resource at generation 1/, fn ->
+        Edit.untest(tested, ended)
+      end
+
+      assert_raise ArgumentError,
+                   "elapsed_ms must be a non-negative integer of milliseconds, got: -1",
+                   fn -> Edit.untest(tested, ended, opaque(-1)) end
     end
 
     test "an edit that has ended: the generation has moved (decisions 60 and 64)" do

@@ -3795,7 +3795,12 @@ and M4-7 the documents.
   the runner's step time 0 while running, read on the clock while tripped, not handed to
   accept, and not passed to a step); run three at a time, some rows also failed a slow
   real-clock test by its timeout, as an unmutated copy did once, which is not counted.
-  1528 tests pass on Elixir 1.20.4 (9 of them doctests), up from 1524.
+  Its verification found two rules no row reverted alone: test checking the generation
+  before the time, and the runner passing the step time to a test but not to an untest,
+  whose untest the existing tests took where both times give one answer. Each now has a
+  test that fails on that mutant, which the full suite judges red, as it does untest's
+  order and the runner passing no step time to either again. 1529 tests pass on Elixir
+  1.20.4 (9 of them doctests), up from 1524.
 - **M4-6 · The contract walk.** `api_contract_test.exs` gains a runner walk on the manual
   clock: seeded configurations with and without untimed programs, simulated devices that
   report and that do not, random waits and presses, injected faults, edits, forces and

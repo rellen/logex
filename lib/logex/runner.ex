@@ -402,7 +402,7 @@ defmodule Logex.Runner do
   process, against the resource the runner hands it, so that the runner's rounds wait on
   it no longer than on a request; where another step was taken meanwhile, it is done
   again against the resource as it is then (decision 141). `{:edit, :accept, forecast}` goes to the
-  subscribers. Its host mistakes are `Logex.Configuration.Edit.accept/2`'s, raised in the
+  subscribers. Its host mistakes are `Logex.Configuration.Edit.accept/3`'s, raised in the
   caller.
   """
   def accept(runner, candidate) do
