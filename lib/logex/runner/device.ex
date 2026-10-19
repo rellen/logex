@@ -40,6 +40,11 @@ defmodule Logex.Runner.Device do
   #   sooner, and moved on to the last deadline where it comes before it; and a device
   #   waiting on the runner for its own change takes its wake there too, so that a runner
   #   stuck while it takes the change is seen.
+  # - Back from its adapter (decision 114): after each read and each report, whatever its
+  #   result, and at each poll while it waits on the runner, the device tells the runner,
+  #   `{Logex.Runner.Device, pid, at, {:back, name, nil}}`, so that the runner sees one hung
+  #   inside its own read or report, which no request of the runner's reaches while its
+  #   outputs do not change.
   # - Its faults (decision 114): every callback is called guarded, so that an error given
   #   back, `{:error, reason, state}`, a raise, a throw, an exit, or a value of a shape the
   #   behaviour does not give, is a cause, `{:error, reason}`, `{:raised, message}`,
@@ -124,7 +129,7 @@ defmodule Logex.Runner.Device do
 
   @impl GenServer
   def handle_info({__MODULE__, :poll, at}, %{next: at} = state),
-    do: waited(fn -> polled(read(adapted(:read, [state.adapter], state), state)) end)
+    do: waited(fn -> polled(read(back(adapted(:read, [state.adapter], state), state), state)) end)
 
   def handle_info({__MODULE__, :poll, _stale}, state), do: {:noreply, state}
 
@@ -242,6 +247,21 @@ defmodule Logex.Runner.Device do
     %{state | next: next}
   end
 
+  # Back from its adapter, a read or a report given back whatever its result: the runner
+  # told, `{Logex.Runner.Device, pid, at, {:back, name, nil}}`, at the time on its clock,
+  # so that it sees a device hung inside its own read or report (decision 114), which no
+  # request of the runner's reaches while its outputs do not change; the cost, a message
+  # a device a poll period, and one a report.
+  defp back(result, state) do
+    told_back(state)
+    result
+  end
+
+  defp told_back(%{clock: {mod, clock}, runner: runner, name: name} = state) do
+    send(runner, {__MODULE__, self(), clocked(fn -> mod.now_ms(clock) end), {:back, name, nil}})
+    state
+  end
+
   # The outputs written, or the write's fault.
   defp wrote(values, state),
     do: wrote(adapted(:write, [values, state.adapter], state), values, state)
@@ -271,7 +291,7 @@ defmodule Logex.Runner.Device do
   defp reported(false, _message, state), do: state
 
   defp reported(true, message, state),
-    do: report(adapted(:report, [message, state.adapter], state), state)
+    do: report(back(adapted(:report, [message, state.adapter], state), state), state)
 
   defp report({:ok, values, adapter}, state), do: passed(values, %{state | adapter: adapter})
   defp report({:fault, cause, adapter}, state), do: faulted(cause, %{state | adapter: adapter})
@@ -307,6 +327,11 @@ defmodule Logex.Runner.Device do
       {__MODULE__, :deadline, _at} = deadline ->
         {:noreply, state} = handle_info(deadline, state)
         awaiting(ref, state)
+
+      # A poll while it waits reads nothing, its read waiting for the next, but tells the
+      # runner the device is not inside its adapter, as every read does.
+      {__MODULE__, :poll, at} when at == :erlang.map_get(:next, state) ->
+        awaiting(ref, polled(told_back(state)))
 
       {:"$gen_call", from, request} ->
         answered(handle_call(request, from, state), from, ref)

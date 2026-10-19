@@ -180,7 +180,12 @@ defmodule Logex.Runner do
     address, value}` and an address that is no input point's `{:unknown_address,
     address}`; a device that does not answer the runner within the deadline its last
     refresh carried, on the runner's clock, is `:timeout`, and is killed, its outputs left
-    to what it does on losing its master; and a device's process that goes down, which
+    to what it does on losing its master; so is one hung inside its own read or report,
+    which has not told the runner it is back from its adapter, after a read or a report,
+    at a poll while it waits on the runner or by answering a round's write in time, within
+    the idle watchdog and a poll period, seen as each round begins and at each wait's
+    refresh, at the cost of a message to the runner a device a poll period (provisional,
+    see §4.11); and a device's process that goes down, which
     the runner traps, is `{:down, reason}`. A device whose own read, report or write again
     fails tells the runner and latches, its 0 written where its adapter still takes it;
     a round's write that fails trips at once, the devices after it not written;
@@ -586,6 +591,7 @@ defmodule Logex.Runner do
           {{device, point.address}, {point.name, point.type}}
         end),
       down: MapSet.new(),
+      heard: Map.new(devices, fn {name, _pid, _points} -> {name, now(start)} end),
       deadline: nil,
       outputs:
         Map.new(devices, fn {name, _pid, points} ->
@@ -702,7 +708,8 @@ defmodule Logex.Runner do
 
   defp wake(true, late, state), do: rounded(%{state | latest_wake: max(state.latest_wake, late)})
 
-  defp wake(false, _late, state), do: scheduled(refresh(state, :idle))
+  defp wake(false, _late, state),
+    do: heard_from(silent(state), state, &scheduled(refresh(&1, :idle)))
 
   # Decision 122's slots: after C ms of the continuous task's rounds, at the end of the
   # round that completes them, the runner serves its own work for up to S ms, each request
@@ -751,7 +758,7 @@ defmodule Logex.Runner do
     receive do
       {Device, _pid, _at, _notice} = notice -> rounded(noticed([notice], state))
     after
-      0 -> a_round(state)
+      0 -> heard_from(silent(state), state, &a_round/1)
     end
   end
 
@@ -909,11 +916,37 @@ defmodule Logex.Runner do
     end
   end
 
+  defp notice({Device, pid, at, {:back, name, nil}}, %{pids: pids} = state)
+       when :erlang.map_get(name, pids) == pid,
+       do: %{state | heard: Map.put(state.heard, name, at)}
+
   defp notice({Device, pid, _at, {_kind, name, _detail} = notice}, %{pids: pids} = state)
        when :erlang.map_get(name, pids) == pid,
        do: tripped(state, reason(notice))
 
   defp notice(_notice, state), do: state
+
+  # A device hung inside its own adapter (decision 114): one that has told the runner it is
+  # back from its adapter, after a read or a report or by answering a round's write in
+  # time, within the idle watchdog and a poll period, the time the runner gives any call
+  # of its own to a device, is heard; the first in device-name order that has not, checked
+  # as a round begins and at each wait's refresh, both while running, when no device is
+  # down, is killed, its outputs left to what it does on losing its master, and trips the
+  # runner `{:io, device, :timeout}`, the trip's zero finding it down.
+  defp silent(%{devices: devices, heard: heard, idle: idle, poll: poll} = state) do
+    now = now(state)
+
+    Enum.find_value(devices, fn {name, pid, _points} ->
+      now - Map.fetch!(heard, name) > idle + poll && {name, pid}
+    end)
+  end
+
+  defp heard_from(nil, state, go), do: go.(state)
+
+  defp heard_from({name, pid}, state, _go) do
+    Process.exit(pid, :kill)
+    tripped(state, {:io, name, :timeout})
+  end
 
   defp reason({:latched, name, ms}), do: {:watchdog, {:device, name, ms}}
   defp reason({:fault, name, cause}), do: {:io, name, cause}
@@ -1026,7 +1059,8 @@ defmodule Logex.Runner do
       merged(changes, state)
       | devices: devices,
         pids: Map.put(state.pids, name, pid),
-        down: MapSet.delete(state.down, name)
+        down: MapSet.delete(state.down, name),
+        heard: Map.put(state.heard, name, now(state))
     })
   end
 
@@ -1194,24 +1228,33 @@ defmodule Logex.Runner do
   defp wrote(true, name, pid, values, state) do
     timeout = max(state.deadline - now(state), 0)
     answer = asked(pid, &Device.write(&1, values, &2), timeout)
-    in_time(answer, now(state) < state.deadline, name, pid, values, state)
+    in_time(answer, now(state), name, pid, values, state)
   end
 
-  defp in_time(:ok, true, name, _pid, values, state),
-    do: {:cont, {:ok, %{state | written: Map.put(state.written, name, values)}}}
+  # A write answered in time: the device is back from its adapter, heard then.
+  defp in_time(:ok, answered, name, _pid, values, %{deadline: deadline} = state)
+       when answered < deadline,
+       do:
+         {:cont,
+          {:ok,
+           %{
+             state
+             | written: Map.put(state.written, name, values),
+               heard: Map.put(state.heard, name, answered)
+           }}}
 
-  defp in_time(:ok, false, name, pid, _values, state) do
+  defp in_time(:ok, _late, name, pid, _values, state) do
     Process.exit(pid, :kill)
     {:halt, {:trip, {:io, name, :timeout}, went_down(name, state)}}
   end
 
-  defp in_time({:error, :timeout}, _in_time, name, _pid, _values, state),
+  defp in_time({:error, :timeout}, _answered, name, _pid, _values, state),
     do: {:halt, {:trip, {:io, name, :timeout}, went_down(name, state)}}
 
-  defp in_time({:error, {:down, reason}}, _in_time, name, _pid, _values, state),
+  defp in_time({:error, {:down, reason}}, _answered, name, _pid, _values, state),
     do: {:halt, {:trip, {:io, name, {:down, reason}}, went_down(name, state)}}
 
-  defp in_time({:error, cause}, _in_time, name, _pid, _values, state),
+  defp in_time({:error, cause}, _answered, name, _pid, _values, state),
     do: {:halt, {:trip, {:io, name, cause}, state}}
 
   defp now(%{clock: {module, clock}}), do: clocked(fn -> module.now_ms(clock) end)

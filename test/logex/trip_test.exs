@@ -84,6 +84,19 @@ defmodule Logex.TripTest do
     defp passed(_clock, _ms), do: :ok
   end
 
+  # A stand-in whose step of the task `e1` sleeps 200 ms on the real clock.
+  defmodule Sleeps do
+    def cycle_steps(runtime, elapsed, inputs), do: Runtime.cycle_steps(runtime, elapsed, inputs)
+    def cycle_outputs(runtime), do: Runtime.cycle_outputs(runtime)
+
+    def cycle_step(runtime, {:timed, "e1", _run} = step) do
+      Process.sleep(200)
+      Runtime.cycle_step(runtime, step)
+    end
+
+    def cycle_step(runtime, step), do: Runtime.cycle_step(runtime, step)
+  end
+
   # A clock whose every reading takes `ms`, the manual clock's: so that the runner's own
   # work takes time.
   defmodule Ticks do
@@ -935,6 +948,122 @@ defmodule Logex.TripTest do
       assert Runner.status(runner).trip == {:io, "drive", {:down, :killed}}
       assert Runner.restart(runner, :cold) == :ok
       assert Sim.outputs(drive) == %{[0] => 1}
+    end
+
+    test "a device hung inside its own read, its outputs unchanged, trips {:io, device, " <>
+           ":timeout} once not heard within the idle watchdog and a poll period, killed" do
+      relays =
+        "var_global x bool at panel.i.0\nvar_global d bool at drive.i.0\n" <>
+          "var_global y bool at panel.q.0\nvar_global z bool at drive.q.0\n" <>
+          "program r relay\n  r.in x\n  r.out y\nprogram s relay\n  s.in d\n  s.out z\n"
+
+      # Seen as a round begins, each millisecond where untimed programs run, and at a
+      # wait's refresh, each poll period, where a task's rounds are ten seconds apart.
+      slow = String.replace(relays, "relay\n", "relay with slow\n")
+      slow = "task slow interval 10000 priority 1\n" <> slow
+
+      for {text, seen_in} <- [{relays, 1}, {slow, 10}] do
+        %{runner: runner, clock: clock, panel: panel, drive: drive} =
+          rig(configured(text), poll: 10, idle: 1000, steps: Runtime)
+
+        Sim.set(panel, [0], 1)
+        Manual.advance(clock, 10_000)
+
+        # The drive's process held after its read at 10,000, as one hung in its next read
+        # is: heard then, it is silent from 11,011, the idle watchdog and a poll period on.
+        old = device_pid(runner, "drive")
+        :sys.suspend(old)
+        drive_written = Sim.writes(drive)
+        Manual.advance(clock, 1010)
+        assert %{status: :running, rounds: rounds} = :sys.get_state(runner)
+        {took, :ok} = :timer.tc(fn -> Manual.advance(clock, seen_in) end, :millisecond)
+
+        assert %{status: :tripped, trip: {:io, "drive", :timeout}, rounds: ^rounds} =
+                 Runner.status(runner)
+
+        # Killed at once, not waited on for its 0: its outputs are left to it.
+        assert took < 500
+        refute Process.alive?(old)
+        zeroed_once(panel, 1)
+        assert Sim.writes(drive) == drive_written
+
+        # Opened again at a restart, two seconds on, and heard from its opening.
+        Manual.advance(clock, 2000)
+        assert Runner.restart(runner, :cold) == :ok
+        Manual.advance(clock, 1100)
+        assert Runner.status(runner).status == :running
+      end
+    end
+
+    test "a device hung inside its own read trips on the real clock, short" do
+      text =
+        "task fast interval 10 priority 1\nvar_global x bool at panel.i.0\n" <>
+          "var_global d bool at drive.i.0\nvar_global y bool at panel.q.0\n" <>
+          "program r relay with fast\n  r.in x\n  r.out y\n"
+
+      %{runner: runner, panel: panel, drive: drive} =
+        rig(configured(text),
+          poll: 10,
+          idle: 50,
+          steps: Runtime,
+          clock: {Logex.Runner.Clock.Monotonic, nil}
+        )
+
+      Runner.subscribe(runner)
+      Sim.set(panel, [0], 1)
+      assert written(panel, 200) == %{[0] => 1}
+      Sim.fail(drive, :read, :hang)
+      assert_receive {Runner, ^runner, {:trip, {:io, "drive", :timeout}}}, 2000
+      zeroed_once(panel, 1)
+      Runner.stop(runner)
+    end
+
+    test "a device waiting on the runner for its change is heard at each poll meanwhile, " <>
+           "on the real clock, short" do
+      text =
+        "task e1 single t1 priority 0 watchdog 1000\ntask e2 single t2 priority 1\n" <>
+          "var_global t1 bool at panel.i.0\nvar_global t2 bool at panel.i.1\n" <>
+          "var_global y bool at panel.q.0\nvar_global hits dint\n" <>
+          "program a count with e1\n  a.n hits\nprogram b relay with e2\n  b.in t2\n  b.out y\n"
+
+      {:ok, panel} = Sim.start_link(reports: true)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(text),
+          io: %{"panel" => {Sim, sim: panel}},
+          poll: 10,
+          idle: 50,
+          steps: Sleeps
+        )
+
+      # One report changes both triggers: e1's round sleeps 200 ms while the panel waits,
+      # and e2's round, at once after it, finds the panel heard.
+      Sim.set(panel, %{[0] => 1, [1] => 1})
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Runner.get!(runner, "y") == 1
+      Runner.stop(runner)
+    end
+
+    test "a device whose round's write is answered in time is heard then" do
+      text =
+        "task e1 single t1 priority 0\ntask e2 single t2 priority 1\n" <>
+          "var_global t1 bool at panel.i.0\nvar_global t2 bool at panel.i.1\n" <>
+          "var_global z bool at drive.q.0\nvar_global hits dint\n" <>
+          "program a relay with e1\n  a.in t1\n  a.out z\nprogram b count with e2\n  b.n hits\n"
+
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(text), poll: 10, idle: 100, steps: Runtime)
+
+      # The drive last read at 20; at 29 one report changes both triggers. e1's round
+      # writes the drive, which takes 105 ms, answered at 134, within its deadline, 139;
+      # e2's round begins at 134, the drive heard at 134, not at 20.
+      Manual.advance(clock, 29)
+      Sim.fail(drive, :write, {:delay, 105})
+      Sim.set(panel, %{[0] => 1, [1] => 1})
+      assert %{status: :running, trip: nil, now: 134} = Runner.status(runner)
+      assert Runner.get!(runner, "hits") == 1
+      assert List.last(Sim.writes(drive)) == %{[0] => 1}
     end
 
     test "a device that hangs while the runner is tripped is killed at the restart's " <>
