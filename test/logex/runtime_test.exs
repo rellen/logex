@@ -1542,8 +1542,11 @@ defmodule Logex.RuntimeTest do
              ]
 
       # M4-3: the wall-clock runner, a GenServer, its every call through its mailbox; and
-      # M4-4's restart/2; and M4-5's forcing.
+      # M4-4's restart/2; and M4-5's forcing and an edit's steps.
       assert Enum.sort(Logex.Runner.__info__(:functions)) == [
+               accept: 2,
+               assemble: 1,
+               cancel: 1,
                child_spec: 1,
                code_change: 3,
                force: 3,
@@ -1561,9 +1564,11 @@ defmodule Logex.RuntimeTest do
                subscribe: 1,
                subscribe: 2,
                terminate: 2,
+               test: 1,
                unforce: 2,
                unforce_all: 1,
-               unsubscribe: 1
+               unsubscribe: 1,
+               untest: 1
              ]
 
       # M4-3: each bound device's process, internal (no moduledoc), which the runner starts.

@@ -134,7 +134,7 @@ defmodule Logex.Runner do
   - `subscribe/2` sends the caller each event of the kinds it names, as `{Logex.Runner,
     runner, event}`: the resource's `{:overlap, task, missed}` and `{:fault, task,
     instance, fault}` and the runner's `{:trip, reason}` and `{:restart, mode}` by
-    default, with the edits M4-5 brings, and, only where named, the resource's `{:ran, task, instance, now}` and the runner's
+    default, with `{:edit, step, report}`, and, only where named, the resource's `{:ran, task, instance, now}` and the runner's
     `{:round, now, outputs}`, each round's output points. A subscriber is monitored and
     dropped when it goes down. `unsubscribe/1` stops them.
   - `force/3`, `unforce/2` and `unforce_all/1` force an input point, below.
@@ -172,6 +172,25 @@ defmodule Logex.Runner do
   output point or a name that is no input point's is forced by no one, and a value that
   does not fit its point is refused, each the host's mistake. Output forcing waits for
   §5's forcing in `cycle/3`.
+
+  **Edits** (M4-5, §4.11). Each step of a `Logex.Configuration.Edit` is a call to the
+  runner, served between two rounds as any request is, and the runner holds the edit, one
+  at a time: `accept/2` gives `{:ok, forecast}` or `{:error, diagnostics}`, a second
+  accept superseding the first (decision 66), a refused one leaving the edit held as it
+  was; `test/1`, `untest/1`, `assemble/1` and `cancel/1` each give `{:ok, report}`, the
+  report the same step gives taken over the resource directly, and its next round runs
+  the resource the step returns. Accept's work, which grows with the programs, is done in
+  the caller's process, against the resource the runner hands it (decision 119), and done
+  again where another step was taken meanwhile. After each step the rounds read the
+  configuration the resource runs: each task's watchdog (decision 129), and whether it
+  has untimed programs, an instance an edit adds with no task rounding back to back and
+  one it sets aside no more; and the next round is planned again from the last, so that
+  a task whose interval changed is next due where decision 40 moves it, no round lost or
+  added. Each step sends `{:edit, step, report}`, accept's its forecast, and `status/1`
+  gives the stage. A step may be taken while tripped, so that a program can be fixed and
+  then restarted, and a restart keeps the stage (decision 65). A step with no edit held,
+  and one its stage refuses, are the host's mistakes, the latter in
+  `Logex.Configuration.Edit`'s words, and so is each of accept's, raised in the caller.
 
   **Its trips** (M4-4; decisions 110, 111, 113 to 115, 125, 126, 128 and 133 to 137). A
   trip has one path, whatever caused it: scheduling stops, its wake cancelled; every
@@ -262,6 +281,7 @@ defmodule Logex.Runner do
   use GenServer, restart: :temporary
 
   alias Logex.{Configuration, Declarations, Runtime}
+  alias Logex.Configuration.Edit
   alias Logex.IO.Point
   alias Logex.Runner.{Clock, Device}
 
@@ -313,11 +333,11 @@ defmodule Logex.Runner do
   restart; `now`, the resource's time; `rounds`, the rounds run, a round that tripped
   not among them; `trip`, the trip's reason, nil while running; `overlaps`, each task's
   (`Logex.Runtime.overlaps/1`);
-  `forces`, every force, by its point's name, with its value; `edit`, nil; `runs`, each task's longest run against its watchdog,
+  `forces`, every force, by its point's name, with its value; `edit`, the stage of the
+  edit the runner holds, `:accepted`, `:testing` or `:untested`, nil for none; `runs`, each task's longest run against its watchdog,
   `{ms, watchdog_ms}`, a timed task's run and the continuous task's round, under its name
   or `:none`, a continuous task that runs no instance timing none and listed at 0; `latest_wake`, the most a round's wake came after its time, in ms; and
-  `refresh_gap`, the longest wait between two refreshes of the devices, in ms. M4-5 gives
-  the edit.
+  `refresh_gap`, the longest wait between two refreshes of the devices, in ms.
   """
   def status(runner), do: call(runner, :status)
 
@@ -362,6 +382,54 @@ defmodule Logex.Runner do
   taken off.
   """
   def unforce_all(runner), do: call(runner, :unforce_all)
+
+  @doc """
+  Accepts `candidate` against the configuration the runner runs, as
+  `Logex.Configuration.Edit.accept/2` does: `{:ok, forecast}`, the runner then holding
+  the edit, a second accept superseding the first, or `{:error, diagnostics}`, the edit
+  it held kept. Accept's work, which grows with the programs, is done in the caller's
+  process, against the resource the runner hands it, so that the runner's rounds wait on
+  it no longer than on a request; where another step was taken meanwhile, it is done
+  again against the resource as it is then. `{:edit, :accept, forecast}` goes to the
+  subscribers. Its host mistakes are `Logex.Configuration.Edit.accept/2`'s, raised in the
+  caller.
+  """
+  def accept(runner, candidate) do
+    {edits, runtime} = call(runner, :resource)
+    accepting(Edit.accept(runtime, candidate), edits, runner, candidate)
+  end
+
+  defp accepting({:ok, edit, forecast}, edits, runner, candidate),
+    do: held(call(runner, {:accept, edits, edit, forecast}), runner, candidate)
+
+  defp accepting(refused, _edits, _runner, _candidate), do: refused
+
+  defp held(:stale, runner, candidate), do: accept(runner, candidate)
+  defp held(reply, _runner, _candidate), do: reply
+
+  @doc """
+  Runs the candidate of the edit the runner holds, from accept or after an untest, as
+  `Logex.Configuration.Edit.test/2` does, between two rounds: `{:ok, report}`, the next
+  round running the resource it switched. A runner that holds no edit, and a step its
+  stage refuses, are the host's mistakes.
+  """
+  def test(runner), do: call(runner, {:edit, :test})
+
+  @doc "Runs the original again, from test, as `Logex.Configuration.Edit.untest/2` does: `{:ok, report}`."
+  def untest(runner), do: call(runner, {:edit, :untest})
+
+  @doc """
+  Keeps the candidate, from test, and ends the edit, as
+  `Logex.Configuration.Edit.assemble/2` does: `{:ok, report}`, the runner running the
+  candidate from now on.
+  """
+  def assemble(runner), do: call(runner, {:edit, :assemble})
+
+  @doc """
+  Keeps the original and ends the edit, from accept or after an untest, as
+  `Logex.Configuration.Edit.cancel/2` does: `{:ok, report}`.
+  """
+  def cancel(runner), do: call(runner, {:edit, :cancel})
 
   @doc """
   Starts a tripped runner again, `:cold` or `:warm`, `:warm` being `:cold` until `retain`
@@ -562,6 +630,36 @@ defmodule Logex.Runner do
         "the runner is running: restart/2 starts a runner again once it has tripped"
       )
 
+  # An edit's steps (§4.11, "Edits"): accept's work is the caller's, against the resource
+  # handed it with the count of steps the runner has taken, which the edit it accepted is
+  # held by only where no step came between, a second accept superseding the first
+  # (decision 66); each other step is taken here, between two rounds, on the edit held.
+  defp serve(:resource, state), do: {{state.edits, state.runtime}, state}
+
+  defp serve({:accept, edits, edit, forecast}, %{edits: edits} = state) do
+    published(state, [{:edit, :accept, forecast}])
+    {{:ok, forecast}, %{state | edit: edit}}
+  end
+
+  defp serve({:accept, _edits, _edit, _forecast}, state), do: {:stale, state}
+
+  defp serve({:edit, step}, %{edit: nil}),
+    do:
+      raise(
+        ArgumentError,
+        "the runner holds no edit: #{step}/1 is a step of the edit accept/2 accepts"
+      )
+
+  defp serve({:edit, step}, %{edit: edit} = state) when step in [:test, :untest] do
+    {edit, runtime, report} = apply(Edit, step, [edit, state.runtime])
+    {{:ok, report}, edited(state, step, edit, Edit.running(edit), runtime, report)}
+  end
+
+  defp serve({:edit, step}, %{edit: edit} = state) when step in [:assemble, :cancel] do
+    {configuration, runtime, report} = apply(Edit, step, [edit, state.runtime])
+    {{:ok, report}, edited(state, step, nil, configuration, runtime, report)}
+  end
+
   # A restart reads the forces file again, as every start does (decision 127): a force it
   # cannot take is raised in the caller, the runner left tripped; a point no longer forced
   # reads its device's last value again.
@@ -582,8 +680,38 @@ defmodule Logex.Runner do
         ArgumentError,
         "Logex.Runner has no request #{inspect(other)}: a runner is called through " <>
           "get/2, get!/2, status/1, subscribe/2, unsubscribe/1, force/3, unforce/2, " <>
-          "unforce_all/1, restart/2 and stop/2"
+          "unforce_all/1, accept/2, test/1, untest/1, assemble/1, cancel/1, restart/2 and " <>
+          "stop/2"
       )
+
+  # A step taken: the edit held, or none once it ends, the resource the step returned,
+  # which the next round runs, and, of the configuration it runs, each task's watchdog and
+  # its untimed programs, which the rounds read from now on (decision 129); its points,
+  # its tasks and its name no edit changes (§4.9); `{:edit, step, report}`
+  # sent; and, running, the next round planned again from the last, a task whose interval
+  # changed next due where decision 40 moved it, so that no round is lost or added.
+  defp edited(state, step, edit, configuration, runtime, report) do
+    state =
+      %{
+        state
+        | edit: edit,
+          runtime: runtime,
+          edits: state.edits + 1
+      }
+      |> Map.merge(timing(configuration))
+      |> longest()
+
+    published(state, [{:edit, step, report}])
+    replanned(state)
+  end
+
+  defp replanned(%{status: :running, last: {start, finish, again}} = state),
+    do: planned(state, start, finish, state.untimed or again)
+
+  defp replanned(state), do: state
+
+  defp stage(nil), do: nil
+  defp stage(edit), do: Edit.stage(edit)
 
   defp filed!(%{file: nil}),
     do:
@@ -829,7 +957,7 @@ defmodule Logex.Runner do
       trip: state.trip,
       overlaps: Runtime.overlaps(state.runtime),
       forces: state.forces,
-      edit: nil,
+      edit: stage(state.edit),
       runs: Map.new(state.longest, fn {task, ms} -> {task, {ms, watchdog(task, state)}} end),
       latest_wake: state.latest_wake,
       refresh_gap: state.refresh_gap
@@ -952,8 +1080,7 @@ defmodule Logex.Runner do
           {point.name, Runtime.get!(start.runtime, point.name)}
         end),
       kick: false,
-      written: %{},
-      watchdogs: watchdogs(start.configuration)
+      written: %{}
     })
     |> scheduling(start.configuration)
   end
@@ -966,15 +1093,11 @@ defmodule Logex.Runner do
   # count the share keeps, the requests waiting for it, the subscribers with the kinds of
   # event each named, the next round, the one wake, each task's longest run, the latest
   # wake and the longest wait between two refreshes.
-  defp scheduling(state, %Configuration{tasks: tasks, instances: instances}) do
-    named = Enum.find_value(tasks, :none, &(&1.continuous && &1.name))
-    timed = for %Configuration.Task{continuous: false, name: name} <- tasks, do: name
-    untimed = Enum.any?(instances, &(&1.task not in timed))
-    continuous = continuous(untimed, named)
-
-    Map.merge(state, %{
-      untimed: untimed,
-      continuous: continuous,
+  defp scheduling(%{configuration: configuration} = state, %Configuration{tasks: tasks}) do
+    state
+    |> Map.put(:longest, %{})
+    |> Map.merge(timing(configuration))
+    |> Map.merge(%{
       slots: slots(state.overhead),
       logic:
         Map.new(
@@ -997,13 +1120,43 @@ defmodule Logex.Runner do
       refreshed: state.anchor,
       refresh_gap: 0,
       latest_wake: 0,
-      longest:
-        Map.new(
-          for(%Configuration.Task{name: name} <- tasks, do: name) ++ List.wrap(continuous),
-          &{&1, 0}
-        )
+      last: nil,
+      edit: nil,
+      edits: 0
     })
+    |> longest()
   end
+
+  # What the rounds' timing reads of the configuration the resource runs, at the start and
+  # again after each step of an edit: whether it has untimed programs, which run under
+  # the continuous task's name, or `:none` where none is declared, `continuous`, nil for
+  # none; and each task's watchdog (decisions 111 and 129).
+  defp timing(%Configuration{tasks: tasks, instances: instances} = configuration) do
+    named = Enum.find_value(tasks, :none, &(&1.continuous && &1.name))
+    timed = for %Configuration.Task{continuous: false, name: name} <- tasks, do: name
+    untimed = Enum.any?(instances, &(&1.task not in timed))
+
+    %{
+      untimed: untimed,
+      continuous: continuous(untimed, named),
+      watchdogs: watchdogs(configuration)
+    }
+  end
+
+  # Each task's longest run, 0 for one not yet timed, those timed before an edit's step
+  # kept.
+  defp longest(%{configuration: %Configuration{tasks: tasks}, continuous: continuous} = state),
+    do: %{
+      state
+      | longest:
+          Map.merge(
+            Map.new(
+              for(%Configuration.Task{name: name} <- tasks, do: name) ++ List.wrap(continuous),
+              &{&1, 0}
+            ),
+            state.longest
+          )
+    }
 
   # A continuous line that runs no instance times no round: its watchdog then times
   # nothing (decision 111), and a round of timed tasks alone is no round of its.
@@ -1244,7 +1397,8 @@ defmodule Logex.Runner do
       state
       | rounds: state.rounds + 1,
         logic: logic,
-        used: used(state, finish - start - timed)
+        used: used(state, finish - start - timed),
+        last: {start, finish, again}
     }
 
     published(state, Enum.reverse(events, [{:round, state.logical, outputs}]))
