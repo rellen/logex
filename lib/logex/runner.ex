@@ -152,9 +152,11 @@ defmodule Logex.Runner do
   input point's last value from its device, the input image's until a device gives one,
   and `unforce/2` puts it back, the next round reading it. A force or an unforce that
   changes what an event task's trigger reads is a change of it, and makes its round at
-  once, before the call returns (decision 120), and a device's change of a forced trigger
-  makes none. `status/1` lists every force. The forces file is the host's to name,
-  `forces:`, and each force and unforce writes the whole set to it before it returns:
+  once, before the call returns (decision 120), each trigger it changes, as
+  `unforce_all/1` may change several, its own round, in device-name and then address
+  order, as a device's changes are; and a device's change of a forced trigger makes
+  none. `status/1` lists every force. The forces file is the host's to name, `forces:`,
+  and each force and unforce writes the whole set to it before it returns:
   one force a line, `name value`, in name order, the empty file for none, written to
   `<path>.tmp` beside it, flushed to the disk and renamed over it, so that a crash at any
   moment leaves the old set or the new; a write that fails changes nothing and gives
@@ -380,7 +382,9 @@ defmodule Logex.Runner do
   @doc """
   Takes every force off, each input point back to its device's last value, and writes the
   forces file empty (decision 127): `:ok`, or `{:error, {:forces, reason}}`, no force
-  taken off.
+  taken off. Each trigger that reads another value makes its own round at once, in
+  device-name and then address order, each round reading those before it at their new
+  values and those after it as they were (decision 120).
   """
   def unforce_all(runner), do: call(runner, :unforce_all)
 
@@ -572,10 +576,15 @@ defmodule Logex.Runner do
   end
 
   # A force or unforce that changed what a trigger reads makes a round at once, before its
-  # call returns, a force of a trigger being a change of it (decisions 117 and 120); the
-  # round is timed by its steps' watchdogs, not the idle watchdog's.
-  defp kicked(%{kick: false} = state), do: state
-  defp kicked(state), do: rounded(%{state | kick: false})
+  # call returns, a force of a trigger being a change of it (decisions 117 and 120); each
+  # trigger it changed its own round, in device-name and then address order, as a
+  # device's changes are, each round reading the triggers before it at their new values
+  # and those after it as they were; each round timed by its steps' watchdogs, not the
+  # idle watchdog's.
+  defp kicked(%{kick: kick} = state), do: Enum.reduce(kick, %{state | kick: []}, &kick/2)
+
+  defp kick(name, state),
+    do: rounded(%{state | pending: Enum.into(Map.take(state.values, [name]), state.pending)})
 
   defp idled(took, %{status: :running, idle: idle} = state) when took > idle,
     do: tripped(state, {:watchdog, {:idle, took}})
@@ -771,8 +780,8 @@ defmodule Logex.Runner do
 
   # The new set of forces, written whole to the file before it is taken (decision 127):
   # a write that fails changes nothing, `{:error, {:forces, reason}}`. Each input point
-  # unforced reads its device's last value again; a trigger whose reading changed makes a
-  # round (decision 120).
+  # unforced reads its device's last value again; each trigger whose reading changed makes
+  # its own round (decision 120), in kicked/1.
   defp kept(state, forces, names), do: taken(stored(state.file, forces), forces, names, state)
 
   defp taken({:error, reason}, _forces, _names, state), do: {{:error, {:forces, reason}}, state}
@@ -790,12 +799,15 @@ defmodule Logex.Runner do
     after_ = Enum.map(names, &seen(&1, state))
 
     kick =
-      Enum.any?(
-        Enum.zip([names, before, after_]),
-        fn {name, was, is} -> was != is and MapSet.member?(state.triggers, name) end
+      for(
+        {name, was, is} <- Enum.zip([names, before, after_]),
+        was != is and MapSet.member?(state.triggers, name),
+        do: name
       )
+      |> Enum.sort_by(&Map.fetch!(state.places, &1))
 
-    {:ok, %{state | kick: kick}}
+    # Each trigger to be kicked read at its new value only from its own round on.
+    {:ok, %{state | kick: kick, pending: Map.drop(state.pending, kick)}}
   end
 
   # What the next round reads at an input point: its force, else its device's change not
@@ -1080,7 +1092,8 @@ defmodule Logex.Runner do
         Map.new(inputs, fn {_device, point} ->
           {point.name, Runtime.get!(start.runtime, point.name)}
         end),
-      kick: false,
+      places: Map.new(inputs, fn {device, point} -> {point.name, {device, point.address}} end),
+      kick: [],
       written: %{}
     })
     |> scheduling(start.configuration)

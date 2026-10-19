@@ -120,6 +120,20 @@ defmodule Logex.ForceTest do
 
   defp raises(message, fun), do: assert_raise(ArgumentError, message, fun)
 
+  # Every event the runner has sent since the last call.
+  defp events(runner) do
+    :sys.get_state(runner)
+    drain(runner, [])
+  end
+
+  defp drain(runner, events) do
+    receive do
+      {Runner, ^runner, event} -> drain(runner, [event | events])
+    after
+      0 -> Enum.reverse(events)
+    end
+  end
+
   describe "a force (decision 117)" do
     test "holds an input point against its device, from the next round, until unforced",
          %{tmp_dir: dir} do
@@ -274,6 +288,60 @@ defmodule Logex.ForceTest do
       # unforce_all/1's change of it makes one round too.
       Runner.unforce_all(runner)
       assert Runner.status(runner).rounds == rounds + 4
+    end
+
+    # Three triggers, `stop` and `guard` at the panel's 1 and 2 and `lift` at the drive's
+    # 3, each an event task's, their priorities the other way about, so that neither their
+    # names, their addresses alone nor their priorities give the order; the task on `stop`
+    # copying `guard` to the panel's output 0.
+    test "unforce_all/1 that changes several triggers makes a round for each, in " <>
+           "device-name and then address order, each reading those after it as they were",
+         %{tmp_dir: dir} do
+      text = """
+      task on_lift  single lift  priority 2
+      task on_stop  single stop  priority 1
+      task on_guard single guard priority 0
+
+      var_global stop  bool at panel.i.1
+      var_global guard bool at panel.i.2
+      var_global lift  bool at drive.i.3
+      var_global seen  bool at panel.q.0
+
+      program s relay with on_stop
+        s.in  guard
+        s.out seen
+      program g count with on_guard
+      program l count with on_lift
+      """
+
+      {:ok, config} = Configuration.compile("plant", text, programs())
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(reports: true, clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock},
+          forces: Path.join(dir, "forces")
+        )
+
+      for name <- ["stop", "guard", "lift"], do: :ok = Runner.force(runner, name, 0)
+      Sim.set(panel, %{[1] => 1, [2] => 1})
+      Sim.set(drive, [3], 1)
+      Runner.subscribe(runner, [:ran, :round])
+
+      assert Runner.unforce_all(runner) == :ok
+
+      assert events(runner) == [
+               {:ran, "on_lift", "l", 0},
+               {:round, 0, %{"seen" => 0}},
+               {:ran, "on_stop", "s", 0},
+               {:round, 0, %{"seen" => 0}},
+               {:ran, "on_guard", "g", 0},
+               {:round, 0, %{"seen" => 0}}
+             ]
     end
 
     test "while tripped a forced trigger makes no round", %{tmp_dir: dir} do
