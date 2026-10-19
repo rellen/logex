@@ -25,7 +25,8 @@ on forces (decision 127); M4-2, M4-3 and M4-4, the watchdogs and the fault path,
 the same day (decisions 128–131), and the findings of M4-4's review were fixed on
 2026-10-19, §4.11's landing note, the maintainer answering its five questions the same
 day (decisions 133–137); and M4-5, forcing and an online edit through the runner, landed
-the same day, four of its readings put to the maintainer (§4.11's landing note).** On 2026-09-28 the
+the same day, its review's findings fixed the same day, four of its readings put to the
+maintainer (§4.11's landing note).** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -2879,16 +2880,21 @@ reads it before it releases anything, a point it no longer forces reading its de
 last value again; the runner keeps each input point's last value from its device, the
 input image's until a device gives one; a force or an unforce that changes what a trigger
 reads makes its round at once, before the call returns, timed by its steps and not the
-idle watchdog, and a device's change of a forced trigger makes none; a runner started
-without `forces:` refuses `unforce/2` and `unforce_all/1` in `force/3`'s words, and an
-unforce of a point not forced writes the set again; the edit's steps give `{:ok,
+idle watchdog, each trigger one changes its own round, as `unforce_all/1` may change
+several, in device-name and then address order, each reading those before it at their
+new values and those after it as they were (since the review), and a device's change of
+a forced trigger makes none; a runner started without `forces:` refuses `unforce/2` and
+`unforce_all/1` in `force/3`'s words, and an unforce of a point not forced writes the set
+again; the edit's steps give `{:ok,
 report}`, accept asking the runner for its resource with the count of steps it has taken,
 the edit it gives held only where no step came between and otherwise accepted again, a
 refused accept leaving the edit held as it was; after each step the rounds read each
-task's watchdog and the untimed programs of the configuration the resource runs, and the
-next round is planned again from the last; and decision 40's `now` is the resource's, the
-last round's, so with no untimed program a cut served long after the last round may fall
-due at once and report a period missed. Four of these are provisional and put to the
+task's watchdog and the untimed programs of the configuration the resource runs, a step
+that leaves none serving at once, in order, every request that waited for the share's
+slot, which no slot would serve again (since the review), and the next round is planned
+again from the last; and decision 40's `now` is the resource's, the last round's, so with
+no untimed program a cut served long after the last round may fall due at once and report
+a period missed. Four of these are provisional and put to the
 maintainer, `PLAN.md` M4-5.)*
 
 **Its API**, every call through the runner's mailbox, so each runs between two rounds:

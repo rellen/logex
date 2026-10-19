@@ -1952,7 +1952,9 @@ stage: nil
   such force named, and the runner does not start; with no runner, deleting the file
   clears every force.
 - A force or an unforce that changes what an event task's trigger reads is a change of
-  it, and makes its round at once, before the call returns.
+  it, and makes its round at once, before the call returns; `unforce_all/1` that changes
+  several makes one for each, in device-name and then address order, as a device's
+  changes do.
 - `accept/2`, `test/1`, `untest/1`, `assemble/1` and `cancel/1` are
   `Logex.Configuration.Edit`'s steps, each served between two rounds, the runner holding
   the edit: each gives the report the same step gives taken over the resource directly,

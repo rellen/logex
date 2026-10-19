@@ -31,8 +31,9 @@ a fixed timer, which amends decision 130 and supersedes decision 132; and its fo
 M4-4, the watchdogs and the fault path, the same day, its review's findings fixed on
 2026-10-19, with five questions put to the maintainer, who answered them the same day,
 each with the option recommended and built, decisions 133 to 137 (§3, M4-4); and its
-fifth, M4-5, edits and forcing through the runner, on 2026-10-19, four of its choices
-provisional and put to the maintainer (§3, M4-5).
+fifth, M4-5, edits and forcing through the runner, on 2026-10-19, its review's
+findings fixed the same day, four of its choices provisional and put to the maintainer
+(§3, M4-5).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -3633,6 +3634,27 @@ and M4-7 the documents.
   highest of 52 runs, 18 beside two suites, 3.333, 3.844 and 1.416. `Logex.Runtime` and
   `Logex.Configuration.Edit` are unchanged.
 
+  **Its review** (2026-10-19, at `3ee6e69`) found one blocking bug and three rules with no
+  test, each fixed the same day in a commit of its own with its mutation table, every row
+  red on the full suite by its exit code:
+  (1) an edit's step that took away the last untimed program left the requests queued
+  behind it for the share's slot unanswered for good, a slot never coming again: now,
+  with no untimed program, every request that waited is served at once, in order, as
+  each is from then on (decision 108), and so is the rest of a millisecond's that a step
+  ran past, `c358efb`; (2) `unforce_all/1` that changed several triggers made one round
+  for all of them, where decision 120 makes each change of a trigger its own round: now
+  one round each, in device-name and then address order, each reading those before it at
+  their new values and those after it as they were, `3ce7f57`; (3) the review's three
+  surviving mutants each a test, a device opened again at a restart kept as its last
+  value, a step's event sent while tripped, and the forces listed in the status before
+  a first round that trips, with the growth bounds raised to a fifth above the highest
+  of 118 runs, the review's 16 and 50 more among them, 3.391, 3.852 and 1.450, to 4.07,
+  4.63 and 1.74, `c77030e`; and (4) these documents, question 2's arithmetic put right
+  (counted from the edit, the fan's next run stays at 100), question 1 given the order
+  of several triggers' rounds, and question 4 the edit another engineer's test leaves.
+  1524 tests pass on Elixir 1.20.4 (9 of them doctests). The review's probes, re-run on
+  the fixes, hold: the queued status answered, and two triggers unforced two rounds.
+
   Chosen while landing, each in its commit and in §4.11's landing note: the forces
   file's format, which the record left to this item, one force a line, `name value`, in
   name order, the empty file for none, written to `<path>.tmp` beside it, flushed and
@@ -3645,65 +3667,101 @@ and M4-7 the documents.
   programs of the configuration the resource runs, and the next round is planned again
   from the last. The following are **provisional**, the record silent, each the option
   closest to the record and to Logix, and put to the maintainer below: a forced
-  trigger's round; decision 40's `now` with no untimed program; the forces file a
-  person reads; and two hosts stepping one edit.
+  trigger's round, and since the review the order of several triggers' rounds across
+  devices; decision 40's `now` with no untimed program; the forces file a person reads;
+  and two hosts stepping one edit.
 
   **Questions for the maintainer.** In each, a *round* is one pass of the controller over
-  its programs; a *trigger* is the input an event task watches, here the e-stop that
-  runs the `trip` task when it goes on; and to *force* an input is to make the controller
-  read a value of the technician's choosing, whatever the real signal says.
-  1. *When a forced e-stop runs its task.* The conveyor runs, the fan's task every 50 ms,
+  its programs, reading the inputs, running the programs that are due and writing the
+  outputs; a *trigger* is the input an *event task* watches, a task that runs when its
+  trigger goes from off to on, here the e-stop button that runs the `trip` task, which
+  stops the conveyor and lights the trip lamp; to *force* an input is to make the
+  controller read a value of the technician's choosing, whatever the real signal says,
+  until the force is taken off (*unforced*); a *periodic task* runs every so many
+  milliseconds, its *interval*, here the fan's task every 50 ms; an *untimed program* is
+  one in no periodic or event task, run again and again as fast as the controller can,
+  here a box counter in the continuous task; and an *online edit* changes the programs or
+  tasks of a plant while it runs, in steps: *accept* (checked, nothing changed yet),
+  *test* (the new version running), *untest* (the old one back), *assemble* (the new one
+  kept) and *cancel* (the edit dropped).
+  1. *When a forced trigger runs its task.* The conveyor runs, the fan's task every 50 ms,
      and a technician forces the e-stop on from a laptop to test the trip lamp. (a) As
      built: the `trip` task runs once, at once, when the force changes what the
-     controller reads, off to on, before the laptop's call returns; forcing it on again
-     while it already reads on runs nothing; and while it is forced, presses of the real
-     e-stop button change nothing the controller reads and run nothing. (b) Every force
-     of the e-stop makes a round at once, even to the value it already reads: an extra
-     round in which nothing new happens, since the task runs on the button's rising
-     edge. (c) A force waits for the controller's next round on its schedule, so the trip
-     lamp lights up to one fan period later, and the laptop's call returns before it.
-     IEC 61131-3 says nothing of forcing; in the conventional family a force changes the
-     input as the program sees it from the next scan, and whether an event task
-     triggered by a forced input runs at once is not in the manuals saved
-     (**unverified**). Recommended: (a).
+     controller reads, off to on, before the laptop's call returns, so the lamp is lit by
+     the time the laptop says "done"; forcing it on again while it already reads on runs
+     nothing; while it is forced, presses of the real e-stop button change nothing the
+     controller reads and run nothing. Where one call changes several triggers, as
+     "unforce all" can, say the e-stop and a guard door's switch on the panel and a lift
+     limit switch on the drive, each runs its own round, one after the other, before the
+     call returns, as several changes from one device already do: first by the device's
+     name, then by the input's address on it (here the drive's lift first, then the
+     panel's e-stop and door in address order), each round seeing the triggers before it
+     at their new values and those after it as they were; the operator sees each task's
+     lamp or alarm come on in that order, in the same instant. (b) Every force of a
+     trigger makes a round at once, even to the value it already reads: an extra round in
+     which nothing new happens, since a task runs on its trigger's rising edge; the round
+     counter on the status screen moves, nothing else. (c) A force waits for the
+     controller's next round on its schedule, so the trip lamp lights up to one fan
+     period, 50 ms, later, and the laptop's call returns before it. For several triggers
+     in one call, the alternative to (a)'s order is one round in which all of them change
+     together, their tasks then running in priority order, which is what the builder
+     first built and what a device's several changes do not do. IEC 61131-3 says nothing
+     of forcing, and an event task in IEC runs on its trigger's rising edge, whatever
+     caused it. In Logix a force changes the input as the program sees it from the next
+     scan, and whether an event task triggered by a forced input runs at once, or in what
+     order several do, is not in the manuals saved (**unverified**). Recommended: (a), the
+     review agreeing, with one round per trigger changed.
   2. *A task's interval cut while no untimed program runs.* The fan's task runs every
-     50 ms, last at 50 ms, and the plant has no continuous task, so the controller's
-     clock stands at the fan's last run between runs; at 95 ms an engineer cuts the fan
-     to 20 ms. (a) As built, decision 40 read on the controller's own time: next due 20 ms
-     after the fan's last run, at 70, already past, so the fan task runs at once, at 95,
-     and the status screen shows one missed period, an overlap, though nothing ran late.
-     (b) Counted from the edit: next due at 115, no missed period shown; the runner
-     would bring the controller's time up to the clock first, by a round that runs no
-     program, so one round more appears in the log. (c) Counted from the edit by a new
-     argument to the edit's switch, `Logex.Configuration.Edit` changed, with no extra
-     round. With §4.4's box counter in the continuous task, as in the Done-when, rounds
-     come every millisecond and the three agree. IEC 61131-3 says nothing of a task's
-     interval changed while running; the conventional family lets a periodic task's
-     period be changed online, and when the new one takes effect is not in the manuals
-     saved (**unverified**). Recommended: (c), the screen showing no alarm the edit
-     itself made, if a change to the edit's switch is acceptable; (a) is what the
-     record's rule says as written.
-  3. *The forces file a person reads.* The file sits beside the plant's files, `eye_1 1`
-     a line. (a) As built: the runner reads exactly what it writes, so a person who opens
-     it sees every force, but one who adds a comment or a blank line, or writes `eye_1
-     01`, finds the next start refused, the line named, the plant not started, until the
-     line is put right or the file deleted; a last line with no newline is read. (b)
-     Comments and blank lines read and passed over, so a person may annotate it, though
-     the runner's next write, at the next force, drops what was added. Beside it: a
-     runner started with no file refuses `unforce/2` and `unforce_all/1` as it refuses
-     `force/3`, in the same words, though it has nothing to take off; and an unforce of
-     an input that is not forced is `:ok` and writes the set again. IEC 61131-3 says
-     nothing of forcing; in the conventional family forces are kept in the project and
-     edited only through the programming software (**unverified**). Recommended: (a).
+     50 ms, last at 50 ms, so it is next due at 100; the plant has no continuous task, so
+     the controller's own clock stands at 50, the fan's last run, until its next run. At
+     95 ms by the wall clock an engineer cuts the fan to 20 ms. Decision 40 sets the next
+     due time to the earlier of the one it had and "now plus the new interval". (a) As
+     built, "now" read on the controller's own clock, 50: the earlier of 100 and 50 + 20 =
+     70, which the wall clock has passed, so the fan task runs at once, at 95, and the
+     status screen shows one missed period, an overlap, though nothing ran late. (b)
+     "Now" the wall clock's, 95, the runner first bringing the controller's clock up to
+     it by a round that runs no program: the earlier of 100 and 95 + 20 = 115 is 100, so
+     the fan runs at 100 as it would have, no missed period shown, and one round more
+     appears in the log. (c) "Now" the wall clock's, 95, given to the edit's switch as a
+     new argument, `Logex.Configuration.Edit` changed: next due at 100, unchanged, no
+     missed period and no extra round. With §4.4's box counter in the continuous task, as
+     in the Done-when, rounds come every millisecond, the controller's clock keeps up with
+     the wall clock, and the three agree. IEC 61131-3 says nothing of a task's interval
+     changed while running. In Logix a periodic task's period may be changed online, and
+     when the new one takes effect is not in the manuals saved (**unverified**).
+     Recommended: (c), the screen showing no alarm the edit itself made and no round
+     added, if a change to the edit's switch is acceptable, the review agreeing; (a) is
+     what the record's rule says as written, and stays built until the maintainer says.
+  3. *The forces file a person reads.* The file sits beside the plant's files, one force
+     a line, `eye_1 1`, the photo-eye that counts boxes on the conveyor held on. (a) As
+     built: the runner reads exactly what it writes, so a person who opens it sees every
+     force, but one who adds a comment or a blank line, or writes `eye_1 01`, finds the
+     next start refused, the line named, the plant not started, until the line is put
+     right or the file deleted; a last line with no newline is read. (b) Comments and
+     blank lines read and passed over, so a person may annotate it, though the runner's
+     next write, at the next force, drops what was added. Beside it: a runner started
+     with no file refuses "unforce" and "unforce all" as it refuses a force, in the same
+     words, though it has nothing to take off; and an unforce of an input that is not
+     forced is accepted and writes the set again. IEC 61131-3 says nothing of forcing. In
+     Logix forces are kept in the project and changed only through the programming
+     software, never by editing a file (**unverified**). Recommended: (a), the review
+     agreeing: a strict file is the safest for a list that decides what the plant reads.
   4. *Two engineers stepping one edit.* Engineer A accepts a change to the fan's
-     interval from one laptop while engineer B cancels the edit held from another. (a)
-     As built: A's accept, worked out on A's laptop against the plant as it was, is found
-     overtaken by B's cancel and is worked out again against the plant as it is, so A
-     gets a forecast that is true when it is held; and a change the runner refuses, a
-     task added, leaves whatever edit was held as it was. (b) A is told the plant moved
-     on, and accepts again by hand. IEC 61131-3 says nothing of online edits; the
-     conventional programming software lets one workstation at a time edit a
-     controller online (**unverified**). Recommended: (a).
+     interval from one laptop while engineer B, from another, takes a step of the edit
+     the controller already holds. (a) As built: A's accept is worked out on A's laptop
+     against the plant as it was; if B's step came first, the controller tells A's laptop
+     so, and A's accept is worked out again against the plant as it is now, so A's
+     laptop shows a forecast that is true when the edit is held, and B's edit is
+     replaced by A's, as a second accept replaces a first. If B's step was a test, the
+     plant as it is now runs B's new version, so A's edit takes B's tested version as
+     its "old" version, the one A's untest would bring back: A would see B's change as
+     already part of the plant. A change the controller refuses, a task added, leaves
+     whatever edit was held as it was. (b) A is told the plant moved on, and accepts again
+     by hand, seeing the plant as it now is before choosing. IEC 61131-3 says nothing of
+     online edits. Logix's programming software lets one workstation at a time edit a
+     controller online (**unverified**). Recommended: (a), the review agreeing, since it
+     gives exactly what the same steps taken over the resource directly give
+     (`Logex.Configuration.Edit`'s rule that a second accept supersedes the first).
 - **M4-6 · The contract walk.** `api_contract_test.exs` gains a runner walk on the manual
   clock: seeded configurations with and without untimed programs, simulated devices that
   report and that do not, random waits and presses, injected faults, edits, forces and
