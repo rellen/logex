@@ -35,6 +35,58 @@ defmodule Logex.RunnerEditTest do
     end
   end
 
+  # A clock whose every reading takes a millisecond, the manual clock's: so a slot of 1 ms
+  # serves one request.
+  defmodule TickClock do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms(clock) do
+      Manual.pass(clock, 1)
+      Manual.now_ms(clock)
+    end
+
+    @impl true
+    def wake_at(clock, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel(clock, timer), do: Manual.cancel(clock, timer)
+  end
+
+  # The manual clock, but for one reading, the k-th from when the test arms it in this
+  # module's table, which takes 5 ms: so a request served at that reading runs past the
+  # time it was served in.
+  defmodule LateClock do
+    @behaviour Logex.Runner.Clock
+
+    @impl true
+    def now_ms(clock) do
+      late(:ets.lookup(Logex.RunnerEditTest, clock), clock)
+      Manual.now_ms(clock)
+    end
+
+    defp late([{clock, 1}], clock) do
+      :ets.insert(Logex.RunnerEditTest, {clock, 0})
+      Manual.pass(clock, 5)
+    end
+
+    defp late([{clock, k}], clock) when k > 1,
+      do: :ets.insert(Logex.RunnerEditTest, {clock, k - 1})
+
+    defp late(_none, _clock), do: :ok
+
+    @impl true
+    def wake_at(clock, pid, message, at), do: Manual.wake_at(clock, pid, message, at)
+
+    @impl true
+    def cancel(clock, timer), do: Manual.cancel(clock, timer)
+  end
+
+  setup_all do
+    :ets.new(__MODULE__, [:named_table, :public])
+    :ok
+  end
+
   defp program(source, name) do
     {:ok, program} = Logex.compile(source, name: name)
     program
@@ -369,6 +421,108 @@ defmodule Logex.RunnerEditTest do
       assert {:instance_stopped, "b", "count"} in report
       Manual.advance(clock, 60)
       assert rounds(drained(runner)) == [50]
+    end
+  end
+
+  # An untimed program `b` beside a program `c`, timed or on an event task, and the
+  # candidate that takes `b` away: so the step that switches to it leaves no untimed
+  # program, and no slot of the share's comes again.
+  defp unboxed(task) do
+    text = task <> "var_global e bool at panel.i.0\nprogram c count with t\n"
+    {configured(text <> "program b count\n"), configured(text)}
+  end
+
+  defp alone(config, {_module, clock} = clocked) do
+    {:ok, panel} = Sim.start_link(clock: clock)
+
+    {:ok, runner} =
+      Runner.start_link(
+        configuration: config,
+        io: %{"panel" => {Sim, sim: panel}},
+        clock: clocked
+      )
+
+    runner
+  end
+
+  # Every reply the test process has had, in the order they came, each by its request,
+  # the clock advanced until there are as many as requests.
+  defp replies(requests, clock) do
+    {:messages, messages} = Process.info(self(), :messages)
+
+    names =
+      for message <- messages,
+          {name, request} <- requests,
+          match?({:reply, _value}, :gen_server.check_response(message, request)),
+          do: name
+
+    replied(length(names) == length(requests), names, requests, clock)
+  end
+
+  defp awaited(task, clock), do: awaiting(Task.yield(task, 0), task, clock)
+
+  defp awaiting({:ok, reply}, _task, _clock), do: reply
+
+  defp awaiting(nil, task, clock) do
+    Manual.advance(clock, 1)
+    awaited(task, clock)
+  end
+
+  defp replied(true, names, _requests, _clock), do: names
+
+  defp replied(false, _names, requests, clock) do
+    Manual.advance(clock, 1)
+    replies(requests, clock)
+  end
+
+  describe "requests waiting for the share's slot across a step" do
+    # At 20% on the clock whose every reading takes a millisecond a slot serves one
+    # request; the test step it serves takes `b` away, so no slot comes for the status
+    # behind it, which is then served at once, after it.
+    test "the step that takes away the last untimed program is followed by every request " <>
+           "that waited, in order, in a slot" do
+      {with_b, without_b} = unboxed("task t interval 50 priority 1\n")
+      {:ok, clock} = Manual.start_link()
+      runner = alone(with_b, {TickClock, clock})
+
+      # Every request waits for a slot here, accept's own two among them: it is made from
+      # another process while this one moves the clock.
+      accepting = Task.async(fn -> Runner.accept(runner, without_b) end)
+      assert {:ok, _forecast} = awaited(accepting, clock)
+
+      tested = :gen_server.send_request(runner, {:edit, :test})
+      status = :gen_server.send_request(runner, :status)
+      assert replies([tested: tested, status: status], clock) == [:tested, :status]
+      assert {:ok, [{:instance_stopped, "b", "count"}]} = waited(tested, clock)
+      assert %{edit: :testing} = waited(status, clock)
+      assert :queue.is_empty(:sys.get_state(runner).queue)
+    end
+
+    # With no timed task no round comes after the step; a request served in the rest of a
+    # millisecond that runs past it, at the k-th reading, would otherwise leave the rest
+    # waiting for good. Each k from 1 to 40 is a fresh runner, so whichever reading the
+    # step's own is, one of them runs it late.
+    test "and so is every request that waited in the rest of a millisecond the step ran " <>
+           "past" do
+      for k <- 1..40 do
+        {with_b, without_b} = unboxed("task t single e priority 0\n")
+        {:ok, clock} = Manual.start_link()
+        runner = alone(with_b, {LateClock, clock})
+        {:ok, _} = Runner.accept(runner, without_b)
+        Manual.advance(clock, 3)
+
+        # The round at 4 owed: the two requests wait for it.
+        Manual.pass(clock, 1)
+        tested = :gen_server.send_request(runner, {:edit, :test})
+        status = :gen_server.send_request(runner, :status)
+        :sys.get_state(runner)
+        :ets.insert(__MODULE__, {clock, k})
+        Manual.advance(clock, 1)
+
+        assert {:reply, {:ok, _report}} = :gen_server.wait_response(tested, 1000), "k = #{k}"
+        assert {:reply, %{edit: :testing}} = :gen_server.wait_response(status, 1000), "k = #{k}"
+        Runner.stop(runner)
+      end
     end
   end
 

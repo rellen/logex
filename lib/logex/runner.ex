@@ -184,9 +184,10 @@ defmodule Logex.Runner do
   again where another step was taken meanwhile. After each step the rounds read the
   configuration the resource runs: each task's watchdog (decision 129), and whether it
   has untimed programs, an instance an edit adds with no task rounding back to back and
-  one it sets aside no more; and the next round is planned again from the last, so that
-  a task whose interval changed is next due where decision 40 moves it, no round lost or
-  added. Each step sends `{:edit, step, report}`, accept's its forecast, and `status/1`
+  one it sets aside no more, and a step that leaves none followed at once by every
+  request that waited for the share's slot, in order, as each is served from then on;
+  and the next round is planned again from the last, so that a task whose interval
+  changed is next due where decision 40 moves it, no round lost or added. Each step sends `{:edit, step, report}`, accept's its forecast, and `status/1`
   gives the stage. A step may be taken while tripped, so that a program can be fixed and
   then restarted, and a restart keeps the stage (decision 65). A step with no edit held,
   and one its stage refuses, are the host's mistakes, the latter in
@@ -1252,7 +1253,13 @@ defmodule Logex.Runner do
   defp popped({:empty, _queue}, _until, state), do: state
 
   defp popped({{:value, request}, queue}, until, state),
-    do: serving(answered(request, %{state | queue: queue}), until)
+    do: going_on(answered(request, %{state | queue: queue}), until)
+
+  # A request served may be an edit's step that leaves the configuration with no untimed
+  # program, which no slot comes for again: the requests that waited behind it are then
+  # served at once, in order, as every request is from now on (decision 108).
+  defp going_on(%{untimed: false} = state, _until), do: freely(state)
+  defp going_on(state, until), do: serving(state, until)
 
   # A round is owed where the configuration has untimed programs and its time has come: a
   # host's request then waits for the share's slot.
@@ -1708,10 +1715,22 @@ defmodule Logex.Runner do
   defp freely(%{untimed: true, next_round: at, queue: queue} = state),
     do: free(:queue.is_empty(queue) or now(state) >= at, at, state)
 
-  defp freely(state), do: state
+  # With no untimed program no round is owed but for a due time, so every request that
+  # waited is served at once, in order: one an edit's step left waiting for a slot that
+  # no longer comes among them (decision 108).
+  defp freely(%{untimed: false, queue: queue} = state),
+    do: free(:queue.is_empty(queue), nil, state)
 
   defp free(true, _at, state), do: state
+  defp free(false, nil, state), do: released(refresh(state, :idle))
   defp free(false, at, state), do: serving(refresh(state, :idle), at)
+
+  # Each served, the next where one waits: a step that brings an untimed program back
+  # puts the rest under the share's slots again.
+  defp released(state) do
+    {{:value, request}, queue} = :queue.out(state.queue)
+    freely(answered(request, %{state | queue: queue}))
+  end
 
   defp watchdog(task, %{watchdogs: watchdogs}), do: Map.fetch!(watchdogs, task)
 
