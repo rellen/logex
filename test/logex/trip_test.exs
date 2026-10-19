@@ -654,6 +654,47 @@ defmodule Logex.TripTest do
       refute_received {Runner, ^runner, {:trip, _}}
     end
 
+    test "two devices that latch in one millisecond trip for the first in device-name " <>
+           "order, whichever notice comes first" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@conveyor), poll: 10, idle: 100, steps: Runtime)
+
+      Runner.subscribe(runner)
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 20)
+
+      # Both deadlines are 130; the drive's process is held, so the panel's notice comes
+      # first, and the drive's, raised at 130 too, after it.
+      :sys.suspend(runner)
+      drive_device = device_pid(runner, "drive")
+      :sys.suspend(drive_device)
+      Manual.advance(clock, 110)
+      assert List.last(Sim.writes(panel)) == %{[0] => 0}
+      assert List.last(Sim.writes(drive)) == %{[0] => 1}
+      :sys.resume(drive_device)
+      :sys.get_state(drive_device)
+      zeroed_once(drive, 1)
+      :sys.resume(runner)
+      assert_receive {Runner, ^runner, {:trip, {:watchdog, {:device, "drive", 110}}}}, 5000
+      refute_received {Runner, ^runner, {:trip, _}}
+
+      # And a notice raised sooner comes first, whatever its device's name: the panel's
+      # read fails at 30, the drive's at 40, both waiting as the runner comes back.
+      read_both = @conveyor <> "var_global d bool at drive.i.0\n"
+
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(read_both), poll: 10, steps: Runtime)
+
+      Manual.advance(clock, 20)
+      :sys.suspend(runner)
+      Sim.fail(panel, :read, {:error, :first})
+      Manual.advance(clock, 10)
+      Sim.fail(drive, :read, {:error, :second})
+      Manual.advance(clock, 10)
+      :sys.resume(runner)
+      assert Runner.status(runner).trip == {:io, "panel", {:error, :first}}
+    end
+
     test "a restart after a device latched releases it, and its deadline is heard again" do
       %{runner: runner, clock: clock, panel: panel} =
         rig(configured(@conveyor), poll: 10, idle: 100, steps: Runtime)

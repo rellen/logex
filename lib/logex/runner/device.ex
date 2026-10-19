@@ -32,9 +32,9 @@ defmodule Logex.Runner.Device do
   # - Its heartbeat (decision 125): a refresh carries the deadline by which it will hear
   #   from the runner again, and the time it was sent. A device that hears nothing by the
   #   deadline its last refresh carried, a wake on the runner's clock at it, latches as a
-  #   trip's zero does and tells the runner, `{Logex.Runner.Device, pid, {:latched, name,
-  #   ms}}`, `ms` the time from that refresh to its deadline, which the runner trips on when
-  #   it next runs. One wake is kept, set again only where a refresh brings the deadline
+  #   trip's zero does and tells the runner, `{Logex.Runner.Device, pid, at, {:latched,
+  #   name, ms}}`, `at` the time on the runner's clock it latched and `ms` the time from
+  #   that refresh to its deadline, which the runner trips on when it next runs. One wake is kept, set again only where a refresh brings the deadline
   #   sooner, and moved on to the last deadline where it comes before it; and a device
   #   waiting on the runner for its own change takes its wake there too, so that a runner
   #   stuck while it takes the change is seen.
@@ -43,7 +43,8 @@ defmodule Logex.Runner.Device do
   #   behaviour does not give, is a cause, `{:error, reason}`, `{:raised, message}`,
   #   `{:thrown, term}` or `{:exited, term}`, a shape the behaviour does not give being
   #   `{:raised, message}` with a message that says so. A read's, a report's or a poll's
-  #   write again tells the runner, `{Logex.Runner.Device, pid, {:fault, name, cause}}`; a
+  #   write again tells the runner, `{Logex.Runner.Device, pid, at, {:fault, name, cause}}`,
+  #   `at` the time on the runner's clock it failed; a
   #   round's write answers `{:error, cause}`; and either way the device latches, its 0
   #   written once where its adapter still takes it. An open that fails is `{:error,
   #   reason}`, init/3's own reason or the cause, and the process stops; a zero or a close
@@ -205,8 +206,12 @@ defmodule Logex.Runner.Device do
   # latched device has told it already, or was latched by a trip.
   defp faulted(_cause, %{latched: true} = state), do: state
 
-  defp faulted(cause, %{runner: runner, name: name} = state) do
-    send(runner, {__MODULE__, self(), {:fault, name, cause}})
+  defp faulted(cause, %{runner: runner, name: name, clock: {mod, clock}} = state) do
+    send(
+      runner,
+      {__MODULE__, self(), clocked(fn -> mod.now_ms(clock) end), {:fault, name, cause}}
+    )
+
     latched(state)
   end
 
@@ -337,14 +342,16 @@ defmodule Logex.Runner.Device do
 
   # The wake came: a deadline later than now moves it on; one reached, with no refresh
   # since that brought a later one, latches the device, which tells the runner.
-  defp expired(%{clock: {mod, clock}, deadline: deadline} = state),
-    do: expire(clocked(fn -> mod.now_ms(clock) end) >= deadline, state)
+  defp expired(%{clock: {mod, clock}, deadline: deadline} = state) do
+    now = clocked(fn -> mod.now_ms(clock) end)
+    expire(now >= deadline, now, state)
+  end
 
-  defp expire(false, state), do: armed(state)
-  defp expire(true, %{latched: true} = state), do: state
+  defp expire(false, _now, state), do: armed(state)
+  defp expire(true, _now, %{latched: true} = state), do: state
 
-  defp expire(true, %{runner: runner, name: name} = state) do
-    send(runner, {__MODULE__, self(), {:latched, name, state.deadline - state.heard}})
+  defp expire(true, now, %{runner: runner, name: name} = state) do
+    send(runner, {__MODULE__, self(), now, {:latched, name, state.deadline - state.heard}})
     latched(state)
   end
 

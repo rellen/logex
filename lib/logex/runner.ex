@@ -150,7 +150,10 @@ defmodule Logex.Runner do
   device's change is merged into the next round's inputs and makes no round; and the
   resource is kept as the last round computed it, for `get/2`, outputs the plant never
   received among them where the round tripped before its write. A runner tripped already
-  keeps its first reason. The reasons:
+  keeps its first reason; the devices' notices that waited for it, a latch or a fault of
+  their own, are taken together, in the order of the time each was raised, ties in
+  device-name order, so that two devices that latch in one millisecond trip it for the
+  same reason on every run. The reasons:
   - `{:watchdog, {:task, task, took_ms, limit_ms}}`: a timed task's run, from the start of
     its first instance's scan to the end of its last, longer than its task's watchdog,
     checked after its step and before the round's write (decision 110);
@@ -368,9 +371,10 @@ defmodule Logex.Runner do
   def handle_info({__MODULE__, :wake, _stale}, state), do: {:noreply, state}
 
   # A device's notice, from its own process: it has latched on its deadline (decision
-  # 125), which trips the runner. A notice from a process that is no longer its device's is
-  # passed over.
-  def handle_info({Device, pid, notice}, state), do: {:noreply, noticed(pid, notice, state)}
+  # 125), or its own callback failed (decision 114), which trips the runner. A notice from
+  # a process that is no longer its device's is passed over.
+  def handle_info({Device, _pid, _at, _notice} = notice, state),
+    do: {:noreply, noticed([notice], state)}
 
   # A device's process gone down, which the runner traps: an I/O fault (decision 114), the
   # device opened again at the next restart. One it killed, or that stopped as it was
@@ -741,7 +745,7 @@ defmodule Logex.Runner do
   # runner that comes back after its devices latched trips before it runs anything.
   defp rounded(state) do
     receive do
-      {Device, pid, notice} -> rounded(noticed(pid, notice, state))
+      {Device, _pid, _at, _notice} = notice -> rounded(noticed([notice], state))
     after
       0 -> a_round(state)
     end
@@ -884,11 +888,28 @@ defmodule Logex.Runner do
 
   # ---- the trip and the restart ----------------------------------------------------------
 
-  defp noticed(pid, {_kind, name, _detail} = notice, %{pids: pids} = state)
+  # Every notice waiting is taken with the first, and each acted on in the order of the
+  # time on the runner's clock its device raised it, ties in device-name order: the trip
+  # names the first, so that two devices that latch in one millisecond, whose notices
+  # come in whichever order their processes ran, trip the runner for one reason, the same
+  # on every run on the manual clock.
+  defp noticed(taken, state) do
+    receive do
+      {Device, _pid, _at, _notice} = notice -> noticed([notice | taken], state)
+    after
+      0 ->
+        taken
+        |> Enum.reverse()
+        |> Enum.sort_by(fn {Device, _pid, at, {_kind, name, _detail}} -> {at, name} end)
+        |> Enum.reduce(state, &notice/2)
+    end
+  end
+
+  defp notice({Device, pid, _at, {_kind, name, _detail} = notice}, %{pids: pids} = state)
        when :erlang.map_get(name, pids) == pid,
        do: tripped(state, reason(notice))
 
-  defp noticed(_pid, _notice, state), do: state
+  defp notice(_notice, state), do: state
 
   defp reason({:latched, name, ms}), do: {:watchdog, {:device, name, ms}}
   defp reason({:fault, name, cause}), do: {:io, name, cause}
