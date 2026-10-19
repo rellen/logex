@@ -23,7 +23,8 @@ the clocks, the adapter behaviour and the simulated device, landed the same day;
 review's answers followed on 2026-10-18 (decisions 122–126), with the maintainer's answer
 on forces (decision 127); M4-2, M4-3 and M4-4, the watchdogs and the fault path, landed
 the same day (decisions 128–131), and the findings of M4-4's review were fixed on
-2026-10-19, §4.11's landing note.** On 2026-09-28 the
+2026-10-19, §4.11's landing note, the maintainer answering its five questions the same
+day (decisions 133–137).** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -2786,14 +2787,15 @@ one of:
   `Logex.Runtime`'s steps (`PLAN.md` M4-4).
 
 *(Landed with M4-4, 2026-10-18, as this section says, with the readings the record left,
-each provisional until the maintainer answers, `PLAN.md` M4-4: the hidden option is
-`steps:`, a module with `cycle_steps/3`, `cycle_step/2` and `cycle_outputs/1`, each call
-of the three guarded, an exception's `message` its own and a throw's or an exit's its
-banner; a restart of a runner that is running is the host's mistake; a device whose own
-callback failed is zeroed through its adapter too, where it still takes a write, so that
-every output that can still be written is, the table's "every other device zeroed" read as
-the others besides it; `{:watchdog, {:device, device, ms}}` names the time from the
-device's last refresh to its deadline, the heartbeat it was given; a result of no shape
+five of them put to the maintainer and answered on 2026-10-19 as decisions 133 to 137,
+each as built: the hidden option is `steps:`, a module with `cycle_steps/3`,
+`cycle_step/2` and `cycle_outputs/1`, each call of the three guarded, an exception's
+`message` its own and a throw's or an exit's its banner; a restart of a runner that is
+running is the host's mistake (decision 133); a device whose own callback failed is zeroed
+through its adapter too, where it still takes a write, so that every output that can still
+be written is, the table's "every other device zeroed" read as the others besides it
+(decision 135); `{:watchdog, {:device, device, ms}}` names the time from the device's last
+refresh to its deadline, the heartbeat it was given (decision 137); a result of no shape
 `Logex.IO` gives is `{:raised, message}`, a message saying so, the cause list having no
 word of its own for it; a device that answers after its deadline on the runner's clock is
 `:timeout`, and, having answered, is not killed but written its 0 by the trip (since
@@ -2804,26 +2806,26 @@ on the runner, that it is back from its adapter, a message a device a poll perio
 round's write answered in time counting too, and the runner, as each round begins and at
 each wait's refresh, kills and trips `{:io, device, :timeout}` on the first device in
 device-name order not heard within the idle watchdog and a poll period, the time it gives
-any call of its own to a device; a device's notices that waited for the runner are taken
-together, in the order of the time each was raised, ties in device-name order, so that a
-run on the manual clock trips for one reason; a restart releases every latch first, a
-device that does not answer killed, and then opens again every device down, so a device
-that hung or died while the runner was tripped is opened again by the same restart, and
-one that cannot be opened leaves every device that answers latched again, written 0 once
-more, as a restart that trips again does; a release forgets what the device last wrote, so
-that no poll writes the outputs from before the trip again before the restart's first
-round writes its own; a close answered while a device waits on the runner for its own
-change stops it closed, so that it is zeroed and closed once; init/3's own `{:error,
-reason}` is given as `{:io_init, device, reason}`, as M4-3 gave it, and an init/3 or first
-read that raised, threw, exited, hung or gave a value that does not fit as its cause; a
-clock that goes down or fails stops the runner, a shutdown, its devices zeroed and closed
-as at a stop; a host's request is timed from its start to its end against the idle
-watchdog, a restart not, and trips once it is answered; a tripped runner keeps its first
-reason and merges a device's changes into the next round's inputs, so the restart's first
-round takes them; and a test makes time pass inside a task's run through the seam, a
-stand-in that passes the manual clock or, for a stuck runner, advances it from inside the
-runner, which the manual clock allows a receiver handling a message, its timers on the way
-delivered to the devices.)*
+any call of its own to a device (decision 134); a device's notices that waited for the
+runner are taken together, in the order of the time each was raised, ties in device-name
+order, so that a run on the manual clock trips for one reason; a restart releases every
+latch first, a device that does not answer killed, and then opens again every device down,
+so a device that hung or died while the runner was tripped is opened again by the same
+restart, and one that cannot be opened leaves every device that answers latched again,
+written 0 once more, as a restart that trips again does (decision 136); a release forgets
+what the device last wrote, so that no poll writes the outputs from before the trip again
+before the restart's first round writes its own; a close answered while a device waits on
+the runner for its own change stops it closed, so that it is zeroed and closed once;
+init/3's own `{:error, reason}` is given as `{:io_init, device, reason}`, as M4-3 gave it,
+and an init/3 or first read that raised, threw, exited, hung or gave a value that does not
+fit as its cause; a clock that goes down or fails stops the runner, a shutdown, its
+devices zeroed and closed as at a stop; a host's request is timed from its start to its
+end against the idle watchdog, a restart not, and trips once it is answered; a tripped
+runner keeps its first reason and merges a device's changes into the next round's inputs,
+so the restart's first round takes them; and a test makes time pass inside a task's run
+through the seam, a stand-in that passes the manual clock or, for a stuck runner, advances
+it from inside the runner, which the manual clock allows a receiver handling a message,
+its timers on the way delivered to the devices.)*
 
 **What fails, and what happens.**
 
@@ -5043,7 +5045,7 @@ over.
      since its review a device that hangs inside its own read or report, which no request
      of the runner's reaches while its outputs do not change, is seen by its telling the
      runner after each read and report that it is back from its adapter, the bound the
-     idle watchdog and a poll period, provisional, `PLAN.md` M4-4.)*
+     idle watchdog and a poll period, decision 134.)*
 115. **After a crash (Milestone 4).** The controller software itself crashes; whichever is
      chosen, every output goes off on the way down.
      - It stays stopped until someone starts it again, as after the watchdog;
@@ -5655,6 +5657,130 @@ found one rule of decision 130's that its words did not hold at a boundary.
      *(Taken 2026-10-18, after M4-3's verification; the maintainer may choose the second.
      The maintainer answered the same day with neither: a fixed timer, decision 130's
      amendment, which supersedes this decision.)*
+
+**The maintainer's answers after M4-4's review, 2026-10-19.** M4-4 landed with five
+readings the record left open, the builder's three of 2026-10-18, with the review's view
+of each, one the review's fixes raised and one the builder left among its choices, each
+put to the maintainer as a question (`PLAN.md` M4-4). The maintainer answered all five the
+same day, each with the option recommended, which is what was built. The plant is §4.4's:
+a conveyor on the panel card, a fan, and the "case full" lamp, with the conveyor's speed
+on the drive.
+
+133. **A restart while nothing has tripped (Milestone 4),** following decisions 113 and
+     115. The conveyor and the fan are running and the lamp is lit, and an engineer's
+     program calls `restart/2`.
+     - Refused: the engineer's program is told "the runner is running", and the plant
+       runs on untouched;
+     - a trip and a restart in one: for a moment every output goes off, the conveyor and
+       the fan stop and the lamp goes out, and then the program starts from its initial
+       values, the conveyor staying off until start is pressed;
+     - or the program's values reset without the outputs switched off first: the conveyor
+       drops out on the next round, as its seal-in resets, the fan goes off if its program
+       starts it off, and nothing is written 0 in between.
+
+     IEC 61131-3 describes a cold and a warm restart as ways a resource starts, and says
+     nothing of one that is already running. The conventional family has no restart of a
+     running controller, the nearest being a change to Program mode and back, its outputs
+     in their Program-mode state meanwhile (from memory, **unverified** in the manuals
+     saved for this record).
+
+     **Taken: refused,** the host's mistake, raised in the caller as `ArgumentError`,
+     *"the runner is running: restart/2 starts a runner again once it has tripped"*, the
+     runner left as it was (the maintainer, 2026-10-19). A host that wants the plant
+     started again from its initial values while it runs stops it and starts a new one,
+     every output going to 0 on the way, as decision 116 says.
+134. **How soon a device stuck inside its own read is a fault (Milestone 4),** following
+     decisions 114, 119 and 128. The panel card's adapter hangs in the middle of reading
+     the buttons while the conveyor runs steadily and no output changes, so no request of
+     the runner's reaches the card. Decision 114 makes it a fault; what is left is how
+     soon it is seen.
+     - Once the runner has not heard from the card within the idle watchdog and a poll
+       period, 510 ms by default: the conveyor, the fan and the lamp go off about half a
+       second after the card stuck, a press of stop on that card unseen until then; the
+       same time the runner gives any call of its own to a card, so a card has as long to
+       answer as its deadline, but a busy machine that holds a card's read back by more
+       than that trips the plant;
+     - a count of missed reads: the plant stops after four poll periods without a read,
+       40 ms by default, sooner, but a machine that holds a card's process back for 40 ms
+       trips the plant;
+     - or a time set for each device in its binding: the panel's could be 50 ms and a slow
+       network drive's two seconds, at the cost of one more setting a plant must get
+       right.
+
+     Each costs one message from each card to the runner each poll period, 100 a second a
+     card at 10 ms. IEC 61131-3 says nothing of how a controller talks to its I/O. The
+     conventional family faults a connection that misses its timeout, its RPI times a
+     multiplier of 4 by default, which the second matches (from memory, **unverified** in
+     the manuals saved for this record).
+
+     **Taken: the idle watchdog and a poll period,** one time for every call to a card,
+     until a plant needs a time of its own for a device (the maintainer, 2026-10-19).
+     Each device tells the runner it is back from its adapter after every read and
+     report, whatever its result, and at each poll while it waits on the runner, a
+     round's write answered in time counting too; the runner, as each round begins and at
+     each wait's refresh, kills and trips `{:io, device, :timeout}` on the first device in
+     device-name order not heard within `idle:` and a poll period. The cost is the
+     message a device a poll period.
+135. **The device that failed, at its trip (Milestone 4),** following decisions 113 and
+     114. The drive's network cable comes loose and the runner's write of the drive's
+     speed fails; the record's table says "every other device zeroed".
+     - The drive is written its 0 too where it still takes a write, as well as the panel,
+       so that where the cable is only flaky the drive's speed goes to 0;
+     - or the failed device is left alone, the panel alone written 0, the drive's outputs
+       left to what it does when its master goes quiet: the drive keeps its last speed
+       until its own timeout.
+
+     IEC 61131-3 says nothing of it. In the conventional family a faulted module's
+     outputs go to the fault state configured on the module, the module doing it rather
+     than the controller (from memory, **unverified**).
+
+     **Taken: the failed device written its 0 too,** where it still takes a write, so that
+     every output that can still be written is written 0, the milestone's done sentence,
+     and the table's "every other device zeroed" is read as the others besides it (the
+     maintainer, 2026-10-19). A device that does not answer at all is killed, its outputs
+     left to what it does on losing its master, as decision 114 says.
+136. **A restart that cannot open a device (Milestone 4),** following decisions 113 and
+     114. The drive was unplugged while the plant was tripped, and the operator presses
+     restart: the panel answers, the drive cannot be opened, and the plant stays tripped,
+     the conveyor, the fan and the lamp off.
+     - The panel, released for the restart and then latched again, is written its 0 once
+       more, as it is when a restart's first round trips again: nothing visible changes
+       on a healthy panel, its outputs already off, but a panel that reset itself
+       meanwhile, or a card opened again in the same restart, is told 0;
+     - or the panel latched again without a second 0, every output written 0 exactly once
+       a trip whatever the restarts in between: the same on a healthy panel, and a card
+       opened again in that restart left to whatever it does at power-up until the next
+       restart.
+
+     IEC 61131-3 says nothing of it. The conventional family writes each module's
+     outputs every RPI in every mode, so a module hears its state again and again (from
+     memory, **unverified**).
+
+     **Taken: written its 0 once more,** a 0 heard once more rather than a card left
+     unsaid (the maintainer, 2026-10-19): the runner stays tripped with its first reason,
+     `restart/2` gives `{:error, {:io_init, device, reason}}`, and every device that
+     answers is latched again and written 0 once more, as a restart that trips again is.
+137. **What time a device's own deadline trip reports (Milestone 4),** following decision
+     125. The runner is stuck for 3 s inside the conveyor's step, whose watchdog is 50 ms;
+     the panel hears nothing by its deadline, 50 ms and a poll period after the step
+     began, switches the conveyor, the fan and the lamp off itself, and the runner, back
+     after 3 s, trips `{:watchdog, {:device, "panel", ms}}`.
+     - `ms` the heartbeat the panel was given, 60, from the refresh it last heard to its
+       deadline: the operator reads "the panel heard nothing for 60 ms", the time after
+       which the plant went off, the same on every run;
+     - the time the runner was gone, about 3,000, read when it came back: "the controller
+       was stuck for 3 s", which says how long, but varies from run to run on the real
+       clock and says nothing of when the plant went off;
+     - or no time at all, `{:watchdog, {:device, "panel"}}`, the reason naming only the
+       card.
+
+     IEC 61131-3 says nothing of it. In the conventional family a module whose connection
+     times out shows a connection fault code with no time in it, and a task's watchdog
+     fault names the task (from memory, **unverified** in the manuals saved for this
+     record).
+
+     **Taken: the heartbeat the device was given,** the time after which the plant
+     actually went off, the same on every run (the maintainer, 2026-10-19).
 
 ---
 

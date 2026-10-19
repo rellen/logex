@@ -139,25 +139,25 @@ defmodule Logex.Runner do
     device-name order, before it returns (decision 116). It is served at once, whatever
     the share.
   - `restart/2` starts a tripped runner again (below); a runner that is running is the
-    host's mistake.
+    host's mistake (decision 133).
 
-  **Its trips** (M4-4; decisions 110, 111, 113 to 115, 125, 126 and 128). A trip has one
-  path, whatever caused it: scheduling stops, its wake cancelled; every output is written
-  0 once through each device that answers, in device-name order, which latches and writes
-  nothing more, a round's write and a poll's write again among it, until a restart;
-  `{:trip, reason}` goes to the subscribers and `status/1` gives `:tripped` and the reason;
-  the host's requests that waited are answered, and every one after is served at once; a
-  device's change is merged into the next round's inputs and makes no round; and the
-  resource is kept as the last round computed it, for `get/2`, outputs the plant never
-  received among them where the round tripped before its write. A runner tripped already
-  keeps its first reason; the devices' notices that waited for it, a latch or a fault of
-  their own, are taken together, in the order of the time each was raised, ties in
-  device-name order, so that two devices that latch in one millisecond trip it for the
-  same reason on every run, and each is acted on before the trip, which may serve a
-  restart that waited, so that its first round finds every device heard as late as they
-  say. A notice carries the count of restarts its device had been released for, and one
-  raised before the last restart's release, taken with the notice that made the trip or
-  come in behind a restart the trip served, trips nothing. The reasons:
+  **Its trips** (M4-4; decisions 110, 111, 113 to 115, 125, 126, 128 and 133 to 137). A
+  trip has one path, whatever caused it: scheduling stops, its wake cancelled; every
+  output is written 0 once through each device that answers, in device-name order, which
+  latches and writes nothing more, a round's write and a poll's write again among it,
+  until a restart; `{:trip, reason}` goes to the subscribers and `status/1` gives
+  `:tripped` and the reason; the host's requests that waited are answered, and every one
+  after is served at once; a device's change is merged into the next round's inputs and
+  makes no round; and the resource is kept as the last round computed it, for `get/2`,
+  outputs the plant never received among them where the round tripped before its write. A
+  runner tripped already keeps its first reason; the devices' notices that waited for it,
+  a latch or a fault of their own, are taken together, in the order of the time each was
+  raised, ties in device-name order, so that two devices that latch in one millisecond
+  trip it for the same reason on every run, and each is acted on before the trip, which
+  may serve a restart that waited, so that its first round finds every device heard as
+  late as they say. A notice carries the count of restarts its device had been released
+  for, and one raised before the last restart's release, taken with the notice that made
+  the trip or come in behind a restart the trip served, trips nothing. The reasons:
   - `{:watchdog, {:task, task, took_ms, limit_ms}}`: a timed task's run, from the start of
     its first instance's scan to the end of its last, longer than its task's watchdog,
     checked after its step and before the round's write (decision 110);
@@ -169,13 +169,14 @@ defmodule Logex.Runner do
   - `{:watchdog, {:idle, ms}}`: a host's request served whole, from its start to its end,
     longer than the idle watchdog, the trip made once it is answered (decision 128);
   - `{:watchdog, {:device, device, ms}}`: a device that heard nothing from the runner by
-    the deadline its last refresh carried, `ms` from that refresh to it, which writes every
-    output 0 once and latches by itself and tells the runner, which trips when it next
-    runs, before any round (decision 125). Every device is refreshed before each step
-    with that step's deadline, its task's watchdog and a poll period from its start, and
-    before the runner's own work, a write or a wait with the idle watchdog's and a poll
-    period, so a runner that is well never misses one, and one stuck in the conveyor's
-    50 ms step leaves every device that answers at 0 within 50 ms and a poll period;
+    the deadline its last refresh carried, `ms` from that refresh to it, the heartbeat it
+    was given (decision 137), which writes every output 0 once and latches by itself and
+    tells the runner, which trips when it next runs, before any round (decision 125).
+    Every device is refreshed before each step with that step's deadline, its task's
+    watchdog and a poll period from its start, and before the runner's own work, a write
+    or a wait with the idle watchdog's and a poll period, so a runner that is well never
+    misses one, and one stuck in the conveyor's 50 ms step leaves every device that
+    answers at 0 within 50 ms and a poll period;
   - `{:io, device, cause}`: an I/O fault (decision 114). Every callback is called guarded
     in its device's process: an `{:error, reason, state}` it gives is `{:error, reason}`,
     a raise `{:raised, message}`, a throw `{:thrown, term}`, an exit `{:exited, term}`,
@@ -190,10 +191,10 @@ defmodule Logex.Runner do
     which has not told the runner it is back from its adapter, after a read or a report,
     at a poll while it waits on the runner or by answering a round's write in time, within
     the idle watchdog and a poll period, seen as each round begins and at each wait's
-    refresh, at the cost of a message to the runner a device a poll period (provisional,
-    see §4.11); and a device's process that goes down, which
-    the runner traps, is `{:down, reason}`. A device whose own read, report or write again
-    fails tells the runner and latches, its 0 written where its adapter still takes it;
+    refresh, at the cost of a message to the runner a device a poll period (decision
+    134); and a device's process that goes down, which the runner traps, is `{:down,
+    reason}`. A device whose own read, report or write again fails tells the runner and
+    latches, its 0 written where its adapter still takes it (decision 135);
     a round's write that fails trips at once, the devices after it not written;
   - `{:internal, message}`: an exception out of the core, which the host contract says
     cannot happen; tripping rather than crashing keeps the state for diagnosis. No host
@@ -206,8 +207,9 @@ defmodule Logex.Runner do
   again each device that went down, those among them, in device-name order, `{:error,
   {:io_init, device, reason}}` for one that cannot be opened, the runner left tripped with
   its first reason and every device that answers latched again, written 0 once more, as
-  a restart that trips again is; restarts the resource (`Logex.Runtime.restart/2`), which keeps its input image and puts
-  every other global back to its initial value; sends `{:restart, mode}`; and runs the
+  a restart that trips again is (decision 136); restarts the resource
+  (`Logex.Runtime.restart/2`), which keeps its input image and puts every other global
+  back to its initial value; sends `{:restart, mode}`; and runs the
   first round at once, before it returns, the clock not counting the time it was
   stopped. A runner that crashes, is killed or loses its clock is gone (decision 115):
   each device traps its exit and writes every output 0 once, where it had not, and closes;
@@ -310,7 +312,7 @@ defmodule Logex.Runner do
   back to its initial value), `{:restart, mode}` sent to the subscribers, and the first
   round run at once, before it returns, the clock not counting the time it was stopped,
   so that round's elapsed time is 0. `:ok`; a runner that is running is the host's
-  mistake.
+  mistake (decision 133).
   """
   def restart(runner, mode), do: call(runner, {:restart, mode!(mode)})
 

@@ -29,7 +29,8 @@ answers to its review and the maintainer's two answers, decisions 130 and 131, t
 answers to the verification of those, decision 132, and the maintainer's answer to that,
 a fixed timer, which amends decision 130 and supersedes decision 132; and its fourth,
 M4-4, the watchdogs and the fault path, the same day, its review's findings fixed on
-2026-10-19, with five questions put to the maintainer (§3, M4-4).
+2026-10-19, with five questions put to the maintainer, who answered them the same day,
+each with the option recommended and built, decisions 133 to 137 (§3, M4-4).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -3485,26 +3486,29 @@ and M4-7 the documents.
   made by the runner after the advance that failed the read had returned, and the status
   call is answered only once the runner has taken the panel's notice and tripped.
 
-  **Provisional, and put to the maintainer** (each a question below): a restart of a
-  runner that is running is the host's mistake (question 1); a device hung inside its own
-  read or report, a fault by decision 114, is tripped once not heard within the idle
-  watchdog and a poll period, at the cost of a message a device a poll period (question
-  2); a device whose own callback failed is zeroed through its adapter too (question 3);
-  a restart that cannot open a device writes every other device its 0 once more
-  (question 4); and `{:watchdog, {:device, device, ms}}` names the heartbeat the device
-  was given, from its last refresh to its deadline (question 5).
+  **Answered by the maintainer, 2026-10-19,** each question below with its option (a),
+  the one recommended and the one built, so nothing changes in the code: a restart of a
+  runner that is running is the host's mistake (question 1, decision 133); a device hung
+  inside its own read or report, a fault by decision 114, is tripped once not heard
+  within the idle watchdog and a poll period, 510 ms by default, at the cost of a message
+  a device a poll period (question 2, decision 134); a device whose own callback failed
+  is zeroed through its adapter too, where it still takes a write (question 3, decision
+  135); a restart that cannot open a device stays tripped and writes every other device
+  its 0 once more (question 4, decision 136); and `{:watchdog, {:device, device, ms}}`
+  names the heartbeat the device was given, from its last refresh to its deadline
+  (question 5, decision 137).
 
   *Questions for the maintainer, 2026-10-19,* the builder's three of 2026-10-18 with the
-  review's view of each, one the fixes raised and one the builder left among its
-  provisional choices. Words used: a *trip* is the runner
-  stopping itself after a fault, every output switched off once and nothing run until a
-  *restart*, the host's call that starts it again from the program's initial values; a
-  *device* is one I/O card or drive the runner talks to through its *adapter*, the code
-  for that hardware; a *poll period* is how often the runner's process for a device reads
-  it, 10 ms unless set; the *idle watchdog*, `idle:`, is how long the runner may spend on
-  its own work between steps, 500 ms unless set (decision 128); the plant is §4.4's, a
-  conveyor on the panel card, a fan, and the "case full" lamp, with the drive's speed on
-  the drive.
+  review's view of each, one the fixes raised and one the builder had left among its own
+  choices, each answered (a) the same day, decisions 133 to 137. Words used: a *trip* is
+  the runner stopping itself after a fault, every output switched off once and nothing run
+  until a *restart*, the host's call that starts it again from the program's initial
+  values; a *device* is one I/O card or drive the runner talks to through its *adapter*,
+  the code for that hardware; a *poll period* is how often the runner's process for a
+  device reads it, 10 ms unless set; the *idle watchdog*, `idle:`, is how long the runner
+  may spend on its own work between steps, 500 ms unless set (decision 128); the plant is
+  §4.4's, a conveyor on the panel card, a fan, and the "case full" lamp, with the drive's
+  speed on the drive.
   1. *A restart while nothing has tripped.* The conveyor and the fan are running and the
      lamp is lit, and an engineer's program calls `restart/2`. (a) As built: refused, the
      engineer's program told "the runner is running", and the plant runs on untouched.

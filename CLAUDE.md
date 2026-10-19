@@ -552,21 +552,23 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   resource kept for `get/2`, and `restart/2`, cold or warm, releasing every latch, a
   device that does not answer killed, opening again each device that went down, those
   among them, one that cannot be opened leaving every device latched again and written 0
-  once more, `Logex.Runtime.restart/2` and the first round at once, the stopped time not
-  counted, a running runner's restart the host's mistake. A device's notices that waited
-  are taken together, by the time each was raised, ties in device-name order (M4-4's
-  review). Its
+  once more (decision 136), `Logex.Runtime.restart/2` and the first round at once, the
+  stopped time not counted, a running runner's restart the host's mistake (decision 133).
+  A device's notices that waited are taken together, by the time each was raised, ties in
+  device-name order (M4-4's review). Its
   reasons: a timed task's run longer than its watchdog, `{:watchdog, {:task, ...}}`; a
   continuous task's round, from its inputs to its last scan, `{:watchdog, {:round, task,
   took, limit, steps}}`, each step named with its time (decisions 110, 111 and 126); a
   request served whole longer than `idle:`, `{:watchdog, {:idle, ms}}` (decision 128);
-  a device latched on its deadline, `{:watchdog, {:device, device, ms}}` (decision 125);
+  a device latched on its deadline, `{:watchdog, {:device, device, ms}}`, `ms` the
+  heartbeat its last refresh gave it (decisions 125 and 137);
   an I/O fault, `{:io, device, cause}`, an error, a raise, a throw, an exit, a result of
   no shape, a bad value, an unknown address, `:timeout` (no answer within its deadline in
   real time, the device killed; one answered late on the runner's clock, written its 0
   by the trip; or, since M4-4's review, a device not heard back from its adapter within
   `idle:` and a poll period, checked as each round begins and at each wait's refresh,
-  killed) or `{:down, reason}` (decision 114); and an
+  killed, decision 134) or `{:down, reason}` (decision 114), the failed device written
+  its 0 too where it still takes a write (decision 135); and an
   exception out of the core, `{:internal, message}`, through the core's three calls
   guarded and reached by a test through one hidden option, `steps:`, a module standing in
   for the cycle's steps. Every check comes before the round's write. A clock that goes
@@ -715,7 +717,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   task's watchdog and the continuous task in a configuration, with decision 129, on
   2026-10-18, and its third, M4-3, the runner itself, the same day, and its fourth, M4-4,
   the watchdogs and the fault path, the same day, its review's findings fixed on
-  2026-10-19).
+  2026-10-19 and its five questions answered by the maintainer the same day, decisions
+  133–137).
   Read it before designing anything that names a program, schedules one, binds I/O,
   changes a running controller (§4.9, online edit, decided 2026-10-01), or runs one on
   the clock (§4.11).

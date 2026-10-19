@@ -1801,15 +1801,16 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   its last program's scan, the timed tasks' runs in it included and each step named with
   its time, so that the slow one is seen; `{:watchdog, {:idle, ms}}`, a host's request
   served whole that took longer than `idle:`; `{:watchdog, {:device, device, ms}}`, a
-  device that heard nothing from the runner by the deadline its last refresh carried,
-  and so latched itself; `{:io, device, cause}`, an adapter's callback that gave an
-  error, raised, threw, exited or gave no result the behaviour gives, a value that does
+  device that heard nothing from the runner by the deadline its last refresh carried, and
+  so latched itself, `ms` the heartbeat that refresh gave it, the time after which the
+  plant went off (decision 137); `{:io, device, cause}`, an adapter's callback that gave
+  an error, raised, threw, exited or gave no result the behaviour gives, a value that does
   not fit its point, an address that is no point's, a device that did not answer within
   its deadline, `:timeout`, a device hung inside its own read or report, `:timeout` too,
   or one whose process went down; and `{:internal, message}`, an exception out of the
-  core, which no host can cause. A device's notices that waited for the runner, a latch
-  or a fault of its own, are taken in the order they were raised, ties in device-name
-  order, so a run on the manual clock trips for the same reason every time.
+  core, which no host can cause. A device's notices that waited for the runner, a latch or
+  a fault of its own, are taken in the order they were raised, ties in device-name order,
+  so a run on the manual clock trips for the same reason every time.
 - Every check is made before the round's write, so a round that ran too long, or a
   device that failed, never reaches the plant: here `k1` is 1 in the resource, the round
   at 19's, and 0 at the panel. A device that does not answer is killed, its outputs left
@@ -1818,8 +1819,10 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   adapter, a message a device a poll period; one the runner has not heard from within
   `idle:` and a poll period, checked as each round begins and at each wait's refresh, is
   hung, and is killed and trips the runner, so a stop pressed on a card stuck inside its
-  read is never taken for "not pressed" for longer than that. One that answers a round's
-  write late is `:timeout` too, but answered, so the trip writes it its 0.
+  read is never taken for "not pressed" for longer than that (decision 134). One that
+  answers a round's write late is `:timeout` too, but answered, so the trip writes it its
+  0, as it writes any device whose own callback failed and that still takes a write
+  (decision 135).
 - Each device's deadline is the step's: its task's watchdog and a poll period from the
   step's start, or the idle watchdog and a poll period while the runner serves its own
   work or waits. So a runner stuck in the conveyor's 50 ms step leaves every device that
@@ -1832,10 +1835,12 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   stays off until start is pressed again. A released device writes nothing again until
   that round has written its own outputs, so a restart never puts back, even for a moment,
   what the plant had before the trip; and a device that cannot be opened leaves the runner
-  tripped, every device latched again and written 0 once more. A runner that crashes or is
-  killed is gone, its devices writing every output 0 once and closing as it goes
-  (decision 115), a device waiting on it for its own change among them; its child spec
-  is `restart: :temporary`, so the host starts a new one.
+  tripped, every device latched again and written 0 once more (decision 136). A runner
+  that is running, not tripped, refuses a restart as the host's mistake, "the runner is
+  running" (decision 133). A runner that crashes or is killed is gone, its devices writing
+  every output 0 once and closing as it goes (decision 115), a device waiting on it for
+  its own change among them; its child spec is `restart: :temporary`, so the host starts a
+  new one.
 - Forcing and edits through the runner are M4-5's (`PLAN.md`).
 
 ## Changing a running program
