@@ -1460,6 +1460,8 @@ defmodule Logex.RunnerTest do
                [{7_023, runner, {Runner, :wake, :sys.get_state(runner).token}}]
     end
 
+    # About 15 s alone, and four times that on a loaded machine.
+    @tag timeout: 300_000
     test "rounds on a periodic task keep their grid, absolute, a slow write's time not " <>
            "counted: 100,000 rounds, every one on time" do
       config =

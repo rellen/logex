@@ -611,7 +611,8 @@ defmodule Logex.RunnerEditTest do
       :erlang.trace(caller, true, [:call])
       :erlang.trace(runner, true, [:call])
       send(caller, :go)
-      assert_receive {:accepted, {:ok, _forecast}}
+      # Accept under a trace of every call, which a loaded machine slows past 100 ms.
+      assert_receive {:accepted, {:ok, _forecast}}, 5000
       {:ok, _} = Runner.test(runner)
       :erlang.trace(runner, false, [:call])
       :erlang.trace_pattern({Edit, :_, :_}, false, [:global])

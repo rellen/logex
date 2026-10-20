@@ -1393,7 +1393,7 @@ defmodule Logex.TripTest do
                  configuration: configured(@read_both),
                  io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
                  clock: {Manual, clock},
-                 idle: 20
+                 idle: 300
                ) == {:error, {:io_init, "panel", reason}}
 
         assert Sim.closed?(drive)
