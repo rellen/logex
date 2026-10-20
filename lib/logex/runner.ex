@@ -38,17 +38,22 @@ defmodule Logex.Runner do
     it was opened, on a grid that never drifts, and gives each other message its process
     receives to the adapter's `report/2`, where it has one: so a device that reports
     passes each change on as it comes, between reads, and one that cannot is read.
-  - What changed since the runner last took a change of it, it passes on to the runner by
-    a call, one change at a time, in order; a change the runner refuses, holding a value
-    that does not fit or an address that is no input point's (an I/O fault, below), is not
-    taken, and the device passes it on again at its next read, and a restart reads every
-    device whole (decision 142), so that one that goes on giving it leaves each restart
-    refused; from a restart's release until the runner has taken a device's own read,
-    the device passes nothing on, a reading between the release and that read given
-    with it for each point it leaves out, and so checked as the restart's read, and
-    superseded by it for each point it gives, one after it passed on against it, and a
-    report the device handles late, having waited on the runner meanwhile, dropped where
-    it came before that read. The runner merges it into the next round's inputs, and
+  - A device keeps each point's newest reading the runner has not taken, and passes on
+    what of it changed since the runner last took a change of it, by a call, one change
+    at a time, in order; a change the runner refuses, holding a value that does not fit
+    or an address that is no input point's (an I/O fault, below), is not taken, its
+    refused point's reading dropped, so that the device passes it on again at its next
+    read that gives it, and the rest passed on with its next reading, and a restart reads
+    every device whole (decision 142), so that one that goes on giving it leaves each
+    restart refused; from a restart's release until the runner has taken a device's own
+    read, the device passes nothing on, the read merged over every reading the device
+    holds untaken, one between the release and the read or one passed on before the
+    release and answered stale, so that the read supersedes it for each point it gives
+    and the rest is checked as the restart's read, one after it passed on against it,
+    and a report the device handles late, having waited on the runner meanwhile, dropped
+    for each point that read gives where it came before it; a restart refused, the
+    device passes on what it held, as a change read while tripped. The runner merges a
+    change into the next round's inputs, and
     a change of an event task's trigger, an input point that is a task's `single`, makes a
     round at once, each such change its own, in address order; it answers once those
     rounds have run and their outputs are written, so that `Logex.IO.Sim.set/3` returns
@@ -531,8 +536,9 @@ defmodule Logex.Runner do
   # round's inputs, and each change of an event task's trigger its own round, in address
   # order, answered once each has run and its outputs are written (decisions 120 and
   # 124), whatever the share. A change read before the last restart, which may wait in
-  # the mailbox behind the restart, is stale: the restart's own read has overtaken it, so
-  # it is answered `:stale` and taken as nothing (decision 142).
+  # the mailbox behind the restart, is stale, answered `:stale` and taken as nothing: the
+  # device gave its readings with the restart's own read, which supersedes them for the
+  # points it gives, or passes them on again after a refused restart (decision 142).
   @impl GenServer
   def handle_call(
         {:changes, device, restarts, changes},
@@ -1672,8 +1678,10 @@ defmodule Logex.Runner do
   end
 
   # A device up, read again: its values checked and, taken, told to the device as what it
-  # last passed on, by a cast that comes before anything else the runner sends it, so
-  # that a read refused leaves nothing in it to hide the same fault at a later read; and
+  # last passed on, by a cast that comes before anything else the runner sends it, or,
+  # refused, its cause told, so that the device drops the refused point's reading and
+  # holds the rest, and a read refused leaves nothing in it to hide the same fault at a
+  # later read; and
   # its fault, or no answer in time or its process gone down, the restart's answer; one
   # killed for no answer, or gone down, is marked down by its exit, which the runner
   # traps, and so opened again at the next restart.
@@ -1688,8 +1696,10 @@ defmodule Logex.Runner do
     read_again(rest, merged(changes, state))
   end
 
-  defp reread_checked({:fault, cause}, _values, name, _pid, _rest, state),
-    do: {{:error, {:io_init, name, cause}}, state}
+  defp reread_checked({:fault, cause}, _values, name, pid, _rest, state) do
+    Device.refused(pid, cause)
+    {{:error, {:io_init, name, cause}}, state}
+  end
 
   defp reopen_read({:ok, values}, name, pid, points, rest, state),
     do: reopen_checked(vetted(name, values, state), name, pid, points, rest, state)

@@ -1588,6 +1588,7 @@ defmodule Logex.RuntimeTest do
                open: 1,
                open: 2,
                refresh: 3,
+               refused: 2,
                release: 2,
                release: 3,
                reread: 1,

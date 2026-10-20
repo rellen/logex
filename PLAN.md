@@ -4124,11 +4124,43 @@ and M4-7 the documents.
   read, red (two, the fourth verification's among them); the readings passed on after
   `taken/2` instead of with the answer, red (four); the runner taking a stale change, red
   (three, the new stale test among them); and the device taking a stale change into its
-  image, red (three). The fence and its drop are kept as they were, so a report the
-  device handles late, having waited on the runner, of a point the reread leaves out, is
-  still lost where it came after the release, until that point is reported again (a
-  residual for the maintainer, `docs/organisation.md` decision 142). 1554 tests pass on
-  Elixir 1.20.4 (9 of them doctests), up from 1550.
+  image, red (three). The fence and its drop were kept as they were, so a report the
+  device handles late, having waited on the runner, of a point the reread leaves out, was
+  still lost, which the sixth verification below closes. 1554 tests pass on Elixir 1.20.4
+  (9 of them doctests), up from 1550.
+
+  **Decision 142, verified a sixth time** (2026-10-20, M4-6's eighth verification): a
+  report-only reading was still lost three ways, in an ordinary race around a restart on
+  the real clock in 200 runs of 200: a change passed on before the release, answered
+  `:stale`, was dropped although the reread did not give its point; a report the device
+  handled late, before the fence, was dropped whole, whether sent before the release or
+  after it; and a restart refused, on the device's own reread or another device's, ended
+  the hold and dropped what it held, though the same reading a moment before the
+  release was taken while tripped. Two of the fifth verification's tests pinned the loss
+  as correct. Now a device keeps each point's newest reading the runner has not taken,
+  and passes on what of it differs from what the runner last took: its reread answers
+  with the read merged over all of them; a report before the fence is dropped only for
+  the points the reread, or a poll since, gives; a reread the runner refuses is told its
+  cause, `Device.refused/2`, the refused point's reading dropped and the rest held; a
+  zero that ends a hold passes on what was held; and a change refused in a round keeps
+  its other points, passed on at the next reading, only a read that gives the refused
+  point passing it on again. `trip_test.exs` pins the three losses (the stale change now
+  given with the read, reports handled late against a reread of none or one of their
+  points, a restart refused on another device with and without a stale change, a bad
+  report in the window now keeping its good point) and the refused change's rest; the
+  verifier's real-clock repros lose none in 200. Its mutation table, each applied alone
+  in a copy, the full suite judged by its exit code: the reread answering its read
+  alone, red (four decision-142 tests); a report before the fence dropped whole, red
+  (two); a poll's read while the fence is up not marking its points, red (one, the new
+  poll-and-fence test); a zero ending a hold without passing it on, red (two, and the
+  runner walk); the runner not telling the device a refused reread's cause, red (one);
+  the device keeping the refused point's reading from a refused reread, red (one); a
+  change refused in a round keeping its refused point, red (two, and the runner walk);
+  the device's untaken readings not set aside at its reread, red (seven); and a reading
+  passed on while held, red (six, and the runner walk). A held device's passing on at
+  the zero's message, checked against a hold since, was green, equivalent, since that
+  message comes before any later release, and is now one clause. 1558 tests pass on
+  Elixir 1.20.4 (9 of them doctests), up from 1554.
 
   **The record's claims of Logix, checked** (2026-10-20, against the manuals' current
   PDFs, `docs/organisation.md` §8): verified, outputs sent at the RPI (1756-UM058L

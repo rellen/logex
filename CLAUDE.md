@@ -614,9 +614,12 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   change at a time, answering the runner's own requests while it waits (decision 124), a
   change the runner refuses for a value that does not fit or an address that is no input
   point's not taken, so that the next read passes it on again (fix found by M4-6's walk),
-  a restart reading the device whole since decision 142, and each change carrying the
-  count of restarts it was read under, so that one read before the runner's last restart
-  and taken after it is answered `:stale`, taken by neither; `write/2`
+  since M4-6's eighth verification its refused point's reading dropped and the rest kept,
+  the device keeping each point's newest reading the runner has not taken and passing on
+  what differs, a restart reading the device whole since decision 142, and each change
+  carrying the count of restarts it was read under, so that one read before the runner's
+  last restart and taken after it is answered `:stale`, taken by neither, its readings
+  given with the restart's read; `write/2`
   writes, answered once written; at each poll, after its read, it writes its last
   outputs again, whether or not a round wrote within the period, a fixed timer as
   Logix's RPI, while its last deadline has not passed, one never written or with no
@@ -633,16 +636,20 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   it is back from its adapter, `{:back, name, nil}`, a message a poll period (M4-4's
   review); `zero/1` latches it for a trip, `release/1` undoes that for a restart and
   forgets what it last wrote, and `reread/1`, a restart's, reads its adapter once, as its
-  opening does, giving every value or the read's fault (decision 142), what it read
-  becoming what it last passed on only once the runner, having checked it, casts
-  `taken/2`, so that a read the runner refuses leaves nothing behind, and from its
-  release until then passing nothing on, a reading between the release and the reread
-  held, superseded by the reread for each point it gives and given with its answer for
-  each point it leaves out, so checked as the restart's read (M4-6's seventh), and one
-  after it held and passed on against it once taken (M4-6's fourth verification), and a
-  report that came before the reread, handled late because the device waited on the
-  runner meanwhile, dropped by a fence the device sends itself just before the reread
-  reads (M4-6's fifth and sixth); each call takes
+  opening does, merged over every reading it holds untaken, giving every value or the
+  read's fault (decision 142), what it read becoming what it last passed on only once the
+  runner, having checked it, casts `taken/2`, or, refusing it, `refused/2` with the cause,
+  which drops the refused point's reading and holds the rest, so that a read the runner
+  refuses leaves nothing behind to hide the fault, and from its release until then
+  passing nothing on, a reading between the release and the reread, or one passed on
+  before it and answered stale, superseded by the reread for each point it gives and
+  given with its answer for each point it leaves out, so checked as the restart's read
+  (M4-6's seventh and eighth), and one after it held and passed on against it once taken
+  (M4-6's fourth verification), a report that came before the reread, handled late
+  because the device waited on the runner meanwhile, dropped, for each point the reread
+  or a poll since gives, by a fence the device sends itself just before the reread
+  reads (M4-6's fifth, sixth and eighth), and a zero, a restart refused, passing on what
+  it held (M4-6's eighth); each call takes
   the runner's timeout; a close answered
   while it waits on the runner stops it closed; and it traps its runner's exit, writing
   every output 0 once, where it had not, and closing as it goes (decision 115)

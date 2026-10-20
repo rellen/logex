@@ -2321,6 +2321,7 @@ defmodule Logex.TripTest do
     var_global x     bool at a.i.0
     var_global speed dint at b.i.0
     var_global load  dint at b.i.1
+    var_global level dint at b.i.2
     var_global y     bool at a.q.0
 
     program r relay with fast
@@ -2384,29 +2385,35 @@ defmodule Logex.TripTest do
 
     test "a bad report between a device's release and its reread, of a point its read " <>
            "does not give, refuses the restart with the device's fault" do
-      for {bad, cause} <- [
-            {%{[0] => @too_fast}, {:bad_value, [0], @too_fast}},
+      for {reread, speed} <- [{%{}, 1000}, {%{[0] => 1200}, 1200}],
+          {bad, cause} <- [
+            {%{[2] => @too_fast}, {:bad_value, [2], @too_fast}},
             {%{[5] => 1}, {:unknown_address, [5]}}
           ] do
-        rig = pushed(%{}, %{[0] => 1000, [1] => 5})
+        rig = pushed(%{}, %{[0] => 1000, [1] => 5, [2] => 0})
 
-        assert reported_in_window(rig, %{}, [%{[1] => 6}, bad]) ==
+        assert reported_in_window(rig, reread, [%{[1] => 6}, bad]) ==
                  {:error, {:io_init, "b", cause}}
 
         assert %{status: :tripped, trip: {:io, "a", _}} = Runner.status(rig.runner)
-        assert Runner.get!(rig.runner, "speed") == 1000
-        assert Runner.get!(rig.runner, "load") == 5
-        assert :sys.get_state(rig.b).image == %{[0] => 1000, [1] => 5}
 
-        # Nothing of the refused restart's read is kept: the next restart reads afresh.
+        # The refused point is dropped and the rest of the read passed on, as a change
+        # read while tripped is, and the next restart reads afresh.
+        :sys.get_state(rig.b)
+        assert taken_while_tripped(rig) == {speed, 6}
+        assert :sys.get_state(rig.b).image == %{[0] => speed, [1] => 6, [2] => 0}
         assert Runner.restart(rig.runner, :cold) == :ok
-        assert {Runner.get!(rig.runner, "speed"), Runner.get!(rig.runner, "load")} == {1000, 5}
+        assert {Runner.get!(rig.runner, "speed"), Runner.get!(rig.runner, "load")} == {speed, 6}
+        assert Runner.get!(rig.runner, "level") == 0
         Runner.stop(rig.runner)
       end
     end
 
+    # Found by M4-6's eighth verification: a change answered :stale was dropped, safe only
+    # for the points the restart's read gives, so one of a point the adapter's read
+    # leaves out was lost for good.
     test "a report of a point a device's read does not give, passed on before its release " <>
-           "and taken after the restart, is still stale" do
+           "and answered stale, is given with the restart's read" do
       rig = pushed(%{}, %{[0] => 1000, [1] => 5})
       :sys.suspend(rig.runner)
       restart = Task.async(fn -> Runner.restart(rig.runner, :cold) end)
@@ -2417,8 +2424,135 @@ defmodule Logex.TripTest do
       assert Task.await(restart) == :ok
       :sys.get_state(rig.b)
       assert %{status: :running, trip: nil} = Runner.status(rig.runner)
-      assert Runner.get!(rig.runner, "speed") == 1000
-      assert :sys.get_state(rig.b).image == %{[0] => 1000, [1] => 5}
+      assert Runner.get!(rig.runner, "speed") == 1500
+      assert :sys.get_state(rig.b).image == %{[0] => 1500, [1] => 5}
+    end
+
+    # Found by M4-6's eighth verification: a report in a device's mailbox as its reread
+    # began, handled after the fence was set, was dropped whole, so one of a point the
+    # read leaves out was lost; it is older than the read only where the read gives it.
+    test "reports a device handles late, older than its restart's read, are dropped only " <>
+           "where the read gives their points" do
+      for {reread, want} <- [{%{}, {1500, 9}}, {%{[0] => 1200}, {1200, 9}}] do
+        rig = pushed(%{[0] => 1000}, %{[0] => 1000, [1] => 5})
+        Agent.update(rig.agent, &%{&1 | next: [reread]})
+        :sys.suspend(rig.runner)
+        restart = Task.async(fn -> Runner.restart(rig.runner, :cold) end)
+        restart_waiting(rig.runner)
+        send(rig.b, {:report, %{[1] => 6}})
+        changes_waiting(rig.runner)
+
+        for report <- [%{[1] => 7}, %{[0] => 1500, [1] => 8}, %{[1] => 9}],
+            do: send(rig.b, {:report, report})
+
+        :sys.resume(rig.runner)
+        assert Task.await(restart) == :ok
+        :sys.get_state(rig.b)
+
+        # A round, and no poll of b.
+        Manual.advance(rig.clock, 10)
+        assert %{status: :running, trip: nil} = Runner.status(rig.runner)
+        assert {Runner.get!(rig.runner, "speed"), Runner.get!(rig.runner, "load")} == want
+        {speed, load} = want
+        assert :sys.get_state(rig.b).image == %{[0] => speed, [1] => load}
+        Runner.stop(rig.runner)
+      end
+    end
+
+    test "a report a device handles before its fence is older than a poll's read that " <>
+           "came before it too, and supersedes it for none of its points" do
+      rig = pushed(%{[0] => 1000}, %{[0] => 1000, [1] => 5})
+      Agent.update(rig.agent, &%{&1 | next: [%{}, %{[0] => 1300}]})
+      next = :sys.get_state(rig.b).next
+
+      # a held inside its read, b suspended once released, its reread, a poll and a
+      # report waiting in its mailbox in that order.
+      :sys.suspend(rig.a)
+      restart = Task.async(fn -> Runner.restart(rig.runner, :cold) end)
+      called(rig.a)
+      :sys.get_state(rig.b)
+      :sys.suspend(rig.b)
+      :sys.resume(rig.a)
+      reread_waiting(rig.b)
+      send(rig.b, {Logex.Runner.Device, :poll, next})
+      send(rig.b, {:report, %{[0] => 1100, [1] => 9}})
+      :sys.resume(rig.b)
+      assert Task.await(restart) == :ok
+      :sys.get_state(rig.b)
+
+      # A round, and no poll of b.
+      Manual.advance(rig.clock, 10)
+      assert {Runner.get!(rig.runner, "speed"), Runner.get!(rig.runner, "load")} == {1300, 9}
+      assert :sys.get_state(rig.b).image == %{[0] => 1300, [1] => 9}
+    end
+
+    defp reread_waiting(device),
+      do: reread_found(Process.info(device, :messages), device)
+
+    defp reread_found({:messages, messages}, device),
+      do: reread_seen(Enum.any?(messages, &match?({:"$gen_call", _, :reread}, &1)), device)
+
+    defp reread_seen(true, _device), do: :ok
+    defp reread_seen(false, device), do: reread_waiting(device)
+
+    # Found by M4-6's eighth verification: a restart refused on another device ended b's
+    # hold and dropped what it held, so a reading of a point its read leaves out, which a
+    # moment before the release would have been taken while tripped, was lost.
+    test "a restart refused on another device passes on what a device held since its " <>
+           "release, and what it passed on before it" do
+      for passed_before <- [false, true] do
+        rig = pushed(%{}, %{[0] => 1000, [1] => 5})
+        before_release(passed_before, rig)
+        Sim.fail(rig.a, :read, {:value, [0], 7})
+        assert {:error, {:io_init, "a", _}} = reported_in_window(rig, %{}, [%{[1] => 9}])
+        :sys.get_state(rig.b)
+        assert %{status: :tripped} = Runner.status(rig.runner)
+        assert taken_while_tripped(rig) == {speed_before(passed_before), 9}
+
+        assert Runner.restart(rig.runner, :cold) == :ok
+        Manual.advance(rig.clock, 1000)
+
+        assert {Runner.get!(rig.runner, "speed"), Runner.get!(rig.runner, "load")} ==
+                 {speed_before(passed_before), 9}
+
+        Runner.stop(rig.runner)
+      end
+    end
+
+    # A change of b passed on, its answer waiting behind a restart refused on a's read.
+    defp before_release(false, _rig), do: :ok
+
+    defp before_release(true, rig) do
+      Sim.fail(rig.a, :read, {:value, [0], 7})
+      :sys.suspend(rig.runner)
+      restart = Task.async(fn -> Runner.restart(rig.runner, :cold) end)
+      restart_waiting(rig.runner)
+      send(rig.b, {:report, %{[0] => 1500}})
+      changes_waiting(rig.runner)
+      :sys.resume(rig.runner)
+      assert {:error, {:io_init, "a", _}} = Task.await(restart)
+      :sys.get_state(rig.b)
+      assert taken_while_tripped(rig) == {1500, 5}
+    end
+
+    # The values a tripped runner has taken from b, which its next round's inputs merge.
+    defp taken_while_tripped(rig),
+      do: {:sys.get_state(rig.runner).values["speed"], :sys.get_state(rig.runner).values["load"]}
+
+    defp speed_before(false), do: 1000
+    defp speed_before(true), do: 1500
+
+    test "a change the runner refuses drops the refused point's reading and passes on the " <>
+           "rest at the device's next reading" do
+      rig = pushed(%{}, %{[0] => 1000, [1] => 5})
+      assert Runner.restart(rig.runner, :cold) == :ok
+      send(rig.b, {:report, %{[0] => @too_fast, [1] => 6}})
+      :sys.get_state(rig.b)
+      assert {:io, "b", {:bad_value, [0], @too_fast}} = Runner.status(rig.runner).trip
+      assert taken_while_tripped(rig) == {1000, 5}
+      Manual.advance(rig.clock, 100)
+      assert taken_while_tripped(rig) == {1000, 6}
+      assert :sys.get_state(rig.b).image == %{[0] => 1000, [1] => 6}
     end
 
     test "reports between a device's release and its reread are superseded by the read " <>

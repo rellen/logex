@@ -6099,8 +6099,19 @@ run lamp, and a drive whose card gives the conveyor's speed.
      for each point it leaves out, which the runner checks as the restart's own read, a
      bad one refusing the restart with that device's fault, a good one among what the
      first round reads (since M4-6's seventh verification, 2026-10-20, the maintainer
-     settling it as a fix within this decision). A report the fence drops is lost so
-     where it is of a point the reread leaves out, until that point is reported again.
+     settling it as a fix within this decision). That still lost a reading of a point the
+     reread leaves out three ways: a change passed on before the release and answered
+     `:stale`, a report the fence dropped whole, and what a device held when a restart
+     was refused, on its own reread or another device's, the zero ending the hold. So a
+     device keeps each point's newest reading the runner has not taken: its reread is
+     the read merged over all of them, a stale change's among them; a report the fence
+     marks as older than the reread is dropped only for the points the reread, or a poll
+     since, gives; a reread the runner refuses drops the refused point's reading and
+     holds the rest, the runner telling the device the cause; and a zero that ends a
+     hold passes on what was held, as a change read while tripped is. A change the
+     runner refuses in a round keeps its other points in the same way, passed on at the
+     device's next reading, so that only a read that gives the refused point again passes
+     it on again (since M4-6's eighth verification, 2026-10-20).
 
 ---
 
