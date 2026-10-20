@@ -1830,13 +1830,17 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   answers at 0 within 50 ms and a poll period, whatever the fan's watchdog, and the
   runner trips when it next runs.
 - `restart(runner, :cold | :warm)` releases every latch, a device that does not answer its
-  release killed, opens again each device that went down, those among them, restarts the
-  resource, which keeps its input image and puts every other global back to its initial
-  value, and runs the first round at once, the stopped time not counted: the conveyor
-  stays off until start is pressed again. A released device writes nothing again until
-  that round has written its own outputs, so a restart never puts back, even for a moment,
-  what the plant had before the trip; and a device that cannot be opened leaves the runner
-  tripped, every device latched again and written 0 once more (decision 136). A runner
+  release killed, reads every device once, as a start does, opening again each device
+  that went down, those among them (decision 142), restarts the resource, which keeps its
+  input image and puts every other global back to its initial value, and runs the first
+  round at once, on what was read, the stopped time not counted: the conveyor stays off
+  until start is pressed again. A released device writes nothing again until that round
+  has written its own outputs, so a restart never puts back, even for a moment, what the
+  plant had before the trip; and a device that cannot be opened, or whose read fails or
+  gives a value that does not fit, a drive card still giving a speed no dint holds,
+  leaves the runner tripped with its first reason, the restart answered `{:error,
+  {:io_init, device, cause}}`, every device latched again and written 0 once more
+  (decision 136): nothing switches on, and the card at fault is named. A runner
   that is running, not tripped, refuses a restart as the host's mistake, "the runner is
   running" (decision 133). A runner that crashes or is killed is gone, its devices writing
   every output 0 once and closing as it goes (decision 115), a device waiting on it for

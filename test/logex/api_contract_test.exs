@@ -7778,8 +7778,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   walk takes 70 steps: random waits and presses, forces and unforces, an online edit's
   steps (a candidate's interval, watchdog or untimed counter changed, or a task added,
   which accept refuses), host mistakes, a crash and a fresh start from the same forces
-  file, restarts, cold and warm, one now and then refused by a device that cannot be
-  opened, for a reason drawn, which the restart gives back, and injected faults: a task's step slow by about its watchdog or the continuous
+  file, restarts, cold and warm, each reading every device first (decision 142), one now
+  and then refused by a device that cannot be opened, for a reason drawn, or by a device
+  up whose read fails, in each way `Logex.IO.Sim` fails a read, which the restart gives
+  back, and injected faults: a task's step slow by about its watchdog or the continuous
   task's, a host's request slower than the idle watchdog, the runner stuck for less than
   its idle watchdog or for longer than its devices' heartbeat, a device killed, or hung in
   a third of the walks, each hang costing a real-time wait,
@@ -7801,11 +7803,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     tripped after its 0. What the runner gave the core is checked too: each round's
     elapsed time is the clock's since the last round, 0 for the first after a start or a
     restart; a forced input reads its force, a reporting device's input its value now,
-    and a read device's a value it held within two poll periods of the round, and the
-    time passed inside steps while it was read, each pass that ended within that window
-    widening it by its own time and no more, which a test of the check's own pins; a
-    scheduled round comes exactly when decision 122's back
-    to back rounds or the next periodic due time say, never before a step it waited
+    every device's its value now in the first round after a start or a restart, which
+    read it, and a read device's a value it held within two poll periods of the round,
+    and the time passed inside steps while it was read, each pass that ended within that
+    window widening it by its own time and no more, which a test of the check's own pins;
+    a scheduled round comes exactly when decision 122's back to back rounds or the next periodic due time say, never before a step it waited
     behind, and none is left owed; and a force of a trigger makes its round at once, one
     that changes nothing none (decisions 120 and 138).
   - The watchdogs' and the trip's: a timed task's step longer than its watchdog trips

@@ -28,7 +28,8 @@ day (decisions 133–137); and M4-5, forcing and an online edit through the runn
 the same day, its review's findings fixed the same day, four of its readings put to the
 maintainer and answered the same day (§4.11's landing note, decisions 138–141); and M4-6,
 the contract walk over the runner, the same day, with the fix it found (decision 114's
-note).** On 2026-09-28 the
+note), and the question it raised answered by the maintainer on 2026-10-20 and built, a
+restart that reads every device first (decision 142).** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -2770,9 +2771,10 @@ through each device that answers, which latches and writes nothing more until a 
 reports `{:trip, reason}` to each subscriber and `status/1` gives the reason until a
 restart; it keeps the resource as the last round computed it, which `get/2` reads, outputs
 the plant never received among them where the round tripped before its write; and it waits
-for `restart(runner, :cold | :warm)`, which opens again each device that went down,
-releases every latch, calls `Logex.Runtime.restart/2`, which keeps the input image and puts
-every other global back to its initial value, and runs the first round at once, the clock
+for `restart(runner, :cold | :warm)`, which releases every latch, reads every device once,
+as a start does, opening again each device that went down (decision 142), calls
+`Logex.Runtime.restart/2`, which keeps the input image and puts every other global back to
+its initial value, and runs the first round at once, on what the devices read, the clock
 not counting the stopped time. `:warm` is `:cold` until `retain` lands. A trip's reason is
 one of:
 - `{:watchdog, {:task, task, took_ms, limit_ms}}`, a timed task's run;
@@ -2814,10 +2816,12 @@ device-name order not heard within the idle watchdog and a poll period, the time
 any call of its own to a device (decision 134); a device's notices that waited for the
 runner are taken together, in the order of the time each was raised, ties in device-name
 order, so that a run on the manual clock trips for one reason; a restart releases every
-latch first, a device that does not answer killed, and then opens again every device down,
-so a device that hung or died while the runner was tripped is opened again by the same
-restart, and one that cannot be opened leaves every device that answers latched again,
-written 0 once more, as a restart that trips again does (decision 136); a release forgets
+latch first, a device that does not answer killed, and then reads every device once, in
+device-name order, opening again every device down, so a device that hung or died while
+the runner was tripped is opened again by the same restart, and one that cannot be opened,
+or whose read fails or gives a value that does not fit, leaves the runner tripped with its
+first reason and every device that answers latched again, written 0 once more, as a
+restart that trips again does (decisions 136 and 142); a release forgets
 what the device last wrote, so that no poll writes the outputs from before the trip again
 before the restart's first round writes its own; a close answered while a device waits on
 the runner for its own change stops it closed, so that it is zeroed and closed once;
@@ -2913,7 +2917,7 @@ maintainer answered the four readings the record left on 2026-10-19, decisions 1
 | `get(runner, path)`, `get!(runner, path)` | as `Logex.Runtime.get/2` and `get!/2`, of the last round computed |
 | `subscribe(runner, kinds)`, `unsubscribe(runner)` | `{Logex.Runner, runner, event}` for each event of a kind named; a subscriber is monitored and dropped when it dies |
 | `force(runner, point, value)`, `unforce(runner, point)`, `unforce_all(runner)` | input points only; each writes the forces file whole before it returns, `{:error, {:forces, reason}}` where it cannot, and a runner started without `forces:` takes no force (decision 127) |
-| `restart(runner, :cold \| :warm)` | `:ok`, or `{:error, {:io_init, device, reason}}` |
+| `restart(runner, :cold \| :warm)` | `:ok`, or `{:error, {:io_init, device, reason}}` for a device it cannot open or read (decisions 136 and 142) |
 | `accept(runner, candidate)`, `test/1`, `untest/1`, `assemble/1`, `cancel/1` | the edit's steps |
 
 Its events are an open set: the resource's own `{:overlap, task, missed}` and `{:fault,
@@ -3048,7 +3052,8 @@ against `cycle/3` called with those, every round's events, outputs and resource,
 against the rules restated: when each scheduled round comes, what each input reads, and
 which trip each fault gives. Its reach is every event kind and every trip reason but
 `{:internal, message}`. It found one bug, a device that took a change the runner refused
-(decision 114's note), and one question, whether a restart reads every device first.
+(decision 114's note), and one question, whether a restart reads every device first,
+which the maintainer answered on 2026-10-20: it does, as a start does (decision 142).
 
 **Risks.**
 - *Real time in CI*: every rule is tested on the manual clock, and a test on the real
@@ -5097,8 +5102,11 @@ over.
      a card that goes on giving a bad value trips the runner again after each restart,
      where until then it tripped it once and the runner ran on with the last value it had
      taken, and a good change refused beside a bad one is read at the first read after the
-     restart. Whether a restart should read every device before its first round is put to
-     the maintainer, `PLAN.md` M4-6.)*
+     restart. Whether a restart should read every device before its first round was put
+     to the maintainer, `PLAN.md` M4-6, who answered that it should, decision 142: since
+     then a card still giving a bad value leaves each restart refused with its fault, the
+     runner tripped and nothing switched on, and the restart's own read takes the good
+     change, so the device's not taking a refused change no longer shows in any run.)*
 115. **After a crash (Milestone 4).** The controller software itself crashes; whichever is
      chosen, every output goes off on the way down.
      - It stays stopped until someone starts it again, as after the watchdog;
@@ -5439,7 +5447,15 @@ question put, as decisions 111 and 112 were.
      the maintainer's account and **unverified**: of the conventional manuals saved for
      this record, the design considerations reference lists *"I/O force tables"* among a
      controller's I/O memory (p.31), and neither it nor the tasks, programs and routines
-     manual says what a power cycle does to them or names an indicator.
+     manual says what a power cycle does to them or names an indicator. *(Checked
+     2026-10-20: the indicator and where forces are kept are **verified**, a power cycle
+     **not found**. The I/O and tag data manual: *"FORCE Status Indicator ... Flashing: At
+     least one tag contains a force value. I/O forces are inactive (disabled). Solid: I/O
+     forces are active (enabled)"*, and of a force "Installed", *"At least one force of
+     this type exists in the project"* (1756-PM004L, Nov 2023, p.52); *"I/O forces are held by the
+     controller and not by the programming workstation. Forces remain even if the
+     programming workstation is disconnected"* (p.53). None of the manuals saved says what
+     a power cycle does to them.)*
 
      **Taken,** with the record's choices on how, each with the alternative it passes
      over:
@@ -5592,8 +5608,18 @@ same day.
      occur within the RPI, the module sends its data at the RPI"* (the tasks, programs
      and routines manual, p.42, of an input module, decision 120); that a controller's
      outputs go out at the RPI in the same way, and that an output module drops them when
-     several RPIs pass with nothing heard, is the maintainer's account, and
-     **unverified** for outputs in the manuals saved for this record.
+     several RPIs pass with nothing heard, is the maintainer's account, and was
+     **unverified** for outputs in the manuals saved for this record. *(Checked
+     2026-10-20: the first is **verified**, *"An owner-controller sends output data to an
+     output module when either one of two things occurs: At the end of every one of its
+     tasks (local chassis only); At the rate specified in the module RPI"* (1756-UM058L,
+     Sept 2026, p.24), a remote module's *"When the RPI timer expires"* (p.25), sends tied
+     to the RPI's timer rather than to a change; the second is **verified** as a module's
+     configured fault state on a communication fault, *"If a module loses its connection
+     to the controller, outputs go to their configured faulted state"* (1756-PM015Q, Sept
+     2025, p.12; 1756-UM058L, p.123, FaultMode, *"configure the state of outputs when a
+     communication fault occurs"*), which the manuals tie to the connection's loss and do
+     not phrase as a number of RPIs.)*
 
      **Taken: the first,** as the maintainer answered, "Re-write each poll", in the form
      the review refined it: the write again is made by the device's own process at its
@@ -5624,9 +5650,12 @@ same day.
      last write. IEC 61131-3 says nothing of a controller's traffic with its I/O. Logix
      sends a module's data at its RPI whether or not it changed, which the manual saved
      for this record says of an input module (p.42, above), and re-sends a controller's
-     outputs at the RPI in the same way, as the maintainer answers; that an output
-     module falls back to its safe state after missing several RPIs stays
-     **unverified**, by the maintainer's answer "Leave unverified". The cost: one adapter
+     outputs at the RPI in the same way, as the maintainer answers, since **verified**
+     (1756-UM058L, Sept 2026, pp.24–25, above); that an output module falls back to its
+     safe state after missing several RPIs stayed **unverified**, by the maintainer's
+     answer "Leave unverified", and is since **verified** as a fall to its configured
+     fault state on a communication fault (1756-PM015Q, Sept 2025, p.12; 1756-UM058L,
+     p.123), not phrased in RPIs. The cost: one adapter
      write a device a poll period, plus each round's; a poll in a round's millisecond,
      handled first, writes the last value just before the round writes the new one, as
      the maintainer accepts. *(Answered and taken
@@ -5734,9 +5763,11 @@ on the drive.
 
      IEC 61131-3 describes a cold and a warm restart as ways a resource starts, and says
      nothing of one that is already running. The conventional family has no restart of a
-     running controller, the nearest being a change to Program mode and back, its outputs
-     in their Program-mode state meanwhile (from memory, **unverified** in the manuals
-     saved for this record).
+     running controller, the nearest being a change to Program mode and back (from
+     memory, **unverified** in the manuals saved for this record), its outputs in their
+     Program-mode state meanwhile: that state is **verified** (2026-10-20), each output
+     module's ProgMode and ProgValue *"configure output state when the controller is in
+     Program mode"* (1756-UM058L, Sept 2026, p.123).
 
      **Taken: refused,** the host's mistake, raised in the caller as `ArgumentError`,
      *"the runner is running: restart/2 starts a runner again once it has tripped"*, the
@@ -5763,9 +5794,20 @@ on the drive.
 
      Each costs one message from each card to the runner each poll period, 100 a second a
      card at 10 ms. IEC 61131-3 says nothing of how a controller talks to its I/O. The
-     conventional family faults a connection that misses its timeout, its RPI times a
-     multiplier of 4 by default, which the second matches (from memory, **unverified** in
-     the manuals saved for this record).
+     conventional family faults a connection that misses its timeout, which the record
+     gave, from memory, as the RPI times a multiplier of 4 by default, matching the
+     second. **Contradicted** (checked 2026-10-20): *"The minimum timeout period that,
+     once expired without communication, causes a timeout is 100 ms. The timeout period
+     can be greater, depending on the RPI of the application. For example, if your
+     application uses the default RPI = 20 ms, the timeout period is 160 ms"* (1756-UM001Q,
+     Dec 2024, p.158), eight RPIs, not four; *"If communication with a device in the I/O
+     configuration of the controller does not occur for 100 ms, the communication times
+     out"* (1756-PM015Q, Sept 2025, p.11); and the digital I/O manual speaks of *"4/8/16 x
+     RPI"* only for redundant systems, *"For non-redundant ControlLogix applications, the
+     CIP connection timeout delay minimum is 100 ms"* (1756-UM058L, Sept 2026, p.79). No
+     default multiplier is stated. So Logix's timeout is a time with a floor of 100 ms,
+     which grows with the RPI, nearer the first option's one time for every card than the
+     second's count of four missed reads.
 
      **Taken: the idle watchdog and a poll period,** one time for every call to a card,
      until a plant needs a time of its own for a device (the maintainer, 2026-10-19).
@@ -5786,7 +5828,13 @@ on the drive.
 
      IEC 61131-3 says nothing of it. In the conventional family a faulted module's
      outputs go to the fault state configured on the module, the module doing it rather
-     than the controller (from memory, **unverified**).
+     than the controller. **Verified** (2026-10-20): *"If a module loses its connection
+     to the controller, outputs go to their configured faulted state"* (1756-PM015Q, Sept
+     2025, p.12), the state set on the module's own configuration, FaultMode, *"configure
+     the state of outputs when a communication fault occurs"*, *"0 = Use FaultValue (Off
+     or On) 1 = Hold Last State"* (1756-UM058L, Sept 2026, p.123), so a module may hold its
+     last state rather than go off, which logex's 0 written to the failed device, where it
+     still takes a write, does not leave to it.
 
      **Taken: the failed device written its 0 too,** where it still takes a write, so that
      every output that can still be written is written 0, the milestone's done sentence,
@@ -5807,8 +5855,13 @@ on the drive.
        restart.
 
      IEC 61131-3 says nothing of it. The conventional family writes each module's
-     outputs every RPI in every mode, so a module hears its state again and again (from
-     memory, **unverified**).
+     outputs every RPI, so a module hears its state again and again: **verified**
+     (2026-10-20), *"An owner-controller sends output data to an output module when
+     either one of two things occurs: At the end of every one of its tasks (local chassis
+     only); At the rate specified in the module RPI"* (1756-UM058L, Sept 2026, p.24), and
+     to a remote chassis *"When the RPI timer expires"* (p.25); "in every mode" is not
+     stated, though a module has a configured Program-mode state, ProgMode, *"configure
+     the state of outputs when the controller is in Program mode"* (p.123).
 
      **Taken: written its 0 once more,** a 0 heard once more rather than a card left
      unsaid (the maintainer, 2026-10-19): the runner stays tripped with its first reason,
@@ -5864,9 +5917,15 @@ photo-eye that counts boxes.
 
      IEC 61131-3 says nothing of forcing, and an event task in IEC runs on its trigger's
      rising edge, whatever caused it. In the conventional family a force changes the
-     input as the program sees it from the next scan; whether an event task triggered by
-     a forced input runs at once, or in what order several do, is not in the manuals
-     saved (**unverified**).
+     input as the program sees it at once: **verified** (2026-10-20), *"If forces are
+     enabled and you install a force, the new force immediately takes effect"*, and a
+     force *"Overrides the value regardless of the value of the physical device"*
+     (1756-PM004L, Nov 2023, pp.51 and 54). Whether an event task triggered by a forced
+     input runs at once, or in what order several do, is **not found**: the event
+     triggers of the tasks, programs and routines manual (1756-PM005M) are a module's
+     change-of-state data, and neither it, the I/O and tag data manual (1756-PM004L) nor
+     the white paper "Using Event Tasks with Logix5000 Controllers" (LOGIX-WP003A, June
+     2003) mentions forcing an input.
 
      **Taken: at once, a round for each trigger changed,** in device-name and then
      address order, before the call returns, a force that changes nothing making no round
@@ -5891,8 +5950,13 @@ photo-eye that counts boxes.
      With an untimed program, as §4.4's box counter in the continuous task, rounds come
      every millisecond, the controller's clock keeps up with the wall clock, and the three
      agree. IEC 61131-3 says nothing of a task's interval changed while running. In the
-     conventional family a periodic task's period may be changed online, and when the new
-     one takes effect is not in the manuals saved (**unverified**).
+     conventional family a periodic task's period may be changed while it runs:
+     **partly verified** (2026-10-20), the TASK object's Rate, which GSV and SSV read and
+     write in a standard task, is *"The time interval between executions of the task.
+     Time is in microseconds"* (1756-RM018A, Sept 2025, p.276), so logic may write it at
+     runtime; whether the Task Properties dialog changes it online, and when the new one
+     takes effect, is **not found** in the manuals saved (a Rockwell help page, seen only
+     through a search's summary, says a safety task's period cannot be modified online).
 
      **Taken: the wall clock's, given to the switch** (the maintainer, 2026-10-19): the
      screen shows no alarm the edit itself made, and no round is added.
@@ -5922,7 +5986,9 @@ photo-eye that counts boxes.
      and an unforce of an input that is not forced is accepted and writes the set again.
      IEC 61131-3 says nothing of forcing. In the conventional family forces are kept in
      the project and changed only through the programming software, never by editing a
-     file (**unverified**).
+     file: the first half **verified** (2026-10-20), *"I/O forces are held by the
+     controller and not by the programming workstation"* and a force *"exists in the
+     project"* (1756-PM004L, Nov 2023, pp.52–53), the rest **not found**.
 
      **Taken: read exactly as the runner writes it,** and an unforce of a point not
      forced accepted (the maintainer, 2026-10-19), as built: a strict file is the safest
@@ -5940,8 +6006,15 @@ photo-eye that counts boxes.
      - or A is told the plant moved on, and accepts again by hand, seeing the plant as it
        now is before choosing.
 
-     IEC 61131-3 says nothing of online edits. The conventional family's programming
-     software lets one workstation at a time edit a controller online (**unverified**).
+     IEC 61131-3 says nothing of online edits. The record gave, from memory, that the
+     conventional family's programming software lets one workstation at a time edit a
+     controller online: **not found, and probably contradicted** (checked 2026-10-20).
+     Rockwell's help, seen only through a search's summaries and not fetched, says pending
+     edits are kept in the workstation and *"visible only to the person performing those
+     edits"*, while test edits *"can be viewed by all workstations"*, and release notes fix
+     an anomaly *"when multiple users perform online edits on the same controller"*; no
+     locking rule was found. So two engineers stepping edits on one controller, which
+     this decision provides for, is likely Logix's case too.
 
      **Taken: an overtaken accept redone against the plant as it now is** (the
      maintainer, 2026-10-19), as built: it gives exactly what the same steps taken over
@@ -6026,24 +6099,54 @@ run lamp, and a drive whose card gives the conveyor's speed.
 **The conventional family.**
 - The import/export reference, Sept 2025: ch.6 (tags), ch.8 (programs), ch.14 (tasks) and
   ch.15 (parameter connections).
-- The general instructions reference, Sept 2025: the TASK object for GSV/SSV, TON
-  (its TIMER structure and prescan), ONS, and a CPS example.
+- The general instructions reference, Sept 2025, 1756-RM018A (served at the 1756-RM003
+  address): the TASK object for GSV/SSV (p.276, its Rate, decision 139), TON (its TIMER
+  structure and prescan), ONS, and a CPS example.
 - The ladder-diagram programming manual, July 2022, ch.1.
 - For Milestone 4's design (§4.11, decisions 108–132): the tasks, programs and routines
-  manual, Sept 2025, p.8 (the continuous task, one at most, restarting at once), p.13 (its
+  manual, Sept 2025, 1756-PM005M, p.8 (the continuous task, one at most, restarting at
+  once), p.13 (its
   lowest priority, and the system overhead time slice), pp.31–33 (the time slice, its
   table and its default), p.34 (each task's watchdog) and pp.37–46 (event tasks, the change
   of state and the requested packet interval, p.46 its warning of an overlap, decision
-  120); and the design considerations reference, Sept 2025, pp.19, 24 and 34–36 (the
+  120); and the design considerations reference, Sept 2025, 1756-RM094N, pp.19, 24 and
+  34–36 (the
   newest controllers run communications on a core of their own, with no time slice; p.35
   the time slice's formula and table, decision 122) and p.31 (the I/O force tables among
   a controller's I/O memory, decision 127). **Unverified:** that the conventional family
-  keeps forces in the project through a power cycle, with a "forces on" indicator,
-  which neither manual says (decision 127); and that an output module falls back to its
-  safe state after missing several RPIs, left unverified by the maintainer's answer,
-  "Leave unverified" (decision 130's amendment, which takes from the maintainer that a
-  controller's outputs are re-sent at the RPI, as the manual says an input module's
-  data is, p.42).
+  keeps forces through a power cycle, which no manual saved says (decision 127; the
+  indicator and the forces held in the controller, verified since, below).
+- Read on 2026-10-20, for decision 142 and to check the record's other claims of the
+  conventional family's I/O, forces and online edits (the PDFs current at
+  `literature.rockwellautomation.com`, page numbers the printed ones):
+  - *Information and Status*, 1756-PM015Q, Sept 2025: p.11 (a connection's 100 ms
+    timeout, data that does not update, the logic acting on old data), p.12 (Major Fault
+    On Controller If Connection Fails While in Run Mode, its one attempt to connect
+    during the Program to Run transition, faults 3/23 and 3/16, and a module's outputs
+    going to their configured faulted state without it; decisions 130, 135 and 142) and
+    p.14 (the controller re-establishing a connection);
+  - *Major, Minor, and I/O Faults*, 1756-PM014O, Sept 2024: p.9 (a major fault halts
+    logic and the controller goes to faulted mode);
+  - *I/O and Tag Data*, 1756-PM004L, Nov 2023: pp.51–54 (a force taking effect at once,
+    the FORCE status indicator, forces held by the controller and kept in the project,
+    a force overriding the physical device; decisions 127, 138 and 140);
+  - *ControlLogix 5570 and 5560 Controllers*, user manual, 1756-UM001Q, Dec
+    2024: p.158 (the I/O connection's timeout, 100 ms at least, 160 ms at the default
+    20 ms RPI; decision 134) and p.161 (where the major-fault checkbox is set);
+  - *ControlLogix Digital I/O Modules*, user manual, 1756-UM058L, Sept 2026: pp.24–25
+    (outputs sent at the end of each task, locally, and at the RPI; decisions 130 and
+    136), p.67 (the major-fault checkbox), p.79 (the connection timeout, 100 ms at least
+    where not redundant; decision 134) and p.123 (FaultMode, FaultValue, ProgMode and
+    ProgValue; decisions 130, 133, 135 and 136);
+  - *ControlLogix 5590 Controller User Manual*, 1756-UM900B, Nov 2025: p.132 (at least
+    100 ms to see a connection lost), p.240 (the controller's state with the checkbox and
+    without) and p.242 (a major fault sends the outputs to their configured fault state);
+  - *Using Event Tasks with Logix5000 Controllers*, LOGIX-WP003A, June 2003 (no word of
+    forcing a trigger; decision 138).
+  - **Not found** in them: whether a forced input fires the event task it triggers
+    (decision 138); when a task's period changed online takes effect (decision 139); and
+    any rule that one workstation at a time edits online, which Rockwell's help, seen
+    only through a search's summaries, probably contradicts (decision 141).
 - For Milestone 2's design: the add-on instructions manual, Sept 2025, p.21 (instructions
   nested up to 16 levels deep, decision 32; the design considerations reference says the
   same on p.15), p.23 (local tags not reachable from outside, decision 33) and p.79 (a
@@ -6073,10 +6176,12 @@ numbers").**
 **Online edit (§4.9), read on 2026-10-01.**
 - The conventional family: its quick start (Oct 2009), pp.120–124, for the edit cycle and
   the three output sentences (verified again on 2026-10-01); its current online-editing
-  help (pending, accept, test, untest, assemble); its *design considerations reference* (Sept 2025), p.65
+  help (pending, accept, test, untest, assemble); its *design considerations reference*
+  (Sept 2025, 1756-RM094N), p.65
   (partial import online, and rescheduling a program refused in Run mode) and pp.85, 88
   and 91 (a tag's data type, or an existing user-defined type, changed offline only); and the TASK object of its general
-  instructions reference, whose rate and priority logic may write at runtime.
+  instructions reference (1756-RM018A, p.276), whose rate and priority logic may write at
+  runtime.
 - CODESYS online help: "Online Change" (Table 106, what forces a full download) and
   `FB_Init`/`FB_Reinit` (how an instance's data is copied).
 - Siemens: the S7-300/400/1200/1500 comparison list for programming languages (11/2019).
@@ -6094,9 +6199,11 @@ numbers").**
   - that a lower priority number is higher there;
   - that an unscheduled program does not run;
   - that its logic may `move` into a timer's `.pre` and `.acc`;
-  - what its controller does to outputs on a watchdog fault *(still: the tasks, programs
-    and routines manual says only that a major fault occurs and that, depending on the
-    controller's fault handler, the controller might shut down, p.34)*.
+  - what its controller does to outputs on a watchdog fault *(the tasks, programs and
+    routines manual says only that a major fault occurs and that, depending on the
+    controller's fault handler, the controller might shut down, p.34; read since,
+    2026-10-20: *"A major fault on the controller causes the outputs to go to their
+    configured fault state"*, 1756-UM900B, Nov 2025, p.242)*.
 - **Not tried:** what a machine that suspends does to the runner's monotonic clock and its
   devices' heartbeats (§4.11, "Risks").
 - **Inferred, not stated by the sources:**

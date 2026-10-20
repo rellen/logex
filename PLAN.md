@@ -36,7 +36,8 @@ findings fixed the same day, four of its choices put to the maintainer, who answ
 the same day, decisions 138 to 141, the second with the option recommended, then built
 (§3, M4-5); and its sixth, M4-6, the contract walk over the runner, the same day, with a
 fix to the devices it found and one question put to the maintainer, its review's
-findings fixed on 2026-10-20 (§3, M4-6).
+findings fixed on 2026-10-20, and the maintainer's answer the same day, a restart that
+reads every device first, decision 142, then built (§3, M4-6).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -3105,7 +3106,9 @@ and M4-7 the documents.
   every start reads it, a force the configuration cannot take refused there as the host's
   mistake; `unforce_all/1` clears it; and the status always lists every force. IEC 61131-3
   says nothing of forcing, and the conventional family's keeping of forces through a
-  power cycle, with a "forces on" indicator, is unverified in the manuals saved.
+  power cycle, with a "forces on" indicator, is unverified in the manuals saved *(checked
+  2026-10-20, decision 127: the FORCE status indicator and forces held by the controller
+  are verified, 1756-PM004L pp.52–53; a power cycle is not found)*.
 - **M4-2 · Watchdogs and the continuous task in a configuration.** The survey first: the
   stanzas `watchdog` and `continuous` in `docs/naming.md`, then the words in
   `Logex.Configuration.Text.keywords/0` and `naming_test.exs`'s pinned list. A task line
@@ -3326,7 +3329,9 @@ and M4-7 the documents.
   (2) the documents, the commit after it: decision 130 amended and 132 marked
   superseded in `docs/organisation.md` §7, with IEC's silence on a controller's I/O
   traffic, Logix's re-send at the RPI, an output module's fallback after missed RPIs
-  left unverified, and the cost, one adapter write a device a poll period, plus each
+  left unverified *(both verified on 2026-10-20, 1756-UM058L pp.24–25 and 1756-PM015Q
+  p.12, the fallback as a configured fault state on a communication fault, not phrased in
+  RPIs; decision 130)*, and the cost, one adapter write a device a poll period, plus each
   round's; §4.11, the moduledocs, README's "On the clock", re-run, its output the same,
   and CLAUDE.md brought to it. 1407 tests pass on Elixir 1.20.4 (9 of them doctests),
   down from 1408: decision 132's four tests gone, three new.
@@ -3527,7 +3532,8 @@ and M4-7 the documents.
      ways a resource starts, and says nothing of one already running; the conventional
      family has no restart of a running controller, the nearest being a change to Program
      mode and back, its outputs in their Program-mode state meanwhile (from memory,
-     **unverified** in the manuals saved). The review agrees. Recommended: (a).
+     **unverified** in the manuals saved; the Program-mode state verified on 2026-10-20,
+     1756-UM058L p.123, decision 133). The review agrees. Recommended: (a).
   2. *How soon a card stuck while it is read is a fault.* The panel card's adapter hangs in
      the middle of reading the buttons, while the conveyor runs steadily and no output
      changes. Decision 114 already makes it a fault, as the review pointed out, so the
@@ -3545,7 +3551,9 @@ and M4-7 the documents.
      message from each card to the runner each poll period, 100 a second a card at 10 ms.
      IEC 61131-3 says nothing of how a controller talks to its I/O; the conventional
      family faults a connection that misses its timeout, its RPI times a multiplier of 4
-     by default, which (b) matches (from memory, **unverified** in the manuals saved).
+     by default, which (b) matches (from memory, **unverified** in the manuals saved;
+     **contradicted** on 2026-10-20: a timeout of 100 ms at least, 160 ms at the default
+     20 ms RPI, 1756-UM001Q p.158, no default multiplier stated, decision 134).
      Recommended: (a), one time for every call to a card, until a plant needs (c).
   3. *The card that failed.* The drive's network cable comes loose and the runner's write
      of the drive's speed fails; the record's table says "every other device zeroed". (a)
@@ -3555,7 +3563,8 @@ and M4-7 the documents.
      quiet, the panel alone written 0: the drive keeps its last speed until its own
      timeout. IEC 61131-3 says nothing of it; in the conventional family a faulted
      module's outputs go to the fault state configured on the module, the module doing it
-     rather than the controller (from memory, **unverified**). The review agrees.
+     rather than the controller (from memory, **unverified**; verified on 2026-10-20,
+     1756-PM015Q p.12 and 1756-UM058L p.123, decision 135). The review agrees.
      Recommended: (a), every output that can still be written at 0, the milestone's done
      sentence.
   4. *A restart that cannot open a card.* The drive was unplugged while the plant was
@@ -3569,8 +3578,9 @@ and M4-7 the documents.
      between: the same on a healthy panel, and a card opened again in that restart left
      to whatever it does at power-up until the next restart. IEC 61131-3 says nothing of
      it; the conventional family writes each module's outputs every RPI in every mode,
-     so a module hears its state again and again (from memory, **unverified**).
-     Recommended: (a), a 0 heard once more rather than a card left unsaid.
+     so a module hears its state again and again (from memory, **unverified**; every RPI
+     verified on 2026-10-20, 1756-UM058L pp.24–25, "in every mode" not stated, decision
+     136). Recommended: (a), a 0 heard once more rather than a card left unsaid.
   5. *What time a card's own timeout reports.* The runner is stuck for 3 s inside the
      conveyor's step, whose watchdog is 50 ms; the panel hears nothing by its deadline,
      50 ms and a poll period after the step began, switches the conveyor, fan and lamp
@@ -3713,7 +3723,9 @@ and M4-7 the documents.
      of forcing, and an event task in IEC runs on its trigger's rising edge, whatever
      caused it. In Logix a force changes the input as the program sees it from the next
      scan, and whether an event task triggered by a forced input runs at once, or in what
-     order several do, is not in the manuals saved (**unverified**). Recommended: (a), the
+     order several do, is not in the manuals saved (**unverified**; checked on 2026-10-20,
+     decision 138: a force *"immediately takes effect"*, 1756-PM004L p.51, and an event
+     task fired by a force is not found). Recommended: (a), the
      review agreeing, with one round per trigger changed. *Answered: (a), as built, one
      round per trigger changed, in device-name then address order, a force that changes
      nothing making no round (decision 138).*
@@ -3734,7 +3746,9 @@ and M4-7 the documents.
      in the Done-when, rounds come every millisecond, the controller's clock keeps up with
      the wall clock, and the three agree. IEC 61131-3 says nothing of a task's interval
      changed while running. In Logix a periodic task's period may be changed online, and
-     when the new one takes effect is not in the manuals saved (**unverified**).
+     when the new one takes effect is not in the manuals saved (**unverified**; partly
+     verified on 2026-10-20, decision 139: the TASK object's Rate, which logic may write,
+     1756-RM018A p.276, its taking effect not found).
      Recommended: (c), the screen showing no alarm the edit itself made and no round
      added, if a change to the edit's switch is acceptable, the review agreeing; (a) is
      what the record's rule says as written, and stays built until the maintainer says.
@@ -3753,7 +3767,9 @@ and M4-7 the documents.
      words, though it has nothing to take off; and an unforce of an input that is not
      forced is accepted and writes the set again. IEC 61131-3 says nothing of forcing. In
      Logix forces are kept in the project and changed only through the programming
-     software, never by editing a file (**unverified**). Recommended: (a), the review
+     software, never by editing a file (**unverified**; forces held by the controller and
+     kept in the project verified on 2026-10-20, 1756-PM004L pp.52–53, decision 140).
+     Recommended: (a), the review
      agreeing: a strict file is the safest for a list that decides what the plant reads.
      *Answered: (a), as built, and an unforce of a point not forced accepted (decision
      140).*
@@ -3770,7 +3786,8 @@ and M4-7 the documents.
      whatever edit was held as it was. (b) A is told the plant moved on, and accepts again
      by hand, seeing the plant as it now is before choosing. IEC 61131-3 says nothing of
      online edits. Logix's programming software lets one workstation at a time edit a
-     controller online (**unverified**). Recommended: (a), the review agreeing, since it
+     controller online (**unverified**; not found, and probably contradicted, on
+     2026-10-20, decision 141). Recommended: (a), the review agreeing, since it
      gives exactly what the same steps taken over the resource directly give
      (`Logex.Configuration.Edit`'s rule that a second accept supersedes the first).
      *Answered: (a), as built: an overtaken accept is redone against the plant as it
@@ -3851,7 +3868,8 @@ and M4-7 the documents.
   `runner_test.exs`, `force_test.exs` and `runner_edit_test.exs`, which the table names;
   the one only the walk catches is a round that trips the continuous task's watchdog
   recording no longest run in `status/1`. The fix's three rules, reverted, fail the walk
-  alone once the fix's own test is taken out. The ten it misses are each caught by a
+  alone once the fix's own test is taken out *(until decision 142, since which they are
+  equivalent, below)*. The ten it misses are each caught by a
   per-rule test, most of them out of the walk's reach by design: a write delayed, a
   host's call waiting for a slot, two bad addresses in one read, or equivalent on the
   manual clock.
@@ -3924,7 +3942,8 @@ and M4-7 the documents.
      after the last round (decision 139) in eight and a step taken while tripped in
      one.
 
-  **A question for the maintainer** (provisional: built as (a), as the record says). A
+  **A question for the maintainer** (answered 2026-10-20: (b), "Read cards first", then
+  built, decision 142; it had been built as (a), as the record said). A
   *trip* stops the plant: every output switched off once, nothing run until a person
   presses restart. A *round* is one pass of the controller over its programs: the inputs
   read, the programs run, the outputs written. A *device* is an I/O card the controller
@@ -3948,9 +3967,57 @@ and M4-7 the documents.
      and then trips again within a poll period. IEC 61131-3 says nothing of a restart
      after an I/O fault. In Logix a module whose connection faulted is reconnected before
      its inputs are used, and a major fault is cleared before the controller goes back to
-     run (from memory, **unverified** in the manuals saved). Recommended: (b), the
-     same rule as a start, which the record has; nothing is switched on from a value the
-     controller knows may be bad.
+     run (from memory, **unverified** in the manuals saved; since **verified** for a
+     module set to "Major Fault On Controller If Connection Fails While in Run Mode": at
+     the transition from Program to Run *"the controller makes one attempt to connect to
+     a module"*, and where none occurs *"a fault occurs because at least one required
+     connection is not established before going to Run mode. This is a 3/23 type fault
+     code"*, 1756-PM015Q, Sept 2025, p.12; a module without that setting is not waited
+     for). Recommended: (b), the same rule as a start, which the record has; nothing is
+     switched on from a value the controller knows may be bad.
+     *Answered: (b), "Read cards first"* (the maintainer, 2026-10-20), then built
+     (decision 142): a restart reads every device once, in device-name order, as a start
+     does, before its first round; one whose read fails, an error, a raise, a throw, an
+     exit, a value that does not fit, an address that is no input point's, no answer in
+     time or a process gone down, leaves the runner tripped with its first reason, the
+     restart answered `{:error, {:io_init, device, cause}}`, the answer a device a restart
+     cannot open gives (decision 136), and every device that answers latched again and
+     written 0 once more, as decision 136 has it.
+
+  **Decision 142, built** (2026-10-20), as two commits: (1) the code, its tests and the
+  walk, with decision 142's record, `0cb2b61`; (2) these documents, with the record's
+  claims of Logix checked against the manuals (below). 1538 tests pass on Elixir 1.20.4
+  (9 of them doctests), up from 1533. `restart/2` releases every latch and then reads
+  every device once, in device-name order: one up through its process's `reread/1`, one
+  down opened again. `trip_test.exs` pins a card still bad leaving the runner tripped and
+  written only 0, cold and warm, a card put right letting it run on what it gives now,
+  read by no poll, each kind of read fault in the card's words, a card hung in the read
+  killed and opened again at the next restart, and the first in device-name order; the
+  walk refuses a restart now and then through a device up whose read fails, and holds a
+  start's and a restart's first round to every device as it is then. Its mutation table
+  (`0cb2b61`'s message): 13 mutants, each applied alone in a copy and the full suite
+  judged by its exit code; the ten of decision 142's rules all red, the walk alone failing
+  four of them, one, a device that kept its old image after the reread, the walk only; and
+  M4-6's fix's three rules (above) green, equivalent since: a refusal always trips, and a
+  restart now reads every device whole, so a device's image after a refusal no longer
+  shows in any run, and the fix's own test now pins decision 142. Two rules first written
+  were equivalent mutants and taken out: the runner marking down a device that did not
+  answer its read, which its trapped exit does, and moving its heard time, which its
+  "back" notices do.
+
+  **The record's claims of Logix, checked** (2026-10-20, against the manuals' current
+  PDFs, `docs/organisation.md` §8): verified, outputs sent at the RPI (1756-UM058L
+  pp.24–25, decisions 130 and 136), an output module's configured fault state on a
+  communication fault (1756-PM015Q p.12, 1756-UM058L p.123, decisions 130 and 135), a
+  force taking effect at once (1756-PM004L p.51, decision 138), the FORCE status
+  indicator and forces held by the controller (1756-PM004L pp.52–53, decisions 127 and
+  140), a module's Program-mode output state (1756-UM058L p.123, decision 133) and a
+  major fault's outputs (1756-UM900B p.242); contradicted, a connection's timeout of four
+  RPIs by default (1756-UM001Q p.158: 100 ms at least, 160 ms at the default 20 ms RPI,
+  decision 134); partly verified, a task's period changed online (the TASK object's Rate,
+  1756-RM018A p.276, decision 139); and not found, a forced input firing its event task
+  (decision 138) and one workstation editing online at a time, which Rockwell's help
+  probably contradicts (decision 141). No decision's outcome changed.
 - **M4-7 · The documents.** README's "Running a plant on the clock", with a real run, and
   "What logex is not", plainly; CLAUDE.md's Key Files; `docs/organisation.md` §4.5's
   adapter contract, §4.6's watchdog paragraph, §5's row and decision 14's annotation, as
