@@ -912,6 +912,9 @@ defmodule Logex.TripTest do
     s.out z
   """
 
+  # The e-stop's round writing the drive alone.
+  @drive_stopped String.replace(@stopped, "var_global y bool at panel.q.0", "var_global y bool")
+
   # The conveyor with an input on the drive too, so that both devices are read.
   @read_both @conveyor <> "var_global d bool at drive.i.0\n"
 
@@ -1098,13 +1101,17 @@ defmodule Logex.TripTest do
       assert Runner.restart(runner, :cold) == :ok
       assert device_pid(runner, "drive") == old
 
-      # One a millisecond sooner is in time.
+      # One a millisecond sooner is in time. The panel has no output here: written after
+      # the drive, it would have the deadline's last millisecond, on the manual clock a
+      # millisecond of real time, to answer in, which a loaded machine misses.
       %{runner: runner, panel: panel, drive: drive} =
-        rig(configured(@stopped), poll: 10, steps: Runtime)
+        rig(configured(@drive_stopped), poll: 10, steps: Runtime)
 
       Sim.fail(drive, :write, {:delay, 509})
       Sim.set(panel, [0], 1)
       assert Runner.status(runner).status == :running
+      assert Sim.writes(drive) == [%{[0] => 0}, %{[0] => 1}]
+      assert Sim.writes(panel) == []
     end
 
     test "a device's process that goes down trips, and is opened again at a restart" do

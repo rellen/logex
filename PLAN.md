@@ -4096,7 +4096,12 @@ and M4-7 the documents.
   tests, the runner walk and a forces test among them); and a reread that fails keeping
   its fence too, green, since that only drops a report handled before it by a runner the
   refused restart leaves tripped, which the next restart's read replaces for every point
-  the read gives. 1550 tests pass on Elixir 1.20.4 (9
+  the read gives. And the trip test whose 509 ms half found the runner tripped under load
+  was a real-time margin, not a race: the panel, written after the drive's 509 ms write,
+  had the shared deadline's last millisecond to answer in, a millisecond of real time on
+  the manual clock, and tripped `{:io, "panel", :timeout}` 6 runs in 3000 under load; the
+  half now writes the drive alone, 0 runs in 3000 under a heavier load, and still fails
+  where an answer a millisecond early is judged late. 1550 tests pass on Elixir 1.20.4 (9
   of them doctests), up from 1549.
 
   **The record's claims of Logix, checked** (2026-10-20, against the manuals' current
