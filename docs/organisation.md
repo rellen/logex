@@ -6132,24 +6132,33 @@ recorded here. The plant is §4.4's, as for decision 142.
 143. **A change refused for one bad point (Milestone 4),** following decisions 114 and
      124. The conveyor runs. The drive's card reports the conveyor's speed and its load
      together, in one change, and the speed is a value no dint holds, the load a good
-     one. The controller trips on the bad speed (decision 114), and the operator, the
-     card still bad, looks at the screen before restarting.
+     one. The controller trips on the bad speed (decision 114), the card's fault is
+     cleared, and the operator restarts.
      - The good load is kept: the card's change is refused for its bad speed alone, and
        the load goes on to the controller with the card's next reading, so that the load
-       on the screen, and the one the first round after a restart reads, is the one the
-       card last gave, not an older one;
+       the first round after a restart reads is the one the card last gave, not an older
+       one;
      - or the whole change is dropped: the controller goes on holding the load it had
        before the change, until the card gives the load again, which a card that reports
        only what changes may not do for as long as the load holds steady.
 
-     IEC 61131-3 says nothing of an input refused in part. Logix (**verified**,
-     1756-PM015Q, Sept 2025, p.11) holds a faulted module's input data at its last value
-     rather than zeroing it: *"If the controller loses communication with a module, data
-     from that device does not update. When this occurs, the logic acts on the data in
-     ways that may or may not be correct,"* and *"Outputs respond to the last,
-     non-faulted state of the controlling inputs."* So the controller acts on the last
-     good data a module gave; the manual says nothing of a module's data that is good in
-     part, which a Logix connection does not deliver.
+     The two differ only from the restart on. While tripped no round runs, so the screen,
+     `get/2`, shows the load from before the change under either. And a card still bad
+     gives the bad speed again with each reading, each refused as the first was, so the
+     load is passed on at no reading while it stays bad, and its restart is refused for
+     the speed, as decision 142's is (corrected after M4-6's ninth verification,
+     2026-10-20: the record said the kept load was the one on the screen).
+
+     IEC 61131-3 says nothing of an input refused in part. Logix's manual (1756-PM015Q,
+     Sept 2025, p.11) says, of a connection lost, not of a module faulted, and the two
+     quotes **verified** word for word: *"If the controller loses communication with a
+     module, data from that device does not update. When this occurs, the logic acts on
+     the data in ways that may or may not be correct,"* and *"Outputs respond to the
+     last, non-faulted state of the controlling inputs."* That a module's data, so not
+     updated, holds its last value rather than going to zero is our reading of
+     "does not update"; the page does not speak of zeroing. The manual says nothing of a
+     module's data that is good in part, and whether a Logix connection can deliver such
+     data is **unverified**.
 
      **Taken: keep the good points** (the maintainer, 2026-10-20), as built since M4-6's
      eighth verification: the device drops the refused point's reading alone and keeps

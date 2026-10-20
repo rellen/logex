@@ -2555,6 +2555,36 @@ defmodule Logex.TripTest do
       assert :sys.get_state(rig.b).image == %{[0] => 1000, [1] => 6}
     end
 
+    # Decision 143's scenario as its record now states it: while tripped the host sees
+    # the load from before the refused change, the good load or not, and a card that goes
+    # on giving the bad speed gives the load no reading that passes, its restart refused.
+    test "a tripped runner shows the load from before a change refused for its speed, and " <>
+           "a card still bad passes the load on at no reading" do
+      for {still_bad, taken, restarted} <- [
+            {false, {1000, 6}, :ok},
+            {true, {1000, 5}, {:error, {:io_init, "b", {:bad_value, [0], @too_fast}}}}
+          ] do
+        rig = pushed(%{}, %{[0] => 1000, [1] => 5})
+        assert Runner.restart(rig.runner, :cold) == :ok
+        Manual.advance(rig.clock, 10)
+        assert Runner.get!(rig.runner, "load") == 5
+        card(still_bad, rig.agent)
+        send(rig.b, {:report, %{[0] => @too_fast, [1] => 6}})
+        :sys.get_state(rig.b)
+        assert {:io, "b", {:bad_value, [0], @too_fast}} = Runner.status(rig.runner).trip
+        Manual.advance(rig.clock, 300)
+        :sys.get_state(rig.b)
+        assert taken_while_tripped(rig) == taken
+        assert {Runner.get!(rig.runner, "speed"), Runner.get!(rig.runner, "load")} == {1000, 5}
+        assert Runner.restart(rig.runner, :cold) == restarted
+        Runner.stop(rig.runner)
+      end
+    end
+
+    # The card's polls: giving nothing, or the bad speed again.
+    defp card(false, _agent), do: :ok
+    defp card(true, agent), do: Agent.update(agent, &%{&1 | inputs: %{[0] => @too_fast}})
+
     test "reports between a device's release and its reread are superseded by the read " <>
            "where it gives their points and taken where it leaves them out, either way" do
       for {reread, want} <- [

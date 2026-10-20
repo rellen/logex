@@ -4192,6 +4192,25 @@ and M4-7 the documents.
   1756-RM018A p.276, decision 139); and not found, a forced input firing its event task
   (decision 138) and one workstation editing online at a time, which Rockwell's help
   probably contradicts (decision 141). No decision's outcome changed.
+
+  **The ninth verification** (2026-10-20, on the record above) found decision 143's first
+  option overstated: it said the kept load is the one on the screen, but while tripped no
+  round runs and `get/2` reads the resource, so the screen shows the load from before the
+  change under either option, and a card still bad gives the bad speed again with each
+  reading, so the load passes on at no reading and the restart is refused. The option and
+  its scenario now say so, the two differing only from the restart on, and the decision's
+  Logix paragraph now marks verified only the two quotes of p.11, which speak of a lost
+  connection: that the data holds its last value, not 0, is a reading, and whether a
+  connection delivers data good in part unverified. No decision's outcome changed, and no
+  code. `trip_test.exs` pins the corrected scenario, the card good on its polls and still
+  bad: the load shown from before the change while tripped, taken while tripped only from
+  a card good again, and a still-bad card's restart refused. Its mutation table, each
+  applied alone and judged by the full suite: a tripped runner's `get!/2` reading the
+  runner's merged inputs, red 2, the new test and the hidden seam's while-tripped test; a
+  device keeping a refused point's reading, red 3; one dropping the whole change, red 2;
+  and one passing the rest on at once, not at its next reading, red 2: the new test red
+  under each, the refused-change test beside it under the last three. 1559 tests pass on
+  Elixir 1.20.4 (9 of them doctests).
 - **M4-7 · The documents.** README's "Running a plant on the clock", with a real run, and
   "What logex is not", plainly; CLAUDE.md's Key Files; `docs/organisation.md` §4.5's
   adapter contract, §4.6's watchdog paragraph, §5's row and decision 14's annotation, as
