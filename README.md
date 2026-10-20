@@ -20,11 +20,15 @@ one configuration on periodic tasks and on event tasks, which the rising edge of
 global makes due, wired to input and output points, its programs
 sharing globals by name, such as an e-stop, through `var_external`
 (`Logex.Configuration`), written as a configuration file (`.logex`) that names its `.ld`
-program types or built from Elixir data, and a printer that turns an AST back into source
-so a routine round-trips, as a configuration file does too — all of that works and is
-tested end to end, and a program or a configuration with mistakes in it gets every one
-reported with its file and line rather than an exception, a misspelt tag included. What
-does not exist yet: bit access, and a real type, which `sqrt` waits for.
+program types or built from Elixir data, a printer that turns an AST back into source
+so a routine round-trips, as a configuration file does too, and a runner that runs a
+configuration on the clock through device adapters, a watchdog on every task, a trip
+switching every output off once, with input forcing and online edits while it runs
+(`Logex.Runner`) — all of that works and is tested end to end, and a program or a
+configuration with mistakes in it gets every one reported with its file and line rather
+than an exception, a misspelt tag included. What does not exist yet: bit access, and a
+real type, which `sqrt` waits for. What logex is not, a safety controller first of all,
+is said plainly below ("What logex is not").
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
 
@@ -220,7 +224,11 @@ totality is a guarantee, not a feature to write programs against (`PLAN.md` §5)
 
 These are decided (see [`docs/naming.md`](docs/naming.md), and `PLAN.md` §5) and will
 change the source language. Program organisation, `PLAN.md`'s Milestone 2, has landed
-whole ("A function block" and "A configuration", below):
+whole ("A function block" and "A configuration", below), and so has the wall-clock
+runner, `PLAN.md`'s Milestone 4 (decisions 108–143 in
+[`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11), whose only words
+in the language are a task's `watchdog` and the `continuous` task ("Watchdogs and the
+continuous task" and "Running a plant on the clock", below). Still to land:
 - **Bit access** with `.` (`word.3`).
 - **`sqrt`**, waiting for a real type. Milestone 3 (`PLAN.md` §3, decisions 67–107 in
   [`docs/organisation.md`](docs/organisation.md) §7) has otherwise landed whole: the
@@ -231,15 +239,6 @@ whole ("A function block" and "A configuration", below):
   `res`: a counter resets through its own `r` input, as IEC's does, and so does a
   retentive timer, `xic greased ote lube.r` (decision 90). Nor is there a master control
   zone, for good (decision 83).
-- **The wall-clock runner**, `PLAN.md`'s Milestone 4 (decisions 108–132 in
-  [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11), whose
-  configuration words have landed, a task's `watchdog` and the `continuous` task
-  ("Watchdogs and the continuous task", below), and so has the runner's first part,
-  M4-3 ("On the clock", below): `Logex.Runner` runs a configuration on a clock through
-  device adapters (`Logex.IO`), its untimed programs back to back, one round a clock
-  millisecond at most. Still to land: the watchdogs' trips and device faults (M4-4), and
-  edits and forcing through the runner, an input forced from the host staying forced
-  across a restart and, kept in a file the host names, across a crash (M4-5).
 
 ## An example
 
@@ -1614,9 +1613,9 @@ wrong_packing.logex: line 4, column 36: `priority` goes before `watchdog`, as in
   only `fast` here, and `overlaps/1` lists `main` at 0.
 - `Logex.Runtime` reads no clock and so no watchdog: a cycle runs as it did whatever the
   watchdogs, and `Logex.Configuration.watchdog/1` gives each task's, 500 where its line
-  sets none, for the runner (`Logex.Runner`, "On the clock", below), whose trips on
-  them are `PLAN.md`'s M4-4, and which times a timed task's run and each round of the
-  continuous task against them.
+  sets none, for the runner (`Logex.Runner`, "Running a plant on the clock", below),
+  which times a timed task's run and each round of the continuous task against them,
+  and trips on one that outlasts its watchdog.
 - From Elixir data a task is `%Logex.Configuration.Task{name: "main", continuous: true,
   watchdog: 200}`, checked in the same words.
 - An online edit (`Logex.Configuration.Edit`, "A running plant", below) may change a
@@ -1626,10 +1625,10 @@ wrong_packing.logex: line 4, column 36: `priority` goes before `watchdog`, as in
   continuous line added or removed, a task made continuous or timed, and an instance
   moved between a timed task and the continuous one are refused until a restart.
 
-### On the clock
+### Running a plant on the clock
 
 `Logex.Runner` runs a configuration's resource on a clock, through the devices its points
-are at (`docs/organisation.md` §4.11, decisions 108 to 131; `PLAN.md` M4-3 and M4-4). Each device
+are at (`docs/organisation.md` §4.11, decisions 108 to 143; `PLAN.md`'s Milestone 4). Each device
 is bound by name to an adapter (`Logex.IO`), and runs in a process of its own; logex ships
 one adapter, `Logex.IO.Sim`, an in-memory device a test sets and reads. With the manual
 clock, `Logex.Runner.Clock.Manual`, a run is deterministic and repeats exactly: time moves
@@ -1973,6 +1972,88 @@ stage: nil
   that a plant with no untimed program, whose resource stands at its last round, misses
   no period for an edit (decision 139): the conveyor, last run at 0, ran at 6 and 11.
   A step may be taken while tripped, and a restart keeps the edit's stage.
+
+Everything above ran on the manual clock, where a run repeats exactly. Without `clock:`
+the runner reads the machine's, `Logex.Runner.Clock.Monotonic`, and the same plant runs
+in real time. `on_the_real_clock.exs` starts the conveyor, passes three boxes, lets the
+plant run for a second and stops it:
+
+```elixir
+alias Logex.Runner
+alias Logex.IO.Sim
+
+{:ok, plant} = Logex.Configuration.compile_file("packing.logex")
+{:ok, panel} = Sim.start_link(reports: true)
+
+# No clock: the machine's, Logex.Runner.Clock.Monotonic.
+{:ok, runner} = Runner.start_link(configuration: plant, io: %{"panel" => {Sim, sim: panel}})
+
+Sim.set(panel, [0], 1)                      # start pressed for 100 ms
+Process.sleep(100)
+Sim.set(panel, [0], 0)
+
+for _box <- 1..3 do
+  Sim.set(panel, [8], 1)                    # a box on the eye for 20 ms, then 20 ms clear
+  Process.sleep(20)
+  Sim.set(panel, [8], 0)
+  Process.sleep(20)
+end
+
+Process.sleep(1_000)
+status = Runner.status(runner)
+
+IO.inspect(
+  status: status.status,
+  trip: status.trip,
+  k1: Runner.get!(runner, "k1"),
+  boxes: Runner.get!(runner, "b1.count"),
+  case_full: Runner.get!(runner, "case_full"),
+  one_round_a_millisecond_at_most: status.rounds <= status.now + 1
+)
+
+IO.puts("this run's figures: now=#{status.now} rounds=#{status.rounds} " <>
+  "runs=#{inspect(status.runs)} overlaps=#{inspect(status.overlaps)} latest_wake=#{status.latest_wake}")
+
+:ok = Runner.stop(runner)
+IO.inspect(List.last(Sim.writes(panel)), label: "the last write")
+IO.inspect(Sim.closed?(panel), label: "closed")
+```
+
+```
+$ mix run on_the_real_clock.exs
+[
+  status: :running,
+  trip: nil,
+  k1: 1,
+  boxes: 3,
+  case_full: 1,
+  one_round_a_millisecond_at_most: true
+]
+this run's figures: now=1232 rounds=1229 runs=%{"fast" => {0, 50}, "main" => {0, 200}} overlaps=%{"fast" => 0, "main" => 0} latest_wake=1
+the last write: %{[0] => 0, [4] => 0}
+closed: true
+```
+
+- The keyword list is the same on every run; the figures are this run's, on a four-core
+  Linux container, and differ from run to run and machine to machine. Here 1,229 rounds
+  ran in 1,232 ms, back to back, the conveyor's task among them every 10 ms, none late
+  enough to miss a period.
+- Nothing about it is guaranteed. The BEAM runs on a general-purpose operating system and
+  shares its schedulers, so a round can be late by what the machine is doing: the
+  design's spike measured absolute timers on an idle machine 0.19 ms late at the median
+  and 3.4 ms at worst, and beside a full test suite 126 ms at p99 and 196 ms at worst
+  (`docs/organisation.md` §4.11). A late periodic task runs once and reports the periods
+  it missed, `{:overlap, task, missed}`; it never runs early, and its due times stay on
+  their grid.
+- `status/1`'s `runs` is each task's longest run against its watchdog, and
+  `latest_wake` the most any round's wake came after its time, in ms, so a soak on the
+  target machine gives what to set each `watchdog` to. The same spike measured `cycle/3` at 9 to 26 µs
+  an instance of the motor of `docs/organisation.md` §4.3, 2.0 ms for 100 instances and
+  27 ms for 1,000, and the runner's own cost, two devices read and written, at 0.2 ms a
+  round at the median.
+- The real-clock tests in the suite assert liveness only (§4.11's "Risks"): the plant
+  runs for 2 s, rounds and keeps its clock, and stops in order, its devices' last writes
+  all 0 and both closed. Every timing rule is tested on the manual clock.
 
 ## Changing a running program
 
@@ -2419,6 +2500,42 @@ runtime it returns, and tolerate a report kind it does not know. The input image
 resource's and kept, each var_input is copied in from its connection, and a held point is
 in every cycle's outputs at the value it holds.
 
+## What logex is not
+
+- **Not a safety controller.** It must not implement a safety function: an emergency
+  stop, a guard interlock, a light curtain, two-hand control, burner or pressure
+  protection belong in hardwired circuits or a safety-rated controller, designed and
+  validated to the functional-safety standards that apply, and logex makes no claim
+  against any of them. The e-stop in the examples above is a signal a program reads and
+  records; the e-stop that cuts a machine's power must be wired to work with logex
+  stopped, crashed or never started.
+- **Not hard real-time.** It runs on the BEAM, on a general-purpose operating system, with
+  no bound on a round's lateness or jitter ("Running a plant on the clock", above). A
+  watchdog is a backstop that trips the plant when a task runs long, not a guarantee that
+  it never does. An input pulse shorter than the gap between two of its device's reads is
+  missed unless the device reports it.
+- **Not certified** for any industrial use.
+- **Not a full guarantee of outputs off.** A trip, a stop, a crash or a kill of the
+  runner, a stuck runner and a device fault each leave every output that can still be
+  written at 0, written once. A device that hangs is killed, and its outputs are left to
+  what the hardware does on losing its master; if the VM itself stops, nothing of logex
+  runs to switch anything off. What a machine that sleeps does to the clock has not been
+  tried.
+- **Not a compiler to BEAM.** A program compiles to data, `%Logex.Program{}`, which
+  `Logex.Runtime` interprets; nothing puts the Elixir compiler on the path that runs or
+  changes a program.
+- **Not wired to real I/O out of the box.** The one adapter logex ships is
+  `Logex.IO.Sim`, a simulated device for tests and examples. A fieldbus or a card's
+  adapter is the host's, written to the `Logex.IO` behaviour.
+- **Not IEC 61131-3 text.** It is a ladder dialect written as text, with IEC's names
+  where IEC names the operation ("The dialect", above); there is no Structured Text,
+  Function Block Diagram, SFC or Instruction List, no graphical editor, and no
+  paste-compatibility with IEC's textual forms.
+- **Not everything a controller has.** One resource a configuration; bool and dint only,
+  no real, no bit access, no arrays or structures; a jump forward only; no retained
+  values, so a warm restart is a cold one; and forcing for inputs only, an output never
+  forced.
+
 ## Running it
 
 The toolchain this repository documents and pins is **Elixir 1.20 on Erlang/OTP 28**
@@ -2456,7 +2573,7 @@ Erlang/OTP 28 and Elixir 1.20.4 (`.github/workflows/ci.yml`).
 - [`docs/instruction-sets.md`](docs/instruction-sets.md) — what IEC 61131-3 specifies for ladder, clause by clause, and what free software (MatIEC/Beremiz, OpenPLC, LDmicro, ClassicLadder, rusty, IronPLC) actually implements
 - `CONTRIBUTING.md` — how to work on it: when the test output misleads, what a fix owes, what not to "fix"
 - `CLAUDE.md` — commands and conventions for anyone (or anything) editing the code
-- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, globals shared through `var_external` with M2-4, and event tasks with M2-6, which completes Milestone 2, and a configured plant's online edit with OE-2)
+- [`docs/organisation.md`](docs/organisation.md) — program organisation: IEC's configurations, tasks, program instances and I/O mapping, the conventional family's hierarchy mapped onto them, and the logex form for them, and how a running controller is changed (decided; program instances landed with M1-5, the online edit of one with OE-1, configurations with periodic tasks, from Elixir data, with M2-1, function blocks, their online edit included, with M2-5, the configuration file with its periodic tasks with M2-2 and M2-3, globals shared through `var_external` with M2-4, and event tasks with M2-6, which completes Milestone 2, a configured plant's online edit with OE-2, and the wall-clock runner, with its watchdogs, trips, forcing and edits, with Milestone 4)
 - [`docs/defladder.md`](docs/defladder.md) — a study of an Elixir-embedded `defladder` DSL: what Nx's `defn` does, an executed spike, and a recommendation (proposed, not adopted)
 
 ## License
