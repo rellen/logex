@@ -4005,6 +4005,31 @@ and M4-7 the documents.
   answer its read, which its trapped exit does, and moving its heard time, which its
   "back" notices do.
 
+  **Decision 142, verified** (2026-10-20, M4-6's third verification): the claim above that
+  M4-6's fix's three rules were equivalent was false, and so was `0cb2b61`'s message,
+  which made it. A device still took a restart's read as what it had passed on before the
+  runner checked it, so an address that is no input point's, which no good read gives
+  again, stayed in its image after the restart was refused, and the same fault read
+  later was never passed on; and with any of the fix's three rules reverted a poll's
+  refused change did the same across a restart. And a change a device read before a
+  restart, waiting in the runner's mailbox behind it, was taken after the restart: a bad
+  one tripped the runner just after a restart answered `:ok`, a good one put an older
+  value over what the restart read, in the runner and in the device. Now what a device
+  read at a restart is what it last passed on only once the runner has taken it, by a
+  cast, `taken/2`, and each change carries the count of restarts it was read under, as a
+  notice does, one from before the last restart answered `:stale` and taken by neither.
+  `trip_test.exs` pins each, and a restart's read as the value an unforce puts back,
+  which no test checked. Its mutation table, each applied alone in a copy, the full suite
+  judged by its exit code: the fix's three rules, F1 to F3, now red; the reread taken
+  before it is checked, red; no `taken/2`, red (the walk too); a stale change taken, red;
+  the device taking a stale change, red; a restart's read not kept as each point's last
+  value, red; a change carrying no count, red (the walk too); and `taken/2` replacing the
+  image rather than merging into it, green, equivalent with `Logex.IO.Sim`, whose every
+  read gives every input point (with an adapter that reads some, a point the restart's
+  read left out would be passed on again once, unchanged). The walk, under the seed
+  families `{2027, 3}` and `{2031, 7}` that found the first, passes all 30 walks. 1542
+  tests pass on Elixir 1.20.4 (9 of them doctests), up from 1538.
+
   **The record's claims of Logix, checked** (2026-10-20, against the manuals' current
   PDFs, `docs/organisation.md` §8): verified, outputs sent at the RPI (1756-UM058L
   pp.24–25, decisions 130 and 136), an output module's configured fault state on a

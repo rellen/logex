@@ -6072,7 +6072,14 @@ run lamp, and a drive whose card gives the conveyor's speed.
      answers `{:error, {:io_init, device, cause}}`, the one answer a restart gives a
      device it cannot bring up, a start's too, and every device that answers is latched
      again and written 0 once more, as decision 136 has it; otherwise every value read is
-     the first round's input, as at a start.
+     the first round's input, as at a start. A read the restart refuses leaves nothing in
+     the device: what a device read is what it last passed on only once the runner has
+     taken it, so that the same fault read again later is passed on again and trips. And
+     a change a device read before the restart, waiting in the runner's mailbox behind
+     it, is stale, taken as nothing: each change carries the count of restarts it was
+     read under, as a notice does, so that a reading from before the restart trips
+     nothing after one answered `:ok` and overwrites nothing the restart's read gave
+     (since M4-6's third verification, 2026-10-20).
 
 ---
 

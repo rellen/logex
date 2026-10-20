@@ -525,13 +525,23 @@ defmodule Logex.Runner do
   # A device's changes, by address, from that device's own process: merged into the next
   # round's inputs, and each change of an event task's trigger its own round, in address
   # order, answered once each has run and its outputs are written (decisions 120 and
-  # 124), whatever the share.
+  # 124), whatever the share. A change read before the last restart, which may wait in
+  # the mailbox behind the restart, is stale: the restart's own read has overtaken it, so
+  # it is answered `:stale` and taken as nothing (decision 142).
   @impl GenServer
-  def handle_call({:changes, device, changes}, {pid, _tag}, %{pids: pids} = state)
+  def handle_call(
+        {:changes, device, restarts, changes},
+        {pid, _tag},
+        %{pids: pids, restarts: restarts} = state
+      )
       when :erlang.map_get(device, pids) == pid do
     vetted = vetted(device, changes, state)
     {:reply, took(vetted), changed(device, vetted, state)}
   end
+
+  def handle_call({:changes, device, _stale, _changes}, {pid, _tag}, %{pids: pids} = state)
+      when :erlang.map_get(device, pids) == pid,
+      do: {:reply, :stale, state}
 
   # A host's request is the runner's own work: served at once where no round is owed, and
   # otherwise queued for the share's slot (decision 122).
@@ -1653,23 +1663,27 @@ defmodule Logex.Runner do
 
   defp read_device(false, {name, pid, _points}, rest, state) do
     timeout = state.idle + state.poll
-    reread(asked(pid, &Device.reread/2, timeout), name, rest, state)
+    reread(asked(pid, &Device.reread/2, timeout), name, pid, rest, state)
   end
 
-  # A device up, read again: its values checked, and its fault, or no answer in time or
-  # its process gone down, the restart's answer; one killed for no answer, or gone down,
-  # is marked down by its exit, which the runner traps, and so opened again at the next
-  # restart.
-  defp reread({:ok, values}, name, rest, state),
-    do: reread_checked(vetted(name, values, state), name, rest, state)
+  # A device up, read again: its values checked and, taken, told to the device as what it
+  # last passed on, by a cast that comes before anything else the runner sends it, so
+  # that a read refused leaves nothing in it to hide the same fault at a later read; and
+  # its fault, or no answer in time or its process gone down, the restart's answer; one
+  # killed for no answer, or gone down, is marked down by its exit, which the runner
+  # traps, and so opened again at the next restart.
+  defp reread({:ok, values}, name, pid, rest, state),
+    do: reread_checked(vetted(name, values, state), values, name, pid, rest, state)
 
-  defp reread({_failed, cause}, name, _rest, state),
+  defp reread({_failed, cause}, name, _pid, _rest, state),
     do: {{:error, {:io_init, name, cause}}, state}
 
-  defp reread_checked({:ok, changes}, _name, rest, state),
-    do: read_again(rest, merged(changes, state))
+  defp reread_checked({:ok, changes}, values, _name, pid, rest, state) do
+    Device.taken(pid, values)
+    read_again(rest, merged(changes, state))
+  end
 
-  defp reread_checked({:fault, cause}, name, _rest, state),
+  defp reread_checked({:fault, cause}, _values, name, _pid, _rest, state),
     do: {{:error, {:io_init, name, cause}}, state}
 
   defp reopen_read({:ok, values}, name, pid, points, rest, state),

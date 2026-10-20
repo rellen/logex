@@ -1693,8 +1693,8 @@ t=22  three boxes      rounds=23  k1=1 case_full=1  boxes=3
 t=32  e-stop at 22     rounds=33  k1=0 case_full=1  boxes=3
 the conveyor ran: [{"c1", 30}]
 %{
-  runs: %{"fast" => {0, 50}, "main" => {0, 200}},
   overlaps: %{"fast" => 0, "main" => 0},
+  runs: %{"fast" => {0, 50}, "main" => {0, 200}},
   latest_wake: 0
 }
 the last two writes: [%{[0] => 0, [4] => 1}, %{[0] => 0, [4] => 0}]

@@ -1878,6 +1878,87 @@ defmodule Logex.TripTest do
       assert Runner.restart(runner, :cold) == :ok
       assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
     end
+
+    # Found by M4-6's third verification: the device took a restart's read as what it had
+    # passed on before the runner checked it, so an address that is no input point's,
+    # which no good read gives again, stayed in it for good and the same fault, read again
+    # later, was never passed on.
+    test "a restart's read the runner refuses leaves nothing in the device to hide the " <>
+           "same fault at a later read" do
+      %{runner: runner, clock: clock, drive: drive} = tripped_on_speed([], 1)
+      Sim.fail(drive, :read, {:value, [7], 1})
+
+      assert Runner.restart(runner, :cold) ==
+               {:error, {:io_init, "drive", {:unknown_address, [7]}}}
+
+      assert Runner.restart(runner, :cold) == :ok
+      Manual.advance(clock, 10)
+      assert %{status: :running} = Runner.status(runner)
+      Sim.fail(drive, :read, {:value, [7], 1})
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).trip == {:io, "drive", {:unknown_address, [7]}}
+    end
+
+    test "a poll's change the runner refuses leaves nothing in the device to hide the " <>
+           "same fault after a restart" do
+      %{runner: runner, clock: clock, drive: drive} = tripped_on_speed([], 1)
+      assert Runner.restart(runner, :cold) == :ok
+      Sim.fail(drive, :read, {:value, [7], 1})
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).trip == {:io, "drive", {:unknown_address, [7]}}
+      assert Runner.restart(runner, :cold) == :ok
+      Manual.advance(clock, 10)
+      Sim.fail(drive, :read, {:value, [7], 1})
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).trip == {:io, "drive", {:unknown_address, [7]}}
+    end
+
+    # A device's change read before a restart, waiting in the runner's mailbox behind it,
+    # is overtaken by the restart's own read: a reading taken before the restart trips
+    # nothing after it and overwrites nothing it read.
+    test "a change read before a restart and taken after it is stale: a bad one trips " <>
+           "nothing, a good one overwrites nothing the restart read" do
+      for {before, now} <- [{@too_fast, 1000}, {1500, 1700}] do
+        %{runner: runner, clock: clock, panel: panel, drive: drive} = tripped_on_speed([], 1)
+        Sim.set(drive, [0], 1000)
+
+        case before do
+          @too_fast -> Sim.fail(drive, :read, {:value, [0], @too_fast})
+          speed -> Sim.set(drive, [0], speed)
+        end
+
+        :sys.suspend(runner)
+        restart = Task.async(fn -> Runner.restart(runner, :cold) end)
+        restart_waiting(runner)
+        poll = Task.async(fn -> Manual.advance(clock, 10) end)
+        changes_waiting(runner)
+        Sim.set(drive, [0], now)
+        :sys.resume(runner)
+        assert Task.await(restart) == :ok
+        Task.await(poll)
+
+        assert %{status: :running, trip: nil} = Runner.status(runner)
+        assert Runner.get!(runner, "speed") == now
+        assert :sys.get_state(device_pid(runner, "drive")).image == %{[0] => now}
+        assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+      end
+    end
+
+    @tag :tmp_dir
+    test "a restart's read is each input point's last value from its device, which an " <>
+           "unforce puts back",
+         %{tmp_dir: dir} do
+      %{runner: runner, clock: clock, drive: drive} =
+        tripped_on_speed([forces: Path.join(dir, "forces")], 1)
+
+      :ok = Runner.force(runner, "speed", 5)
+      Sim.set(drive, [0], 1300)
+      assert Runner.restart(runner, :cold) == :ok
+      assert Runner.get!(runner, "speed") == 5
+      :ok = Runner.unforce(runner, "speed")
+      Manual.advance(clock, 20)
+      assert Runner.get!(runner, "speed") == 1300
+    end
   end
 
   describe "restart/2 (decision 113)" do
@@ -2143,6 +2224,20 @@ defmodule Logex.TripTest do
 
   defp waited({:message_queue_len, 0}, runner), do: waiting(runner)
   defp waited(_len, _runner), do: :ok
+
+  # Waits until a device's change waits in the runner's mailbox.
+  defp changes_waiting(runner),
+    do: changes_waited(Process.info(runner, :messages), runner)
+
+  defp changes_waited({:messages, messages}, runner),
+    do:
+      changes_found(
+        Enum.any?(messages, &match?({:"$gen_call", _, {:changes, _, _, _}}, &1)),
+        runner
+      )
+
+  defp changes_found(true, _runner), do: :ok
+  defp changes_found(false, runner), do: changes_waiting(runner)
 
   # Waits until a host's restart waits in the runner's mailbox.
   defp restart_waiting(runner),

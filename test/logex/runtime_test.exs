@@ -1593,6 +1593,7 @@ defmodule Logex.RuntimeTest do
                reread: 1,
                reread: 2,
                start_link: 1,
+               taken: 2,
                terminate: 2,
                write: 2,
                write: 3,
