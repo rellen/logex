@@ -753,10 +753,14 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   running program", and a one-shot's event-task warning in "An event task"; M3-5's jump
   its "A forward jump", the label in the syntax list and the jump in "Changing a running
   program"; M4-2's watchdogs and continuous task its "Watchdogs and the continuous task";
-  M4-3's runner its "On the clock", whose output is a real run on the manual clock, and
-  M4-4's trips and restart the run of `a_trip.exs` there, real too, and M4-5's forcing and
-  an edit through the runner the run of `forced_and_edited.exs` there.
-  Nothing tests this.
+  M4-3's runner its "Running a plant on the clock", whose output is a real run on the
+  manual clock, and M4-4's trips and restart the run of `a_trip.exs` there, real too, and
+  M4-5's forcing and an edit through the runner the run of `forced_and_edited.exs` there,
+  and since M4-7 the plant on the real clock, `on_the_real_clock.exs`, its keyword list
+  the same on every run and its figures that run's; and "What logex is not" says plainly
+  what logex does not do, a safety function first, each claim checked against the code,
+  so a change that adds an adapter, output forcing, retained values, a backward jump or a
+  type stales it. Nothing tests this.
 - `CONTRIBUTING.md` — working practices, each one traced to something that broke
 - `PLAN.md` — reviewed findings and the ordered plan of work
 - `docs/naming.md` — the IEC and vendor name survey, one stanza per mnemonic, declaration
@@ -788,7 +792,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   and two calls of the lead's in its verifications confirmed by the maintainer the same
   day, a report-only reading kept across a restart, a fix within decision 142, and a
   refused change's good points kept, decision 143, with the record's claims of Logix
-  checked against the manuals the same day, §8).
+  checked against the manuals the same day, §8, and its seventh and last, M4-7, the
+  documents, the same day, §4.5, §4.6, §5 and decision 14 annotated as landed).
   Read it before designing anything that names a program, schedules one, binds I/O,
   changes a running controller (§4.9, online edit, decided 2026-10-01), or runs one on
   the clock (§4.11).

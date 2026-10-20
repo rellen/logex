@@ -32,7 +32,9 @@ note), and the question it raised answered by the maintainer on 2026-10-20 and b
 restart that reads every device first (decision 142), and two calls of the lead's in
 its verifications confirmed by the maintainer on 2026-10-20, a report-only reading kept
 across a restart as a fix within decision 142, and a refused change's good points kept
-(decision 143).** On 2026-09-28 the
+(decision 143); and M4-7, the documents, the same day, the last of Milestone 4's items:
+§4.5's adapter contract, §4.6's watchdog paragraph, §5's row and decision 14 annotated as
+landed, and README's "Running a plant on the clock" and "What logex is not".** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -664,6 +666,26 @@ the host's, raised at start. Added on 2026-10-18, after M4-1's review: an option
 `check/3` checks an adapter's own options in the host's process at start, so that a typo
 in them is the host's mistake there too, and `Logex.IO.Sim`'s holds it to its sim,
 `{Logex.IO.Sim, sim: panel}`, so the bare `Logex.IO.Sim` above is refused.)*
+*(Landed with Milestone 4, M4-1 to M4-6, by 2026-10-20, as §4.11's "The adapter
+behaviour" gives it: the sketch's `init/3` gives `{:ok, state}` or `{:error, reason}`, any
+term; `read/1` gives `{:ok, values, state}`, some or all of the device's input points by
+address, and `write/2`, given every output point by address, `{:ok, state}`; each fails as
+`{:error, reason, state}`, never by raising; `report/2`, `close/1` and `check/3` are
+optional. The host binds `%{device => module | {module, options}}`, checked by
+`Logex.IO.bind!/2` in the host's process, every mistake a line of one `ArgumentError`,
+an unbound device and a bound device with no points among them, so the binding above is
+the landed form but for the bare `Logex.IO.Sim`. Each device runs in a process of its own
+under the runner, which calls `init/3` there and reads it once at start; reads it every
+poll period on a grid from its opening, passing each change on to the runner; writes it
+where a round changed its outputs, and again at every poll, its last outputs, while its
+last refresh's deadline has not passed (decision 130 as amended); and, at a trip, a stop
+or the runner's death, writes it 0 once and closes it. A callback that gives an error,
+raises, throws, exits, gives a result of no shape or a value that does not fit, or does
+not answer in time, trips the runner, `{:io, device, cause}` (decision 114); a restart
+reads every device again before its first round (decision 142); and a change refused for
+one bad point keeps its other points (decision 143). The one adapter logex ships is
+`Logex.IO.Sim`, the fixture of every runner test; an adapter for a card or a fieldbus,
+such as the `MyModbus` above, is the host's.)*
 
 ### 4.6 Execution model
 
@@ -754,7 +776,18 @@ its own watchdog, 500 ms unless its line sets one, the continuous task's per rou
 (decisions 109–111), timed by the runner at the boundaries of the cycle's steps (decision
 118), and each device's heartbeat zeroes its outputs if the runner stops refreshing it
 (decision 119), by the deadline its last refresh carried (decision 125); a trip stops the
-plant with every output off once, confirming decision 14 (decision 113).)*
+plant with every output off once, confirming decision 14 (decision 113).)* *(Landed with
+Milestone 4 by 2026-10-20: a task's `watchdog` and the continuous task with M4-2, read
+through `Logex.Configuration.watchdog/1`; the runner, M4-3, reading time through
+`Logex.Runner.Clock`, whose monotonic clock is the one place logex calls
+`System.monotonic_time/1`, and a manual clock a test moves; and with M4-4 the trips, a
+timed task's run longer than its watchdog `{:watchdog, {:task, task, took, limit}}`, a
+round of the continuous task longer than its own `{:watchdog, {:round, task, took, limit,
+steps}}` (decision 126), a host's request served whole longer than the runner's idle
+watchdog `{:watchdog, {:idle, ms}}` (decision 128), and a device that heard nothing by
+its deadline `{:watchdog, {:device, device, ms}}` (decision 137), each before the round's
+write. `Logex.Runtime` still reads no clock. The deterministic budget waits on a backward
+`jmp`, which has not landed: M3-5's jump goes forward only.)*
 
 **Where timers get their time.** Every scan receives a read-only `%Logex.Scan{now:,
 first:}`, and `evaluate/3` threads it. Each timer instance keeps its own last-scanned time
@@ -2986,7 +3019,8 @@ its liveness test found; and a simulated device's `set/3` reports from the calle
 then waits through `:sys` for the device to handle the report, so that the sim's own
 process never waits on a device, which may be calling it.)*
 
-**What it can promise**, to be said plainly in README: exact replay, since the runner adds
+**What it can promise**, to be said plainly in README *(said, M4-7, in README's
+"Running a plant on the clock", with a run on the real clock)*: exact replay, since the runner adds
 nothing to the logic and a cycle is a function of its arguments, so a recorded run replays
 (`Logex.Runtime`'s moduledoc, "What it may rely on", item 6); no drift, every deadline
 absolute; lateness reported, as an overlap; and outputs at 0 when the runner trips, stops,
@@ -3034,7 +3068,12 @@ measures:
   whole cycle measured 0.2 ms; and no queue of tasks by due time, `next_due_in/1` being
   linear in the tasks and called once a round, until a plant of hundreds of tasks is seen.
 
-**What logex is not**, to be stated in README, in `Logex.Runner`'s moduledoc and here.
+**What logex is not**, to be stated in README, in `Logex.Runner`'s moduledoc and here
+*(stated in the moduledoc with M4-3, and in README's "What logex is not" with M4-7, which
+adds, each checked against the code, that logex compiles nothing to BEAM, ships one
+adapter, `Logex.IO.Sim`, is a ladder dialect and not IEC 61131-3's text, and has one
+resource a configuration, bool and dint only, a forward jump only, no retained values and
+no output forcing)*.
 logex is not a safety controller, and must not implement a safety function: an emergency
 stop, a guard interlock, a light curtain, two-hand control, burner or pressure protection
 belong in hardwired circuits or a safety-rated controller designed and validated to the
@@ -3093,10 +3132,10 @@ which the maintainer answered on 2026-10-20: it does, as a start does (decision 
 | Preemption | not adopted | It gives up determinism, and nothing is observable in zero logical time (§4.6) |
 | FB-to-task association (`FB1 WITH SLOW_1`, Table 49 f6b) | deferred | Rarely needed. It splits an FB's execution from its program's scan |
 | Direct representation `%IX0.0` and raw addresses in connections | not adopted; the fallback for §4.5 | One declared, named I/O list instead |
-| Wall-clock runner, `Logex.IO` adapters, watchdog | target, after Milestone 2; **designed and decided 2026-10-17** (§4.11, decisions 108–121, and 122–127 after M4-1's review, 2026-10-18), `PLAN.md`'s Milestone 4 | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
+| Wall-clock runner, `Logex.IO` adapters, watchdog | **landed**, `PLAN.md`'s Milestone 4: designed and decided 2026-10-17 (§4.11, decisions 108–121, and 122–127 after M4-1's review, 2026-10-18), built as M4-1 to M4-6 from 2026-10-17 to 2026-10-20 (decisions 128–143), and documented by M4-7 on 2026-10-20: `Logex.Runner`, `Logex.Runner.Clock` with its monotonic and manual clocks, `Logex.IO` and `Logex.IO.Sim`, the one adapter shipped | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
 | Restarting one program instance inside a resource | not adopted (Milestone 2's design, §4.10) | `restart/2` restarts the whole resource (decision 38). Restarting one instance would be another rule for the input image and the tasks, for a need no decided text states |
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
-| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* |
+| VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
@@ -3409,7 +3448,15 @@ the reasons stay with them.
     zero the output image once, report, and require an explicit restart. Holding the last
     outputs is the alternative. *Recommend zeroing; decide with the runner.* *(Confirmed
     2026-10-17 by decision 113, with the five refinements of Milestone 4's design,
-    §4.11.)*
+    §4.11.)* *(Landed with M4-4 on 2026-10-18, its review's fixes on 2026-10-19: a trip,
+    whatever its reason, stops scheduling, writes every output 0 once through each device
+    that answers, which latches and writes nothing more, sends `{:trip, reason}`, keeps the
+    resource for `get/2`, and runs nothing again until `Logex.Runner.restart/2`, cold or
+    warm (decisions 113 and 133 to 137), which since M4-6 reads every device first
+    (decision 142). A stop zeroes every output once too (decision 116), and a runner that
+    crashes or is killed is gone, each device writing its outputs 0 once as it goes
+    (decision 115). A device that hangs is killed, its outputs left to the device, and a
+    VM that stops writes nothing: README's "What logex is not" says so.)*
 15. **Declaring a controller from Elixir:** a Spark or macro DSL as the model, or one model
     held as data with text as its saved form. *Recommend data*: whatever a DSL declares is
     compiled into a module, so it cannot be the copy a running controller edits. Adopted,
@@ -5693,8 +5740,8 @@ same day.
      **Taken: the rule kept,** as the maintainer answered, "Keep the rule": a run on the
      manual clock follows the monotonic clock's rules, one rule for both, so that a test
      tests the rule the plant runs, and the hang is a test's to avoid, which `Logex.Runner`'s
-     moduledoc and README's "On the clock" say how: make the call from another process,
-     `Task.async/1`, and advance the clock until it is answered, at most C rounds, 4 at
+     moduledoc and README's "Running a plant on the clock" (so named since M4-7) say
+     how: make the call from another process, `Task.async/1`, and advance the clock until it is answered, at most C rounds, 4 at
      20%. The defect the review found is fixed with it: the slot is served at the end of
      the round that completes C ms, in the advance that runs that round, `advance(clock,
      0)` among them, so a call whose slot has come never waits for a later advance. The
