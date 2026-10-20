@@ -42,9 +42,12 @@ confirmation the same day of two calls the lead made in its verifications, a rep
 reading kept across a restart, a fix within decision 142, and a refused change's good
 points kept, decision 143; and its seventh and last, M4-7, the documents, the same day,
 so every item of Milestone 4 has landed, its done sentence checked clause by clause
-against the tests (§3, after M4-7): every clause is pinned by a test, those of timing on
-the manual clock, and on the real clock the plant's run is asserted as liveness only, as
-the milestone's own rule has it.
+against the tests (§3, after M4-7): every clause is pinned by a test on the manual
+clock, but the three of timing on the real clock, rounds back to back one a millisecond
+at most, the share and the grid with its missed periods, are met there only under the
+milestone's own rule, timing tested on the manual clock and a test on the real clock
+asserting liveness, the plant's 2 s run asserting no more rounds than milliseconds and
+nothing finer.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -4230,12 +4233,14 @@ and M4-7 the documents.
   adapter contract, §4.6's watchdog paragraph, §5's row and decision 14's annotation, as
   landed; and this status.
 
-  **Landed** (2026-10-20), as three commits, no code changed. README: "On the clock" is
+  **Landed** (2026-10-20), as three commits and a fourth for its review, no code in
+  `lib/` changed. README: "On the clock" is
   "Running a plant on the clock", its three runs on the manual clock re-run on the tip,
   their output unchanged, and a fourth, `on_the_real_clock.exs`, the plant on the
   machine's clock: start pressed, three boxes passed, a second's run and a stop, its
-  keyword list the same in ten runs of ten and its figures, said to be that run's, 1,229
-  rounds in 1,232 ms, none late enough to miss a period; with the spike's lateness and
+  keyword list the same in five runs of five and its figures, said to be that run's,
+  1,227 rounds in 1,231 ms, no period reported missed, and no more rounds than
+  milliseconds, an average the rule needs but which does not prove it; with the spike's lateness and
   cost figures, for sizing a watchdog, and what is not guaranteed. A new section, "What
   logex is not": not a safety controller, not hard real-time, not certified, not a full
   guarantee of outputs off (a hung device's are the device's, and a VM that stops writes
@@ -4249,20 +4254,31 @@ and M4-7 the documents.
   what stales them, and the status of `docs/organisation.md`. 1559 tests pass on Elixir
   1.20.4 (9 of them doctests), unchanged.
 
+  Its review's fixes (2026-10-20): README's "What logex is not" and §4.6 say that a
+  reported pulse is missed too, unless it is an event task's trigger or a round runs
+  while it holds, the runner keeping only each input's latest value; §4.5's note says a
+  trip latches a device, open for `restart/2`, and a stop or the runner's death closes
+  it; README's real-clock run prints `no_more_rounds_than_milliseconds` for what it
+  checks, run again, and says which real-clock tests the suite has; §5's row groups
+  decision 128 with M4-1's review; and three tests check more, the plant's 2 s run on the
+  real clock no more rounds than milliseconds, and a continuous round's watchdog trip and
+  a report's fault each every output 0 once and nothing after, so that the table below
+  cites no test for what it does not check.
+
   **Milestone 4's done sentence, checked** (2026-10-20, on M4-7's tip), clause by clause,
   with the test that shows each; a test named here is in `test/logex/`.
 
   | Clause | Shown by |
   |---|---|
   | §4.4's plant, from files on disk with a box counter in its continuous task, runs on the real clock through bound devices | `end_to_end_test.exs`, "on the real clock the plant runs for 2 s and stops in order": liveness only, running and untripped, 20 rounds at least, `now` 500 ms at least, `k1` on, and every output's last write 0 at the stop. README's `on_the_real_clock.exs` is a run, not a test |
-  | its untimed programs back to back, one round a clock millisecond at most | on the manual clock, `runner_test.exs`, "while untimed programs exist, one round each clock millisecond, advance(n) running n, the first at once", "a round that takes a millisecond or more is followed at once, a wake on the clock" and "a round counts a millisecond at least". **No test asserts it on the real clock**: the 2 s test counts 20 rounds at least, and README's run prints the rounds no more than the milliseconds |
+  | its untimed programs back to back, one round a clock millisecond at most | on the manual clock, `runner_test.exs`, "while untimed programs exist, one round each clock millisecond, advance(n) running n, the first at once", "a round that takes a millisecond or more is followed at once, a wake on the clock" and "a round counts a millisecond at least". On the real clock only on average: the 2 s test asserts 20 rounds at least and no more rounds than milliseconds, `rounds <= now + 1`, as README's run prints; **no test asserts it round by round on the real clock** |
   | with the runner's share kept | on the manual clock, `runner_test.exs`, "the share's slots: after C ms of rounds that fill their milliseconds the runner serves the requests that waited, at 10%, 20%, 50% and 90%", "a slot serves the runner's own work for up to S ms, each request whole" and "the timed tasks' runs are left out of the share's count". None on the real clock |
-  | each timed task's runs never before their times on its grid | on the manual clock, `runner_test.exs`, "rounds on a periodic task keep their grid, absolute, a slow write's time not counted: 100,000 rounds, every one on time"; on the real clock only the clock's own rule, `clock_test.exs`, "wakes a process once, no sooner than its time, and a time already past at once". **No test runs a timed task on the real clock and checks its times** |
-  | its runs and the periods it reports missed together one for each grid time passed | on the manual clock, the 100,000 rounds above, every grid time a run and none missed, and `runner_test.exs`, "subscribe/2: the resource's overlaps and faults by default, …", a 25 ms write making the run at 25 and `{:overlap, "fast", 1}` for the grid time at 20; and the runner walk against `cycle/3`. None on the real clock |
+  | each timed task's runs never before their times on its grid | on the manual clock, `api_contract_test.exs`'s runner walk, `Logex.ApiContractTest.RunnerWalk`, which checks after every step when each scheduled round comes, never before a step it waited; and `runner_test.exs`, "rounds on a periodic task keep their grid, absolute, a slow write's time not counted: 100,000 rounds, every one on time", which counts the rounds and checks none missed, not when each came; on the real clock only the clock's own rule, `clock_test.exs`, "wakes a process once, no sooner than its time, and a time already past at once". **No test runs a timed task on the real clock and checks its times** |
+  | its runs and the periods it reports missed together one for each grid time passed | on the manual clock, the 100,000 rounds above, every grid time a run and none missed, and `runner_test.exs`, "subscribe/2: the resource's overlaps and faults by default, …", a 25 ms write making the run at 25 and `{:overlap, "fast", 1}` for the grid time at 20; and the runner walk against `cycle/3`. **None on the real clock** |
   | a host test drives the same plant on a manual clock with simulated devices, one reporting its changes and one only read, its outputs and events exactly those `cycle/3` gives for the same times and inputs | `end_to_end_test.exs`, "M4-3's Done-when: the plant through the runner on the manual clock, round for round the oracle's, from files on disk, repeating exactly", 600 seeded presses and waits; and `api_contract_test.exs`'s runner walk, `Logex.ApiContractTest.RunnerWalk`, over seeded configurations |
   | with no untimed program the plant rounds only when a task is due or a trigger changes | `runner_test.exs`, "with no untimed program, a round only at a due time or a trigger's change", on a configuration of a 10 ms relay and an event task over a panel that reports and a drive only read, **not §4.4's plant itself**, whose box counter is untimed; and the runner walk's configurations with no untimed program, about one in four |
-  | a task that outlasts its watchdog leaves every output that can still be written at 0, written once | `trip_test.exs`, "a timed task's run that outlasts its watchdog trips before its round's write, naming it; one that takes exactly its watchdog does not" and "a round that outlasts the continuous task's watchdog trips, naming each step with its time, …" |
-  | a device that fails does too | `trip_test.exs`, "each kind of fault in a poll's read trips, naming its device, every device written 0 once and nothing after", "a report's fault trips, naming its device" and "a round's write that fails trips, the devices after it not written, and the device that failed zeroed where it still takes a write" |
+  | a task that outlasts its watchdog leaves every output that can still be written at 0, written once | `trip_test.exs`, "a timed task's run that outlasts its watchdog trips before its round's write, naming it; one that takes exactly its watchdog does not", its panel's writes exactly the two zeros, and "a round that outlasts the continuous task's watchdog trips, naming each step with its time, …", its panel's output 0 once after the last count and nothing after (checked since M4-7's review) |
+  | a device that fails does too | `trip_test.exs`, "each kind of fault in a poll's read trips, naming its device, every device written 0 once and nothing after", "a report's fault trips, naming its device, every device written 0 once and nothing after" (checked since M4-7's review) and "a round's write that fails trips, the devices after it not written, and the device that failed zeroed where it still takes a write" |
   | a runner that is stopped does too | `runner_test.exs`, "stop/2 writes every output 0 once and closes every device before it returns (decision 116)" |
   | a runner stuck does too | `trip_test.exs`, "a runner stuck in the conveyor's 50 ms step leaves every device at 0 within 50 ms and a poll period of the step's start, not before" and "a runner stuck in its own work leaves every device at 0 within its idle watchdog and a poll period, …" |
   | a runner killed does too | `trip_test.exs`, "a killed runner's devices write every output 0 once and close" and "a runner that crashes zeroes and closes every device, and its supervisor does not start it again" |
@@ -4271,13 +4287,16 @@ and M4-7 the documents.
   | a forced input holds across a restart and, kept in its file, across a crash and a fresh start | `end_to_end_test.exs`, "M4-5's Done-when: the photo-eye forced, against its device, across a restart, a crash and a fresh start from its forces file"; `force_test.exs`, "a runner killed while an input is forced, started again from the same file, comes back with it forced and listed, from its first round" |
   | an online edit is stepped through the running runner between rounds | `end_to_end_test.exs`, "M4-5's Done-when: the plant edited through the runner, every report and round the same steps give over the resource directly, from files on disk"; `runner_edit_test.exs` |
 
-  So every clause is shown by a test, and the three of timing on the real clock, rounds
-  back to back one a millisecond at most, the share and the grid with its missed
-  periods, are shown on the manual clock only, as the milestone's rule has it ("every
-  rule is tested on the manual clock"; a test on the real clock "asserts liveness only"),
-  the real clock's own wake no sooner than its time aside. They are not claimed of the
-  real clock beyond that, nor beyond README's one run; and the clause of a plant with no
-  untimed program is shown on a smaller configuration than §4.4's plant.
+  So every clause is shown by a test on the manual clock, and the three of timing on the
+  real clock, rounds back to back one a millisecond at most, the share and the grid with
+  its missed periods, are not: the done sentence puts them on the plant's run on the
+  real clock, and they are met there only under the milestone's own rule ("every rule is
+  tested on the manual clock"; a test on the real clock "asserts liveness only"), the
+  real clock's own wake no sooner than its time and the 2 s run's no more rounds than
+  milliseconds aside. They are not claimed of the real clock beyond that, nor beyond
+  README's one run; and the clause of a plant with no untimed program is shown on a
+  smaller configuration than §4.4's plant. Whether that reading of the done sentence
+  stands is the maintainer's.
 
 **Milestone 4 is done when** §4.4's plant, loaded from files on disk with a box counter in
 its continuous task, runs on the real clock through bound devices, its untimed programs

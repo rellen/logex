@@ -2008,7 +2008,7 @@ IO.inspect(
   k1: Runner.get!(runner, "k1"),
   boxes: Runner.get!(runner, "b1.count"),
   case_full: Runner.get!(runner, "case_full"),
-  one_round_a_millisecond_at_most: status.rounds <= status.now + 1
+  no_more_rounds_than_milliseconds: status.rounds <= status.now + 1
 )
 
 IO.puts("this run's figures: now=#{status.now} rounds=#{status.rounds} " <>
@@ -2027,17 +2027,20 @@ $ mix run on_the_real_clock.exs
   k1: 1,
   boxes: 3,
   case_full: 1,
-  one_round_a_millisecond_at_most: true
+  no_more_rounds_than_milliseconds: true
 ]
-this run's figures: now=1232 rounds=1229 runs=%{"fast" => {0, 50}, "main" => {0, 200}} overlaps=%{"fast" => 0, "main" => 0} latest_wake=1
+this run's figures: now=1231 rounds=1227 runs=%{"fast" => {0, 50}, "main" => {0, 200}} overlaps=%{"fast" => 0, "main" => 0} latest_wake=1
 the last write: %{[0] => 0, [4] => 0}
 closed: true
 ```
 
 - The keyword list is the same on every run; the figures are this run's, on a four-core
-  Linux container, and differ from run to run and machine to machine. Here 1,229 rounds
-  ran in 1,232 ms, back to back, the conveyor's task among them every 10 ms, none late
-  enough to miss a period.
+  Linux container, and differ from run to run and machine to machine. Here 1,227 rounds
+  ran in 1,231 ms, back to back, and no task reported a period missed: both overlaps are
+  0. `no_more_rounds_than_milliseconds` counts over the whole run, so it says one round a
+  millisecond at most on average, which the rule needs but does not prove; the rule
+  itself, round by round, is tested on the manual clock. Nothing printed says when each
+  of the conveyor's runs came.
 - Nothing about it is guaranteed. The BEAM runs on a general-purpose operating system and
   shares its schedulers, so a round can be late by what the machine is doing: the
   design's spike measured absolute timers on an idle machine 0.19 ms late at the median
@@ -2051,9 +2054,15 @@ closed: true
   an instance of the motor of `docs/organisation.md` §4.3, 2.0 ms for 100 instances and
   27 ms for 1,000, and the runner's own cost, two devices read and written, at 0.2 ms a
   round at the median.
-- The real-clock tests in the suite assert liveness only (§4.11's "Risks"): the plant
-  runs for 2 s, rounds and keeps its clock, and stops in order, its devices' last writes
-  all 0 and both closed. Every timing rule is tested on the manual clock.
+- The suite's tests on the real clock are few and short, with generous bounds, and none
+  times a round (§4.11's "Risks"): the plant runs for 2 s, rounds no more often than its
+  clock's milliseconds, keeps its clock and stops in order, its devices' last writes all
+  0 and both closed; in `trip_test.exs` a device hung inside its read trips `{:io,
+  "drive", :timeout}`, a device waiting on the runner for its change is heard at each
+  poll meanwhile, and a bad reading of a device released at a restart trips nothing; and
+  the contract walk, on the manual clock, waits in real time where the runner waits for
+  its devices, a device's open made late by 100 ms tripping nothing. Every timing rule is
+  tested on the manual clock.
 
 ## Changing a running program
 
@@ -2513,7 +2522,9 @@ in every cycle's outputs at the value it holds.
   no bound on a round's lateness or jitter ("Running a plant on the clock", above). A
   watchdog is a backstop that trips the plant when a task runs long, not a guarantee that
   it never does. An input pulse shorter than the gap between two of its device's reads is
-  missed unless the device reports it.
+  missed unless the device reports it, and a reported pulse is missed too unless it is an
+  event task's trigger or a round runs while it holds: the runner keeps only each input's
+  latest value, so a change that rises and falls between two rounds never reaches logic.
 - **Not certified** for any industrial use.
 - **Not a full guarantee of outputs off.** A trip, a stop, a crash or a kill of the
   runner, a stuck runner and a device fault each leave every output that can still be

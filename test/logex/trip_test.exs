@@ -616,7 +616,7 @@ defmodule Logex.TripTest do
       text =
         "task main continuous watchdog 200\ntask fan interval 1000 priority 2 watchdog 2000\n" <>
           "var_global fan_ms dint at panel.i.0\nvar_global main_ms dint at panel.i.1\n" <>
-          "var_global a dint\nvar_global b dint\n" <>
+          "var_global a dint\nvar_global b dint at panel.q.0\n" <>
           "program f count with fan\n  f.n a\nprogram m count\n  m.n b\n"
 
       %{runner: runner, clock: clock, panel: panel} = slow(text)
@@ -640,6 +640,12 @@ defmodule Logex.TripTest do
                {:watchdog, {:round, "main", 201, 200, [{"fan", 151}, {"main", 50}]}}
 
       assert Runner.status(runner).now == 2000
+
+      # The round's count is never written: the panel's output is 0, written once after
+      # the last count, and nothing after.
+      Manual.advance(clock, 100)
+      assert [%{[0] => 0}, %{[0] => last} | _] = Enum.reverse(Sim.writes(panel))
+      assert last > 0
     end
 
     test "a round where no continuous task is declared is named :none, 500 ms" do
@@ -956,14 +962,21 @@ defmodule Logex.TripTest do
       end
     end
 
-    test "a report's fault trips, naming its device" do
-      %{runner: runner, panel: panel} = rig(configured(@read_both), steps: Runtime)
+    test "a report's fault trips, naming its device, every device written 0 once and " <>
+           "nothing after" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@read_both), steps: Runtime)
+
       Sim.fail(panel, :report, :raise)
       Sim.set(panel, [0], 1)
 
       assert Runner.status(runner).trip ==
                {:io, "panel",
                 {:raised, "the simulated device \"panel\" raised in report, as fail/3 told it"}}
+
+      Manual.advance(clock, 100)
+      zeroed_once(panel, 0)
+      zeroed_once(drive, 0)
     end
 
     # Found by M4-6's walk: a device took a change the runner refused as passed on, so a

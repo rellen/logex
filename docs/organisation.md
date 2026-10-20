@@ -678,8 +678,9 @@ the landed form but for the bare `Logex.IO.Sim`. Each device runs in a process o
 under the runner, which calls `init/3` there and reads it once at start; reads it every
 poll period on a grid from its opening, passing each change on to the runner; writes it
 where a round changed its outputs, and again at every poll, its last outputs, while its
-last refresh's deadline has not passed (decision 130 as amended); and, at a trip, a stop
-or the runner's death, writes it 0 once and closes it. A callback that gives an error,
+last refresh's deadline has not passed (decision 130 as amended); at a trip writes it 0
+once and latches it, open for `restart/2`'s release; and at a stop or the runner's death
+writes it 0 once and closes it. A callback that gives an error,
 raises, throws, exits, gives a result of no shape or a value that does not fit, or does
 not answer in time, trips the runner, `{:io, device, cause}` (decision 114); a restart
 reads every device again before its first round (decision 142); and a change refused for
@@ -3027,7 +3028,9 @@ absolute; lateness reported, as an overlap; and outputs at 0 when the runner tri
 dies or stops refreshing a device, wherever the device still answers. **What it cannot:**
 no hard deadline and no bounded jitter, since the BEAM runs on a general-purpose operating
 system and shares its schedulers; no edge shorter than the gap between two of its device's
-reads, unless the device reports it; and nothing once the VM stops. A host helps by giving
+reads, unless the device reports it, and of one reported, none that falls before a round
+runs while it holds, unless it is an event task's trigger, since the runner keeps only
+each input's latest value; and nothing once the VM stops. A host helps by giving
 the controller cores of its own, keeping heavy work out of its VM, and setting each task's
 watchdog from a soak on the target machine, which `status/1`'s longest runs make easy.
 Operating-system real-time priority and the VM's scheduler flags are left unmeasured, and
@@ -3132,7 +3135,7 @@ which the maintainer answered on 2026-10-20: it does, as a start does (decision 
 | Preemption | not adopted | It gives up determinism, and nothing is observable in zero logical time (§4.6) |
 | FB-to-task association (`FB1 WITH SLOW_1`, Table 49 f6b) | deferred | Rarely needed. It splits an FB's execution from its program's scan |
 | Direct representation `%IX0.0` and raw addresses in connections | not adopted; the fallback for §4.5 | One declared, named I/O list instead |
-| Wall-clock runner, `Logex.IO` adapters, watchdog | **landed**, `PLAN.md`'s Milestone 4: designed and decided 2026-10-17 (§4.11, decisions 108–121, and 122–127 after M4-1's review, 2026-10-18), built as M4-1 to M4-6 from 2026-10-17 to 2026-10-20 (decisions 128–143), and documented by M4-7 on 2026-10-20: `Logex.Runner`, `Logex.Runner.Clock` with its monotonic and manual clocks, `Logex.IO` and `Logex.IO.Sim`, the one adapter shipped | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
+| Wall-clock runner, `Logex.IO` adapters, watchdog | **landed**, `PLAN.md`'s Milestone 4: designed and decided 2026-10-17 (§4.11, decisions 108–121, and 122–128 after M4-1's review, 2026-10-18), built as M4-1 to M4-6 from 2026-10-17 to 2026-10-20 (decisions 129–143), and documented by M4-7 on 2026-10-20: `Logex.Runner`, `Logex.Runner.Clock` with its monotonic and manual clocks, `Logex.IO` and `Logex.IO.Sim`, the one adapter shipped | Outside the pure core. Nothing in M2 blocks them. A queue of tasks by due time, if a plant with many tasks wants one, is the runner's (§4.10). *(The core gains only the cycle in steps, decision 118, and the configuration's `watchdog` and `continuous`, decisions 110 and 111.)* |
 | Restarting one program instance inside a resource | not adopted (Milestone 2's design, §4.10) | `restart/2` restarts the whole resource (decision 38). Restarting one instance would be another rule for the input image and the tasks, for a need no decided text states |
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
 | VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* |

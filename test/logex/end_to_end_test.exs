@@ -4697,6 +4697,9 @@ defmodule Logex.EndToEndTest do
       assert %{status: :running, trip: nil} = status
       assert status.rounds >= 20
       assert status.now >= 500
+      # One round a clock millisecond at most, counted over the run: no trigger changes
+      # here, so no round of its own beside them.
+      assert status.rounds <= status.now + 1
       assert Runner.get!(runner, "k1") == 1
 
       assert Runner.stop(runner) == :ok
