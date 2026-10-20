@@ -4060,6 +4060,27 @@ and M4-7 the documents.
   starts no hold (two). 1548 tests pass on Elixir 1.20.4 (9 of them doctests), up from
   1542.
 
+  **Decision 142, verified a third time** (2026-10-20, M4-6's fifth verification): the
+  hold did not reach a report that waited in a device's mailbox while the device waited
+  on the runner for its own change. That wait takes only the runner's answers and
+  requests, so a report sent before the restart, or after the device's release and
+  before its reread, was overtaken by the release, the reread and `taken/2`, handled
+  once the stale change was answered, with the hold over, and passed on over what the
+  reread read, the input wrong until the next poll, on the manual clock every run and on
+  the real clock 200 runs in 200. It was there before the fourth verification's fix too.
+  Now a reread that answers sends the device a fence, a message to itself behind every
+  one already in its mailbox, and a report the device handles before that fence is
+  older than the reread and dropped, the adapter's state kept; a fence an older reread
+  sent, overtaken by a second restart's, is passed over. `trip_test.exs` pins it, the
+  report sent before the release, before the reread, and before a refused restart that
+  a second follows while the device waits throughout, with a report after the restart
+  still passed on. Its mutation table, each applied alone in a copy, the full suite
+  judged by its exit code, every one red by the new test: the fix reverted, a report
+  before the fence passed on; the fence never lifted, red by the runner walk and a
+  forces test too; an older fence given to the adapter as a report; and the fence sent
+  at the release rather than at the reread.
+  1549 tests pass on Elixir 1.20.4 (9 of them doctests), up from 1548.
+
   **The record's claims of Logix, checked** (2026-10-20, against the manuals' current
   PDFs, `docs/organisation.md` §8): verified, outputs sent at the RPI (1756-UM058L
   pp.24–25, decisions 130 and 136), an output module's configured fault state on a

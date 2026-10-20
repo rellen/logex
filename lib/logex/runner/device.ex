@@ -48,6 +48,11 @@ defmodule Logex.Runner.Device do
   #   that no change is read before a device's own reread and taken after the restart,
   #   whatever the order the devices are read in, and none is compared against the image
   #   from before the restart; a zero, a restart refused, ends the hold, nothing taken.
+  #   A reread that answers sends the device a fence of its own, and a report it handles
+  #   before that fence came before the reread, older than it, and is dropped, the
+  #   adapter's state kept: a device waiting on the runner for its own change takes only
+  #   the runner's answers and requests, so a report already in its mailbox, overtaken
+  #   by the release, the reread and `taken/2`, is handled only after them.
   # - A change it passes on carries the count of restarts it had heard as it read it, as
   #   its notices do: one read before the runner's last restart, which the restart's own
   #   read has overtaken, the runner answers `:stale`, taking nothing, and the device keeps
@@ -124,6 +129,7 @@ defmodule Logex.Runner.Device do
        adapter: nil,
        image: %{},
        held: nil,
+       fence: nil,
        next: nil,
        deadline: nil,
        heard: nil,
@@ -184,6 +190,11 @@ defmodule Logex.Runner.Device do
 
   def handle_info({__MODULE__, :deadline, _stale}, state), do: {:noreply, state}
 
+  def handle_info({__MODULE__, :fence, fence}, %{fence: fence} = state),
+    do: {:noreply, %{state | fence: nil}}
+
+  def handle_info({__MODULE__, :fence, _stale}, state), do: {:noreply, state}
+
   def handle_info(message, %{module: module} = state),
     do: waited(fn -> reported(function_exported?(module, :report, 2), message, state) end)
 
@@ -223,8 +234,14 @@ defmodule Logex.Runner.Device do
 
   defp first_read({:fault, cause, _adapter}, state), do: {:stop, :normal, {:error, cause}, state}
 
-  defp read_again({:ok, values, adapter}, state),
-    do: {:reply, {:ok, values}, %{state | adapter: adapter, held: {:reread, %{}}}}
+  # A restart's read taken: a fence sent to the device itself, so that a report already in
+  # its mailbox, which the device's wait on the runner may have passed over, reaches the
+  # adapter before the fence and is older than the read (fenced/2).
+  defp read_again({:ok, values, adapter}, state) do
+    fence = make_ref()
+    send(self(), {__MODULE__, :fence, fence})
+    {:reply, {:ok, values}, %{state | adapter: adapter, held: {:reread, %{}}, fence: fence}}
+  end
 
   defp read_again({:fault, cause, adapter}, state),
     do: {:reply, {:fault, cause}, %{state | adapter: adapter}}
@@ -352,7 +369,14 @@ defmodule Logex.Runner.Device do
   defp reported(true, message, state),
     do: report(back(adapted(:report, [message, state.adapter], state), state), state)
 
-  defp report({:ok, values, adapter}, state), do: kept(values, %{state | adapter: adapter})
+  defp report({:ok, values, adapter}, %{fence: nil} = state),
+    do: kept(values, %{state | adapter: adapter})
+
+  # A report that came before a restart's read, handled only after it because the device
+  # waited on the runner meanwhile, which takes nothing but the runner's answers and
+  # requests, is older than that read and dropped, as a reading between a release and
+  # its reread is (decision 142).
+  defp report({:ok, _values, adapter}, state), do: %{state | adapter: adapter}
   defp report({:fault, cause, adapter}, state), do: faulted(cause, %{state | adapter: adapter})
 
   # A poll's or a report's reading, passed on; or, from a restart's release until the

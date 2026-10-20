@@ -45,7 +45,8 @@ defmodule Logex.Runner do
     device whole (decision 142), so that one that goes on giving it leaves each restart
     refused; from a restart's release until the runner has taken a device's own read,
     the device passes nothing on, a reading from before that read dropped and one after
-    it passed on against it. The runner merges it into the next round's inputs, and
+    it passed on against it, a report the device handles late, having waited on the
+    runner meanwhile, dropped too where it came before that read. The runner merges it into the next round's inputs, and
     a change of an event task's trigger, an input point that is a task's `single`, makes a
     round at once, each such change its own, in address order; it answers once those
     rounds have run and their outputs are written, so that `Logex.IO.Sim.set/3` returns

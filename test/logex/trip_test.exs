@@ -239,6 +239,10 @@ defmodule Logex.TripTest do
     defp partial(%{next: [values | rest]} = state), do: {values, %{state | next: rest}}
     defp partial(%{inputs: inputs, next: []} = state), do: {inputs, state}
 
+    # A report, `{:report, values}`, gives its values, which a test sends it.
+    @impl true
+    def report({:report, values}, agent), do: {:ok, values, agent}
+
     @impl true
     def write(_values, agent), do: {:ok, agent}
   end
@@ -2159,6 +2163,102 @@ defmodule Logex.TripTest do
       assert :sys.get_state(drive_pid).image == %{[0] => 1200, [1] => 7}
     end
 
+    @apart """
+    task fast interval 10 priority 1
+
+    var_global x     bool at a.i.0
+    var_global speed dint at b.i.0
+    var_global y     bool at a.q.0
+
+    program r relay with fast
+      r.in  x
+      r.out y
+    """
+
+    # Found by M4-6's fifth verification: a device waiting on the runner for its own
+    # change takes only the runner's answers and requests, so a report already in its
+    # mailbox was overtaken by the restart's release, reread and taking, and passed on
+    # after them, over what the reread read, until the next poll.
+    test "a report in a device's mailbox while it waits on the runner, sent before its " <>
+           "reread, is older than the restart's read and overwrites nothing" do
+      for sent <- [:before_release, :before_reread, :before_a_refused_restart] do
+        {:ok, clock} = Manual.start_link()
+        {:ok, a} = Sim.start_link(clock: clock)
+        {:ok, agent} = Agent.start_link(fn -> %{inputs: %{[0] => 1000}, next: []} end)
+
+        {:ok, runner} =
+          Runner.start_link(
+            configuration: configured(@apart),
+            io: %{"a" => {Sim, sim: a}, "b" => {Partial, agent: agent}},
+            clock: {Manual, clock},
+            poll: 100,
+            idle: 5000
+          )
+
+        Sim.set(a, [0], 1)
+        Sim.fail(a, :read, {:value, [0], 7})
+        Manual.advance(clock, 100)
+        assert {:io, "a", _} = Runner.status(runner).trip
+        b = device_pid(runner, "b")
+
+        # b's change waits in the runner's mailbox behind the restart, b waiting on it.
+        :sys.suspend(runner)
+        restart = Task.async(fn -> Runner.restart(runner, :cold) end)
+        restart_waiting(runner)
+        refused = refused_first(sent, runner, agent)
+        send(b, {:report, %{[0] => 1500}})
+        changes_waiting(runner)
+        Agent.update(agent, &%{&1 | inputs: %{[0] => 1200}})
+
+        case sent do
+          :before_reread ->
+            :sys.suspend(a)
+            :sys.resume(runner)
+            called(a)
+            send(b, {:report, %{[0] => 1}})
+            :sys.resume(a)
+
+          _before_release ->
+            send(b, {:report, %{[0] => 1}})
+            :sys.resume(runner)
+        end
+
+        assert Task.await(restart) == refused_restart(refused)
+        assert second_restart(refused) == :ok
+        :sys.get_state(b)
+
+        # A round, and no poll of b, which would read 1200 again.
+        Manual.advance(clock, 10)
+        assert %{status: :running, trip: nil} = Runner.status(runner)
+        assert Runner.get!(runner, "speed") == 1200
+        assert :sys.get_state(b).image == %{[0] => 1200}
+
+        # A report after the restart is passed on.
+        send(b, {:report, %{[0] => 1300}})
+        :sys.get_state(b)
+        Manual.advance(clock, 10)
+        assert Runner.get!(runner, "speed") == 1300
+        Runner.stop(runner)
+      end
+    end
+
+    # The third kind: a restart refused on b's reread, a second waiting behind it, so that
+    # b, waiting on the runner throughout, is read again twice before it handles anything.
+    defp refused_first(:before_a_refused_restart, runner, agent) do
+      Agent.update(agent, &%{&1 | next: [%{[0] => @too_fast}]})
+      second = Task.async(fn -> Runner.restart(runner, :cold) end)
+      restarts_waiting(runner, 2)
+      second
+    end
+
+    defp refused_first(_sent, _runner, _agent), do: nil
+
+    defp second_restart(nil), do: :ok
+    defp second_restart(second), do: Task.await(second)
+
+    defp refused_restart(nil), do: :ok
+    defp refused_restart(_second), do: {:error, {:io_init, "b", {:bad_value, [0], @too_fast}}}
+
     test "a device whose restart is refused goes on passing its changes on while tripped, " <>
            "as after any trip" do
       %{runner: runner, clock: clock, drive: drive} = tripped_on_speed([], 1)
@@ -2501,6 +2601,21 @@ defmodule Logex.TripTest do
 
   defp changes_found(true, _runner), do: :ok
   defp changes_found(false, runner), do: changes_waiting(runner)
+
+  # Waits until n host's restarts wait in the runner's mailbox.
+  defp restarts_waiting(runner, n),
+    do: restarts_waited(Process.info(runner, :messages), runner, n)
+
+  defp restarts_waited({:messages, messages}, runner, n),
+    do:
+      restarts_found(
+        Enum.count(messages, &match?({:"$gen_call", _, {:restart, _}}, &1)) >= n,
+        runner,
+        n
+      )
+
+  defp restarts_found(true, _runner, _n), do: :ok
+  defp restarts_found(false, runner, n), do: restarts_waiting(runner, n)
 
   # Waits until a host's restart waits in the runner's mailbox.
   defp restart_waiting(runner),

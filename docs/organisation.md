@@ -6085,7 +6085,12 @@ run lamp, and a drive whose card gives the conveyor's speed.
      the new count and was taken after the restart. So from its release until the runner
      has taken its reread a device passes nothing on, a reading from before its reread
      dropped and one after it held and passed on against the image the reread leaves
-     (since M4-6's fourth verification, 2026-10-20).
+     (since M4-6's fourth verification, 2026-10-20). And a report that came before a
+     device's reread, which the device handles only after the restart because it waited
+     on the runner for its own change meanwhile, taking nothing but the runner's answers
+     and requests, is dropped too: a reread that answers sends the device a fence, and a
+     report handled before it is older than the reread (since M4-6's fifth verification,
+     2026-10-20).
 
 ---
 
