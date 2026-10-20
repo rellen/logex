@@ -35,7 +35,8 @@ fifth, M4-5, edits and forcing through the runner, on 2026-10-19, its review's
 findings fixed the same day, four of its choices put to the maintainer, who answered them
 the same day, decisions 138 to 141, the second with the option recommended, then built
 (§3, M4-5); and its sixth, M4-6, the contract walk over the runner, the same day, with a
-fix to the devices it found and one question put to the maintainer (§3, M4-6).
+fix to the devices it found and one question put to the maintainer, its review's
+findings fixed on 2026-10-20 (§3, M4-6).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -3819,7 +3820,8 @@ and M4-7 the documents.
   `api_contract_test.exs`, so that it runs beside `Logex.ApiContractTest` rather than
   after its eleven walks: 30 seeded configurations of a fast task, now and then a slow
   one, an event task on a panel's or a drive's input, one on a trigger logic writes and
-  the continuous task, half with an untimed counter; each device reporting or only read;
+  the continuous task, about three in four with an untimed counter (22 of the 30 at its
+  seed); each device reporting or only read;
   a forces file or none; and 70 steps each of waits, presses, forces and unforces, an
   online edit's steps, host mistakes, restarts, a crash and a fresh start from the forces
   file, and injected faults, a step slow by about a watchdog, a slow request, the runner
@@ -3837,10 +3839,10 @@ and M4-7 the documents.
   output is 0 once at a trip and nothing is written until the restart. The first walk
   runs again from fresh processes and repeats exactly. Its reach is asserted: every event
   kind, every trip reason but `{:internal, message}`, and 41 kinds of round, step, fault
-  and mistake. It takes 5 to 9 s and leaves the suite's wall time where it was, 63 to
-  67 s (67 to 72 s before), running beside the other modules; no step reads the real
-  clock. At this seed every atom is reached; over 30 other seed families every walk
-  passed and 21 reached every atom, the rest missing one or two of the rarest.
+  and mistake. No step reads the real clock, but the runner's waits for its devices are
+  in real time (decision 125), which its review found the walk's margins too thin for;
+  the times and seed families as its review left them are below. At this seed every
+  atom is reached.
 
   Its mutation table (`c591faa`'s message): 58 mutants of `lib/`, each applied alone in a
   copy and the full suite judged by its exit code, 57 red and one green, equivalent (a
@@ -3864,6 +3866,51 @@ and M4-7 the documents.
   The runner now answers a refused change `{:error, cause}`, and the device takes only a
   change the runner answered `:ok`, so its next read passes a refused one on again.
   Decision 114 makes each read's bad value a fault, so the record was not silent.
+
+  **Its review** (of `e6b7410`, fixed 2026-10-20, four commits and these documents):
+  1533 tests pass on Elixir 1.20.4 (9 of them doctests), up from 1531.
+  1. *The walk could fail under load* (`763503a`). The runner waits for an open or a
+     close for the idle watchdog and a poll period, in real time, and the walk drew an
+     idle watchdog of 60 or 80 ms: beside three suites an open missed its wait, `{:io_init,
+     "drive", :timeout}`, once in about 24 runs. It now draws 300 or 400 ms, and in about
+     one start in six makes the first device opened late by 150 ms in real time, as a
+     loaded machine is, which must trip nothing; with the old draws that stand-in fails
+     as the review's run did. A hung device, whose trip waits up to that long, is injected
+     in half the walks. The moduledoc states each real-time wait and its margin; a round's
+     write keeps the least, what its step's deadline leaves on the manual clock, a poll
+     period, 3 to 8 ms, where a step takes its watchdog exactly, which the review's load
+     runs never missed and which a margin of the walk's cannot widen without changing the
+     rule it tests.
+  2. *A restart's refusal lost no reason the suite saw* (`98126e0`). Every restart a
+     device refused said `:refused`, so a runner that answered `{:io_init, device,
+     :refused}` whatever the device said passed. `trip_test.exs` now restarts past a
+     device that answers `:unplugged` and then `{:no_route, 3}`, and the walk draws the
+     reason; that mutant fails both.
+  3. *Older real-time windows* (`d056e00`). Beside the walk, under load, three older
+     tests failed now and then: `trip_test.exs`'s device that cannot be opened at start,
+     at `idle: 20` (now 300; under six CPU burners the old test failed 3 runs of 3 with
+     `:timeout`, the new one passed 3 of 3); `runner_edit_test.exs`'s traced accept, at
+     ExUnit's 100 ms, which it takes 106 ms for alone (now 5 s); and `runner_test.exs`'s
+     100,000 rounds, about 15 s alone, at ExUnit's 60 s (now 300 s). The walk stays
+     async, so it adds no module to the suite's critical path.
+  4. *The input check loosened for good* (`fada5ca`). A read device's input was allowed
+     two poll periods and the most time ever passed inside a step, which an idle
+     injection raised to four times its lag for the rest of the walk. Each pass on the
+     manual clock is now recorded with its time, and a check allows two poll periods and
+     the time of each pass that ended within the window, which widens it in turn, and no
+     more. A test of the check's own gives the core a read device's change late, from the
+     first pass, by that pass's time less 10 ms, never later than the old allowance but
+     later than two poll periods once the pass is behind it: it is caught in its first
+     walk, and with the running maximum put back in none of 20.
+  5. *Two numbers* (these documents). "Half with untimed programs" was about three in
+     four, 22 of the 30 at the seed. The suite's time, measured three times each on one
+     machine, one after another: 62.2, 65.2 and 68.1 s at `c7b0d1a`, 68.0, 70.3 and
+     68.5 s at the fixes' tip, so the review's fixes cost about 3 s of wall time, within
+     the runs' spread; the walk alone takes 4.6 to 12.5 s over 31 seed families, 7.8 s at
+     its own, most of it hung devices' real-time waits, and the check's own test about
+     1 s. Over 30 other seed families every walk passed and 23 reached every atom, the
+     rest missing one: an interval cut a while after the last round (decision 139) in
+     four, a round's trip in two and a step taken while tripped in one.
 
   **A question for the maintainer** (provisional: built as (a), as the record says). A
   *trip* stops the plant: every output switched off once, nothing run until a person

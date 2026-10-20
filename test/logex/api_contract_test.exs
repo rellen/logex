@@ -7771,8 +7771,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   other walks rather than after them. It runs `Logex.Runner` on the manual clock over 30
   seeded configurations, each a fast task, now and then a slow one, an event task on a
   panel's or a drive's input, an event task on a trigger logic writes and the continuous
-  task, with an untimed counter under it or with no task, or none, so that half have
-  untimed programs and half do not; a divide by zero while the panel's dint reads 0; the
+  task, with an untimed counter under it or with no task, or none, so that about three in
+  four have untimed programs, 22 of the 30 at this seed, and the rest do not; a divide by zero while the panel's dint reads 0; the
   panel and the drive each a simulated device that reports its changes or one that is only
   read; a forces file or none; a poll period, an idle watchdog and a share drawn. Each
   walk takes 70 steps: random waits and presses, forces and unforces, an online edit's
@@ -8175,10 +8175,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :ok
   end
 
-  # At 30 walks of 70 steps every atom is reached at this seed, in about 7 s beside the
-  # suite's other modules. Over 30 other seed families every walk passed, and 21 reached
-  # every atom, the rest missing one or two, an interval cut a while after the last round
-  # (decision 139), a round's trip or a forced trigger, each rare by its nature.
+  # At 30 walks of 70 steps every atom is reached at this seed, in about 8 s alone, most of
+  # it the hung devices' real-time waits. Over 30 other seed families every walk passed,
+  # in 5 to 13 s, and 23 reached every atom, the rest missing one, an interval cut a while
+  # after the last round (decision 139), a round's trip or a step taken while tripped,
+  # each rare by its nature.
   @tag :tmp_dir
   test "the runner on the manual clock runs each round as cycle/3 runs it, trips as the " <>
          "watchdogs and the faults say, and reaches every event kind and trip reason",

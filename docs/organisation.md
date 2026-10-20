@@ -3041,7 +3041,7 @@ VM do not, and the documents say so.
 
 **The contract walk** *(M4-6, landed 2026-10-19).* `api_contract_test.exs`'s runner walk,
 `Logex.ApiContractTest.RunnerWalk`, runs the runner on the manual clock over seeded
-configurations, half with untimed programs, devices that report and that are only read,
+configurations, about three in four with untimed programs, devices that report and that are only read,
 waits, presses, forces, edits, restarts, a crash, and injected faults, through the hidden
 seam `steps:`, which tells the walk each round's elapsed time and inputs. It is checked
 against `cycle/3` called with those, every round's events, outputs and resource, and
