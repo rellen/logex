@@ -47,7 +47,7 @@ clock, but the three of timing on the real clock, rounds back to back one a mill
 at most, the share and the grid with its missed periods, are met there only under the
 milestone's own rule, timing tested on the manual clock and a test on the real clock
 asserting liveness, the plant's 2 s run asserting no more rounds than milliseconds and
-nothing finer.
+nothing finer, a reading the maintainer accepted on 2026-10-20, so Milestone 4 is done.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -4296,7 +4296,9 @@ and M4-7 the documents.
   milliseconds aside. They are not claimed of the real clock beyond that, nor beyond
   README's one run; and the clause of a plant with no untimed program is shown on a
   smaller configuration than §4.4's plant. Whether that reading of the done sentence
-  stands is the maintainer's.
+  stands is the maintainer's. *(The maintainer accepted it on 2026-10-20, "Done as is":
+  timing proven on the manual clock, the real clock checked for liveness, as the
+  milestone's own rule says, so Milestone 4 is done.)*
 
 **Milestone 4 is done when** §4.4's plant, loaded from files on disk with a box counter in
 its continuous task, runs on the real clock through bound devices, its untimed programs
