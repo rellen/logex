@@ -4104,6 +4104,32 @@ and M4-7 the documents.
   where an answer a millisecond early is judged late. 1550 tests pass on Elixir 1.20.4 (9
   of them doctests), up from 1549.
 
+  **Decision 142, verified a fifth time** (2026-10-20, M4-6's seventh verification): a
+  device dropped every reading between its release and its reread, safe only for the
+  points the reread gives; `Logex.IO`'s `read/1` gives some or all of a device's points,
+  so a report of a point the adapter's read leaves out, arriving in that window, was lost
+  for good, the input wrong until that point was reported again. The maintainer settled
+  it as a fix within decision 142, not a new policy: a device now holds every reading
+  from its release, merged, and its reread answers with the read merged over them, so
+  the read supersedes a reading for each point it gives, and each point it leaves out is
+  given with its answer, which the runner checks as the restart's own read, a bad one
+  refusing the restart with that device's fault, `{:io_init, device, cause}`, a good one
+  among what the first round reads. `trip_test.exs` pins the verifier's repro, a bad
+  report-only reading in the window (a value that does not fit and an address that is no
+  input point's) refusing the restart, a report-only reading passed on before the release
+  still stale, and an adapter whose reread gives one point, the other, both or neither,
+  each against reports of both. Its mutation table, each applied alone in a copy, the
+  full suite judged by its exit code: the window's readings dropped again, red (three
+  tests); the reread answering its read alone, red (three); the readings merged over the
+  read, red (two, the fourth verification's among them); the readings passed on after
+  `taken/2` instead of with the answer, red (four); the runner taking a stale change, red
+  (three, the new stale test among them); and the device taking a stale change into its
+  image, red (three). The fence and its drop are kept as they were, so a report the
+  device handles late, having waited on the runner, of a point the reread leaves out, is
+  still lost where it came after the release, until that point is reported again (a
+  residual for the maintainer, `docs/organisation.md` decision 142). 1554 tests pass on
+  Elixir 1.20.4 (9 of them doctests), up from 1550.
+
   **The record's claims of Logix, checked** (2026-10-20, against the manuals' current
   PDFs, `docs/organisation.md` §8): verified, outputs sent at the RPI (1756-UM058L
   pp.24–25, decisions 130 and 136), an output module's configured fault state on a

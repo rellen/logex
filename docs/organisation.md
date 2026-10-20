@@ -6092,7 +6092,15 @@ run lamp, and a drive whose card gives the conveyor's speed.
      report handled before it is older than the reread (since M4-6's fifth verification,
      2026-10-20), the fence sent just before the reread reads, so that a report the
      device is sent while its adapter reads, which may give what the read's sample
-     missed, is held and passed on (since M4-6's sixth verification, 2026-10-20).
+     missed, is held and passed on (since M4-6's sixth verification, 2026-10-20). A
+     reading between a device's release and its reread is held, not dropped: an
+     adapter's read may give some of its points and a report the rest (`Logex.IO`), so
+     the reread supersedes it only for the points it gives, and gives it with its answer
+     for each point it leaves out, which the runner checks as the restart's own read, a
+     bad one refusing the restart with that device's fault, a good one among what the
+     first round reads (since M4-6's seventh verification, 2026-10-20, the maintainer
+     settling it as a fix within this decision). A report the fence drops is lost so
+     where it is of a point the reread leaves out, until that point is reported again.
 
 ---
 

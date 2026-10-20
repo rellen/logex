@@ -42,19 +42,26 @@ defmodule Logex.Runner.Device do
   #   before anything else the runner sends it: a read the runner refuses, an address
   #   that is no input point's or a value that does not fit, leaves nothing behind, so
   #   that the device passes it on again whenever it reads it again. From its release
-  #   until the runner takes its reread it passes nothing on: a poll's or a report's
-  #   reading before the reread is older than it and dropped, and one after it held,
-  #   merged, and passed on against the image the reread leaves once `taken/2` comes, so
-  #   that no change is read before a device's own reread and taken after the restart,
-  #   whatever the order the devices are read in, and none is compared against the image
-  #   from before the restart; a zero, a restart refused, ends the hold, nothing taken.
+  #   until the runner takes its reread it passes nothing on, every poll's or report's
+  #   reading held, merged: one between its release and the reread is older than the
+  #   reread, which supersedes it for every point the reread gives, and is given with the
+  #   reread's answer for each point the reread leaves out, since Logex.IO's read/1 may
+  #   give some of the points and a report the rest, so that the runner checks it as the
+  #   restart's own read and a bad one refuses the restart; and one after the reread is
+  #   passed on against the image the reread leaves once `taken/2` comes. So no change is
+  #   read before a device's own reread and taken after the restart, whatever the order
+  #   the devices are read in, none is compared against the image from before the
+  #   restart, and none of a point the reread leaves out is lost; a zero, a restart
+  #   refused, ends the hold, nothing taken.
   #   A reread sends the device a fence of its own just before it reads, and a report it
   #   handles before that fence came before the reread began, older than it, and is
   #   dropped, the adapter's state kept: a device waiting on the runner for its own change
   #   takes only the runner's answers and requests, so a report already in its mailbox,
-  #   overtaken by the release, the reread and `taken/2`, is handled only after them. A
-  #   report sent while the adapter reads comes after the fence and is held, since it may
-  #   give what the read's sample missed.
+  #   overtaken by the release, the reread and `taken/2`, is handled only after them, too
+  #   late to be given with the reread: one of a point the reread leaves out is so lost
+  #   with it, whether it was sent before the release or after, until that point is
+  #   reported again. A report sent while the adapter reads comes after the fence and is
+  #   held, since it may give what the read's sample missed.
   # - A change it passes on carries the count of restarts it had heard as it read it, as
   #   its notices do: one read before the runner's last restart, which the restart's own
   #   read has overtaken, the runner answers `:stale`, taking nothing, and the device keeps
@@ -161,11 +168,18 @@ defmodule Logex.Runner.Device do
   def handle_call({:release, restarts}, _from, state),
     do:
       {:reply, :ok,
-       %{disarmed(state) | latched: false, written: nil, restarts: restarts, held: :released}}
+       %{
+         disarmed(state)
+         | latched: false,
+           written: nil,
+           restarts: restarts,
+           held: {:released, %{}}
+       }}
 
-  # A restart's read (decision 142): the adapter read once, as an opening reads it, or the
+  # A restart's read (decision 142): the adapter read once, as an opening reads it, with
+  # what the device read since its release of the points the read leaves out, or the
   # read's fault, which the runner answers the restart with; its poll grid is kept. What
-  # it read is what the device last passed on only once the runner has taken it.
+  # it gave is what the device last passed on only once the runner has taken it.
   def handle_call(:reread, _from, state), do: read_again(fenced(state))
 
   # The fence, sent before the read, so that a report the adapter is sent while it reads,
@@ -243,13 +257,19 @@ defmodule Logex.Runner.Device do
 
   defp first_read({:fault, cause, _adapter}, state), do: {:stop, :normal, {:error, cause}, state}
 
-  # A restart's read answered: the fence its device sent itself just before the read kept,
-  # so that a report already in its mailbox as the read began, which the device's wait on
-  # the runner may have passed over, reaches the adapter before the fence and is older
-  # than the read, and one sent while the adapter read comes after it and is held (see
-  # report/2); a read that fails keeps no fence, its own passed over when it comes.
-  defp read_again({{:ok, values, adapter}, fence, state}),
-    do: {:reply, {:ok, values}, %{state | adapter: adapter, held: {:reread, %{}}, fence: fence}}
+  # A restart's read answered: with it, what the device read between its release and the
+  # read, held, of each point the read leaves out, where an adapter's read gives some of
+  # its points and reports the rest (Logex.IO), the read superseding the rest, so that the
+  # runner checks all of it as the restart's own read (decision 142). The fence its device
+  # sent itself just before the read is kept, so that a report already in its mailbox as
+  # the read began, which the device's wait on the runner may have passed over, reaches
+  # the adapter before the fence and is older than the read, and one sent while the
+  # adapter read comes after it and is held (see report/2); a read that fails keeps no
+  # fence, its own passed over when it comes.
+  defp read_again({{:ok, values, adapter}, fence, %{held: {:released, since}} = state}),
+    do:
+      {:reply, {:ok, Map.merge(since, values)},
+       %{state | adapter: adapter, held: {:reread, %{}}, fence: fence}}
 
   defp read_again({{:fault, cause, adapter}, _fence, state}),
     do: {:reply, {:fault, cause}, %{state | adapter: adapter}}
@@ -388,13 +408,16 @@ defmodule Logex.Runner.Device do
   defp report({:fault, cause, adapter}, state), do: faulted(cause, %{state | adapter: adapter})
 
   # A poll's or a report's reading, passed on; or, from a restart's release until the
-  # runner has taken its read, held (decision 142): one read before the restart's read is
-  # older than it and dropped, and one read after it held, every one merged, until the
-  # runner takes the restart's read and the device passes on what changed against it. A
-  # change is so never passed on from a reading older than the restart's read, whatever
-  # order the devices are read in, nor compared against the image from before it.
+  # runner has taken its read, held (decision 142), every one merged: one read before the
+  # restart's read given with it, where the read leaves its points out, and one read after
+  # it passed on against it once the runner takes it. A change is so never passed on from
+  # a reading older than the restart's read, whatever order the devices are read in, nor
+  # compared against the image from before it, and none of a point the read leaves out is
+  # lost.
   defp kept(values, %{held: nil} = state), do: passed(values, state)
-  defp kept(_values, %{held: :released} = state), do: state
+
+  defp kept(values, %{held: {:released, since}} = state),
+    do: %{state | held: {:released, Map.merge(since, values)}}
 
   defp kept(values, %{held: {:reread, held}} = state),
     do: %{state | held: {:reread, Map.merge(held, values)}}
