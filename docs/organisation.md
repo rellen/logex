@@ -6090,7 +6090,9 @@ run lamp, and a drive whose card gives the conveyor's speed.
      on the runner for its own change meanwhile, taking nothing but the runner's answers
      and requests, is dropped too: a reread that answers sends the device a fence, and a
      report handled before it is older than the reread (since M4-6's fifth verification,
-     2026-10-20).
+     2026-10-20), the fence sent just before the reread reads, so that a report the
+     device is sent while its adapter reads, which may give what the read's sample
+     missed, is held and passed on (since M4-6's sixth verification, 2026-10-20).
 
 ---
 

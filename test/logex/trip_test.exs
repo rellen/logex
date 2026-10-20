@@ -247,6 +247,37 @@ defmodule Logex.TripTest do
     def write(_values, agent), do: {:ok, agent}
   end
 
+  # An adapter over an Agent, `agent:`, holding `{value, slip}`: a read gives `value` at
+  # [0], and where `slip` is a value the input changes to it just after the read's sample,
+  # the agent set and a report of it, `{:report, values}`, sent to the device's own
+  # process, as a message an adapter is sent while it reads.
+  defmodule Slips do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, opts), do: {:ok, Keyword.fetch!(opts, :agent)}
+
+    @impl true
+    def read(agent) do
+      {value, slip} = Agent.get(agent, & &1)
+      slipped(slip, agent)
+      {:ok, %{[0] => value}, agent}
+    end
+
+    defp slipped(nil, _agent), do: :ok
+
+    defp slipped(slip, agent) do
+      Agent.update(agent, fn _ -> {slip, nil} end)
+      send(self(), {:report, %{[0] => slip}})
+    end
+
+    @impl true
+    def report({:report, values}, agent), do: {:ok, values, agent}
+
+    @impl true
+    def write(_values, agent), do: {:ok, agent}
+  end
+
   setup_all do
     :ets.new(__MODULE__, [:named_table, :public, :set])
     :ok
@@ -2240,6 +2271,41 @@ defmodule Logex.TripTest do
         assert Runner.get!(runner, "speed") == 1300
         Runner.stop(runner)
       end
+    end
+
+    # Found by M4-6's sixth verification: the fence was sent once the reread had read, so
+    # a report the device was sent while its adapter read, which may give what the read's
+    # sample missed, came before the fence and was dropped, the input wrong until the next
+    # poll.
+    test "a report a device is sent while its restart's read samples is newer than that " <>
+           "read, and passed on after it" do
+      {:ok, clock} = Manual.start_link()
+      {:ok, a} = Sim.start_link(clock: clock)
+      {:ok, agent} = Agent.start_link(fn -> {1000, nil} end)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(@apart),
+          io: %{"a" => {Sim, sim: a}, "b" => {Slips, agent: agent}},
+          clock: {Manual, clock},
+          poll: 100
+        )
+
+      Sim.set(a, [0], 1)
+      Sim.fail(a, :read, {:value, [0], 7})
+      Manual.advance(clock, 100)
+      assert {:io, "a", _} = Runner.status(runner).trip
+
+      # The restart's read samples 2000, and the input goes to 3000 as it reads.
+      Agent.update(agent, fn _ -> {2000, 3000} end)
+      assert Runner.restart(runner, :cold) == :ok
+      :sys.get_state(device_pid(runner, "b"))
+
+      # A round, and no poll of b, which would read 3000 again.
+      Manual.advance(clock, 10)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      assert Runner.get!(runner, "speed") == 3000
+      assert :sys.get_state(device_pid(runner, "b")).image == %{[0] => 3000}
     end
 
     # The third kind: a restart refused on b's reread, a second waiting behind it, so that

@@ -4081,6 +4081,24 @@ and M4-7 the documents.
   at the release rather than at the reread.
   1549 tests pass on Elixir 1.20.4 (9 of them doctests), up from 1548.
 
+  **Decision 142, verified a fourth time** (2026-10-20, M4-6's sixth verification): the
+  fence was sent once the reread had read, so a report the device was sent while its
+  adapter read, a message that may give what the read's sample missed, came before the
+  fence and was dropped as older than the read, the input wrong until the next poll, and
+  for good where the read does not give that point; with an adapter that is sent such a
+  message as it reads, every run in 200 on the real clock. Now the reread sends the fence
+  just before it reads, so a report in the mailbox before it was sent before the read
+  began and is dropped, and one sent while the adapter reads is held and passed on once
+  the reread is taken. `trip_test.exs` pins it on the manual clock. Its mutation table,
+  each applied alone in a copy, the full suite judged by its exit code: the fence sent
+  once the read is done, red by the new test alone; the fence sent but not kept, red by
+  the fifth verification's test; no fence sent, the device waiting on one, red (four
+  tests, the runner walk and a forces test among them); and a reread that fails keeping
+  its fence too, green, since that only drops a report handled before it by a runner the
+  refused restart leaves tripped, which the next restart's read replaces for every point
+  the read gives. 1550 tests pass on Elixir 1.20.4 (9
+  of them doctests), up from 1549.
+
   **The record's claims of Logix, checked** (2026-10-20, against the manuals' current
   PDFs, `docs/organisation.md` §8): verified, outputs sent at the RPI (1756-UM058L
   pp.24–25, decisions 130 and 136), an output module's configured fault state on a

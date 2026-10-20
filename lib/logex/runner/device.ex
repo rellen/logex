@@ -48,11 +48,13 @@ defmodule Logex.Runner.Device do
   #   that no change is read before a device's own reread and taken after the restart,
   #   whatever the order the devices are read in, and none is compared against the image
   #   from before the restart; a zero, a restart refused, ends the hold, nothing taken.
-  #   A reread that answers sends the device a fence of its own, and a report it handles
-  #   before that fence came before the reread, older than it, and is dropped, the
-  #   adapter's state kept: a device waiting on the runner for its own change takes only
-  #   the runner's answers and requests, so a report already in its mailbox, overtaken
-  #   by the release, the reread and `taken/2`, is handled only after them.
+  #   A reread sends the device a fence of its own just before it reads, and a report it
+  #   handles before that fence came before the reread began, older than it, and is
+  #   dropped, the adapter's state kept: a device waiting on the runner for its own change
+  #   takes only the runner's answers and requests, so a report already in its mailbox,
+  #   overtaken by the release, the reread and `taken/2`, is handled only after them. A
+  #   report sent while the adapter reads comes after the fence and is held, since it may
+  #   give what the read's sample missed.
   # - A change it passes on carries the count of restarts it had heard as it read it, as
   #   its notices do: one read before the runner's last restart, which the restart's own
   #   read has overtaken, the runner answers `:stale`, taking nothing, and the device keeps
@@ -164,8 +166,15 @@ defmodule Logex.Runner.Device do
   # A restart's read (decision 142): the adapter read once, as an opening reads it, or the
   # read's fault, which the runner answers the restart with; its poll grid is kept. What
   # it read is what the device last passed on only once the runner has taken it.
-  def handle_call(:reread, _from, state),
-    do: read_again(adapted(:read, [state.adapter], state), state)
+  def handle_call(:reread, _from, state), do: read_again(fenced(state))
+
+  # The fence, sent before the read, so that a report the adapter is sent while it reads,
+  # which may give what the read's sample missed, comes after it (read_again/2).
+  defp fenced(state) do
+    fence = make_ref()
+    send(self(), {__MODULE__, :fence, fence})
+    {adapted(:read, [state.adapter], state), fence, state}
+  end
 
   @impl GenServer
   def handle_cast(request, state), do: waited(fn -> cast(request, state) end)
@@ -234,16 +243,15 @@ defmodule Logex.Runner.Device do
 
   defp first_read({:fault, cause, _adapter}, state), do: {:stop, :normal, {:error, cause}, state}
 
-  # A restart's read taken: a fence sent to the device itself, so that a report already in
-  # its mailbox, which the device's wait on the runner may have passed over, reaches the
-  # adapter before the fence and is older than the read (fenced/2).
-  defp read_again({:ok, values, adapter}, state) do
-    fence = make_ref()
-    send(self(), {__MODULE__, :fence, fence})
-    {:reply, {:ok, values}, %{state | adapter: adapter, held: {:reread, %{}}, fence: fence}}
-  end
+  # A restart's read answered: the fence its device sent itself just before the read kept,
+  # so that a report already in its mailbox as the read began, which the device's wait on
+  # the runner may have passed over, reaches the adapter before the fence and is older
+  # than the read, and one sent while the adapter read comes after it and is held (see
+  # report/2); a read that fails keeps no fence, its own passed over when it comes.
+  defp read_again({{:ok, values, adapter}, fence, state}),
+    do: {:reply, {:ok, values}, %{state | adapter: adapter, held: {:reread, %{}}, fence: fence}}
 
-  defp read_again({:fault, cause, adapter}, state),
+  defp read_again({{:fault, cause, adapter}, _fence, state}),
     do: {:reply, {:fault, cause}, %{state | adapter: adapter}}
 
   # A poll's read: what changed passed on and the outputs written again, or the fault.
