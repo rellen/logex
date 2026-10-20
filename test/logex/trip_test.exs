@@ -1089,6 +1089,23 @@ defmodule Logex.TripTest do
       assert Sim.outputs(drive) == %{[0] => 1}
     end
 
+    test "a device that cannot be opened at a restart gives the restart its own reason, " <>
+           "whatever it is" do
+      %{runner: runner, clock: clock, panel: panel, drive: drive} =
+        rig(configured(@conveyor), steps: Runtime)
+
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Process.exit(device_pid(runner, "drive"), :kill)
+      Runner.status(runner)
+
+      for reason <- [:unplugged, {:no_route, 3}] do
+        Sim.fail(drive, :init, {:error, reason})
+        assert Runner.restart(runner, :warm) == {:error, {:io_init, "drive", reason}}
+        assert Runner.status(runner).trip == {:io, "drive", {:down, :killed}}
+      end
+    end
+
     test "a device hung inside its own read, its outputs unchanged, trips {:io, device, " <>
            ":timeout} once not heard within the idle watchdog and a poll period, killed" do
       relays =

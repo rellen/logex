@@ -7779,7 +7779,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   steps (a candidate's interval, watchdog or untimed counter changed, or a task added,
   which accept refuses), host mistakes, a crash and a fresh start from the same forces
   file, restarts, cold and warm, one now and then refused by a device that cannot be
-  opened, and injected faults: a task's step slow by about its watchdog or the continuous
+  opened, for a reason drawn, which the restart gives back, and injected faults: a task's step slow by about its watchdog or the continuous
   task's, a host's request slower than the idle watchdog, the runner stuck for less than
   its idle watchdog or for longer than its devices' heartbeat, a device killed, or hung in
   half the walks, each hang costing a real-time wait,
@@ -8595,7 +8595,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   # A tripped runner restarted, :cold or :warm (decision 113): every device that went down
   # opened again, one now and then refusing to open, which leaves the runner tripped with
-  # its first reason, every device that answers written 0 once more (decision 136).
+  # its first reason, every device that answers written 0 once more (decision 136). The
+  # device's own reason is the restart's, whatever it is.
   defp restart(w) do
     mode = pick([:cold, :warm])
     down = Enum.sort(MapSet.to_list(w.down))
@@ -8604,9 +8605,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     case refuse do
       true ->
         [device | _] = down
-        Sim.fail(w.sims[device], :init, {:error, :refused})
+        reason = pick([:refused, :unplugged, {:no_route, :rand.uniform(9)}])
+        Sim.fail(w.sims[device], :init, {:error, reason})
         before = writes(w)
-        assert Runner.restart(w.runner, mode) == {:error, {:io_init, device, :refused}}
+        assert Runner.restart(w.runner, mode) == {:error, {:io_init, device, reason}}
         reach(:restart_refused, true)
         w = consumed(w)
 
