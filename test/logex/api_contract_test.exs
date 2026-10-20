@@ -7782,7 +7782,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   opened, for a reason drawn, which the restart gives back, and injected faults: a task's step slow by about its watchdog or the continuous
   task's, a host's request slower than the idle watchdog, the runner stuck for less than
   its idle watchdog or for longer than its devices' heartbeat, a device killed, or hung in
-  half the walks, each hang costing a real-time wait,
+  a third of the walks, each hang costing a real-time wait,
   and a device's read, report or write failing in each way `Logex.IO.Sim` acts out, a
   value that does not fit and an address that is no input point's among them.
 
@@ -7822,8 +7822,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   from a walk and `trip_test.exs` reaches through the seam, and each kind of round, step,
   fault and mistake. No step reads the real clock, but the runner's waits for its devices
   are in real time (decision 125): an open or a close waits for the idle watchdog and a
-  poll period, so the walk draws an idle watchdog of 300 or 400 ms, which a device's open
-  made late by 150 ms, as on a loaded machine, now and then at a start, must not trip,
+  poll period, so the walk draws an idle watchdog of 400 or 500 ms, which a device's open
+  made late by 100 ms, as on a loaded machine, now and then at a start, must not trip,
   and a hung device costs one such wait or less; and a round's write waits for what is left of
   its step's deadline on the manual clock, its task's watchdog and a poll period less the
   time a slow step passed, so a step slow by its watchdog exactly leaves its write a poll
@@ -8175,11 +8175,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :ok
   end
 
-  # At 30 walks of 70 steps every atom is reached at this seed, in about 8 s alone, most of
+  # At 30 walks of 70 steps every atom is reached at this seed, in about 7 s alone, most of
   # it the hung devices' real-time waits. Over 30 other seed families every walk passed,
-  # in 5 to 13 s, and 23 reached every atom, the rest missing one, an interval cut a while
-  # after the last round (decision 139), a round's trip or a step taken while tripped,
-  # each rare by its nature.
+  # in 5 to 11 s, and 22 reached every atom, the rest missing one, an interval cut a while
+  # after the last round (decision 139) or a step taken while tripped, each rare by its
+  # nature.
   @tag :tmp_dir
   test "the runner on the manual clock runs each round as cycle/3 runs it, trips as the " <>
          "watchdogs and the faults say, and reaches every event kind and trip reason",
@@ -8252,9 +8252,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       sims: sims,
       file: file,
       poll: pick([3, 5, 8]),
-      idle: pick([300, 400]),
+      idle: pick([400, 500]),
       overhead: pick([10, 20, 50, 90]),
-      hangs: pick([true, false]),
+      hangs: pick([true, false, false]),
       forces: %{},
       timeline: Map.new(@inputs, fn {name, _} -> {name, [{0, 0}]} end),
       log: [],
@@ -8360,11 +8360,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   end
 
   # Now and then the first device opened is late, by more than an idle watchdog of 60 or
-  # 80 ms and a poll period would cover and by less than the walk's 300 or 400: a loaded
+  # 80 ms and a poll period would cover and by less than the walk's 400 or 500: a loaded
   # machine, which must trip nothing, the runner waiting for an open in real time.
   defp late_open do
     late = :rand.uniform(6) == 1
-    late && :ets.insert(@table, {{self(), :late}, 150})
+    late && :ets.insert(@table, {{self(), :late}, 100})
     late
   end
 

@@ -1005,14 +1005,14 @@ defmodule Logex.TripTest do
     test "a device that does not answer a round's write within its deadline is killed, " <>
            "the deadline in real time and short, and opened again at a restart" do
       %{runner: runner, panel: panel, drive: drive} =
-        rig(configured(@stopped), idle: 30, poll: 10, steps: Runtime)
+        rig(configured(@stopped), idle: 300, poll: 10, steps: Runtime)
 
       # The e-stop's round, at once, writes the drive, which hangs: the runner waits its
-      # deadline, 30 ms and a poll period, in real time on the manual clock.
+      # deadline, 300 ms and a poll period, in real time on the manual clock.
       old = device_pid(runner, "drive")
       Sim.fail(drive, :write, :hang)
       {took, :ok} = :timer.tc(fn -> Sim.set(panel, [0], 1) end, :millisecond)
-      assert took >= 40 and took < 2000
+      assert took >= 310 and took < 3000
       assert Runner.status(runner).trip == {:io, "drive", :timeout}
       refute Process.alive?(old)
 
@@ -1160,7 +1160,7 @@ defmodule Logex.TripTest do
       %{runner: runner, panel: panel, drive: drive} =
         rig(configured(text),
           poll: 10,
-          idle: 50,
+          idle: 300,
           steps: Runtime,
           clock: {Logex.Runner.Clock.Monotonic, nil}
         )
@@ -1225,7 +1225,7 @@ defmodule Logex.TripTest do
     test "a device that hangs while the runner is tripped is killed at the restart's " <>
            "release and opened again, its inputs read, the deadline in real time and short" do
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
-        rig(configured(@read_both), poll: 10, idle: 30, steps: Runtime)
+        rig(configured(@read_both), poll: 10, idle: 300, steps: Runtime)
 
       Sim.set(panel, [0], 1)
       Manual.advance(clock, 10)
@@ -1267,7 +1267,7 @@ defmodule Logex.TripTest do
 
       # The drive opened again, the panel then held and refused: the drive is written 0.
       %{runner: runner, clock: clock, panel: panel, drive: drive} =
-        rig(configured(@read_both), poll: 10, idle: 30, steps: Runtime)
+        rig(configured(@read_both), poll: 10, idle: 300, steps: Runtime)
 
       Runner.subscribe(runner)
       Sim.set(panel, [0], 1)
