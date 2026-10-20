@@ -17,7 +17,7 @@ has to happen, or the next reader inherits a plan that disagrees with the code.
 **§2 (Milestone 0) is complete.** It is kept as the record of what was wrong and why each
 fix took the shape it did, so its present tense describes the code *before* those commits.
 §1, §3·M1-1 to M1-6, §3's OE-1, §3's M2-1, §3's M2-5, §3's M2-2 and M2-3, §3's M2-4,
-§3's M2-6, §3's OE-2, §3's M3-1, M3-2, M3-3, M3-4 and M3-5 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
+§3's M2-6, §3's OE-2, §3's M3-1, M3-2, M3-3, M3-4 and M3-5, and §3's Milestone 4 have been brought current. Milestone 2 was designed on 2026-10-02 (§3), its
 first item, M2-1, landed the same day, M2-5 on 2026-10-04, M2-2 and M2-3 on 2026-10-11,
 and M2-4 and M2-6 on 2026-10-12, so Milestone 2 is done; OE-2 was designed and landed on
 2026-10-13 (§3), and Milestone 3 was designed and decided on 2026-10-14, its first four
@@ -40,7 +40,11 @@ findings fixed on 2026-10-20, and the maintainer's answer the same day, a restar
 reads every device first, decision 142, then built (§3, M4-6), and the maintainer's
 confirmation the same day of two calls the lead made in its verifications, a report-only
 reading kept across a restart, a fix within decision 142, and a refused change's good
-points kept, decision 143.
+points kept, decision 143; and its seventh and last, M4-7, the documents, the same day,
+so every item of Milestone 4 has landed, its done sentence checked clause by clause
+against the tests (§3, after M4-7): every clause is pinned by a test, those of timing on
+the manual clock, and on the real clock the plant's run is asserted as liveness only, as
+the milestone's own rule has it.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -151,7 +155,17 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   priority, 500 ms unless set, and one line may declare the continuous task, `task main
   continuous watchdog 200`, which runs every instance with no timed task, `with main` or
   none, after the due tasks, each run reported under its name; a watchdog changes while
-  the plant runs, and the runner that reads it is M4-3's.
+  the plant runs, and the runner reads it, below.
+- The wall-clock runner (M4-1, M4-3 to M4-6): `Logex.Runner` runs a configuration's
+  resource on a clock, `Logex.Runner.Clock`'s monotonic one or a manual one a test moves,
+  through devices bound to adapters (`Logex.IO`, with `Logex.IO.Sim` the one shipped),
+  its untimed programs back to back, one round a clock millisecond at most, a share kept
+  for its own work, and each timed task on its grid; a watchdog on every task, a device's
+  deadline and an idle watchdog trip it, every output 0 once, until a cold or warm
+  restart, which reads every device first; a stop and its death zero every output too;
+  inputs are forced, kept in a file across a crash; and an online edit is stepped
+  through it between rounds. README's "Running a plant on the clock" runs it, and "What
+  logex is not" says what it is not, a safety controller first.
 
 These were each verified directly:
 
@@ -4216,6 +4230,55 @@ and M4-7 the documents.
   adapter contract, §4.6's watchdog paragraph, §5's row and decision 14's annotation, as
   landed; and this status.
 
+  **Landed** (2026-10-20), as three commits, no code changed. README: "On the clock" is
+  "Running a plant on the clock", its three runs on the manual clock re-run on the tip,
+  their output unchanged, and a fourth, `on_the_real_clock.exs`, the plant on the
+  machine's clock: start pressed, three boxes passed, a second's run and a stop, its
+  keyword list the same in ten runs of ten and its figures, said to be that run's, 1,229
+  rounds in 1,232 ms, none late enough to miss a period; with the spike's lateness and
+  cost figures, for sizing a watchdog, and what is not guaranteed. A new section, "What
+  logex is not": not a safety controller, not hard real-time, not certified, not a full
+  guarantee of outputs off (a hung device's are the device's, and a VM that stops writes
+  nothing), not a compiler to BEAM, no adapter for real I/O but the host's, not IEC
+  61131-3's text, and what a controller has that logex lacks (one resource, bool and dint
+  only, a forward jump only, no retained values, no output forcing), each checked against
+  the code. The "Settled, not yet landed" bullet that still said M4-4 and M4-5 were to
+  land is gone, and the intro names the runner. `docs/organisation.md`: §4.5, §4.6, §5's
+  two rows, the runner's and forcing's, and decision 14 annotated as landed, and §4.11's
+  two paragraphs for README marked said. CLAUDE.md's Key Files: README's sections and
+  what stales them, and the status of `docs/organisation.md`. 1559 tests pass on Elixir
+  1.20.4 (9 of them doctests), unchanged.
+
+  **Milestone 4's done sentence, checked** (2026-10-20, on M4-7's tip), clause by clause,
+  with the test that shows each; a test named here is in `test/logex/`.
+
+  | Clause | Shown by |
+  |---|---|
+  | §4.4's plant, from files on disk with a box counter in its continuous task, runs on the real clock through bound devices | `end_to_end_test.exs`, "on the real clock the plant runs for 2 s and stops in order": liveness only, running and untripped, 20 rounds at least, `now` 500 ms at least, `k1` on, and every output's last write 0 at the stop. README's `on_the_real_clock.exs` is a run, not a test |
+  | its untimed programs back to back, one round a clock millisecond at most | on the manual clock, `runner_test.exs`, "while untimed programs exist, one round each clock millisecond, advance(n) running n, the first at once", "a round that takes a millisecond or more is followed at once, a wake on the clock" and "a round counts a millisecond at least". **No test asserts it on the real clock**: the 2 s test counts 20 rounds at least, and README's run prints the rounds no more than the milliseconds |
+  | with the runner's share kept | on the manual clock, `runner_test.exs`, "the share's slots: after C ms of rounds that fill their milliseconds the runner serves the requests that waited, at 10%, 20%, 50% and 90%", "a slot serves the runner's own work for up to S ms, each request whole" and "the timed tasks' runs are left out of the share's count". None on the real clock |
+  | each timed task's runs never before their times on its grid | on the manual clock, `runner_test.exs`, "rounds on a periodic task keep their grid, absolute, a slow write's time not counted: 100,000 rounds, every one on time"; on the real clock only the clock's own rule, `clock_test.exs`, "wakes a process once, no sooner than its time, and a time already past at once". **No test runs a timed task on the real clock and checks its times** |
+  | its runs and the periods it reports missed together one for each grid time passed | on the manual clock, the 100,000 rounds above, every grid time a run and none missed, and `runner_test.exs`, "subscribe/2: the resource's overlaps and faults by default, …", a 25 ms write making the run at 25 and `{:overlap, "fast", 1}` for the grid time at 20; and the runner walk against `cycle/3`. None on the real clock |
+  | a host test drives the same plant on a manual clock with simulated devices, one reporting its changes and one only read, its outputs and events exactly those `cycle/3` gives for the same times and inputs | `end_to_end_test.exs`, "M4-3's Done-when: the plant through the runner on the manual clock, round for round the oracle's, from files on disk, repeating exactly", 600 seeded presses and waits; and `api_contract_test.exs`'s runner walk, `Logex.ApiContractTest.RunnerWalk`, over seeded configurations |
+  | with no untimed program the plant rounds only when a task is due or a trigger changes | `runner_test.exs`, "with no untimed program, a round only at a due time or a trigger's change", on a configuration of a 10 ms relay and an event task over a panel that reports and a drive only read, **not §4.4's plant itself**, whose box counter is untimed; and the runner walk's configurations with no untimed program, about one in four |
+  | a task that outlasts its watchdog leaves every output that can still be written at 0, written once | `trip_test.exs`, "a timed task's run that outlasts its watchdog trips before its round's write, naming it; one that takes exactly its watchdog does not" and "a round that outlasts the continuous task's watchdog trips, naming each step with its time, …" |
+  | a device that fails does too | `trip_test.exs`, "each kind of fault in a poll's read trips, naming its device, every device written 0 once and nothing after", "a report's fault trips, naming its device" and "a round's write that fails trips, the devices after it not written, and the device that failed zeroed where it still takes a write" |
+  | a runner that is stopped does too | `runner_test.exs`, "stop/2 writes every output 0 once and closes every device before it returns (decision 116)" |
+  | a runner stuck does too | `trip_test.exs`, "a runner stuck in the conveyor's 50 ms step leaves every device at 0 within 50 ms and a poll period of the step's start, not before" and "a runner stuck in its own work leaves every device at 0 within its idle watchdog and a poll period, …" |
+  | a runner killed does too | `trip_test.exs`, "a killed runner's devices write every output 0 once and close" and "a runner that crashes zeroes and closes every device, and its supervisor does not start it again" |
+  | a tripped runner runs nothing again until the host restarts it | `trip_test.exs`, "while tripped a device's change is merged and makes no round, and a host's request is served at once", "a latched device writes nothing again at its polls, and a tripped runner refreshes no device" and "cold and warm each release the latches, restart the resource and run the first round at once, the clock not counting the stopped time" |
+  | one stopped or killed is gone, its child spec `restart: :temporary` | `runner_test.exs`, "its child spec starts it once: restart: :temporary (decision 115)"; `trip_test.exs`, the crash test above, its supervisor starting nothing again |
+  | a forced input holds across a restart and, kept in its file, across a crash and a fresh start | `end_to_end_test.exs`, "M4-5's Done-when: the photo-eye forced, against its device, across a restart, a crash and a fresh start from its forces file"; `force_test.exs`, "a runner killed while an input is forced, started again from the same file, comes back with it forced and listed, from its first round" |
+  | an online edit is stepped through the running runner between rounds | `end_to_end_test.exs`, "M4-5's Done-when: the plant edited through the runner, every report and round the same steps give over the resource directly, from files on disk"; `runner_edit_test.exs` |
+
+  So every clause is shown by a test, and the three of timing on the real clock, rounds
+  back to back one a millisecond at most, the share and the grid with its missed
+  periods, are shown on the manual clock only, as the milestone's rule has it ("every
+  rule is tested on the manual clock"; a test on the real clock "asserts liveness only"),
+  the real clock's own wake no sooner than its time aside. They are not claimed of the
+  real clock beyond that, nor beyond README's one run; and the clause of a plant with no
+  untimed program is shown on a smaller configuration than §4.4's plant.
+
 **Milestone 4 is done when** §4.4's plant, loaded from files on disk with a box counter in
 its continuous task, runs on the real clock through bound devices, its untimed programs
 back to back, one round a clock millisecond at most, with the runner's share kept, and
@@ -4838,7 +4901,8 @@ The mnemonic set is authentic ladder vocabulary rather than invented. What is mi
    tasks' instances by priority and returning every output point. A wall-clock runner,
    the only code that will read a clock, comes after Milestone 2 (`docs/organisation.md`
    §5). *(Milestone 4, designed and decided 2026-10-17, §3: decisions 108–121, and
-   122–128 after M4-1's review, 2026-10-18.)*
+   122–128 after M4-1's review, 2026-10-18.)* *(Landed with Milestone 4, M4-1 to M4-7, by
+   2026-10-20: `Logex.Runner`, decisions 108–143.)*
 3. **A tag table with types.** Landed with M1-3.
 4. **Comparisons (`eq ne lt gt le ge` — IEC names, see `docs/naming.md`)** — high value,
    low cost. *Landed with M1-6, on dints.*
