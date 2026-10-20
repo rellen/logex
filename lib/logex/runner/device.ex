@@ -35,6 +35,9 @@ defmodule Logex.Runner.Device do
   #   after the trip. A release gives it the runner's count of restarts, 0 from its
   #   opening, which every notice it sends the runner carries as `restarts`, so that the
   #   runner passes over a latch or a fault raised before the restart it released for.
+  # - `reread/1` is a restart's read, after its release (decision 142): the adapter read
+  #   once, as an opening reads it, `{:ok, values}`, all of them taken as changed, or
+  #   `{:fault, cause}`, the device left released for the runner to latch again.
   # - Its heartbeat (decision 125): a refresh carries the deadline by which it will hear
   #   from the runner again, and the time it was sent. A device that hears nothing by the
   #   deadline its last refresh carried, a wake on the runner's clock at it, latches as a
@@ -86,6 +89,8 @@ defmodule Logex.Runner.Device do
   def release(device, restarts, timeout \\ :infinity),
     do: GenServer.call(device, {:release, restarts}, timeout)
 
+  def reread(device, timeout \\ :infinity), do: GenServer.call(device, :reread, timeout)
+
   @impl GenServer
   def init(%{name: name, module: module, opts: opts, points: points, runner: runner} = args) do
     Process.flag(:trap_exit, true)
@@ -130,6 +135,12 @@ defmodule Logex.Runner.Device do
   # notice after it carries, so that the runner passes over one raised before it.
   def handle_call({:release, restarts}, _from, state),
     do: {:reply, :ok, %{disarmed(state) | latched: false, written: nil, restarts: restarts}}
+
+  # A restart's read (decision 142): the adapter read once, as an opening reads it, all it
+  # gives taken as changed, or the read's fault, which the runner answers the restart
+  # with; its poll grid is kept.
+  def handle_call(:reread, _from, state),
+    do: read_again(adapted(:read, [state.adapter], state), state)
 
   @impl GenServer
   def handle_cast({:refresh, _deadline, _at}, %{latched: true} = state), do: {:noreply, state}
@@ -186,6 +197,13 @@ defmodule Logex.Runner.Device do
   end
 
   defp first_read({:fault, cause, _adapter}, state), do: {:stop, :normal, {:error, cause}, state}
+
+  defp read_again({:ok, values, adapter}, state),
+    do:
+      {:reply, {:ok, values}, %{state | adapter: adapter, image: Map.merge(state.image, values)}}
+
+  defp read_again({:fault, cause, adapter}, state),
+    do: {:reply, {:fault, cause}, %{state | adapter: adapter}}
 
   # A poll's read: what changed passed on and the outputs written again, or the fault.
   defp read({:ok, values, adapter}, state),
@@ -332,8 +350,8 @@ defmodule Logex.Runner.Device do
   # Waiting for the runner's answer, the runner's own requests answered meanwhile, so that
   # neither waits on the other (decision 124). A change the runner took is what the device
   # last passed on; one it refused, a value that does not fit or an address that is no
-  # input point's (decision 114), is not, so that the next read passes it on again and a
-  # device that goes on giving it trips the runner again once it is restarted.
+  # input point's (decision 114), is not, so that the next read passes it on again; a
+  # restart reads the device whole (decision 142).
   defp awaiting(ref, changes, state) do
     receive do
       {^ref, :ok} ->

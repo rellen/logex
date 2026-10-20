@@ -1590,6 +1590,8 @@ defmodule Logex.RuntimeTest do
                refresh: 3,
                release: 2,
                release: 3,
+               reread: 1,
+               reread: 2,
                start_link: 1,
                terminate: 2,
                write: 2,

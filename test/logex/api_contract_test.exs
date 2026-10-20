@@ -8062,7 +8062,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :stuck_small,
     :restart_cold,
     :restart_warm,
-    :restart_refused,
+    :restart_init_refused,
+    :restart_read_refused,
     :restart_running,
     :get_mistake,
     :crash,
@@ -8698,42 +8699,64 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   # ---- a restart -------------------------------------------------------------------------
 
-  # A tripped runner restarted, :cold or :warm (decision 113): every device that went down
-  # opened again, one now and then refusing to open, which leaves the runner tripped with
-  # its first reason, every device that answers written 0 once more (decision 136). The
-  # device's own reason is the restart's, whatever it is.
+  # A tripped runner restarted, :cold or :warm (decision 113): every device read once, in
+  # device-name order, as a start reads them (decision 142), each that went down opened
+  # again, one now and then refusing to open, or one up giving a read that fails, which
+  # leaves the runner tripped with its first reason, every device that answers written 0
+  # once more (decision 136). The device's own reason is the restart's, whatever it is.
   defp restart(w) do
     mode = pick([:cold, :warm])
     down = Enum.sort(MapSet.to_list(w.down))
-    refuse = down != [] and :rand.uniform(3) == 1
+    up = for name <- Enum.sort(Map.keys(w.sims)), Enum.all?(down, &(&1 > name)), do: name
 
-    case refuse do
-      true ->
-        [device | _] = down
-        reason = pick([:refused, :unplugged, {:no_route, :rand.uniform(9)}])
-        Sim.fail(w.sims[device], :init, {:error, reason})
-        before = writes(w)
-        assert Runner.restart(w.runner, mode) == {:error, {:io_init, device, reason}}
-        reach(:restart_refused, true)
-        w = consumed(w)
+    refusal =
+      case {down != [] and :rand.uniform(3) == 1, up != [] and :rand.uniform(4) == 1} do
+        {true, _} ->
+          {:init, hd(down), pick([:refused, :unplugged, {:no_route, :rand.uniform(9)}])}
 
-        for {name, sim} <- w.sims, not MapSet.member?(w.down, name) do
-          zeros = Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
-          assert Enum.drop(Sim.writes(sim), length(before[name])) == [zeros]
-        end
+        {false, true} ->
+          {:read, pick(up), pick(read_hows())}
 
-        checked(%{w | zeroed: %{}})
+        {false, false} ->
+          nil
+      end
 
-      false ->
-        assert Runner.restart(w.runner, mode) == :ok
-        reach(:"restart_#{mode}", true)
-
-        # Its first round ran before it returned.
-        w = drained(w)
-        assert w.round == nil and (w.first == false or w.status == :tripped)
-        checked(consumed(w))
-    end
+    restart(refusal, mode, w)
   end
+
+  defp restart(nil, mode, w) do
+    assert Runner.restart(w.runner, mode) == :ok
+    reach(:"restart_#{mode}", true)
+
+    # Its first round ran before it returned.
+    w = drained(w)
+    assert w.round == nil and (w.first == false or w.status == :tripped)
+    checked(consumed(w))
+  end
+
+  defp restart({callback, device, how}, mode, w) do
+    before = writes(w)
+    Sim.fail(w.sims[device], callback, refusal_how(callback, how))
+
+    assert Runner.restart(w.runner, mode) ==
+             {:error, {:io_init, device, refusal_cause(callback, device, how)}}
+
+    reach(:"restart_#{callback}_refused", true)
+    w = consumed(w)
+
+    for {name, sim} <- w.sims, not MapSet.member?(w.down, name) do
+      zeros = Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
+      assert Enum.drop(Sim.writes(sim), length(before[name])) == [zeros]
+    end
+
+    checked(%{w | zeroed: %{}})
+  end
+
+  defp refusal_how(:init, reason), do: {:error, reason}
+  defp refusal_how(:read, how), do: how
+
+  defp refusal_cause(:init, _device, reason), do: reason
+  defp refusal_cause(:read, device, how), do: cause(device, :read, how)
 
   # ---- a crash and a fresh start ---------------------------------------------------------
 
@@ -8775,17 +8798,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     injected(pick(kinds[pick([:slow | Enum.sort(Map.keys(kinds))])]), w)
   end
 
+  # Each way `Logex.IO.Sim` fails a read, a report or a write.
+  defp read_hows,
+    do: [{:error, :eio}, :raise, :throw, :exit, {:value, [0], 2}, {:value, [7], 1}]
+
   defp injections(w) do
     devices = ["panel", "drive"]
-
-    hows = [
-      {:error, :eio},
-      :raise,
-      :throw,
-      :exit,
-      {:value, [0], 2},
-      {:value, [7], 1}
-    ]
+    hows = read_hows()
 
     [{:slow, "fast"}, {:stuck, :small}, {:stuck, :big}] ++
       optional(w.config.tasks |> Enum.find(&(&1.name == "slow")), fn _ -> {:slow, "slow"} end) ++
@@ -9297,6 +9316,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # Each trigger an unforce of all changes is its own round, reading those after it as
   # they were, forced (decision 138).
   defp unforcing(w, name), do: List.wrap(w.unforcing[name])
+
+  # A start's and a restart's first round reads every device as it is then (decision 142).
+  defp window(%{first: true}, _device, _passes, _to), do: 0
 
   defp window(w, device, passes, to),
     do: reported(w.reports[device] and not MapSet.member?(w.lossy, device), w, passes, to)

@@ -910,23 +910,27 @@ defmodule Logex.TripTest do
     end
 
     # Found by M4-6's walk: a device took a change the runner refused as passed on, so a
-    # value that does not fit, read again after a restart, was never passed on again and
-    # the runner ran on with the last value it took; and a report the runner refused lost
-    # the good change beside the bad one for good.
-    test "a device that goes on giving a value that does not fit trips the runner again " <>
-           "after each restart, and a change refused with it is passed on at the next read" do
+    # value that does not fit was never passed on again and the runner ran on with the
+    # last value it took; and a report the runner refused lost the good change beside the
+    # bad one for good. Since decision 142 a restart reads every device whole, so a card
+    # that goes on giving it leaves each restart refused, and the good change is taken by
+    # the restart's own read.
+    test "a device that goes on giving a value that does not fit refuses each restart with " <>
+           "its fault, and a change refused with it is taken once it is put right" do
       for bad <- [{:value, [0], 2}, {:value, [7], 1}] do
         %{runner: runner, clock: clock, panel: panel} = rig(configured(), poll: 10)
         cause = (bad == {:value, [0], 2} && {:bad_value, [0], 2}) || {:unknown_address, [7]}
         for _ <- 1..3, do: Sim.fail(panel, :read, bad)
+        Manual.advance(clock, 10)
+        assert Runner.status(runner).trip == {:io, "panel", cause}
 
-        for _ <- 1..3 do
-          Manual.advance(clock, 10)
+        for _ <- 1..2 do
+          assert Runner.restart(runner, :cold) == {:error, {:io_init, "panel", cause}}
           assert Runner.status(runner).trip == {:io, "panel", cause}
-          assert Runner.restart(runner, :cold) == :ok
         end
 
         # Put right, it is read as it is.
+        assert Runner.restart(runner, :cold) == :ok
         Manual.advance(clock, 10)
         assert %{status: :running} = Runner.status(runner)
         Sim.set(panel, [0], 1)
@@ -935,14 +939,13 @@ defmodule Logex.TripTest do
       end
 
       # A report the runner refuses for a value that does not fit holds a good change
-      # beside it, which the next read passes on once the runner is restarted.
-      %{runner: runner, clock: clock, panel: panel} = rig(configured(), poll: 10)
+      # beside it, which the restart's read takes before its first round.
+      %{runner: runner, panel: panel} = rig(configured(), poll: 10)
       Sim.fail(panel, :report, {:value, [1], 2_147_483_648})
       Sim.set(panel, [0], 1)
       assert Runner.status(runner).trip == {:io, "panel", {:bad_value, [1], 2_147_483_648}}
       assert Runner.get!(runner, "x") == 0
       assert Runner.restart(runner, :cold) == :ok
-      Manual.advance(clock, 10)
       assert %{status: :running} = Runner.status(runner)
       assert Runner.get!(runner, "x") == 1
     end
@@ -1742,6 +1745,140 @@ defmodule Logex.TripTest do
 
   defp b(true), do: 1
   defp b(false), do: 0
+
+  # The conveyor of a drive whose card gives its speed, a dint, the panel's x running y
+  # on the panel and z on the drive.
+  @speed """
+  task fast interval 10 priority 1
+
+  var_global x     bool at panel.i.0
+  var_global speed dint at drive.i.0
+  var_global y     bool at panel.q.0
+  var_global z     bool at drive.q.0
+
+  program r relay with fast
+    r.in  x
+    r.out y
+
+  program s relay with fast
+    s.in  x
+    s.out z
+  """
+
+  @too_fast 2_147_483_648
+
+  # The conveyor running, the drive's speed 1000, and then its card giving a speed no
+  # dint holds `bad` reads running, which trips the runner at its next read.
+  defp tripped_on_speed(extra, bad) do
+    rig = rig(configured(@speed), [poll: 10, steps: Runtime] ++ extra)
+    %{runner: runner, clock: clock, panel: panel, drive: drive} = rig
+    Sim.set(drive, [0], 1000)
+    Sim.set(panel, [0], 1)
+    Manual.advance(clock, 10)
+    assert Runner.get!(runner, "speed") == 1000
+    assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+    for _ <- 1..bad, do: Sim.fail(drive, :read, {:value, [0], @too_fast})
+    Manual.advance(clock, 10)
+    assert Runner.status(runner).trip == {:io, "drive", {:bad_value, [0], @too_fast}}
+    zeroed_once(panel, 1)
+    zeroed_once(drive, 1)
+    rig
+  end
+
+  describe "a restart reads every device before its first round (decision 142)" do
+    test "a card still giving a value that does not fit leaves the runner tripped, the " <>
+           "restart answered with its fault, cold or warm, nothing written but 0" do
+      for mode <- [:cold, :warm] do
+        %{runner: runner, clock: clock, panel: panel, drive: drive} = tripped_on_speed([], 3)
+        Runner.subscribe(runner)
+        %{rounds: rounds} = Runner.status(runner)
+        {panel_at, drive_at} = {length(Sim.writes(panel)), length(Sim.writes(drive))}
+
+        # Each restart refused, its trip kept, and every device latched again, its 0
+        # written once more (decision 136): nothing switches on.
+        for _ <- 1..2 do
+          assert Runner.restart(runner, mode) ==
+                   {:error, {:io_init, "drive", {:bad_value, [0], @too_fast}}}
+
+          assert %{status: :tripped, trip: {:io, "drive", {:bad_value, [0], @too_fast}}} =
+                   Runner.status(runner)
+        end
+
+        Manual.advance(clock, 100)
+        assert Enum.drop(Sim.writes(panel), panel_at) == [%{[0] => 0}, %{[0] => 0}]
+        assert Enum.drop(Sim.writes(drive), drive_at) == [%{[0] => 0}, %{[0] => 0}]
+        assert %{status: :tripped, rounds: ^rounds} = Runner.status(runner)
+        refute_received {Runner, ^runner, {:restart, _mode}}
+
+        # Put right, the next restart runs.
+        assert Runner.restart(runner, mode) == :ok
+        assert_received {Runner, ^runner, {:restart, ^mode}}
+        assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+      end
+    end
+
+    test "a card put right before the restart lets it run, its first round on what the " <>
+           "card gives now, cold or warm" do
+      for mode <- [:cold, :warm] do
+        %{runner: runner, panel: panel, drive: drive} = tripped_on_speed([], 1)
+
+        # Mended while tripped, and read by no poll before the restart: the restart's own
+        # read gives the first round its speed.
+        Sim.set(drive, [0], 1200)
+        assert Runner.restart(runner, mode) == :ok
+        assert %{status: :running, trip: nil} = Runner.status(runner)
+        assert Runner.get!(runner, "speed") == 1200
+        assert List.last(Sim.writes(panel)) == %{[0] => 1}
+        assert List.last(Sim.writes(drive)) == %{[0] => 1}
+      end
+    end
+
+    test "each kind of fault in a restart's read is the restart's answer, in the card's " <>
+           "own words" do
+      raised = "the simulated device \"drive\" raised in read, as fail/3 told it"
+
+      for {how, cause} <- [
+            {{:error, :eio}, {:error, :eio}},
+            {:raise, {:raised, raised}},
+            {:throw, {:thrown, {Sim, :read}}},
+            {:exit, {:exited, {Sim, :read}}},
+            {{:value, [7], 1}, {:unknown_address, [7]}}
+          ] do
+        %{runner: runner, drive: drive} = tripped_on_speed([], 1)
+        Sim.fail(drive, :read, how)
+        assert Runner.restart(runner, :cold) == {:error, {:io_init, "drive", cause}}
+        assert Runner.status(runner).trip == {:io, "drive", {:bad_value, [0], @too_fast}}
+        assert Runner.restart(runner, :cold) == :ok
+      end
+    end
+
+    test "a card hung in a restart's read is killed, the restart answered :timeout, and " <>
+           "opened again at the next restart" do
+      %{runner: runner, drive: drive} = tripped_on_speed([idle: 300], 1)
+      old = device_pid(runner, "drive")
+      Sim.fail(drive, :read, :hang)
+      assert Runner.restart(runner, :warm) == {:error, {:io_init, "drive", :timeout}}
+      refute Process.alive?(old)
+      assert Runner.status(runner).trip == {:io, "drive", {:bad_value, [0], @too_fast}}
+      assert Runner.restart(runner, :warm) == :ok
+      assert device_pid(runner, "drive") != old
+      assert Sim.outputs(drive) == %{[0] => 1}
+    end
+
+    test "the cards are read in device-name order, the first that fails the restart's " <>
+           "answer, the rest read at the next" do
+      %{runner: runner, panel: panel, drive: drive} = tripped_on_speed([], 1)
+      Sim.fail(panel, :read, {:value, [0], 2})
+      Sim.fail(drive, :read, {:error, :eio})
+      assert Runner.restart(runner, :cold) == {:error, {:io_init, "drive", {:error, :eio}}}
+
+      assert Runner.restart(runner, :cold) ==
+               {:error, {:io_init, "panel", {:bad_value, [0], 2}}}
+
+      assert Runner.restart(runner, :cold) == :ok
+      assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+    end
+  end
 
   describe "restart/2 (decision 113)" do
     test "cold and warm each release the latches, restart the resource and run the " <>

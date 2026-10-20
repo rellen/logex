@@ -5947,6 +5947,60 @@ photo-eye that counts boxes.
      maintainer, 2026-10-19), as built: it gives exactly what the same steps taken over
      the resource directly give, a second accept superseding the first (decision 66).
 
+**The maintainer's answer after M4-6's walk, 2026-10-20.** M4-6 landed with one reading
+the record left open, built as the record said, and put to the maintainer as a question
+(`PLAN.md` M4-6). The maintainer answered it on 2026-10-20 with the option recommended,
+which was then built. The plant is §4.4's: a conveyor on the panel card, its fan, its
+run lamp, and a drive whose card gives the conveyor's speed.
+
+142. **Whether a restart reads every device before its first round (Milestone 4),**
+     following decisions 113, 114 and 136. The conveyor runs, the fan with it and the
+     run lamp lit, and the drive's card starts giving a speed no dint holds. The
+     controller trips: the conveyor, the fan and the lamp go off. The operator presses
+     restart without the card mended.
+     - The restart lets every card go and runs its first round at once on the last
+       values the controller took, so the conveyor's contactor and the fan pull in and
+       the lamp lights; at the drive card's next read, within a poll period, the bad
+       value trips the controller again and everything goes off: the plant starts and
+       stops again in 10 ms, a click of the contactors, and the trip screen again;
+     - or the restart reads every card once before its first round, as a start does,
+       and one whose read fails or gives a value that does not fit leaves the controller
+       tripped with its first reason, the restart answered with that card's fault, as a
+       card that cannot be opened again answers it (decision 136): nothing switches on,
+       and the operator is told which card is at fault;
+     - or the restart is taken as in the first, but the first round's outputs are held
+       back until every card has been read once since: nothing switches on, and the
+       restart is taken and then trips again within a poll period.
+
+     IEC 61131-3 says nothing of a restart after an I/O fault. Logix (**verified**,
+     1756-PM015Q, Sept 2025, p.12), for a module set to "Major Fault On Controller If
+     Connection Fails While in Run Mode": the controller *"Must be connected to the
+     module during the Program transition to Run mode. During the Program to Run mode
+     transition, there can be a 20-second delay. During this delay, the controller makes
+     one attempt to connect to a module. If Major Fault On Controller…Run Mode is
+     selected and no connection occurs during the 20-second delay, a fault occurs because
+     at least one required connection is not established before going to Run mode. This
+     is a 3/23 type fault code"*; and in Run it *"Registers a fault if the connection is
+     dropped while in Run mode. A required I/O module connection failed, creating a 3/16
+     type fault."* A module without that setting is not waited for: *"If a module loses
+     its connection to the controller, outputs go to their configured faulted state. The
+     controller and other I/O modules continue to operate based on old data from the
+     module"* (the same page). Every device of logex's trips the runner when it fails
+     (decision 114), so each is a module with that setting, and the second option is
+     Logix's one attempt at the transition to Run.
+
+     **Taken: read cards first** (the maintainer, 2026-10-20), then built: `restart/2`
+     reads every device once, in device-name order, after every latch is released, one
+     that went down opened again and read as its opening reads it, each read checked as a
+     start's first reads are; the first that fails, an error, a raise, a throw, an exit,
+     a value that does not fit, an address that is no input point's, no answer within the
+     idle watchdog and a poll period (the device then killed and opened again at the next
+     restart) or a process gone down, leaves the runner tripped with its first reason and
+     answers `{:error, {:io_init, device, cause}}`, the one answer a restart gives a
+     device it cannot bring up, a start's too, and every device that answers is latched
+     again and written 0 once more, as decision 136 has it; otherwise every value read is
+     the first round's input, as at a start.
+
 ---
 
 ## 8. Sources, and what is unverified

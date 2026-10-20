@@ -41,8 +41,9 @@ defmodule Logex.Runner do
   - What changed since the runner last took a change of it, it passes on to the runner by
     a call, one change at a time, in order; a change the runner refuses, holding a value
     that does not fit or an address that is no input point's (an I/O fault, below), is not
-    taken, and the device passes it on again at its next read, so that one that goes on
-    giving it trips the runner again once restarted. The runner merges it into the next round's inputs, and
+    taken, and the device passes it on again at its next read, and a restart reads every
+    device whole (decision 142), so that one that goes on giving it leaves each restart
+    refused. The runner merges it into the next round's inputs, and
     a change of an event task's trigger, an input point that is a task's `single`, makes a
     round at once, each such change its own, in address order; it answers once those
     rounds have run and their outputs are written, so that `Logex.IO.Sim.set/3` returns
@@ -265,15 +266,19 @@ defmodule Logex.Runner do
 
   `restart(runner, :cold | :warm)`, `:warm` being `:cold` until `retain` lands, releases
   every latch, in device-name order, a device that does not answer within the idle
-  watchdog and a poll period killed, as one that hung while the runner was tripped; opens
-  again each device that went down, those among them, in device-name order, `{:error,
-  {:io_init, device, reason}}` for one that cannot be opened, the runner left tripped with
+  watchdog and a poll period killed, as one that hung while the runner was tripped; reads
+  every device once, in device-name order, as a start does (decision 142), opening again
+  each device that went down, those among them, and checking each value read as a start's
+  first reads are; `{:error, {:io_init, device, reason}}` for the first that cannot be
+  opened or whose read fails, an error, a raise, a throw, an exit, a value that does not
+  fit, an address that is no input point's, no answer in time (the device killed, and
+  opened again at the next restart) or a process gone down, the runner left tripped with
   its first reason and every device that answers latched again, written 0 once more, as
-  a restart that trips again is (decision 136); restarts the resource
-  (`Logex.Runtime.restart/2`), which keeps its input image and puts every other global
-  back to its initial value; sends `{:restart, mode}`; and runs the
-  first round at once, before it returns, the clock not counting the time it was
-  stopped. A runner that crashes, is killed or loses its clock is gone (decision 115):
+  a restart that trips again is (decision 136), so that nothing switches on from a card
+  still at fault; restarts the resource (`Logex.Runtime.restart/2`), which keeps its
+  input image and puts every other global back to its initial value; sends `{:restart,
+  mode}`; and runs the first round at once, on what the devices read, before it returns,
+  the clock not counting the time it was stopped. A runner that crashes, is killed or loses its clock is gone (decision 115):
   each device traps its exit and writes every output 0 once, where it had not, and closes;
   its child spec is `restart: :temporary`, so nothing starts it again, and the host starts
   a new one. A clock that goes down or fails stops it as a shutdown, `{:shutdown,
@@ -451,13 +456,17 @@ defmodule Logex.Runner do
 
   @doc """
   Starts a tripped runner again, `:cold` or `:warm`, `:warm` being `:cold` until `retain`
-  lands (decision 113): every device's latch released, each device that went down, or
-  does not answer its release, opened again, the resource restarted
+  lands (decision 113): every device's latch released, every device read once, as a
+  start reads it (decision 142), each device that went down, or does not answer its
+  release, opened again, the resource restarted
   (`Logex.Runtime.restart/2`, which keeps the input image and puts every other global
   back to its initial value), `{:restart, mode}` sent to the subscribers, and the first
-  round run at once, before it returns, the clock not counting the time it was stopped,
-  so that round's elapsed time is 0. `:ok`; a runner that is running is the host's
-  mistake (decision 133). It reads the forces file again first, as every start does
+  round run at once, on what was read, before it returns, the clock not counting the time
+  it was stopped, so that round's elapsed time is 0. `:ok`, or `{:error, {:io_init,
+  device, reason}}` for the first device, in device-name order, that cannot be opened or
+  whose read fails, the runner left tripped with its first reason and every device that
+  answers written 0 once more (decisions 136 and 142); a runner that is running is the
+  host's mistake (decision 133). It reads the forces file again first, as every start does
   (decision 127): a force it cannot take is raised here, the runner left tripped.
   """
   def restart(runner, mode), do: call(runner, {:restart, mode!(mode)})
@@ -530,8 +539,7 @@ defmodule Logex.Runner do
     do: {:noreply, requested(owed?(state), {from, request}, state)}
 
   # The device's answer: a change taken, or one refused, which the device passes on again
-  # at its next read, so that a device that goes on giving it trips the runner again once
-  # it is restarted (decision 114).
+  # at its next read (decision 114); a restart reads every device whole (decision 142).
   defp took({:ok, _changes}), do: :ok
   defp took({:fault, cause}), do: {:error, cause}
 
@@ -1616,26 +1624,53 @@ defmodule Logex.Runner do
 
   # A restart (decision 113): every latch released, a device that does not answer its
   # release killed and marked down, as one that hung or went down while the runner was
-  # tripped; every device down opened again; the resource restarted, which keeps its
-  # clock and its input image, the triggers logic writes sampled again, the anchor moved
-  # so that the time stopped is not counted, and the first round run at once.
+  # tripped; every device read once, in device-name order, as a start reads them (decision
+  # 142), one down opened again and read as its opening reads it; the resource restarted,
+  # which keeps its clock and its input image, the triggers logic writes sampled again,
+  # the anchor moved so that the time stopped is not counted, and the first round run at
+  # once.
   defp restarted(mode, state) do
     restarts = state.restarts + 1
     state = each_live(%{state | restarts: restarts}, &Device.release(&1, restarts, &2))
-    reopened(reopen(Enum.filter(state.devices, &down?(&1, state)), state), mode)
+    reopened(read_again(state.devices, state), mode)
   end
 
   defp down?({name, _pid, _points}, state), do: MapSet.member?(state.down, name)
 
-  # Each device that went down opened again, in device-name order, and read once, its
-  # values checked; the first that cannot be opened leaves the runner tripped.
-  defp reopen([], state), do: {:ok, state}
+  # Each device read once, its values checked as a start's first reads are: one up read
+  # by its process, one down opened again; the first that cannot be read or opened leaves
+  # the runner tripped, the restart answered with its reason (decisions 136 and 142).
+  defp read_again([], state), do: {:ok, state}
 
-  defp reopen([{name, _old, points} | rest], state) do
+  defp read_again([device | rest], state),
+    do: read_device(down?(device, state), device, rest, state)
+
+  defp read_device(true, {name, _old, points}, rest, state) do
     {:ok, pid} = device(name, Map.fetch!(state.bindings, name), points, state, state.restarts)
     timeout = state.idle + state.poll
     reopen_read(asked(pid, &Device.open/2, timeout), name, pid, points, rest, state)
   end
+
+  defp read_device(false, {name, pid, _points}, rest, state) do
+    timeout = state.idle + state.poll
+    reread(asked(pid, &Device.reread/2, timeout), name, rest, state)
+  end
+
+  # A device up, read again: its values checked, and its fault, or no answer in time or
+  # its process gone down, the restart's answer; one killed for no answer, or gone down,
+  # is marked down by its exit, which the runner traps, and so opened again at the next
+  # restart.
+  defp reread({:ok, values}, name, rest, state),
+    do: reread_checked(vetted(name, values, state), name, rest, state)
+
+  defp reread({_failed, cause}, name, _rest, state),
+    do: {{:error, {:io_init, name, cause}}, state}
+
+  defp reread_checked({:ok, changes}, _name, rest, state),
+    do: read_again(rest, merged(changes, state))
+
+  defp reread_checked({:fault, cause}, name, _rest, state),
+    do: {{:error, {:io_init, name, cause}}, state}
 
   defp reopen_read({:ok, values}, name, pid, points, rest, state),
     do: reopen_checked(vetted(name, values, state), name, pid, points, rest, state)
@@ -1646,7 +1681,7 @@ defmodule Logex.Runner do
   defp reopen_checked({:ok, changes}, name, pid, points, rest, state) do
     devices = List.keyreplace(state.devices, name, 0, {name, pid, points})
 
-    reopen(rest, %{
+    read_again(rest, %{
       merged(changes, state)
       | devices: devices,
         pids: Map.put(state.pids, name, pid),
