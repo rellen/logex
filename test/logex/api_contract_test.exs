@@ -7801,8 +7801,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     tripped after its 0. What the runner gave the core is checked too: each round's
     elapsed time is the clock's since the last round, 0 for the first after a start or a
     restart; a forced input reads its force, a reporting device's input its value now,
-    and a read device's a value it held within two poll periods, and any time passed
-    inside a step, of the round; a scheduled round comes exactly when decision 122's back
+    and a read device's a value it held within two poll periods of the round, and the
+    time passed inside steps while it was read, each pass that ended within that window
+    widening it by its own time and no more, which a test of the check's own pins; a
+    scheduled round comes exactly when decision 122's back
     to back rounds or the next periodic due time say, never before a step it waited
     behind, and none is left owed; and a force of a trigger makes its round at once, one
     that changes nothing none (decisions 120 and 138).
@@ -7851,7 +7853,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
     def cycle_steps(runtime, elapsed, inputs) do
       {test, clock} = walk()
-      send(test, {:walked, self(), {:steps, elapsed, inputs, Manual.now_ms(clock)}})
+      now = Manual.now_ms(clock)
+      inputs = Logex.ApiContractTest.RunnerWalk.delayed(test, now, inputs)
+      send(test, {:walked, self(), {:steps, elapsed, inputs, now}})
       Runtime.cycle_steps(runtime, elapsed, inputs)
     end
 
@@ -7875,7 +7879,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     defp slow([]), do: 0
 
     defp passed(_clock, 0), do: :ok
-    defp passed(clock, ms), do: Manual.pass(clock, ms)
+
+    defp passed(clock, ms) do
+      [test | _] = Process.get(:"$ancestors")
+      Logex.ApiContractTest.RunnerWalk.passing(test, clock, ms)
+    end
   end
 
   # The manual clock, every reading the runner makes passing `{test, :lag}` ms first where
@@ -7911,8 +7919,49 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     defp late([{_key, ms}]), do: Process.sleep(ms)
     defp late([]), do: :ok
 
-    defp lagged([{_key, ms}], clock) when ms > 0, do: Manual.pass(clock, ms)
+    defp lagged([{{test, :lag}, ms}], clock) when ms > 0,
+      do: Logex.ApiContractTest.RunnerWalk.passing(test, clock, ms)
+
     defp lagged(_none, _clock), do: :ok
+  end
+
+  # Time passed inside a step on the manual clock, which delivers no device's poll on the
+  # way, each pass recorded with the time it began, so that a read device's input is
+  # allowed the time passed while it was read, and no more (`passes/2`).
+  @doc false
+  def passing(test, clock, ms) do
+    :ets.insert(@table, {{test, :pass, :erlang.unique_integer()}, {Manual.now_ms(clock), ms}})
+    delaying(:ets.lookup(@table, {test, :stale}), test, ms)
+    Manual.pass(clock, ms)
+  end
+
+  # The check's own test (below): from the first time passed inside a step, a read
+  # device's change, but a trigger's or a force's, given to the core late by that time
+  # less 10 ms, as a runner that took it late would, so that it is never later than a
+  # running maximum of the time passed would allow, but later than two poll periods.
+  defp delaying([{_key, {names, poll}}], test, ms) when ms - 10 > 2 * poll + 1,
+    do: :ets.insert_new(@table, {{test, :delay}, {ms - 10, names}})
+
+  defp delaying(_stale, _test, _ms), do: true
+
+  @doc false
+  def delayed(test, now, inputs),
+    do: delayed(:ets.lookup(@table, {test, :delay}), test, now, inputs)
+
+  defp delayed([], _test, _now, inputs), do: inputs
+
+  defp delayed([{_key, {delay, names}}], test, now, inputs) do
+    {late, given} = Map.split(inputs, names)
+    held = :ets.lookup_element(@table, {test, :held}, 2, %{})
+
+    held =
+      Enum.reduce(late, held, fn {name, value}, held ->
+        Map.update(held, name, {value, now}, fn {_was, since} -> {value, since} end)
+      end)
+
+    {due, still} = Enum.split_with(held, fn {_name, {_value, since}} -> since + delay <= now end)
+    :ets.insert(@table, {{test, :held}, Map.new(still)})
+    Enum.into(for({name, {value, _since}} <- due, do: {name, value}), given)
   end
 
   # ---- the programs and the configurations -----------------------------------------------
@@ -8150,6 +8199,35 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert Process.get(:runner_reach) == MapSet.new(@runner_reach)
   end
 
+  # The walk's check of a read device's input allows the time passed inside a step while it
+  # was read, and no more: a runner that gives the core such a change late, once time has
+  # passed inside a step, by less than that time but by more than two poll periods, is
+  # caught once the time passed is behind it. A check that kept the most time ever passed
+  # would allow it for the rest of the walk.
+  @tag :tmp_dir
+  test "the walk's input check holds a read device's input to the time passed while it " <>
+         "was read",
+       %{tmp_dir: dir} do
+    programs = programs()
+    Process.put(:runner_reach, MapSet.new())
+    Process.put(:stale_mode, true)
+
+    caught =
+      Enum.find_value(1..20, fn seed ->
+        :rand.seed(:exsss, {2026, 11, seed})
+
+        try do
+          walk(programs, dir, seed, 70)
+          nil
+        rescue
+          error in ExUnit.AssertionError -> error.message
+        end
+      end)
+
+    assert is_binary(caught), "the walk's check caught no input given late"
+    assert caught =~ ~r/^(pa|pd|da) read -?\d+ at \d+, held /
+  end
+
   defp walk(programs, dir, seed, steps) do
     d = draw()
     config = configured(d, programs)
@@ -8157,6 +8235,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     test = self()
     :ets.insert(@table, {{test, :clock}, manual})
     :ets.insert(@table, {{test, :lag}, 0})
+    :ets.match_delete(@table, {{test, :pass, :_}, :_})
+    for key <- [:delay, :held, :stale], do: :ets.delete(@table, {test, key})
     reports = %{"panel" => pick([true, false]), "drive" => pick([true, false])}
     sims = Map.new(reports, fn {name, r} -> {name, sim(r, manual)} end)
     file = pick([nil, Path.join(dir, "forces-#{seed}")])
@@ -8179,7 +8259,6 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       log: [],
       fault: nil,
       down: MapSet.new(),
-      max_pass: 0,
       unforcing: %{},
       hung: %{},
       begun: 0,
@@ -8192,13 +8271,34 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     reach(:reporting, reports["panel"] or reports["drive"])
     reach(:read_only, not (reports["panel"] and reports["drive"]))
 
+    stale(Process.get(:stale_mode), test, reports, w.poll)
     w = started(w, config)
-    w = Enum.reduce(1..steps, w, fn _, w -> step(w) end)
+    w = Enum.reduce_while(1..steps, w, fn _, w -> stepped_on(step(w)) end)
     w = ended(w)
     for {_name, sim} <- sims, do: GenServer.stop(sim)
     GenServer.stop(manual)
     Enum.reverse(w.log)
   end
+
+  # The check's own test reads only the read devices' inputs that are no trigger, and
+  # ends its walk at a trip, after which a change held back would be held for as long.
+  defp stale(nil, _test, _reports, _poll), do: :ok
+
+  defp stale(true, test, reports, poll) do
+    names =
+      for {name, {device, _, _}} <- @inputs,
+          name not in ["pb", "db"],
+          not reports[device],
+          do: name
+
+    :ets.insert(@table, {{test, :stale}, {names, poll}})
+  end
+
+  defp stepped_on(%{status: :tripped} = w), do: on(Process.get(:stale_mode), w)
+  defp stepped_on(w), do: {:cont, w}
+
+  defp on(nil, w), do: {:cont, w}
+  defp on(true, w), do: {:halt, w}
 
   defp sim(reports, manual) do
     {:ok, sim} = Sim.start_link(reports: reports, clock: manual)
@@ -8311,7 +8411,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp running_step(n, w) when n <= 3, do: wait(w, :rand.uniform(26) - 1)
   defp running_step(n, w) when n <= 5, do: press(w)
-  defp running_step(6, w), do: forcing(w)
+  defp running_step(6, w), do: forcing(Process.get(:stale_mode), w)
   defp running_step(n, w) when n in [7, 11], do: editing(w)
   defp running_step(8, %{status: :running} = w), do: inject(w)
   defp running_step(9, w), do: mistaken(w)
@@ -8348,6 +8448,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp value(:dint), do: pick([0, 0, 3, 7, -4])
 
   # ---- forcing ---------------------------------------------------------------------------
+
+  # The check's own test forces nothing, a force being read exactly.
+  defp forcing(nil, w), do: forcing(w)
+  defp forcing(true, w), do: wait(w, 1)
 
   defp forcing(%{file: nil} = w) do
     {name, _} = pick(Enum.sort(@inputs))
@@ -8696,7 +8800,6 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp injected({:slow, task}, w) do
     ms = slow_ms(task, w)
     :ets.insert(@table, {{self(), :slow, task}, ms})
-    w = %{w | max_pass: max(w.max_pass, ms)}
     w = wait_for_slow(w, task, 60)
     reach(:slow_injected, true)
     checked(w)
@@ -8708,7 +8811,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     status = Runner.status(w.runner)
     :ets.insert(@table, {{self(), :lag}, 0})
     assert status.status == :running
-    w = %{w | max_pass: max(w.max_pass, 4 * lag), fault: {:watchdog, {:idle, lag}}}
+    w = %{w | fault: {:watchdog, {:idle, lag}}}
     w = consumed(w)
 
     # The time the request took passed inside it, the devices' polls on the way waiting
@@ -9175,15 +9278,17 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp missed(w, _target), do: w
 
   # Each input point as the round reads it: a force's value, exactly; a reporting
-  # device's as it is now; and a read device's as it was within its poll period, and any
-  # time passed inside a step, of now.
+  # device's as it is now; and a read device's as it was within two poll periods, and the
+  # time passed inside steps while it was read, of now.
   defp inputs!(w, inputs, at) do
     for {name, value} <- w.forces, do: assert(inputs[name] == value)
+
+    passes = for {_key, pass} <- :ets.match_object(@table, {{self(), :pass, :_}, :_}), do: pass
 
     for {name, {device, _address, _type}} <- @inputs, not Map.has_key?(w.forces, name) do
       value = Map.get(inputs, name, Runtime.get!(w.rt, name))
       to = min(at, Map.get(w.hung, device, at))
-      held = held(w.timeline[name], to - window(w, device), to) ++ unforcing(w, name)
+      held = held(w.timeline[name], to - window(w, device, passes, to), to) ++ unforcing(w, name)
       assert value in held, "#{name} read #{value} at #{at}, held #{inspect(held)}"
     end
   end
@@ -9192,13 +9297,23 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # they were, forced (decision 138).
   defp unforcing(w, name), do: List.wrap(w.unforcing[name])
 
-  defp window(w, device),
-    do: reported(w.reports[device] and not MapSet.member?(w.lossy, device), w)
+  defp window(w, device, passes, to),
+    do: reported(w.reports[device] and not MapSet.member?(w.lossy, device), w, passes, to)
 
-  # A read device's last read is within a poll period, or two where a read failed, and
-  # any time passed inside a step, of now.
-  defp reported(true, _w), do: 0
-  defp reported(false, w), do: 2 * w.poll + w.max_pass + 1
+  # A read device's last read is within a poll period, or two where a read failed, of
+  # now, and the time passed inside steps while it was read: each pass that ended within
+  # that window held its polls back for as long as it passed, which widens the window in
+  # turn.
+  defp reported(true, _w, _passes, _to), do: 0
+  defp reported(false, w, passes, to), do: allowed(2 * w.poll + 1, 2 * w.poll + 1, passes, to)
+
+  defp allowed(window, read, passes, to) do
+    passed = for {at, ms} <- passes, at + ms > to - window, reduce: 0, do: (sum -> sum + ms)
+    widened(read + passed, window, read, passes, to)
+  end
+
+  defp widened(window, window, _read, _passes, _to), do: window
+  defp widened(wider, _window, read, passes, to), do: allowed(wider, read, passes, to)
 
   defp held(timeline, from, to) do
     {within, before} = Enum.split_while(timeline, fn {at, _} -> at > from end)
