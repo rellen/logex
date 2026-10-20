@@ -614,7 +614,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   change at a time, answering the runner's own requests while it waits (decision 124), a
   change the runner refuses for a value that does not fit or an address that is no input
   point's not taken, so that the next read passes it on again (fix found by M4-6's walk),
-  since M4-6's eighth verification its refused point's reading dropped and the rest kept,
+  since M4-6's eighth verification its refused point's reading dropped and the rest kept
+  (decision 143),
   the device keeping each point's newest reading the runner has not taken and passing on
   what differs, a restart reading the device whole since decision 142, and each change
   carrying the count of restarts it was read under, so that one read before the runner's
@@ -784,7 +785,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   four questions answered by the maintainer the same day, decisions 138–141, and its
   sixth, M4-6, the contract walk over the runner, the same day, its question answered
   by the maintainer on 2026-10-20, decision 142, a restart that reads every device first,
-  with the record's claims of Logix checked against the manuals the same day, §8).
+  and two calls of the lead's in its verifications confirmed by the maintainer the same
+  day, a report-only reading kept across a restart, a fix within decision 142, and a
+  refused change's good points kept, decision 143, with the record's claims of Logix checked against the manuals the same day, §8).
   Read it before designing anything that names a program, schedules one, binds I/O,
   changes a running controller (§4.9, online edit, decided 2026-10-01), or runs one on
   the clock (§4.11).

@@ -29,7 +29,10 @@ the same day, its review's findings fixed the same day, four of its readings put
 maintainer and answered the same day (§4.11's landing note, decisions 138–141); and M4-6,
 the contract walk over the runner, the same day, with the fix it found (decision 114's
 note), and the question it raised answered by the maintainer on 2026-10-20 and built, a
-restart that reads every device first (decision 142).** On 2026-09-28 the
+restart that reads every device first (decision 142), and two calls of the lead's in
+its verifications confirmed by the maintainer on 2026-10-20, a report-only reading kept
+across a restart as a fix within decision 142, and a refused change's good points kept
+(decision 143).** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
 1–14 in §7 as recommended. `PLAN.md` records them: §5 the direction, M1-3, M1-5 and M1-6
@@ -5106,7 +5109,10 @@ over.
      to the maintainer, `PLAN.md` M4-6, who answered that it should, decision 142: since
      then a card still giving a bad value leaves each restart refused with its fault, the
      runner tripped and nothing switched on, and the restart's own read takes the good
-     change, so the device's not taking a refused change no longer shows in any run.)*
+     change, so the device's not taking a refused change no longer shows in any run. And
+     a change refused for one bad point keeps its other good points, passed on with the
+     device's next reading (since M4-6's eighth verification, which the maintainer
+     confirmed on 2026-10-20, decision 143).)*
 115. **After a crash (Milestone 4).** The controller software itself crashes; whichever is
      chosen, every output goes off on the way down.
      - It stays stopped until someone starts it again, as after the watchdog;
@@ -6098,8 +6104,9 @@ run lamp, and a drive whose card gives the conveyor's speed.
      the reread supersedes it only for the points it gives, and gives it with its answer
      for each point it leaves out, which the runner checks as the restart's own read, a
      bad one refusing the restart with that device's fault, a good one among what the
-     first round reads (since M4-6's seventh verification, 2026-10-20, the maintainer
-     settling it as a fix within this decision). That still lost a reading of a point the
+     first round reads (since M4-6's seventh verification, 2026-10-20, which the lead
+     treated as a bug fix within this decision, not a new policy, and the maintainer
+     confirmed on 2026-10-20). That still lost a reading of a point the
      reread leaves out three ways: a change passed on before the release and answered
      `:stale`, a report the fence dropped whole, and what a device held when a restart
      was refused, on its own reread or another device's, the zero ending the hold. So a
@@ -6111,7 +6118,43 @@ run lamp, and a drive whose card gives the conveyor's speed.
      hold passes on what was held, as a change read while tripped is. A change the
      runner refuses in a round keeps its other points in the same way, passed on at the
      device's next reading, so that only a read that gives the refused point again passes
-     it on again (since M4-6's eighth verification, 2026-10-20).
+     it on again (since M4-6's eighth verification, 2026-10-20, decision 143).
+
+**The maintainer's confirmation after M4-6's eighth verification, 2026-10-20.** Two of
+the verifications' fixes were the lead's calls, built before the maintainer was asked:
+that a report-only input's newest untaken reading survives a restart, a bad one refusing
+the restart with its card's fault and a good one going into the first round, which the
+lead treated as a bug fix within decision 142, not a new policy; and what a change the
+runner refuses for one bad point does to its other points, outside a restart. The
+maintainer confirmed both on 2026-10-20, the first in decision 142's note and the second
+recorded here. The plant is §4.4's, as for decision 142.
+
+143. **A change refused for one bad point (Milestone 4),** following decisions 114 and
+     124. The conveyor runs. The drive's card reports the conveyor's speed and its load
+     together, in one change, and the speed is a value no dint holds, the load a good
+     one. The controller trips on the bad speed (decision 114), and the operator, the
+     card still bad, looks at the screen before restarting.
+     - The good load is kept: the card's change is refused for its bad speed alone, and
+       the load goes on to the controller with the card's next reading, so that the load
+       on the screen, and the one the first round after a restart reads, is the one the
+       card last gave, not an older one;
+     - or the whole change is dropped: the controller goes on holding the load it had
+       before the change, until the card gives the load again, which a card that reports
+       only what changes may not do for as long as the load holds steady.
+
+     IEC 61131-3 says nothing of an input refused in part. Logix (**verified**,
+     1756-PM015Q, Sept 2025, p.11) holds a faulted module's input data at its last value
+     rather than zeroing it: *"If the controller loses communication with a module, data
+     from that device does not update. When this occurs, the logic acts on the data in
+     ways that may or may not be correct,"* and *"Outputs respond to the last,
+     non-faulted state of the controlling inputs."* So the controller acts on the last
+     good data a module gave; the manual says nothing of a module's data that is good in
+     part, which a Logix connection does not deliver.
+
+     **Taken: keep the good points** (the maintainer, 2026-10-20), as built since M4-6's
+     eighth verification: the device drops the refused point's reading alone and keeps
+     the rest, passed on with its next reading, so that only a reading that gives the
+     refused point again passes it on again.
 
 ---
 
@@ -6159,7 +6202,8 @@ run lamp, and a drive whose card gives the conveyor's speed.
   conventional family's I/O, forces and online edits (the PDFs current at
   `literature.rockwellautomation.com`, page numbers the printed ones):
   - *Information and Status*, 1756-PM015Q, Sept 2025: p.11 (a connection's 100 ms
-    timeout, data that does not update, the logic acting on old data), p.12 (Major Fault
+    timeout, data that does not update, the logic acting on old data, outputs
+    responding to the last non-faulted state of their inputs; decision 143), p.12 (Major Fault
     On Controller If Connection Fails While in Run Mode, its one attempt to connect
     during the Program to Run transition, faults 3/23 and 3/16, and a module's outputs
     going to their configured faulted state without it; decisions 130, 135 and 142) and

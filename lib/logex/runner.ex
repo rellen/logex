@@ -43,17 +43,17 @@ defmodule Logex.Runner do
     at a time, in order; a change the runner refuses, holding a value that does not fit
     or an address that is no input point's (an I/O fault, below), is not taken, its
     refused point's reading dropped, so that the device passes it on again at its next
-    read that gives it, and the rest passed on with its next reading, and a restart reads
-    every device whole (decision 142), so that one that goes on giving it leaves each
-    restart refused; from a restart's release until the runner has taken a device's own
-    read, the device passes nothing on, the read merged over every reading the device
-    holds untaken, one between the release and the read or one passed on before the
-    release and answered stale, so that the read supersedes it for each point it gives
-    and the rest is checked as the restart's read, one after it passed on against it,
-    and a report the device handles late, having waited on the runner meanwhile, dropped
-    for each point that read gives where it came before it; a restart refused, the
-    device passes on what it held, as a change read while tripped. The runner merges a
-    change into the next round's inputs, and
+    read that gives it, and the rest passed on with its next reading (decision 143), and
+    a restart reads every device whole (decision 142), so that one that goes on giving
+    it leaves each restart refused; from a restart's release until the runner has taken
+    a device's own read, the device passes nothing on, the read merged over every
+    reading the device holds untaken, one between the release and the read or one passed
+    on before the release and answered stale, so that the read supersedes it for each
+    point it gives and the rest is checked as the restart's read, one after it passed on
+    against it, and a report the device handles late, having waited on the runner
+    meanwhile, dropped for each point that read gives where it came before it; a restart
+    refused, the device passes on what it held, as a change read while tripped. The
+    runner merges a change into the next round's inputs, and
     a change of an event task's trigger, an input point that is a task's `single`, makes a
     round at once, each such change its own, in address order; it answers once those
     rounds have run and their outputs are written, so that `Logex.IO.Sim.set/3` returns
@@ -560,7 +560,8 @@ defmodule Logex.Runner do
     do: {:noreply, requested(owed?(state), {from, request}, state)}
 
   # The device's answer: a change taken, or one refused, which the device passes on again
-  # at its next read (decision 114); a restart reads every device whole (decision 142).
+  # at its next read (decision 114), its other points with its next reading (decision
+  # 143); a restart reads every device whole (decision 142).
   defp took({:ok, _changes}), do: :ok
   defp took({:fault, cause}), do: {:error, cause}
 

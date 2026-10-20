@@ -24,7 +24,7 @@ defmodule Logex.Runner.Device do
   #   refuses, for a value that does not fit or an address that is no input point's
   #   (decision 114): the refused point's reading is dropped, so that only a reading that
   #   gives it again passes it on again, and the rest of the change is kept, passed on
-  #   with the device's next reading, since an adapter's read may give some of the points
+  #   with the device's next reading (decision 143), since an adapter's read may give some of the points
   #   and a report the rest (Logex.IO). While it waits it answers the runner's own
   #   requests to it, so that neither waits on the other.
   # - `write/2` writes the outputs a round gave, answered once the adapter has written them;
@@ -491,7 +491,8 @@ defmodule Logex.Runner.Device do
   # neither waits on the other (decision 124). A change the runner took is what the device
   # last passed on; one it refused, a value that does not fit or an address that is no
   # input point's (decision 114), is not, its refused point's reading dropped, so that only
-  # a read that gives it again passes it on again, and the rest held for the next reading;
+  # a read that gives it again passes it on again, and the rest held for the next reading
+  # (decision 143);
   # and one read before the runner's last restart, `:stale`, is taken by neither, its
   # readings given with the restart's read already, or passed on after a refused
   # restart's zero (decision 142).

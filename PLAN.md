@@ -37,7 +37,10 @@ the same day, decisions 138 to 141, the second with the option recommended, then
 (§3, M4-5); and its sixth, M4-6, the contract walk over the runner, the same day, with a
 fix to the devices it found and one question put to the maintainer, its review's
 findings fixed on 2026-10-20, and the maintainer's answer the same day, a restart that
-reads every device first, decision 142, then built (§3, M4-6).
+reads every device first, decision 142, then built (§3, M4-6), and the maintainer's
+confirmation the same day of two calls the lead made in its verifications, a report-only
+reading kept across a restart, a fix within decision 142, and a refused change's good
+points kept, decision 143.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -4108,8 +4111,9 @@ and M4-7 the documents.
   device dropped every reading between its release and its reread, safe only for the
   points the reread gives; `Logex.IO`'s `read/1` gives some or all of a device's points,
   so a report of a point the adapter's read leaves out, arriving in that window, was lost
-  for good, the input wrong until that point was reported again. The maintainer settled
-  it as a fix within decision 142, not a new policy: a device now holds every reading
+  for good, the input wrong until that point was reported again. The lead treated it as a
+  bug fix within decision 142, not a new policy, which the maintainer confirmed on
+  2026-10-20: a device now holds every reading
   from its release, merged, and its reread answers with the read merged over them, so
   the read supersedes a reading for each point it gives, and each point it leaves out is
   given with its answer, which the runner checks as the restart's own read, a bad one
@@ -4144,7 +4148,8 @@ and M4-7 the documents.
   cause, `Device.refused/2`, the refused point's reading dropped and the rest held; a
   zero that ends a hold passes on what was held; and a change refused in a round keeps
   its other points, passed on at the next reading, only a read that gives the refused
-  point passing it on again. `trip_test.exs` pins the three losses (the stale change now
+  point passing it on again, a call of the lead's that the maintainer confirmed on
+  2026-10-20, decision 143. `trip_test.exs` pins the three losses (the stale change now
   given with the read, reports handled late against a reread of none or one of their
   points, a restart refused on another device with and without a stale change, a bad
   report in the window now keeping its good point) and the refused change's rest; the
@@ -4161,6 +4166,18 @@ and M4-7 the documents.
   the zero's message, checked against a hold since, was green, equivalent, since that
   message comes before any later release, and is now one clause. 1558 tests pass on
   Elixir 1.20.4 (9 of them doctests), up from 1554.
+
+  **The lead's two calls, confirmed** (2026-10-20): the maintainer confirmed both calls
+  the lead made in the verifications above, each already built: a report-only input's
+  newest untaken reading surviving a restart, a bad one refusing it with its card's
+  fault and a good one going into the first round, a bug fix within decision 142; and,
+  outside a restart, a change refused for one bad point keeping its other good points,
+  passed on with the device's next reading, recorded as decision 143
+  (`docs/organisation.md` §7). No code changed. The contract walk, whole, under the seed
+  families {2026, 10}, {2027, 3}, {2029, 1}, {2031, 7} and {2033, 12}: 14 tests of 14
+  pass in each, the runner walk's reach whole in 2026 and 2033 and missing only
+  `:next_due_from_step` in the other three, as in the runs before it. 1558 tests
+  pass on Elixir 1.20.4 (9 of them doctests), unchanged.
 
   **The record's claims of Logix, checked** (2026-10-20, against the manuals' current
   PDFs, `docs/organisation.md` §8): verified, outputs sent at the RPI (1756-UM058L
