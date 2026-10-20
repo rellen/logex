@@ -7781,7 +7781,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   file, restarts, cold and warm, one now and then refused by a device that cannot be
   opened, and injected faults: a task's step slow by about its watchdog or the continuous
   task's, a host's request slower than the idle watchdog, the runner stuck for less than
-  its idle watchdog or for longer than its devices' heartbeat, a device killed or hung,
+  its idle watchdog or for longer than its devices' heartbeat, a device killed, or hung in
+  half the walks, each hang costing a real-time wait,
   and a device's read, report or write failing in each way `Logex.IO.Sim` acts out, a
   value that does not fit and an address that is no input point's among them.
 
@@ -7817,8 +7818,14 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   The walk repeats exactly from fresh processes, and asserts its reach: every event kind,
   every trip reason but `{:internal, message}`, which the host contract makes unreachable
   from a walk and `trip_test.exs` reaches through the seam, and each kind of round, step,
-  fault and mistake. No step reads the real clock; a hung device costs one wait of its
-  deadline in real time, the idle watchdog and a poll period, under 90 ms.
+  fault and mistake. No step reads the real clock, but the runner's waits for its devices
+  are in real time (decision 125): an open or a close waits for the idle watchdog and a
+  poll period, so the walk draws an idle watchdog of 300 or 400 ms, which a device's open
+  made late by 150 ms, as on a loaded machine, now and then at a start, must not trip,
+  and a hung device costs one such wait or less; and a round's write waits for what is left of
+  its step's deadline on the manual clock, its task's watchdog and a poll period less the
+  time a slow step passed, so a step slow by its watchdog exactly leaves its write a poll
+  period, 3 to 8 ms, of real time.
   """
   use ExUnit.Case, async: true
 
@@ -7873,7 +7880,10 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   # The manual clock, every reading the runner makes passing `{test, :lag}` ms first where
   # the walk has set it: a host's request that takes that long, for the idle watchdog.
-  # A device's readings, made in its own process, pass nothing.
+  # A device's readings, made in its own process, pass nothing; but where the walk has set
+  # `{test, :late}`, the first a device makes, inside its open, sleeps that many ms in real
+  # time first, once, as a loaded machine is late, which the runner's real-time wait for
+  # an open, the idle watchdog and a poll period, must cover.
   defmodule Lagged do
     @behaviour Logex.Runner.Clock
     @table :logex_runner_walk
@@ -7893,7 +7903,13 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     defp lag({Logex.Runner, :init, 1}, clock, test),
       do: lagged(:ets.lookup(@table, {test, :lag}), clock)
 
+    defp lag({Logex.Runner.Device, :init, 1}, _clock, test),
+      do: late(:ets.take(@table, {test, :late}))
+
     defp lag(_other, _clock, _test), do: :ok
+
+    defp late([{_key, ms}]), do: Process.sleep(ms)
+    defp late([]), do: :ok
 
     defp lagged([{_key, ms}], clock) when ms > 0, do: Manual.pass(clock, ms)
     defp lagged(_none, _clock), do: :ok
@@ -8000,7 +8016,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :restart_refused,
     :restart_running,
     :get_mistake,
-    :crash
+    :crash,
+    :late_open
   ]
 
   @paths ~w(pa pb pd da db qa qn qb qc cm cs g r1.out c1.n d1.q c2.n c3.n nothing)
@@ -8109,7 +8126,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     :ok
   end
 
-  # At 30 walks of 70 steps every atom is reached at this seed, in about 8 s beside the
+  # At 30 walks of 70 steps every atom is reached at this seed, in about 7 s beside the
   # suite's other modules. Over 30 other seed families every walk passed, and 21 reached
   # every atom, the rest missing one or two, an interval cut a while after the last round
   # (decision 139), a round's trip or a forced trigger, each rare by its nature.
@@ -8154,8 +8171,9 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       sims: sims,
       file: file,
       poll: pick([3, 5, 8]),
-      idle: pick([60, 80]),
+      idle: pick([300, 400]),
       overhead: pick([10, 20, 50, 90]),
+      hangs: pick([true, false]),
       forces: %{},
       timeline: Map.new(@inputs, fn {name, _} -> {name, [{0, 0}]} end),
       log: [],
@@ -8190,6 +8208,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   # A runner started on the configuration, its first round run at once before it returns,
   # and the walk subscribed to every kind of event.
   defp started(w, config) do
+    late = late_open()
+
     {:ok, runner} =
       Runner.start_link(
         configuration: config,
@@ -8202,6 +8222,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
         steps: Walked
       )
 
+    assert :ets.lookup(@table, {self(), :late}) == []
+    reach(:late_open, late)
     :ok = Runner.subscribe(runner, [:overlap, :fault, :trip, :restart, :edit, :ran, :round])
     rt = Runtime.start(config)
 
@@ -8234,6 +8256,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     w = consumed(w)
     w = round_ended(w, w.round.outputs)
     checked(%{w | subscribed: true})
+  end
+
+  # Now and then the first device opened is late, by more than an idle watchdog of 60 or
+  # 80 ms and a poll period would cover and by less than the walk's 300 or 400: a loaded
+  # machine, which must trip nothing, the runner waiting for an open in real time.
+  defp late_open do
+    late = :rand.uniform(6) == 1
+    late && :ets.insert(@table, {{self(), :late}, 150})
+    late
   end
 
   defp ended(w) do
@@ -8654,7 +8685,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       optional(continuous(w.config), &{:slow, &1}) ++
       optional(not untimed?(w.config), fn _ -> {:idle} end) ++
       for(device <- devices, do: {:kill, device}) ++
-      for(device <- devices, do: {:hang, device}) ++
+      for(device <- devices, w.hangs, do: {:hang, device}) ++
       for(device <- devices, how <- hows, do: {:read, device, how}) ++
       for(device <- devices, how <- Enum.take(hows, 4), do: {:write, device, how}) ++
       for(device <- devices, w.reports[device], how <- hows, do: {:report, device, how})
