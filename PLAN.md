@@ -4030,6 +4030,36 @@ and M4-7 the documents.
   families `{2027, 3}` and `{2031, 7}` that found the first, passes all 30 walks. 1542
   tests pass on Elixir 1.20.4 (9 of them doctests), up from 1538.
 
+  **Decision 142, verified again** (2026-10-20, M4-6's fourth verification): the count
+  of restarts a change carries did not close the window it was for. A device heard the
+  new count at its release, and the runner releases every device before it reads any
+  again, so a reading a device took while the runner read the devices before it carried
+  the new count, waited behind the restart and was taken after it, over the device's own
+  newer reread: a bad one tripped the runner just after the restart answered `:ok`, on
+  the manual clock and the real one. And a poll a device handled between its reread's
+  answer and `taken/2` was compared against the image from before the restart, so a
+  reading that differed only from the reread was lost. Now, from its release until the
+  runner has taken its reread, a device passes nothing on, by a poll or a report: a
+  reading before its reread is dropped, older than it, and one after it held, merged
+  with any other, and passed on against the image the reread leaves once `taken/2`
+  comes; a zero, a refused restart's, ends the hold. `trip_test.exs` pins each repro, a
+  bad and an older reading in that window by a poll and by a report, on the manual
+  clock and the real one, a reading between the reread and its taking, two of some
+  points each merged, a restart's read of some points keeping the rest of the device's
+  image with an adapter that reads some (so that `taken/2` replacing the image, which
+  the paragraph above found equivalent with `Logex.IO.Sim`, is red), and a device whose
+  restart is refused passing its changes on while tripped. README's "On the clock" now
+  prints the status fields as a keyword list in a fixed order, the run repeated ten
+  times from a built tree, every output the same. Its mutation table, each applied alone
+  in a copy, the full suite judged by its exit code, every one red, and only by the new
+  tests: the whole fix reverted (three tests); a reading before the reread passed on
+  (two); a reading after it passed on at once, against the old image (one); `taken/2`
+  replacing the image (one, the partial adapter's); a zero not ending the hold (one);
+  `taken/2` passing nothing held (two); held readings replaced rather than merged (one);
+  a report passed on unheld (one); a poll passed on unheld (three); and a release that
+  starts no hold (two). 1548 tests pass on Elixir 1.20.4 (9 of them doctests), up from
+  1542.
+
   **The record's claims of Logix, checked** (2026-10-20, against the manuals' current
   PDFs, `docs/organisation.md` §8): verified, outputs sent at the RPI (1756-UM058L
   pp.24–25, decisions 130 and 136), an output module's configured fault state on a

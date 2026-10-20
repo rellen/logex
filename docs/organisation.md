@@ -6079,7 +6079,13 @@ run lamp, and a drive whose card gives the conveyor's speed.
      it, is stale, taken as nothing: each change carries the count of restarts it was
      read under, as a notice does, so that a reading from before the restart trips
      nothing after one answered `:ok` and overwrites nothing the restart's read gave
-     (since M4-6's third verification, 2026-10-20).
+     (since M4-6's third verification, 2026-10-20). The count alone did not close it: a
+     device heard the new count at its release, which comes before every device's
+     reread, so a reading it took while the runner read the devices before it carried
+     the new count and was taken after the restart. So from its release until the runner
+     has taken its reread a device passes nothing on, a reading from before its reread
+     dropped and one after it held and passed on against the image the reread leaves
+     (since M4-6's fourth verification, 2026-10-20).
 
 ---
 

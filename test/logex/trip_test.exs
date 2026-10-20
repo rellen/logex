@@ -224,6 +224,25 @@ defmodule Logex.TripTest do
     def write(_values, state), do: {:ok, state}
   end
 
+  # An adapter over an Agent, `agent:`, holding `inputs` and `next`: each read gives the
+  # next of `next`, some points or all, and once none is left the inputs.
+  defmodule Partial do
+    @behaviour Logex.IO
+
+    @impl true
+    def init(_device, _points, opts), do: {:ok, Keyword.fetch!(opts, :agent)}
+
+    @impl true
+    def read(agent),
+      do: {:ok, Agent.get_and_update(agent, &partial/1), agent}
+
+    defp partial(%{next: [values | rest]} = state), do: {values, %{state | next: rest}}
+    defp partial(%{inputs: inputs, next: []} = state), do: {inputs, state}
+
+    @impl true
+    def write(_values, agent), do: {:ok, agent}
+  end
+
   setup_all do
     :ets.new(__MODULE__, [:named_table, :public, :set])
     :ok
@@ -1944,6 +1963,214 @@ defmodule Logex.TripTest do
       end
     end
 
+    # Found by M4-6's fourth verification: a device released heard the restart's count
+    # at once, so a reading it took between its release and its own reread, while the
+    # runner read the devices before it, was passed on as the restart's own, taken after
+    # the restart over what its reread read: a bad one tripped the runner just after the
+    # restart answered :ok.
+    test "a change read between a device's release and its reread is never passed on: " <>
+           "a bad one trips nothing, an older one overwrites nothing" do
+      for how <- [:poll, :report], window <- [2, 0] do
+        %{runner: runner, panel: panel, drive: drive} = tripped_on_speed([idle: 5000], 1)
+        panel_pid = device_pid(runner, "panel")
+        next = :sys.get_state(panel_pid).next
+        reads = Sim.reads(panel)
+
+        # The drive, read first, held inside its reread's read, the panel released.
+        :sys.suspend(drive)
+        restart = Task.async(fn -> Runner.restart(runner, :cold) end)
+        called(drive)
+
+        case how do
+          :poll ->
+            Sim.fail(panel, :read, {:value, [0], window})
+            send(panel_pid, {Logex.Runner.Device, :poll, next})
+            read_since(panel, reads)
+
+          :report ->
+            Sim.fail(panel, :report, {:value, [0], window})
+            report = Task.async(fn -> Sim.set(panel, [5], 1) end)
+            reported_or_passed(report, runner)
+        end
+
+        :sys.resume(drive)
+        assert Task.await(restart) == :ok
+        :sys.get_state(panel_pid)
+        assert %{status: :running, trip: nil} = Runner.status(runner)
+        assert Runner.get!(runner, "x") == 1
+        assert :sys.get_state(panel_pid).image[[0]] == 1
+        assert {Sim.outputs(panel), Sim.outputs(drive)} == {%{[0] => 1}, %{[0] => 1}}
+      end
+    end
+
+    test "on the real clock, a bad reading of a device released while the one before " <>
+           "it is read again trips nothing" do
+      {:ok, panel} = Sim.start_link()
+      {:ok, drive} = Sim.start_link()
+      Sim.set(drive, [0], 1000)
+      Sim.set(panel, [0], 1)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(@speed),
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Logex.Runner.Clock.Monotonic, nil},
+          poll: 10
+        )
+
+      Sim.fail(panel, :read, {:value, [0], 2})
+      tripped(runner, 0)
+      assert Runner.status(runner).trip == {:io, "panel", {:bad_value, [0], 2}}
+
+      # The drive's reread sleeps 300 ms, the panel's polls going on meanwhile.
+      Sim.fail(drive, :read, {:delay, 300})
+      restart = Task.async(fn -> Runner.restart(runner, :cold) end)
+      Process.sleep(100)
+      Sim.fail(panel, :read, {:value, [0], 2})
+      assert Task.await(restart) == :ok
+      Process.sleep(30)
+      assert %{status: :running, trip: nil} = Runner.status(runner)
+      Runner.stop(runner)
+    end
+
+    test "a reading between a device's reread and its taking is passed on against the " <>
+           "reread, never lost to the image from before" do
+      %{runner: runner, panel: panel} = tripped_on_speed([idle: 5000], 1)
+      panel_pid = device_pid(runner, "panel")
+      next = :sys.get_state(panel_pid).next
+
+      # The panel's reread gives x 0, held inside its read until a poll waits behind it,
+      # the poll reading x 1 again, as the image from before the restart holds it.
+      Sim.fail(panel, :read, {:value, [0], 0})
+      :sys.suspend(panel)
+      restart = Task.async(fn -> Runner.restart(runner, :cold) end)
+      called(panel)
+      send(panel_pid, {Logex.Runner.Device, :poll, next})
+      :sys.resume(panel)
+      assert Task.await(restart) == :ok
+      :sys.get_state(panel_pid)
+
+      # The poll's x 1 taken by the runner for its next round, and the device's image.
+      assert :sys.get_state(runner).values["x"] == 1
+      assert :sys.get_state(panel_pid).image[[0]] == 1
+    end
+
+    @trigger """
+    task e single t priority 1
+
+    var_global x     bool at panel.i.0
+    var_global speed dint at drive.i.0
+    var_global t     bool at drive.i.1
+    var_global y     bool at panel.q.0
+
+    program r relay with e
+      r.in  x
+      r.out y
+    """
+
+    test "a restart's read of some points keeps the rest of the device's image: a " <>
+           "trigger read again unchanged makes no round" do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+      {:ok, agent} = Agent.start_link(fn -> %{inputs: %{[0] => 1000, [1] => 1}, next: []} end)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(@trigger),
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Partial, agent: agent}},
+          clock: {Manual, clock},
+          poll: 10
+        )
+
+      Sim.set(panel, [0], 1)
+      Manual.advance(clock, 10)
+      Sim.fail(panel, :read, {:value, [0], 7})
+      Manual.advance(clock, 10)
+      assert {:io, "panel", _} = Runner.status(runner).trip
+
+      # The restart's read of the drive gives its speed alone.
+      Agent.update(agent, &%{&1 | next: [%{[0] => 1000}]})
+      Runner.subscribe(runner, [:round])
+      assert Runner.restart(runner, :cold) == :ok
+      %{rounds: rounds} = Runner.status(runner)
+      Manual.advance(clock, 10)
+      assert %{rounds: ^rounds, trip: nil} = Runner.status(runner)
+      assert_received {Runner, ^runner, {:round, 0, _}}
+      refute_received {Runner, ^runner, {:round, _, _}}
+    end
+
+    @loads """
+    task fast interval 10 priority 1
+
+    var_global x     bool at panel.i.0
+    var_global speed dint at drive.i.0
+    var_global load  dint at drive.i.1
+    var_global y     bool at panel.q.0
+
+    program r relay with fast
+      r.in  x
+      r.out y
+    """
+
+    test "readings between a device's reread and its taking, each of some points, are " <>
+           "merged and passed on together" do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(clock: clock)
+      {:ok, agent} = Agent.start_link(fn -> %{inputs: %{[0] => 1000, [1] => 5}, next: []} end)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: configured(@loads),
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Partial, agent: agent}},
+          clock: {Manual, clock},
+          poll: 10,
+          idle: 5000
+        )
+
+      Sim.fail(panel, :read, {:value, [0], 7})
+      Manual.advance(clock, 10)
+      assert {:io, "panel", _} = Runner.status(runner).trip
+      drive_pid = device_pid(runner, "drive")
+      next = :sys.get_state(drive_pid).next
+
+      # The reread reads both points, and two polls that wait behind it one each.
+      Agent.update(agent, fn state ->
+        %{
+          state
+          | inputs: %{[0] => 1200, [1] => 7},
+            next: [%{[0] => 1100, [1] => 6}, %{[0] => 1200}, %{[1] => 7}]
+        }
+      end)
+
+      :sys.suspend(agent)
+      restart = Task.async(fn -> Runner.restart(runner, :cold) end)
+      called(agent)
+      send(drive_pid, {Logex.Runner.Device, :poll, next})
+      send(drive_pid, {Logex.Runner.Device, :poll, next + 10})
+      :sys.resume(agent)
+      assert Task.await(restart) == :ok
+      :sys.get_state(drive_pid)
+
+      assert Map.take(:sys.get_state(runner).values, ["speed", "load"]) == %{
+               "speed" => 1200,
+               "load" => 7
+             }
+
+      assert :sys.get_state(drive_pid).image == %{[0] => 1200, [1] => 7}
+    end
+
+    test "a device whose restart is refused goes on passing its changes on while tripped, " <>
+           "as after any trip" do
+      %{runner: runner, clock: clock, drive: drive} = tripped_on_speed([], 1)
+      Sim.fail(drive, :read, {:error, :eio})
+      assert Runner.restart(runner, :cold) == {:error, {:io_init, "drive", {:error, :eio}}}
+      Sim.set(drive, [0], 1300)
+      Manual.advance(clock, 10)
+      drive_pid = device_pid(runner, "drive")
+      assert :sys.get_state(drive_pid).image[[0]] == 1300
+      assert :sys.get_state(runner).values["speed"] == 1300
+    end
+
     @tag :tmp_dir
     test "a restart's read is each input point's last value from its device, which an " <>
            "unforce puts back",
@@ -2226,6 +2453,42 @@ defmodule Logex.TripTest do
   defp waited(_len, _runner), do: :ok
 
   # Waits until a device's change waits in the runner's mailbox.
+  # Waits until a sim, suspended, holds a call from its device.
+  defp called(sim), do: call_found(Process.info(sim, :messages), sim)
+
+  defp call_found({:messages, [{:"$gen_call", _, _} | _]}, _sim), do: :ok
+  defp call_found({:messages, _}, sim), do: called(sim)
+
+  # Waits until a sim has been read since it had been read `reads` times.
+  defp read_since(sim, reads), do: read_found(Sim.reads(sim) > reads, sim, reads)
+
+  defp read_found(true, _sim, _reads), do: :ok
+  defp read_found(false, sim, reads), do: read_since(sim, reads)
+
+  # Waits until a report's set is handled by its device, or its device passes a change on.
+  defp reported_or_passed(task, runner),
+    do: report_found(Task.yield(task, 1), Process.info(runner, :messages), task, runner)
+
+  defp report_found({:ok, _}, _messages, _task, _runner), do: :ok
+
+  defp report_found(nil, {:messages, messages}, task, runner),
+    do:
+      passed_found(
+        Enum.any?(messages, &match?({:"$gen_call", _, {:changes, _, _, _}}, &1)),
+        task,
+        runner
+      )
+
+  defp passed_found(true, _task, _runner), do: :ok
+  defp passed_found(false, task, runner), do: reported_or_passed(task, runner)
+
+  # Waits, on the real clock, up to a second for the runner to trip.
+  defp tripped(_runner, 1000), do: flunk("the runner did not trip")
+  defp tripped(runner, n), do: trip_found(Runner.status(runner).trip, runner, n)
+
+  defp trip_found(nil, runner, n), do: tripped(Process.sleep(1) && runner, n + 1)
+  defp trip_found(_trip, _runner, _n), do: :ok
+
   defp changes_waiting(runner),
     do: changes_waited(Process.info(runner, :messages), runner)
 

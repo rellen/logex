@@ -1678,7 +1678,7 @@ Sim.set(panel, [7], 1)                      # the e-stop, which the conveyor rea
 Manual.advance(clock, 10)
 show.("e-stop at 22   ")
 IO.inspect(for({Runner, ^runner, {:ran, "fast", i, at}} <- Process.info(self(), :messages) |> elem(1), do: {i, at}), label: "the conveyor ran")
-IO.inspect(Map.take(Runner.status(runner), [:runs, :overlaps, :latest_wake]))
+IO.inspect(for(key <- [:runs, :overlaps, :latest_wake], do: {key, Map.fetch!(Runner.status(runner), key)}))
 
 :ok = Runner.stop(runner)
 IO.inspect(Enum.take(Sim.writes(panel), -2), label: "the last two writes")
@@ -1692,11 +1692,11 @@ t=10  start pressed    rounds=11  k1=1 case_full=0  boxes=0
 t=22  three boxes      rounds=23  k1=1 case_full=1  boxes=3
 t=32  e-stop at 22     rounds=33  k1=0 case_full=1  boxes=3
 the conveyor ran: [{"c1", 30}]
-%{
-  overlaps: %{"fast" => 0, "main" => 0},
+[
   runs: %{"fast" => {0, 50}, "main" => {0, 200}},
+  overlaps: %{"fast" => 0, "main" => 0},
   latest_wake: 0
-}
+]
 the last two writes: [%{[0] => 0, [4] => 1}, %{[0] => 0, [4] => 0}]
 closed: true
 ```
