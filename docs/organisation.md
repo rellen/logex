@@ -1295,7 +1295,7 @@ rules, in order:
 | Resume | A timer T runs and F did not, timing when last run (`.en` 1, its `last` before `now`), resumes from the switch: its `last` becomes `now`, so the time no `ton` ran it is not caught up. Every `ton` stamps `last` at every scan, so within the contract a `last` before `now` says F did not run it, and the switch reads no more. *(Changed 2026-10-02 by Milestone 2's design, §4.10, M2-5: a false `cal` freezes a timer inside a block, so a `last` before `now` no longer says F did not run it. The basis becomes F's text not running the timer, and F being the program that last scanned. The top level behaves as before. Landed with M2-5, which `edit_test.exs` and OE-1's contract walk confirm unchanged at the top level.)* | `{:resumed, t, ms}` |
 | One-shots (decision 21) | Blocks an `ons` for the next scan: below | `{:ons_blocked, b, v}` |
 | Held outputs (decision 20) | Records each output no logic drives any more: below | `{:held, o, v}` |
-| Initial values (decision 29) | A bool or dint both programs declare, of one type, whose initial value (as `Program.initial_env/1` gives it) differs keeps its running value; the new one applies when a restart next starts it. Not reported where a rule above started it, nor for a var_input of the program started, whose value a restart keeps. *(From Milestone 5, decision 157: a tag of every type, an array element by element, compared exactly, `0` and `0.0` two values.)* | `{:initial_changed, n, {old, new}}` |
+| Initial values (decision 29) | A bool or dint both programs declare, of one type, whose initial value (as `Program.initial_env/1` gives it) differs keeps its running value; the new one applies when a restart next starts it. Not reported where a rule above started it, nor for a var_input of the program started, whose value a restart keeps. *(From Milestone 5, decision 157: a tag of every type, an array element by element, compared exactly as declared, `0` and `0.0` two values, so `var x real 0` edited to `var x real 0.0` is reported though both start at 0.0.)* | `{:initial_changed, n, {old, new}}` |
 | `now` and `first` | Never touched, so no switch makes a scan first | — |
 
 **One-shots (decision 21; fixes F2, F3, F7, F9).** No switch writes a storage bit: a bit
@@ -3303,7 +3303,8 @@ passes no power, IEC's ENO (decision 98), and nothing else: no fault, no event (
 `neg` into an unsigned destination is refused when the program compiles (decision 145).
 A real does not wrap: a real result beyond its type saturates (decision 150). A
 conversion from a real into an integer whose result does not fit is truncated toward
-zero and then wrapped, with no power and no fault (decisions 146 and 148). The counters
+zero and then wrapped, with no power and no fault (decisions 146 and 148), how the
+rounding meets the truncation at the range's edge put to the maintainer below. The counters
 are not arithmetic: IEC's CTU and CTD bodies stop counting at a limit (`CV < PVmax`,
 `CV > PVmin`, Ed 3 Table 45), as decision 71 has logex's do, and decision 146 names only
 decision 77, so a counter stops at its type's limit with `ov` or `un` latched, as before;
@@ -3356,7 +3357,8 @@ Any other source is refused when the program compiles, naming the conversion to 
 their types, which is exact on the BEAM, with none of C's signed and unsigned surprises;
 an integer with a real compares only where Figure 11 widens the integer into the real's
 type, and two reals by value; a bit string compares with a bit string as an unsigned
-integer (Ed 3 p.90), and with an integer only through a conversion. `move` takes the
+integer (Ed 3 p.90), and with an integer tag only through a conversion (the ninth question
+put to the maintainer below). `move` takes the
 arithmetic rule. The departure is plain and said in the `add` stanza when it lands: IEC
 computes an overloaded `INT + INT` as an INT even when stored into a DINT (Ed 3 p.70,
 Example 3), and Siemens documents the trap (`INT#1 + 50000` gives −15,535, TIA V21
@@ -3507,25 +3509,30 @@ any other an `ArgumentError` whose message a test pins; `get/2` gives a whole ar
 same shape. Size limits are a spike's to measure (a proposal: 1 to 65,536 elements in
 all); Logix's is 2 MB (RM094N p.85).
 
-**The major fault** (decisions 153 and 160, amending decisions 99 and 113). An index or
-a tag bit number out of range is a major fault. The instruction does nothing, each as
-the record states it instruction by instruction: a contact passes no power, a coil and a
+**The major fault** (decisions 153 and 160, amending decisions 99 and 113). An index or a
+tag bit number out of range is a major fault. The instruction does nothing, each as the
+record states it instruction by instruction: a contact passes no power, a coil and a
 one-shot write nothing and pass no power, a `move`, an arithmetic, a bitwise or a
 conversion instruction writes nothing and passes no power, and the rest of the rung runs
 on that power; the scan finishes. `%Logex.Fault{}` gains `severity`, `:minor` for a zero
-divisor and `:major` for the new kinds, `:index_out_of_range` and `:bit_out_of_range`,
-and the subscripts or bit number read; it is placed as decision 99 places a fault, in a
-lone instance's `state.faults` and as a cycle's `{:fault, task, instance, fault}` event
-after its scan's `{:ran, ...}`. `Logex.Runner` trips on the round's first major fault,
-before it writes the round's outputs, on decision 113's one path, every output 0 once, its
-reason `{:fault, task, instance, fault}`, so that the trip names the instance, the file,
-the line and the index; a host that drives the resource itself sees the event and
-decides. Logix raises major fault 4/20 for a subscript out of range (RM018A p.869, p.884;
-PM014O p.20) and halts logic (PM014O p.9), where logex runs the scan on: the outputs are
-not written either way, and only the state `get/2` reads after the trip differs. The
-S7-1500 goes to STOP; the S7-1200 stays in RUN with a diagnostic entry (TIA V21
-*Addressing ARRAY components*); CODESYS checks only with `CheckBounds`; no vendor clamps
-or wraps an index.
+divisor and `:major` for the new kinds, `:index_out_of_range` and `:bit_out_of_range`, and
+the subscripts or bit number read; it is placed as decision 99 places a fault, in a lone
+instance's `state.faults` and as a cycle's `{:fault, task, instance, fault}` event after
+its scan's `{:ran, ...}`. `Logex.Runner` trips on the round's first major fault at the end
+of the step that raised it, one task's run or the untimed instances' run (`cycle_step/2`,
+decision 118), as it checks a timed task's watchdog when the step is done: the step's own
+run scans every instance it holds, and none of the round's later steps runs (a reading,
+put to the maintainer below, the tenth question). It trips before it writes the round's
+outputs, on decision 113's one path, every output 0 once, its reason `{:fault, task,
+instance, fault}`, so that the trip names the instance, the file, the line and the index,
+and `get/2` reads each later task's instances as the round before left them. A host that
+drives the resource itself through `cycle/3`, which runs every due step, sees the event
+and decides. Logix raises major fault 4/20 for a subscript out of range (RM018A p.869,
+p.884; PM014O p.20) and halts logic (PM014O p.9), where logex runs the faulting step on:
+the outputs are not written either way, and only the state `get/2` reads after the trip
+differs. The S7-1500 goes to STOP; the S7-1200 stays in RUN with a diagnostic entry (TIA
+V21 *Addressing ARRAY components*); CODESYS checks only with `CheckBounds`; no vendor
+clamps or wraps an index.
 
 **I/O points** (decision 156). Every elementary scalar type may be located, and so may an
 array: `var_global temps real[8] at card.i.0` occupies `card.i.0` to `card.i.7`, in the
@@ -3552,10 +3559,15 @@ type, its dimensions and its sizes, change only with a restart, as §4.9's type 
 for every type: `boxes` from `usint` to `uint`, or `temps` from `int[8]` to `int[10]`, is
 refused at accept, in the words of §4.9's refusal. Decision 29's report of a changed
 initial value is widened to every type, a real's, a bit string's and an array's, element
-by element, and values are compared exactly, so that an initial `0` and `0.0` are two
-values, never equal under `!=` (`Logex.Edit.Plan.changed/2` guards on `[:bool, :dint]`
-today and compares with `!=`); decision 44 takes the same for a global. Logix changes an
-array's size or type offline only (RM094N p.85), and IEC says nothing of online edit.
+by element, and the declared values are compared exactly, so that an initial `0` and `0.0`
+are two values, where `!=` finds them equal (`Logex.Edit.Plan.changed/2` guards on
+`[:bool, :dint]` today and compares with `!=`): `var x real 0` edited to `var x real 0.0`
+is reported, `{:initial_changed, "x", {0, 0.0}}`, the running value kept, although a new
+instance starts at 0.0 under either (a real's zero is 0.0 in every state, a routine choice
+below), since the edit compares what the two programs declare, not what
+`Program.initial_env/1` makes of it; decision 44 takes the same for a global. Logix
+changes an array's size or type offline only (RM094N p.85), and IEC says nothing of online
+edit.
 
 **Timers and counters** (decision 158). The counters take IEC's typed variants, one for
 each integer type Ed 3 Table 45 gives a counter, INT, LINT, UDINT and ULINT, the type
@@ -3623,7 +3635,15 @@ family's names as data (a routine choice below).
 - *A counter's or timer's instruction runs every typed variant of its kind*, `ton` a
   `ton_ltime`, `ctu` a `ctu_int`, its preset judged in its instance's type and unit; over
   an instruction for each variant, `ton_ltime lt 30000000000`, twelve more mnemonics in
-  the signatures for no rule of their own.
+  the signatures for no rule of their own. Its cost: the rung does not say the unit, which
+  is the declaration's, so the same rung `ton t 2000000` is 2,000,000 ms, about 33
+  minutes, where `t` is a `ton` and 2 ms where it is a `ton_ltime`, and a declaration
+  changed from one to the other while the line is stopped compiles with every preset a
+  million times off; the warning below catches a long timer's preset that is not a whole
+  number of milliseconds, `ton t 2000` on a `ton_ltime`, and not this one, a valid preset
+  either way. The alternative passed over would say the unit on the rung, `ton_ltime t
+  2000000`, and refuse the rung whose mnemonic is not its instance's type. Each stanza and
+  the README's timer section say the unit is the instance's.
 - *A long timer's preset that is not a whole number of milliseconds is warned of*,
   "times as the next whole millisecond"; over silence.
 - *`status.[n]` lexes as one name token*, as PLAN §5 made `t1.dn` one, `QUALIFIED` grown
@@ -3642,24 +3662,36 @@ lands.**
 - An integer at a real point, from a device, a host or a force, beyond the real's range:
   refused as a bad value, or saturated as decision 150 saturates a result.
 
-**Put to the maintainer, where two answers meet** (2026-10-21). The record takes the
-reading given in each case, and changes it if the maintainer answers otherwise.
+**Put to the maintainer, where two answers meet or an answer leaves a reading open**
+(2026-10-21). The record takes the reading given in each case, and changes it if the
+maintainer answers otherwise.
 1. *Real to integer, in range and out of it* (decisions 146 and 148). A conversion rounds
-   to nearest, ties to even, and one whose result does not fit is "truncated, then
-   wrapped". Read: the rounded value is the result; where it does not fit, the real is
-   truncated toward zero instead and wrapped. So `real_to_int` of 32767.6 rounds to
-   32768, which does not fit, and truncation gives 32767, which does, so the answer is
-   32767 with no power: the rule changes which rounding applies at the edge, and a value
-   such as 40000.7 wraps as 40000, not 40001. The alternative reading rounds first and
-   wraps the rounded value, 32767.6 giving −32768.
+   to nearest, ties to even, and one whose value does not fit is "truncated, then wrapped"
+   (decision 146's follow-up). Read, in the answer's words: where the rounded value fits
+   it is the result, with power; where it does not, the real is truncated toward zero
+   instead and the truncated value wrapped, with no power. The no power is itself a
+   reading, of decision 146's rule that an instruction whose stored value is not the exact
+   one passes none, which the answer does not state for a conversion. So `real_to_int` of
+   32767.6 rounds to 32768, which does not fit, and truncates to 32767, which does: 32767,
+   with no power; 32768.4 truncates to 32768 and wraps to −32768; and 40000.7 wraps as
+   40000, to −25536, not as 40001. The cost is an edge rule neither IEC nor Logix has: the
+   rounding mode changes at the range's edge. The alternative rounds first and wraps the
+   rounded value, one rounding everywhere, 32767.6 giving −32768 and 40000.7 −25535, which
+   is what IEC's own procedure and Logix's do: Ed 3 §6.6.2.5.3 (p.79) converts a numeric
+   source by extending it to the largest type of its category, then converting to the
+   largest of the target's, LINT, which rounds, and only then to the target, and works the
+   out-of-range case on `REAL_TO_INT(70_000.4)`, whose stored value it leaves to the
+   implementer; and Logix *"rounds the fractional part and truncates the upper portion of
+   the non-fractional part"* (RM018A p.875). Both readings give 70000.4 → 4464, 70000
+   wrapped, with no power.
 2. *Bitwise on integers, and mixed types* (decisions 155 and 147). The bitwise
    instructions work on bit strings and on integers, but Figure 11 converts neither into
    the other implicitly, so `and status 16#00ff speed`, a `word` with an `int`
    destination, is refused, naming `word_to_int`. Read: both answers hold, an instruction
    being all bit strings or all integers.
 3. *Typed conversions with an overloaded truncation* (decision 148). The answer takes
-   IEC's typed `real_to_int` (Table 22 feature 1a) and `trunc_<integer>`, IEC's
-   overloaded truncation (feature 2c); IEC's typed truncation is `real_trunc_int` and
+   IEC's typed `real_to_int` (Table 22 feature 1a) and `trunc_<integer>`, IEC's overloaded
+   truncation (feature 2c); IEC's typed truncation is `real_trunc_int` and
    `lreal_trunc_int` (feature 2b), sixteen names. Read: `trunc_int`, eight names, as
    answered.
 4. *"Never hide a rounding mode inside a conversion name"* (decision 148). Read: kept,
@@ -3675,14 +3707,27 @@ reading given in each case, and changes it if the maintainer answers otherwise.
 7. *`rto_ltime`* (decision 158). The RTO is a vendor's (rule 2) and IEC has no RTO_LTIME.
    Read: fitting, IEC's suffix on the vendor's mnemonic, so taken; the alternative is no
    long retentive timer.
-8. *An initial `0` and `0.0`* (decisions 150 and 157). Decision 157 treats them as two
-   values; decision 150 writes every real as a float, so a `real` declared `0` starts at
-   0.0. Read: a real's initial value is stored as its type's value, so `var x real 0`
-   edited to `var x real 0.0` changes nothing, and the exact comparison matters where the
-   two values could otherwise meet, a plain swap's kept value among them.
-9. *"Wrap, as the vendors do", with no power* (decision 146). Logix's ladder wraps and
+8. *"Wrap, as the vendors do", with no power* (decision 146). Logix's ladder wraps and
    passes power (rung-out is rung-in, S:V set); the S7-1200 wraps with ENO 0. Read: the
    S7-1200's, no power, as answered.
+9. *A bit string compared with an integer* (decisions 147 and 155). The "Logix-friendly"
+   follow-up makes bit strings and integers interchangeable for bit access and the bitwise
+   instructions; it says nothing of a comparison, and Figure 11 widens no integer into a
+   bit string nor a bit string into an integer. Read: a comparison of a bit string with an
+   integer tag, `eq drive_status fault_code`, a `word` with an `int`, is refused, naming
+   `int_to_word` and `word_to_int`, as a `move` between them is, while a literal is judged
+   by its slot (decision 149), so `eq drive_status 16#0004` is taken; the alternative
+   compares them by value, the bit string read as the unsigned integer IEC compares bit
+   strings as (Ed 3 p.90), as two integers compare whatever their types.
+10. *When the runner trips on a major fault* (decision 153). The answer has the scan
+    finish with the instruction doing nothing and the runner trip before it writes
+    outputs; a round runs several steps, each due task's run and then the untimed
+    instances' (`cycle_step/2`, decision 118). Read: the runner trips at the end of the
+    step that raised the round's first major fault, as it checks a timed task's watchdog,
+    that step's run scanning every instance it holds and no later step running, so that
+    `get/2` reads each later task's instances as the round before left them (§4.12, "The
+    major fault"); Logix halts logic at once (PM014O p.9). The alternative runs every due
+    step of the round, as `cycle/3` does, and trips after the last, before the write.
 
 **Unverified.**
 1. CODESYS's tie rule for `REAL_TO_INT`: its page's one example, −1.5 → −2, and ABB's
@@ -4156,7 +4201,8 @@ the reasons stay with them.
     is still reported as `:input` (decision 22).* *(Widened 2026-10-21 by decision 157:
     from Milestone 5 the report is for a kept tag or member of every type, the new
     widths, the reals, the bit strings and an array, element by element, and values are
-    compared exactly, so that an initial `0` and `0.0` are two values, where
+    compared exactly, so that an initial `0` and `0.0` are two values, the declared values compared and
+    not `Program.initial_env/1`'s, which starts a real at 0.0 under either, where
     `Logex.Edit.Plan.changed/2` guards on bool and dint and compares with `!=`; decision
     44's report for a global is widened the same way.)*
 
@@ -6864,8 +6910,8 @@ recorded here. The plant is §4.4's, as for decision 142.
 design put to the maintainer, numbered as it numbered them, so that 158, put eighth, keeps
 its number, and 160 is the follow-up on a bit number held in a tag. The maintainer
 answered all of them on 2026-10-21; where an answer is not the recommendation, the
-decision gives both. The questions the record found where two answers meet are §4.12's
-"Put to the maintainer".
+decision gives both. The questions the record found where two answers meet, or an answer
+leaves a reading open, are §4.12's "Put to the maintainer".
 
 144. **What the new types are called (Milestone 5).** The programmer declares the box
      count as a small whole number, the drive's register as a 16-bit unsigned number and
@@ -7083,7 +7129,9 @@ decision gives both. The questions the record found where two answers meet are �
      **Taken: a major fault; the scan finishes with that instruction doing nothing, then
      the runner trips before it writes outputs, amending decisions 99 and 113** (the
      maintainer, 2026-10-21), as recommended. §4.12's "The major fault" gives the fault's
-     shape and the trip's reason.
+     shape and the trip's reason, and the reading put back to the maintainer, §4.12's
+     tenth question, of when in a round the runner trips: at the end of the step that
+     raised the fault, no later step of the round running.
 154. **Arrays of timers, counters and blocks, and one-shots on elements (Milestone 5).**
      Each lane has its own reject timer, `var lane_t ton[4]`, and its own one-shot, `var
      edge bool[4]`.
@@ -7156,7 +7204,10 @@ decision gives both. The questions the record found where two answers meet are �
      for a bool or a dint today, compared with `!=`, under which `0` and `0.0` are equal.
 
      **Taken: refused; decision 29's "initial value changed" widened to every type, with 0
-     and 0.0 treated as different** (the maintainer, 2026-10-21), as recommended.
+     and 0.0 treated as different** (the maintainer, 2026-10-21), as recommended. The
+     declared values are compared, so `var x real 0` edited to `var x real 0.0` is
+     reported, `{:initial_changed, "x", {0, 0.0}}`, the running value kept, although a
+     real starts at 0.0 under either (§4.12, "An online edit").
 158. **Whether timers and counters change type (Milestone 5).** A timer longer than 24.8
      days, or a box count past 2,147,483,647.
      - `.pre`, `.acc`, `.pv` and `.cv` stay `dint`, presets in milliseconds;

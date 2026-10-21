@@ -4341,9 +4341,9 @@ have up to three dimensions (151); the bit strings `byte word dword lword` come 
 located, one point an element at consecutive addresses (156); and the counters and timers
 get typed variants, IEC's `ctu_int` to `ctud_ulint` and long timers in nanoseconds (158).
 A bit number may be a tag, `status.[n]`, and one out of range trips the plant, as an index
-out of range does (160, 153). §4.12 lists nine places where two answers meet, each with
-the reading the record takes and put back to the maintainer, and three rules left open for
-the item that meets them.
+out of range does (160, 153). §4.12 lists ten readings put back to the maintainer, where
+two answers meet or an answer leaves a reading open, each with the reading the record
+takes, and three rules left open for the item that meets them.
 
 Each item lands as Milestones 3 and 4 did: its words surveyed in `docs/naming.md` first,
 before any code, each new word reserved in any case and its commit naming what programs
@@ -4393,9 +4393,9 @@ the walks' cross-type reach and the documents.
 | M5-5 | Typed counters | 158 | M5-4 | M |
 | M5-6 | Long timers in nanoseconds | 158 | M5-3 | M |
 | M5-7 | Based literals and `_` separators | 149 | M5-3 | M |
-| M5-8 | Bit strings, the bitwise instructions, literal bit access, the 76 bit-string conversions | 147, 148, 155, 156 | M5-4, M5-7 | L |
-| M5-9 | A bit number in a tag, and the major fault | 160, 153 (the fault), 99, 113 | M5-8 | L |
-| M5-10 | Reals: literals, arithmetic, faults, points, forces, the 34 real conversions, `trunc_<integer>`, `sqrt` | 147–150, 156 | M5-4, M5-7 | XL |
+| M5-8 | Bit strings, located too, the bitwise instructions, literal bit access, the 76 bit-string conversions | 147, 148, 155, 156 | M5-4, M5-7 | L |
+| M5-9 | A bit number in a tag, and the major fault, the runner tripping at the end of its step | 160, 153 (the fault), 99, 113 | M5-8 | L |
+| M5-10 | Reals: literals, arithmetic, faults, points, forces, the 34 real conversions, `trunc_<integer>`, `sqrt`, a real's bit refused | 147–150, 155, 156, 157 | M5-4, M5-7, M5-9 | XL |
 | M5-11 | Arrays of elementary types, up to three dimensions, literal subscripts | 151, 154 (bits), 157, 159 | M5-10 | XL |
 | M5-12 | Tag subscripts and the index fault | 152, 153 | M5-9, M5-11 | L |
 | M5-13 | Located arrays | 156 | M5-11 | M |
@@ -4469,58 +4469,81 @@ the walks' cross-type reach and the documents.
 - **M5-6 · Long timers in nanoseconds.** The stanzas, then `ton_ltime tof_ltime tp_ltime`
   and `rto_ltime` (decision 158, its last subject to §4.12's seventh question), run by
   `ton`, `tof`, `tp` and `rto`, their `pre` and `acc` `lint` nanoseconds, the preset on
-  the instruction in nanoseconds, 0 to 2^63−1, each scan's elapsed milliseconds counted
-  as 1,000,000 ns each, so that the resolution is a millisecond, said in each stanza, with
-  a warning for a preset that is not a whole number of milliseconds. *Done when* a
-  `ton_ltime` with a preset of 30 days in ns is done at exactly 30 days of scans and never
-  before, a preset of 1,500,000 ns is done at the 2 ms scan and warned of, each long
-  timer's rules of M3-2 hold for it from source through `call/4`, an edit resumes one by
-  its type's `times` member, an edit from `ton` to `ton_ltime` is refused, and the
+  the instruction in nanoseconds, 0 to 2^63−1, each scan's elapsed milliseconds counted as
+  1,000,000 ns each, so that the resolution is a millisecond, said in each stanza, with a
+  warning for a preset that is not a whole number of milliseconds; each stanza and
+  README's timer section say that a preset's unit is its instance's, so that one rung's
+  preset is a million times longer on a `ton` than on a `ton_ltime` (§4.12's routine
+  choice). *Done when* a `ton_ltime` with a preset of 30 days in ns is done at exactly 30
+  days of scans and never before, a preset of 1,500,000 ns is done at the 2 ms scan and
+  warned of, the one rung `ton t 2000000` is done at 2,000,000 ms with `t` a `ton` and at
+  2 ms with `t` a `ton_ltime`, a test that fails when either unit is taken for both, each
+  long timer's rules of M3-2 hold for it from source through `call/4`, an edit resumes one
+  by its type's `times` member, an edit from `ton` to `ton_ltime` is refused, and the
   contract walk's timer oracle draws them. *Size M.*
 - **M5-7 · Based literals and separators.** `16#`, `2#` and `_` (decision 149), through
   the lexer, `well_formed!/1`, the printer, the generator and curated golden sources.
   *Done when* each form is in the golden record's curated sources, an entry that held
   `1_000` or `16#…` before changes and its diff is read, `16#ffff` is 65,535 in a `uint`
   and refused in an `int`, and `8#17`, `16#-1`, `16#_ff`, `1__0`, `1_`, `_1` (a name, not
-  a number) and `1.5_` are pinned refusals or readings, each a test that fails when its
-  lexer clause is reverted. *Size M.*
+  a number) and `1.5_` are pinned refusals or readings, and Logix's suffixes `5U` and `5L`
+  pinned as B2's mistyped lexeme at their columns (decision 149, the vendors' suffixes
+  refused), each a test that fails when its lexer clause is reverted. *Size M.*
 - **M5-8 · Bit strings, the bitwise instructions and literal bit access.** The stanzas
   first: `byte word dword lword`, `and or xor not shl shr rol ror`, and the bit-string
-  conversions' family stanzas, `docs/naming.md`'s `wand` rows amended (decision 155).
-  The four types, with no arithmetic, comparing as unsigned; the eight instructions on bit
-  strings and integers alike, computed in the destination's type, operands all of one
-  kind (decision 147); the 12 conversions between bit strings and the 64 between a bit
-  string and an integer, binary transfers; and `x.3` on every integer and bit string,
-  read by a contact and written by a coil, a one-shot's storage bit and a pulse coil's two
-  bits among them, the number checked against the width when the program compiles; a
-  coil on a bit a write of its word in `Logex.Walk.writes/1`, the writer warnings and the
-  input-point refusal; a bit of a `bool` and of a real refused. *Done when* `shr` of an
-  `int` −2 by 1 gives 32,767 (zero fill), `rol` of a `byte` 2#1001_0001 by 1 gives
-  2#0010_0011, a shift by the width gives 0, a negative literal shift count is refused,
-  every width's top bit is read and written in two's complement, `add` of a `word` and
-  `and` of a `word` with an `int` destination are pinned refusals naming what to use, a
-  coil on a bit of a located input point is refused and one on a bit of a `var_external`
-  makes it a writer of its global, `ote status.3` beside `move x status` draws the
-  second-`ote` warning, an edit of a rung with `ons status.3` blocks it once, and the
-  contract walk draws bit strings, bitwise instructions and bits. The commit names what
-  `and`, `or`, `not`, `byte` and `word` break. A shift count held in a tag that is
+  conversions' family stanzas, `docs/naming.md`'s `wand` rows amended (decision 155). The
+  four types, with no arithmetic, comparing as unsigned, each declarable everywhere an
+  integer is (M5-3): a tag, a block's member, each section, `var_external` among them, a
+  global and a located point (decision 156), its value from a device, a host's
+  `put_inputs/3`, `Logex.IO.Sim` and a force an integer from 0 to 2^N−1, checked by
+  `fits?/2`, and the forces file spelling it as the integer; the eight instructions on bit
+  strings and integers alike, computed in the destination's type, operands all of one kind
+  (decision 147); a comparison of a bit string with an integer tag refused naming its
+  conversion (§4.12's ninth question); the 12 conversions between bit strings and the 64
+  between a bit string and an integer, binary transfers; and `x.3` on every integer and
+  bit string, read by a contact and written by a coil, a one-shot's storage bit and a
+  pulse coil's two bits among them, the number checked against the width when the program
+  compiles; a coil on a bit a write of its word in `Logex.Walk.writes/1`, the writer
+  warnings and the input-point refusal; a bit of a `bool` refused, and a bit of a real
+  with the reals (M5-10). *Done when* `shr` of an `int` −2 by 1 gives 32,767 (zero fill),
+  `rol` of a `byte` 2#1001_0001 by 1 gives 2#0010_0011, a shift by the width gives 0, a
+  negative literal shift count is refused, every width's top bit is read and written in
+  two's complement, `add` of a `word`, `and` of a `word` with an `int` destination and
+  `eq` of a `word` with an `int` tag are pinned refusals naming what to use, a coil on a
+  bit of a located input point is refused and one on a bit of a `var_external` makes it a
+  writer of its global, `ote status.3` beside `move x status` draws the second-`ote`
+  warning, an edit of a rung with `ons status.3` blocks it once; §4.4's plant reads the
+  drive's status as a `word` point, `var_global drive_status word at drive.i.4`, through
+  the sim, its `drive_status.3` lighting the run lamp against an oracle that knows nothing
+  of logex; 65,536, −1 and a float for that point are pinned refusals from the device (a
+  bad value that trips the runner, decision 114), a host's `put_inputs/3` and a force,
+  each in the `word`'s words; a `word` force of 65,535 reads back from the forces file
+  across a restart and a fresh start; a `bool`'s bit is a pinned refusal; and the contract
+  walk draws bit strings, their points, bitwise instructions and bits. The commit names
+  what `and`, `or`, `not`, `byte` and `word` break. A shift count held in a tag that is
   negative is §4.12's open rule, answered before this item lands. *Size L.*
 - **M5-9 · A bit number in a tag, and the major fault.** `status.[n]` (decision 160), an
   integer tag of any width, never an expression, refused on a one-shot's bit; a number
-  outside the width at run time the first major fault: `%Logex.Fault{}` gains
-  `severity`, `:minor` for a zero divisor, `:major` for `:bit_out_of_range`, with the
-  number read, decision 99's placement, and `Logex.Runner` trips on the round's first
-  major fault before its write, `{:fault, task, instance, fault}`, on decision 113's one
-  path. *Done when* the run lamp follows `drive_faults.[sel]` in §4.4's plant on the
-  manual clock against an oracle that knows nothing of logex; `sel` at 16 in a `word`
-  trips the runner with every output 0 once and nothing after, the trip naming the
-  instance, file, line and number; a lone instance's `state.faults` holds the major fault
-  and the scan ran on, the instruction doing nothing as §4.12 states it, a test per kind
-  of instruction; a rung a jump skips and a block whose `cal` is false with `sel` at 16
-  raise nothing (decision 82); `fault_test.exs` pins the severity on both kinds; every
-  host's pattern on `%Logex.Fault{}` in README and the tests is brought to the new field;
-  the runner walk reaches the new trip reason; and an element read stays within a
-  measured bound of a tag's in reductions. *Size L.*
+  outside the width at run time the first major fault: `%Logex.Fault{}` gains `severity`,
+  `:minor` for a zero divisor, `:major` for `:bit_out_of_range`, with the number read,
+  decision 99's placement, and `Logex.Runner` trips on the round's first major fault at
+  the end of the step that raised it, running no later step of the round, before its
+  write, `{:fault, task, instance, fault}`, on decision 113's one path (§4.12's "The major
+  fault" and its tenth question). *Done when* the run lamp follows `drive_faults.[sel]` in
+  §4.4's plant on the manual clock against an oracle that knows nothing of logex; `sel` at
+  16 in a `word` trips the runner with every output 0 once and nothing after, the trip
+  naming the instance, file, line and number; a round whose first due task raises the
+  fault runs none of its later steps, a later task's instance read through `get/2` after
+  the trip as the round before left it, while a second instance of the faulting task's run
+  is scanned, a test that fails when the runner runs the round's every step; a lone
+  instance's `state.faults` holds the major fault and the scan ran on, the instruction
+  doing nothing as §4.12 states it, a test per kind of instruction; a rung a jump skips
+  and a block whose `cal` is false with `sel` at 16 raise nothing (decision 82);
+  `fault_test.exs` pins the severity on both kinds; every host's pattern on
+  `%Logex.Fault{}` in README and the tests is brought to the new field; the runner walk
+  reaches the new trip reason, its model running a tripping round's steps up to the one
+  that raised it; and an element read stays within a measured bound of a tag's in
+  reductions. *Size L.*
 - **M5-10 · Reals.** A spike first, on Elixir 1.20.4 and OTP 28, throwaway: the cost of a
   destination lookup and a single-rounding write, and the shortest spelling of a single
   that reads back to it, written and tested. Then the stanzas `real` and `lreal`, the 34
@@ -4529,27 +4552,37 @@ the walks' cross-type reach and the documents.
   generator, `@required_shapes` and curated golden sources; arithmetic, comparisons and
   `move` (decision 147); decision 150's zero divisor, saturation, −0.0, subnormals and
   single rounding; a real's zero, 0.0; host, device and force values, the forces file's
-  spelling and the configuration file's `print/1` (decision 156); real points. `sqrt` of
-  a negative source, and an integer beyond a real's range at a point, are §4.12's open
+  spelling and the configuration file's `print/1` (decision 156); real points; and a bit
+  of a real, `fan_speed.3` or `fan_speed.[sel]`, refused (decision 155). `sqrt` of a
+  negative source, and an integer beyond a real's range at a point, are §4.12's open
   rules, answered before this item lands. *Done when* no float exception leaves a scan
   under a seeded walk of values near each real's limits, at zero divisors and at
   subnormals; no state, output, `get/2` answer or forces file ever holds −0.0, an
   infinity's bits or a subnormal, each pinned by a test that fails when its guard is
-  reverted (a `real` write of 3.5e38 the one that encodes an infinity silently); a literal
-  `0.0` or `-0.0` divisor and a `mod` of a real are refused at their lines; IEC's examples
-  are tests, `real_to_int` of 1.5, 2.5, −1.5, −2.5, 1.6 and 1.4 giving 2, 2, −2, −2, 2 and
-  1 and of 0.5 and 3.5 giving 0 and 4, so that a ties-away implementation, Elixir's
-  `round/1`, fails them, `trunc_int` of −1.6 giving −1, and a value outside the target
-  truncated and wrapped with no power, as §4.12's first question is answered; a `real`
-  forced or printed as `0.1` reads back exactly; a changed real initial value is reported,
-  `0` against `0.0` as decision 157 and §4.12's eighth question say; the configuration
-  file's round trip holds with reals; the contract walk's arithmetic oracle covers both
-  reals; and the fan's speed in §4.4's plant is a `real` read from the sim, against an
-  oracle that knows nothing of logex. *Size XL.*
+  reverted (a `real` write of 3.5e38 the one that encodes an infinity silently); every
+  write to a `real` rounds to the nearest single, `move 0.1 x` reading back through
+  `get/2` as 0.10000000149011612 in a `real` and 0.1 in an `lreal`, and `add 16777216 1.0
+  x` giving 16777216.0 in a `real` and 16777217.0 in an `lreal`, each failing when the
+  rounding is reverted; a literal `0.0` or `-0.0` divisor and a `mod` of a real are
+  refused at their lines; `1.`, `.5`, `1e5`, `1.5e+3` and Logix's `1.5L` are pinned
+  refusals at their columns, each failing when its lexer clause is reverted; `fan_speed.3`
+  and `fan_speed.[sel]` on a `real` and an `lreal` are pinned refusals at their lines;
+  IEC's examples are tests, `real_to_int` of 1.5, 2.5, −1.5, −2.5, 1.6 and 1.4 giving 2,
+  2, −2, −2, 2 and 1 and of 0.5 and 3.5 giving 0 and 4, so that a ties-away
+  implementation, Elixir's `round/1`, fails them, `trunc_int` of −1.6 giving −1; a value
+  outside the target is converted as §4.12's first question reads it, `real_to_int` of
+  32767.6 giving 32767, of 32768.4 −32768 and of 40000.7 −25536, each with no power, and
+  IEC's own case, 70000.4, 4464 with no power, which both readings give; a `real` forced
+  or printed as `0.1` reads back exactly; a changed real initial value is reported as
+  `:initial_changed`, `var x real 0` edited to `var x real 0.0` among them, `{0, 0.0}`,
+  the running 0.0 kept (decision 157), a test that fails when the comparison is `!=`; the
+  configuration file's round trip holds with reals; the contract walk's arithmetic oracle
+  covers both reals; and the fan's speed in §4.4's plant is a `real` read from the sim,
+  against an oracle that knows nothing of logex. *Size XL.*
 - **M5-11 · Arrays of elementary types, literal subscripts.** A spike first, throwaway:
-  the representation (a tuple, §4.12's routine choice) and the size limit, measured.
-  Then decision 151 with literal subscripts only, one to three dimensions: the syntax
-  through the front end (the two golden sources that hold `[` change, the diff read), the
+  the representation (a tuple, §4.12's routine choice) and the size limit, measured. Then
+  decision 151 with literal subscripts only, one to three dimensions: the syntax through
+  the front end (the two golden sources that hold `[` change, the diff read), the
   declaration and its initial list in the elements' order, the IR's element operand, the
   compile-time bound check, `Logex.Walk` and the warnings with a literal subscript as its
   element's path, every one-shot's storage bit and every pulse coil's two bits on an
@@ -4558,12 +4591,12 @@ the walks' cross-type reach and the documents.
   `get/2` and connection paths, a host's array input checked, unlocated array globals and
   `var_external` arrays bound exactly (decision 159). *Done when* `weights[3]` and
   `grid[1,7]` run in a program from source against an oracle that knows nothing of logex;
-  `weights[8]` in an `int[8]`, an initial list of the wrong length, a host's list of the
-  wrong length or shape and a `var_external` of another size or dimension are pinned
-  refusals; an edit of a rung with `ons edge[2]` blocks it once; growth tests in
-  reductions hold an element's read and write within a measured bound of a tag's; and the
-  contract walk draws arrays of one, two and three dimensions with literal subscripts.
-  *Size XL.*
+  `weights[8]` in an `int[8]`, a declaration of four dimensions, `var cells int[2,2,2,2]`,
+  refused at its line, an initial list of the wrong length, a host's list of the wrong
+  length or shape and a `var_external` of another size or dimension are pinned refusals;
+  an edit of a rung with `ons edge[2]` blocks it once; growth tests in reductions hold an
+  element's read and write within a measured bound of a tag's; and the contract walk draws
+  arrays of one, two and three dimensions with literal subscripts. *Size XL.*
 - **M5-12 · Tag subscripts and the index fault.** Decisions 152 and 153: a tag subscript
   of any integer width, the run-time check where the element is read or written, the
   major fault `:index_out_of_range` with the subscripts read, on M5-9's path; a write
