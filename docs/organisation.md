@@ -40,7 +40,7 @@ integer widths, signed and unsigned, overflow wrapping in every width (supersedi
 decision 77), the two reals, the bit strings and the bitwise instructions, arrays of up
 to three dimensions, located too, typed counters and long timers; the record's ten
 questions put back and its three open rules were answered by the maintainer the same day
-(decisions 161–166, and notes on the decisions they settle); nothing of it is built
+(decisions 161–167, and notes on the decisions they settle); nothing of it is built
 yet.** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
@@ -3804,7 +3804,7 @@ suffixes.
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
 | VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
-| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–166 answering the record's questions the same day; `PLAN.md` §3, Milestone 5), none built yet | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
+| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5), none built yet | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage *(arrays decided for Milestone 5, 2026-10-21, decisions 151–156; STRUCT still deferred)* | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays. *(Kept by Milestone 5, decision 158: the TIME and LTIME types and `T#` stay deferred, a preset stays a plain integer, ms for the `ton` family and ns for the long timers.)* |
@@ -6948,7 +6948,7 @@ its number, and 160 is the follow-up on a bit number held in a tag. The maintain
 answered all of them on 2026-10-21; where an answer is not the recommendation, the
 decision gives both. The questions the record found where two answers meet, or an answer
 leaves a reading open, are §4.12's "Put to the maintainer"; the maintainer answered them,
-and the three rules §4.12 left open, the same day, decisions 161–166 below and notes on
+and the three rules §4.12 left open, the same day, decisions 161–167 below and notes on
 the decisions the rest settle.
 
 144. **What the new types are called (Milestone 5).** The programmer declares the box
@@ -7430,9 +7430,8 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      a zero divisor's is, in a lone instance's `state.faults` and as a cycle's `{:fault,
      task, instance, fault}` event after its scan's `{:ran, ...}`, the plant running on.
      The source is checked before the BEAM's square root is called, so no
-     `ArithmeticError` leaves a scan. Whether a literal negative source, `sqrt -4.0 x`,
-     is refused when the program compiles, as decision 78 refuses a literal zero divisor,
-     is not answered, and `PLAN.md`'s M5-10 puts it to the maintainer before it lands.
+     `ArithmeticError` leaves a scan. A literal negative source, `sqrt -4.0 x`, is
+     refused when the program compiles (decision 167).
 165. **A shift or rotate count out of range (Milestone 5),** left open by §4.12. The
      drive's status word is shifted by `shl status n mask`, `n` an `int` tag an operator
      sets, which reaches −1, or 40 for a 16-bit `word`.
@@ -7480,6 +7479,19 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      type's words. A literal is judged otherwise: one a real slot cannot hold exactly is
      refused when the program compiles, the nearest it can named (decision 147), since
      the programmer can write the nearest and a device cannot.
+
+167. **A literal negative square root (Milestone 5),** left open by decision 164. A rung
+     says `sqrt -4.0 root`: its source is negative on every scan, so the minor fault of
+     decision 164 would be raised on every scan for as long as the program runs.
+     - Refused when the program compiles, a diagnostic at its line, as decision 78
+       refuses a literal zero divisor of `div` or `mod`;
+     - or compiled, giving 0.0, no power and `:negative_sqrt` on every scan.
+
+     IEC says nothing of a constant argument outside a function's domain; Logix's
+     verifier is not known to refuse it (unverified). *Recommended and taken: refused when
+     the program compiles, as decision 78* (the maintainer, 2026-10-21). A negative
+     source held in a tag stays decision 164's minor fault at run time; `-0.0`, which is
+     no negative number, is taken.
 
 ---
 

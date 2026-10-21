@@ -795,7 +795,7 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   checked against the manuals the same day, §8, and its seventh and last, M4-7, the
   documents, the same day, §4.5, §4.6, §5 and decision 14 annotated as landed;
   Milestone 5, data types, designed and decided on 2026-10-21, §4.12 and decisions
-  144–160, with 161–166 the maintainer's answers the same day to the record's questions
+  144–160, with 161–167 the maintainer's answers the same day to the record's questions
   put back and its open rules, its sixteen items planned in `PLAN.md` and none landed: IEC's integer widths,
   signed and unsigned, overflow wrapping in every width, which supersedes decision 77's
   saturation and changes the dint's on purpose (M5-2), the reals, the bit strings and

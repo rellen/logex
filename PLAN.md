@@ -53,7 +53,7 @@ Milestone 5, data types, was designed and decided on 2026-10-21 (§3, "Milestone
 questions and a follow-up the same day, six of them otherwise than recommended, among
 them integer overflow wrapping in every width, which supersedes decision 77; the
 record's ten questions put back to the maintainer and its three open rules were answered
-the same day (decisions 161–166, and notes on the decisions the rest settle), three of
+the same day (decisions 161–167, and notes on the decisions the rest settle), three of
 the ten otherwise than the record read them: a real too large for its integer target
 rounded and then wrapped (161), the truncations named `real_trunc_int` (162), and
 `ctu_dint`, `ctd_dint` and `ctud_dint` aliases of `ctu`, `ctd` and `ctud` (163); its
@@ -4331,7 +4331,7 @@ killed runner could be restarted.)*
 ### Milestone 5 — data types
 
 **Designed and decided 2026-10-21** (`docs/organisation.md` §4.12 and §7, decisions
-144–166; "decision N" in this section is that §7's). The maintainer asked for 1-, 2-, 4-
+144–167; "decision N" in this section is that §7's). The maintainer asked for 1-, 2-, 4-
 and 8-byte integers, how IEC and the vendors handle signed ones, 32- and 64-bit reals,
 arrays of all the others, and what else IEC and the vendors have. A design pass on
 `0c55e36` read IEC 61131-3 Ed 2 and Ed 3 in full, the conventional family's manuals,
@@ -4591,9 +4591,9 @@ the walks' cross-type reach and the documents.
   (decision 161); `sqrt` of a negative source 0.0, no power and the minor fault
   `:negative_sqrt`, decision 99's kinds grown by one (decision 164); and an integer at a
   real point stored as the nearest real, silently, only a value beyond the real's range a
-  bad value (decision 166). Whether a literal negative source, `sqrt -4.0 x`, is refused
-  when the program compiles, as decision 78 refuses a literal zero divisor, is put to the
-  maintainer before this item lands (decision 164). *Done when* no float exception leaves a scan
+  bad value (decision 166). A literal negative source, `sqrt -4.0 x`, is refused when the
+  program compiles, at its line, as decision 78 refuses a literal zero divisor (decision
+  167). *Done when* no float exception leaves a scan
   under a seeded walk of values near each real's limits, at zero divisors and at
   subnormals; no state, output, `get/2` answer or forces file ever holds −0.0, an
   infinity's bits or a subnormal, each pinned by a test that fails when its guard is
