@@ -215,6 +215,16 @@ Cite the document that had something to say.
 | Bit field distribute | **not in standard** — compose SHR + AND + OR | BTD (Source, Source bit, Dest, Dest bit, Length 1–32); BTDT adds a Target | none — word logic plus SHL/SHR | none | none direct. **NDIS/NUNI split/combine in arbitrary bit widths; DIS/UNI are the 4-bit (nibble) pair** | **defer** | conventional-set-only, five operands, and decomposes exactly into `shl` + `wand` + `wor` |
 | Array bit shift register | not in standard | BSL / BSR — **edge-triggered, CONTROL structure, one position per scan, across an array** | none | none | BSFR/BSFL, SFTR/SFTL, DSFR/DSFL | **defer** | Listed separately so `BSL` is never mistaken for `SHL`. A sequencer, not a bitwise operator |
 
+*(Amended 2026-10-21, `docs/organisation.md` decision 155: Milestone 5 takes IEC's own
+words, `and or xor not`, in place of the `wand wor wxor wnot` above, with `shl shr rol
+ror`, all of them on the bit strings `byte word dword lword` and on the integers alike.
+The row's reason, that logex's env is untyped integers, ends with the types: an
+instruction's operands are typed and its destination's type is known, which is what lets
+IEC reuse `AND`. The OR row's worry, that a bare `or` would read as a branch, does not
+arise, since `or` stands where a mnemonic stands and a branch is `(`, `|` and `)`. `shr`
+fills 0, as the row says, on an integer too. Each word still gets its stanza before its
+code, and a stanza may still change a spelling.)*
+
 ### Data movement and conversion
 
 | Concept | IEC 61131-3 | Conventional | Siemens | CODESYS | Mitsubishi | logex | Notes |
@@ -232,6 +242,25 @@ Cite the document that had something to say.
 | BCD ↔ binary | BCD_TO_** / **_TO_BCD forms | **TO_BCD** (formerly TOD), **BCD_TO** (formerly FRD); LD/FBD only | CONV with pseudo-types BCD16 / BCD32 | library | BCD/DBCD, BIN/DBIN | **`int_to_bcd` / `bcd_to_int`** *(deferred)* | FRD read like "from decimal" but converted *from BCD*. the conventional set fixed exactly this in that sweep |
 | Real → integer rounding | TRUNC is standard. The REAL_TO_INT tie rule was **not verified** in the standard text | TRUNC (formerly TRN) — drops the fraction; no separate ROUND | ROUND = **nearest, ties to even** (`ROUND(10.5)=10`, `ROUND(11.5)=12`); TRUNC, CEIL, FLOOR | REAL_TO_INT documented as **half away from zero** — `REAL_TO_INT(-1.5) = -2` | INT/DINT rule **not verified** | **`trunc` `round` `ceil` `floor`** as separate instructions *(deferred)* | Two IEC-family systems give different answers for the same input. **Never hide a rounding mode inside a conversion name** |
 | String move | MOVE / `:=` work on STRING like any type | MOVE handles String on 5380/5480/5580; COP/CPS elsewhere | **S_MOVE** — *"to copy a string, use S_MOVE"* | `:=` | `$MOV` | **`move` — no separate instruction** | Only Siemens and Mitsubishi split strings out, for memory-model reasons logex does not have |
+
+*(Amended 2026-10-21, `docs/organisation.md` decision 148: Milestone 5 takes IEC's typed
+`<from>_to_<to>` (Ed 3 Table 22 feature 1a) for every conversion, and **keeps** the
+rounding row's principle, "Never hide a rounding mode inside a conversion name": the
+`real_to_<integer>` names round to nearest, a tie to the even neighbour, a rounding IEC
+fixes in the standard that names them (Table 22 footnote b, both editions, now read:
+`REAL_TO_INT(2.5)` = 2, `(-2.5)` = −2), so they hide no mode logex chose, and the one
+other mode taken, truncation, has its own names, `trunc_<integer>`, IEC's overloaded
+TRUNC (feature 2c), eight of them; `round`, `ceil` and `floor`, which IEC lacks, stay
+deferred, each its own name. The names are the 90 of Table 23, every ordered pair of the
+ten numeric types, of which IEC lacks none: 56 between integer types, 32 between a real
+and an integer type, and `real_to_lreal` and `lreal_to_real`; and with the bit strings
+the 12 between them (Table 24) and the 64 between a bit string and an integer type
+(Table 25), binary transfers. IEC lacks a conversion between a real and a `byte` or a
+`word`, and DWORD to LREAL and LWORD to REAL (Figure 11, "-"); logex defers those it has
+for a real and a bit pattern, `dword_to_real` and its three siblings, since a pattern may
+be an infinity or a NaN. The rounding row's CODESYS cell, "half away from zero", rests on
+one example, `REAL_TO_INT(-1.5)` = −2, which ties-to-even gives too, so it is
+**unverified**. `sqrt` lands with the reals (decision 79's note).)*
 
 ### Program control
 

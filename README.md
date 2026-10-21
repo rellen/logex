@@ -27,7 +27,8 @@ switching every output off once, with input forcing and online edits while it ru
 (`Logex.Runner`) — all of that works and is tested end to end, and a program or a
 configuration with mistakes in it gets every one reported with its file and line rather
 than an exception, a misspelt tag included. What does not exist yet: bit access, and a
-real type, which `sqrt` waits for. What logex is not, a safety controller first of all,
+real type, which `sqrt` waits for, both decided for Milestone 5 with the other data types
+(below). What logex is not, a safety controller first of all,
 is said plainly below ("What logex is not").
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
@@ -229,8 +230,20 @@ runner, `PLAN.md`'s Milestone 4 (decisions 108–143 in
 [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.11), whose only words
 in the language are a task's `watchdog` and the `continuous` task ("Watchdogs and the
 continuous task" and "Running a plant on the clock", below). Still to land:
-- **Bit access** with `.` (`word.3`).
-- **`sqrt`**, waiting for a real type. Milestone 3 (`PLAN.md` §3, decisions 67–107 in
+- **Data types**, `PLAN.md`'s Milestone 5, decided on 2026-10-21 (decisions 144–160 in
+  [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12): IEC's
+  integer widths `sint int lint usint uint udint ulint` beside `dint`; `real` and
+  `lreal`, with literals `37.5` and `1.5e3`, and `16#ff`, `2#1010` and `1_000`; the bit
+  strings `byte word dword lword` with `and or xor not shl shr rol ror`; IEC's typed
+  conversions, `real_to_int` and `trunc_int` among them; bit access `word.3` and
+  `word.[n]`; arrays `var temps real[8]`, up to three dimensions, of timers and blocks
+  too, and at I/O points; typed counters, `ctu_int` and the rest, and long timers in
+  nanoseconds, `ton_ltime`. **One rule that runs today changes:** an arithmetic result
+  past its type's limit will wrap, with no power, rather than stop at the limit, the
+  dint's included ("Arithmetic", below, shows the rule that runs until then). Each type
+  word and mnemonic becomes a reserved word, `int`, `real`, `word`, `byte`, `and`, `or`
+  and `not` among them.
+- **`sqrt`**, waiting for a real type, which Milestone 5 brings. Milestone 3 (`PLAN.md` §3, decisions 67–107 in
   [`docs/organisation.md`](docs/organisation.md) §7) has otherwise landed whole: the
   counters, the other timers, integer arithmetic, the pulse coils and the forward jump
   ("A counter", "Three more timers", "Arithmetic", "Two pulse coils" and "A forward

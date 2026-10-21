@@ -793,8 +793,15 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   day, a report-only reading kept across a restart, a fix within decision 142, and a
   refused change's good points kept, decision 143, with the record's claims of Logix
   checked against the manuals the same day, §8, and its seventh and last, M4-7, the
-  documents, the same day, §4.5, §4.6, §5 and decision 14 annotated as landed).
-  Read it before designing anything that names a program, schedules one, binds I/O,
+  documents, the same day, §4.5, §4.6, §5 and decision 14 annotated as landed;
+  Milestone 5, data types, designed and decided on 2026-10-21, §4.12 and decisions
+  144–160, its sixteen items planned in `PLAN.md` and none landed: IEC's integer widths,
+  signed and unsigned, overflow wrapping in every width, which supersedes decision 77's
+  saturation and changes the dint's on purpose (M5-2), the reals, the bit strings and
+  the bitwise instructions, a bit number in a tag, arrays of up to three dimensions, of
+  instances and located, an index or a bit number out of range a major fault that trips
+  the runner, typed counters and long timers in nanoseconds).
+  Read it before designing anything that adds a data type (§4.12), names a program, schedules one, binds I/O,
   changes a running controller (§4.9, online edit, decided 2026-10-01), or runs one on
   the clock (§4.11).
 - `docs/instruction-sets.md` — reference: IEC's LD elements and standard library by table number,

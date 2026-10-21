@@ -48,6 +48,11 @@ at most, the share and the grid with its missed periods, are met there only unde
 milestone's own rule, timing tested on the manual clock and a test on the real clock
 asserting liveness, the plant's 2 s run asserting no more rounds than milliseconds and
 nothing finer, a reading the maintainer accepted on 2026-10-20, so Milestone 4 is done.
+Milestone 5, data types, was designed and decided on 2026-10-21 (§3, "Milestone 5";
+`docs/organisation.md` §4.12 and decisions 144–160), the maintainer answering its sixteen
+questions and a follow-up the same day, six of them otherwise than recommended, among
+them integer overflow wrapping in every width, which supersedes decision 77; its sixteen
+items, M5-1 to M5-16, are planned and none has landed.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -4318,6 +4323,311 @@ after M4-1's review: "each timed task on its grid as closely as the machine allo
 not be tested, and "nothing runs again until the host restarts it" said a stopped or
 killed runner could be restarted.)*
 
+### Milestone 5 — data types
+
+**Designed and decided 2026-10-21** (`docs/organisation.md` §4.12 and §7, decisions
+144–160; "decision N" in this section is that §7's). The maintainer asked for 1-, 2-, 4-
+and 8-byte integers, how IEC and the vendors handle signed ones, 32- and 64-bit reals,
+arrays of all the others, and what else IEC and the vendors have. A design pass on
+`0c55e36` read IEC 61131-3 Ed 2 and Ed 3 in full, the conventional family's manuals,
+Siemens, CODESYS, Schneider and MatIEC, mapped where logex assumes bool and dint, and ran
+the BEAM's float behaviour on Elixir 1.20.4 / OTP 28; its review corrected eight facts
+and added decision 159. The maintainer took eleven answers as recommended and changed six:
+integer overflow wraps with no power, in every width, the dint's included, superseding
+decision 77's saturation (146); conversions take IEC's typed names, `real_to_int`, keeping
+`docs/naming.md`'s "never hide a rounding mode inside a conversion name" (148); arrays
+have up to three dimensions (151); the bit strings `byte word dword lword` come now, with
+`and or xor not shl shr rol ror` on bit strings and integers alike (155); arrays may be
+located, one point an element at consecutive addresses (156); and the counters and timers
+get typed variants, IEC's `ctu_int` to `ctud_ulint` and long timers in nanoseconds (158).
+A bit number may be a tag, `status.[n]`, and one out of range trips the plant, as an index
+out of range does (160, 153). §4.12 lists nine places where two answers meet, each with
+the reading the record takes and put back to the maintainer, and three rules left open for
+the item that meets them.
+
+Each item lands as Milestones 3 and 4 did: its words surveyed in `docs/naming.md` first,
+before any code, each new word reserved in any case and its commit naming what programs
+and configurations it breaks; a gated series, each commit gated alone by `mix format
+--check-formatted`, `mix compile --force --warnings-as-errors` in both environments and
+`mix test --warnings-as-errors`, judged by exit code on Elixir 1.20.4, with its mutation
+table in its message, every rule it adds reverted alone and the suite judged by exit
+code, every survivor given a test. Throughout:
+- **Each item extends `api_contract_test.exs`'s walks with its own rules as it lands**,
+  as every item since M1-6 has, its oracles restating each range, wrap and rounding rule
+  in Elixir without calling `Logex.Declarations`; M5-15 is only the walks' cross-type
+  reach.
+- **Each item brings README and `docs/naming.md` with it**: the syntax list, the
+  instruction table and an example whose output is real, re-run, and "What logex is not"
+  wherever it stops being true (CLAUDE.md: "Any change to the language stales it").
+- **The data API refuses what the text cannot say, and widens in the same commit as the
+  syntax** (decision 97's rule): `Logex.Tag.new!/4`, `Logex.Configuration.new!/1` and
+  `Logex.Parser.well_formed!/1`.
+- **A new syntax form** goes into `printer_test.exs`'s generator and `@required_shapes`
+  before it lands, and the golden record is regenerated only in that commit, its diff
+  read.
+- **No float exception and no bad index or bit number leaves a scan**: a host mistake is
+  an `ArgumentError` whose message a test pins, a source mistake a diagnostic.
+- **Growth is tested in reductions** where a rule walks something: an element's read and
+  write against a tag's, a per-element rule against the elements, a conversion family's
+  checks against the program.
+- **New state** states its rule across an online edit (`Logex.Program.initial_env/1`,
+  `Logex.Configuration.initial/1`, §4.9's "One rule for new state").
+
+Sizes use the design pass's key: **S** under about 30 lines of `lib/` and its
+tests, **M** 30 to 150, **L** 150 to 500, **XL** more, or a spike first.
+
+**The order** keeps every item gated by the ones before it, and every refusal naming only
+what exists: the type table first, changing nothing; the wrap next, on the one width that
+exists, so that logex never has two overflow rules; the widths with the integer conversions their refusals name, then their arithmetic; the typed counters and long
+timers, which need only the widths; the based literals, which a bit mask wants; the bit
+strings, and then the first major fault, on a bit number, before arrays need it; the
+reals; then arrays, static before run time, their points, and their instances; and last
+the walks' cross-type reach and the documents.
+
+| Item | What | Decisions | Needs | Size |
+|---|---|---|---|---|
+| M5-1 | One table of types, no behaviour changed | 144 (the table) | — | M |
+| M5-2 | The dint wraps: decision 77 superseded on purpose | 146 | M5-1 | M |
+| M5-3 | The integer widths, declared everywhere, `move` and literals by Figure 11, and the 56 integer conversions | 144, 145, 147, 148, 156, 157, 159 | M5-2 | L |
+| M5-4 | Arithmetic and comparison over every width | 145, 146, 147 | M5-3 | L |
+| M5-5 | Typed counters | 158 | M5-4 | M |
+| M5-6 | Long timers in nanoseconds | 158 | M5-3 | M |
+| M5-7 | Based literals and `_` separators | 149 | M5-3 | M |
+| M5-8 | Bit strings, the bitwise instructions, literal bit access, the 76 bit-string conversions | 147, 148, 155, 156 | M5-4, M5-7 | L |
+| M5-9 | A bit number in a tag, and the major fault | 160, 153 (the fault), 99, 113 | M5-8 | L |
+| M5-10 | Reals: literals, arithmetic, faults, points, forces, the 34 real conversions, `trunc_<integer>`, `sqrt` | 147–150, 156 | M5-4, M5-7 | XL |
+| M5-11 | Arrays of elementary types, up to three dimensions, literal subscripts | 151, 154 (bits), 157, 159 | M5-10 | XL |
+| M5-12 | Tag subscripts and the index fault | 152, 153 | M5-9, M5-11 | L |
+| M5-13 | Located arrays | 156 | M5-11 | M |
+| M5-14 | Arrays of instances | 154 | M5-12 | L |
+| M5-15 | The contract walk's cross-type reach | all | M5-14 | L |
+| M5-16 | The documents' closing pass | all | M5-15 | S |
+
+- **M5-1 · One table of types.** `Logex.Declarations` gains the type table (§4.12, "The
+  types"), with only `bool` and `dint` in it, and every range message, article, guard and
+  `fits?/2` in `lib/` reads it; `Logex.Configuration.Text` reads it for its type words and
+  its did-you-mean; `Logex.Edit.Plan.word/1` goes through the articles. *Done when* the
+  suite passes with no pinned message changed, `lib/` holds no `[:bool, :dint]` guard and
+  no hand-written "32 bits" outside the table, a test grepping for both, and each message
+  built from the table is pinned for both types. *Size M.*
+- **M5-2 · The dint wraps.** Decision 146 on the one width there is, before any other
+  lands: `add`, `sub`, `mul`, `div`, `neg` and `abs` keep a result's low 32 bits, two's
+  complement, and pass no power where the stored value is not the exact one, with no fault
+  and no event; a zero divisor is unchanged. The change is on purpose and breaks what
+  pinned the old rule, each changed in this item and named in its commit:
+  `arithmetic_test.exs`'s limits (`add`, `sub` and `mul` past either limit, a product far
+  past one, `div` of −2147483648 by −1, `neg` and `abs` of −2147483648), the M3-3
+  Done-when in `end_to_end_test.exs` (a total driven past 2147483647, its oracle's
+  `clamp`), `api_contract_test.exs`'s arithmetic oracle, the `add sub mul div neg abs`
+  stanzas' logex rows (an amendment line each, the stanzas being append-only), and README's
+  instruction table and "Arithmetic", the wild meter's run re-run and its bullet saying
+  that the total now wraps and that a lamp after `add` is off for the one scan, so a
+  program that must remember latches it. *Done when* each of those pins the wrap, a test
+  of each instruction at each limit fails when the wrap is reverted to the old
+  saturation, the fill valve's oracle in `end_to_end_test.exs` wraps where it clamped,
+  decision 77's note says the rule changed with this commit, and no other behaviour
+  changes. *Size M.*
+- **M5-3 · The integer widths.** The stanzas first, `sint int lint usint uint udint
+  ulint`, `dint`'s amended (decisions 144 and 145). Each is declarable everywhere a dint
+  is: a tag, a block's member, each section, `var_external` among them, a global, a
+  located point (decision 156), a host's input, a value of `Logex.IO.Sim`, a force and the
+  forces file. `move` and every literal follow decision 147, a refusal naming its
+  conversion; the 56 conversions between integer types, `dint_to_int` and the rest
+  (decision 148), each truncating and wrapping where its value does not fit, with no
+  power, land here, their family stanza first, so that every refusal names one that
+  exists; a `cal` formal and a connection widen, and a `var_external` binds exactly
+  (decision 159); an edit of a width is refused and a changed initial value of each width
+  reported (decision 157). *Done when* §4.4's plant reads its drive's speed as a `uint`
+  point through the sim and moves it into a `dint`; each refusal, a literal that does not
+  fit, a narrowing `move`, a sign change, a host's or a device's or a force's value that
+  does not fit, a `cal` formal, a connection and a `var_external` of another width, is
+  pinned in its type's words; an edit of a width is refused at its line; the contract walk
+  draws every width's limits, its oracle restating each range; `dint_to_sint` of 129
+  gives −127 with no power, as Logix's truncation does (RM018A p.872); and the commit
+  names what the seven reserved words and the 56 conversions break. *Size L.*
+- **M5-4 · Arithmetic and comparison over every integer width.** The signatures' slots take a type class, ANY_INT or ANY_NUM as data,
+  unified across every operand of an instruction, so a three-operand `add` is checked
+  whole; each computes in its destination's type, sources widened by decision 147, and
+  wraps there (decision 146); `neg` into an unsigned destination is refused (decision
+  145); `div` and `mod` keep decisions 78 and 99 in every width; comparisons of integers
+  are by value. *Done when* `arithmetic_test.exs` holds every rule at
+  every width's two limits, 127 + 1 in an `sint` giving −128 and 0 − 1 in a `usint` 255,
+  each with no power; a three-operand mismatch fails when the unification is reverted;
+  comparisons of a signed with an unsigned operand are exact at their limits; and the
+  contract walk's arithmetic
+  oracle covers every width from its own ranges. *Size L.*
+- **M5-5 · Typed counters.** The stanzas, then `ctu_int ctu_lint ctu_udint ctu_ulint`,
+  `ctd_*` and `ctud_*` of the same four (decision 158), rows of `Logex.FbType.rules/1`
+  run by `ctu` and `ctd`, a preset judged in its instance's type, each stopping at its
+  type's limits with `ov` or `un` latched, decision 71 by width, unless the maintainer's
+  answer to §4.12's fifth question changes it. *Done when* a `ctu_int` count stops at
+  32,767 with `ov` on and a `ctd_udint` at 0 with `un` on, a `ctu_ulint` counts past
+  2^63, a preset outside its type is refused at its line, an edit that changes a
+  counter's width is refused, its edge memory is on the block list as a `ctu`'s, the event
+  task's warning names each, and the contract walk's counter oracle draws every width.
+  *Size M.*
+- **M5-6 · Long timers in nanoseconds.** The stanzas, then `ton_ltime tof_ltime tp_ltime`
+  and `rto_ltime` (decision 158, its last subject to §4.12's seventh question), run by
+  `ton`, `tof`, `tp` and `rto`, their `pre` and `acc` `lint` nanoseconds, the preset on
+  the instruction in nanoseconds, 0 to 2^63−1, each scan's elapsed milliseconds counted
+  as 1,000,000 ns each, so that the resolution is a millisecond, said in each stanza, with
+  a warning for a preset that is not a whole number of milliseconds. *Done when* a
+  `ton_ltime` with a preset of 30 days in ns is done at exactly 30 days of scans and never
+  before, a preset of 1,500,000 ns is done at the 2 ms scan and warned of, each long
+  timer's rules of M3-2 hold for it from source through `call/4`, an edit resumes one by
+  its type's `times` member, an edit from `ton` to `ton_ltime` is refused, and the
+  contract walk's timer oracle draws them. *Size M.*
+- **M5-7 · Based literals and separators.** `16#`, `2#` and `_` (decision 149), through
+  the lexer, `well_formed!/1`, the printer, the generator and curated golden sources.
+  *Done when* each form is in the golden record's curated sources, an entry that held
+  `1_000` or `16#…` before changes and its diff is read, `16#ffff` is 65,535 in a `uint`
+  and refused in an `int`, and `8#17`, `16#-1`, `16#_ff`, `1__0`, `1_`, `_1` (a name, not
+  a number) and `1.5_` are pinned refusals or readings, each a test that fails when its
+  lexer clause is reverted. *Size M.*
+- **M5-8 · Bit strings, the bitwise instructions and literal bit access.** The stanzas
+  first: `byte word dword lword`, `and or xor not shl shr rol ror`, and the bit-string
+  conversions' family stanzas, `docs/naming.md`'s `wand` rows amended (decision 155).
+  The four types, with no arithmetic, comparing as unsigned; the eight instructions on bit
+  strings and integers alike, computed in the destination's type, operands all of one
+  kind (decision 147); the 12 conversions between bit strings and the 64 between a bit
+  string and an integer, binary transfers; and `x.3` on every integer and bit string,
+  read by a contact and written by a coil, a one-shot's storage bit and a pulse coil's two
+  bits among them, the number checked against the width when the program compiles; a
+  coil on a bit a write of its word in `Logex.Walk.writes/1`, the writer warnings and the
+  input-point refusal; a bit of a `bool` and of a real refused. *Done when* `shr` of an
+  `int` −2 by 1 gives 32,767 (zero fill), `rol` of a `byte` 2#1001_0001 by 1 gives
+  2#0010_0011, a shift by the width gives 0, a negative literal shift count is refused,
+  every width's top bit is read and written in two's complement, `add` of a `word` and
+  `and` of a `word` with an `int` destination are pinned refusals naming what to use, a
+  coil on a bit of a located input point is refused and one on a bit of a `var_external`
+  makes it a writer of its global, `ote status.3` beside `move x status` draws the
+  second-`ote` warning, an edit of a rung with `ons status.3` blocks it once, and the
+  contract walk draws bit strings, bitwise instructions and bits. The commit names what
+  `and`, `or`, `not`, `byte` and `word` break. A shift count held in a tag that is
+  negative is §4.12's open rule, answered before this item lands. *Size L.*
+- **M5-9 · A bit number in a tag, and the major fault.** `status.[n]` (decision 160), an
+  integer tag of any width, never an expression, refused on a one-shot's bit; a number
+  outside the width at run time the first major fault: `%Logex.Fault{}` gains
+  `severity`, `:minor` for a zero divisor, `:major` for `:bit_out_of_range`, with the
+  number read, decision 99's placement, and `Logex.Runner` trips on the round's first
+  major fault before its write, `{:fault, task, instance, fault}`, on decision 113's one
+  path. *Done when* the run lamp follows `drive_faults.[sel]` in §4.4's plant on the
+  manual clock against an oracle that knows nothing of logex; `sel` at 16 in a `word`
+  trips the runner with every output 0 once and nothing after, the trip naming the
+  instance, file, line and number; a lone instance's `state.faults` holds the major fault
+  and the scan ran on, the instruction doing nothing as §4.12 states it, a test per kind
+  of instruction; a rung a jump skips and a block whose `cal` is false with `sel` at 16
+  raise nothing (decision 82); `fault_test.exs` pins the severity on both kinds; every
+  host's pattern on `%Logex.Fault{}` in README and the tests is brought to the new field;
+  the runner walk reaches the new trip reason; and an element read stays within a
+  measured bound of a tag's in reductions. *Size L.*
+- **M5-10 · Reals.** A spike first, on Elixir 1.20.4 and OTP 28, throwaway: the cost of a
+  destination lookup and a single-rounding write, and the shortest spelling of a single
+  that reads back to it, written and tested. Then the stanzas `real` and `lreal`, the 34
+  real conversions, `trunc_<integer>` and `sqrt` (decisions 148 and 79); the literal
+  (decision 149) through the lexer, the parser, `well_formed!/1`, the printer, the
+  generator, `@required_shapes` and curated golden sources; arithmetic, comparisons and
+  `move` (decision 147); decision 150's zero divisor, saturation, −0.0, subnormals and
+  single rounding; a real's zero, 0.0; host, device and force values, the forces file's
+  spelling and the configuration file's `print/1` (decision 156); real points. `sqrt` of
+  a negative source, and an integer beyond a real's range at a point, are §4.12's open
+  rules, answered before this item lands. *Done when* no float exception leaves a scan
+  under a seeded walk of values near each real's limits, at zero divisors and at
+  subnormals; no state, output, `get/2` answer or forces file ever holds −0.0, an
+  infinity's bits or a subnormal, each pinned by a test that fails when its guard is
+  reverted (a `real` write of 3.5e38 the one that encodes an infinity silently); a literal
+  `0.0` or `-0.0` divisor and a `mod` of a real are refused at their lines; IEC's examples
+  are tests, `real_to_int` of 1.5, 2.5, −1.5, −2.5, 1.6 and 1.4 giving 2, 2, −2, −2, 2 and
+  1 and of 0.5 and 3.5 giving 0 and 4, so that a ties-away implementation, Elixir's
+  `round/1`, fails them, `trunc_int` of −1.6 giving −1, and a value outside the target
+  truncated and wrapped with no power, as §4.12's first question is answered; a `real`
+  forced or printed as `0.1` reads back exactly; a changed real initial value is reported,
+  `0` against `0.0` as decision 157 and §4.12's eighth question say; the configuration
+  file's round trip holds with reals; the contract walk's arithmetic oracle covers both
+  reals; and the fan's speed in §4.4's plant is a `real` read from the sim, against an
+  oracle that knows nothing of logex. *Size XL.*
+- **M5-11 · Arrays of elementary types, literal subscripts.** A spike first, throwaway:
+  the representation (a tuple, §4.12's routine choice) and the size limit, measured.
+  Then decision 151 with literal subscripts only, one to three dimensions: the syntax
+  through the front end (the two golden sources that hold `[` change, the diff read), the
+  declaration and its initial list in the elements' order, the IR's element operand, the
+  compile-time bound check, `Logex.Walk` and the warnings with a literal subscript as its
+  element's path, every one-shot's storage bit and every pulse coil's two bits on an
+  element (decision 154), the edit (a type, dimension or size change refused, elements
+  moved by path, a changed initial list reported element by element, decision 157),
+  `get/2` and connection paths, a host's array input checked, unlocated array globals and
+  `var_external` arrays bound exactly (decision 159). *Done when* `weights[3]` and
+  `grid[1,7]` run in a program from source against an oracle that knows nothing of logex;
+  `weights[8]` in an `int[8]`, an initial list of the wrong length, a host's list of the
+  wrong length or shape and a `var_external` of another size or dimension are pinned
+  refusals; an edit of a rung with `ons edge[2]` blocks it once; growth tests in
+  reductions hold an element's read and write within a measured bound of a tag's; and the
+  contract walk draws arrays of one, two and three dimensions with literal subscripts.
+  *Size XL.*
+- **M5-12 · Tag subscripts and the index fault.** Decisions 152 and 153: a tag subscript
+  of any integer width, the run-time check where the element is read or written, the
+  major fault `:index_out_of_range` with the subscripts read, on M5-9's path; a write
+  through a tag subscript a write of the whole array (§4.12's routine choice); a tag
+  subscript refused on a one-shot's storage bit, a pulse coil's bits and whatever runs an
+  instance. *Done when* the box counter's `weights[slot]` runs in §4.4's plant on the
+  manual clock against an oracle that knows nothing of logex; a `slot` of 8 trips the
+  runner with every output 0 once, the trip naming the instance, file, line and index; a
+  false `otl weights_bits[slot]`, a skipped rung and a frozen block with `slot` at 8 raise
+  nothing (decision 82); `ons edge[slot]` is a pinned refusal; `fault_test.exs` pins the
+  kind; and the runner walk reaches it. *Size L.*
+- **M5-13 · Located arrays.** Decision 156's follow-up: `var_global temps real[8] at
+  card.i.0` occupying `card.i.0` to `card.i.7`, in the elements' order, each element a
+  point named `temps[3]`, grouped by `Logex.IO.points/1`, read, written and forced as its
+  own point, the forces file naming it so; a range that overlaps another point refused,
+  both named; an online edit's located-I/O refusal covering the range. *Done when* §4.4's
+  oven card gives its eight zone temperatures as one located array through the sim,
+  `temps[3]` forced against its device and across a restart, a crash and a fresh start
+  from its forces file; an overlap and a range past an adapter's points are pinned
+  refusals; and the runner walk draws a located array. *Size M.*
+- **M5-14 · Arrays of instances.** Decision 154: `var lane_t ton[4]`, `var lanes
+  seal[4]`, a literal subscript on every instruction that runs one, a tag subscript on a
+  member's read or write. *Done when* each refusal is pinned, the one-run rule holds per
+  element (`ton lane_t[2] 500` twice refused), decision 85's two counter rungs hold per
+  element, an edit of a lane's timer resumes it by its path `lane_t[2]`, a counter's edge
+  memory on an element is on the block list by its path, an event task's timer, counter
+  and one-shot warnings name each element, a `cal` of an element runs only its instance,
+  and the contract walk draws arrays of instances. *Size L.*
+- **M5-15 · The contract walk's cross-type reach.** Each item above has extended the walks
+  with its own rules; this one draws the types together: programs, configurations and
+  runner walks that mix every type, `@junk` and `@edges` by type (`1.0` stops being junk
+  for a real), mixed-type `cal`s and connections (decision 159), bits and arrays with
+  literal and tag subscripts, and edits refused by type, against oracles that restate each
+  rule. *Done when* the walks' reach covers every type, every refusal kind and every trip
+  reason but `{:internal, message}`, repeating exactly from fresh processes. *Size L.*
+- **M5-16 · The documents' closing pass.** Each item has brought its README sections,
+  instruction table rows and stanzas; this one checks "What logex is not" (which says
+  "bool and dint only, no real, no bit access, no arrays") against the code,
+  `docs/naming.md`'s `bool`, `dint` and `at` stanzas and its deferred and rounding rows,
+  `docs/organisation.md` §4.1, §4.5, §4.7, §4.8, §4.12 and §5 annotated as landed,
+  `PLAN.md` M1-3 and §5's structured-addressing entry, CLAUDE.md's Key Files, and
+  Milestone 5's done sentence clause by clause against the tests. *Size S.*
+
+**What stays deferred**, each a later item or milestone (§4.12): the TIME and LTIME types,
+the dates and `T#` literals; strings and characters; enumerations, named values and
+subranges; structures, UDTs and directly derived types; typed literals, `int#5`, and
+octal; references; IEC's array bounds, `ARRAY[*]`, more than three dimensions and
+whole-array `copy` and `fill`; IEC's byte and word partial access, `w.%B1`; online
+widening; `round`, `ceil` and `floor`; the BOOL, BCD and real-to-bit-pattern conversions;
+and nanoseconds in the core's clock. Not adopted: pointers, unions, target-width integers
+and Logix's literal suffixes.
+
+**Milestone 5 is done when** a program and a configuration of §4.4's plant, loaded from
+files on disk, declare and run every type decision 144 and 155 name, the fan's speed a
+`real` from the drive card and its eight zone temperatures a located `real[8]`, the box
+counter a typed counter and its weights an array indexed by a tag, through `Logex.Runner`
+on the manual clock against an oracle that knows nothing of logex; an integer result past
+its width wraps with no power, a real's saturates, and no infinity, NaN or −0.0 ever
+reaches a state; every mixed-type operand Figure 11 does not widen is refused naming its
+conversion, and every conversion rounds as IEC's examples say; an index or a bit number
+out of range trips the runner with every output 0 once; an online edit of a type or a
+size is refused, and a changed initial value of every type is reported; and the contract
+walks reach every type, refusal and trip reason, repeating exactly.
+
 ---
 
 ## 4. Backlog
@@ -4896,7 +5206,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | **closed** — metadata, a `@moduledoc` on `Logex.Compiler`, no `:logger`; CI is B3's |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
-| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3; bit access and arrays open |
+| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3; bit access and arrays open, decided for Milestone 5 on 2026-10-21 (§3, M5-8, M5-9 and M5-11) |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed; re-scoped 2026-10-01 as a one-way seed that emits a whole program as data |
 | B10 | nit | warnings | Second-`ote` warnings on one line come in map order, not rung order | `Logex.Warnings.second_otes/3` | **closed** — the uses walked in rung order; guarded by a 40-tag test in `validation_test.exs` |
 
