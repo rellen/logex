@@ -829,13 +829,10 @@ defmodule Logex.Runner do
   defp fits!(true, _name, _type, _value), do: :ok
   defp fits!(false, name, type, value), do: raise(ArgumentError, misfit(name, type, value))
 
-  defp misfit(name, :bool, value),
-    do: "`#{name}` is a bool, forced to 0 or 1, got: #{inspect(value)}"
-
-  defp misfit(name, :dint, value),
+  defp misfit(name, type, value),
     do:
-      "`#{name}` is a dint, forced to an integer from -2147483648 to 2147483647, got: " <>
-        inspect(value)
+      "`#{name}` is #{Declarations.a_type(type)}, forced to #{Declarations.values(type)}, " <>
+        "got: " <> inspect(value)
 
   # The new set of forces, written whole to the file before it is taken (decision 127):
   # a write that fails changes nothing, `{:error, {:forces, reason}}`. Each input point

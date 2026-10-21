@@ -10,9 +10,13 @@ defmodule Logex.Declarations do
                                                        Logex.FbType.builtins/0, ton
                                                        among them | a block's name
 
-  The section and type words are data, in `@sections` and `@types`, and a function block
-  type's word is `Logex.FbType.builtins/0`'s: a new section or type is a row there and a
-  stanza in `docs/naming.md`, not a second declaration parser. An instance of a function
+  The section and type words are data, in `@sections` and, since M5-1, the one table of
+  elementary types, `table/0` (`docs/organisation.md` §4.12, "The types", decisions 144 and
+  145): each type's word, kind, width, range, zero and article, which every range message,
+  article, guard (`is_elementary/1`) and `fits?/2` in `lib/` reads, and the configuration
+  file's type words and did-you-mean (`Logex.Configuration.Text`). A function block type's
+  word is `Logex.FbType.builtins/0`'s: a new section or type is a row there and a stanza
+  in `docs/naming.md`, not a second declaration parser. An instance of a function
   block, `var t1 ton` (M1-6) or `var s1 seal` (M2-5), is declared with `var` and takes no
   initial value. A user function block's name is a type word only where the compile is
   given that block (`Logex.compile/2`'s `types:`), and is not reserved: it is built per
@@ -36,13 +40,30 @@ defmodule Logex.Declarations do
     "var_output" => :var_output,
     "var_external" => :var_external
   }
-  @types %{"bool" => :bool, "dint" => :dint}
+  # M5-1 (docs/organisation.md §4.12, "The types", decisions 144 and 145): the one table of
+  # elementary types, a row each, in the record's order: its word, its value in a tag
+  # (`type`), its kind, its width in bits, its range, its zero and the article a message
+  # says it with. Every range message, article, guard and fits?/2 reads it, and so do the
+  # configuration file's type words. IEC 61131-3 Ed 3 Table 10: a BOOL is 0 or 1, and a
+  # DINT is 32 bits, two's complement, -(2^31)..2^31 - 1 (footnote c).
+  @table [
+    %{word: "bool", type: :bool, kind: :boolean, width: 1, range: 0..1, zero: 0, article: "a"},
+    %{
+      word: "dint",
+      type: :dint,
+      kind: :signed,
+      width: 32,
+      range: -2_147_483_648..2_147_483_647,
+      zero: 0,
+      article: "a"
+    }
+  ]
+
+  @types Map.new(@table, &{&1.word, &1.type})
+  @rows Map.new(@table, &{&1.type, &1})
 
   @section_atoms Map.values(@sections)
-  @type_atoms Map.values(@types)
-
-  # IEC 61131-3 Ed 2 Table 10: a BOOL is 0 or 1, and a DINT is 32 bits, -(2^31)..2^31 - 1.
-  @dint -2_147_483_648..2_147_483_647
+  @type_atoms Enum.map(@table, & &1.type)
 
   # A preset is a dint number of milliseconds, and never negative (docs/naming.md, `ton`).
   @preset 0..2_147_483_647
@@ -73,17 +94,15 @@ defmodule Logex.Declarations do
   # letter by letter where it is no word, so `rto`, "R-T-O", takes `an`, as `tp` and `ctud`
   # take `a`, and `ton` and `tof` are said as words. Every word of
   # Logex.FbType.builtins/0 has its row, which validation_test.exs holds it to.
-  @articles %{
-    "bool" => "a",
-    "dint" => "a",
-    "ton" => "a",
-    "tof" => "a",
-    "tp" => "a",
-    "rto" => "an",
-    "ctu" => "a",
-    "ctd" => "a",
-    "ctud" => "a"
-  }
+  @articles Map.merge(Map.new(@table, &{&1.word, &1.article}), %{
+              "ton" => "a",
+              "tof" => "a",
+              "tp" => "a",
+              "rto" => "an",
+              "ctu" => "a",
+              "ctd" => "a",
+              "ctud" => "a"
+            })
 
   @doc """
   A type word with its indefinite article, by how the word is said (M3-2): `a ton`,
@@ -195,9 +214,98 @@ defmodule Logex.Declarations do
   defp near(true, best), do: " — did you mean `#{best}`?"
   defp near(false, _best), do: ""
 
+  @doc """
+  The elementary types, one row each of the table in `docs/organisation.md` §4.12 ("The
+  types", M5-1), in its order: `word`, `type`, `kind` (`:boolean` or `:signed` so far),
+  `width` in bits, `range`, `zero` and `article`.
+  """
+  def table, do: @table
+
+  @doc "The elementary types' values in a tag, `:bool` and `:dint`, in the table's order."
+  def elementary, do: @type_atoms
+
+  @doc "The elementary types' words, `bool` and `dint`, in the table's order."
+  def type_words, do: Enum.map(@table, & &1.word)
+
+  @typedoc "An elementary type, a row of `table/0`."
+  @type elementary ::
+          unquote(
+            @type_atoms
+            |> Enum.reverse()
+            |> Enum.reduce(fn type, union -> quote(do: unquote(type) | unquote(union)) end)
+          )
+
+  @doc "Whether `type` is an elementary type, a row of `table/0`: a guard."
+  defguard is_elementary(type) when type in @type_atoms
+
+  @doc "An elementary type's word, `dint` for `:dint`."
+  def word(type) when type in @type_atoms, do: Map.fetch!(@rows, type).word
+
+  @doc "An elementary type's kind: `:boolean` or `:signed`."
+  def kind(type) when type in @type_atoms, do: Map.fetch!(@rows, type).kind
+
+  @doc "An elementary type's range of values."
+  def range(type) when type in @type_atoms, do: Map.fetch!(@rows, type).range
+
+  @doc "An elementary type's value before anything sets it."
+  def zero(type) when type in @type_atoms, do: Map.fetch!(@rows, type).zero
+
+  @doc """
+  A type's word with its article, as a message names it: `a dint`, the elementary types'
+  from the table, and any other atom's, a member's `:clock` among them, by `a_or_an/2`.
+  """
+  def a_type(type) when type in @type_atoms, do: a_or_an(word(type))
+  def a_type(type) when is_atom(type), do: a_or_an(to_string(type))
+
   @doc "Whether an integer fits a type."
-  def fits?(:bool, value), do: value in [0, 1]
-  def fits?(:dint, value), do: value in @dint
+  for %{type: type, range: range} <- @table do
+    def fits?(unquote(type), value), do: value in unquote(Macro.escape(range))
+  end
+
+  @doc """
+  What a message says of a value that does not fit a type, after the type is named, from
+  the table (M5-1): `` only 0 or 1 fit, found `2` `` for a bool and `` `2147483648` does
+  not fit in 32 bits `` for a dint, `shown` being the value as the message shows it; with
+  `shown` nil, the words where the value was named before them, `only 0 or 1 fit` and `it
+  does not fit in 32 bits`.
+  """
+  def misfit(type, shown \\ nil) when type in @type_atoms,
+    do: misfit_of(Map.fetch!(@rows, type), shown)
+
+  defp misfit_of(%{kind: :boolean} = row, nil), do: "only #{values(row)} fit"
+  defp misfit_of(%{kind: :boolean} = row, shown), do: "only #{values(row)} fit, found #{shown}"
+  defp misfit_of(%{width: width}, nil), do: "it does not fit in #{width} bits"
+  defp misfit_of(%{width: width}, shown), do: "#{shown} does not fit in #{width} bits"
+
+  @doc """
+  What a message says of a declared initial value that does not fit a type, after the type
+  is named (M5-1): `` its initial value must be 0 or 1, found `2` `` for a bool, and for a
+  dint `misfit/2`'s words.
+  """
+  def initial_misfit(type, shown) when type in @type_atoms,
+    do: initial_of(Map.fetch!(@rows, type), type, shown)
+
+  defp initial_of(%{kind: :boolean} = row, _type, shown),
+    do: "its initial value must be #{values(row)}, found #{shown}"
+
+  defp initial_of(_row, type, shown), do: misfit(type, shown)
+
+  @doc """
+  A type's values in words (M5-1): `0 or 1` for a bool, `an integer from -2147483648 to
+  2147483647` for a dint.
+  """
+  def values(type) when type in @type_atoms, do: values(Map.fetch!(@rows, type))
+  def values(%{kind: :boolean, range: first..last//1}), do: "#{first} or #{last}"
+  def values(%{range: first..last//1}), do: "an integer from #{first} to #{last}"
+
+  @doc """
+  The elementary types each shown by `shown`, joined by commas and an `or` before the last
+  (M5-1): `` :bool or :dint `` with `&inspect/1`.
+  """
+  def either(shown), do: either_of(Enum.map(@type_atoms, shown))
+
+  defp either_of([one]), do: one
+  defp either_of(words), do: Enum.join(Enum.drop(words, -1), ", ") <> " or " <> List.last(words)
 
   @doc """
   Whether an integer is a preset, 0 to 2147483647 ms (M1-6): what a `ton`'s preset slot
@@ -457,15 +565,15 @@ defmodule Logex.Declarations do
 
     {:untyped, name,
      "unknown type `#{type}`: logex has " <>
-       listed(Enum.map(type_words(), &"`#{&1}`")) <>
+       listed(Enum.map(own_type_words(), &"`#{&1}`")) <>
        given(Enum.map(blocks, &"`#{&1}`")) <>
-       suggest(type, type_words() ++ blocks, & &1, "type names")}
+       suggest(type, own_type_words() ++ blocks, & &1, "type names")}
   end
 
   # logex's own type words: the elementary types, then the built-in function block types,
   # each set in order, so a new built-in is named where it lands.
-  defp type_words,
-    do: Enum.sort(Map.keys(@types)) ++ Enum.sort(Map.keys(FbType.builtins()))
+  defp own_type_words,
+    do: Enum.sort(type_words()) ++ Enum.sort(Map.keys(FbType.builtins()))
 
   defp listed([one]), do: one
   defp listed(words), do: Enum.join(Enum.drop(words, -1), ", ") <> " and " <> List.last(words)
@@ -548,7 +656,7 @@ defmodule Logex.Declarations do
   defp type(type),
     do: [
       "unknown type #{inspect(type)}: logex has " <>
-        listed(Enum.map(type_words(), &as_value/1)) <> spelled_as(type)
+        listed(Enum.map(own_type_words(), &as_value/1)) <> spelled_as(type)
     ]
 
   defp as_value(word) when is_map_key(@types, word), do: inspect(Map.fetch!(@types, word))
@@ -562,10 +670,10 @@ defmodule Logex.Declarations do
   # declaration line reads it; any other, of the nearest, as suggest/4 finds it.
   defp spelled(word) do
     folded = String.downcase(word)
-    word_of(Enum.find(type_words(), &(&1 == folded)), word)
+    word_of(Enum.find(own_type_words(), &(&1 == folded)), word)
   end
 
-  defp word_of(nil, word), do: suggest(word, type_words(), &as_value/1)
+  defp word_of(nil, word), do: suggest(word, own_type_words(), &as_value/1)
   defp word_of(found, _word), do: " — did you mean `#{as_value(found)}`?"
 
   # A built-in function block type, exactly as Logex.FbType gives it; one this compile was
@@ -689,11 +797,8 @@ defmodule Logex.Declarations do
 
   defp fit(true, _type, _name, _v), do: []
 
-  defp fit(false, :bool, name, v),
-    do: ["#{label(name)} is a bool: its initial value must be 0 or 1, found `#{v}`"]
-
-  defp fit(false, :dint, name, v),
-    do: ["#{label(name)} is a dint: `#{v}` does not fit in 32 bits"]
+  defp fit(false, type, name, v),
+    do: ["#{label(name)} is #{a_type(type)}: #{initial_misfit(type, "`#{v}`")}"]
 
   defp label(name) when is_binary(name), do: "`#{name}`"
   defp label(name), do: inspect(name)

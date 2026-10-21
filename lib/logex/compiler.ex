@@ -24,6 +24,7 @@ defmodule Logex.Compiler do
 
   alias Logex.{Declarations, Diagnostic, FbType, Program, Tag, Walk}
   alias Logex.FbType.Member
+  import Logex.Declarations, only: [is_elementary: 1]
 
   defdelegate tokenize(source), to: Logex.Lexer
   defdelegate parse(tokens), to: Logex.Parser
@@ -36,7 +37,7 @@ defmodule Logex.Compiler do
   # since M3-1 an instance slot names a list where it runs instances of several types. M3-5
   # adds `{:label, nil}`, a label of the routine's own, a namespace that holds no tag, which
   # the IR keeps as `{:label, line, name}`.
-  # Type: `:bool`, `:dint`, or `:any`,
+  # Type: an elementary type of `Logex.Declarations.table/0`, `:bool` or `:dint`, or `:any`,
   # which IEC's MOVE takes (`IN : ANY` -> `OUT : ANY`, docs/naming.md). A tag here may be
   # a member of an instance, `t1.acc`, which has the type its schema gives it (M1-6).
   # Mnemonics are matched case-insensitively and are reserved: no tag may be named after
@@ -328,7 +329,7 @@ defmodule Logex.Compiler do
   defp any?(_element), do: true
 
   # A tag of a type the lowering knows, once each held type is given (M2-5).
-  defp typed?({_name, %Tag{type: type}}) when type in [:bool, :dint], do: true
+  defp typed?({_name, %Tag{type: type}}) when is_elementary(type), do: true
   defp typed?({_name, %Tag{type: %FbType{}}}), do: true
   defp typed?(_entry), do: false
 
@@ -1483,15 +1484,9 @@ defmodule Logex.Compiler do
 
   defp fits_formal(true, _formal, _value, _at, diagnostics), do: diagnostics
 
-  defp fits_formal(false, {{_, :bool}, _} = formal, value, {line, at}, diagnostics),
+  defp fits_formal(false, {{_, type}, _} = formal, value, {line, at}, diagnostics),
     do: [
-      diagnostic(line, of_formal(formal, at) <> ": only 0 or 1 fit, found `#{value}`")
-      | diagnostics
-    ]
-
-  defp fits_formal(false, formal, value, {line, at}, diagnostics),
-    do: [
-      diagnostic(line, of_formal(formal, at) <> ": `#{value}` does not fit in 32 bits")
+      diagnostic(line, of_formal(formal, at) <> ": " <> Declarations.misfit(type, "`#{value}`"))
       | diagnostics
     ]
 
@@ -1542,7 +1537,10 @@ defmodule Logex.Compiler do
   defp typed_formal(diagnostics, type, type, _name, _at), do: diagnostics
 
   defp typed_formal(diagnostics, _type, found, name, {formal, line, at}),
-    do: [diagnostic(line, of_formal(formal, at) <> ", but `#{name}` is a #{found}") | diagnostics]
+    do: [
+      diagnostic(line, of_formal(formal, at) <> ", but `#{name}` is #{a_type(found)}")
+      | diagnostics
+    ]
 
   defp input_formal(diagnostics, :write, %Tag{section: :var_input} = tag, {formal, line, at}),
     do: [
@@ -1770,11 +1768,13 @@ defmodule Logex.Compiler do
     )
   end
 
-  # A literal in a dint slot must fit 32 bits, as a declared initial value must (M1-6: the
-  # comparisons). An `:any` slot's literal is checked against the tag beside it, by unify/3.
-  # Since M3-3 a literal may be negative (decision 97), so each meets one too small too.
-  defp check_tag({{:value, :dint}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics),
-    do: literal(Declarations.fits?(:dint, value), value, {line, word}, diagnostics)
+  # A literal in a slot of an elementary type must fit it, as a declared initial value must
+  # (M1-6: the comparisons, whose slots are dints). An `:any` slot's literal is checked
+  # against the tag beside it, by unify/3. Since M3-3 a literal may be negative (decision
+  # 97), so each meets one too small too.
+  defp check_tag({{:value, type}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics)
+       when is_elementary(type),
+       do: literal(Declarations.fits?(type, value), {type, value}, {line, word}, diagnostics)
 
   # A preset is a dint, a number of milliseconds for a timer or a count for a counter, and
   # never negative (docs/naming.md, `ton`): a negative literal lexes since M3-3, and is
@@ -1817,9 +1817,14 @@ defmodule Logex.Compiler do
 
   defp literal(true, _value, _at, diagnostics), do: diagnostics
 
-  defp literal(false, value, {line, word}, diagnostics),
+  defp literal(false, {type, value}, {line, word}, diagnostics),
     do: [
-      diagnostic(line, "`#{word}` reads a dint: `#{value}` does not fit in 32 bits") | diagnostics
+      diagnostic(
+        line,
+        "`#{word}` reads #{Declarations.a_type(type)}: " <>
+          Declarations.misfit(type, "`#{value}`")
+      )
+      | diagnostics
     ]
 
   defp label_shape(:label, _at, diagnostics), do: diagnostics
@@ -1995,7 +2000,7 @@ defmodule Logex.Compiler do
     do: [
       diagnostic(
         line,
-        "`#{name}` goes too deep: `#{tag.name}` is a #{tag.type}, which has no members"
+        "`#{name}` goes too deep: `#{tag.name}` is #{a_type(tag.type)}, which has no members"
       )
       | diagnostics
     ]
@@ -2005,7 +2010,7 @@ defmodule Logex.Compiler do
 
   defp resolve(nil, {:too_deep, tag, member}, _slot, {:name, line, name}, _at, diagnostics) do
     message =
-      "`#{name}` goes too deep: `#{tag.name}.#{member.name}` is a #{member.type}, " <>
+      "`#{name}` goes too deep: `#{tag.name}.#{member.name}` is #{a_type(member.type)}, " <>
         "which has no members"
 
     [diagnostic(line, message) | diagnostics]
@@ -2032,7 +2037,7 @@ defmodule Logex.Compiler do
   # A counter of the other kind is one declaration from one that counts both ways.
   defp both_ways(%FbType{name: kind, body: nil}, tag) when kind in ["ctu", "ctd"],
     do:
-      ": a #{kind} only counts #{way(kind)}; declare it `var #{tag.name} ctud` to count both " <>
+      ": #{Declarations.a_or_an(kind)} only counts #{way(kind)}; declare it `var #{tag.name} ctud` to count both " <>
         "ways"
 
   defp both_ways(_type, _tag), do: ""
@@ -2057,14 +2062,14 @@ defmodule Logex.Compiler do
 
   defp no_members(_not_a_bit, name, tag),
     do:
-      "`#{name}` names a member of `#{tag.name}`, but `#{tag.name}` is a #{tag.type}" <>
+      "`#{name}` names a member of `#{tag.name}`, but `#{tag.name}` is #{a_type(tag.type)}" <>
         "#{declared(tag)}: only an instance of a function block has members"
 
   # Bit access, when it lands, reaches a bit of a word; a bool is one bit, and has none.
   defp bit(name, word, :bool), do: "`#{name}` names a bit of `#{word}`, a bool, which has no bits"
 
   defp bit(name, word, type),
-    do: "`#{name}` names a bit of `#{word}`, a #{type}: bit access is not supported yet"
+    do: "`#{name}` names a bit of `#{word}`, #{a_type(type)}: bit access is not supported yet"
 
   # The member to suggest for an instance named whole: one of the slot's type that the slot
   # may use, a value the block sets for a read, one logic may write for a write.
@@ -2092,7 +2097,7 @@ defmodule Logex.Compiler do
     do: [
       diagnostic(
         line,
-        "`#{word}` #{verb(access)} #{a_type(type)}, but `#{name}` is a #{member.type}"
+        "`#{word}` #{verb(access)} #{a_type(type)}, but `#{name}` is #{a_type(member.type)}"
       )
       | diagnostics
     ]
@@ -2172,7 +2177,7 @@ defmodule Logex.Compiler do
 
   defp unify([%Tag{} = a, %Tag{} = b], {line, word}, diagnostics) do
     message =
-      "`#{word}` takes operands of one type: `#{a.name}` is a #{a.type}, `#{b.name}` is a #{b.type}"
+      "`#{word}` takes operands of one type: `#{a.name}` is #{a_type(a.type)}, `#{b.name}` is #{a_type(b.type)}"
 
     [diagnostic(line, message) | diagnostics]
   end
@@ -2184,14 +2189,11 @@ defmodule Logex.Compiler do
 
   defp fits(true, _value, _tag, _at, diagnostics), do: diagnostics
 
-  defp fits(false, value, %Tag{type: :bool} = tag, {line, word}, diagnostics),
-    do: [
-      diagnostic(line, "`#{word}` writes `#{value}` into `#{tag.name}`, a bool: only 0 or 1 fit")
-      | diagnostics
-    ]
+  defp fits(false, value, %Tag{type: type} = tag, {line, word}, diagnostics) do
+    message =
+      "`#{word}` writes `#{value}` into `#{tag.name}`, #{Declarations.a_type(type)}: " <>
+        Declarations.misfit(type)
 
-  defp fits(false, value, %Tag{type: :dint} = tag, {line, word}, diagnostics) do
-    message = "`#{word}` writes `#{value}` into `#{tag.name}`, a dint: it does not fit in 32 bits"
     [diagnostic(line, message) | diagnostics]
   end
 

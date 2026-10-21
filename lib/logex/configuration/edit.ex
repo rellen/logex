@@ -189,7 +189,8 @@ defmodule Logex.Configuration.Edit do
   outside the contract, as is an edit built or changed by hand.
   """
 
-  alias Logex.{Configuration, Diagnostic, FbType, Instance, Program, Runtime, Tag, Walk}
+  alias Logex.{Configuration, Declarations, Diagnostic, FbType, Instance, Program, Runtime, Tag}
+  alias Logex.Walk
   alias Logex.Edit.Plan
 
   @enforce_keys [:original, :candidate, :stage, :plans, :held, :records, :generation]
@@ -508,7 +509,8 @@ defmodule Logex.Configuration.Edit do
 
   defp typed(was, type, name),
     do: [
-      "`#{name}` is a #{was} global in the running configuration and a #{type} in the " <>
+      "`#{name}` is #{Declarations.a_type(was)} global in the running configuration and " <>
+        "#{Declarations.a_type(type)} in the " <>
         "candidate: a global's type changes only with a restart"
     ]
 

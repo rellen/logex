@@ -211,9 +211,10 @@ defmodule Logex.Runtime do
   **The host contract.** A mistake by the host raises `ArgumentError` (a host bug, not a
   PLC event, `docs/organisation.md` §4.6); a mistake in the source is a diagnostic from
   `Logex.compile/2`. Only a declared `var_input` may be set, by its name as a string, with
-  a value that fits its type exactly: a bool is 0 or 1, a dint an integer of 32 bits. Every
-  input problem in one call comes in one raise, a line each, in key order. Inputs merge
-  into the instance, so a host sends only what changed. Outputs are every `var_output`.
+  a value that fits its type exactly, by `Logex.Declarations.fits?/2`: a bool is 0 or 1, a
+  dint an integer from -2147483648 to 2147483647. Every input problem in one call comes in
+  one raise, a line each, in key order. Inputs merge into the instance, so a host sends
+  only what changed. Outputs are every `var_output`.
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
   `first`; its `ons_blocked` is the runtime's, which `call/4` fills in with a map of the
   bits the instance's list names, so a host leaves it out. A state is matched to its program
@@ -284,8 +285,10 @@ defmodule Logex.Runtime do
   @divisions [:div, :mod]
   @signs [:neg, :abs]
 
-  @dint_max 2_147_483_647
-  @dint_min -2_147_483_648
+  # The dint's limits, from the one table of types (M5-1).
+  @dint Declarations.range(:dint)
+  @dint_min @dint.first
+  @dint_max @dint.last
 
   # The resource (M2-1): the configuration it runs; `now`, its clock; `globals`, one value
   # for each global, the input points' among them; `instances`, each program instance's
@@ -991,18 +994,28 @@ defmodule Logex.Runtime do
 
   defp hint(line, suggestion, _inputs), do: line <> suggestion
 
-  defp fit(%Tag{type: :dint} = tag, value) when not is_integer(value),
-    do: "input `#{tag.name}` is a dint: its value must be an integer, found #{inspect(value)}"
+  # An integer type's value must be an integer, which a bool's is told by its range (M5-1:
+  # the kind, from the one table of types).
+  defp fit(%Tag{type: type} = tag, value), do: fit(Declarations.kind(type), tag, value)
 
-  defp fit(%Tag{type: type} = tag, value), do: fits(Declarations.fits?(type, value), tag, value)
+  defp fit(:signed, tag, value) when not is_integer(value),
+    do:
+      "input `#{tag.name}` is #{Declarations.a_type(tag.type)}: its value must be an integer, " <>
+        "found #{inspect(value)}"
+
+  defp fit(_kind, %Tag{type: type} = tag, value),
+    do: fits(Declarations.fits?(type, value), tag, value)
 
   defp fits(true, _tag, _value), do: nil
 
-  defp fits(false, %Tag{type: :bool} = tag, value),
-    do: "input `#{tag.name}` is a bool: only 0 or 1 fit, found #{inspect(value)}"
+  defp fits(false, %Tag{type: type} = tag, value),
+    do:
+      "input `#{tag.name}` is #{Declarations.a_type(type)}: " <>
+        Declarations.misfit(type, shown(Declarations.kind(type), value))
 
-  defp fits(false, %Tag{type: :dint} = tag, value),
-    do: "input `#{tag.name}` is a dint: #{value} does not fit in 32 bits"
+  # A bool's misfit is shown as the host gave it, an integer's as a number.
+  defp shown(:boolean, value), do: inspect(value)
+  defp shown(_kind, value), do: "#{value}"
 
   # A key is quoted as a name when every `.` part of it is one, so `t1.dn` reads as written.
   defp label(key), do: labelled(Enum.all?(String.split(key, "."), &Declarations.name?/1), key)
@@ -1341,7 +1354,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "`#{path}` goes too deep: `#{head}` is a #{global.type} global, which has no members"
+        "`#{path}` goes too deep: `#{head}` is #{Declarations.a_type(global.type)} global, which has no members"
       )
 
   defp at_path(:error, {:ok, type}, {head, [], _path}, runtime),
@@ -1416,7 +1429,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "`#{path}` goes too deep: `#{head}.#{tag}` is a #{type}, which has no members"
+        "`#{path}` goes too deep: `#{head}.#{tag}` is #{Declarations.a_type(type)}, which has no members"
       )
 
   # A function block instance's public members, as logic names them: never an internal
@@ -1462,7 +1475,7 @@ defmodule Logex.Runtime do
     do:
       raise(
         ArgumentError,
-        "`#{path}` goes too deep: `#{at}.#{member}` is a #{found.type}, which has no members"
+        "`#{path}` goes too deep: `#{at}.#{member}` is #{Declarations.a_type(found.type)}, which has no members"
       )
 
   # A name the type gives a member but FbType.member/2 does not is a hidden one's, and the

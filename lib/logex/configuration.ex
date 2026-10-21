@@ -131,6 +131,7 @@ defmodule Logex.Configuration do
 
   alias Logex.{Declarations, Diagnostic, FbType, Program, Tag, Walk}
   alias Logex.Configuration.{Connection, Global, Instance, Text}
+  import Logex.Declarations, only: [is_elementary: 1]
 
   defstruct name: nil,
             file: nil,
@@ -197,7 +198,7 @@ defmodule Logex.Configuration do
 
     @type t :: %__MODULE__{
             name: String.t(),
-            type: :bool | :dint,
+            type: Logex.Declarations.elementary(),
             initial: non_neg_integer | nil,
             at: String.t() | nil,
             line: pos_integer | nil
@@ -982,10 +983,13 @@ defmodule Logex.Configuration do
 
   defp priority_rule(name), do: "task #{label(name)}: a priority is 0, the highest, to 65535"
 
-  defp global_type(%Global{type: type}) when type in [:bool, :dint], do: []
+  defp global_type(%Global{type: type}) when is_elementary(type), do: []
 
   defp global_type(%Global{name: name, type: type}),
-    do: ["global #{label(name)} has type #{inspect(type)}: a global is :bool or :dint"]
+    do: [
+      "global #{label(name)} has type #{inspect(type)}: a global is " <>
+        Declarations.either(&inspect/1)
+    ]
 
   defp global_initial(%Global{initial: initial}) when initial == nil or is_integer(initial),
     do: []
@@ -1493,17 +1497,20 @@ defmodule Logex.Configuration do
   defp no_trigger(false, name, world),
     do: declare(Declarations.suggest(name, world.bools, & &1, "names"), :global, name, :bool)
 
-  defp triggered({:ok, %Global{name: name, type: :dint} = global}, task),
-    do:
-      {[
-         diagnostic(
-           task.line,
-           "the single of `#{task.name}`, `#{name}`, is a dint#{where(global)}: a single is " <>
-             "a bool global"
-         )
-       ], MapSet.new()}
+  defp triggered({:ok, %Global{name: name, type: :bool}}, _task), do: {[], MapSet.new([name])}
 
-  # A bool global, or one whose type is the host's mistake, refused already.
+  defp triggered({:ok, %Global{name: name, type: type} = global}, task)
+       when is_elementary(type),
+       do:
+         {[
+            diagnostic(
+              task.line,
+              "the single of `#{task.name}`, `#{name}`, is #{Declarations.a_type(type)}" <>
+                "#{where(global)}: a single is a bool global"
+            )
+          ], MapSet.new()}
+
+  # A global whose type is the host's mistake, refused already.
   defp triggered({:ok, %Global{name: name}}, _task), do: {[], MapSet.new([name])}
 
   defp triggered({:error, message}, task),
@@ -1511,7 +1518,7 @@ defmodule Logex.Configuration do
 
   defp triggered(:skip, _task), do: {[], MapSet.new()}
 
-  defp global(%Global{type: type} = global) when type in [:bool, :dint],
+  defp global(%Global{type: type} = global) when is_elementary(type),
     do: initial(global, location(global.at))
 
   defp global(%Global{}), do: []
@@ -1546,11 +1553,14 @@ defmodule Logex.Configuration do
 
   defp fit(true, _type, _v, _what, _line), do: []
 
-  defp fit(false, :bool, v, what, line),
-    do: [diagnostic(line, "#{what} is a bool: its initial value must be 0 or 1, found `#{v}`")]
-
-  defp fit(false, :dint, v, what, line),
-    do: [diagnostic(line, "#{what} is a dint: `#{v}` does not fit in 32 bits")]
+  defp fit(false, type, v, what, line),
+    do: [
+      diagnostic(
+        line,
+        "#{what} is #{Declarations.a_type(type)}: " <>
+          Declarations.initial_misfit(type, "`#{v}`")
+      )
+    ]
 
   @doc """
   A global's value before anything sets it: its `initial`, or 0 without one, so that an
@@ -1573,6 +1583,9 @@ defmodule Logex.Configuration do
       iex> Logex.Configuration.initial(%Logex.Configuration.Global{name: "x", type: :bool, at: "panel.i.0"})
       0
   """
+  def initial(%Global{type: type, initial: nil}) when is_elementary(type),
+    do: Declarations.zero(type)
+
   def initial(%Global{initial: nil}), do: 0
   def initial(%Global{initial: initial}) when is_integer(initial), do: initial
 
@@ -2106,27 +2119,18 @@ defmodule Logex.Configuration do
 
   defp constant(true, _connection, _tag, acc), do: acc
 
-  defp constant(false, connection, %Tag{type: :bool}, acc),
+  defp constant(false, connection, %Tag{type: type}, acc),
     do:
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` is a bool: only 0 or 1 fit, " <>
-          "found `#{connection.to}`"
-      )
-
-  defp constant(false, connection, %Tag{type: :dint}, acc),
-    do:
-      problem(
-        acc,
-        connection,
-        "`#{connection.instance}.#{connection.member}` is a dint: `#{connection.to}` " <>
-          "does not fit in 32 bits"
+        "`#{connection.instance}.#{connection.member}` is #{Declarations.a_type(type)}: " <>
+          Declarations.misfit(type, "`#{connection.to}`")
       )
 
   # A global whose type is the host's mistake is refused already: one mistake, one message.
   defp read_global({:ok, %Global{type: type} = global}, _connection, _tag, acc)
-       when type not in [:bool, :dint],
+       when not is_elementary(type),
        do: used(acc, global)
 
   defp read_global({:ok, global}, connection, tag, acc),
@@ -2147,12 +2151,12 @@ defmodule Logex.Configuration do
       problem(
         acc,
         connection,
-        "`#{connection.instance}.#{connection.member}` is a #{type_word(tag.type)}, but " <>
-          "`#{global.name}` is a #{global.type}#{where(global)}"
+        "`#{connection.instance}.#{connection.member}` is #{type_word(tag.type)}, but " <>
+          "`#{global.name}` is #{Declarations.a_type(global.type)}#{where(global)}"
       )
 
-  defp type_word(%Logex.FbType{name: name}), do: name
-  defp type_word(type), do: to_string(type)
+  defp type_word(%Logex.FbType{name: name}), do: "a #{name}"
+  defp type_word(type), do: Declarations.a_type(type)
 
   # What a name where a global is wanted reads as: a global; nothing to report, its name
   # refused already; or a mistake, each reading named (§4.7). `type` is the member's, for
@@ -2250,7 +2254,7 @@ defmodule Logex.Configuration do
   defp output(:junk, _connection, _tag, acc, _world), do: acc
 
   defp sink({:ok, %Global{type: type} = global}, _connection, _tag, acc)
-       when type not in [:bool, :dint],
+       when not is_elementary(type),
        do: used(acc, global)
 
   defp sink({:ok, global}, connection, tag, acc),
@@ -2414,7 +2418,7 @@ defmodule Logex.Configuration do
 
   # A global whose type is the host's mistake is refused already: one mistake, one message.
   defp bound_to({:global, _line, %Global{type: type}}, _tag, _typed, _world)
-       when type not in [:bool, :dint],
+       when not is_elementary(type),
        do: []
 
   defp bound_to(
@@ -2426,7 +2430,9 @@ defmodule Logex.Configuration do
        do: written_point(location(global.at), Map.fetch(writes, tag.name), global, {tag, program})
 
   defp bound_to({:global, _line, global}, tag, {_writes, program}, _world),
-    do: ["#{declares(tag, program)}, but `#{global.name}` is a #{global.type}#{where(global)}"]
+    do: [
+      "#{declares(tag, program)}, but `#{global.name}` is #{Declarations.a_type(global.type)}#{where(global)}"
+    ]
 
   defp bound_to({kind, line, _ref}, tag, {_writes, program}, _world),
     do: [

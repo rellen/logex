@@ -28,6 +28,8 @@ defmodule Logex.Program do
     each with its block's file (decision 34); a block's body holds only its own.
   """
 
+  import Logex.Declarations, only: [is_elementary: 1]
+
   @enforce_keys [:rungs, :tags]
   defstruct [:rungs, :tags, name: nil, source: nil, file: nil, warnings: [], blocks: %{}]
 
@@ -80,6 +82,9 @@ defmodule Logex.Program do
   # A timer's preset, from the `ton` that runs it (Logex.Compiler), is its `pre` to start.
   defp start(%Logex.Tag{type: %Logex.FbType{} = type, initial: inputs}),
     do: Logex.FbType.initial(type, inputs)
+
+  defp start(%Logex.Tag{type: type, initial: nil}) when is_elementary(type),
+    do: Logex.Declarations.zero(type)
 
   defp start(%Logex.Tag{initial: nil}), do: 0
   defp start(%Logex.Tag{initial: initial}), do: initial

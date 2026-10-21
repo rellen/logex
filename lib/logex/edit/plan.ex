@@ -8,6 +8,7 @@ defmodule Logex.Edit.Plan do
 
   alias Logex.{Declarations, Diagnostic, FbType, Instance, Program, Tag, Walk}
   alias Logex.FbType.Member
+  import Logex.Declarations, only: [is_elementary: 1]
 
   # The edit's record of one instance (F5): `shown`, the value each held output's point
   # holds, as the edit has learnt it (F4); `pre`, for each timer, the `.pre` the last
@@ -89,7 +90,7 @@ defmodule Logex.Edit.Plan do
 
   # A user block's name is any name, so it takes no article of its own (M2-5).
   defp word(%FbType{} = type), do: Declarations.instance_of(type)
-  defp word(type), do: "a #{type}"
+  defp word(type), do: Declarations.a_type(type)
 
   # The per-program half (F5): what each program declares and drives, read once, and a
   # plan for each direction. A switch then reads and writes only the state and the record,
@@ -268,7 +269,7 @@ defmodule Logex.Edit.Plan do
     do:
       for(
         {name, %Tag{type: type}} <- to.tags,
-        type in [:bool, :dint],
+        is_elementary(type),
         not is_map_key(to.inputs, name),
         not is_map_key(to.shared, name) and not is_map_key(from.shared, name),
         {:ok, %Tag{type: ^type}} <- [Map.fetch(from.tags, name)],
@@ -549,7 +550,7 @@ defmodule Logex.Edit.Plan do
   defp resolved(type, member), do: %{member | type: FbType.type_of(type, member)}
 
   defp member(%Member{type: type, initial: initial}, old, _context, memo, name)
-       when type in [:bool, :dint],
+       when is_elementary(type),
        do: {{:leaf, name, type, initial, old_initial(old), old != nil}, memo}
 
   defp member(

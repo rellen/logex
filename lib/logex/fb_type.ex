@@ -56,7 +56,8 @@ defmodule Logex.FbType do
 
     @type t :: %__MODULE__{
             name: String.t(),
-            type: :bool | :dint | :clock | Logex.FbType.t() | {:block, String.t()},
+            type:
+              Logex.Declarations.elementary() | :clock | Logex.FbType.t() | {:block, String.t()},
             role: :input | :output | :local | :internal,
             write: boolean,
             initial: integer | %{String.t() => integer}

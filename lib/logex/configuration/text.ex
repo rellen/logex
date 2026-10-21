@@ -93,26 +93,26 @@ defmodule Logex.Configuration.Text do
 
   alias Logex.{Declarations, Diagnostic, FbType}
   alias Logex.Configuration.{Connection, Global, Instance}
+  import Logex.Declarations, only: [is_elementary: 1]
 
   # Each word of a configuration file's lines, and the place a line reads it: `:line`
   # starts one, `:task` goes on a `task` line, `:program` on a `program` line, and
-  # `:global` and `:type` on a `var_global` line.
-  @keywords %{
-    "task" => :line,
-    "var_global" => :line,
-    "program" => :line,
-    "continuous" => :task,
-    "single" => :task,
-    "interval" => :task,
-    "priority" => :task,
-    "watchdog" => :task,
-    "with" => :program,
-    "at" => :global,
-    "bool" => :type,
-    "dint" => :type
-  }
+  # `:global` and `:type` on a `var_global` line, each type word one of the elementary
+  # types' (`Logex.Declarations.table/0`, M5-1).
+  @keywords Map.merge(Map.new(Declarations.type_words(), &{&1, :type}), %{
+              "task" => :line,
+              "var_global" => :line,
+              "program" => :line,
+              "continuous" => :task,
+              "single" => :task,
+              "interval" => :task,
+              "priority" => :task,
+              "watchdog" => :task,
+              "with" => :program,
+              "at" => :global
+            })
 
-  @types %{"bool" => :bool, "dint" => :dint}
+  @types Map.new(Declarations.elementary(), &{Declarations.word(&1), &1})
 
   # A task's inputs, in IEC's order (Ed 2 Annex B.1.7, `task_initialization`), each with
   # its rank in that order and the field it fills; since M4-2, `continuous` before them,
@@ -419,14 +419,21 @@ defmodule Logex.Configuration.Text do
 
   defp unknown_type(%FbType{name: type}, _word, name),
     do:
-      "`#{name}` cannot be #{Declarations.a_or_an(type, "`#{type}`")}: a global is a " <>
-        "`bool` or a `dint`, and " <>
+      "`#{name}` cannot be #{Declarations.a_or_an(type, "`#{type}`")}: a global is " <>
+        "#{a_global()}, and " <>
         "#{Declarations.a_or_an(type)} is declared inside a program, as in `var #{name} #{type}`"
 
   defp unknown_type(nil, word, _name),
     do:
-      "unknown type `#{word}`: a global is a `bool` or a `dint`" <>
-        Declarations.suggest(word, ["bool", "dint"], & &1, "types")
+      "unknown type `#{word}`: a global is #{a_global()}" <>
+        Declarations.suggest(word, Declarations.type_words(), & &1, "types")
+
+  # The elementary types a global may have, each with its article: a `bool` or a `dint`.
+  defp a_global,
+    do:
+      Declarations.either(
+        &Declarations.a_or_an(Declarations.word(&1), "`#{Declarations.word(&1)}`")
+      )
 
   defp initial([{:int_lit, _, value} | rest], global),
     do: located(rest, %{global | initial: value})
@@ -695,7 +702,7 @@ defmodule Logex.Configuration.Text do
   defp printed(%Global{} = global),
     do:
       Enum.join(
-        ["var_global", global.name, Atom.to_string(global.type)] ++
+        ["var_global", global.name, Declarations.word(global.type)] ++
           given(nil, global.initial) ++ given("at", global.at),
         " "
       ) <> "\n"
@@ -821,8 +828,10 @@ defmodule Logex.Configuration.Text do
   defp continuous!(_continuous, entry),
     do: unsaid!("a task's continuous is true or false", entry)
 
-  defp type!(type, _entry) when type in [:bool, :dint], do: :ok
-  defp type!(_type, entry), do: unsaid!("a global's type is :bool or :dint", entry)
+  defp type!(type, _entry) when is_elementary(type), do: :ok
+
+  defp type!(_type, entry),
+    do: unsaid!("a global's type is " <> Declarations.either(&inspect/1), entry)
 
   # A connection's first word is one name token, split at its first `.`: what `read/1`
   # reads as instance and member is exactly what joins back into that token.

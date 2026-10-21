@@ -13,6 +13,6 @@ defmodule Logex.IO.Point do
           name: String.t(),
           direction: :input | :output,
           address: Logex.IO.address(),
-          type: :bool | :dint
+          type: Logex.Declarations.elementary()
         }
 end
