@@ -235,9 +235,10 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   integer widths `sint int lint usint uint udint ulint` beside `dint`; `real` and
   `lreal`, with literals `37.5` and `1.5e3`, and `16#ff`, `2#1010` and `1_000`; the bit
   strings `byte word dword lword` with `and or xor not shl shr rol ror`; IEC's typed
-  conversions, `real_to_int` and `trunc_int` among them; bit access `word.3` and
+  conversions, `real_to_int` and `real_trunc_int` among them; bit access `word.3` and
   `word.[n]`; arrays `var temps real[8]`, up to three dimensions, of timers and blocks
-  too, and at I/O points; typed counters, `ctu_int` and the rest, and long timers in
+  too, and at I/O points; typed counters, `ctu_int` and the rest, with `ctu_dint` another
+  word for `ctu`, and long timers in
   nanoseconds, `ton_ltime`. **One rule that runs today changes:** an arithmetic result
   past its type's limit will wrap, with no power, rather than stop at the limit, the
   dint's included ("Arithmetic", below, shows the rule that runs until then). Each type

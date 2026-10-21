@@ -249,8 +249,11 @@ rounding row's principle, "Never hide a rounding mode inside a conversion name":
 `real_to_<integer>` names round to nearest, a tie to the even neighbour, a rounding IEC
 fixes in the standard that names them (Table 22 footnote b, both editions, now read:
 `REAL_TO_INT(2.5)` = 2, `(-2.5)` = −2), so they hide no mode logex chose, and the one
-other mode taken, truncation, has its own names, `trunc_<integer>`, IEC's overloaded
-TRUNC (feature 2c), eight of them; `round`, `ceil` and `floor`, which IEC lacks, stay
+other mode taken, truncation, has its own names, IEC's typed `real_trunc_<integer>` and
+`lreal_trunc_<integer>` (feature 2b), sixteen of them, not the overloaded
+`trunc_<integer>` (feature 2c), as the maintainer answered on 2026-10-21 (decision 162);
+a value outside its integer target is rounded, or truncated, and then wrapped (decision
+161); `round`, `ceil` and `floor`, which IEC lacks, stay
 deferred, each its own name. The names are the 90 of Table 23, every ordered pair of the
 ten numeric types, of which IEC lacks none: 56 between integer types, 32 between a real
 and an integer type, and `real_to_lreal` and `lreal_to_real`; and with the bit strings

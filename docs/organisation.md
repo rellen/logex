@@ -38,7 +38,9 @@ landed, and README's "Running a plant on the clock" and "What logex is not". Mil
 data types, was designed and decided on 2026-10-21 (§4.12, decisions 144–160): IEC's
 integer widths, signed and unsigned, overflow wrapping in every width (superseding
 decision 77), the two reals, the bit strings and the bitwise instructions, arrays of up
-to three dimensions, located too, typed counters and long timers; nothing of it is built
+to three dimensions, located too, typed counters and long timers; the record's ten
+questions put back and its three open rules were answered by the maintainer the same day
+(decisions 161–166, and notes on the decisions they settle); nothing of it is built
 yet.** On 2026-09-28 the
 maintainer adopted the direction in §1 (IEC's software model, in logex's dialect: the
 hierarchy, task-style execution and I/O mapping), deferred routines, and took decisions
@@ -2845,7 +2847,8 @@ one of:
   `Logex.Runtime`'s steps (`PLAN.md` M4-4).
 - *(Decided 2026-10-21 for Milestone 5, decisions 153 and 160:)* `{:fault, task,
   instance, fault}`, a major fault, an index or a tag bit number out of range, the
-  round's first, before its write (§4.12, "The major fault").
+  round's first, at the end of the step that raised it and before its write (§4.12, "The
+  major fault"; decision 153's note).
 
 *(Landed with M4-4, 2026-10-18, as this section says, with the readings the record left,
 five of them put to the maintainer and answered on 2026-10-19 as decisions 133 to 137,
@@ -3163,6 +3166,15 @@ work on bit strings and integers alike (155); **arrays may be located** (156); a
 timers and counters get **typed variants**, the long timers counted in nanoseconds
 (158). Where a rule changes decided text above or in §7, that text is annotated where it
 stands, never rewritten. `PLAN.md` §3's Milestone 5 gives the items and their order.
+The record then put ten readings back to the maintainer and left three rules open ("Put
+to the maintainer", below), all thirteen answered on 2026-10-21: seven readings as the
+record took them, each a note on the decision it settles; three otherwise, a real too
+large for its integer target **rounded, then wrapped** (decision 161), the truncations
+named in IEC's typed form, **`real_trunc_int`** (162), and **`ctu_dint`, `ctd_dint` and
+`ctud_dint`** taken as aliases of `ctu`, `ctd` and `ctud` (163); and the three rules,
+`sqrt` of a negative source a minor fault, `:negative_sqrt` (164), a shift or rotate
+count out of range no fault (165), and an integer at a real point stored as the nearest
+real (166).
 
 **Words.** An *integer type* is one of IEC's eight, signed or unsigned. A *real* is one of
 IEC's two floating-point types, `real` and `lreal`. A *bit string* is IEC's BYTE, WORD,
@@ -3302,14 +3314,15 @@ passes no power, IEC's ENO (decision 98), and nothing else: no fault, no event (
 99). A zero divisor is unchanged: 0, no power and the minor fault (decisions 78 and 99).
 `neg` into an unsigned destination is refused when the program compiles (decision 145).
 A real does not wrap: a real result beyond its type saturates (decision 150). A
-conversion from a real into an integer whose result does not fit is truncated toward
-zero and then wrapped, with no power and no fault (decisions 146 and 148), how the
-rounding meets the truncation at the range's edge put to the maintainer below. The counters
+conversion from a real into an integer rounds to the nearest, a tie to the even
+neighbour, and a rounded value that does not fit is wrapped, with no power and no fault
+(decisions 146, 148 and 161): `real_to_int` of 40000.7 rounds to 40001 and wraps to
+−25535; a truncation, `real_trunc_int`, truncates toward zero and then wraps. The counters
 are not arithmetic: IEC's CTU and CTD bodies stop counting at a limit (`CV < PVmax`,
 `CV > PVmin`, Ed 3 Table 45), as decision 71 has logex's do, and decision 146 names only
 decision 77, so a counter stops at its type's limit with `ov` or `un` latched, as before;
-Logix's COUNTER rolls over instead (RM018A p.94, p.104), which is put to the maintainer
-below.
+Logix's COUNTER rolls over instead (RM018A p.94, p.104), and the maintainer kept the
+stop (§4.12's fifth question, decision 158's note).
 
 *What this changes for programs that run today.* Every dint result that passes a limit
 gives a different value. The README's fill valve, `add total flow total`, stopped at
@@ -3357,8 +3370,9 @@ Any other source is refused when the program compiles, naming the conversion to 
 their types, which is exact on the BEAM, with none of C's signed and unsigned surprises;
 an integer with a real compares only where Figure 11 widens the integer into the real's
 type, and two reals by value; a bit string compares with a bit string as an unsigned
-integer (Ed 3 p.90), and with an integer tag only through a conversion (the ninth question
-put to the maintainer below). `move` takes the
+integer (Ed 3 p.90), and with an integer tag only through a conversion, refused naming
+it (the ninth question put to the maintainer, answered as recorded, decision 147's
+note). `move` takes the
 arithmetic rule. The departure is plain and said in the `add` stanza when it lands: IEC
 computes an overloaded `INT + INT` as an INT even when stored into a DINT (Ed 3 p.70,
 Example 3), and Siemens documents the trap (`INT#1 + 50000` gives −15,535, TIA V21
@@ -3375,25 +3389,35 @@ rule reaches beyond an instruction is decision 159.
 - **the 90 numeric conversions** of Ed 3 Table 23, every ordered pair of the ten numeric
   types, of which IEC lacks none: 56 between the integer types, 32 between a real and an
   integer type, and `real_to_lreal` and `lreal_to_real`;
-- **`trunc_<integer>`**, eight, IEC's overloaded truncation (Table 22 feature 2c,
-  `TRUNC_INT(-1.6)` = −1, footnote c), toward zero, from either real;
+- **`real_trunc_<integer>` and `lreal_trunc_<integer>`**, sixteen, IEC's typed
+  truncation (Table 22 feature 2b; decision 162), each from the real type it names to
+  each of the eight integer types, toward zero, `real_trunc_int` of −1.6 giving −1
+  (footnote c's `TRUNC_INT(-1.6)` = −1); IEC's overloaded `TRUNC_<integer>` (feature 2c)
+  is not taken;
 - **the bit-string conversions**, binary transfers (Ed 3 §6.6.2.5.4–6.6.2.5.5, Tables 24
   and 25): the 12 between the four bit strings and the 64 between a bit string and an
   integer type, a widening filling 0 on the left, a narrowing keeping the rightmost bytes,
   never a sign extension, so an `int` −1 into a `dword` is 16#0000FFFF.
 
-That is 174 mnemonics, each reserved and each owing its survey. A real into an integer
+That is 182 mnemonics, each reserved and each owing its survey. A real into an integer
 rounds to the nearest, a tie to the even neighbour (Table 22 footnote b, both editions:
 `REAL_TO_INT(2.5)` = 2, `(-2.5)` = −2, `(1.6)` = 2; Logix the same, RM018A p.872), an
 unsigned target too (Table 23 rows 6–9 and 15–18); Elixir's `round/1` and
 `Float.round/1` round a tie away from zero (verified on 1.20.4/OTP 28), so the
-implementation must not call them. An integer result outside its target is truncated
-toward zero and wrapped, with no power (decision 146); `lreal_to_real` beyond a real's
+implementation must not call them. A rounded value outside its target is wrapped, with
+no power (decisions 146 and 161, the maintainer's answer to the first question): one
+rounding everywhere, so `real_to_int` of 32767.6 and of 32768.4 give −32768, of 40000.7
+−25535 and of 70000.4 4464, IEC's own case, the order of IEC's procedure (Ed 3
+§6.6.2.5.3 p.79: the source extended to LREAL, converted to LINT, which rounds, and only
+then to the target, the stored value left to the implementer) and of Logix's (*"rounds the fractional part and truncates the
+upper portion of the non-fractional part"*, RM018A p.875); a truncation truncates and
+then wraps; `lreal_to_real` beyond a real's
 range saturates, with no power (decision 150); an integer into a real rounds to the
 nearest value the real holds. **`docs/naming.md`'s principle is kept**: *"Never hide a
 rounding mode inside a conversion name"*. `real_to_int` hides none logex chose, since IEC
 fixes its rounding in the standard that names it, and the one other mode logex takes,
-truncation, has its own name, `trunc_<integer>`, as the principle asks; `round`, `ceil`
+truncation, has its own names, `real_trunc_<integer>` and `lreal_trunc_<integer>`, as
+the principle asks (the fourth question, answered as recorded, decision 148's note); `round`, `ceil`
 and `floor`, which IEC does not have (none occurs in Ed 3's text), stay deferred, each a
 name of its own when a plant asks. Ed 3's overloaded `to_<type>`, which the design
 recommended, is not taken. Deferred with them: `BOOL_TO_*` and `*_TO_BOOL` (Tables 24
@@ -3438,9 +3462,10 @@ single's range but encodes infinity (`<<127, 128, 0, 0>>`), which no float-32 ma
 back, so a write saturates **before** it encodes; a subnormal single encodes (`1.0e-45`
 gives 1.4e−45), so the flush is logex's own; and `0.0 === -0.0` is false, a match on
 `0.0` missing −0.0, which is why one zero is kept (all verified on 1.20.4/OTP 28).
-`sqrt`, which decision 79 kept for a real, lands with the reals; what it does with a
-negative source, which raises on the BEAM and which no answer settles, is put to the
-maintainer before it lands.
+`sqrt`, which decision 79 kept for a real, lands with the reals; a negative source,
+which raises on the BEAM, writes 0.0, passes no power and raises the minor fault
+`:negative_sqrt` (decision 164), the source checked before the BEAM's square root is
+called, as a divisor is checked before it divides.
 
 **Bit strings, the bitwise instructions and bit access** (decisions 155 and 160). `byte
 word dword lword` are types of their own, IEC's, with no arithmetic: `add` of a `word` is
@@ -3449,16 +3474,20 @@ bitwise instructions are IEC's, lowercased (Ed 3 Tables 30 and 31), and take bit
 **and** integers, the maintainer's "Logix-friendly" (Logix's AND, OR, XOR and NOT take
 SINT to LREAL, RM018A pp.494–496): `and a b dst`, `or a b dst`, `xor a b dst`, `not src
 dst`, and `shl src n dst`, `shr`, `rol` and `ror`. Each computes in its destination's
-type by decision 147, so its operands are all bit strings or all integers, and on an
+type by decision 147, so its operands are all bit strings or all integers, a mix
+refused naming the conversion (the second question, answered as recorded, decision 155's
+note), and on an
 integer it works on the two's-complement pattern of the destination's width. `shr` fills 0
 on the left, a logical shift, as IEC's (*"zero-filled on left"*, Table 30) and unlike the
 classic Siemens `SHR_I`, which sign-extends; `rol` and `ror` are circular within the
 destination's width. `n` is a literal or an integer tag; a shift of the width or more
-gives 0, by IEC's zero-fill definition; a rotate of n rotates by n modulo the width
-(IEC's text says only "circular", **unverified** for n at or past the width); a negative
-literal `n` is refused when the program compiles, IEC calling it an error (Table 30
-footnote a). A bitwise instruction cannot fail, so its power out is its power in, as
-Logix's rung-out (a routine choice below). `docs/naming.md` planned `wand wor wxor wnot`,
+gives 0, by IEC's zero-fill definition, with its power in; a rotate of n rotates by n
+modulo the width (IEC's text says only "circular", **unverified** for n at or past the
+width); a negative literal `n` is refused when the program compiles, IEC calling it an
+error (Table 30 footnote a); and a tag `n` that is negative at run time acts as a count
+of 0, the source written unshifted, with no power out and no fault (decision 165). Apart
+from that one case a bitwise instruction cannot fail, so its power out is its power in,
+as Logix's rung-out (a routine choice below). `docs/naming.md` planned `wand wor wxor wnot`,
 reasoning that *"logex's env is untyped integers, so the reader is the type checker"*;
 the types end that premise, and rule 1 takes IEC's words (its note is amended); its other
 worry, that a bare `or` would read as a branch, does not arise, since `or` stands where a
@@ -3515,14 +3544,15 @@ record states it instruction by instruction: a contact passes no power, a coil a
 one-shot write nothing and pass no power, a `move`, an arithmetic, a bitwise or a
 conversion instruction writes nothing and passes no power, and the rest of the rung runs
 on that power; the scan finishes. `%Logex.Fault{}` gains `severity`, `:minor` for a zero
-divisor and `:major` for the new kinds, `:index_out_of_range` and `:bit_out_of_range`, and
+divisor and for a negative square root, `:negative_sqrt` (decision 164), and `:major` for
+the new kinds, `:index_out_of_range` and `:bit_out_of_range`, and
 the subscripts or bit number read; it is placed as decision 99 places a fault, in a lone
 instance's `state.faults` and as a cycle's `{:fault, task, instance, fault}` event after
 its scan's `{:ran, ...}`. `Logex.Runner` trips on the round's first major fault at the end
 of the step that raised it, one task's run or the untimed instances' run (`cycle_step/2`,
 decision 118), as it checks a timed task's watchdog when the step is done: the step's own
-run scans every instance it holds, and none of the round's later steps runs (a reading,
-put to the maintainer below, the tenth question). It trips before it writes the round's
+run scans every instance it holds, and none of the round's later steps runs (the tenth
+question put to the maintainer, answered as recorded, decision 153's note). It trips before it writes the round's
 outputs, on decision 113's one path, every output 0 once, its reason `{:fault, task,
 instance, fault}`, so that the trip names the instance, the file, the line and the index,
 and `get/2` reads each later task's instances as the round before left them. A host that
@@ -3541,7 +3571,10 @@ elements' order, each element a point of its own, read, written and forced by it
 told both names. An adapter's `check/3` refuses a type its device cannot carry. A value a
 device, a host's `put_inputs/3` or a force gives is checked by
 `Logex.Declarations.fits?/2`: an integer point takes only an integer that fits, a float
-refused; a real point takes a float or an integer, stored rounded at its width; a bit
+refused; a real point takes a float or an integer, stored as the nearest value of its
+width, an integer's lost precision silent, as Logix's is, so that 16,777,217 at a `real`
+point is 16777216.0, and only a value beyond the type's range a bad value (decision
+166), where decision 147 refuses a literal the slot cannot hold exactly; a bit
 string takes an integer from 0 to 2^N−1, as the unsigned integer IEC compares it as (a
 reading of decision 156's integer rule). A refused device value trips the runner as a bad
 value (decision 114). The forces file spells a real so that it reads back exactly, as
@@ -3575,12 +3608,16 @@ words `ctu_int ctu_lint ctu_udint ctu_ulint`, `ctd_int ctd_lint ctd_udint ctd_ul
 `ctud_int ctud_lint ctud_udint ctud_ulint`, their `pv` and `cv` of that type, each
 stopping at its type's limits with `ov` or `un` latched (decision 71 by width); `ctu`,
 `ctd` and `ctud` stay IEC's CTU_DINT, CTD_DINT and CTUD_DINT (features 1b, 2b, 3b), where
-IEC's plain CTU is CTU_INT (feature 1a), a departure logex has made since M3-1. The
+IEC's plain CTU is CTU_INT (feature 1a), a departure logex has made since M3-1; and
+`ctu_dint`, `ctd_dint` and `ctud_dint`, IEC's typed names for those three, are aliases
+of them (decision 163), the same types, so that an instance declared with either word is
+one type, named in every message and warning by the plain word. The
 instructions stay `ctu` and `ctd`, each running every counter of its kind, as `ctu` runs a
 `ctud` (M3-1), its preset judged in its instance's type (a routine choice below). The long
 timers are IEC's `ton_ltime`, `tof_ltime` and `tp_ltime` (Ed 3 Table 46 features 2c, 3c
-and 1c), and `rto_ltime`, read as the "rto equivalent if fitting" the maintainer allowed
-and put back to the maintainer below, run by `ton`, `tof`, `tp` and `rto`: their `pre`
+and 1c), and `rto_ltime`, the "rto equivalent if fitting" the maintainer allowed, taken
+(the seventh question, answered as recorded, decision 158's note), run by `ton`, `tof`,
+`tp` and `rto`: their `pre`
 and `acc` are `lint` counts of **nanoseconds**, as IEC's LTIME is (*"a signed 64-bit
 integer with unit of nanoseconds"*, Ed 3 Table 10 footnote m), and the preset on the
 instruction is in nanoseconds, 0 to 2^63−1, about 292 years. The TIME and LTIME types
@@ -3606,8 +3643,9 @@ as IEC's rule 6 forbids implicit conversion for in-out parameters.
 reserves it with the tags, labels, globals and instances it breaks: the type words `sint
 int lint usint uint udint ulint real lreal byte word dword lword`, in every `.ld` and
 `.logex` file, `int`, `real`, `byte` and `word` the likeliest to break a tag; the twelve
-typed counters and four long timers, in every `.ld` file; and the mnemonics, in every
-`.ld` file, `and or xor not shl shr rol ror`, the 174 conversions and `sqrt`. A family of
+typed counters, the three aliases `ctu_dint ctd_dint ctud_dint` (decision 163) and the
+four long timers, in every `.ld` file; and the mnemonics, in every `.ld` file, `and or
+xor not shl shr rol ror`, the 182 conversions and `sqrt`. A family of
 conversions may share one stanza that names each member, `naming_test.exs` reading the
 family's names as data (a routine choice below).
 
@@ -3631,7 +3669,8 @@ family's names as data (a routine choice below).
   second-`ote` warning; a literal subscript is its element's path, `lamps[2]`; over
   writes that no rule could see.
 - *A bitwise instruction's power out is its power in*, since it cannot fail; over no
-  power where a shift drops a 1, which IEC does not call an error.
+  power where a shift drops a 1, which IEC does not call an error. *(Amended by decision
+  165: a shift or rotate whose count is a tag negative at run time passes no power.)*
 - *A counter's or timer's instruction runs every typed variant of its kind*, `ton` a
   `ton_ltime`, `ctu` a `ctu_int`, its preset judged in its instance's type and unit; over
   an instruction for each variant, `ton_ltime lt 30000000000`, twelve more mnemonics in
@@ -3650,84 +3689,68 @@ family's names as data (a routine choice below).
   by `\.\[{NAME}\]` and the subscripts by `\[({NAME}|{INT})(,({NAME}|{INT})){0,2}\]`; over
   tokens and a grammar production, which would change every operand's shape.
 - *A family stanza for the conversions*, one for each IEC table, each member named;
-  over 174 stanzas that say the same thing 174 times.
+  over 182 stanzas that say the same thing 182 times.
 - *The oracles in `api_contract_test.exs` restate every range, wrap and rounding rule in
   Elixir* without calling `Logex.Declarations`, as they do for the dint today.
 
-**Left open, for the item that meets it, each to be put to the maintainer before it
-lands.**
-- `sqrt` of a negative source (it raises on the BEAM; decision 150 rules out a NaN).
+**Left open, for the item that meets it, and answered by the maintainer on 2026-10-21**,
+each a decision of its own:
+- `sqrt` of a negative source (it raises on the BEAM; decision 150 rules out a NaN): 0.0,
+  no power and a minor fault, `:negative_sqrt`, decision 99's kinds grown by one
+  (decision 164).
 - A shift or rotate whose `n` is a tag that is negative at run time (IEC: an error, Table
-  30 footnote a): no power and nothing written, a minor fault, or a major one.
-- An integer at a real point, from a device, a host or a force, beyond the real's range:
-  refused as a bad value, or saturated as decision 150 saturates a result.
+  30 footnote a): it acts as a count of 0, the source written unshifted, with no power;
+  a count of the width or more shifts everything out, 0; a rotate takes its count modulo
+  the width; no fault in any case (decision 165).
+- An integer at a real point, from a device, a host or a force: stored as the nearest
+  real, its precision lost silently, as Logix does; only a value beyond the real's range
+  is a bad value, and trips (decision 166).
 
-**Put to the maintainer, where two answers meet or an answer leaves a reading open**
-(2026-10-21). The record takes the reading given in each case, and changes it if the
-maintainer answers otherwise.
-1. *Real to integer, in range and out of it* (decisions 146 and 148). A conversion rounds
-   to nearest, ties to even, and one whose value does not fit is "truncated, then wrapped"
-   (decision 146's follow-up). Read, in the answer's words: where the rounded value fits
-   it is the result, with power; where it does not, the real is truncated toward zero
-   instead and the truncated value wrapped, with no power. The no power is itself a
-   reading, of decision 146's rule that an instruction whose stored value is not the exact
-   one passes none, which the answer does not state for a conversion. So `real_to_int` of
-   32767.6 rounds to 32768, which does not fit, and truncates to 32767, which does: 32767,
-   with no power; 32768.4 truncates to 32768 and wraps to −32768; and 40000.7 wraps as
-   40000, to −25536, not as 40001. The cost is an edge rule neither IEC nor Logix has: the
-   rounding mode changes at the range's edge. The alternative rounds first and wraps the
-   rounded value, one rounding everywhere, 32767.6 giving −32768 and 40000.7 −25535, which
-   is what IEC's own procedure and Logix's do: Ed 3 §6.6.2.5.3 (p.79) converts a numeric
-   source by extending it to the largest type of its category, then converting to the
-   largest of the target's, LINT, which rounds, and only then to the target, and works the
-   out-of-range case on `REAL_TO_INT(70_000.4)`, whose stored value it leaves to the
-   implementer; and Logix *"rounds the fractional part and truncates the upper portion of
-   the non-fractional part"* (RM018A p.875). Both readings give 70000.4 → 4464, 70000
-   wrapped, with no power.
-2. *Bitwise on integers, and mixed types* (decisions 155 and 147). The bitwise
-   instructions work on bit strings and on integers, but Figure 11 converts neither into
-   the other implicitly, so `and status 16#00ff speed`, a `word` with an `int`
-   destination, is refused, naming `word_to_int`. Read: both answers hold, an instruction
-   being all bit strings or all integers.
-3. *Typed conversions with an overloaded truncation* (decision 148). The answer takes
-   IEC's typed `real_to_int` (Table 22 feature 1a) and `trunc_<integer>`, IEC's overloaded
-   truncation (feature 2c); IEC's typed truncation is `real_trunc_int` and
-   `lreal_trunc_int` (feature 2b), sixteen names. Read: `trunc_int`, eight names, as
-   answered.
+**Put to the maintainer, where two answers meet or an answer leaves a reading open, and
+answered on 2026-10-21.** Each question gives the reading the record took and the
+maintainer's answer: seven as the record read them, each a note on the decision it
+settles, and three otherwise, each a decision of its own.
+1. *Real to integer, in range and out of it* (decisions 146 and 148). The record read
+   "truncate, then wrap" as a second rounding at the range's edge: where the rounded
+   value does not fit, the real truncated toward zero instead and the truncated value
+   wrapped, 32767.6 giving 32767 and 40000.7 −25536. **Answered otherwise: round, then
+   wrap, as IEC and Logix do** (decision 161): one rounding everywhere, the rounded value
+   wrapped with no power, 32767.6 → −32768, 32768.4 → −32768, 40000.7 → −25535, and IEC's
+   own case, 70000.4 → 4464 (Ed 3 §6.6.2.5.3 p.79; RM018A p.875).
+2. *Bitwise on integers, and mixed types* (decisions 155 and 147). Read: an instruction
+   is all bit strings or all integers, `and status 16#00ff speed`, a `word` with an `int`
+   destination, refused naming `word_to_int`. **Answered as recorded** (decision 155's
+   note).
+3. *Typed conversions with an overloaded truncation* (decision 148). Read: `trunc_int`,
+   IEC's overloaded TRUNC (Table 22 feature 2c), eight names. **Answered otherwise:
+   IEC's typed form, `real_trunc_int`** (feature 2b), sixteen names, `real` and `lreal`
+   each to the eight integer types, and not `trunc_int` (decision 162).
 4. *"Never hide a rounding mode inside a conversion name"* (decision 148). Read: kept,
-   since `real_to_int`'s rounding is IEC's and truncation has its own name, as above; the
-   alternative reading is that the principle forbids any conversion that rounds, leaving
-   `real_to_int` refused and `round_<integer>` beside `trunc_<integer>`.
-5. *Counters and the wrap* (decisions 146 and 158). Logix's counters roll over (RM018A
-   p.94, p.104); IEC's stop. Read: decision 146 replaces decision 77 alone, and the
-   counters, IEC's typed ones, stop at their type's limits, decision 71 by width.
-6. *`ctu` and IEC's CTU* (decision 158). IEC's plain CTU is CTU_INT; logex's `ctu` stays
-   CTU_DINT, as answered. Read: there is no `ctu_dint`, `ctd_dint` or `ctud_dint`, one
-   spelling for one thing, rule 3.
-7. *`rto_ltime`* (decision 158). The RTO is a vendor's (rule 2) and IEC has no RTO_LTIME.
-   Read: fitting, IEC's suffix on the vendor's mnemonic, so taken; the alternative is no
-   long retentive timer.
-8. *"Wrap, as the vendors do", with no power* (decision 146). Logix's ladder wraps and
-   passes power (rung-out is rung-in, S:V set); the S7-1200 wraps with ENO 0. Read: the
-   S7-1200's, no power, as answered.
-9. *A bit string compared with an integer* (decisions 147 and 155). The "Logix-friendly"
-   follow-up makes bit strings and integers interchangeable for bit access and the bitwise
-   instructions; it says nothing of a comparison, and Figure 11 widens no integer into a
-   bit string nor a bit string into an integer. Read: a comparison of a bit string with an
-   integer tag, `eq drive_status fault_code`, a `word` with an `int`, is refused, naming
-   `int_to_word` and `word_to_int`, as a `move` between them is, while a literal is judged
-   by its slot (decision 149), so `eq drive_status 16#0004` is taken; the alternative
-   compares them by value, the bit string read as the unsigned integer IEC compares bit
-   strings as (Ed 3 p.90), as two integers compare whatever their types.
-10. *When the runner trips on a major fault* (decision 153). The answer has the scan
-    finish with the instruction doing nothing and the runner trip before it writes
-    outputs; a round runs several steps, each due task's run and then the untimed
-    instances' (`cycle_step/2`, decision 118). Read: the runner trips at the end of the
-    step that raised the round's first major fault, as it checks a timed task's watchdog,
-    that step's run scanning every instance it holds and no later step running, so that
-    `get/2` reads each later task's instances as the round before left them (§4.12, "The
-    major fault"); Logix halts logic at once (PM014O p.9). The alternative runs every due
-    step of the round, as `cycle/3` does, and trips after the last, before the write.
+   `real_to_int` rounding as IEC fixes it and truncation named apart; the alternative
+   refused `real_to_int`. **Answered as recorded: kept with `real_to_int`** (decision
+   148's note).
+5. *Counters and the wrap* (decisions 146 and 158). Read: decision 146 replaces decision
+   77 alone, and the counters stop at their type's limits, decision 71 by width, where
+   Logix's roll over. **Answered as recorded** (decision 158's note).
+6. *`ctu` and IEC's CTU* (decision 158). Read: no `ctu_dint`, `ctd_dint` or
+   `ctud_dint`, one spelling for one thing. **Answered otherwise: the three exist, as
+   aliases of `ctu`, `ctd` and `ctud`, which are the same thing**, each owing its own
+   stanza (decision 163, which says how a message and a warning name an instance
+   declared with either spelling).
+7. *`rto_ltime`* (decision 158). Read: IEC's suffix on the vendor's mnemonic, so taken.
+   **Answered as recorded: taken** (decision 158's note).
+8. *"Wrap, as the vendors do", with no power* (decision 146). Read: the S7-1200's, no
+   power, where Logix's ladder passes power. **Answered as recorded: a wrap passes no
+   power** (decision 146's note).
+9. *A bit string compared with an integer* (decisions 147 and 155). Read: a comparison
+   of a bit string with an integer tag, `eq drive_status fault_code`, refused naming
+   `int_to_word` and `word_to_int`, a literal judged by its slot, so that `eq
+   drive_status 16#0004` is taken. **Answered as recorded** (decision 147's note).
+10. *When the runner trips on a major fault* (decision 153). Read: at the end of the step
+    that raised the round's first major fault, that step scanning every instance it
+    holds and no later step of the round running, before the round's write; the
+    alternative ran every due step and tripped after the last. **Answered as recorded:
+    at the end of the step that raised it** (decision 153's note).
 
 **Unverified.**
 1. CODESYS's tie rule for `REAL_TO_INT`: its page's one example, −1.5 → −2, and ABB's
@@ -3746,7 +3769,8 @@ maintainer answers otherwise.
    third-party pages say so; RM094N p.84 says only that it is stored in 32-bit words).
 6. The version that brought Logix's TIMER_T and time types.
 7. That two's complement is required by IEC anywhere: no clause read says it.
-8. IEC's ROL and ROR for a count at or past the width, and the typing of ST's unary minus
+8. IEC's ROL and ROR for a count at or past the width (logex's rule is decision 165's
+   either way), and the typing of ST's unary minus
    on an unsigned operand (Ed 3 Table 71), neither read.
 9. That Logix has no shift-by-N instruction for integers: the survey found none
    (`docs/naming.md`, "Bitwise and shift"), and RM018A's shift instructions are BSL and
@@ -3780,7 +3804,7 @@ suffixes.
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
 | VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
-| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160; `PLAN.md` §3, Milestone 5), none built yet | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
+| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–166 answering the record's questions the same day; `PLAN.md` §3, Milestone 5), none built yet | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage *(arrays decided for Milestone 5, 2026-10-21, decisions 151–156; STRUCT still deferred)* | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays. *(Kept by Milestone 5, decision 158: the TIME and LTIME types and `T#` stay deferred, a preset stays a plain integer, ms for the `ton` family and ns for the long timers.)* |
@@ -4861,6 +4885,10 @@ questions asked after M3-1's review, the same day.
     reset or a load: `r` clears `ov` on a `ctu`, `ld` clears `un` on a `ctd`, and either
     clears both on a `ctud`. IEC bounds its bodies by `PVmax` and `PVmin`, whose values are
     *"Implementer specific"* (Ed 3 Table 45 NOTE); logex's are the dint's. *(Landed with M3-1, 2026-10-14.)*
+    *(Kept 2026-10-21 for every width: the typed counters of decision 158 stop at their
+    type's limits, decision 146's wrap replacing decision 77 alone, as the maintainer
+    answered §4.12's fifth question; `ctu_dint` and its siblings, decision 163, are this
+    decision's counters under another word.)*
 72. **A counter under an event task (M3-1).** The e-stop's own event task counts how many
     times the e-stop was pressed. The task runs only when the e-stop switches on, so the
     counter only ever sees "pressed", never a new press, and its count stays at 0.
@@ -4965,7 +4993,8 @@ questions asked after M3-1's review, the same day.
     2026-10-21: `sqrt` lands with Milestone 5's reals, decision 150, a real in and a real
     out; what it does with a negative source, which raises on the BEAM and which
     decision 150 keeps from becoming a NaN, is put to the maintainer before it lands,
-    §4.12.)*
+    §4.12.)* *(Answered 2026-10-21 by decision 164: a negative source writes 0.0, passes
+    no power and raises the minor fault `:negative_sqrt`.)*
 80. **Pulse coils (M3-4).** A programmer wants a one-scan pulse when the start button is
     pressed, while the rest of the line carries on seeing the button.
     - Add both, `osr` for "switched on" and `osf` for "switched off", IEC's transition-
@@ -5341,7 +5370,9 @@ the record keeps; 99 is the shape of the report decision 78 asked for and left t
     the exact one, in place of "where it left the dint"; a real's is false where it
     saturated or its divisor was 0.0 (decision 150), and a conversion's where its value did
     not fit (decision 148). It stays settled, so anything may still follow. The bitwise
-    instructions, which cannot fail, pass on their power in (§4.12).)*
+    instructions, which cannot fail, pass on their power in (§4.12).)* *(Amended
+    2026-10-21 by decisions 164 and 165: `sqrt`'s power out is false where its source was
+    negative, and a shift's or a rotate's where its count, a tag, was negative.)*
 99. **How a zero divisor is reported to the host (M3-3),** the event's shape decision 78
     left to M3-3. The line works out "boxes per minute", `div boxes minutes per_minute`,
     and just after start-up the minutes are 0: the division gives 0, passes no power, and
@@ -5386,7 +5417,9 @@ the record keeps; 99 is the shape of the report decision 78 asked for and left t
     subscripts or bit number read; a major fault is placed as this decision places a
     fault, in `state.faults` and as the cycle's event, and the runner trips on it
     (decision 113's note). A wrap is still no fault (decision 146), as "a result brought
-    to a dint's limit" was not.)*
+    to a dint's limit" was not.)* *(Amended 2026-10-21 by decision 164: a minor kind more,
+    `:negative_sqrt`, `instruction: :sqrt`, so that the kinds are `:divide_by_zero` and
+    `:negative_sqrt`, minor, and `:index_out_of_range` and `:bit_out_of_range`, major.)*
 
 **M3-4's own choices, 2026-10-14.** Decisions 100–103 are M3-4's routine choices for the
 pulse coils decision 80 adopted, each with the alternative the record keeps; where the
@@ -5820,6 +5853,9 @@ over.
      this decision's one path, with a new reason, `{:fault, task, instance, fault}`, which
      names the instance, the file, the line and the index or bit number; §4.11's list of
      reasons, and the runner walk's "every trip reason", gain it with `PLAN.md`'s M5-9.)*
+     *(Settled 2026-10-21, the maintainer answering §4.12's tenth question as recorded:
+     the runner trips at the end of the step that raised the round's first major fault,
+     no later step of the round running, decision 153's note.)*
 114. **A device that fails or is lost (Milestone 4).** The drive's network cable comes
      loose, or an input card stops answering.
      - It is treated as the watchdog is: everything off, and wait for a restart;
@@ -6911,7 +6947,9 @@ design put to the maintainer, numbered as it numbered them, so that 158, put eig
 its number, and 160 is the follow-up on a bit number held in a tag. The maintainer
 answered all of them on 2026-10-21; where an answer is not the recommendation, the
 decision gives both. The questions the record found where two answers meet, or an answer
-leaves a reading open, are §4.12's "Put to the maintainer".
+leaves a reading open, are §4.12's "Put to the maintainer"; the maintainer answered them,
+and the three rules §4.12 left open, the same day, decisions 161–166 below and notes on
+the decisions the rest settle.
 
 144. **What the new types are called (Milestone 5).** The programmer declares the box
      count as a small whole number, the drive's register as a 16-bit unsigned number and
@@ -6978,7 +7016,12 @@ leaves a reading open, are §4.12's "Put to the maintainer".
      destination is truncated to an integer and then wrapped as an integer is. A real
      destination saturates (decision 150). What this changes for programs and tests that
      run today is §4.12's "Overflow wraps"; `PLAN.md`'s M5-2 changes them first, on
-     purpose.
+     purpose. *(Settled 2026-10-21, the maintainer answering §4.12's eighth question as
+     recorded: a wrap passes no power, the S7-1200's reading, not Logix's ladder's. The
+     follow-up's "truncated to an integer and then wrapped" is, for a conversion that
+     rounds, rounded and then wrapped, decision 161, which the maintainer answered
+     otherwise than the record read it; a truncation, `real_trunc_int`, truncates and
+     then wraps.)*
 147. **Arithmetic and comparison across types (Milestone 5).** The day's total is a
      `dint`, the shift's count a `uint`: `add day_total shift_count day_total`. The fan's
      speed is a `real` and its limit an `int`: `gt fan_speed fan_limit`.
@@ -7005,7 +7048,10 @@ leaves a reading open, are §4.12's "Put to the maintainer".
      integers compare by value whatever their types** (the maintainer, 2026-10-21), as
      recommended, with its two literal rules: an integer literal a real slot cannot hold
      exactly refused, the nearest it can named, and a real literal in an integer slot
-     refused.
+     refused. *(Settled 2026-10-21, the maintainer answering §4.12's ninth question as
+     recorded: a bit string compared with an integer tag is refused, naming the
+     conversion, `int_to_word` or `word_to_int`; a literal is judged by its slot, so that
+     `eq drive_status 16#0004` is taken.)*
 148. **Converting a real to an integer, and what the conversions are called (Milestone
      5).** The fan's speed is worked out as a `real` percentage and written to the drive
      as an `int`: 37.5 becomes 38 or 37? 36.5 becomes 36 or 37? And a real of 40,000.0
@@ -7032,9 +7078,14 @@ leaves a reading open, are §4.12's "Put to the maintainer".
      "never hide a rounding mode inside a conversion name"; rounding to nearest, ties to
      even, and `trunc_<integer>` beside them; out of range, decision 146's follow-up:
      truncate, then wrap** (the maintainer, 2026-10-21). §4.12's "Conversions" lists the
-     names, 90 numeric, 8 truncations and, with decision 155, 76 for the bit strings, and
-     how the principle is kept; how rounding and "truncate, then wrap" meet at a range's
-     edge, and which truncation names, are among §4.12's questions put back.
+     names, 90 numeric, 16 truncations (decision 162) and, with decision 155, 76 for the
+     bit strings, 182 in all, and how the principle is kept. *(Settled 2026-10-21 by the
+     maintainer's answers to §4.12's first, third and fourth questions: out of range, a
+     conversion rounds and then wraps, decision 161, not as the record read "truncate,
+     then wrap"; the truncations are IEC's typed `real_trunc_<integer>` and
+     `lreal_trunc_<integer>`, sixteen, decision 162, not `trunc_<integer>`; and "never
+     hide a rounding mode inside a conversion name" is kept with `real_to_int`, as
+     recorded.)*
 149. **How literals are written (Milestone 5).** The fan setpoint is 37.5, a mask is hex
      FF, a batch is a million boxes.
      - Reals `37.5`, `-0.25`, `1.5e3`, `1.5E-3`, digits on both sides of the point; `1.`,
@@ -7131,7 +7182,9 @@ leaves a reading open, are §4.12's "Put to the maintainer".
      maintainer, 2026-10-21), as recommended. §4.12's "The major fault" gives the fault's
      shape and the trip's reason, and the reading put back to the maintainer, §4.12's
      tenth question, of when in a round the runner trips: at the end of the step that
-     raised the fault, no later step of the round running.
+     raised the fault, no later step of the round running. *(Settled 2026-10-21, the
+     maintainer answering that question as recorded: the runner trips at the end of the
+     step that raised the round's first major fault.)*
 154. **Arrays of timers, counters and blocks, and one-shots on elements (Milestone 5).**
      Each lane has its own reject timer, `var lane_t ton[4]`, and its own one-shot, `var
      edge bool[4]`.
@@ -7171,6 +7224,10 @@ leaves a reading open, are §4.12's "Put to the maintainer".
      strings and integers; a coil on `status.3` counts as a write of `status`; a bit of a
      real is refused. Arithmetic on a bit string stays refused, as IEC's; `docs/naming.md`'s
      planned `wand wor wxor wnot` give way to IEC's words (its note is amended).
+     *(Settled 2026-10-21, the maintainer answering §4.12's second question as recorded: a
+     bitwise instruction's operands are all bit strings or all integers, a mix refused
+     naming the conversion. Decision 165 gives a shift's or a rotate's count out of range
+     its rule.)*
 156. **What types an I/O point may have, and what a device gives (Milestone 5).** The
      drive card gives the fan's speed as a 16-bit register, the analog card the eight zone
      temperatures as reals, the panel the lamp's bool.
@@ -7229,7 +7286,11 @@ leaves a reading open, are §4.12's "Put to the maintainer".
      **nanoseconds**, as IEC's LTIME is ("Long timers in ns"), the TIME and LTIME types
      themselves deferred. Since `Logex.Runtime`'s `now` and the runner's clock are whole
      milliseconds, a long timer's resolution is one millisecond, its `acc` stepping by
-     1,000,000 ns (§4.12, "Timers and counters").
+     1,000,000 ns (§4.12, "Timers and counters"). *(Settled 2026-10-21 by the
+     maintainer's answers to §4.12's fifth, sixth and seventh questions: the counters stop
+     at their type's limits, decision 71 by width, as recorded; `ctu_dint`, `ctd_dint` and
+     `ctud_dint` exist as aliases of `ctu`, `ctd` and `ctud`, decision 163, otherwise
+     than the record read it; and `rto_ltime` is taken, as recorded.)*
 159. **Where decision 147's widening applies beyond an instruction (Milestone 5),** added
      by the review. The shift's count is a `uint` and the block `seal` takes a `dint`
      input: `cal s1 shift_count`; the configuration connects a `uint` global to a
@@ -7268,6 +7329,157 @@ leaves a reading open, are §4.12's "Put to the maintainer".
      out of range does** (the maintainer, 2026-10-21), as recommended in the follow-up. A
      one-shot's storage bit, or a pulse coil's bit, on a bit takes a literal number
      (decision 154).
+
+**The answers to Milestone 5's questions put back, 2026-10-21** (§4.12, "Put to the
+maintainer"). Decisions 161–163 are the three of §4.12's ten questions the maintainer
+answered otherwise than the record read them, and 164–166 the three rules §4.12 left
+open for the item that meets them. The other seven answers keep the record's reading and
+are notes on the decisions they settle: 146 (the eighth question), 147 (the ninth), 148
+(the fourth), 153 (the tenth), 155 (the second) and 158 (the fifth and seventh).
+
+161. **A real too large for its integer target (Milestone 5),** following decisions 146
+     and 148. The fan's speed is worked out as a `real` and has run to 40,000.7 when it
+     is written to the drive as an `int`, whose top is 32,767.
+     - Round, and where the rounded value does not fit, truncate the real toward zero
+       instead and wrap the truncated value, with no power: 32767.6 gives 32767, 32768.4
+       −32768 and 40000.7 −25536 (the record's reading of decision 146's follow-up,
+       "truncated, then wrapped");
+     - or round, and wrap the rounded value, with no power: one rounding everywhere,
+       32767.6 giving −32768, 32768.4 −32768 and 40000.7 −25535.
+
+     Both give IEC's own case, 70000.4, 4464, with no power. IEC converts a numeric source
+     by extending it to the largest type of its category, then converting it to LINT,
+     which rounds, and only then to the target, and leaves the stored value of
+     `REAL_TO_INT(70_000.4)` to the implementer (Ed 3 §6.6.2.5.3 p.79); Logix *"rounds the
+     fractional part and truncates the upper portion of the non-fractional part"* (RM018A
+     p.875). The first changes the rounding mode at the range's edge, which neither does.
+
+     **Taken: round, then wrap, as IEC and Logix do** (the maintainer, 2026-10-21),
+     reversing the record's reading. Every `<real>_to_<integer>` conversion rounds to the
+     nearest, a tie to the even neighbour (decision 148), and a rounded value outside its
+     target keeps its low bits, two's complement for a signed target (decision 146),
+     passing no power, as a wrap does (§4.12's eighth question, answered as recorded):
+     `real_to_int` of 32767.6 is −32768, of 32768.4 −32768, of 40000.7 −25535 and of
+     70000.4 4464, each with no power, and of 32767.4, which rounds to 32767, 32767 with
+     power. A truncation, `real_trunc_int` (decision 162), truncates toward zero and then
+     wraps, with no power where the truncated value does not fit, so `real_trunc_int` of
+     40000.7 is −25536. No fault is recorded for either (decision 146's follow-up).
+162. **What the truncations are called (Milestone 5),** following decision 148.
+     Converting the fan's speed for a display that must never show a value it has not
+     reached, the programmer drops the fraction: 37.9 shown as 37.
+     - `trunc_<integer>`, IEC's overloaded TRUNC (Ed 3 Table 22 feature 2c), eight names,
+       `trunc_int` from either real (the record's reading of the answer);
+     - or IEC's typed truncation (feature 2b), `real_trunc_int` and `lreal_trunc_int`,
+       sixteen names, each naming its source as `real_to_int` does.
+
+     **Taken: IEC's typed form, `real_trunc_int`, not `trunc_int`** (the maintainer,
+     2026-10-21): sixteen names, `real_trunc_<integer>` and `lreal_trunc_<integer>` for
+     each of `sint int dint lint usint uint udint ulint`, each from the real type it
+     names, toward zero (Table 22 footnote c, `TRUNC_INT(-1.6)` = −1, so `real_trunc_int`
+     of −1.6 is −1), out of range wrapped with no power (decision 161). Every conversion's
+     name then says both its types, as decision 148's `<from>_to_<to>` does. The
+     conversions are 182: the 90 numeric, the 16 truncations and the 76 of the bit
+     strings (decision 155), each reserved in every `.ld` file and named in a family
+     stanza (§4.12, "Reserved words"); `trunc_int` is no mnemonic.
+163. **`ctu_dint`, `ctd_dint` and `ctud_dint` (Milestone 5),** following decision 158.
+     A programmer used to IEC's typed counters declares `var boxes ctu_dint`, beside a
+     colleague's `var cases ctu`.
+     - No such word: `ctu` is IEC's CTU_DINT and its one spelling, the typed words being
+       `ctu_int`, `ctu_lint`, `ctu_udint` and `ctu_ulint` (the record's reading);
+     - or the three as aliases, second words for the very types `ctu`, `ctd` and `ctud`
+       declare.
+
+     IEC names the DINT counters CTU_DINT, CTD_DINT and CTUD_DINT (Ed 3 Table 45 features
+     1b, 2b and 3b), and its plain CTU is CTU_INT (feature 1a); logex's `ctu` has been
+     CTU_DINT since M3-1.
+
+     **Taken: the three exist, as aliases of `ctu`, `ctd` and `ctud`, which are the same
+     thing** (the maintainer, 2026-10-21). Each is a type word, reserved in any case in
+     every `.ld` file and named in the commit that reserves it, and owes its own
+     `docs/naming.md` stanza, which `naming_test.exs` checks as for any type word, each
+     saying it is its plain word's alias, CTU_DINT's IEC name. A declaration with either
+     word gives one type, `Logex.FbType.ctu/0` and its two siblings, and keeps no
+     spelling, so `var boxes ctu_dint` and `var boxes ctu` compile to the same program.
+     *Reading (the record's):* every message and warning names an instance by its type's
+     plain word, whichever spelling declared it: `Logex.Declarations.instance_of/1`'s "a
+     ctu", which every message that names an instance's type reads, the compiler's
+     refusals of a counter (decisions 73 and 85, a counter of the other kind told to
+     declare a `ctud` among them), the warning for a counter no instruction runs, the
+     event task's counter warning (decision 72) and an edit's refusal of a type change;
+     and an
+     edit from one spelling to the other changes no type, so it is neither refused nor
+     reported. The cost is a message that names a word the declaration does not hold,
+     which each alias's stanza and README's counter section say once. The alternative, a
+     message in the declaration's own word, would put the spelling into the tag's type,
+     so that two declarations of one thing would differ as data and `Logex.FbType.same?/2`
+     and the edit's type comparison would have to excuse it.
+164. **`sqrt` of a negative source (Milestone 5),** left open by §4.12 and decision 79's
+     note. The fan's vibration is worked out as `sqrt fan_var fan_dev`, and a rounding in
+     the subtraction before it leaves `fan_var` at −0.25 for one scan.
+     - 0.0, no power and a minor fault;
+     - 0.0 and no power, with no fault, as a wrap;
+     - or a major fault, which trips the plant.
+
+     On the BEAM `:math.sqrt(-1.0)` raises (verified on 1.20.4/OTP 28), and decision 150
+     keeps a NaN, IEC 60559's answer, out of every state; IEC's SQRT takes a real
+     (decision 79), and the record read no clause of IEC's on a negative input.
+
+     **Taken: 0.0, no power and a minor fault, `:negative_sqrt`** (the maintainer,
+     2026-10-21): decision 99's fault kinds grow by one, a `%Logex.Fault{kind:
+     :negative_sqrt, instruction: :sqrt}` of `severity: :minor` (decision 153), placed as
+     a zero divisor's is, in a lone instance's `state.faults` and as a cycle's `{:fault,
+     task, instance, fault}` event after its scan's `{:ran, ...}`, the plant running on.
+     The source is checked before the BEAM's square root is called, so no
+     `ArithmeticError` leaves a scan. Whether a literal negative source, `sqrt -4.0 x`,
+     is refused when the program compiles, as decision 78 refuses a literal zero divisor,
+     is not answered, and `PLAN.md`'s M5-10 puts it to the maintainer before it lands.
+165. **A shift or rotate count out of range (Milestone 5),** left open by §4.12. The
+     drive's status word is shifted by `shl status n mask`, `n` an `int` tag an operator
+     sets, which reaches −1, or 40 for a 16-bit `word`.
+     - A count negative at run time passes no power and writes nothing;
+     - or it is a minor fault;
+     - or a major one, which trips the plant.
+
+     IEC calls a negative count an error (Ed 3 Table 30 footnote a), fills a shift with
+     zeros (Table 30) and says of a rotate only that it is circular.
+
+     **Taken: a negative shift or rotate count acts as 0, no shift, with no power out; a
+     count of at least the width shifts everything out, 0; a rotate takes its count
+     modulo the width; no fault** (the maintainer, 2026-10-21). *Reading (the record's),
+     in each case:* a negative count writes the source, unshifted and unrotated, into the
+     destination in the destination's type (decision 147), as a count of 0 writes it,
+     and passes no power, so that a lamp after it shows it; a `shl` or `shr` count of
+     the destination's width or more writes 0 and passes its power in, as §4.12 had it;
+     a `rol` or `ror` count of 0 or more rotates by the count modulo the width, with its
+     power in; and none raises a fault or an event. A negative literal count stays
+     refused when the program compiles (§4.12), and an unsigned tag is never negative.
+     This amends §4.12's routine choice that a bitwise instruction's power out is its
+     power in, for this one case, and decision 98's note.
+166. **An integer at a real I/O point (Milestone 5),** left open by §4.12. The analog
+     card's driver gives a zone temperature as the integer 16,777,217 to a `real` point,
+     or a host forces 10^40 onto it.
+     - An integer beyond the real's range refused as a bad value, which trips the runner
+       from a device (decision 114);
+     - or saturated at the real's largest finite value, as decision 150 saturates a
+       result.
+
+     A `real` holds every integer to 2^24 exactly and an `lreal` every integer to 2^53
+     (§4.12's table); Logix stores an integer put into a REAL at the REAL's precision,
+     the rounding it uses there **unverified** (§4.12, "Unverified", its second item).
+
+     **Taken: an integer at a real point is stored as the nearest real, its precision
+     lost silently, as Logix does; only a value beyond the real's range is a bad value,
+     and trips** (the maintainer, 2026-10-21). 16,777,217 at a `real` point is stored as
+     16777216.0, with no message, and 2^53 + 1 at an `lreal` point as 2^53. *Reading
+     (the record's):* "beyond the range" is a value, integer or float, whose nearest value
+     of the type would lie past its largest finite value, 3.4028235E38 for a `real`, so
+     that 2^128 is beyond and 3.4028235E38 is not; the rule is `Logex.Declarations.fits?/2`'s,
+     one check for a device's value, a host's `put_inputs/3` and a force (§4.12, "I/O
+     points"), so a device's value beyond the range trips the runner as a bad value
+     (decision 114), a host's is an `ArgumentError` and a force is refused, each in the
+     type's words. A literal is judged otherwise: one a real slot cannot hold exactly is
+     refused when the program compiles, the nearest it can named (decision 147), since
+     the programmer can write the nearest and a device cannot.
 
 ---
 

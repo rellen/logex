@@ -51,8 +51,13 @@ nothing finer, a reading the maintainer accepted on 2026-10-20, so Milestone 4 i
 Milestone 5, data types, was designed and decided on 2026-10-21 (§3, "Milestone 5";
 `docs/organisation.md` §4.12 and decisions 144–160), the maintainer answering its sixteen
 questions and a follow-up the same day, six of them otherwise than recommended, among
-them integer overflow wrapping in every width, which supersedes decision 77; its sixteen
-items, M5-1 to M5-16, are planned and none has landed.
+them integer overflow wrapping in every width, which supersedes decision 77; the
+record's ten questions put back to the maintainer and its three open rules were answered
+the same day (decisions 161–166, and notes on the decisions the rest settle), three of
+the ten otherwise than the record read them: a real too large for its integer target
+rounded and then wrapped (161), the truncations named `real_trunc_int` (162), and
+`ctu_dint`, `ctd_dint` and `ctud_dint` aliases of `ctu`, `ctd` and `ctud` (163); its
+sixteen items, M5-1 to M5-16, are planned and none has landed.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -4326,7 +4331,7 @@ killed runner could be restarted.)*
 ### Milestone 5 — data types
 
 **Designed and decided 2026-10-21** (`docs/organisation.md` §4.12 and §7, decisions
-144–160; "decision N" in this section is that §7's). The maintainer asked for 1-, 2-, 4-
+144–166; "decision N" in this section is that §7's). The maintainer asked for 1-, 2-, 4-
 and 8-byte integers, how IEC and the vendors handle signed ones, 32- and 64-bit reals,
 arrays of all the others, and what else IEC and the vendors have. A design pass on
 `0c55e36` read IEC 61131-3 Ed 2 and Ed 3 in full, the conventional family's manuals,
@@ -4341,9 +4346,18 @@ have up to three dimensions (151); the bit strings `byte word dword lword` come 
 located, one point an element at consecutive addresses (156); and the counters and timers
 get typed variants, IEC's `ctu_int` to `ctud_ulint` and long timers in nanoseconds (158).
 A bit number may be a tag, `status.[n]`, and one out of range trips the plant, as an index
-out of range does (160, 153). §4.12 lists ten readings put back to the maintainer, where
-two answers meet or an answer leaves a reading open, each with the reading the record
-takes, and three rules left open for the item that meets them.
+out of range does (160, 153). §4.12 then put ten readings back to the maintainer, where
+two answers meet or an answer leaves a reading open, and left three rules open for the
+item that meets them, all thirteen answered on 2026-10-21: seven readings as the record
+took them, each a note on its decision; three otherwise, a real too large for its
+integer target rounded and then wrapped, `real_to_int` of 40000.7 giving −25535 (161),
+the truncations IEC's typed `real_trunc_int` and its fifteen siblings, not `trunc_int`
+(162), and `ctu_dint`, `ctd_dint` and `ctud_dint` as aliases of `ctu`, `ctd` and `ctud`
+(163); and the three rules, `sqrt` of a negative source 0.0 with no power and the minor
+fault `:negative_sqrt` (164), a negative shift or rotate count acting as 0 with no
+power, a count of the width or more shifting everything out and a rotate's count taken
+modulo the width, with no fault (165), and an integer at a real point stored as the
+nearest real, only a value beyond the real's range a bad value (166).
 
 Each item lands as Milestones 3 and 4 did: its words surveyed in `docs/naming.md` first,
 before any code, each new word reserved in any case and its commit naming what programs
@@ -4390,12 +4404,12 @@ the walks' cross-type reach and the documents.
 | M5-2 | The dint wraps: decision 77 superseded on purpose | 146 | M5-1 | M |
 | M5-3 | The integer widths, declared everywhere, `move` and literals by Figure 11, and the 56 integer conversions | 144, 145, 147, 148, 156, 157, 159 | M5-2 | L |
 | M5-4 | Arithmetic and comparison over every width | 145, 146, 147 | M5-3 | L |
-| M5-5 | Typed counters | 158 | M5-4 | M |
+| M5-5 | Typed counters, and `ctu_dint`, `ctd_dint` and `ctud_dint` as aliases | 158, 163 | M5-4 | M |
 | M5-6 | Long timers in nanoseconds | 158 | M5-3 | M |
 | M5-7 | Based literals and `_` separators | 149 | M5-3 | M |
-| M5-8 | Bit strings, located too, the bitwise instructions, literal bit access, the 76 bit-string conversions | 147, 148, 155, 156 | M5-4, M5-7 | L |
+| M5-8 | Bit strings, located too, the bitwise instructions, literal bit access, the 76 bit-string conversions | 147, 148, 155, 156, 165 | M5-4, M5-7 | L |
 | M5-9 | A bit number in a tag, and the major fault, the runner tripping at the end of its step | 160, 153 (the fault), 99, 113 | M5-8 | L |
-| M5-10 | Reals: literals, arithmetic, faults, points, forces, the 34 real conversions, `trunc_<integer>`, `sqrt`, a real's bit refused | 147–150, 155, 156, 157 | M5-4, M5-7, M5-9 | XL |
+| M5-10 | Reals: literals, arithmetic, faults, points, forces, the 34 real conversions, the 16 truncations `real_trunc_<integer>` and `lreal_trunc_<integer>`, `sqrt`, a real's bit refused | 147–150, 155, 156, 157, 161, 162, 164, 166 | M5-4, M5-7, M5-9 | XL |
 | M5-11 | Arrays of elementary types, up to three dimensions, literal subscripts | 151, 154 (bits), 157, 159 | M5-10 | XL |
 | M5-12 | Tag subscripts and the index fault | 152, 153 | M5-9, M5-11 | L |
 | M5-13 | Located arrays | 156 | M5-11 | M |
@@ -4459,15 +4473,25 @@ the walks' cross-type reach and the documents.
 - **M5-5 · Typed counters.** The stanzas, then `ctu_int ctu_lint ctu_udint ctu_ulint`,
   `ctd_*` and `ctud_*` of the same four (decision 158), rows of `Logex.FbType.rules/1`
   run by `ctu` and `ctd`, a preset judged in its instance's type, each stopping at its
-  type's limits with `ov` or `un` latched, decision 71 by width, unless the maintainer's
-  answer to §4.12's fifth question changes it. *Done when* a `ctu_int` count stops at
-  32,767 with `ov` on and a `ctd_udint` at 0 with `un` on, a `ctu_ulint` counts past
-  2^63, a preset outside its type is refused at its line, an edit that changes a
-  counter's width is refused, its edge memory is on the block list as a `ctu`'s, the event
-  task's warning names each, and the contract walk's counter oracle draws every width.
-  *Size M.*
+  type's limits with `ov` or `un` latched, decision 71 by width, as the maintainer
+  answered §4.12's fifth question; and `ctu_dint`, `ctd_dint` and `ctud_dint`, aliases of
+  `ctu`, `ctd` and `ctud`, which are the same thing (decision 163), each a type word with
+  its own stanza, which `naming_test.exs` checks, a declaration with either word giving
+  the one type and keeping no spelling, so that every message and warning names the
+  instance by the plain word. *Done when* a `ctu_int` count stops at 32,767 with `ov` on
+  and a `ctd_udint` at 0 with `un` on, a `ctu_ulint` counts past 2^63, a preset outside
+  its type is refused at its line, an edit that changes a counter's width is refused, its
+  edge memory is on the block list as a `ctu`'s, the event task's warning names each, and
+  the contract walk's counter oracle draws every width; `var boxes ctu_dint` and `var
+  boxes ctu` compile to equal programs, `ctd_dint` and `ctud_dint` likewise, a test that
+  fails when an alias is made a type of its own; an instance declared `ctu_dint` is named
+  `ctu` in its unrun warning, its article (`instance_of/1`), the compiler's refusal of a
+  second `ctu` on it, the event task's counter warning and an edit's refusal of a change to `ctu_int`, each
+  pinned; an edit from `ctu` to `ctu_dint` is accepted with no report; and the commit
+  names what the fifteen reserved counter words break. *Size M.*
 - **M5-6 · Long timers in nanoseconds.** The stanzas, then `ton_ltime tof_ltime tp_ltime`
-  and `rto_ltime` (decision 158, its last subject to §4.12's seventh question), run by
+  and `rto_ltime` (decision 158, its last taken as the maintainer answered §4.12's
+  seventh question), run by
   `ton`, `tof`, `tp` and `rto`, their `pre` and `acc` `lint` nanoseconds, the preset on
   the instruction in nanoseconds, 0 to 2^63−1, each scan's elapsed milliseconds counted as
   1,000,000 ns each, so that the resolution is a millisecond, said in each stanza, with a
@@ -4497,9 +4521,14 @@ the walks' cross-type reach and the documents.
   global and a located point (decision 156), its value from a device, a host's
   `put_inputs/3`, `Logex.IO.Sim` and a force an integer from 0 to 2^N−1, checked by
   `fits?/2`, and the forces file spelling it as the integer; the eight instructions on bit
-  strings and integers alike, computed in the destination's type, operands all of one kind
-  (decision 147); a comparison of a bit string with an integer tag refused naming its
-  conversion (§4.12's ninth question); the 12 conversions between bit strings and the 64
+  strings and integers alike, computed in the destination's type, operands all of one kind,
+  a mix refused naming its conversion (decision 147, §4.12's second question answered as
+  recorded); a shift or rotate whose tag count is negative at run time acting as a count
+  of 0, the source written unshifted, with no power out, a `shl` or `shr` count of the
+  width or more writing 0 with its power in, and a rotate by its count modulo the width,
+  none of them a fault (decision 165); a comparison of a bit string with an integer tag
+  refused naming its conversion, a literal judged by its slot (§4.12's ninth question,
+  answered as recorded); the 12 conversions between bit strings and the 64
   between a bit string and an integer, binary transfers; and `x.3` on every integer and
   bit string, read by a contact and written by a coil, a one-shot's storage bit and a
   pulse coil's two bits among them, the number checked against the width when the program
@@ -4507,7 +4536,11 @@ the walks' cross-type reach and the documents.
   warnings and the input-point refusal; a bit of a `bool` refused, and a bit of a real
   with the reals (M5-10). *Done when* `shr` of an `int` −2 by 1 gives 32,767 (zero fill),
   `rol` of a `byte` 2#1001_0001 by 1 gives 2#0010_0011, a shift by the width gives 0, a
-  negative literal shift count is refused, every width's top bit is read and written in
+  negative literal shift count is refused, `shl` of a `word` 16#00ff by an `int` tag at
+  −1 writes 16#00ff with no power and no fault and by 16 and by 40 writes 0 with its
+  power in, `rol` of a `byte` by 9 gives what a rotate by 1 gives, and `ror` by an `int`
+  tag at −3 writes its source with no power, each a test that fails when its rule is
+  reverted (the count taken as its bit pattern, the power passed, a fault raised), every width's top bit is read and written in
   two's complement, `add` of a `word`, `and` of a `word` with an `int` destination and
   `eq` of a `word` with an `int` tag are pinned refusals naming what to use, a coil on a
   bit of a located input point is refused and one on a bit of a `var_external` makes it a
@@ -4520,8 +4553,7 @@ the walks' cross-type reach and the documents.
   each in the `word`'s words; a `word` force of 65,535 reads back from the forces file
   across a restart and a fresh start; a `bool`'s bit is a pinned refusal; and the contract
   walk draws bit strings, their points, bitwise instructions and bits. The commit names
-  what `and`, `or`, `not`, `byte` and `word` break. A shift count held in a tag that is
-  negative is §4.12's open rule, answered before this item lands. *Size L.*
+  what `and`, `or`, `not`, `byte` and `word` break. *Size L.*
 - **M5-9 · A bit number in a tag, and the major fault.** `status.[n]` (decision 160), an
   integer tag of any width, never an expression, refused on a one-shot's bit; a number
   outside the width at run time the first major fault: `%Logex.Fault{}` gains `severity`,
@@ -4529,7 +4561,7 @@ the walks' cross-type reach and the documents.
   decision 99's placement, and `Logex.Runner` trips on the round's first major fault at
   the end of the step that raised it, running no later step of the round, before its
   write, `{:fault, task, instance, fault}`, on decision 113's one path (§4.12's "The major
-  fault" and its tenth question). *Done when* the run lamp follows `drive_faults.[sel]` in
+  fault", its tenth question answered as recorded). *Done when* the run lamp follows `drive_faults.[sel]` in
   §4.4's plant on the manual clock against an oracle that knows nothing of logex; `sel` at
   16 in a `word` trips the runner with every output 0 once and nothing after, the trip
   naming the instance, file, line and number; a round whose first due task raises the
@@ -4547,15 +4579,21 @@ the walks' cross-type reach and the documents.
 - **M5-10 · Reals.** A spike first, on Elixir 1.20.4 and OTP 28, throwaway: the cost of a
   destination lookup and a single-rounding write, and the shortest spelling of a single
   that reads back to it, written and tested. Then the stanzas `real` and `lreal`, the 34
-  real conversions, `trunc_<integer>` and `sqrt` (decisions 148 and 79); the literal
+  real conversions, the 16 truncations `real_trunc_<integer>` and
+  `lreal_trunc_<integer>` (decision 162) and `sqrt` (decisions 148 and 79); the literal
   (decision 149) through the lexer, the parser, `well_formed!/1`, the printer, the
   generator, `@required_shapes` and curated golden sources; arithmetic, comparisons and
   `move` (decision 147); decision 150's zero divisor, saturation, −0.0, subnormals and
   single rounding; a real's zero, 0.0; host, device and force values, the forces file's
   spelling and the configuration file's `print/1` (decision 156); real points; and a bit
-  of a real, `fan_speed.3` or `fan_speed.[sel]`, refused (decision 155). `sqrt` of a
-  negative source, and an integer beyond a real's range at a point, are §4.12's open
-  rules, answered before this item lands. *Done when* no float exception leaves a scan
+  of a real, `fan_speed.3` or `fan_speed.[sel]`, refused (decision 155); a real into an
+  integer rounded and then wrapped, with no power, where the rounded value does not fit
+  (decision 161); `sqrt` of a negative source 0.0, no power and the minor fault
+  `:negative_sqrt`, decision 99's kinds grown by one (decision 164); and an integer at a
+  real point stored as the nearest real, silently, only a value beyond the real's range a
+  bad value (decision 166). Whether a literal negative source, `sqrt -4.0 x`, is refused
+  when the program compiles, as decision 78 refuses a literal zero divisor, is put to the
+  maintainer before this item lands (decision 164). *Done when* no float exception leaves a scan
   under a seeded walk of values near each real's limits, at zero divisors and at
   subnormals; no state, output, `get/2` answer or forces file ever holds −0.0, an
   infinity's bits or a subnormal, each pinned by a test that fails when its guard is
@@ -4569,10 +4607,21 @@ the walks' cross-type reach and the documents.
   and `fan_speed.[sel]` on a `real` and an `lreal` are pinned refusals at their lines;
   IEC's examples are tests, `real_to_int` of 1.5, 2.5, −1.5, −2.5, 1.6 and 1.4 giving 2,
   2, −2, −2, 2 and 1 and of 0.5 and 3.5 giving 0 and 4, so that a ties-away
-  implementation, Elixir's `round/1`, fails them, `trunc_int` of −1.6 giving −1; a value
-  outside the target is converted as §4.12's first question reads it, `real_to_int` of
-  32767.6 giving 32767, of 32768.4 −32768 and of 40000.7 −25536, each with no power, and
-  IEC's own case, 70000.4, 4464 with no power, which both readings give; a `real` forced
+  implementation, Elixir's `round/1`, fails them, `real_trunc_int` and `lreal_trunc_int`
+  of −1.6 giving −1 and `trunc_int` a pinned unknown mnemonic; a value outside the target
+  is rounded and then wrapped (decision 161), `real_to_int` of 32767.6 giving −32768, of
+  32768.4 −32768, of 40000.7 −25535 and IEC's own case, 70000.4, 4464, each with no power,
+  and of 32767.4 32767 with power, a test that fails when the value is truncated before
+  it wraps, as the record first read it (32767.6 then giving 32767 and 40000.7 −25536),
+  and `real_trunc_int` of 40000.7 giving −25536 with no power; `sqrt` of −0.25 writes 0.0
+  with no power, its fault `:negative_sqrt`, minor, `instruction: :sqrt`, in a lone
+  instance's `state.faults` and as a cycle's `{:fault, ...}` event, `fault_test.exs`
+  pinning its kind and severity, a test that fails when the source is not checked; an
+  integer of 16,777,217 at a `real` point, from the sim, a host's `put_inputs/3` and a
+  force, reads back through `get/2` as 16777216.0 with no trip and no refusal, and 2^128
+  at a `real` point trips the runner as a bad value from the sim and is refused from a
+  host and a force, in the `real`'s words, while 2^53 + 1 at an `lreal` point reads back
+  as 2^53, each a test that fails when its rule is reverted; a `real` forced
   or printed as `0.1` reads back exactly; a changed real initial value is reported as
   `:initial_changed`, `var x real 0` edited to `var x real 0.0` among them, `{0, 0.0}`,
   the running 0.0 kept (decision 157), a test that fails when the comparison is `!=`; the
@@ -4657,7 +4706,8 @@ on the manual clock against an oracle that knows nothing of logex; an integer re
 its width wraps with no power, a real's saturates, and no infinity, NaN or −0.0 ever
 reaches a state; every mixed-type operand Figure 11 does not widen is refused naming its
 conversion, and every conversion rounds as IEC's examples say; an index or a bit number
-out of range trips the runner with every output 0 once; an online edit of a type or a
+out of range trips the runner with every output 0 once, and a negative square root is a
+minor fault, `:negative_sqrt`; an online edit of a type or a
 size is refused, and a changed initial value of every type is reported; and the contract
 walks reach every type, refusal and trip reason, repeating exactly.
 
