@@ -57,7 +57,8 @@ the same day (decisions 161–167, and notes on the decisions the rest settle), 
 the ten otherwise than the record read them: a real too large for its integer target
 rounded and then wrapped (161), the truncations named `real_trunc_int` (162), and
 `ctu_dint`, `ctd_dint` and `ctud_dint` aliases of `ctu`, `ctd` and `ctud` (163); its
-sixteen items, M5-1 to M5-16, are planned and none has landed.
+sixteen items, M5-1 to M5-16, are planned, and the first, M5-1, one table of types, landed
+the same day with no behaviour changed (§3, M5-1).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -4424,6 +4425,35 @@ the walks' cross-type reach and the documents.
   suite passes with no pinned message changed, `lib/` holds no `[:bool, :dint]` guard and
   no hand-written "32 bits" outside the table, a test grepping for both, and each message
   built from the table is pinned for both types. *Size M.*
+
+  **Status: DONE — landed 2026-10-21**, as two commits, the code with its tests and then
+  the documents. `Logex.Declarations.table/0` holds `bool` and `dint`, each its word, its
+  value in a tag, its kind (`:boolean`, `:signed`), its width in bits, its range, its zero
+  and its article; `is_elementary/1`, a guard, replaces the nine `type in [:bool, :dint]`
+  guards; `fits?/2` is a clause per row; `a_type/1`, `misfit/2`, `initial_misfit/2`,
+  `values/1` and `either/1` build every range message and article the thirteen
+  hand-written ones gave, in `Logex.Compiler`, `Logex.Configuration`, its `Text` and
+  `Edit`, `Logex.Edit.Plan` (whose `word/1` goes through the articles), `Logex.Runtime`
+  and `Logex.Runner`; `Logex.Configuration.Text`'s type words, keywords and did-you-mean
+  are the table's, and `Logex.Program.initial_env/1` and `Logex.Configuration.initial/1`
+  read its zero. `type_table_test.exs` pins the table, `fits?/2` at each limit, every
+  builder, and every message built from the table for both types, each as main gave it,
+  and greps `lib/` for a `[:bool, :dint]` guard, for "32 bits", "0 or 1", ":bool or
+  :dint", "a `bool` or a `dint`", "-2147483648 to" and "is a dint" in code, for the
+  dint's lower limit outside `Logex.Declarations`, and for an article written by hand
+  before a type; 60 of its 64 mutants are red, the four survivors equivalent while every
+  row has its values (a literal slot of another type, the zeros, the printed word). No pinned message changed: the suite passed
+  before a test was added. A differential run, outside the repository, ran the same
+  generated programs (mostly refused, so their diagnostics are compared), programs that
+  compile scanned with inputs that fit and that do not, Elixir declarations, online edits
+  accepted, tested, assembled and untested, configurations from text and from data,
+  started, cycled, read by `get/2`, printed and edited through `Logex.Configuration.Edit`,
+  against `main` and this branch: ten seeds of 2,000 draws each, 698,809 results,
+  each a SHA-256 of its `:erlang.term_to_binary/1`, byte-identical, every changed message
+  reached; one message changed by a space made 36,888 of one seed's results differ. It
+  found, on `main` as here, an `UndefinedFunctionError` that escapes
+  `Logex.Configuration.compile/3` where a program's `var_external` names a global whose
+  `var_global` line is broken (`var_global estop boo`), left to its own fix.
 - **M5-2 · The dint wraps.** Decision 146 on the one width there is, before any other
   lands: `add`, `sub`, `mul`, `div`, `neg` and `abs` keep a result's low 32 bits, two's
   complement, and pass no power where the stored value is not the exact one, with no fault

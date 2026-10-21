@@ -3144,8 +3144,9 @@ which the maintainer answered on 2026-10-20: it does, as a start does (decision 
 
 ### 4.12 Data types (Milestone 5)
 
-**Designed and decided 2026-10-21; nothing of it is built yet** (`PLAN.md` §3, Milestone
-5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
+**Designed and decided 2026-10-21; its first item, M5-1, the one table of types, landed
+the same day, changing nothing a program, a configuration, a host or an edit sees**
+(`PLAN.md` §3, Milestone 5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
 4, 8 byte integers (how does IEC and vendors handle signed?), 32/64 bit reals, arrays of
 all others, what else does IEC and vendors have."* It read IEC 61131-3 Ed 2:2003 and Ed
 3:2013 in full and Ed 4:2025 from its publisher preview only; the conventional family's
@@ -3653,7 +3654,10 @@ family's names as data (a routine choice below).
 - *One table of types* in `Logex.Declarations`, each type's word, kind, width, range,
   zero and article, read by every message, guard and `fits?/2`, and by
   `Logex.Configuration.Text`'s type words and did-you-mean; over the nine `type in [:bool,
-  :dint]` guards and thirteen hand-written range messages of today.
+  :dint]` guards and thirteen hand-written range messages of today. *(Landed with M5-1,
+  2026-10-21: `Logex.Declarations.table/0`, read through `is_elementary/1`, `fits?/2`,
+  `a_type/1`, `misfit/2`, `initial_misfit/2`, `values/1` and `either/1`, its width kept in
+  bits, the record's "Bytes" times eight, and its kinds `:boolean` and `:signed` so far.)*
 - *A real's zero is 0.0 in every state*, never 0, from `initial_env/1` and
   `Configuration.initial/1`; `get/2` gives a float for a real; over a zero that is an
   integer until first written.
