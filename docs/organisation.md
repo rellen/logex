@@ -3725,7 +3725,12 @@ ton_ltime"; a timer slot's messages name both words, "`ton` runs a ton or ton_lt
 as decision 192 has a counter slot's name every word it runs; and the edit, the walks,
 the event task's warning and the runner read the rules, so a long timer's catch-up,
 resume, forecast and block list are its kind's, in ns where they are a member's value and
-in ms where they are the clock's, `{:resumed, "t", 500}`.)*
+in ms where they are the clock's, `{:resumed, "t", 500}`. Since M5-6's review each type's
+unit is settled when logex compiles, a clause generated from the rules, and a run looks
+its timer's tag up once to learn it, so a plain timer's scan costs 2.4 to 3.6% more than
+before long timers, where the rules walked on each run had cost 8 to 10%; carrying the
+unit in the compiled program instead is a question put to the maintainer, PLAN M5-6's
+review.)*
 
 **Widening beyond an instruction** (decision 159). A `cal`'s inputs and a connection's
 copy-in widen as an instruction's sources do, and a `cal`'s outputs and a connection's

@@ -92,7 +92,8 @@ unknown type's list kept. And the sixth, M5-6, the same day: the long timers, `t
 `tof_ltime`, `tp_ltime` and `rto_ltime`, run by `ton`, `tof`, `tp` and `rto`, their `.pre`
 and `.acc` lint nanoseconds, each millisecond of the clock adding 1,000,000, a preset
 that is no whole number of milliseconds warned of (§3, M5-6), with three questions put to
-the maintainer.
+the maintainer; and M5-6's review's three findings fixed the same day, a plain timer's
+scan brought back within about 3% of its cost before long timers, with one more question.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -5455,6 +5456,49 @@ the walks' cross-type reach and the documents.
      as for every timer. An operator reading the report sees ns beside ms. The other
      reading gives the gap in ns too, a million times larger. IEC and Logix have no such
      report.
+
+  **M5-6's review**, fixed on 2026-10-22, each with a test that fails when it is
+  reverted, judged by the full suite: (1) every run of a `ton`, `tof`, `tp` or `rto`
+  walked its type's rules for its `per_ms`, a look-up of its tag, `FbType.rules/1` and a
+  match, about 10 reductions, plain timers too and a `tp` on a false rung, so a plain
+  timer's scan grew 8 to 10% dearer, which the claim above, a long timer's scan within
+  1.2x a plain one's, hid by measuring against a plain timer that had grown too: what a
+  type's millisecond adds is now settled when logex compiles, a clause of the runtime's
+  `per_ms/1` for each built-in type whose unit is not 1 ms, generated from the rules as
+  `wrapped/2` is from the type table, so a run pays one look-up of its tag and one match
+  of its type's word. For 2,000 timers, fewest reductions of 7 scans, before long timers
+  (`6a15701`), at M5-6 (`d860484`) and now: `ton` energised 224,621, 246,012, 232,780;
+  `tof` de-energised 238,597, 256,316, 244,268; `tp` energised 255,710, 275,837, 262,244;
+  `tp` de-energised 220,563, 238,185, 227,068; `rto` energised 253,928, 274,341, 260,175;
+  `rto` de-energised 237,088, 256,255, 244,354; a `ton`'s de-energised run, which reads
+  no clock, unchanged throughout. What is left, 2.4 to 3.6%, is the look-up of each
+  timer's tag on each run, which only a unit carried in the compiled program could
+  remove (question 4 below). `long_timer_test.exs` bounds a plain `ton`'s energised run
+  over its de-energised one under 26.5 reductions a timer, about 21 before long timers,
+  24 now and 29 at M5-6 (`e480a76`); (2) `Logex.Compiler.run_words/1`'s comment said a
+  timer's slot names its one word, where since M5-6 it names both, "a ton or ton_ltime"
+  (`042aff2`, a comment, so no test); and (3) the review's mutant R17, a `ctu`'s `q` read
+  as CV >= max(PV, 0), left the suite green: it differs only at a count below a negative
+  preset, which a lone up counter reaches only from a state the host built, since it
+  counts from 0 and logic cannot write its `cv` (decision 86); `typed_counter_test.exs`
+  now counts a `ctu_int` up from -5 to a preset of -3, its `q` lit at -3 (`22108aa`).
+  Each fix's revert, judged by the full suite's exit code, is red: the rules walked on
+  each run again fails the bound, and R17 fails the new test. 1712 tests (9 doctests), up
+  from 1710.
+
+  **Question for the maintainer** after M5-6's review:
+  4. *Where a timer's unit is settled* (decision 158 and the scan's cost). A timer's unit
+     is what each millisecond of the clock adds to its accumulated time: 1 for a `ton`,
+     counted in ms, and 1,000,000 for a `ton_ltime`, counted in ns. logex now looks each
+     timer's tag up on each run to learn its unit, so a program of plain timers, the
+     conveyor's 2,000 `ton`s, scans about 3% slower than before long timers existed, and
+     never wrong. The other reading carries each timer's unit in the compiled program, so
+     the scan reads it with the instruction and a plain timer costs exactly what it did,
+     at the price of a field in `%Logex.Program{}` or in the instruction's IR that every
+     walk, edit and hand-built program must keep in step with the tag table. Taken
+     provisionally: the look-up, no change of the compiled program's data. IEC says
+     nothing of a scan's cost; Logix's TIMER has one unit, the millisecond, so it makes
+     no such choice.
 - **M5-7 · Based literals and separators.** `16#`, `2#` and `_` (decision 149), through
   the lexer, `well_formed!/1`, the printer, the generator and curated golden sources.
   *Done when* each form is in the golden record's curated sources, an entry that held
