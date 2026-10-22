@@ -5391,6 +5391,11 @@ defmodule Logex.ApiContractTest do
 
   defp ct_width, do: pick(["", "_int", "_dint", "_lint", "_udint", "_ulint"])
 
+  # The other word of a dint counter, which names the same type, or any width for another.
+  defp ct_alias(""), do: "_dint"
+  defp ct_alias("_dint"), do: ""
+  defp ct_alias(_width), do: ct_width()
+
   # The width a suffix names, the alias's the dint's.
   defp ct_plain(""), do: "dint"
   defp ct_plain("_" <> width), do: width
@@ -5416,24 +5421,26 @@ defmodule Logex.ApiContractTest do
   # `u`'s kind, which accept refuses.
   defp ct_candidate(spec),
     do:
-      Enum.reduce(1..:rand.uniform(2), spec, fn _, spec -> ct_change(:rand.uniform(15), spec) end)
+      Enum.reduce(1..:rand.uniform(2), spec, fn _, spec -> ct_change(:rand.uniform(18), spec) end)
 
-  defp ct_change(1, %{u: %{} = u} = spec), do: %{spec | u: %{u | p: pick([1, 2, 3, 4])}}
+  defp ct_change(1, %{u: %{} = u} = spec), do: %{spec | u: %{u | p: pick([0, 1, 2, 3, 4])}}
   defp ct_change(2, %{u: %{} = u} = spec), do: %{spec | u: %{u | chain: ct_chain()}}
   defp ct_change(3, %{u: %{} = u} = spec), do: %{spec | u: %{u | reset: pick([:above, :below])}}
   defp ct_change(4, spec), do: %{spec | u: pick([nil, %{p: 2, chain: ct_chain(), reset: :above}])}
   defp ct_change(5, %{d: %{} = d} = spec), do: %{spec | d: %{d | p: pick([1, 2, 3])}}
-  defp ct_change(6, %{b: %{} = b} = spec), do: %{spec | b: %{b | p: pick([1, 2, 3, 4])}}
+  defp ct_change(6, %{b: %{} = b} = spec), do: %{spec | b: %{b | p: pick([0, 1, 2, 3, 4])}}
   defp ct_change(7, %{b: %{} = b} = spec), do: %{spec | b: %{b | up: ct_chain()}}
   defp ct_change(8, %{b: %{} = b} = spec), do: %{spec | b: %{b | down: ct_chain()}}
   defp ct_change(9, %{b: %{} = b} = spec), do: %{spec | b: %{b | big: not b.big}}
   defp ct_change(10, spec), do: %{spec | s: pick([nil, 1, 2, 3])}
   defp ct_change(11, %{u: %{}} = spec), do: %{spec | kind_u: pick(["ctud", spec.kind_u])}
   # M5-5: `u`'s width, which accept refuses, or its alias, which changes no type.
-  defp ct_change(12, %{u: %{}} = spec), do: %{spec | wu: ct_width()}
-  # A preset moved, the commonest change, so that forecasts come both ways.
-  defp ct_change(n, spec) when n in [13, 14], do: ct_change(pick([1, 6]), spec)
-  defp ct_change(15, %{s: version} = spec) when version in [1, 2], do: %{spec | s: 3 - version}
+  defp ct_change(12, %{u: %{}} = spec), do: %{spec | wu: pick([ct_width(), ct_alias(spec.wu)])}
+  # A preset moved, the commonest change, to 0 now and then, so that forecasts come both
+  # ways under any seed (M5-5's review: 4 seeds in 20 saw no forecast one way or the other;
+  # since, none in 81). `u`'s width moves to its alias as often as to any width.
+  defp ct_change(n, spec) when n in 13..17, do: ct_change(pick([1, 6]), spec)
+  defp ct_change(18, %{s: version} = spec) when version in [1, 2], do: %{spec | s: 3 - version}
   defp ct_change(_n, spec), do: %{spec | d: pick([nil, %{p: 1, chain: ct_chain(), load: :below}])}
 
   @ct_bodies %{
