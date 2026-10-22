@@ -158,12 +158,24 @@ defmodule Logex.TypeTableTest do
       assert limits == []
     end
 
+    # An article before an interpolation, quoted in backticks or not, or joined on with
+    # `<>`: none names a type. A section, a kind of configuration element, a program type's
+    # name, which is any name, and a one-shot's mnemonic, each said letter by letter, are
+    # the articles allowed.
     test "lib/ gives a type no article by hand: each `a \#{...}` names a section or a part" do
-      allowed = ["a \#{tag.section}", "a \#{kind(element)}", "a \#{name}"]
+      allowed = [
+        "a \#{tag.section}",
+        "a \#{kind(element)}",
+        "a `\#{program.name}",
+        "an `\#{one_shot}",
+        "an `\#{word}"
+      ]
 
       found =
         for file <- Path.wildcard(Path.join(@lib, "**/*.ex")),
-            [article] <- Regex.scan(~r/\ban? #\{[^}]*\}/, File.read!(file)),
+            [article] <-
+              Regex.scan(~r/\ban? `?#\{[^}]*\}/, File.read!(file)) ++
+                Regex.scan(~r/"an? " <>/, File.read!(file)),
             article not in allowed,
             do: {Path.basename(file), article}
 
@@ -308,6 +320,28 @@ defmodule Logex.TypeTableTest do
                [%Global{name: "a", type: :bool}, %Global{name: "a", type: :dint}],
                &Configuration.initial/1
              ) == [0, 0]
+    end
+
+    # No text declares a connected var_input that holds an instance, but a program edited
+    # by hand may: its type is named with the table's article, `an rto`, never by hand.
+    test "a connected member a hand-edited program makes an instance is named with its article",
+         %{motor: motor} do
+      motor = %{motor | tags: Map.update!(motor.tags, "run", &%{&1 | type: Logex.FbType.rto()})}
+
+      configuration = %Configuration{
+        name: "plant",
+        programs: %{"motor" => motor},
+        globals: [%Global{name: "estop", type: :bool}, %Global{name: "g", type: :bool}],
+        instances: [%Instance{name: "m1", type: "motor"}],
+        connections: [
+          %Configuration.Connection{instance: "m1", member: "run", to: "g"},
+          %Configuration.Connection{instance: "m1", member: "sp", to: 0}
+        ]
+      }
+
+      assert Enum.map(Configuration.check(configuration), & &1.message) == [
+               "`m1.run` is an rto, but `g` is a bool"
+             ]
     end
 
     test "a configuration's type words, its did-you-mean, its printing and the host's type", %{

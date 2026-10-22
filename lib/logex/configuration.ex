@@ -2155,7 +2155,9 @@ defmodule Logex.Configuration do
           "`#{global.name}` is #{Declarations.a_type(global.type)}#{where(global)}"
       )
 
-  defp type_word(%Logex.FbType{name: name}), do: "a #{name}"
+  # No text declares a connected var_input or var_output that holds an instance, but a
+  # program edited by hand may: it is named as an instance's type is, `an rto`.
+  defp type_word(%Logex.FbType{} = type), do: Declarations.instance_of(type)
   defp type_word(type), do: Declarations.a_type(type)
 
   # What a name where a global is wanted reads as: a global; nothing to report, its name
