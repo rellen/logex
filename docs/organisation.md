@@ -963,6 +963,11 @@ becomes a type word, reserved.)*
 | `.ld` function block | as a program, plus `function_block` (M2-5, landed) |
 | configuration (`.logex`) | `task interval single priority program with var_global at bool dint`; later `var_config` |
 
+*(M5-3, 2026-10-22: the seven other integer type words, `sint int lint usint uint udint
+ulint`, are reserved in both file kinds, as `bool` and `dint` are, and the 56 integer
+conversions, `dint_to_int` and the rest, in every `.ld` file, as every mnemonic is
+(decisions 144 and 148).)*
+
 A `var_external` name must be legal in both kinds, because it is declared again as a
 `var_global`. *(Landed with M2-4: `Logex.Declarations` refuses a configuration file's
 keyword, `Logex.Configuration.Text.keywords/0` as M2-3 left it, as a `var_external`'s
@@ -3152,7 +3157,8 @@ which the maintainer answered on 2026-10-20: it does, as a start does (decision 
 **Designed and decided 2026-10-21; its first item, M5-1, the one table of types, landed
 the same day, changing nothing a program, a configuration, a host or an edit sees, and
 its second, M5-2, the dint's wrap, on 2026-10-22, decision 77's saturation superseded on
-purpose**
+purpose, and its third, M5-3, the integer widths declared everywhere, `move` and literals
+by Figure 11 and the 56 integer conversions, the same day**
 (`PLAN.md` §3, Milestone 5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
 4, 8 byte integers (how does IEC and vendors handle signed?), 32/64 bit reals, arrays of
 all others, what else does IEC and vendors have."* It read IEC 61131-3 Ed 2:2003 and Ed
@@ -3315,6 +3321,12 @@ The survey table above keeps its bytes.)*
 Every value is an Elixir integer or float, so a width is a range row and an unsigned type
 costs no more than a signed one. Bit 7 of an `sint` is its sign bit, read and written in
 two's complement.
+*(Landed for the integers with M5-3, 2026-10-22: the seven other widths are rows of the table, each
+with its kind, `:signed` or `:unsigned`, and since then its `widens`, Figure 11's "i"
+cells, read by `Logex.Declarations.widens?/2`. A message says a signed width's misfit as
+the dint's, "does not fit in 16 bits", and an unsigned one's by its range, "is outside 0
+to 65535", the record's provisional wording; and logex's type words are listed in the
+table's order, `bool`, the signed widths, then the unsigned.)*
 
 **Overflow wraps** (decision 146, superseding decision 77). An integer instruction's result
 is computed exactly and then brought into its destination's width by keeping its low N
@@ -3395,6 +3407,13 @@ slot is the value it spells, and is refused where the slot's type cannot hold it
 the nearest it can named (`move 16777217 fan_speed` into a `real`); a real literal in an
 integer slot is refused, never rounded; a based literal is the number it spells. Where the
 rule reaches beyond an instruction is decision 159.
+*(Landed for `move`, every literal, a `cal` formal and a connection with M5-3, 2026-10-22: a
+source of another width that Figure 11 does not widen is refused naming its conversion,
+`dint_to_int`, and a bool with an integer told that logex has no conversion between them.
+Arithmetic and comparison keep their dint slots until M5-4, an operand of another width
+refused there with the conversion that bridges it, `int_to_dint` before a read and
+`dint_to_int` after a write, the record's provisional reading of M5-3's "`move` and every
+literal": M5-4 widens their sources.)*
 
 **Conversions** (decision 148). IEC's typed names, `<from>_to_<to>` (Ed 3 Table 22 feature
 1a), lowercased, two operands, `real_to_int fan_pct drive_sp`:
@@ -3410,6 +3429,13 @@ rule reaches beyond an instruction is decision 159.
   and 25): the 12 between the four bit strings and the 64 between a bit string and an
   integer type, a widening filling 0 on the left, a narrowing keeping the rightmost bytes,
   never a sign extension, so an `int` −1 into a `dword` is 16#0000FFFF.
+*(The 56 integer conversions landed with M5-3, 2026-10-22, from the table in `Logex.Compiler` and
+`Logex.Runtime`, one family stanza in `docs/naming.md` naming each: a source of exactly
+the `from` type, a tag of another integer type told the conversion that does the whole
+job, `sint_to_int` for an `sint` given to `dint_to_int`, and the destination of exactly
+the `to` type, the record's provisional reading, since IEC's rule 2 would let a typed
+function's input widen; a value that does not fit keeps its low bits with no power, as
+an arithmetic result does.)*
 
 That is 182 mnemonics, each reserved and each owing its survey. A real into an integer
 rounds to the nearest, a tie to the even neighbour (Table 22 footnote b, both editions:
@@ -3598,6 +3624,9 @@ configuration file's `print/1` of a real global's initial value and constant tak
 same rule for its exact round trip. IEC's directly represented variables carry a size
 prefix and are bit strings (`%IW215`, Ed 3 Table 16); logex's location has none, since the
 declared type carries the size (§4.5).
+*(Landed for the integers with M5-3, 2026-10-22: a point of any integer width, its value from a
+device, a host's `put_inputs/3` and a force checked by `fits?/2`, the forces file spelling
+it as the integer, a device's value outside its width a bad value that trips the runner.)*
 
 **An online edit** (decision 157). A tag's, member's or global's type, an array's element
 type, its dimensions and its sizes, change only with a restart, as §4.9's type rule has it
@@ -3613,6 +3642,9 @@ below), since the edit compares what the two programs declare, not what
 `Program.initial_env/1` makes of it; decision 44 takes the same for a global. Logix
 changes an array's size or type offline only (RM094N p.85), and IEC says nothing of online
 edit.
+*(Landed for the integers with M5-3, 2026-10-22: an edit from `usint` to `uint` is refused at its
+line in §4.9's words, a global's alike, and a changed initial value of every width
+reported; the comparison stays `!=`, exact on integers, until the reals.)*
 
 **Timers and counters** (decision 158). The counters take IEC's typed variants, one for
 each integer type Ed 3 Table 45 gives a counter, INT, LINT, UDINT and ULINT, the type
@@ -3649,6 +3681,10 @@ naming the conversion, so a connection's copy-out that narrows is refused, as a 
 that narrows is; a `var_external` binds only to a global of exactly its type, an array's
 element type and dimensions included, since it *is* the global (decision 49's one copy),
 as IEC's rule 6 forbids implicit conversion for in-out parameters.
+*(Landed with M5-3, 2026-10-22: a `cal` var_input from a tag Figure 11 widens into it and a
+var_output into a tag it widens into, a connection's copy-in and copy-out alike, each
+refusal naming the conversion a program would make, and a `var_external` of another
+width told that it is its global, so its type is exactly the global's.)*
 
 **Reserved words.** Each word below becomes reserved in any case where its kind is
 (§4.8), owes its `docs/naming.md` stanza before its code, and is named in the commit that
@@ -3819,7 +3855,7 @@ suffixes.
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
 | VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
-| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5), none built yet | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
+| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage *(arrays decided for Milestone 5, 2026-10-21, decisions 151–156; STRUCT still deferred)* | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays. *(Kept by Milestone 5, decision 158: the TIME and LTIME types and `T#` stay deferred, a preset stays a plain integer, ms for the `ton` family and ns for the long timers.)* |
@@ -6992,6 +7028,8 @@ the decisions the rest settle.
      **Taken: IEC's words, lowercased, each with its stanza and reserved in any case** (the
      maintainer, 2026-10-21), as recommended. Decision 155's `byte word dword lword` follow
      the same rule.
+     *(Landed with M5-3, 2026-10-22: the seven words are rows of the type table, each with its stanza, reserved in every `.ld` and `.logex` file, and `dint`'s "only integer type" amended.)*
+
 145. **Whether the unsigned types come too (Milestone 5).** The drive card reports the
      fan's speed as a 16-bit register, 0 to 65,535, and the box counter can never be
      negative.
@@ -7009,6 +7047,8 @@ the decisions the rest settle.
      **Taken: all four; `neg` into an unsigned destination refused when the program
      compiles** (the maintainer, 2026-10-21), as recommended. An unsigned result below 0
      wraps (decision 146): 0 − 1 in a `usint` is 255, with no power.
+     *(Landed with M5-3, 2026-10-22: all four unsigned widths; `neg` into an unsigned destination is M5-4's, with the arithmetic over every width.)*
+
 146. **What overflow does, in every width (Milestone 5).** The box counter's tag is a
      `usint`, `add boxes 1 boxes`, and the 256th box arrives; the fan ramp, `add speed 10
      speed`, is an `int` and passes 32,767.
@@ -7077,6 +7117,8 @@ the decisions the rest settle.
      recorded: a bit string compared with an integer tag is refused, naming the
      conversion, `int_to_word` or `word_to_int`; a literal is judged by its slot, so that
      `eq drive_status 16#0004` is taken.)*
+     *(Landed for `move` and every literal with M5-3, 2026-10-22; arithmetic and comparison over every width are M5-4's.)*
+
 148. **Converting a real to an integer, and what the conversions are called (Milestone
      5).** The fan's speed is worked out as a `real` percentage and written to the drive
      as an `int`: 37.5 becomes 38 or 37? 36.5 becomes 36 or 37? And a real of 40,000.0
@@ -7111,6 +7153,8 @@ the decisions the rest settle.
      `lreal_trunc_<integer>`, sixteen, decision 162, not `trunc_<integer>`; and "never
      hide a rounding mode inside a conversion name" is kept with `real_to_int`, as
      recorded.)*
+     *(The 56 integer conversions landed with M5-3, 2026-10-22.)*
+
 149. **How literals are written (Milestone 5).** The fan setpoint is 37.5, a mask is hex
      FF, a batch is a million boxes.
      - Reals `37.5`, `-0.25`, `1.5e3`, `1.5E-3`, digits on both sides of the point; `1.`,
@@ -7273,6 +7317,8 @@ the decisions the rest settle.
      range must not overlap another point. An integer point takes only an integer that
      fits; a real point a float or an integer; the forces file spells reals so that they
      read back exactly.
+     *(Landed for every integer width with M5-3, 2026-10-22.)*
+
 157. **An online edit that changes a type or an array's size (Milestone 5).** The box
      counter's `usint` overflows at 255, so the programmer edits it to a `uint` while the
      line runs; two zones are added, `temps` from `int[8]` to `int[10]`.
@@ -7290,6 +7336,8 @@ the decisions the rest settle.
      declared values are compared, so `var x real 0` edited to `var x real 0.0` is
      reported, `{:initial_changed, "x", {0, 0.0}}`, the running value kept, although a
      real starts at 0.0 under either (§4.12, "An online edit").
+     *(Landed for the integer widths with M5-3, 2026-10-22.)*
+
 158. **Whether timers and counters change type (Milestone 5).** A timer longer than 24.8
      days, or a box count past 2,147,483,647.
      - `.pre`, `.acc`, `.pv` and `.cv` stay `dint`, presets in milliseconds;
@@ -7334,6 +7382,8 @@ the decisions the rest settle.
      **Taken: `cal` parameters and connections widen as instructions do; a `var_external`
      must match its global's type exactly** (the maintainer, 2026-10-21), as recommended,
      an array's element type and every dimension included.
+     *(Landed with M5-3, 2026-10-22.)*
+
 160. **A bit number held in a tag (Milestone 5),** following decision 155. The drive's
      fault word has sixteen bits, and a lamp shows the bit an operator selects, `xic
      drive_faults.[sel] ote fault_lamp`; `sel` reaches 16.

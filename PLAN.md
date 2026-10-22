@@ -63,7 +63,9 @@ the dint wraps, decision 77's saturation superseded on purpose (§3, M5-2); the
 maintainer's four answers to their reviews' questions landed the same day (decisions
 168–171, §3 after M5-2): a program type named with no article, a hand-edited program's
 port holding an instance the host's mistake, the type table's width in bits, and a value
-a state holds outside its tag's type refused where the state is handed in.
+a state holds outside its tag's type refused where the state is handed in; and the third,
+M5-3, the same day: IEC's eight integer widths declared everywhere a dint is, `move` and
+literals by Figure 11, and the 56 integer conversions (§3, M5-3).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -4616,6 +4618,102 @@ the walks' cross-type reach and the documents.
   draws every width's limits, its oracle restating each range; `dint_to_sint` of 129
   gives −127 with no power, as Logix's truncation does (RM018A p.872); and the commit
   names what the seven reserved words and the 56 conversions break. *Size L.*
+
+  **Status: DONE — landed 2026-10-22**, as four commits: the stanzas first, `sint int
+  lint usint uint udint ulint` and one family stanza for the 56 conversions, its
+  `**Members:**` line read as data by `naming_test.exs`, `dint`'s and `move`'s stanzas
+  amended; then the code with its tests; then a test pinning the two articles below;
+  then the documents. The type table holds `bool` and the eight integer widths, each row
+  its kind (`:signed`, `:unsigned`), width, range, zero, article and `widens`, Figure
+  11's "i" cells, read by `Logex.Declarations.widens?/2`, with `conversion/2` and
+  `integers/0`. Each width is declared everywhere a dint is: a tag of each section,
+  `var_external` among them, a block's member, a global from text and from data, a
+  located point, a host's input, a device's value through the sim, a force and the
+  forces file, every refusal in its type's words, a signed width's "does not fit in N
+  bits" and an unsigned one's "is outside 0 to max". `move` computes in its
+  destination's type, its source of that type or one Figure 11 widens into it, every
+  other pair refused naming its conversion and a bool with an integer told that logex
+  has none; a literal is judged by its slot. The 56 conversions are generated from the
+  table in `Logex.Compiler` and `Logex.Runtime`, each writing its value where it fits,
+  with power, and its low bits otherwise, two's complement where signed, with no power
+  and no fault: `dint_to_sint` of 129 gives −127. A `cal` formal and a connection widen,
+  a refusal naming the conversion, and a `var_external` binds only to a global of
+  exactly its type, told so. An edit from `usint` to `uint` is refused at its line and a
+  changed initial value of every width reported. The messages that gave two types as an
+  example read as examples, "needs a type, as in `var x bool` or `var x dint`", logex's
+  type words are listed in the table's order, a global's every width, and the two "a
+  bool" of `Logex.Compiler` come from the table. The Done-when is
+  `end_to_end_test.exs`'s "the integer widths in the plant (M5-3)": §4.4's plant from
+  files on disk, `var_global fan_hz uint at drive.i.0` read through the sim into a
+  `dint`, each value up to 65,535 whole, a force held to the uint and read back from the
+  forces file, and 65,536 from the device tripping the plant as a bad value.
+  `integer_width_test.exs` holds every rule above from source, among them `move` over
+  all 64 ordered pairs, the 56 conversions over their limits against a wrap restated,
+  and a point of each width through the runner, with the conversions' growth in
+  reductions (400 against 100 rungs under 4.8x); the runtime contract walk draws
+  programs of every width and a program of each width at each of its edges, its oracle
+  restating each range and the wrap as a remainder by 2^N, reaching both limits of every
+  width at every one of 13 seeds tried. Changed on purpose, each pinning the new rule:
+  every message listing logex's type words, the configuration's keywords and its
+  reserved-name refusal, `move`'s refusal of a bool and a dint (no longer "takes operands
+  of one type"), the "needs a type" wording, and the tests that used `int` as an unknown
+  type word (now `dintt`, or `:real` from Elixir, which M5-10 will change again).
+
+  The mutation table, 35 mutants each judged by the full suite's exit code, every one red
+  at the item's tip: `widens?/2` true for every pair (22 tests) or the same type only
+  (7); a Figure 11 cell dropped (5), a narrowing (3), a sign change (3) or an unsigned
+  into a signed of its width added (3); a `usint` range one too high (15), the `lint`'s
+  one short (12), an `sint` article "a" (14), an unsigned misfit in signed words (8); a
+  conversion's unsigned bits read signed (4) or signed read unsigned (19), passing power
+  on a wrap (21), saturating (21), writing de-energised (2), wrapping into its source
+  type (6), one missing (4); a `cal` var_output widened the wrong way (1) or a formal
+  exact (1); a connection's copy-in exact (1), copy-out exact (1) or widened the wrong
+  way (1); a `var_external` that widens bound (4); the preset hint for a dint alone (1);
+  a non-integer input for an unsigned width told its range (2); no conversion named for a
+  fixed slot (1), a conversion's slot given the generic hint (1), `move` naming none
+  (2); the type words sorted (14); "needs a type" as before (5); each of the two "a
+  bool" written by hand (1 each), the first green until the third commit pinned it, its
+  change of no message seen by no test; `naming_test.exs` reading no family members (1);
+  and the contract walk's oracle clamping (1) or widening an unsigned range by one (1).
+  1614 tests (9 doctests), up from 1586.
+
+  *Provisional readings* (each a question for the maintainer, below): the arithmetic and
+  comparison slots stay dints until M5-4, another width there refused with the
+  conversion that bridges it; a conversion's source is exactly its `from` type; an
+  unsigned width's refusal is "is outside 0 to max"; a conversion of a literal draws no
+  warning; and logex's type words are listed in the table's order.
+
+  **Questions for the maintainer** (each taken provisionally as written):
+  1. *Another width in an `add` or a comparison before M5-4.* A *slot* is the place an
+     instruction takes an operand; `add`'s and `eq`'s read dints. The record puts `move`
+     and literals in M5-3 and the arithmetic's widening in M5-4, so M5-3 refuses `add
+     fan_hz 10 speed` with a `uint` `fan_hz`, telling the programmer to convert it first,
+     `uint_to_dint`. On the conveyor: an engineer who adds a fan's `uint` register to a
+     dint offset gets a compile error naming the conversion and writes one extra rung
+     until M5-4; the operator sees nothing different. The other reading lets a `uint`
+     into a dint slot now, as decision 147 would once M5-4 lands, which is what IEC's
+     `ADD_DINT` and Logix's ranking both do.
+  2. *A conversion's source of a narrower type.* `dint_to_int` is IEC's typed function
+     DINT_TO_INT; Ed 3's rule 2 lets a typed function's input convert implicitly, so an
+     `sint` could be given to `dint_to_int`. M5-3 takes the source as exactly the type
+     the name says and tells the programmer the one that does the job, `sint_to_int`.
+     On the conveyor: the box-count trim, an `sint`, put through `dint_to_int` is a
+     compile error naming `sint_to_int`, rather than compiling and doing the same thing.
+     Logix has no conversion instructions (MOV converts anything); MatIEC requires the
+     exact type.
+  3. *How an unsigned value that does not fit is told.* A signed width says "`40000`
+     does not fit in 16 bits", as the dint always has; for an unsigned one that wording
+     misleads, since −1 fits in 8 bits as a pattern, so M5-3 says "`-1` is outside 0 to
+     255". On the conveyor: a host that writes −1 to the lamp-count `usint` sees "input
+     `count` is a usint: -1 is outside 0 to 255". The alternative is one wording for
+     both kinds, the range for every width ("is outside -32768 to 32767"), which would
+     change every pinned dint message.
+  4. *A conversion of a literal.* `dint_to_sint 129 trim` compiles and always writes
+     −127 with no power, as `add 1 2 x` compiles with a warning that its result never
+     changes. M5-3 gives the conversion no such warning. On the conveyor: an engineer who
+     converts a constant by mistake sees the trim stuck at −127 and the "fits" lamp off,
+     with nothing said at compile time. The other reading warns, as an all-literal
+     arithmetic instruction does; IEC and Logix say nothing either way.
 - **M5-4 · Arithmetic and comparison over every integer width.** The signatures' slots take a type class, ANY_INT or ANY_NUM as data,
   unified across every operand of an instruction, so a three-operand `add` is checked
   whole; each computes in its destination's type, sources widened by decision 147, and
