@@ -3147,7 +3147,9 @@ which the maintainer answered on 2026-10-20: it does, as a start does (decision 
 ### 4.12 Data types (Milestone 5)
 
 **Designed and decided 2026-10-21; its first item, M5-1, the one table of types, landed
-the same day, changing nothing a program, a configuration, a host or an edit sees**
+the same day, changing nothing a program, a configuration, a host or an edit sees, and
+its second, M5-2, the dint's wrap, on 2026-10-22, decision 77's saturation superseded on
+purpose**
 (`PLAN.md` §3, Milestone 5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
 4, 8 byte integers (how does IEC and vendors handle signed?), 32/64 bit reals, arrays of
 all others, what else does IEC and vendors have."* It read IEC 61131-3 Ed 2:2003 and Ed
@@ -3342,7 +3344,7 @@ limit, `div` of the minimum by −1, and `neg` and `abs` of the minimum),
 `mul`, `div`, `neg` and `abs` stanzas, and README's instruction table and "Arithmetic",
 whose run prints the wild meter at 2147483647. `PLAN.md`'s M5-2 changes all of them on
 purpose, in one item, before any new width lands, so that logex never has two overflow
-rules at once.
+rules at once. *(Landed for the dint with M5-2, 2026-10-22.)*
 
 **Mixed types** (decision 147). An instruction computes in its destination's type, as
 IEC's typed function of that type, `ADD_DINT`, whose inputs Ed 3's rule 2 (p.66) lets
@@ -4973,7 +4975,11 @@ questions asked after M3-1's review, the same day.
     `api_contract_test.exs`'s arithmetic oracle, the arithmetic stanzas of
     `docs/naming.md`, and README's instruction table and "Arithmetic", and `PLAN.md`'s
     M5-2 changes them on purpose, before any new width lands (§4.12, "Overflow wraps").
-    Until M5-2 lands, the rule above is what runs.)*
+    Until M5-2 lands, the rule above is what runs.)* *(Changed with M5-2, 2026-10-22: the
+    rule above no longer runs. The dint wraps, with no power and no fault, in `add`,
+    `sub`, `mul`, `div`, `neg` and `abs`, and every test and README example named above
+    was changed in that commit to pin the wrap; the README's fill valve latches its
+    overflow lamp, `xio total_ok otl overflow`.)*
 78. **Dividing by zero (M3-3).** The line works out "boxes per minute", and just after
     start-up the minutes are 0.
     - The division gives 0 and passes no power on that scan;
@@ -7027,7 +7033,9 @@ the decisions the rest settle.
      follow-up's "truncated to an integer and then wrapped" is, for a conversion that
      rounds, rounded and then wrapped, decision 161, which the maintainer answered
      otherwise than the record read it; a truncation, `real_trunc_int`, truncates and
-     then wraps.)*
+     then wraps.)* *(Landed for the dint, the one width there is, with M5-2,
+     2026-10-22: decision 77's saturation replaced on purpose, each test and example that
+     pinned it changed in that commit; the other widths follow with M5-3 and M5-4.)*
 147. **Arithmetic and comparison across types (Milestone 5).** The day's total is a
      `dint`, the shift's count a `uint`: `add day_total shift_count day_total`. The fan's
      speed is a `real` and its limit an `int`: `gt fan_speed fan_limit`.

@@ -90,9 +90,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   and cleared by its `r` input at its next run (decisions 76, 90 and 95); each stamping
   `last` on every run, so a frozen block's timer catches up. Since M3-3 it runs IEC's
   arithmetic on dints, `add sub mul div mod` and the vendors' `neg` with IEC's `abs`: the
-  result computed exactly and brought to the nearer dint limit, the power out IEC's ENO,
-  false on the scan it left the dint (decision 77) or met a zero divisor, which writes 0
-  (decision 78), `div` truncating toward zero and `mod` taking the dividend's sign, a
+  result computed exactly and, since M5-2, wrapped into the dint, its low 32 bits kept in
+  two's complement (`Logex.Declarations.width/1`), with no fault, superseding decision
+  77's saturation (decision 146), the power out IEC's ENO, false on the scan it left the
+  dint or met a zero divisor, which writes 0 (decision 78), `div` truncating toward zero and `mod` taking the dividend's sign, a
   source no integer in a hand-built env reading 0; and a zero divisor is a minor fault,
   a `%Logex.Fault{}` (`lib/logex/fault.ex`), recorded in the routine's env under an atom
   key and placed when the routine is done: `call/4` gives the scan's in the state's
@@ -802,7 +803,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   documents, the same day, §4.5, §4.6, §5 and decision 14 annotated as landed;
   Milestone 5, data types, designed and decided on 2026-10-21, §4.12 and decisions
   144–160, with 161–167 the maintainer's answers the same day to the record's questions
-  put back and its open rules, its sixteen items planned in `PLAN.md` and none landed: IEC's integer widths,
+  put back and its open rules, its sixteen items planned in `PLAN.md`, M5-1, one table of
+  types, and M5-2, the dint's wrap, landed: IEC's integer widths,
   signed and unsigned, overflow wrapping in every width, which supersedes decision 77's
   saturation and changes the dint's on purpose (M5-2), the reals, the bit strings and
   the bitwise instructions, a bit number in a tag, arrays of up to three dimensions, of

@@ -186,9 +186,9 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `rto lube 360000000` | a retentive timer (`var lube rto`), then a preset in ms | retentive on-delay timer, the conventional RTO — true, it times as `ton`; false, it keeps `.acc` and `.dn`, so its time adds up across the rung's drops. Its reset `.r`, an input a rung writes, `xic greased ote lube.r`, puts `.acc`, `.dn` and `.tt` to 0 at its next run; every restart, warm or cold, starts it at 0. Logic writes `.pre`, `.acc` and `.r` |
 | `ctu boxes 12` | an up counter (`var boxes ctu`) or an up-down one (`ctud`), then a preset of 0 to 2147483647 | count up — rung power is the counter's count input `cu`. Each rising edge adds one to `.cv`, never on an instance's first scan, and `.q` is `.cv >= .pv`. Its reset `.r`, an input a rung writes, as `xic reset_pb ote boxes.r`, puts `.cv` to 0 at the counter's next run, and keeps its memory of `cu`, so a box on the eye at a reset is not counted again. At 2147483647 the count stops and `.ov` stays on until a reset. The preset is where `.pv` starts; logic writes only `.r` and `.pv`, and a `ctud`'s `.ld`. One `ctu` runs a counter, and nothing may follow it on its path: read it with `xic boxes.q` on a rung below |
 | `ctd hopper 40` | a down counter (`var hopper ctd`) or an up-down one, then a preset | count down — rung power is `cd`. Its load `.ld` puts `.cv` to `.pv`; each rising edge takes one away, stopping at −2147483648 with `.un` on until a load; `.q` is `.cv <= 0`. A `ctud`, `var stock ctud`, is run by one `ctu` and one `ctd` on two rungs, with one preset, and has `.r` and `.ld`, `.qu` at `.cv >= .pv` and `.qd` at `.cv <= 0` |
-| `add a b dst` `sub a b dst` `mul a b dst` | two dints, each a tag, a member or a literal, then a dint tag or member it writes, not a `var_input` | add, subtract (`a − b`), multiply — true: writes the result and passes power; a result outside a dint stops at the nearer limit, −2147483648 or 2147483647, and passes no power on that scan. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
-| `div a b dst` `mod a b dst` | as `add` | divide, truncated toward zero (`div -7 2 q` is −3), and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. `div -2147483648 -1` stops at the top, with no power |
-| `neg a dst` `abs a dst` | a dint, a tag, a member or a literal, then a dint it writes | negate, absolute value — as `add`, one source: −2147483648 has no positive twin, so each gives 2147483647 for it, with no power |
+| `add a b dst` `sub a b dst` `mul a b dst` | two dints, each a tag, a member or a literal, then a dint tag or member it writes, not a `var_input` | add, subtract (`a − b`), multiply — true: writes the result and passes power; a result outside a dint wraps, keeping its low 32 bits in two's complement (2147483647 + 1 is −2147483648), and passes no power on that scan, with no fault. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
+| `div a b dst` `mod a b dst` | as `add` | divide, truncated toward zero (`div -7 2 q` is −3), and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. `div -2147483648 -1` wraps to −2147483648, with no power |
+| `neg a dst` `abs a dst` | a dint, a tag, a member or a literal, then a dint it writes | negate, absolute value — as `add`, one source: −2147483648 has no positive twin, so each wraps to −2147483648 itself for it, with no power |
 | `cal s1 a b q` | an instance of a function block, then a value for each of its var_inputs (a tag, a member or a literal of its type) and a tag for each of its var_outputs, which it writes, so not a `var_input`, in the block's declaration order | runs the instance: rung power is its EN, and passes on. True: copies `a` and `b` in, runs the block's rungs over the instance's state and copies its outputs out to `q`. False: copies nothing in or out and runs nothing, so the instance and `q` are frozen; a timer inside catches up when the block next runs. One `cal` runs an instance, and a `ton` is run by its `ton`, never by `cal` |
 | `jmp auto` | a label, a name declared nowhere | jump — true: once the rest of its rung has run, skips the rungs after its own up to the one `lbl auto` heads, which runs, and passes on the power it receives, so anything may follow it. False: skips nothing and passes no power. The label is on a later rung of the same routine: a jump back or to its own rung is refused, and a rung holds one `jmp`. A skipped rung runs nothing, so its coils hold and its counters, one-shots and timers are frozen, as in a block whose `cal` is false, a timer catching up when it next runs |
 | `lbl auto` | a label | label — first on its rung, which it names as a jump's target, and passes on the power it receives. A label names one rung of its routine, a block's body its own, and a label no `jmp` names is a warning |
@@ -239,9 +239,9 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   `word.[n]`; arrays `var temps real[8]`, up to three dimensions, of timers and blocks
   too, and at I/O points; typed counters, `ctu_int` and the rest, with `ctu_dint` another
   word for `ctu`, and long timers in
-  nanoseconds, `ton_ltime`. **One rule that runs today changes:** an arithmetic result
-  past its type's limit will wrap, with no power, rather than stop at the limit, the
-  dint's included ("Arithmetic", below, shows the rule that runs until then). Each type
+  nanoseconds, `ton_ltime`. An arithmetic result past its type's limit wraps, with no
+  power, in every width; for the dint this has landed (M5-2, "Arithmetic", below), and
+  replaced the stop at the limit the dint had until then. Each type
   word and mnemonic becomes a reserved word, `int`, `real`, `word`, `byte`, `and`, `or`
   and `not` among them.
 - **`sqrt`**, waiting for a real type, which Milestone 5 brings. Milestone 3 (`PLAN.md` §3, decisions 67–107 in
@@ -593,8 +593,9 @@ the task next runs.
 ### Arithmetic
 
 `fill.ld` — a fill valve: each scan adds the meter's flow to a running total, `ge` closes
-the valve once the total reaches the setpoint, a lamp shows the total is still real, and
-the flow per minute is worked out from the minutes run:
+the valve once the total reaches the setpoint, a lamp shows the total did not wrap on this
+scan, a latched lamp that it ever did, and the flow per minute is worked out from the
+minutes run:
 
 ```
 var_input flow dint
@@ -604,9 +605,11 @@ var_output valve bool
 var_output total dint
 var_output total_ok bool
 var_output per_minute dint
+var_output overflow bool
 var full bool
 
 add total flow total ote total_ok
+xio total_ok otl overflow
 ge total setpoint ote full
 xio full ote valve
 div total minutes per_minute
@@ -667,27 +670,32 @@ IO.puts(Logex.Diagnostic.format(diagnostic))
 
 ```
 $ mix run fill.exs
-400 in, no minutes yet  %{"per_minute" => 0, "total" => 400, "total_ok" => 1, "valve" => 1}
-    %Logex.Fault{kind: :divide_by_zero, instruction: :div, path: nil, file: "fill.ld", line: 13}
-a minute in             %{"per_minute" => 800, "total" => 800, "total_ok" => 1, "valve" => 1}
-past the setpoint       %{"per_minute" => 600, "total" => 1200, "total_ok" => 1, "valve" => 0}
-a meter gone wild       %{"per_minute" => 1073741823, "total" => 2147483647, "total_ok" => 0, "valve" => 0}
-still wild              %{"per_minute" => 1073741823, "total" => 2147483647, "total_ok" => 0, "valve" => 0}
-a backflow of 5         %{"per_minute" => 1073741821, "total" => 2147483642, "total_ok" => 1, "valve" => 0}
+400 in, no minutes yet  %{"overflow" => 0, "per_minute" => 0, "total" => 400, "total_ok" => 1, "valve" => 1}
+    %Logex.Fault{kind: :divide_by_zero, instruction: :div, path: nil, file: "fill.ld", line: 15}
+a minute in             %{"overflow" => 0, "per_minute" => 800, "total" => 800, "total_ok" => 1, "valve" => 1}
+past the setpoint       %{"overflow" => 0, "per_minute" => 600, "total" => 1200, "total_ok" => 1, "valve" => 0}
+a meter gone wild       %{"overflow" => 1, "per_minute" => -1073741548, "total" => -2147483096, "total_ok" => 0, "valve" => 1}
+still wild              %{"overflow" => 1, "per_minute" => -48, "total" => -96, "total_ok" => 1, "valve" => 1}
+a backflow of 5         %{"overflow" => 1, "per_minute" => -50, "total" => -101, "total_ok" => 1, "valve" => 1}
 a cycle: %{"valve" => 1}
     {:ran, "fill", "f1", 0}
-    {:fault, "fill", "f1", %Logex.Fault{kind: :divide_by_zero, instruction: :div, path: nil, file: "fill.ld", line: 13}}
+    {:fault, "fill", "f1", %Logex.Fault{kind: :divide_by_zero, instruction: :div, path: nil, file: "fill.ld", line: 15}}
 line 3: `div` divides by the literal `0`: a zero divisor gives 0 and passes no power on every scan, so a literal one is refused
 line 2, column 6: missing separator before `-`: "5-3" is neither a tag nor a number, and a sign begins a number
 ```
 
 - `add total flow total` reads its sources before it writes, so the total runs on from
-  scan to scan. Each arithmetic instruction's power out is IEC's ENO: true when its
-  result is a dint's, so anything may follow it on its rung, here the `ote total_ok`.
-- A result outside a dint stops at the nearer limit, −2147483648 or 2147483647, and on
-  that scan the instruction passes no power: the wild meter's total stops at the top and
-  `total_ok` goes off, so no total ever jumps to a huge negative number, and none outside
-  a dint reaches a state. It comes back in with the next flow that brings it in.
+  scan to scan. Each arithmetic instruction's power out is IEC's ENO: true when the
+  value it stores is the exact result, so anything may follow it on its rung, here the `ote total_ok`.
+- A result outside a dint wraps: it keeps its low 32 bits, read in two's complement, so
+  2147483647 + 1 is −2147483648, and on that scan the instruction passes no power and
+  raises no fault. The wild meter's total passes the top and jumps to −2147483096, and
+  counts on from there, so the valve opens again; `total_ok` is off for the one scan that
+  wrapped and back on at the next. A program that must remember an overflow latches it,
+  as `xio total_ok otl overflow` does here, on the rung after the `add`. No value outside
+  a dint ever reaches a state. Until Milestone 5 (decision 146) a result stopped at the
+  nearer limit instead; the dint now wraps, as Logix and the S7-1200 do, with no power out
+  as on the S7-1200, and every integer width will.
 - A zero divisor, the minutes at start-up, gives 0 and no power on that scan, and is a
   minor fault the scan reports: a lone instance's `state.faults` is every
   `%Logex.Fault{}` of the scan that returned it, `[]` for none, and a cycle gives each as
@@ -696,7 +704,8 @@ line 2, column 6: missing separator before `-`: "5-3" is neither a tag nor a num
   ran in for one inside a function block. The plant runs on.
 - `div` truncates toward zero, as IEC's does, so `div -7 2 q` is −3, and `mod` is the
   remainder IEC defines, its sign the dividend's: `mod -7 3 r` is −1. `neg` and `abs` of
-  −2147483648 overflow, giving 2147483647 and no power, as `div -2147483648 -1` does.
+  −2147483648 overflow, giving −2147483648 itself and no power, as `div -2147483648 -1`
+  does.
 - A literal zero divisor is refused when the program compiles. A negative literal is its
   sign glued to its digits, `-5`, wherever a literal goes, and a sign begins a number, so
   `5-3` is an error rather than a number and then another: a difference is `sub`.

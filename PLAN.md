@@ -58,7 +58,8 @@ the ten otherwise than the record read them: a real too large for its integer ta
 rounded and then wrapped (161), the truncations named `real_trunc_int` (162), and
 `ctu_dint`, `ctd_dint` and `ctud_dint` aliases of `ctu`, `ctd` and `ctud` (163); its
 sixteen items, M5-1 to M5-16, are planned, and the first, M5-1, one table of types, landed
-the same day with no behaviour changed (§3, M5-1).
+the same day with no behaviour changed (§3, M5-1), and the second, M5-2, on 2026-10-22:
+the dint wraps, decision 77's saturation superseded on purpose (§3, M5-2).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -146,7 +147,8 @@ an evaluator that is private to it (B5). The stage functions stay public for the
   online edit, a `tp`'s edge blocked as a counter's is, and each warned of under an event
   task in its own words.
 - Integer arithmetic (M3-3): `add sub mul div mod neg abs` on dints, the result brought to
-  the nearer limit with no power on that scan, IEC's ENO; a zero divisor 0 and no power,
+  the nearer limit with no power on that scan, IEC's ENO, and since M5-2 wrapped instead,
+  its low 32 bits kept, with no power and no fault (decision 146); a zero divisor 0 and no power,
   reported to the host as a minor fault, a `%Logex.Fault{}` in a lone instance's state and
   a `{:fault, ...}` event of a cycle; and negative literals, `-5`, a sign glued to its
   digits.
@@ -4486,6 +4488,34 @@ the walks' cross-type reach and the documents.
   saturation, the fill valve's oracle in `end_to_end_test.exs` wraps where it clamped,
   decision 77's note says the rule changed with this commit, and no other behaviour
   changes. *Size M.*
+
+  **Status: DONE — landed 2026-10-22**, as two commits, the code with its tests and the
+  stanzas' amendments, then the documents. `Logex.Runtime`'s one rule, `wrapped/1`,
+  replaces `bounded/1`: a result inside the dint is itself, with power; any other keeps
+  its low 32 bits, read signed, the width from the type table's row through a new
+  `Logex.Declarations.width/1`, with no power, and no fault is recorded, so `add`, `sub`,
+  `mul`, `div` (the minimum by −1), `neg` and `abs` (the minimum) all wrap; a zero
+  divisor and the counters, which stop at a limit (decision 71), are unchanged. Changed on
+  purpose, each pinning the wrap where it pinned the stop: `arithmetic_test.exs`'s limits
+  (`add`, `sub` and `mul` past either limit, a product far past one, 65536 × 65536 giving
+  0, `div` of −2147483648 by −1, `neg` and `abs` of −2147483648, a total run on past the
+  top, a branch group, a block's body), with two tests added, a sum that wraps to 0
+  passing no power and a wrap raising no fault; `end_to_end_test.exs`'s M3-3 Done-when,
+  its oracle's `clamp` now `wrap`, `Integer.mod/2` over 2^32, its total driven past
+  2147483647 giving −1294967296 with `total_ok` off for that one run, the oracle checked
+  against the wild run too; `api_contract_test.exs`'s arithmetic oracle, which restates
+  the wrap as a remainder by 2^32 taken back into the range, independent of the code's
+  bit syntax, with a reach, `:far_past`, a result more than 2^32 out; the six stanzas'
+  amendment lines; and README's instruction table and "Arithmetic", whose `fill.ld`
+  gains `xio total_ok otl overflow` and whose run was re-run. The mutation table, 24
+  mutants each judged by the full suite's exit code, every one red: saturation put back
+  (15 tests), for `add sub mul` alone (12), `div` alone (2), `neg abs` alone (3), and for
+  one instruction at one limit, each of the ten (2 to 8 each); a wrap passing power (15),
+  read unsigned (13), not wrapped at all (15), kept to 31 bits (14) or 64 (15), its power
+  judged by the stored value (14), recorded as a fault (2); the contract oracle clamping
+  (1) or leaving its remainder out of range (1), the fill oracle clamping (2), and the
+  `:far_past` reach dropped (1). No growth test: the wrap is one comparison and, past a
+  limit, one binary match, whatever the program. 1577 tests (9 doctests), up from 1575.
 - **M5-3 · The integer widths.** The stanzas first, `sint int lint usint uint udint
   ulint`, `dint`'s amended (decisions 144 and 145). Each is declarable everywhere a dint
   is: a tag, a block's member, each section, `var_external` among them, a global, a
