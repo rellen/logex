@@ -78,7 +78,10 @@ M5-4) the same day: a `neg` into an unsigned destination told a signed type to d
 a program edited by hand whose arithmetic destination has no integer type refused where
 it is handed in, a literal compared with a tag its type cannot hold refused, and an
 instance's tag that holds no map and a timer's `last` that is no integer refused as every
-value outside its type is, the other two confirmed as built.
+value outside its type is, the other two confirmed as built. And the fifth, M5-5, the same day: IEC's
+typed counters, `ctu_int` to `ctud_ulint`, run by `ctu` and `ctd` and each stopping at its
+type's limits, and `ctu_dint`, `ctd_dint` and `ctud_dint` the very types of `ctu`, `ctd`
+and `ctud` (§3, M5-5), with three questions put to the maintainer.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -5093,6 +5096,100 @@ the walks' cross-type reach and the documents.
   second `ctu` on it, the event task's counter warning and an edit's refusal of a change to `ctu_int`, each
   pinned; an edit from `ctu` to `ctu_dint` is accepted with no report; and the commit
   names what the fifteen reserved counter words break. *Size M.*
+
+  **Status: DONE — landed 2026-10-22**, as three commits: the fifteen stanzas first, one a
+  type word, `ctu_int` to `ctud_ulint` and `ctu_dint`, `ctd_dint` and `ctud_dint`, each
+  alias saying it is its plain word's; then the code with its tests; then the documents.
+  The twelve typed counters are built-in types, `Logex.FbType.ctu_int/0` to
+  `ctud_ulint/0`, each its kind's members with `pv` and `cv` of its integer type, named
+  by its word, and each a row of `Logex.FbType.rules/1`: its kind's row with its
+  `family`, the kind an instruction's slot takes (`Logex.FbType.family/1`), and its
+  `counts`, the type of its `pv` and `cv`, `:dint` for the three plain counters and nil
+  for a timer. The instructions stay `ctu` and `ctd`: an instance slot names kinds, so a
+  `ctu` runs every up counter, and a counter of the other kind is told the up-down counter
+  of its own type, "a ctd_lint only counts down; declare it `var c ctud_lint` to count
+  both ways". A preset is judged in its instance's type, 0 to its top, "`ctu` takes a
+  preset of 0 to 32767 for a counter of ints, found `40000`", a dint's message as before,
+  and a preset from a tag is told the `move` where the tag widens into the `pv`;
+  `Logex.Declarations.preset?/1`, which held a preset to the dint, is gone. The runtime
+  reads a counter's kind and its limits from its type's rules, so a `ctu_int` stops at
+  32767 with `ov` set and a `ctd_udint` at 0 with `un` set, decision 71 by width, at a
+  cost of 2.5% more reductions a counter's run (83,277 to 85,347 for 400 counters).
+  `ctu_dint`, `ctd_dint` and `ctud_dint` are keys of `Logex.FbType.builtins/0` whose
+  values are the very types of `ctu`, `ctd` and `ctud` (decision 163), so a declaration
+  with either word gives one type and keeps no spelling: every message and warning names
+  the instance `a ctu`, its article, the compiler's refusals, the unrun warning, the event
+  task's counter warning and an edit's refusal of a change to `ctu_int`, each pinned; and
+  an edit from `ctu` to `ctu_dint` is accepted with no report. An unknown type's message
+  lists the fifteen words among logex's type words, in order, and from Elixir names each
+  alias once, as its plain word's value. The Done-when is `typed_counter_test.exs`: a
+  `ctu_int` stopping at 32,767 with `ov` on until `r` and a `ctd_udint` at 0 with `un` on
+  until `ld`; a `ctu_ulint` counting past 2^63; every kind of every width at its own two
+  limits against Table 10 restated; a preset at each typed width's top taken and one past
+  it, or a negative one, refused at its line; an edit of a width refused in its type's
+  words and of an alias accepted with no report; a typed counter's edge memory on the
+  block list, `c.cu`, a real edge counting after; the event task's counter warning for a
+  typed counter and an alias's; `var boxes ctu_dint` and `var boxes ctu` compiling to
+  equal programs, `ctd_dint` and `ctud_dint` likewise, in any case, red with an alias
+  made a type of its own; a typed counter's state outside its type refused; one in a
+  block; the fifteen words reserved as a tag's and a label's name; and the counters'
+  growth in reductions, 4x the counters under 4.8x to compile and to scan, and a typed
+  counter's scan within 1.2x a dint's. `end_to_end_test.exs` runs M5-5's Done-when from
+  files on disk: a plant whose `ctud_int` stock stops at 32767 with `ov` on and whose
+  `ctd_udint` hopper stops at 0 with `un` on, through `cycle/3`, against an oracle that
+  knows nothing of logex, and its `ctu_dint` box counter the very `ctu`. The contract
+  walk's counter oracle draws each counter's word from the six, `_dint` among them, and
+  stops each at its width's limits restated, its reach a count in each width and in the
+  alias, an unsigned counter stopped at 0, an edit of a width refused and of the alias
+  accepted. Changed on purpose: the unknown type's lists in `validation_test.exs`,
+  `function_block_test.exs` and `end_to_end_test.exs`, the articles test, and
+  `Logex.FbType`'s surface and `builtins/0` in `runtime_test.exs`. README's "A counter"
+  gained `stock.ld` and `stock.exs`, run; its output is the README's. The fifteen words
+  are reserved in every `.ld` file, in any case, as the code commit names; a `.logex`
+  file's global may still be named one, as it may be named `ctu`.
+
+  The mutation table (`m5/mut55.log` in the work's scratchpad), 18 mutants of `lib/`,
+  each applied alone in a copy, which differed from the code commit's only in the dead
+  `preset?/1` it still held, and judged by the full suite's exit code, every one red: a
+  typed counter's `pv` and `cv` left dints (10 tests); its rules counting in a dint (9);
+  the runtime stopping every counter at the dint's limits (8); an up counter stopping one
+  past its top (7) and a down counter one past its bottom (7); an alias made a type of
+  its own (15) or `ctu_dint` missing (25); an instance slot matched by a type's name, not
+  its family (18); a preset always judged as a dint (2), a negative one taken (2), its
+  refusal naming no type (2); the other kind's hint dropping the width (1); the `move`
+  hint judged against a dint (1); an alias named twice in the Elixir list (3) or by its
+  own word (3); a typed counter's family its own word (20); the runtime's kind the
+  side's own, ignoring the family (12); and the typed counters left out of
+  `builtins/0` (38). 1671 tests (9 doctests), up from 1646.
+
+  *Provisional readings* (each a question below): a typed counter's preset is never
+  negative; a counter slot's message names the plain words alone; and an unknown type's
+  message lists every counter word.
+
+  **Questions for the maintainer** (each taken provisionally as written, the closest
+  reading to the record and to Logix):
+  1. *A negative preset on a signed counter* (decision 158). A *preset* is the number on
+     the instruction, `ctd stock 50`, the `pv` an instance starts and restarts with. logex
+     takes 0 to the counter's type's top, so `ctu offset -10` on a `ctu_int` is refused at
+     its line, as every preset has been since M1-6, though a `move -10 offset.pv` compiles
+     and runs. On the conveyor: an engineer counting a reject chute's balance with a
+     `ctud_int`, its done lamp `qu` meant to light at −10, sees the program refused and
+     writes the `move` on a rung above instead. The other reading takes the type's whole
+     range, −32768 to 32767 for a `ctud_int`, the lamp then lit by the preset alone. IEC's
+     PV is of the counter's type, any INT (Ed 3 Table 45); Logix's `.PRE` is any DINT.
+  2. *What a counter slot's refusal names* (decision 163). `xic e ctu c 1` with `c` a
+     `ctd_lint` is told "`ctu` runs a ctu or a ctud, but `c` is a ctd_lint …", the slot
+     named by its kinds' plain words, though a `ctu` runs a `ctu_lint` too. On the
+     conveyor: an engineer who declared the hopper `ctd_lint` reads that `ctu` takes a
+     dint counter only, and may change the width as well as the kind. The other readings
+     say "an up counter or an up-down counter, of any width", or list all ten words. IEC
+     and Logix have no such message.
+  3. *An unknown type's list* (decision 163). A misspelt type, `var c ctu_itn`, is told
+     every one of logex's type words, 31 now, the twelve typed counters and the three
+     aliases among them, with the nearest suggested. On the conveyor: the engineer reads a
+     long line to find `ctu_int`, which the did-you-mean names anyway. The other readings
+     list the plain words and say "and the typed counters", or leave the aliases out,
+     which a declaration still takes. IEC and Logix have no such message.
 - **M5-6 · Long timers in nanoseconds.** The stanzas, then `ton_ltime tof_ltime tp_ltime`
   and `rto_ltime` (decision 158, its last taken as the maintainer answered §4.12's
   seventh question), run by

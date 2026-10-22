@@ -193,8 +193,8 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `tof run_on 30000` | an off-delay timer (`var run_on tof`), then a preset in ms | off-delay timer, IEC's TOF — rung power is its IN. True: `.dn` set, `.acc` 0. The first false scan starts the delay, and `.dn` stays set until `.acc` reaches `.pre`, then drops; a true rung during the delay ends it with `.dn` still set. A new or restarted one is at rest, `.dn` 0. Read it with `xic run_on.dn` on a rung below |
 | `tp horn_pulse 3000` | a pulse timer (`var horn_pulse tp`), then a preset in ms | pulse timer, IEC's TP — a rising edge of its rung, never on an instance's first scan, starts a pulse on `.tt` exactly `.pre` long, whatever the rung does meanwhile, an edge during it ignored; `.dn` is set as the pulse ends and holds while the rung does. Read the pulse with `xic horn_pulse.tt` on a rung below |
 | `rto lube 360000000` | a retentive timer (`var lube rto`), then a preset in ms | retentive on-delay timer, the conventional RTO — true, it times as `ton`; false, it keeps `.acc` and `.dn`, so its time adds up across the rung's drops. Its reset `.r`, an input a rung writes, `xic greased ote lube.r`, puts `.acc`, `.dn` and `.tt` to 0 at its next run; every restart, warm or cold, starts it at 0. Logic writes `.pre`, `.acc` and `.r` |
-| `ctu boxes 12` | an up counter (`var boxes ctu`) or an up-down one (`ctud`), then a preset of 0 to 2147483647 | count up — rung power is the counter's count input `cu`. Each rising edge adds one to `.cv`, never on an instance's first scan, and `.q` is `.cv >= .pv`. Its reset `.r`, an input a rung writes, as `xic reset_pb ote boxes.r`, puts `.cv` to 0 at the counter's next run, and keeps its memory of `cu`, so a box on the eye at a reset is not counted again. At 2147483647 the count stops and `.ov` stays on until a reset. The preset is where `.pv` starts; logic writes only `.r` and `.pv`, and a `ctud`'s `.ld`. One `ctu` runs a counter, and nothing may follow it on its path: read it with `xic boxes.q` on a rung below |
-| `ctd hopper 40` | a down counter (`var hopper ctd`) or an up-down one, then a preset | count down — rung power is `cd`. Its load `.ld` puts `.cv` to `.pv`; each rising edge takes one away, stopping at −2147483648 with `.un` on until a load; `.q` is `.cv <= 0`. A `ctud`, `var stock ctud`, is run by one `ctu` and one `ctd` on two rungs, with one preset, and has `.r` and `.ld`, `.qu` at `.cv >= .pv` and `.qd` at `.cv <= 0` |
+| `ctu boxes 12` | an up counter (`var boxes ctu`) or an up-down one (`ctud`), of any of IEC's typed counters too, `ctu_int` or `ctud_ulint` (M5-5), then a preset of 0 to 2147483647, or to its type's top for a typed counter | count up — rung power is the counter's count input `cu`. Each rising edge adds one to `.cv`, never on an instance's first scan, and `.q` is `.cv >= .pv`. Its reset `.r`, an input a rung writes, as `xic reset_pb ote boxes.r`, puts `.cv` to 0 at the counter's next run, and keeps its memory of `cu`, so a box on the eye at a reset is not counted again. At 2147483647, or a typed counter's top, the count stops and `.ov` stays on until a reset. The preset is where `.pv` starts; logic writes only `.r` and `.pv`, and a `ctud`'s `.ld`. One `ctu` runs a counter, and nothing may follow it on its path: read it with `xic boxes.q` on a rung below |
+| `ctd hopper 40` | a down counter (`var hopper ctd`) or an up-down one, then a preset | count down — rung power is `cd`. Its load `.ld` puts `.cv` to `.pv`; each rising edge takes one away, stopping at −2147483648, or a typed counter's bottom, 0 for a `ctd_udint`, with `.un` on until a load; `.q` is `.cv <= 0`. A `ctud`, `var stock ctud`, is run by one `ctu` and one `ctd` on two rungs, with one preset, and has `.r` and `.ld`, `.qu` at `.cv >= .pv` and `.qd` at `.cv <= 0` |
 | `add a b dst` `sub a b dst` `mul a b dst` | two integer sources, each a tag, a member or a literal, of `dst`'s type or one IEC's Figure 11 widens into it, then an integer tag or member it writes, not a `var_input`; any other source is refused naming its conversion | add, subtract (`a − b`), multiply, in `dst`'s type — true: writes the result and passes power; a result outside that type wraps, keeping its low bits, in two's complement where signed (2147483647 + 1 is −2147483648 in a `dint`, 127 + 1 −128 in an `sint`, 0 − 1 255 in a `usint`), and passes no power on that scan, with no fault. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
 | `div a b dst` `mod a b dst` | as `add` | divide, truncated toward zero (`div -7 2 q` is −3), and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. A signed type's minimum divided by −1 wraps to itself, `div -2147483648 -1` to −2147483648 in a `dint`, with no power |
 | `neg a dst` `abs a dst` | a source as `add`'s, then an integer it writes; `neg` into an unsigned type is refused | negate, absolute value — as `add`, one source: a signed type's minimum, −2147483648 in a `dint`, has no positive twin, so each wraps to it itself for it, with no power |
@@ -248,9 +248,9 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   strings `byte word dword lword` with `and or xor not shl shr rol ror`; the rest of IEC's
   typed conversions, `real_to_int` and `real_trunc_int` among them; bit access `word.3` and
   `word.[n]`; arrays `var temps real[8]`, up to three dimensions, of timers and blocks
-  too, and at I/O points; typed counters, `ctu_int` and the rest, with `ctu_dint` another
-  word for `ctu`, and long timers in
-  nanoseconds, `ton_ltime`. An arithmetic result past its type's limit wraps, with no
+  too, and at I/O points; and long timers in nanoseconds, `ton_ltime`. IEC's typed
+  counters have landed, `ctu_int` and the rest, with `ctu_dint` another word for `ctu`
+  (M5-5, "A counter", below). An arithmetic result past its type's limit wraps, with no
   power, in every integer width, as has landed (M5-2 and M5-4, "Arithmetic" and "Integer
   widths", below), replacing the stop at the limit the dint had until then. Each type
   word and mnemonic becomes a reserved word, `real`, `word`, `byte`, `and`, `or` and
@@ -499,6 +499,82 @@ A `ctd` on an up counter is refused, with what to declare instead:
 ```
 line 8: `ctd` runs a ctd or a ctud, but `boxes` is a ctu (declared on line 5): a ctu only counts up; declare it `var boxes ctud` to count both ways
 ```
+
+A counter counts in a dint, as IEC's CTU_DINT, and the conventional set's COUNTER, do.
+IEC's typed counters count in another integer type (decision 158): `ctu_int`, `ctu_lint`,
+`ctu_udint` and `ctu_ulint`, and `ctd_` and `ctud_` the same, each with its `pv` and `cv`
+of that type and run by the same `ctu` and `ctd`, so a rung never says a width: its
+preset is judged in its instance's type, and the count stops at that type's limits with
+`ov` or `un` on, where the conventional set's CTUD rolls over. `ctu_dint`, `ctd_dint` and
+`ctud_dint` are IEC's names for `ctu`, `ctd` and `ctud` themselves (decision 163): a
+declaration with either word gives the one type, so every message and warning names the
+instance by the plain word, `a ctu`, whichever word declared it, and an edit from one to
+the other changes nothing. An edit that changes a counter's width is refused, as any type
+change is. `stock.ld`, a buffer counted as an int, its case counter declared with IEC's
+dint word:
+
+```
+var_input infeed bool
+var_input outfeed bool
+var_output full bool
+var_output over bool
+var stock ctud_int
+var cases ctu_dint
+
+xic infeed ctu stock 32767
+xic outfeed ctd stock 32767
+xic stock.qu ote full
+xic stock.ov ote over
+xic infeed ctu cases 12
+```
+
+`stock.exs` starts the stock one short of an int's top, as a long run of boxes leaves it,
+and tries a preset an int cannot hold:
+
+```elixir
+{:ok, stock} = Logex.compile_file("stock.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(stock, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(stock, state, 10)
+  IO.puts("#{label}  cv #{state.env["stock"]["cv"]}  #{inspect(outputs)}")
+  state
+end
+
+state = Logex.Runtime.instance(stock)
+{_, state} = Logex.Runtime.scan(stock, state, 10)
+# A stock of 32766, one short of an int's top, as a run of boxes leaves it.
+state = put_in(state.env["stock"]["cv"], 32_766)
+
+state
+|> scan.("box in          ", %{"infeed" => 1})
+|> scan.("eye clear       ", %{"infeed" => 0})
+|> scan.("box in, at 32767", %{"infeed" => 1})
+|> scan.("eye clear       ", %{"infeed" => 0})
+|> scan.("box out         ", %{"outfeed" => 1})
+
+IO.puts(inspect(stock.tags["cases"].type == Logex.FbType.ctu()))
+
+{:error, [mistake]} =
+  Logex.compile("var e bool\nvar stock ctud_int\nxic e ctu stock 40000\n", name: "m")
+
+IO.puts(Logex.Diagnostic.format(mistake))
+```
+
+```
+$ mix run stock.exs
+box in            cv 32767  %{"full" => 1, "over" => 0}
+eye clear         cv 32767  %{"full" => 1, "over" => 0}
+box in, at 32767  cv 32767  %{"full" => 1, "over" => 1}
+eye clear         cv 32767  %{"full" => 1, "over" => 1}
+box out           cv 32766  %{"full" => 0, "over" => 1}
+true
+line 3: `ctu` takes a preset of 0 to 32767 for a counter of ints, found `40000`
+```
+
+The stock stops at 32767 with `ov` on, which stays until a reset or a load, and a count
+down from there takes one away; `cases` holds the very type `ctu` declares; and a preset
+past an int's top is refused at its line, in the type it is judged in.
 
 A counter in a function block whose `cal` is false is frozen with the rest of the block:
 a box that passes the eye while it is frozen is not counted. A counter under an event
@@ -1133,7 +1209,7 @@ And a block that holds an instance of itself, `var inner seal` on line 6 of `sea
 refused in its own file, and the program that names it is compiled no further:
 
 ```
-belts.ld: line 12: unknown type `sael`: logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`, and the function block `seal` — did you mean `seal`?
+belts.ld: line 12: unknown type `sael`: logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, `ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, `ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, `rto`, `tof`, `ton` and `tp`, and the function block `seal` — did you mean `seal`?
 belts.ld: line 18: `ote` writes `s1.run`, but `s1` is an instance of `seal`, whose members only its body writes
 ./seal.ld: line 6: `seal` cannot hold an instance of `seal`: a function block never holds an instance of itself
 ```

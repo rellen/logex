@@ -3159,7 +3159,8 @@ the same day, changing nothing a program, a configuration, a host or an edit see
 its second, M5-2, the dint's wrap, on 2026-10-22, decision 77's saturation superseded on
 purpose, and its third, M5-3, the integer widths declared everywhere, `move` and literals
 by Figure 11 and the 56 integer conversions, the same day, and its fourth, M5-4,
-arithmetic and comparison over every integer width, the same day**
+arithmetic and comparison over every integer width, the same day, and its fifth, M5-5,
+IEC's typed counters and the dint counters' IEC names, the same day**
 (`PLAN.md` §3, Milestone 5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
 4, 8 byte integers (how does IEC and vendors handle signed?), 32/64 bit reals, arrays of
 all others, what else does IEC and vendors have."* It read IEC 61131-3 Ed 2:2003 and Ed
@@ -3686,7 +3687,14 @@ IEC's plain CTU is CTU_INT (feature 1a), a departure logex has made since M3-1; 
 of them (decision 163), the same types, so that an instance declared with either word is
 one type, named in every message and warning by the plain word. The
 instructions stay `ctu` and `ctd`, each running every counter of its kind, as `ctu` runs a
-`ctud` (M3-1), its preset judged in its instance's type (a routine choice below). The long
+`ctud` (M3-1), its preset judged in its instance's type (a routine choice below).
+*(Landed for the counters with M5-5, 2026-10-22: the twelve typed counters are rows of
+`Logex.FbType.rules/1`, each its kind's row with its `family`, the kind an instruction's
+slot takes, and its `counts`, the type of its `pv` and `cv`, so the one `ctu` and `ctd`
+run them and the runtime stops each at its `counts`' limits; a preset is judged 0 to its
+type's top, never negative as every preset, "`ctu` takes a preset of 0 to 32767 for a
+counter of ints"; and `Logex.FbType.builtins/0` gives each alias the very type of its
+plain word, so `var boxes ctu_dint` and `var boxes ctu` compile to equal programs.)* The long
 timers are IEC's `ton_ltime`, `tof_ltime` and `tp_ltime` (Ed 3 Table 46 features 2c, 3c
 and 1c), and `rto_ltime`, the "rto equivalent if fitting" the maintainer allowed, taken
 (the seventh question, answered as recorded, decision 158's note), run by `ton`, `tof`,
@@ -3725,6 +3733,8 @@ four long timers, in every `.ld` file; and the mnemonics, in every `.ld` file, `
 xor not shl shr rol ror`, the 182 conversions and `sqrt`. A family of
 conversions may share one stanza that names each member, `naming_test.exs` reading the
 family's names as data (a routine choice below).
+*(Landed for the fifteen counter words with M5-5, 2026-10-22, each with its own stanza,
+reserved in every `.ld` file in any case as a tag's and a label's name.)*
 
 **Routine choices, each with the alternative it passes over.**
 - *One table of types* in `Logex.Declarations`, each type's word, kind, width, range,
@@ -4972,7 +4982,9 @@ questions asked after M3-1's review, the same day.
     *(Kept 2026-10-21 for every width: the typed counters of decision 158 stop at their
     type's limits, decision 146's wrap replacing decision 77 alone, as the maintainer
     answered §4.12's fifth question; `ctu_dint` and its siblings, decision 163, are this
-    decision's counters under another word.)*
+    decision's counters under another word.)* *(Landed for every width with M5-5,
+    2026-10-22: a `ctu_int` stops at 32767 with `ov` set, a `ctd_udint` at 0 with `un`
+    set, and a `ctu_ulint` counts past 2^63.)*
 72. **A counter under an event task (M3-1).** The e-stop's own event task counts how many
     times the e-stop was pressed. The task runs only when the e-stop switches on, so the
     counter only ever sees "pressed", never a new press, and its count stays at 0.
@@ -7407,7 +7419,10 @@ the decisions the rest settle.
      maintainer's answers to §4.12's fifth, sixth and seventh questions: the counters stop
      at their type's limits, decision 71 by width, as recorded; `ctu_dint`, `ctd_dint` and
      `ctud_dint` exist as aliases of `ctu`, `ctd` and `ctud`, decision 163, otherwise
-     than the record read it; and `rto_ltime` is taken, as recorded.)*
+     than the record read it; and `rto_ltime` is taken, as recorded.)* *(Landed for the
+     counters with M5-5, 2026-10-22: `ctu_int ctu_lint ctu_udint ctu_ulint` and the same
+     of `ctd` and `ctud`, run by `ctu` and `ctd`, each stopping at its type's limits; the
+     long timers are M5-6's.)*
 159. **Where decision 147's widening applies beyond an instruction (Milestone 5),** added
      by the review. The shift's count is a `uint` and the block `seal` takes a `dint`
      input: `cal s1 shift_count`; the configuration connects a `uint` global to a
@@ -7531,7 +7546,12 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      which each alias's stanza and README's counter section say once. The alternative, a
      message in the declaration's own word, would put the spelling into the tag's type,
      so that two declarations of one thing would differ as data and `Logex.FbType.same?/2`
-     and the edit's type comparison would have to excuse it.
+     and the edit's type comparison would have to excuse it. *(Landed with M5-5,
+     2026-10-22, as read: each alias a key of `Logex.FbType.builtins/0` whose value is its
+     plain word's type, every message and warning naming the instance by the plain word,
+     each pinned, and an edit from one word to the other accepted with no report; an
+     unknown type's message lists the three among logex's type words, and from Elixir
+     names each as the value its plain word gives, once.)*
 164. **`sqrt` of a negative source (Milestone 5),** left open by §4.12 and decision 79's
      note. The fan's vibration is worked out as `sqrt fan_var fan_dev`, and a rounding in
      the subtraction before it leaves `fan_var` at −0.25 for one scan.
