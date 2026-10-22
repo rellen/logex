@@ -205,7 +205,12 @@ defmodule Logex.FbType do
   counters are among them, `ctu_int` and the rest (decision 158), and `ctu_dint`,
   `ctd_dint` and `ctud_dint`, each the very type its plain word gives (decision 163).
   """
-  def builtins do
+  def builtins, do: Logex.FbType.Builtins.table()
+
+  # The table `builtins/0` gives, which `Logex.FbType.Builtins` builds once, as logex
+  # compiles: built on each call, it made every type word's lookup cost a table.
+  @doc false
+  def built do
     plain =
       Map.merge(
         %{

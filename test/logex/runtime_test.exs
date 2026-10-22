@@ -2088,10 +2088,13 @@ defmodule Logex.RuntimeTest do
       # one-version check uses. Decision 53: held/1 and within/2, a type as the one table
       # holds it and as it reads inside the table, and check/2, user?/1 across the types a
       # compile is given. M3-1: the three counters, and rules/1, runners/0 and runs?/2, each
-      # built-in type as data. M3-2: the other timers.
+      # built-in type as data. M3-2: the other timers. M5-5: the typed counters, and
+      # family/1. M5-5's review: built/0, hidden, the table builtins/0 gives, which
+      # Logex.FbType.Builtins builds once as logex compiles and gives as table/0.
       assert Enum.sort(Logex.FbType.__info__(:functions)) == [
                __struct__: 0,
                __struct__: 1,
+               built: 0,
                builtin: 1,
                builtins: 0,
                check: 2,
@@ -2131,6 +2134,13 @@ defmodule Logex.RuntimeTest do
                within: 2,
                writable: 1
              ]
+
+      assert Logex.FbType.Builtins.__info__(:functions) == [table: 0]
+      assert {:docs_v1, _, _, _, :hidden, _, _} = Code.fetch_docs(Logex.FbType.Builtins)
+
+      {:docs_v1, _, _, _, _, _, type_docs} = Code.fetch_docs(Logex.FbType)
+
+      assert for({{:function, :built, 0}, _, _, doc, _} <- type_docs, do: doc) == [:hidden]
 
       # M4-1: the clock the wall-clock runner reads, a behaviour whose three checks, hidden,
       # give both clocks one message a rule, and its two clocks, the manual one a GenServer.

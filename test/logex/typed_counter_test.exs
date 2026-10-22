@@ -454,6 +454,46 @@ defmodule Logex.TypedCounterTest do
       typed = cost.(400, "ctu_ulint", scan) / cost.(400, "ctu", scan)
       assert typed < 1.2, "a typed counter scanned in #{Float.round(typed, 2)}x a dint's"
     end
+
+    # The fifteen new type words cost a program that uses none of them nothing: a type
+    # word is looked up in a table built once, as logex compiles, a lookup costing tens of
+    # reductions where building the table on each call cost over a thousand (M5-5's
+    # review), so a program of bools compiles, against its own parse, as it did before
+    # M5-5, about 12x, where a table built on each lookup made it about 40x.
+    test "a type word's lookup builds no table, so a program of bools compiles as before" do
+      least = fn f ->
+        Enum.min(
+          for _ <- 1..3 do
+            {:reductions, before} = Process.info(self(), :reductions)
+            f.()
+            {:reductions, later} = Process.info(self(), :reductions)
+            later - before
+          end
+        )
+      end
+
+      for word <- Map.keys(Logex.FbType.builtins()) ++ ["ctu_foo", "abc"] do
+        looked = least.(fn -> Logex.FbType.builtin(word) end)
+        assert looked < 200, "looking `#{word}` up took #{looked} reductions"
+        reserved = least.(fn -> Logex.Declarations.reserved(word) end)
+        assert reserved < 300, "`#{word}`'s reservation took #{reserved} reductions"
+      end
+
+      text =
+        Enum.map_join(1..400, "\n", &"var b#{&1} bool") <>
+          "\n" <> Enum.map_join(1..400, "\n", &"xic b#{&1} ote b#{&1}")
+
+      compiled = least.(fn -> Logex.compile(text, name: "p") end)
+
+      parsed =
+        least.(fn ->
+          {:ok, tokens, _end} = Logex.Compiler.tokenize(text)
+          Logex.Compiler.parse(tokens)
+        end)
+
+      assert compiled / parsed < 20,
+             "400 bool rungs compiled in #{Float.round(compiled / parsed, 1)}x their parse"
+    end
   end
 
   describe "the fifteen counter words are reserved in every `.ld` file, in any case" do
