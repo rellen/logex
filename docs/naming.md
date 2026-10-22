@@ -201,6 +201,13 @@ Cite the document that had something to say.
 | Power | **EXPT** (Ed3 T29; ST `**`, operator **feature 3**) | **EXPT** (formerly XPY) | TIA EXPT; `x^y` inside CALCULATE | EXPT | EXPT(_E) | **expt** *(deferred)* | Another that sweep rename toward IEC |
 | Compute from an expression | not in standard — ST `:=` covers it | CPT — **ladder only** | CALCULATE — **LAD/FBD only, not SCL** | none | none | **defer** | These exist precisely because ladder has no expression syntax. **Corrected:** CALCULATE is not an SCL instruction |
 
+*(Amended 2026-10-22, M5-2, `docs/organisation.md` decision 146, superseding decision 77
+for the Add row and for `sub`, `mul`, `div`, `neg` and `abs` alike: a result outside a dint
+no longer stops at the nearer limit; it wraps, keeping its low 32 bits in two's
+complement, `add 2147483647 1 dst` giving −2147483648, and on that scan passes no power,
+IEC's ENO, with no fault. A zero divisor is unchanged, decision 78. Each stanza below
+carries its own amendment line.)*
+
 ### Bitwise and shift
 
 | Concept | IEC 61131-3 | Conventional | Siemens | CODESYS | Mitsubishi | logex | Notes |

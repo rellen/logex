@@ -4510,12 +4510,24 @@ the walks' cross-type reach and the documents.
   gains `xio total_ok otl overflow` and whose run was re-run. The mutation table, 24
   mutants each judged by the full suite's exit code, every one red: saturation put back
   (15 tests), for `add sub mul` alone (12), `div` alone (2), `neg abs` alone (3), and for
-  one instruction at one limit, each of the ten (2 to 8 each); a wrap passing power (15),
+  one instruction at one limit, each of the nine (2 to 8 each); a wrap passing power (15),
   read unsigned (13), not wrapped at all (15), kept to 31 bits (14) or 64 (15), its power
   judged by the stored value (14), recorded as a fault (2); the contract oracle clamping
   (1) or leaving its remainder out of range (1), the fill oracle clamping (2), and the
   `:far_past` reach dropped (1). No growth test: the wrap is one comparison and, past a
   limit, one binary match, whatever the program. 1577 tests (9 doctests), up from 1575.
+
+  *M5-2's review* (2026-10-22) found the wrap right against an oracle of its own, a run
+  against the parent and the README re-run, 32 of its 33 mutants red, and three things
+  to mend, one commit for the test and one for the documents: a source a hand-built env
+  holds outside the dint, read as the integer it is, the result computed exactly and then
+  wrapped, was pinned by nothing, a mutant clamping it first green, now pinned in
+  `arithmetic_test.exs` (5000000000, −5000000000 and 2^70 in `add v 0 r ote k` giving
+  705032704, −705032704 and 0, no power and no fault), the reading provisional, a
+  question for the maintainer; the Arithmetic survey table's Add row in
+  `docs/naming.md`, which still said a result stops at the nearer limit, now amended
+  under the table; and this status, which counted ten single-limit mutants for nine.
+  1578 tests (9 doctests).
 - **M5-3 · The integer widths.** The stanzas first, `sint int lint usint uint udint
   ulint`, `dint`'s amended (decisions 144 and 145). Each is declarable everywhere a dint
   is: a tag, a block's member, each section, `var_external` among them, a global, a
