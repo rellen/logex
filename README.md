@@ -68,7 +68,8 @@ Source syntax today:
   sign begins a number, so it needs a space before it too: `move 5-3 aa` is an error naming
   `5-3`, and `ote a-5` one naming `a-5`; a difference is `sub`. A literal is judged by
   the slot it goes into: it must fit that slot's type, −2147483648 to 2147483647 for a
-  dint, 0 to 65535 for a `uint`, a preset being 0 to 2147483647
+  dint, 0 to 65535 for a `uint`, a timer's preset 0 to 2147483647 ms and a counter's 0
+  to the top of its `pv`'s type, 2147483647 for a `ctu`, 32767 for a `ctu_int`
 - no operand parentheses, no terminator
 - `//` starts a comment, which runs to the end of its line
 - a name may have `.` parts: `t1.dn` is the member `dn` of the timer `t1`. A timer's

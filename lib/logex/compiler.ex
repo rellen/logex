@@ -833,13 +833,14 @@ defmodule Logex.Compiler do
         {run, first, diagnostics}
       )
 
-  defp run_by(:error, %Tag{type: %FbType{}}, {instance, line, symbol, pre}, acc) do
+  defp run_by(:error, %Tag{type: %FbType{} = type}, {instance, line, symbol, pre}, acc) do
     {run, first, diagnostics} = acc
     run = Map.put(run, {instance, symbol}, line)
 
     agreed(
       Map.fetch(first, instance),
       {instance, line, symbol, pre},
+      type,
       {run, Map.put_new(first, instance, {line, symbol, pre}), diagnostics}
     )
   end
@@ -858,19 +859,30 @@ defmodule Logex.Compiler do
 
   # The second instruction to run an instance, of the other mnemonic, gives the preset the
   # first gave. A preset that is no literal was reported already.
-  defp agreed({:ok, {first_line, other, pre}}, {instance, line, symbol, given}, acc)
+  defp agreed({:ok, {first_line, other, pre}}, {instance, line, symbol, given}, type, acc)
        when pre != given and is_integer(pre) and is_integer(given) do
     {run, first, diagnostics} = acc
 
     message =
       "`#{instance}` already has the preset #{pre} from the `#{other}` " <>
-        "#{where(first_line, line)}: the `ctu` and the `ctd` of a ctud give it one preset, " <>
+        "#{where(first_line, line)}: the `ctu` and the `ctd` of " <>
+        "#{Declarations.a_or_an(ctud_of(type))} give it one preset, " <>
         "so this `#{symbol}` takes #{pre} too"
 
     {run, first, [diagnostic(line, message) | diagnostics]}
   end
 
-  defp agreed(_first, _runs, acc), do: acc
+  defp agreed(_first, _runs, _type, acc), do: acc
+
+  # The up-down counter a counter's two sides make, by its own word since M5-5's review,
+  # a `ctud_int`'s own and a `ctu_int`'s `ctud_int`, as a counter of the other kind is told
+  # to declare; any other type, which its own diagnostic refuses, a plain `ctud`.
+  defp ctud_of(%FbType{name: name} = type), do: ctud_word(FbType.family(type), name)
+
+  defp ctud_word(kind, name) when kind in ["ctu", "ctd", "ctud"],
+    do: String.replace_prefix(name, kind, "ctud")
+
+  defp ctud_word(_kind, _name), do: "ctud"
 
   # In the words of the kind of type the instruction is named after (Logex.FbType.rules/1,
   # M3-2): every timer's, one; a counter's, its side.

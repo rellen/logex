@@ -185,8 +185,26 @@ defmodule Logex.TypedCounterTest do
       assert messages("var e bool\nvar c ctud_int\nxic e ctu c 32767\nxio e ctd c 32768") == [
                "line 4: `ctd` takes a preset of 0 to 32767 for a counter of ints, found `32768`",
                "line 4: `c` already has the preset 32767 from the `ctu` on line 3: the `ctu` " <>
-                 "and the `ctd` of a ctud give it one preset, so this `ctd` takes 32767 too"
+                 "and the `ctd` of a ctud_int give it one preset, so this `ctd` takes 32767 too"
              ]
+
+      # The message names the counter by its own word, as every other does (M5-5's
+      # review); an alias keeps no spelling, so a `ctud_dint` is a ctud; and a counter of
+      # one kind, refused for the other side, is named the ctud of its own width it is told
+      # to declare.
+      for {word, named} <- [
+            {"ctud_ulint", "a ctud_ulint"},
+            {"ctud_dint", "a ctud"},
+            {"ctud", "a ctud"},
+            {"CTUD_LINT", "a ctud_lint"},
+            {"ctu_udint", "a ctud_udint"},
+            {"ctd_int", "a ctud_int"}
+          ] do
+        assert ("line 4: `c` already has the preset 5 from the `ctu` on line 3: the `ctu` " <>
+                  "and the `ctd` of #{named} give it one preset, so this `ctd` takes 5 too") in messages(
+                 "var e bool\nvar c #{word}\nxic e ctu c 5\nxio e ctd c 4"
+               )
+      end
     end
 
     test "a preset from a tag is told the `move`, where the tag widens into its `pv`" do
