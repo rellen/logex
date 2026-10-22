@@ -216,10 +216,13 @@ an earlier leg wrote. Both match how a real controller scans a rung.
 
 `xic` and `xio` are complementary by construction: whatever a tag holds, exactly one of
 them passes power. The compiler lets only a `bool` reach either, but an env built by hand
-rather than by `Logex.Program.initial_env/1` can still hold a 5, a `false` or leave a tag
-out, so evaluation settles it: a number reads by value, nonzero closed (so `0.0` is open);
-a boolean reads as itself; `nil` and a missing tag are open; anything else is closed. That
-totality is a guarantee, not a feature to write programs against (`PLAN.md` §5).
+rather than by `Logex.Program.initial_env/1` can still hold a `2.5`, a `false` or leave a
+tag out, so evaluation settles it: a number reads by value, nonzero closed (so `0.0` is
+open); a boolean reads as itself; `nil` and a missing tag are open; anything else is
+closed. That totality is a guarantee, not a feature to write programs against (`PLAN.md`
+§5). An integer outside its tag's type, a 5 in a `bool` or 5000000000 in a `dint`, never
+gets that far: the runtime refuses the state where it is handed in, an `ArgumentError`
+naming each such value, so no scan ever sees one.
 
 ### Settled, not yet landed
 

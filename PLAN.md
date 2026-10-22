@@ -59,7 +59,11 @@ rounded and then wrapped (161), the truncations named `real_trunc_int` (162), an
 `ctu_dint`, `ctd_dint` and `ctud_dint` aliases of `ctu`, `ctd` and `ctud` (163); its
 sixteen items, M5-1 to M5-16, are planned, and the first, M5-1, one table of types, landed
 the same day with no behaviour changed (§3, M5-1), and the second, M5-2, on 2026-10-22:
-the dint wraps, decision 77's saturation superseded on purpose (§3, M5-2).
+the dint wraps, decision 77's saturation superseded on purpose (§3, M5-2); the
+maintainer's four answers to their reviews' questions landed the same day (decisions
+168–171, §3 after M5-2): a program type named with no article, a hand-edited program's
+port holding an instance the host's mistake, the type table's width in bits, and a value
+a state holds outside its tag's type refused where the state is handed in.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -4528,6 +4532,68 @@ the walks' cross-type reach and the documents.
   `docs/naming.md`, which still said a result stops at the nearer limit, now amended
   under the table; and this status, which counted ten single-limit mutants for nine.
   1578 tests (9 doctests).
+- **The maintainer's answers of 2026-10-22** to four questions M5-1's and M5-2's
+  reviews left (`docs/organisation.md` §7, decisions 168 to 171), landed the same day as
+  two commits, the code with its tests and the decisions, then the documents:
+  - *168, a program type's name takes no article*: "`m1` runs `motor`, which declares no
+    `strat`", as a user block's type is named; its entry is gone from
+    `type_table_test.exs`'s allow-list, and every other message naming a program type was
+    checked and takes none already.
+  - *169, a var_input or var_output that holds an instance is the host's mistake*: one
+    `ArgumentError` at the configuration check, a line a tag, the program left out of
+    every diagnostic; on `main` a constant or an undeclared global connected to one let a
+    `FunctionClauseError` or a `Protocol.UndefinedError` escape `check/1`, now refused.
+  - *170, the type table's width is in bits*: §4.12's column renamed, 1 for a bool.
+  - *171, a value a state holds outside its tag's type is the host's mistake*, refused
+    where the state is handed in, after its owner, every such value a line of one
+    message in path order, at any depth, through a guard built from the table,
+    `Logex.Declarations.is_fitting/2`: linear in the state, about five reductions a tag, a
+    growth test holding 4x the tags under 4.8x; paid on every scan, so M3-5's growth test
+    of a skipped rung, 0.23 of running it, is 0.30 now, its bound moved on purpose. M5-2's
+    test of a source computed exactly then wrapped is replaced by its refusal, and the
+    tests that pinned an integer outside a bool read by value (M1-4's contacts, a
+    one-shot's and a pulse coil's storage bit, a timer's `.en`), a plain swap's narrowed
+    7 (decision 26's tests, the restart under a recompile) and the edit walk's plain swap
+    (now `:swap_outside`, refused, the rule restated in the walk) are changed on purpose,
+    each keeping what it pinned with a value that is no integer.
+
+  The mutation table, 17 mutants each judged by the full suite's exit code, every one
+  red: no value check (12 tests), the upper limit unchecked (12) or the lower (6), a
+  built-in's members not looked into (2), a user block's body (1) or its held type (1),
+  the lines unsorted (2), the values checked before the owner (1), the check made
+  quadratic (9, the new growth test among them, 15.8x for 4x), a value that is no integer
+  refused too (20); the port check gone (1), a var_output's unchecked (1), a held user
+  block unnamed (1), the refused program kept for the diagnostics (1); the article put
+  back (11); and the walk's swap oracle never (1) or always (1) saying outside. 1586
+  tests (9 doctests), up from 1578.
+
+  **Questions for the maintainer** (each taken provisionally as written, the closest
+  reading to the record and to Logix):
+  1. *A var_input or var_output holding an instance that nothing connects* (decision
+     169). A *var_input* is a program's input, filled from a global by a *connection*
+     line, `m1.run g`. The answer named the connected one; the record refuses the
+     program whatever its connections, since no text could have compiled it either way.
+     On the conveyor: a hand-edited `motor` whose `run` lamp output holds a timer is
+     refused at start even if no line connects `m1.run`, so the operator's plant never
+     starts with it, rather than starting and showing the lamp as never driven. IEC and
+     Logix have no such program. The other reading refuses only a connected one and
+     gives the unconnected one the usual "leaves its var_input unconnected" diagnostic.
+  2. *A value that is no integer* (decision 171). The answer refuses a value outside its
+     tag's type; the record refuses an integer outside the type's range, 5 in a bool or
+     5,000,000,000 in a dint, and still reads a value that is no integer as before: a
+     contact reads 2.5 as closed and `nil` as open, `add` reads `"x"` as 0 (M1-4, M3-3).
+     On the conveyor: a host that hands in the fan's `speed` as 37.5 sees the fan run as
+     if 0 were written, rather than an `ArgumentError`. IEC has no such value; Logix
+     cannot store one. The other reading refuses every value `fits?/2` refuses, an
+     `ArgumentError` for 37.5 too, retiring M1-4's totality for a state handed in.
+  3. *Where a resource is checked* (decision 171). A `%Logex.Runtime{}` the host builds
+     by hand is checked as each scan takes an instance, inside `cycle/3`, not on every
+     call that takes a runtime, so a configuration edit's steps, which scan nothing,
+     carry a bad value to the next cycle, which refuses it; and a global that no instance
+     reads is never checked. On the conveyor: nothing an operator sees changes, since the
+     runner never takes a runtime from a host; a test that hands `cycle/3` a doctored
+     runtime gets the `ArgumentError` from that cycle. Checking every call would cost a
+     walk of the whole resource every cycle, including the instances not due.
 - **M5-3 · The integer widths.** The stanzas first, `sint int lint usint uint udint
   ulint`, `dint`'s amended (decisions 144 and 145). Each is declarable everywhere a dint
   is: a tag, a block's member, each section, `var_external` among them, a global, a

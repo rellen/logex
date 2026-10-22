@@ -142,7 +142,17 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   holds a key the runtime keeps a scan's records under, `:faults`, `:jump` or `:ran`, all
   it holds named in one message, checked with the env's shape, before the clock and the
   owner, since a record left there would change the run; and a `cal` drops those keys from
-  its instance's map before its body runs, a value no scan checks.
+  its instance's map before its body runs, a value no scan checks. Since decision 171
+  every entry point that takes a state, `Logex.Edit`'s steps among them, refuses one that
+  holds an integer outside its tag's or member's type, at any depth, 5000000000 in a dint
+  or 5 in a bool, after the state's owner, every such value a line of one message in path
+  order (`state.env holds `t1.acc` outside its type: ...`), each tag of the program looked
+  up in the state through `Logex.Declarations.is_fitting/2`, a guard a value, so linear in
+  the state (a growth test in `runtime_test.exs`); a value that is no integer is read as
+  before (provisional); a resource's instance is checked as each scan takes it, inside
+  `call/4`, so a `cycle/3` or `restart/2` of a runtime the host built raises before it
+  returns; and a plain swap that narrows a tag over such a value is refused at its next
+  call. It replaces M5-2's provisional reading of a hand-built source outside the dint.
 - `lib/logex/configuration.ex` — `%Logex.Configuration{}` (M2-1, `docs/organisation.md`
   §4.4 and §4.10): the program types, tasks, globals (located at `<device>.i|q.<address>`
   or not), program instances and connections, as plain data and lists in declaration
@@ -202,7 +212,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   the continuous task, which a task warning counts; a task that needs a priority is shown
   its own watchdog, and one with nothing, where no continuous task is declared, is offered
   it; a watchdog that is not an integer and a continuous that is not a boolean are the
-  host's, the latter read as neither kind.
+  host's, the latter read as neither kind. Since decision 169 a program given whose
+  var_input or var_output holds an instance, which no text declares, so one edited by hand
+  after it compiled, is a host mistake, a line for each such tag, connected or not, the
+  program left out of every diagnostic; and since decision 168 a program type's name in a
+  message takes no article: "`m1` runs `motor`, which declares no `strat`".
   `lib/logex/configuration/text.ex` is a configuration file's text (M2-2, its task lines
   and `with` since M2-3, `single` on a task line since M2-6, `continuous` straight after
   a task's name and `watchdog` after its priority since M4-2, each once): its words as data, `keywords/0`, which `naming_test.exs`
@@ -373,7 +387,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   §4.12, decisions 144 and 145) `table/0`, the one table of elementary types, `bool` and
   `dint` so far, each its word, value in a tag, kind, width in bits, range, zero and
   article, which every range message, article, guard and `fits?/2` in `lib/` reads, through
-  `is_elementary/1` (a guard, imported where it is used), `word/1`, `kind/1`, `range/1`,
+  `is_elementary/1` (a guard, imported where it is used), since decision 171
+  `is_fitting/2` (a guard built from the table's ranges, `fits?/2`'s rule), `word/1`, `kind/1`, `range/1`,
   `zero/1`, `a_type/1`, `misfit/2`, `initial_misfit/2`, `values/1` and `either/1`, and
   `Logex.Configuration.Text` its type words, so a new type is a row there; `kinds/0` (M2-5: the words that head a file of
   another kind, `function_block`), `reserved/1`, `block_name?/1`, `fits?/2`, `instance_of/1`
