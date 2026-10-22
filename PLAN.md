@@ -81,7 +81,8 @@ instance's tag that holds no map and a timer's `last` that is no integer refused
 value outside its type is, the other two confirmed as built. And the fifth, M5-5, the same day: IEC's
 typed counters, `ctu_int` to `ctud_ulint`, run by `ctu` and `ctd` and each stopping at its
 type's limits, and `ctu_dint`, `ctd_dint` and `ctud_dint` the very types of `ctu`, `ctd`
-and `ctud` (§3, M5-5), with three questions put to the maintainer.
+and `ctud` (§3, M5-5), with three questions put to the maintainer, its review's seven
+findings fixed the same day.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -5190,6 +5191,51 @@ the walks' cross-type reach and the documents.
      long line to find `ctu_int`, which the did-you-mean names anyway. The other readings
      list the plain words and say "and the typed counters", or leave the aliases out,
      which a declaration still takes. IEC and Logix have no such message.
+
+  **M5-5's review**, fixed on 2026-10-22, each code fix with a test that fails when it is
+  reverted, judged by the full suite: (1) a `neg` into an unsigned destination whose
+  source is a bool, a tag's or a member's, was told to convert it "with ``", an empty
+  conversion's name, where decision 181 says such a source adds nothing: the hint now
+  reads the source's class, and `arithmetic_test.exs` pins a bool tag, a bool member and
+  an undeclared source (`8d34f84`); (2) `Logex.FbType.builtins/0` rebuilt its 22
+  entries on every call, and each type word's lookup and reservation called it, so a
+  program that uses none of M5-5's types compiled in 3.3x the reductions it took before
+  M5-5 (279k to 913k for 200 bool rungs, 1.20M to 5.43M for 800 `ctu`s), which the
+  growth tests, ratios of sizes, could not see, and this entry reported the scan's cost
+  alone: the table is now built once as logex compiles, by an internal module,
+  `Logex.FbType.Builtins`, from `built/0`, hidden, a lookup about 24 reductions where it
+  was about 1,100, and `typed_counter_test.exs` bounds each word's lookup under 200
+  reductions and its reservation under 300 (33 and 61 at most over 30 runs) and 400 bool
+  rungs' compile under 20x their own parse (11.2x over 30 runs, 40x with the table
+  built on each call) (`f598ba6`); (3) nothing pinned `Logex.Declarations.keywords/0`,
+  the list `naming_test.exs` checks for stanzas, so the three aliases dropped from it,
+  the review's R8, kept their reservation and lost their survey's check: the list is now
+  pinned whole and every key of `builtins/0` held to be in it and reserved (`b9f5a45`);
+  (4) two lines no test could tell from their mutants, the review's R5 and R7, are gone:
+  the typed counters' article rows, each `a`, the default, and a `move` hint's type for
+  a name not declared, never read; neither can have a test that fails when it is put
+  back, and the claim above that the table's mutants were all red is true of its 18,
+  not of these two lines, which it did not hold (`f4a133f`); (5) a ctud's preset
+  disagreement named every counter "a ctud", where every other message names a typed
+  counter by its own word: it now names the instance's own ctud, a `ctud_int`'s, a
+  `ctud_dint` the plain `ctud`, and a counter of one kind the ctud of its width, and
+  README's syntax list gives a counter's preset range as its `pv`'s type's, not
+  0 to 2147483647 (`351c056`); (6) the counter walk missed a forecast one way or the
+  other under 4 of 20 fresh seeds, and an alias's edit under 1: a preset now moves in 5
+  draws of 18, to 0 now and then, and `u`'s width moves to its alias as often as to any
+  width, and in a copy that prints what each seed misses 81 seeds, 1 to 80 and the
+  committed 314, reach everything, every exactness assertion holding (`64c34ac`); and
+  (7) three of `trip_test.exs`'s real-clock tests had margins of about 100 ms that a
+  busy machine crossed, failing 6 of 15 runs under eight busy loops on four cores: each
+  is widened, keeping its point, and none of 15 runs failed under the same load, and
+  `CONTRIBUTING.md` now says a mutant red only on a real-clock test is run again alone
+  before it counts (`8cef95b`). The mutation table, 8 mutants each judged by the full
+  suite's exit code, every one red: a bool source told to convert, by the class read as
+  true or its false clause sent to the true one; `builtins/0` built on each call; the
+  aliases left out of `keywords/0`; the preset message's ctud plain, and the instance's
+  own word in its place; the `move` hint judged in a dint; and a zero's deadline the idle
+  watchdog alone, against the widened test. 1673 tests (9 doctests), up from 1671. No
+  question for the maintainer: each fix follows the record as written.
 - **M5-6 · Long timers in nanoseconds.** The stanzas, then `ton_ltime tof_ltime tp_ltime`
   and `rto_ltime` (decision 158, its last taken as the maintainer answered §4.12's
   seventh question), run by

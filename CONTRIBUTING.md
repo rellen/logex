@@ -130,6 +130,16 @@ would have reached the timer rules with no `.acc`, `.dn` or `.en`; `c1e5d54` add
 test and corrected the claim. Give a survivor a test or delete its rule, and if you keep
 it on an argument, say that the argument is all there is.
 
+A mutant is judged by the full suite's exit code, and a busy machine can make that
+code lie the other way: a mutation run is several suites at once, and the runner's
+real-clock tests have margins of real milliseconds. In M5-5's review `trip_test.exs`
+failed while three mutation runs loaded the machine, so a mutant would have counted red
+for a test that has nothing to do with it; under eight busy loops on four cores, 6 of 15
+runs of `trip_test.exs` failed, on three tests whose margins were about 100 ms, since
+widened (`8cef95b`). A mutant red only on a real-clock test is run again alone before it
+counts, and a new real-clock test is run under load before it lands: give each margin
+hundreds of milliseconds where the point it makes allows.
+
 A walk over a rung must reach a group nested in another, and a test must say so. M1-6's
 spike walked a rung for its `ton`s and for its comparisons of two literals, and cutting
 either walk to one group deep left the whole suite green: a nested `ton t1 5000` then
