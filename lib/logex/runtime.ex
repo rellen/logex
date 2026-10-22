@@ -223,7 +223,10 @@ defmodule Logex.Runtime do
   its owner: an integer outside its tag's or member's type, 5000000000 in a dint or 5 in a
   bool, at any depth, is refused, every such value a line of one message, so that nothing
   outside its type ever reaches a scan; a value that is no integer is read as it is
-  (provisional). The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
+  (provisional). A resource's instance is checked as each scan takes it, and before it
+  each global a connection copies into it against the global's own type, which may be
+  narrower than the var_input it fills (decision 159): "runtime.globals holds `a`
+  outside its type: it is a uint, and 70000 is outside 0 to 65535". The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
   keeps its own records in a routine's env under atoms no tag can be, `:faults`, `:jump` and
   `:ran`, and takes each out before it ends, so an env holding one is refused, since it
   would change the run; a block instance's map holding one has it dropped before its body
@@ -1386,10 +1389,9 @@ defmodule Logex.Runtime do
     program = Map.fetch!(runtime.config.programs, Map.fetch!(wiring.types, name))
     %Instance{first: first} = state = Map.fetch!(runtime.instances, name)
 
-    inputs =
-      Map.new(Map.fetch!(wiring.copy_in, name), fn {member, to} ->
-        {member, value(to, globals)}
-      end)
+    copy_in = Map.fetch!(wiring.copy_in, name)
+    read!(copy_in, globals, wiring.globals)
+    inputs = Map.new(copy_in, fn {member, to} -> {member, value(to, globals)} end)
 
     externals = Map.fetch!(wiring.externals, name)
     state = %{state | env: Map.merge(state.env, Map.take(globals, externals))}
@@ -1408,6 +1410,37 @@ defmodule Logex.Runtime do
     {%{runtime | instances: Map.put(runtime.instances, name, state), globals: globals},
      Enum.reduce(faults, [{:ran, task, name, now} | events], &[{:fault, task, name, &1} | &2])}
   end
+
+  # The globals an instance's connections copy in, each checked against its own type
+  # before the copy-in, whose var_input it may widen into (decision 159), so that a value a
+  # host left in a runtime it built is refused where its global is narrower than the
+  # var_input it fills, as it is where the two are one type (decision 171, M5-3's review):
+  # a line each, in name order, a global read twice told once.
+  defp read!(copy_in, globals, declared),
+    do: read_fitted(Enum.reduce(copy_in, [], &misread(&1, globals, declared, &2)))
+
+  defp misread({_member, global}, globals, declared, acc) when is_binary(global),
+    do: global_fit(Map.fetch!(declared, global), Map.fetch!(globals, global), acc)
+
+  defp misread(_constant, _globals, _declared, acc), do: acc
+
+  defp global_fit(%Configuration.Global{type: type}, value, acc) when is_fitting(type, value),
+    do: acc
+
+  defp global_fit(%Configuration.Global{name: name, type: type}, value, acc)
+       when is_integer(value),
+       do: [
+         "runtime.globals holds `#{name}` outside its type: it is " <>
+           "#{Declarations.a_type(type)}, and " <> Declarations.misfit(type, "#{value}")
+         | acc
+       ]
+
+  defp global_fit(_global, _no_integer, acc), do: acc
+
+  defp read_fitted([]), do: :ok
+
+  defp read_fitted(lines),
+    do: raise(ArgumentError, lines |> Enum.sort() |> Enum.dedup() |> Enum.join("\n"))
 
   defp value(global, globals) when is_binary(global), do: Map.fetch!(globals, global)
   defp value(constant, _globals), do: constant

@@ -461,6 +461,41 @@ defmodule Logex.RuntimeTest do
       raises(outside("e", "a dint", -(2 ** 32)), fn -> Runtime.cycle(by_hand, 0, %{}) end)
     end
 
+    test "a global a connection copies in is checked against its own type, narrower than its var_input" do
+      {:ok, m} =
+        Logex.compile(
+          "var_input i dint\nvar_input j lint\nvar_input k dint\nvar_output o lint\n" <>
+            "move i o",
+          name: "m"
+        )
+
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          "var_global a uint\nvar_global s sint\nvar_global b lint\nprogram m1 m\n" <>
+            "program m2 m\nm1.i a\nm1.j s\nm1.k a\nm1.o b\nm2.i a\nm2.j s\nm2.k a",
+          %{"m" => m}
+        )
+
+      runtime = Runtime.start(config)
+      %Runtime{globals: globals} = runtime
+
+      # Each global's value fits its var_input, so only its own type refuses it, every
+      # one a line in name order, `a`, read twice, told once; nothing is copied out.
+      by_hand = %{runtime | globals: %{globals | "a" => 70000, "s" => -129}}
+
+      raises(
+        "runtime.globals holds `a` outside its type: it is a uint, and 70000 is outside 0 to 65535\n" <>
+          "runtime.globals holds `s` outside its type: it is an sint, and -129 does not fit in 8 bits",
+        fn -> Runtime.cycle(by_hand, 0, %{}) end
+      )
+
+      # At its limits it is taken and widened.
+      at_limits = %{runtime | globals: %{globals | "a" => 65535, "s" => -128}}
+      {ran, _outputs, _events} = Runtime.cycle(at_limits, 0, %{})
+      assert Runtime.get(ran, "b") == {:ok, 65535}
+    end
+
     # A state of n dints and n timers, checked whole by put_inputs/3 with no inputs: linear
     # in the tags. 4x the tags took 3.99x to 4.02x over five runs on Elixir 1.20.4; the
     # bound is a fifth above the highest.

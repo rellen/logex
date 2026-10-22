@@ -634,7 +634,9 @@ defmodule Logex.IntegerWidthTest do
   end
 
   describe "the reserved words" do
-    test "each of the seven type words and the 56 conversions names no tag, label or global, in any case" do
+    # A conversion is reserved in a `.ld` file only, as every mnemonic is, so it may name a
+    # global: this test does not look for one (M5-3's review).
+    test "each of the seven type words names no tag or global, and the 56 conversions no tag or label, in any case" do
       conversions = for from <- @types, to <- @types, from != to, do: "#{from}_to_#{to}"
 
       for word <- ~w(sint int lint usint uint udint ulint) do
@@ -649,7 +651,7 @@ defmodule Logex.IntegerWidthTest do
         end
       end
 
-      for word <- conversions do
+      for conversion <- conversions, word <- [conversion, String.upcase(conversion)] do
         assert hd(messages("var #{word} bool\nxic #{word} ote #{word}")) ==
                  "`#{word}` is an instruction and cannot name a tag"
 
@@ -767,6 +769,27 @@ defmodule Logex.IntegerWidthTest do
                  "got: 256\n" <>
                  "#{file}: line 2: `p_lint` is an lint, forced to an integer from " <>
                  "-9223372036854775808 to 9223372036854775807, got: -9223372036854775809"
+
+      # Every width one past each of its limits, a file for each end, every force a line
+      # of the one refusal, in the file's order (M5-3's review: the ulint's among them).
+      for at <- [0, 1] do
+        File.write!(
+          file,
+          Enum.map_join(@types, fn type ->
+            "p_#{type} #{elem(limits(type), at) + elem({-1, 1}, at)}\n"
+          end)
+        )
+
+        assert raised(fn -> run_card(file) end) ==
+                 @types
+                 |> Enum.with_index(1)
+                 |> Enum.map_join("\n", fn {type, line} ->
+                   {low, high} = limits(type)
+
+                   "#{file}: line #{line}: `p_#{type}` is #{a(type)}, forced to an integer " <>
+                     "from #{low} to #{high}, got: #{elem({low - 1, high + 1}, at)}"
+                 end)
+      end
     end
   end
 end

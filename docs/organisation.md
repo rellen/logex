@@ -7667,7 +7667,12 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
        program is told its owner, never its values;
      - a resource's instance is checked as each scan takes it, inside `call/4`, its
        var_externals' globals merged in with it, and a connection's copy-in checked as
-       an input is: a `cycle/3` or `restart/2` of a runtime the host built holding one
+       an input is, each global it reads checked first against its own type, which since
+       M5-3 may be narrower than the var_input it widens into (decision 159; M5-3's
+       review: a `uint` global holding 70000 copied into a dint var_input is refused,
+       "runtime.globals holds `a` outside its type: it is a uint, and 70000 is outside 0
+       to 65535", where it would have fitted the dint and been copied on into a wider
+       global): a `cycle/3` or `restart/2` of a runtime the host built holding one
        raises before it returns, nothing changed, while a configuration edit's steps,
        which scan nothing, carry it to that cycle;
      - a plain swap that narrows a tag over a value outside its new type, a dint's 7

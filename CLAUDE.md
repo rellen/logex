@@ -150,8 +150,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   up in the state through `Logex.Declarations.is_fitting/2`, a guard a value, so linear in
   the state (a growth test in `runtime_test.exs`); a value that is no integer is read as
   before (provisional); a resource's instance is checked as each scan takes it, inside
-  `call/4`, so a `cycle/3` or `restart/2` of a runtime the host built raises before it
-  returns; and a plain swap that narrows a tag over such a value is refused at its next
+  `call/4`, and since M5-3's review each global a connection copies into it first, against
+  the global's own type, narrower than its var_input where the connection widens
+  (`runtime.globals holds `a` outside its type: ...`), so a `cycle/3` or `restart/2` of a
+  runtime the host built raises before it returns; and a plain swap that narrows a tag over such a value is refused at its next
   call. It replaces M5-2's provisional reading of a hand-built source outside the dint.
   Since M5-3 it runs the 56 integer conversions, `<from>_to_<to>`, each a symbol to the
   type it writes, generated from the type table: energised, the value written where it
