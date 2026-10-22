@@ -1794,22 +1794,23 @@ defmodule Logex.Compiler do
 
   defp moved_into(true, _instance, _name, _known), do: ""
 
-  defp moved_into(false, {instance, symbol}, name, known) do
-    type = runnable(symbol, instance, known)
-    move(type, widens_into?(name, known, starts_as(type)), instance, name)
-  end
+  defp moved_into(false, {instance, symbol}, name, known),
+    do: move(runnable(symbol, instance, known), instance, name, known)
 
-  # M5-5: the type of the preset member, a `ctu_int`'s `pv` an int; a dint for a name not
-  # declared yet, which the hint reads as the instruction's own type.
-  defp starts_as(%FbType{} = type), do: preset_type(true, type)
-  defp starts_as(nil), do: :dint
+  # Into a type the instruction runs, a name not declared yet read as the instruction's
+  # own, and from a source `move` widens into its preset member's type, since M5-5 its
+  # instance's, a `ctu_int`'s `pv` an int; into nothing the instruction runs, no hint.
+  defp move(%FbType{} = type, instance, name, known),
+    do: move_from(widens_into?(name, known, preset_type(true, type)), type, instance, name)
 
-  defp move(%FbType{} = type, true, instance, name),
+  defp move(nil, _instance, _name, _known), do: ""
+
+  defp move_from(true, type, instance, name),
     do:
       ": to preset `#{instance}` from a tag, `move #{name} #{instance}." <>
         "#{FbType.rules(type).preset}` on a rung above"
 
-  defp move(_type, _dint?, _instance, _name), do: ""
+  defp move_from(false, _type, _instance, _name), do: ""
 
   defp widens_into?(name, known, into),
     do: widens_value?(Declarations.reserved(name), hinted(name, known), into)

@@ -122,8 +122,10 @@ defmodule Logex.Declarations do
   # M3-2: the article each of logex's own type words takes, by how the word is said. An
   # elementary type's is said as a word, `a bool`; a built-in function block type's is said
   # letter by letter where it is no word, so `rto`, "R-T-O", takes `an`, as `tp` and `ctud`
-  # take `a`, and `ton` and `tof` are said as words. Every word of
-  # Logex.FbType.builtins/0 has its row, which validation_test.exs holds it to.
+  # take `a`, and `ton` and `tof` are said as words. A word with no row takes `a`: since
+  # M5-5 each typed counter and alias, said as its kind, letter by letter, then its integer
+  # type's word, `a ctu_int` (decisions 158 and 163), so it needs none.
+  # validation_test.exs holds every word of Logex.FbType.builtins/0 to its article.
   @articles Map.merge(Map.new(@table, &{&1.word, &1.article}), %{
               "ton" => "a",
               "tof" => "a",
@@ -133,25 +135,13 @@ defmodule Logex.Declarations do
               "ctd" => "a",
               "ctud" => "a"
             })
-            # M5-5: each typed counter and alias is said as its kind, letter by letter,
-            # then its integer type's word, `a ctu_int` (decisions 158 and 163).
-            |> Map.merge(
-              Map.new(
-                for(
-                  kind <- ~w(ctu ctd ctud),
-                  count <- ~w(int dint lint udint ulint),
-                  do: "#{kind}_#{count}"
-                ),
-                &{&1, "a"}
-              )
-            )
 
   @doc """
   A type word with its indefinite article, by how the word is said (M3-2): `a ton`,
   `a tp`, `a ctud`, and `an rto`, said letter by letter. `shown` is the word as the message
-  writes it, `` an `rto` `` where it quotes the mnemonic. Each of logex's own type words,
-  the elementary ones and every word of `Logex.FbType.builtins/0`, has its row; any other,
-  which only a type built by hand can name, takes `a`. A user block's name is never given
+  writes it, `` an `rto` `` where it quotes the mnemonic. Each of logex's own type words
+  that takes `an`, and the elementary ones and the plain built-ins, has its row; any other,
+  a typed counter, `a ctu_int`, or one only a type built by hand can name, takes `a`. A user block's name is never given
   one: `instance_of/1` names its instance's type `` an instance of `seal` ``, whatever its
   sound.
   """
