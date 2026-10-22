@@ -72,7 +72,13 @@ a conversion's source widening into its `from` type, every width's misfit told i
 and a conversion of a literal warned, the other four confirmed as built; and the fourth,
 M5-4, the same day: arithmetic and comparison over every integer width, computed in the
 destination's type, each source widening into it by Figure 11 (§3, M5-4), its review's
-four findings fixed the same day.
+four findings fixed the same day; and the maintainer's seven answers to M5-4's four
+questions and to the three decision 173's answers left (decisions 180–186, §3 after
+M5-4) the same day: a `neg` into an unsigned destination told a signed type to declare,
+a program edited by hand whose arithmetic destination has no integer type refused where
+it is handed in, a literal compared with a tag its type cannot hold refused, and an
+instance's tag that holds no map and a timer's `last` that is no integer refused as every
+value outside its type is, the other two confirmed as built.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -4798,7 +4804,8 @@ the walks' cross-type reach and the documents.
   again and prints what the README shows.
 
   **Questions for the maintainer** (each taken provisionally as written, the closest
-  reading to the record and to Logix):
+  reading to the record and to Logix; answered 2026-10-22: the first and the third
+  otherwise, refused, decisions 184 and 186, the second as written, decision 185):
   1. *An instance's tag that holds no map* (decision 173). The answer refuses a value
      that is no integer in a bool or an integer tag or member. A tag that holds an
      *instance* of a function block, a timer `run_on`, is a map of its members, and one
@@ -4896,7 +4903,9 @@ the walks' cross-type reach and the documents.
   and a `neg` refused for its unsigned destination is told that alone.
 
   **Questions for the maintainer** (each taken provisionally as written, the closest
-  reading to the record and to Logix):
+  reading to the record and to Logix; answered 2026-10-22: the first otherwise, refused,
+  decision 183, the second as written, decision 180, the third otherwise, a signed type
+  named, decision 181, and the fourth below otherwise, refused, decision 182):
   1. *A literal compared with a narrower tag.* A comparison reads two integers by value
      whatever their types (decision 147); a literal is "judged by its slot", and a
      comparison's slot has no type of its own. logex takes `lt trim 200` with an `sint`
@@ -4965,6 +4974,106 @@ the walks' cross-type reach and the documents.
      refuses a hand-edited port holding an instance, at the cost of a walk of the
      program's arithmetic on every call. IEC and Logix have no compiled program a host
      can edit: Logix downloads a project whose tags and code are checked together.
+- **The maintainer's answers of 2026-10-22** to M5-4's four questions and to the three
+  decision 173's answers left (`docs/organisation.md` §7, decisions 180 to 186), landed
+  the same day as two commits, the code with its tests and the decisions, then the
+  documents:
+  - *180, "a number" and "an integer" kept* for the generic slots: no code changed.
+  - *181, a `neg` into an unsigned destination names a signed type*: "… `neg` writes a
+    signed type, so declare `count` a dint", the narrowest signed type its source widens
+    into by Figure 11, or a literal source fits; a `ulint` source told to convert first,
+    with `ulint_to_lint`, and declare an `lint`.
+  - *182, a program edited by hand whose arithmetic destination has no integer type is
+    refused where it is handed in*: "`m`'s `add` on line 7 computes in the type of `d`, a
+    bool, which is no integer type: `m` was edited by hand after it compiled", a line each,
+    the program's rungs in order and then each body by its block's name, by every entry
+    point of `Logex.Runtime` that takes a program, `Logex.Edit.accept/3` and, after
+    decision 169's ports, `Logex.Configuration.check/1`. `Logex.Program.destination/2` is
+    the one rule the scan and the check (`Logex.Program.unwritable/1`) read; M5-4's
+    review's fallback to the dint is gone, its tests turned into refusal tests. The cost,
+    measured against `23a5136`: a scan of 2,000 contact rungs 13% more reductions, of
+    2,000 `add`s 28% more, linear (a growth test), and `jump_test.exs`'s skipped rungs
+    0.373 of running them where they were 0.303, its bound moved to 0.448.
+  - *183, a literal compared with a tag its type cannot hold is refused*: "`lt` compares
+    `200` with `s`, an sint (declared on line 1), which never holds it: `200` is outside
+    -128 to 127", one rule for the six comparisons, either side, a member's type its
+    schema's; a literal at the type's own limit compiles; two literals as M5-4 has them.
+  - *184, an instance's tag that holds no map is refused*: "it is a ton, and its value
+    must be a map of its members, found 5", a user block's "an instance of `seal`", at any
+    depth, so a plain swap from a dint to a timer is refused at its next call and decision
+    26's restart is reached only by a map that lacks members.
+  - *185, "its value must be an integer, found 37.5" kept*: no code changed.
+  - *186, a timer's `last` that is no integer is refused*: "it is a clock, and its value
+    must be an integer, found nil"; any integer is taken.
+
+  Changed on purpose: M5-4's review's hand-edited program tests (now refusals); a
+  comparison literal past its tag's type in `validation_test.exs` and
+  `arithmetic_test.exs`, `gt d 3000000000` refused again; `neg`'s refusal at every
+  unsigned width; M1-6's timers and members on a hand-built env, a `last` that is no
+  integer and a timer's tag that holds no map, in `end_to_end_test.exs`; decision 26's
+  tests in `edit_test.exs` and `function_block_test.exs`, a plain swap now leaving a
+  counter's map under a timer; a hand-built state with no map where an instance goes,
+  now refused by every step of an edit; and the edit walk's swap oracle. docs/naming.md's
+  `neg` and `eq` stanzas are amended, their worked examples tests. The README's
+  `drive.exs` gained `lt hz 70000` refused and was run again.
+
+  The mutation table, 27 mutants each judged by the full suite's exit code, 26 red and
+  one equivalent: no signed type suggested (2 tests), the widest suggested (2), a literal
+  always told an sint (1), a `ulint` source told nothing (2); the runtime checking no
+  program (4), the edit (3), the configuration (1), held bodies not walked (1), a tag's
+  own body not walked (1), a bool taken as an integer type (4), an instance of no
+  built-in taken (1), a member the built-in lacks taken (1), an undeclared tag taken (2),
+  the lines reversed (1), a group's legs not walked (1), a body walked at each `cal` (1),
+  an undeclared member's instance taken (1); a literal beside a tag held to the class
+  only (3), on the left not held (2), on the right not held (3), a literal beside a bool
+  not held to the class (1, green until a test was added); a built-in's instance that is
+  no map passed (7), a user block's (5); a `last` that is no integer passed (2), a
+  negative `last` refused (1); and the edit walk's oracle reading an integer under a
+  timer as inside (1). The equivalent: a literal beside a tag of no elementary type not
+  held, which no operand reaches. 1646 tests (9 doctests), up from 1641. One gate of the
+  working tree failed once on `trip_test.exs`'s "a tripped runner killed closes its
+  devices", a real-clock race (`:noproc` before `:killed`) under the mutation run's load,
+  green on five reruns alone and on the next gate.
+
+  *Provisional readings* (each a question below): a comparison literal at its tag's
+  type's limit compiles with no warning; a timer's `last` takes any integer; a literal
+  `neg` source names the type the literal fits; and the check's cost is paid on every
+  call.
+
+  **Questions for the maintainer** (each taken provisionally as written, the closest
+  reading to the record and to Logix):
+  1. *A comparison whose literal is its tag's limit* (decision 183). `ge count 0` with a
+     `usint` `count` always passes power, and `lt count 0` never does, though 0 is a
+     value of the type, as `gt trim 127` with an `sint` `trim` never does. logex compiles
+     each with no word. On the conveyor: an engineer who lights the "boxes counted" lamp
+     with `ge count 0` sees it always lit, and nothing is said when the program compiles.
+     The other readings warn, as two literals are warned, "its result never changes", or
+     refuse it as a literal outside the type is. IEC's `GE_USINT(count, 0)` and Logix's
+     GEQ take it.
+  2. *A timer's `last` that is negative or later than now* (decision 186). `last`, the
+     time a timer last ran on the scan's clock, takes any integer: one later than the
+     scan's `now` adds no time, and a negative one adds the time from it, capped by the
+     preset. On the conveyor: a host that hands in the fan's run-on timer with `last` of
+     -1000 sees it count a second it never ran, at most its preset. The other reading
+     refuses a `last` outside 0 to the instance's `now`, as `state.now` must be a
+     non-negative integer of milliseconds. IEC and Logix have no such member a host hands
+     in.
+  3. *What a literal `neg` source names* (decision 181). `neg 5 count` into a `usint` is
+     told "declare `count` an sint", the narrowest signed type 5 fits, and `neg 200 count`
+     "an int"; `neg -128 count` "an sint", where −(−128) wraps to −128 with no power. On
+     the conveyor: an engineer who negates a fixed -128 offset follows the advice and sees
+     the result wrap on every scan, its lamp off. The other reading names the narrowest
+     signed type the negated literal fits too, "an int" for -128. IEC has no NEG; Logix's
+     is `unverified`.
+  4. *The check's cost on every call* (decision 182). Every call that takes a program
+     walks its rungs once for a destination with no integer type, about 5 reductions a
+     rung of contacts and 15 an arithmetic instruction, so a scan costs 13% to 28% more.
+     On the conveyor: a runner scanning the plant every 10 ms spends that much more of each
+     scan checking a program no text can give. The other readings check only where a
+     program first meets the runtime, `instance/1`, `Logex.Runtime.start/1` and an edit's
+     accept, leaving a program swapped in by hand to a later scan, or keep a mark of
+     programs checked, which the runtime, holding no state between calls, cannot. IEC and
+     Logix check a program once, at download.
 - **M5-5 · Typed counters.** The stanzas, then `ctu_int ctu_lint ctu_udint ctu_ulint`,
   `ctd_*` and `ctud_*` of the same four (decision 158), rows of `Logex.FbType.rules/1`
   run by `ctu` and `ctd`, a preset judged in its instance's type, each stopping at its

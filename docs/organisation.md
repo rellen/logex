@@ -3437,6 +3437,12 @@ number being an integer until the reals land; and a `neg` refused for its unsign
 destination is told that alone, its sources held to the class only. The runtime finds
 the destination's type at each scan in the routine's own tag table, as a counter's kind
 is found, the IR unchanged.)*
+*(Answered by the maintainer, 2026-10-22: a literal compared with a tag must be a value
+of the tag's type, `lt s 200` refused, decision 183; the slots' words kept, decision 180;
+a `neg` refused for its unsigned destination told the narrowest signed type its source
+widens into, decision 181; and a program edited by hand whose destination has no integer
+type, which M5-4's review computed in the dint, refused where it is handed in, decision
+182.)*
 
 **Conversions** (decision 148). IEC's typed names, `<from>_to_<to>` (Ed 3 Table 22 feature
 1a), lowercased, two operands, `real_to_int fan_pct drive_sp`:
@@ -7075,6 +7081,8 @@ the decisions the rest settle.
      line, "`neg` writes `u`, a usint, which holds no negative value: `neg` writes a
      signed type", whatever its source; an unsigned source negated into a signed type it
      widens into is taken, `neg w i` with a `usint` `w` and an `int` `i` giving −255.)*
+     *(Since decision 181, 2026-10-22, the refusal also names the narrowest signed type
+     its source widens into, "… so declare `count` a dint".)*
 
 146. **What overflow does, in every width (Milestone 5).** The box counter's tag is a
      `usint`, `add boxes 1 boxes`, and the 256th box arrives; the fan ramp, `add speed 10
@@ -7151,6 +7159,9 @@ the decisions the rest settle.
      *(Landed for the arithmetic and the comparisons with M5-4, 2026-10-22, as §4.12's
      "Mixed types" says, with its provisional readings; the reals and the bit strings
      join the same slots with M5-10 and M5-8.)*
+     *(Since decision 183, 2026-10-22, a literal compared with a tag is judged in the
+     tag's type, the comparison's slot taking it, so `lt s 200` with an `sint` `s` is
+     refused.)*
 
 148. **Converting a real to an integer, and what the conversions are called (Milestone
      5).** The fan's speed is worked out as a `real` percentage and written to the drive
@@ -7776,6 +7787,11 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      now reached by no state, every var_input being a bool or an integer checked first;
      an edit's first test still starts again an integer a plain swap left under an
      instance's tag, `k`'s 7 under what is now a timer.
+     *(Answered by the maintainer, 2026-10-22: the words "its value must be an integer"
+     kept, decision 185; an instance's tag that holds no map refused, decision 184, so
+     `k`'s 7 under a timer is refused at the swap's next call and decision 26's restart is
+     reached only by a map that lacks members; and a timer's `last` that is no integer
+     refused, decision 186.)*
 174. **Where a resource is checked (Milestone 5),** following decision 171. A
      `%Logex.Runtime{}` a host builds by hand is checked as each scan takes an instance,
      inside `cycle/3`, not on every call that takes a runtime, so a configuration edit's

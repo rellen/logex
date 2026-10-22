@@ -743,7 +743,7 @@ dint_to_sint level trim ote trim_ok
 ```
 
 `drive.exs` scans it three times, gives it a register reading too big for a `uint`, and
-compiles three moves, an `add` and a `neg` that cannot work:
+compiles three moves, an `add`, a `neg` and a comparison that cannot work:
 
 ```elixir
 {:ok, drive} = Logex.compile_file("drive.ld")
@@ -770,7 +770,8 @@ end
 {:error, diagnostics} =
   Logex.compile(
     "var speed dint\nvar_output hz uint\nvar_output flag bool\n" <>
-      "move speed hz\nmove 70000 hz\nmove flag speed\nadd speed 1 hz\nneg speed hz",
+      "move speed hz\nmove 70000 hz\nmove flag speed\nadd speed 1 hz\nneg speed hz\n" <>
+      "lt hz 70000 ote flag",
     name: "back"
   )
 
@@ -787,7 +788,8 @@ line 4: `move` writes `speed`, a dint, into `hz`, a uint: a dint does not widen 
 line 5: `move` writes `70000` into `hz`, a uint: it is outside 0 to 65535
 line 6: `move` writes `flag`, a bool, into `speed`, a dint: a bool does not widen into a dint, and logex has no conversion between them
 line 7: `add` computes in `hz`'s type, a uint, but `speed` is a dint (declared on line 1): a dint does not widen into a uint, so convert it first, with `dint_to_uint`
-line 8: `neg` writes `hz`, a uint (declared on line 2), which holds no negative value: `neg` writes a signed type
+line 8: `neg` writes `hz`, a uint (declared on line 2), which holds no negative value: `neg` writes a signed type, so declare `hz` a dint
+line 9: `lt` compares `70000` with `hz`, a uint (declared on line 2), which never holds it: `70000` is outside 0 to 65535
 ```
 
 - `bool` and IEC's eight integer widths are logex's types: `sint int dint lint`, signed in
@@ -824,11 +826,15 @@ line 8: `neg` writes `hz`, a uint (declared on line 2), which holds no negative 
   destination's, two `int`s added into a `dint` cannot overflow, where IEC's overloaded
   `INT + INT` and Siemens's `INT#1 + 50000` compute in the narrower type, so a program
   ported from those that counted on the narrow overflow behaves differently. `neg` into
-  an unsigned type is refused (decision 145), and `div` and `mod` keep their zero divisor
-  and their sign at every width.
+  an unsigned type is refused (decision 145), told the narrowest signed type its source
+  widens into, to declare instead (decision 181), and `div` and `mod` keep their zero
+  divisor and their sign at every width.
 - A comparison reads two integers of any widths by value (decision 147), exact on the
   BEAM's integers, so an `sint` −1 is less than a `udint` 0 and a `ulint`'s top greater
-  than a `lint`'s, with none of C's signed and unsigned surprises.
+  than a `lint`'s, with none of C's signed and unsigned surprises. A literal compared with
+  a tag must be a value of the tag's type, as IEC's typed comparisons type it, so `lt hz
+  70000` with a `uint` `hz`, which would always pass power, is refused (decision 183); two
+  literals compile, with the warning that the result never changes.
 - The seven new type words are reserved in any case in every `.ld` and `.logex` file, so a
   tag or a global named `int` stops compiling, and so are the 56 mnemonics in every `.ld`
   file.
