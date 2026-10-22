@@ -367,6 +367,16 @@ defmodule Logex.TypedCounterTest do
              ]
     end
 
+    # M5-6's review: a lone up counter counts from 0 and logic cannot write its `cv`
+    # (decision 86), so only a state the host built reaches a count below a negative preset;
+    # its `q` is CV >= PV there too, not CV >= 0.
+    test "a lone up counter's `q` lights as its count reaches a negative preset from below" do
+      p = c!("var_input u bool\nvar c ctu_int\nxic u ctu c -3")
+      values = trace(p, at(p, -5), pulses(3, "u"), ["c"])
+      seen = for %{"cv" => cv, "q" => q} <- values, do: {cv, q}
+      assert seen == [{-4, 0}, {-4, 0}, {-3, 1}, {-3, 1}, {-2, 1}, {-2, 1}]
+    end
+
     test "a down counter loads a negative preset, its `q` CV <= 0" do
       p =
         c!(
