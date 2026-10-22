@@ -1701,7 +1701,8 @@ defmodule Logex.Runtime do
   # reaches a state. The sources are read before the write, so the destination may be
   # one of them, `add total flow total`. De-energised, nothing is written and no
   # power passes, as `move`. A source a hand-built env holds as no integer reads 0, so a
-  # scan never raises on one.
+  # scan never raises on one, and one it holds outside the dint is read as the integer it
+  # is, the result computed exactly and then wrapped (provisional, M5-2's review).
   defp evaluate({op, _, [a, b, destination]}, {true, env}, _scan) when op in @sums do
     {power, value} = wrapped(sum(op, integer(read(env, a)), integer(read(env, b))))
     {power, write(env, destination, value)}

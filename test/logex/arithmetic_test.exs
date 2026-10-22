@@ -343,6 +343,30 @@ defmodule Logex.ArithmeticTest do
     end
   end
 
+  describe "a source a hand-built env holds outside the dint" do
+    # Provisional (M5-2's review): such a source is read as the integer it is, the result
+    # computed exactly and then wrapped, never brought into the dint first.
+    @outside """
+    var v dint
+    var r dint
+    var k bool
+    add v 0 r ote k
+    """
+
+    defp outside(v) do
+      p = c!(@outside)
+      state = %Instance{type: "m", env: %{"v" => v, "r" => 0, "k" => 1}, now: 0, first: true}
+      {_, state} = Runtime.call(p, state, %{}, %Scan{now: 0, first: true})
+      {state.env["r"], state.env["k"], state.faults}
+    end
+
+    test "is computed exactly and then wrapped, passing no power and raising no fault" do
+      assert outside(5_000_000_000) == {705_032_704, 0, []}
+      assert outside(-5_000_000_000) == {-705_032_704, 0, []}
+      assert outside(Integer.pow(2, 70)) == {0, 0, []}
+    end
+  end
+
   describe "on the rung" do
     # Decision 98: the power out is IEC's ENO, settled, so anything may follow, a second
     # arithmetic instruction among them, which runs only where the first succeeded.
