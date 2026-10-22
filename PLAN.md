@@ -93,7 +93,13 @@ unknown type's list kept. And the sixth, M5-6, the same day: the long timers, `t
 and `.acc` lint nanoseconds, each millisecond of the clock adding 1,000,000, a preset
 that is no whole number of milliseconds warned of (§3, M5-6), with three questions put to
 the maintainer; and M5-6's review's three findings fixed the same day, a plain timer's
-scan brought back within about 3% of its cost before long timers, with one more question.
+scan brought back within about 3% of its cost before long timers, with one more question;
+and the maintainer's eight answers to M5-6's four questions and to the four readings
+decisions 187–193 left (decisions 194–201, §3 after M5-6) the same day: a literal taken
+beside a long timer's `.pre` or `.acc` that is no whole number of milliseconds warned, as
+a preset is, each timer's unit carried in the compiled program so that a plain timer's
+run costs what it did before long timers, and an edit's accept checking the program
+running as well as its candidate, the other five confirmed as built.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -5314,7 +5320,8 @@ the walks' cross-type reach and the documents.
   candidate only.
 
   **Questions for the maintainer** (each taken provisionally as written, the closest
-  reading to the record and to Logix):
+  reading to the record and to Logix; answered on 2026-10-22, decisions 194, 195, 201 and
+  200, the fourth otherwise than taken, below):
   1. *A trusted program a scan finds broken* (decision 190). A *program edited by hand* is
      a compiled `%Logex.Program{}` a host changed after it compiled, its box count `d`
      retyped from an `sint` to a bool. Since decision 190 nothing walks it after its
@@ -5431,7 +5438,8 @@ the walks' cross-type reach and the documents.
   the warning's next millisecond is the one after the preset, at its instruction's line.
 
   **Questions for the maintainer** (each taken provisionally as written, the closest
-  reading to the record and to Logix):
+  reading to the record and to Logix; answered on 2026-10-22, decisions 198, 196 and 199,
+  the second otherwise than taken, below):
   1. *What a timer's slot is told* (decision 192, applied to timers). A slot is the place
      on an instruction where its timer goes; `ton` now runs a `ton` and a `ton_ltime`.
      Decision 192 has a counter's slot name every type word it runs, so logex tells a
@@ -5486,7 +5494,8 @@ the walks' cross-type reach and the documents.
   each run again fails the bound, and R17 fails the new test. 1712 tests (9 doctests), up
   from 1710.
 
-  **Question for the maintainer** after M5-6's review:
+  **Question for the maintainer** after M5-6's review (answered on 2026-10-22, decision
+  197, otherwise than taken, below):
   4. *Where a timer's unit is settled* (decision 158 and the scan's cost). A timer's unit
      is what each millisecond of the clock adds to its accumulated time: 1 for a `ton`,
      counted in ms, and 1,000,000 for a `ton_ltime`, counted in ns. logex now looks each
@@ -5499,6 +5508,71 @@ the walks' cross-type reach and the documents.
      provisionally: the look-up, no change of the compiled program's data. IEC says
      nothing of a scan's cost; Logix's TIMER has one unit, the millisecond, so it makes
      no such choice.
+- **The maintainer's answers of 2026-10-22** to M5-6's four questions and to the four
+  readings decisions 187–193 left (`docs/organisation.md` §7, decisions 194 to 201),
+  landed the same day as two commits, the code with its tests and the decisions, then the
+  documents:
+  - *194, a trusted program a scan finds broken*: confirmed, the scan raises a pinned
+    `ArgumentError` where it reaches the instruction, and, since 197, where it reaches a
+    timer whose unit is no positive whole number or units that are no map.
+  - *195, `neg 128` into an unsigned tag*: confirmed, "an int".
+  - *196, a literal taken beside a long timer's time is warned of*, as a preset is: "`ge`
+    compares `cure.acc` with `3000`, where `cure.acc` is a ton_ltime's time in
+    nanoseconds: 3000 ns is no whole number of milliseconds, and a ton_ltime counts whole
+    milliseconds". The slots: `move` and the 56 conversions writing it into a long timer's
+    `.pre` or `.acc`, the six comparisons on either side, and `add` and `sub` adding it to
+    one, taking it from one or writing their sum into one, each literal that is no whole
+    number of milliseconds a warning of its own; `mul`, `div`, `mod`, `neg` and `abs`,
+    whose literal is no time, and a plain timer's members, are not looked at.
+  - *197, each timer's unit carried in the compiled program*: `%Logex.Program{}`'s
+    `units`, each timer whose unit is not the millisecond by its name, nil where the
+    routine holds none, settled by the compiler from the tag table (`Logex.Program.units/1`,
+    the one rule), a block's body holding its own; the scan carries the running routine's,
+    a `cal` narrowing it as it does `tags`, and each clause that reads a clock matches
+    `units: nil` in its head first, so a routine of plain timers pays no look-up. Not the
+    IR, whose timer instructions every walk reads as two operands. A plain timer beside a
+    long one pays the look-up, as every timer did before. A guard on the key,
+    `is_map_key/2`, cost two reductions a run, measured, so the head matches nil instead,
+    and the clock's tuple, whose allocation the garbage collector counts, gave way to two
+    arguments. A program whose units its tags do not give is refused where it is handed
+    in, a line each, each routine's before its rungs (`Logex.Program.edited_by_hand/1`,
+    which replaces `unwritable/1`), `Logex.Compiler.lowered?/1` holding a body's to the
+    rule too. A scan of 400 timers, in a process whose heap the collector never visits,
+    costs exactly what it did at `6a15701`, every clause: `ton` 63,774 energised and
+    56,174 not, `tof` 56,174 and 66,175, `tp` 69,775 and 62,576, `rto` 71,773 and 68,573;
+    the fewest of seven with the collector running are within 1% either way.
+  - *198, a timer's slot names both words*: confirmed.
+  - *199, an edit's report keeps mixed units*: confirmed, presets in ns, gaps in ms.
+  - *200, an edit's accept checks the program running too*: `Logex.Edit.accept/3` checks
+    the program running and then its candidate, and `Logex.Configuration.Edit.accept/3`
+    each program type the resource runs, after the runtime and before its `elapsed_ms`.
+  - *201, the full word list in every counter-slot message*: confirmed.
+
+  Changed on purpose: `runtime_test.exs`'s edit accept of a program running edited by
+  hand, trusted until now and refused since decision 200, and its traced checks, two at
+  an edit's accept and two at a configuration edit's; the struct surface, `%Logex.Scan{}`
+  and `%Logex.Program{}` each gaining `units`; and `long_timer_test.exs`'s bound on a
+  plain timer's energised run, 26.5 reductions a timer over its de-energised one, now 19,
+  exactly what it was before long timers, measured in a process the collector never
+  visits, as the new per-clause test is. README's `cure.exs` was run again, its second
+  compile reading the cured lamp from a comparison ported from a `ton`, `ge cure.acc
+  3000`, warned of.
+
+  The mutation table (`m5/mut194/run.log` in the work's scratchpad), 31 mutants of
+  `lib/`, each applied alone in a copy and judged by the full suite's exit code, every one
+  red: each of the six clauses that read a clock never taking the plain path, the look-up
+  raising on nil (201, 25, 22, 22, 19 and 15 tests), and again with the look-up giving 1 for
+  nil, so that only the cost differs (1, 1, 1, 2, 1 and 1: the per-clause cost test and the
+  bound); a program's units unset by the compiler (27), a body's (4), a recompiled body's
+  (3); `lowered?/1` not holding a body's units (1); a `cal` not narrowing the scan's units
+  (1); a host's `scan.units` taken (1); units that are no map read as none (1); a unit of 0
+  taken (1); a plain timer given a unit by the rule (7); a routine's unit lines dropped (2);
+  nil read as no table at all (1,105); an edit's accept not checking the program running
+  (7); a configuration edit's not checking the program types it runs (3); the warning
+  dropped (2), its comparisons (3), its conversions (1), `mul`, `div` and `mod` looked at
+  (1), a whole millisecond warned of (3), and `sub`'s operands swapped in its words (1).
+  1725 tests (9 doctests), up from 1712.
+
 - **M5-7 · Based literals and separators.** `16#`, `2#` and `_` (decision 149), through
   the lexer, `well_formed!/1`, the printer, the generator and curated golden sources.
   *Done when* each form is in the golden record's curated sources, an entry that held

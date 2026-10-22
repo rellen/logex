@@ -712,7 +712,9 @@ move cure.acc cure_ns
 ```
 
 `cure.exs` scans it, each scan the given milliseconds after the last, and then compiles it
-again with the fan's run-on cut to 1,500,000 ns:
+again with the fan's run-on cut to 1,500,000 ns and the cured lamp lit by a comparison
+ported from a `ton`'s rung, `ge cure.acc 3000`, which meant 3 s and on a `ton_ltime` reads
+3,000 ns:
 
 ```elixir
 {:ok, cure} = Logex.compile_file("cure.ld")
@@ -736,7 +738,10 @@ Logex.Runtime.instance(cure)
 |> scan.("90 s later: fan off", 30_000, %{})
 
 {:ok, short} =
-  Logex.compile(File.read!("cure.ld") |> String.replace("90000000000", "1500000"),
+  Logex.compile(
+    File.read!("cure.ld")
+    |> String.replace("90000000000", "1500000")
+    |> String.replace("xic cure.dn ote cured", "ge cure.acc 3000 ote cured"),
     name: "short"
   )
 
@@ -752,6 +757,7 @@ door shut            %{"cure_ns" => 0, "cured" => 0, "fan" => 1}
 door opened          %{"cure_ns" => 0, "cured" => 0, "fan" => 1}
 60 s later           %{"cure_ns" => 0, "cured" => 0, "fan" => 1}
 90 s later: fan off  %{"cure_ns" => 0, "cured" => 0, "fan" => 0}
+line 9: warning: `ge` compares `cure.acc` with `3000`, where `cure.acc` is a ton_ltime's time in nanoseconds: 3000 ns is no whole number of milliseconds, and a ton_ltime counts whole milliseconds
 line 10: warning: `tof` gives `run_on` a preset of 1500000 ns, which is no whole number of milliseconds: a tof_ltime counts whole milliseconds, so it times as the next whole millisecond, 2 ms
 ```
 
@@ -761,8 +767,11 @@ from one to the other compiles with every preset a million times off, and nothin
 rung says which. **The resolution is a millisecond:** logex's clock and every elapsed time
 a host or the runner gives are whole milliseconds, so each millisecond adds 1,000,000 ns
 to `.acc`, and a preset that is no whole number of milliseconds, as the 1,500,000 ns
-above, is reached at the next whole millisecond, 2 ms, and warned of. A long timer's
-`.pre` and `.acc` take a `move` of a `lint` or of anything that widens into one, in ns. An
+above, is reached at the next whole millisecond, 2 ms, and warned of; so is a literal that
+`move`, a conversion, a comparison, `add` or `sub` takes beside a long timer's `.pre` or
+`.acc`, as the ported `ge cure.acc 3000` above, a time in ns too (decision 196). A long
+timer's `.pre` and `.acc` take a `move` of a `lint` or of anything that widens into one,
+in ns. An
 online edit from a `ton` to a `ton_ltime`, or back, is a change of type and refused; an
 edit of its preset is reported and forecast in ns, a resumed timer's gap in ms, the
 clock's unit. Under an event task each is warned of in its own words, "a ton_ltime times
