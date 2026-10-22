@@ -2209,7 +2209,9 @@ defmodule Logex.Compiler do
   # runs wherever a message names the slot, in a fixed order: the plain words first, then
   # each width in the type table's order, each width's kinds in the slot's order, `ctu`'s
   # "a ctu, ctud, ctu_int, ctud_int, …"; an alias, which names a plain word's very type, is
-  # left out. A slot of one kind, a timer's, names it alone.
+  # left out. Since M5-6 a timer's slot, of one kind, `["ton"]`, names its kind's two types
+  # so, the plain timer's word first and then the long timer's, of a lint: "a ton or
+  # ton_ltime".
   defp run_words(kinds) do
     words =
       for {word, type} <- FbType.builtins(),
