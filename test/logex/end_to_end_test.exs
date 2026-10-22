@@ -14,7 +14,11 @@ defmodule Logex.EndToEndTest do
 
   # M3-2: logex's own type words, as an unknown type's message lists them: the elementary
   # types, then every built-in function block type, each set in order.
-  @has "logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`"
+  @has "logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, " <>
+         "`ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, " <>
+         "`ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, " <>
+         "`ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, " <>
+         "`rto`, `tof`, `ton` and `tp`"
 
   defp run(src, env) do
     {:ok, program} = compile(src)
@@ -5237,6 +5241,150 @@ defmodule Logex.EndToEndTest do
       assert Runner.status(runner).trip == {:io, "drive", {:bad_value, [0], 65_536}}
       assert Runner.get!(runner, "fan_speed") == 65_535
       Runner.stop(runner)
+    end
+  end
+
+  # PLAN M5-5's Done-when: IEC's typed counters in a plant, from files on disk through
+  # Logex.Configuration.compile_file/1 and Logex.Runtime.cycle/3: a stock counted as an
+  # int stopping at 32767 with `ov` on, a hopper of udints stopping at 0 with `un` on, and
+  # a `ctu_dint` box counter the very `ctu` it names, against an oracle that knows nothing
+  # of logex.
+  describe "typed counters (M5-5)" do
+    @describetag :tmp_dir
+
+    @line_ld """
+    var_input infeed bool
+    var_input outfeed bool
+    var_input refill bool
+    var_input full_load bool
+    var_output stock_over bool
+    var_output hopper_under bool
+    var stock ctud_int
+    var hopper ctd_udint
+    var boxes ctu_dint
+    xic full_load ote stock.ld
+    xic infeed ctu stock 32767
+    xic outfeed ctd stock 32767
+    xic refill ote hopper.ld
+    xic outfeed ctd hopper 2
+    xic infeed ctu boxes 3
+    xic stock.ov ote stock_over
+    xic hopper.un ote hopper_under
+    """
+
+    @line_logex """
+    task fast interval 10 priority 1
+    var_global infeed bool at panel.i.0
+    var_global outfeed bool at panel.i.1
+    var_global refill bool at panel.i.2
+    var_global full_load bool at panel.i.3
+    var_global over bool at panel.q.0
+    var_global under bool at panel.q.1
+    program line line with fast
+    line.infeed infeed
+    line.outfeed outfeed
+    line.refill refill
+    line.full_load full_load
+    line.stock_over over
+    line.hopper_under under
+    """
+
+    # The oracle: IEC's CTUD and CTD bodies restated, each stopping at its type's limits.
+    defp oracle(model, step) do
+      stock = model.stock
+      hopper = model.hopper
+
+      stock =
+        cond do
+          step["full_load"] == 1 ->
+            %{stock | cv: 32_767, ov: 0, un: 0}
+
+          step["infeed"] == 1 and model.last["infeed"] == 0 and stock.cv == 32_767 ->
+            %{stock | ov: 1}
+
+          step["infeed"] == 1 and model.last["infeed"] == 0 ->
+            %{stock | cv: stock.cv + 1}
+
+          true ->
+            stock
+        end
+
+      stock =
+        cond do
+          step["full_load"] == 1 ->
+            stock
+
+          step["outfeed"] == 1 and model.last["outfeed"] == 0 and stock.cv == -32_768 ->
+            %{stock | un: 1}
+
+          step["outfeed"] == 1 and model.last["outfeed"] == 0 ->
+            %{stock | cv: stock.cv - 1}
+
+          true ->
+            stock
+        end
+
+      hopper =
+        cond do
+          step["refill"] == 1 ->
+            %{cv: 2, un: 0}
+
+          step["outfeed"] == 1 and model.last["outfeed"] == 0 and hopper.cv == 0 ->
+            %{hopper | un: 1}
+
+          step["outfeed"] == 1 and model.last["outfeed"] == 0 ->
+            %{hopper | cv: hopper.cv - 1}
+
+          true ->
+            hopper
+        end
+
+      %{model | stock: stock, hopper: hopper, last: step}
+    end
+
+    test "M5-5's Done-when: a ctud_int and a ctd_udint stop at their types' limits in a plant",
+         %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "line.ld"), @line_ld)
+      File.write!(Path.join(dir, "plant.logex"), @line_logex)
+      {:ok, config} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      runtime = Logex.Runtime.start(config)
+
+      # The first cycle is the instance's first scan, which counts nothing.
+      idle = %{"infeed" => 0, "outfeed" => 0, "refill" => 0, "full_load" => 0}
+
+      {runtime, _, _} = Logex.Runtime.cycle(runtime, 0, idle)
+
+      model = %{stock: %{cv: 0, ov: 0, un: 0}, hopper: %{cv: 0, un: 0}, last: idle}
+
+      steps =
+        [Map.put(idle, "full_load", 1), idle] ++
+          List.duplicate([Map.put(idle, "infeed", 1), idle], 3) ++
+          [[Map.put(idle, "refill", 1), idle]] ++
+          List.duplicate([Map.put(idle, "outfeed", 1), idle], 4) ++
+          [Map.put(idle, "full_load", 1), idle]
+
+      Enum.reduce(List.flatten(steps), {runtime, model}, fn step, {runtime, model} ->
+        {runtime, outputs, _events} = Logex.Runtime.cycle(runtime, 10, step)
+        model = oracle(model, step)
+        assert Logex.Runtime.get!(runtime, "line.stock.cv") == model.stock.cv
+        assert Logex.Runtime.get!(runtime, "line.stock.ov") == model.stock.ov
+        assert Logex.Runtime.get!(runtime, "line.hopper.cv") == model.hopper.cv
+        assert Logex.Runtime.get!(runtime, "line.hopper.un") == model.hopper.un
+        assert outputs == %{"over" => model.stock.ov, "under" => model.hopper.un}
+        {runtime, Map.update(model, :seen, [outputs], &[outputs | &1])}
+      end)
+      |> then(fn {runtime, model} ->
+        # The stock reached its top, its `ov` set and cleared by a load, the hopper its
+        # bottom, and the boxes counted as a `ctu`.
+        assert %{"over" => 1, "under" => 0} in model.seen
+        assert %{"over" => 0, "under" => 1} in model.seen
+        assert {model.stock, model.hopper} == {%{cv: 32_767, ov: 0, un: 0}, %{cv: 0, un: 1}}
+        assert Logex.Runtime.get!(runtime, "line.boxes.cv") == 3
+      end)
+
+      # `ctu_dint` declared the very `ctu`: the program's tag holds the type `ctu` gives.
+      {:ok, line} = Logex.compile_file(Path.join(dir, "line.ld"))
+      assert line.tags["boxes"].type == Logex.FbType.ctu()
     end
   end
 end

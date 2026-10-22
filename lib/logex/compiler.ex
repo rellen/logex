@@ -77,7 +77,9 @@ defmodule Logex.Compiler do
     # M3-1: IEC's counters (decision 67). Rung power is the count input of the counter's
     # side the mnemonic names, `cu` or `cd`, and the preset is its starting `pv`, a count.
     # An instance slot may take several types, a list: a `ctud` is run by one of each
-    # (decision 85).
+    # (decision 85). Since M5-5 a slot names kinds, each type's `family`
+    # (Logex.FbType.family/1), so a `ctu` runs every up counter, `ctu_int` among them, its
+    # preset judged in its instance's type (decision 158).
     "ctu" => {:ctu, [{:instance, ["ctu", "ctud"]}, {:preset, :dint}]},
     "ctd" => {:ctd, [{:instance, ["ctd", "ctud"]}, {:preset, :dint}]},
     # M3-3: IEC's arithmetic (decision 79), two sources, each a tag, a member or a literal,
@@ -1792,8 +1794,15 @@ defmodule Logex.Compiler do
 
   defp moved_into(true, _instance, _name, _known), do: ""
 
-  defp moved_into(false, {instance, symbol}, name, known),
-    do: move(runnable(symbol, instance, known), dint?(name, known), instance, name)
+  defp moved_into(false, {instance, symbol}, name, known) do
+    type = runnable(symbol, instance, known)
+    move(type, widens_into?(name, known, starts_as(type)), instance, name)
+  end
+
+  # M5-5: the type of the preset member, a `ctu_int`'s `pv` an int; a dint for a name not
+  # declared yet, which the hint reads as the instruction's own type.
+  defp starts_as(%FbType{} = type), do: preset_type(true, type)
+  defp starts_as(nil), do: :dint
 
   defp move(%FbType{} = type, true, instance, name),
     do:
@@ -1802,23 +1811,25 @@ defmodule Logex.Compiler do
 
   defp move(_type, _dint?, _instance, _name), do: ""
 
-  defp dint?(name, known), do: dint_value?(Declarations.reserved(name), hinted(name, known))
+  defp widens_into?(name, known, into),
+    do: widens_value?(Declarations.reserved(name), hinted(name, known), into)
 
-  # M5-3: a source `move` widens into the preset's dint (decision 147), an `int` among them.
-  defp dint_value?(nil, {:ok, %Tag{type: type}}) when is_elementary(type),
-    do: Declarations.widens?(type, :dint)
+  # M5-3: a source `move` widens into the preset's type (decision 147), an `int` into a
+  # dint among them; since M5-5 the preset's type is its instance's, a `ctu_int`'s an int.
+  defp widens_value?(nil, {:ok, %Tag{type: type}}, into) when is_elementary(type),
+    do: Declarations.widens?(type, into)
 
-  defp dint_value?(nil, {:member, _tag, %Member{type: type}}) when is_elementary(type),
-    do: Declarations.widens?(type, :dint)
+  defp widens_value?(nil, {:member, _tag, %Member{type: type}}, into) when is_elementary(type),
+    do: Declarations.widens?(type, into)
 
-  defp dint_value?(nil, :error), do: true
-  defp dint_value?(_reserved, _found), do: false
+  defp widens_value?(nil, :error, _into), do: true
+  defp widens_value?(_reserved, _found, _into), do: false
 
   # M1-3: each operand against the tag table -- declared, of the type its slot reads or
   # writes, and not a var_input where the slot writes. A literal where a tag must go was
   # reported by check_kind/4 and is not looked at again. Then the `:any` operands must agree.
   defp check_tags(signature, operands, at, scope, diagnostics) do
-    slots = Enum.zip(signature, operands)
+    slots = judged(Enum.zip(signature, operands), at, scope)
     diagnostics = Enum.reduce(slots, diagnostics, &check_tag(&1, at, scope, &2))
 
     diagnostics =
@@ -1839,6 +1850,31 @@ defmodule Logex.Compiler do
     )
   end
 
+  # M5-5 (decision 158): a preset is judged in its instance's type, the type of the member
+  # it starts, a `ctu_int`'s `pv` an int, where the instruction runs the instance; a dint
+  # for every other, the timers' and a name that is no such instance, which has its own
+  # diagnostic.
+  defp judged(
+         [{{:instance, _} = slot, {:name, _, name} = operand}, {{:preset, _}, preset}],
+         at,
+         scope
+       ),
+       do: [{slot, operand}, {{:preset, counts_in(lookup(name, scope), at)}, preset}]
+
+  defp judged(slots, _at, _scope), do: slots
+
+  defp counts_in({:ok, %Tag{type: %FbType{} = type}}, {_, word}),
+    do: preset_type(FbType.runs?(type, symbol_of(word)), type)
+
+  defp counts_in(_not_an_instance, _at), do: :dint
+
+  defp preset_type(true, type) do
+    {:ok, %Member{type: counts}} = FbType.member(type, FbType.rules(type).preset)
+    counts
+  end
+
+  defp preset_type(false, _type), do: :dint
+
   # A literal in a slot of an elementary type must fit it, as a declared initial value must
   # (M1-6: the comparisons, whose slots were dints; since M5-4 a conversion's source). An
   # `:any` slot's literal is checked against the tag beside it, by unify/3, and a generic
@@ -1851,8 +1887,17 @@ defmodule Logex.Compiler do
   # A preset is a dint, a number of milliseconds for a timer or a count for a counter, and
   # never negative (docs/naming.md, `ton`): a negative literal lexes since M3-3, and is
   # refused here (decision 97).
-  defp check_tag({{:preset, _}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics),
-    do: preset(Declarations.preset?(value), value, {line, word}, diagnostics)
+  # Since M5-5 it is judged in its instance's type, 0 to the type's largest (judged/3), a
+  # timer's and a dint counter's 0 to 2147483647, where Logex.Declarations.preset?/1 held
+  # it until then.
+  defp check_tag({{:preset, type}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics),
+    do:
+      preset(
+        value >= 0 and Declarations.fits?(type, value),
+        {type, value},
+        {line, word},
+        diagnostics
+      )
 
   defp check_tag({_slot, {:int_lit, _, _}}, _at, _scope, diagnostics), do: diagnostics
 
@@ -1870,15 +1915,19 @@ defmodule Logex.Compiler do
 
   defp preset(true, _value, _at, diagnostics), do: diagnostics
 
-  defp preset(false, value, {line, word}, diagnostics),
+  defp preset(false, {type, value}, {line, word}, diagnostics),
     do: [
       diagnostic(
         line,
-        "`#{word}` takes a preset of 0 to 2147483647#{suffix(symbol_of(word))}, " <>
-          "found `#{value}`"
+        "`#{word}` takes a preset of 0 to #{Declarations.range(type).last}" <>
+          "#{suffix(symbol_of(word))}#{of_type(type)}, found `#{value}`"
       )
       | diagnostics
     ]
+
+  # M5-5: a preset of a type other than the dint says the type it is judged in.
+  defp of_type(:dint), do: ""
+  defp of_type(type), do: " for a counter of #{Declarations.word(type)}s"
 
   defp suffix(symbol), do: suffix_of(kind_of(symbol))
 
@@ -2013,16 +2062,17 @@ defmodule Logex.Compiler do
   defp resolve(nil, {:ok, %Tag{type: %FbType{name: type}}}, {:instance, type}, _, _, diagnostics),
     do: diagnostics
 
-  # M3-1: a slot of several types, a counter's.
+  # M3-1: a slot of several types, a counter's, each the kind of instance it takes: since
+  # M5-5 a typed counter is of its kind's, `ctu_int` a `ctu`'s (Logex.FbType.family/1).
   defp resolve(
          nil,
-         {:ok, %Tag{type: %FbType{name: type} = fb} = tag},
+         {:ok, %Tag{type: %FbType{} = fb} = tag},
          {:instance, [_ | _] = types} = slot,
          operand,
          at,
          diagnostics
        ),
-       do: of_kind(type in types, {tag, fb}, slot, {operand, at}, diagnostics)
+       do: of_kind(FbType.family(fb) in types, {tag, fb}, slot, {operand, at}, diagnostics)
 
   defp resolve(
          nil,
@@ -2106,13 +2156,19 @@ defmodule Logex.Compiler do
          | diagnostics
        ]
 
-  # A counter of the other kind is one declaration from one that counts both ways.
-  defp both_ways(%FbType{name: kind, body: nil}, tag) when kind in ["ctu", "ctd"],
-    do:
-      ": #{Declarations.a_or_an(kind)} only counts #{way(kind)}; declare it `var #{tag.name} ctud` to count both " <>
-        "ways"
+  # A counter of the other kind is one declaration from one that counts both ways, of its
+  # own type since M5-5: a `ctd_int` from a `ctud_int`.
+  defp both_ways(%FbType{name: name, body: nil} = type, tag),
+    do: one_way(FbType.family(type), name, tag)
 
   defp both_ways(_type, _tag), do: ""
+
+  defp one_way(kind, name, tag) when kind in ["ctu", "ctd"],
+    do:
+      ": #{Declarations.a_or_an(name)} only counts #{way(kind)}; declare it " <>
+        "`var #{tag.name} #{String.replace_prefix(name, kind, "ctud")}` to count both ways"
+
+  defp one_way(_kind, _name, _tag), do: ""
 
   defp way("ctu"), do: "up"
   defp way("ctd"), do: "down"

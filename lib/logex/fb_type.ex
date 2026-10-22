@@ -36,7 +36,11 @@ defmodule Logex.FbType do
   it nests, at any depth.
 
   `body` is nil for a built-in type: the `ton`, since M3-1 the counters `ctu`, `ctd` and
-  `ctud`, and since M3-2 the timers `tof`, `tp` and `rto` (`rules/1`). For a user function block (M2-5) it is the block's compiled body,
+  `ctud`, since M3-2 the timers `tof`, `tp` and `rto`, and since M5-5 IEC's typed
+  counters, `ctu_int` to `ctud_ulint`, each its kind's members with `pv` and `cv` of its
+  integer type, named by its word (decision 158) (`rules/1`). `ctu_dint`, `ctd_dint` and
+  `ctud_dint` are no types of their own: each word gives the type of `ctu`, `ctd` or
+  `ctud` (`builtins/0`, decision 163), so an instance keeps no spelling. For a user function block (M2-5) it is the block's compiled body,
   a `%Logex.Program{}` named after the block, whose tags are its members, whose `blocks`
   holds the types of the instances it declares at any depth, whose rungs `cal` runs over
   an instance's map, and whose `source` is the block's text. `of/1` builds the type from
@@ -171,17 +175,56 @@ defmodule Logex.FbType do
       ]
     }
 
-  @doc "The built-in function block types, by their lowercase type word."
-  def builtins,
-    do: %{
-      "ton" => ton(),
-      "tof" => tof(),
-      "tp" => tp(),
-      "rto" => rto(),
-      "ctu" => ctu(),
-      "ctd" => ctd(),
-      "ctud" => ctud()
-    }
+  # M5-5 (decision 158): IEC's typed counters, one of each kind for each integer type Ed 3
+  # Table 45 gives a counter but the dint, which `ctu`, `ctd` and `ctud` are: `ctu_int` an
+  # up counter whose `pv` and `cv` are ints, and so on, each a type of its own, named by
+  # its word, its other members its kind's.
+  @counts [:int, :lint, :udint, :ulint]
+  @counter_kinds [:ctu, :ctd, :ctud]
+
+  for kind <- @counter_kinds, count <- @counts do
+    @doc "The built-in #{kind} whose `pv` and `cv` are #{count}s, as `var c #{kind}_#{count}` declares it (M5-5)."
+    def unquote(:"#{kind}_#{count}")(), do: counting(unquote(kind)(), unquote(count))
+  end
+
+  defp counting(%__MODULE__{name: kind, members: members} = type, count),
+    do: %{type | name: "#{kind}_#{count}", members: Enum.map(members, &counted(&1, count))}
+
+  defp counted(%Member{name: name} = member, count) when name in ["pv", "cv"],
+    do: %{member | type: count}
+
+  defp counted(member, _count), do: member
+
+  # M5-5 (decision 163): IEC's names for the dint counters, second words for `ctu`, `ctd`
+  # and `ctud`, which are the same types: a declaration with either word gives the one
+  # type, and keeps no spelling.
+  @aliases %{"ctu_dint" => "ctu", "ctd_dint" => "ctd", "ctud_dint" => "ctud"}
+
+  @doc """
+  The built-in function block types, by their lowercase type word. Since M5-5 the typed
+  counters are among them, `ctu_int` and the rest (decision 158), and `ctu_dint`,
+  `ctd_dint` and `ctud_dint`, each the very type its plain word gives (decision 163).
+  """
+  def builtins do
+    plain =
+      Map.merge(
+        %{
+          "ton" => ton(),
+          "tof" => tof(),
+          "tp" => tp(),
+          "rto" => rto(),
+          "ctu" => ctu(),
+          "ctd" => ctd(),
+          "ctud" => ctud()
+        },
+        Map.new(
+          for(kind <- @counter_kinds, count <- @counts, do: "#{kind}_#{count}"),
+          &{&1, apply(__MODULE__, String.to_existing_atom(&1), [])}
+        )
+      )
+
+    Map.merge(plain, Map.new(@aliases, fn {alias, word} -> {alias, Map.fetch!(plain, word)} end))
+  end
 
   # What each built-in type is to the instructions that run it, by its type word: the one
   # description the compiler, the walks, the warnings and the edit read, rather than match
@@ -262,6 +305,24 @@ defmodule Logex.FbType do
     }
   }
 
+  # M5-5 (decision 158): every row says the kind of instance its instructions take, its
+  # `family`, its own word for each type so far, and each typed counter is its kind's row
+  # under its own word, the one instruction of its kind running it.
+  # A counter's row says the type of its count, `counts`, the type of its `pv` and `cv`,
+  # whose limits it stops at (decision 71 by width), nil for a timer.
+  @rules Map.merge(
+           Map.new(@runs, fn {word, row} ->
+             {word, Map.merge(row, %{family: word, counts: Map.get(%{counter: :dint}, row.kind)})}
+           end),
+           Map.new(
+             for(kind <- @counter_kinds, count <- @counts, do: {kind, count}),
+             fn {kind, count} ->
+               {"#{kind}_#{count}",
+                Map.merge(Map.fetch!(@runs, "#{kind}"), %{family: "#{kind}", counts: count})}
+             end
+           )
+         )
+
   @doc """
   What a built-in function block type is to the instructions that run it (M3-1), or nil
   for a user function block: `%{kind:, preset:, done:, times:, forecast:, runs:}`. `kind`
@@ -275,9 +336,14 @@ defmodule Logex.FbType do
   an `rto` and `:count` for a counter (M3-2); and `runs`
   each instruction that runs it, by its IR symbol, to `{edge, reads}`, the member that is
   that instruction's edge memory, nil for none, and the member a rung below reads it by.
+  Since M5-5, `family`, the word of the kind of instance an instruction's slot takes,
+  `"ctu"` for a `ctu` and for each typed up counter, `ctu_int` among them (decision 158),
+  and each type's own word for every other; and `counts`, a counter's integer type, that
+  of its `pv` and `cv`, whose limits it stops at, `:dint` for a `ctu` and `:int` for a
+  `ctu_int`, nil for a timer.
   """
-  def rules(%__MODULE__{name: name, body: nil}) when is_map_key(@runs, name),
-    do: Map.fetch!(@runs, name)
+  def rules(%__MODULE__{name: name, body: nil}) when is_map_key(@rules, name),
+    do: Map.fetch!(@rules, name)
 
   def rules(_type), do: nil
 
@@ -286,7 +352,16 @@ defmodule Logex.FbType do
   every key of a built-in type's `runs` (`rules/1`).
   """
   def runners,
-    do: @runs |> Map.values() |> Enum.flat_map(&Map.keys(&1.runs)) |> Enum.uniq() |> Enum.sort()
+    do: @rules |> Map.values() |> Enum.flat_map(&Map.keys(&1.runs)) |> Enum.uniq() |> Enum.sort()
+
+  @doc """
+  The word of the kind of instance `type` is to the instructions that run it (M5-5): its
+  `rules/1`'s `family`, `"ctu"` for a `ctu_int`, or nil for a user block's.
+  """
+  def family(type), do: family_of(rules(type))
+
+  defp family_of(%{family: family}), do: family
+  defp family_of(nil), do: nil
 
   @doc "Whether the instruction `symbol` runs an instance of `type` (`rules/1`)."
   def runs?(type, symbol), do: runs_in?(rules(type), symbol)

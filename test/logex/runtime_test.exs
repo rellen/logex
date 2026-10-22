@@ -1319,8 +1319,55 @@ defmodule Logex.RuntimeTest do
                "rto" => FbType.rto(),
                "ctu" => FbType.ctu(),
                "ctd" => FbType.ctd(),
-               "ctud" => FbType.ctud()
+               "ctud" => FbType.ctud(),
+               # M5-5: IEC's typed counters (decision 158), and the dint's words, each the
+               # very type its plain word gives (decision 163).
+               "ctu_int" => FbType.ctu_int(),
+               "ctu_lint" => FbType.ctu_lint(),
+               "ctu_udint" => FbType.ctu_udint(),
+               "ctu_ulint" => FbType.ctu_ulint(),
+               "ctd_int" => FbType.ctd_int(),
+               "ctd_lint" => FbType.ctd_lint(),
+               "ctd_udint" => FbType.ctd_udint(),
+               "ctd_ulint" => FbType.ctd_ulint(),
+               "ctud_int" => FbType.ctud_int(),
+               "ctud_lint" => FbType.ctud_lint(),
+               "ctud_udint" => FbType.ctud_udint(),
+               "ctud_ulint" => FbType.ctud_ulint(),
+               "ctu_dint" => FbType.ctu(),
+               "ctd_dint" => FbType.ctd(),
+               "ctud_dint" => FbType.ctud()
              }
+    end
+
+    # M5-5 (decision 158): each typed counter is its kind's members with `pv` and `cv` of
+    # its type, named by its word, and its kind's rules under its `family`, so the one
+    # instruction of its kind runs it.
+    test "the typed counters' members and rules, each its kind's but for its type" do
+      for kind <- ~w(ctu ctd ctud), count <- ~w(int lint udint ulint)a do
+        plain = FbType.builtin(kind)
+        typed = FbType.builtin("#{kind}_#{count}")
+        assert typed.name == "#{kind}_#{count}"
+        assert Enum.map(typed.members, & &1.name) == Enum.map(plain.members, & &1.name)
+        assert Enum.map(typed.members, & &1.role) == Enum.map(plain.members, & &1.role)
+        assert Enum.map(typed.members, & &1.write) == Enum.map(plain.members, & &1.write)
+
+        for member <- typed.members,
+            do: assert(member.type == if(member.name in ~w(pv cv), do: count, else: :bool))
+
+        assert Map.delete(FbType.rules(typed), :counts) ==
+                 Map.delete(FbType.rules(plain), :counts)
+
+        assert {FbType.rules(typed).counts, FbType.rules(plain).counts} == {count, :dint}
+        assert FbType.family(typed) == kind
+        assert FbType.initial(typed) == FbType.initial(plain)
+        refute typed == plain
+      end
+
+      assert FbType.family(FbType.ton()) == "ton"
+      assert FbType.family(FbType.ctu()) == "ctu"
+      assert FbType.rules(FbType.ctu_int()).family == "ctu"
+      assert FbType.rules(FbType.ton()).counts == nil
     end
 
     # M3-2: the other timers keep the ton's members (decision 68), each its own type.
@@ -2049,8 +2096,21 @@ defmodule Logex.RuntimeTest do
                builtins: 0,
                check: 2,
                ctd: 0,
+               ctd_int: 0,
+               ctd_lint: 0,
+               ctd_udint: 0,
+               ctd_ulint: 0,
                ctu: 0,
+               ctu_int: 0,
+               ctu_lint: 0,
+               ctu_udint: 0,
+               ctu_ulint: 0,
                ctud: 0,
+               ctud_int: 0,
+               ctud_lint: 0,
+               ctud_udint: 0,
+               ctud_ulint: 0,
+               family: 1,
                held: 1,
                initial: 1,
                initial: 2,

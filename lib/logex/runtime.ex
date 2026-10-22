@@ -305,10 +305,8 @@ defmodule Logex.Runtime do
   @divisions [:div, :mod]
   @signs [:neg, :abs]
 
-  # The dint's limits, from the one table of types (M5-1).
+  # The dint's limits, from the one table of types (M5-1): a counter of no tag's.
   @dint Declarations.range(:dint)
-  @dint_min @dint.first
-  @dint_max @dint.last
 
   # M5-3 (decision 148): each integer conversion's symbol, `:dint_to_int`, to the type it
   # writes, every ordered pair of two integer types of the one table.
@@ -2020,7 +2018,8 @@ defmodule Logex.Runtime do
   # `cv` to 0; else on a `ctd` or a `ctud`, `ld` puts it to `pv`; either clears the flags;
   # otherwise a rising edge of the side's input, its edge memory 0 from its last run,
   # counts, never on the instance's first scan nor where the edit's block list holds the
-  # memory (decision 87), stopping at the dint's limits with `ov` or `un` set, which stays
+  # memory (decision 87), stopping at its type's limits, a dint's or since M5-5 a typed
+  # counter's, `ctu_int`'s 32767 (decision 158), with `ov` or `un` set, which stays
   # until a reset or load. The memory then takes the rung's power, a reset or load keeping
   # it as IEC's R_TRIG does (decision 70), and the outputs are set from `cv`. The preset
   # operand is not read: it is the instance's starting `pv`. Nothing may follow a counter on
@@ -2179,7 +2178,7 @@ defmodule Logex.Runtime do
   # counter's name in the tree, and the run is recorded as a `cal`'s is, so that the scan
   # keeps no block of a memory whose instruction ran (decision 87).
   defp counted(env, {:name, _, name} = counter, {side, power}, %Scan{} = scan) do
-    kind = counter_kind(Map.get(scan.tags, name), side)
+    kind = counter_of(Map.get(scan.tags, name), side)
     memory = memory(side)
     tree = as_map(Map.get(scan.ons_blocked, name))
     blocked = scan.first or Map.get(tree, memory) == true
@@ -2189,12 +2188,21 @@ defmodule Logex.Runtime do
     unblocked(map_size(tree) > 0, env, name)
   end
 
-  defp counter_kind(%Tag{type: %FbType{name: kind, body: nil}}, _side)
-       when kind in ["ctu", "ctd", "ctud"],
-       do: kind
+  # M5-5: a counter's kind, a typed counter's its kind's, a `ctu_int` a `ctu`'s, and the
+  # limits it stops at, its count's type's, decision 71 by width (decision 158), from its
+  # type's rules; a counter of no such tag is the mnemonic's own, a dint's.
+  defp counter_of(%Tag{type: %FbType{body: nil} = type}, side),
+    do: counting(FbType.rules(type), side)
 
-  defp counter_kind(_no_tag, :up), do: "ctu"
-  defp counter_kind(_no_tag, :down), do: "ctd"
+  defp counter_of(_no_tag, side), do: {own_kind(side), @dint}
+
+  defp counting(%{kind: :counter, family: kind, counts: counts}, _side),
+    do: {kind, Declarations.range(counts)}
+
+  defp counting(_no_counter, side), do: {own_kind(side), @dint}
+
+  defp own_kind(:up), do: "ctu"
+  defp own_kind(:down), do: "ctd"
 
   defp memory(:up), do: "cu"
   defp memory(:down), do: "cd"
@@ -2209,31 +2217,34 @@ defmodule Logex.Runtime do
   # Whatever a hand-built env left out of a counter, a well-formed one comes back: a member
   # it left out reads 0, and a bit is read as a contact; every member it holds is inside its
   # type (decisions 171 and 173).
-  defp count(kind, side, state, {power, edge}) do
+  defp count({kind, limits}, side, state, {power, edge}) do
     pv = integer(Map.get(state, "pv"))
     flags = {closed?(Map.get(state, "ov")), closed?(Map.get(state, "un"))}
-    {cv, {ov, un}} = step(kind, side, state, {integer(Map.get(state, "cv")), pv, flags, edge})
+
+    {cv, {ov, un}} =
+      step({kind, limits}, side, state, {integer(Map.get(state, "cv")), pv, flags, edge})
+
     members(kind, state, %{"pv" => pv, "cv" => cv, "ov" => ov, "un" => un}, {side, power})
   end
 
   # IEC's priority, R before LD before a count (Ed 3 Table 45): a ctu has no `ld` and a
   # ctd no `r`.
-  defp step(kind, side, state, {cv, pv, flags, edge}),
-    do: step(kind, reset?(kind, state), load?(kind, state), side, {cv, pv, flags, edge})
+  defp step({kind, limits}, side, state, {cv, pv, flags, edge}),
+    do: step(limits, reset?(kind, state), load?(kind, state), side, {cv, pv, flags, edge})
 
-  defp step(_kind, true, _load, _side, {_cv, _pv, _flags, _edge}), do: {0, {false, false}}
-  defp step(_kind, false, true, _side, {_cv, pv, _flags, _edge}), do: {pv, {false, false}}
-  defp step(_kind, false, false, _side, {cv, _pv, flags, false}), do: {cv, flags}
+  defp step(_limits, true, _load, _side, {_cv, _pv, _flags, _edge}), do: {0, {false, false}}
+  defp step(_limits, false, true, _side, {_cv, pv, _flags, _edge}), do: {pv, {false, false}}
+  defp step(_limits, false, false, _side, {cv, _pv, flags, false}), do: {cv, flags}
 
-  defp step(_kind, false, false, :up, {cv, _pv, {_ov, un}, true}) when cv >= @dint_max,
+  defp step(_min..max//1, false, false, :up, {cv, _pv, {_ov, un}, true}) when cv >= max,
     do: {cv, {true, un}}
 
-  defp step(_kind, false, false, :up, {cv, _pv, flags, true}), do: {cv + 1, flags}
+  defp step(_limits, false, false, :up, {cv, _pv, flags, true}), do: {cv + 1, flags}
 
-  defp step(_kind, false, false, :down, {cv, _pv, {ov, _un}, true}) when cv <= @dint_min,
+  defp step(min.._max//1, false, false, :down, {cv, _pv, {ov, _un}, true}) when cv <= min,
     do: {cv, {ov, true}}
 
-  defp step(_kind, false, false, :down, {cv, _pv, flags, true}), do: {cv - 1, flags}
+  defp step(_limits, false, false, :down, {cv, _pv, flags, true}), do: {cv - 1, flags}
 
   defp reset?("ctd", _state), do: false
   defp reset?(_kind, state), do: closed?(Map.get(state, "r"))

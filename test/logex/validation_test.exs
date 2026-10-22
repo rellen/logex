@@ -18,12 +18,22 @@ defmodule Logex.ValidationTest do
   # M3-2: logex's own type words, as an unknown type's message lists them: the elementary
   # types, then every built-in function block type, each set in order.
   @has "logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, " <>
-         "`ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`"
+         "`ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, " <>
+         "`ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, " <>
+         "`ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, " <>
+         "`rto`, `tof`, `ton` and `tp`"
 
   # The same from Elixir, each named as the value that declares it.
+  # M5-5: an alias of a counter is named once, as the value its plain word gives (decision
+  # 163).
   @has_elixir "logex has :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, " <>
-                "Logex.FbType.ctd(), Logex.FbType.ctu(), " <>
-                "Logex.FbType.ctud(), Logex.FbType.rto(), Logex.FbType.tof(), " <>
+                "Logex.FbType.ctd(), Logex.FbType.ctd_int(), Logex.FbType.ctd_lint(), " <>
+                "Logex.FbType.ctd_udint(), Logex.FbType.ctd_ulint(), " <>
+                "Logex.FbType.ctu(), Logex.FbType.ctu_int(), Logex.FbType.ctu_lint(), " <>
+                "Logex.FbType.ctu_udint(), Logex.FbType.ctu_ulint(), " <>
+                "Logex.FbType.ctud(), Logex.FbType.ctud_int(), Logex.FbType.ctud_lint(), " <>
+                "Logex.FbType.ctud_udint(), Logex.FbType.ctud_ulint(), " <>
+                "Logex.FbType.rto(), Logex.FbType.tof(), " <>
                 "Logex.FbType.ton() and Logex.FbType.tp()"
 
   alias Logex.Compiler
@@ -2507,7 +2517,22 @@ xic a ton t1 7") == [
                "rto" => "an rto",
                "ctu" => "a ctu",
                "ctd" => "a ctd",
-               "ctud" => "a ctud"
+               "ctud" => "a ctud",
+               "ctu_int" => "a ctu_int",
+               "ctu_dint" => "a ctu_dint",
+               "ctu_lint" => "a ctu_lint",
+               "ctu_udint" => "a ctu_udint",
+               "ctu_ulint" => "a ctu_ulint",
+               "ctd_int" => "a ctd_int",
+               "ctd_dint" => "a ctd_dint",
+               "ctd_lint" => "a ctd_lint",
+               "ctd_udint" => "a ctd_udint",
+               "ctd_ulint" => "a ctd_ulint",
+               "ctud_int" => "a ctud_int",
+               "ctud_dint" => "a ctud_dint",
+               "ctud_lint" => "a ctud_lint",
+               "ctud_udint" => "a ctud_udint",
+               "ctud_ulint" => "a ctud_ulint"
              }
 
       assert Logex.Declarations.a_or_an("rto", "`rto`") == "an `rto`"

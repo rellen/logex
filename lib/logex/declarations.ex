@@ -98,9 +98,6 @@ defmodule Logex.Declarations do
   }
   @class_atoms Map.keys(@classes)
 
-  # A preset is a dint number of milliseconds, and never negative (docs/naming.md, `ton`).
-  @preset 0..2_147_483_647
-
   @doc "The section and type words, lowercase. Each is reserved, in any case."
   def keywords, do: Map.keys(@sections) ++ Map.keys(@types) ++ Map.keys(FbType.builtins())
 
@@ -136,6 +133,18 @@ defmodule Logex.Declarations do
               "ctd" => "a",
               "ctud" => "a"
             })
+            # M5-5: each typed counter and alias is said as its kind, letter by letter,
+            # then its integer type's word, `a ctu_int` (decisions 158 and 163).
+            |> Map.merge(
+              Map.new(
+                for(
+                  kind <- ~w(ctu ctd ctud),
+                  count <- ~w(int dint lint udint ulint),
+                  do: "#{kind}_#{count}"
+                ),
+                &{&1, "a"}
+              )
+            )
 
   @doc """
   A type word with its indefinite article, by how the word is said (M3-2): `a ton`,
@@ -409,13 +418,6 @@ defmodule Logex.Declarations do
   defp either_of(words), do: Enum.join(Enum.drop(words, -1), ", ") <> " or " <> List.last(words)
 
   @doc """
-  Whether an integer is a preset, 0 to 2147483647 ms (M1-6): what a `ton`'s preset slot
-  takes, and so where a timer's `.pre` starts. The slot is the one place a preset is
-  given: `Logex.Tag.new!/4` took one too, as `%{"pre" => ms}`, until OE-1 withdrew it.
-  """
-  def preset?(value), do: value in @preset
-
-  @doc """
   Splits parsed rungs into a tag table and the rungs of logic:
   `{tags, logic_rungs, diagnostics, untyped}`, the diagnostics in line order.
 
@@ -677,6 +679,11 @@ defmodule Logex.Declarations do
   defp own_type_words,
     do: type_words() ++ Enum.sort(Map.keys(FbType.builtins()))
 
+  # The same as the values that declare them from Elixir: an alias's is its plain word's
+  # (decision 163), named once.
+  defp own_type_values,
+    do: own_type_words() |> Enum.map(&as_value/1) |> Enum.uniq()
+
   defp listed([one]), do: one
   defp listed(words), do: Enum.join(Enum.drop(words, -1), ", ") <> " and " <> List.last(words)
 
@@ -758,11 +765,11 @@ defmodule Logex.Declarations do
   defp type(type),
     do: [
       "unknown type #{inspect(type)}: logex has " <>
-        listed(Enum.map(own_type_words(), &as_value/1)) <> spelled_as(type)
+        listed(own_type_values()) <> spelled_as(type)
     ]
 
   defp as_value(word) when is_map_key(@types, word), do: inspect(Map.fetch!(@types, word))
-  defp as_value(word), do: "Logex.FbType.#{word}()"
+  defp as_value(word), do: "Logex.FbType.#{FbType.builtin(word).name}()"
 
   defp spelled_as(type) when is_atom(type), do: spelled(Atom.to_string(type))
   defp spelled_as(type) when is_binary(type), do: spelled(type)

@@ -5327,7 +5327,18 @@ defmodule Logex.ApiContractTest do
     :forecast_rises,
     :round_trip,
     :retype_refused,
-    :restarted
+    :restarted,
+    # M5-5: a count in each width, an alias's among them, an unsigned counter stopped at
+    # 0, an edit of a counter's width refused and one of its alias accepted.
+    :in_int,
+    :in_dint,
+    :in_lint,
+    :in_udint,
+    :in_ulint,
+    :in_alias,
+    :underflow,
+    :width_refused,
+    :alias_kept
   ]
 
   @ct_inputs ~w(e1 e2 e3 rs ld on)
@@ -5365,6 +5376,11 @@ defmodule Logex.ApiContractTest do
           %{p: pick([1, 2, 3]), chain: ct_chain(), reset: pick([:above, :below])}
         end),
       kind_u: "ctu",
+      # M5-5: each counter's width, a type word's suffix, `_dint` the alias of none
+      # (decisions 158 and 163).
+      wu: ct_width(),
+      wd: ct_width(),
+      wb: ct_width(),
       d: ct_maybe(fn -> %{p: pick([1, 2]), chain: ct_chain(), load: pick([:above, :below])} end),
       b:
         ct_maybe(fn ->
@@ -5372,6 +5388,24 @@ defmodule Logex.ApiContractTest do
         end),
       s: ct_maybe(fn -> pick([1, 2, 3]) end)
     }
+
+  defp ct_width, do: pick(["", "_int", "_dint", "_lint", "_udint", "_ulint"])
+
+  # The width a suffix names, the alias's the dint's.
+  defp ct_plain(""), do: "dint"
+  defp ct_plain("_" <> width), do: width
+
+  # Each width's limits, restated: IEC's Table 10, not Logex.Declarations.
+  defp ct_limits("int"), do: {-32_768, 32_767}
+  defp ct_limits("dint"), do: {-2_147_483_648, 2_147_483_647}
+  defp ct_limits("lint"), do: {-9_223_372_036_854_775_808, 9_223_372_036_854_775_807}
+  defp ct_limits("udint"), do: {0, 4_294_967_295}
+  defp ct_limits("ulint"), do: {0, 18_446_744_073_709_551_615}
+
+  # The word an instance's type is named by in a message: its kind's, with its width's
+  # suffix but for the dint's, whichever word declared it (decision 163).
+  defp ct_named(kind, width) when width in ["", "_dint"], do: kind
+  defp ct_named(kind, width), do: kind <> width
 
   defp ct_maybe(fun), do: if(:rand.uniform(4) == 1, do: nil, else: fun.())
 
@@ -5395,6 +5429,8 @@ defmodule Logex.ApiContractTest do
   defp ct_change(9, %{b: %{} = b} = spec), do: %{spec | b: %{b | big: not b.big}}
   defp ct_change(10, spec), do: %{spec | s: pick([nil, 1, 2, 3])}
   defp ct_change(11, %{u: %{}} = spec), do: %{spec | kind_u: pick(["ctud", spec.kind_u])}
+  # M5-5: `u`'s width, which accept refuses, or its alias, which changes no type.
+  defp ct_change(12, %{u: %{}} = spec), do: %{spec | wu: ct_width()}
   # A preset moved, the commonest change, so that forecasts come both ways.
   defp ct_change(n, spec) when n in [13, 14], do: ct_change(pick([1, 6]), spec)
   defp ct_change(15, %{s: version} = spec) when version in [1, 2], do: %{spec | s: 3 - version}
@@ -5439,16 +5475,18 @@ defmodule Logex.ApiContractTest do
     declarations =
       Enum.map(@ct_inputs, &"var_input #{&1} bool") ++
         ["var_output y bool", "var_output n dint"] ++
-        if(spec.u, do: ["var u #{spec.kind_u}"], else: []) ++
-        if(spec.d, do: ["var d ctd"], else: []) ++
-        if(spec.b, do: ["var b ctud"], else: []) ++ if(spec.s, do: ["var s1 tally"], else: [])
+        if(spec.u, do: ["var u #{spec.kind_u}#{spec.wu}"], else: []) ++
+        if(spec.d, do: ["var d ctd#{spec.wd}"], else: []) ++
+        if(spec.b, do: ["var b ctud#{spec.wb}"], else: []) ++
+        if(spec.s, do: ["var s1 tally"], else: [])
 
     Enum.join(declarations ++ Enum.map(ct_rungs(spec), &ct_text/1) ++ ["xic e2 move 1 n"], "\n")
   end
 
   # The rungs, in order, as the model runs them: `{:set, counter, member, chain-or-input}`,
   # `{:count, counter, side, chain, preset}`, `{:move, counter, value}` and `{:cal, version}`.
-  defp ct_rungs(spec), do: ct_u(spec.u) ++ ct_d(spec.d) ++ ct_b(spec.b) ++ ct_s(spec.s)
+  defp ct_rungs(spec),
+    do: ct_u(spec.u) ++ ct_d(spec.d) ++ ct_b(spec.b, spec.wb) ++ ct_s(spec.s)
 
   defp ct_u(nil), do: []
 
@@ -5466,11 +5504,12 @@ defmodule Logex.ApiContractTest do
   defp ct_d(%{load: :below} = d),
     do: [{:count, "d", :down, d.chain, d.p}, {:set, "d", "ld", "ld"}]
 
-  defp ct_b(nil), do: []
+  defp ct_b(nil, _width), do: []
 
-  defp ct_b(b),
+  # M5-5: the preset moved to the top of `b`'s own width.
+  defp ct_b(b, width),
     do:
-      if(b.big, do: [{:move, "b", 2_147_483_647}], else: []) ++
+      if(b.big, do: [{:move, "b", elem(ct_limits(ct_plain(width)), 1)}], else: []) ++
         [
           {:set, "b", "r", "rs"},
           {:set, "b", "ld", "ld"},
@@ -5567,12 +5606,25 @@ defmodule Logex.ApiContractTest do
 
     case Edit.accept(w.p, ct_program(candidate), w.s) do
       {:ok, edit, _forecast} ->
+        # M5-5: an edit of `u`'s word that changes no type, its alias, is accepted.
+        if w.spec.u != nil and candidate.u != nil and candidate.wu != w.spec.wu,
+          do: ct_reached(:alias_kept)
+
         %{w | e: edit, c: candidate}
 
       {:error, [%Diagnostic{stage: :edit, message: message}]} ->
-        assert w.spec.u != nil and candidate.u != nil and candidate.kind_u != w.spec.kind_u
-        assert message =~ "`u` is a #{w.spec.kind_u} in the running program and a ctud"
-        ct_reached(:retype_refused)
+        was = ct_named(w.spec.kind_u, w.spec.wu)
+        now = ct_named(candidate.kind_u, candidate.wu)
+        assert w.spec.u != nil and candidate.u != nil and was != now
+
+        assert message ==
+                 "`u` is a #{was} in the running program and a #{now} in the candidate: a " <>
+                   "tag's type changes only with a restart"
+
+        ct_reached(
+          if candidate.kind_u != w.spec.kind_u, do: :retype_refused, else: :width_refused
+        )
+
         w
     end
   end
@@ -5698,7 +5750,15 @@ defmodule Logex.ApiContractTest do
     texts = ct_texts(spec)
     kinds = ct_kinds(spec)
     start = Map.new(kinds, fn {name, _kind} -> {name, ct_at(before.env, name)} end)
-    ctx = %{image: image, w: w, texts: texts, kinds: kinds, first: before.first}
+
+    ctx = %{
+      image: image,
+      w: w,
+      texts: texts,
+      kinds: kinds,
+      widths: %{"u" => spec.wu, "d" => spec.wd, "b" => spec.wb, "s1.c" => ""},
+      first: before.first
+    }
 
     {possible, ran} =
       Enum.reduce(ct_rungs(spec), {[{start, []}], []}, fn rung, acc -> ct_run(rung, acc, ctx) end)
@@ -5803,7 +5863,7 @@ defmodule Logex.ApiContractTest do
     held = if edge? and c["r"] == 1 and kind != "ctd", do: [:reset_held], else: []
 
     for ok <- Enum.uniq(allowed) do
-      {c, counted} = ct_iec(kind, side, c, edge? and ok, cond)
+      {c, counted} = ct_iec({kind, Map.fetch!(ctx.widths, counter)}, side, c, edge? and ok, cond)
       sides = for :counted <- counted, do: {:side, counter}
       why = ct_why(counted, ok, clean?, key, ctx)
       {Map.put(counters, counter, c), notes ++ held ++ counted ++ sides ++ why}
@@ -5823,10 +5883,9 @@ defmodule Logex.ApiContractTest do
   defp ct_memory(:up), do: "cu"
   defp ct_memory(:down), do: "cd"
 
-  @ct_max 2_147_483_647
-  @ct_min -2_147_483_648
-
-  defp ct_iec(kind, side, c, edge, cond) do
+  # M5-5: each counter stops at its width's limits, decision 71 by width.
+  defp ct_iec({kind, width}, side, c, edge, cond) do
+    {min, max} = ct_limits(ct_plain(width))
     mem = ct_memory(side)
     ov = Map.get(c, "ov", 0)
     un = Map.get(c, "un", 0)
@@ -5835,10 +5894,10 @@ defmodule Logex.ApiContractTest do
       cond do
         kind != "ctd" and c["r"] == 1 -> {0, 0, 0, []}
         kind != "ctu" and c["ld"] == 1 -> {c["pv"], 0, 0, [:loaded]}
-        edge and side == :up and c["cv"] == @ct_max -> {c["cv"], 1, un, [:overflow]}
-        edge and side == :up -> {c["cv"] + 1, ov, un, [:counted]}
-        edge and side == :down and c["cv"] == @ct_min -> {c["cv"], ov, 1, []}
-        edge and side == :down -> {c["cv"] - 1, ov, un, [:counted]}
+        edge and side == :up and c["cv"] == max -> {c["cv"], 1, un, [:overflow]}
+        edge and side == :up -> {c["cv"] + 1, ov, un, [:counted | ct_in(width)]}
+        edge and side == :down and c["cv"] == min -> {c["cv"], ov, 1, ct_under(min)}
+        edge and side == :down -> {c["cv"] - 1, ov, un, [:counted | ct_in(width)]}
         true -> {c["cv"], ov, un, []}
       end
 
@@ -5847,6 +5906,12 @@ defmodule Logex.ApiContractTest do
     c = if Map.has_key?(c, "un"), do: Map.put(c, "un", un), else: c
     {ct_done(kind, c), notes}
   end
+
+  defp ct_in("_dint"), do: [:in_dint, :in_alias]
+  defp ct_in(width), do: [:"in_#{ct_plain(width)}"]
+
+  defp ct_under(0), do: [:underflow]
+  defp ct_under(_min), do: []
 
   defp ct_done("ctu", c), do: %{c | "q" => if(c["cv"] >= c["pv"], do: 1, else: 0)}
   defp ct_done("ctd", c), do: %{c | "q" => if(c["cv"] <= 0, do: 1, else: 0)}
