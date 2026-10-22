@@ -68,8 +68,9 @@ Source syntax today:
   sign begins a number, so it needs a space before it too: `move 5-3 aa` is an error naming
   `5-3`, and `ote a-5` one naming `a-5`; a difference is `sub`. A literal is judged by
   the slot it goes into: it must fit that slot's type, −2147483648 to 2147483647 for a
-  dint, 0 to 65535 for a `uint`, a timer's preset 0 to 2147483647 ms and a counter's 0
-  to the top of its `pv`'s type, 2147483647 for a `ctu`, 32767 for a `ctu_int`
+  dint, 0 to 65535 for a `uint`, a timer's preset 0 to 2147483647 ms and a counter's any
+  value of its `pv`'s type, as IEC's PV is, −2147483648 to 2147483647 for a `ctu`,
+  −32768 to 32767 for a `ctu_int` and 0 to 4294967295 for a `ctu_udint`
 - no operand parentheses, no terminator
 - `//` starts a comment, which runs to the end of its line
 - a name may have `.` parts: `t1.dn` is the member `dn` of the timer `t1`. A timer's
@@ -189,12 +190,12 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
 | `osr s1 pulse` | two bool tags it writes, each not a `var_input`: the storage bit, then the pulse bit, which may be a member logic may write | one-shot rising, IEC's positive transition-sensing coil in the conventional set's form — sets `pulse` for the one scan in which the power reaching it rises, and clears it on every other run, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last run. It passes that power on, so anything may follow it on its rung. A second `ons`, `osr` or `osf` on `s1` is an error, as is `s1` for its pulse bit too, and any other write to `s1` a warning; a second coil on `pulse`, an `ote` among them, is the second-`ote` warning |
 | `osf s1 pulse` | as `osr` | one-shot falling, IEC's negative transition-sensing coil — sets `pulse` for the one scan in which the power reaching it falls, which its run on the false rung sees, and is `osr` in every other rule |
-| `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two integers of any widths, each a tag, a member or a literal | compare by value, whatever the two types — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`, so an `sint` −1 is less than a `udint` 0; none on a false rung. Two literals are a warning |
+| `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two integers of any widths, each a tag, a member or a literal | compare by value, whatever the two types — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`, so an `sint` −1 is less than a `udint` 0; none on a false rung. A literal its tag's type cannot hold is refused, and two literals are a warning, as is a literal at its tag's type's limit whose result never changes, `ge count 0` with a `usint` `count` |
 | `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
 | `tof run_on 30000` | an off-delay timer (`var run_on tof`), then a preset in ms | off-delay timer, IEC's TOF — rung power is its IN. True: `.dn` set, `.acc` 0. The first false scan starts the delay, and `.dn` stays set until `.acc` reaches `.pre`, then drops; a true rung during the delay ends it with `.dn` still set. A new or restarted one is at rest, `.dn` 0. Read it with `xic run_on.dn` on a rung below |
 | `tp horn_pulse 3000` | a pulse timer (`var horn_pulse tp`), then a preset in ms | pulse timer, IEC's TP — a rising edge of its rung, never on an instance's first scan, starts a pulse on `.tt` exactly `.pre` long, whatever the rung does meanwhile, an edge during it ignored; `.dn` is set as the pulse ends and holds while the rung does. Read the pulse with `xic horn_pulse.tt` on a rung below |
 | `rto lube 360000000` | a retentive timer (`var lube rto`), then a preset in ms | retentive on-delay timer, the conventional RTO — true, it times as `ton`; false, it keeps `.acc` and `.dn`, so its time adds up across the rung's drops. Its reset `.r`, an input a rung writes, `xic greased ote lube.r`, puts `.acc`, `.dn` and `.tt` to 0 at its next run; every restart, warm or cold, starts it at 0. Logic writes `.pre`, `.acc` and `.r` |
-| `ctu boxes 12` | an up counter (`var boxes ctu`) or an up-down one (`ctud`), of any of IEC's typed counters too, `ctu_int` or `ctud_ulint` (M5-5), then a preset of 0 to 2147483647, or to its type's top for a typed counter | count up — rung power is the counter's count input `cu`. Each rising edge adds one to `.cv`, never on an instance's first scan, and `.q` is `.cv >= .pv`. Its reset `.r`, an input a rung writes, as `xic reset_pb ote boxes.r`, puts `.cv` to 0 at the counter's next run, and keeps its memory of `cu`, so a box on the eye at a reset is not counted again. At 2147483647, or a typed counter's top, the count stops and `.ov` stays on until a reset. The preset is where `.pv` starts; logic writes only `.r` and `.pv`, and a `ctud`'s `.ld`. One `ctu` runs a counter, and nothing may follow it on its path: read it with `xic boxes.q` on a rung below |
+| `ctu boxes 12` | an up counter (`var boxes ctu`) or an up-down one (`ctud`), of any of IEC's typed counters too, `ctu_int` or `ctud_ulint` (M5-5), then a preset, any value of its `pv`'s type, −2147483648 to 2147483647 for a `ctu`, negatives among them, and 0 to its top for an unsigned typed counter | count up — rung power is the counter's count input `cu`. Each rising edge adds one to `.cv`, never on an instance's first scan, and `.q` is `.cv >= .pv`. Its reset `.r`, an input a rung writes, as `xic reset_pb ote boxes.r`, puts `.cv` to 0 at the counter's next run, and keeps its memory of `cu`, so a box on the eye at a reset is not counted again. At 2147483647, or a typed counter's top, the count stops and `.ov` stays on until a reset. The preset is where `.pv` starts; logic writes only `.r` and `.pv`, and a `ctud`'s `.ld`. One `ctu` runs a counter, and nothing may follow it on its path: read it with `xic boxes.q` on a rung below |
 | `ctd hopper 40` | a down counter (`var hopper ctd`) or an up-down one, then a preset | count down — rung power is `cd`. Its load `.ld` puts `.cv` to `.pv`; each rising edge takes one away, stopping at −2147483648, or a typed counter's bottom, 0 for a `ctd_udint`, with `.un` on until a load; `.q` is `.cv <= 0`. A `ctud`, `var stock ctud`, is run by one `ctu` and one `ctd` on two rungs, with one preset, and has `.r` and `.ld`, `.qu` at `.cv >= .pv` and `.qd` at `.cv <= 0` |
 | `add a b dst` `sub a b dst` `mul a b dst` | two integer sources, each a tag, a member or a literal, of `dst`'s type or one IEC's Figure 11 widens into it, then an integer tag or member it writes, not a `var_input`; any other source is refused naming its conversion | add, subtract (`a − b`), multiply, in `dst`'s type — true: writes the result and passes power; a result outside that type wraps, keeping its low bits, in two's complement where signed (2147483647 + 1 is −2147483648 in a `dint`, 127 + 1 −128 in an `sint`, 0 − 1 255 in a `usint`), and passes no power on that scan, with no fault. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
 | `div a b dst` `mod a b dst` | as `add` | divide, truncated toward zero (`div -7 2 q` is −3), and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. A signed type's minimum divided by −1 wraps to itself, `div -2147483648 -1` to −2147483648 in a `dint`, with no power |
@@ -402,7 +403,8 @@ The timer starts at the scan that first sees `go` (t=100), counts the time that 
 not the number of scans, and stops at its preset; a false rung resets it. The one-shot
 fires once per rise, and never on an instance's first scan, even with `go` already held.
 The timer's members are in the instance's state, `state.env["t1"]`, a map with `pre`,
-`acc`, `dn`, `tt` and `en`, and `last`, the time its `ton` last ran.
+`acc`, `dn`, `tt` and `en`, and `last`, the time its `ton` last ran, which a state a
+host hands in may hold at any time up to the instance's own `now`, and no later.
 
 The lamp is read from `t1.dn` on a rung of its own. Whether the power after a `ton` is
 the rung's or the timer's `.dn` is not settled, so nothing may follow a `ton` on its path,
@@ -498,7 +500,7 @@ xic stock.qu ote buffer_full
 A `ctd` on an up counter is refused, with what to declare instead:
 
 ```
-line 8: `ctd` runs a ctd or a ctud, but `boxes` is a ctu (declared on line 5): a ctu only counts up; declare it `var boxes ctud` to count both ways
+line 8: `ctd` runs a ctd, ctud, ctd_int, ctud_int, ctd_lint, ctud_lint, ctd_udint, ctud_udint, ctd_ulint or ctud_ulint, but `boxes` is a ctu (declared on line 5): a ctu only counts up; declare it `var boxes ctud` to count both ways
 ```
 
 A counter counts in a dint, as IEC's CTU_DINT, and the conventional set's COUNTER, do.
@@ -570,12 +572,14 @@ box in, at 32767  cv 32767  %{"full" => 1, "over" => 1}
 eye clear         cv 32767  %{"full" => 1, "over" => 1}
 box out           cv 32766  %{"full" => 0, "over" => 1}
 true
-line 3: `ctu` takes a preset of 0 to 32767 for a counter of ints, found `40000`
+line 3: `ctu` takes a preset of -32768 to 32767 for a counter of ints, found `40000`
 ```
 
 The stock stops at 32767 with `ov` on, which stays until a reset or a load, and a count
 down from there takes one away; `cases` holds the very type `ctu` declares; and a preset
-past an int's top is refused at its line, in the type it is judged in.
+past an int's top is refused at its line, in the type it is judged in. A signed counter's
+preset may be negative, as IEC's PV may: `ctu offset -10` on a `ctu_int` compiles, and its
+`q`, `.cv >= .pv`, is on from the start.
 
 A counter in a function block whose `cal` is false is frozen with the rest of the block:
 a box that passes the eye while it is frozen is not counted. A counter under an event

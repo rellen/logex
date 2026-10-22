@@ -82,7 +82,13 @@ value outside its type is, the other two confirmed as built. And the fifth, M5-5
 typed counters, `ctu_int` to `ctud_ulint`, run by `ctu` and `ctd` and each stopping at its
 type's limits, and `ctu_dint`, `ctd_dint` and `ctud_dint` the very types of `ctu`, `ctd`
 and `ctud` (§3, M5-5), with three questions put to the maintainer, its review's seven
-findings fixed the same day.
+findings fixed the same day; and the maintainer's seven answers to M5-5's three questions
+and to the four readings decisions 180–186 left (decisions 187–193, §3 after M5-5) the same day: a
+comparison whose literal sits at its tag's type limit warned, a timer's `last` later than
+`now` refused, a literal `neg` source told the type its negation fits, decision 182's
+check made once where a program is handed in, a scan costing what it did before it, a
+signed counter's preset negative too, and a counter slot naming every word it runs, the
+unknown type's list kept.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -5236,6 +5242,109 @@ the walks' cross-type reach and the documents.
   own word in its place; the `move` hint judged in a dint; and a zero's deadline the idle
   watchdog alone, against the widened test. 1673 tests (9 doctests), up from 1671. No
   question for the maintainer: each fix follows the record as written.
+- **The maintainer's answers of 2026-10-22** to the questions M5-4's answers and M5-5 put
+  (`docs/organisation.md` §7, decisions 187 to 193), landed the same day as two commits,
+  the code with its tests and the decisions, then the documents:
+  - *187, a comparison whose literal sits at its tag's type limit is warned of* where its
+    result never changes, in the all-literal warning's words: "`ge` compares `count` with
+    `0`, and a usint holds nothing below `0`: its result never changes". The pairs are
+    eight, at every width: `ge x lo` and `le x hi` always pass power, `lt x lo` and `gt x
+    hi` never, and their mirrors with the literal on the left, `le lo x` and `ge hi x`
+    always, `gt lo x` and `lt hi x` never; `eq` and `ne` at a limit, the other four at a
+    limit and every literal inside the range can go either way.
+  - *188, a timer's `last` later than the instance's `now` is refused*: "it is a clock,
+    and 5000 is later than the instance's now, 1000"; any integer up to `now` is taken.
+  - *189, a literal `neg` source names the narrowest signed type its negation fits*:
+    `neg -128 count` is told "an int".
+  - *190, decision 182's check runs once, where a program is first handed in*:
+    `Logex.Runtime.instance/1`, `Logex.Edit.accept/3` for its candidate and
+    `Logex.Configuration.check/1`, so `start/1`, `new!/1`, `compile/3` and a
+    configuration edit's accept, each program type once; `start/1` and a configuration
+    edit's switch make each instance with the internal `Logex.Runtime.fresh/1`. Every
+    other entry point checks only a program's shape. What it gives up: a program swapped
+    in by hand after its check is trusted. A scan costs what it did at `23a5136`: 2,000
+    contact rungs 78,195 reductions where `23a5136` took 78,168 and decision 182 88,198,
+    and 2,000 `add`s 116,171 where they took 116,168 and 148,762; `jump_test.exs`'s
+    skipped rungs are 0.303 of running them again, its bound decision 171's 0.364.
+  - *191, a counter's preset is any value of its type*, as IEC's PV is: `ctu offset -10`
+    on a `ctu_int` compiles, "`ctu` takes a preset of -32768 to 32767 for a counter of
+    ints", the dint counters' from -2147483648; an unsigned counter's is 0 to its top and
+    a timer's 0 to 2147483647 ms, as before. The done lamps, a load, the edit's preset
+    rules and its forecast hold at a negative preset, each pinned, and the counter walk
+    draws one.
+  - *192, a counter slot names every word it runs*, in a fixed order: "`ctu` runs a ctu,
+    ctud, ctu_int, ctud_int, ctu_lint, ctud_lint, ctu_udint, ctud_udint, ctu_ulint or
+    ctud_ulint, but `c` is a ctd_lint …", the hint "declare it `var c ctud_lint`" kept.
+  - *193, the unknown type's list of 31 words kept*: no code changed.
+
+  Changed on purpose: `runtime_test.exs`'s hand-edited program, refused now only where it
+  is handed in, its trust and the scan's raise pinned, and the check traced at each entry
+  point; `jump_test.exs`'s bound back to 0.364; `end_to_end_test.exs`'s `a `last` later
+  than now` and `runtime_test.exs`'s `last` of 2^70, now refused against a `now` before
+  them; `validation_test.exs`'s `lt 2147483647 i`, now `lt 2147483646 i`, which no dint
+  makes fixed; every counter preset message's range and every counter slot message in
+  `validation_test.exs` and `typed_counter_test.exs`. `docs/naming.md`'s `neg` stanza is
+  amended, its worked example a test. README's `stock.exs` was run again, its preset
+  line now -32768 to 32767, and the `ctd` on an up counter's refusal; `drive.exs` gives
+  what it gave.
+
+  The mutation table (`m5/mut187.log` in the work's scratchpad), 27 mutants of `lib/`, each
+  applied alone in a copy and judged by the full suite's exit code, every one red: no
+  limit warning (2 tests), the right side's lowest pair `ge`/`le` (2), the left side's
+  lowest unwarned (2), the left's highest taken as the right's (2), `eq` warned at the
+  lowest (2), a member's type unread (1), the sides swapped in the words (2); a `last`
+  later than `now` taken (2), one equal to `now` refused (274), `now` + 1 taken (1); the
+  literal's own type named (2), its negation's alone (2), the none-holds words swapped
+  (1); `instance/1` checking nothing (5), an edit's candidate unchecked (4), `call/4`
+  checking again (3), `start/1` checking each instance (1), a configuration edit's switch
+  checking (1), a trusted bad destination computed in the dint (1), a bool destination
+  passed to the wrap (1), an edit checking the program running too (2); a counter's preset
+  from 0 (9), a timer's negative (6); the slot's old words (4), the plain words not first
+  (4), the aliases listed (4), a width's kinds reversed (4). 1681 tests (9 doctests), up
+  from 1673; the counter walk reaches a negative preset under ten other seeds.
+
+  *Provisional readings* (each a question below): a scan that reaches a trusted program's
+  bad destination raises there; `neg 128` names the type the literal fits too; every
+  message that names a counter slot lists its words; and an edit's accept checks its
+  candidate only.
+
+  **Questions for the maintainer** (each taken provisionally as written, the closest
+  reading to the record and to Logix):
+  1. *A trusted program a scan finds broken* (decision 190). A *program edited by hand* is
+     a compiled `%Logex.Program{}` a host changed after it compiled, its box count `d`
+     retyped from an `sint` to a bool. Since decision 190 nothing walks it after its
+     check, so a scan that reaches its `add 100 100 d` raises an `ArgumentError` there,
+     "a scan's `add` on line 7 computes in the type of `d`, a bool, …", and a scan whose
+     rung is false runs on. On the conveyor: a runner whose host swapped such a program
+     in sees no fault until a box arrives and the `add`'s rung goes true, and then the
+     scan stops with that message, the outputs of that scan never written. The other
+     readings compute it in the dint, as M5-4's review did, so the lamp lights and the
+     count is wrong, or skip the instruction, no power and nothing written. IEC and Logix
+     have no compiled program a host can edit.
+  2. *`neg 128` into an unsigned tag* (decision 189). The narrowest signed type -128, the
+     negation of 128, fits is an `sint`, but 128 itself is no sint's, and a literal is
+     judged in its destination's type, so `neg 128 count` declared an sint would still be
+     refused. logex tells it "an int", the narrowest that holds both, the one change that
+     makes it compile. On the conveyor: an engineer negating a fixed 128 mm offset into a
+     `usint` is told to declare an `int`, and it compiles. The other reading names the
+     sint, as the answer reads word for word, and the engineer is then told 128 does not
+     fit an sint. IEC has no NEG; Logix's is unverified.
+  3. *The slot's words in the other messages* (decision 192). The answer listed every
+     word where a counter of the wrong kind is given; logex lists them wherever a message
+     names the slot, a bool given to `ctu` ("`ctu` runs a ctu, ctud, …, but `a` is a
+     bool"), a literal ("`ctu` expects a ctu, ctud, …, found `5`") and a missing operand
+     ("(a ctu, ctud, …, then a preset)"), since each reads one description of the slot.
+     On the conveyor: an engineer who typed `ctu 5 5` reads the ten words on a line. The
+     other reading lists them only for a counter of the wrong kind and keeps "a ctu or a
+     ctud" elsewhere, a message that says less than it means. IEC and Logix have no such
+     message.
+  4. *Which program an edit's accept checks* (decision 190). `Logex.Edit.accept/3` takes
+     the program running and the candidate; logex checks the candidate only, the program
+     running having been checked where its instance was made, so a running program
+     swapped in by hand is trusted there too. On the conveyor: nothing an operator sees
+     changes unless a host edited the running program by hand. The other reading checks
+     both, as decision 182 did, once an accept, which no scan pays. IEC and Logix check a
+     program once, at download.
 - **M5-6 · Long timers in nanoseconds.** The stanzas, then `ton_ltime tof_ltime tp_ltime`
   and `rto_ltime` (decision 158, its last taken as the maintainer answered §4.12's
   seventh question), run by
