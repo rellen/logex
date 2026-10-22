@@ -3158,7 +3158,8 @@ which the maintainer answered on 2026-10-20: it does, as a start does (decision 
 the same day, changing nothing a program, a configuration, a host or an edit sees, and
 its second, M5-2, the dint's wrap, on 2026-10-22, decision 77's saturation superseded on
 purpose, and its third, M5-3, the integer widths declared everywhere, `move` and literals
-by Figure 11 and the 56 integer conversions, the same day**
+by Figure 11 and the 56 integer conversions, the same day, and its fourth, M5-4,
+arithmetic and comparison over every integer width, the same day**
 (`PLAN.md` §3, Milestone 5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
 4, 8 byte integers (how does IEC and vendors handle signed?), 32/64 bit reals, arrays of
 all others, what else does IEC and vendors have."* It read IEC 61131-3 Ed 2:2003 and Ed
@@ -3363,7 +3364,12 @@ limit, `div` of the minimum by −1, and `neg` and `abs` of the minimum),
 `mul`, `div`, `neg` and `abs` stanzas, and README's instruction table and "Arithmetic",
 whose run prints the wild meter at 2147483647. `PLAN.md`'s M5-2 changes all of them on
 purpose, in one item, before any new width lands, so that logex never has two overflow
-rules at once. *(Landed for the dint with M5-2, 2026-10-22.)*
+rules at once. *(Landed for the dint with M5-2, 2026-10-22, and for every integer width
+with M5-4, the same day: an arithmetic result wraps in its destination's type, 127 + 1 in
+an `sint` giving −128 and 0 − 1 in a `usint` 255, each with no power; a signed type's
+minimum divided by −1, negated or made absolute gives that minimum; a zero divisor is 0,
+no power and the minor fault at every width; and `neg` into an unsigned destination is
+refused when the program compiles.)*
 
 **Mixed types** (decision 147). An instruction computes in its destination's type, as
 IEC's typed function of that type, `ADD_DINT`, whose inputs Ed 3's rule 2 (p.66) lets
@@ -3414,6 +3420,23 @@ Arithmetic and comparison keep their dint slots until M5-4, an operand of anothe
 refused there with the conversion that bridges it, `int_to_dint` before a read and
 `dint_to_int` after a write, the record's provisional reading of M5-3's "`move` and every
 literal": M5-4 widens their sources.)*
+*(Landed for the arithmetic and the comparisons with M5-4, 2026-10-22. The slots of `add
+sub mul div neg abs` and the six comparisons take IEC's ANY_NUM, and `mod`'s ANY_INT,
+as data in `Logex.Declarations` (`in_class?/2`, a generic type's kinds of rows), so a
+real joins ANY_NUM by its row when it lands; the operands of one instruction are held
+together, so a three-operand `add` is checked whole: it computes in its destination's
+type, each source tag of a type Figure 11 widens into it, any other told "convert it
+first, with `dint_to_sint`", and a literal source must fit it. A comparison's two
+integers are compared by value whatever their types, the runtime reading Elixir's
+integers, so an `sint` −1 is less than a `udint` 0. The record's provisional readings,
+each a question in `PLAN.md`'s M5-4: a literal compared with a tag is taken by value,
+whatever the tag's type, so `lt s 200` with an `sint` `s` compiles and always passes
+power, two literals each within −2^63 to 2^64 − 1; the slots' word in a message is the
+generic type's, "`add` reads a number, but `b` is a bool", "`mod` reads an integer", a
+number being an integer until the reals land; and a `neg` refused for its unsigned
+destination is told that alone, its sources held to the class only. The runtime finds
+the destination's type at each scan in the routine's own tag table, as a counter's kind
+is found, the IR unchanged.)*
 
 **Conversions** (decision 148). IEC's typed names, `<from>_to_<to>` (Ed 3 Table 22 feature
 1a), lowercased, two operands, `real_to_int fan_pct drive_sp`:
@@ -7048,6 +7071,10 @@ the decisions the rest settle.
      compiles** (the maintainer, 2026-10-21), as recommended. An unsigned result below 0
      wraps (decision 146): 0 − 1 in a `usint` is 255, with no power.
      *(Landed with M5-3, 2026-10-22: all four unsigned widths; `neg` into an unsigned destination is M5-4's, with the arithmetic over every width.)*
+     *(Landed with M5-4, 2026-10-22: `neg` into an unsigned destination is refused at its
+     line, "`neg` writes `u`, a usint, which holds no negative value: `neg` writes a
+     signed type", whatever its source; an unsigned source negated into a signed type it
+     widens into is taken, `neg w i` with a `usint` `w` and an `int` `i` giving −255.)*
 
 146. **What overflow does, in every width (Milestone 5).** The box counter's tag is a
      `usint`, `add boxes 1 boxes`, and the 256th box arrives; the fan ramp, `add speed 10
@@ -7087,6 +7114,9 @@ the decisions the rest settle.
      then wraps.)* *(Landed for the dint, the one width there is, with M5-2,
      2026-10-22: decision 77's saturation replaced on purpose, each test and example that
      pinned it changed in that commit; the other widths follow with M5-3 and M5-4.)*
+     *(Landed for every integer width with M5-4, 2026-10-22, the conversions' with M5-3:
+     an arithmetic result wraps in its destination's type, with no power and no fault,
+     `arithmetic_test.exs` holding each rule at each width's two limits.)*
 147. **Arithmetic and comparison across types (Milestone 5).** The day's total is a
      `dint`, the shift's count a `uint`: `add day_total shift_count day_total`. The fan's
      speed is a `real` and its limit an `int`: `gt fan_speed fan_limit`.
@@ -7118,6 +7148,9 @@ the decisions the rest settle.
      conversion, `int_to_word` or `word_to_int`; a literal is judged by its slot, so that
      `eq drive_status 16#0004` is taken.)*
      *(Landed for `move` and every literal with M5-3, 2026-10-22; arithmetic and comparison over every width are M5-4's, another width there refused until then, as the maintainer confirmed the same day, decision 175.)*
+     *(Landed for the arithmetic and the comparisons with M5-4, 2026-10-22, as §4.12's
+     "Mixed types" says, with its provisional readings; the reals and the bit strings
+     join the same slots with M5-10 and M5-8.)*
 
 148. **Converting a real to an integer, and what the conversions are called (Milestone
      5).** The fan's speed is worked out as a `real` percentage and written to the drive
@@ -7763,7 +7796,8 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      - or a `uint` taken into a dint slot now, as decision 147 will take it.
 
      **Taken: refused until M5-4, decision 147's order of work confirmed** (the
-     maintainer, 2026-10-22). No code changed; M5-4 lifts it.
+     maintainer, 2026-10-22). No code changed; M5-4 lifts it. *(Lifted by M5-4,
+     2026-10-22: an `add` or a comparison takes every integer width, decision 147.)*
 176. **A conversion's source of a narrower type (Milestone 5),** following decision 148.
      The box-count trim is an `sint`, put through `dint_to_int`. M5-3 took a conversion's
      source as exactly the type its name gives and refused the trim naming `sint_to_int`.

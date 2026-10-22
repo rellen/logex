@@ -69,7 +69,9 @@ literals by Figure 11, and the 56 integer conversions (§3, M5-3); and the maint
 eight answers to M5-3's and decision 171's questions the same day (decisions 172–179, §3
 after M5-3): a value a state holds that is no integer refused as one outside its type is,
 a conversion's source widening into its `from` type, every width's misfit told its range,
-and a conversion of a literal warned, the other four confirmed as built.
+and a conversion of a literal warned, the other four confirmed as built; and the fourth,
+M5-4, the same day: arithmetic and comparison over every integer width, computed in the
+destination's type, each source widening into it by Figure 11 (§3, M5-4).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -4828,6 +4830,97 @@ the walks' cross-type reach and the documents.
   comparisons of a signed with an unsigned operand are exact at their limits; and the
   contract walk's arithmetic
   oracle covers every width from its own ranges. *Size L.*
+
+  **Status: DONE — landed 2026-10-22**, as three commits: the stanzas' amendments first,
+  the Arithmetic table, `add` with the departure decision 147 asks it to state, `sub`,
+  `mul`, `div`, `mod`, `neg`, `abs`, `eq` and the seven type stanzas from `sint` to
+  `ulint`; then the code with its tests; then the documents. The slots of `add sub mul div
+  neg abs` and the six comparisons take IEC's ANY_NUM and `mod`'s ANY_INT, generic types
+  as data in `Logex.Declarations`, each the kinds of rows it holds (`is_class/1`,
+  `in_class?/2`, `a_class/1`, `class_range/1`), so that a real joins ANY_NUM by its row.
+  `Logex.Compiler`'s `classed/3` holds an instruction's operands together: where it
+  writes a destination of its class it computes in that type, each source tag of a type
+  Figure 11 widens into it, any other told "`add` computes in `s`'s type, an sint, but `d`
+  is a dint (declared on line 1): a dint does not widen into an sint, so convert it
+  first, with `dint_to_sint`", and a literal source must fit it; `neg` into an unsigned
+  destination is refused, told that alone; a comparison's two integers need nothing of
+  each other. `Logex.Runtime` wraps each result into its destination's type, found at
+  each scan in the routine's tag table (`type_at/2`), a member's by its built-in's
+  schema, as a counter's kind is found, the IR unchanged; a comparison reads Elixir's
+  integers, exact by value. The fixed integer slots the arithmetic and comparisons had
+  are gone, and with them the hints "convert it first" and "write a dint and convert it"
+  for a fixed slot. The Done-when is `arithmetic_test.exs`'s two new groups: every rule
+  at every width's two limits, `add sub mul div mod` over each width's limits in its own
+  type and `neg` and `abs` over the signed ones, against each range, Figure 11 and the
+  wrap restated from IEC's tables, 127 + 1 in an `sint` giving −128 and 0 − 1 in a
+  `usint` 255, each with no power; every Figure 11 pair computed in the destination's
+  type and every other pair refused naming its conversion; the three-operand mismatch
+  `add d i s`, red with the unification reverted; a literal source at each width's limits
+  and one past them; `neg` into each unsigned width refused; the zero divisor and the
+  minimum by −1 at every width and the remainder's sign at every signed one; a member's
+  and a block's destination; the comparisons of all 64 ordered pairs of widths over their
+  limits, exact by value; and the arithmetic's growth in reductions, 4x the instructions
+  and tags under 4.8x. The contract walk's arithmetic gives every tag a width drawn from
+  the eight, each source of a width Figure 11 widens into its destination's, its oracle
+  wrapping in the destination's width, its reach a widened source and a wrap in each
+  width, held at its seed and at {n, 10, 333}, n from 1 to 30, after a dividend and a
+  divisor drawn for a width's minimum by −1. Changed on purpose: every message that said
+  an arithmetic or comparison slot "reads a dint" says "reads a number", `mod`'s "an
+  integer"; a literal source's misfit is told in its destination's type, "`add` computes
+  in `d`'s type, a dint: …"; a comparison literal past a dint, `gt n 3000000000`, now
+  compiles, and the compile walk's fragment is a literal past 2^64; and
+  `integer_width_test.exs`'s test of another width in a dint slot pins the widening.
+  Found on the way: the M5-3 contract walk drew widths from `Map.keys(@widths)`, an
+  atom-keyed map whose keys come in the order of the atoms' indexes in the atom table, so
+  its draws differed between a run of the one file and of the whole suite; every draw now
+  reads a list, `@width_types`. README's `drive.exs` gained a `uint` doubled in a `uint`,
+  an `add` and a `neg` refused, and was run again; its output is the README's.
+  The mutation table, 24 mutants each judged by the full suite's exit code, every
+  one red: the unification reverted (11 tests), every integer source taken (3), the
+  widening read backwards (7), a literal source never held to the destination (4) or held
+  to the dint (2), a literal with no type known never checked (3) or held to the dint (2);
+  `neg` into an unsigned type taken (1), `abs` refused there too (3), a refused `neg` told
+  its sources as well (1); a generic slot taking a bool tag (4) or member (3), `mod`
+  ANY_NUM (1), no member suggested for an instance named whole (3), a bool read as of a
+  class (7), the class range the signed types' alone (2); the runtime wrapping every
+  result into a dint (7), a member's into a lint (1), a division's (4) or `neg`'s and
+  `abs`'s (2) into a dint, a comparison read as 64 bits unsigned (2), the destination's
+  type found by a linear walk of the tags (1, the growth test); the walk's oracle wrapping
+  into a dint (1) and drawing no source of another width (1).
+  1632 tests (9 doctests), up from 1617.
+
+  *Provisional readings* (each a question below): a literal compared with a tag is taken
+  by value whatever the tag's type, two literals each within −2^63 to 2^64 − 1; the slots'
+  word in a message is the generic type's, "a number" for ANY_NUM before the reals land;
+  and a `neg` refused for its unsigned destination is told that alone.
+
+  **Questions for the maintainer** (each taken provisionally as written, the closest
+  reading to the record and to Logix):
+  1. *A literal compared with a narrower tag.* A comparison reads two integers by value
+     whatever their types (decision 147); a literal is "judged by its slot", and a
+     comparison's slot has no type of its own. logex takes `lt trim 200` with an `sint`
+     `trim`, which can hold only −128 to 127, so the comparison always passes power. On
+     the conveyor: an engineer who compares the fan's `sint` trim with 200 sees the lamp
+     after it always lit, and nothing is said when the program compiles. The other
+     readings refuse it, "`200` is outside -128 to 127", as IEC's typed `GT_SINT` would,
+     its literal an SINT; or compile it with the warning a comparison of two literals
+     gets, its result never changing. Logix takes it, converting both to the wider type
+     and comparing.
+  2. *The word for the arithmetic's slots in a message.* `add b 1 d` with a bool `b` is
+     told "`add` reads a number, but `b` is a bool", and `mod b 2 d` "`mod` reads an
+     integer", IEC's ANY_NUM and ANY_INT in words. Until the reals land a number is an
+     integer, so the words differ only for the operator who reads them both. On the
+     conveyor: an engineer who adds the photo-eye's bool into the box count reads that
+     `add` reads a number. The other reading says "an integer" for both until M5-10, and
+     changes `add`'s message when the reals come.
+  3. *What a `neg` into an unsigned destination is told.* `neg level count` with a `usint`
+     `count` is told "`neg` writes `count`, a usint, which holds no negative value: `neg`
+     writes a signed type", and nothing of its source, whatever it is. On the conveyor: an
+     engineer who negates the level into the box count is told to write a signed type, and
+     on the next compile, if the level is a `dint` and the new destination an `int`, is
+     told that the dint does not widen. The other reading names a signed type the source
+     widens into, "write an int or wider", or tells both problems at once. IEC has no
+     NEG; Logix's NEG into an unsigned tag is `unverified`.
 - **M5-5 · Typed counters.** The stanzas, then `ctu_int ctu_lint ctu_udint ctu_ulint`,
   `ctd_*` and `ctud_*` of the same four (decision 158), rows of `Logex.FbType.rules/1`
   run by `ctu` and `ctd`, a preset judged in its instance's type, each stopping at its

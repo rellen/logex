@@ -188,16 +188,16 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
 | `osr s1 pulse` | two bool tags it writes, each not a `var_input`: the storage bit, then the pulse bit, which may be a member logic may write | one-shot rising, IEC's positive transition-sensing coil in the conventional set's form — sets `pulse` for the one scan in which the power reaching it rises, and clears it on every other run, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last run. It passes that power on, so anything may follow it on its rung. A second `ons`, `osr` or `osf` on `s1` is an error, as is `s1` for its pulse bit too, and any other write to `s1` a warning; a second coil on `pulse`, an `ote` among them, is the second-`ote` warning |
 | `osf s1 pulse` | as `osr` | one-shot falling, IEC's negative transition-sensing coil — sets `pulse` for the one scan in which the power reaching it falls, which its run on the false rung sees, and is `osr` in every other rule |
-| `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two dints, each a tag, a member or a literal; another width is converted first, `uint_to_dint`, until M5-4 | compare — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`; none on a false rung. Two literals are a warning |
+| `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two integers of any widths, each a tag, a member or a literal | compare by value, whatever the two types — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`, so an `sint` −1 is less than a `udint` 0; none on a false rung. Two literals are a warning |
 | `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
 | `tof run_on 30000` | an off-delay timer (`var run_on tof`), then a preset in ms | off-delay timer, IEC's TOF — rung power is its IN. True: `.dn` set, `.acc` 0. The first false scan starts the delay, and `.dn` stays set until `.acc` reaches `.pre`, then drops; a true rung during the delay ends it with `.dn` still set. A new or restarted one is at rest, `.dn` 0. Read it with `xic run_on.dn` on a rung below |
 | `tp horn_pulse 3000` | a pulse timer (`var horn_pulse tp`), then a preset in ms | pulse timer, IEC's TP — a rising edge of its rung, never on an instance's first scan, starts a pulse on `.tt` exactly `.pre` long, whatever the rung does meanwhile, an edge during it ignored; `.dn` is set as the pulse ends and holds while the rung does. Read the pulse with `xic horn_pulse.tt` on a rung below |
 | `rto lube 360000000` | a retentive timer (`var lube rto`), then a preset in ms | retentive on-delay timer, the conventional RTO — true, it times as `ton`; false, it keeps `.acc` and `.dn`, so its time adds up across the rung's drops. Its reset `.r`, an input a rung writes, `xic greased ote lube.r`, puts `.acc`, `.dn` and `.tt` to 0 at its next run; every restart, warm or cold, starts it at 0. Logic writes `.pre`, `.acc` and `.r` |
 | `ctu boxes 12` | an up counter (`var boxes ctu`) or an up-down one (`ctud`), then a preset of 0 to 2147483647 | count up — rung power is the counter's count input `cu`. Each rising edge adds one to `.cv`, never on an instance's first scan, and `.q` is `.cv >= .pv`. Its reset `.r`, an input a rung writes, as `xic reset_pb ote boxes.r`, puts `.cv` to 0 at the counter's next run, and keeps its memory of `cu`, so a box on the eye at a reset is not counted again. At 2147483647 the count stops and `.ov` stays on until a reset. The preset is where `.pv` starts; logic writes only `.r` and `.pv`, and a `ctud`'s `.ld`. One `ctu` runs a counter, and nothing may follow it on its path: read it with `xic boxes.q` on a rung below |
 | `ctd hopper 40` | a down counter (`var hopper ctd`) or an up-down one, then a preset | count down — rung power is `cd`. Its load `.ld` puts `.cv` to `.pv`; each rising edge takes one away, stopping at −2147483648 with `.un` on until a load; `.q` is `.cv <= 0`. A `ctud`, `var stock ctud`, is run by one `ctu` and one `ctd` on two rungs, with one preset, and has `.r` and `.ld`, `.qu` at `.cv >= .pv` and `.qd` at `.cv <= 0` |
-| `add a b dst` `sub a b dst` `mul a b dst` | two dints, each a tag, a member or a literal, then a dint tag or member it writes, not a `var_input` | add, subtract (`a − b`), multiply — true: writes the result and passes power; a result outside a dint wraps, keeping its low 32 bits in two's complement (2147483647 + 1 is −2147483648), and passes no power on that scan, with no fault. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
-| `div a b dst` `mod a b dst` | as `add` | divide, truncated toward zero (`div -7 2 q` is −3), and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. `div -2147483648 -1` wraps to −2147483648, with no power |
-| `neg a dst` `abs a dst` | a dint, a tag, a member or a literal, then a dint it writes | negate, absolute value — as `add`, one source: −2147483648 has no positive twin, so each wraps to −2147483648 itself for it, with no power |
+| `add a b dst` `sub a b dst` `mul a b dst` | two integer sources, each a tag, a member or a literal, of `dst`'s type or one IEC's Figure 11 widens into it, then an integer tag or member it writes, not a `var_input`; any other source is refused naming its conversion | add, subtract (`a − b`), multiply, in `dst`'s type — true: writes the result and passes power; a result outside that type wraps, keeping its low bits, in two's complement where signed (2147483647 + 1 is −2147483648 in a `dint`, 127 + 1 −128 in an `sint`, 0 − 1 255 in a `usint`), and passes no power on that scan, with no fault. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
+| `div a b dst` `mod a b dst` | as `add` | divide, truncated toward zero (`div -7 2 q` is −3), and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. A signed type's minimum divided by −1 wraps to itself, `div -2147483648 -1` to −2147483648 in a `dint`, with no power |
+| `neg a dst` `abs a dst` | a source as `add`'s, then an integer it writes; `neg` into an unsigned type is refused | negate, absolute value — as `add`, one source: a signed type's minimum, −2147483648 in a `dint`, has no positive twin, so each wraps to it itself for it, with no power |
 | `cal s1 a b q` | an instance of a function block, then a value for each of its var_inputs (a tag, a member or a literal of its type) and a tag for each of its var_outputs, which it writes, so not a `var_input`, in the block's declaration order | runs the instance: rung power is its EN, and passes on. True: copies `a` and `b` in, runs the block's rungs over the instance's state and copies its outputs out to `q`. False: copies nothing in or out and runs nothing, so the instance and `q` are frozen; a timer inside catches up when the block next runs. One `cal` runs an instance, and a `ton` is run by its `ton`, never by `cal` |
 | `jmp auto` | a label, a name declared nowhere | jump — true: once the rest of its rung has run, skips the rungs after its own up to the one `lbl auto` heads, which runs, and passes on the power it receives, so anything may follow it. False: skips nothing and passes no power. The label is on a later rung of the same routine: a jump back or to its own rung is refused, and a rung holds one `jmp`. A skipped rung runs nothing, so its coils hold and its counters, one-shots and timers are frozen, as in a block whose `cal` is false, a timer catching up when it next runs |
 | `lbl auto` | a label | label — first on its rung, which it names as a jump's target, and passes on the power it receives. A label names one rung of its routine, a block's body its own, and a label no `jmp` names is a warning |
@@ -243,7 +243,7 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12), of which
   IEC's integer widths `sint int lint usint uint udint ulint` beside `dint` have landed,
   with `move` by Figure 11 and the 56 integer conversions (M5-3, "Integer widths",
-  below), arithmetic and comparison over every width to come; `real` and
+  below), and arithmetic and comparison over every width (M5-4); `real` and
   `lreal`, with literals `37.5` and `1.5e3`, and `16#ff`, `2#1010` and `1_000`; the bit
   strings `byte word dword lword` with `and or xor not shl shr rol ror`; the rest of IEC's
   typed conversions, `real_to_int` and `real_trunc_int` among them; bit access `word.3` and
@@ -251,8 +251,8 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   too, and at I/O points; typed counters, `ctu_int` and the rest, with `ctu_dint` another
   word for `ctu`, and long timers in
   nanoseconds, `ton_ltime`. An arithmetic result past its type's limit wraps, with no
-  power, in every width; for the dint this has landed (M5-2, "Arithmetic", below), and
-  replaced the stop at the limit the dint had until then. Each type
+  power, in every integer width, as has landed (M5-2 and M5-4, "Arithmetic" and "Integer
+  widths", below), replacing the stop at the limit the dint had until then. Each type
   word and mnemonic becomes a reserved word, `real`, `word`, `byte`, `and`, `or` and
   `not` among them, as `int` and the other widths already are.
 - **`sqrt`**, waiting for a real type, which Milestone 5 brings. Milestone 3 (`PLAN.md` §3, decisions 67–107 in
@@ -706,7 +706,7 @@ line 2, column 6: missing separator before `-`: "5-3" is neither a tag nor a num
   as `xio total_ok otl overflow` does here, on the rung after the `add`. No value outside
   a dint ever reaches a state. Until Milestone 5 (decision 146) a result stopped at the
   nearer limit instead; the dint now wraps, as Logix and the S7-1200 do, with no power out
-  as on the S7-1200, and every integer width will.
+  as on the S7-1200, and so does every integer width ("Integer widths", below).
 - A zero divisor, the minutes at start-up, gives 0 and no power on that scan, and is a
   minor fault the scan reports: a lone instance's `state.faults` is every
   `%Logex.Fault{}` of the scan that returned it, `[]` for none, and a cycle gives each as
@@ -724,22 +724,26 @@ line 2, column 6: missing separator before `-`: "5-3" is neither a tag nor a num
 ### Integer widths
 
 `drive.ld` — a drive card's 16-bit speed register, a `uint`, moved into the `dint` the
-rest of the program works in, and a level trimmed into an `sint`, with a lamp that is off
-when the level did not fit:
+rest of the program works in and doubled in a `uint`, with a lamp that is off when the
+double did not fit, and a level trimmed into an `sint`, with a lamp that is off when the
+level did not fit:
 
 ```
-var_input  hz      uint
-var_input  level   dint
-var_output speed   dint
-var_output trim    sint
-var_output trim_ok bool
+var_input  hz       uint
+var_input  level    dint
+var_output speed    dint
+var_output twice    uint
+var_output twice_ok bool
+var_output trim     sint
+var_output trim_ok  bool
 
 move hz speed
+add hz hz twice ote twice_ok
 dint_to_sint level trim ote trim_ok
 ```
 
 `drive.exs` scans it three times, gives it a register reading too big for a `uint`, and
-compiles three moves that cannot work:
+compiles three moves, an `add` and a `neg` that cannot work:
 
 ```elixir
 {:ok, drive} = Logex.compile_file("drive.ld")
@@ -766,7 +770,7 @@ end
 {:error, diagnostics} =
   Logex.compile(
     "var speed dint\nvar_output hz uint\nvar_output flag bool\n" <>
-      "move speed hz\nmove 70000 hz\nmove flag speed",
+      "move speed hz\nmove 70000 hz\nmove flag speed\nadd speed 1 hz\nneg speed hz",
     name: "back"
   )
 
@@ -775,13 +779,15 @@ for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
 
 ```
 $ mix run drive.exs
-a register of 1200, a level of 100  %{"speed" => 1200, "trim" => 100, "trim_ok" => 1}
-the register's top, a level of 129   %{"speed" => 65535, "trim" => -127, "trim_ok" => 0}
-a level of -1                        %{"speed" => 65535, "trim" => -1, "trim_ok" => 1}
+a register of 1200, a level of 100  %{"speed" => 1200, "trim" => 100, "trim_ok" => 1, "twice" => 2400, "twice_ok" => 1}
+the register's top, a level of 129   %{"speed" => 65535, "trim" => -127, "trim_ok" => 0, "twice" => 65534, "twice_ok" => 0}
+a level of -1                        %{"speed" => 65535, "trim" => -1, "trim_ok" => 1, "twice" => 65534, "twice_ok" => 0}
 input `hz` is a uint: 65536 is outside 0 to 65535
 line 4: `move` writes `speed`, a dint, into `hz`, a uint: a dint does not widen into a uint, so convert it with `dint_to_uint`
 line 5: `move` writes `70000` into `hz`, a uint: it is outside 0 to 65535
 line 6: `move` writes `flag`, a bool, into `speed`, a dint: a bool does not widen into a dint, and logex has no conversion between them
+line 7: `add` computes in `hz`'s type, a uint, but `speed` is a dint (declared on line 1): a dint does not widen into a uint, so convert it first, with `dint_to_uint`
+line 8: `neg` writes `hz`, a uint (declared on line 2), which holds no negative value: `neg` writes a signed type
 ```
 
 - `bool` and IEC's eight integer widths are logex's types: `sint int dint lint`, signed in
@@ -809,9 +815,20 @@ line 6: `move` writes `flag`, a bool, into `speed`, a dint: a bool does not wide
   into a wider tag or global; a `var_external` is its global, so it binds only to one of
   exactly its type (decision 159). An online edit that changes a tag's width is refused
   until a restart; one that changes its initial value is reported (decision 157).
-- `add`, `sub` and the rest, and the comparisons, still read and write dints alone:
-  another width is told the conversion that bridges it, `uint_to_dint`, until `PLAN.md`'s
-  M5-4 brings them every width.
+- The arithmetic works as `move` does, in its destination's type (decision 147): `add
+  hz hz twice` adds two `uint`s in a `uint`, and the register's top doubled wraps to
+  65534 with no power, so `twice_ok` is off, as 2147483647 + 1 does in a dint (decision
+  146). A source widens into the destination's type where Figure 11 lets it, so `add hz
+  level speed` would compute a `uint` and a `dint` in the `dint`, and any other source is
+  refused naming its conversion, as `add speed 1 hz` is. Since the computation is the
+  destination's, two `int`s added into a `dint` cannot overflow, where IEC's overloaded
+  `INT + INT` and Siemens's `INT#1 + 50000` compute in the narrower type, so a program
+  ported from those that counted on the narrow overflow behaves differently. `neg` into
+  an unsigned type is refused (decision 145), and `div` and `mod` keep their zero divisor
+  and their sign at every width.
+- A comparison reads two integers of any widths by value (decision 147), exact on the
+  BEAM's integers, so an `sint` −1 is less than a `udint` 0 and a `ulint`'s top greater
+  than a `lint`'s, with none of C's signed and unsigned surprises.
 - The seven new type words are reserved in any case in every `.ld` and `.logex` file, so a
   tag or a global named `int` stops compiling, and so are the 56 mnemonics in every `.ld`
   file.
@@ -2672,7 +2689,7 @@ in every cycle's outputs at the value it holds.
   Function Block Diagram, SFC or Instruction List, no graphical editor, and no
   paste-compatibility with IEC's textual forms.
 - **Not everything a controller has.** One resource a configuration; bool and the eight
-  integer widths only, their arithmetic and comparisons still dints', no real, no bit
+  integer widths only, no real, no bit
   strings or bit access, no arrays or structures; a jump forward only; no retained
   values, so a warm restart is a cold one; and forcing for inputs only, an output never
   forced.
