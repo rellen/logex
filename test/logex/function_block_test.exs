@@ -19,7 +19,7 @@ defmodule Logex.FunctionBlockTest do
 
   # M3-2: logex's own type words, as an unknown type's message lists them: the elementary
   # types, then every built-in function block type, each set in order.
-  @has "logex has `bool`, `dint`, `ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`"
+  @has "logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`"
 
   @seal """
   function_block seal

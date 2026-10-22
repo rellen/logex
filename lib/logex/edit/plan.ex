@@ -261,7 +261,8 @@ defmodule Logex.Edit.Plan do
   defp type_of(_type, nil), do: nil
   defp type_of(type, %Member{} = member), do: FbType.type_of(type, member)
 
-  # Decision 29: a bool or a dint both declare, of one type, whose initial value differs,
+  # Decision 29: an elementary tag both declare, of one type, a bool or any integer width
+  # since M5-3 (decision 157), whose initial value differs,
   # and that is no var_input of `to`, since a restart keeps a var_input's value. OE-2: nor
   # a var_external that is a global in either, whose value and initial value are the
   # global's.
@@ -692,7 +693,7 @@ defmodule Logex.Edit.Plan do
   # declare, kept as a map and not started whole above, each member the program started
   # declares moves by the rules a tag does: one the state lacks starts at its initial value;
   # at the first test, one the candidate's version of the block adds, or whose value does
-  # not fit its type, starts so too; a kept bool or dint whose initial value changed keeps
+  # not fit its type, starts so too; a kept bool or integer whose initial value changed keeps
   # its value and is reported; a timer meets the timer rules; and an instance it holds is
   # migrated in turn. A member only the stopped program's version declares is kept, unused,
   # until assemble or cancel prunes it. Each is reported by its path, `s1.count`.

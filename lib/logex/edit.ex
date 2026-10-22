@@ -56,7 +56,7 @@ defmodule Logex.Edit do
     or given another section) is reported as `:unread`. A section change keeps the value
     (decision 25);
   - *held outputs* (decision 20): below;
-  - *initial values* (decision 29): a bool or dint both programs declare whose initial
+  - *initial values* (decision 29): a bool or an integer of any width both programs declare whose initial
     value differs keeps its running value, and the new one applies when a restart next
     starts it. It is not reported where a rule above started it, which `:added` reports,
     or `:input` for a var_input, nor where it is a var_input of the program started,
@@ -247,7 +247,7 @@ defmodule Logex.Edit do
   running program and an instance of `latch` in the candidate …``. Inside an instance both
   programs declare, a switch moves each member as it moves a tag, by its path, `p.count`:
   one the state lacks starts at its initial value; at the first test, one the candidate's
-  version adds, or whose value does not fit, starts so too; a kept bool or dint whose
+  version adds, or whose value does not fit, starts so too; a kept bool or integer whose
   initial value changed keeps its value and is reported; a timer meets the timer rules;
   and an instance it holds is moved in turn. A member only the stopped program's version
   declares is kept until assemble or cancel prunes it, by its path. This is the nested

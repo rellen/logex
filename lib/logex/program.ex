@@ -67,7 +67,7 @@ defmodule Logex.Program do
   (M3-4); a var_input a switch
   starts or makes live is reported, since its value is the host's; at
   the first test, a tag the candidate adds, or one whose value does not fit its type,
-  starts here over what a plain swap left; and a kept bool or dint whose initial value
+  starts here over what a plain swap left; and a kept bool or integer whose initial value
   changed keeps its value until a restart, and is reported as `:initial_changed`, except
   one the switch starts here, at its new initial value, and a var_input of the program
   started, whose value a restart keeps: neither is so reported. An event task's trigger, its

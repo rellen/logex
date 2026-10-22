@@ -129,18 +129,26 @@ defmodule Logex.NamingTest do
     # M2-2: `var_global <name> <type> [at <location>]` and `program <instance> <type>`;
     # M2-3: `task <name> interval <ms> priority <p>` and `program <instance> <type> with
     # <task>`; M2-6: `task <name> single <global> [interval <ms>] priority <p>`; M4-2:
-    # `task <name> continuous [watchdog <ms>]` and `... priority <p> watchdog <ms>`.
+    # `task <name> continuous [watchdog <ms>]` and `... priority <p> watchdog <ms>`; M5-3:
+    # the seven other integer type words of `var_global <name> <type>`.
     assert Enum.sort(Logex.Configuration.Text.keywords()) ==
              [
                "at",
                "bool",
                "continuous",
                "dint",
+               "int",
                "interval",
+               "lint",
                "priority",
                "program",
                "single",
+               "sint",
                "task",
+               "udint",
+               "uint",
+               "ulint",
+               "usint",
                "var_global",
                "watchdog",
                "with"

@@ -119,7 +119,8 @@ defmodule Logex.Configuration do
   file's are; a name, a location, a type or a task that the lexer does not read as one
   name token; a task's single that is neither nil nor one name token; a task's continuous
   that is neither true nor false (M4-2); a number that is not an integer, a watchdog's
-  among them; a global's type that is neither `:bool` nor `:dint`; and a connection's
+  among them; a global's type that is no elementary type, `:bool`, `:dint` or since M5-3 another
+  integer type; and a connection's
   instance that is not a name, or with its member makes no one path. A negative number was
   one too, until a negative literal lexed (M3-3, decision 97): a line can say one now, so
   a negative interval or priority is a diagnostic, in the file's words, as one too large is.
@@ -190,7 +191,8 @@ defmodule Logex.Configuration do
 
   defmodule Global do
     @moduledoc """
-    A global: `name`, `type` (`:bool` or `:dint`), an `initial` value or nil for 0, and
+    A global: `name`, `type` (an elementary type, `:bool`, `:dint` or since M5-3 any
+    integer type, `:uint` among them), an `initial` value or nil for 0, and
     `at`, a location such as `"panel.i.0"`, or nil. A global located at an `i` address is
     an input point, set by the host; one at a `q` address an output point, given back to
     the host after every cycle.
@@ -2163,8 +2165,16 @@ defmodule Logex.Configuration do
        when not is_elementary(type),
        do: used(acc, global)
 
+  # M5-3 (decision 159): a connection's copy-in widens as an instruction's source does, so
+  # the global's type is the var_input's or one Ed 3 Figure 11 widens into it.
   defp read_global({:ok, global}, connection, tag, acc),
-    do: same_type(global.type == tag.type, global, connection, tag, used(acc, global))
+    do:
+      same_type(
+        Declarations.widens?(global.type, tag.type),
+        {global.type, tag.type},
+        {global, connection, tag},
+        used(acc, global)
+      )
 
   defp read_global({:error, message}, connection, _tag, acc),
     do: problem(acc, connection, message)
@@ -2174,16 +2184,26 @@ defmodule Logex.Configuration do
   defp used({wiring, problems}, global),
     do: {%{wiring | used: MapSet.put(wiring.used, global.name)}, problems}
 
-  defp same_type(true, _global, _connection, _tag, acc), do: acc
+  defp same_type(true, _types, _ends, acc), do: acc
 
-  defp same_type(false, global, connection, tag, acc),
+  defp same_type(false, {from, to}, {global, connection, tag}, acc),
     do:
       problem(
         acc,
         connection,
         "`#{connection.instance}.#{connection.member}` is #{type_word(tag.type)}, but " <>
-          "`#{global.name}` is #{Declarations.a_type(global.type)}#{where(global)}"
+          "`#{global.name}` is #{Declarations.a_type(global.type)}#{where(global)}" <>
+          unwidened(Declarations.conversion(from, to), from, to)
       )
+
+  # Two integer types a connection cannot widen between are told the conversion, which a
+  # program makes, since a connection converts nothing (M5-3, decision 159).
+  defp unwidened(nil, _from, _to), do: ""
+
+  defp unwidened(conversion, from, to),
+    do:
+      ": #{Declarations.a_type(from)} does not widen into #{Declarations.a_type(to)}, and a " <>
+        "connection converts nothing: convert it inside the program, with `#{conversion}`"
 
   # A var_input or var_output that holds an instance is the host's mistake, refused before
   # any diagnostic (decision 169), so a connected member's type is elementary here.
@@ -2303,11 +2323,13 @@ defmodule Logex.Configuration do
           "`#{connection.instance}.#{connection.member}`, a var_output, cannot drive it"
       )
 
+  # M5-3 (decision 159): a copy-out widens as a destination takes a value, so the global's
+  # type is the var_output's or one Ed 3 Figure 11 widens it into.
   defp drives(_location, global, connection, tag, acc),
-    do: typed_sink(global.type == tag.type, global, connection, tag, acc)
+    do: typed_sink(Declarations.widens?(tag.type, global.type), global, connection, tag, acc)
 
   defp typed_sink(false, global, connection, tag, acc),
-    do: same_type(false, global, connection, tag, acc)
+    do: same_type(false, {tag.type, global.type}, {global, connection, tag}, acc)
 
   defp typed_sink(true, global, connection, _tag, {wiring, _problems} = acc),
     do: driver(Map.get(wiring.driven, global.name), global, connection, acc)
@@ -2466,13 +2488,21 @@ defmodule Logex.Configuration do
 
   defp bound_to({:global, _line, global}, tag, {_writes, program}, _world),
     do: [
-      "#{declares(tag, program)}, but `#{global.name}` is #{Declarations.a_type(global.type)}#{where(global)}"
+      "#{declares(tag, program)}, but `#{global.name}` is #{Declarations.a_type(global.type)}#{where(global)}" <>
+        exactly(Declarations.conversion(global.type, tag.type))
     ]
 
   defp bound_to({kind, line, _ref}, tag, {_writes, program}, _world),
     do: [
       "#{declares(tag, program)}, but `#{tag.name}` is #{a(kind)}#{at_line(line)}, not a global"
     ]
+
+  # M5-3 (decision 159): a var_external is its global, one copy (decision 49), so it binds
+  # only to a global of exactly its type, where a connection would widen.
+  defp exactly(nil), do: ""
+
+  defp exactly(_conversion),
+    do: ": a var_external is its global, so its type is exactly the global's, never widened"
 
   defp no_global("", tag, program),
     do:

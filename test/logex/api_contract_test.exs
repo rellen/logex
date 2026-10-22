@@ -313,11 +313,49 @@ defmodule Logex.ApiContractTest do
     %Scan{now: 0, first: true}
   ]
 
-  # A var_input's values either side of its type's edges.
-  @edges %{
-    bool: [0, 1, 0, 1, 2, 1.0, true],
-    dint: [0, -2_147_483_648, 2_147_483_647, -2_147_483_649, 2_147_483_648, 1.0, %{}]
+  # M5-3: IEC's eight integer widths, each its kind and N (Ed 3 Table 10), restated here
+  # and never read from Logex.Declarations, with Figure 11's "i" cells among them.
+  @widths %{
+    sint: {:signed, 8},
+    int: {:signed, 16},
+    dint: {:signed, 32},
+    lint: {:signed, 64},
+    usint: {:unsigned, 8},
+    uint: {:unsigned, 16},
+    udint: {:unsigned, 32},
+    ulint: {:unsigned, 64}
   }
+
+  @figure_11 %{
+    sint: [:int, :dint, :lint],
+    int: [:dint, :lint],
+    dint: [:lint],
+    lint: [],
+    usint: [:uint, :udint, :ulint, :int, :dint, :lint],
+    uint: [:udint, :ulint, :dint, :lint],
+    udint: [:ulint, :lint],
+    ulint: []
+  }
+
+  # Each width's range from IEC's footnotes c and d.
+  defp width_range(type), do: width_range_of(Map.fetch!(@widths, type))
+  defp width_range_of({:signed, n}), do: -Integer.pow(2, n - 1)..(Integer.pow(2, n - 1) - 1)//1
+  defp width_range_of({:unsigned, n}), do: 0..(Integer.pow(2, n) - 1)//1
+
+  # A var_input's values either side of its type's edges: since M5-3 every width's limits
+  # and one past each, its zero and a float.
+  @edges Map.merge(
+           %{bool: [0, 1, 0, 1, 2, 1.0, true]},
+           Map.new(@widths, fn
+             {type, {:signed, n}} ->
+               {low, high} = {-Integer.pow(2, n - 1), Integer.pow(2, n - 1) - 1}
+               {type, [0, low, high, low - 1, high + 1, 1.0, %{}]}
+
+             {type, {:unsigned, n}} ->
+               high = Integer.pow(2, n) - 1
+               {type, [0, 1, high, -1, high + 1, 1.0, %{}]}
+           end)
+         )
 
   # The documented kinds of refusal, by their first words. A scan's block list, which only
   # the runtime fills in (OE-1), is a kind of its own, so the walk is seen to reach it.
@@ -361,8 +399,13 @@ defmodule Logex.ApiContractTest do
     members? = timed? and :rand.uniform(3) == 1
     warned = if :rand.uniform(3) == 1, do: [pick(warned())], else: []
 
+    # M5-3: half the programs take an input of a random width, moved into a width Figure 11
+    # widens it into and converted into another, wrapping where it does not fit.
+    widths = Enum.take([width_draw()], min(:rand.uniform(3) - 1, 1))
+
     declarations =
       Enum.map(inputs, &"var_input #{&1} bool") ++
+        Enum.flat_map(widths, &elem(&1, 0)) ++
         dint_input ++
         Enum.map(~w(a b c), &"#{pick(~w(var var_output))} #{&1} bool") ++
         ["var_output n dint 7"] ++
@@ -409,13 +452,30 @@ defmodule Logex.ApiContractTest do
 
     Enum.join(
       declarations ++
-        rungs ++ moves ++ Enum.flat_map(warned, &elem(&1, 1)) ++ member_moves ++ timing,
+        rungs ++
+        moves ++
+        Enum.flat_map(widths, &elem(&1, 1)) ++
+        Enum.flat_map(warned, &elem(&1, 1)) ++ member_moves ++ timing,
       "\n"
     )
   end
 
   defp source(2), do: soup(@words)
   defp source(3), do: soup(@words ++ @lex_errors)
+
+  defp width_draw, do: width_draw(pick(Map.keys(@widths)))
+
+  defp width_draw(from) do
+    wide = pick([from | Map.fetch!(@figure_11, from)])
+    to = pick(Map.keys(@widths) -- [from])
+
+    {[
+       "var_input w #{from}",
+       "var_output wide #{wide}",
+       "var_output narrow #{to}",
+       "var_output wok bool"
+     ], ["move w wide", "#{from}_to_#{to} w narrow ote wok"]}
+  end
 
   # Programs that compile with an M1-6 warning: declarations, then rungs.
   defp warned,
@@ -512,14 +572,44 @@ defmodule Logex.ApiContractTest do
       walk(program, Runtime.instance(other), Runtime.instance(program), steps(program))
     end
 
+    # M5-3: and a program of each width, a call at each of its edges, so every width's two
+    # limits are drawn whatever the seed, each judged by the contract's own words.
+    for from <- Map.keys(@widths) do
+      {inputs, rungs} = width_draw(from)
+      {:ok, program} = Logex.compile(Enum.join(inputs ++ rungs, "\n"), name: "p")
+      state = Runtime.instance(program)
+
+      for value <- @edges[from] do
+        inputs = %{"w" => value}
+        scan = %Scan{now: state.now, first: state.first}
+
+        call = fn ->
+          scanned(program, state, inputs, Runtime.call(program, state, inputs, scan))
+        end
+
+        assert attempt(call) == :refused == bad_inputs?(program, inputs)
+      end
+
+      {:ok, other} = Logex.compile(program.source, name: "q")
+      walk(program, Runtime.instance(other), state, steps(program))
+    end
+
     # "state." is left out: only an instance edited by hand, outside the contract, gets it.
     assert Process.get(:refused, MapSet.new()) == MapSet.new(@refusals -- ["state."])
     assert Process.get(:behaviours, MapSet.new()) == MapSet.new(@behaviours)
+
+    # M5-3: every width's two limits accepted and scanned, and a conversion that wraps
+    # and one that fits.
+    limits = for type <- Map.keys(@widths), limit <- [:low, :high, :inside], do: {type, limit}
+
+    assert Process.get(:widths, MapSet.new()) ==
+             MapSet.new(limits ++ [{:wrapped, true}, {:wrapped, false}])
   end
 
   # A timed program walks longer, so a timer is seen through its edges: a preset set while
   # it is reset and then timed, a gap long enough to clamp.
   defp steps(%Program{tags: %{"go" => _}}), do: 90
+  defp steps(%Program{tags: %{"w" => _}}), do: 60
   defp steps(_program), do: 30
 
   # Random operations on one instance. Each says whether it is a host mistake, and the
@@ -625,15 +715,16 @@ defmodule Logex.ApiContractTest do
   # A new instance is checked and set aside: the walk goes on with its own.
   defp kept(%Instance{now: 0, first: true}, state), do: state
 
-  # The contract's own words: only a declared var_input, a bool 0 or 1, a dint in 32 bits.
+  # The contract's own words: only a declared var_input, a bool 0 or 1, a dint in 32 bits,
+  # and since M5-3 each integer width in its own range.
   defp bad_inputs?(program, inputs), do: Enum.any?(inputs, &bad_input?(program.tags, &1))
 
   defp bad_input?(tags, {key, value}), do: not fits?(Map.get(tags, key), value)
 
   defp fits?(%Tag{section: :var_input, type: :bool}, value), do: value in [0, 1]
 
-  defp fits?(%Tag{section: :var_input, type: :dint}, value),
-    do: is_integer(value) and value in -2_147_483_648..2_147_483_647//1
+  defp fits?(%Tag{section: :var_input, type: type}, value) when is_map_key(@widths, type),
+    do: is_integer(value) and value in width_range(type)
 
   defp fits?(_tag, _value), do: false
 
@@ -644,11 +735,47 @@ defmodule Logex.ApiContractTest do
     state
   end
 
-  # A scan whose state before it is known: the M1-6 oracle, then the checks above.
+  # A scan whose state before it is known: the M1-6 oracle, M5-3's, then the checks above.
   defp scanned(program, before, inputs, {outputs, %Instance{} = later} = result) do
     timed(program, before, Map.merge(before.env, inputs), outputs, later)
+    widened(program, Map.merge(before.env, inputs), outputs)
     scanned(program, result)
   end
+
+  # M5-3's oracle: `move w wide` writes the input as it is, every width it is moved into
+  # holding it (Figure 11), and `<from>_to_<to> w narrow` its low N bits, two's complement
+  # where signed, with power where it fits, restated as a remainder by 2^N taken back into
+  # the range. Each width's two limits are seen accepted, and a conversion that wraps and
+  # one that fits.
+  defp widened(
+         %Program{tags: %{"w" => %Tag{type: from}, "narrow" => %Tag{type: to}}},
+         env,
+         outputs
+       ) do
+    w = env["w"]
+    assert outputs["wide"] == w
+    assert outputs["narrow"] == wrapped_into(to, w)
+    fits = w in width_range(to)
+    assert outputs["wok"] == Map.fetch!(%{true => 1, false => 0}, fits)
+    width_reached({:wrapped, not fits})
+    first..last//1 = width_range(from)
+    width_reached({from, limit_of(w, first, last)})
+  end
+
+  defp widened(_program, _env, _outputs), do: :ok
+
+  defp limit_of(w, w, _last), do: :low
+  defp limit_of(w, _first, w), do: :high
+  defp limit_of(_w, _first, _last), do: :inside
+
+  defp wrapped_into(type, value) do
+    first..last//1 = width_range(type)
+    span = last - first + 1
+    first + Integer.mod(value - first, span)
+  end
+
+  defp width_reached(atom),
+    do: Process.put(:widths, MapSet.put(Process.get(:widths, MapSet.new()), atom))
 
   defp timed(%Program{tags: %{"go" => _}} = program, before, env, outputs, later) do
     go = env["go"]

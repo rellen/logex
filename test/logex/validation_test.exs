@@ -17,10 +17,12 @@ defmodule Logex.ValidationTest do
 
   # M3-2: logex's own type words, as an unknown type's message lists them: the elementary
   # types, then every built-in function block type, each set in order.
-  @has "logex has `bool`, `dint`, `ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`"
+  @has "logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, " <>
+         "`ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`"
 
   # The same from Elixir, each named as the value that declares it.
-  @has_elixir "logex has :bool, :dint, Logex.FbType.ctd(), Logex.FbType.ctu(), " <>
+  @has_elixir "logex has :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, " <>
+                "Logex.FbType.ctd(), Logex.FbType.ctu(), " <>
                 "Logex.FbType.ctud(), Logex.FbType.rto(), Logex.FbType.tof(), " <>
                 "Logex.FbType.ton() and Logex.FbType.tp()"
 
@@ -438,12 +440,12 @@ defmodule Logex.ValidationTest do
 
     test "every malformed line is named, each with its own line" do
       assert source_errors(
-               "var b\nvar c int\nvar e bool 2\nvar f dint 3000000000\nvar ote bool\n" <>
+               "var b\nvar c dintt\nvar e bool 2\nvar f dint 3000000000\nvar ote bool\n" <>
                  "var Bool bool\nvar var_input bool\nvar 7 bool\nvar g bool 1 2\nvar x 5\n" <>
                  "var\nvar_input i bool 1\nvar h ( xic a )\nvar retain r bool\nvar p q bool"
              ) == [
-               "line 1: `b` needs a type: `var b bool` or `var b dint`",
-               "line 2: unknown type `int`: #{@has} — did you mean `dint`?",
+               "line 1: `b` needs a type, as in `var b bool` or `var b dint`",
+               "line 2: unknown type `dintt`: #{@has} — did you mean `dint`?",
                "line 3: `e` is a bool: its initial value must be 0 or 1, found `2`",
                "line 4: `f` is a dint: `3000000000` does not fit in 32 bits",
                "line 5: `ote` is an instruction and cannot name a tag",
@@ -499,7 +501,7 @@ defmodule Logex.ValidationTest do
       assert source_errors("xic a ote a\nvar b") == [
                "line 1: `a` is not declared",
                "line 2: `var` after the first rung (line 1): declarations come first",
-               "line 2: `b` needs a type: `var b bool` or `var b dint`"
+               "line 2: `b` needs a type, as in `var b bool` or `var b dint`"
              ]
     end
 
@@ -553,7 +555,7 @@ defmodule Logex.ValidationTest do
                "line 1: `retain` is not supported yet: a warm restart, like a cold one, " <>
                  "starts every tag at its initial value but the var_inputs whose values fit " <>
                  "their types",
-               "line 2: `b` needs a type: `VAR b bool` or `VAR b dint`"
+               "line 2: `b` needs a type, as in `VAR b bool` or `VAR b dint`"
              ]
 
       assert source_errors("VAR a bool\nxic a ote a\nVAR b bool") == [
@@ -599,7 +601,7 @@ defmodule Logex.ValidationTest do
     end
 
     test "Logex.Declarations.split/2 gives its diagnostics in line order" do
-      {:ok, tokens, _} = Compiler.tokenize("var a bool\nvar a bool\nvar b int")
+      {:ok, tokens, _} = Compiler.tokenize("var a bool\nvar a bool\nvar b dintt")
       {:ok, {:routine, {:rungs, rungs}}} = Compiler.parse(tokens)
       {_tags, [], diagnostics, _untyped} = Logex.Declarations.split(rungs)
       assert Enum.map(diagnostics, & &1.line) == [2, 3]
@@ -656,14 +658,14 @@ defmodule Logex.ValidationTest do
       assert source_errors("zzz\nxic a") == [
                "line 1: unknown instruction `zzz`",
                "line 2: `a` is not declared (this program declares no tags: each is now " <>
-                 "declared before the first rung, as `var a bool` or `var a dint`)"
+                 "declared before the first rung, as in `var a bool` or `var a dint`)"
              ]
     end
 
     test "a program that declares nothing is told how, once" do
       assert source_errors("xic a ote b") == [
                "line 1: `a` is not declared (this program declares no tags: each is now " <>
-                 "declared before the first rung, as `var a bool` or `var a dint`)",
+                 "declared before the first rung, as in `var a bool` or `var a dint`)",
                "line 1: `b` is not declared"
              ]
     end
@@ -672,7 +674,7 @@ defmodule Logex.ValidationTest do
       assert source_errors("xic t1.dn ote b") == [
                "line 1: `t1` is not declared",
                "line 1: `b` is not declared (this program declares no tags: each is now " <>
-                 "declared before the first rung, as `var b bool` or `var b dint`)"
+                 "declared before the first rung, as in `var b bool` or `var b dint`)"
              ]
     end
 
@@ -700,12 +702,12 @@ defmodule Logex.ValidationTest do
 
     test "a program whose declarations were all wrong is not told it declares nothing" do
       # Since M2-5 `a`'s own use is excused, as the use of a line refused for its type.
-      assert source_errors("var a int\nxic a ote a") == [
-               "line 1: unknown type `int`: #{@has} — did you mean `dint`?"
+      assert source_errors("var a dintt\nxic a ote a") == [
+               "line 1: unknown type `dintt`: #{@has} — did you mean `dint`?"
              ]
 
-      assert source_errors("var a int\nxic a ote b") == [
-               "line 1: unknown type `int`: #{@has} — did you mean `dint`?",
+      assert source_errors("var a dintt\nxic a ote b") == [
+               "line 1: unknown type `dintt`: #{@has} — did you mean `dint`?",
                "line 2: `b` is not declared"
              ]
     end
@@ -718,22 +720,22 @@ defmodule Logex.ValidationTest do
   describe "a declaration whose type is unknown (M2-5)" do
     test "excuses its name's uses, wherever and however they are made" do
       assert source_errors(
-               "var a int\nvar t1 timer\nvar c int 5\nvar d foo bar\nvar b bool\n" <>
+               "var a dintt\nvar t1 timer\nvar c dintt 5\nvar d foo bar\nvar b bool\n" <>
                  "xic a ote b\nxic b ote a\n( xic c | xio d ) ote b\n" <>
                  "xic b ton t1 500\nxic t1.dn ote b\nxic b ote e\nvar e ints\nxic e ote b"
              ) == [
-               "line 1: unknown type `int`: #{@has} — did you mean `dint`?",
+               "line 1: unknown type `dintt`: #{@has} — did you mean `dint`?",
                "line 2: unknown type `timer`: #{@has}",
-               "line 3: unknown type `int`: #{@has} — did you mean `dint`?",
+               "line 3: unknown type `dintt`: #{@has} — did you mean `dint`?",
                "line 4: unknown type `foo`: #{@has}",
                "line 12: `var` after the first rung (line 6): declarations come first",
-               "line 12: unknown type `ints`: #{@has} — did you mean `dint`?"
+               "line 12: unknown type `ints`: #{@has} — did you mean `int`?"
              ]
     end
 
     test "excuses its own name only, as written" do
-      assert source_errors("var a int\nvar b bool\nxic A ote b\nxic a ote b") == [
-               "line 1: unknown type `int`: #{@has} — did you mean `dint`?",
+      assert source_errors("var a dintt\nvar b bool\nxic A ote b\nxic a ote b") == [
+               "line 1: unknown type `dintt`: #{@has} — did you mean `dint`?",
                "line 3: `A` is not declared"
              ]
     end
@@ -749,7 +751,7 @@ defmodule Logex.ValidationTest do
                  "starts every tag at its initial value but the var_inputs whose values fit " <>
                  "their types",
                "line 3: `c` is a bool: its initial value must be 0 or 1, found `2`",
-               "line 4: `d` needs a type: `var d bool` or `var d dint`",
+               "line 4: `d` needs a type, as in `var d bool` or `var d dint`",
                "line 6: `p` is not declared",
                "line 7: `q` is not declared",
                "line 8: `r` is not declared",
@@ -808,7 +810,7 @@ defmodule Logex.ValidationTest do
                "line 9: `var_global` #{@keyword}",
                "line 10: `at` #{@keyword}",
                "line 11: `Bool` is a type and cannot name a tag",
-               "line 12: `c` needs a type: `var_external c bool` or `var_external c dint`"
+               "line 12: `c` needs a type, as in `var_external c bool` or `var_external c dint`"
              ]
     end
 
@@ -904,10 +906,14 @@ defmodule Logex.ValidationTest do
                source_compile("var_input i bool\nvar_output o bool\n( xic i | xic o ) ote o")
     end
 
-    test "move takes operands of one type" do
+    # M5-3 (decision 147): `move` computes in its destination's type, so its source widens
+    # into it or is refused; a bool and an integer have no conversion between them.
+    test "move takes a source its destination's type holds, and no bool for an integer" do
       assert source_errors("var b bool\nvar d dint\nmove b d\nmove d b\nmove d d\nmove b b") == [
-               "line 3: `move` takes operands of one type: `b` is a bool, `d` is a dint",
-               "line 4: `move` takes operands of one type: `d` is a dint, `b` is a bool"
+               "line 3: `move` writes `b`, a bool, into `d`, a dint: a bool does not widen into " <>
+                 "a dint, and logex has no conversion between them",
+               "line 4: `move` writes `d`, a dint, into `b`, a bool: a dint does not widen into " <>
+                 "a bool, and logex has no conversion between them"
              ]
     end
 
@@ -2713,7 +2719,8 @@ xic a ton t1 7") == [
                  "xic t1.acc ote a\nmove t1.dn d\nmove 2147483648 t1.pre\nlt t1.tt 5 ote a"
              ) == [
                "line 4: `xic` reads a bool, but `t1.acc` is a dint",
-               "line 5: `move` takes operands of one type: `t1.dn` is a bool, `d` is a dint",
+               "line 5: `move` writes `t1.dn`, a bool, into `d`, a dint: a bool does not widen " <>
+                 "into a dint, and logex has no conversion between them",
                "line 6: `move` writes `2147483648` into `t1.pre`, a dint: it does not fit in 32 bits",
                "line 7: `lt` reads a dint, but `t1.tt` is a bool"
              ]
@@ -2951,7 +2958,7 @@ xic a ton t1 7") == [
       assert source_errors("xic panel.i.0 ote b") == [
                "line 1: `panel.i.0` #{@located}",
                "line 1: `b` is not declared (this program declares no tags: each is now " <>
-                 "declared before the first rung, as `var b bool` or `var b dint`)"
+                 "declared before the first rung, as in `var b bool` or `var b dint`)"
              ]
 
       assert source_errors("xic panel.i.0 ote lamp\nton panel 1000") == [
@@ -3003,7 +3010,7 @@ xic a ton t1 7") == [
     test "raise ArgumentError for every rule they break, whatever the argument" do
       for {args, message} <- [
             {["x", :bool, :input], "unknown section :input"},
-            {["x", :int], "unknown type :int: #{@has_elixir} — did you mean `:dint`?"},
+            {["x", :dintt], "unknown type :dintt: #{@has_elixir} — did you mean `:dint`?"},
             # M3-2: a type spelled as one of logex's, in any case, is told the value that
             # declares it, and one near one, the nearest.
             {["x", :tof],
@@ -3024,7 +3031,8 @@ xic a ton t1 7") == [
              "`x` is a dint: `-2147483649` does not fit in 32 bits"},
             {["x", :bool, :var, -1],
              "`x` is a bool: its initial value must be 0 or 1, found `-1`"},
-            {["x", :int, :var, 5], "unknown type :int: #{@has_elixir} — did you mean `:dint`?"},
+            {["x", :dintt, :var, 5],
+             "unknown type :dintt: #{@has_elixir} — did you mean `:dint`?"},
             {[" a", :bool], ~s(" a" is not a tag name)},
             {["t1.dn", :bool],
              "`t1.dn` cannot name a tag: `.` is kept for a member, as in a timer's `t1.dn`"},

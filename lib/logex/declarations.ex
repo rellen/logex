@@ -6,7 +6,9 @@ defmodule Logex.Declarations do
 
       <section> <name> <type> [<initial>]     section: var | var_input | var_output
                                                        | var_external
-                                              type:    bool | dint | a word of
+                                              type:    bool | sint | int | dint | lint
+                                                       | usint | uint | udint | ulint
+                                                       | a word of
                                                        Logex.FbType.builtins/0, ton
                                                        among them | a block's name
 
@@ -23,7 +25,8 @@ defmodule Logex.Declarations do
   compile, not a row (PLAN.md M1-3).
 
   A `var_external` (M2-4) names a configuration's global, declared there again with
-  `var_global` (Ed 2 §2.4.3): a bool or a dint, with no initial value (Ed 2 §2.4.3.2) and
+  `var_global` (Ed 2 §2.4.3): of an elementary type, exactly its global's (decision 159),
+  with no initial value (Ed 2 §2.4.3.2) and
   no instance, and named by no configuration file's keyword
   (`Logex.Configuration.Text.keywords/0`), since its name is a global's too
   (`docs/organisation.md` §4.8). Logic reads and writes it. A function block's file
@@ -44,23 +47,42 @@ defmodule Logex.Declarations do
   # elementary types, a row each, in the record's order: its word, its value in a tag
   # (`type`), its kind, its width in bits, its range, its zero and the article a message
   # says it with. Every range message, article, guard and fits?/2 reads it, and so do the
-  # configuration file's type words. IEC 61131-3 Ed 3 Table 10: a BOOL is 0 or 1, and a
-  # DINT is 32 bits, two's complement, -(2^31)..2^31 - 1 (footnote c).
-  @table [
-    %{word: "bool", type: :bool, kind: :boolean, width: 1, range: 0..1, zero: 0, article: "a"},
-    %{
-      word: "dint",
-      type: :dint,
-      kind: :signed,
-      width: 32,
-      range: -2_147_483_648..2_147_483_647,
-      zero: 0,
-      article: "a"
-    }
-  ]
+  # configuration file's type words. IEC 61131-3 Ed 3 Table 10: a BOOL is 0 or 1, a signed
+  # integer of N bits is two's complement, -(2^(N-1))..2^(N-1) - 1 (footnote c), and an
+  # unsigned one 0..2^N - 1 (footnote d). M5-3 adds IEC's seven other integer widths, and
+  # since it each row's `widens`, the types Ed 3 Figure 11 (p.67) converts it into
+  # implicitly, its "i" cells among the types the table holds (decision 147): never signed
+  # into unsigned, nor unsigned into a signed type of its own width, nor narrowing.
+  @table Enum.map(
+           [
+             {"bool", :boolean, 1, 0..1, "a", []},
+             {"sint", :signed, 8, -128..127, "an", [:int, :dint, :lint]},
+             {"int", :signed, 16, -32_768..32_767, "an", [:dint, :lint]},
+             {"dint", :signed, 32, -2_147_483_648..2_147_483_647, "a", [:lint]},
+             {"lint", :signed, 64, -9_223_372_036_854_775_808..9_223_372_036_854_775_807, "an",
+              []},
+             {"usint", :unsigned, 8, 0..255, "a", [:uint, :udint, :ulint, :int, :dint, :lint]},
+             {"uint", :unsigned, 16, 0..65_535, "a", [:udint, :ulint, :dint, :lint]},
+             {"udint", :unsigned, 32, 0..4_294_967_295, "a", [:ulint, :lint]},
+             {"ulint", :unsigned, 64, 0..18_446_744_073_709_551_615, "a", []}
+           ],
+           fn {word, kind, width, range, article, widens} ->
+             %{
+               word: word,
+               type: String.to_atom(word),
+               kind: kind,
+               width: width,
+               range: range,
+               zero: 0,
+               article: article,
+               widens: widens
+             }
+           end
+         )
 
   @types Map.new(@table, &{&1.word, &1.type})
   @rows Map.new(@table, &{&1.type, &1})
+  @integers for %{kind: kind, type: type} <- @table, kind in [:signed, :unsigned], do: type
 
   @section_atoms Map.values(@sections)
   @type_atoms Enum.map(@table, & &1.type)
@@ -216,16 +238,20 @@ defmodule Logex.Declarations do
 
   @doc """
   The elementary types, one row each of the table in `docs/organisation.md` §4.12 ("The
-  types", M5-1), in its order: `word`, `type`, `kind` (`:boolean` or `:signed` so far),
-  `width` in bits, `range`, `zero` and `article`.
+  types", M5-1), in its order: `word`, `type`, `kind` (`:boolean`, `:signed` or
+  `:unsigned`, M5-3), `width` in bits, `range`, `zero`, `article`, and since M5-3 `widens`,
+  the types Ed 3 Figure 11 converts it into implicitly (decision 147).
   """
   def table, do: @table
 
-  @doc "The elementary types' values in a tag, `:bool` and `:dint`, in the table's order."
+  @doc "The elementary types' values in a tag, `:bool`, `:sint` and the rest, in the table's order."
   def elementary, do: @type_atoms
 
-  @doc "The elementary types' words, `bool` and `dint`, in the table's order."
+  @doc "The elementary types' words, `bool`, `sint` and the rest, in the table's order."
   def type_words, do: Enum.map(@table, & &1.word)
+
+  @doc "The integer types, signed and unsigned, in the table's order (M5-3)."
+  def integers, do: @integers
 
   @typedoc "An elementary type, a row of `table/0`."
   @type elementary ::
@@ -257,7 +283,7 @@ defmodule Logex.Declarations do
   @doc "An elementary type's word, `dint` for `:dint`."
   def word(type) when type in @type_atoms, do: Map.fetch!(@rows, type).word
 
-  @doc "An elementary type's kind: `:boolean` or `:signed`."
+  @doc "An elementary type's kind: `:boolean`, `:signed` or `:unsigned`."
   def kind(type) when type in @type_atoms, do: Map.fetch!(@rows, type).kind
 
   @doc "An elementary type's range of values."
@@ -276,6 +302,27 @@ defmodule Logex.Declarations do
   def a_type(type) when type in @type_atoms, do: a_or_an(word(type))
   def a_type(type) when is_atom(type), do: a_or_an(to_string(type))
 
+  @doc """
+  Whether a value of the elementary type `from` widens into `to` with no word (M5-3,
+  decision 147): the same type, or one of `from`'s `widens`, Ed 3 Figure 11's "i" cells, so
+  that every value of `from` is one of `to`.
+  """
+  def widens?(type, type) when type in @type_atoms, do: true
+
+  def widens?(from, to) when from in @type_atoms and to in @type_atoms,
+    do: to in Map.fetch!(@rows, from).widens
+
+  @doc """
+  The conversion that takes a value of `from` into `to`, its mnemonic, `dint_to_int`, or
+  nil where logex has none (M5-3, decision 148): one for each ordered pair of two integer
+  types, and none with a bool, whose conversions IEC's Tables 24 and 25 give and logex
+  defers, a contact and a coil doing the work.
+  """
+  def conversion(from, to) when from in @integers and to in @integers and from != to,
+    do: "#{word(from)}_to_#{word(to)}"
+
+  def conversion(_from, _to), do: nil
+
   @doc "Whether an integer fits a type."
   for %{type: type, range: range} <- @table do
     def fits?(unquote(type), value), do: value in unquote(Macro.escape(range))
@@ -283,23 +330,32 @@ defmodule Logex.Declarations do
 
   @doc """
   What a message says of a value that does not fit a type, after the type is named, from
-  the table (M5-1): `` only 0 or 1 fit, found `2` `` for a bool and `` `2147483648` does
-  not fit in 32 bits `` for a dint, `shown` being the value as the message shows it; with
-  `shown` nil, the words where the value was named before them, `only 0 or 1 fit` and `it
-  does not fit in 32 bits`.
+  the table (M5-1): `` only 0 or 1 fit, found `2` `` for a bool, `` `2147483648` does
+  not fit in 32 bits `` for a signed integer, a dint's, and since M5-3 `` `-1` is outside 0
+  to 255 `` for an unsigned one, a usint's, `shown` being the value as the message shows
+  it; with `shown` nil, the words where the value was named before them, `only 0 or 1
+  fit`, `it does not fit in 32 bits` and `it is outside 0 to 255`.
   """
   def misfit(type, shown \\ nil) when type in @type_atoms,
     do: misfit_of(Map.fetch!(@rows, type), shown)
 
   defp misfit_of(%{kind: :boolean} = row, nil), do: "only #{values(row)} fit"
   defp misfit_of(%{kind: :boolean} = row, shown), do: "only #{values(row)} fit, found #{shown}"
-  defp misfit_of(%{width: width}, nil), do: "it does not fit in #{width} bits"
-  defp misfit_of(%{width: width}, shown), do: "#{shown} does not fit in #{width} bits"
+  defp misfit_of(%{kind: :signed, width: width}, nil), do: "it does not fit in #{width} bits"
+
+  defp misfit_of(%{kind: :signed, width: width}, shown),
+    do: "#{shown} does not fit in #{width} bits"
+
+  defp misfit_of(%{kind: :unsigned, range: first..last//1}, nil),
+    do: "it is outside #{first} to #{last}"
+
+  defp misfit_of(%{kind: :unsigned, range: first..last//1}, shown),
+    do: "#{shown} is outside #{first} to #{last}"
 
   @doc """
   What a message says of a declared initial value that does not fit a type, after the type
-  is named (M5-1): `` its initial value must be 0 or 1, found `2` `` for a bool, and for a
-  dint `misfit/2`'s words.
+  is named (M5-1): `` its initial value must be 0 or 1, found `2` `` for a bool, and for an
+  integer type `misfit/2`'s words.
   """
   def initial_misfit(type, shown) when type in @type_atoms,
     do: initial_of(Map.fetch!(@rows, type), type, shown)
@@ -311,7 +367,7 @@ defmodule Logex.Declarations do
 
   @doc """
   A type's values in words (M5-1): `0 or 1` for a bool, `an integer from -2147483648 to
-  2147483647` for a dint.
+  2147483647` for a dint, and so for every integer type.
   """
   def values(type) when type in @type_atoms, do: values(Map.fetch!(@rows, type))
   def values(%{kind: :boolean, range: first..last//1}), do: "#{first} or #{last}"
@@ -319,7 +375,7 @@ defmodule Logex.Declarations do
 
   @doc """
   The elementary types each shown by `shown`, joined by commas and an `or` before the last
-  (M5-1): `` :bool or :dint `` with `&inspect/1`.
+  (M5-1): `` :bool, :sint, … or :ulint `` with `&inspect/1`.
   """
   def either(shown), do: either_of(Enum.map(@type_atoms, shown))
 
@@ -554,7 +610,7 @@ defmodule Logex.Declarations do
   defp typeless([message], _name, _v, _kw), do: message
 
   defp typeless([], name, nil, kw),
-    do: "`#{name}` needs a type: `#{kw} #{name} bool` or `#{kw} #{name} dint`"
+    do: "`#{name}` needs a type, as in `#{kw} #{name} bool` or `#{kw} #{name} dint`"
 
   defp typeless([], name, v, _kw), do: "`#{name}` needs a type before its initial value `#{v}`"
 
@@ -589,10 +645,11 @@ defmodule Logex.Declarations do
        suggest(type, own_type_words() ++ blocks, & &1, "type names")}
   end
 
-  # logex's own type words: the elementary types, then the built-in function block types,
-  # each set in order, so a new built-in is named where it lands.
+  # logex's own type words: the elementary types in the table's order, `bool`, then the
+  # signed integers and the unsigned by width (M5-3), then the built-in function block
+  # types in order, so a new built-in is named where it lands.
   defp own_type_words,
-    do: Enum.sort(type_words()) ++ Enum.sort(Map.keys(FbType.builtins()))
+    do: type_words() ++ Enum.sort(Map.keys(FbType.builtins()))
 
   defp listed([one]), do: one
   defp listed(words), do: Enum.join(Enum.drop(words, -1), ", ") <> " and " <> List.last(words)
@@ -671,7 +728,7 @@ defmodule Logex.Declarations do
 
   # M3-2: from Elixir, a type is an atom or a function block type's value, so each of
   # logex's type words is named as the value that declares it, and a type spelled like one,
-  # `:tof` or `:int`, is told of it.
+  # `:tof` or `:Dint`, is told of it.
   defp type(type),
     do: [
       "unknown type #{inspect(type)}: logex has " <>

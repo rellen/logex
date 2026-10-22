@@ -37,8 +37,9 @@ defmodule Logex.Compiler do
   # since M3-1 an instance slot names a list where it runs instances of several types. M3-5
   # adds `{:label, nil}`, a label of the routine's own, a namespace that holds no tag, which
   # the IR keeps as `{:label, line, name}`.
-  # Type: an elementary type of `Logex.Declarations.table/0`, `:bool` or `:dint`, or `:any`,
-  # which IEC's MOVE takes (`IN : ANY` -> `OUT : ANY`, docs/naming.md). A tag here may be
+  # Type: an elementary type of `Logex.Declarations.table/0`, `:bool`, `:dint` or since M5-3
+  # any integer type, or `:any`, which IEC's MOVE takes (`IN : ANY` -> `OUT : ANY`,
+  # docs/naming.md), its source widening into its destination's type (decision 147). A tag here may be
   # a member of an instance, `t1.acc`, which has the type its schema gives it (M1-6).
   # Mnemonics are matched case-insensitively and are reserved: no tag may be named after
   # one, in any case.
@@ -102,6 +103,20 @@ defmodule Logex.Compiler do
     # in declaration order. The entry still reserves the word and names its stanza.
     "cal" => {:cal, :block}
   }
+
+  # M5-3 (decision 148): IEC's typed conversions between two integer types, `<from>_to_<to>`
+  # lowercased (Ed 3 Table 22 feature 1a), every ordered pair of the integer types of
+  # `Logex.Declarations.table/0`, 56: a source of the `from` type, a tag, a member or a
+  # literal, then the destination of the `to` type it writes, `dint_to_int day_total
+  # small_count`. Rung power is IEC's EN and the power out its ENO, false on the scan its
+  # value did not fit and wrapped (decision 146), so what it passes on is settled.
+  @conversions for from <- Declarations.integers(),
+                   to <- Declarations.integers(),
+                   word = Declarations.conversion(from, to),
+                   into: %{},
+                   do: {word, {String.to_atom(word), [{:value, from}, {:write, to}]}}
+
+  @instructions Map.merge(@instructions, @conversions)
 
   @doc """
   The mnemonic table: each lowercase mnemonic to its IR symbol and operand signature, or
@@ -737,7 +752,7 @@ defmodule Logex.Compiler do
        [
          diagnostic(
            line,
-           "`#{symbol}` keeps its storage bit in a bool of its own, not in " <>
+           "`#{symbol}` keeps its storage bit in #{Declarations.a_type(:bool)} of its own, not in " <>
              "`#{instance}.#{member}`, a member of `#{instance}`, which its instance reads"
          )
          | diagnostics
@@ -1361,7 +1376,7 @@ defmodule Logex.Compiler do
   end
 
   # Anything else is not run by `cal`, and its would-be operands are passed over: a timer,
-  # which its `ton` runs; a bool or a dint; a member; a reserved word; or a name no
+  # which its `ton` runs; a bool or an integer; a member; a reserved word; or a name no
   # declaration gives, reported once as undeclared.
   defp runs(reserved, found, {:name, line, name}, {_, word}, {rest, ir, diagnostics, known}) do
     lower(
@@ -1510,7 +1525,7 @@ defmodule Logex.Compiler do
   defp by_formal(nil, {:ok, %Tag{} = tag}, {formal, {access, type}, _}, {line, at}, {_, d}),
     do:
       d
-      |> typed_formal(type, tag.type, tag.name, {formal, line, at})
+      |> typed_formal({access, type}, tag.type, tag.name, {formal, line, at})
       |> input_formal(access, tag, {formal, line, at})
 
   defp by_formal(
@@ -1522,7 +1537,7 @@ defmodule Logex.Compiler do
        ),
        do:
          d
-         |> typed_formal(type, member.type, name, {formal, line, at})
+         |> typed_formal({access, type}, member.type, name, {formal, line, at})
          |> member_formal(access, tag, member, name, {formal, line, at})
 
   defp by_formal(
@@ -1534,13 +1549,45 @@ defmodule Logex.Compiler do
        ),
        do: resolve(reserved, found, slot, operand, {line, "cal"}, d)
 
-  defp typed_formal(diagnostics, type, type, _name, _at), do: diagnostics
+  # M5-3 (decision 159): a `cal`'s operand meets its formal as an instruction's does: one
+  # the block reads, a var_input, takes a tag of a type Ed 3 Figure 11 widens into the
+  # formal's, and one it writes, a var_output, a tag of a type the formal's widens into, as
+  # a destination takes a value (IEC's rules 4 and 5, p.66). Anything else is told the
+  # conversion that would bridge them, where logex has one.
+  defp typed_formal(diagnostics, {_access, type}, type, _name, _at), do: diagnostics
 
-  defp typed_formal(diagnostics, _type, found, name, {formal, line, at}),
+  defp typed_formal(diagnostics, {access, type}, found, name, at)
+       when is_elementary(type) and is_elementary(found),
+       do:
+         formal_widens(widened(access, type, found), {access, type}, found, name, at, diagnostics)
+
+  defp typed_formal(diagnostics, _slot, found, name, {formal, line, at}),
     do: [
       diagnostic(line, of_formal(formal, at) <> ", but `#{name}` is #{a_type(found)}")
       | diagnostics
     ]
+
+  defp widened(:write, type, found), do: {Declarations.widens?(type, found), type, found}
+  defp widened(_read, type, found), do: {Declarations.widens?(found, type), found, type}
+
+  defp formal_widens({true, _from, _to}, _slot, _found, _name, _at, diagnostics), do: diagnostics
+
+  defp formal_widens({false, from, to}, _slot, found, name, {formal, line, at}, diagnostics),
+    do: [
+      diagnostic(
+        line,
+        of_formal(formal, at) <>
+          ", but `#{name}` is #{a_type(found)}" <>
+          formal_conversion(Declarations.conversion(from, to), from, to)
+      )
+      | diagnostics
+    ]
+
+  # A bool and an integer have no conversion: the message stays M2-5's.
+  defp formal_conversion(nil, _from, _to), do: ""
+
+  defp formal_conversion(conversion, from, to),
+    do: ": #{a_type(from)} does not widen into #{a_type(to)}, so convert it with `#{conversion}`"
 
   defp input_formal(diagnostics, :write, %Tag{section: :var_input} = tag, {formal, line, at}),
     do: [
@@ -1749,8 +1796,13 @@ defmodule Logex.Compiler do
 
   defp dint?(name, known), do: dint_value?(Declarations.reserved(name), hinted(name, known))
 
-  defp dint_value?(nil, {:ok, %Tag{type: :dint}}), do: true
-  defp dint_value?(nil, {:member, _tag, %Member{type: :dint}}), do: true
+  # M5-3: a source `move` widens into the preset's dint (decision 147), an `int` among them.
+  defp dint_value?(nil, {:ok, %Tag{type: type}}) when is_elementary(type),
+    do: Declarations.widens?(type, :dint)
+
+  defp dint_value?(nil, {:member, _tag, %Member{type: type}}) when is_elementary(type),
+    do: Declarations.widens?(type, :dint)
+
   defp dint_value?(nil, :error), do: true
   defp dint_value?(_reserved, _found), do: false
 
@@ -2066,7 +2118,8 @@ defmodule Logex.Compiler do
         "#{declared(tag)}: only an instance of a function block has members"
 
   # Bit access, when it lands, reaches a bit of a word; a bool is one bit, and has none.
-  defp bit(name, word, :bool), do: "`#{name}` names a bit of `#{word}`, a bool, which has no bits"
+  defp bit(name, word, :bool),
+    do: "`#{name}` names a bit of `#{word}`, #{Declarations.a_type(:bool)}, which has no bits"
 
   defp bit(name, word, type),
     do: "`#{name}` names a bit of `#{word}`, #{a_type(type)}: bit access is not supported yet"
@@ -2097,7 +2150,8 @@ defmodule Logex.Compiler do
     do: [
       diagnostic(
         line,
-        "`#{word}` #{verb(access)} #{a_type(type)}, but `#{name}` is #{a_type(member.type)}"
+        "`#{word}` #{verb(access)} #{a_type(type)}, but `#{name}` is #{a_type(member.type)}" <>
+          converted(word, access, member.type, type)
       )
       | diagnostics
     ]
@@ -2134,11 +2188,43 @@ defmodule Logex.Compiler do
 
   defp check_type(diagnostics, access, type, tag, {line, word}) do
     message =
-      "`#{word}` #{verb(access)} #{a_type(type)}, but `#{tag.name}` is a " <>
-        "#{tag.type}#{declared(tag)}"
+      "`#{word}` #{verb(access)} #{a_type(type)}, but `#{tag.name}` is " <>
+        "#{a_type(tag.type)}#{declared(tag)}" <> converted(word, access, tag.type, type)
 
     [diagnostic(line, message) | diagnostics]
   end
+
+  # M5-3 (decision 148): an integer slot given another integer type is told the conversion
+  # that bridges them, where logex has one: before the read, or after the write. A
+  # conversion's own slot is told the conversion that does the whole job instead, from the
+  # type found or into it, or `move` where the two are one type.
+  defp converted(word, access, found, type),
+    do: converting(Map.get(@conversions, String.downcase(word)), access, found, type)
+
+  defp converting({_symbol, [{:value, from}, {:write, to}]}, access, found, _type),
+    do: instead(conversion_of(access, found, {from, to}))
+
+  defp converting(nil, :write, found, type),
+    do: convert_with(Declarations.conversion(type, found), {:write, type})
+
+  defp converting(nil, _read, found, type),
+    do: convert_with(Declarations.conversion(found, type), :read)
+
+  defp conversion_of(:write, found, {from, _to}),
+    do: {Declarations.conversion(from, found), found, from}
+
+  defp conversion_of(_read, found, {_from, to}),
+    do: {Declarations.conversion(found, to), found, to}
+
+  defp instead({nil, same, same}), do: ": use `move`"
+  defp instead({nil, _found, _type}), do: ""
+  defp instead({conversion, _found, _type}), do: ": use `#{conversion}`"
+
+  defp convert_with(nil, _access), do: ""
+  defp convert_with(conversion, :read), do: ": convert it first, with `#{conversion}`"
+
+  defp convert_with(conversion, {:write, type}),
+    do: ": write #{a_type(type)} and convert it, with `#{conversion}`"
 
   defp verb(:write), do: "writes"
   defp verb(:instance), do: "runs"
@@ -2171,21 +2257,33 @@ defmodule Logex.Compiler do
 
   defp typed_ref(_access, _unresolved), do: nil
 
-  # Every `:any` operand of one instruction has one type: two tags must agree, and a literal
-  # must fit the tag it goes into. Anything else was reported already, or is not a tag.
-  defp unify([%Tag{type: type}, %Tag{type: type}], _at, diagnostics), do: diagnostics
-
-  defp unify([%Tag{} = a, %Tag{} = b], {line, word}, diagnostics) do
-    message =
-      "`#{word}` takes operands of one type: `#{a.name}` is #{a_type(a.type)}, `#{b.name}` is #{a_type(b.type)}"
-
-    [diagnostic(line, message) | diagnostics]
-  end
+  # The `:any` operands of one instruction, `move`'s source and then its destination: the
+  # instruction computes in its destination's type, so the source must be of a type Ed 3
+  # Figure 11 widens into it (M5-3, decision 147), and a literal must fit the tag it goes
+  # into. Anything else was reported already, or is not a tag.
+  defp unify([%Tag{type: from} = source, %Tag{type: to} = destination], at, diagnostics)
+       when is_elementary(from) and is_elementary(to),
+       do: widens(Declarations.widens?(from, to), source, destination, at, diagnostics)
 
   defp unify([{:literal, value}, %Tag{type: type} = tag], at, diagnostics),
     do: fits(Declarations.fits?(type, value), value, tag, at, diagnostics)
 
   defp unify(_typed, _at, diagnostics), do: diagnostics
+
+  defp widens(true, _source, _destination, _at, diagnostics), do: diagnostics
+
+  defp widens(false, source, destination, {line, word}, diagnostics) do
+    message =
+      "`#{word}` writes `#{source.name}`, #{a_type(source.type)}, into `#{destination.name}`, " <>
+        "#{a_type(destination.type)}: #{a_type(source.type)} does not widen into " <>
+        "#{a_type(destination.type)}" <>
+        conversion_of(Declarations.conversion(source.type, destination.type))
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp conversion_of(nil), do: ", and logex has no conversion between them"
+  defp conversion_of(conversion), do: ", so convert it with `#{conversion}`"
 
   defp fits(true, _value, _tag, _at, diagnostics), do: diagnostics
 
@@ -2244,7 +2342,7 @@ defmodule Logex.Compiler do
   defp how(true, {:instance, [type | _]}, name), do: note("`var #{name} #{type}`")
   defp how(true, {:instance, type}, name), do: note("`var #{name} #{type}`")
   defp how(true, :block, _name), do: ""
-  defp how(true, _slot, name), do: note("`var #{name} bool` or `var #{name} dint`")
+  defp how(true, _slot, name), do: note("in `var #{name} bool` or `var #{name} dint`")
 
   defp note(declaration),
     do:

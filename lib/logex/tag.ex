@@ -1,6 +1,7 @@
 defmodule Logex.Tag do
   @moduledoc """
-  One declared tag. `type` is `:bool`, `:dint`, or for an instance of a function block a
+  One declared tag. `type` is an elementary type, `:bool`, `:dint` or since M5-3 any
+  integer type, `:sint` to `:ulint`, or for an instance of a function block a
   `%Logex.FbType{}`, the schema itself, as `Logex.FbType.ton()` (M1-6) or a user block's
   type as `Logex.compile/2` gives it for the block's file (M2-5). `initial` is the
   initial value as declared, or nil when none was, and the tag then starts at 0
@@ -31,7 +32,7 @@ defmodule Logex.Tag do
   @doc """
   A tag declared from Elixir, checked by the same rules as a declaration line
   (`Logex.Declarations.check/1`). Raises `ArgumentError` with the message a declaration
-  line would have got. With no initial value a bool or a dint starts at 0, and an
+  line would have got. With no initial value a bool or an integer of any width starts at 0, and an
   instance of a function block where its type says (`Logex.FbType.initial/2`).
 
   What no declaration line can say is refused here too, so every tag declared from Elixir

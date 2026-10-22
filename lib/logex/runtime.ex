@@ -212,7 +212,8 @@ defmodule Logex.Runtime do
   PLC event, `docs/organisation.md` §4.6); a mistake in the source is a diagnostic from
   `Logex.compile/2`. Only a declared `var_input` may be set, by its name as a string, with
   a value that fits its type exactly, by `Logex.Declarations.fits?/2`: a bool is 0 or 1, a
-  dint an integer from -2147483648 to 2147483647. Every input problem in one call comes in
+  dint an integer from -2147483648 to 2147483647, and since M5-3 each integer width an
+  integer in its own range, a uint 0 to 65535. Every input problem in one call comes in
   one raise, a line each, in key order. Inputs merge into the instance, so a host sends
   only what changed. Outputs are every `var_output`.
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
@@ -296,7 +297,14 @@ defmodule Logex.Runtime do
   @dint Declarations.range(:dint)
   @dint_min @dint.first
   @dint_max @dint.last
-  @dint_width Declarations.width(:dint)
+
+  # M5-3 (decision 148): each integer conversion's symbol, `:dint_to_int`, to the type it
+  # writes, every ordered pair of two integer types of the one table.
+  @conversions for from <- Declarations.integers(),
+                   to <- Declarations.integers(),
+                   word = Declarations.conversion(from, to),
+                   into: %{},
+                   do: {String.to_atom(word), to}
 
   # The resource (M2-1): the configuration it runs; `now`, its clock; `globals`, one value
   # for each global, the input points' among them; `instances`, each program instance's
@@ -1070,7 +1078,7 @@ defmodule Logex.Runtime do
   # the kind, from the one table of types).
   defp fit(%Tag{type: type} = tag, value), do: fit(Declarations.kind(type), tag, value)
 
-  defp fit(:signed, tag, value) when not is_integer(value),
+  defp fit(kind, tag, value) when kind in [:signed, :unsigned] and not is_integer(value),
     do:
       "input `#{tag.name}` is #{Declarations.a_type(tag.type)}: its value must be an integer, " <>
         "found #{inspect(value)}"
@@ -1477,7 +1485,7 @@ defmodule Logex.Runtime do
   defp fetched(:error, _blocks), do: :error
 
   # M2-4: a var_external is read as its global, the one copy, directly; a path below one
-  # goes too deep, as below any bool or dint.
+  # goes too deep, as below any bool or integer.
   defp read_tag({:ok, %Tag{section: :var_external}}, {_head, tag, [], _path}, _program, runtime),
     do: Map.fetch!(runtime.globals, tag)
 
@@ -1811,6 +1819,24 @@ defmodule Logex.Runtime do
   end
 
   defp evaluate({op, _, _}, {false, env}, _scan) when op in @signs do
+    {false, env}
+  end
+
+  # M5-3: the integer conversions, `dint_to_int src dst` and the rest (docs/naming.md's
+  # family stanza; IEC's typed `<FROM>_TO_<TO>`; decisions 146 and 148). Rung power is IEC's
+  # EN and the power out its ENO. Energised, the source is read and written into the
+  # destination, the type the mnemonic names, where it fits, with power; where it does not,
+  # its low bits are kept, two's complement for a signed type, `dint_to_sint` of 129 giving
+  # -127, as an arithmetic result is wrapped, and on that scan no power passes, with no
+  # fault. A source a hand-built env holds as no integer reads 0, as arithmetic's does.
+  # De-energised, nothing is written and no power passes, as `move`.
+  defp evaluate({op, _, [source, destination]}, {true, env}, _scan)
+       when is_map_key(@conversions, op) do
+    {power, value} = wrapped(:erlang.map_get(op, @conversions), integer(read(env, source)))
+    {power, write(env, destination, value)}
+  end
+
+  defp evaluate({op, _, _}, {false, env}, _scan) when is_map_key(@conversions, op) do
     {false, env}
   end
 
@@ -2178,12 +2204,27 @@ defmodule Logex.Runtime do
   # M5-2: a result is brought into the dint by keeping its low 32 bits, read in two's
   # complement, and passes no power on the scan where that stored value is not the exact
   # one (decision 146, superseding decision 77's saturation); no fault is recorded for it.
-  # A result inside the dint is itself and passes power.
-  defp wrapped(value) when value in @dint, do: {true, value}
+  # A result inside the dint is itself and passes power. M5-3: so too into every integer
+  # type, a conversion's, its width and kind the one table's, read unsigned for an
+  # unsigned type.
+  defp wrapped(value), do: wrapped(:dint, value)
 
-  defp wrapped(value) do
-    <<low::signed-size(@dint_width)>> = <<value::size(@dint_width)>>
-    {false, low}
+  for %{type: type, kind: kind, width: width, range: range} <- Declarations.table(),
+      kind in [:signed, :unsigned] do
+    defp wrapped(unquote(type), value) when value in unquote(Macro.escape(range)),
+      do: {true, value}
+
+    defp wrapped(unquote(type), value), do: {false, low(unquote(kind), unquote(width), value)}
+  end
+
+  defp low(:signed, width, value) do
+    <<low::signed-size(^width)>> = <<value::size(width)>>
+    low
+  end
+
+  defp low(:unsigned, width, value) do
+    <<low::size(^width)>> = <<value::size(width)>>
+    low
   end
 
   # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is

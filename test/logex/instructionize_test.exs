@@ -109,6 +109,21 @@ defmodule Logex.InstructionizeTest do
       lbl past xic a ote c
       """
 
+      # M5-3: each of the 56 integer conversions, a tag of each integer type into another.
+      integers = ~w(sint int dint lint usint uint udint ulint)
+
+      source =
+        Enum.map_join(integers, &"var v_#{&1} #{&1}\n") <>
+          source <>
+          Enum.join(
+            for(
+              from <- integers,
+              to <- integers,
+              from != to,
+              do: "xic a #{from}_to_#{to} v_#{from} v_#{to}\n"
+            )
+          )
+
       assert {:ok, %Logex.Program{rungs: rungs} = program} =
                Logex.compile(source, name: "every", types: [seal])
 

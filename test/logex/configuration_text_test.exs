@@ -403,14 +403,14 @@ defmodule Logex.Configuration.TextTest do
                  "`var_global estop bool`",
                "line 4, column 12: `var_global` needs a name before `At`, as in " <>
                  "`var_global estop bool`",
-               "line 5, column 1: `estop` needs a type: `var_global estop bool` or " <>
+               "line 5, column 1: `estop` needs a type, as in `var_global estop bool` or " <>
                  "`var_global estop dint`",
                "line 6, column 15: `e2` needs a type before its initial value `1`",
                "line 7, column 15: `k1` needs a type before `at`, as in " <>
                  "`var_global k1 bool at panel.q.0`",
-               "line 8, column 14: unknown type `boolean`: a global is a `bool` or a `dint` " <>
+               "line 8, column 14: unknown type `boolean`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint` or `ulint` " <>
                  "— did you mean `bool`?",
-               "line 9, column 15: `t1` cannot be a `ton`: a global is a `bool` or a `dint`, " <>
+               "line 9, column 15: `t1` cannot be a `ton`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint` or `ulint`, " <>
                  "and a ton is declared inside a program, as in `var t1 ton`",
                "line 10, column 19: `at` needs a location, as in `at panel.i.0`",
                "line 11, column 22: `at` needs a location, as in `at panel.i.0`, found `5`",
@@ -422,9 +422,9 @@ defmodule Logex.Configuration.TextTest do
 
       # M3-2: each built-in type with its article by how its word is said, `an rto`.
       assert errors("var_global l rto\nvar_global h tp\n") == [
-               "line 1, column 14: `l` cannot be an `rto`: a global is a `bool` or a `dint`, " <>
+               "line 1, column 14: `l` cannot be an `rto`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint` or `ulint`, " <>
                  "and an rto is declared inside a program, as in `var l rto`",
-               "line 2, column 14: `h` cannot be a `tp`: a global is a `bool` or a `dint`, " <>
+               "line 2, column 14: `h` cannot be a `tp`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint` or `ulint`, " <>
                  "and a tp is declared inside a program, as in `var h tp`"
              ]
 
@@ -665,7 +665,8 @@ defmodule Logex.Configuration.TextTest do
             {%{a | name: "a b"}, "a name lexes as one name token"},
             {%{a | name: :a}, "a name lexes as one name token"},
             {%{a | at: "%ix0.0"}, "a name lexes as one name token"},
-            {%{a | type: :real}, "a global's type is :bool or :dint"},
+            {%{a | type: :real},
+             "a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint or :ulint"},
             {%{a | initial: 1.0}, "a number is an integer"},
             {%{m1 | type: "a b"}, "a name lexes as one name token"},
             {%{m1 | task: "a b"}, "a name lexes as one name token"},
@@ -709,13 +710,13 @@ defmodule Logex.Configuration.TextTest do
              "a connection is to a global, by its name, or to a constant"},
             # A keyword a line reads in a global's name place: no line can say these.
             {%{a | name: "AT"},
-             "a global's name is not `at`, `bool` or `dint`, in any case: a line reads that " <>
+             "a global's name is not `at`, `bool`, `dint`, `int`, `lint`, `sint`, `udint`, `uint`, `ulint` or `usint`, in any case: a line reads that " <>
                "word as its keyword"},
             {%{a | name: "bool"},
-             "a global's name is not `at`, `bool` or `dint`, in any case: a line reads that " <>
+             "a global's name is not `at`, `bool`, `dint`, `int`, `lint`, `sint`, `udint`, `uint`, `ulint` or `usint`, in any case: a line reads that " <>
                "word as its keyword"},
             {%{a | name: "Dint"},
-             "a global's name is not `at`, `bool` or `dint`, in any case: a line reads that " <>
+             "a global's name is not `at`, `bool`, `dint`, `int`, `lint`, `sint`, `udint`, `uint`, `ulint` or `usint`, in any case: a line reads that " <>
                "word as its keyword"}
           ] do
         assert_raise ArgumentError, unsaid(rule, entry), fn -> Text.entries!([m1, entry]) end
@@ -900,7 +901,7 @@ defmodule Logex.Configuration.TextTest do
     end
 
     test "and none is reserved in a program" do
-      for word <- Text.keywords() -- ["bool", "dint"] do
+      for word <- Text.keywords() -- Logex.Declarations.type_words() do
         assert {:ok, _} = Logex.compile("var #{word} bool\nxic #{word} ote #{word}", name: "p")
       end
     end

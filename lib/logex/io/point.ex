@@ -3,7 +3,8 @@ defmodule Logex.IO.Point do
   A point of a device, as an adapter's `init/3` is given it (M4-1, `Logex.IO`): a global
   located at the device, `name`, its `direction`, `:input` for an `i` location and
   `:output` for a `q` one, its `address`, the location's integer fields, leftmost
-  highest, `panel.i.1.3` being `[1, 3]`, and its `type`, `:bool` or `:dint`. Plain data.
+  highest, `panel.i.1.3` being `[1, 3]`, and its `type`, an elementary type, `:bool`, `:dint` or since M5-3
+  any integer type, `:uint` among them. Plain data.
   """
 
   @enforce_keys [:name, :direction, :address, :type]

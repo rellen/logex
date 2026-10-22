@@ -14,7 +14,7 @@ defmodule Logex.EndToEndTest do
 
   # M3-2: logex's own type words, as an unknown type's message lists them: the elementary
   # types, then every built-in function block type, each set in order.
-  @has "logex has `bool`, `dint`, `ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`"
+  @has "logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `ctd`, `ctu`, `ctud`, `rto`, `tof`, `ton` and `tp`"
 
   defp run(src, env) do
     {:ok, program} = compile(src)
@@ -5059,6 +5059,105 @@ defmodule Logex.EndToEndTest do
       assert Runner.unforce_all(runner) == :ok
       assert File.read!(file) == ""
       assert Runner.status(runner).forces == %{}
+      Runner.stop(runner)
+    end
+  end
+
+  # PLAN M5-3's Done-when: §4.4's plant reads its drive's speed as a `uint` point through
+  # the simulated drive and moves it into a `dint` (decisions 144, 145, 147 and 156), from
+  # files on disk through `Logex.Runner` on the manual clock; a reading the `uint` cannot
+  # hold is a bad value that trips the plant, and a force is held to the `uint` too.
+  describe "the integer widths in the plant (M5-3)" do
+    @describetag :tmp_dir
+
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    @fan_ld """
+    var_input  hz    uint
+    var_output speed dint
+    move hz speed
+    """
+
+    @fan_lines """
+
+    var_global fan_hz    uint at drive.i.0
+    var_global fan_speed dint
+
+    program fan1 fan with fast
+      fan1.hz    fan_hz
+      fan1.speed fan_speed
+    """
+
+    defp fan_plant(dir) do
+      files = [
+        {"seal.ld", cut("**A function block type** is")},
+        {"motor.ld", cut("**The motor, rewritten to use it**")},
+        {"snapshot.ld", @snapshot_ld},
+        {"fan.ld", @fan_ld},
+        {"plant.logex", whole_plant() <> @fan_lines}
+      ]
+
+      for {name, text} <- files, do: File.write!(Path.join(dir, name), text)
+      {:ok, plant} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      plant
+    end
+
+    test "M5-3's Done-when: the drive's speed read as a uint point and moved into a dint",
+         %{tmp_dir: dir} do
+      plant = fan_plant(dir)
+      assert plant.warnings == []
+      assert %{type: :uint} = Enum.find(plant.globals, &(&1.name == "fan_hz"))
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      assert [{"drive", Sim, _, drive_points}, {"panel", Sim, _, _}] =
+               Logex.IO.bind!(plant, %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}})
+
+      assert {"fan_hz", :input, :uint} in Enum.map(
+               drive_points,
+               &{&1.name, &1.direction, &1.type}
+             )
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: plant,
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock},
+          forces: Path.join(dir, "forces")
+        )
+
+      # Every value a 16-bit register gives, its top among them, reaches the dint whole: a
+      # uint widens into a dint, so the oracle is the value itself.
+      for hz <- [0, 1, 1200, 32_767, 32_768, 65_534, 65_535] do
+        Sim.set(drive, [0], hz)
+        Manual.advance(clock, 10)
+        assert Runner.get!(runner, "fan_hz") == hz
+        assert Runner.get!(runner, "fan1.speed") == hz
+        assert Runner.get!(runner, "fan_speed") == hz
+      end
+
+      # A force is held to the uint's range, and one that fits is read as the device's is.
+      assert_raise ArgumentError,
+                   "`fan_hz` is a uint, forced to an integer from 0 to 65535, got: 65536",
+                   fn -> Runner.force(runner, "fan_hz", 65_536) end
+
+      assert :ok = Runner.force(runner, "fan_hz", 40_000)
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "fan_speed") == 40_000
+      assert File.read!(Path.join(dir, "forces")) == "fan_hz 40000\n"
+      assert :ok = Runner.unforce(runner, "fan_hz")
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "fan_speed") == 65_535
+
+      # A reading the uint cannot hold is a bad value, and the plant trips on it.
+      Sim.set(drive, [0], 65_536)
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).trip == {:io, "drive", {:bad_value, [0], 65_536}}
+      assert Runner.get!(runner, "fan_speed") == 65_535
       Runner.stop(runner)
     end
   end

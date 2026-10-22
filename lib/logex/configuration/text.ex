@@ -11,7 +11,7 @@ defmodule Logex.Configuration.Text do
       global      -> 'var_global' NAME TYPE [INT] ['at' NAME]
       program     -> 'program' NAME NAME ['with' NAME]
       connection  -> PATH (NAME | INT)         PATH: a name with `.` parts, as `m1.start`
-      TYPE        -> 'bool' | 'dint'
+      TYPE        -> 'bool' | 'dint' | each of Logex.Declarations.type_words/0 (M5-3)
 
   `line/1` reads `line` by its first token; `task/3` reads `task`, with `inputs/2` its
   words, `order/4` their order and `value/5` each one's number, for `single` its name and
@@ -73,7 +73,8 @@ defmodule Logex.Configuration.Text do
   Milestone 2 item brings its own words (`docs/organisation.md` §4.10). M2-2's are
   `var_global` and `program`, which start their lines, and `at`, `bool` and `dint`, which
   belong on a `var_global` line, so no line starts with one of those three and no global
-  is named by one. M2-3's are `task`, which starts its line, `interval` and `priority`,
+  is named by one; since M5-3 the seven other integer type words belong there too, as
+  every word of the one table of types does (`Logex.Declarations.type_words/0`). M2-3's are `task`, which starts its line, `interval` and `priority`,
   which belong on a `task` line, so no line starts with one and no task is named by one,
   and `with`, which belongs on a `program` line after the type, so no line starts with it
   and no program type is named by it. M2-6's is `single`, which belongs on a `task` line,
@@ -388,7 +389,7 @@ defmodule Logex.Configuration.Text do
       {:error,
        fail(
          first,
-         "`#{global.name}` needs a type: `var_global #{global.name} bool` or " <>
+         "`#{global.name}` needs a type, as in `var_global #{global.name} bool` or " <>
            "`var_global #{global.name} dint`"
        ), declared(global)}
 
@@ -419,21 +420,18 @@ defmodule Logex.Configuration.Text do
 
   defp unknown_type(%FbType{name: type}, _word, name),
     do:
-      "`#{name}` cannot be #{Declarations.a_or_an(type, "`#{type}`")}: a global is " <>
+      "`#{name}` cannot be #{Declarations.a_or_an(type, "`#{type}`")}: a global's type is " <>
         "#{a_global()}, and " <>
         "#{Declarations.a_or_an(type)} is declared inside a program, as in `var #{name} #{type}`"
 
   defp unknown_type(nil, word, _name),
     do:
-      "unknown type `#{word}`: a global is #{a_global()}" <>
+      "unknown type `#{word}`: a global's type is #{a_global()}" <>
         Declarations.suggest(word, Declarations.type_words(), & &1, "types")
 
-  # The elementary types a global may have, each with its article: a `bool` or a `dint`.
-  defp a_global,
-    do:
-      Declarations.either(
-        &Declarations.a_or_an(Declarations.word(&1), "`#{Declarations.word(&1)}`")
-      )
+  # The elementary types a global may have, each by its word, from the one table: `bool`,
+  # `sint`, … or `ulint` (M5-3).
+  defp a_global, do: Declarations.either(&"`#{Declarations.word(&1)}`")
 
   defp initial([{:int_lit, _, value} | rest], global),
     do: located(rest, %{global | initial: value})
@@ -731,8 +729,9 @@ defmodule Logex.Configuration.Text do
     either (M2-6, M4-2); its interval, its priority and its watchdog each nil or an
     integer; and whether it is continuous true or false (M4-2);
   - a `%Logex.Configuration.Global{}`, its name one name token to the lexer and none of
-    `at`, `bool` or `dint` in any case, which a line reads as that keyword; its type
-    `:bool` or `:dint`; its initial value nil or an integer; its location nil
+    `at` or a type word in any case, which a line reads as that keyword; its type an
+    elementary type, `:bool`, `:dint` or since M5-3 any integer type; its initial value
+    nil or an integer; its location nil
     or one name token;
   - a `%Logex.Configuration.Instance{}`, its name, its type and its task, if it has one,
     each one name token, its type not `with` in any case, which a line reads as that
