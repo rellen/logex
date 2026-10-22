@@ -10,7 +10,10 @@ defmodule Logex.FrontendGoldenTest do
   `713b2d2`), `//` comments one (`"ote aa // note"`, `1fab52c`) and `.` name parts one
   (`"ote a.b"`, `46f17f0`), and the header's wording changed once. M3-3's negative
   literals (decision 97) changed none and added 24, each a new source with a `-` in it,
-  `"move -5 aa"` and `"ote a-5"` among them, after the curated ones. It exercises the front end far more widely than
+  `"move -5 aa"` and `"ote a-5"` among them, after the curated ones. M5-7's based literals
+  and `_` separators (decision 149) added 38 after those, recorded first by the front end
+  before them, every one a lex error but `"move _1 aa"`, a name, so that the commit that
+  lands them changes those entries alone. It exercises the front end far more widely than
   the rest of the suite — CRLF, lone CRs, blank and whitespace-only lines, token
   boundaries, every unbalanced delimiter.
 

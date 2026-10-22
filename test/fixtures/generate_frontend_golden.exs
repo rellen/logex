@@ -141,7 +141,7 @@ defmodule FrontendGolden do
       "ote aa\r\n\r\n( xic bb",
       deep,
       many
-    ] ++ signed()
+    ] ++ signed() ++ based()
   end
 
   # M3-3 (decision 97): negative literals, a sign glued to its digits. Added after the rest,
@@ -172,6 +172,52 @@ defmodule FrontendGolden do
       "xic aa\n-5 ote bb",
       "xic aa\r\nmove -5 bb\n\nmove 7-x cc",
       "eq aa -1 ote bb // -2"
+    ]
+  end
+
+  # M5-7 (decision 149): based literals, `16#` and `2#`, and `_` between digits, each with
+  # the refusals around it. Added after the rest, and recorded first by the front end before
+  # them, so that the diff of the commit that lands them is these entries alone.
+  defp based do
+    [
+      "move 16#ff aa",
+      "move 16#FF aa",
+      "move 16#Ff aa",
+      "move 16#ffff aa",
+      "move 16#0 aa",
+      "move 16#ffff_ffff_ffff_ffff aa",
+      "move 2#1010_0000 aa",
+      "move 2#0 aa",
+      "move 1_000 aa",
+      "move 1_000_000 aa",
+      "move -1_000 aa",
+      "eq 16#7fff_ffff aa",
+      "( move 16#1 a | move 2#1 b )",
+      "move 8#17 aa",
+      "move 10#5 aa",
+      "move 016#ff aa",
+      "move 1_6#ff aa",
+      "move 16#-1 aa",
+      "move -16#1 aa",
+      "move 16#_ff aa",
+      "move 16#ff_ aa",
+      "move 1__0 aa",
+      "move 1_ aa",
+      "move _1 aa",
+      "move 1.5_ aa",
+      "move 5U aa",
+      "move 5L aa",
+      "move 1.5L aa",
+      "move 16# aa",
+      "move 2#102 aa",
+      "move 16#fg aa",
+      "move 16#ff#1 aa",
+      "move 16#ff-1 aa",
+      "move 1_000bst aa",
+      "move 16 #ff aa",
+      "#ff",
+      "xic a.16#f",
+      "xic aa\nmove 16#z bb"
     ]
   end
 
