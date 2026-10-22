@@ -4714,6 +4714,35 @@ the walks' cross-type reach and the documents.
      converts a constant by mistake sees the trim stuck at −127 and the "fits" lamp off,
      with nothing said at compile time. The other reading warns, as an all-literal
      arithmetic instruction does; IEC and Logix say nothing either way.
+  5. *How `move` between a bool and an integer is refused.* Before M5-3, `move b d` with
+     a bool `b` and a dint `d` was told "`move` takes operands of one type"; M5-3 tells
+     it "a bool does not widen into a dint, and logex has no conversion between them",
+     in the words every other narrowing `move` is told, since the record defers IEC's
+     `BOOL_TO_*` and `*_TO_BOOL` (Tables 24 and 25: a contact and a coil do the work).
+     The record does not ask for this wording; it was the builder's choice. On the
+     conveyor: an engineer who moves the photo-eye's bool into the box count reads that
+     there is no conversion, and writes `xic eye move 1 count` instead; the operator
+     sees nothing different. The other reading keeps the older sentence for this one
+     pair. IEC has `BOOL_TO_INT` and its kin; Logix's MOV takes no BOOL.
+
+  **M5-3's review**, fixed on 2026-10-22, each with a test that fails when its fix is
+  reverted, judged by the full suite: (1) a global a connection copies in is checked
+  against its own type before the copy-in, which since decision 159 may widen into its
+  var_input, so that a hand-built runtime holding 70000 in a `uint` global read by a dint
+  var_input is refused by `cycle/3`, "runtime.globals holds `a` outside its type: it is a
+  uint, and 70000 is outside 0 to 65535", a line each in name order, a global read twice
+  told once, rather than copied on into a wider global (decision 171's reading; before
+  M5-3 the two types were one, so the var_input's check covered it); its mutants, the
+  check gone, the lines unsorted and a global read twice told twice, each red (1 test);
+  (2) the forces file's test puts every width one past each of its limits, a file for
+  each end, so that a forced `ulint` out of range in the file is refused, the review's
+  surviving mutant, red now (1 test); (3) `integer_width_test.exs`'s reserved-word test
+  is titled for what it checks, the type words no tag or global and the conversions no
+  tag or label, a conversion being reserved in `.ld` files only, as every mnemonic is,
+  and checks each conversion in upper case too. The review's other notes are for later
+  items or need nothing: `Logex.Edit.Plan.changed/2`'s `!=` is noted in M5-10, and
+  `dint_to_dint`, told "unknown instruction", is told as every unknown mnemonic is.
+  1615 tests (9 doctests), up from 1614.
 - **M5-4 · Arithmetic and comparison over every integer width.** The signatures' slots take a type class, ANY_INT or ANY_NUM as data,
   unified across every operand of an instruction, so a three-operand `add` is checked
   whole; each computes in its destination's type, sources widened by decision 147, and
@@ -4879,7 +4908,9 @@ the walks' cross-type reach and the documents.
   as 2^53, each a test that fails when its rule is reverted; a `real` forced
   or printed as `0.1` reads back exactly; a changed real initial value is reported as
   `:initial_changed`, `var x real 0` edited to `var x real 0.0` among them, `{0, 0.0}`,
-  the running 0.0 kept (decision 157), a test that fails when the comparison is `!=`; the
+  the running 0.0 kept (decision 157), a test that fails when the comparison is `!=`
+  (`Logex.Edit.Plan.changed/2`'s, `!=` at M5-3, under which 0 and 0.0 are one value, as
+  M5-3's review noted, so it becomes `!==`); the
   configuration file's round trip holds with reals; the contract walk's arithmetic oracle
   covers both reals; and the fan's speed in §4.4's plant is a `real` read from the sim,
   against an oracle that knows nothing of logex. *Size XL.*
