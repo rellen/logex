@@ -99,7 +99,10 @@ decisions 187–193 left (decisions 194–201, §3 after M5-6) the same day: a l
 beside a long timer's `.pre` or `.acc` that is no whole number of milliseconds warned, as
 a preset is, each timer's unit carried in the compiled program so that a plain timer's
 run costs what it did before long timers, and an edit's accept checking the program
-running as well as its candidate, the other five confirmed as built.
+running as well as its candidate, the other five confirmed as built. And the seventh,
+M5-7, the same day: based literals, `16#ff` and `2#1010_0000`, and `_` between digits,
+`1_000`, each the number it spells, judged by its slot, so that `16#ffff` fits a `uint`
+and is refused for an `int`, with one question put to the maintainer (§3, M5-7).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -5581,6 +5584,55 @@ the walks' cross-type reach and the documents.
   a number) and `1.5_` are pinned refusals or readings, and Logix's suffixes `5U` and `5L`
   pinned as B2's mistyped lexeme at their columns (decision 149, the vendors' suffixes
   refused), each a test that fails when its lexer clause is reverted. *Size M.*
+
+  **Status: DONE — landed 2026-10-22**, as three commits: the 38 curated golden sources
+  first, recorded by the front end before the rules, every one a lex error but `"move _1
+  aa"`, a name, so that the next commit's diff is exactly what the rules change
+  (`dcc41b9`); then the lexer with its tests (`e7a11ef`); then the documents. No word is
+  added, so no stanza is owed. `Logex.Lexer` reads a based number in base 16 or 2, `16#ff`,
+  `16#FF`, `2#1010_0000`, with no sign, and a single `_` between two digits of any number,
+  `1_000` and `-1_000`, one `int_lit` token holding the value it spells, a plain decimal
+  still read by `String.to_integer/1` at the cost it had; each mistake is a located lex
+  error naming the number whole at its start, `8#17`, `10#5`, `016#ff` and `1_6#ff` another
+  base, `16#-1` and `-16#1` a sign, `16#_ff`, `16#ff_`, `1__0`, `1_` and `7_` a `_` out of
+  place, `16#`, `2#102` and `16#fg` a digit outside the base; Logix's `5U` and `5L` are
+  B2's mistyped lexeme at their columns, `_1` a name, and `1.5_` and `1.5L` an illegal `.`
+  as before, reals being M5-10's. `mov 7_ aa`, which B2 named a mistyped lexeme, is the
+  separator refusal now, changed on purpose. The golden record's diff on landing is 13 of
+  the 38, each a lex error become the tree of the value it spells, `"move 16#ff aa"` 255
+  and `"move 1_000 aa"` 1000 among them, the other 25 lex errors still on their lines, and
+  no other entry. `printer_test.exs`'s generator spells every literal of its corpus in
+  decimal, with `_`, in base 16 in either case or in base 2, each read back as the tree,
+  its `@required_shapes` gaining the three spellings. The Done-when is
+  `integer_width_test.exs`'s: `16#ffff` 65,535 in a `uint`, refused in an `int` as a move
+  and a declaration, every width's top in base 16 and 2, and a program spelled with `_` and
+  bases compiling to the one its decimal spelling gives; `frontend_test.exs` pins each
+  token and column, each refusal and message, and the lexer's cost in reductions; and a
+  configuration file's numbers take each form. The mutation table: 27 mutants of
+  `lib/logex/lexer.ex`, each judged by the full suite's exit code, every one red (the
+  second commit's message lists them). 1738 tests (9 doctests), up from 1725.
+
+  *Provisional readings*: the parse tree keeps a literal's value, not its spelling, so
+  `well_formed!/1` takes what it took, the printer writes `16#ff` as `255`, and a
+  message cites `65535` for `16#ffff` (the question below); a base is `16#` or `2#`
+  exactly, so `016#ff` and `1_6#ff` are refused as another base; a digit outside the
+  base, `2#102` or `16#fg`, is that refusal and not B2's mistyped lexeme, and so is `16#`
+  with no digit; `7_`, a `_` with no digit after it, is the separator refusal where B2
+  named it before; and a based number of any length is read, a slot judging what fits.
+
+  **Question for the maintainer** (taken provisionally as written, the closest reading to
+  the record):
+  1. *Whether a rung keeps a literal's spelling* (decision 149 with the printer). A
+     literal's spelling is how it was typed, `16#00ff` or `2#1010_0000`; its value is the
+     number, 255 or 160. logex keeps the value alone, so a rung printed back, as an
+     editing box shows it, reads `and status 255 speed` where the engineer typed `and
+     status 16#00ff speed` for a mask on the fan's status word, and a refusal says
+     "`move` writes `65535` into `i`" where `move 16#ffff i` was written. The other
+     reading keeps the spelling in the tree, a new leaf that every stage reading a
+     literal takes, so the box shows `16#00ff` and a message quotes it as written. IEC
+     defines a literal's value, and Ed 3 p.26 reads `16#ffff` as a bit-string literal,
+     not how a tool shows it; how Logix shows an immediate typed as `16#00FF` back in a
+     rung is `unverified`.
 - **M5-8 · Bit strings, the bitwise instructions and literal bit access.** The stanzas
   first: `byte word dword lword`, `and or xor not shl shr rol ror`, and the bit-string
   conversions' family stanzas, `docs/naming.md`'s `wand` rows amended (decision 155). The

@@ -72,6 +72,15 @@ Source syntax today:
   to 9223372036854775807 ns ("Long timers", below), and a counter's any
   value of its `pv`'s type, as IEC's PV is, −2147483648 to 2147483647 for a `ctu`,
   −32768 to 32767 for a `ctu_int` and 0 to 4294967295 for a `ctu_udint`
+- a based integer, `16#ff`, `16#FF` or `2#1010_0000`, in base 16 or 2 and with no sign, is
+  the number it spells, judged by its slot as any literal is: `move 16#ffff hz` puts
+  65535 in a `uint`, and `move 16#ffff i` into an `int` is refused, `65535` outside
+  −32768 to 32767, where Logix would store −1. Any number may hold a single `_` between
+  two digits, `1_000_000`, `-1_000` or `2#1010_0000`. Each is an error naming the number
+  whole otherwise: `8#17`, octal and every other base; `16#-1`, a sign; `16#_ff`, `1__0`
+  and `1_`, a `_` not between two digits; `2#102`, a digit outside its base; and Logix's
+  `5U` and `5L` as `1bst` is. `_1` is a name. A rung printed back writes each in
+  decimal, `16#ff` as `255`. A configuration file's numbers take the same forms
 - no operand parentheses, no terminator
 - `//` starts a comment, which runs to the end of its line
 - a name may have `.` parts: `t1.dn` is the member `dn` of the timer `t1`. A timer's
@@ -245,9 +254,10 @@ continuous task" and "Running a plant on the clock", below). Still to land:
 - **Data types**, `PLAN.md`'s Milestone 5, decided on 2026-10-21 (decisions 144–160 in
   [`docs/organisation.md`](docs/organisation.md) §7, designed in its §4.12), of which
   IEC's integer widths `sint int lint usint uint udint ulint` beside `dint` have landed,
+  with based literals `16#ff` and `2#1010` and `_` between digits, `1_000` (M5-7),
   with `move` by Figure 11 and the 56 integer conversions (M5-3, "Integer widths",
   below), and arithmetic and comparison over every width (M5-4); `real` and
-  `lreal`, with literals `37.5` and `1.5e3`, and `16#ff`, `2#1010` and `1_000`; the bit
+  `lreal`, with literals `37.5` and `1.5e3`; the bit
   strings `byte word dword lword` with `and or xor not shl shr rol ror`; the rest of IEC's
   typed conversions, `real_to_int` and `real_trunc_int` among them; bit access `word.3` and
   `word.[n]`; arrays `var temps real[8]`, up to three dimensions, of timers and blocks

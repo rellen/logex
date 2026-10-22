@@ -3514,6 +3514,9 @@ while there are no float literals" is answered by the rule that digits before a 
 number. A new leaf, `{:real_lit, line, float}`, goes into the parser,
 `Logex.Parser.well_formed!/1`, the printer, `printer_test.exs`'s generator and
 `@required_shapes`, and curated golden sources, before it lands (CLAUDE.md).
+*(The based integers and `_` landed with M5-7, 2026-10-22, as decision 149's note says,
+their spellings in `printer_test.exs`'s generator and `@required_shapes` and 38 curated
+golden sources; reals wait for M5-10.)*
 
 **Reals** (decision 150). No infinity and no NaN ever reaches a state, an output, a
 `get/2` answer or the forces file. A zero divisor gives 0.0, no power and the minor fault
@@ -5470,7 +5473,9 @@ the record keeps; 99 is the shape of the report decision 78 asked for and left t
     out, in an exponent too, so `1.5e+3` is refused. Each is still judged by its slot, a
     real literal refused in an integer slot and a based one the number it spells (decision
     147), and `well_formed!/1`, `Logex.Declarations.check/1` and
-    `Logex.Configuration.Text.entries!/1` widen with each, as above.)*
+    `Logex.Configuration.Text.entries!/1` widen with each, as above.)* *(The based integers
+    and `_` landed with M5-7, 2026-10-22, decision 149's note: each is the integer it
+    spells, so the three take what they took.)*
 98. **What an arithmetic instruction passes on, and what may follow it on its line
     (M3-3),** following decisions 73, 77 and 78. The fill valve's total, with a lamp on the
     same line that shows the total is real: `xic fill add total flow total ote total_ok`.
@@ -7258,6 +7263,18 @@ the decisions the rest settle.
      vendors' suffixes refused** (the maintainer, 2026-10-21), as recommended. A based
      literal is the number it spells, judged by its slot, so `16#ffff` fits a `uint` and
      is refused for an `int`.
+     *(Landed for the based integers and `_` with M5-7, 2026-10-22: `Logex.Lexer` reads
+     `16#ff`, `16#FF` and `2#1010_0000` as the value each spells, one `int_lit` token,
+     and a single `_` between two digits of any number, `1_000` and `-1_000`; `8#17` and
+     every other base, `10#5` and `016#ff` among them, a based number with a sign,
+     `16#-1` or `-16#1`, a `_` anywhere but between two digits, `16#_ff`, `1__0` or `1_`,
+     and a digit outside its base, `2#102` or `16#fg`, are each a located lex error
+     naming the number whole; `5U` and `5L` stay B2's mistyped lexeme, and `_1` is a
+     name. The parse tree keeps the value, not the spelling, so `well_formed!/1` takes
+     what it took and the printer writes `16#ff` as `255`, and a message cites `65535`
+     for `16#ffff`, provisional (`PLAN.md` M5-7's question). A configuration file's
+     numbers are the lexer's, so they take each form too. Reals wait for M5-10, so `1.5_`
+     is still an illegal `.`.)*
 150. **What a real does with a zero divisor, an overflow, NaN and −0.0 (Milestone 5).**
      The fan's speed per box is `div fan_speed boxes_per_min rate`, and just after
      start-up `boxes_per_min` is 0.0; elsewhere `mul big big product` passes 3.4E38 in a

@@ -584,10 +584,18 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   negative literal's sign, one `int_lit` token at the `-`, and a sign begins a lexeme, so
   `a-5` and `5-3` are one mistyped lexeme each, `{:signed_inside, run}`, as B2 names
   `1bst` (decision 97); a `-` with no digit straight after it, `- 5` or `--5`, is still
-  illegal, and there is no `+`; `well_formed!/1` takes any integer. There is no generator, so nothing reports a
+  illegal, and there is no `+`; `well_formed!/1` takes any integer. Since M5-7 (decision
+  149) a number may be based, `16#ff`, `16#FF` or `2#1010`, in base 16 or 2 alone, with no
+  sign, or hold a single `_` between two digits, `1_000`, one `int_lit` token holding the
+  value it spells, a plain decimal still read by `String.to_integer/1`; another base, a
+  sign, a misplaced `_` or a digit outside its base is a located lex error naming the
+  number whole, `{:base, run}`, `{:signed_based, run}`, `{:separator, run}` or `{:digits,
+  base, run}`, and `5U` B2's; the tree keeps the value, so `well_formed!/1` is unchanged
+  and the printer writes `16#ff` as `255`. There is no generator, so nothing reports a
   grammar conflict: **a new syntax form goes into `printer_test.exs`'s generator and
   `@required_shapes` before it lands**, and the golden record below must stay green.
-- `lib/logex/printer.ex` — the parse AST back to canonical source text
+- `lib/logex/printer.ex` — the parse AST back to canonical source text, an integer in
+  its shortest decimal form, however it was spelled (decision 149)
 - `lib/logex/diagnostic.ex` — `%Logex.Diagnostic{stage:, line:, message:, file:, column:,
   severity:}`, the one error and warning type of every stage, and `format/1` for the
   `motor.ld: line 3, column 5: …` form
@@ -807,7 +815,8 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
   rung, failed it and nothing else until B8's own tests came with it; M3-3's negative
-  literals added 24 sources and changed none. It keeps the AST and error lines, not the tokens or
+  literals added 24 sources and changed none; M5-7's based literals and `_` added 38,
+  recorded by the front end before them, and changed 13 of them on landing. It keeps the AST and error lines, not the tokens or
   columns, so newline coalescing, columns and messages are pinned in
   `test/logex/frontend_test.exs` instead. Regenerate it only in a commit that changes the
   language or the generator on purpose, and read the diff:
