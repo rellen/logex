@@ -6,7 +6,11 @@ defmodule Logex.ArithmeticTest do
   source through `Logex.Runtime.call/4`, a test that fails when the rule alone is reverted.
   Since M5-2 a result outside the dint wraps, its low 32 bits kept in two's complement,
   and passes no power on that scan, with no fault (decision 146, superseding decision 77's
-  saturation on purpose): every test of a limit below pins the wrap.
+  saturation on purpose): every test of a limit below pins the wrap. Since M5-4 every rule
+  holds at every integer width, computed in the destination's type, each source widening
+  into it by Ed 3 Figure 11, and the comparisons read two integers of any types by value
+  (decisions 145, 146 and 147): the last three groups below, which restate each width's
+  range, Figure 11 and the wrap from IEC's tables rather than read them from `lib/`.
   The compiler's refusals and warnings are `validation_test.exs`'s, the writes of the walk
   `walk_test.exs`'s, and an edit's rules `edit_test.exs`'s.
   """
@@ -488,4 +492,407 @@ defmodule Logex.ArithmeticTest do
       end
     end
   end
+
+  # M5-4 (decisions 145, 146 and 147): every rule above at every integer width. Each width's
+  # range, Ed 3 Figure 11's "i" cells and the wrap are restated here, from IEC's Table 10
+  # and Figure 11, never read from `Logex.Declarations`, so that a wrong row of its table
+  # is seen.
+  @widths [
+    sint: {:signed, 8},
+    int: {:signed, 16},
+    dint: {:signed, 32},
+    lint: {:signed, 64},
+    usint: {:unsigned, 8},
+    uint: {:unsigned, 16},
+    udint: {:unsigned, 32},
+    ulint: {:unsigned, 64}
+  ]
+
+  @figure_11 %{
+    sint: [:int, :dint, :lint],
+    int: [:dint, :lint],
+    dint: [:lint],
+    lint: [],
+    usint: [:uint, :udint, :ulint, :int, :dint, :lint],
+    uint: [:udint, :ulint, :dint, :lint],
+    udint: [:ulint, :lint],
+    ulint: []
+  }
+
+  defp bounds(type), do: bounds_of(Keyword.fetch!(@widths, type))
+  defp bounds_of({:signed, n}), do: {-Integer.pow(2, n - 1), Integer.pow(2, n - 1) - 1}
+  defp bounds_of({:unsigned, n}), do: {0, Integer.pow(2, n) - 1}
+
+  # The low N bits of an exact result, read in two's complement for a signed type: a
+  # remainder by 2^N, shifted to the type's least value.
+  defp wrap(type, value) do
+    {low, _high} = bounds(type)
+    {_kind, n} = Keyword.fetch!(@widths, type)
+    Integer.mod(value - low, Integer.pow(2, n)) + low
+  end
+
+  defp exact(type, value), do: {wrap(type, value), power(wrap(type, value) == value)}
+  defp power(true), do: 1
+  defp power(false), do: 0
+
+  defp signed?(type), do: elem(Keyword.fetch!(@widths, type), 0) == :signed
+
+  # The values a width's tests meet: its two limits, one inside each, and 0, 1 and -1
+  # where it holds them.
+  defp samples(type) do
+    {low, high} = bounds(type)
+    Enum.uniq(Enum.filter([low, low + 1, -1, 0, 1, high - 1, high], &(&1 >= low)))
+  end
+
+  defp typed(op, a, b, r) do
+    c!("""
+    var_input go bool
+    var_input a #{a}
+    var_input b #{b}
+    var_output r #{r}
+    var_output ok bool
+    xic go #{op} a b r ote ok
+    """)
+  end
+
+  defp scan(program, input) do
+    Runtime.call(program, Runtime.instance(program), input, %Scan{now: 0, first: true})
+  end
+
+  defp run(program, input) do
+    {out, _state} = scan(program, input)
+    {out["r"], out["ok"]}
+  end
+
+  defp exact_of(:add, a, b), do: a + b
+  defp exact_of(:sub, a, b), do: a - b
+  defp exact_of(:mul, a, b), do: a * b
+  # IEC's truncation toward zero, and its remainder IN1 - (IN1/IN2)*IN2, restated.
+  defp exact_of(:div, a, b), do: sign(a * b) * Kernel.div(abs(a), abs(b))
+  defp exact_of(:mod, a, b), do: a - exact_of(:div, a, b) * b
+
+  defp sign(product) when product < 0, do: -1
+  defp sign(_product), do: 1
+
+  describe "every integer width (M5-4)" do
+    test "127 + 1 in an sint gives -128 and 0 - 1 in a usint 255, each with no power" do
+      assert run(typed("add", :sint, :sint, :sint), %{"go" => 1, "a" => 127, "b" => 1}) ==
+               {-128, 0}
+
+      assert run(typed("sub", :usint, :usint, :usint), %{"go" => 1, "a" => 0, "b" => 1}) ==
+               {255, 0}
+
+      assert run(typed("add", :ulint, :ulint, :ulint), %{
+               "go" => 1,
+               "a" => Integer.pow(2, 64) - 1,
+               "b" => 1
+             }) == {0, 0}
+
+      assert run(typed("sub", :lint, :lint, :lint), %{
+               "go" => 1,
+               "a" => -Integer.pow(2, 63),
+               "b" => 1
+             }) == {Integer.pow(2, 63) - 1, 0}
+    end
+
+    test "`add`, `sub`, `mul`, `div` and `mod` at each width's limits, in its own type" do
+      for {type, _kind} <- @widths, op <- [:add, :sub, :mul, :div, :mod] do
+        program = typed(op, type, type, type)
+
+        for a <- samples(type), b <- samples(type), b != 0 do
+          assert run(program, %{"go" => 1, "a" => a, "b" => b}) ==
+                   exact(type, exact_of(op, a, b)),
+                 "#{op} #{a} #{b} in #{type}"
+        end
+      end
+    end
+
+    test "`neg` and `abs` at each width's limits, the minimum alone wrapping to itself" do
+      for {type, _kind} <- @widths, signed?(type), op <- ["neg", "abs"] do
+        program =
+          c!(
+            "var_input go bool\nvar_input a #{type}\nvar_output r #{type}\n" <>
+              "var_output ok bool\nxic go #{op} a r ote ok"
+          )
+
+        for a <- samples(type) do
+          {out, _state} = scan(program, %{"go" => 1, "a" => a})
+          expected = exact(type, (op == "neg" && -a) || abs(a))
+          assert {out["r"], out["ok"]} == expected, "#{op} #{a} in #{type}"
+        end
+
+        {low, _high} = bounds(type)
+        {out, _state} = scan(program, %{"go" => 1, "a" => low})
+        assert {out["r"], out["ok"]} == {low, 0}
+      end
+
+      # An unsigned source negated into a signed type it widens into is exact.
+      program =
+        c!("var_input a usint\nvar_output r int\nvar_output ok bool\nneg a r ote ok")
+
+      assert run(program, %{"a" => 255}) == {-255, 1}
+
+      program =
+        c!("var_input a uint\nvar_output r uint\nvar_output ok bool\nabs a r ote ok")
+
+      assert run(program, %{"a" => 65_535}) == {65_535, 1}
+    end
+
+    # Decision 147: the instruction computes in its destination's type, each source
+    # widened into it, so two ints into a dint cannot overflow, where IEC's overloaded
+    # INT + INT computes in INT (Ed 3 p.70, Example 3).
+    test "sources of every type Figure 11 widens into the destination's, computed there" do
+      for {from, intos} <- @figure_11, into <- intos, op <- [:add, :sub, :mul, :div, :mod] do
+        program = typed(op, from, into, into)
+
+        for a <- samples(from),
+            b <- [elem(bounds(into), 0), elem(bounds(into), 1), -1, 1],
+            b >= elem(bounds(into), 0),
+            b != 0 do
+          assert run(program, %{"go" => 1, "a" => a, "b" => b}) ==
+                   exact(into, exact_of(op, a, b)),
+                 "#{op} #{from} #{a} #{into} #{b}"
+        end
+      end
+
+      assert run(typed("add", :int, :int, :dint), %{"go" => 1, "a" => 32_767, "b" => 32_767}) ==
+               {65_534, 1}
+
+      assert run(typed("mul", :usint, :sint, :int), %{"go" => 1, "a" => 255, "b" => -128}) ==
+               {-32_640, 1}
+    end
+
+    test "a source no Figure 11 cell widens into the destination's type is refused, " <>
+           "naming its conversion" do
+      for {from, _} <- @widths,
+          {into, _} <- @widths,
+          from != into,
+          into not in Map.fetch!(@figure_11, from) do
+        assert messages("var a #{from}\nvar r #{into}\nadd a r r\nadd r a r") ==
+                 for(
+                   _ <- 1..2,
+                   do:
+                     "`add` computes in `r`'s type, #{article(into)}, but `a` is " <>
+                       "#{article(from)} (declared on line 1): #{article(from)} does not " <>
+                       "widen into #{article(into)}, so convert it first, with " <>
+                       "`#{from}_to_#{into}`"
+                 ),
+               "#{from} into #{into}"
+      end
+    end
+
+    # The Done-when's three-operand mismatch: each source alone is an integer, as each slot
+    # takes, and only the instruction held whole sees that a dint does not widen into the
+    # sint it writes.
+    test "a three-operand mismatch is refused, the instruction checked whole" do
+      assert messages("var d dint\nvar i int\nvar s sint\nadd d i s") == [
+               "`add` computes in `s`'s type, an sint, but `d` is a dint (declared on line 1): " <>
+                 "a dint does not widen into an sint, so convert it first, with `dint_to_sint`",
+               "`add` computes in `s`'s type, an sint, but `i` is an int (declared on line 2): " <>
+                 "an int does not widen into an sint, so convert it first, with `int_to_sint`"
+             ]
+
+      assert messages("var d dint\nvar s sint\nvar ok bool\nadd s s d ote ok\nmod s d d") == []
+    end
+
+    test "a literal source must fit the destination's type" do
+      for {type, _kind} <- @widths do
+        {low, high} = bounds(type)
+
+        assert messages("var r #{type}\nadd r #{high} r\nsub #{low} r r") == []
+
+        assert messages("var r #{type}\nadd r #{high + 1} r\nsub #{low - 1} r r") == [
+                 "`add` computes in `r`'s type, #{article(type)}: `#{high + 1}` is outside " <>
+                   "#{low} to #{high}",
+                 "`sub` computes in `r`'s type, #{article(type)}: `#{low - 1}` is outside " <>
+                   "#{low} to #{high}"
+               ]
+      end
+    end
+
+    # Decision 145: an unsigned type holds no negative value, so a `neg` into one could
+    # only give 0 or a wrap.
+    test "`neg` into an unsigned destination is refused, told that alone" do
+      for {type, {:unsigned, _}} <- @widths do
+        assert messages("var a #{type}\nvar r #{type}\nneg a r\nneg 5 r\nneg -1 r") ==
+                 for(
+                   _ <- 1..3,
+                   do:
+                     "`neg` writes `r`, #{article(type)} (declared on line 2), which holds no " <>
+                       "negative value: `neg` writes a signed type"
+                 )
+      end
+
+      assert messages("var a sint\nvar r usint\nneg a r") == [
+               "`neg` writes `r`, a usint (declared on line 2), which holds no negative " <>
+                 "value: `neg` writes a signed type"
+             ]
+
+      assert messages("var a usint\nvar r usint\nabs a r") == []
+    end
+
+    test "a zero divisor writes 0, passes no power and is a fault, at every width" do
+      for {type, _kind} <- @widths, op <- ["div", "mod"] do
+        program = typed(op, type, type, type)
+        {_low, high} = bounds(type)
+        {out, state} = scan(program, %{"go" => 1, "a" => high, "b" => 0})
+        assert {out["r"], out["ok"]} == {0, 0}
+        assert [%Logex.Fault{kind: :divide_by_zero, line: 6}] = state.faults
+
+        assert [%Logex.Diagnostic{message: "`" <> _}] =
+                 diagnostics("var r #{type}\n#{op} r 0 r")
+      end
+    end
+
+    test "the minimum divided by -1 wraps to itself, and a remainder takes the dividend's " <>
+           "sign, at every signed width" do
+      for {type, {:signed, _}} <- @widths do
+        {low, high} = bounds(type)
+
+        assert run(typed("div", type, type, type), %{"go" => 1, "a" => low, "b" => -1}) ==
+                 {low, 0}
+
+        modulo = typed("mod", type, type, type)
+        assert run(modulo, %{"go" => 1, "a" => low, "b" => -1}) == {0, 1}
+        assert run(modulo, %{"go" => 1, "a" => -7, "b" => 3}) == {-1, 1}
+        assert run(modulo, %{"go" => 1, "a" => 7, "b" => -3}) == {1, 1}
+        assert run(modulo, %{"go" => 1, "a" => low, "b" => high}) == {-1, 1}
+      end
+    end
+
+    test "a member's destination computes in the member's type" do
+      p = c!("var c ctu\nvar ok bool\nadd c.pv 2147483647 c.pv ote ok")
+      {out, state} = scan(p, %{})
+      assert out == %{}
+      assert state.env["c"]["pv"] == 2_147_483_647
+      {_out, state} = Runtime.call(p, state, %{}, %Scan{now: 10, first: false})
+      assert {state.env["c"]["pv"], state.env["ok"]} == {-2, 0}
+    end
+
+    test "a block's body computes in its own tags' types" do
+      {:ok, small} =
+        Logex.compile(
+          "function_block small\nvar_input n sint\nvar_output total sint\n" <>
+            "var_output fits bool\nadd total n total ote fits",
+          name: "small"
+        )
+
+      p =
+        c!(
+          "var_input n sint\nvar_output t sint\nvar_output f bool\nvar s1 small\ncal s1 n t f",
+          [small]
+        )
+
+      assert trace(p, [%{"n" => 100}, %{"n" => 27}, %{"n" => 1}]) == [
+               %{"t" => 100, "f" => 1},
+               %{"t" => 127, "f" => 1},
+               %{"t" => -128, "f" => 0}
+             ]
+    end
+  end
+
+  describe "the cost over every integer width (M5-4)" do
+    # Each instruction is held whole once at its compile, and each scan finds its
+    # destination's type in the routine's one table, so a program of 4x the instructions and
+    # 4x the tags compiles and scans in about 4x the reductions.
+    test "arithmetic over mixed widths costs linear reductions to compile and to scan" do
+      source = fn n ->
+        "var_input v sint\nvar_input w usint\nvar c ctu\n" <>
+          Enum.map_join(1..n, fn i -> "var r#{i} int\nvar q#{i} udint\n" end) <>
+          Enum.map_join(1..n, fn i ->
+            "add v w r#{i}\nmul w w q#{i}\nsub r#{i} 1 r#{i}\nadd c.pv v c.pv\n"
+          end)
+      end
+
+      cost = fn n ->
+        text = source.(n)
+
+        Enum.min(
+          for _ <- 1..3 do
+            {:reductions, before} = Process.info(self(), :reductions)
+            {:ok, p} = Logex.compile(text, name: "p")
+
+            Runtime.scan(
+              p,
+              Runtime.put_inputs(p, Runtime.instance(p), %{"v" => -128, "w" => 255})
+            )
+
+            {:reductions, later} = Process.info(self(), :reductions)
+            later - before
+          end
+        )
+      end
+
+      ratio = cost.(400) / cost.(100)
+      assert ratio < 4.8, "4x the instructions took #{Float.round(ratio, 2)}x the reductions"
+    end
+  end
+
+  describe "comparisons over every integer width (M5-4)" do
+    # Decision 147: two integers compare by value whatever their types, exact at their
+    # limits, a signed -1 less than an unsigned 0 and a ulint's top greater than a lint's.
+    test "a signed with an unsigned operand, each at its limits, by value" do
+      for {left, _} <- @widths, {right, _} <- @widths do
+        program =
+          c!(
+            "var_input a #{left}\nvar_input b #{right}\n" <>
+              Enum.map_join(~w(eq ne lt gt le ge), fn op ->
+                "var_output #{op}_ok bool\n"
+              end) <>
+              Enum.map_join(~w(eq ne lt gt le ge), "\n", &"#{&1} a b ote #{&1}_ok")
+          )
+
+        for a <- samples(left), b <- samples(right) do
+          {out, _state} = scan(program, %{"a" => a, "b" => b})
+
+          assert out == %{
+                   "eq_ok" => power(a == b),
+                   "ne_ok" => power(a != b),
+                   "lt_ok" => power(a < b),
+                   "gt_ok" => power(a > b),
+                   "le_ok" => power(a <= b),
+                   "ge_ok" => power(a >= b)
+                 },
+                 "#{left} #{a} against #{right} #{b}"
+        end
+      end
+    end
+
+    test "a literal compares by value with any width, and two literals within every " <>
+           "integer type's values" do
+      assert messages(
+               "var s sint\nvar u ulint\nvar b bool\nlt s 200 ote b\ngt u -1 ote b\n" <>
+                 "eq 18446744073709551615 -9223372036854775808 ote b"
+             ) == []
+
+      assert messages("var s sint\nvar b bool\nlt s 18446744073709551616 ote b") == [
+               "`lt` reads a number: `18446744073709551616` is outside -9223372036854775808 " <>
+                 "to 18446744073709551615, every integer type's values"
+             ]
+
+      p = c!("var_input s sint\nvar_output b bool\nlt s 200 ote b")
+      {out, _state} = scan(p, %{"s" => 127})
+      assert out == %{"b" => 1}
+    end
+  end
+
+  defp diagnostics(source) do
+    {:error, diagnostics} = Logex.compile(source, name: "m")
+    diagnostics
+  end
+
+  defp messages(source) do
+    case Logex.compile(source, name: "m") do
+      {:ok, _program} -> []
+      {:error, diagnostics} -> Enum.map(diagnostics, & &1.message)
+    end
+  end
+
+  defp article(type) when type in [:int, :lint, :usint, :uint, :udint, :ulint, :sint],
+    do: "#{article_of(type)} #{type}"
+
+  defp article(type), do: "a #{type}"
+
+  defp article_of(type) when type in [:int, :lint, :sint], do: "an"
+  defp article_of(_type), do: "a"
 end

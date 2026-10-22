@@ -87,6 +87,17 @@ defmodule Logex.Declarations do
   @section_atoms Map.values(@sections)
   @type_atoms Enum.map(@table, & &1.type)
 
+  # M5-4 (decision 147): IEC's generic types that an instruction's slots take, as data, each
+  # the kinds of the table's rows it holds and the words a message names it with (Ed 3
+  # Figure 5): ANY_INT, the integers, and ANY_NUM, the integers and the reals, which hold
+  # no row until M5-10. IEC's ANY_MAGNITUDE, which ADD's inputs are, adds TIME, which logex
+  # defers (§4.12), so logex's arithmetic takes ANY_NUM.
+  @classes %{
+    any_int: %{kinds: [:signed, :unsigned], word: "an integer"},
+    any_num: %{kinds: [:signed, :unsigned, :real], word: "a number"}
+  }
+  @class_atoms Map.keys(@classes)
+
   # A preset is a dint number of milliseconds, and never negative (docs/naming.md, `ton`).
   @preset 0..2_147_483_647
 
@@ -311,6 +322,29 @@ defmodule Logex.Declarations do
 
   def widens?(from, to) when from in @type_atoms and to in @type_atoms,
     do: to in Map.fetch!(@rows, from).widens
+
+  @doc "Whether `class` is one of IEC's generic types a slot takes, `:any_int` or `:any_num` (M5-4): a guard."
+  defguard is_class(class) when class in @class_atoms
+
+  @doc """
+  Whether the elementary type `type` is one of the generic type `class`'s (M5-4, decision
+  147), by its kind: an `int` is ANY_INT's and ANY_NUM's, a bool neither's.
+  """
+  def in_class?(type, class) when type in @type_atoms and class in @class_atoms,
+    do: Map.fetch!(@rows, type).kind in Map.fetch!(@classes, class).kinds
+
+  @doc "A generic type as a message names it, `an integer` for `:any_int` (M5-4)."
+  def a_class(class) when class in @class_atoms, do: Map.fetch!(@classes, class).word
+
+  @doc """
+  The values of the generic type `class`'s integer types together, from the least of
+  their ranges' firsts to the greatest of their lasts (M5-4): -2^63 to 2^64 - 1, what an
+  integer literal must fit where no type is known for it, a comparison's of two literals.
+  """
+  def class_range(class) when class in @class_atoms do
+    ranges = for type <- @integers, in_class?(type, class), do: range(type)
+    Enum.min(Enum.map(ranges, & &1.first))..Enum.max(Enum.map(ranges, & &1.last))//1
+  end
 
   @doc """
   The conversion that takes a value of `from` into `to`, its mnemonic, `dint_to_int`, or

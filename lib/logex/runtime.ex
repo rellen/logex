@@ -292,8 +292,9 @@ defmodule Logex.Runtime do
 
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
 
-  # M3-3: the arithmetic of two sources whose result is wrapped into a dint (decision 146),
-  # the two that divide, whose divisor may be 0 (decision 78), and the two of one source.
+  # M3-3: the arithmetic of two sources whose result is wrapped into its destination's type
+  # (decision 146; a dint until M5-4), the two that divide, whose divisor may be 0
+  # (decision 78), and the two of one source.
   @sums [:add, :sub, :mul]
   @divisions [:div, :mod]
   @signs [:neg, :abs]
@@ -1807,7 +1808,9 @@ defmodule Logex.Runtime do
 
   # The six comparisons (docs/naming.md, `eq` to `ge`) are input instructions, as a contact
   # is: energised, power is the comparison of the first operand with the second, `lt a b`
-  # reading a < b; de-energised, no power. Neither writes anything.
+  # reading a < b; de-energised, no power. Neither writes anything. Since M5-4 the two may
+  # be of any integer types, compared by value on Elixir's integers, so a signed -1 is less
+  # than an unsigned 0 (decision 147).
   defp evaluate({op, _, [a, b]}, {true, env}, _scan) when op in @comparisons do
     {compare(op, read(env, a), read(env, b)), env}
   end
@@ -1818,18 +1821,21 @@ defmodule Logex.Runtime do
 
   # M3-3: `add`, `sub` and `mul` (docs/naming.md; IEC's ADD, SUB and MUL; decisions 98 and
   # 146). Rung power is IEC's EN, and the power out its ENO. Energised, both sources are
-  # read, the result computed exactly, on Elixir's integers, and wrapped into the dint, its
-  # low 32 bits kept in two's complement (M5-2, superseding decision 77's saturation), then
-  # written: the power out is true, or false on the scan where the result left the dint,
-  # 2147483647 + 1 giving -2147483648, with no fault, so no value outside a dint ever
-  # reaches a state. The sources are read before the write, so the destination may be
+  # read, the result computed exactly, on Elixir's integers, and wrapped into the
+  # destination's type, its low bits kept, in two's complement for a signed type (M5-2,
+  # superseding decision 77's saturation; since M5-4 every width, the type type_at/2 finds,
+  # decision 147), then written: the power out is true, or false on the scan where the
+  # result left the type, 2147483647 + 1 giving -2147483648 in a dint and 127 + 1 -128 in an
+  # sint, with no fault, so no value outside its type ever reaches a state. The sources are read before the write, so the destination may be
   # one of them, `add total flow total`. De-energised, nothing is written and no
   # power passes, as `move`. No source a hand-built env holds outside the dint reaches a
   # scan, nor since decision 173 one that is no integer: the state is refused where it is
   # handed in (decision 171), superseding M5-2's provisional reading, computed exactly and
   # then wrapped; a member of an instance a hand-built env left as no map reads 0.
-  defp evaluate({op, _, [a, b, destination]}, {true, env}, _scan) when op in @sums do
-    {power, value} = wrapped(sum(op, integer(read(env, a)), integer(read(env, b))))
+  defp evaluate({op, _, [a, b, destination]}, {true, env}, scan) when op in @sums do
+    {power, value} =
+      wrapped(type_at(destination, scan), sum(op, integer(read(env, a)), integer(read(env, b))))
+
     {power, write(env, destination, value)}
   end
 
@@ -1841,12 +1847,12 @@ defmodule Logex.Runtime do
   # Energised, `div` writes the quotient truncated toward zero, IEC's 7/3 = 2 and
   # (-7)/3 = -2, and `mod` the remainder, IEC's IN1 - (IN1/IN2)*IN2, whose sign is the
   # dividend's: Elixir's `div/2` and `rem/2`. A zero divisor writes 0 and passes no power
-  # (decision 78). The one quotient outside a dint, -2147483648 / -1, wraps to
-  # -2147483648 with no power and no fault, as `add`'s sum does (decision 146); a
-  # remainder always fits. The power out is otherwise true. De-energised, nothing is
+  # (decision 78). The one quotient outside its type, a signed type's minimum by -1,
+  # -2147483648 / -1 in a dint, wraps to that minimum with no power and no fault, as
+  # `add`'s sum does (decision 146); a remainder always fits. The power out is otherwise true. De-energised, nothing is
   # written and no power passes.
-  defp evaluate({op, line, [a, b, destination]}, {true, env}, _scan) when op in @divisions do
-    divided({op, line}, integer(read(env, a)), integer(read(env, b)), destination, env)
+  defp evaluate({op, line, [a, b, destination]}, {true, env}, scan) when op in @divisions do
+    divided({op, line}, integer(read(env, a)), integer(read(env, b)), {destination, scan}, env)
   end
 
   defp evaluate({op, _, _}, {false, env}, _scan) when op in @divisions do
@@ -1854,12 +1860,12 @@ defmodule Logex.Runtime do
   end
 
   # M3-3: `neg` and `abs` (docs/naming.md; the vendors' NEG and IEC's ABS; decisions 98 and
-  # 146). Energised, `neg` writes 0 - a and `abs` a's absolute value, wrapped into the dint:
-  # -2147483648 alone has no positive twin, so each gives -2147483648 itself for it, with
-  # no power on that scan; the power out is otherwise true. De-energised, nothing is
+  # 146). Energised, `neg` writes 0 - a and `abs` a's absolute value, wrapped into the
+  # destination's type: its minimum alone has no positive twin, so each gives that minimum
+  # itself, -2147483648 in a dint, with no power on that scan; the power out is otherwise true. De-energised, nothing is
   # written and no power passes.
-  defp evaluate({op, _, [a, destination]}, {true, env}, _scan) when op in @signs do
-    {power, value} = wrapped(signed(op, integer(read(env, a))))
+  defp evaluate({op, _, [a, destination]}, {true, env}, scan) when op in @signs do
+    {power, value} = wrapped(type_at(destination, scan), signed(op, integer(read(env, a))))
     {power, write(env, destination, value)}
   end
 
@@ -2233,12 +2239,12 @@ defmodule Logex.Runtime do
   # M3-3: a division, by a divisor that is 0 or not. A zero divisor is a minor fault the
   # scan reports (decision 99), recorded in the routine's env as `{symbol, line}` until the
   # routine is done, which places it (`faulted/2`, `raised/4`).
-  defp divided(at, _a, 0, destination, env),
+  defp divided(at, _a, 0, {destination, _scan}, env),
     do:
       {false, Map.put(write(env, destination, 0), @faults, [at | as_list(Map.get(env, @faults))])}
 
-  defp divided({op, _line}, a, b, destination, env) do
-    {power, value} = wrapped(quotient(op, a, b))
+  defp divided({op, _line}, a, b, {destination, scan}, env) do
+    {power, value} = wrapped(type_at(destination, scan), quotient(op, a, b))
     {power, write(env, destination, value)}
   end
 
@@ -2248,13 +2254,22 @@ defmodule Logex.Runtime do
   defp signed(:neg, a), do: -a
   defp signed(:abs, a), do: abs(a)
 
+  # M5-4 (decision 147): the type an arithmetic instruction computes in, its destination's,
+  # a tag's in the routine's table or a member's of the built-in instance that holds it,
+  # the one kind of member logic outside a block writes.
+  defp type_at({:name, _, name}, %Scan{tags: tags}), do: :erlang.map_get(name, tags).type
+
+  defp type_at({:member, _, [instance, member]}, %Scan{tags: tags}) do
+    {:ok, %Member{type: type}} = FbType.member(:erlang.map_get(instance, tags).type, member)
+    type
+  end
+
   # M5-2: a result is brought into the dint by keeping its low 32 bits, read in two's
   # complement, and passes no power on the scan where that stored value is not the exact
   # one (decision 146, superseding decision 77's saturation); no fault is recorded for it.
   # A result inside the dint is itself and passes power. M5-3: so too into every integer
   # type, a conversion's, its width and kind the one table's, read unsigned for an
-  # unsigned type.
-  defp wrapped(value), do: wrapped(:dint, value)
+  # unsigned type; and since M5-4 an arithmetic result, into its destination's type.
 
   for %{type: type, kind: kind, width: width, range: range} <- Declarations.table(),
       kind in [:signed, :unsigned] do

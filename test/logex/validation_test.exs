@@ -1585,15 +1585,22 @@ defmodule Logex.ValidationTest do
   end
 
   describe "comparisons (M1-6)" do
-    test "take two dints, each a tag or a literal that fits 32 bits" do
+    # M5-4 (decision 147): two integers compare by value whatever their types, so a
+    # literal need only be an integer of some type, -2^63 to 2^64 - 1.
+    test "take two numbers, each a tag or a literal of some integer type" do
       assert source_errors(
                "var b bool\nvar d dint\nvar_input i dint\nvar_output o dint\n" <>
-                 "eq b d ote b\ngt d 2147483648 ote b\nge d ote b\nlt 2147483647 i le o i ote b"
+                 "eq b d ote b\ngt d 18446744073709551616 ote b\nge d ote b\n" <>
+                 "lt 2147483647 i le o i ote b\nlt -9223372036854775809 d ote b\n" <>
+                 "gt d 18446744073709551615 lt -9223372036854775808 d ote b"
              ) == [
-               "line 5: `eq` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 6: `gt` reads a dint: `2147483648` is outside -2147483648 to 2147483647",
+               "line 5: `eq` reads a number, but `b` is a bool (declared on line 1)",
+               "line 6: `gt` reads a number: `18446744073709551616` is outside " <>
+                 "-9223372036854775808 to 18446744073709551615, every integer type's values",
                "line 7: `ge` expects 2 operands (a value, then a value), found 1 " <>
-                 "before the instruction `ote`"
+                 "before the instruction `ote`",
+               "line 9: `lt` reads a number: `-9223372036854775809` is outside " <>
+                 "-9223372036854775808 to 18446744073709551615, every integer type's values"
              ]
     end
 
@@ -1632,32 +1639,34 @@ defmodule Logex.ValidationTest do
   describe "arithmetic (M3-3)" do
     # Each slot of each instruction meets a bool in one of these three tests, so every
     # slot's type is pinned: a slot widened to `:any` lets its bool through.
-    test "takes two dint sources, each a tag, a member or a literal, and a dint it writes" do
+    test "takes two number sources, each a tag, a member or a literal, and a number it writes" do
       assert source_errors(
                "var b bool\nvar d dint\nvar_input i dint\nvar t1 ton\nvar c ctu\n" <>
                  "add b d d\nsub d 2147483648 d\nmul d -2147483649 d\nadd d d\n" <>
                  "sub d 1 5\nmul d 1 b\nadd d 1 i\nsub d 1 t1.dn\nmul 2 d c.cv\nadd t1 1 d\n" <>
                  "add d b d\nadd d 1 b\nsub b 1 d\nsub d b d\nmul b 1 d\nmul d b d"
              ) == [
-               "line 6: `add` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 7: `sub` reads a dint: `2147483648` is outside -2147483648 to 2147483647",
-               "line 8: `mul` reads a dint: `-2147483649` is outside -2147483648 to 2147483647",
+               "line 6: `add` reads a number, but `b` is a bool (declared on line 1)",
+               "line 7: `sub` computes in `d`'s type, a dint: `2147483648` is outside " <>
+                 "-2147483648 to 2147483647",
+               "line 8: `mul` computes in `d`'s type, a dint: `-2147483649` is outside " <>
+                 "-2147483648 to 2147483647",
                "line 9: `add` expects 3 operands (a value, then a value, then a tag), found 2",
                "line 10: `sub` expects a tag, found `5`",
-               "line 11: `mul` writes a dint, but `b` is a bool (declared on line 1)",
+               "line 11: `mul` writes a number, but `b` is a bool (declared on line 1)",
                "line 12: `add` writes `i`, a var_input (declared on line 3): logic must not " <>
                  "write an input",
-               "line 13: `sub` writes a dint, but `t1.dn` is a bool",
+               "line 13: `sub` writes a number, but `t1.dn` is a bool",
                "line 13: `sub` writes `t1.dn`, but logic may write only `.pre` and `.acc` of a ton",
                "line 14: `mul` writes `c.cv`, but logic may write only `.r` and `.pv` of a ctu",
-               "line 15: `add` reads a dint, but `t1` is a ton (declared on line 4): name one " <>
+               "line 15: `add` reads a number, but `t1` is a ton (declared on line 4): name one " <>
                  "of its members, as in `t1.acc`",
-               "line 16: `add` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 17: `add` writes a dint, but `b` is a bool (declared on line 1)",
-               "line 18: `sub` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 19: `sub` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 20: `mul` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 21: `mul` reads a dint, but `b` is a bool (declared on line 1)"
+               "line 16: `add` reads a number, but `b` is a bool (declared on line 1)",
+               "line 17: `add` writes a number, but `b` is a bool (declared on line 1)",
+               "line 18: `sub` reads a number, but `b` is a bool (declared on line 1)",
+               "line 19: `sub` reads a number, but `b` is a bool (declared on line 1)",
+               "line 20: `mul` reads a number, but `b` is a bool (declared on line 1)",
+               "line 21: `mul` reads a number, but `b` is a bool (declared on line 1)"
              ]
     end
 
@@ -1675,21 +1684,21 @@ defmodule Logex.ValidationTest do
              ]
     end
 
-    test "`div` and `mod` take two dint sources and write a dint, as `add` does" do
+    test "`div` takes two number sources and writes a number, as `add` does, and `mod` integers" do
       assert source_errors(
                "var b bool\nvar d dint\nvar_input i dint\n" <>
                  "div d b d\nmod b 2 d\ndiv d 2 i\nmod d 2 5\ndiv d 2 b\n" <>
                  "div b 2 d\nmod d b d\nmod d 2 b"
              ) == [
-               "line 4: `div` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 5: `mod` reads a dint, but `b` is a bool (declared on line 1)",
+               "line 4: `div` reads a number, but `b` is a bool (declared on line 1)",
+               "line 5: `mod` reads an integer, but `b` is a bool (declared on line 1)",
                "line 6: `div` writes `i`, a var_input (declared on line 3): logic must not " <>
                  "write an input",
                "line 7: `mod` expects a tag, found `5`",
-               "line 8: `div` writes a dint, but `b` is a bool (declared on line 1)",
-               "line 9: `div` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 10: `mod` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 11: `mod` writes a dint, but `b` is a bool (declared on line 1)"
+               "line 8: `div` writes a number, but `b` is a bool (declared on line 1)",
+               "line 9: `div` reads a number, but `b` is a bool (declared on line 1)",
+               "line 10: `mod` reads an integer, but `b` is a bool (declared on line 1)",
+               "line 11: `mod` writes an integer, but `b` is a bool (declared on line 1)"
              ]
     end
 
@@ -1710,23 +1719,24 @@ defmodule Logex.ValidationTest do
       assert source_warnings("var d dint\ndiv 0 d d\nmod d d d\nadd 0 d d\nsub d 0 d") == []
     end
 
-    test "`neg` and `abs` take a dint source, a tag, a member or a literal, and a dint they write" do
+    test "`neg` and `abs` take a number source, a tag, a member or a literal, and a number they write" do
       assert source_errors(
                "var b bool\nvar d dint\nvar_input i dint\nvar t1 ton\n" <>
                  "neg b d\nabs 2147483648 d\nneg d\nabs d 5\nneg d i\nabs d t1.dn\nneg d d d\n" <>
                  "neg d b\nabs b d"
              ) == [
-               "line 5: `neg` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 6: `abs` reads a dint: `2147483648` is outside -2147483648 to 2147483647",
+               "line 5: `neg` reads a number, but `b` is a bool (declared on line 1)",
+               "line 6: `abs` computes in `d`'s type, a dint: `2147483648` is outside " <>
+                 "-2147483648 to 2147483647",
                "line 7: `neg` expects 2 operands (a value, then a tag), found 1",
                "line 8: `abs` expects a tag, found `5`",
                "line 9: `neg` writes `i`, a var_input (declared on line 3): logic must not " <>
                  "write an input",
-               "line 10: `abs` writes a dint, but `t1.dn` is a bool",
+               "line 10: `abs` writes a number, but `t1.dn` is a bool",
                "line 10: `abs` writes `t1.dn`, but logic may write only `.pre` and `.acc` of a ton",
                "line 11: unknown instruction `d`",
-               "line 12: `neg` writes a dint, but `b` is a bool (declared on line 1)",
-               "line 13: `abs` reads a dint, but `b` is a bool (declared on line 1)"
+               "line 12: `neg` writes a number, but `b` is a bool (declared on line 1)",
+               "line 13: `abs` reads a number, but `b` is a bool (declared on line 1)"
              ]
 
       assert source_warnings(
@@ -2722,7 +2732,7 @@ xic a ton t1 7") == [
                "line 5: `move` writes `t1.dn`, a bool, into `d`, a dint: a bool does not widen " <>
                  "into a dint, and logex has no conversion between them",
                "line 6: `move` writes `2147483648` into `t1.pre`, a dint: it is outside -2147483648 to 2147483647",
-               "line 7: `lt` reads a dint, but `t1.tt` is a bool"
+               "line 7: `lt` reads a number, but `t1.tt` is a bool"
              ]
     end
 
@@ -2841,7 +2851,7 @@ xic a ton t1 7") == [
                "line 6: `move` writes a value, but `t1` is a ton (declared on line 1): " <>
                  "name one of its members, as in `t1.pre`",
                "line 7: `ote` writes a bool, but `t1` is a ton (declared on line 1)",
-               "line 8: `eq` reads a dint, but `t1` is a ton (declared on line 1): " <>
+               "line 8: `eq` reads a number, but `t1` is a ton (declared on line 1): " <>
                  "name one of its members, as in `t1.acc`",
                # One diagnostic: an instance named whole is not also unified with `a`.
                "line 9: `move` reads a value, but `t1` is a ton (declared on line 1): " <>

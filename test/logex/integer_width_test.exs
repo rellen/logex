@@ -313,20 +313,29 @@ defmodule Logex.IntegerWidthTest do
              ]
     end
 
-    # Arithmetic and comparison read and write dints alone until PLAN M5-4, so another
-    # width in one of their slots is told the conversion that bridges it.
-    test "an arithmetic or comparison slot is a dint's, another width told its conversion" do
+    # Since PLAN M5-4 (decision 147) arithmetic computes in its destination's type, each
+    # source widening into it by Figure 11, and a comparison reads two integers of any
+    # types by value; `arithmetic_test.exs` holds every rule at every width.
+    test "an arithmetic or comparison slot takes every width, a source widening into the " <>
+           "destination's type" do
       for type <- @types -- [:dint] do
         assert messages(
                  "var i #{type}\nvar d dint\nvar b bool\nadd i 1 d\nadd d 1 i\neq i 5 ote b"
-               ) == [
-                 "`add` reads a dint, but `i` is #{a(type)} (declared on line 1): convert it " <>
-                   "first, with `#{type}_to_dint`",
-                 "`add` writes a dint, but `i` is #{a(type)} (declared on line 1): write a " <>
-                   "dint and convert it, with `dint_to_#{type}`",
-                 "`eq` reads a dint, but `i` is #{a(type)} (declared on line 1): convert it " <>
-                   "first, with `#{type}_to_dint`"
-               ]
+               ) ==
+                 for(
+                   true <- [type in [:lint, :udint, :ulint]],
+                   do:
+                     "`add` computes in `d`'s type, a dint, but `i` is #{a(type)} (declared " <>
+                       "on line 1): #{a(type)} does not widen into a dint, so convert it " <>
+                       "first, with `#{type}_to_dint`"
+                 ) ++
+                   for(
+                     true <- [type != :lint],
+                     do:
+                       "`add` computes in `i`'s type, #{a(type)}, but `d` is a dint (declared " <>
+                         "on line 2): a dint does not widen into #{a(type)}, so convert it " <>
+                         "first, with `dint_to_#{type}`"
+                   )
       end
     end
   end

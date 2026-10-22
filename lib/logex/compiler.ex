@@ -24,7 +24,7 @@ defmodule Logex.Compiler do
 
   alias Logex.{Declarations, Diagnostic, FbType, Program, Tag, Walk}
   alias Logex.FbType.Member
-  import Logex.Declarations, only: [is_elementary: 1]
+  import Logex.Declarations, only: [is_elementary: 1, is_class: 1]
 
   defdelegate tokenize(source), to: Logex.Lexer
   defdelegate parse(tokens), to: Logex.Parser
@@ -39,8 +39,12 @@ defmodule Logex.Compiler do
   # the IR keeps as `{:label, line, name}`.
   # Type: an elementary type of `Logex.Declarations.table/0`, `:bool`, `:dint` or since M5-3
   # any integer type, or `:any`, which IEC's MOVE takes (`IN : ANY` -> `OUT : ANY`,
-  # docs/naming.md), its source widening into its destination's type (decision 147). A tag here may be
-  # a member of an instance, `t1.acc`, which has the type its schema gives it (M1-6).
+  # docs/naming.md), its source widening into its destination's type (decision 147), or
+  # since M5-4 one of IEC's generic types, `:any_int` or `:any_num`
+  # (`Logex.Declarations.is_class/1`), whose operands classed/3 holds together: the
+  # instruction computes in its destination's type, each source widening into it. A tag
+  # here may be a member of an instance, `t1.acc`, which has the type its schema gives it
+  # (M1-6).
   # Mnemonics are matched case-insensitively and are reserved: no tag may be named after
   # one, in any case.
   @instructions %{
@@ -57,12 +61,12 @@ defmodule Logex.Compiler do
     # falling, and passing that power on (decision 100).
     "osr" => {:osr, [{:write, :bool}, {:write, :bool}]},
     "osf" => {:osf, [{:write, :bool}, {:write, :bool}]},
-    "eq" => {:eq, [{:value, :dint}, {:value, :dint}]},
-    "ne" => {:ne, [{:value, :dint}, {:value, :dint}]},
-    "lt" => {:lt, [{:value, :dint}, {:value, :dint}]},
-    "gt" => {:gt, [{:value, :dint}, {:value, :dint}]},
-    "le" => {:le, [{:value, :dint}, {:value, :dint}]},
-    "ge" => {:ge, [{:value, :dint}, {:value, :dint}]},
+    "eq" => {:eq, [{:value, :any_num}, {:value, :any_num}]},
+    "ne" => {:ne, [{:value, :any_num}, {:value, :any_num}]},
+    "lt" => {:lt, [{:value, :any_num}, {:value, :any_num}]},
+    "gt" => {:gt, [{:value, :any_num}, {:value, :any_num}]},
+    "le" => {:le, [{:value, :any_num}, {:value, :any_num}]},
+    "ge" => {:ge, [{:value, :any_num}, {:value, :any_num}]},
     "ton" => {:ton, [{:instance, "ton"}, {:preset, :dint}]},
     # M3-2: the off-delay timer, rung power its IN, the preset its starting `.pre` in ms.
     "tof" => {:tof, [{:instance, "tof"}, {:preset, :dint}]},
@@ -76,22 +80,26 @@ defmodule Logex.Compiler do
     # (decision 85).
     "ctu" => {:ctu, [{:instance, ["ctu", "ctud"]}, {:preset, :dint}]},
     "ctd" => {:ctd, [{:instance, ["ctd", "ctud"]}, {:preset, :dint}]},
-    # M3-3: IEC's arithmetic on dints (decision 79), two sources, each a tag, a member or a
-    # literal, then the destination it writes: `add total flow total`, `sub a b d` being
-    # a - b. Rung power is IEC's EN and the power out its ENO (decision 98): false where the
-    # result leaves the dint, which wraps, its low 32 bits kept (decision 146, M5-2).
-    "add" => {:add, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
-    "sub" => {:sub, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
-    "mul" => {:mul, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
+    # M3-3: IEC's arithmetic (decision 79), two sources, each a tag, a member or a literal,
+    # then the destination it writes: `add total flow total`, `sub a b d` being a - b. Rung
+    # power is IEC's EN and the power out its ENO (decision 98): false where the result
+    # leaves its type, which wraps, its low bits kept (decision 146, M5-2). Since M5-4
+    # every integer width, IEC's ANY_NUM, computed in the destination's type, each source
+    # widening into it by Ed 3 Figure 11 (decision 147).
+    "add" => {:add, [{:value, :any_num}, {:value, :any_num}, {:write, :any_num}]},
+    "sub" => {:sub, [{:value, :any_num}, {:value, :any_num}, {:write, :any_num}]},
+    "mul" => {:mul, [{:value, :any_num}, {:value, :any_num}, {:write, :any_num}]},
     # M3-3: `div a b d` is a / b truncated toward zero, and `mod a b d` its remainder, the
     # dividend's sign. A zero divisor gives 0 and no power (decision 78); a literal one is
-    # refused.
-    "div" => {:div, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
-    "mod" => {:mod, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
+    # refused. IEC's MOD is ANY_INT (Ed 3 Table 29), so `mod` stays an integer's when the
+    # reals land (M5-10).
+    "div" => {:div, [{:value, :any_num}, {:value, :any_num}, {:write, :any_num}]},
+    "mod" => {:mod, [{:value, :any_int}, {:value, :any_int}, {:write, :any_int}]},
     # M3-3: `neg a d` is 0 - a, the vendors' NEG, and `abs a d` IEC's ABS: one source, then
-    # the destination. The most negative dint has no positive twin, so it alone overflows.
-    "neg" => {:neg, [{:value, :dint}, {:write, :dint}]},
-    "abs" => {:abs, [{:value, :dint}, {:write, :dint}]},
+    # the destination. A signed type's most negative value has no positive twin, so it alone
+    # overflows; `neg` into an unsigned type is refused (decision 145).
+    "neg" => {:neg, [{:value, :any_num}, {:write, :any_num}]},
+    "abs" => {:abs, [{:value, :any_num}, {:write, :any_num}]},
     # M3-5: the forward jump (decisions 81 and 104): `jmp done` names the label that a later
     # rung of its routine begins with, `lbl done`, and passes on the power it receives. A
     # label is a name of the routine's own, never a tag (decision 105).
@@ -1813,16 +1821,28 @@ defmodule Logex.Compiler do
     slots = Enum.zip(signature, operands)
     diagnostics = Enum.reduce(slots, diagnostics, &check_tag(&1, at, scope, &2))
 
-    unify(
-      for({{access, :any}, operand} <- slots, typed = typed(access, operand, scope), do: typed),
+    diagnostics =
+      unify(
+        for({{access, :any}, operand} <- slots, typed = typed(access, operand, scope), do: typed),
+        at,
+        diagnostics
+      )
+
+    classed(
+      for(
+        {{access, class}, operand} <- slots,
+        is_class(class),
+        do: {access, class, typed(access, operand, scope)}
+      ),
       at,
       diagnostics
     )
   end
 
   # A literal in a slot of an elementary type must fit it, as a declared initial value must
-  # (M1-6: the comparisons, whose slots are dints). An `:any` slot's literal is checked
-  # against the tag beside it, by unify/3. Since M3-3 a literal may be negative (decision
+  # (M1-6: the comparisons, whose slots were dints; since M5-4 a conversion's source). An
+  # `:any` slot's literal is checked against the tag beside it, by unify/3, and a generic
+  # slot's against the type its instruction computes in, by classed/3. Since M3-3 a literal may be negative (decision
   # 97), so each meets one too small too.
   defp check_tag({{:value, type}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics)
        when is_elementary(type),
@@ -2132,16 +2152,33 @@ defmodule Logex.Compiler do
     do: of_type(Enum.filter(FbType.public(type), &(&1.role == :output)), slot_type)
 
   defp of_type(members, :any), do: List.first(members)
+
+  defp of_type(members, class) when is_class(class),
+    do: Enum.find(members, &(is_elementary(&1.type) and Declarations.in_class?(&1.type, class)))
+
   defp of_type(members, slot_type), do: Enum.find(members, &(&1.type == slot_type))
 
   defp example(nil, _tag), do: ""
   defp example(member, tag), do: ": name one of its members, as in `#{tag.name}.#{member.name}`"
 
   defp a_type(:any), do: "a value"
+  defp a_type(class) when is_class(class), do: Declarations.a_class(class)
   defp a_type([_ | _] = types), do: Enum.map_join(types, " or ", &Declarations.a_or_an/1)
   defp a_type(type), do: Declarations.a_or_an(to_string(type))
 
   defp check_member_type(diagnostics, {_access, :any}, _name, _member, _at), do: diagnostics
+
+  # M5-4: a slot of a generic type takes a member of any of its types, which classed/3 then
+  # holds to the instruction's other operands.
+  defp check_member_type(diagnostics, {access, class}, name, member, at) when is_class(class),
+    do:
+      member_widened(
+        of_class?(member.type, class),
+        diagnostics,
+        {access, class},
+        {name, member},
+        at
+      )
 
   defp check_member_type(diagnostics, {_access, type}, _name, %Member{type: type}, _at),
     do: diagnostics
@@ -2167,6 +2204,9 @@ defmodule Logex.Compiler do
       )
       | diagnostics
     ]
+
+  defp of_class?(type, class) when is_elementary(type), do: Declarations.in_class?(type, class)
+  defp of_class?(_type, _class), do: false
 
   # Decision 176: a conversion's source widens as an input of IEC's typed functions does,
   # `ADD_REAL` taking an INT (Ed 3 Table 21, Example 2): `dint_to_int` takes an sint, an
@@ -2205,6 +2245,10 @@ defmodule Logex.Compiler do
         Declarations.a_or_an(type.name)
 
   defp check_type(diagnostics, _access, :any, _tag, _at), do: diagnostics
+
+  defp check_type(diagnostics, access, class, tag, at) when is_class(class),
+    do: tag_widened(of_class?(tag.type, class), diagnostics, {access, class}, tag, at)
+
   defp check_type(diagnostics, _access, type, %Tag{type: type}, _at), do: diagnostics
 
   defp check_type(diagnostics, access, type, tag, {_line, word} = at),
@@ -2227,21 +2271,18 @@ defmodule Logex.Compiler do
     [diagnostic(line, message) | diagnostics]
   end
 
-  # M5-3 (decision 148): an integer slot given another integer type is told the conversion
-  # that bridges them, where logex has one: before the read, or after the write. A
-  # conversion's own slot is told the conversion that does the whole job instead, from the
-  # type found or into it, or `move` where the two are one type.
+  # M5-3 (decision 148): a conversion's own slot is told the conversion that does the whole
+  # job, from the type found or into it, or `move` where the two are one type. Since M5-4
+  # every other slot that takes an integer takes a generic type, which classed/3 holds to
+  # the instruction's other operands, so a fixed slot given another type, a bool's given an
+  # integer, has no conversion to name.
   defp converted(word, access, found, type),
     do: converting(Map.get(@conversions, String.downcase(word)), access, found, type)
 
   defp converting({_symbol, [{:value, from}, {:write, to}]}, access, found, _type),
     do: instead(conversion_of(access, found, {from, to}))
 
-  defp converting(nil, :write, found, type),
-    do: convert_with(Declarations.conversion(type, found), {:write, type})
-
-  defp converting(nil, _read, found, type),
-    do: convert_with(Declarations.conversion(found, type), :read)
+  defp converting(nil, _access, _found, _type), do: ""
 
   defp conversion_of(:write, found, {from, _to}),
     do: {Declarations.conversion(from, found), found, from}
@@ -2252,12 +2293,6 @@ defmodule Logex.Compiler do
   defp instead({nil, same, same}), do: ": use `move`"
   defp instead({nil, _found, _type}), do: ""
   defp instead({conversion, _found, _type}), do: ": use `#{conversion}`"
-
-  defp convert_with(nil, _access), do: ""
-  defp convert_with(conversion, :read), do: ": convert it first, with `#{conversion}`"
-
-  defp convert_with(conversion, {:write, type}),
-    do: ": write #{a_type(type)} and convert it, with `#{conversion}`"
 
   defp verb(:write), do: "writes"
   defp verb(:instance), do: "runs"
@@ -2317,6 +2352,123 @@ defmodule Logex.Compiler do
 
   defp conversion_of(nil), do: ", and logex has no conversion between them"
   defp conversion_of(conversion), do: ", so convert it with `#{conversion}`"
+
+  # M5-4 (decisions 145, 146 and 147): the operands of an instruction whose slots take a
+  # generic type, ANY_NUM or ANY_INT, held together, so that a three-operand `add` is
+  # checked whole. Where it writes a destination of the class, it computes in that type,
+  # as IEC's typed `ADD_<type>`: each source tag must be of a type Ed 3 Figure 11 widens
+  # into it, told the conversion that bridges them where it is not, and a literal must fit
+  # it. A comparison writes nothing: two integers compare by value whatever their types, so
+  # a tag needs nothing of the other operand, and a literal must fit some integer type,
+  # the class's whole range, as must one whose destination is not of the class or is not
+  # resolved, reported already. `neg` into an unsigned destination is refused (decision
+  # 145): such a type holds no negative value, so its only results would be 0 and a wrap.
+  defp classed([], _at, diagnostics), do: diagnostics
+
+  defp classed([{_access, class, _typed} | _] = operands, {_line, word} = at, diagnostics) do
+    {writes, reads} = Enum.split_with(operands, &match?({:write, _class, _typed}, &1))
+
+    {diagnostics, computed} =
+      negated(symbol_of(word), computed_in(writes, class), at, diagnostics)
+
+    Enum.reduce(reads, diagnostics, &source(&1, computed, at, &2))
+  end
+
+  defp computed_in([{:write, class, %Tag{type: type} = tag}], class) when is_elementary(type),
+    do: of_class(Declarations.in_class?(type, class), tag, class)
+
+  defp computed_in(_none_or_unresolved, class), do: {:class, class}
+
+  defp of_class(true, tag, _class), do: tag
+  defp of_class(false, _tag, class), do: {:class, class}
+
+  defp source(
+         {:value, class, %Tag{type: from} = tag},
+         %Tag{type: to} = destination,
+         at,
+         diagnostics
+       )
+       when is_elementary(from),
+       do:
+         computes(
+           Declarations.in_class?(from, class) and not Declarations.widens?(from, to),
+           tag,
+           destination,
+           at,
+           diagnostics
+         )
+
+  defp source(
+         {:value, _class, {:literal, value}},
+         %Tag{type: type} = destination,
+         at,
+         diagnostics
+       ),
+       do: literal_in(Declarations.fits?(type, value), value, destination, at, diagnostics)
+
+  defp source({:value, _class, {:literal, value}}, {:class, class}, at, diagnostics),
+    do: class_literal(value in Declarations.class_range(class), value, class, at, diagnostics)
+
+  defp source(_operand, _computed, _at, diagnostics), do: diagnostics
+
+  defp computes(false, _source, _destination, _at, diagnostics), do: diagnostics
+
+  defp computes(true, source, destination, {line, word}, diagnostics) do
+    message =
+      "`#{word}` computes in `#{destination.name}`'s type, #{a_type(destination.type)}, " <>
+        "but `#{source.name}` is #{a_type(source.type)}#{declared(source)}: " <>
+        "#{a_type(source.type)} does not widen into #{a_type(destination.type)}, so " <>
+        "convert it first, with `#{Declarations.conversion(source.type, destination.type)}`"
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp literal_in(true, _value, _destination, _at, diagnostics), do: diagnostics
+
+  defp literal_in(false, value, destination, {line, word}, diagnostics),
+    do: [
+      diagnostic(
+        line,
+        "`#{word}` computes in `#{destination.name}`'s type, " <>
+          "#{a_type(destination.type)}: " <> Declarations.misfit(destination.type, "`#{value}`")
+      )
+      | diagnostics
+    ]
+
+  defp class_literal(true, _value, _class, _at, diagnostics), do: diagnostics
+
+  defp class_literal(false, value, class, {line, word}, diagnostics) do
+    first..last//1 = Declarations.class_range(class)
+
+    message =
+      "`#{word}` reads #{a_type(class)}: `#{value}` is outside #{first} to #{last}, " <>
+        "every integer type's values"
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  # A `neg` refused for its unsigned destination is told that alone, its sources then held
+  # to the class only, since no conversion into that destination would make it compile.
+  defp negated(:neg, %Tag{type: type} = destination, at, diagnostics),
+    do: unsigned(Declarations.kind(type), destination, at, diagnostics)
+
+  defp negated(_symbol, computed, _at, diagnostics), do: {diagnostics, computed}
+
+  defp unsigned(:unsigned, destination, {line, word}, diagnostics),
+    do: {
+      [
+        diagnostic(
+          line,
+          "`#{word}` writes `#{destination.name}`, #{a_type(destination.type)}" <>
+            "#{declared(destination)}, which holds no negative value: `#{word}` writes a " <>
+            "signed type"
+        )
+        | diagnostics
+      ],
+      {:class, :any_num}
+    }
+
+  defp unsigned(_kind, destination, _at, diagnostics), do: {diagnostics, destination}
 
   defp fits(true, _value, _tag, _at, diagnostics), do: diagnostics
 

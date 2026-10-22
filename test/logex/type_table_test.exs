@@ -311,11 +311,15 @@ defmodule Logex.TypeTableTest do
                "`d` is a dint: `2147483648` is outside -2147483648 to 2147483647"
     end
 
-    test "a literal in a dint slot, a literal moved into each type, and two types met" do
-      assert messages("var d dint\nvar b bool\neq d 2147483648 ote b\nge -2147483649 d ote b") ==
+    # M5-4 (decision 147): an arithmetic instruction computes in its destination's type, so
+    # a literal source must fit it.
+    test "a literal computed in a dint, a literal moved into each type, and two types met" do
+      assert messages("var d dint\nvar b bool\nadd d 2147483648 d\nsub -2147483649 d d") ==
                [
-                 "`eq` reads a dint: `2147483648` is outside -2147483648 to 2147483647",
-                 "`ge` reads a dint: `-2147483649` is outside -2147483648 to 2147483647"
+                 "`add` computes in `d`'s type, a dint: `2147483648` is outside -2147483648 " <>
+                   "to 2147483647",
+                 "`sub` computes in `d`'s type, a dint: `-2147483649` is outside -2147483648 " <>
+                   "to 2147483647"
                ]
 
       assert messages(

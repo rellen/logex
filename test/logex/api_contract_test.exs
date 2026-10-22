@@ -240,7 +240,7 @@ defmodule Logex.ApiContractTest do
     "ton t1 3000000000",
     "ton a 5",
     "eq a n ote a",
-    "gt n 3000000000 ote a",
+    "gt n 18446744073709551616 ote a",
     "xic t9.dn ote a",
     "xic a ton t1 5 ote a",
     "xic a ons s1 ote b\nxio a ons s1",
@@ -268,8 +268,8 @@ defmodule Logex.ApiContractTest do
     "takes its preset as a number",
     "takes a preset of 0 to",
     "`ton` runs a ton, but",
-    "`eq` reads a dint, but",
-    "`gt` reads a dint: `3000000000`",
+    "`eq` reads a number, but",
+    "`gt` reads a number: `18446744073709551616`",
     "`t9` is not declared",
     "follows `ton t1` on its path",
     "is already the storage bit of the `ons`",
@@ -325,6 +325,12 @@ defmodule Logex.ApiContractTest do
     udint: {:unsigned, 32},
     ulint: {:unsigned, 64}
   }
+
+  # The widths in the table's order, a list: a map's keys come in an order that may differ
+  # from one run of the VM to the next, an atom key being ordered by its index in the atom
+  # table, so a draw from `Map.keys(@widths)` repeats only where the atoms were made in one
+  # order (M5-4).
+  @width_types [:sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint]
 
   @figure_11 %{
     sint: [:int, :dint, :lint],
@@ -463,11 +469,11 @@ defmodule Logex.ApiContractTest do
   defp source(2), do: soup(@words)
   defp source(3), do: soup(@words ++ @lex_errors)
 
-  defp width_draw, do: width_draw(pick(Map.keys(@widths)))
+  defp width_draw, do: width_draw(pick(@width_types))
 
   defp width_draw(from) do
     wide = pick([from | Map.fetch!(@figure_11, from)])
-    to = pick(Map.keys(@widths) -- [from])
+    to = pick(@width_types -- [from])
 
     {[
        "var_input w #{from}",
@@ -574,7 +580,7 @@ defmodule Logex.ApiContractTest do
 
     # M5-3: and a program of each width, a call at each of its edges, so every width's two
     # limits are drawn whatever the seed, each judged by the contract's own words.
-    for from <- Map.keys(@widths) do
+    for from <- @width_types do
       {inputs, rungs} = width_draw(from)
       {:ok, program} = Logex.compile(Enum.join(inputs ++ rungs, "\n"), name: "p")
       state = Runtime.instance(program)
@@ -600,7 +606,7 @@ defmodule Logex.ApiContractTest do
 
     # M5-3: every width's two limits accepted and scanned, and a conversion that wraps
     # and one that fits.
-    limits = for type <- Map.keys(@widths), limit <- [:low, :high, :inside], do: {type, limit}
+    limits = for type <- @width_types, limit <- [:low, :high, :inside], do: {type, limit}
 
     assert Process.get(:widths, MapSet.new()) ==
              MapSet.new(limits ++ [{:wrapped, true}, {:wrapped, false}])
@@ -6462,37 +6468,54 @@ defmodule Logex.ApiContractTest do
 
   # What the arithmetic walk must be seen to do, at least once each.
   @ar_reach [
-    :above,
-    :below,
-    :far_past,
-    :div_by_zero,
-    :mod_by_zero,
-    :min_by_minus_one,
-    :neg_min,
-    :abs_min,
-    :mod_negative,
-    :cut,
-    :de_energised,
-    :block_fault,
-    :block_frozen,
-    :event_fault,
-    :edit_kept,
-    :restarted,
-    :negative_literal
-  ]
+              :above,
+              :below,
+              :far_past,
+              :div_by_zero,
+              :mod_by_zero,
+              :min_by_minus_one,
+              :neg_min,
+              :abs_min,
+              :mod_negative,
+              :cut,
+              :de_energised,
+              :block_fault,
+              :block_frozen,
+              :event_fault,
+              :edit_kept,
+              :restarted,
+              :negative_literal,
+              :widened
+            ] ++ for(type <- @width_types, do: {:wrapped, type})
 
-  @ar_max 2_147_483_647
-  @ar_min -2_147_483_648
+  # Since M5-4 every tag of a program is of a width drawn from `@widths`, each width's
+  # range from IEC's footnotes, restated above and never read from Logex.Declarations, and
+  # an instruction's sources only of a width Figure 11 widens into its destination's, the
+  # type it computes in (decision 147): the oracle wraps there (decision 146).
 
-  # Values near the dint's limits and near 0, which a source, a literal or an input, takes.
-  @ar_pool [0, 0, 1, -1, 2, -2, 3, -3, 7, -7, 46_341, -46_341, 65_536, -65_536] ++
-             [@ar_max, @ar_min, @ar_max - 1, @ar_min + 1, 1_000_000_000, -1_000_000_000]
+  # Values near a width's limits and near 0, which a source, a literal or an input takes:
+  # the limits, one inside each, small values of each sign, and 2^(N/2), whose square passes
+  # the top.
+  defp ar_pool(type) do
+    first..last//1 = width_range(type)
+    {_kind, n} = Map.fetch!(@widths, type)
+    root = Integer.pow(2, div(n, 2))
+
+    Enum.filter(
+      [0, 0, 1, -1, 2, -2, 3, -3, 7, -7, root, -root, last, first, last - 1, first + 1],
+      &(&1 in first..last//1)
+    )
+  end
 
   @ar_ops [:add, :sub, :mul, :div, :mod, :neg, :abs]
 
-  test "arithmetic runs as IEC's rules restated: every scan's results, power out and faults " <>
-         "agree with an oracle that knows nothing of logex, alone, in a block, in a resource " <>
-         "and across an edit, and no value outside a dint reaches a state" do
+  # Since M5-4 every tag is of a width drawn from the eight, and the reach adds a source
+  # widened and a wrap in each width: at 150 specs it holds at this seed and, in its
+  # place, at each of {n, 10, 333}, n from 1 to 30, the rarest atom a width's minimum
+  # divided by -1, which a dividend and a divisor drawn for it make likely.
+  test "arithmetic runs as IEC's rules restated at every width: every scan's results, " <>
+         "power out and faults agree with an oracle that knows nothing of logex, alone, in a " <>
+         "block, in a resource and across an edit" do
     :rand.seed(:exsss, {2026, 10, 333})
 
     for _ <- 1..150 do
@@ -6507,78 +6530,138 @@ defmodule Logex.ApiContractTest do
 
   defp ar_reached(name), do: reached(:ar_reach, name)
 
-  # A program's rungs over four dint inputs, three vars and two dint outputs, each rung an
-  # optional contact on `g`, one to three arithmetic instructions and an optional coil, and
-  # now and then a block `c1` of the same kind, run by a `cal` on `gb`. Each var starts at
-  # a value drawn near a limit.
-  defp ar_spec do
+  # The types a spec's tags take: the block's one width, if it has a block, and each
+  # program tag's; `x0` and `x1`, which its `cal` gives the block's var_inputs, of a width
+  # that widens into the block's (decision 159), and `yb`, which it fills, the block's.
+  defp ar_types do
+    block = pick(@width_types)
+    into = Enum.filter(@width_types, &(&1 == block or block in Map.fetch!(@figure_11, &1)))
+
+    Map.new(~w(x2 x3 v0 v1 v2 y0 y1), &{&1, pick(@width_types)})
+    |> Map.merge(%{"x0" => pick(into), "x1" => pick(into), "yb" => block, "block" => block})
+  end
+
+  # A program's rungs over four inputs, three vars and two outputs, each rung an optional
+  # contact on `g`, one to three arithmetic instructions and an optional coil, and now and
+  # then a block `c1` of the same kind, run by a `cal` on `gb`. Each var starts at a value
+  # drawn near a limit of its type.
+  defp ar_spec(types \\ ar_types(), inits \\ nil, block \\ :draw) do
+    inits = inits || for(i <- 0..2, do: pick(ar_pool(types["v#{i}"])))
+    block_types = Map.new(~w(a b w r), &{&1, types["block"]})
+
     %{
-      inits: for(_ <- 1..3, do: pick(@ar_pool)),
+      types: types,
+      inits: inits,
       rungs:
         for(
           _ <- 1..Enum.random(2..6),
-          do: ar_rung(~w(x0 x1 x2 x3 v0 v1 v2 y0 y1), ~w(v0 v1 v2 y0 y1), ~w(ok0 ok1 ok2), "g")
+          do:
+            ar_rung(
+              types,
+              ~w(x0 x1 x2 x3 v0 v1 v2 y0 y1),
+              ~w(v0 v1 v2 y0 y1),
+              ~w(ok0 ok1 ok2),
+              "g"
+            )
         ),
-      block:
-        if(:rand.uniform(3) == 1,
-          do: nil,
-          else: %{
-            init: pick(@ar_pool),
-            rungs: for(_ <- 1..Enum.random(1..3), do: ar_rung(~w(a b w r), ~w(w r), ~w(ok), "go"))
-          }
-        )
+      block: ar_block(block, block_types)
     }
   end
 
-  defp ar_rung(sources, destinations, coils, contact) do
-    {pick([nil, nil, {:xic, contact}, {:xio, contact}]),
-     for(_ <- 1..Enum.random(1..3), do: ar_instruction(pick(@ar_ops), sources, destinations)),
-     pick([nil | coils])}
+  defp ar_block(:draw, types) do
+    if(:rand.uniform(3) == 1,
+      do: nil,
+      else: %{
+        init: pick(ar_pool(types["w"])),
+        rungs:
+          for(_ <- 1..Enum.random(1..3), do: ar_rung(types, ~w(a b w r), ~w(w r), ~w(ok), "go"))
+      }
+    )
   end
 
-  defp ar_instruction(op, sources, destinations) when op in [:neg, :abs],
-    do: {op, [ar_source(sources)], pick(destinations)}
+  defp ar_block(block, _types), do: block
 
-  defp ar_instruction(op, sources, destinations) when op in [:div, :mod],
-    do: {op, [ar_source(sources), ar_divisor(sources)], pick(destinations)}
+  defp ar_rung(types, sources, destinations, coils, contact) do
+    {pick([nil, nil, {:xic, contact}, {:xio, contact}]),
+     for(
+       _ <- 1..Enum.random(1..3),
+       do: ar_instruction(pick(@ar_ops), types, sources, pick(destinations))
+     ), pick([nil | coils])}
+  end
 
-  defp ar_instruction(op, sources, destinations),
-    do: {op, [ar_source(sources), ar_source(sources)], pick(destinations)}
+  # The sources an instruction into `destination` may read: the tags of a width Figure 11
+  # widens into its type, its own among them; and a `neg` into an unsigned destination,
+  # which is refused (decision 145), is an `abs` instead.
+  defp ar_instruction(op, types, sources, destination) do
+    into = types[destination]
+    widening = Enum.filter(sources, &(types[&1] == into or into in @figure_11[types[&1]]))
+    ar_instruction_of(ar_op(op, Map.fetch!(@widths, into)), {into, widening}, destination)
+  end
 
-  defp ar_source(sources),
-    do: if(:rand.uniform(3) == 1, do: {:lit, pick(@ar_pool)}, else: {:tag, pick(sources)})
+  defp ar_op(:neg, {:unsigned, _}), do: :abs
+  defp ar_op(op, _width), do: op
+
+  defp ar_instruction_of(op, sources, destination) when op in [:neg, :abs],
+    do: {op, [ar_source(sources)], destination}
+
+  defp ar_instruction_of(op, sources, destination) when op in [:div, :mod],
+    do: {op, [ar_dividend(op, sources), ar_divisor(sources)], destination}
+
+  defp ar_instruction_of(op, sources, destination),
+    do: {op, [ar_source(sources), ar_source(sources)], destination}
+
+  defp ar_source({into, tags}),
+    do: if(:rand.uniform(3) == 1, do: {:lit, pick(ar_pool(into))}, else: {:tag, pick(tags)})
+
+  # Since M5-4 one dividend of a `div` in four is its type's least value, and one divisor
+  # in four into a signed type is -1, so that the minimum of each width is divided by -1
+  # often enough for the reach, eight widths sharing what one dint had.
+  defp ar_dividend(:div, {into, _tags} = sources),
+    do: ar_dividend(pick([:drawn, :drawn, :drawn, :least]), width_range(into), sources)
+
+  defp ar_dividend(_mod, sources), do: ar_source(sources)
+
+  defp ar_dividend(:least, first.._last//1, _sources), do: {:lit, first}
+  defp ar_dividend(_drawn, _range, sources), do: ar_source(sources)
 
   # A literal zero divisor is refused when the program compiles (decision 78): a divisor is
   # a tag, which may be 0, or a literal that is not.
-  defp ar_divisor(sources) do
+  defp ar_divisor({into, _tags} = sources),
+    do: ar_divisor(pick([:drawn, :drawn, :drawn, :minus_one]), Map.fetch!(@widths, into), sources)
+
+  defp ar_divisor(:minus_one, {:signed, _n}, _sources), do: {:lit, -1}
+
+  defp ar_divisor(_drawn, _width, {into, _tags} = sources) do
     case ar_source(sources) do
-      {:lit, 0} -> {:lit, pick([1, -1, 7, @ar_min])}
+      {:lit, 0} -> {:lit, pick(Enum.reject(ar_pool(into), &(&1 == 0)))}
       source -> source
     end
   end
 
-  @ar_block_head [
-    "function_block calc",
-    "var_input a dint",
-    "var_input b dint",
-    "var_input go bool",
-    "var_output r dint",
-    "var_output ok bool"
-  ]
-
-  defp ar_block_source(block),
+  defp ar_block_source(spec),
     do:
       Enum.join(
-        @ar_block_head ++ ["var w dint #{block.init}"] ++ Enum.map(block.rungs, &ar_text/1),
+        [
+          "function_block calc",
+          "var_input a #{spec.types["block"]}",
+          "var_input b #{spec.types["block"]}",
+          "var_input go bool",
+          "var_output r #{spec.types["block"]}",
+          "var_output ok bool",
+          "var w #{spec.types["block"]} #{spec.block.init}"
+        ] ++ Enum.map(spec.block.rungs, &ar_text/1),
         "\n"
       )
 
   defp ar_declarations(spec),
     do:
       ["var_input g bool", "var_input gb bool"] ++
-        for(x <- ~w(x0 x1 x2 x3), do: "var_input #{x} dint") ++
-        for({init, i} <- Enum.with_index(spec.inits), do: "var v#{i} dint #{init}") ++
-        for(y <- ~w(y0 y1 yb), do: "var_output #{y} dint") ++
+        for(x <- ~w(x0 x1 x2 x3), do: "var_input #{x} #{spec.types[x]}") ++
+        for(
+          {init, i} <- Enum.with_index(spec.inits),
+          do: "var v#{i} #{spec.types["v#{i}"]} #{init}"
+        ) ++
+        for(y <- ~w(y0 y1 yb), do: "var_output #{y} #{spec.types[y]}") ++
         for(ok <- ~w(ok0 ok1 ok2 okb), do: "var_output #{ok} bool") ++
         if(spec.block, do: ["var c1 calc"], else: [])
 
@@ -6614,8 +6697,8 @@ defmodule Logex.ApiContractTest do
         nil ->
           []
 
-        block ->
-          {:ok, calc} = Logex.compile(ar_block_source(block), name: "calc")
+        _block ->
+          {:ok, calc} = Logex.compile(ar_block_source(spec), name: "calc")
           [calc]
       end
 
@@ -6627,7 +6710,7 @@ defmodule Logex.ApiContractTest do
 
   # The program's first rung's line, after its declarations, and the block's.
   defp ar_first_line(spec), do: length(ar_declarations(spec)) + 1
-  defp ar_block_first_line, do: length(@ar_block_head) + 2
+  defp ar_block_first_line, do: 8
 
   defp ar_initial(spec) do
     base =
@@ -6652,22 +6735,29 @@ defmodule Logex.ApiContractTest do
 
   # One scan: the program's rungs, then the `cal`, each fault `{op, line, path}`, in order.
   defp ar_scan(spec, env) do
-    {env, faults} = ar_routine(spec.rungs, env, ar_first_line(spec), nil)
-    {env, more} = ar_cal(spec.block, env, ar_first_line(spec) + length(spec.rungs))
+    {env, faults} = ar_routine(spec, spec.rungs, env, {ar_first_line(spec), nil})
+    {env, more} = ar_cal(spec, env)
     {env, faults ++ more}
   end
 
-  defp ar_routine(rungs, env, first, path) do
+  # A routine's tags' types: the program's, or in the block, its one width for each of
+  # `a b w r`.
+  defp ar_types_in(spec, nil), do: spec.types
+  defp ar_types_in(spec, "c1"), do: Map.new(~w(a b w r), &{&1, spec.types["block"]})
+
+  defp ar_routine(spec, rungs, env, {first, path}) do
+    types = ar_types_in(spec, path)
+
     {env, faults, _line} =
       Enum.reduce(rungs, {env, [], first}, fn rung, {env, faults, line} ->
-        {env, more} = ar_rung_run(rung, env, line, path)
+        {env, more} = ar_rung_run(rung, env, {line, path, types})
         {env, faults ++ more, line + 1}
       end)
 
     {env, faults}
   end
 
-  defp ar_rung_run({contact, instructions, coil}, env, line, path) do
+  defp ar_rung_run({contact, instructions, coil}, env, at) do
     power = ar_contact(contact, env)
     if not power, do: ar_reached(:de_energised)
 
@@ -6675,7 +6765,7 @@ defmodule Logex.ApiContractTest do
       Enum.reduce(instructions, {power, env, []}, fn instruction, {now, env, faults} ->
         # A rung's power that an earlier instruction on it took away.
         if power and not now, do: ar_reached(:cut)
-        ar_instruction_run(instruction, now, env, {line, path}, faults)
+        ar_instruction_run(instruction, now, env, at, faults)
       end)
 
     env = if coil, do: Map.put(env, coil, if(powered, do: 1, else: 0)), else: env
@@ -6691,10 +6781,16 @@ defmodule Logex.ApiContractTest do
     {false, env, faults}
   end
 
-  defp ar_instruction_run({op, sources, destination}, true, env, {line, path}, faults) do
+  defp ar_instruction_run({op, sources, destination}, true, env, {line, path, types}, faults) do
     values = Enum.map(sources, &ar_value(&1, env))
+    into = types[destination]
+    first..last//1 = width_range(into)
     if Enum.any?(sources, &match?({:lit, n} when n < 0, &1)), do: ar_reached(:negative_literal)
-    ar_notes(op, values)
+
+    if Enum.any?(sources, &match?({:tag, tag} when :erlang.map_get(tag, types) != into, &1)),
+      do: ar_reached(:widened)
+
+    ar_notes(op, values, first)
 
     case ar_exact(op, values) do
       :zero_divisor ->
@@ -6702,45 +6798,49 @@ defmodule Logex.ApiContractTest do
         if path, do: ar_reached(:block_fault)
         {false, Map.put(env, destination, 0), [{op, line, path} | faults]}
 
-      {:ok, exact} when exact > @ar_max ->
+      {:ok, exact} when exact > last ->
         ar_reached(:above)
-        {false, Map.put(env, destination, ar_wrapped(exact)), faults}
+        ar_reached({:wrapped, into})
+        {false, Map.put(env, destination, ar_wrapped(into, exact)), faults}
 
-      {:ok, exact} when exact < @ar_min ->
+      {:ok, exact} when exact < first ->
         ar_reached(:below)
-        {false, Map.put(env, destination, ar_wrapped(exact)), faults}
+        ar_reached({:wrapped, into})
+        {false, Map.put(env, destination, ar_wrapped(into, exact)), faults}
 
       {:ok, exact} ->
         {true, Map.put(env, destination, exact), faults}
     end
   end
 
-  # Decision 146, restated (M5-2, superseding decision 77's saturation): a result outside
-  # the dint keeps its remainder by 2^32, taken back into the dint's range, so that the
-  # stored value is the one of the dint's 2^32 that the exact one is congruent to; one far
-  # past a limit, more than 2^32 out, is noted as well.
-  @ar_span 4_294_967_296
-
-  defp ar_wrapped(exact) do
-    if abs(exact) >= @ar_span, do: ar_reached(:far_past)
-    ar_into(rem(exact, @ar_span))
+  # Decision 146, restated: a result outside its destination's width keeps its remainder by
+  # 2^N, taken back into the width's range, so that the stored value is the one of the
+  # width's 2^N that the exact one is congruent to; one far past a limit, more than 2^N
+  # out, is noted as well.
+  defp ar_wrapped(type, exact) do
+    {_kind, n} = Map.fetch!(@widths, type)
+    span = Integer.pow(2, n)
+    if abs(exact) >= span, do: ar_reached(:far_past)
+    ar_into(rem(exact, span), width_range(type), span)
   end
 
-  defp ar_into(r) when r > @ar_max, do: r - @ar_span
-  defp ar_into(r) when r < @ar_min, do: r + @ar_span
-  defp ar_into(r), do: r
+  defp ar_into(r, _first..last//1, span) when r > last, do: r - span
+  defp ar_into(r, first.._last//1, span) when r < first, do: r + span
+  defp ar_into(r, _range, _span), do: r
 
   defp ar_value({:lit, n}, _env), do: n
   defp ar_value({:tag, tag}, env), do: Map.fetch!(env, tag)
 
-  defp ar_notes(:div, [@ar_min, -1]), do: ar_reached(:min_by_minus_one)
-  defp ar_notes(:neg, [@ar_min]), do: ar_reached(:neg_min)
-  defp ar_notes(:abs, [@ar_min]), do: ar_reached(:abs_min)
+  # The signed destination's minimum, divided by -1, negated or made absolute: the one
+  # value of each that leaves its width.
+  defp ar_notes(:div, [min, -1], min), do: ar_reached(:min_by_minus_one)
+  defp ar_notes(:neg, [min], min) when min < 0, do: ar_reached(:neg_min)
+  defp ar_notes(:abs, [min], min) when min < 0, do: ar_reached(:abs_min)
 
-  defp ar_notes(:mod, [a, b]) when a < 0 and b != 0 and rem(a, b) != 0,
+  defp ar_notes(:mod, [a, b], _first) when a < 0 and b != 0 and rem(a, b) != 0,
     do: ar_reached(:mod_negative)
 
-  defp ar_notes(_op, _values), do: :ok
+  defp ar_notes(_op, _values, _first), do: :ok
 
   # The exact result, on Elixir's integers: IEC's DIV truncates toward zero, restated from
   # the magnitudes alone, and MOD is IN1 - (IN1/IN2)*IN2 from it (Ed 3 Table 29 notes d, e).
@@ -6760,12 +6860,12 @@ defmodule Logex.ApiContractTest do
 
   # The `cal` on `gb`: the block's inputs copied in, its body over its own map, its outputs
   # copied out; on a false `gb`, nothing at all (decision 12).
-  defp ar_cal(nil, env, _line), do: {env, []}
+  defp ar_cal(%{block: nil}, env), do: {env, []}
 
-  defp ar_cal(block, env, _line) when is_map(block) do
+  defp ar_cal(spec, env) do
     if env["gb"] == 1 do
       c1 = Map.merge(env["c1"], %{"a" => env["x0"], "b" => env["x1"], "go" => env["g"]})
-      {c1, faults} = ar_routine(block.rungs, c1, ar_block_first_line(), "c1")
+      {c1, faults} = ar_routine(spec, spec.block.rungs, c1, {ar_block_first_line(), "c1"})
       {Map.merge(env, %{"c1" => c1, "yb" => c1["r"], "okb" => c1["ok"]}), faults}
     else
       ar_reached(:block_frozen)
@@ -6773,15 +6873,11 @@ defmodule Logex.ApiContractTest do
     end
   end
 
-  defp ar_inputs do
-    %{
-      "g" => pick([1, 1, 1, 0]),
-      "gb" => pick([1, 1, 0]),
-      "x0" => pick(@ar_pool),
-      "x1" => pick(@ar_pool),
-      "x2" => pick(@ar_pool),
-      "x3" => pick(@ar_pool)
-    }
+  defp ar_inputs(spec) do
+    Map.merge(
+      %{"g" => pick([1, 1, 1, 0]), "gb" => pick([1, 1, 0])},
+      Map.new(~w(x0 x1 x2 x3), &{&1, pick(ar_pool(spec.types[&1]))})
+    )
   end
 
   defp ar_fault({op, line, path}, file),
@@ -6789,9 +6885,15 @@ defmodule Logex.ApiContractTest do
 
   defp ar_outputs(env), do: Map.take(env, ~w(y0 y1 yb ok0 ok1 ok2 okb))
 
-  # Every value a state holds is a dint's, or a bool's, at any depth.
-  defp ar_dints?(%{} = env), do: Enum.all?(env, fn {_k, v} -> ar_dints?(v) end)
-  defp ar_dints?(v), do: is_integer(v) and v in @ar_min..@ar_max
+  # Every value a state holds is its tag's type's, or a bool's, at any depth.
+  defp ar_fitting?(spec, env),
+    do: Enum.all?(env, fn {k, v} -> ar_fits?(ar_types_in(spec, nil)[k], v, spec) end)
+
+  defp ar_fits?(nil, %{} = c1, spec),
+    do: Enum.all?(c1, fn {k, v} -> ar_fits?(ar_types_in(spec, "c1")[k], v, spec) end)
+
+  defp ar_fits?(nil, v, _spec), do: v in [0, 1]
+  defp ar_fits?(type, v, _spec), do: is_integer(v) and v in width_range(type)
 
   # ---- the walks ------------------------------------------------------------------------
 
@@ -6808,7 +6910,7 @@ defmodule Logex.ApiContractTest do
           {spec, program, state, model} =
             ar_maybe_edit(n == div(scans, 2), spec, program, state, model)
 
-          inputs = ar_inputs()
+          inputs = ar_inputs(spec)
           {model, faults} = ar_scan(spec, Map.merge(model, inputs))
 
           {outputs, state} =
@@ -6817,7 +6919,7 @@ defmodule Logex.ApiContractTest do
           assert outputs == ar_outputs(model), ar_source_text(spec)
           assert state.env == model, ar_source_text(spec)
           assert state.faults == Enum.map(faults, &ar_fault(&1, nil)), ar_source_text(spec)
-          assert ar_dints?(state.env)
+          assert ar_fitting?(spec, state.env)
           {spec, program, state, model}
       end)
 
@@ -6840,7 +6942,7 @@ defmodule Logex.ApiContractTest do
   defp ar_maybe_edit(false, spec, program, state, model), do: {spec, program, state, model}
 
   defp ar_maybe_edit(true, spec, program, state, model) do
-    candidate_spec = %{ar_spec() | inits: spec.inits, block: spec.block}
+    candidate_spec = ar_spec(spec.types, spec.inits, spec.block)
     candidate = ar_program(candidate_spec)
     {:ok, edit, _forecast} = Edit.accept(program, candidate, state)
     {edit, switched, _report} = Edit.test(edit, state)
@@ -6870,7 +6972,7 @@ defmodule Logex.ApiContractTest do
             {name, i} <- Enum.with_index(inputs),
             do: %Logex.Configuration.Global{
               name: name,
-              type: if(name in ~w(g gb), do: :bool, else: :dint),
+              type: Map.get(spec.types, name, :bool),
               at: "panel.i.#{i}"
             }
           ),
@@ -6888,7 +6990,7 @@ defmodule Logex.ApiContractTest do
 
     Enum.reduce(1..cycles, {Runtime.start(config), ar_initial(spec), ar_initial(spec), 0}, fn
       _, {rt, m1, m2, now} ->
-        sample = ar_inputs()
+        sample = ar_inputs(spec)
         {m1, f1} = ar_scan(spec, Map.merge(m1, sample))
         {m2, f2} = ar_scan(spec, Map.merge(m2, sample))
         {rt, _outputs, events} = Runtime.cycle(rt, if(now == 0, do: 0, else: 10), sample)
@@ -6904,7 +7006,7 @@ defmodule Logex.ApiContractTest do
         if f1 != [], do: ar_reached(:event_fault)
         %Runtime{instances: %{"m1" => s1, "m2" => s2}} = rt
         assert {s1.env, s1.faults, s2.env, s2.faults} == {m1, [], m2, []}
-        assert ar_dints?(s1.env) and ar_dints?(s2.env)
+        assert ar_fitting?(spec, s1.env) and ar_fitting?(spec, s2.env)
         {rt, m1, m2, now}
     end)
   end
