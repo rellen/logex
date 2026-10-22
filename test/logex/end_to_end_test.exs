@@ -1018,13 +1018,9 @@ defmodule Logex.EndToEndTest do
       p = program(@ton)
 
       for junk <- [
-            5,
-            nil,
-            "x",
-            [1],
             %{},
-            %{"pre" => 0, "last" => "z", "en" => 1},
-            %{"dn" => 0, "acc" => 0, "pre" => 0, "last" => 1.5},
+            %{"pre" => 0, "en" => 1},
+            %{"dn" => 0, "acc" => 0, "pre" => 0},
             %Logex.Scan{now: 0, first: true}
           ] do
         {_, on} = later_scan(p, %{"t1" => junk, "go" => 1})
@@ -1053,17 +1049,34 @@ defmodule Logex.EndToEndTest do
                        "go" => 1
                      })
                    end
+
+      # So is a timer's tag that holds no map (decision 184), where until then it was read
+      # as an empty timer's.
+      for junk <- [5, nil, "x", [1]] do
+        assert_raise ArgumentError,
+                     "state.env holds `t1` outside its type: it is a ton, and its value must " <>
+                       "be a map of its members, found #{inspect(junk)}",
+                     fn -> later_scan(p, %{"t1" => junk, "go" => 1}) end
+      end
     end
 
-    test "a `last` that is not an integer adds nothing" do
-      # A .pre with room above .acc, so the cap cannot hide what was added.
+    test "a `last` that is not an integer is refused, and one left out adds nothing" do
+      # Decision 186: until then a `last` that was no integer added nothing, as one the env
+      # leaves out still does. A .pre with room above .acc, so the cap cannot hide what was
+      # added.
       for last <- ["z", nil, 1.5] do
         timer = %{"pre" => 50, "acc" => 5, "en" => 1, "last" => last}
 
-        assert {_, %{"t1" => %{"acc" => 5, "last" => 7}}} =
-                 later_scan(program(@ton), %{"t1" => timer, "go" => 1}),
-               inspect(last)
+        assert_raise ArgumentError,
+                     "state.env holds `t1.last` outside its type: it is a clock, and its " <>
+                       "value must be an integer, found #{inspect(last)}",
+                     fn -> later_scan(program(@ton), %{"t1" => timer, "go" => 1}) end
       end
+
+      timer = %{"pre" => 50, "acc" => 5, "en" => 1}
+
+      assert {_, %{"t1" => %{"acc" => 5, "last" => 7}}} =
+               later_scan(program(@ton), %{"t1" => timer, "go" => 1})
     end
 
     test "a `last` later than now, or .en read as a contact reads it" do
@@ -1127,10 +1140,17 @@ defmodule Logex.EndToEndTest do
   end
 
   describe "members on an env the host builds (M1-6)" do
-    # Outside the contract, like M1-4's contacts, but still total: whatever a hand-built
-    # env holds where a timer belongs, nothing raises; a member of a bool or an integer type
-    # holding anything outside its type is the host's mistake (decisions 171 and 173).
-    @junk [5, nil, "x", [1], %{}, %{"acc" => 2}, %Logex.Scan{now: 0, first: true}]
+    # Outside the contract, like M1-4's contacts, but still total: whatever map a
+    # hand-built env holds where a timer belongs, nothing raises; a member of a bool or an
+    # integer type holding anything outside its type is the host's mistake (decisions 171
+    # and 173), and so is a timer's tag that holds no map (decision 184).
+    @junk [%{}, %{"acc" => 2}, %Logex.Scan{now: 0, first: true}]
+    @not_maps [5, nil, "x", [1]]
+
+    defp not_a_map(junk),
+      do:
+        "state.env holds `t1` outside its type: it is a ton, and its value must be a map of " <>
+          "its members, found #{inspect(junk)}"
 
     test "a contact on a member is total, and xic and xio stay complementary" do
       p = program("var t1 ton\nvar hi bool\nvar lo bool\nxic t1.dn ote hi\nxio t1.dn ote lo")
@@ -1142,6 +1162,10 @@ defmodule Logex.EndToEndTest do
 
       assert {_, %{"hi" => 1}} = later_scan(p, %{"t1" => %{"dn" => 1}})
 
+      for junk <- @not_maps do
+        assert_raise ArgumentError, not_a_map(junk), fn -> later_scan(p, %{"t1" => junk}) end
+      end
+
       # Until decision 173 a true read as closed, a nil and a 2.5 as open and closed.
       for junk <- [true, nil, 2.5] do
         assert_raise ArgumentError,
@@ -1151,19 +1175,31 @@ defmodule Logex.EndToEndTest do
       end
     end
 
-    test "move from a member the host left out, or of a timer that is not a map, copies 0" do
+    test "move from a member the host left out copies 0, and of a timer that is not a map " <>
+           "is refused" do
       p = program("var t1 ton\nvar d dint\nmove t1.acc d")
 
       for junk <- @junk -- [%{"acc" => 2}] do
         assert {_, %{"d" => 0}} = later_scan(p, %{"t1" => junk, "d" => 9}), inspect(junk)
       end
+
+      for junk <- @not_maps do
+        assert_raise ArgumentError, not_a_map(junk), fn ->
+          later_scan(p, %{"t1" => junk, "d" => 9})
+        end
+      end
     end
 
-    test "a write into a timer that is not a map makes one" do
+    test "a write into a timer the host left without the member adds it, and into one that " <>
+           "is not a map is refused" do
       p = program("var t1 ton\nmove 3 t1.pre")
 
-      for junk <- [5, nil, "x", [1]] do
+      for junk <- [%{}, %Logex.Scan{now: 0, first: true}] do
         assert {_, %{"t1" => %{"pre" => 3}}} = later_scan(p, %{"t1" => junk}), inspect(junk)
+      end
+
+      for junk <- @not_maps do
+        assert_raise ArgumentError, not_a_map(junk), fn -> later_scan(p, %{"t1" => junk}) end
       end
 
       assert {_, %{"t1" => %{"pre" => 3, "acc" => 4}}} =

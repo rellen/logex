@@ -1243,8 +1243,9 @@ defmodule Logex.ApiContractTest do
   # Decision 171: a swap to a program under which a value the state holds is an integer
   # outside its tag's type, `r`'s 3 under a bool, is the host's mistake, refused by the
   # swap's first call, the state kept as it was; and since decision 173 so is a value that
-  # is no integer under a bool or a dint, a timer's map under what is now a bool; the rule
-  # restated, with no call into Logex.Declarations.
+  # is no integer under a bool or a dint, a timer's map under what is now a bool, and since
+  # decision 184 an integer under what is now a timer; the rule restated, with no call into
+  # Logex.Declarations.
   defp swap(new, w), do: swapped(Enum.any?(w.s.env, &outside_type?(new.tags, &1)), new, w)
 
   defp swapped(true, new, w) do
@@ -1268,6 +1269,11 @@ defmodule Logex.ApiContractTest do
     do: value not in -2_147_483_648..2_147_483_647
 
   defp outside_type?(%Tag{type: type}, _no_integer) when type in [:bool, :dint], do: true
+
+  # Decision 184: an instance's tag holds a map of its members, so a swap that leaves a
+  # bool's or a dint's value under what is now a timer is refused too.
+  defp outside_type?(%Tag{type: %Logex.FbType{}}, value), do: not is_map(value)
+  defp outside_type?(%Tag{type: {:block, _}}, value), do: not is_map(value)
   defp outside_type?(_tag, _value), do: false
 
   defp open_mistakes(%{e: nil}, _step, _bad), do: []

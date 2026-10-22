@@ -407,8 +407,8 @@ defmodule Logex.RuntimeTest do
       end)
     end
 
-    test "a tag the program lacks, one the env leaves out, and an instance that is no map " <>
-           "are not looked into, but a value that is no integer is (decision 173)",
+    test "a tag the program lacks and one the env leaves out are not looked into, but a " <>
+           "value that is no integer is (decision 173)",
          %{motor: m, state: s} do
       p = holder()
       ps = Runtime.instance(p)
@@ -437,9 +437,114 @@ defmodule Logex.RuntimeTest do
         assert %Instance{} = Runtime.put_inputs(m, %{s | env: env}, %{})
       end
 
-      for inner <- [7, nil, Map.delete(ps.env["p"], "n"), %{ps.env["p"] | "t" => 9}] do
+      for inner <- [Map.delete(ps.env["p"], "n"), Map.delete(ps.env["p"], "t")] do
         assert %Instance{} = Runtime.put_inputs(p, %{ps | env: %{ps.env | "p" => inner}}, %{})
       end
+    end
+
+    # Decision 184: an instance's tag holds a map of its members, a built-in's and a user
+    # block's, at any depth, and one that holds anything else is the host's mistake.
+    test "an instance that is no map is refused, a built-in's and a user block's, at any " <>
+           "depth (decision 184)" do
+      p = holder()
+      ps = Runtime.instance(p)
+      {:ok, m} = Logex.compile("var_input go bool\nvar t1 ctu\nxic go ctu t1 3", name: "m")
+      s = Runtime.instance(m)
+
+      for value <- [5, nil, 1.5, "x", [], {}] do
+        raises(
+          "state.env holds `t1` outside its type: it is a ctu, and its value must be a map " <>
+            "of its members, found #{inspect(value)}",
+          fn -> Runtime.put_inputs(m, %{s | env: %{s.env | "t1" => value}}, %{}) end
+        )
+
+        raises(
+          "state.env holds `p` outside its type: it is an instance of `held`, and its " <>
+            "value must be a map of its members, found #{inspect(value)}",
+          fn -> Runtime.put_inputs(p, %{ps | env: %{ps.env | "p" => value}}, %{}) end
+        )
+
+        raises(
+          "state.env holds `p.t` outside its type: it is a ton, and its value must be a map " <>
+            "of its members, found #{inspect(value)}",
+          fn ->
+            Runtime.put_inputs(
+              p,
+              %{ps | env: %{ps.env | "p" => %{ps.env["p"] | "t" => value}}},
+              %{}
+            )
+          end
+        )
+      end
+
+      # Each entry point that takes a state, with every other value outside a line of the
+      # one message, in path order.
+      bad = %{ps | env: %{ps.env | "y" => 2, "p" => %{ps.env["p"] | "t" => 9, "n" => nil}}}
+
+      message =
+        Enum.join(
+          [
+            "state.env holds `p.n` outside its type: it is a dint, and its value must be an " <>
+              "integer, found nil",
+            "state.env holds `p.t` outside its type: it is a ton, and its value must be a " <>
+              "map of its members, found 9",
+            outside("y", "a bool", 2)
+          ],
+          "\n"
+        )
+
+      raises(message, fn -> Runtime.put_inputs(p, bad, %{}) end)
+      raises(message, fn -> Runtime.call(p, bad, %{}, %Scan{now: 0, first: true}) end)
+      raises(message, fn -> Runtime.scan(p, bad) end)
+      raises(message, fn -> Runtime.restart(p, bad, :cold) end)
+    end
+
+    # Decision 186: a timer's `last`, the time it last ran on the scan's clock, is an
+    # integer as every other member's value is, any integer, the clock being unbounded.
+    test "a timer's `last` that is no integer is refused, and any integer taken (decision 186)" do
+      p = holder()
+      ps = Runtime.instance(p)
+      {:ok, m} = Logex.compile("var_input go bool\nvar t1 rto\nxic go rto t1 3", name: "m")
+      s = Runtime.instance(m)
+
+      for value <- [nil, 1.5, "x", %{}, :never] do
+        raises(
+          "state.env holds `t1.last` outside its type: it is a clock, and its value must be " <>
+            "an integer, found #{inspect(value)}",
+          fn ->
+            Runtime.put_inputs(
+              m,
+              %{s | env: %{s.env | "t1" => %{s.env["t1"] | "last" => value}}},
+              %{}
+            )
+          end
+        )
+
+        inner = %{ps.env["p"] | "t" => %{ps.env["p"]["t"] | "last" => value}}
+
+        raises(
+          "state.env holds `p.t.last` outside its type: it is a clock, and its value must be " <>
+            "an integer, found #{inspect(value)}",
+          fn -> Runtime.put_inputs(p, %{ps | env: %{ps.env | "p" => inner}}, %{}) end
+        )
+      end
+
+      for value <- [-5, 0, 2 ** 70] do
+        assert %Instance{} =
+                 Runtime.put_inputs(
+                   m,
+                   %{s | env: %{s.env | "t1" => %{s.env["t1"] | "last" => value}}},
+                   %{}
+                 )
+      end
+
+      # One the env leaves out reads as before, a timer that adds nothing on its next run.
+      assert %Instance{} =
+               Runtime.put_inputs(
+                 m,
+                 %{s | env: %{s.env | "t1" => Map.delete(s.env["t1"], "last")}},
+                 %{}
+               )
     end
 
     test "a plain swap that narrows a tag over a value outside it is refused at its next call" do
@@ -559,12 +664,12 @@ defmodule Logex.RuntimeTest do
     end
   end
 
-  describe "a program edited by hand after it compiled (M5-4's review)" do
+  describe "a program edited by hand after it compiled (decision 182)" do
     # An arithmetic instruction computes in its destination's type, looked up in the
-    # program's tag table on each run. No compile gives a destination the table does not
-    # hold, or holds as no integer; a program edited by hand does, and the lookup is total,
-    # reading the dint, as every arithmetic instruction did before M5-4 (provisional), so
-    # that the scan runs rather than raise an Elixir error.
+    # routine's tag table on each run. No compile gives a destination the table does not
+    # hold, or holds as no integer; a program edited by hand does, and since decision 182
+    # every entry point that takes a program refuses it, a line for each such destination,
+    # where M5-4's review read the dint.
     @sums """
     var_input go bool
     var d sint
@@ -586,33 +691,204 @@ defmodule Logex.RuntimeTest do
     defp retyped(program, name, type),
       do: %{program | tags: Map.update!(program.tags, name, &%{&1 | type: type})}
 
+    defp edited(line), do: line <> ": `m` was edited by hand after it compiled"
+
+    @d "`m`'s `add` on line 7 computes in the type of `d`"
+    @pv "`m`'s `mul` on line 8 computes in the type of `c1.pv`"
+
+    # Every entry point that takes a program refuses it before anything else of its
+    # arguments: a state of the program as compiled is refused nothing else.
+    defp refused_everywhere(edited, compiled, message) do
+      s = Runtime.instance(compiled)
+      scan = %Scan{now: 0, first: true}
+
+      for call <- [
+            fn -> Runtime.instance(edited) end,
+            fn -> Runtime.call(edited, s, %{"go" => 1}, scan) end,
+            fn ->
+              Runtime.call(edited, opaque(:not_a_state), opaque(:no_inputs), opaque(:no_scan))
+            end,
+            fn -> Runtime.put_inputs(edited, s, %{"go" => 1}) end,
+            fn -> Runtime.scan(edited, s, 10) end,
+            fn -> Runtime.restart(edited, s, :cold) end,
+            fn -> Logex.Edit.accept(edited, compiled, s) end,
+            fn -> Logex.Edit.accept(compiled, edited, s) end
+          ] do
+        assert_raise ArgumentError, message, call
+      end
+    end
+
     test "as compiled, each computes in its destination's type" do
       {:ok, p} = Logex.compile(@sums, name: "m")
+      assert Logex.Program.unwritable(p) == []
       assert scanned(p) == {%{"ok" => 0, "ok2" => 1}, -56, 200}
     end
 
-    test "a destination retyped as no integer computes in the dint" do
-      {:ok, p} = Logex.compile(@sums, name: "m")
-      assert scanned(retyped(p, "d", :bool)) == {%{"ok" => 1, "ok2" => 1}, 200, 200}
-    end
-
-    test "a destination taken out of the table computes in the dint" do
-      {:ok, p} = Logex.compile(@sums, name: "m")
-      assert scanned(%{p | tags: Map.delete(p.tags, "d")}) == {%{"ok" => 1, "ok2" => 1}, 200, 200}
-    end
-
-    test "a member's instance taken out, retyped as no block or as one without the member" do
+    test "a destination retyped as no integer is refused where the program is handed in" do
       {:ok, p} = Logex.compile(@sums, name: "m")
 
-      for edited <- [
-            %{p | tags: Map.delete(p.tags, "c1")},
-            retyped(p, "c1", :bool),
-            retyped(p, "c1", Logex.FbType.ton()),
-            retyped(p, "c1", {:block, "seal"}),
-            retyped(p, "c1", :sint)
+      for {type, word} <- [
+            {:bool, "a bool"},
+            {Logex.FbType.ton(), "a ton"},
+            {{:block, "seal"}, "an instance of `seal`"}
           ] do
-        assert {_, -56, 200} = scanned(edited)
+        refused_everywhere(
+          retyped(p, "d", type),
+          p,
+          edited(@d <> ", #{word}, which is no integer type")
+        )
       end
+    end
+
+    test "a destination taken out of the table is refused" do
+      {:ok, p} = Logex.compile(@sums, name: "m")
+
+      refused_everywhere(
+        %{p | tags: Map.delete(p.tags, "d")},
+        p,
+        edited(@d <> ", which `m` does not declare")
+      )
+
+      unnamed = %{p | name: nil, tags: Map.delete(p.tags, "d")}
+
+      assert_raise ArgumentError,
+                   "an unnamed program's `add` on line 7 computes in the type of `d`, which " <>
+                     "the program does not declare: the program was edited by hand after it " <>
+                     "compiled",
+                   fn -> Runtime.instance(unnamed) end
+    end
+
+    test "a member's instance taken out, retyped as no built-in, or without the member, or " <>
+           "the member of no integer type" do
+      {:ok, p} = Logex.compile(@sums, name: "m")
+      counter = Logex.FbType.ctu()
+
+      bool_pv = %{
+        counter
+        | members: Enum.map(counter.members, &%{&1 | type: pv_type(&1)})
+      }
+
+      for {edited, told} <- [
+            {%{p | tags: Map.delete(p.tags, "c1")}, ", and `m` declares no `c1`"},
+            {retyped(p, "c1", :bool), ", and `c1` is a bool, not a built-in's instance"},
+            {retyped(p, "c1", :sint), ", and `c1` is an sint, not a built-in's instance"},
+            {retyped(p, "c1", {:block, "seal"}),
+             ", and `c1` is an instance of `seal`, not a built-in's instance"},
+            {retyped(p, "c1", Logex.FbType.ton()), ", and a ton has no `pv`"},
+            {retyped(p, "c1", bool_pv), ", a bool, which is no integer type"}
+          ] do
+        refused_everywhere(edited, p, edited(@pv <> told))
+      end
+    end
+
+    defp pv_type(%{name: "pv"}), do: :bool
+    defp pv_type(%{type: type}), do: type
+
+    test "every such destination is a line of one message, the program's first, in rung " <>
+           "order, then each block's body by the block's name" do
+      {:ok, seal} =
+        Logex.compile(
+          "function_block seal\nvar_input a bool\nvar_output q bool\nvar n int\n" <>
+            "xic a add 1 n n ote q\n",
+          name: "seal"
+        )
+
+      {:ok, h} =
+        Logex.compile(
+          "var_input go bool\nvar_output y bool\nvar s seal\nvar s2 seal\nvar t dint\n" <>
+            "var u dint\ncal s go y\ncal s2 go y\nsub t 1 t\n( xic go neg 5 u | abs 5 t )\n",
+          name: "h",
+          types: [seal]
+        )
+
+      held = h.blocks["seal"]
+
+      held = %{
+        held
+        | body: %{held.body | tags: Map.update!(held.body.tags, "n", &%{&1 | type: :bool})}
+      }
+
+      tags =
+        h.tags
+        |> Map.update!("t", &%{&1 | type: :bool})
+        |> Map.delete("u")
+
+      edited = %{h | blocks: %{h.blocks | "seal" => held}, tags: tags}
+
+      message =
+        Enum.join(
+          [
+            "`h`'s `sub` on line 9 computes in the type of `t`, a bool, which is no integer " <>
+              "type: `h` was edited by hand after it compiled",
+            "`h`'s `neg` on line 10 computes in the type of `u`, which `h` does not declare: " <>
+              "`h` was edited by hand after it compiled",
+            "`h`'s `abs` on line 10 computes in the type of `t`, a bool, which is no integer " <>
+              "type: `h` was edited by hand after it compiled",
+            "`add` on line 5 of `seal`'s body computes in the type of `n`, a bool, which is " <>
+              "no integer type: `h` was edited by hand after it compiled"
+          ],
+          "\n"
+        )
+
+      assert_raise ArgumentError, message, fn -> Runtime.instance(edited) end
+
+      # A body a tag holds as its type itself, which only a program built by hand gives,
+      # is walked too, where a `cal` runs it, once, however many `cal`s run it.
+      direct = %{
+        h
+        | tags: %{
+            h.tags
+            | "s" => %{h.tags["s"] | type: held},
+              "s2" => %{h.tags["s2"] | type: held}
+          }
+      }
+
+      assert_raise ArgumentError,
+                   "`add` on line 5 of `seal`'s body computes in the type of `n`, a bool, " <>
+                     "which is no integer type: `h` was edited by hand after it compiled",
+                   fn -> Runtime.instance(%{direct | blocks: %{}}) end
+    end
+
+    test "a configuration refuses it at its check, as decision 169 refuses a port" do
+      {:ok, p} = Logex.compile(@sums, name: "m")
+      edited = retyped(p, "d", :bool)
+
+      assert_raise ArgumentError,
+                   edited(@d <> ", a bool, which is no integer type"),
+                   fn ->
+                     Logex.Configuration.new!(
+                       name: "plant",
+                       programs: [edited],
+                       instances: [%Logex.Configuration.Instance{name: "m1", type: "m"}]
+                     )
+                   end
+    end
+
+    # The check walks the program's rungs and each body once, on every call that takes a
+    # program, a scan among them: linear in the program, a share of the scan's own cost.
+    defp reductions_for(n, fun) do
+      src =
+        "var_input go bool\n" <>
+          Enum.map_join(1..n, "\n", &"var d#{&1} sint\nvar c#{&1} ctu") <>
+          "\n" <>
+          Enum.map_join(1..n, "\n", &"xic go add 1 d#{&1} d#{&1}\nmul 2 3 c#{&1}.pv")
+
+      {:ok, p} = Logex.compile(src, name: "m")
+
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          fun.(p)
+          {:reductions, later} = Process.info(self(), :reductions)
+          later - before
+        end
+      )
+    end
+
+    test "the check is linear in the program" do
+      check = &Logex.Program.unwritable/1
+      ratio = reductions_for(2000, check) / reductions_for(500, check)
+      assert ratio < 4.8, "4x the instructions took #{Float.round(ratio, 2)}x the reductions"
     end
   end
 

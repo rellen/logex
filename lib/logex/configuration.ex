@@ -861,7 +861,7 @@ defmodule Logex.Configuration do
     do: "the program under #{label(key)} is #{label(name)}, " <> Declarations.not_a_program(type)
 
   defp program_shaped(true, %Program{} = program, ok, mistakes),
-    do: program_held(ports_held(program), program, ok, mistakes)
+    do: program_held(ports_held(program) ++ Program.unwritable(program), program, ok, mistakes)
 
   defp program_shaped(false, %Program{name: name}, ok, mistakes),
     do: {ok, Enum.reverse(shaped(false, name, "a program"), mistakes)}
@@ -870,7 +870,9 @@ defmodule Logex.Configuration do
   # (Logex.Declarations refuses `var_input t ton`, from source and from Elixir), so a
   # compiled program whose own does was edited by hand after it compiled: the host's
   # mistake, a line for each such tag in name order, and the program is left out of every
-  # diagnostic, as a misnamed one is.
+  # diagnostic, as a misnamed one is. Since decision 182 so is one whose arithmetic
+  # computes in a destination with no integer type, a line each after them, in the words
+  # every entry point that takes a program gives (`Logex.Program.unwritable/1`).
   defp program_held([], %Program{name: name} = program, ok, mistakes),
     do: {Map.put(ok, name, program), mistakes}
 

@@ -711,21 +711,46 @@ defmodule Logex.ArithmeticTest do
     end
 
     # Decision 145: an unsigned type holds no negative value, so a `neg` into one could
-    # only give 0 or a wrap.
-    test "`neg` into an unsigned destination is refused, told that alone" do
-      for {type, {:unsigned, _}} <- @widths do
-        assert messages("var a #{type}\nvar r #{type}\nneg a r\nneg 5 r\nneg -1 r") ==
-                 for(
-                   _ <- 1..3,
-                   do:
-                     "`neg` writes `r`, #{article(type)} (declared on line 2), which holds no " <>
-                       "negative value: `neg` writes a signed type"
-                 )
+    # only give 0 or a wrap; and since decision 181 it is told the narrowest signed type its
+    # source widens into by Ed 3 Figure 11, or a literal source fits, to declare it.
+    @signed_for %{
+      sint: "an sint",
+      int: "an int",
+      dint: "a dint",
+      lint: "an lint",
+      usint: "an int",
+      uint: "a dint",
+      udint: "an lint"
+    }
+
+    test "`neg` into an unsigned destination is refused, told a signed type to declare it" do
+      refused = fn type ->
+        "`neg` writes `r`, #{article(type)} (declared on line 2), which holds no negative " <>
+          "value: `neg` writes a signed type"
       end
 
-      assert messages("var a sint\nvar r usint\nneg a r") == [
-               "`neg` writes `r`, a usint (declared on line 2), which holds no negative " <>
-                 "value: `neg` writes a signed type"
+      for {type, {:unsigned, _}} <- @widths do
+        assert messages("var a #{type}\nvar r #{type}\nneg a r\nneg 5 r\nneg -1 r\nneg 200 r") ==
+                 [
+                   refused.(type) <> source_told(type),
+                   refused.(type) <> ", so declare `r` an sint",
+                   refused.(type) <> ", so declare `r` an sint",
+                   refused.(type) <> ", so declare `r` an int"
+                 ]
+      end
+
+      for {source, _} <- @widths, source != :ulint do
+        assert messages("var a #{source}\nvar r usint\nneg a r") == [
+                 refused.(:usint) <> ", so declare `r` #{Map.fetch!(@signed_for, source)}"
+               ]
+      end
+
+      assert messages("var t ton\nvar r usint\nneg 9223372036854775808 r") == [
+               refused.(:usint) <> ", and none holds `9223372036854775808`"
+             ]
+
+      assert messages("var t ton\nvar r usint\nneg t.acc r") == [
+               refused.(:usint) <> ", so declare `r` a dint"
              ]
 
       assert messages("var a usint\nvar r usint\nabs a r") == []
@@ -872,7 +897,18 @@ defmodule Logex.ArithmeticTest do
 
       assert example("var u usint", "neg 1 u", %{}) == [
                "`neg` writes `u`, a usint (declared on line 2), which holds no negative " <>
-                 "value: `neg` writes a signed type"
+                 "value: `neg` writes a signed type, so declare `u` an sint"
+             ]
+
+      assert example("var_input level dint\nvar count usint", "neg level count", %{}) == [
+               "`neg` writes `count`, a usint (declared on line 3), which holds no negative " <>
+                 "value: `neg` writes a signed type, so declare `count` a dint"
+             ]
+
+      assert example("var_input level ulint\nvar count usint", "neg level count", %{}) == [
+               "`neg` writes `count`, a usint (declared on line 3), which holds no negative " <>
+                 "value: `neg` writes a signed type, and a ulint widens into none, so convert " <>
+                 "`level` first, with `ulint_to_lint`, and declare `count` an lint"
              ]
 
       assert example("var_input w usint\nvar i int", "neg w i", %{"w" => 255}) ==
@@ -881,7 +917,13 @@ defmodule Logex.ArithmeticTest do
       assert example("var_input s sint\nvar_input u udint", "lt s u", %{"s" => -1, "u" => 0}) ==
                %{"ok" => 1}
 
-      assert example("var_input s sint", "lt s 200", %{"s" => 127}) == %{"ok" => 1}
+      assert example("var_input s sint", "lt s 200", %{"s" => 127}) == [
+               "`lt` compares `200` with `s`, an sint (declared on line 2), which never holds " <>
+                 "it: `200` is outside -128 to 127"
+             ]
+
+      assert example("var_input s sint", "lt s 127", %{"s" => 126}) == %{"ok" => 1}
+      assert example("var_input u usint", "ge u 0", %{"u" => 0}) == %{"ok" => 1}
     end
   end
 
@@ -963,20 +1005,56 @@ defmodule Logex.ArithmeticTest do
       end
     end
 
-    test "a literal compares by value with any width, and two literals within every " <>
-           "integer type's values" do
-      assert messages(
-               "var s sint\nvar u ulint\nvar b bool\nlt s 200 ote b\ngt u -1 ote b\n" <>
-                 "eq 18446744073709551615 -9223372036854775808 ote b"
-             ) == []
+    # Decision 183: a literal compared with a tag is a value of the tag's type, as IEC's
+    # typed comparison types its literal, for each of the six comparisons, on either side:
+    # one outside it would make the comparison's result never change. Two literals are each
+    # within every integer type's values, as M5-4 has it.
+    test "a literal compared with a tag must be a value of the tag's type, at every width, " <>
+           "and two literals within every integer type's values" do
+      for {type, _kind} <- @widths, op <- ~w(eq ne lt gt le ge) do
+        {low, high} = bounds(type)
 
-      assert messages("var s sint\nvar b bool\nlt s 18446744073709551616 ote b") == [
+        assert messages("var s #{type}\nvar b bool\n#{op} s #{low} ote b\n#{op} #{high} s ote b") ==
+                 []
+
+        assert messages(
+                 "var s #{type}\nvar b bool\n#{op} s #{high + 1} ote b\n#{op} #{low - 1} s ote b"
+               ) ==
+                 for(
+                   value <- [high + 1, low - 1],
+                   do:
+                     "`#{op}` compares `#{value}` with `s`, #{article(type)} (declared on line " <>
+                       "1), which never holds it: `#{value}` is outside #{low} to #{high}"
+                 )
+      end
+
+      assert messages("var t ton\nvar b bool\nlt t.acc 2147483648 ote b") == [
+               "`lt` compares `2147483648` with `t.acc`, a dint, which never holds it: " <>
+                 "`2147483648` is outside -2147483648 to 2147483647"
+             ]
+
+      assert messages("var b bool\neq 18446744073709551615 -9223372036854775808 ote b") == []
+
+      # A literal beside a tag outside the class, a bool, told so by its slot, is held to
+      # every integer type's values, on either side.
+      bool = "`lt` reads a number, but `b` is a bool (declared on line 1)"
+
+      past =
+        "`lt` reads a number: `18446744073709551616` is outside -9223372036854775808 to " <>
+          "18446744073709551615, every integer type's values"
+
+      assert messages(
+               "var b bool\nvar q bool\nlt b 18446744073709551616 ote q\n" <>
+                 "lt 18446744073709551616 b ote q\nlt b 300 ote q"
+             ) == [bool, past, bool, past, bool]
+
+      assert messages("var b bool\nlt 18446744073709551616 0 ote b") == [
                "`lt` reads a number: `18446744073709551616` is outside -9223372036854775808 " <>
                  "to 18446744073709551615, every integer type's values"
              ]
 
-      p = c!("var_input s sint\nvar_output b bool\nlt s 200 ote b")
-      {out, _state} = scan(p, %{"s" => 127})
+      p = c!("var_input s sint\nvar_output b bool\nlt s 127 ote b")
+      {out, _state} = scan(p, %{"s" => 126})
       assert out == %{"b" => 1}
     end
   end
@@ -992,6 +1070,13 @@ defmodule Logex.ArithmeticTest do
       {:error, diagnostics} -> Enum.map(diagnostics, & &1.message)
     end
   end
+
+  defp source_told(:ulint),
+    do:
+      ", and a ulint widens into none, so convert `a` first, with `ulint_to_lint`, and " <>
+        "declare `r` an lint"
+
+  defp source_told(type), do: ", so declare `r` #{Map.fetch!(@signed_for, type)}"
 
   defp article(type) when type in [:int, :lint, :usint, :uint, :udint, :ulint, :sint],
     do: "#{article_of(type)} #{type}"

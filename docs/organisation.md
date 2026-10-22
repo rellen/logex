@@ -7859,6 +7859,165 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
 
      **Taken: "a bool does not widen into a dint, and logex has no conversion between
      them", M5-3's wording confirmed** (the maintainer, 2026-10-22). No code changed.
+180. **The word for the arithmetic's slots in a message (Milestone 5),** following
+     decision 145 and M5-4. `add b 1 d` with a bool `b` is told "`add` reads a number, but
+     `b` is a bool", and `mod b 2 d` "`mod` reads an integer", IEC's ANY_NUM and ANY_INT in
+     words, a number being an integer until the reals land.
+     - "A number" and "an integer", the generic types' words, as M5-4 has it;
+     - or "an integer" for both until M5-10, `add`'s message changing when the reals come.
+
+     IEC names the generic types and no message; Logix's messages were not read.
+
+     **Taken: "a number" for ANY_NUM and "an integer" for ANY_INT, M5-4's reading
+     confirmed** (the maintainer, 2026-10-22). No code changed.
+181. **What a `neg` into an unsigned destination is told (Milestone 5),** following
+     decision 145 and M5-4. `neg level count` with a `usint` `count` was told "`neg` writes
+     `count`, a usint, which holds no negative value: `neg` writes a signed type", and
+     nothing of its source, so an engineer who declared `count` an `int` next was then told
+     that the dint `level` does not widen into it.
+     - That alone, as M5-4 has it;
+     - or a signed type the source widens into, so one change makes it compile;
+     - or both problems at once.
+
+     IEC has no NEG; Logix's NEG into an unsigned tag is **unverified**.
+
+     **Taken: the refusal also names a signed type the source widens into, "declare
+     `count` a dint"** (the maintainer, 2026-10-22): the narrowest signed type Ed 3 Figure
+     11 widens the source's type into, a tag's or a member's, `usint` into `int`, `uint`
+     into `dint`, `udint` into `lint`, a signed source its own type, "… `neg` writes a
+     signed type, so declare `count` a dint". *Readings (the record's, provisional):* a
+     literal source names the narrowest signed type the literal itself fits, `neg 5 u` "so
+     declare `u` an sint" and `neg 200 u` "an int", since the literal is judged in the
+     destination's type as every arithmetic literal is, `neg -128 s` in an `sint` then
+     wrapping as it does today; a `ulint` source, which widens into no signed type, is told
+     "and a ulint widens into none, so convert `level` first, with `ulint_to_lint`, and
+     declare `count` an lint"; a literal no signed type holds, "and none holds
+     `9223372036854775808`"; and a source that is not resolved, undeclared or a bool, adds
+     nothing, its own diagnostic given. `arithmetic_test.exs` holds every unsigned
+     destination against every source width and the literals.
+182. **A program edited by hand whose arithmetic destination has no integer type
+     (Milestone 5),** superseding M5-4's review's provisional reading. A host changes a
+     compiled `%Logex.Program{}`, retyping the box count `d` of `add 100 100 d` from an
+     `sint` to a bool, or deleting it, or the counter `c1` of `mul 100 2 c1.pv`, from the
+     tag table. M5-4's review made the runtime's lookup of a destination's type total,
+     computing such an instruction in the dint, so `d` took 200 with power.
+     - Computed in the dint, as M5-4's review had it;
+     - or refused where the program is handed in, a pinned `ArgumentError` naming each
+       such destination, as decision 169 refuses a hand-edited port.
+
+     IEC and Logix have no compiled program a host can edit: Logix downloads a project
+     whose tags and code are checked together.
+
+     **Taken: refused where the program is handed in** (the maintainer, 2026-10-22):
+     "`m`'s `add` on line 7 computes in the type of `d`, a bool, which is no integer type:
+     `m` was edited by hand after it compiled", and for the other shapes "`d`, which `m`
+     does not declare", "`c1.pv`, and `m` declares no `c1`", "`c1.pv`, and `c1` is a bool,
+     not a built-in's instance", "`c1.pv`, and a ton has no `pv`", and a block's body's
+     "`add` on line 5 of `seal`'s body computes in the type of `n`, a bool, …", a line for
+     each such destination in one message, the program's rungs in order and then each
+     body by the block's name. `Logex.Program.destination/2` is the one rule, which the
+     scan reads to find the type it computes in and `Logex.Program.unwritable/1`, the
+     check, holds to an integer type; M5-4's review's fallback to the dint, in the lookup
+     and in the wrap, is gone, and its tests are refusal tests. The check is made by every
+     entry point that takes a program: `Logex.Runtime`'s `instance/1`, `call/4`,
+     `put_inputs/3`, `scan/2,3` and `restart/3`, before anything else of their arguments;
+     `Logex.Edit.accept/3`, for the program running and the candidate; and, as decision
+     169's ports are, `Logex.Configuration.check/1`, `new!/1`, `compile/3` and
+     `Logex.Runtime.start/1`, its lines after the ports'. *The cost (the record's, as the
+     maintainer asked):* one walk of the program's rungs and of each body in its one table
+     once, a clause an element with no closure, on every call that takes a program, a
+     resource's scans among them: about 5 reductions a rung of contacts and 15 an
+     arithmetic instruction on Elixir 1.20.4, linear (a growth test holds 4x the program
+     under 4.8x the reductions). Measured against `23a5136`, a scan of 2,000 rungs of
+     `xic go ote d` costs 13% more reductions (78,715 to 89,058), and of 2,000 `add`s 28%
+     more (116,502 to 148,755); `jump_test.exs`'s skipped rungs, 0.303 of running them,
+     cost 0.373 now, the check being paid whether a rung runs or not. *Reading (the
+     record's, provisional):* a body a tag holds as its type itself, which only a program
+     built by hand gives (a compile names every block's type in the one table, decision
+     53), is walked where a `cal` runs it, each body once; a member of a user block's
+     instance, which no compile lets logic outside the block write, is refused as no
+     built-in's.
+183. **A literal compared with a tag whose type cannot hold it (Milestone 5),** following
+     decision 147 and M5-4. `lt trim 200` with an `sint` `trim`, which holds only −128 to
+     127, compiled and always passed power, a literal being judged by its slot and a
+     comparison's slot having no type of its own.
+     - Taken by value, as M5-4 has it;
+     - refused, the literal judged in the tag's type, as IEC's typed `GT_SINT` would type
+       it;
+     - or compiled with the warning two literals get.
+
+     Logix takes it, converting both to the wider type and comparing.
+
+     **Taken: refused when the program compiles, naming the literal, the tag and its
+     type's range** (the maintainer, 2026-10-22): "`lt` compares `200` with `trim`, an
+     sint (declared on line 1), which never holds it: `200` is outside -128 to 127", on
+     either side, a member's type its schema's ("`t.acc`, a dint"). *What "cannot hold"
+     means, for each comparison (the record's, as the maintainer asked):* one rule for all
+     six, the literal outside the tag's type's range, the range the type table's
+     (`Logex.Declarations.fits?/2`). Outside it, each comparison's result is fixed: `eq`
+     never passes power and `ne` always does, and `lt`, `le`, `gt` and `ge` always or
+     never do, by the side the literal falls on. Inside it, every comparison can go either
+     way, but for a literal at the type's own limit, where `ge u 0` with a `usint` `u`
+     always passes power and `lt u 0` never does, as `le s 127` and `gt s 127` with an
+     `sint` `s`: that literal is a value of the type, as IEC's `GE_USINT(u, 0)` takes it,
+     so it compiles, with no warning (*the record's reading, provisional*). Two literals
+     are as M5-4 has them: each within −2^63 to 2^64 − 1, with the warning
+     that the result never changes; and a literal beside a tag not resolved, undeclared
+     or a bool, is held to every integer type's values, the tag's own diagnostic given.
+     `arithmetic_test.exs` holds every comparison at every width's two limits and one past
+     each, on either side.
+184. **An instance's tag that holds no map (Milestone 5),** following decision 173. A
+     host hands in the fan's run-on timer, a `tof`, as 5 or `nil`, or a plain swap leaves
+     a dint's 7 under what is now a timer. Decision 173's reading read such a tag as a
+     fresh instance, each member 0, so a run-on already under way started over.
+     - Read as an empty instance, as decision 173's reading had it;
+     - or refused, so that only a map reaches an instance's tag.
+
+     IEC and Logix have no such state.
+
+     **Taken: refused with the same pinned `ArgumentError` as every other value outside
+     its type** (the maintainer, 2026-10-22): "state.env holds `run_on` outside its type:
+     it is a tof, and its value must be a map of its members, found 5", a user block's
+     "it is an instance of `seal`", at any depth, `p.t`, a line of decision 171's one
+     message in path order, by every entry point that takes a state, `Logex.Edit`'s steps
+     among them. A plain swap from a dint `k` to a timer `k` is now refused at its next
+     call, as one that narrows a tag is; decision 26's restart at an edit's first test is
+     reached now only by a map that lacks some of its members, a counter's left under what
+     is now a timer, and an edit's walk of a block's instance that is no map (`fits?/2`'s
+     `:block` and a timer's member keys) by no state the runtime takes. Changed on purpose:
+     M1-6's timers and members on a hand-built env, decision 26's tests in `edit_test.exs`
+     and `function_block_test.exs`, a hand-built state with no map where an instance goes
+     (now refused by every step), and the edit walk's swap oracle. *Reading (the record's,
+     provisional):* a tag that names a block type the program's table lacks, or holds as no
+     type, which only a program built by hand gives, is not looked into, as nothing runs
+     for it; and a struct, being a map, is read as a map of members, as before.
+185. **How a value that is no integer is told in an integer type (Milestone 5),** following
+     decision 173. logex says "it is a dint, and its value must be an integer, found 37.5",
+     the words an input that is no integer is told, rather than decision 177's range,
+     "37.5 is outside -2147483648 to 2147483647", which reads as if 37.5 were not between
+     them.
+     - "Its value must be an integer", as decision 173's reading has it;
+     - or the range, as decision 177 tells an integer outside it.
+
+     **Taken: "its value must be an integer, found 37.5", decision 173's reading
+     confirmed** (the maintainer, 2026-10-22). No code changed.
+186. **A built-in's internal member that is no integer (Milestone 5),** following decision
+     173. A timer's `last`, the time it last ran, is no bool or integer member a program can
+     name, so decision 173's check did not look at it, and one that was no integer, a
+     `nil`, added no time, the timer counting from that scan.
+     - Read as before, adding nothing;
+     - or refused as the host's mistake, as every other member's value is.
+
+     IEC and Logix have no such member a host can hand in.
+
+     **Taken: refused, like every other member** (the maintainer, 2026-10-22): "state.env
+     holds `t1.last` outside its type: it is a clock, and its value must be an integer,
+     found nil", a block's timer's by its path, `p.t.last`, a line of decision 171's one
+     message. *Reading (the record's, provisional):* any integer is taken, a negative one
+     among them, since `last` is a time on the scan's clock, which `Logex.FbType` calls
+     an unbounded count of milliseconds, and a `last` later than `now` adds nothing, as
+     before; and one the env leaves out reads as before, a timer that adds nothing on its
+     next run.
 
 ---
 

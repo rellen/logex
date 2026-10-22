@@ -407,8 +407,8 @@ defmodule Logex.EditTest do
            "again (decision 26)" do
       v0 =
         c!(
-          "var_input go bool\nvar k dint\nvar b ton\nvar t1 ton\nvar_output n dint\n" <>
-            "xic go move 7 k\nxic go ton b 5\nxic go ton t1 50"
+          "var_input go bool\nvar k ctu\nvar b ton\nvar t1 ton\nvar_output n dint\n" <>
+            "xic go ctu k 3\nxic go ton b 5\nxic go ton t1 50"
         )
 
       # A plain swap that leaves b's map under a bool and t1's under a dint is refused at
@@ -430,18 +430,32 @@ defmodule Logex.EditTest do
                      inspect(state.env["t1"]),
                    fn -> Runtime.scan(narrowed, state, 10) end
 
-      # So decision 26 is reached by an integer a plain swap keeps under a timer: k's 7; a
-      # well-typed n is kept, and b and t1, kept as instances, fit.
+      # An integer a plain swap keeps under an instance's tag, a dint's 7 under what is now
+      # a timer, is refused at its next call too (decision 184).
       v1 =
         c!(
           "var_input go bool\nvar k ton\nvar b ton\nvar t1 ton\nvar_output n dint\n" <>
             "xic go move 4 n"
         )
 
+      sevened = %{state | env: %{state.env | "k" => 7}}
+
+      assert_raise ArgumentError,
+                   "state.env holds `k` outside its type: it is a ton, and its value must " <>
+                     "be a map of its members, found 7",
+                   fn -> Runtime.scan(v1, sevened, 10) end
+
+      # So decision 26 is reached by a map a plain swap keeps under another type: k's
+      # counter under what is now a timer; a well-typed n is kept, and b and t1, kept as
+      # instances, fit.
       v2 = String.replace(v1.source, "move 4 n", "move 4 n\nxic go ton k 5000")
       v2 = c!(v2)
+      counter = state.env["k"]
       {_, state} = Runtime.scan(v1, state, 10)
-      assert %{"k" => 7, "b" => %{"pre" => 5}, "t1" => %{"pre" => 50}, "n" => 4} = state.env
+
+      assert %{"k" => ^counter, "b" => %{"pre" => 5}, "t1" => %{"pre" => 50}, "n" => 4} =
+               state.env
+
       {:ok, edit, forecast} = Edit.accept(v1, v2, state)
       {_edit, state, report} = Edit.test(edit, state)
       fresh = Runtime.instance(v2).env
@@ -452,13 +466,15 @@ defmodule Logex.EditTest do
     end
 
     test "a timer's map that a plain swap left without all its members does not fit" do
-      # Over a bool, a member write makes a map of that member alone.
-      v0 = c!("var_input go bool\nvar t1 bool\nxic go ote t1")
+      # Over a counter's map, a member write adds that member alone. (Over a bool's 1 the
+      # swap is refused at its next call, decision 184.)
+      v0 = c!("var_input go bool\nvar t1 ctu\nxic go ctu t1 3")
       v1 = c!("var_input go bool\nvar t1 ton\nxic go move 40 t1.pre")
       v2 = c!("var_input go bool\nvar t1 ton\nxic go move 40 t1.pre\nxic go ton t1 300")
       {_, state} = run(v0, [{0, %{"go" => 1}}])
+      counter = state.env["t1"]
       {_, state} = Runtime.scan(v1, state, 10)
-      assert state.env["t1"] == %{"pre" => 40}
+      assert state.env["t1"] == Map.put(counter, "pre", 40)
       {:ok, edit, forecast} = Edit.accept(v1, v2, state)
       {_edit, state, report} = Edit.test(edit, state)
       assert report == [{:added, "t1", Runtime.instance(v2).env["t1"]}] and report == forecast
@@ -482,17 +498,19 @@ defmodule Logex.EditTest do
 
     test "a value that does not fit is started only at the first test, and only for the " <>
            "candidate's tags" do
-      # The plain swap leaves 9 under `k`, a timer of the original the candidate drops: the
-      # first test leaves it alone, and so does the untest, which starts nothing, and whose
-      # timer rules read no timer that is not a map. (A timer's map it left under a bool
-      # would be refused at its next call since decision 173.)
-      v0 = c!("var_input go bool\nvar k dint\nxic go move 9 k")
+      # The plain swap leaves a counter's map under `k`, a timer of the original the
+      # candidate drops: the first test leaves it alone, and so does the untest, which
+      # starts nothing, and whose timer rules read no timer that lacks its members. (A
+      # timer's map it left under a bool would be refused at its next call since decision
+      # 173, and a dint's 9 under the timer since decision 184.)
+      v0 = c!("var_input go bool\nvar k ctu\nxic go ctu k 3")
       v1 = c!("var_input go bool\nvar k ton\nvar_output y bool\nxic go ote y")
       v2 = c!("var_input go bool\nvar_output y bool\nxic go ote y")
       {_, state} = run(v0, [{0, %{"go" => 1}}])
+      counter = state.env["k"]
       {_, state} = Runtime.scan(v1, state, 10)
       {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
-      assert {_, %Instance{env: %{"k" => 9}}, []} = Edit.untest(edit, state)
+      assert {_, %Instance{env: %{"k" => ^counter}}, []} = Edit.untest(edit, state)
     end
 
     test "a restart during the test drops what only the original declares, and untest " <>

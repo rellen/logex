@@ -2359,19 +2359,57 @@ defmodule Logex.Compiler do
   # as IEC's typed `ADD_<type>`: each source tag must be of a type Ed 3 Figure 11 widens
   # into it, told the conversion that bridges them where it is not, and a literal must fit
   # it. A comparison writes nothing: two integers compare by value whatever their types, so
-  # a tag needs nothing of the other operand, and a literal must fit some integer type,
-  # the class's whole range, as must one whose destination is not of the class or is not
-  # resolved, reported already. `neg` into an unsigned destination is refused (decision
+  # a tag needs nothing of the other operand; a literal beside a tag must fit the tag's
+  # type (decision 183), and one beside a literal some integer type, the class's whole
+  # range, as must one whose destination is not of the class or is not resolved, reported
+  # already. `neg` into an unsigned destination is refused (decision
   # 145): such a type holds no negative value, so its only results would be 0 and a wrap.
   defp classed([], _at, diagnostics), do: diagnostics
 
-  defp classed([{_access, class, _typed} | _] = operands, {_line, word} = at, diagnostics) do
+  defp classed([{_access, class, _typed} | _] = operands, at, diagnostics) do
     {writes, reads} = Enum.split_with(operands, &match?({:write, _class, _typed}, &1))
+    compared(writes, reads, class, at, diagnostics)
+  end
 
+  # Decision 183: a comparison, which writes nothing, holds a literal to the type of the
+  # tag it is compared with, as IEC's typed `LT_SINT` types its literal: `lt s 200` with an
+  # sint `s` can never be false, and is refused. Two literals, or a literal and a tag not
+  # resolved, are held to every integer type's values, as M5-4 has it.
+  defp compared([], [{:value, _, {:literal, value}}, {:value, _, %Tag{} = tag}], class, at, d),
+    do: against(value, tag, class, at, d)
+
+  defp compared([], [{:value, _, %Tag{} = tag}, {:value, _, {:literal, value}}], class, at, d),
+    do: against(value, tag, class, at, d)
+
+  defp compared(writes, reads, class, {_line, word} = at, diagnostics) do
     {diagnostics, computed} =
-      negated(symbol_of(word), computed_in(writes, class), at, diagnostics)
+      negated(symbol_of(word), computed_in(writes, class), reads, at, diagnostics)
 
     Enum.reduce(reads, diagnostics, &source(&1, computed, at, &2))
+  end
+
+  defp against(value, %Tag{type: type} = tag, class, at, diagnostics) when is_elementary(type),
+    do: held(Declarations.in_class?(type, class), value, tag, class, at, diagnostics)
+
+  defp against(value, _tag, class, at, diagnostics),
+    do: source({:value, class, {:literal, value}}, {:class, class}, at, diagnostics)
+
+  # A tag outside the class, a bool, was reported by its slot; its literal is held to the
+  # class alone.
+  defp held(true, value, %Tag{type: type} = tag, _class, at, diagnostics),
+    do: holds(Declarations.fits?(type, value), value, tag, at, diagnostics)
+
+  defp held(false, value, _tag, class, at, diagnostics),
+    do: source({:value, class, {:literal, value}}, {:class, class}, at, diagnostics)
+
+  defp holds(true, _value, _tag, _at, diagnostics), do: diagnostics
+
+  defp holds(false, value, %Tag{type: type} = tag, {line, word}, diagnostics) do
+    message =
+      "`#{word}` compares `#{value}` with `#{tag.name}`, #{a_type(type)}#{declared(tag)}, " <>
+        "which never holds it: " <> Declarations.misfit(type, "`#{value}`")
+
+    [diagnostic(line, message) | diagnostics]
   end
 
   defp computed_in([{:write, class, %Tag{type: type} = tag}], class) when is_elementary(type),
@@ -2447,28 +2485,59 @@ defmodule Logex.Compiler do
     [diagnostic(line, message) | diagnostics]
   end
 
-  # A `neg` refused for its unsigned destination is told that alone, its sources then held
-  # to the class only, since no conversion into that destination would make it compile.
-  defp negated(:neg, %Tag{type: type} = destination, at, diagnostics),
-    do: unsigned(Declarations.kind(type), destination, at, diagnostics)
+  # A `neg` refused for its unsigned destination is told that, and since decision 181 the
+  # narrowest signed type its source widens into, or a literal source fits, to declare the
+  # destination; its sources are then held to the class only, since no conversion into
+  # that destination would make it compile.
+  defp negated(:neg, %Tag{type: type} = destination, reads, at, diagnostics),
+    do: unsigned(Declarations.kind(type), destination, reads, at, diagnostics)
 
-  defp negated(_symbol, computed, _at, diagnostics), do: {diagnostics, computed}
+  defp negated(_symbol, computed, _reads, _at, diagnostics), do: {diagnostics, computed}
 
-  defp unsigned(:unsigned, destination, {line, word}, diagnostics),
+  defp unsigned(:unsigned, destination, reads, {line, word}, diagnostics),
     do: {
       [
         diagnostic(
           line,
           "`#{word}` writes `#{destination.name}`, #{a_type(destination.type)}" <>
             "#{declared(destination)}, which holds no negative value: `#{word}` writes a " <>
-            "signed type"
+            "signed type" <> signed_suggested(reads, destination)
         )
         | diagnostics
       ],
       {:class, :any_num}
     }
 
-  defp unsigned(_kind, destination, _at, diagnostics), do: {diagnostics, destination}
+  defp unsigned(_kind, destination, _reads, _at, diagnostics), do: {diagnostics, destination}
+
+  # The signed integer types, narrowest first, from the one table.
+  @signed Enum.sort_by(
+            for(type <- Declarations.integers(), Declarations.kind(type) == :signed, do: type),
+            &Declarations.width/1
+          )
+
+  defp signed_suggested([{:value, _class, %Tag{type: from} = source}], destination)
+       when is_elementary(from),
+       do: widened_into(Enum.find(@signed, &Declarations.widens?(from, &1)), source, destination)
+
+  defp signed_suggested([{:value, _class, {:literal, value}}], destination),
+    do: literal_into(Enum.find(@signed, &Declarations.fits?(&1, value)), value, destination)
+
+  defp signed_suggested(_unresolved, _destination), do: ""
+
+  defp widened_into(nil, %Tag{type: from} = source, destination) do
+    widest = List.last(@signed)
+
+    ", and #{a_type(from)} widens into none, so convert `#{source.name}` first, with " <>
+      "`#{Declarations.conversion(from, widest)}`, and #{declare(destination, widest)}"
+  end
+
+  defp widened_into(type, _source, destination), do: ", so #{declare(destination, type)}"
+
+  defp literal_into(nil, value, _destination), do: ", and none holds `#{value}`"
+  defp literal_into(type, _value, destination), do: ", so #{declare(destination, type)}"
+
+  defp declare(destination, type), do: "declare `#{destination.name}` #{a_type(type)}"
 
   defp fits(true, _value, _tag, _at, diagnostics), do: diagnostics
 

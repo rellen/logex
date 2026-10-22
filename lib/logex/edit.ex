@@ -414,8 +414,12 @@ defmodule Logex.Edit do
 
   # ---- host mistakes ----------------------------------------------------------------------
 
-  # The runtime's own messages for a non-program, a function block type among them (M2-5).
-  defp program!(%Program{tags: tags, rungs: rungs}) when is_map(tags) and is_list(rungs), do: :ok
+  # The runtime's own messages for a non-program, a function block type among them (M2-5),
+  # and since decision 182 for one edited by hand whose arithmetic computes in a
+  # destination with no integer type (`Logex.Program.unwritable/1`).
+  defp program!(%Program{tags: tags, rungs: rungs} = program)
+       when is_map(tags) and is_list(rungs),
+       do: computable!(Program.unwritable(program))
 
   defp program!(%FbType{name: name} = type) when is_binary(name),
     do: raise(ArgumentError, "`#{name}` is " <> Declarations.not_a_program(type))
@@ -426,6 +430,9 @@ defmodule Logex.Edit do
         ArgumentError,
         "expected a %Logex.Program{} from Logex.compile/2, got: #{inspect(other)}"
       )
+
+  defp computable!([]), do: :ok
+  defp computable!(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
 
   defp named!(%Program{name: name}, %Program{name: name}), do: :ok
 

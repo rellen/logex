@@ -1585,21 +1585,27 @@ defmodule Logex.ValidationTest do
   end
 
   describe "comparisons (M1-6)" do
-    # M5-4 (decision 147): two integers compare by value whatever their types, so a
-    # literal need only be an integer of some type, -2^63 to 2^64 - 1.
-    test "take two numbers, each a tag or a literal of some integer type" do
+    # M5-4 (decision 147): two integers compare by value whatever their types, so two
+    # literals need only be integers of some type, -2^63 to 2^64 - 1; and since decision
+    # 183 a literal compared with a tag must be a value of the tag's type.
+    test "take two numbers, each a tag or a literal, a literal beside a tag of its type" do
       assert source_errors(
                "var b bool\nvar d dint\nvar_input i dint\nvar_output o dint\n" <>
-                 "eq b d ote b\ngt d 18446744073709551616 ote b\nge d ote b\n" <>
-                 "lt 2147483647 i le o i ote b\nlt -9223372036854775809 d ote b\n" <>
-                 "gt d 18446744073709551615 lt -9223372036854775808 d ote b"
+                 "eq b d ote b\ngt d 3000000000 ote b\nge d ote b\n" <>
+                 "lt 2147483647 i le o i ote b\nlt -2147483649 d ote b\n" <>
+                 "gt 18446744073709551616 5 ote b\nlt -9223372036854775809 0 ote b\n" <>
+                 "gt 18446744073709551615 -9223372036854775808 ote b"
              ) == [
                "line 5: `eq` reads a number, but `b` is a bool (declared on line 1)",
-               "line 6: `gt` reads a number: `18446744073709551616` is outside " <>
-                 "-9223372036854775808 to 18446744073709551615, every integer type's values",
+               "line 6: `gt` compares `3000000000` with `d`, a dint (declared on line 2), " <>
+                 "which never holds it: `3000000000` is outside -2147483648 to 2147483647",
                "line 7: `ge` expects 2 operands (a value, then a value), found 1 " <>
                  "before the instruction `ote`",
-               "line 9: `lt` reads a number: `-9223372036854775809` is outside " <>
+               "line 9: `lt` compares `-2147483649` with `d`, a dint (declared on line 2), " <>
+                 "which never holds it: `-2147483649` is outside -2147483648 to 2147483647",
+               "line 10: `gt` reads a number: `18446744073709551616` is outside " <>
+                 "-9223372036854775808 to 18446744073709551615, every integer type's values",
+               "line 11: `lt` reads a number: `-9223372036854775809` is outside " <>
                  "-9223372036854775808 to 18446744073709551615, every integer type's values"
              ]
     end

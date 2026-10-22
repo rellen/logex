@@ -1802,13 +1802,24 @@ defmodule Logex.FunctionBlockTest do
       end
     end
 
-    test "an instance a plain swap left as no map runs from an empty one: nothing escapes" do
+    # Decision 184: an instance's tag holds a map, so the bool's 1 a plain swap leaves under
+    # what is now a block's instance is refused at the swap's next call, where until then
+    # it ran from an empty instance.
+    test "an instance a plain swap left as no map is refused at its next call" do
       seal = block!(@seal)
       a = program!("var_input go bool\nvar_output q bool\nvar z bool\nxic go ote z", [])
       b = program!("var_input go bool\nvar_output q bool\nvar z seal\ncal z go 0 q", [seal])
       {_, state} = step(a, Runtime.instance(a), %{"go" => 1}, 0)
       assert state.env["z"] == 1
-      {outputs, state} = step(b, state, %{})
+
+      raises(
+        "state.env holds `z` outside its type: it is an instance of `seal`, and its value " <>
+          "must be a map of its members, found 1",
+        fn -> step(b, state, %{}) end
+      )
+
+      # A new instance of the program swapped in runs.
+      {outputs, state} = step(b, Runtime.instance(b), %{"go" => 1})
       assert outputs == %{"q" => 1}
       assert state.env["z"] == %{"start" => 1, "stop" => 0, "run" => 1}
     end
@@ -2684,11 +2695,11 @@ defmodule Logex.FunctionBlockTest do
         )
       end
 
-      with_dints =
+      with_others =
         runs(
           holder.(
-            "var n ton\nvar k dint\nvar s dint",
-            "xic go ton n 7\nxic go move 3 k\nxic go move 2 s"
+            "var n ton\nvar k ctu\nvar s dint",
+            "xic go ton n 7\nxic go ctu k 3\nxic go move 2 s"
           )
         )
 
@@ -2700,30 +2711,40 @@ defmodule Logex.FunctionBlockTest do
           )
         )
 
+      with_timer =
+        runs(holder.("var n ton\nvar k ton\nvar r bool", "xic go ton n 7\nxic go ton k 40"))
+
       with_bool = runs(holder.("var n bool", "xic go otl n"))
 
-      {_, state} = running(with_dints, [{0, %{"a" => 1, "en" => 1}}])
-      assert %{"n" => %{"pre" => 7}, "k" => 3, "s" => 2} = state.env["p"]
+      {_, state} = running(with_others, [{0, %{"a" => 1, "en" => 1}}])
+      counter = state.env["p"]["k"]
+      assert %{"n" => %{"pre" => 7}, "k" => %{"cu" => 1}, "s" => 2} = state.env["p"]
 
       # A plain swap that leaves the timer's map under a bool is refused at its next call:
-      # it is no integer (decision 173), where until then the first test started it again.
+      # it is no integer (decision 173), where until then the first test started it again;
+      # and so is one that leaves the 2 under an instance of a block: it is no map
+      # (decision 184). (A 7 under a bool would be an integer outside its type, refused
+      # since decision 171.)
       assert_raise ArgumentError,
                    "state.env holds `p.n` outside its type: it is a bool, and only 0 or 1 fit, " <>
                      "found #{inspect(state.env["p"]["n"])}",
                    fn -> step(with_bool, state, %{"en" => 0}) end
 
-      # One keeps the 3 and the 2 under a timer and an instance of a block its program
-      # declares, while no cal runs the body. (A 7 under a bool would be an integer outside
-      # its type, refused since decision 171.)
-      {_, state} = step(with_kinds, state, %{"en" => 0})
-      assert %{"n" => %{"pre" => 7}, "k" => 3, "s" => 2} = state.env["p"]
+      assert_raise ArgumentError,
+                   "state.env holds `p.s` outside its type: it is an instance of `seal`, and " <>
+                     "its value must be a map of its members, found 2",
+                   fn -> step(with_kinds, state, %{"en" => 0}) end
 
-      {_edit, state, report} = Edit.test(accept!(with_kinds, with_kinds, state), state)
+      # One keeps the counter's map under a timer its program declares, while no cal runs
+      # the body.
+      {_, state} = step(with_timer, state, %{"en" => 0})
+      assert %{"n" => %{"pre" => 7}, "k" => ^counter, "s" => 2} = state.env["p"]
+
+      {_edit, state, report} = Edit.test(accept!(with_timer, with_timer, state), state)
       timer = FbType.initial(FbType.ton(), %{"pre" => 40})
-      held = FbType.initial(seal)
 
-      assert report == [{:added, "p.k", timer}, {:added, "p.r", 0}, {:added, "p.s", held}]
-      assert %{"n" => %{"pre" => 7}, "k" => ^timer, "s" => ^held} = state.env["p"]
+      assert report == [{:added, "p.k", timer}, {:added, "p.r", 0}]
+      assert %{"n" => %{"pre" => 7}, "k" => ^timer} = state.env["p"]
     end
 
     test "at the first test a member the candidate's version adds starts at its initial " <>
@@ -2912,8 +2933,11 @@ defmodule Logex.FunctionBlockTest do
       assert outputs == %{"q" => 0}
     end
 
-    test "at the first test an instance a plain swap left as no map starts again whole " <>
-           "(decision 26)" do
+    # Decision 184: the bool's 1 a plain swap leaves under an instance of a block is no map,
+    # refused at the swap's next call and by each step of an edit, where until then the
+    # edit's first test started it again whole (decision 26).
+    test "an instance a plain swap left as no map is refused before an edit can start it " <>
+           "again (decision 184)" do
       seal = block!(@seal)
 
       a =
@@ -2931,11 +2955,16 @@ defmodule Logex.FunctionBlockTest do
         )
 
       {_, state} = at(a, Runtime.instance(a), 10, %{"go" => 1})
-      {_, state} = at(b, state, 20)
       assert state.env["z"] == 1
-      {_edit, state, report} = Edit.test(accept!(b, c, state), state)
-      assert report == [{:added, "z", FbType.initial(seal)}, {:input, "st", 0}]
-      assert state.env["z"] == FbType.initial(seal)
+
+      message =
+        "state.env holds `z` outside its type: it is an instance of `seal`, and its value " <>
+          "must be a map of its members, found 1"
+
+      raises(message, fn -> at(b, state, 20) end)
+      raises(message, fn -> Edit.accept(b, c, state) end)
+      {:ok, edit, _forecast} = Edit.accept(b, c, Runtime.instance(b))
+      raises(message, fn -> Edit.test(edit, state) end)
     end
 
     test "assemble prunes a member at any depth, inside an instance an instance holds" do
@@ -2953,11 +2982,12 @@ defmodule Logex.FunctionBlockTest do
       refute is_map_key(state.env["w1"]["p"], "old")
     end
 
-    # A state built by hand is outside the contract (Logex.Instance): a switch and a prune
-    # of one that holds no map where an instance goes, at the top or inside one, and one
-    # whose block list names a bit under such a value, raise nothing.
-    test "a state built by hand with no map where an instance goes takes every step: " <>
-           "nothing escapes" do
+    # Decision 184: a state built by hand that holds no map where an instance goes, at the
+    # top or inside one, and one whose block list names a bit under such a value, is
+    # refused by each step of an edit, the host's mistake, as by every entry point that
+    # takes a state.
+    test "a state built by hand with no map where an instance goes is refused by every " <>
+           "step (decision 184)" do
       old_pulse =
         block!(String.replace(@pulse_go, "var edge bool", "var edge bool\nvar old dint 4"))
 
@@ -2975,20 +3005,33 @@ defmodule Logex.FunctionBlockTest do
       {_, state} = at(a, Runtime.instance(a), 10, %{"go" => 1})
       {edit, tested, _report} = Edit.test(accept!(a, b, state), state)
 
-      for hand <- [
-            %{tested | env: put_in(tested.env, ["w1", "p"], 5)},
-            %{tested | env: Map.put(tested.env, "w1", 5)},
-            %{
-              tested
-              | env: put_in(tested.env, ["w1", "p"], 5),
-                switched: false,
-                ons_blocked: ["w1.p.edge"]
-            }
+      inner =
+        "state.env holds `w1.p` outside its type: it is an instance of `pulse`, and its " <>
+          "value must be a map of its members, found 5"
+
+      outer =
+        "state.env holds `w1` outside its type: it is an instance of `wrap`, and its " <>
+          "value must be a map of its members, found 5"
+
+      for {hand, message} <- [
+            {%{tested | env: put_in(tested.env, ["w1", "p"], 5)}, inner},
+            {%{tested | env: Map.put(tested.env, "w1", 5)}, outer},
+            {%{
+               tested
+               | env: put_in(tested.env, ["w1", "p"], 5),
+                 switched: false,
+                 ons_blocked: ["w1.p.edge"]
+             }, inner}
           ] do
-        {edit, untested, _report} = Edit.untest(edit, hand)
-        {edit, retested, _report} = Edit.test(edit, untested)
-        assert {^b, %Instance{}, _report} = Edit.assemble(edit, retested)
+        raises(message, fn -> Edit.untest(edit, hand) end)
+        raises(message, fn -> Edit.assemble(edit, hand) end)
+        raises(message, fn -> Edit.cancel(edit, hand) end)
       end
+
+      # The state as the test left it takes every step.
+      {edit, untested, _report} = Edit.untest(edit, tested)
+      {edit, retested, _report} = Edit.test(edit, untested)
+      assert {^b, %Instance{}, _report} = Edit.assemble(edit, retested)
     end
 
     test "a timer whose cal a block's body drops and a later edit restores resumes from the " <>

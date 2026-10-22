@@ -225,7 +225,9 @@ defmodule Logex.Runtime do
   outside its type ever reaches a scan; and since decision 173 a value that is no integer
   in a bool or an integer tag or member, 37.5, `nil` or `"x"`, is outside its type too,
   "it is a dint, and its value must be an integer, found 37.5", retiring M1-4's reading
-  of one for a state handed in. A resource's instance is checked as each scan takes it, and before it
+  of one for a state handed in; so since decision 184 is an instance's tag that holds no
+  map, "it is a ton, and its value must be a map of its members, found 5", and since
+  decision 186 a timer's `last` that is no integer. A resource's instance is checked as each scan takes it, and before it
   each global a connection copies into it against the global's own type, which may be
   narrower than the var_input it fills (decision 159): "runtime.globals holds `a`
   outside its type: it is a uint, and 70000 is outside 0 to 65535". The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
@@ -237,7 +239,8 @@ defmodule Logex.Runtime do
   the same name over a kept instance, a *plain swap*, stays in this contract: the instance
   keeps its values until `restart/3`, so a tag the recompile adds reads 0, an added timer
   starting at a `.pre` of 0, a tag whose type it changes keeps its old value, refused at
-  the next call where it is an integer outside its new type (decision 171), a timer's map
+  the next call where it is an integer outside its new type (decision 171), or a value
+  that is no map under what is now an instance (decision 184), a timer's map
   reaching the outputs and the contacts, and a timer whose `ton` it gives back catches up
   all the time it was not run.
   `Logex.Edit` moves a state to a new program by rule instead: it starts what is added,
@@ -248,8 +251,11 @@ defmodule Logex.Runtime do
   106), where a plain swap's first scan can fire one whose condition was already true;
   inside a function block's instance it does each of these by the member's path (M2-5).
   `restart/3` starts every tag again but the `var_input`s whose values fit their types,
-  and empties `ons_blocked`. A `%Logex.Program{}`, `%Logex.Instance{}` or `%Logex.Edit{}` built or
-  edited by hand is outside this contract, and so is one that holds a block type whose body
+  and empties `ons_blocked`. Every entry point that takes a program refuses one whose
+  arithmetic computes in a destination that has no integer type, its tag retyped or taken
+  out of the table, which only a program edited by hand after it compiled holds, a line
+  each (`Logex.Program.unwritable/1`, decision 182). Otherwise a `%Logex.Program{}`,
+  `%Logex.Instance{}` or `%Logex.Edit{}` built or edited by hand is outside this contract, and so is one that holds a block type whose body
   was edited by hand, which may raise: a body whose rungs are no IR does. Only a `cal` of
   an instance its table lacks, or whose type it names and does not hold, is defined: it
   runs nothing. A type given to `Logex.compile/2` or `Logex.Tag.new!/4` cannot be one: it
@@ -773,7 +779,12 @@ defmodule Logex.Runtime do
     do: Map.put(tree, instance, plant(path, as_map(Map.get(tree, instance))))
 
   # The arguments, checked in order: program, state, the state's owner, scan, inputs.
-  defp program!(%Program{tags: tags, rungs: rungs}) when is_map(tags) and is_list(rungs), do: :ok
+  # Decision 182: a program whose arithmetic computes in a destination that has no integer
+  # type, which only one edited by hand after it compiled holds, is refused here, a line
+  # each (`Logex.Program.unwritable/1`), so that a scan finds every destination's type.
+  defp program!(%Program{tags: tags, rungs: rungs} = program)
+       when is_map(tags) and is_list(rungs),
+       do: computable!(Program.unwritable(program))
 
   # M2-5: what Logex.compile/2 gives for a function block's file, which a program runs.
   defp program!(%FbType{name: name} = type) when is_binary(name),
@@ -785,6 +796,9 @@ defmodule Logex.Runtime do
         ArgumentError,
         "expected a %Logex.Program{} from Logex.compile/2, got: #{inspect(other)}"
       )
+
+  defp computable!([]), do: :ok
+  defp computable!(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
 
   defp state!(%Instance{type: type}, _program) when not is_binary(type) and type != nil,
     do: raise(ArgumentError, "state.type must be a program name, got: #{inspect(type)}")
@@ -878,8 +892,9 @@ defmodule Logex.Runtime do
   # a user block's type found in the program's one table of block types (decision 53), so
   # the check is linear in the state, a guard a value that fits; the lines are sorted only
   # when there are any. A value that is no integer, 37.5, nil or "x", is outside its type
-  # too, since decision 173 retired M1-4's reading of one for a state handed in; an
-  # instance that is no map is read as before (provisional, decision 173).
+  # too, since decision 173 retired M1-4's reading of one for a state handed in; so is
+  # an instance's tag that holds no map, 5 or nil (decision 184), and a timer's `last` that
+  # is no integer (decision 186).
   defp values!(%Instance{env: env} = state, %Program{tags: tags, blocks: blocks}),
     do: fitted(misfits(env, tags, as_map(blocks), [], []), state)
 
@@ -921,17 +936,53 @@ defmodule Logex.Runtime do
   defp of_type({:block, name}, %{} = map, path, blocks, acc),
     do: held_block(Map.fetch(blocks, name), map, path, blocks, acc)
 
-  defp of_type(_type, _value, _path, _blocks, acc), do: acc
+  # Decision 184: an instance's tag holds a map of its members, so one that holds anything
+  # else, 5 or nil, is outside its type, told the instance's type in a message's words.
+  defp of_type(%FbType{} = type, value, path, _blocks, acc),
+    do: [outside_instance(type, value, path) | acc]
+
+  defp of_type({:block, name}, value, path, blocks, acc),
+    do: not_a_map(Map.fetch(blocks, name), value, path, acc)
+
+  # Decision 186: a built-in timer's `last`, a time on the scan's clock, unbounded, is an
+  # integer, as every other member's value is.
+  defp of_type(:clock, value, _path, _blocks, acc) when is_integer(value), do: acc
+
+  defp of_type(:clock, value, path, _blocks, acc),
+    do: [described(Declarations.a_type(:clock), unfitting(:clock, :clock, value), path) | acc]
 
   defp held_block({:ok, %FbType{} = type}, map, path, blocks, acc),
     do: of_type(type, map, path, blocks, acc)
 
   defp held_block(_not_held, _map, _path, _blocks, acc), do: acc
 
+  # A name the program's one table lacks, or holds as no type, which only a program built
+  # by hand gives, is no type the check can read, and nothing runs for it (`called/5`).
+  defp not_a_map({:ok, %FbType{} = type}, value, path, acc),
+    do: [outside_instance(type, value, path) | acc]
+
+  defp not_a_map(_not_held, _value, _path, acc), do: acc
+
   defp outside(type, value, path),
     do:
+      described(
+        Declarations.a_type(type),
+        unfitting(Declarations.kind(type), type, value),
+        path
+      )
+
+  defp outside_instance(type, value, path),
+    do:
+      described(
+        Declarations.instance_of(type),
+        "its value must be a map of its members, found #{inspect(value)}",
+        path
+      )
+
+  defp described(a_type, told, path),
+    do:
       "state.env holds `#{Enum.join(Enum.reverse(path), ".")}` outside its type: it is " <>
-        "#{Declarations.a_type(type)}, and " <> unfitting(Declarations.kind(type), type, value)
+        "#{a_type}, and " <> told
 
   # What a held value outside its type is told (decisions 171 and 173): an integer its
   # type's misfit, a bool's 2 among them; a value that is no integer, 37.5, nil or "x", in
@@ -1831,7 +1882,8 @@ defmodule Logex.Runtime do
   # power passes, as `move`. No source a hand-built env holds outside its type reaches a
   # scan, nor since decision 173 one that is no integer: the state is refused where it is
   # handed in (decision 171), superseding M5-2's provisional reading, computed exactly and
-  # then wrapped; a member of an instance a hand-built env left as no map reads 0.
+  # then wrapped; nor since decision 184 an instance that is no map, nor since decision
+  # 182 a program whose destination has no integer type.
   defp evaluate({op, _, [a, b, destination]}, {true, env}, scan) when op in @sums do
     {power, value} =
       wrapped(type_at(destination, scan), sum(op, integer(read(env, a)), integer(read(env, b))))
@@ -2256,28 +2308,13 @@ defmodule Logex.Runtime do
 
   # M5-4 (decision 147): the type an arithmetic instruction computes in, its destination's,
   # a tag's in the routine's table or a member's of the built-in instance that holds it,
-  # the one kind of member logic outside a block writes. Total, as the runtime's other
-  # lookups of a tag are (`counter_kind/2`): a destination the table does not hold, or
-  # holds as no integer, which no compile gives and only a program edited by hand after it
-  # compiled does, computes in the dint, as every arithmetic instruction did before M5-4
-  # (provisional, M5-4's review), so that nothing but a pinned `ArgumentError` escapes.
-  defp type_at({:name, _, name}, %Scan{tags: tags}), do: tag_type(Map.get(tags, name))
-
-  defp type_at({:member, _, [instance, member]}, %Scan{tags: tags}),
-    do: member_type(Map.get(tags, instance), member)
-
-  defp type_at(_destination, _scan), do: :dint
-
-  defp tag_type(%Tag{type: type}), do: type
-  defp tag_type(_no_tag), do: :dint
-
-  defp member_type(%Tag{type: %FbType{} = type}, member),
-    do: member_of(FbType.member(type, member))
-
-  defp member_type(_no_instance, _member), do: :dint
-
-  defp member_of({:ok, %Member{type: type}}), do: type
-  defp member_of(:error), do: :dint
+  # by the one rule `Logex.Program.destination/2`, which every entry point that takes a
+  # program has held to an integer type since decision 182, refusing a program edited by
+  # hand whose destination has none, so that nothing but a pinned `ArgumentError` escapes.
+  defp type_at(destination, %Scan{tags: tags}) do
+    {:ok, type} = Program.destination(destination, tags)
+    type
+  end
 
   # M5-2: a result is brought into the dint by keeping its low 32 bits, read in two's
   # complement, and passes no power on the scan where that stored value is not the exact
@@ -2293,10 +2330,6 @@ defmodule Logex.Runtime do
 
     defp wrapped(unquote(type), value), do: {false, low(unquote(kind), unquote(width), value)}
   end
-
-  # A destination's type that is no integer, which only a program edited by hand gives
-  # (`type_at/2`), is read as the dint (provisional, M5-4's review).
-  defp wrapped(_no_integer, value), do: wrapped(:dint, value)
 
   defp low(:signed, width, value) do
     <<low::signed-size(^width)>> = <<value::size(width)>>
@@ -2319,9 +2352,9 @@ defmodule Logex.Runtime do
   defp compare(:le, a, b), do: not compare(:gt, a, b)
 
   # Whatever a hand-built env left in a timer, a well-formed one comes back: a member it
-  # leaves out reads 0, `.en` is read as a contact, and a `last` that is not an integer, an
-  # internal member no check looks into, or is later than now, adds nothing; every `.pre`,
-  # `.acc` and bit it holds is inside its type (decisions 171 and 173). A negative `.acc`, which logic may write,
+  # leaves out reads 0, `.en` is read as a contact, and a `last` the env leaves out, or later
+  # than now, adds nothing; every `.pre`, `.acc` and bit it holds is inside its type
+  # (decisions 171 and 173), and its `last` an integer (decision 186). A negative `.acc`, which logic may write,
   # counts from 0: it is floored before the time is added, not after.
   defp timing(timer, now) do
     pre = integer(Map.get(timer, "pre"))

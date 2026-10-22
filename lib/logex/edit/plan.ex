@@ -843,9 +843,11 @@ defmodule Logex.Edit.Plan do
   defp own(_started, _plan), do: []
 
   # A timer fits by its member keys (decision 26): a map with none missing. A plain swap can
-  # leave one that lacks some: where the program swapped out held a bool under the name,
-  # a program that writes `t1.pre` and runs no `ton` on it leaves `%{"pre" => 40}`, which
-  # the timer rules, reading `.acc`, `.dn` and `.en`, could not take.
+  # leave one that lacks some: where the program swapped out held a counter under the name,
+  # a program that writes `t1.pre` and runs no `ton` on it leaves the counter's map with a
+  # `pre`, which the timer rules, reading `.acc`, `.dn` and `.en`, could not take. A value
+  # that is no map under an instance's tag is refused before any step since decision 184,
+  # so the clauses for one are totality only.
   defp fits?(:block, value), do: is_map(value)
   defp fits?({:members, keys}, %{} = timer), do: Enum.sort(Map.keys(timer)) == keys
   defp fits?({:members, _keys}, _not_a_timer), do: false

@@ -111,4 +111,186 @@ defmodule Logex.Program do
     do: %{tag | type: Logex.FbType.within(type, blocks)}
 
   defp held(_not_held, tag, _blocks), do: tag
+
+  # Decision 182: the instructions that compute in their destination's type (M5-4,
+  # decision 147), each writing its last operand.
+  @computing [:add, :sub, :mul, :div, :mod, :neg, :abs]
+
+  @doc """
+  The type an arithmetic instruction computes in, its destination's, in the tag table of
+  the routine that holds it: a tag's, or a member's of the built-in instance that holds
+  it, the one kind of member logic outside a block writes (M5-4, decision 147). `{:ok,
+  type}` where that type is an integer, as every compile gives; otherwise `{:error, what}`,
+  what the destination is, which only a program edited by hand after it compiled gives,
+  and which `unwritable/1` refuses where the program is handed in (decision 182). It is
+  the one rule the runtime's scan and that check read.
+  """
+  def destination({:name, _, name}, tags), do: tag_destination(Map.fetch(tags, name), name)
+
+  def destination({:member, _, [instance, member]}, tags),
+    do: instance_destination(Map.fetch(tags, instance), instance, member)
+
+  def destination(_no_tag, _tags), do: {:error, :no_tag}
+
+  defp tag_destination({:ok, %Logex.Tag{type: type}}, name), do: integer(type, name)
+  defp tag_destination(:error, _name), do: {:error, :undeclared}
+
+  defp instance_destination({:ok, %Logex.Tag{type: %Logex.FbType{body: nil} = type}}, i, m),
+    do: member_destination(Logex.FbType.member(type, m), type, "#{i}.#{m}")
+
+  defp instance_destination({:ok, %Logex.Tag{type: type}}, instance, _member),
+    do: {:error, {:instance, instance, type}}
+
+  defp instance_destination(:error, instance, _member), do: {:error, {:no_instance, instance}}
+
+  defp member_destination({:ok, %Logex.FbType.Member{type: type}}, _owner, path),
+    do: integer(type, path)
+
+  defp member_destination(:error, owner, _path), do: {:error, {:no_member, owner}}
+
+  # The integer types, the one table's (Logex.Declarations.integers/0), read once here.
+  @integers Logex.Declarations.integers()
+
+  defp integer(type, _name) when type in @integers, do: {:ok, type}
+  defp integer(type, _name), do: {:error, {:type, type}}
+
+  @doc """
+  Decision 182: a line for each arithmetic instruction of `program`, or of a block's body
+  it holds, whose destination has no integer type (`destination/2`), in rung order, the
+  program's first and then each body's, by the block's name: what no compile gives, so a
+  program edited by hand after it compiled, its destination's tag retyped or taken out of
+  the table. `[]` for every program a compile gives. One walk of the program's rungs and
+  of each body once: a body in the program's one table of block types (decision 53), and
+  one a tag of a routine walked holds as its type itself, which only a program built by
+  hand does.
+  """
+  def unwritable(%__MODULE__{name: name} = program) do
+    {lines, _seen} = routine(program, {name, nil}, {[], MapSet.new()})
+    Enum.reverse(lines)
+  end
+
+  defp routine(%__MODULE__{rungs: rungs, tags: tags, blocks: blocks}, where, {lines, seen})
+       when is_list(rungs) and is_map(tags) do
+    {program, _block} = where
+    {lines, called} = rungs(rungs, {tags, where}, {lines, []})
+    acc = Enum.reduce(Enum.reverse(called), {lines, seen}, &once(&1, program, &2))
+    held_bodies(blocks, program, acc)
+  end
+
+  defp routine(_not_a_routine, _where, acc), do: acc
+
+  # Only a program's own table is walked: a held body's table is the program's (decision
+  # 53), so a body names no table of its own to walk.
+  defp held_bodies(%{} = blocks, program, acc),
+    do: Enum.reduce(Enum.sort(blocks), acc, fn {_name, type}, acc -> once(type, program, acc) end)
+
+  defp held_bodies(_no_table, _program, acc), do: acc
+
+  defp once(%Logex.FbType{name: name, body: %__MODULE__{} = body}, program, {lines, seen} = acc),
+    do:
+      unseen(
+        MapSet.member?(seen, body),
+        body,
+        {program, name},
+        acc,
+        {lines, MapSet.put(seen, body)}
+      )
+
+  defp once(_no_body, _program, acc), do: acc
+
+  defp unseen(true, _body, _where, acc, _put), do: acc
+  defp unseen(false, body, where, _acc, put), do: routine(%{body | blocks: nil}, where, put)
+
+  # The walk itself, a clause an element, with no closure, since it runs on every scan:
+  # a few reductions an instruction.
+  defp rungs([{:rung, elements} | rest], at, lines),
+    do: rungs(rest, at, elements(elements, at, lines))
+
+  defp rungs([_not_a_rung | rest], at, lines), do: rungs(rest, at, lines)
+  defp rungs(_end, _at, lines), do: lines
+
+  defp elements([{:branches, legs} | rest], at, lines),
+    do: elements(rest, at, legs(legs, at, lines))
+
+  defp elements([{symbol, line, [_ | _] = operands} | rest], {tags, where} = at, {lines, called})
+       when symbol in @computing,
+       do:
+         elements(
+           rest,
+           at,
+           {computes(
+              destination(List.last(operands), tags),
+              symbol,
+              line,
+              operands,
+              where,
+              lines
+            ), called}
+         )
+
+  # A `cal` runs the body of the type its instance's tag holds: one named in the program's
+  # table is walked with the table, and one a tag holds as itself, which only a program
+  # built by hand gives, is walked where a `cal` runs it.
+  defp elements([{:cal, _, [{:name, _, instance} | _]} | rest], {tags, _where} = at, acc),
+    do: elements(rest, at, called(Map.get(tags, instance), acc))
+
+  defp elements([_other | rest], at, lines), do: elements(rest, at, lines)
+  defp elements(_end, _at, lines), do: lines
+
+  defp legs([leg | rest], at, lines), do: legs(rest, at, elements(leg, at, lines))
+  defp legs(_end, _at, lines), do: lines
+
+  defp called(%Logex.Tag{type: %Logex.FbType{body: %__MODULE__{}} = type}, {lines, called}),
+    do: {lines, [type | called]}
+
+  defp called(_named_or_none, acc), do: acc
+
+  defp computes({:ok, _type}, _symbol, _line, _operands, _where, lines), do: lines
+
+  defp computes({:error, what}, symbol, line, operands, {program, _block} = where, lines),
+    do: [
+      "#{located(where)}`#{symbol}` on line #{line}#{within(where)} computes in the type of " <>
+        "#{written(List.last(operands), what, where)}: #{named(program)} was edited by " <>
+        "hand after it compiled"
+      | lines
+    ]
+
+  defp located({nil, nil}), do: "an unnamed program's "
+  defp located({program, nil}), do: "`#{program}`'s "
+  defp located({_program, _block}), do: ""
+
+  defp within({_program, nil}), do: ""
+  defp within({_program, block}), do: " of `#{block}`'s body"
+
+  defp named(nil), do: "the program"
+  defp named(program), do: "`#{program}`"
+
+  defp written(destination, :undeclared, where),
+    do: "#{shown(destination)}, which #{declarer(where)} does not declare"
+
+  defp written(destination, :no_tag, _where), do: "#{shown(destination)}, which is no tag"
+
+  defp written(destination, {:type, type}, _where),
+    do: "#{shown(destination)}, #{a(type)}, which is no integer type"
+
+  defp written(destination, {:no_instance, instance}, where),
+    do: "#{shown(destination)}, and #{declarer(where)} declares no `#{instance}`"
+
+  defp written(destination, {:instance, instance, type}, _where),
+    do: "#{shown(destination)}, and `#{instance}` is #{a(type)}, not a built-in's instance"
+
+  defp written({:member, _, [_, member]} = destination, {:no_member, type}, _where),
+    do: "#{shown(destination)}, and #{a(type)} has no `#{member}`"
+
+  defp declarer({program, nil}), do: named(program)
+  defp declarer({_program, _block}), do: "the body"
+
+  defp shown({:name, _, name}), do: "`#{name}`"
+  defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
+  defp shown(other), do: "`#{inspect(other)}`"
+
+  defp a(%Logex.FbType{} = type), do: Logex.Declarations.instance_of(type)
+  defp a({:block, name}) when is_binary(name), do: "an instance of `#{name}`"
+  defp a(type) when is_atom(type), do: Logex.Declarations.a_type(type)
+  defp a(other), do: inspect(other)
 end
