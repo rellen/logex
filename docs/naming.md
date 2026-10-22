@@ -1475,3 +1475,63 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `ctud_dint`, a type word, the alias of `ctud`.
 **Why:** Decision 163, as the maintainer answered §4.12's sixth question on 2026-10-21: a programmer used to IEC's typed counters writes `ctud_dint`, IEC's name for the very type logex's `ctud` declares, so the word is taken as a second word for it, not a type of its own. Its cost is a message that names a word the declaration does not hold, `a ctud` for `var stock ctud_dint`, which keeps two declarations of one thing equal as data, so neither `Logex.FbType.same?/2` nor an edit's type comparison has a spelling to excuse. It is reserved in any case in every `.ld` file (§4.12, "Reserved words").
 **Checked:** 2026-10-22. IEC 61131-3:2013 Table 45 (pp.113–114), as Milestone 5's design pass read it (2026-10-21); the conventional general instructions reference, Sept 2025, pp.92–96, as the `ctu` stanza read it.
+
+### `ton_ltime` — on-delay timer counted in nanoseconds: a type word
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var cure ton_ltime`; `xic press ton cure 2592000000000000`; `xic cure.dn ote cured` | A type word only, declaring an on-delay timer whose `.pre` and `.acc` are `lint` counts of **nanoseconds**, a `var` with no initial value: `ton`'s members and every rule of `ton` (its own stanza) but for its unit, and the instruction `ton` runs it. Its preset, the literal on the instruction, is in nanoseconds, 0 to 9223372036854775807, about 292 years, `2592000000000000` above being 30 days. **The unit is the instance's, not the rung's:** `ton t 2000000` is 2,000,000 ms, about 33 minutes, where `t` is a `ton`, and 2 ms where it is a `ton_ltime`. **The resolution is a millisecond:** logex's clock and every scan's elapsed time are whole milliseconds, so `.acc` gains 1,000,000 ns for each millisecond since this `ton` last ran, and a preset that is no whole number of milliseconds, `1500000`, is done at the first scan whose `.acc` reaches it, at the next whole millisecond, 2 ms, and is warned of. A `move` into `cure.pre` takes a source that widens into a lint (Ed 3 Figure 11). An edit from `ton` to `ton_ltime`, or back, is refused, as any type change is (`docs/organisation.md` §4.9). M5-6. |
+| IEC 61131-3 | **TON_LTIME** | Ed 3:2013 §6.6.3.5.5 Table 46 feature 2c, *"On-delay using LTIME"*, p.115, beside the overloaded TON (2a) and TON_TIME (2b): *"The standard timer function blocks may be used overloaded with TIME or LTIME, or the base data type for the standard timer may be specified as TIME or LTIME"* (p.114). LTIME is *"a signed 64-bit integer with unit of nanoseconds"* (Table 10 footnote m, pp.32–33). Ed 2:2003 has no LTIME. |
+| Conventional | the **TIMER** structure, DINT milliseconds | `.PRE` and `.ACC` DINT, *"(1 millisecond units)"*, as the `ton` stanza reads it; LTIME, 64-bit nanoseconds, is a type on the 5x80 controllers (`docs/organisation.md` decision 158's reading of RM094N p.13). Whether a timer there takes an LTIME preset, as the Timers table's TIMER_T suggests: `unverified`. |
+| Siemens STEP 7 / TIA Portal LAD | TIA **TON** with LTIME chosen for `PT` and `ET`, an IEC_LTIMER, on the S7-1500 | `unverified`, not re-read for this stanza. |
+| CODESYS | **LTON**, of its 64-bit standard library | `unverified`, not re-read for this stanza. |
+| Mitsubishi GX Works | none found | `unverified`. |
+
+**Chosen:** `ton_ltime`, a type word.
+**Why:** Rule 1: IEC names the timer TON_LTIME, lowercased as every IEC word logex takes (decision 158, as the maintainer took typed variants on 2026-10-21). The instruction stays `ton`, running every on-delay timer, so a rung says no unit, its preset judged in its instance's type and unit (`docs/organisation.md` §4.12's routine choice): that costs a rung whose meaning a declaration changes a million-fold, which the stanza says plainly, and which the warning for a preset that is no whole number of milliseconds catches only in part. The TIME and LTIME types themselves stay deferred, so the preset is a plain integer, ns here as ms for `ton`. A finer clock would put nanoseconds into the core's `now`, a later item; until then a long timer is a `ton` with 63 bits of range and a millisecond's resolution, as IEC leaves the timer's resolution to the implementer. It is reserved in any case in every `.ld` file, so a tag, label or instance named `ton_ltime` stops compiling (§4.12, "Reserved words").
+**Checked:** 2026-10-22. IEC 61131-3:2013 §6.6.3.5.5 and Table 46 (pp.114–115), and Table 10 and its footnote m (pp.32–33), read directly in the copy `docs/instruction-sets.md` §9 lists; the conventional rows as the `ton` stanza and decision 158 read them. The Siemens, CODESYS and Mitsubishi rows were not re-read.
+
+### `tof_ltime` — off-delay timer counted in nanoseconds: a type word
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var run_on tof_ltime`; `xic fan tof run_on 90000000000`; `xic run_on.dn ote fan_motor` | A type word only, declaring an off-delay timer whose `.pre` and `.acc` are `lint` counts of **nanoseconds**: `tof`'s members and every rule of `tof` (its own stanza) but for its unit, and the instruction `tof` runs it. Its preset is in nanoseconds, 0 to 9223372036854775807, `90000000000` above being 90 s. **The unit is the instance's, not the rung's**: `tof t 2000000` is 2,000,000 ms on a `tof` and 2 ms on a `tof_ltime`. **The resolution is a millisecond:** each millisecond of the delay adds 1,000,000 ns to `.acc`, and a preset that is no whole number of milliseconds ends its delay at the next whole millisecond, and is warned of. An edit from `tof` to `tof_ltime` is refused, as any type change is. M5-6. |
+| IEC 61131-3 | **TOF_LTIME** | Ed 3:2013 §6.6.3.5.5 Table 46 feature 3c, *"Off-delay using LTIME"*, p.115; LTIME as the `ton_ltime` stanza reads it. |
+| Conventional | the **TIMER** structure, DINT milliseconds | As the `ton_ltime` stanza: a timer in LTIME `unverified`. |
+| Siemens STEP 7 / TIA Portal LAD | TIA **TOF** with LTIME, an IEC_LTIMER | `unverified`, not re-read for this stanza. |
+| CODESYS | **LTOF** | `unverified`, not re-read for this stanza. |
+| Mitsubishi GX Works | none found | `unverified`. |
+
+**Chosen:** `tof_ltime`, a type word.
+**Why:** Rule 1, as for `ton_ltime`: IEC's TOF_LTIME, lowercased, run by `tof`, its preset in its instance's unit, its resolution a millisecond (decision 158). It is reserved in any case in every `.ld` file (§4.12, "Reserved words").
+**Checked:** 2026-10-22. IEC 61131-3:2013 Table 46 (p.115), read directly in the copy `docs/instruction-sets.md` §9 lists. The other rows as the `ton_ltime` stanza's.
+
+### `tp_ltime` — pulse timer counted in nanoseconds: a type word
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var horn_pulse tp_ltime`; `xic alarm tp horn_pulse 2500000000`; `xic horn_pulse.tt ote horn` | A type word only, declaring a pulse timer whose `.pre` and `.acc` are `lint` counts of **nanoseconds**: `tp`'s members and every rule of `tp` (its own stanza) but for its unit, its rising edge read from `.en` as `tp`'s is, and the instruction `tp` runs it. Its preset is in nanoseconds, 0 to 9223372036854775807, `2500000000` above being 2.5 s. **The unit is the instance's, not the rung's**: `tp t 2000000` is 2,000,000 ms on a `tp` and 2 ms on a `tp_ltime`. **The resolution is a millisecond:** each millisecond of the pulse adds 1,000,000 ns to `.acc`, and a preset that is no whole number of milliseconds ends the pulse at the next whole millisecond, and is warned of. An edit from `tp` to `tp_ltime` is refused, as any type change is. M5-6. |
+| IEC 61131-3 | **TP_LTIME** | Ed 3:2013 §6.6.3.5.5 Table 46 feature 1c, *"Pulse using LTIME"*, p.115; LTIME as the `ton_ltime` stanza reads it. |
+| Conventional | none: the conventional set has no pulse timer (the Timers table) | |
+| Siemens STEP 7 / TIA Portal LAD | TIA **TP** with LTIME, an IEC_LTIMER | `unverified`, not re-read for this stanza. |
+| CODESYS | **LTP** | `unverified`, not re-read for this stanza. |
+| Mitsubishi GX Works | none found | `unverified`. |
+
+**Chosen:** `tp_ltime`, a type word.
+**Why:** Rule 1, as for `ton_ltime`: IEC's TP_LTIME, lowercased, run by `tp`, its preset in its instance's unit, its resolution a millisecond (decision 158). It is reserved in any case in every `.ld` file (§4.12, "Reserved words").
+**Checked:** 2026-10-22. IEC 61131-3:2013 Table 46 (p.115), read directly in the copy `docs/instruction-sets.md` §9 lists. The other rows as the `ton_ltime` stanza's.
+
+### `rto_ltime` — retentive on-delay timer counted in nanoseconds: a type word
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var lube rto_ltime`; `xic motor rto lube 1800000000000000`; `xic lube.dn ote grease_lamp`; `xic greased ote lube.r` | A type word only, declaring a retentive timer whose `.pre` and `.acc` are `lint` counts of **nanoseconds**: `rto`'s members, its reset input `r` among them, and every rule of `rto` (its own stanza) but for its unit, and the instruction `rto` runs it. Its preset is in nanoseconds, 0 to 9223372036854775807, `1800000000000000` above being 500 hours, past the 24.8 days a `rto`'s dint of milliseconds holds. **The unit is the instance's, not the rung's**: `rto t 2000000` is 2,000,000 ms on an `rto` and 2 ms on an `rto_ltime`. **The resolution is a millisecond:** each millisecond its rung is true adds 1,000,000 ns to `.acc`, and a preset that is no whole number of milliseconds is done at the next whole millisecond, and is warned of. An edit from `rto` to `rto_ltime` is refused, as any type change is. M5-6. |
+| IEC 61131-3 | **none** | Table 46 defines only TP, TON and TOF, each with TIME and LTIME variants, and no retentive timer, as the `rto` stanza reads it. |
+| Conventional | **RTO**, a **TIMER** tag, DINT milliseconds | As the `rto` stanza; a timer in LTIME `unverified`, as the `ton_ltime` stanza says. |
+| Siemens STEP 7 / TIA Portal LAD | TIA **TONR** with LTIME | `unverified`, not re-read for this stanza. |
+| CODESYS | none in the Standard library | Carried from the Timers table above. |
+| Mitsubishi GX Works | none found | `unverified`. |
+
+**Chosen:** `rto_ltime`, a type word.
+**Why:** IEC has no retentive timer, so `rto` is rule 2's vendor mnemonic, and its long form takes IEC's own suffix for the LTIME variant of a timer, `_LTIME`, on that mnemonic: the "rto equivalent if fitting" decision 158 allowed, taken as the maintainer answered §4.12's seventh question on 2026-10-21. No coined word: rule 3 holds, since both parts are standard names. It is run by `rto`, its preset in its instance's unit, its resolution a millisecond. It is reserved in any case in every `.ld` file (§4.12, "Reserved words").
+**Checked:** 2026-10-22. IEC 61131-3:2013 Table 46 (p.115), read directly in the copy `docs/instruction-sets.md` §9 lists; the `rto` stanza for the rest.
