@@ -2441,7 +2441,9 @@ lines of the block's own text, each block type read once a call; the writer warn
 storage-bit words are given wherever any writer's `ons` keeps its bit in the global,
 whoever the other writer is, as a fact of the global; a `var_external` line refused for
 its initial value declares nothing, as a `var_input`'s does; and a `var_external` never
-names a global refused for its name, so decision 42's silence has no case here.)*
+names a global refused for its name, so decision 42's silence has no case here; one that
+names a broken `var_global` line is silent, the line's diagnostic the one mistake, which
+M5-1's review found raising and fixed.)*
 - *One IR walk first.* B5's one walk of a program's IR lands as M2-4's first commit,
   before any check that reads a program's writes or timers. It answers "which tags a
   program writes" and "which timers it runs" as public functions over the IR, not as a

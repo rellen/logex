@@ -4841,7 +4841,10 @@ defmodule Logex.ConfigurationTest do
     test "nothing but a diagnostic or a pinned ArgumentError escapes the text or compile/3",
          %{seal: seal} do
       :rand.seed(:exsss, {2026, 10, 46})
-      programs = %{"seal" => seal}
+      # `ext` reads `pb` through a var_external, so an edit that breaks `pb`'s line leaves
+      # a placeholder that a var_external names, silent (decision 42), never a raise.
+      {:ok, ext} = Logex.compile("var_external pb bool\nvar q bool\nxic pb ote q", name: "ext")
+      programs = %{"seal" => seal, "ext" => ext}
       config = Configuration.new!(tasked(seal))
       {:ok, lined} = compiled(@tasked, programs)
 
@@ -4850,7 +4853,8 @@ defmodule Logex.ConfigurationTest do
         @tasked,
         @broken,
         "m.start pb\nprogram m seal with fast\nvar_global pb bool at panel.i.0\n" <>
-          "task fast interval 10 priority 1"
+          "task fast interval 10 priority 1",
+        "var_global pb boo\nprogram e ext\nvar_global pb2 bool at panel.i.1\nprogram m ext"
       ]
 
       outcomes =
@@ -5328,6 +5332,41 @@ defmodule Logex.ConfigurationTest do
                "global `alarm` has type :int: a global is :bool or :dint",
                "`reader` declares `var_external estop bool` on its line 1, but `estop` is an " <>
                  "instance, not a global"
+             ]
+    end
+
+    # A broken `var_global` line declares its name (Logex.Configuration.Text's placeholder),
+    # so a var_external that names it is that line's one mistake, its use silent (decision
+    # 42), whatever broke the line: no type, an unknown one, an instance's, no location.
+    test "one that names a broken `var_global` line is silent, the line's diagnostic alone" do
+      reader = %{"reader" => sharing()["reader"]}
+      instance = "\nprogram r reader\nvar_global lamp bool\nr.lamp lamp"
+
+      assert errors("var_global estop boo" <> instance, reader) == [
+               "line 1, column 18: unknown type `boo`: a global is a `bool` or a `dint` — " <>
+                 "did you mean `bool`?"
+             ]
+
+      assert errors("var_global estop ton" <> instance, reader) == [
+               "line 1, column 18: `estop` cannot be a `ton`: a global is a `bool` or a " <>
+                 "`dint`, and a ton is declared inside a program, as in `var estop ton`"
+             ]
+
+      assert errors("var_global estop" <> instance, reader) == [
+               "line 1, column 1: `estop` needs a type: `var_global estop bool` or " <>
+                 "`var_global estop dint`"
+             ]
+
+      assert errors("var_global estop bool at" <> instance, reader) == [
+               "line 1, column 23: `at` needs a location, as in `at panel.i.0`"
+             ]
+
+      # A broken line of another kind still names that kind, which is no global.
+      assert errors("task estop 5 x" <> instance, reader) == [
+               "line 1, column 12: unexpected `5` on the line of task `estop`: a task takes " <>
+                 "`continuous`, `single`, `interval`, `priority` and `watchdog`",
+               "line 2: `reader` declares `var_external estop bool` on its line 1, but " <>
+                 "`estop` is a task (line 1), not a global"
              ]
     end
 

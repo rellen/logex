@@ -2410,11 +2410,15 @@ defmodule Logex.Configuration do
       |> Enum.map(&diagnostic(instance.line, &1))
 
   # A var_external's name is no keyword and has no `.` (Logex.Declarations), so it never
-  # names a global refused for its name, which decision 42 would leave silent.
+  # names a global refused for its name. It may name what a broken line declares, a
+  # placeholder whose element is `:declared`, a `var_global estop boo` among them: that
+  # line's diagnostic is the one mistake, and a use of its name is silent (decision 42).
   defp binding(tag, typed, world), do: bound_to(Map.get(world.names, tag.name), tag, typed, world)
 
   defp bound_to(nil, tag, {_writes, program}, world),
     do: [no_global(Declarations.suggest(tag.name, world.globals, & &1, "names"), tag, program)]
+
+  defp bound_to({:global, _line, :declared}, _tag, _typed, _world), do: []
 
   # A global whose type is the host's mistake is refused already: one mistake, one message.
   defp bound_to({:global, _line, %Global{type: type}}, _tag, _typed, _world)
