@@ -227,7 +227,7 @@ defmodule Logex.Runtime do
   "it is a dint, and its value must be an integer, found 37.5", retiring M1-4's reading
   of one for a state handed in; so since decision 184 is an instance's tag that holds no
   map, "it is a ton, and its value must be a map of its members, found 5", and since
-  decision 186 a timer's `last` that is no integer. A resource's instance is checked as each scan takes it, and before it
+  decision 186 a timer's `last` that is no integer, and since decision 188 one later than the instance's `now`. A resource's instance is checked as each scan takes it, and before it
   each global a connection copies into it against the global's own type, which may be
   narrower than the var_input it fills (decision 159): "runtime.globals holds `a`
   outside its type: it is a uint, and 70000 is outside 0 to 65535". The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
@@ -251,10 +251,14 @@ defmodule Logex.Runtime do
   106), where a plain swap's first scan can fire one whose condition was already true;
   inside a function block's instance it does each of these by the member's path (M2-5).
   `restart/3` starts every tag again but the `var_input`s whose values fit their types,
-  and empties `ons_blocked`. Every entry point that takes a program refuses one whose
-  arithmetic computes in a destination that has no integer type, its tag retyped or taken
-  out of the table, which only a program edited by hand after it compiled holds, a line
-  each (`Logex.Program.unwritable/1`, decision 182). Otherwise a `%Logex.Program{}`,
+  and empties `ons_blocked`. A program whose arithmetic computes in a destination that
+  has no integer type, its tag retyped or taken out of the table, which only a program
+  edited by hand after it compiled holds, is refused a line each
+  (`Logex.Program.unwritable/1`, decision 182) where it is first handed in, since
+  decision 190 once: `instance/1`, `start/1` through `Logex.Configuration.check/1`, and
+  an edit's accept for its candidate. Every other entry point checks only a program's
+  shape, so a program swapped in by hand after that check is trusted, and a scan that
+  reaches such a destination raises there. Otherwise a `%Logex.Program{}`,
   `%Logex.Instance{}` or `%Logex.Edit{}` built or edited by hand is outside this contract, and so is one that holds a block type whose body
   was edited by hand, which may raise: a body whose rungs are no IR does. Only a `cal` of
   an instance its table lacks, or whose type it names and does not hold, is defined: it
@@ -310,6 +314,8 @@ defmodule Logex.Runtime do
 
   # M5-3 (decision 148): each integer conversion's symbol, `:dint_to_int`, to the type it
   # writes, every ordered pair of two integer types of the one table.
+  @integers Declarations.integers()
+
   @conversions for from <- Declarations.integers(),
                    to <- Declarations.integers(),
                    word = Declarations.conversion(from, to),
@@ -359,9 +365,16 @@ defmodule Logex.Runtime do
 
   @doc "A new instance of `program`: every tag at its initial value, before its first scan."
   def instance(program) do
-    program!(program)
-    %Instance{type: program.name, env: Program.initial_env(program), now: 0, first: true}
+    checked!(program)
+    fresh(program)
   end
+
+  # Decision 190: a new instance of a program already checked where it was handed in, a
+  # configuration's by `Logex.Configuration.check/1`, so that `start/1` and a
+  # configuration edit's switch check each program once, not once an instance. Internal.
+  @doc false
+  def fresh(program),
+    do: %Instance{type: program.name, env: Program.initial_env(program), now: 0, first: true}
 
   @doc """
   One scan of one instance, at `scan.now`: `inputs` are copied in, the rungs run in order,
@@ -436,7 +449,7 @@ defmodule Logex.Runtime do
       globals: Map.new(config.globals, &{&1.name, Configuration.initial(&1)}),
       instances:
         Map.new(config.instances, fn %{name: name, type: type} ->
-          {name, detached(instance(Map.fetch!(config.programs, type)), wiring, name)}
+          {name, detached(fresh(Map.fetch!(config.programs, type)), wiring, name)}
         end),
       tasks: Map.new(config.tasks, &{&1.name, task_state(&1, 0)}),
       wiring: wiring,
@@ -778,11 +791,17 @@ defmodule Logex.Runtime do
 
   # The arguments, checked in order: program, state, the state's owner, scan, inputs.
   # Decision 182: a program whose arithmetic computes in a destination that has no integer
-  # type, which only one edited by hand after it compiled holds, is refused here, a line
-  # each (`Logex.Program.unwritable/1`), so that a scan finds every destination's type.
-  defp program!(%Program{tags: tags, rungs: rungs} = program)
-       when is_map(tags) and is_list(rungs),
-       do: computable!(Program.unwritable(program))
+  # type, which only one edited by hand after it compiled holds, is refused a line each
+  # (`Logex.Program.unwritable/1`), since decision 190 once, where the program is first
+  # handed in, `instance/1` here: the other entry points take the program's shape alone,
+  # so that a scan costs what it did before decision 182.
+  defp checked!(program) do
+    program!(program)
+    computable!(Program.unwritable(program))
+  end
+
+  defp program!(%Program{tags: tags, rungs: rungs}) when is_map(tags) and is_list(rungs),
+    do: :ok
 
   # M2-5: what Logex.compile/2 gives for a function block's file, which a program runs.
   defp program!(%FbType{name: name} = type) when is_binary(name),
@@ -892,9 +911,9 @@ defmodule Logex.Runtime do
   # when there are any. A value that is no integer, 37.5, nil or "x", is outside its type
   # too, since decision 173 retired M1-4's reading of one for a state handed in; so is
   # an instance's tag that holds no map, 5 or nil (decision 184), and a timer's `last` that
-  # is no integer (decision 186).
-  defp values!(%Instance{env: env} = state, %Program{tags: tags, blocks: blocks}),
-    do: fitted(misfits(env, tags, as_map(blocks), [], []), state)
+  # is no integer (decision 186), or later than the instance's `now` (decision 188).
+  defp values!(%Instance{env: env, now: now} = state, %Program{tags: tags, blocks: blocks}),
+    do: fitted(misfits(env, tags, {as_map(blocks), now}, [], []), state)
 
   defp fitted([], state), do: state
   defp fitted(lines, _state), do: raise(ArgumentError, Enum.join(Enum.sort(lines), "\n"))
@@ -931,23 +950,31 @@ defmodule Logex.Runtime do
   defp of_type(%FbType{body: %Program{tags: tags}}, %{} = map, path, blocks, acc),
     do: misfits(map, tags, blocks, path, acc)
 
-  defp of_type({:block, name}, %{} = map, path, blocks, acc),
-    do: held_block(Map.fetch(blocks, name), map, path, blocks, acc)
+  defp of_type({:block, name}, %{} = map, path, {blocks, _now} = known, acc),
+    do: held_block(Map.fetch(blocks, name), map, path, known, acc)
 
   # Decision 184: an instance's tag holds a map of its members, so one that holds anything
   # else, 5 or nil, is outside its type, told the instance's type in a message's words.
   defp of_type(%FbType{} = type, value, path, _blocks, acc),
     do: [outside_instance(type, value, path) | acc]
 
-  defp of_type({:block, name}, value, path, blocks, acc),
+  defp of_type({:block, name}, value, path, {blocks, _now}, acc),
     do: not_a_map(Map.fetch(blocks, name), value, path, acc)
 
-  # Decision 186: a built-in timer's `last`, a time on the scan's clock, unbounded, is an
-  # integer, as every other member's value is.
-  defp of_type(:clock, value, _path, _blocks, acc) when is_integer(value), do: acc
+  # Decision 186: a built-in timer's `last`, a time on the scan's clock, unbounded below, is
+  # an integer, as every other member's value is; and since decision 188 none later than
+  # the instance's `now`, a time the timer cannot have run at yet.
+  defp of_type(:clock, value, _path, {_blocks, now}, acc)
+       when is_integer(value) and value <= now,
+       do: acc
+
+  defp of_type(:clock, value, path, {_blocks, now}, acc) when is_integer(value),
+    do: [described(Declarations.a_type(:clock), later(value, now), path) | acc]
 
   defp of_type(:clock, value, path, _blocks, acc),
     do: [described(Declarations.a_type(:clock), unfitting(:clock, :clock, value), path) | acc]
+
+  defp later(value, now), do: "#{value} is later than the instance's now, #{now}"
 
   defp held_block({:ok, %FbType{} = type}, map, path, blocks, acc),
     do: of_type(type, map, path, blocks, acc)
@@ -1882,9 +1909,12 @@ defmodule Logex.Runtime do
   # handed in (decision 171), superseding M5-2's provisional reading, computed exactly and
   # then wrapped; nor since decision 184 an instance that is no map, nor since decision
   # 182 a program whose destination has no integer type.
-  defp evaluate({op, _, [a, b, destination]}, {true, env}, scan) when op in @sums do
+  defp evaluate({op, line, [a, b, destination]}, {true, env}, scan) when op in @sums do
     {power, value} =
-      wrapped(type_at(destination, scan), sum(op, integer(read(env, a)), integer(read(env, b))))
+      wrapped(
+        type_at({op, line}, destination, scan),
+        sum(op, integer(read(env, a)), integer(read(env, b)))
+      )
 
     {power, write(env, destination, value)}
   end
@@ -1914,8 +1944,10 @@ defmodule Logex.Runtime do
   # destination's type: its minimum alone has no positive twin, so each gives that minimum
   # itself, -2147483648 in a dint, with no power on that scan; the power out is otherwise true. De-energised, nothing is
   # written and no power passes.
-  defp evaluate({op, _, [a, destination]}, {true, env}, scan) when op in @signs do
-    {power, value} = wrapped(type_at(destination, scan), signed(op, integer(read(env, a))))
+  defp evaluate({op, line, [a, destination]}, {true, env}, scan) when op in @signs do
+    {power, value} =
+      wrapped(type_at({op, line}, destination, scan), signed(op, integer(read(env, a))))
+
     {power, write(env, destination, value)}
   end
 
@@ -2306,8 +2338,8 @@ defmodule Logex.Runtime do
     do:
       {false, Map.put(write(env, destination, 0), @faults, [at | as_list(Map.get(env, @faults))])}
 
-  defp divided({op, _line}, a, b, {destination, scan}, env) do
-    {power, value} = wrapped(type_at(destination, scan), quotient(op, a, b))
+  defp divided({op, _line} = at, a, b, {destination, scan}, env) do
+    {power, value} = wrapped(type_at(at, destination, scan), quotient(op, a, b))
     {power, write(env, destination, value)}
   end
 
@@ -2319,13 +2351,46 @@ defmodule Logex.Runtime do
 
   # M5-4 (decision 147): the type an arithmetic instruction computes in, its destination's,
   # a tag's in the routine's table or a member's of the built-in instance that holds it,
-  # by the one rule `Logex.Program.destination/2`, which every entry point that takes a
-  # program has held to an integer type since decision 182, refusing a program edited by
-  # hand whose destination has none, so that nothing but a pinned `ArgumentError` escapes.
-  defp type_at(destination, %Scan{tags: tags}) do
-    {:ok, type} = Program.destination(destination, tags)
-    type
-  end
+  # by the one rule `Logex.Program.destination/2`, which the entry point where a program is
+  # first handed in has held to an integer type since decision 182, refusing a program
+  # edited by hand whose destination has none. Since decision 190 a program edited by hand
+  # after that check is trusted, not walked again; a scan that reaches such a destination
+  # raises a pinned `ArgumentError` at it, so that nothing else escapes (provisional).
+  # The lookup is the one rule's own reading, made here with no tuple, so that a scan costs
+  # what it did before decision 182: a destination it does not take is handed to the rule,
+  # which says what it is, or, were the two ever to differ, the type the rule finds.
+  defp type_at(at, {:name, _, name} = destination, %Scan{tags: tags}),
+    do: tag_type(Map.get(tags, name), {at, destination, tags})
+
+  defp type_at(at, {:member, _, [instance, member]} = destination, %Scan{tags: tags}),
+    do: member_type(Map.get(tags, instance), member, {at, destination, tags})
+
+  defp type_at(at, destination, %Scan{tags: tags}), do: refused_at({at, destination, tags})
+
+  defp tag_type(%Tag{type: type}, _met) when type in @integers, do: type
+  defp tag_type(_no_integer, met), do: refused_at(met)
+
+  defp member_type(%Tag{type: %FbType{body: nil} = type}, member, met),
+    do: member_of(FbType.member(type, member), met)
+
+  defp member_type(_no_builtin, _member, met), do: refused_at(met)
+
+  defp member_of({:ok, %Member{type: type}}, _met) when type in @integers, do: type
+  defp member_of(_no_integer, met), do: refused_at(met)
+
+  defp refused_at({at, destination, tags}),
+    do: computes_in(Program.destination(destination, tags), at, destination)
+
+  defp computes_in({:ok, type}, _at, _destination), do: type
+
+  defp computes_in({:error, what}, {op, line}, destination),
+    do:
+      raise(
+        ArgumentError,
+        "a scan's `#{op}` on line #{line} computes in the type of " <>
+          Program.met(destination, what) <>
+          ": the program was edited by hand after it was handed in and checked"
+      )
 
   # M5-2: a result is brought into the dint by keeping its low 32 bits, read in two's
   # complement, and passes no power on the scan where that stored value is not the exact
@@ -2363,9 +2428,10 @@ defmodule Logex.Runtime do
   defp compare(:le, a, b), do: not compare(:gt, a, b)
 
   # Whatever a hand-built env left in a timer, a well-formed one comes back: a member it
-  # leaves out reads 0, `.en` is read as a contact, and a `last` the env leaves out, or later
-  # than now, adds nothing; every `.pre`, `.acc` and bit it holds is inside its type
-  # (decisions 171 and 173), and its `last` an integer (decision 186). A negative `.acc`, which logic may write,
+  # leaves out reads 0, `.en` is read as a contact, and a `last` the env leaves out adds
+  # nothing; every `.pre`, `.acc` and bit it holds is inside its type (decisions 171 and
+  # 173), and its `last` an integer (decision 186) no later than the instance's `now`
+  # (decision 188), so never later than the scan's. A negative `.acc`, which logic may write,
   # counts from 0: it is floored before the time is added, not after.
   defp timing(timer, now) do
     pre = integer(Map.get(timer, "pre"))

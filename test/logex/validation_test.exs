@@ -8,6 +8,11 @@ defmodule Logex.ValidationTest do
   """
   use ExUnit.Case, async: true
 
+  # Decision 192: a counter's slot names every type word it runs, the plain words first,
+  # then each width in the type table's order.
+  @runs_ctu "a ctu, ctud, ctu_int, ctud_int, ctu_lint, ctud_lint, ctu_udint, ctud_udint, ctu_ulint or ctud_ulint"
+  @runs_ctd "a ctd, ctud, ctd_int, ctud_int, ctd_lint, ctud_lint, ctd_udint, ctud_udint, ctd_ulint or ctud_ulint"
+
   # M2-4: what a var_external named by a configuration file's keyword is told.
   @keyword "is a keyword of a configuration file, where a var_external's global is " <>
              "declared, so it cannot name a var_external"
@@ -1620,10 +1625,12 @@ defmodule Logex.ValidationTest do
              ]
     end
 
+    # Since decision 187 `lt 2147483647 i` with a dint `i` never passes power and is warned
+    # of, so a literal one below the dint's top stands on the left.
     test "a literal may stand on either side, and a var_input or var_output be read" do
       assert source_warnings(
                "var_input i dint\nvar_output o dint\nvar b bool\n" <>
-                 "lt 2147483647 i le o i ne i 0 ote b\nmove i o"
+                 "lt 2147483646 i le o i ne i 0 ote b\nmove i o"
              ) == []
     end
 
@@ -2076,10 +2083,12 @@ defmodule Logex.ValidationTest do
     # M3-3 (decision 97): `-1` lexes, and a preset stays 0 or more, so a negative one is
     # refused at its line, as one too large is, a timer's in milliseconds and a counter's a
     # count.
+    # Since decision 191 a counter's preset is any value of its type, a dint counter's
+    # -2147483648 among them; a timer's is never negative.
     test "a negative preset is refused at its line, as one too large is" do
-      assert source_errors("var t1 ton\nvar c ctu\nton t1 -1\nctu c -2147483648") == [
+      assert source_errors("var t1 ton\nvar c ctu\nton t1 -1\nctu c -2147483649") == [
                "line 3: `ton` takes a preset of 0 to 2147483647 ms, found `-1`",
-               "line 4: `ctu` takes a preset of 0 to 2147483647, found `-2147483648`"
+               "line 4: `ctu` takes a preset of -2147483648 to 2147483647, found `-2147483649`"
              ]
     end
 
@@ -2340,7 +2349,7 @@ xic a ton t1 7") == [
                "line 6: `tof` runs a tof, but `t1` is a ton (declared on line 2)",
                "line 7: `ton` runs a ton, but `f` is a tof (declared on line 1)",
                "line 8: `tof` runs a tof, but `c` is a ctu (declared on line 3)",
-               "line 9: `ctu` runs a ctu or a ctud, but `f` is a tof (declared on line 1)",
+               "line 9: `ctu` runs #{@runs_ctu}, but `f` is a tof (declared on line 1)",
                "line 10: `tof` runs a tof, but `a` is a bool (declared on line 4)",
                "line 11: `tof` expects a tof, found `5`",
                "line 12: `tof` expects 2 operands (a tof, then a preset), found 1"
@@ -2565,16 +2574,16 @@ xic a ton t1 7") == [
                  "xic a ctd c 5\nxic a ctu h 5\nxic a ton k 5\nxic a ctu t1 5\nxic a ctu a 5\n" <>
                  "ctu n 5\nctu 5 5\nctu c"
              ) == [
-               "line 7: `ctd` runs a ctd or a ctud, but `c` is a ctu (declared on line 1): a ctu " <>
+               "line 7: `ctd` runs #{@runs_ctd}, but `c` is a ctu (declared on line 1): a ctu " <>
                  "only counts up; declare it `var c ctud` to count both ways",
-               "line 8: `ctu` runs a ctu or a ctud, but `h` is a ctd (declared on line 2): a ctd " <>
+               "line 8: `ctu` runs #{@runs_ctu}, but `h` is a ctd (declared on line 2): a ctd " <>
                  "only counts down; declare it `var h ctud` to count both ways",
                "line 9: `ton` runs a ton, but `k` is a ctud (declared on line 3)",
-               "line 10: `ctu` runs a ctu or a ctud, but `t1` is a ton (declared on line 4)",
-               "line 11: `ctu` runs a ctu or a ctud, but `a` is a bool (declared on line 5)",
-               "line 12: `ctu` runs a ctu or a ctud, but `n` is a dint (declared on line 6)",
-               "line 13: `ctu` expects a ctu or a ctud, found `5`",
-               "line 14: `ctu` expects 2 operands (a ctu or a ctud, then a preset), found 1"
+               "line 10: `ctu` runs #{@runs_ctu}, but `t1` is a ton (declared on line 4)",
+               "line 11: `ctu` runs #{@runs_ctu}, but `a` is a bool (declared on line 5)",
+               "line 12: `ctu` runs #{@runs_ctu}, but `n` is a dint (declared on line 6)",
+               "line 13: `ctu` expects #{@runs_ctu}, found `5`",
+               "line 14: `ctu` expects 2 operands (#{@runs_ctu}, then a preset), found 1"
              ]
 
       assert {:ok, program} =
@@ -2610,14 +2619,14 @@ xic a ton t1 7") == [
              ]
     end
 
-    test "its preset is a count of 0 to 2147483647, and one from a tag is moved into `pv`" do
+    test "its preset is a count of -2147483648 to 2147483647, and one from a tag is moved into `pv`" do
       assert source_errors(
                @counters <>
                  "xic a ctu c n\nxic a ctd h 2147483648\nxic a ctu k zz\nxic a ctd h n"
              ) == [
                "line 7: `ctu` takes its preset as a number, a count, found `n`: to preset `c` " <>
                  "from a tag, `move n c.pv` on a rung above",
-               "line 8: `ctd` takes a preset of 0 to 2147483647, found `2147483648`",
+               "line 8: `ctd` takes a preset of -2147483648 to 2147483647, found `2147483648`",
                "line 9: `ctu` takes its preset as a number, a count, found `zz`: to preset `k` " <>
                  "from a tag, `move zz k.pv` on a rung above",
                "line 10: `ctd` takes its preset as a number, a count, found `n`: to preset `h` " <>
@@ -2649,7 +2658,7 @@ xic a ton t1 7") == [
 
       # A name that runs no counter is read by the counter's `.q`.
       assert source_errors("var a bool\nxic a ctu a 3 ote a") == [
-               "line 2: `ctu` runs a ctu or a ctud, but `a` is a bool (declared on line 1)",
+               "line 2: `ctu` runs #{@runs_ctu}, but `a` is a bool (declared on line 1)",
                "line 2: `ote a` follows `ctu a` on its path: what passes on after a `ctu` is not " <>
                  "settled, so a `ctu` ends its path; read the counter's `.q` on a rung below"
              ]

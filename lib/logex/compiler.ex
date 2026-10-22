@@ -1900,17 +1900,21 @@ defmodule Logex.Compiler do
   # A preset is a dint, a number of milliseconds for a timer or a count for a counter, and
   # never negative (docs/naming.md, `ton`): a negative literal lexes since M3-3, and is
   # refused here (decision 97).
-  # Since M5-5 it is judged in its instance's type, 0 to the type's largest (judged/3), a
-  # timer's and a dint counter's 0 to 2147483647, where Logex.Declarations.preset?/1 held
-  # it until then.
-  defp check_tag({{:preset, type}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics),
-    do:
-      preset(
-        value >= 0 and Declarations.fits?(type, value),
-        {type, value},
-        {line, word},
-        diagnostics
-      )
+  # Since M5-5 it is judged in its instance's type (judged/3), a timer's 0 to 2147483647,
+  # where Logex.Declarations.preset?/1 held it until then.
+  # Since decision 191 a counter's preset is any value of its `pv`'s type, as IEC's PV is,
+  # a signed counter's negatives among them, `ctu offset -10` on a `ctu_int`, an unsigned
+  # one's 0 to its top; a timer's is still 0 to 2147483647 ms.
+  defp check_tag({{:preset, type}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics) do
+    first = preset_first(kind_of(symbol_of(word)), type)
+
+    preset(
+      value >= first and Declarations.fits?(type, value),
+      {type, value, first},
+      {line, word},
+      diagnostics
+    )
+  end
 
   defp check_tag({_slot, {:int_lit, _, _}}, _at, _scope, diagnostics), do: diagnostics
 
@@ -1926,13 +1930,16 @@ defmodule Logex.Compiler do
   defp check_tag({slot, {:name, _, name} = operand}, at, scope, diagnostics),
     do: resolve(Declarations.reserved(name), lookup(name, scope), slot, operand, at, diagnostics)
 
+  defp preset_first(:timer, _type), do: 0
+  defp preset_first(:counter, type), do: Declarations.range(type).first
+
   defp preset(true, _value, _at, diagnostics), do: diagnostics
 
-  defp preset(false, {type, value}, {line, word}, diagnostics),
+  defp preset(false, {type, value, first}, {line, word}, diagnostics),
     do: [
       diagnostic(
         line,
-        "`#{word}` takes a preset of 0 to #{Declarations.range(type).last}" <>
+        "`#{word}` takes a preset of #{first} to #{Declarations.range(type).last}" <>
           "#{suffix(symbol_of(word))}#{of_type(type)}, found `#{value}`"
       )
       | diagnostics
@@ -2169,6 +2176,34 @@ defmodule Logex.Compiler do
          | diagnostics
        ]
 
+  # Decision 192: a slot that runs several kinds, a counter's, names every type word it
+  # runs wherever a message names the slot, in a fixed order: the plain words first, then
+  # each width in the type table's order, each width's kinds in the slot's order, `ctu`'s
+  # "a ctu, ctud, ctu_int, ctud_int, …"; an alias, which names a plain word's very type, is
+  # left out. A slot of one kind, a timer's, names it alone.
+  defp run_words(kinds) do
+    words =
+      for {word, type} <- FbType.builtins(),
+          type.name == word,
+          FbType.family(type) in kinds,
+          do: {run_order(FbType.rules(type).counts, FbType.family(type), kinds), word}
+
+    [first | rest] = for {_order, word} <- Enum.sort(words), do: word
+    listed_or([Declarations.a_or_an(first) | rest])
+  end
+
+  @counts Enum.with_index(Declarations.integers())
+
+  defp run_order(:dint, family, kinds), do: {0, 0, Enum.find_index(kinds, &(&1 == family))}
+
+  defp run_order(counts, family, kinds),
+    do: {1, Keyword.fetch!(@counts, counts), Enum.find_index(kinds, &(&1 == family))}
+
+  defp listed_or([one]), do: one
+
+  defp listed_or(words),
+    do: Enum.join(Enum.drop(words, -1), ", ") <> " or " <> List.last(words)
+
   # A counter of the other kind is one declaration from one that counts both ways, of its
   # own type since M5-5: a `ctd_int` from a `ctud_int`.
   defp both_ways(%FbType{name: name, body: nil} = type, tag),
@@ -2232,7 +2267,7 @@ defmodule Logex.Compiler do
 
   defp a_type(:any), do: "a value"
   defp a_type(class) when is_class(class), do: Declarations.a_class(class)
-  defp a_type([_ | _] = types), do: Enum.map_join(types, " or ", &Declarations.a_or_an/1)
+  defp a_type([_ | _] = kinds), do: run_words(kinds)
   defp a_type(type), do: Declarations.a_or_an(to_string(type))
 
   defp check_member_type(diagnostics, {_access, :any}, _name, _member, _at), do: diagnostics
@@ -2589,8 +2624,11 @@ defmodule Logex.Compiler do
        when is_elementary(from),
        do: integer_suggested(Declarations.in_class?(from, :any_int), source, destination)
 
+  # Decision 189: a literal source names the narrowest signed type its negation fits, the
+  # value `neg` writes, `neg -128 count` an int; and, since the literal is judged in the
+  # destination's type, one the literal fits too (provisional), `neg 128 count` an int.
   defp signed_suggested([{:value, _class, {:literal, value}}], destination),
-    do: literal_into(Enum.find(@signed, &Declarations.fits?(&1, value)), value, destination)
+    do: literal_into(Enum.find(@signed, &both_fit?(&1, value)), value, destination)
 
   defp signed_suggested(_unresolved, _destination), do: ""
 
@@ -2610,8 +2648,16 @@ defmodule Logex.Compiler do
 
   defp widened_into(type, _source, destination), do: ", so #{declare(destination, type)}"
 
-  defp literal_into(nil, value, _destination), do: ", and none holds `#{value}`"
+  defp both_fit?(type, value),
+    do: Declarations.fits?(type, value) and Declarations.fits?(type, -value)
+
+  defp literal_into(nil, value, _destination),
+    do: none_holds(Enum.any?(@signed, &Declarations.fits?(&1, value)), value)
+
   defp literal_into(type, _value, destination), do: ", so #{declare(destination, type)}"
+
+  defp none_holds(false, value), do: ", and none holds `#{value}`"
+  defp none_holds(true, value), do: ", and none holds `#{-value}`, its negation"
 
   defp declare(destination, type), do: "declare `#{destination.name}` #{a_type(type)}"
 

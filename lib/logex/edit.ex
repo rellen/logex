@@ -316,7 +316,7 @@ defmodule Logex.Edit do
   """
   def accept(running, candidate, state) do
     program!(running)
-    program!(candidate)
+    checked!(candidate)
     named!(running, candidate)
     accepted(Plan.retyped(running, candidate), running, candidate, checked(running, state))
   end
@@ -416,10 +416,16 @@ defmodule Logex.Edit do
 
   # The runtime's own messages for a non-program, a function block type among them (M2-5),
   # and since decision 182 for one edited by hand whose arithmetic computes in a
-  # destination with no integer type (`Logex.Program.unwritable/1`).
-  defp program!(%Program{tags: tags, rungs: rungs} = program)
-       when is_map(tags) and is_list(rungs),
-       do: computable!(Program.unwritable(program))
+  # destination with no integer type (`Logex.Program.unwritable/1`), since decision 190
+  # checked once, where a program is first handed in: here the candidate, the program
+  # running having been handed in where its instance was made.
+  defp checked!(program) do
+    program!(program)
+    computable!(Program.unwritable(program))
+  end
+
+  defp program!(%Program{tags: tags, rungs: rungs}) when is_map(tags) and is_list(rungs),
+    do: :ok
 
   defp program!(%FbType{name: name} = type) when is_binary(name),
     do: raise(ArgumentError, "`#{name}` is " <> Declarations.not_a_program(type))

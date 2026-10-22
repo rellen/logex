@@ -3694,7 +3694,11 @@ slot takes, and its `counts`, the type of its `pv` and `cv`, so the one `ctu` an
 run them and the runtime stops each at its `counts`' limits; a preset is judged 0 to its
 type's top, never negative as every preset, "`ctu` takes a preset of 0 to 32767 for a
 counter of ints"; and `Logex.FbType.builtins/0` gives each alias the very type of its
-plain word, so `var boxes ctu_dint` and `var boxes ctu` compile to equal programs.)* The long
+plain word, so `var boxes ctu_dint` and `var boxes ctu` compile to equal programs. Since
+decision 191 a counter's preset is any value of its type, as IEC's PV is, a signed one's
+negatives among them, "`ctu` takes a preset of -32768 to 32767 for a counter of ints", an
+unsigned one's 0 to its top; and since decision 192 a counter slot's message names every
+type word it runs.)* The long
 timers are IEC's `ton_ltime`, `tof_ltime` and `tp_ltime` (Ed 3 Table 46 features 2c, 3c
 and 1c), and `rto_ltime`, the "rto equivalent if fitting" the maintainer allowed, taken
 (the seventh question, answered as recorded, decision 158's note), run by `ton`, `tof`,
@@ -7930,7 +7934,9 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      declare `count` an lint"; a literal no signed type holds, "and none holds
      `9223372036854775808`"; and a source that is not resolved, undeclared or a bool, adds
      nothing, its own diagnostic given. `arithmetic_test.exs` holds every unsigned
-     destination against every source width and the literals.
+     destination against every source width and the literals. *A literal source's type
+     superseded by decision 189: the narrowest its negation fits too, `neg -128 count` an
+     int.*
 182. **A program edited by hand whose arithmetic destination has no integer type
      (Milestone 5),** superseding M5-4's review's provisional reading. A host changes a
      compiled `%Logex.Program{}`, retyping the box count `d` of `add 100 100 d` from an
@@ -7972,7 +7978,8 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      built by hand gives (a compile names every block's type in the one table, decision
      53), is walked where a `cal` runs it, each body once; a member of a user block's
      instance, which no compile lets logic outside the block write, is refused as no
-     built-in's.
+     built-in's. *Where the check runs, and its cost, superseded by decision 190: once,
+     where a program is first handed in, a scan costing what it did at `23a5136`.*
 183. **A literal compared with a tag whose type cannot hold it (Milestone 5),** following
      decision 147 and M5-4. `lt trim 200` with an `sint` `trim`, which holds only −128 to
      127, compiled and always passed power, a literal being judged by its slot and a
@@ -8001,7 +8008,8 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      that the result never changes; and a literal beside a tag not resolved, undeclared
      or a bool, is held to every integer type's values, the tag's own diagnostic given.
      `arithmetic_test.exs` holds every comparison at every width's two limits and one past
-     each, on either side.
+     each, on either side. *The literal at the type's own limit warned since decision 187,
+     where its result never changes.*
 184. **An instance's tag that holds no map (Milestone 5),** following decision 173. A
      host hands in the fan's run-on timer, a `tof`, as 5 or `nil`, or a plain swap leaves
      a dint's 7 under what is now a timer. Decision 173's reading read such a tag as a
@@ -8053,7 +8061,129 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      among them, since `last` is a time on the scan's clock, which `Logex.FbType` calls
      an unbounded count of milliseconds, and a `last` later than `now` adds nothing, as
      before; and one the env leaves out reads as before, a timer that adds nothing on its
-     next run.
+     next run. *A `last` later than `now` refused since decision 188.*
+187. **A comparison whose literal sits at its tag's type limit (Milestone 5),** following
+     decision 183. `ge count 0` with a `usint` `count` always passes power, and `lt count 0`
+     never does, though 0 is a value of the type, so decision 183 compiles it; the
+     engineer who lights the "boxes counted" lamp with `ge count 0` sees it always lit.
+
+     **Taken: warned, in the words the all-literal warning is worded in** (the maintainer,
+     2026-10-22): "`ge` compares `count` with `0`, and a usint holds nothing below `0`: its
+     result never changes", and with the literal on the left "`le` compares `0` with
+     `count`, …", the tag's type its declaration's, a member's its schema's (`c.cv` of a
+     `ctu_udint` a udint, `t.acc` a dint). *Which pairs never change (the record's, as the
+     maintainer asked):* with the tag `x` of type lo..hi on the left, `ge x lo` always
+     passes power and `lt x lo` never does, `le x hi` always and `gt x hi` never; with the
+     literal on the left, the mirror, `le lo x` and `ge hi x` always, `gt lo x` and `lt hi x`
+     never. These eight, at every width, and no others: `eq` and `ne` at a limit can go
+     either way, `eq u 0` passing power only while `u` is 0, and so can `le x lo`, `gt x lo`,
+     `ge x hi` and `lt x hi` and their mirrors, and every comparison of a literal inside the
+     range; a literal outside it is decision 183's refusal, and two literals are M1-6's
+     warning. `Logex.Warnings` gives it; `arithmetic_test.exs` holds every comparison at
+     every width's two limits and one inside each, on either side, against the result at the
+     type's two ends and at the literal restated. A comparison of two tags is never fixed, since
+     every integer type holds 0 and 1, so it is not looked at, nor is a tag of no integer
+     type, whose own diagnostic is given. Changed on purpose: `validation_test.exs`'s literal on the left of a comparison,
+     `lt 2147483647 i`, now `lt 2147483646 i`, which no value of a dint makes fixed.
+188. **A timer's `last` later than the instance's now (Milestone 5),** following decision
+     186. A host hands in the fan's run-on timer with `last`, the time it last ran, of 5000
+     while the instance's own clock, `now`, reads 1000; decision 186's reading took it,
+     the timer adding no time until the clock passed it.
+
+     **Taken: refused, a pinned `ArgumentError`, and any integer up to `now` still taken**
+     (the maintainer, 2026-10-22): "state.env holds `t1.last` outside its type: it is a
+     clock, and 5000 is later than the instance's now, 1000", a block's timer by its path,
+     `p.t.last`, a line of decision 171's one message in path order, by every entry point
+     that takes a state, `Logex.Edit`'s steps among them; a negative `last`, and one equal
+     to `now`, are taken as before. *Reading (the record's, provisional):* `now` is the
+     state's own, `state.now`, the time of the instance's last scan, not the scan about to
+     run, since a scan always stamps `last` with its own `now` and a switch moves `now` and
+     a resumed `last` together; and a resource's instance is checked as each scan takes
+     it, so a `cycle/3` of a runtime the host built raises. Changed on purpose:
+     `end_to_end_test.exs`'s `a `last` later than now`, which pinned that such a timer adds
+     nothing, its hand-built env now taken at `now` 5, and `runtime_test.exs`'s `last` of
+     2^70, now taken only where `now` is at least 2^70.
+189. **What a literal `neg` source names (Milestone 5),** following decision 181. `neg -128
+     count` into a `usint` was told "declare `count` an sint", the narrowest signed type
+     -128 fits, where −(−128) wraps to −128 with no power in an `sint`.
+
+     **Taken: the narrowest signed type the negated value fits** (the maintainer,
+     2026-10-22): `neg -128 count` is told "… `neg` writes a signed type, so declare `count`
+     an int", every signed type's minimum the next wider type, and one above it that type
+     itself. *Reading (the record's, provisional):* since the literal is judged in the
+     destination's type, as every arithmetic literal is, the type names the narrowest
+     signed type the literal fits too, so `neg 128 count`, whose negation -128 is an sint's
+     but whose 128 is not, is told "an int", the one change that makes it compile; and a
+     literal whose negation no signed type holds is told so, `neg -9223372036854775808
+     count` "… and none holds `9223372036854775808`, its negation", one no signed type
+     holds itself as before, "and none holds `9223372036854775808`". `arithmetic_test.exs`
+     holds each signed type's minimum, its negated top and one past its top.
+190. **Where decision 182's check runs (Milestone 5),** following decision 182. Every call
+     that took a program walked its rungs for an arithmetic destination with no integer
+     type, a scan 13% to 28% dearer for a program no text can give.
+
+     **Taken: once, where a program is first handed in** (the maintainer, 2026-10-22):
+     `Logex.Runtime.instance/1`; `Logex.Edit.accept/3`, for the candidate; and
+     `Logex.Configuration.check/1`, so `new!/1`, `compile/3`, `Logex.Runtime.start/1` and
+     `Logex.Configuration.Edit.accept/3`, each program type once, however many instances
+     run it, `start/1` and a configuration edit's switch making each instance with an
+     internal `Logex.Runtime.fresh/1` that checks nothing again. `call/4`, `put_inputs/3`,
+     `scan/2,3`, `restart/3`, `cycle/3` and an edit's steps check only the program's shape.
+     *What this gives up, plainly:* a program swapped into an instance by hand after its
+     check, or handed to `call/4` with an instance the host built itself and never through
+     `instance/1`, is trusted: nothing walks it, and the program running an edit is taken
+     as the one its instance was made from. *Reading (the record's, provisional):* a scan
+     that reaches an arithmetic instruction of such a program whose destination has no
+     integer type raises a pinned `ArgumentError` there, "a scan's `add` on line 7 computes
+     in the type of `d`, a bool, which is no integer type: the program was edited by hand
+     after it was handed in and checked", so that nothing else escapes, and one that does
+     not reach it, its rung false or skipped, runs; the scan's lookup is the one rule's own
+     reading, made with no tuple, `Logex.Program.destination/2` asked only for a
+     destination it does not take. *The cost (measured on Elixir 1.20.4, the fewest
+     reductions of seven):* a scan of 2,000 rungs of `xic go ote d` takes 78,195 reductions
+     where `23a5136` took 78,168 and decision 182 88,198, and of 2,000 `add`s 116,171 where
+     `23a5136` took 116,168 and decision 182 148,762; `jump_test.exs`'s skipped rungs cost
+     0.303 of running them again, its bound decision 171's 0.364. `runtime_test.exs` traces
+     the check, once at `instance/1`, an edit's accept, `start/1` and a configuration
+     edit's accept, and never at a scan, a restart, a cycle or a switch.
+191. **A negative preset on a signed counter (Milestone 5),** following decision 158. logex
+     took a counter's preset from 0 to its type's top, so `ctu offset -10` on a `ctu_int`
+     was refused, though `move -10 offset.pv` compiled and ran.
+
+     **Taken: any value of the counter's type, as IEC's PV is** (the maintainer,
+     2026-10-22): a signed counter's preset is its type's whole range, `ctu offset -10` on a
+     `ctu_int` compiling, -32768 to 32767, and the dint counters' -2147483648 to
+     2147483647, "`ctu` takes a preset of -32768 to 32767 for a counter of ints, found
+     `40000`"; an unsigned counter's is still 0 to its top, and a timer's 0 to 2147483647
+     ms. The preset starts `pv` as before, and the rest holds unchanged at a negative
+     preset, each pinned in `typed_counter_test.exs`: the done lamps are IEC's, `q` and `qu`
+     CV >= PV, so an up counter preset below its count is done from its first scan, and a
+     ctud's `qu` drops only once its count falls below the preset, its `qd` CV <= 0; a
+     down counter loads a negative preset; an edit moves a `pv` still at the old preset to
+     the new, forecasting `:dn_rises` or `:dn_drops` by CV >= PV, and keeps one logic moved.
+     The contract walk's counter oracle draws a negative preset for a signed counter.
+     Changed on purpose: every preset message's range for a counter, a dint's
+     `-2147483648 to 2147483647`, in `validation_test.exs` and `typed_counter_test.exs`.
+192. **What a counter slot's refusal names (Milestone 5),** following decision 163. `xic e
+     ctu c 1` with `c` a `ctd_lint` was told "`ctu` runs a ctu or a ctud, …", though a `ctu`
+     runs a `ctu_lint` too.
+
+     **Taken: every word it runs, in a fixed order** (the maintainer, 2026-10-22): "`ctu`
+     runs a ctu, ctud, ctu_int, ctud_int, ctu_lint, ctud_lint, ctu_udint, ctud_udint,
+     ctu_ulint or ctud_ulint, but `c` is a ctd_lint (declared on line 2): a ctd_lint only
+     counts down; declare it `var c ctud_lint` to count both ways", the hint kept; the
+     plain words first, then each width in the type table's order, each width's two kinds
+     in the slot's order; an alias, `ctu_dint`, which names the plain word's very type, left
+     out. *Reading (the record's, provisional):* every message that names the slot names
+     it so, a tag of no counter given to it, "`ctu` runs a ctu, ctud, …, but `a` is a
+     bool", a literal, "`ctu` expects a ctu, ctud, …, found `5`", and a missing operand,
+     "(a ctu, ctud, …, then a preset)", since each reads the slot's one description.
+193. **An unknown type's list (Milestone 5),** following decision 163. A misspelt type,
+     `var c ctu_itn`, is told every one of logex's 31 type words, the twelve typed counters
+     and the three aliases among them, with the nearest suggested.
+
+     **Taken: the list of all 31 words kept, M5-5's reading confirmed** (the maintainer,
+     2026-10-22). No code changed.
 
 ---
 

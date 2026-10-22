@@ -838,7 +838,7 @@ defmodule Logex.Configuration.Edit do
          _context,
          {instances, records, reports}
        ) do
-    state = split(Runtime.instance(program), externals(program))
+    state = split(Runtime.fresh(program), externals(program))
     {Map.put(instances, name, state), records, [{:instance_added, name, type} | reports]}
   end
 

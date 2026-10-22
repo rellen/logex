@@ -12,7 +12,9 @@ defmodule Logex.Warnings do
     `ote` writes its tag, so a second coil on it is the second-`ote` warning;
   - a comparison of two literals (M1-6): its result never changes; since M3-3 so is an
     arithmetic instruction whose every source is a literal, `add 2 3 x` or `neg 5 x`,
-    and since decision 178 a conversion of a literal, `dint_to_sint 129 trim`;
+    and since decision 178 a conversion of a literal, `dint_to_sint 129 trim`; and since
+    decision 187 a comparison of a tag with a literal at its type's limit whose result
+    never changes, `ge count 0` with a `usint` `count`;
   - a timer no `ton` runs (M1-6): it never times; since M3-1 any built-in instance no
     instruction of its type runs, in its type's words, a counter no `ctu` or `ctd` runs:
     it never counts;
@@ -54,6 +56,7 @@ defmodule Logex.Warnings do
     |> Kernel.++(second_otes(instructions, tags, owners))
     |> Kernel.++(storage_writes(instructions, tags, owners))
     |> Kernel.++(Enum.flat_map(instructions, &constant/1))
+    |> Kernel.++(Enum.flat_map(instructions, &at_limit(&1, tags)))
     |> Kernel.++(unjumped(instructions))
     |> Enum.sort_by(& &1.line)
   end
@@ -246,6 +249,82 @@ defmodule Logex.Warnings do
     do: [warning(line, "`#{symbol}` reads a literal, `#{a}`: its result never changes")]
 
   defp constant(_instruction), do: []
+
+  # Decision 187: a comparison of a tag with a literal at its type's own limit, which
+  # decision 183 compiles, is warned of in the all-literal warning's words wherever its
+  # result never changes. With the tag of type lo..hi on the left, `ge x lo` always passes
+  # power and `lt x lo` never does, `le x hi` always and `gt x hi` never; with the literal
+  # on the left the mirror, `le lo x` and `ge hi x` always, `gt lo x` and `lt hi x` never.
+  # `eq` and `ne` at a limit, and every comparison inside the range, can go either way, and
+  # a literal outside the range is decision 183's refusal.
+  defp at_limit({symbol, line, [operand, {:int_lit, _, value}]}, tags)
+       when symbol in @comparisons,
+       do: limited(integer_type(operand, tags), {symbol, :right}, {operand, value}, line)
+
+  defp at_limit({symbol, line, [{:int_lit, _, value}, operand]}, tags)
+       when symbol in @comparisons,
+       do: limited(integer_type(operand, tags), {symbol, :left}, {operand, value}, line)
+
+  defp at_limit(_instruction, _tags), do: []
+
+  defp limited({:ok, type}, at, {operand, value}, line) do
+    lo..hi//_ = Declarations.range(type)
+    fixed(fixed?(at, limit(value, lo, hi)), at, {operand, value, type}, line)
+  end
+
+  defp limited(:error, _at, _compared, _line), do: []
+
+  defp limit(lo, lo, _hi), do: :lowest
+  defp limit(hi, _lo, hi), do: :highest
+  defp limit(_value, _lo, _hi), do: :inside
+
+  # The pairs whose result never changes, and the side of the type the literal is at.
+  defp fixed?({symbol, :right}, :lowest) when symbol in [:ge, :lt], do: {true, "below"}
+  defp fixed?({symbol, :right}, :highest) when symbol in [:le, :gt], do: {true, "above"}
+  defp fixed?({symbol, :left}, :lowest) when symbol in [:le, :gt], do: {true, "below"}
+  defp fixed?({symbol, :left}, :highest) when symbol in [:ge, :lt], do: {true, "above"}
+  defp fixed?(_at, _limit), do: false
+
+  defp fixed({true, side}, {symbol, order}, {operand, value, type}, line),
+    do: [
+      warning(
+        line,
+        "`#{symbol}` compares #{in_order(order, shown(operand), "`#{value}`")}, and " <>
+          "#{Declarations.a_type(type)} holds nothing #{side} `#{value}`: its result never " <>
+          "changes"
+      )
+    ]
+
+  defp fixed(false, _at, _compared, _line), do: []
+
+  defp in_order(:right, tag, literal), do: "#{tag} with #{literal}"
+  defp in_order(:left, tag, literal), do: "#{literal} with #{tag}"
+
+  defp shown({:name, _, name}), do: "`#{name}`"
+  defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
+
+  # An operand's integer type, a tag's or a member's of the built-in instance that holds
+  # it; anything else, a bool or a member of a user block's instance, which no comparison
+  # takes, is passed over.
+  @integers Declarations.integers()
+
+  defp integer_type({:name, _, name}, tags), do: of_integer(Map.get(tags, name))
+
+  defp integer_type({:member, _, [instance, member]}, tags),
+    do: member_integer(Map.get(tags, instance), member)
+
+  defp integer_type(_other, _tags), do: :error
+
+  defp of_integer(%Tag{type: type}) when type in @integers, do: {:ok, type}
+  defp of_integer(_other), do: :error
+
+  defp member_integer(%Tag{type: %FbType{body: nil} = type}, member),
+    do: member_type(FbType.member(type, member))
+
+  defp member_integer(_other, _member), do: :error
+
+  defp member_type({:ok, %FbType.Member{type: type}}) when type in @integers, do: {:ok, type}
+  defp member_type(_other), do: :error
 
   defp from_source?(tags, name),
     do: match?(%Tag{line: line} when line != nil, Map.get(tags, name))

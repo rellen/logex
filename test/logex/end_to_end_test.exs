@@ -404,9 +404,10 @@ defmodule Logex.EndToEndTest do
     program
   end
 
-  # One scan, not the first, at 7 ms, from an env the test builds by hand.
+  # One scan, not the first, at 7 ms, after one at 5 ms, from an env the test builds by
+  # hand.
   defp later_scan(program, env) do
-    state = %Logex.Instance{type: program.name, env: env, now: 0, first: false}
+    state = %Logex.Instance{type: program.name, env: env, now: 5, first: false}
     {outputs, state} = Logex.Runtime.call(program, state, %{}, %Logex.Scan{now: 7, first: false})
     {outputs, state.env}
   end
@@ -1083,12 +1084,20 @@ defmodule Logex.EndToEndTest do
                later_scan(program(@ton), %{"t1" => timer, "go" => 1})
     end
 
-    test "a `last` later than now, or .en read as a contact reads it" do
+    # Decision 188: a `last` later than the instance's `now`, a time the timer cannot have
+    # run at yet, is the host's mistake, where it added nothing until then.
+    test "a `last` later than now refused, or .en read as a contact reads it" do
       p = program(@ton)
       timer = %{"pre" => 50, "acc" => 5, "dn" => 0, "tt" => 1, "last" => 1000}
 
-      assert {_, %{"t1" => %{"acc" => 5, "last" => 7}}} =
-               later_scan(p, %{"t1" => Map.put(timer, "en", 1), "go" => 1})
+      assert_raise ArgumentError,
+                   "state.env holds `t1.last` outside its type: it is a clock, and 1000 is " <>
+                     "later than the instance's now, 5",
+                   fn -> later_scan(p, %{"t1" => Map.put(timer, "en", 1), "go" => 1}) end
+
+      # Up to the instance's own `now` it is taken, adding the time from it.
+      assert {_, %{"t1" => %{"acc" => 7, "last" => 7}}} =
+               later_scan(p, %{"t1" => Map.merge(timer, %{"en" => 1, "last" => 5}), "go" => 1})
 
       for {en, acc} <- [{1, 7}, {0, 5}] do
         from_zero = %{timer | "last" => 5}
@@ -1105,7 +1114,12 @@ defmodule Logex.EndToEndTest do
         assert_raise ArgumentError,
                      "state.env holds `t1.en` outside its type: it is a bool, and only 0 or 1 " <>
                        "fit, found #{inspect(junk)}",
-                     fn -> later_scan(p, %{"t1" => Map.put(timer, "en", junk), "go" => 1}) end
+                     fn ->
+                       later_scan(p, %{
+                         "t1" => Map.merge(timer, %{"last" => 0, "en" => junk}),
+                         "go" => 1
+                       })
+                     end
       end
     end
   end

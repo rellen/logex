@@ -14,6 +14,10 @@ defmodule Logex.TypedCounterTest do
   """
   use ExUnit.Case, async: true
 
+  # Decision 192: a counter's slot names every type word it runs.
+  @runs_ctu "a ctu, ctud, ctu_int, ctud_int, ctu_lint, ctud_lint, ctu_udint, ctud_udint, ctu_ulint or ctud_ulint"
+  @runs_ctd "a ctd, ctud, ctd_int, ctud_int, ctd_lint, ctud_lint, ctd_udint, ctud_udint, ctd_ulint or ctud_ulint"
+
   alias Logex.{Configuration, Diagnostic, Edit, FbType, Instance, Runtime, Scan}
 
   # IEC 61131-3 Ed 3 Table 10: each counter width's limits, footnotes c and d.
@@ -149,24 +153,37 @@ defmodule Logex.TypedCounterTest do
   defp rungs("ctud"), do: ["xic u ctu c 1", "xic d ctd c 1"]
 
   describe "a typed counter's preset is judged in its type" do
-    test "its largest is taken and one past it refused at its line, a dint's in the old words" do
-      for kind <- ~w(ctu ctd), width <- @typed do
-        {_min, max} = @limits[width]
-        assert %Logex.Program{} = c!("var e bool\nvar c #{kind}_#{width}\nxic e #{kind} c #{max}")
+    # Decision 191: any value of the counter's type, as IEC's PV is, a signed counter's
+    # negatives among them, an unsigned one's 0 to its top.
+    test "its two limits are taken and one past either refused at its line, a dint's too" do
+      for kind <- ~w(ctu ctd), width <- @typed ++ ["dint"] do
+        {min, max} = @limits[width]
+        of = if width == "dint", do: "", else: " for a counter of #{width}s"
 
-        assert messages("var e bool\nvar c #{kind}_#{width}\nxic e #{kind} c #{max + 1}") == [
-                 "line 3: `#{kind}` takes a preset of 0 to #{max} for a counter of #{width}s, " <>
-                   "found `#{max + 1}`"
-               ]
+        for value <- [min, max] do
+          assert %Logex.Program{} =
+                   p = c!("var e bool\nvar c #{kind}_#{width}\nxic e #{kind} c #{value}")
 
-        assert messages("var e bool\nvar c #{kind}_#{width}\nxic e #{kind} c -1") == [
-                 "line 3: `#{kind}` takes a preset of 0 to #{max} for a counter of #{width}s, " <>
-                   "found `-1`"
-               ]
+          assert Logex.Program.initial_env(p)["c"]["pv"] == value
+        end
+
+        for value <- [min - 1, max + 1] do
+          assert messages("var e bool\nvar c #{kind}_#{width}\nxic e #{kind} c #{value}") == [
+                   "line 3: `#{kind}` takes a preset of #{min} to #{max}#{of}, found `#{value}`"
+                 ]
+        end
       end
 
       assert messages("var e bool\nvar c ctu_dint\nxic e ctu c 2147483648") == [
-               "line 3: `ctu` takes a preset of 0 to 2147483647, found `2147483648`"
+               "line 3: `ctu` takes a preset of -2147483648 to 2147483647, found `2147483648`"
+             ]
+
+      assert %Logex.Program{} = c!("var e bool\nvar offset ctu_int\nxic e ctu offset -10")
+      assert %Logex.Program{} = c!("var e bool\nvar c ctu\nxic e ctu c -2147483648")
+
+      assert messages("var e bool\nvar c ctu_udint\nxic e ctu c -1") == [
+               "line 3: `ctu` takes a preset of 0 to 4294967295 for a counter of udints, " <>
+                 "found `-1`"
              ]
 
       assert messages("var e bool\nvar t ton\nxic e ton t 2147483648") == [
@@ -183,7 +200,8 @@ defmodule Logex.TypedCounterTest do
       assert Logex.Program.initial_env(p)["c"]["pv"] == 18_446_744_073_709_551_615
 
       assert messages("var e bool\nvar c ctud_int\nxic e ctu c 32767\nxio e ctd c 32768") == [
-               "line 4: `ctd` takes a preset of 0 to 32767 for a counter of ints, found `32768`",
+               "line 4: `ctd` takes a preset of -32768 to 32767 for a counter of ints, found " <>
+                 "`32768`",
                "line 4: `c` already has the preset 32767 from the `ctu` on line 3: the `ctu` " <>
                  "and the `ctd` of a ctud_int give it one preset, so this `ctd` takes 32767 too"
              ]
@@ -232,12 +250,12 @@ defmodule Logex.TypedCounterTest do
   describe "the instructions of its kind run it, and no other" do
     test "a counter of the other kind is told the up-down counter of its own type" do
       assert messages("var e bool\nvar c ctd_lint\nxic e ctu c 1") == [
-               "line 3: `ctu` runs a ctu or a ctud, but `c` is a ctd_lint (declared on line 2): " <>
+               "line 3: `ctu` runs #{@runs_ctu}, but `c` is a ctd_lint (declared on line 2): " <>
                  "a ctd_lint only counts down; declare it `var c ctud_lint` to count both ways"
              ]
 
       assert messages("var e bool\nvar c ctu_dint\nxic e ctd c 1") == [
-               "line 3: `ctd` runs a ctd or a ctud, but `c` is a ctu (declared on line 2): " <>
+               "line 3: `ctd` runs #{@runs_ctd}, but `c` is a ctu (declared on line 2): " <>
                  "a ctu only counts up; declare it `var c ctud` to count both ways"
              ]
 
@@ -312,6 +330,78 @@ defmodule Logex.TypedCounterTest do
       {_, later} = Runtime.scan(v2, Runtime.put_inputs(v2, later, %{"e" => 0}), 10)
       {_, later} = Runtime.scan(v2, Runtime.put_inputs(v2, later, %{"e" => 1}), 10)
       assert later.env["c"]["cv"] == 1
+    end
+  end
+
+  # Decision 191: a signed counter's preset is any value of its type, as IEC's PV is. The
+  # done lamps are IEC's Table 45 bodies restated, `q` (`qu`) CV >= PV and `qd` CV <= 0,
+  # whatever the preset's sign.
+  describe "a negative preset (decision 191)" do
+    test "an up counter's done lamp is lit at once by a preset below its count, as CV >= PV" do
+      p =
+        c!(
+          "var_input e bool\nvar offset ctu_int\nvar_output lamp bool\nxic e ctu offset -10\nxic offset.q ote lamp"
+        )
+
+      state = Runtime.instance(p)
+      assert state.env["offset"]["pv"] == -10
+      {out, state} = Runtime.call(p, state, %{"e" => 0}, %Scan{now: 0, first: true})
+      assert {state.env["offset"]["cv"], state.env["offset"]["q"], out["lamp"]} == {0, 1, 1}
+    end
+
+    test "a ctud's `qu` holds while its count is at or above a negative preset, and drops " <>
+           "below it" do
+      p = c!("var_input u bool\nvar_input d bool\nvar c ctud_int\nxic u ctu c -3\nxic d ctd c -3")
+      values = trace(p, at(p, 0), pulses(4, "d"), ["c"])
+      seen = for %{"cv" => cv, "qu" => qu, "qd" => qd} <- values, do: {cv, qu, qd}
+
+      assert seen == [
+               {-1, 1, 1},
+               {-1, 1, 1},
+               {-2, 1, 1},
+               {-2, 1, 1},
+               {-3, 1, 1},
+               {-3, 1, 1},
+               {-4, 0, 1},
+               {-4, 0, 1}
+             ]
+    end
+
+    test "a down counter loads a negative preset, its `q` CV <= 0" do
+      p =
+        c!(
+          "var_input e bool\nvar_input load bool\nvar c ctd_lint\nxic load ote c.ld\nxic e ctd c -5"
+        )
+
+      [loaded] = trace(p, at(p, 7), [%{"load" => 1}], ["c"])
+      assert {loaded["cv"], loaded["q"]} == {-5, 1}
+    end
+
+    test "an edit's preset rules and forecast hold at a negative preset" do
+      v1 = c!("var_input e bool\nvar c ctu_int\nxic e ctu c 5")
+      v2 = c!("var_input e bool\nvar c ctu_int\nxic e ctu c -10")
+      state = at(v1, 0)
+      assert state.env["c"]["q"] == 0
+
+      # `pv` still at the old preset takes the new one, and `q` rises at the next run.
+      {:ok, edit, forecast} = Edit.accept(v1, v2, state)
+      assert forecast == [{:dn_rises, "c", {0, -10}}, {:preset, "c", {5, -10}}]
+      {_edit, tested, report} = Edit.test(edit, state)
+      assert report == forecast
+      assert tested.env["c"]["pv"] == -10
+      {_, later} = Runtime.call(v2, tested, %{"e" => 0}, %Scan{now: 20, first: false})
+      assert later.env["c"]["q"] == 1
+
+      # And back: `q` drops.
+      {:ok, back, forecast} = Edit.accept(v2, v1, later)
+      assert forecast == [{:dn_drops, "c", {0, 5}}, {:preset, "c", {-10, 5}}]
+      {_edit, tested, _report} = Edit.test(back, later)
+      assert tested.env["c"]["pv"] == 5
+
+      # A `pv` logic moved off the old preset, to a negative one, is kept.
+      moved = put_in(state.env["c"]["pv"], -2)
+      {:ok, _edit, forecast} = Edit.accept(v1, v2, moved)
+      assert forecast == [{:preset_kept, "c", {-2, -10}}]
     end
   end
 

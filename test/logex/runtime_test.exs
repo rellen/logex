@@ -500,7 +500,8 @@ defmodule Logex.RuntimeTest do
     end
 
     # Decision 186: a timer's `last`, the time it last ran on the scan's clock, is an
-    # integer as every other member's value is, any integer, the clock being unbounded.
+    # integer as every other member's value is, any integer, the clock being unbounded,
+    # and since decision 188 none later than the instance's `now`.
     test "a timer's `last` that is no integer is refused, and any integer taken (decision 186)" do
       p = holder()
       ps = Runtime.instance(p)
@@ -533,10 +534,47 @@ defmodule Logex.RuntimeTest do
         assert %Instance{} =
                  Runtime.put_inputs(
                    m,
-                   %{s | env: %{s.env | "t1" => %{s.env["t1"] | "last" => value}}},
+                   %{s | now: 2 ** 70, env: %{s.env | "t1" => %{s.env["t1"] | "last" => value}}},
                    %{}
                  )
       end
+
+      # Decision 188: none later than the instance's `now`, a time the timer cannot have
+      # run at yet, a block's timer by its path, a line of the one message.
+      for {now, value} <- [{0, 1}, {1000, 1001}, {0, 2 ** 70}] do
+        raises(
+          "state.env holds `t1.last` outside its type: it is a clock, and #{value} is later " <>
+            "than the instance's now, #{now}",
+          fn ->
+            Runtime.put_inputs(
+              m,
+              %{s | now: now, env: %{s.env | "t1" => %{s.env["t1"] | "last" => value}}},
+              %{}
+            )
+          end
+        )
+      end
+
+      inner = %{ps.env["p"] | "t" => %{ps.env["p"]["t"] | "last" => 41}}
+
+      raises(
+        "state.env holds `p.t.last` outside its type: it is a clock, and 41 is later than " <>
+          "the instance's now, 40",
+        fn ->
+          Runtime.call(p, %{ps | now: 40, env: %{ps.env | "p" => inner}}, %{}, %Scan{
+            now: 50,
+            first: true
+          })
+        end
+      )
+
+      assert {_, %Instance{}} =
+               Runtime.call(
+                 p,
+                 %{ps | now: 41, env: %{ps.env | "p" => inner}},
+                 %{},
+                 %Scan{now: 50, first: true}
+               )
 
       # One the env leaves out reads as before, a timer that adds nothing on its next run.
       assert %Instance{} =
@@ -668,8 +706,10 @@ defmodule Logex.RuntimeTest do
     # An arithmetic instruction computes in its destination's type, looked up in the
     # routine's tag table on each run. No compile gives a destination the table does not
     # hold, or holds as no integer; a program edited by hand does, and since decision 182
-    # every entry point that takes a program refuses it, a line for each such destination,
-    # where M5-4's review read the dint.
+    # it is refused, a line for each such destination, where M5-4's review read the dint,
+    # since decision 190 once, where the program is first handed in: `Runtime.instance/1`,
+    # an edit's candidate, a configuration's check. A program swapped in by hand after that
+    # check is trusted, its scan raising only where it reaches such a destination.
     @sums """
     var_input go bool
     var d sint
@@ -696,23 +736,15 @@ defmodule Logex.RuntimeTest do
     @d "`m`'s `add` on line 7 computes in the type of `d`"
     @pv "`m`'s `mul` on line 8 computes in the type of `c1.pv`"
 
-    # Every entry point that takes a program refuses it before anything else of its
-    # arguments: a state of the program as compiled is refused nothing else.
+    # Where the program is first handed in it is refused before anything else of the
+    # arguments: a lone instance's `instance/1`, and an edit's candidate.
     defp refused_everywhere(edited, compiled, message) do
       s = Runtime.instance(compiled)
-      scan = %Scan{now: 0, first: true}
 
       for call <- [
             fn -> Runtime.instance(edited) end,
-            fn -> Runtime.call(edited, s, %{"go" => 1}, scan) end,
-            fn ->
-              Runtime.call(edited, opaque(:not_a_state), opaque(:no_inputs), opaque(:no_scan))
-            end,
-            fn -> Runtime.put_inputs(edited, s, %{"go" => 1}) end,
-            fn -> Runtime.scan(edited, s, 10) end,
-            fn -> Runtime.restart(edited, s, :cold) end,
-            fn -> Logex.Edit.accept(edited, compiled, s) end,
-            fn -> Logex.Edit.accept(compiled, edited, s) end
+            fn -> Logex.Edit.accept(compiled, edited, s) end,
+            fn -> Logex.Edit.accept(compiled, edited, opaque(:not_a_state)) end
           ] do
         assert_raise ArgumentError, message, call
       end
@@ -864,8 +896,123 @@ defmodule Logex.RuntimeTest do
                    end
     end
 
-    # The check walks the program's rungs and each body once, on every call that takes a
-    # program, a scan among them: linear in the program, a share of the scan's own cost.
+    test "a program swapped in by hand after its check is trusted: no other entry point " <>
+           "walks it, and a scan raises only where it reaches such a destination" do
+      {:ok, p} = Logex.compile(@sums, name: "m")
+      s = Runtime.instance(p)
+      scan = %Scan{now: 0, first: true}
+      edited = retyped(p, "d", :bool)
+
+      # The rung that holds the `add` is false: nothing reaches it, and the scan runs.
+      assert {%{"ok" => 0, "ok2" => 0}, _} = Runtime.call(edited, s, %{"go" => 0}, scan)
+      assert %Instance{} = Runtime.put_inputs(edited, s, %{"go" => 1})
+      assert %Instance{} = Runtime.restart(edited, s, :cold)
+      assert {%{"ok" => 0}, _} = Runtime.scan(edited, s, 10)
+
+      # The program running an edit is the one its instance was made from: trusted too.
+      assert {:error, [%Logex.Diagnostic{stage: :edit}]} = Logex.Edit.accept(edited, p, s)
+
+      assert_raise ArgumentError,
+                   "a scan's `add` on line 7 computes in the type of `d`, a bool, which is no " <>
+                     "integer type: the program was edited by hand after it was handed in and " <>
+                     "checked",
+                   fn -> Runtime.call(edited, s, %{"go" => 1}, scan) end
+
+      for {program, told} <- [
+            {%{p | tags: Map.delete(p.tags, "d")}, "`d`, which the program does not declare"},
+            {%{p | tags: Map.delete(p.tags, "c1")}, "`c1.pv`, and the program declares no `c1`"},
+            {retyped(p, "c1", Logex.FbType.ton()), "`c1.pv`, and a ton has no `pv`"}
+          ] do
+        at = if String.starts_with?(told, "`d`"), do: "`add` on line 7", else: "`mul` on line 8"
+
+        assert_raise ArgumentError,
+                     "a scan's #{at} computes in the type of #{told}: the program was edited " <>
+                       "by hand after it was handed in and checked",
+                     fn -> Runtime.call(program, s, %{"go" => 1}, scan) end
+      end
+    end
+
+    # Decision 190: the check is made once, where the program is first handed in, and on no
+    # scan, a lone instance's or a resource's, so that a scan costs what it did before
+    # decision 182 (`jump_test.exs` holds a skipped rung to decision 171's bound again).
+    test "the check runs where a program is handed in, and on no scan" do
+      {:ok, p} = Logex.compile(@sums, name: "m")
+      s = Runtime.instance(p)
+      scan = %Scan{now: 0, first: true}
+
+      configuration =
+        Logex.Configuration.new!(
+          name: "plant",
+          programs: [p],
+          tasks: [%Logex.Configuration.Task{name: "fast", interval: 10, priority: 1}],
+          instances: [%Logex.Configuration.Instance{name: "m1", type: "m", task: "fast"}],
+          connections: [%Logex.Configuration.Connection{instance: "m1", member: "go", to: 1}]
+        )
+
+      runtime = Runtime.start(configuration)
+      # Loaded first: a pattern names only the functions of a module loaded.
+      Code.ensure_loaded!(Logex.Program)
+      assert :erlang.trace_pattern({Logex.Program, :unwritable, 1}, true, [:global]) == 1
+
+      try do
+        assert checks(fn -> Runtime.instance(p) end) == 1
+        assert checks(fn -> Runtime.call(p, s, %{"go" => 1}, scan) end) == 0
+        assert checks(fn -> Runtime.put_inputs(p, s, %{"go" => 1}) end) == 0
+        assert checks(fn -> Runtime.scan(p, s, 10) end) == 0
+        assert checks(fn -> Runtime.restart(p, s, :cold) end) == 0
+        assert checks(fn -> Logex.Edit.accept(p, p, s) end) == 1
+        assert checks(fn -> Runtime.start(configuration) end) == 1
+        assert checks(fn -> Runtime.cycle(runtime, 10, %{}) end) == 0
+        assert checks(fn -> Runtime.cycle(runtime, 20, %{}) end) == 0
+
+        # A configuration edit checks its candidate's program types once, at its accept,
+        # and its switch starts the instance it adds with no check of its own.
+        candidate = %{
+          configuration
+          | instances:
+              configuration.instances ++
+                [%Logex.Configuration.Instance{name: "m2", type: "m", task: "fast"}],
+            connections:
+              configuration.connections ++
+                [%Logex.Configuration.Connection{instance: "m2", member: "go", to: 0}]
+        }
+
+        assert checks(fn -> Logex.Configuration.Edit.accept(runtime, candidate) end) == 1
+        {:ok, edit, _} = Logex.Configuration.Edit.accept(runtime, candidate)
+        assert checks(fn -> Logex.Configuration.Edit.test(edit, runtime) end) == 0
+      after
+        :erlang.trace_pattern({Logex.Program, :unwritable, 1}, false, [:global])
+      end
+    end
+
+    # How often `fun`, run in a process of its own that this one traces, checks a program.
+    defp checks(fun) do
+      parent = self()
+      ref = make_ref()
+
+      pid =
+        spawn_link(fn ->
+          receive do
+            :go -> send(parent, {ref, fun.()})
+          end
+        end)
+
+      :erlang.trace(pid, true, [:call])
+      send(pid, :go)
+      assert_receive {^ref, _}, 5000
+      counted(pid, 0)
+    end
+
+    defp counted(pid, n) do
+      receive do
+        {:trace, ^pid, :call, {Logex.Program, :unwritable, _}} -> counted(pid, n + 1)
+      after
+        100 -> n
+      end
+    end
+
+    # The check walks the program's rungs and each body once, where the program is first
+    # handed in: linear in the program.
     defp reductions_for(n, fun) do
       src =
         "var_input go bool\n" <>
@@ -1903,7 +2050,8 @@ defmodule Logex.RuntimeTest do
       # M2-1: the scheduler, and its resource, `%Logex.Runtime{}`, opaque as an edit is.
       # OE-2: edited/2, internal (no doc), the one writer of a configuration edit's step
       # into the resource. M4-3: the cycle in steps, internal too (decision 118), which the
-      # runner times: cycle_steps/3, cycle_step/2 and cycle_outputs/1.
+      # runner times: cycle_steps/3, cycle_step/2 and cycle_outputs/1. Decision 190:
+      # fresh/1, internal, a new instance of a program a configuration's check has checked.
       assert Enum.sort(Runtime.__info__(:functions)) ==
                [
                  __struct__: 0,
@@ -1914,6 +2062,7 @@ defmodule Logex.RuntimeTest do
                  cycle_step: 2,
                  cycle_steps: 3,
                  edited: 2,
+                 fresh: 1,
                  get: 2,
                  get!: 2,
                  instance: 1,
@@ -2059,9 +2208,9 @@ defmodule Logex.RuntimeTest do
 
       assert Enum.sort(
                for {{:function, name, arity}, _, _, :hidden, _} <- docs,
-                   name in [:cycle_steps, :cycle_step, :cycle_outputs],
+                   name in [:cycle_steps, :cycle_step, :cycle_outputs, :fresh],
                    do: {name, arity}
-             ) == [cycle_outputs: 1, cycle_step: 2, cycle_steps: 3]
+             ) == [cycle_outputs: 1, cycle_step: 2, cycle_steps: 3, fresh: 1]
 
       # OE-2: the staged edit of a running configuration, whose struct is opaque; since
       # M4-5, accept, test and untest take the step's time too (decision 139).

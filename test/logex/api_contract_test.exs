@@ -5310,6 +5310,7 @@ defmodule Logex.ApiContractTest do
 
   # What the counter walk must be seen to do, at least once each.
   @ct_reach [
+    :negative_preset,
     :counted,
     :first_held,
     :reset_held,
@@ -5391,6 +5392,15 @@ defmodule Logex.ApiContractTest do
 
   defp ct_width, do: pick(["", "_int", "_dint", "_lint", "_udint", "_ulint"])
 
+  # A signed width's negative presets, drawn as often as two of the five others; none for
+  # an unsigned width, where a negative preset is refused, so one taken to an unsigned width
+  # is made positive.
+  defp ct_negatives(width) when width in ["_udint", "_ulint"], do: []
+  defp ct_negatives(_signed), do: [-1, -3]
+
+  defp ct_unsigned([], preset), do: abs(preset)
+  defp ct_unsigned(_signed, preset), do: preset
+
   # The other word of a dint counter, which names the same type, or any width for another.
   defp ct_alias(""), do: "_dint"
   defp ct_alias("_dint"), do: ""
@@ -5423,19 +5433,29 @@ defmodule Logex.ApiContractTest do
     do:
       Enum.reduce(1..:rand.uniform(2), spec, fn _, spec -> ct_change(:rand.uniform(18), spec) end)
 
-  defp ct_change(1, %{u: %{} = u} = spec), do: %{spec | u: %{u | p: pick([0, 1, 2, 3, 4])}}
+  # Decision 191: a signed counter's preset may be negative, as IEC's PV may.
+  defp ct_change(1, %{u: %{} = u} = spec),
+    do: %{spec | u: %{u | p: pick([0, 1, 2, 3, 4] ++ ct_negatives(spec.wu))}}
+
   defp ct_change(2, %{u: %{} = u} = spec), do: %{spec | u: %{u | chain: ct_chain()}}
   defp ct_change(3, %{u: %{} = u} = spec), do: %{spec | u: %{u | reset: pick([:above, :below])}}
   defp ct_change(4, spec), do: %{spec | u: pick([nil, %{p: 2, chain: ct_chain(), reset: :above}])}
   defp ct_change(5, %{d: %{} = d} = spec), do: %{spec | d: %{d | p: pick([1, 2, 3])}}
-  defp ct_change(6, %{b: %{} = b} = spec), do: %{spec | b: %{b | p: pick([0, 1, 2, 3, 4])}}
+
+  defp ct_change(6, %{b: %{} = b} = spec),
+    do: %{spec | b: %{b | p: pick([0, 1, 2, 3, 4] ++ ct_negatives(spec.wb))}}
+
   defp ct_change(7, %{b: %{} = b} = spec), do: %{spec | b: %{b | up: ct_chain()}}
   defp ct_change(8, %{b: %{} = b} = spec), do: %{spec | b: %{b | down: ct_chain()}}
   defp ct_change(9, %{b: %{} = b} = spec), do: %{spec | b: %{b | big: not b.big}}
   defp ct_change(10, spec), do: %{spec | s: pick([nil, 1, 2, 3])}
   defp ct_change(11, %{u: %{}} = spec), do: %{spec | kind_u: pick(["ctud", spec.kind_u])}
   # M5-5: `u`'s width, which accept refuses, or its alias, which changes no type.
-  defp ct_change(12, %{u: %{}} = spec), do: %{spec | wu: pick([ct_width(), ct_alias(spec.wu)])}
+  defp ct_change(12, %{u: %{} = u} = spec) do
+    width = pick([ct_width(), ct_alias(spec.wu)])
+    %{spec | wu: width, u: %{u | p: ct_unsigned(ct_negatives(width), u.p)}}
+  end
+
   # A preset moved, the commonest change, to 0 now and then, so that forecasts come both
   # ways under any seed (M5-5's review: 4 seeds in 20 saw no forecast one way or the other;
   # since, none in 81). `u`'s width moves to its alias as often as to any width.
@@ -5471,6 +5491,10 @@ defmodule Logex.ApiContractTest do
       _ ->
         {:ok, program} = Logex.compile(ct_source(spec), name: "ct", types: ct_types(spec))
         Process.put(:ct_programs, Map.put(known, spec, program))
+
+        if Enum.any?(ct_rungs(spec), &match?({:count, _, _, _, p} when p < 0, &1)),
+          do: ct_reached(:negative_preset)
+
         program
     end
   end

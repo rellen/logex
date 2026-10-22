@@ -712,7 +712,8 @@ defmodule Logex.ArithmeticTest do
 
     # Decision 145: an unsigned type holds no negative value, so a `neg` into one could
     # only give 0 or a wrap; and since decision 181 it is told the narrowest signed type its
-    # source widens into by Ed 3 Figure 11, or a literal source fits, to declare it.
+    # source widens into by Ed 3 Figure 11, or, since decision 189, a literal source and its
+    # negation fit, to declare it.
     @signed_for %{
       sint: "an sint",
       int: "an int",
@@ -747,6 +748,25 @@ defmodule Logex.ArithmeticTest do
 
       assert messages("var t ton\nvar r usint\nneg 9223372036854775808 r") == [
                refused.(:usint) <> ", and none holds `9223372036854775808`"
+             ]
+
+      # Decision 189: a literal source is told the narrowest signed type its negation, the
+      # value `neg` writes, fits, and the literal too: a signed type's minimum, whose
+      # negation is one past its top, the next wider type, and one above it that type
+      # itself; `neg 128` an int, since 128 is no sint's though -128 is.
+      for {narrow, wider} <- [sint: "an int", int: "a dint", dint: "an lint"] do
+        {low, high} = bounds(narrow)
+
+        assert messages("var t ton\nvar r usint\nneg #{low} r\nneg #{-high} r\nneg #{high + 1} r") ==
+                 [
+                   refused.(:usint) <> ", so declare `r` #{wider}",
+                   refused.(:usint) <> ", so declare `r` #{Map.fetch!(@signed_for, narrow)}",
+                   refused.(:usint) <> ", so declare `r` #{wider}"
+                 ]
+      end
+
+      assert messages("var t ton\nvar r usint\nneg -9223372036854775808 r") == [
+               refused.(:usint) <> ", and none holds `9223372036854775808`, its negation"
              ]
 
       assert messages("var t ton\nvar r usint\nneg t.acc r") == [
@@ -917,6 +937,16 @@ defmodule Logex.ArithmeticTest do
                  "value: `neg` writes a signed type, so declare `u` an sint"
              ]
 
+      assert example("var count usint", "neg -128 count", %{}) == [
+               "`neg` writes `count`, a usint (declared on line 2), which holds no negative " <>
+                 "value: `neg` writes a signed type, so declare `count` an int"
+             ]
+
+      assert example("var count usint", "neg 128 count", %{}) == [
+               "`neg` writes `count`, a usint (declared on line 2), which holds no negative " <>
+                 "value: `neg` writes a signed type, so declare `count` an int"
+             ]
+
       assert example("var_input level dint\nvar count usint", "neg level count", %{}) == [
                "`neg` writes `count`, a usint (declared on line 3), which holds no negative " <>
                  "value: `neg` writes a signed type, so declare `count` a dint"
@@ -1074,7 +1104,109 @@ defmodule Logex.ArithmeticTest do
       {out, _state} = scan(p, %{"s" => 126})
       assert out == %{"b" => 1}
     end
+
+    # Decision 187: a literal at its tag's type's own limit, which decision 183 compiles, is
+    # warned of where the comparison's result never changes, restated here as the tag's
+    # two limits and the literal itself giving one result: `lt`, `gt`, `le` and `ge` are
+    # monotone in the tag, so their result is the same for every value of the type exactly
+    # where it is at both ends, and `eq` and `ne` differ at the literal from either end.
+    test "a literal at its tag's type's limit is warned of where the result never changes, " <>
+           "at every width, on either side" do
+      for {type, _kind} <- @widths, op <- ~w(eq ne lt gt le ge)a do
+        {low, high} = bounds(type)
+
+        for value <- [low, high, low + 1, high - 1], side <- [:right, :left] do
+          rung = rung(side, op, value)
+          source = "var s #{type}\nvar_output b bool\n#{rung} ote b"
+          {:ok, program} = Logex.compile(source, name: "m")
+
+          fixed =
+            [low, high, value]
+            |> Enum.map(&compared(side, op, &1, value))
+            |> Enum.uniq()
+            |> length() == 1
+
+          {shown, beyond} =
+            {rung |> String.split(" ", parts: 2) |> List.last(), beyond(value, low)}
+
+          expected =
+            for true <- [fixed],
+                do:
+                  "`#{op}` compares #{both_shown(side, value)}, and #{article(type)} holds nothing " <>
+                    "#{beyond} `#{value}`: its result never changes"
+
+          assert Enum.map(program.warnings, & &1.message) == expected, "#{type}: #{shown}"
+          assert Enum.all?(program.warnings, &(&1.line == 3))
+        end
+      end
+    end
+
+    test "each pair that never changes, as decision 187 records it" do
+      warned = fn source ->
+        {:ok, program} =
+          Logex.compile("var u usint\nvar s sint\nvar_output b bool\n" <> source, name: "m")
+
+        for %{message: "`" <> _ = message} <- program.warnings,
+            String.contains?(message, " compares "),
+            do: message |> String.split(",") |> hd()
+      end
+
+      assert warned.(
+               "ge u 0 ote b\nlt u 0 ote b\nle s 127 ote b\ngt s 127 ote b\n" <>
+                 "le 0 u ote b\ngt 0 u ote b\nge 127 s ote b\nlt 127 s ote b"
+             ) == [
+               "`ge` compares `u` with `0`",
+               "`lt` compares `u` with `0`",
+               "`le` compares `s` with `127`",
+               "`gt` compares `s` with `127`",
+               "`le` compares `0` with `u`",
+               "`gt` compares `0` with `u`",
+               "`ge` compares `127` with `s`",
+               "`lt` compares `127` with `s`"
+             ]
+
+      assert warned.(
+               "le u 0 ote b\ngt u 0 ote b\neq u 0 ote b\nne s 127 ote b\nge s 127 ote b\n" <>
+                 "lt s 127 ote b\nge 0 u ote b\nlt 0 u ote b\nle 127 s ote b\ngt 127 s ote b"
+             ) == []
+
+      # A member's type is its schema's, a counter's `cv` and a timer's `acc`.
+      {:ok, program} =
+        Logex.compile(
+          "var_input go bool\nvar c ctu_udint\nvar t ton\nvar_output b bool\nvar_output b2 bool\n" <>
+            "xic go ctu c 5\nxic go ton t 5\nge c.cv 0 ote b\nlt t.acc -2147483648 ote b2",
+          name: "m"
+        )
+
+      assert Enum.map(program.warnings, &{&1.line, &1.message}) == [
+               {8,
+                "`ge` compares `c.cv` with `0`, and a udint holds nothing below `0`: its " <>
+                  "result never changes"},
+               {9,
+                "`lt` compares `t.acc` with `-2147483648`, and a dint holds nothing below " <>
+                  "`-2147483648`: its result never changes"}
+             ]
+    end
   end
+
+  defp rung(:right, op, value), do: "#{op} s #{value}"
+  defp rung(:left, op, value), do: "#{op} #{value} s"
+
+  defp compared(:right, op, x, value), do: cmp(op, x, value)
+  defp compared(:left, op, x, value), do: cmp(op, value, x)
+
+  defp cmp(:eq, a, b), do: a == b
+  defp cmp(:ne, a, b), do: a != b
+  defp cmp(:lt, a, b), do: a < b
+  defp cmp(:gt, a, b), do: a > b
+  defp cmp(:le, a, b), do: a <= b
+  defp cmp(:ge, a, b), do: a >= b
+
+  defp both_shown(:right, value), do: "`s` with `#{value}`"
+  defp both_shown(:left, value), do: "`#{value}` with `s`"
+
+  defp beyond(low, low), do: "below"
+  defp beyond(_value, _low), do: "above"
 
   defp diagnostics(source) do
     {:error, diagnostics} = Logex.compile(source, name: "m")

@@ -201,8 +201,8 @@ defmodule Logex.Program do
   defp unseen(true, _body, _where, acc, _put), do: acc
   defp unseen(false, body, where, _acc, put), do: routine(%{body | blocks: nil}, where, put)
 
-  # The walk itself, a clause an element, with no closure, since it runs on every scan:
-  # a few reductions an instruction.
+  # The walk itself, a clause an element, with no closure: a few reductions an
+  # instruction, paid once a program since decision 190, where it is first handed in.
   defp rungs([{:rung, elements} | rest], at, lines),
     do: rungs(rest, at, elements(elements, at, lines))
 
@@ -281,6 +281,11 @@ defmodule Logex.Program do
 
   defp written({:member, _, [_, member]} = destination, {:no_member, type}, _where),
     do: "#{shown(destination)}, and #{a(type)} has no `#{member}`"
+
+  # Decision 190: what a scan of a program edited by hand after its check is told of a
+  # destination it reaches, in the words above.
+  @doc false
+  def met(destination, what), do: written(destination, what, {nil, nil})
 
   defp declarer({program, nil}), do: named(program)
   defp declarer({_program, _block}), do: "the body"

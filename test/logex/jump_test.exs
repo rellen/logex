@@ -751,17 +751,17 @@ defmodule Logex.JumpTest do
     # holds one: 400 skipped one-shot rungs took 0.230x to 0.232x what running them took over the
     # same 32 runs, the scan's own work most of it, and walked for their memories with the
     # list empty, 0.999x. Since decision 171 the scan's own work includes the check of every
-    # value its state holds, a guard a tag: 0.303x over 6 runs on Elixir 1.20.4; and since
-    # decision 182 the walk of the program's rungs for a destination with no integer type,
-    # a few reductions a rung, on every call: 0.373x over 6 runs, and the bound a fifth
-    # above it.
+    # value its state holds, a guard a tag: 0.303x over 6 runs on Elixir 1.20.4, and the
+    # bound a fifth above it. Decision 182's walk of the program's rungs on every call took
+    # it to 0.373x, until decision 190 made that check once, where a program is first
+    # handed in, so that the bound is decision 171's again.
     test "a skipped rung costs a small part of what running it costs, where the block list " <>
            "holds nothing" do
       ratio =
         reductions_to_scan(one_shots(400), %{"j" => 1}) /
           reductions_to_scan(one_shots(400), %{"j" => 0, "a" => 1})
 
-      assert ratio < 0.448, "skipping took #{Float.round(ratio, 3)}x the reductions of running"
+      assert ratio < 0.364, "skipping took #{Float.round(ratio, 3)}x the reductions of running"
     end
   end
 end
