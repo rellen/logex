@@ -2574,12 +2574,19 @@ defmodule Logex.Compiler do
 
   defp signed_suggested([{:value, _class, %Tag{type: from} = source}], destination)
        when is_elementary(from),
-       do: widened_into(Enum.find(@signed, &Declarations.widens?(from, &1)), source, destination)
+       do: integer_suggested(Declarations.in_class?(from, :any_int), source, destination)
 
   defp signed_suggested([{:value, _class, {:literal, value}}], destination),
     do: literal_into(Enum.find(@signed, &Declarations.fits?(&1, value)), value, destination)
 
   defp signed_suggested(_unresolved, _destination), do: ""
+
+  # A source of no integer type, a bool, adds nothing (decision 181): its own diagnostic,
+  # that `neg` reads a number, is given.
+  defp integer_suggested(true, %Tag{type: from} = source, destination),
+    do: widened_into(Enum.find(@signed, &Declarations.widens?(from, &1)), source, destination)
+
+  defp integer_suggested(false, _source, _destination), do: ""
 
   defp widened_into(nil, %Tag{type: from} = source, destination) do
     widest = List.last(@signed)

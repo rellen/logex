@@ -753,6 +753,23 @@ defmodule Logex.ArithmeticTest do
                refused.(:usint) <> ", so declare `r` a dint"
              ]
 
+      # A source that is not resolved, undeclared or a bool, a tag's or a member's, adds
+      # nothing to the refusal, its own diagnostic given (decision 181).
+      assert messages("var b bool\nvar r usint\nneg b r") == [
+               "`neg` reads a number, but `b` is a bool (declared on line 1)",
+               refused.(:usint)
+             ]
+
+      assert messages("var t ton\nvar r usint\nneg t.dn r") == [
+               "`neg` reads a number, but `t.dn` is a bool",
+               refused.(:usint)
+             ]
+
+      assert messages("var t ton\nvar r usint\nneg zz r") == [
+               "`zz` is not declared",
+               refused.(:usint)
+             ]
+
       assert messages("var a usint\nvar r usint\nabs a r") == []
     end
 
