@@ -996,6 +996,49 @@ defmodule Logex.RuntimeTest do
       assert {:ok, _edit, _forecast} = Logex.Configuration.Edit.accept(runtime, configuration)
     end
 
+    # Decision 200: the program types the resource runs are checked in name order, every
+    # line of each in one message. Over 32 of them a map's keys come in no name order, so
+    # the order is the check's own.
+    test "a configuration edit's accept names every program type edited by hand, in name " <>
+           "order" do
+      names = for i <- 1..33, do: "p" <> String.pad_leading("#{i}", 2, "0")
+      programs = for name <- names, do: elem(Logex.compile(@sums, name: name), 1)
+
+      configuration =
+        Logex.Configuration.new!(
+          name: "plant",
+          programs: programs,
+          tasks: [%Logex.Configuration.Task{name: "fast", interval: 10, priority: 1}],
+          instances:
+            for(
+              name <- names,
+              do: %Logex.Configuration.Instance{name: "i" <> name, type: name, task: "fast"}
+            ),
+          connections:
+            for(
+              name <- names,
+              do: %Logex.Configuration.Connection{instance: "i" <> name, member: "go", to: 1}
+            )
+        )
+
+      runtime = Runtime.start(configuration)
+      edited_programs = Map.new(programs, &{&1.name, retyped(&1, "d", :bool)})
+      assert Map.keys(edited_programs) != names
+      edited_runtime = %{runtime | config: %{runtime.config | programs: edited_programs}}
+
+      told =
+        Enum.map_join(
+          names,
+          "\n",
+          &("`#{&1}`'s `add` on line 7 computes in the type of `d`, a bool, which is no " <>
+              "integer type: `#{&1}` was edited by hand after it compiled")
+        )
+
+      assert_raise ArgumentError, told, fn ->
+        Logex.Configuration.Edit.accept(edited_runtime, configuration)
+      end
+    end
+
     # Decision 190: the check is made once, where the program is first handed in, and on no
     # scan, a lone instance's or a resource's, so that a scan costs what it did before
     # decision 182 (`jump_test.exs` holds a skipped rung to decision 171's bound again).

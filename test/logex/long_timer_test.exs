@@ -929,6 +929,33 @@ defmodule Logex.LongTimerTest do
       assert length(beside("add cure.acc 5 cure.pre")) == 1
       assert length(beside("lt 3 cure.acc ote y")) == 1
     end
+
+    # Decision 196: the first long timer's member among the operands is the one named, the
+    # instruction's own order, whichever side it is on.
+    test "of two long timers' members, the first among the operands is named" do
+      text =
+        "var_input go bool\nvar_output y bool\nvar cure ton_ltime\nvar c2 tof_ltime\n" <>
+          "xic go ton cure 30000000\nxic go tof c2 30000000\n"
+
+      on = fn rung ->
+        Enum.filter(warnings(text <> rung), &String.starts_with?(&1, "line 7:"))
+      end
+
+      assert on.("add c2.acc 5 cure.pre") == [
+               "line 7: warning: `add` adds `c2.acc` and `5` into `cure.pre`, where `c2.acc` " <>
+                 "is a tof_ltime's time in nanoseconds: 5 ns is no whole number of " <>
+                 "milliseconds, and a tof_ltime counts whole milliseconds"
+             ]
+
+      assert on.("add cure.acc 5 c2.pre") == [
+               "line 7: warning: `add` adds `cure.acc` and `5` into `c2.pre`, where " <>
+                 "`cure.acc` #{@ns_told}: 5 ns is no whole number of milliseconds, and a " <>
+                 "ton_ltime counts whole milliseconds"
+             ]
+
+      assert [warning] = on.("lt c2.acc cure.acc ote y") ++ on.("ge 3 c2.acc ote y")
+      assert warning =~ "where `c2.acc` is a tof_ltime's time"
+    end
   end
 
   describe "growth" do
