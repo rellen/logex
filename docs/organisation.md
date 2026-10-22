@@ -7453,7 +7453,11 @@ the decisions the rest settle.
      for the long timers with M5-6, the same day: `ton_ltime tof_ltime tp_ltime rto_ltime`,
      run by `ton`, `tof`, `tp` and `rto`, `.pre` and `.acc` lint nanoseconds, a preset 0 to
      2^63−1 ns, as decision 191 leaves a timer's preset never negative, each millisecond
-     adding 1,000,000.)*
+     adding 1,000,000; its slot's messages naming both words, decision 198, and an edit's
+     report its presets in ns and a resume's gap in ms, decision 199; a literal taken
+     beside a long timer's `.pre` or `.acc` that is no whole number of ms warned of since
+     decision 196, and each timer's unit carried in the compiled program since decision
+     197.)*
 159. **Where decision 147's widening applies beyond an instruction (Milestone 5),** added
      by the review. The shift's count is a `uint` and the block `seal` takes a `dint`
      input: `cal s1 shift_count`; the configuration connects a `uint` global to a
@@ -8144,7 +8148,8 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      literal whose negation no signed type holds is told so, `neg -9223372036854775808
      count` "… and none holds `9223372036854775808`, its negation", one no signed type
      holds itself as before, "and none holds `9223372036854775808`". `arithmetic_test.exs`
-     holds each signed type's minimum, its negated top and one past its top.
+     holds each signed type's minimum, its negated top and one past its top. *(The reading
+     confirmed by decision 195.)*
 190. **Where decision 182's check runs (Milestone 5),** following decision 182. Every call
      that took a program walked its rungs for an arithmetic destination with no integer
      type, a scan 13% to 28% dearer for a program no text can give.
@@ -8172,7 +8177,10 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      `23a5136` took 116,168 and decision 182 148,762; `jump_test.exs`'s skipped rungs cost
      0.303 of running them again, its bound decision 171's 0.364. `runtime_test.exs` traces
      the check, once at `instance/1`, an edit's accept, `start/1` and a configuration
-     edit's accept, and never at a scan, a restart, a cycle or a switch.
+     edit's accept, and never at a scan, a restart, a cycle or a switch. *(An edit's
+     accept checks the program running too since decision 200, and the check holds a
+     program's timer units to its tags since decision 197, `Logex.Program.edited_by_hand/1`
+     replacing `unwritable/1`; the scan's raise confirmed by decision 194.)*
 191. **A negative preset on a signed counter (Milestone 5),** following decision 158. logex
      took a counter's preset from 0 to its type's top, so `ctu offset -10` on a `ctu_int`
      was refused, though `move -10 offset.pv` compiled and ran.
@@ -8205,6 +8213,7 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      it so, a tag of no counter given to it, "`ctu` runs a ctu, ctud, …, but `a` is a
      bool", a literal, "`ctu` expects a ctu, ctud, …, found `5`", and a missing operand,
      "(a ctu, ctud, …, then a preset)", since each reads the slot's one description.
+     *(The reading confirmed by decision 201.)*
 193. **An unknown type's list (Milestone 5),** following decision 163. A misspelt type,
      `var c ctu_itn`, is told every one of logex's 31 type words, the twelve typed counters
      and the three aliases among them, with the nearest suggested.
@@ -8212,6 +8221,123 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      **Taken: the list of all 31 words kept, M5-5's reading confirmed** (the maintainer,
      2026-10-22). No code changed. *(Grown to 35 by M5-6's four long timers, the list
      still every type word.)*
+
+194. **A trusted program a scan finds broken (Milestone 5),** following decision 190. A
+     host retypes the box count `d` of `add 100 100 d` from an `sint` to a bool after the
+     program's one check; nothing walks it again, so a scan reaches the `add` only when its
+     rung goes true.
+
+     **Taken: the scan raises a pinned `ArgumentError` where it reaches the instruction,
+     as decision 190 read it** (the maintainer, 2026-10-22): "a scan's `add` on line 7
+     computes in the type of `d`, a bool, which is no integer type: the program was edited
+     by hand after it was handed in and checked", and a scan whose rung is false, or
+     skipped, runs on. No code changed; `runtime_test.exs` pins it. So, since decision 197,
+     does a scan that reaches a timer whose unit is no positive whole number, or that
+     reads it from units that are no map.
+195. **What `neg 128` into an unsigned tag is told (Milestone 5),** following decision 189.
+     **Taken: "an int", the narrowest signed type that holds the literal and its
+     negation, as decision 189 read it** (the maintainer, 2026-10-22): `neg 128 count`
+     with a `usint` `count` is told "… so declare `count` an int", the one change that
+     makes it compile, since a literal is judged in its destination's type. No code
+     changed; `arithmetic_test.exs` pins it.
+196. **A literal taken beside a long timer's time (Milestone 5),** following decision 158
+     and §4.12's routine choice. A preset on the instruction that is no whole number of
+     milliseconds is warned of; `ge cure.acc 3000` on a `ton_ltime`, a rung ported from a
+     `ton` that still reads 3 s, compares with 3 µs, unwarned, so the oven's cure lamp
+     lights 3 µs into the cure.
+
+     **Taken: warned, as a preset is** (the maintainer, 2026-10-22): "`ge` compares
+     `cure.acc` with `3000`, where `cure.acc` is a ton_ltime's time in nanoseconds: 3000 ns
+     is no whole number of milliseconds, and a ton_ltime counts whole milliseconds", at the
+     instruction's line. *The slots (the record's, as the maintainer asked):* an
+     instruction one of whose operands is a long timer's `.pre` or `.acc`, a member of an
+     instance whose type's unit is not the millisecond (`Logex.FbType.rules/1`'s
+     `per_ms`), and whose literal is then a time in its unit: `move` and the 56
+     conversions, which write it into the member ("`move` writes `1500000` into
+     `cure.pre`, …"); the six comparisons, which compare it with the member, on either
+     side ("`lt` compares `2000500` with `cure.acc`, …"); and `add` and `sub`, which add it
+     to the member, take it away, or write their sum into it ("`add` adds `cure.acc` and
+     `500` into `cure.acc`, …", "`sub` takes `500` from `cure.pre` into `cure.pre`, …").
+     Each such literal that is no whole number of milliseconds, `rem(value, 1_000_000) !=
+     0`, negative ones among them, is a warning of its own; the first long timer's member
+     among the operands is the one named. Not looked at: `mul`, `div` and `mod`, whose
+     literal is a factor or a divisor, not a time; `neg` and `abs`, which take one
+     operand; a plain timer's members, counted in whole ms; and its other members, bools
+     or `last`. `long_timer_test.exs` holds each slot, both sides of a comparison, every
+     instruction left out, and a plain timer's.
+197. **Where a timer's unit is settled (Milestone 5),** following M5-6's review. A timer's
+     unit is what each millisecond of the clock adds to its `acc`, 1 for a `ton` and
+     1,000,000 for a `ton_ltime`; logex looked each timer's tag up on every run to learn
+     it, so the conveyor's 2,000 plain `ton`s scanned about 3% dearer than before long
+     timers.
+
+     **Taken: carried in the compiled program, so that a plain timer's run costs what it
+     did before long timers** (the maintainer, 2026-10-22). *Where it lives (the record's,
+     as the maintainer asked):* a field of `%Logex.Program{}`, `units`, a table settled
+     from the tag table when logex compiles, `Logex.Program.units/1` the one rule: each
+     timer whose unit is not the millisecond by its name, `%{"cure" => 1_000_000}`, and
+     nil, the default, where the routine holds none; a block's body holds its own. Not the
+     IR: an operand more on a timer's instruction would change its shape for every walk,
+     the compiler's, `Logex.Walk`'s, the warnings' and an edit's plans, each of which
+     reads a timer's two operands. The scan carries the running routine's `units`,
+     `%Logex.Scan{}`'s runtime field, a `cal` narrowing it to its body's as it does
+     `tags`; a timer's run in a routine whose `units` are nil matches it in its clause's
+     head and pays no look-up, and only a routine holding a long timer looks each of its
+     timers up in its table. A guard on a key, `is_map_key/2`, costs two reductions a run,
+     so the head matches nil instead. *The cost (measured on Elixir 1.20.4, a scan of 400
+     timers in a process whose heap the garbage collector never visits, so the same count
+     every run):* exactly what `6a15701`, before long timers, took, for every clause: `ton`
+     63,774 energised and 56,174 not, `tof` 56,174 and 66,175, `tp` 69,775 and 62,576, `rto`
+     71,773 and 68,573; the fewest of seven with the collector running are within 1% either
+     way, its share. `long_timer_test.exs` holds a `ton`'s energised run to 19 reductions over
+     its de-energised one, exactly, and each clause that reads a clock to 2 reductions under
+     the look-up's path. *What it gives up, plainly:* a plain timer in a routine that also holds a long
+     timer pays the look-up, as every timer did before this decision. *Keeping it in step:*
+     the compiler sets it on every program and body it builds; `Logex.Compiler.lowered?/1`
+     holds a body's to the rule; an edit's switch moves an instance to its candidate,
+     whose `units` the compile gave; `Logex.Program.typed_tags/1` leaves a timer's type
+     as it is, so the rule reads the same table either way; and a program edited by hand
+     whose units disagree with its tags, a long timer's left out, a plain timer or another
+     tag given one, one that differs, or units that are neither nil nor a map, is a host
+     mistake under decisions 182 and 190, refused once where it is handed in, a line each
+     in the one message, each routine's units before its rungs: "`m`'s units give `cure`
+     no unit, where a ton_ltime adds 1000000 to its `acc` each millisecond: `m` was edited
+     by hand after it compiled" (`Logex.Program.edited_by_hand/1`, which replaces
+     `unwritable/1`). One handed in trusted after its check counts as its units say, and a
+     scan that reaches a timer whose unit is no positive whole number raises there, "a
+     scan's `ton` on line 3 times `cure` in a unit of 0, which is no positive whole number
+     a millisecond: the program was edited by hand after it was handed in and checked"
+     (decision 194).
+198. **What a timer's slot is told (Milestone 5),** following decision 192. **Taken: both
+     words, as M5-6 built it** (the maintainer, 2026-10-22): "`ton` runs a ton or
+     ton_ltime, but `a` is a bool". No code changed; `validation_test.exs` and
+     `long_timer_test.exs` pin it.
+199. **The units of an edit's report on a long timer (Milestone 5),** following decision
+     158 with §4.9. **Taken: mixed, as M5-6 built it** (the maintainer, 2026-10-22): a
+     moved preset and its forecast in ns, a member's own unit, `{:preset, "cure",
+     {129600000000000, …}}`, and a resume's gap in ms, the clock's, `{:resumed, "cure",
+     500}`, as for every timer. No code changed; `long_timer_test.exs` pins both.
+200. **Which program an edit's accept checks (Milestone 5),** superseding decision 190's
+     "for the candidate". `Logex.Edit.accept/3` checked its candidate only, trusting the
+     program running as the one its instance was made from.
+
+     **Taken: the program running too** (the maintainer, 2026-10-22): `Logex.Edit.accept/3`
+     checks the program running and then the candidate, each by
+     `Logex.Program.edited_by_hand/1` (decisions 182 and 197), in the runtime's words,
+     before the names and the state; and `Logex.Configuration.Edit.accept/3`, where it
+     applies, each program type the resource runs, in name order, after the runtime's own
+     check and before its `elapsed_ms`, the candidate's being checked by
+     `Logex.Configuration.check/1` as before. A program swapped into an instance by hand
+     after its check is so refused when an edit is accepted against it, before an edit
+     plans from it. The cost is one walk of each program an accept, which no scan pays;
+     `runtime_test.exs` traces two checks at an edit's accept and two at a configuration
+     edit's, the running program types' and the candidate's.
+201. **The slot's words in a counter's other messages (Milestone 5),** following decision
+     192. **Taken: the full list in every message that names a counter slot, as decision
+     192 read it** (the maintainer, 2026-10-22): a bool given to `ctu`, "`ctu` runs a ctu,
+     ctud, …, but `a` is a bool", a literal, "`ctu` expects a ctu, ctud, …, found `5`", and
+     a missing operand, "(a ctu, ctud, …, then a preset)". No code changed;
+     `validation_test.exs` and `typed_counter_test.exs` pin it.
 
 ---
 

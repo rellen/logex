@@ -286,6 +286,7 @@ defmodule Logex.Compiler do
        name: name,
        rungs: rungs,
        tags: Map.new(named),
+       units: Program.units(tags),
        warnings: Logex.Warnings.of(rungs, tags)
      }}
   end
@@ -298,7 +299,8 @@ defmodule Logex.Compiler do
   compile makes, to itself, with no diagnostic; the one-per-bit, one-per-timer and
   one-per-instance rules and the path after a `ton` hold; each timer's preset is the
   number on the `ton` that runs it; the rungs are on rising lines, each on one line, after
-  the declarations; and the warnings are the ones its rungs give, a file aside. Its tag
+  the declarations; the warnings are the ones its rungs give, a file aside; and since
+  decision 197 its `units` are the ones its tags give (`Logex.Program.units/1`). Its tag
   table is its tags with each instance's type itself (`Logex.Program.typed_tags/1`): a
   tag naming a type its `blocks` does not hold, or an entry that is no `%Logex.Tag{}`,
   makes it no compiled body.
@@ -317,13 +319,17 @@ defmodule Logex.Compiler do
   a key that is no string or an instance whose type's members are no list of members, may
   raise.
   """
-  def lowered?(%Program{rungs: rungs, tags: tags, blocks: blocks, warnings: warnings} = body)
+  def lowered?(
+        %Program{rungs: rungs, tags: tags, blocks: blocks, warnings: warnings, units: units} =
+          body
+      )
       when is_list(rungs) and is_map(tags) and not is_struct(tags) and is_map(blocks) and
              is_list(warnings) do
     typed = Program.typed_tags(body)
 
     relowered(
-      proper?(rungs, &ir_rung?/1) and proper?(warnings, &any?/1) and Enum.all?(typed, &typed?/1),
+      proper?(rungs, &ir_rung?/1) and proper?(warnings, &any?/1) and
+        Enum.all?(typed, &typed?/1) and units == Program.units(typed),
       rungs,
       typed,
       warnings
@@ -1055,7 +1061,13 @@ defmodule Logex.Compiler do
     {named, blocks} = hold(tags, held)
 
     {:ok,
-     %Program{rungs: rungs, tags: named, blocks: blocks, warnings: Logex.Warnings.of(rungs, tags)}}
+     %Program{
+       rungs: rungs,
+       tags: named,
+       blocks: blocks,
+       units: Program.units(tags),
+       warnings: Logex.Warnings.of(rungs, tags)
+     }}
   end
 
   defp lowered({:block, name}, rungs, {tags, held}, [], routine) do
@@ -1067,6 +1079,7 @@ defmodule Logex.Compiler do
       rungs: rungs,
       tags: named,
       blocks: blocks,
+      units: Program.units(tags),
       warnings: Logex.Warnings.of(rungs, tags)
     }
 

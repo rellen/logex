@@ -14,7 +14,8 @@ defmodule Logex.TypedCounterTest do
   """
   use ExUnit.Case, async: true
 
-  # Decision 192: a counter's slot names every type word it runs.
+  # Decision 192: a counter's slot names every type word it runs, in every message that
+  # names the slot, as the maintainer confirmed (decision 201).
   @runs_ctu "a ctu, ctud, ctu_int, ctud_int, ctu_lint, ctud_lint, ctu_udint, ctud_udint, ctu_ulint or ctud_ulint"
   @runs_ctd "a ctd, ctud, ctd_int, ctud_int, ctd_lint, ctud_lint, ctd_udint, ctud_udint, ctd_ulint or ctud_ulint"
 

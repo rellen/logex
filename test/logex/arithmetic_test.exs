@@ -753,7 +753,8 @@ defmodule Logex.ArithmeticTest do
       # Decision 189: a literal source is told the narrowest signed type its negation, the
       # value `neg` writes, fits, and the literal too: a signed type's minimum, whose
       # negation is one past its top, the next wider type, and one above it that type
-      # itself; `neg 128` an int, since 128 is no sint's though -128 is.
+      # itself; `neg 128` an int, since 128 is no sint's though -128 is, as the maintainer
+      # confirmed (decision 195).
       for {narrow, wider} <- [sint: "an int", int: "a dint", dint: "an lint"] do
         {low, high} = bounds(narrow)
 

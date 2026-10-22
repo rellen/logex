@@ -359,6 +359,8 @@ defmodule Logex.LongTimerTest do
       end
     end
 
+    # Decision 199: an edit's report keeps a member's own unit for a preset, ns, and the
+    # clock's for a resume's gap, ms.
     test "a moved preset is reported and forecast in ns, a `.pre` logic moved kept" do
       v1 = c!(@e <> "var t ton_ltime\nxic go ton t 50000000\nxic t.dn ote y")
       v2 = c!(@e <> "var t ton_ltime\nxic go ton t 20000000\nxic t.dn ote y")
@@ -472,6 +474,7 @@ defmodule Logex.LongTimerTest do
                  "widen into a dint, so convert it with `lint_to_dint`"
     end
 
+    # Decision 198: a timer's slot names both its words.
     test "each instruction runs its own kind's timers, both units, and is told so" do
       assert messages(
                "var e bool\nvar f tof_ltime\nvar c ctu\nxic e ton f 1\nxic e tp c 1\nxic e rto 5 1"
@@ -641,6 +644,293 @@ defmodule Logex.LongTimerTest do
     end
   end
 
+  describe "each timer's unit, carried in the compiled program (decision 197)" do
+    @mixed """
+    var_input go bool
+    var_output y bool
+    var cure ton_ltime
+    var t ton
+    var f tof
+    xic go ton cure 30000000
+    xic go ton t 30
+    xic go tof f 5
+    xic cure.dn ote y
+    """
+
+    test "the compiler settles each long timer's unit by its name, and none for a plain " <>
+           "routine" do
+      assert c!(@mixed).units == %{"cure" => @ns}
+      assert c!("var_input go bool\nvar t ton\nxic go ton t 5").units == nil
+      assert c!("var_input go bool\nvar c ctu_lint\nxic go ctu c 5").units == nil
+
+      for kind <- @kinds do
+        assert c!("var_input go bool\nvar t #{kind}_ltime\nxic go #{kind} t 5").units ==
+                 %{"t" => @ns}
+      end
+
+      assert Logex.Program.units(c!(@mixed).tags) == %{"cure" => @ns}
+    end
+
+    test "a block's body holds its own, and the program that holds the block none" do
+      {:ok, cure} =
+        Logex.compile(
+          "function_block cure\nvar_input go bool\nvar_output done bool\nvar t ton_ltime\n" <>
+            "xic go ton t 50000000\nxic t.dn ote done",
+          name: "cure"
+        )
+
+      assert cure.body.units == %{"t" => @ns}
+      p = c!("var_input go bool\nvar_output y bool\nvar c cure\ncal c go y", [cure])
+      assert p.units == nil
+      assert p.blocks["cure"].body.units == %{"t" => @ns}
+      assert Logex.Compiler.lowered?(cure.body)
+      refute Logex.Compiler.lowered?(%{cure.body | units: nil})
+      refute Logex.Compiler.lowered?(%{cure.body | units: %{"t" => 1}})
+    end
+
+    test "a plain timer beside a long one counts its ms, and the long one its ns" do
+      p = c!(@mixed)
+      steps = [{0, %{"go" => 1}}, {10, %{}}, {20, %{}}, {5, %{"go" => 0}}, {3, %{}}]
+      states = scans(p, Runtime.instance(p), steps)
+      assert at(states, ["cure", "acc"]) == [0, 10 * @ns, 30 * @ns, 0, 0]
+      assert at(states, ["t", "acc"]) == [0, 10, 30, 0, 0]
+      assert at(states, ["f", "acc"]) == [0, 0, 0, 0, 3]
+      assert at(states, ["f", "dn"]) == [1, 1, 1, 1, 1]
+    end
+
+    @told ": `m` was edited by hand after it compiled"
+
+    test "a program whose units its tags do not give is refused where it is handed in, a " <>
+           "line each in name order" do
+      p = c!(@mixed)
+      s = Runtime.instance(p)
+
+      for {units, lines} <- [
+            {nil,
+             [
+               "`m`'s units give `cure` no unit, where a ton_ltime adds 1000000 to its `acc` " <>
+                 "each millisecond"
+             ]},
+            {%{"cure" => 5},
+             [
+               "`m`'s units give `cure` 5 a millisecond, where a ton_ltime adds 1000000 to " <>
+                 "its `acc` each millisecond"
+             ]},
+            {%{"cure" => @ns, "t" => @ns, "go" => 1, "x" => @ns},
+             [
+               "`m`'s units give `go` 1 a millisecond, where a bool keeps no time",
+               "`m`'s units give `t` 1000000 a millisecond, where a ton adds 1 to its `acc` " <>
+                 "each millisecond, which takes no unit",
+               "`m`'s units give `x` 1000000 a millisecond, where `m` declares no such tag"
+             ]},
+            {:junk,
+             [
+               "`m`'s units are neither nil nor a map of timer names to units, got: :junk"
+             ]}
+          ] do
+        edited = %{p | units: units}
+        message = Enum.map_join(lines, "\n", &(&1 <> @told))
+        assert_raise ArgumentError, message, fn -> Runtime.instance(edited) end
+        assert_raise ArgumentError, message, fn -> Edit.accept(edited, p, s) end
+        assert_raise ArgumentError, message, fn -> Edit.accept(p, edited, s) end
+
+        assert_raise ArgumentError, message, fn ->
+          Configuration.new!(
+            name: "plant",
+            programs: [edited],
+            instances: [%Configuration.Instance{name: "m1", type: "m"}],
+            connections: [%Configuration.Connection{instance: "m1", member: "go", to: 0}]
+          )
+        end
+      end
+
+      # An empty table is the routine of plain timers nil says it is.
+      plain = c!("var_input go bool\nvar t ton\nxic go ton t 5")
+      assert %Instance{} = Runtime.instance(%{plain | units: %{}})
+    end
+
+    test "a body's units, before its rungs, a line after the program's" do
+      {:ok, cure} =
+        Logex.compile(
+          "function_block cure\nvar_input go bool\nvar_output done bool\nvar t ton_ltime\n" <>
+            "xic go ton t 50000000\nxic t.dn ote done",
+          name: "cure"
+        )
+
+      p = c!("var_input go bool\nvar_output y bool\nvar c cure\ncal c go y", [cure])
+      held = p.blocks["cure"]
+
+      edited = %{
+        p
+        | units: %{"c" => 1},
+          blocks: %{"cure" => %{held | body: %{held.body | units: nil}}}
+      }
+
+      assert_raise ArgumentError,
+                   "`m`'s units give `c` 1 a millisecond, where an instance of `cure` keeps no " <>
+                     "time#{@told}\n`cure`'s body's units give `t` no unit, where a ton_ltime " <>
+                     "adds 1000000 to its `acc` each millisecond#{@told}",
+                   fn -> Runtime.instance(edited) end
+    end
+
+    test "one swapped in by hand after its check counts as its units say, and a scan that " <>
+           "reaches a unit that is no positive whole number raises there" do
+      p = c!(@mixed)
+      s = Runtime.instance(p)
+      scan = %Scan{now: 0, first: true}
+
+      # Trusted: no units, so the long timer counts as a plain one.
+      {_, s1} = Runtime.call(%{p | units: nil}, s, %{"go" => 1}, scan)
+      {_, s2} = Runtime.call(%{p | units: nil}, s1, %{}, %Scan{now: 7, first: false})
+      assert s2.env["cure"]["acc"] == 7
+
+      for {units, told} <- [
+            {%{"cure" => 0},
+             "times `cure` in a unit of 0, which is no positive whole number a " <>
+               "millisecond"},
+            {%{"cure" => "ns"},
+             ~s|times `cure` in a unit of "ns", which is no positive whole | <>
+               "number a millisecond"},
+            {:junk, "reads the unit of `cure` from units that are no map, got: :junk"}
+          ] do
+        assert_raise ArgumentError,
+                     "a scan's `ton` on line 6 #{told}: the program was edited by hand after " <>
+                       "it was handed in and checked",
+                     fn -> Runtime.call(%{p | units: units}, s, %{"go" => 1}, scan) end
+      end
+
+      # A rung that does not reach the timer runs on.
+      assert {_, _} = Runtime.call(%{p | units: %{"cure" => 0}}, s, %{"go" => 0}, scan)
+
+      # Every clause that reads a clock: a `tof`'s de-energised run, both of a `tp`'s and of
+      # an `rto`'s.
+      for {kind, go} <- [{"tof", 0}, {"tp", 1}, {"tp", 0}, {"rto", 1}, {"rto", 0}] do
+        q = c!("var_input go bool\nvar t #{kind}_ltime\nxic go #{kind} t 5000000")
+
+        assert_raise ArgumentError,
+                     ~r/^a scan's `#{kind}` on line 3 times `t` in a unit of 0/,
+                     fn ->
+                       Runtime.call(
+                         %{q | units: %{"t" => 0}},
+                         Runtime.instance(q),
+                         %{"go" => go},
+                         scan
+                       )
+                     end
+      end
+    end
+
+    test "a scan's units are the runtime's: a host leaves them out" do
+      p = c!(@mixed)
+
+      assert_raise ArgumentError,
+                   "scan.units is the runtime's, taken from the program: a host leaves it out, " <>
+                     "got: %{}",
+                   fn ->
+                     Runtime.call(p, Runtime.instance(p), %{}, %Scan{
+                       now: 0,
+                       first: true,
+                       units: %{}
+                     })
+                   end
+    end
+  end
+
+  describe "a literal taken beside a long timer's time (decision 196)" do
+    @beside "var_input go bool\nvar_output y bool\nvar cure ton_ltime\nvar x lint\n" <>
+              "xic go ton cure 30000000\n"
+
+    # The warnings on the line under test, the declarations' own aside.
+    defp beside(rungs),
+      do: Enum.filter(warnings(@beside <> rungs), &String.starts_with?(&1, "line 6:"))
+
+    @ns_told "is a ton_ltime's time in nanoseconds"
+
+    test "each instruction that takes a literal as a time warns of one that is no whole ms" do
+      assert beside("ge cure.acc 3000 ote y") == [
+               "line 6: warning: `ge` compares `cure.acc` with `3000`, where `cure.acc` " <>
+                 "#{@ns_told}: 3000 ns is no whole number of milliseconds, and a ton_ltime " <>
+                 "counts whole milliseconds"
+             ]
+
+      assert beside("lt 2000500 cure.acc ote y") == [
+               "line 6: warning: `lt` compares `2000500` with `cure.acc`, where `cure.acc` " <>
+                 "#{@ns_told}: 2000500 ns is no whole number of milliseconds, and a ton_ltime " <>
+                 "counts whole milliseconds"
+             ]
+
+      assert beside("move 1500000 cure.pre") == [
+               "line 6: warning: `move` writes `1500000` into `cure.pre`, where `cure.pre` " <>
+                 "#{@ns_told}: 1500000 ns is no whole number of milliseconds, and a ton_ltime " <>
+                 "counts whole milliseconds"
+             ]
+
+      assert beside("add cure.acc 500 cure.acc") == [
+               "line 6: warning: `add` adds `cure.acc` and `500` into `cure.acc`, where " <>
+                 "`cure.acc` #{@ns_told}: 500 ns is no whole number of milliseconds, and a " <>
+                 "ton_ltime counts whole milliseconds"
+             ]
+
+      assert beside("sub cure.pre -7 cure.pre") == [
+               "line 6: warning: `sub` takes `-7` from `cure.pre` into `cure.pre`, where " <>
+                 "`cure.pre` #{@ns_told}: -7 ns is no whole number of milliseconds, and a " <>
+                 "ton_ltime counts whole milliseconds"
+             ]
+
+      # A tag's sum written into the member: its literal is a time too.
+      assert [_] = beside("add x 1 cure.pre")
+
+      # A conversion writes it, and is warned of its literal too (decision 178).
+      assert beside("dint_to_lint 3 cure.pre") == [
+               "line 6: warning: `dint_to_lint` reads a literal, `3`: its result never changes",
+               "line 6: warning: `dint_to_lint` writes `3` into `cure.pre`, where `cure.pre` " <>
+                 "#{@ns_told}: 3 ns is no whole number of milliseconds, and a ton_ltime counts " <>
+                 "whole milliseconds"
+             ]
+
+      for op <- ~w(eq ne lt gt le ge) do
+        assert [warning] = beside("#{op} cure.acc 1 ote y")
+        assert warning =~ "`#{op}` compares `cure.acc` with `1`, where"
+      end
+    end
+
+    test "a whole number of ms, a factor, a divisor, a negation and a plain timer are not " <>
+           "looked at" do
+      for rung <- [
+            "ge cure.acc 3000000 ote y",
+            "move -2000000 cure.pre",
+            "add cure.acc 0 cure.acc",
+            "mul cure.acc 3 x",
+            "div cure.acc 7 x",
+            "mod cure.acc 7 x",
+            "ge x 3000 ote y"
+          ] do
+        assert beside(rung) == [], rung
+      end
+
+      assert warnings(
+               "var_input go bool\nvar_output y bool\nvar t ton\nxic go ton t 30\n" <>
+                 "ge t.acc 3 ote y\nmove 1 t.pre"
+             ) == []
+    end
+
+    test "each long timer's own word, and one warning a literal" do
+      for kind <- @kinds do
+        [warning] =
+          warnings(
+            "var_input go bool\nvar_output y bool\nvar t #{kind}_ltime\n" <>
+              "xic go #{kind} t 30000000\nge t.acc 3 ote y"
+          )
+
+        assert warning =~ "where `t.acc` is #{article(kind)} #{kind}_ltime's time in nanoseconds"
+        assert warning =~ "and #{article(kind)} #{kind}_ltime counts whole milliseconds"
+      end
+
+      assert length(beside("add cure.acc 5 cure.pre")) == 1
+      assert length(beside("lt 3 cure.acc ote y")) == 1
+    end
+  end
+
   describe "growth" do
     # A long timer's unit is its type's, read from its rules on each run: a scan of 400
     # long timers costs about a scan of 400 plain ones, and 4x the timers about 4x.
@@ -671,11 +961,12 @@ defmodule Logex.LongTimerTest do
       assert long < 1.2, "a long timer scanned in #{Float.round(long, 2)}x a plain one's"
     end
 
-    # M5-6's review: a plain timer's run pays for its unit no more than a look up of its tag
-    # and a match of its type's word. Its energised run, the one that reads its clock, costs
-    # about 21 reductions more than its de-energised one, which reads none, before long
-    # timers, about 24 now, and was about 29 while each run walked its type's rules.
-    test "a plain timer's energised run costs little more than before long timers" do
+    # Decision 197: a plain timer's run in a routine of plain timers, whose `units` are nil,
+    # pays nothing for its unit. Its energised run, the one that reads its clock, costs
+    # exactly 19 reductions more than its de-energised one, which reads none, with no
+    # collection, as before long timers (`6a15701`), where a look-up of each timer's tag
+    # cost about 3 more (M5-6's review), and a walk of its type's rules about 8 (M5-6).
+    test "a plain timer's energised run costs what it did before long timers" do
       cost = fn e ->
         text =
           "var_input e bool\n" <>
@@ -686,19 +977,61 @@ defmodule Logex.LongTimerTest do
         state = Runtime.put_inputs(p, Runtime.instance(p), %{"e" => 1})
         {_, state} = Runtime.scan(p, state, 1)
         state = Runtime.put_inputs(p, state, %{"e" => e})
-
-        Enum.min(
-          for _ <- 1..5 do
-            {:reductions, before} = Process.info(self(), :reductions)
-            Runtime.scan(p, state, 1)
-            {:reductions, later} = Process.info(self(), :reductions)
-            later - before
-          end
-        )
+        collected_nothing(fn -> Runtime.scan(p, state, 1) end)
       end
 
       clock = (cost.(1) - cost.(0)) / 400
-      assert clock < 26.5, "a plain timer's clock cost #{Float.round(clock, 1)} reductions a run"
+      assert clock <= 19, "a plain timer's clock cost #{Float.round(clock, 1)} reductions a run"
+    end
+  end
+
+  # The reductions `fun` takes in a process of its own whose heap is large enough that the
+  # garbage collector, whose work the reductions count, never runs: the same count on every
+  # run, so a bound may be tight.
+  defp collected_nothing(fun) do
+    parent = self()
+
+    {_pid, ref} =
+      :erlang.spawn_opt(
+        fn ->
+          {:reductions, before} = Process.info(self(), :reductions)
+          fun.()
+          {:reductions, later} = Process.info(self(), :reductions)
+          send(parent, {:reductions, later - before})
+        end,
+        [:monitor, min_heap_size: 4_000_000]
+      )
+
+    assert_receive {:reductions, n}, 10_000
+    assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+    n
+  end
+
+  describe "growth, decision 197" do
+    # A routine of plain timers has no units, nil, and each of its timers' runs matches that
+    # in its clause's head, paying no look-up; the same program handed an empty table, which
+    # a routine holding a long timer has, pays the look-up on every run that reads a clock,
+    # 2 reductions a run with no collection. So each clause that reads a clock, energised or not, is
+    # seen to take the plain path.
+    test "a plain routine's timers pay nothing for their units, each clause that reads a " <>
+           "clock" do
+      for {kind, go} <- [{"ton", 1}, {"tof", 0}, {"tp", 1}, {"tp", 0}, {"rto", 1}, {"rto", 0}] do
+        text =
+          "var_input e bool\n" <>
+            Enum.map_join(1..400, "\n", &"var t#{&1} #{kind}") <>
+            "\n" <> Enum.map_join(1..400, "\n", &"xic e #{kind} t#{&1} 5000")
+
+        {:ok, p} = Logex.compile(text, name: "p")
+        assert p.units == nil
+        state = Runtime.put_inputs(p, Runtime.instance(p), %{"e" => 1})
+        {_, state} = Runtime.scan(p, state, 1)
+        state = Runtime.put_inputs(p, state, %{"e" => go})
+
+        cost = fn program -> collected_nothing(fn -> Runtime.scan(program, state, 1) end) end
+
+        saved = (cost.(%{p | units: %{}}) - cost.(p)) / 400
+        assert saved >= 2, "#{kind} at #{go} saved #{Float.round(saved, 1)} reductions a run"
+      end
     end
   end
 

@@ -176,7 +176,9 @@ defmodule Logex.Configuration.Edit do
   it again under the same name (decision 66). The other kinds state facts.
 
   **Host mistakes** raise `ArgumentError`, each with a message a test pins. Accept checks
-  the runtime, with `Logex.Runtime`'s own message; then its `elapsed_ms`, a non-negative
+  the runtime, with `Logex.Runtime`'s own message, and since decision 200 each program
+  type it runs, as `Logex.Configuration.check/1` checks a program edited by hand after it
+  compiled (`Logex.Program.edited_by_hand/1`), in name order; then its `elapsed_ms`, a non-negative
   integer, in `Logex.Runtime.cycle/3`'s words; then the candidate, as
   `Logex.Runtime.start/1` checks a configuration, with its messages, a candidate that
   `Logex.Configuration.check/1` refuses among them (decision 63); then that the candidate
@@ -207,6 +209,7 @@ defmodule Logex.Configuration.Edit do
   """
   def accept(runtime, candidate, elapsed_ms \\ 0) do
     %Runtime{config: original} = runtime = runtime!(runtime)
+    edited!(original)
     at = at!(runtime, elapsed_ms)
     candidate!(candidate)
     named!(original, candidate)
@@ -332,6 +335,19 @@ defmodule Logex.Configuration.Edit do
     Runtime.overlaps(runtime)
     runtime
   end
+
+  # Decision 200: the program types the resource runs, each checked once again as
+  # `Logex.Configuration.check/1` checked them where the resource started
+  # (`Logex.Program.edited_by_hand/1`, decisions 182 and 197), in name order, so that one a
+  # host changed by hand in a resource after its start is refused before an edit plans
+  # from it, a line each in one message, in the words every entry point gives.
+  defp edited!(%Configuration{programs: programs}) do
+    lines = programs |> Enum.sort() |> Enum.flat_map(fn {_, p} -> Program.edited_by_hand(p) end)
+    unedited!(lines)
+  end
+
+  defp unedited!([]), do: :ok
+  defp unedited!(lines), do: raise(ArgumentError, Enum.join(lines, "\n"))
 
   # Decision 139: the step's time, `elapsed_ms` after the resource's last cycle, counted as
   # Logex.Runtime.cycle/3 counts it, in its words; 0, the resource's own time, by default.

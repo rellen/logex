@@ -174,7 +174,7 @@ defmodule Logex.RuntimeTest do
             {%{s | env: nil}, "state.env must be a map of tag names to values, got: nil"},
             {%{s | env: %Scan{now: 0, first: true}},
              "state.env must be a map of tag names to values, " <>
-               "got: %Logex.Scan{now: 0, first: true, ons_blocked: [], tags: nil, blocks: nil}"},
+               "got: %Logex.Scan{now: 0, first: true, ons_blocked: [], tags: nil, blocks: nil, units: nil}"},
             # M3-5's review: the keys a scan keeps its own records under, which no tag can
             # be, and which it takes out before it ends, so no state holds one.
             {%{s | env: Map.put(s.env, :jump, "nowhere")},
@@ -737,13 +737,15 @@ defmodule Logex.RuntimeTest do
     @pv "`m`'s `mul` on line 8 computes in the type of `c1.pv`"
 
     # Where the program is first handed in it is refused before anything else of the
-    # arguments: a lone instance's `instance/1`, and an edit's candidate.
+    # arguments: a lone instance's `instance/1`, an edit's candidate, and since decision
+    # 200 the program an edit's accept is told is running.
     defp refused_everywhere(edited, compiled, message) do
       s = Runtime.instance(compiled)
 
       for call <- [
             fn -> Runtime.instance(edited) end,
             fn -> Logex.Edit.accept(compiled, edited, s) end,
+            fn -> Logex.Edit.accept(edited, compiled, s) end,
             fn -> Logex.Edit.accept(compiled, edited, opaque(:not_a_state)) end
           ] do
         assert_raise ArgumentError, message, call
@@ -752,7 +754,7 @@ defmodule Logex.RuntimeTest do
 
     test "as compiled, each computes in its destination's type" do
       {:ok, p} = Logex.compile(@sums, name: "m")
-      assert Logex.Program.unwritable(p) == []
+      assert Logex.Program.edited_by_hand(p) == []
       assert scanned(p) == {%{"ok" => 0, "ok2" => 1}, -56, 200}
     end
 
@@ -896,6 +898,8 @@ defmodule Logex.RuntimeTest do
                    end
     end
 
+    # Decision 194: a scan that reaches such a destination raises there, as the maintainer
+    # confirmed.
     test "a program swapped in by hand after its check is trusted: no other entry point " <>
            "walks it, and a scan raises only where it reaches such a destination" do
       {:ok, p} = Logex.compile(@sums, name: "m")
@@ -909,8 +913,11 @@ defmodule Logex.RuntimeTest do
       assert %Instance{} = Runtime.restart(edited, s, :cold)
       assert {%{"ok" => 0}, _} = Runtime.scan(edited, s, 10)
 
-      # The program running an edit is the one its instance was made from: trusted too.
-      assert {:error, [%Logex.Diagnostic{stage: :edit}]} = Logex.Edit.accept(edited, p, s)
+      # Decision 200: the program running an edit is checked at the edit's accept, so one
+      # swapped in by hand is refused there, before an edit plans from it.
+      assert_raise ArgumentError, edited(@d <> ", a bool, which is no integer type"), fn ->
+        Logex.Edit.accept(edited, p, s)
+      end
 
       assert_raise ArgumentError,
                    "a scan's `add` on line 7 computes in the type of `d`, a bool, which is no " <>
@@ -930,6 +937,63 @@ defmodule Logex.RuntimeTest do
                        "by hand after it was handed in and checked",
                      fn -> Runtime.call(program, s, %{"go" => 1}, scan) end
       end
+    end
+
+    # Decision 200: an edit's accept checks the program running as well as its candidate,
+    # the program running first, before the names and the state.
+    test "an edit's accept refuses a program running that was edited by hand, before its " <>
+           "candidate, its name and its state" do
+      {:ok, p} = Logex.compile(@sums, name: "m")
+      s = Runtime.instance(p)
+      running = retyped(p, "d", :bool)
+      candidate = %{p | tags: Map.delete(p.tags, "d")}
+      told = edited(@d <> ", a bool, which is no integer type")
+
+      assert_raise ArgumentError, told, fn -> Logex.Edit.accept(running, candidate, s) end
+      assert_raise ArgumentError, told, fn -> Logex.Edit.accept(running, %{p | name: "x"}, s) end
+
+      assert_raise ArgumentError, told, fn ->
+        Logex.Edit.accept(running, p, opaque(:not_a_state))
+      end
+
+      # The candidate is checked after it: a running program as compiled passes.
+      assert_raise ArgumentError, edited(@d <> ", which `m` does not declare"), fn ->
+        Logex.Edit.accept(p, candidate, s)
+      end
+    end
+
+    test "a configuration edit's accept refuses a program type the resource runs that was " <>
+           "edited by hand, after the runtime and before its elapsed time and its candidate" do
+      {:ok, p} = Logex.compile(@sums, name: "m")
+
+      configuration =
+        Logex.Configuration.new!(
+          name: "plant",
+          programs: [p],
+          tasks: [%Logex.Configuration.Task{name: "fast", interval: 10, priority: 1}],
+          instances: [%Logex.Configuration.Instance{name: "m1", type: "m", task: "fast"}],
+          connections: [%Logex.Configuration.Connection{instance: "m1", member: "go", to: 1}]
+        )
+
+      runtime = Runtime.start(configuration)
+      programs = %{"m" => retyped(p, "d", :bool)}
+      edited_runtime = %{runtime | config: %{runtime.config | programs: programs}}
+      told = edited(@d <> ", a bool, which is no integer type")
+
+      assert_raise ArgumentError, told, fn ->
+        Logex.Configuration.Edit.accept(edited_runtime, configuration)
+      end
+
+      assert_raise ArgumentError, told, fn ->
+        Logex.Configuration.Edit.accept(edited_runtime, configuration, -1)
+      end
+
+      assert_raise ArgumentError, told, fn ->
+        Logex.Configuration.Edit.accept(edited_runtime, opaque(:not_a_configuration))
+      end
+
+      # As started, the resource's program types pass, and the edit is accepted.
+      assert {:ok, _edit, _forecast} = Logex.Configuration.Edit.accept(runtime, configuration)
     end
 
     # Decision 190: the check is made once, where the program is first handed in, and on no
@@ -952,7 +1016,7 @@ defmodule Logex.RuntimeTest do
       runtime = Runtime.start(configuration)
       # Loaded first: a pattern names only the functions of a module loaded.
       Code.ensure_loaded!(Logex.Program)
-      assert :erlang.trace_pattern({Logex.Program, :unwritable, 1}, true, [:global]) == 1
+      assert :erlang.trace_pattern({Logex.Program, :edited_by_hand, 1}, true, [:global]) == 1
 
       try do
         assert checks(fn -> Runtime.instance(p) end) == 1
@@ -960,13 +1024,15 @@ defmodule Logex.RuntimeTest do
         assert checks(fn -> Runtime.put_inputs(p, s, %{"go" => 1}) end) == 0
         assert checks(fn -> Runtime.scan(p, s, 10) end) == 0
         assert checks(fn -> Runtime.restart(p, s, :cold) end) == 0
-        assert checks(fn -> Logex.Edit.accept(p, p, s) end) == 1
+        # Decision 200: an edit's accept checks the program running and its candidate.
+        assert checks(fn -> Logex.Edit.accept(p, p, s) end) == 2
         assert checks(fn -> Runtime.start(configuration) end) == 1
         assert checks(fn -> Runtime.cycle(runtime, 10, %{}) end) == 0
         assert checks(fn -> Runtime.cycle(runtime, 20, %{}) end) == 0
 
         # A configuration edit checks its candidate's program types once, at its accept,
-        # and its switch starts the instance it adds with no check of its own.
+        # and since decision 200 the program types the resource runs, once each, and its
+        # switch starts the instance it adds with no check of its own.
         candidate = %{
           configuration
           | instances:
@@ -977,11 +1043,11 @@ defmodule Logex.RuntimeTest do
                 [%Logex.Configuration.Connection{instance: "m2", member: "go", to: 0}]
         }
 
-        assert checks(fn -> Logex.Configuration.Edit.accept(runtime, candidate) end) == 1
+        assert checks(fn -> Logex.Configuration.Edit.accept(runtime, candidate) end) == 2
         {:ok, edit, _} = Logex.Configuration.Edit.accept(runtime, candidate)
         assert checks(fn -> Logex.Configuration.Edit.test(edit, runtime) end) == 0
       after
-        :erlang.trace_pattern({Logex.Program, :unwritable, 1}, false, [:global])
+        :erlang.trace_pattern({Logex.Program, :edited_by_hand, 1}, false, [:global])
       end
     end
 
@@ -1005,7 +1071,7 @@ defmodule Logex.RuntimeTest do
 
     defp counted(pid, n) do
       receive do
-        {:trace, ^pid, :call, {Logex.Program, :unwritable, _}} -> counted(pid, n + 1)
+        {:trace, ^pid, :call, {Logex.Program, :edited_by_hand, _}} -> counted(pid, n + 1)
       after
         100 -> n
       end
@@ -1033,7 +1099,7 @@ defmodule Logex.RuntimeTest do
     end
 
     test "the check is linear in the program" do
-      check = &Logex.Program.unwritable/1
+      check = &Logex.Program.edited_by_hand/1
       ratio = reductions_for(2000, check) / reductions_for(500, check)
       assert ratio < 4.8, "4x the instructions took #{Float.round(ratio, 2)}x the reductions"
     end
@@ -2208,15 +2274,16 @@ defmodule Logex.RuntimeTest do
       assert Logex.Fault.__info__(:functions) == [__struct__: 0, __struct__: 1]
 
       # M2-5: the scan also carries the tag table of the routine it runs, and the block types
-      # it holds, the runtime's.
+      # it holds, the runtime's; since decision 197 the routine's timer units too.
       assert Enum.sort(Map.keys(Scan.__struct__())) ==
-               [:__struct__, :blocks, :first, :now, :ons_blocked, :tags]
+               [:__struct__, :blocks, :first, :now, :ons_blocked, :tags, :units]
 
       # M2-5 (fix F15): a program keeps the file it was read from; a program, and a block's
       # body, hold the block types their instances reach in one table, `blocks` (decision
       # 53).
+      # Decision 197: and each timer's unit where it is not the millisecond, `units`.
       assert Enum.sort(Map.keys(Logex.Program.__struct__())) ==
-               [:__struct__, :blocks, :file, :name, :rungs, :source, :tags, :warnings]
+               [:__struct__, :blocks, :file, :name, :rungs, :source, :tags, :units, :warnings]
 
       # OE-1: the staged edit of one instance, whose struct is opaque.
       assert Enum.sort(Logex.Edit.__info__(:functions)) == [

@@ -23,6 +23,14 @@ defmodule Logex.Program do
     copied flat grows with the number of distinct types it holds, whatever the shape of
     its nesting, and `typed_tags/1` gives the tag table with each type itself. The
     built-in `ton` is in no table: each timer's tag holds it.
+  - `units` (decision 197) is what each millisecond of the clock adds to the `acc` of
+    each timer whose unit is not the millisecond, by the timer's name: 1,000,000 for a
+    long timer, `ton_ltime` and its kind, counted in nanoseconds, and nothing for a plain
+    timer, counted in ms; nil, the default, where the routine holds no such timer. The
+    compiler settles it once from the tag table, `units/1`, the one rule, so that a scan
+    reads it with the routine it runs, and a timer of a routine whose `units` are nil, every
+    routine of plain timers, runs with no look-up, as it did before long timers; a
+    block's body holds its own.
   - `warnings` are `%Logex.Diagnostic{severity: :warning}`, in line order. From
     `Logex.compile_file/1` the warnings of each block it loaded beside the file follow,
     each with its block's file (decision 34); a block's body holds only its own.
@@ -31,12 +39,22 @@ defmodule Logex.Program do
   import Logex.Declarations, only: [is_elementary: 1]
 
   @enforce_keys [:rungs, :tags]
-  defstruct [:rungs, :tags, name: nil, source: nil, file: nil, warnings: [], blocks: %{}]
+  defstruct [
+    :rungs,
+    :tags,
+    name: nil,
+    source: nil,
+    file: nil,
+    warnings: [],
+    blocks: %{},
+    units: nil
+  ]
 
   @type t :: %__MODULE__{
           rungs: [{:rung, list}],
           tags: %{String.t() => Logex.Tag.t()},
           blocks: %{String.t() => Logex.FbType.t()},
+          units: nil | %{String.t() => pos_integer},
           name: String.t() | nil,
           source: String.t() | nil,
           file: String.t() | nil,
@@ -122,7 +140,7 @@ defmodule Logex.Program do
   it, the one kind of member logic outside a block writes (M5-4, decision 147). `{:ok,
   type}` where that type is an integer, as every compile gives; otherwise `{:error, what}`,
   what the destination is, which only a program edited by hand after it compiled gives,
-  and which `unwritable/1` refuses where the program is handed in (decision 182). It is
+  and which `edited_by_hand/1` refuses where the program is handed in (decision 182). It is
   the one rule the runtime's scan and that check read.
   """
   def destination({:name, _, name}, tags), do: tag_destination(Map.fetch(tags, name), name)
@@ -155,23 +173,57 @@ defmodule Logex.Program do
   defp integer(type, _name), do: {:error, {:type, type}}
 
   @doc """
-  Decision 182: a line for each arithmetic instruction of `program`, or of a block's body
-  it holds, whose destination has no integer type (`destination/2`), in rung order, the
-  program's first and then each body's, by the block's name: what no compile gives, so a
-  program edited by hand after it compiled, its destination's tag retyped or taken out of
-  the table. `[]` for every program a compile gives. One walk of the program's rungs and
-  of each body once: a body in the program's one table of block types (decision 53), and
-  one a tag of a routine walked holds as its type itself, which only a program built by
-  hand does.
+  Decision 197: a timer's unit, what each millisecond of the clock adds to its `acc`, for
+  each timer of `tags` whose unit is not the millisecond, by its name: its type's
+  `per_ms` (`Logex.FbType.rules/1`), 1,000,000 for a long timer, or nil where there is
+  none. A plain timer, counted in ms, and every other tag are left out. The one rule for a program's `units`, which the
+  compiler gives every program and body it builds, and the check below holds a program
+  handed in to.
   """
-  def unwritable(%__MODULE__{name: name} = program) do
+  def units(tags) when is_map(tags),
+    do:
+      tags
+      |> Enum.flat_map(&unit/1)
+      |> some()
+
+  defp unit({name, %Logex.Tag{type: type}}), do: unit(per_ms(Logex.FbType.rules(type)), name)
+  defp unit(_not_a_tag), do: []
+
+  defp unit(nil, _name), do: []
+  defp unit(per_ms, name), do: [{name, per_ms}]
+
+  defp some([]), do: nil
+  defp some(units), do: Map.new(units)
+
+  defp per_ms(%{per_ms: per_ms}) when is_integer(per_ms) and per_ms != 1, do: per_ms
+  defp per_ms(_plain_or_no_timer), do: nil
+
+  @doc """
+  What only a program edited by hand after it compiled holds, a line each: decision 182's
+  arithmetic instruction whose destination has no integer type (`destination/2`), its
+  destination's tag retyped or taken out of the table, and since decision 197 a routine
+  whose `units` are not the ones its tags give (`units/1`), a long timer's left out, a
+  plain timer's or another tag's given one, or one that differs, each routine's units
+  first and then its rungs in order, the program's routine first and then each body's, by
+  the block's name. `[]` for every program a compile gives. One walk of the program's
+  rungs and of each body once: a body in the program's one table of block types (decision
+  53), and one a tag of a routine walked holds as its type itself, which only a program
+  built by hand does. Every entry point that takes a program first checks it so, where it
+  is first handed in (decision 190).
+  """
+  def edited_by_hand(%__MODULE__{name: name} = program) do
     {lines, _seen} = routine(program, {name, nil}, {[], MapSet.new()})
     Enum.reverse(lines)
   end
 
-  defp routine(%__MODULE__{rungs: rungs, tags: tags, blocks: blocks}, where, {lines, seen})
+  defp routine(
+         %__MODULE__{rungs: rungs, tags: tags, blocks: blocks, units: units},
+         where,
+         {lines, seen}
+       )
        when is_list(rungs) and is_map(tags) do
     {program, _block} = where
+    lines = Enum.reverse(unit_lines(units, tags, where), lines)
     {lines, called} = rungs(rungs, {tags, where}, {lines, []})
     acc = Enum.reduce(Enum.reverse(called), {lines, seen}, &once(&1, program, &2))
     held_bodies(blocks, program, acc)
@@ -254,6 +306,54 @@ defmodule Logex.Program do
         "hand after it compiled"
       | lines
     ]
+
+  # Decision 197: a routine's units against the ones its tags give, by name in order.
+  defp unit_lines(units, tags, where) when is_map(units) or units == nil do
+    given = table(units)
+    wanted = table(units(tags))
+
+    for name <- Enum.sort(Enum.uniq(Map.keys(wanted) ++ Map.keys(given))),
+        Map.fetch(given, name) != Map.fetch(wanted, name),
+        do:
+          "#{owner(where)} units give #{shown_name(name)} #{unit_given(Map.fetch(given, name))}, " <>
+            "where #{unit_wanted(Map.fetch(tags, name), where)}: " <>
+            "#{named(elem(where, 0))} was edited by hand after it compiled"
+  end
+
+  defp unit_lines(units, _tags, where),
+    do: [
+      "#{owner(where)} units are neither nil nor a map of timer names to units, got: #{inspect(units)}: " <>
+        "#{named(elem(where, 0))} was edited by hand after it compiled"
+    ]
+
+  # No units, nil, are an empty table: a routine of plain timers.
+  defp table(nil), do: %{}
+  defp table(units), do: units
+
+  defp owner({nil, nil}), do: "an unnamed program's"
+  defp owner({program, nil}), do: "`#{program}`'s"
+  defp owner({_program, block}), do: "`#{block}`'s body's"
+
+  defp shown_name(name) when is_binary(name), do: "`#{name}`"
+  defp shown_name(name), do: inspect(name)
+
+  defp unit_given(:error), do: "no unit"
+  defp unit_given({:ok, per_ms}), do: "#{inspect(per_ms)} a millisecond"
+
+  defp unit_wanted({:ok, %Logex.Tag{type: type}}, _where),
+    do: of_unit(per_ms_of(Logex.FbType.rules(type)), type)
+
+  defp unit_wanted(_undeclared, where), do: "#{declarer(where)} declares no such tag"
+
+  defp per_ms_of(%{per_ms: per_ms}) when is_integer(per_ms), do: per_ms
+  defp per_ms_of(_no_timer), do: nil
+
+  defp of_unit(nil, type), do: "#{a(type)} keeps no time"
+
+  defp of_unit(1, type),
+    do: "#{a(type)} adds 1 to its `acc` each millisecond, which takes no unit"
+
+  defp of_unit(per_ms, type), do: "#{a(type)} adds #{per_ms} to its `acc` each millisecond"
 
   defp located({nil, nil}), do: "an unnamed program's "
   defp located({program, nil}), do: "`#{program}`'s "

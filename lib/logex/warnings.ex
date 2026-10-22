@@ -20,7 +20,10 @@ defmodule Logex.Warnings do
     it never counts;
   - an instance of a user function block no `cal` runs (M2-5): it never runs;
   - a long timer's preset that is no whole number of milliseconds (M5-6, §4.12's routine
-    choice), `ton t 1500000` on a `ton_ltime`: it times as the next whole millisecond;
+    choice), `ton t 1500000` on a `ton_ltime`: it times as the next whole millisecond; and
+    since decision 196 a literal that is no whole number of them taken beside a long
+    timer's `.pre` or `.acc` by `move`, a conversion, a comparison, `add` or `sub`, `ge
+    cure.acc 3000`;
   - a label no `jmp` names (M3-5): nothing jumps to its rung.
 
   A write on a rung a jump may skip is still a write (decision 107): two `ote`s on one tag,
@@ -61,6 +64,7 @@ defmodule Logex.Warnings do
     |> Kernel.++(Enum.flat_map(instructions, &at_limit(&1, tags)))
     |> Kernel.++(unjumped(instructions))
     |> Kernel.++(Enum.flat_map(instructions, &between_milliseconds(&1, tags)))
+    |> Kernel.++(Enum.flat_map(instructions, &timed_literals(&1, tags)))
     |> Enum.sort_by(& &1.line)
   end
 
@@ -269,13 +273,14 @@ defmodule Logex.Warnings do
   # the same words: `dint_to_sint 129 trim` always writes -127 with no power. Its symbols
   # are the type table's, as `Logex.Compiler` generates them, every ordered pair of two
   # integer types.
-  @one_source [:neg, :abs] ++
-                for(
-                  from <- Declarations.integers(),
-                  to <- Declarations.integers(),
-                  word = Declarations.conversion(from, to),
-                  do: String.to_atom(word)
-                )
+  @conversions for(
+                 from <- Declarations.integers(),
+                 to <- Declarations.integers(),
+                 word = Declarations.conversion(from, to),
+                 do: String.to_atom(word)
+               )
+
+  @one_source [:neg, :abs] ++ @conversions
 
   defp constant({symbol, line, [{:int_lit, _, a}, _destination]}) when symbol in @one_source,
     do: [warning(line, "`#{symbol}` reads a literal, `#{a}`: its result never changes")]
@@ -334,6 +339,7 @@ defmodule Logex.Warnings do
 
   defp shown({:name, _, name}), do: "`#{name}`"
   defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
+  defp shown({:int_lit, _, value}), do: "`#{value}`"
 
   # An operand's integer type, a tag's or a member's of the built-in instance that holds
   # it; anything else, a bool or a member of a user block's instance, which no comparison
@@ -357,6 +363,64 @@ defmodule Logex.Warnings do
 
   defp member_type({:ok, %FbType.Member{type: type}}) when type in @integers, do: {:ok, type}
   defp member_type(_other), do: :error
+
+  # Decision 196: a literal an instruction takes beside a long timer's `.pre` or `.acc`,
+  # its time in ns, is a time in ns too, and one that is no whole number of milliseconds
+  # is warned of as a preset is: `ge cure.acc 3000` on a `ton_ltime` reads 3000 ns, where a
+  # rung ported from a `ton` meant 3 s. The instructions whose literal is such a time:
+  # `move` and the conversions, which write it into the member; the six comparisons, which
+  # compare it with the member; and `add` and `sub`, which add it to the member or take it
+  # away, or write their sum into it. A factor or a divisor, `mul`, `div` and `mod`, and a
+  # negation, `neg` and `abs`, are no time, and are not looked at. The first long timer's
+  # member among the operands is the one named; each literal that is no whole number of
+  # its milliseconds is a warning.
+  @timed [:move, :add, :sub] ++ @comparisons ++ @conversions
+
+  defp timed_literals({symbol, line, operands}, tags) when symbol in @timed,
+    do: timed(Enum.find_value(operands, &long_member(&1, tags)), {symbol, line, operands})
+
+  defp timed_literals(_instruction, _tags), do: []
+
+  defp long_member({:member, _, [instance, member]} = operand, tags)
+       when member in ["pre", "acc"],
+       do: long(per_ms(Map.get(tags, instance)), operand)
+
+  defp long_member(_operand, _tags), do: nil
+
+  defp long({per_ms, type}, operand) when is_integer(per_ms) and per_ms != 1,
+    do: {operand, type, per_ms}
+
+  defp long(_plain_or_none, _operand), do: nil
+
+  defp timed(nil, _instruction), do: []
+
+  defp timed({member, type, per_ms}, {symbol, line, operands}),
+    do:
+      for(
+        {:int_lit, _, value} <- operands,
+        rem(value, per_ms) != 0,
+        do:
+          warning(
+            line,
+            "#{taking(symbol, operands)}, where #{shown(member)} is " <>
+              "#{Declarations.a_or_an(type.name)}'s time in nanoseconds: #{value} ns is no " <>
+              "whole number of milliseconds, and #{Declarations.a_or_an(type.name)} counts " <>
+              "whole milliseconds"
+          )
+      )
+
+  # What the instruction does with its operands, in its own words.
+  defp taking(symbol, [a, b]) when symbol in @comparisons,
+    do: "`#{symbol}` compares #{shown(a)} with #{shown(b)}"
+
+  defp taking(symbol, [source, destination]),
+    do: "`#{symbol}` writes #{shown(source)} into #{shown(destination)}"
+
+  defp taking(:add, [a, b, destination]),
+    do: "`add` adds #{shown(a)} and #{shown(b)} into #{shown(destination)}"
+
+  defp taking(:sub, [a, b, destination]),
+    do: "`sub` takes #{shown(b)} from #{shown(a)} into #{shown(destination)}"
 
   defp from_source?(tags, name),
     do: match?(%Tag{line: line} when line != nil, Map.get(tags, name))

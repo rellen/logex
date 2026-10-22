@@ -283,7 +283,10 @@ defmodule Logex.Edit do
   by its path.
 
   **Host mistakes** raise `ArgumentError`, each with a message a test pins: something
-  other than a program at accept, with the runtime's own message; a candidate with
+  other than a program at accept, with the runtime's own message; a program edited by
+  hand after it compiled (`Logex.Program.edited_by_hand/1`, decisions 182 and 197), the
+  program running first and then the candidate (decision 200), in the runtime's words; a
+  candidate with
   another name than the running program's (two unnamed programs count as one name);
   something other than an edit; a state that is not the running program's, or that holds
   an integer outside its tag's type in the program it runs (decision 171), with the
@@ -315,7 +318,7 @@ defmodule Logex.Edit do
   `{:error, diagnostics}` when the candidate changes a tag's type. Nothing is changed.
   """
   def accept(running, candidate, state) do
-    program!(running)
+    checked!(running)
     checked!(candidate)
     named!(running, candidate)
     accepted(Plan.retyped(running, candidate), running, candidate, checked(running, state))
@@ -416,12 +419,14 @@ defmodule Logex.Edit do
 
   # The runtime's own messages for a non-program, a function block type among them (M2-5),
   # and since decision 182 for one edited by hand whose arithmetic computes in a
-  # destination with no integer type (`Logex.Program.unwritable/1`), since decision 190
-  # checked once, where a program is first handed in: here the candidate, the program
-  # running having been handed in where its instance was made.
+  # destination with no integer type, and since decision 197 whose units its tags do not
+  # give (`Logex.Program.edited_by_hand/1`), since decision 190 checked once, where a
+  # program is first handed in: here, since decision 200, the program running as well as
+  # the candidate, the program running first, so that one swapped into the instance by
+  # hand after its check is refused before an edit plans from it.
   defp checked!(program) do
     program!(program)
-    computable!(Program.unwritable(program))
+    computable!(Program.edited_by_hand(program))
   end
 
   defp program!(%Program{tags: tags, rungs: rungs}) when is_map(tags) and is_list(rungs),
