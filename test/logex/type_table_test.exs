@@ -77,6 +77,7 @@ defmodule Logex.TypeTableTest do
              ]
 
       assert Enum.map([:bool, :dint], &Declarations.zero/1) == [0, 0]
+      assert Enum.map([:bool, :dint], &Declarations.width/1) == [1, 32]
     end
 
     test "fits?/2 is each row's range, an integer only" do

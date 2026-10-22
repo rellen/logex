@@ -78,7 +78,7 @@ defmodule Logex.Compiler do
     # M3-3: IEC's arithmetic on dints (decision 79), two sources, each a tag, a member or a
     # literal, then the destination it writes: `add total flow total`, `sub a b d` being
     # a - b. Rung power is IEC's EN and the power out its ENO (decision 98): false where the
-    # result leaves the dint, which stops at the nearer limit (decision 77).
+    # result leaves the dint, which wraps, its low 32 bits kept (decision 146, M5-2).
     "add" => {:add, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
     "sub" => {:sub, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},
     "mul" => {:mul, [{:value, :dint}, {:value, :dint}, {:write, :dint}]},

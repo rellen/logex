@@ -900,6 +900,7 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `add`
 **Why:** Rule 1: IEC names the operation ADD, and every family spells it so. The arity is fixed at two sources and a destination, as the conventional ADD's and LDmicro's ELEM_ADD (`docs/instruction-sets.md` §5.3), since logex has no variadic operands: a longer sum is two `add`s. The power out is IEC's ENO, EN being the rung (Table 18 feature 4): true on success, false where IEC calls the result an error, a sum outside the dint, and false de-energised (decision 77). That is logex's own against the conventional ladder, which passes rung-condition-in and wraps; IEC leaves the outputs to the implementer once ENO is false, and logex brings the result to the nearer limit, as its counters stop at the dint's limits (decision 71), so no value outside a dint ever reaches a state and a total never jumps from +2 billion to −2 billion. Because what it passes on is settled, anything may follow it on its path, so `add total flow total ote total_ok` reads its ENO, unlike a counter or a timer, whose power out is left open (decision 73). Two literals compile, as `EQ(1, 1)` does, with the warning two compared literals get, since the result never changes.
 **Checked:** 2026-10-14. IEC 61131-3:2013 §6.6.1.5 (p.63), Table 18 (p.65), §6.6.2.5.8 and Table 29 (pp.87–88), and IEC 61131-3:2003 §2.5.1.2 (p.49), §2.5.1.5.2 and Table 24 (pp.56–58) and Annex E Table E.1 (p.167), read directly in the copies `docs/instruction-sets.md` §9 lists; MatIEC `lib/C/iec_std_functions.h`, in the copy Milestone 2's survey saved; the conventional family's general instructions reference, Sept 2025, pp.427–441 and 868–869, in the copy Milestone 2's survey saved; CODESYS online help, *Operator: ADD*, read on 2026-10-14. The Siemens and Mitsubishi rows are the Arithmetic table's.
+*(Amended 2026-10-22, M5-2, `docs/organisation.md` decision 146, superseding decision 77 for this row: a sum outside a dint now wraps, keeping its low 32 bits in two's complement, `add 2147483647 1 dst` giving −2147483648, and on that scan passes no power, with no fault; it is no longer brought to the nearer limit. The power out is the S7-1200's reading, ENO 0 with *"the least significant part of the result that fits"*, where the conventional ADD wraps too but passes rung-condition-in. A total may now jump from +2 billion to −2 billion, and a program that must remember it latches the lamp after `add`.)*
 
 ### `sub` — subtract one value from another into a tag
 
@@ -915,6 +916,7 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `sub`
 **Why:** Rule 1: IEC's SUB, unanimous. The operand order is IEC's IN1 − IN2 and the conventional Source A − Source B, so `sub a b dst` reads as it is written. Every other rule is `add`'s, for the same reasons (decision 77).
 **Checked:** 2026-10-14, as `add`'s: IEC 61131-3:2013 Table 29 (p.88) and IEC 61131-3:2003 Table 24 (p.58), read directly; the conventional general instructions reference, Sept 2025, pp.476–483. The Siemens, CODESYS and Mitsubishi rows are the Arithmetic table's.
+*(Amended 2026-10-22, M5-2, decision 146: a difference outside a dint wraps, its low 32 bits kept, `sub -2147483648 1 dst` giving 2147483647, with no power and no fault on that scan, as `add`'s sum does, in place of the nearer limit.)*
 
 ### `mul` — multiply two values into a tag
 
@@ -930,6 +932,7 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `mul`
 **Why:** Rule 1: IEC's MUL, unanimous. Two sources and a destination, as `add`. A product is computed exactly, on Elixir's unbounded integers, before it is brought into a dint, so a product far past the limit stops there with the right sign rather than wrapping twice. Every other rule is `add`'s (decision 77).
 **Checked:** 2026-10-14, as `add`'s: IEC 61131-3:2013 Table 29 (p.88) and IEC 61131-3:2003 Table 24 (p.58), read directly; the conventional general instructions reference, Sept 2025, pp.458–463. The Siemens, CODESYS and Mitsubishi rows are the Arithmetic table's.
+*(Amended 2026-10-22, M5-2, decision 146: a product outside a dint keeps its low 32 bits in two's complement however far it passed, `mul 65536 65536 dst` giving 0 and `mul 2147483647 -2 dst` 2, with no power and no fault on that scan; it no longer stops at the limit of its true sign, so the sign stored is bit 31's.)*
 
 ### `div` — divide one value by another into a tag, the quotient truncated
 
@@ -945,6 +948,7 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `div`, the quotient only.
 **Why:** Rule 1: IEC's DIV, as every family names it. It truncates toward zero, IEC's rule and the conventional one, and Elixir's `div/2`; the remainder is `mod`'s, not a second destination as Mitsubishi's. A zero divisor gives 0 and no power on that scan (decision 78): IEC's ENO, MatIEC's 0 and STEP 7 Safety's 0 agree, where the conventional DIV gives Source A, which looks like a real answer. The conventional set's minor fault is the report decision 78 adds: the scan goes on and the plant runs, and the host is told which instance, file and line. A literal 0 divisor could never do anything else, so it is refused when the program compiles, an error IEC lets be found *"during preparation of the program for execution"*. The one quotient outside a dint, −2147483648 / −1, is brought to the limit with no power, as `add`'s sum is (decision 77), and is not a fault: only a zero divisor is reported.
 **Checked:** 2026-10-14. IEC 61131-3:2013 §6.6.1.5 (p.63), §6.6.2.5.8 and Table 29 (pp.87–88) and §7.3.2 (p.202), and IEC 61131-3:2003 §2.5.1.2 (p.49), Table 24 (p.58), §3.3.1 (p.130) and Annex E (p.167), read directly in the copies `docs/instruction-sets.md` §9 lists; MatIEC `lib/C/iec_std_functions.h`, in the copy Milestone 2's survey saved; the conventional family's general instructions reference, Sept 2025, pp.445–451 and 868–869; CODESYS online help, *Operator: DIV*, read on 2026-10-14; the TIA Portal help's *DIV: Dividieren (STEP 7 Safety V20)*, through a fetch summary, on 2026-10-14. The Mitsubishi row is the Arithmetic table's.
+*(Amended 2026-10-22, M5-2, decision 146: `div -2147483648 -1` is 2147483648, outside a dint, and wraps to −2147483648 with no power and no fault, in place of 2147483647; a zero divisor is unchanged, 0, no power and the minor fault, decisions 78 and 99.)*
 
 ### `mod` — the remainder of dividing one value by another, into a tag
 
@@ -975,6 +979,7 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `neg`
 **Why:** Rule 2: IEC has no function to name, only ST's unary minus, and logex has no expression syntax to hold one, so it takes the vendors' word, NEG, the conventional set's, Siemens's and Mitsubishi's alike, as the README long promised. Its power out and its limit are `add`'s (decision 77): the most negative dint has no positive twin, so it alone overflows. A negative literal, `-5`, is a number and no `neg`: `move -5 x` writes −5 with no instruction to run (`PLAN.md` §5).
 **Checked:** 2026-10-14. IEC 61131-3:2013 Table 28 (p.87) and Table 71 (p.202), and IEC 61131-3:2003 Table 23 (p.57) and Table 55 (p.131), read directly in the copies `docs/instruction-sets.md` §9 lists; the conventional family's general instructions reference, Sept 2025, pp.464–469. The Siemens, CODESYS and Mitsubishi rows are the Arithmetic table's.
+*(Amended 2026-10-22, M5-2, decision 146: `neg -2147483648 dst` is 2147483648, outside a dint, and wraps to −2147483648 itself with no power and no fault on that scan, in place of 2147483647, as the conventional NEG's wrap leaves it, S:V set.)*
 
 ### `abs` — the absolute value of a value, into a tag
 
@@ -990,6 +995,7 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `abs`
 **Why:** Rule 1: IEC's ABS, unanimous where it exists. The most negative dint has no positive twin: the conventional ABS leaves −2147483648 and flags an overflow, and logex brings it to 2147483647 with no power on that scan, as every result past the limit is (decision 77), so `abs` never gives a negative number.
 **Checked:** 2026-10-14. IEC 61131-3:2013 §6.6.2.5.8 and Table 28 (p.87), and IEC 61131-3:2003 Table 23 (p.57), read directly in the copies `docs/instruction-sets.md` §9 lists; MatIEC `lib/C/iec_std_functions.h`, in the copy Milestone 2's survey saved; the conventional family's general instructions reference, Sept 2025, pp.428–433; CODESYS online help, *Operator: ABS*, read on 2026-10-14. The Siemens and Mitsubishi rows are the Arithmetic table's.
+*(Amended 2026-10-22, M5-2, decision 146: `abs -2147483648 dst` wraps to −2147483648 itself with no power and no fault on that scan, in place of 2147483647, as the conventional ABS leaves it and flags its overflow; so `abs` may now give a negative number, on that one value only, and its power out says so.)*
 
 ### `osr` — one-shot rising: the positive transition-sensing coil, a storage bit and a pulse bit
 

@@ -247,6 +247,9 @@ defmodule Logex.Declarations do
   @doc "An elementary type's range of values."
   def range(type) when type in @type_atoms, do: Map.fetch!(@rows, type).range
 
+  @doc "An elementary type's width in bits, 32 for a dint: the bits a wrap keeps (M5-2)."
+  def width(type) when type in @type_atoms, do: Map.fetch!(@rows, type).width
+
   @doc "An elementary type's value before anything sets it."
   def zero(type) when type in @type_atoms, do: Map.fetch!(@rows, type).zero
 

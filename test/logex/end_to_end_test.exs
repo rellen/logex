@@ -3406,7 +3406,9 @@ defmodule Logex.EndToEndTest do
   # negative operand each give what their stanzas say; and no value outside a dint ever
   # reaches a state. Each piece runs in one configuration through Logex.Runtime.cycle/3,
   # from text and from files on disk, against an oracle in plain Elixir that knows nothing
-  # of logex.
+  # of logex. Since M5-2 the total past 2147483647 wraps, its low 32 bits kept in two's
+  # complement, `total_ok` off for the one run that wrapped (decision 146, superseding
+  # decision 77's saturation on purpose), and the oracle wraps where it clamped.
   describe "integer arithmetic (M3-3)" do
     alias Logex.{Configuration, Fault, Runtime}
 
@@ -3515,16 +3517,18 @@ defmodule Logex.EndToEndTest do
       end)
     end
 
-    defp clamp(value), do: value |> min(@max) |> max(@min)
+    # Decision 146, restated: the integer of the dint's 2^32 values that the exact one is
+    # congruent to.
+    defp wrap(value), do: Integer.mod(value - @min, 4_294_967_296) + @min
 
     # The oracle: the task runs at every 100 ms, from 0, and each run adds the flow then
-    # sampled to the total, brought into a dint, and closes the valve once the total reaches
+    # sampled to the total, wrapped into a dint, and closes the valve once the total reaches
     # the setpoint.
     defp fill_oracle(flows, setpoint, last) do
       {trace, _} =
         Enum.map_reduce(0..last//10, {0, 0}, fn now, {flow, total} ->
           flow = Map.get(flows, now, flow)
-          total = if rem(now, 100) == 0, do: clamp(total + flow), else: total
+          total = if rem(now, 100) == 0, do: wrap(total + flow), else: total
           {{now, total, if(total >= setpoint, do: 0, else: 1)}, {flow, total}}
         end)
 
@@ -3556,7 +3560,7 @@ defmodule Logex.EndToEndTest do
       assert Enum.all?(trace, fn {now, _, g} -> now < closed or g["valve"] == 0 end)
     end
 
-    defp total_stops_at_the_top({plant, _file}) do
+    defp total_wraps_past_the_top({plant, _file}) do
       {trace, _runtime} =
         fill_cycles(
           Runtime.start(plant),
@@ -3568,17 +3572,25 @@ defmodule Logex.EndToEndTest do
       runs =
         for {now, _events, g} <- trace, rem(now, 100) == 0, do: {now, g["total"], g["total_ok"]}
 
-      # 1.5 billion, then past the top: there and no power, so `total_ok` is off, at every
-      # run that would pass it; a flow of -1 brings it back in, and the reset to 0.
+      # 1.5 billion, then past the top: 3 billion less 2^32 and no power, so `total_ok` is
+      # off for that one run; the next counts on from the wrapped total with power, as does
+      # a flow of -1, and the reset brings it to 0.
       assert runs == [
                {0, 1_500_000_000, 1},
-               {100, @max, 0},
-               {200, @max, 0},
-               {300, @max - 1, 1},
-               {400, @max - 2, 1},
+               {100, -1_294_967_296, 0},
+               {200, 205_032_704, 1},
+               {300, 205_032_703, 1},
+               {400, 205_032_702, 1},
                {500, 0, 0},
                {600, 0, 0}
              ]
+
+      # The oracle wraps as the scan does, at every cycle up to the reset.
+      assert for({now, _events, g} <- trace, now < 500, do: {now, g["total"]}) ==
+               for(
+                 {now, total, _valve} <- fill_oracle(%{0 => 1_500_000_000, 300 => -1}, 0, 490),
+                 do: {now, total}
+               )
     end
 
     defp divides_by_zero({plant, file}) do
@@ -3635,7 +3647,7 @@ defmodule Logex.EndToEndTest do
            "zero minutes and a phase of a negative offset" do
       plant = fill_from_text()
       fills_to_setpoint(plant)
-      total_stops_at_the_top(plant)
+      total_wraps_past_the_top(plant)
       divides_by_zero(plant)
       phase_of_a_negative(plant)
     end
@@ -3644,7 +3656,7 @@ defmodule Logex.EndToEndTest do
     test "M3-3's Done-when, from files on disk, each fault naming its file", %{tmp_dir: dir} do
       plant = fill_from_files(dir)
       fills_to_setpoint(plant)
-      total_stops_at_the_top(plant)
+      total_wraps_past_the_top(plant)
       divides_by_zero(plant)
       phase_of_a_negative(plant)
     end

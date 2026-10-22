@@ -279,7 +279,7 @@ defmodule Logex.Runtime do
 
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
 
-  # M3-3: the arithmetic of two sources whose result is brought into a dint (decision 77),
+  # M3-3: the arithmetic of two sources whose result is wrapped into a dint (decision 146),
   # the two that divide, whose divisor may be 0 (decision 78), and the two of one source.
   @sums [:add, :sub, :mul]
   @divisions [:div, :mod]
@@ -289,6 +289,7 @@ defmodule Logex.Runtime do
   @dint Declarations.range(:dint)
   @dint_min @dint.first
   @dint_max @dint.last
+  @dint_width Declarations.width(:dint)
 
   # The resource (M2-1): the configuration it runs; `now`, its clock; `globals`, one value
   # for each global, the input points' among them; `instances`, each program instance's
@@ -1691,17 +1692,18 @@ defmodule Logex.Runtime do
     {false, env}
   end
 
-  # M3-3: `add`, `sub` and `mul` (docs/naming.md; IEC's ADD, SUB and MUL; decisions 77 and
-  # 98). Rung power is IEC's EN, and the power out its ENO. Energised, both sources are
-  # read, the result computed exactly, on Elixir's integers, and brought into the dint,
-  # then written: the power out is true, or false on the scan where the result left the
-  # dint and was brought to the nearer limit, -2147483648 or 2147483647, so no value outside
-  # a dint ever reaches a state. The sources are read before the write, so the destination
-  # may be one of them, `add total flow total`. De-energised, nothing is written and no
+  # M3-3: `add`, `sub` and `mul` (docs/naming.md; IEC's ADD, SUB and MUL; decisions 98 and
+  # 146). Rung power is IEC's EN, and the power out its ENO. Energised, both sources are
+  # read, the result computed exactly, on Elixir's integers, and wrapped into the dint, its
+  # low 32 bits kept in two's complement (M5-2, superseding decision 77's saturation), then
+  # written: the power out is true, or false on the scan where the result left the dint,
+  # 2147483647 + 1 giving -2147483648, with no fault, so no value outside a dint ever
+  # reaches a state. The sources are read before the write, so the destination may be
+  # one of them, `add total flow total`. De-energised, nothing is written and no
   # power passes, as `move`. A source a hand-built env holds as no integer reads 0, so a
   # scan never raises on one.
   defp evaluate({op, _, [a, b, destination]}, {true, env}, _scan) when op in @sums do
-    {power, value} = bounded(sum(op, integer(read(env, a)), integer(read(env, b))))
+    {power, value} = wrapped(sum(op, integer(read(env, a)), integer(read(env, b))))
     {power, write(env, destination, value)}
   end
 
@@ -1709,13 +1711,14 @@ defmodule Logex.Runtime do
     {false, env}
   end
 
-  # M3-3: `div` and `mod` (docs/naming.md; IEC's DIV and MOD; decisions 77, 78 and 98).
+  # M3-3: `div` and `mod` (docs/naming.md; IEC's DIV and MOD; decisions 78, 98 and 146).
   # Energised, `div` writes the quotient truncated toward zero, IEC's 7/3 = 2 and
   # (-7)/3 = -2, and `mod` the remainder, IEC's IN1 - (IN1/IN2)*IN2, whose sign is the
   # dividend's: Elixir's `div/2` and `rem/2`. A zero divisor writes 0 and passes no power
-  # (decision 78). The one quotient outside a dint, -2147483648 / -1, is brought to the
-  # limit with no power, as `add`'s sum is (decision 77); a remainder always fits. The
-  # power out is otherwise true. De-energised, nothing is written and no power passes.
+  # (decision 78). The one quotient outside a dint, -2147483648 / -1, wraps to
+  # -2147483648 with no power and no fault, as `add`'s sum does (decision 146); a
+  # remainder always fits. The power out is otherwise true. De-energised, nothing is
+  # written and no power passes.
   defp evaluate({op, line, [a, b, destination]}, {true, env}, _scan) when op in @divisions do
     divided({op, line}, integer(read(env, a)), integer(read(env, b)), destination, env)
   end
@@ -1724,13 +1727,13 @@ defmodule Logex.Runtime do
     {false, env}
   end
 
-  # M3-3: `neg` and `abs` (docs/naming.md; the vendors' NEG and IEC's ABS; decisions 77 and
-  # 98). Energised, `neg` writes 0 - a and `abs` a's absolute value, brought into the dint:
-  # -2147483648 alone has no positive twin, so each gives 2147483647 for it, with no power
-  # on that scan; the power out is otherwise true. De-energised, nothing is written and no
-  # power passes.
+  # M3-3: `neg` and `abs` (docs/naming.md; the vendors' NEG and IEC's ABS; decisions 98 and
+  # 146). Energised, `neg` writes 0 - a and `abs` a's absolute value, wrapped into the dint:
+  # -2147483648 alone has no positive twin, so each gives -2147483648 itself for it, with
+  # no power on that scan; the power out is otherwise true. De-energised, nothing is
+  # written and no power passes.
   defp evaluate({op, _, [a, destination]}, {true, env}, _scan) when op in @signs do
-    {power, value} = bounded(signed(op, integer(read(env, a))))
+    {power, value} = wrapped(signed(op, integer(read(env, a))))
     {power, write(env, destination, value)}
   end
 
@@ -2076,7 +2079,7 @@ defmodule Logex.Runtime do
 
   defp bit(value), do: one(closed?(value))
 
-  # M3-3: the exact result of two sources, before it is brought into a dint.
+  # M3-3: the exact result of two sources, before it is wrapped into a dint.
   defp sum(:add, a, b), do: a + b
   defp sum(:sub, a, b), do: a - b
   defp sum(:mul, a, b), do: a * b
@@ -2089,7 +2092,7 @@ defmodule Logex.Runtime do
       {false, Map.put(write(env, destination, 0), @faults, [at | as_list(Map.get(env, @faults))])}
 
   defp divided({op, _line}, a, b, destination, env) do
-    {power, value} = bounded(quotient(op, a, b))
+    {power, value} = wrapped(quotient(op, a, b))
     {power, write(env, destination, value)}
   end
 
@@ -2099,11 +2102,16 @@ defmodule Logex.Runtime do
   defp signed(:neg, a), do: -a
   defp signed(:abs, a), do: abs(a)
 
-  # A result outside a dint is brought to the nearer limit, and passes no power on that
-  # scan (decision 77); one inside it passes power.
-  defp bounded(value) when value > @dint_max, do: {false, @dint_max}
-  defp bounded(value) when value < @dint_min, do: {false, @dint_min}
-  defp bounded(value), do: {true, value}
+  # M5-2: a result is brought into the dint by keeping its low 32 bits, read in two's
+  # complement, and passes no power on the scan where that stored value is not the exact
+  # one (decision 146, superseding decision 77's saturation); no fault is recorded for it.
+  # A result inside the dint is itself and passes power.
+  defp wrapped(value) when value in @dint, do: {true, value}
+
+  defp wrapped(value) do
+    <<low::signed-size(@dint_width)>> = <<value::size(@dint_width)>>
+    {false, low}
+  end
 
   # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is
   # complementary by construction, as `xic` and `xio` are (M1-4). Erlang's term order is

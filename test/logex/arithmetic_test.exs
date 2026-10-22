@@ -1,9 +1,12 @@
 defmodule Logex.ArithmeticTest do
   @moduledoc """
   M3-3: IEC's arithmetic on dints, `add`, `sub`, `mul`, `div` and `mod`, and `neg` and
-  `abs` (docs/organisation.md decisions 77 to 79 and 98; docs/naming.md, each mnemonic's
+  `abs` (docs/organisation.md decisions 78, 79 and 98; docs/naming.md, each mnemonic's
   stanza), each rule of a scan pinned from
   source through `Logex.Runtime.call/4`, a test that fails when the rule alone is reverted.
+  Since M5-2 a result outside the dint wraps, its low 32 bits kept in two's complement,
+  and passes no power on that scan, with no fault (decision 146, superseding decision 77's
+  saturation on purpose): every test of a limit below pins the wrap.
   The compiler's refusals and warnings are `validation_test.exs`'s, the writes of the walk
   `walk_test.exs`'s, and an edit's rules `edit_test.exs`'s.
   """
@@ -56,15 +59,35 @@ defmodule Logex.ArithmeticTest do
       assert two("add", @max, @min) == {-1, 1}
     end
 
-    test "a sum past the top stops there and passes no power on that scan (decision 77)" do
-      assert two("add", @max, 1) == {@max, 0}
-      assert two("add", @max, @max) == {@max, 0}
+    test "a sum past the top wraps to the bottom and passes no power on that scan " <>
+           "(decision 146)" do
+      assert two("add", @max, 1) == {@min, 0}
+      assert two("add", @max, 5) == {@min + 4, 0}
+      assert two("add", @max, @max) == {-2, 0}
     end
 
-    test "a sum past the bottom stops there and passes no power on that scan" do
-      assert two("add", @min, -1) == {@min, 0}
-      assert two("add", @min, @min) == {@min, 0}
+    test "a sum past the bottom wraps to the top and passes no power on that scan" do
+      assert two("add", @min, -1) == {@max, 0}
+      assert two("add", @min, @min) == {0, 0}
       assert two("add", @min, 0) == {@min, 1}
+    end
+
+    # The power out says the stored value is not the exact one, even where the low bits
+    # happen to be a value a sum inside the dint could give.
+    test "a sum that wraps to 0 passes no power, though 0 is a dint's" do
+      assert two("add", @min, @min) == {0, 0}
+      assert two("add", 0, 0) == {0, 1}
+    end
+
+    # Decision 146's follow-up: a wrap shows only as no power out, never as a fault.
+    test "a wrap raises no fault: the scan's faults stay empty" do
+      for {op, a, b} <- [{"add", @max, 1}, {"sub", @min, 1}, {"mul", @max, 2}] do
+        p = c!(String.replace(@two, "OP", op))
+        inputs = %{"go" => 1, "a" => a, "b" => b}
+
+        assert {%{"ok" => 0}, %Instance{faults: []}} =
+                 Runtime.call(p, Runtime.instance(p), inputs, %Scan{now: 0, first: true})
+      end
     end
 
     test "de-energised, writes nothing and passes no power" do
@@ -80,7 +103,8 @@ defmodule Logex.ArithmeticTest do
 
     # The sources are read before the write, so the destination may be one of them, and a
     # total runs on across scans.
-    test "a destination that is a source accumulates, and stops at the top with no power" do
+    test "a destination that is a source accumulates, and wraps past the top with no power " <>
+           "on that scan alone" do
       p =
         c!("""
         var_input flow dint
@@ -94,10 +118,11 @@ defmodule Logex.ArithmeticTest do
 
       state = %{Runtime.instance(p) | env: %{"flow" => 0, "total" => @max - 3, "ok" => 0}}
 
-      assert trace(p, [%{"flow" => 2}, %{}, %{"flow" => -1}], state) == [
+      assert trace(p, [%{"flow" => 2}, %{}, %{}, %{"flow" => -1}], state) == [
                %{"total" => @max - 1, "ok" => 1},
-               %{"total" => @max, "ok" => 0},
-               %{"total" => @max - 1, "ok" => 1}
+               %{"total" => @min, "ok" => 0},
+               %{"total" => @min + 2, "ok" => 1},
+               %{"total" => @min + 1, "ok" => 1}
              ]
     end
   end
@@ -110,10 +135,12 @@ defmodule Logex.ArithmeticTest do
       assert two("sub", -1, @max) == {@min, 1}
     end
 
-    test "past either limit, the nearer one and no power on that scan" do
-      assert two("sub", @min, 1) == {@min, 0}
-      assert two("sub", 0, @min) == {@max, 0}
-      assert two("sub", @max, -1) == {@max, 0}
+    test "past either limit, wraps to the other and passes no power on that scan" do
+      assert two("sub", @min, 1) == {@max, 0}
+      assert two("sub", 0, @min) == {@min, 0}
+      assert two("sub", @max, -1) == {@min, 0}
+      assert two("sub", @max, @min) == {-1, 0}
+      assert two("sub", @min, @max) == {1, 0}
     end
 
     test "de-energised, writes nothing and passes no power" do
@@ -130,15 +157,17 @@ defmodule Logex.ArithmeticTest do
       assert two("mul", 46_341, 46_340) == {2_147_441_940, 1}
     end
 
-    # The product is exact before it is brought into the dint, so one far past a limit
-    # stops at the limit of its true sign, never wrapping to the other.
-    test "a product past a limit stops at the limit of its sign, with no power" do
-      assert two("mul", 46_341, 46_341) == {@max, 0}
-      assert two("mul", @max, @max) == {@max, 0}
-      assert two("mul", @min, @min) == {@max, 0}
-      assert two("mul", @min, -1) == {@max, 0}
-      assert two("mul", @max, -2) == {@min, 0}
-      assert two("mul", 65_536, -65_536) == {@min, 0}
+    # The product is exact before it is brought into the dint, and keeps its low 32 bits
+    # however far it passed, its sign that of bit 31, not the true product's.
+    test "a product past a limit keeps its low 32 bits, with no power" do
+      assert two("mul", 46_341, 46_341) == {-2_147_479_015, 0}
+      assert two("mul", @max, @max) == {1, 0}
+      assert two("mul", @min, @min) == {0, 0}
+      assert two("mul", @min, -1) == {@min, 0}
+      assert two("mul", @max, -2) == {2, 0}
+      assert two("mul", @max, 3) == {@max - 2, 0}
+      assert two("mul", 65_536, -65_536) == {0, 0}
+      assert two("mul", 65_536, 65_536) == {0, 0}
     end
 
     test "de-energised, writes nothing and passes no power" do
@@ -174,9 +203,19 @@ defmodule Logex.ArithmeticTest do
              ]) == [%{"r" => 10, "ok" => 1}, %{"r" => 0, "ok" => 0}, %{"r" => 200, "ok" => 1}]
     end
 
-    # Decision 77: the one quotient outside a dint, which is no zero divisor.
-    test "the minimum divided by -1 stops at the top, with no power" do
-      assert two("div", @min, -1) == {@max, 0}
+    # Decision 146: the one quotient outside a dint, which is no zero divisor, wraps to the
+    # minimum, with no power and no fault.
+    test "the minimum divided by -1 wraps to the minimum, with no power and no fault" do
+      assert two("div", @min, -1) == {@min, 0}
+
+      p = c!(String.replace(@two, "OP", "div"))
+      state = Runtime.instance(p)
+
+      assert {%{"r" => @min, "ok" => 0}, %Instance{faults: []}} =
+               Runtime.call(p, state, %{"go" => 1, "a" => @min, "b" => -1}, %Scan{
+                 now: 0,
+                 first: true
+               })
     end
 
     test "de-energised, writes nothing and passes no power, a zero divisor too" do
@@ -241,9 +280,10 @@ defmodule Logex.ArithmeticTest do
       assert one("neg", -@max) == {@max, 1}
     end
 
-    # The most negative dint has no positive twin: decision 77's limit, with no power.
-    test "the minimum alone overflows: the top, and no power on that scan" do
-      assert one("neg", @min) == {@max, 0}
+    # The most negative dint has no positive twin: its negation, 2147483648, wraps to the
+    # minimum itself, with no power (decision 146).
+    test "the minimum alone overflows: itself, and no power on that scan" do
+      assert one("neg", @min) == {@min, 0}
     end
 
     test "de-energised, writes nothing and passes no power" do
@@ -264,8 +304,9 @@ defmodule Logex.ArithmeticTest do
       assert one("abs", -@max) == {@max, 1}
     end
 
-    test "the minimum alone overflows: the top, never a negative, and no power" do
-      assert one("abs", @min) == {@max, 0}
+    # So an `abs` of the minimum is negative, the power out the one sign of it.
+    test "the minimum alone overflows: itself, a negative, and no power" do
+      assert one("abs", @min) == {@min, 0}
     end
 
     test "de-energised, writes nothing and passes no power" do
@@ -317,7 +358,7 @@ defmodule Logex.ArithmeticTest do
 
       assert trace(p, [%{"a" => 4}, %{"a" => @max}, %{"a" => 9}]) == [
                %{"b" => 5, "c" => 10, "ok" => 1},
-               %{"b" => @max, "c" => 10, "ok" => 0},
+               %{"b" => @min, "c" => 10, "ok" => 0},
                %{"b" => 10, "c" => 20, "ok" => 1}
              ]
     end
@@ -334,8 +375,8 @@ defmodule Logex.ArithmeticTest do
 
       assert trace(p, [%{"a" => 3}, %{"a" => @max}, %{"a" => @min}]) == [
                %{"b" => 6, "c" => -3, "ok" => 1},
-               %{"b" => @max, "c" => -@max, "ok" => 1},
-               %{"b" => @min, "c" => @max, "ok" => 0}
+               %{"b" => -2, "c" => -@max, "ok" => 1},
+               %{"b" => 0, "c" => @min, "ok" => 0}
              ]
     end
 
@@ -369,8 +410,8 @@ defmodule Logex.ArithmeticTest do
 
       assert trace(p, [%{"n" => 7}, %{"n" => @max}, %{"n" => 0}]) == [
                %{"t" => 7, "f" => 1},
-               %{"t" => @max, "f" => 0},
-               %{"t" => @max, "f" => 1}
+               %{"t" => @min + 6, "f" => 0},
+               %{"t" => @min + 6, "f" => 1}
              ]
     end
 

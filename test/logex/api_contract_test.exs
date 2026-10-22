@@ -6311,6 +6311,7 @@ defmodule Logex.ApiContractTest do
   @ar_reach [
     :above,
     :below,
+    :far_past,
     :div_by_zero,
     :mod_by_zero,
     :min_by_minus_one,
@@ -6550,16 +6551,31 @@ defmodule Logex.ApiContractTest do
 
       {:ok, exact} when exact > @ar_max ->
         ar_reached(:above)
-        {false, Map.put(env, destination, @ar_max), faults}
+        {false, Map.put(env, destination, ar_wrapped(exact)), faults}
 
       {:ok, exact} when exact < @ar_min ->
         ar_reached(:below)
-        {false, Map.put(env, destination, @ar_min), faults}
+        {false, Map.put(env, destination, ar_wrapped(exact)), faults}
 
       {:ok, exact} ->
         {true, Map.put(env, destination, exact), faults}
     end
   end
+
+  # Decision 146, restated (M5-2, superseding decision 77's saturation): a result outside
+  # the dint keeps its remainder by 2^32, taken back into the dint's range, so that the
+  # stored value is the one of the dint's 2^32 that the exact one is congruent to; one far
+  # past a limit, more than 2^32 out, is noted as well.
+  @ar_span 4_294_967_296
+
+  defp ar_wrapped(exact) do
+    if abs(exact) >= @ar_span, do: ar_reached(:far_past)
+    ar_into(rem(exact, @ar_span))
+  end
+
+  defp ar_into(r) when r > @ar_max, do: r - @ar_span
+  defp ar_into(r) when r < @ar_min, do: r + @ar_span
+  defp ar_into(r), do: r
 
   defp ar_value({:lit, n}, _env), do: n
   defp ar_value({:tag, tag}, env), do: Map.fetch!(env, tag)
