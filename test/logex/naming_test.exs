@@ -19,19 +19,48 @@ defmodule Logex.NamingTest do
   # Stanza headings live under the "## Stanzas" section. Anchoring there rather
   # than grepping the whole file keeps the blank template in "Adding a stanza",
   # which sits inside a fenced block, from counting as a survey entry.
-  defp surveyed_mnemonics do
+  #
+  # A family of words may share one stanza (docs/organisation.md §4.12's routine choice, M5-3:
+  # the 56 integer conversions), headed by one of them, its `**Members:**` line naming each,
+  # and every word that line names is surveyed by it.
+  defp surveyed_mnemonics, do: MapSet.union(headed(), MapSet.new(Enum.concat(families())))
+
+  defp stanzas do
     @survey
     |> File.read!()
     |> String.split("\n## Stanzas\n", parts: 2)
     |> Enum.at(1)
-    |> then(&Regex.scan(~r/^### `([a-z_][a-z0-9_]*)`/m, &1 || ""))
+    |> Kernel.||("")
+  end
+
+  defp headed do
+    ~r/^### `([a-z_][a-z0-9_]*)`/m
+    |> Regex.scan(stanzas())
     |> Enum.map(fn [_, mnemonic] -> mnemonic end)
     |> MapSet.new()
+  end
+
+  # Each family stanza's members, as data: one list a `**Members:**` line.
+  defp families do
+    for [_, line] <- Regex.scan(~r/^\*\*Members:\*\* (.*)$/m, stanzas()),
+        do: for([_, word] <- Regex.scan(~r/`([a-z_][a-z0-9_]*)`/, line), do: word)
   end
 
   test "docs/naming.md exists and has a Stanzas section" do
     assert File.exists?(@survey), "expected the naming survey at #{@survey}"
     assert File.read!(@survey) =~ "\n## Stanzas\n"
+  end
+
+  # M5-3 (decision 148): the integer conversions' stanza names every ordered pair of the
+  # eight integer types, each once, and its heading is one of them.
+  test "a family stanza's members are read as data: the 56 integer conversions" do
+    integers = ~w(sint int dint lint usint uint udint ulint)
+    pairs = for from <- integers, to <- integers, from != to, do: "#{from}_to_#{to}"
+
+    assert [members] = families()
+    assert length(pairs) == 56
+    assert Enum.sort(members) == Enum.sort(pairs)
+    assert "dint_to_int" in headed()
   end
 
   test "every implemented instruction has been surveyed" do
