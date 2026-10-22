@@ -791,39 +791,144 @@ defmodule Logex.ArithmeticTest do
     end
   end
 
+  describe "a division computed in its destination's type (M5-4's review)" do
+    # `div` and `mod` wrap their result into the destination's type, never a source's: a
+    # divisor narrower than the destination, or of another kind, changes nothing.
+    defp quotient_in(decl, rung, inputs, tag) do
+      p = c!("var_input go bool\n#{decl}\nvar_output ok bool\nxic go #{rung} ote ok")
+
+      {outputs, state} =
+        Runtime.call(p, Runtime.instance(p), Map.put(inputs, "go", 1), %Scan{now: 0, first: true})
+
+      {state.env[tag], outputs["ok"]}
+    end
+
+    test "an int quotient by an sint divisor wraps in the int" do
+      decl = "var_input a int\nvar_input b sint\nvar q int"
+
+      assert quotient_in(decl, "div a b q", %{"a" => -32_768, "b" => -1}, "q") ==
+               {-32_768, 0}
+
+      assert quotient_in(decl, "div a b q", %{"a" => 300, "b" => 1}, "q") == {300, 1}
+    end
+
+    test "an int remainder by a usint divisor keeps the dividend's sign in the int" do
+      decl = "var_input a int\nvar_input b usint\nvar q int"
+      assert quotient_in(decl, "mod a b q", %{"a" => -7, "b" => 3}, "q") == {-1, 1}
+      assert quotient_in(decl, "mod a b q", %{"a" => -300, "b" => 255}, "q") == {-45, 1}
+    end
+  end
+
+  describe "the worked examples of docs/naming.md's M5-4 amendments" do
+    # Each example the arithmetic and comparison stanzas give, as they give it, so that a
+    # stanza and the scan cannot differ (M5-4's review found one that did).
+    defp example(decl, rung, inputs) do
+      source = "var_input go bool\n#{decl}\nvar_output ok bool\nxic go #{rung} ote ok"
+
+      case Logex.compile(source, name: "m") do
+        {:ok, p} ->
+          {_outputs, state} =
+            Runtime.call(p, Runtime.instance(p), Map.put(inputs, "go", 1), %Scan{
+              now: 0,
+              first: true
+            })
+
+          Map.drop(state.env, ["go" | Map.keys(inputs)])
+
+        {:error, diagnostics} ->
+          Enum.map(diagnostics, & &1.message)
+      end
+    end
+
+    test "add, sub and mul" do
+      assert example("var s sint", "add 127 1 s", %{}) == %{"s" => -128, "ok" => 0}
+
+      assert example("var_input day_total dint\nvar small int", "add day_total 1 small", %{}) ==
+               [
+                 "`add` computes in `small`'s type, an int, but `day_total` is a dint " <>
+                   "(declared on line 2): a dint does not widen into an int, so convert it " <>
+                   "first, with `dint_to_int`"
+               ]
+
+      assert example("var_input i1 int\nvar_input i2 int\nvar d dint", "add i1 i2 d", %{
+               "i1" => 32_767,
+               "i2" => 32_767
+             }) == %{"d" => 65_534, "ok" => 1}
+
+      assert example("var u usint", "sub 0 1 u", %{}) == %{"u" => 255, "ok" => 0}
+      assert example("var s sint", "mul 16 16 s", %{}) == %{"s" => 0, "ok" => 0}
+
+      assert example("var_input w usint\nvar d dint", "mul w w d", %{"w" => 255}) ==
+               %{"d" => 65_025, "ok" => 1}
+
+      assert example("var_input w usint\nvar d int", "mul w w d", %{"w" => 255}) ==
+               %{"d" => -511, "ok" => 0}
+    end
+
+    test "div, mod, neg and the comparisons" do
+      assert example("var s sint", "div -128 -1 s", %{}) == %{"s" => -128, "ok" => 0}
+      assert example("var s sint", "mod -7 3 s", %{}) == %{"s" => -1, "ok" => 1}
+      assert example("var s sint", "neg -128 s", %{}) == %{"s" => -128, "ok" => 0}
+
+      assert example("var u usint", "neg 1 u", %{}) == [
+               "`neg` writes `u`, a usint (declared on line 2), which holds no negative " <>
+                 "value: `neg` writes a signed type"
+             ]
+
+      assert example("var_input w usint\nvar i int", "neg w i", %{"w" => 255}) ==
+               %{"i" => -255, "ok" => 1}
+
+      assert example("var_input s sint\nvar_input u udint", "lt s u", %{"s" => -1, "u" => 0}) ==
+               %{"ok" => 1}
+
+      assert example("var_input s sint", "lt s 200", %{"s" => 127}) == %{"ok" => 1}
+    end
+  end
+
   describe "the cost over every integer width (M5-4)" do
     # Each instruction is held whole once at its compile, and each scan finds its
     # destination's type in the routine's one table, so a program of 4x the instructions and
-    # 4x the tags compiles and scans in about 4x the reductions.
-    test "arithmetic over mixed widths costs linear reductions to compile and to scan" do
-      source = fn n ->
-        "var_input v sint\nvar_input w usint\nvar c ctu\n" <>
-          Enum.map_join(1..n, fn i -> "var r#{i} int\nvar q#{i} udint\n" end) <>
-          Enum.map_join(1..n, fn i ->
-            "add v w r#{i}\nmul w w q#{i}\nsub r#{i} 1 r#{i}\nadd c.pv v c.pv\n"
-          end)
-      end
+    # 4x the tags compiles and scans in about 4x the reductions. The compile and the scan
+    # are measured apart, since a scan is a few percent of a compile's reductions and a
+    # quadratic scan would hide inside the sum (M5-4's review).
+    defp mixed(n) do
+      "var_input v sint\nvar_input w usint\nvar c ctu\n" <>
+        Enum.map_join(1..n, fn i -> "var r#{i} int\nvar q#{i} udint\n" end) <>
+        Enum.map_join(1..n, fn i ->
+          "add v w r#{i}\nmul w w q#{i}\nsub r#{i} 1 r#{i}\nadd c.pv v c.pv\n" <>
+            "div q#{i} w q#{i}\nneg v r#{i}\n"
+        end)
+    end
 
-      cost = fn n ->
-        text = source.(n)
+    defp least(fun) do
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          fun.()
+          {:reductions, later} = Process.info(self(), :reductions)
+          later - before
+        end
+      )
+    end
 
-        Enum.min(
-          for _ <- 1..3 do
-            {:reductions, before} = Process.info(self(), :reductions)
-            {:ok, p} = Logex.compile(text, name: "p")
+    defp to_compile(n) do
+      text = mixed(n)
+      least(fn -> {:ok, _} = Logex.compile(text, name: "p") end)
+    end
 
-            Runtime.scan(
-              p,
-              Runtime.put_inputs(p, Runtime.instance(p), %{"v" => -128, "w" => 255})
-            )
+    defp to_scan(n) do
+      {:ok, p} = Logex.compile(mixed(n), name: "p")
+      state = Runtime.put_inputs(p, Runtime.instance(p), %{"v" => -128, "w" => 255})
+      least(fn -> Runtime.scan(p, state) end)
+    end
 
-            {:reductions, later} = Process.info(self(), :reductions)
-            later - before
-          end
-        )
-      end
+    test "arithmetic over mixed widths costs linear reductions to compile" do
+      ratio = to_compile(400) / to_compile(100)
+      assert ratio < 4.8, "4x the instructions took #{Float.round(ratio, 2)}x the reductions"
+    end
 
-      ratio = cost.(400) / cost.(100)
+    test "arithmetic over mixed widths costs linear reductions to scan" do
+      ratio = to_scan(400) / to_scan(100)
       assert ratio < 4.8, "4x the instructions took #{Float.round(ratio, 2)}x the reductions"
     end
   end

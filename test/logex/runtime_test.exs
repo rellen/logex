@@ -559,6 +559,63 @@ defmodule Logex.RuntimeTest do
     end
   end
 
+  describe "a program edited by hand after it compiled (M5-4's review)" do
+    # An arithmetic instruction computes in its destination's type, looked up in the
+    # program's tag table on each run. No compile gives a destination the table does not
+    # hold, or holds as no integer; a program edited by hand does, and the lookup is total,
+    # reading the dint, as every arithmetic instruction did before M5-4 (provisional), so
+    # that the scan runs rather than raise an Elixir error.
+    @sums """
+    var_input go bool
+    var d sint
+    var c1 ctu
+    var_output ok bool
+    var_output ok2 bool
+
+    xic go add 100 100 d ote ok
+    xic go mul 100 2 c1.pv ote ok2
+    """
+
+    defp scanned(program) do
+      {outputs, state} =
+        Runtime.call(program, Runtime.instance(program), %{"go" => 1}, %Scan{now: 0, first: true})
+
+      {outputs, state.env["d"], state.env["c1"]["pv"]}
+    end
+
+    defp retyped(program, name, type),
+      do: %{program | tags: Map.update!(program.tags, name, &%{&1 | type: type})}
+
+    test "as compiled, each computes in its destination's type" do
+      {:ok, p} = Logex.compile(@sums, name: "m")
+      assert scanned(p) == {%{"ok" => 0, "ok2" => 1}, -56, 200}
+    end
+
+    test "a destination retyped as no integer computes in the dint" do
+      {:ok, p} = Logex.compile(@sums, name: "m")
+      assert scanned(retyped(p, "d", :bool)) == {%{"ok" => 1, "ok2" => 1}, 200, 200}
+    end
+
+    test "a destination taken out of the table computes in the dint" do
+      {:ok, p} = Logex.compile(@sums, name: "m")
+      assert scanned(%{p | tags: Map.delete(p.tags, "d")}) == {%{"ok" => 1, "ok2" => 1}, 200, 200}
+    end
+
+    test "a member's instance taken out, retyped as no block or as one without the member" do
+      {:ok, p} = Logex.compile(@sums, name: "m")
+
+      for edited <- [
+            %{p | tags: Map.delete(p.tags, "c1")},
+            retyped(p, "c1", :bool),
+            retyped(p, "c1", Logex.FbType.ton()),
+            retyped(p, "c1", {:block, "seal"}),
+            retyped(p, "c1", :sint)
+          ] do
+        assert {_, -56, 200} = scanned(edited)
+      end
+    end
+  end
+
   describe "the inputs a host may set" do
     defp put(m, s, inputs), do: Runtime.put_inputs(m, s, inputs)
 

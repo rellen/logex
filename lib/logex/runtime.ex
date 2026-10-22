@@ -1828,7 +1828,7 @@ defmodule Logex.Runtime do
   # result left the type, 2147483647 + 1 giving -2147483648 in a dint and 127 + 1 -128 in an
   # sint, with no fault, so no value outside its type ever reaches a state. The sources are read before the write, so the destination may be
   # one of them, `add total flow total`. De-energised, nothing is written and no
-  # power passes, as `move`. No source a hand-built env holds outside the dint reaches a
+  # power passes, as `move`. No source a hand-built env holds outside its type reaches a
   # scan, nor since decision 173 one that is no integer: the state is refused where it is
   # handed in (decision 171), superseding M5-2's provisional reading, computed exactly and
   # then wrapped; a member of an instance a hand-built env left as no map reads 0.
@@ -2256,13 +2256,28 @@ defmodule Logex.Runtime do
 
   # M5-4 (decision 147): the type an arithmetic instruction computes in, its destination's,
   # a tag's in the routine's table or a member's of the built-in instance that holds it,
-  # the one kind of member logic outside a block writes.
-  defp type_at({:name, _, name}, %Scan{tags: tags}), do: :erlang.map_get(name, tags).type
+  # the one kind of member logic outside a block writes. Total, as the runtime's other
+  # lookups of a tag are (`counter_kind/2`): a destination the table does not hold, or
+  # holds as no integer, which no compile gives and only a program edited by hand after it
+  # compiled does, computes in the dint, as every arithmetic instruction did before M5-4
+  # (provisional, M5-4's review), so that nothing but a pinned `ArgumentError` escapes.
+  defp type_at({:name, _, name}, %Scan{tags: tags}), do: tag_type(Map.get(tags, name))
 
-  defp type_at({:member, _, [instance, member]}, %Scan{tags: tags}) do
-    {:ok, %Member{type: type}} = FbType.member(:erlang.map_get(instance, tags).type, member)
-    type
-  end
+  defp type_at({:member, _, [instance, member]}, %Scan{tags: tags}),
+    do: member_type(Map.get(tags, instance), member)
+
+  defp type_at(_destination, _scan), do: :dint
+
+  defp tag_type(%Tag{type: type}), do: type
+  defp tag_type(_no_tag), do: :dint
+
+  defp member_type(%Tag{type: %FbType{} = type}, member),
+    do: member_of(FbType.member(type, member))
+
+  defp member_type(_no_instance, _member), do: :dint
+
+  defp member_of({:ok, %Member{type: type}}), do: type
+  defp member_of(:error), do: :dint
 
   # M5-2: a result is brought into the dint by keeping its low 32 bits, read in two's
   # complement, and passes no power on the scan where that stored value is not the exact
@@ -2278,6 +2293,10 @@ defmodule Logex.Runtime do
 
     defp wrapped(unquote(type), value), do: {false, low(unquote(kind), unquote(width), value)}
   end
+
+  # A destination's type that is no integer, which only a program edited by hand gives
+  # (`type_at/2`), is read as the dint (provisional, M5-4's review).
+  defp wrapped(_no_integer, value), do: wrapped(:dint, value)
 
   defp low(:signed, width, value) do
     <<low::signed-size(^width)>> = <<value::size(width)>>
