@@ -386,6 +386,17 @@ defmodule Logex.FrontendTest do
             {"move 16#-1 x", 6, {:signed_based, "16#-1"}},
             {"move -16#1 x", 6, {:signed_based, "-16#1"}},
             {"move -2#1 x", 6, {:signed_based, "-2#1"}},
+            # The base is judged before the sign (M5-7's review).
+            {"move -8#17 x", 6, {:base, "-8#17"}},
+            {"move -10#5 x", 6, {:base, "-10#5"}},
+            # A second `#` is in the number, Ada's `16#ff#` among them (M5-7's review).
+            {"move 16#ff# x", 6, {:hash, "16#ff#"}},
+            {"move 16#FF# x", 6, {:hash, "16#FF#"}},
+            {"move 2#1#1 x", 6, {:hash, "2#1#1"}},
+            {"move 16#ff#1 x", 6, {:hash, "16#ff#1"}},
+            {"move 16##1 x", 6, {:hash, "16##1"}},
+            {"move 1_6#ff# x", 6, {:base, "1_6#ff#"}},
+            {"move 16#f_# x", 6, {:separator, "16#f_#"}},
             {"move 16#_ff x", 6, {:separator, "16#_ff"}},
             {"move 16#ff_ x", 6, {:separator, "16#ff_"}},
             {"move 2#1__0 x", 6, {:separator, "2#1__0"}},
@@ -422,13 +433,12 @@ defmodule Logex.FrontendTest do
     end
 
     # Reals are M5-10's, so until then a `.` after digits is illegal where it stands, as
-    # before decision 149; and a `#` or a sign after a based number is the next lexeme's.
+    # before decision 149; and a sign after a based number is the next lexeme's.
     test "what follows a number is read as it was before" do
       for {source, column, reason} <- [
             {"move 1.5_ x", 7, {:illegal, "."}},
             {"move 1.5L x", 7, {:illegal, "."}},
             {"move 16#ff.3 x", 11, {:illegal, "."}},
-            {"move 16#ff#1 x", 11, {:illegal, "#"}},
             {"move 16 #ff x", 9, {:illegal, "#"}},
             {"move 16#ff-1 x", 6, {:signed_inside, "16#ff-1"}},
             {"move 1_0-1 x", 6, {:signed_inside, "1_0-1"}}
@@ -451,7 +461,11 @@ defmodule Logex.FrontendTest do
 
       assert Logex.Lexer.format_error({:digits, 16, "16#fg"}) ==
                ~s("16#fg" is no number: a number in base 16 is written with the digits 0 to 9 ) <>
-                 "and a to f after its `16#`"
+                 "and a to f, in either case, after its `16#`"
+
+      assert Logex.Lexer.format_error({:hash, "16#ff#"}) ==
+               ~s("16#ff#" is no number: a based number holds one `#`, between its base and ) <>
+                 "its digits, `16#ff`"
 
       assert Logex.Lexer.format_error({:digits, 2, "2#102"}) ==
                ~s("2#102" is no number: a number in base 2 is written with the digits 0 and 1 ) <>

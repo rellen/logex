@@ -14,8 +14,8 @@ defmodule Logex.Lexer do
   with no sign, and any number may hold a single `_` between two digits, `1_000_000` or
   `2#1010_0000`; the token holds the value it spells, `16#ffff` 65,535, which its slot
   judges as it judges any literal. Octal and every other base, a signed based number, a
-  `_` anywhere but between two digits and a based number with a digit outside its base
-  are each a located error naming the number whole, and Logix's suffixes, `5U` and `5L`,
+  `_` anywhere but between two digits, a based number with a digit outside its base and
+  one with a second `#`, `16#ff#`, are each a located error naming the number whole, and Logix's suffixes, `5U` and `5L`,
   B2's mistyped lexeme.
 
   `Logex.Parser` keeps only the line in the AST, whose shape the suite pins; the column
@@ -62,12 +62,17 @@ defmodule Logex.Lexer do
   def format_error({:digits, 16, text}),
     do:
       "#{inspect(text)} is no number: a number in base 16 is written with the digits 0 to 9 " <>
-        "and a to f after its `16#`"
+        "and a to f, in either case, after its `16#`"
 
   def format_error({:digits, 2, text}),
     do:
       "#{inspect(text)} is no number: a number in base 2 is written with the digits 0 and 1 " <>
         "after its `2#`"
+
+  def format_error({:hash, text}),
+    do:
+      "#{inspect(text)} is no number: a based number holds one `#`, between its base and " <>
+        "its digits, `16#ff`"
 
   def format_error({:signed_inside, text}),
     do:
@@ -144,7 +149,8 @@ defmodule Logex.Lexer do
 
   # A number's lexeme, measured: its sign and decimal digits, and any `_` among them; then
   # either a `#` and the rest of a based numeral, which may hold a sign so that `16#-1` is
-  # named whole and refused, or B2's mistyped run, or nothing more. B2: digits running
+  # named whole and refused, and a later `#`, so that Ada's `16#ff#` is too (M5-7's
+  # review), or B2's mistyped run, or nothing more. B2: digits running
   # straight on into a letter are one mistyped lexeme, not a number and then a tag — `mov
   # 1bst aa` used to lex as `1` and `bst` and fail much later, unlocated. The error names
   # the whole run (`1bst`, not `1b`). `mov 123 hh`, a bare `1`, a tag ending in digits and
@@ -173,7 +179,9 @@ defmodule Logex.Lexer do
   defp based(<<?#, ?-, rest::binary>>, n), do: {:based, based_run(rest, n + 2)}
   defp based(<<?#, rest::binary>>, n), do: {:based, based_run(rest, n + 1)}
 
-  defp based_run(<<ch, rest::binary>>, n) when is_name_char(ch), do: based_run(rest, n + 1)
+  defp based_run(<<ch, rest::binary>>, n) when is_name_char(ch) or ch == ?#,
+    do: based_run(rest, n + 1)
+
   defp based_run(_rest, n), do: n
 
   defp number(src, {:decimal, n}, l, c, acc) do
@@ -202,7 +210,10 @@ defmodule Logex.Lexer do
   defp value(:mistyped, text), do: {:error, {:missing_separator, text}}
   defp value(:separated, <<?-, numeral::binary>> = text), do: negated(read(numeral, 10, text))
   defp value(:separated, text), do: read(text, 10, text)
-  defp value(:based, <<?-, _::binary>> = text), do: {:error, {:signed_based, text}}
+  # A based number's base is judged before its sign, so `-8#17` is told that logex reads no
+  # octal, and `-16#1` that a based number takes no sign (M5-7's review).
+  defp value(:based, <<"-16#", _::binary>> = text), do: {:error, {:signed_based, text}}
+  defp value(:based, <<"-2#", _::binary>> = text), do: {:error, {:signed_based, text}}
   defp value(:based, <<"16#", numeral::binary>> = text), do: read(numeral, 16, text)
   defp value(:based, <<"2#", numeral::binary>> = text), do: read(numeral, 2, text)
   defp value(:based, text), do: {:error, {:base, text}}
@@ -222,6 +233,7 @@ defmodule Logex.Lexer do
   defp checked(:separator, _numeral, _base, text), do: {:error, {:separator, text}}
   defp checked(:signed, _numeral, _base, text), do: {:error, {:signed_based, text}}
   defp checked(:digits, _numeral, base, text), do: {:error, {:digits, base, text}}
+  defp checked(:hash, _numeral, _base, text), do: {:error, {:hash, text}}
 
   defguardp is_digit(ch, base)
             when (ch in ?0..?9 and (base != 2 or ch in ?0..?1)) or
@@ -233,6 +245,7 @@ defmodule Logex.Lexer do
   defp digits(<<ch, rest::binary>>, base) when is_digit(ch, base), do: digit_run(rest, base)
   defp digits(<<?_, _::binary>>, _base), do: :separator
   defp digits(<<?-, _::binary>>, _base), do: :signed
+  defp digits(<<?#, _::binary>>, _base), do: :hash
   defp digits(_numeral, _base), do: :digits
 
   defp digit_run(<<ch, rest::binary>>, base) when is_digit(ch, base), do: digit_run(rest, base)
@@ -241,6 +254,7 @@ defmodule Logex.Lexer do
     do: digit_run(rest, base)
 
   defp digit_run(<<?_, _::binary>>, _base), do: :separator
+  defp digit_run(<<?#, _::binary>>, _base), do: :hash
   defp digit_run(<<>>, _base), do: :ok
   defp digit_run(_rest, _base), do: :digits
 
