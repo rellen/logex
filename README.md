@@ -184,7 +184,7 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `otl xx` | bool tag, not a `var_input` | output latch — writes 1 on a true rung, leaves the tag alone otherwise |
 | `otu xx` | bool tag, not a `var_input` | output unlatch — writes 0 on a true rung, leaves the tag alone otherwise |
 | `move 123 hh` | source, then a destination, not a `var_input`, of the source's type or one it widens into | copies a literal or a tag into a tag, in the destination's type: the source is of that type or one IEC's Figure 11 widens into it, a `uint` into a `dint`, and any other is refused naming its conversion; a literal must fit the destination (`mov` until M1-2; it now gets a diagnostic pointing here) |
-| `dint_to_int a dst` and the 55 others, `<from>_to_<to>` | a source of the `from` integer type, a tag, a member or a literal, then a tag of the `to` type it writes, not a `var_input` | converts between two integer widths, IEC's typed conversions — true: writes the value where it fits, with power, and where it does not keeps its low bits, two's complement where signed, and passes no power, with no fault: `dint_to_sint` of 129 gives −127. False: writes nothing, passes no power. Anything may follow it on the rung |
+| `dint_to_int a dst` and the 55 others, `<from>_to_<to>` | a source of the `from` integer type or one that widens into it, a tag, a member or a literal, then a tag of the `to` type it writes, not a `var_input`; a literal source is a warning | converts between two integer widths, IEC's typed conversions — true: writes the value where it fits, with power, and where it does not keeps its low bits, two's complement where signed, and passes no power, with no fault: `dint_to_sint` of 129 gives −127. False: writes nothing, passes no power. Anything may follow it on the rung |
 | `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
 | `osr s1 pulse` | two bool tags it writes, each not a `var_input`: the storage bit, then the pulse bit, which may be a member logic may write | one-shot rising, IEC's positive transition-sensing coil in the conventional set's form — sets `pulse` for the one scan in which the power reaching it rises, and clears it on every other run, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last run. It passes that power on, so anything may follow it on its rung. A second `ons`, `osr` or `osf` on `s1` is an error, as is `s1` for its pulse bit too, and any other write to `s1` a warning; a second coil on `pulse`, an `ote` among them, is the second-`ote` warning |
 | `osf s1 pulse` | as `osr` | one-shot falling, IEC's negative transition-sensing coil — sets `pulse` for the one scan in which the power reaching it falls, which its run on the false rung sees, and is `osr` in every other rule |
@@ -223,15 +223,12 @@ short-circuit, so a later leg's `ote` and `move` still take effect after an earl
 already true; and the environment threads through the legs in order, so a leg can see what
 an earlier leg wrote. Both match how a real controller scans a rung.
 
-`xic` and `xio` are complementary by construction: whatever a tag holds, exactly one of
-them passes power. The compiler lets only a `bool` reach either, but an env built by hand
-rather than by `Logex.Program.initial_env/1` can still hold a `2.5`, a `false` or leave a
-tag out, so evaluation settles it: a number reads by value, nonzero closed (so `0.0` is
-open); a boolean reads as itself; `nil` and a missing tag are open; anything else is
-closed. That totality is a guarantee, not a feature to write programs against (`PLAN.md`
-§5). An integer outside its tag's type, a 5 in a `bool` or 5000000000 in a `dint`, never
-gets that far: the runtime refuses the state where it is handed in, an `ArgumentError`
-naming each such value, so no scan ever sees one.
+`xic` and `xio` are complementary by construction: exactly one of them passes power. The
+compiler lets only a `bool` reach either, and the runtime lets only a bool's 0 or 1 reach
+it from a state: a value outside its tag's type, a 5 in a `bool` or 5000000000 in a
+`dint`, and a value that is no integer at all, a `2.5`, a `false`, a `nil` or a `"x"`, is
+refused where the state is handed in, an `ArgumentError` naming each such value, so no
+scan ever sees one (decisions 171 and 173). A tag the state leaves out reads open, as 0.
 
 ### Settled, not yet landed
 
@@ -791,8 +788,9 @@ line 6: `move` writes `flag`, a bool, into `speed`, a dint: a bool does not wide
   two's complement, and `usint uint udint ulint`, unsigned, of 8, 16, 32 and 64 bits,
   IEC's words lowercased (decisions 144 and 145). Each is declared wherever a dint is, a
   tag of any section, a block's member, a global, located or not, and every value a host,
-  a device or a force gives one is checked against its range, a signed width's mistake
-  "does not fit in N bits" and an unsigned one's "is outside 0 to max".
+  a device or a force gives one is checked against its range, a mistake told the range
+  of its width, signed or unsigned: "128 is outside -128 to 127", "-1 is outside 0 to
+  255" (decision 177).
 - `move` works in its destination's type (decision 147): a source moves in where IEC's
   Figure 11 widens it, every value of it a value of the destination, so a `uint` into a
   `dint`, a `usint` into an `int`, but never signed into unsigned, nor unsigned into a
@@ -802,7 +800,11 @@ line 6: `move` writes `flag`, a bool, into `speed`, a dint: a bool does not wide
   way a value narrows or changes sign (decision 148). Where it fits, the value is written
   and the instruction passes power; where it does not, its low bits are kept, so 129
   becomes −127 in an `sint`, as Logix's truncation gives, and no power passes, with no
-  fault, as an `add` that wraps.
+  fault, as an `add` that wraps. Its source may be of any type that widens into the one
+  its name reads, so `dint_to_int` takes an `sint` or a `usint` as it takes a dint, as
+  IEC's typed functions take their inputs (decision 176); its destination is exactly the
+  type its name writes. A conversion of a literal compiles with the warning an
+  all-literal `add` draws: its result never changes (decision 178).
 - A `cal`'s operands and a configuration's connections widen as `move` does, an output
   into a wider tag or global; a `var_external` is its global, so it binds only to one of
   exactly its type (decision 159). An online edit that changes a tag's width is refused

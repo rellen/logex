@@ -65,7 +65,11 @@ maintainer's four answers to their reviews' questions landed the same day (decis
 port holding an instance the host's mistake, the type table's width in bits, and a value
 a state holds outside its tag's type refused where the state is handed in; and the third,
 M5-3, the same day: IEC's eight integer widths declared everywhere a dint is, `move` and
-literals by Figure 11, and the 56 integer conversions (§3, M5-3).
+literals by Figure 11, and the 56 integer conversions (§3, M5-3); and the maintainer's
+eight answers to M5-3's and decision 171's questions the same day (decisions 172–179, §3
+after M5-3): a value a state holds that is no integer refused as one outside its type is,
+a conversion's source widening into its `from` type, every width's misfit told its range,
+and a conversion of a literal warned, the other four confirmed as built.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -4570,7 +4574,8 @@ the walks' cross-type reach and the documents.
   tests (9 doctests), up from 1578.
 
   **Questions for the maintainer** (each taken provisionally as written, the closest
-  reading to the record and to Logix):
+  reading to the record and to Logix; answered 2026-10-22, decisions 172 to 174: the
+  first and third kept, the second changed, a value that is no integer refused too):
   1. *A var_input or var_output holding an instance that nothing connects* (decision
      169). A *var_input* is a program's input, filled from a global by a *connection*
      line, `m1.run g`. The answer named the connected one; the record refuses the
@@ -4683,7 +4688,10 @@ the walks' cross-type reach and the documents.
   unsigned width's refusal is "is outside 0 to max"; a conversion of a literal draws no
   warning; and logex's type words are listed in the table's order.
 
-  **Questions for the maintainer** (each taken provisionally as written):
+  **Questions for the maintainer** (each taken provisionally as written; answered
+  2026-10-22, decisions 175 to 179: the first and fifth kept, the second, third and
+  fourth changed, a conversion's source widening, the range for every width, and a
+  conversion of a literal warned):
   1. *Another width in an `add` or a comparison before M5-4.* A *slot* is the place an
      instruction takes an operand; `add`'s and `eq`'s read dints. The record puts `move`
      and literals in M5-3 and the arithmetic's widening in M5-4, so M5-3 refuses `add
@@ -4743,6 +4751,72 @@ the walks' cross-type reach and the documents.
   items or need nothing: `Logex.Edit.Plan.changed/2`'s `!=` is noted in M5-10, and
   `dint_to_dint`, told "unknown instruction", is told as every unknown mnemonic is.
   1615 tests (9 doctests), up from 1614.
+- **The maintainer's answers of 2026-10-22** to M5-3's five questions and decision 171's
+  three (`docs/organisation.md` §7, decisions 172 to 179), landed the same day as two
+  commits, the code with its tests and the decisions, then the documents:
+  - *172, decision 169 kept*: a hand-edited program whose var_input or var_output holds
+    an instance is refused whether or not it is connected; no code changed.
+  - *173, a value that is no integer is the host's mistake*: 37.5, `nil`, `"x"` or a map
+    in a bool or an integer tag or member is refused with decision 171's message, "it is
+    a dint, and its value must be an integer, found 37.5", a bool's "only 0 or 1 fit,
+    found nil", a resource's global as each scan takes it too, retiring M1-4's lenient
+    reading for a state handed in; the walk is decision 171's, a guard a value, so
+    linear. Changed on purpose, each keeping what it pinned with a value inside its type
+    and pinning the refusal of what it read before: M1-4's contacts, the comparisons on
+    a hand-built env, the one-shots' and pulse coils' storage bits, a timer's `.en` and
+    hand-built bits, the arithmetic's sources and divisor that read 0, a hand-built
+    timer's members, the restart under a recompile, a plain swap's map under a bool or a
+    dint (now refused at its next call, where an edit's first test started it again,
+    decision 26, which an integer under an instance's tag still reaches), and the edit
+    walk's swap oracle.
+  - *174, the checking place kept*, and *175, decision 147 kept until M5-4*: no code
+    changed.
+  - *176, a conversion's source widens*: `dint_to_int` takes any source Figure 11 widens
+    into a dint, a tag's or a member's, and only one that does not is refused, told the
+    conversion from its own type or `move`; the destination stays exact.
+  - *177, every width's misfit gives its range*: "`128` is outside -128 to 127",
+    "`5000000000` is outside -2147483648 to 2147483647", replacing "does not fit in N
+    bits", every pinned message changed on purpose.
+  - *178, a conversion of a literal warns*: "`dint_to_sint` reads a literal, `129`: its
+    result never changes".
+  - *179, M5-3's wording for `move` between a bool and an integer kept*: no code changed.
+
+  The mutation table, 17 mutants each judged by the full suite's exit code, every
+  one red: a value that is no integer read as before (17 tests), a global that is none
+  passed (1), an integer type's told its range (8), a bool's shown unquoted (4), a
+  built-in's members not looked into for one (4); the signed misfit in bits (34), with no
+  value shown (6), a lint's alone (7); no conversion source widening (1), every integer
+  source taken (2), the widening read backwards (1), the destination widening too (1,
+  green until a test of a destination of another width was added), a member source
+  never widening (1), every value slot of every instruction widening (1); no
+  conversion warned (1), only the dint's (1); and the edit walk's swap oracle reading a
+  value that is no integer as inside (1). One more, every read slot widening, is green
+  and equivalent: every read slot takes a bool, which widens into nothing. 1617 tests (9 doctests), up from 1615. The README's `drive.exs` was run
+  again and prints what the README shows.
+
+  **Questions for the maintainer** (each taken provisionally as written, the closest
+  reading to the record and to Logix):
+  1. *An instance's tag that holds no map* (decision 173). The answer refuses a value
+     that is no integer in a bool or an integer tag or member. A tag that holds an
+     *instance* of a function block, a timer `run_on`, is a map of its members, and one
+     a host hands in holding 5 or `nil` is still read as a fresh instance, each member 0,
+     as a plain swap from a dint `k` to a timer `k` leaves it (an edit's first test then
+     starts it again, decision 26). On the conveyor: a host that hands in the fan's
+     run-on timer as `nil` sees it read as a timer just started, its time and its done
+     bit 0, so a run-on already under way starts over, rather than an `ArgumentError`. The other reading refuses it too, so
+     that only a map reaches an instance's tag and a plain swap from a dint to a timer is
+     refused at its next call. IEC and Logix have no such state.
+  2. *How a value that is no integer is told in an integer type* (decision 173). logex
+     says "it is a dint, and its value must be an integer, found 37.5", the words an input
+     that is no integer is told, rather than decision 177's range, "37.5 is outside
+     -2147483648 to 2147483647", which reads as if 37.5 were not between them. On the
+     conveyor: a host that hands in the fan's speed as 37.5 reads that a dint's value must
+     be an integer. A bool's says "only 0 or 1 fit, found 37.5" either way.
+  3. *A built-in's internal member* (decision 173). A timer's `last`, the time it last
+     ran, is no bool or integer member a program can name, so the check does not look at
+     it, and one that is no integer adds no time, as before. On the conveyor: a host that
+     hands in a timer whose `last` is `nil` sees it count from that scan. The other
+     reading refuses a `last` that is no non-negative integer as the host's mistake.
 - **M5-4 · Arithmetic and comparison over every integer width.** The signatures' slots take a type class, ANY_INT or ANY_NUM as data,
   unified across every operand of an instruction, so a three-operand `add` is checked
   whole; each computes in its destination's type, sources widened by decision 147, and
