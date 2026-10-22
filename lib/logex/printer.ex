@@ -24,8 +24,10 @@ defmodule Logex.Printer do
   Renders a parse AST as source text.
 
   The result is **canonical**, not a copy of whatever was parsed: one rung per line,
-  single spaces between elements, and integers in their shortest form. So
-  `"  xic   aa  "` prints as `"xic aa"` and `"mov 007 hh"` as `"mov 7 hh"`. That is a
+  single spaces between elements, and integers in their shortest decimal form. So
+  `"  xic   aa  "` prints as `"xic aa"` and `"mov 007 hh"` as `"mov 7 hh"`, and, since
+  the AST keeps a literal's value and not its spelling (decision 149), `"move 16#00ff
+  hh"` as `"move 255 hh"` and `"move 1_000 hh"` as `"move 1000 hh"`. That is a
   decision, not an accident — `print/1` emits the one spelling logex considers
   correct, and `test/logex/printer_test.exs` pins each loss so that none can change
   silently. Mnemonic case is the exception: it carries no meaning since M1-2, but the

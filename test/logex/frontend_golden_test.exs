@@ -13,7 +13,9 @@ defmodule Logex.FrontendGoldenTest do
   `"move -5 aa"` and `"ote a-5"` among them, after the curated ones. M5-7's based literals
   and `_` separators (decision 149) added 38 after those, recorded first by the front end
   before them, every one a lex error but `"move _1 aa"`, a name, so that the commit that
-  lands them changes those entries alone. It exercises the front end far more widely than
+  lands them changes those entries alone: it changed 13, each a lex error that became the
+  tree of the value it spells, `"move 16#ff aa"` and `"move 1_000 aa"` among them, and the
+  other 25, the refusals, stayed lex errors on their lines. It exercises the front end far more widely than
   the rest of the suite — CRLF, lone CRs, blank and whitespace-only lines, token
   boundaries, every unbalanced delimiter.
 

@@ -33,12 +33,36 @@ defmodule Logex.PrinterTest do
                      :dotted_name,
                      # a literal below 0, its sign glued to its digits (M3-3, decision 97):
                      # a lexer rule too, but printed
-                     :negative_int_lit
+                     :negative_int_lit,
+                     # M5-7 (decision 149): the spellings of a literal, lexer rules that the
+                     # AST keeps no trace of, so reached by the spelled corpus below, each
+                     # read back as the value it spells and printed in decimal
+                     # `_` between decimal digits, `1_000`, signed too, `-1_000`
+                     :separated_int_lit,
+                     # `16#ff`, `16#FF`, `16#f_f`
+                     :hex_int_lit,
+                     # `2#1010_0000`
+                     :binary_int_lit
                    ])
 
   describe "round trip" do
     test "generates every shape the grammar can hold" do
-      assert @required_shapes == corpus() |> Enum.map(&shapes/1) |> Enum.reduce(&MapSet.union/2)
+      spellings = for {_ast, _source, spelt} <- spelled_corpus(), shape <- spelt, do: shape
+
+      assert @required_shapes ==
+               corpus()
+               |> Enum.map(&shapes/1)
+               |> Enum.reduce(MapSet.new(spellings), &MapSet.union/2)
+    end
+
+    # M5-7 (decision 149): a literal may be written in decimal, with `_` between its digits,
+    # or, at 0 or more, in base 16 or 2, and every spelling is the number it spells, so the
+    # AST is the one its decimal spelling gives, and the printer gives that spelling back.
+    test "every spelling of a literal reads back as the AST, and prints in decimal" do
+      for {ast, source, _spelt} <- spelled_corpus() do
+        assert strip_lines(parse!(source)) == strip_lines(ast), source
+        assert Printer.print(parse!(source)) == Printer.print(ast)
+      end
     end
 
     test "parse . print restores the AST, modulo line numbers" do
@@ -86,6 +110,13 @@ defmodule Logex.PrinterTest do
 
     test "integer literals print in their shortest form" do
       assert Printer.print(parse!("mov 007 hh")) == "mov 7 hh"
+    end
+
+    # M5-7 (decision 149): the AST keeps a literal's value, not its spelling, so a based
+    # literal or one with `_` prints as its decimal value.
+    test "a based literal or one with `_` separators prints as its decimal value" do
+      assert Printer.print(parse!("move 16#00FF hh\nand 2#1010_0000 x\nmove -1_000_000 y")) ==
+               "move 255 hh\nand 160 x\nmove -1000000 y"
     end
 
     # M3-3 (decision 97): a sign is glued to its digits, and `-0` is 0.
@@ -297,6 +328,71 @@ defmodule Logex.PrinterTest do
   defp break(:no_legs, {:branches, _}), do: {:branches, []}
   defp break(:leg_not_a_list, {:branches, [_ | legs]}), do: {:branches, [:leg | legs]}
   defp break(:improper, {:branches, legs}), do: {:branches, legs ++ [[] | :x]}
+
+  # The corpus again, each tree written as source with every literal spelled in a way drawn
+  # for it, and the spellings it took. The draws come after the corpus's own, so the corpus
+  # is the one the other properties run on.
+  defp spelled_corpus do
+    trees = corpus()
+
+    for ast <- trees do
+      {source, spelt} = spell(ast)
+      {ast, source, spelt}
+    end
+  end
+
+  defp spell({:routine, {:rungs, rungs}}) do
+    {lines, spelt} = Enum.map_reduce(rungs, [], &spell/2)
+    {Enum.join(lines, "\n"), spelt}
+  end
+
+  defp spell({:rung, elements}, spelt) do
+    {words, spelt} = spell_all(elements, spelt)
+    {Enum.join(words, " "), spelt}
+  end
+
+  defp spell_all(elements, spelt) do
+    {words, spelt} = Enum.map_reduce(elements, spelt, &spell_one/2)
+    {Enum.concat(words), spelt}
+  end
+
+  defp spell_one({:name, _, name}, spelt), do: {[name], spelt}
+
+  defp spell_one({:int_lit, _, n}, spelt) do
+    word = spelling(n, :rand.uniform(4))
+    {[word], [spelt(word) | spelt]}
+  end
+
+  defp spell_one({:branches, legs}, spelt) do
+    {legs, spelt} = Enum.map_reduce(legs, spelt, &spell_all/2)
+    {["("] ++ Enum.concat(Enum.intersperse(legs, ["|"])) ++ [")"], spelt}
+  end
+
+  defp spelling(n, 1), do: Integer.to_string(n)
+  defp spelling(n, 2), do: separated(Integer.to_string(n))
+  defp spelling(n, 3) when n >= 0, do: "16#" <> separated(cased(Integer.to_string(n, 16)))
+  defp spelling(n, 4) when n >= 0, do: "2#" <> separated(Integer.to_string(n, 2))
+  defp spelling(n, _), do: spelling(n, 1)
+
+  # The shape a spelling reaches, read from the word itself.
+  defp spelt("16#" <> _), do: :hex_int_lit
+  defp spelt("2#" <> _), do: :binary_int_lit
+  defp spelt(word), do: separated_shape(String.contains?(word, "_"))
+
+  defp separated_shape(true), do: :separated_int_lit
+  defp separated_shape(false), do: :int_lit
+
+  # A `_` drawn after each digit but the last, never two together nor after a sign.
+  defp separated(<<?-, digits::binary>>), do: "-" <> separated(digits)
+
+  defp separated(digits) do
+    digits
+    |> String.graphemes()
+    |> Enum.map_join(fn digit -> digit <> Enum.random(["", "", "_"]) end)
+    |> String.trim_trailing("_")
+  end
+
+  defp cased(hex), do: Enum.random([hex, String.downcase(hex)])
 
   # Which grammar productions a generated AST actually reaches.
   defp shapes({:routine, {:rungs, rungs}}) do

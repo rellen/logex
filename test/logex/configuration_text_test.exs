@@ -142,6 +142,36 @@ defmodule Logex.Configuration.TextTest do
                 ], []}
     end
 
+    # M5-7 (decision 149): a configuration's numbers are `Logex.Lexer`'s, so a based one or
+    # one with `_` is the number it spells, which `print/1` writes in decimal.
+    test "a number may be based or hold `_`, and prints in decimal" do
+      source = "var_global mask uint 16#ffff\ntask t interval 1_000 priority 2#1\nm1.x 16#0F"
+
+      assert {:ok, entries} = Text.read(source)
+
+      assert entries == [
+               %Global{name: "mask", type: :uint, initial: 65_535, line: 1},
+               task(2, "t", 1000, 1),
+               wire(3, "m1", "x", 15)
+             ]
+
+      assert Text.print(entries) ==
+               "var_global mask uint 65535\ntask t interval 1000 priority 1\nm1.x 15\n"
+
+      assert Text.read("var_global k dint 8#17") ==
+               {:error,
+                [
+                  %Diagnostic{
+                    stage: :lex,
+                    line: 1,
+                    column: 19,
+                    message:
+                      ~s("8#17" is no number: a based number is written in base 16, `16#ff`, ) <>
+                        "or base 2, `2#1010`, and logex reads no other base"
+                  }
+                ], []}
+    end
+
     test "a source with no line reads to no entry" do
       assert Text.read("") == {:ok, []}
       assert Text.read("\n// nothing\r\n\r") == {:ok, []}

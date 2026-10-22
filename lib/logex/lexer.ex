@@ -10,20 +10,28 @@ defmodule Logex.Lexer do
 
   A name may have `.` parts, `t1.dn` or `word.3`, and is still one `name` token. An
   integer may have a sign, `-5`, glued to its digits (M3-3): one `int_lit` token, located
-  at the `-`.
+  at the `-`. Since M5-7 (decision 149) it may be based, `16#ff`, `16#FF` or `2#1010`,
+  with no sign, and any number may hold a single `_` between two digits, `1_000_000` or
+  `2#1010_0000`; the token holds the value it spells, `16#ffff` 65,535, which its slot
+  judges as it judges any literal. Octal and every other base, a signed based number, a
+  `_` anywhere but between two digits and a based number with a digit outside its base
+  are each a located error naming the number whole, and Logix's suffixes, `5U` and `5L`,
+  B2's mistyped lexeme.
 
   `Logex.Parser` keeps only the line in the AST, whose shape the suite pins; the column
   is there for diagnostics. Whitespace and `//` comments are never emitted.
 
   This replaced `src/ladder_lexer.xrl`. `test/fixtures/frontend_golden.txt` is the record
-  that one first wrote, which this matched before B2, B8 and PLAN.md §5's comment, `.` and
-  negative-literal rules changed it on purpose. Seven things differ on purpose: locations
+  that one first wrote, which this matched before B2, B8, PLAN.md §5's comment, `.` and
+  negative-literal rules and decision 149's based literals and separators changed it on
+  purpose. Eight things differ on purpose: locations
   carry a column; a source that is not valid UTF-8 is a located error rather than the
   `UnicodeConversionError` that `String.to_charlist/1` raised before leex ever ran; a
   number running straight into a tag, `1bst`, is an error rather than two tokens (B2); a
   lone `\r` is a newline, not whitespace (B8); `//` starts a comment; a name may have `.`
-  parts; and a `-` glued to digits is a negative literal's sign (M3-3, decision 97). leex
-  made the last three illegal characters.
+  parts; a `-` glued to digits is a negative literal's sign (M3-3, decision 97); and a
+  number may be based or hold `_` (M5-7, decision 149). leex made the last four illegal
+  characters, or `1_000` a mistyped lexeme.
   """
 
   defguardp is_name_start(ch) when ch in ?a..?z or ch in ?A..?Z or ch == ?_
@@ -39,6 +47,27 @@ defmodule Logex.Lexer do
 
   def format_error({:missing_separator, text}),
     do: "missing separator after integer: #{inspect(text)} is neither a number nor a tag"
+
+  def format_error({:separator, text}),
+    do: "#{inspect(text)} is no number: a `_` in a number stands only between two digits"
+
+  def format_error({:base, text}),
+    do:
+      "#{inspect(text)} is no number: a based number is written in base 16, `16#ff`, or " <>
+        "base 2, `2#1010`, and logex reads no other base"
+
+  def format_error({:signed_based, text}),
+    do: "#{inspect(text)} is no number: a based number takes no sign"
+
+  def format_error({:digits, 16, text}),
+    do:
+      "#{inspect(text)} is no number: a number in base 16 is written with the digits 0 to 9 " <>
+        "and a to f after its `16#`"
+
+  def format_error({:digits, 2, text}),
+    do:
+      "#{inspect(text)} is no number: a number in base 2 is written with the digits 0 and 1 " <>
+        "after its `2#`"
 
   def format_error({:signed_inside, text}),
     do:
@@ -68,12 +97,11 @@ defmodule Logex.Lexer do
   # up to 64 bytes is a heap binary, and a longer one a sub-binary of the source. Grown with
   # `<<acc::binary, ch>>`, each was an off-heap, 256-byte writable binary, and allocating
   # and collecting those made token-dense sources lex up to 2.2x slower than leex did.
-  # lexer_binaries_test.exs fails if they come back.
-  defp lex(<<d, _::binary>> = src, l, c, acc) when d in ?0..?9 do
-    n = digits(src, 0)
-    <<digits::binary-size(^n), rest::binary>> = src
-    number(rest, digits, l, c, acc)
-  end
+  # lexer_binaries_test.exs fails if they come back. A number's value is read from the cut
+  # text, its `_`s left out, so only a number that holds one builds a binary, a heap one
+  # for any up to 64 digits.
+  defp lex(<<d, _::binary>> = src, l, c, acc) when d in ?0..?9,
+    do: number(src, numeral(src, 0), l, c, acc)
 
   # PLAN.md §5, M3-3 (decision 97): a `-` glued to digits is a negative literal's sign, and
   # the two are one token, located at the `-`: `-5`, and `-0`, which is 0. logex has no
@@ -83,9 +111,7 @@ defmodule Logex.Lexer do
   # is one mistyped lexeme.
   defp lex(<<?-, d, _::binary>> = src, l, c, acc) when d in ?0..?9 do
     <<?-, unsigned::binary>> = src
-    n = digits(unsigned, 0) + 1
-    <<digits::binary-size(^n), rest::binary>> = src
-    number(rest, digits, l, c, acc)
+    number(src, numeral(unsigned, 1), l, c, acc)
   end
 
   defp lex(<<h, _::binary>> = src, l, c, acc) when is_name_start(h),
@@ -116,18 +142,107 @@ defmodule Logex.Lexer do
   defp newline(rest, l, _c, [{:rnd, _} | _] = acc), do: lex(rest, l + 1, 1, acc)
   defp newline(rest, l, c, acc), do: lex(rest, l + 1, 1, [{:rnd, {l, c}} | acc])
 
-  # B2: digits running straight on into a letter or `_` are one mistyped lexeme, not a
-  # number and then a tag — `mov 1bst aa` used to lex as `1` and `bst` and fail much
-  # later, unlocated. The error names the whole run (`1bst`, not `1b`). `mov 123 hh`, a
-  # bare `1`, a tag ending in digits and `1(` are unaffected.
-  defp number(<<h, _::binary>> = rest, digits, l, c, _acc) when is_name_start(h) do
-    n = word(rest, 0)
-    <<tail::binary-size(^n), _::binary>> = rest
-    {:error, {{l, c}, __MODULE__, {:missing_separator, digits <> tail}}, l}
+  # A number's lexeme, measured: its sign and decimal digits, and any `_` among them; then
+  # either a `#` and the rest of a based numeral, which may hold a sign so that `16#-1` is
+  # named whole and refused, or B2's mistyped run, or nothing more. B2: digits running
+  # straight on into a letter are one mistyped lexeme, not a number and then a tag — `mov
+  # 1bst aa` used to lex as `1` and `bst` and fail much later, unlocated. The error names
+  # the whole run (`1bst`, not `1b`). `mov 123 hh`, a bare `1`, a tag ending in digits and
+  # `1(` are unaffected. Logix's suffixes, `5U` and `5L` (RM018A p.870), are B2's lexeme
+  # too, being no IEC form (decision 149).
+  #
+  # Plain digits, the commonest number by far, are read by `String.to_integer/1`, as before
+  # decision 149; a number with a `_` in it, `separated/2`'s, or a `#` is checked digit by
+  # digit first.
+  defp numeral(<<d, rest::binary>>, n) when d in ?0..?9, do: numeral(rest, n + 1)
+  defp numeral(<<?_, rest::binary>>, n), do: separated(rest, n + 1)
+  defp numeral(<<?#, _::binary>> = rest, n), do: based(rest, n)
+  defp numeral(<<h, _::binary>> = rest, n) when is_name_start(h), do: {:mistyped, word(rest, n)}
+  defp numeral(_rest, n), do: {:decimal, n}
+
+  defp separated(<<ch, rest::binary>>, n) when ch in ?0..?9 or ch == ?_,
+    do: separated(rest, n + 1)
+
+  defp separated(<<?#, _::binary>> = rest, n), do: based(rest, n)
+
+  defp separated(<<h, _::binary>> = rest, n) when is_name_start(h),
+    do: {:mistyped, word(rest, n)}
+
+  defp separated(_rest, n), do: {:separated, n}
+
+  defp based(<<?#, ?-, rest::binary>>, n), do: {:based, based_run(rest, n + 2)}
+  defp based(<<?#, rest::binary>>, n), do: {:based, based_run(rest, n + 1)}
+
+  defp based_run(<<ch, rest::binary>>, n) when is_name_char(ch), do: based_run(rest, n + 1)
+  defp based_run(_rest, n), do: n
+
+  defp number(src, {:decimal, n}, l, c, acc) do
+    <<text::binary-size(^n), rest::binary>> = src
+    lexeme(rest, text, {:int_lit, {l, c}, String.to_integer(text)}, {l, c}, acc)
   end
 
-  defp number(rest, digits, l, c, acc),
-    do: lexeme(rest, digits, {:int_lit, {l, c}, String.to_integer(digits)}, {l, c}, acc)
+  defp number(src, {kind, n}, l, c, acc) do
+    <<text::binary-size(^n), rest::binary>> = src
+    literal(value(kind, text), text, rest, l, c, acc)
+  end
+
+  defp literal({:ok, value}, text, rest, l, c, acc),
+    do: lexeme(rest, text, {:int_lit, {l, c}, value}, {l, c}, acc)
+
+  defp literal({:error, reason}, _text, _rest, l, c, _acc),
+    do: {:error, {{l, c}, __MODULE__, reason}, l}
+
+  # Decision 149: a number is decimal, or based in 16 or 2 (IEC Ed 3 Table 5 features 4 and
+  # 6), with no sign, which IEC gives a based number none of; octal, `8#`, which Ed 3
+  # deprecates (NOTE 2), is deferred, and refused as any other base. A single `_` may stand
+  # between two digits, `1_000_000` (Ed 3 p.26), and not after a `#`, `16#_ff`, which IEC's
+  # grammar allows and its prose does not. A based literal is the number it spells,
+  # `16#ffff` 65,535, judged by its slot as any literal is: a bit-string literal, read as
+  # IEC reads one (p.26), and as Logix reads it (RM018A p.869).
+  defp value(:mistyped, text), do: {:error, {:missing_separator, text}}
+  defp value(:separated, <<?-, numeral::binary>> = text), do: negated(read(numeral, 10, text))
+  defp value(:separated, text), do: read(text, 10, text)
+  defp value(:based, <<?-, _::binary>> = text), do: {:error, {:signed_based, text}}
+  defp value(:based, <<"16#", numeral::binary>> = text), do: read(numeral, 16, text)
+  defp value(:based, <<"2#", numeral::binary>> = text), do: read(numeral, 2, text)
+  defp value(:based, text), do: {:error, {:base, text}}
+
+  defp negated({:ok, value}), do: {:ok, -value}
+  defp negated(refused), do: refused
+
+  # A numeral is checked digit by digit and then read whole, its `_`s left out, by
+  # `String.to_integer/2`, so its cost is linear in its length, as a decimal's is.
+  defp read(numeral, base, text), do: checked(digits(numeral, base), numeral, base, text)
+
+  defp checked(:ok, numeral, base, _text) do
+    parts = :binary.split(numeral, "_", [:global])
+    {:ok, String.to_integer(IO.iodata_to_binary(parts), base)}
+  end
+
+  defp checked(:separator, _numeral, _base, text), do: {:error, {:separator, text}}
+  defp checked(:signed, _numeral, _base, text), do: {:error, {:signed_based, text}}
+  defp checked(:digits, _numeral, base, text), do: {:error, {:digits, base, text}}
+
+  defguardp is_digit(ch, base)
+            when (ch in ?0..?9 and (base != 2 or ch in ?0..?1)) or
+                   (base == 16 and (ch in ?a..?f or ch in ?A..?F))
+
+  # A numeral's digits, a `_` only between two of them: `:ok`, or what is wrong with it, in
+  # the order a reader meets it. `digits/2` takes the first digit, straight after a `#` or
+  # at the start, and `digit_run/2` the rest.
+  defp digits(<<ch, rest::binary>>, base) when is_digit(ch, base), do: digit_run(rest, base)
+  defp digits(<<?_, _::binary>>, _base), do: :separator
+  defp digits(<<?-, _::binary>>, _base), do: :signed
+  defp digits(_numeral, _base), do: :digits
+
+  defp digit_run(<<ch, rest::binary>>, base) when is_digit(ch, base), do: digit_run(rest, base)
+
+  defp digit_run(<<?_, ch, rest::binary>>, base) when is_digit(ch, base),
+    do: digit_run(rest, base)
+
+  defp digit_run(<<?_, _::binary>>, _base), do: :separator
+  defp digit_run(<<>>, _base), do: :ok
+  defp digit_run(_rest, _base), do: :digits
 
   defp name(src, {:ok, n}, l, c, acc) do
     <<name::binary-size(^n), rest::binary>> = src
@@ -176,9 +291,6 @@ defmodule Logex.Lexer do
   # Each returns `n` plus the length of the run it starts on. Every lexeme is ASCII, so
   # its byte size is its width in characters. A mistyped run goes on through `.` parts, so
   # `1b.c` and `a.1b.c` are named whole, since `b.c` alone would be one name.
-  defp digits(<<d, rest::binary>>, n) when d in ?0..?9, do: digits(rest, n + 1)
-  defp digits(_, n), do: n
-
   defp word(<<ch, rest::binary>>, n) when is_name_char(ch), do: word(rest, n + 1)
   defp word(<<?., ch, rest::binary>>, n) when is_name_char(ch), do: word(rest, n + 2)
   defp word(_, n), do: n

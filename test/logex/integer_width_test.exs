@@ -340,6 +340,54 @@ defmodule Logex.IntegerWidthTest do
     end
   end
 
+  # PLAN M5-7's Done-when (decision 149): a based literal is the number it spells, judged by
+  # its slot as any literal is, so `16#ffff` is 65,535, which a `uint` holds and an `int`
+  # does not, where Logix would store -1 (RM018A p.869).
+  describe "based literals and `_` separators (M5-7, decision 149)" do
+    test "`16#ffff` is 65,535 in a `uint` and refused in an `int`" do
+      p = program("var_output u uint\nvar f bool\nxio f move 16#ffff u")
+      assert scan(p, %{})["u"] == 65_535
+
+      assert Runtime.instance(program("var u uint 16#ffff\nvar f bool\nxio f move u u")).env["u"] ==
+               65_535
+
+      assert messages("var i int\nvar f bool\nxio f move 16#ffff i") == [
+               "`move` writes `65535` into `i`, an int: #{misfit(:int, "it")}"
+             ]
+
+      assert messages("var i int 16#ffff\nvar f bool\nxic f ote f") == [
+               "`i` is an int: #{misfit(:int, "`65535`")}"
+             ]
+    end
+
+    test "every width takes its top as a based literal, in base 16 and in base 2" do
+      for type <- @types do
+        {_low, high} = limits(type)
+        hex = "16#" <> Integer.to_string(high, 16)
+        binary = "2#" <> Integer.to_string(high, 2)
+
+        for literal <- [hex, binary] do
+          p = program("var_output d #{type}\nvar f bool\nxio f move #{literal} d")
+          assert scan(p, %{})["d"] == high, inspect({type, literal})
+        end
+      end
+    end
+
+    test "a program spelled with `_` or a base compiles to the one its decimal spelling gives" do
+      spelled =
+        "var_input go bool\nvar_output done bool\nvar t ton\nvar n udint 1_000_000\n" <>
+          "xic go ton t 1_000\nxic t.dn eq n 16#f_42_40 ote done\nxic go move 2#1010_0000 n"
+
+      decimal =
+        "var_input go bool\nvar_output done bool\nvar t ton\nvar n udint 1000000\n" <>
+          "xic go ton t 1000\nxic t.dn eq n 1000000 ote done\nxic go move 160 n"
+
+      a = program(spelled)
+      b = program(decimal)
+      assert {a.rungs, a.tags, a.warnings} == {b.rungs, b.tags, b.warnings}
+    end
+  end
+
   describe "the 56 integer conversions (decision 148)" do
     # Each pair, over its source's limits, 0, 1, -1 where it fits, and its target's limits
     # and one past each where the source holds them.

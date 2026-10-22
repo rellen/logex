@@ -34,7 +34,8 @@ defmodule Logex.Parser do
       routine  = {:routine, {:rungs, [rung, ...]}}     the list may be empty
       rung     = {:rung, [element, ...]}               one element or more
       element  = {:name, line, word}                   word lexes as one name token
-               | {:int_lit, line, n}                   n an integer, negative too
+               | {:int_lit, line, n}                   n an integer, negative too,
+                                                       whatever its spelling
                | {:branches, [leg, ...]}               one leg or more
       leg      = [element, ...]                        possibly empty: a jumper
 
@@ -43,7 +44,9 @@ defmodule Logex.Parser do
   A rung of nothing but empty groups, `( )`, carries no line, but stands on a line of its
   own, so the next rung's line is past that one too. It widened when `PLAN.md` §5's
   negative literals landed (M3-3, decision 97), as `-5` lexes, and widens when its line
-  continuations land, and not before. Until then what the compiler does with one, an
+  continuations land, and not before. Decision 149's based literals and `_` separators
+  (M5-7) did not widen it: a literal's leaf holds the value it spells, `16#ff` 255, which
+  a decimal could spell already. Until then what the compiler does with one, an
   element cited at a line of its own, is kept for it, but nothing reaches it.
   """
 
