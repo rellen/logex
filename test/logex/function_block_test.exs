@@ -1461,12 +1461,12 @@ defmodule Logex.FunctionBlockTest do
                  "logic may write only `.pre` and `.acc` of a ton"
              ]
 
-      # A dint input's literal must fit in 32 bits.
+      # A dint input's literal must fit a dint's range.
       dint = block!("function_block d\nvar_input sp dint\nvar_output q bool\ngt sp 0 ote q")
 
       assert errors("var_output q bool\nvar d1 d\ncal d1 2147483648 q", [dint]) == [
-               "line 3: operand 1 of `cal d1` is `sp` (var_input dint): `2147483648` does not " <>
-                 "fit in 32 bits"
+               "line 3: operand 1 of `cal d1` is `sp` (var_input dint): `2147483648` is outside " <>
+                 "-2147483648 to 2147483647"
              ]
 
       # Two swapped bools still compile: the price of the positional form (§4.3).
@@ -2695,17 +2695,26 @@ defmodule Logex.FunctionBlockTest do
       with_kinds =
         runs(
           holder.(
-            "var n bool\nvar k ton\nvar s seal\nvar r bool",
-            "xic go otl n\nxic go ton k 40\ncal s go go r"
+            "var n ton\nvar k ton\nvar s seal\nvar r bool",
+            "xic go ton n 7\nxic go ton k 40\ncal s go go r"
           )
         )
+
+      with_bool = runs(holder.("var n bool", "xic go otl n"))
 
       {_, state} = running(with_dints, [{0, %{"a" => 1, "en" => 1}}])
       assert %{"n" => %{"pre" => 7}, "k" => 3, "s" => 2} = state.env["p"]
 
-      # A plain swap keeps the timer's map, the 3 and the 2 under a bool, a timer and an
-      # instance of a block its program declares, while no cal runs the body. (A 7 under
-      # the bool would be an integer outside its type, refused since decision 171.)
+      # A plain swap that leaves the timer's map under a bool is refused at its next call:
+      # it is no integer (decision 173), where until then the first test started it again.
+      assert_raise ArgumentError,
+                   "state.env holds `p.n` outside its type: it is a bool, and only 0 or 1 fit, " <>
+                     "found #{inspect(state.env["p"]["n"])}",
+                   fn -> step(with_bool, state, %{"en" => 0}) end
+
+      # One keeps the 3 and the 2 under a timer and an instance of a block its program
+      # declares, while no cal runs the body. (A 7 under a bool would be an integer outside
+      # its type, refused since decision 171.)
       {_, state} = step(with_kinds, state, %{"en" => 0})
       assert %{"n" => %{"pre" => 7}, "k" => 3, "s" => 2} = state.env["p"]
 
@@ -2713,14 +2722,8 @@ defmodule Logex.FunctionBlockTest do
       timer = FbType.initial(FbType.ton(), %{"pre" => 40})
       held = FbType.initial(seal)
 
-      assert report == [
-               {:added, "p.k", timer},
-               {:added, "p.n", 0},
-               {:added, "p.r", 0},
-               {:added, "p.s", held}
-             ]
-
-      assert %{"n" => 0, "k" => ^timer, "s" => ^held} = state.env["p"]
+      assert report == [{:added, "p.k", timer}, {:added, "p.r", 0}, {:added, "p.s", held}]
+      assert %{"n" => %{"pre" => 7}, "k" => ^timer, "s" => ^held} = state.env["p"]
     end
 
     test "at the first test a member the candidate's version adds starts at its initial " <>

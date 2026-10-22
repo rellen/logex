@@ -24,8 +24,8 @@ defmodule Logex.EndToEndTest do
   defp compile(src), do: Logex.compile(src, name: "t")
 
   # One scan through the public API, from an env the test chooses: an instance built by
-  # hand, which Logex.Runtime runs refusing only an integer outside its tag's type
-  # (decision 171), and reading any other value as it is (outside its contract).
+  # hand, which Logex.Runtime runs refusing any value outside its tag's type, an integer
+  # outside its range (decision 171) or a value that is no integer (decision 173).
   defp env_after(program, env) do
     state = %Logex.Instance{type: program.name, env: env, now: 0, first: true}
     {_outputs, state} = Logex.Runtime.call(program, state, %{}, %Logex.Scan{now: 0, first: true})
@@ -462,19 +462,21 @@ defmodule Logex.EndToEndTest do
       assert pulses(src, [1, 0, 1]) == [0, 0, 1]
     end
 
-    test "a storage bit holding anything is read as a contact reads it" do
+    test "a storage bit holding a bool's 0 or 1 is read as a contact reads it, and anything " <>
+           "else is the host's mistake (decisions 171 and 173)" do
       p = program(@ons)
 
-      for {junk, fires} <- [{0, 1}, {nil, 1}, {false, 1}, {0.0, 1}, {2.5, 0}, {"x", 0}, {true, 0}] do
-        assert {%{"pulse" => ^fires}, %{"s1" => 1}} = later_scan(p, %{"s1" => junk, "go" => 1}),
-               inspect(junk)
+      for {bit, fires} <- [{0, 1}, {1, 0}] do
+        assert {%{"pulse" => ^fires}, %{"s1" => 1}} = later_scan(p, %{"s1" => bit, "go" => 1})
       end
 
-      # An integer outside a bool is the host's mistake (decision 171).
-      assert_raise ArgumentError,
-                   "state.env holds `s1` outside its type: it is a bool, and only 0 or 1 fit, " <>
-                     "found 5",
-                   fn -> later_scan(p, %{"s1" => 5, "go" => 1}) end
+      # Until decision 173 a nil or a false read as 0 and fired, a 2.5, "x" or true as 1.
+      for junk <- [5, nil, false, 0.0, 2.5, "x", true] do
+        assert_raise ArgumentError,
+                     "state.env holds `s1` outside its type: it is a bool, and only 0 or 1 " <>
+                       "fit, found #{inspect(junk)}",
+                     fn -> later_scan(p, %{"s1" => junk, "go" => 1}) end
+      end
     end
   end
 
@@ -540,20 +542,29 @@ defmodule Logex.EndToEndTest do
       assert [%{"either" => 0}] = drive(p, [{0, %{"a" => 2, "b" => 2}}])
     end
 
-    test "on an env the host builds, they never raise, and each pair is complementary" do
+    test "on an env the host builds, each pair is complementary, and a value that is no " <>
+           "integer is the host's mistake (decision 173)" do
       src =
         "var a dint\nvar b dint\nvar eq_ bool\nvar ne_ bool\nvar lt_ bool\nvar ge_ bool\n" <>
           "var gt_ bool\nvar le_ bool\neq a b ote eq_\nne a b ote ne_\nlt a b ote lt_\n" <>
           "ge a b ote ge_\ngt a b ote gt_\nle a b ote le_"
 
       p = program(src)
-      values = [0, 1, -1, 1.0, 2.5, nil, true, :on, "0", [], %{}, {1}, :missing]
+      values = [0, 1, -1, -2_147_483_648, 2_147_483_647, :missing]
 
       for a <- values, b <- values do
         env = for({k, v} <- [{"a", a}, {"b", b}], v != :missing, into: %{}, do: {k, v})
         {_, env} = later_scan(p, env)
         pairs = [{"eq_", "ne_"}, {"lt_", "ge_"}, {"gt_", "le_"}]
         assert Enum.all?(pairs, fn {x, y} -> env[x] + env[y] == 1 end), inspect({a, b})
+      end
+
+      # Until decision 173 each of these was compared as Erlang orders terms.
+      for junk <- [1.0, 2.5, nil, true, :on, "0", [], %{}, {1}] do
+        assert_raise ArgumentError,
+                     "state.env holds `a` outside its type: it is a dint, and its value must " <>
+                       "be an integer, found #{inspect(junk)}",
+                     fn -> later_scan(p, %{"a" => junk, "b" => 0}) end
       end
     end
   end
@@ -791,8 +802,8 @@ defmodule Logex.EndToEndTest do
       assert %{"pre" => 5000, "acc" => 0, "dn" => 0} = restarted.env["t2"]
     end
 
-    test "a restart under a recompile of the same name starts again a var_input whose type " <>
-           "it changed, and refuses an integer outside its new type (decision 171)" do
+    test "a restart under a recompile of the same name keeps a var_input whose value fits " <>
+           "its new type, and refuses one outside it (decisions 171 and 173)" do
       {:ok, v1} =
         Logex.compile("var_input go bool\nvar_input x dint\nvar t1 ton\nxic go ton t1 50",
           name: "m"
@@ -810,17 +821,29 @@ defmodule Logex.EndToEndTest do
       {_, state} = Logex.Runtime.scan(v1, state, 10)
       assert %{"x" => 5, "t1" => %{"acc" => 10}} = state.env
 
-      # `x`'s 5 is outside its new type, a bool: the host's mistake.
+      # `x`'s 5 is outside its new type, a bool: the host's mistake; and `t1`, a timer's map
+      # where a dint now goes, is no integer: the host's mistake too (decision 173), where
+      # until then it was started again.
+      timer = "found #{inspect(state.env["t1"])}"
+
       assert_raise ArgumentError,
-                   "state.env holds `x` outside its type: it is a bool, and only 0 or 1 fit, " <>
+                   "state.env holds `t1` outside its type: it is a dint, and its value must " <>
+                     "be an integer, #{timer}\n" <>
+                     "state.env holds `x` outside its type: it is a bool, and only 0 or 1 fit, " <>
                      "found 5",
                    fn -> Logex.Runtime.restart(v2, state, :cold) end
 
-      # `go` and a 1 in `x` still fit, and are kept as the input image is; `t1`, a timer's
-      # map where a dint now goes, no longer does.
       state = %{state | env: %{state.env | "x" => 1}}
+
+      assert_raise ArgumentError,
+                   "state.env holds `t1` outside its type: it is a dint, and its value must " <>
+                     "be an integer, #{timer}",
+                   fn -> Logex.Runtime.restart(v2, state, :cold) end
+
+      # `go`, a 1 in `x` and a 7 in `t1` fit, and are kept as the input image is.
+      state = %{state | env: %{state.env | "t1" => 7}}
       restarted = Logex.Runtime.restart(v2, state, :cold)
-      assert restarted.env == %{"go" => 1, "x" => 1, "t1" => 0, "y" => 0}
+      assert restarted.env == %{"go" => 1, "x" => 1, "t1" => 7, "y" => 0}
     end
 
     test "a preset lowered below .acc is done at the next true scan, .acc brought down to it" do
@@ -1000,8 +1023,8 @@ defmodule Logex.EndToEndTest do
             "x",
             [1],
             %{},
-            %{"pre" => "q", "acc" => :a, "last" => "z", "en" => 1},
-            %{"dn" => nil, "acc" => 2.5, "pre" => 1.0},
+            %{"pre" => 0, "last" => "z", "en" => 1},
+            %{"dn" => 0, "acc" => 0, "pre" => 0, "last" => 1.5},
             %Logex.Scan{now: 0, first: true}
           ] do
         {_, on} = later_scan(p, %{"t1" => junk, "go" => 1})
@@ -1014,6 +1037,22 @@ defmodule Logex.EndToEndTest do
                  %{"pre" => 0, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => 7},
                inspect(junk)
       end
+
+      # A member of a bool or an integer type holding no integer is the host's mistake
+      # (decision 173), where until then it was read as a well-formed timer's.
+      assert_raise ArgumentError,
+                   "state.env holds `t1.acc` outside its type: it is a dint, and its value " <>
+                     "must be an integer, found 2.5\n" <>
+                     "state.env holds `t1.dn` outside its type: it is a bool, and only 0 or 1 " <>
+                     "fit, found nil\n" <>
+                     "state.env holds `t1.pre` outside its type: it is a dint, and its value " <>
+                     "must be an integer, found \"q\"",
+                   fn ->
+                     later_scan(p, %{
+                       "t1" => %{"dn" => nil, "acc" => 2.5, "pre" => "q"},
+                       "go" => 1
+                     })
+                   end
     end
 
     test "a `last` that is not an integer adds nothing" do
@@ -1034,7 +1073,7 @@ defmodule Logex.EndToEndTest do
       assert {_, %{"t1" => %{"acc" => 5, "last" => 7}}} =
                later_scan(p, %{"t1" => Map.put(timer, "en", 1), "go" => 1})
 
-      for {en, acc} <- [{1, 7}, {true, 7}, {2.5, 7}, {0, 5}, {nil, 5}, {false, 5}] do
+      for {en, acc} <- [{1, 7}, {0, 5}] do
         from_zero = %{timer | "last" => 5}
 
         assert {_, %{"t1" => %{"acc" => ^acc}}} =
@@ -1042,11 +1081,15 @@ defmodule Logex.EndToEndTest do
                inspect(en)
       end
 
-      # An integer outside a bool is the host's mistake (decision 171).
-      assert_raise ArgumentError,
-                   "state.env holds `t1.en` outside its type: it is a bool, and only 0 or 1 " <>
-                     "fit, found 5",
-                   fn -> later_scan(p, %{"t1" => Map.put(timer, "en", 5), "go" => 1}) end
+      # Anything else in a bool is the host's mistake: an integer outside it (decision 171)
+      # or, since decision 173, a value that is no integer, a true or a 2.5 read as 1 until
+      # then and a nil or a false as 0.
+      for junk <- [5, true, 2.5, nil, false] do
+        assert_raise ArgumentError,
+                     "state.env holds `t1.en` outside its type: it is a bool, and only 0 or 1 " <>
+                       "fit, found #{inspect(junk)}",
+                     fn -> later_scan(p, %{"t1" => Map.put(timer, "en", junk), "go" => 1}) end
+      end
     end
   end
 
@@ -1085,24 +1128,33 @@ defmodule Logex.EndToEndTest do
 
   describe "members on an env the host builds (M1-6)" do
     # Outside the contract, like M1-4's contacts, but still total: whatever a hand-built
-    # env holds where a timer belongs, or in its members, nothing raises.
-    @junk [5, nil, "x", [1], %{}, %{"dn" => nil, "acc" => 2.5}, %Logex.Scan{now: 0, first: true}]
+    # env holds where a timer belongs, nothing raises; a member of a bool or an integer type
+    # holding anything outside its type is the host's mistake (decisions 171 and 173).
+    @junk [5, nil, "x", [1], %{}, %{"acc" => 2}, %Logex.Scan{now: 0, first: true}]
 
     test "a contact on a member is total, and xic and xio stay complementary" do
       p = program("var t1 ton\nvar hi bool\nvar lo bool\nxic t1.dn ote hi\nxio t1.dn ote lo")
 
-      for junk <- @junk ++ [%{"dn" => 1}, %{"dn" => true}, %{"dn" => 0}] do
+      for junk <- @junk ++ [%{"dn" => 1}, %{"dn" => 0}] do
         {_, env} = later_scan(p, %{"t1" => junk})
         assert env["hi"] + env["lo"] == 1, inspect(junk)
       end
 
       assert {_, %{"hi" => 1}} = later_scan(p, %{"t1" => %{"dn" => 1}})
+
+      # Until decision 173 a true read as closed, a nil and a 2.5 as open and closed.
+      for junk <- [true, nil, 2.5] do
+        assert_raise ArgumentError,
+                     "state.env holds `t1.dn` outside its type: it is a bool, and only 0 or 1 " <>
+                       "fit, found #{inspect(junk)}",
+                     fn -> later_scan(p, %{"t1" => %{"dn" => junk}}) end
+      end
     end
 
     test "move from a member the host left out, or of a timer that is not a map, copies 0" do
       p = program("var t1 ton\nvar d dint\nmove t1.acc d")
 
-      for junk <- @junk -- [%{"dn" => nil, "acc" => 2.5}] do
+      for junk <- @junk -- [%{"acc" => 2}] do
         assert {_, %{"d" => 0}} = later_scan(p, %{"t1" => junk, "d" => 9}), inspect(junk)
       end
     end
@@ -1132,31 +1184,21 @@ defmodule Logex.EndToEndTest do
     # nil or a missing tag read false for both, so an interlock on xio never fired.
     @contacts "var t bool\nvar hi bool\nvar lo bool\nxic t ote hi\nxio t ote lo"
 
-    test "xic and xio are complementary for every value: a number by value, a boolean as " <>
-           "itself, anything else closed" do
-      for {env, closed} <- [
-            {%{"t" => 0}, 0},
-            {%{"t" => 1}, 1},
-            {%{"t" => 0.0}, 0},
-            {%{"t" => -0.0}, 0},
-            {%{"t" => 2.5}, 1},
-            {%{"t" => false}, 0},
-            {%{"t" => true}, 1},
-            {%{"t" => nil}, 0},
-            {%{}, 0},
-            {%{"t" => :on}, 1},
-            {%{"t" => "0"}, 1}
-          ] do
+    test "xic and xio are complementary for a bool's two values and a tag left out, and " <>
+           "anything else is the host's mistake (decisions 171 and 173)" do
+      for {env, closed} <- [{%{"t" => 0}, 0}, {%{"t" => 1}, 1}, {%{}, 0}] do
         assert %{"hi" => ^closed, "lo" => lo} = run(@contacts, env)
         assert lo == 1 - closed, "xio must be the complement of xic for #{inspect(env)}"
       end
 
-      # Since decision 171 an integer outside a bool, a 5 or a -3, never reaches a contact:
-      # it is the host's mistake, refused before the scan.
-      for t <- [5, -3] do
+      # Since decision 171 an integer outside a bool, a 5 or a -3, never reaches a contact,
+      # and since decision 173 nor does a value that is no integer, which M1-4 read by
+      # value, 0.0 and -0.0 open and 2.5 closed, a boolean as itself, a nil open and
+      # anything else closed: each is the host's mistake, refused before the scan.
+      for t <- [5, -3, 0.0, -0.0, 2.5, false, true, nil, :on, "0"] do
         assert_raise ArgumentError,
                      "state.env holds `t` outside its type: it is a bool, and only 0 or 1 " <>
-                       "fit, found #{t}",
+                       "fit, found #{inspect(t)}",
                      fn -> run(@contacts, %{"t" => t}) end
       end
     end

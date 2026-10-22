@@ -411,26 +411,43 @@ defmodule Logex.EditTest do
             "xic go move 7 k\nxic go ton b 5\nxic go ton t1 50"
         )
 
-      # The plain swap keeps k's 7 under a timer, b's map under a bool, and t1's map under
-      # a dint; a well-typed n is kept. (A 5 under a bool is an integer outside its type, the
-      # host's mistake since decision 171, refused by the plain swap's scan.)
-      v1 =
+      # A plain swap that leaves b's map under a bool and t1's under a dint is refused at
+      # its next call: neither is an integer (decision 173), where until then the first test
+      # started each again. (A 5 under a bool is an integer outside its type, the host's
+      # mistake since decision 171.)
+      narrowed =
         c!(
           "var_input go bool\nvar k ton\nvar b bool\nvar t1 dint 3\nvar_output n dint\n" <>
             "xic go move 4 n"
         )
 
-      v2 = String.replace(v1.source, "move 4 n", "move 4 n\nxic go ton k 5000\nxic b ote b")
-      v2 = c!(v2)
       {_, state} = run(v0, [{0, %{"go" => 1}}])
+
+      assert_raise ArgumentError,
+                   "state.env holds `b` outside its type: it is a bool, and only 0 or 1 fit, " <>
+                     "found #{inspect(state.env["b"])}\nstate.env holds `t1` outside its " <>
+                     "type: it is a dint, and its value must be an integer, found " <>
+                     inspect(state.env["t1"]),
+                   fn -> Runtime.scan(narrowed, state, 10) end
+
+      # So decision 26 is reached by an integer a plain swap keeps under a timer: k's 7; a
+      # well-typed n is kept, and b and t1, kept as instances, fit.
+      v1 =
+        c!(
+          "var_input go bool\nvar k ton\nvar b ton\nvar t1 ton\nvar_output n dint\n" <>
+            "xic go move 4 n"
+        )
+
+      v2 = String.replace(v1.source, "move 4 n", "move 4 n\nxic go ton k 5000")
+      v2 = c!(v2)
       {_, state} = Runtime.scan(v1, state, 10)
-      assert %{"k" => 7, "b" => %{"pre" => 5}, "t1" => %{}, "n" => 4} = state.env
+      assert %{"k" => 7, "b" => %{"pre" => 5}, "t1" => %{"pre" => 50}, "n" => 4} = state.env
       {:ok, edit, forecast} = Edit.accept(v1, v2, state)
       {_edit, state, report} = Edit.test(edit, state)
       fresh = Runtime.instance(v2).env
-      assert report == [{:added, "b", 0}, {:added, "k", fresh["k"]}, {:added, "t1", 3}]
+      assert report == [{:added, "k", fresh["k"]}]
       assert report == forecast
-      assert %{"b" => 0, "t1" => 3, "n" => 4} = state.env
+      assert %{"b" => %{"pre" => 5}, "t1" => %{"pre" => 50}, "n" => 4} = state.env
       assert %{"pre" => 5000} = state.env["k"]
     end
 
@@ -465,17 +482,17 @@ defmodule Logex.EditTest do
 
     test "a value that does not fit is started only at the first test, and only for the " <>
            "candidate's tags" do
-      # The plain swap leaves a timer's map under `b`, a bool of the original the candidate
-      # drops, and 9 under `k`, a timer of it: the first test leaves both alone, and so does
-      # the untest, which starts nothing, and whose timer rules read no timer that is not a
-      # map.
-      v0 = c!("var_input go bool\nvar b ton\nvar k dint\nxic go ton b 7\nxic go move 9 k")
-      v1 = c!("var_input go bool\nvar b bool\nvar k ton\nvar_output y bool\nxic go ote y")
+      # The plain swap leaves 9 under `k`, a timer of the original the candidate drops: the
+      # first test leaves it alone, and so does the untest, which starts nothing, and whose
+      # timer rules read no timer that is not a map. (A timer's map it left under a bool
+      # would be refused at its next call since decision 173.)
+      v0 = c!("var_input go bool\nvar k dint\nxic go move 9 k")
+      v1 = c!("var_input go bool\nvar k ton\nvar_output y bool\nxic go ote y")
       v2 = c!("var_input go bool\nvar_output y bool\nxic go ote y")
       {_, state} = run(v0, [{0, %{"go" => 1}}])
       {_, state} = Runtime.scan(v1, state, 10)
       {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
-      assert {_, %Instance{env: %{"b" => %{"pre" => 7}, "k" => 9}}, []} = Edit.untest(edit, state)
+      assert {_, %Instance{env: %{"k" => 9}}, []} = Edit.untest(edit, state)
     end
 
     test "a restart during the test drops what only the original declares, and untest " <>
@@ -849,15 +866,23 @@ defmodule Logex.EditTest do
       assert %{"sp" => 900, "b" => 1} = Runtime.restart(v2, state, :cold).env
     end
 
-    test "is not reported for a tag the first test starts again, which :added reports" do
+    # Until decision 173 a timer's map a plain swap left under the bool `x` reached the
+    # first test, which started it again and reported it :added, not :initial_changed; now
+    # a value that is no integer under a bool never reaches an edit: the plain swap's scan
+    # and the accept both refuse it, so a tag with an initial value is started again by
+    # nothing that a state can hold.
+    test "is not reported for a tag the first test would start again, which no state reaches" do
       p0 = c!("var x ton\nvar_output y bool\nxio y ton x 7")
       v1 = c!("var x bool\nvar_output y bool\nxic x ote y")
       v2 = c!("var x bool 1\nvar_output y bool\nxic x ote y")
       {_, state} = run(p0, [{0, %{}}])
-      {_, state} = drive(v1, state, [{0, %{}}])
-      assert {:ok, edit, [{:added, "x", 1}]} = Edit.accept(v1, v2, state)
-      {edit, state, [{:added, "x", 1}]} = Edit.test(edit, state)
-      assert {_, _, [{:initial_changed, "x", {1, 0}}]} = Edit.untest(edit, state)
+
+      message =
+        "state.env holds `x` outside its type: it is a bool, and only 0 or 1 fit, found " <>
+          inspect(state.env["x"])
+
+      assert_raise ArgumentError, message, fn -> drive(v1, state, [{0, %{}}]) end
+      assert_raise ArgumentError, message, fn -> Edit.accept(v1, v2, state) end
     end
 
     test "is not reported for a var_input of the program started, whose value a restart keeps" do

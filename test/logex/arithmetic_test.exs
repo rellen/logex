@@ -331,14 +331,17 @@ defmodule Logex.ArithmeticTest do
       assert Enum.map(trace(p, [%{"a" => -7}, %{"a" => 3}]), & &1["r"]) == [-7, -3]
     end
 
-    test "a source a hand-built env holds as no integer reads 0" do
+    # Until decision 173 each of these read 0, `neg` writing 0 with power.
+    test "a source a hand-built env holds as no integer is refused before the scan" do
       p = c!(String.replace(@one, "OP", "neg"))
 
       for junk <- [nil, 1.5, %{}, :x] do
         state = %Instance{type: "m", env: %{"go" => 1, "a" => junk}, now: 0, first: true}
 
-        assert {%{"r" => 0, "ok" => 1}, _} =
-                 Runtime.call(p, state, %{}, %Scan{now: 0, first: true})
+        assert_raise ArgumentError,
+                     "state.env holds `a` outside its type: it is a dint, and its value must " <>
+                       "be an integer, found #{inspect(junk)}",
+                     fn -> Runtime.call(p, state, %{}, %Scan{now: 0, first: true}) end
       end
     end
   end
@@ -368,8 +371,8 @@ defmodule Logex.ArithmeticTest do
     test "is refused before the scan, as the host's mistake" do
       for v <- [5_000_000_000, -5_000_000_000, Integer.pow(2, 70)] do
         assert outside(v) ==
-                 "state.env holds `v` outside its type: it is a dint, and #{v} does not fit " <>
-                   "in 32 bits"
+                 "state.env holds `v` outside its type: it is a dint, and #{v} is outside " <>
+                   "-2147483648 to 2147483647"
       end
 
       assert {%{}, %Instance{env: %{"r" => 2_147_483_647, "k" => 1}}} =
@@ -455,12 +458,17 @@ defmodule Logex.ArithmeticTest do
              ]
     end
 
-    # A state built by hand is outside the contract, but a scan of one never raises: a
-    # source that is no integer reads 0.
-    test "a source a hand-built env holds as no integer reads 0" do
+    # Until decision 173 a source that is no integer read 0, `add` giving 4 with power and
+    # a divisor that is no integer a zero one; now no such source reaches a scan.
+    test "a source a hand-built env holds as no integer is refused before the scan" do
       p = c!(String.replace(@two, "OP", "add"))
+      d = c!(String.replace(@two, "OP", "div"))
 
       for junk <- [nil, 1.5, %{"x" => 1}, :x, "7"] do
+        message =
+          &("state.env holds `#{&1}` outside its type: it is a dint, and its value must be " <>
+              "an integer, found #{inspect(junk)}")
+
         state = %Instance{
           type: "m",
           env: %{"go" => 1, "a" => junk, "b" => 4},
@@ -468,15 +476,15 @@ defmodule Logex.ArithmeticTest do
           first: true
         }
 
-        {outputs, _} = Runtime.call(p, state, %{}, %Scan{now: 0, first: true})
-        assert outputs == %{"r" => 4, "ok" => 1}
+        assert_raise ArgumentError, message.("a"), fn ->
+          Runtime.call(p, state, %{}, %Scan{now: 0, first: true})
+        end
 
-        # A divisor that is no integer reads 0 too, and is then a zero one.
-        d = c!(String.replace(@two, "OP", "div"))
         state = %{state | env: %{"go" => 1, "a" => 7, "b" => junk}}
 
-        assert {%{"r" => 0, "ok" => 0}, _} =
-                 Runtime.call(d, state, %{}, %Scan{now: 0, first: true})
+        assert_raise ArgumentError, message.("b"), fn ->
+          Runtime.call(d, state, %{}, %Scan{now: 0, first: true})
+        end
       end
     end
   end

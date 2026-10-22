@@ -330,27 +330,19 @@ defmodule Logex.Declarations do
 
   @doc """
   What a message says of a value that does not fit a type, after the type is named, from
-  the table (M5-1): `` only 0 or 1 fit, found `2` `` for a bool, `` `2147483648` does
-  not fit in 32 bits `` for a signed integer, a dint's, and since M5-3 `` `-1` is outside 0
-  to 255 `` for an unsigned one, a usint's, `shown` being the value as the message shows
-  it; with `shown` nil, the words where the value was named before them, `only 0 or 1
-  fit`, `it does not fit in 32 bits` and `it is outside 0 to 255`.
+  the table (M5-1): `` only 0 or 1 fit, found `2` `` for a bool, and for every integer
+  type its range, signed or unsigned (decision 177): `` `2147483648` is outside
+  -2147483648 to 2147483647 `` for a dint, `` `-1` is outside 0 to 255 `` for a usint,
+  `shown` being the value as the message shows it; with `shown` nil, the words where the
+  value was named before them, `only 0 or 1 fit` and `it is outside 0 to 255`.
   """
   def misfit(type, shown \\ nil) when type in @type_atoms,
     do: misfit_of(Map.fetch!(@rows, type), shown)
 
   defp misfit_of(%{kind: :boolean} = row, nil), do: "only #{values(row)} fit"
   defp misfit_of(%{kind: :boolean} = row, shown), do: "only #{values(row)} fit, found #{shown}"
-  defp misfit_of(%{kind: :signed, width: width}, nil), do: "it does not fit in #{width} bits"
-
-  defp misfit_of(%{kind: :signed, width: width}, shown),
-    do: "#{shown} does not fit in #{width} bits"
-
-  defp misfit_of(%{kind: :unsigned, range: first..last//1}, nil),
-    do: "it is outside #{first} to #{last}"
-
-  defp misfit_of(%{kind: :unsigned, range: first..last//1}, shown),
-    do: "#{shown} is outside #{first} to #{last}"
+  defp misfit_of(%{range: first..last//1}, nil), do: "it is outside #{first} to #{last}"
+  defp misfit_of(%{range: first..last//1}, shown), do: "#{shown} is outside #{first} to #{last}"
 
   @doc """
   What a message says of a declared initial value that does not fit a type, after the type

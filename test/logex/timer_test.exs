@@ -141,10 +141,18 @@ defmodule Logex.TimerTest do
 
     test "a hand-built env's timer comes back well-formed" do
       p = c!(@fan)
-      state = put_in(%{Runtime.instance(p) | first: false}.env["run_on"], %{"en" => true})
+      state = put_in(%{Runtime.instance(p) | first: false}.env["run_on"], %{"en" => 1})
 
       assert [%{"pre" => 0, "acc" => 0, "dn" => 0, "tt" => 0, "en" => 0, "last" => 10}] =
                trace(p, [%{"motor" => 0}], ["run_on"], state)
+
+      # A bit holding a `true`, read as a contact until decision 173, is the host's mistake.
+      state = put_in(state.env["run_on"]["en"], true)
+
+      assert_raise ArgumentError,
+                   "state.env holds `run_on.en` outside its type: it is a bool, and only 0 or " <>
+                     "1 fit, found true",
+                   fn -> trace(p, [%{"motor" => 0}], ["run_on"], state) end
     end
 
     test "inside a function block a frozen `tof` catches up when the block next runs " <>
@@ -285,7 +293,7 @@ defmodule Logex.TimerTest do
                50
              ]
 
-      state = put_in(%{Runtime.instance(p) | first: false}.env["horn_pulse"], %{"tt" => true})
+      state = put_in(%{Runtime.instance(p) | first: false}.env["horn_pulse"], %{"tt" => 1})
 
       assert [%{"pre" => 0, "acc" => 0, "dn" => 1, "tt" => 0, "en" => 1, "last" => 10}] =
                trace(p, [%{"fault" => 1}], ["horn_pulse"], state)
@@ -430,7 +438,7 @@ defmodule Logex.TimerTest do
       assert [%{"acc" => 0, "dn" => 1}] = trace(p, levels("motor", [1]), ["lube"], neg)
 
       # De-energised, a hand-built `.acc` is kept as it is, and a bit read as a contact.
-      odd = put_in(state.env["lube"], %{timer | "acc" => 7, "dn" => true})
+      odd = put_in(state.env["lube"], %{timer | "acc" => 7, "dn" => 1})
       assert [%{"acc" => 7, "dn" => 1, "en" => 0}] = trace(p, [%{}], ["lube"], odd)
     end
 

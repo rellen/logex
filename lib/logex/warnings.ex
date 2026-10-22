@@ -11,7 +11,8 @@ defmodule Logex.Warnings do
     is an `osr`'s or an `osf`'s storage bit, and a coil's pulse bit is written as an
     `ote` writes its tag, so a second coil on it is the second-`ote` warning;
   - a comparison of two literals (M1-6): its result never changes; since M3-3 so is an
-    arithmetic instruction whose every source is a literal, `add 2 3 x` or `neg 5 x`;
+    arithmetic instruction whose every source is a literal, `add 2 3 x` or `neg 5 x`,
+    and since decision 178 a conversion of a literal, `dint_to_sint 129 trim`;
   - a timer no `ton` runs (M1-6): it never times; since M3-1 any built-in instance no
     instruction of its type runs, in its type's words, a counter no `ctu` or `ctd` runs:
     it never counts;
@@ -27,7 +28,7 @@ defmodule Logex.Warnings do
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
   """
 
-  alias Logex.{Diagnostic, FbType, Tag, Walk}
+  alias Logex.{Declarations, Diagnostic, FbType, Tag, Walk}
 
   @doc """
   The warnings for lowered `rungs` checked against the tag table `tags`, each instance's
@@ -229,7 +230,19 @@ defmodule Logex.Warnings do
          )
        ]
 
-  defp constant({symbol, line, [{:int_lit, _, a}, _destination]}) when symbol in [:neg, :abs],
+  # Decision 178: a conversion of a literal compiles, as `neg 5 x` does, and is told so in
+  # the same words: `dint_to_sint 129 trim` always writes -127 with no power. Its symbols
+  # are the type table's, as `Logex.Compiler` generates them, every ordered pair of two
+  # integer types.
+  @one_source [:neg, :abs] ++
+                for(
+                  from <- Declarations.integers(),
+                  to <- Declarations.integers(),
+                  word = Declarations.conversion(from, to),
+                  do: String.to_atom(word)
+                )
+
+  defp constant({symbol, line, [{:int_lit, _, a}, _destination]}) when symbol in @one_source,
     do: [warning(line, "`#{symbol}` reads a literal, `#{a}`: its result never changes")]
 
   defp constant(_instruction), do: []

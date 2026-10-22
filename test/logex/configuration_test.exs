@@ -1147,7 +1147,7 @@ defmodule Logex.ConfigurationTest do
                "the initial value of global `e` must be an integer, found 1.0",
                "global `n` has type nil: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint or :ulint",
                "`b` is a bool: its initial value must be 0 or 1, found `2`",
-               "`c` is a dint: `2147483648` does not fit in 32 bits",
+               "`c` is a dint: `2147483648` is outside -2147483648 to 2147483647",
                "`f` is an input point: its value comes from the input image, so it takes no " <>
                  "initial value",
                "`h` is an output point: it takes no initial value, and is 0 until its driver " <>
@@ -1155,7 +1155,7 @@ defmodule Logex.ConfigurationTest do
                "`l` is an input point: its value comes from the input image, so it takes no " <>
                  "initial value",
                "`o` is a bool: its initial value must be 0 or 1, found `-1`",
-               "`p` is a dint: `-2147483649` does not fit in 32 bits"
+               "`p` is a dint: `-2147483649` is outside -2147483648 to 2147483647"
              ]
     end
 
@@ -1446,7 +1446,12 @@ defmodule Logex.ConfigurationTest do
       assert %Configuration{} = Configuration.new!(fields.(-2_147_483_648))
 
       for to <- [2_147_483_648, 3_000_000_000, -2_147_483_649],
-          do: assert(refused(fields.(to)) == ["`d.a` is a dint: `#{to}` does not fit in 32 bits"])
+          do:
+            assert(
+              refused(fields.(to)) == [
+                "`d.a` is a dint: `#{to}` is outside -2147483648 to 2147483647"
+              ]
+            )
     end
 
     test "a var_output drives a global of its type, never an input point, and is the one " <>
@@ -2331,7 +2336,7 @@ defmodule Logex.ConfigurationTest do
 
       assert errors(source, %{"seal" => seal}) == [
                "line 9: `b` is a bool: its initial value must be 0 or 1, found `2`",
-               "line 10: `c` is a dint: `2147483648` does not fit in 32 bits",
+               "line 10: `c` is a dint: `2147483648` is outside -2147483648 to 2147483647",
                "line 11: `f` is an input point: its value comes from the input image, so it " <>
                  "takes no initial value",
                "line 12: `h` is an output point: it takes no initial value, and is 0 until its " <>
@@ -2651,7 +2656,7 @@ defmodule Logex.ConfigurationTest do
       assert {:ok, _} = compiled(dint.(2_147_483_647), %{"dints" => dints})
 
       assert errors(dint.(2_147_483_648), %{"dints" => dints}) == [
-               "line 3: `d.a` is a dint: `2147483648` does not fit in 32 bits"
+               "line 3: `d.a` is a dint: `2147483648` is outside -2147483648 to 2147483647"
              ]
     end
 

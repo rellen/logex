@@ -73,12 +73,32 @@ defmodule Logex.IntegerWidthTest do
 
   defp a(type), do: "#{Map.get(@articles, type, "a")} #{type}"
 
-  # What a message says of a value that does not fit, in its type's words.
-  defp misfit(type, shown), do: misfit_of(Keyword.fetch!(@widths, type), type, shown)
-  defp misfit_of({:signed, n}, _type, shown), do: "#{shown} does not fit in #{n} bits"
+  # What a message says of a value that does not fit: its type's range, signed or unsigned
+  # (decision 177).
+  defp misfit(type, shown),
+    do: "#{shown} is outside #{elem(limits(type), 0)} to #{elem(limits(type), 1)}"
 
-  defp misfit_of({:unsigned, _n}, type, shown),
-    do: "#{shown} is outside 0 to #{elem(limits(type), 1)}"
+  defp widened(true, {source, _from, to}, text) do
+    p = program(text)
+    {low, high} = limits(source)
+
+    for value <- [low, high, 0] do
+      assert scan(p, %{"v" => value}) == %{"d" => wrap(to, value), "ok" => bit(fits?(to, value))},
+             inspect({source, to, value})
+    end
+  end
+
+  defp widened(false, {source, from, to}, text),
+    do:
+      assert(
+        messages(text) == [
+          "`#{from}_to_#{to}` reads #{a(from)}, but `v` is #{a(source)} (declared on line 1): " <>
+            "use `#{told(source, to)}`"
+        ]
+      )
+
+  defp told(type, type), do: "move"
+  defp told(source, to), do: "#{source}_to_#{to}"
 
   defp messages(source, types \\ []) do
     {:error, diagnostics} = Logex.compile(source, name: "p", types: types)
@@ -378,16 +398,83 @@ defmodule Logex.IntegerWidthTest do
       {_outputs, state} = Runtime.scan(p, Runtime.instance(p))
       assert {state.env["s"], state.env["ok"]} == {-127, 0}
 
+      # A source of a type that does not widen into the one it reads is told the
+      # conversion from its own type, or `move` where that is the destination's (decision
+      # 176); a destination of another type, the conversion into its own.
       assert messages(
-               "var s sint\nvar i int\nvar d dint\nvar b bool\nsint_to_dint 200 d\n" <>
-                 "dint_to_int s i\ndint_to_int d d\ndint_to_int b i\nint_to_dint 5 5"
+               "var u udint\nvar i int\nvar d dint\nvar b bool\nsint_to_dint 200 d\n" <>
+                 "dint_to_int u i\ndint_to_int d d\ndint_to_int b i\nint_to_dint 5 5\n" <>
+                 "sint_to_int i i"
              ) == [
-               "`sint_to_dint` reads an sint: `200` does not fit in 8 bits",
-               "`dint_to_int` reads a dint, but `s` is an sint (declared on line 1): use " <>
-                 "`sint_to_int`",
+               "`sint_to_dint` reads an sint: `200` is outside -128 to 127",
+               "`dint_to_int` reads a dint, but `u` is a udint (declared on line 1): use " <>
+                 "`udint_to_int`",
                "`dint_to_int` writes an int, but `d` is a dint (declared on line 3): use `move`",
                "`dint_to_int` reads a dint, but `b` is a bool (declared on line 4)",
-               "`int_to_dint` expects a tag, found `5`"
+               "`int_to_dint` expects a tag, found `5`",
+               "`sint_to_int` reads an sint, but `i` is an int (declared on line 2): use `move`"
+             ]
+    end
+
+    # Decision 178: a conversion of a literal compiles, as `neg 5 x` does, with the warning
+    # an all-literal arithmetic instruction draws: its result never changes. One of a tag,
+    # or of a member, draws none. Every one of the 56, in any case.
+    test "a conversion of a literal warns that its result never changes (decision 178)" do
+      for from <- @types, to <- @types, from != to do
+        {:ok, p} =
+          Logex.compile(
+            "var v #{from}\nvar d #{to}\nvar t1 ton\nvar e #{to}\n" <>
+              "#{String.upcase("#{from}_to_#{to}")} 0 d\n#{from}_to_#{to} v d\n" <>
+              "xic t1.dn #{from}_to_#{to} 1 e",
+            name: "p"
+          )
+
+        assert Enum.map(p.warnings, &{&1.line, &1.message}) == [
+                 {3, "`t1` is a ton, but no `ton` runs it: it never times"},
+                 {5, "`#{from}_to_#{to}` reads a literal, `0`: its result never changes"},
+                 {7, "`#{from}_to_#{to}` reads a literal, `1`: its result never changes"}
+               ]
+      end
+
+      {:ok, p} = Logex.compile("var s sint\ndint_to_sint 129 s", name: "p")
+
+      assert Enum.map(p.warnings, & &1.message) == [
+               "`dint_to_sint` reads a literal, `129`: its result never changes"
+             ]
+    end
+
+    # Decision 176: a conversion's source widens as IEC's typed functions' inputs do, so
+    # `dint_to_int` takes an sint, an int or a usint as it takes a dint, and writes what
+    # the dint's would; its destination stays exact. Over every conversion and every
+    # source type, each at its limits, against Figure 11 and the wrap restated.
+    test "its source may be of any type that widens into the one it reads (decision 176)" do
+      for from <- @types, to <- @types, from != to, source <- @types, source != from do
+        text =
+          "var_input v #{source}\nvar_output d #{to}\nvar_output ok bool\n" <>
+            "#{from}_to_#{to} v d ote ok"
+
+        widened(widens?(source, from), {source, from, to}, text)
+      end
+
+      # The destination stays exact, narrower or wider, each told the conversion that does
+      # the whole job, though every value of the wider one's would fit.
+      assert messages("var v dint\nvar s sint\nvar l lint\ndint_to_int v s\ndint_to_int v l") == [
+               "`dint_to_int` writes an int, but `s` is an sint (declared on line 2): use " <>
+                 "`dint_to_sint`",
+               "`dint_to_int` writes an int, but `l` is an lint (declared on line 3): use " <>
+                 "`dint_to_lint`"
+             ]
+
+      # A member widens as a tag does: a timer's `.acc` is a dint.
+      p =
+        program(
+          "var_input go bool\nvar t1 ton\nvar_output i int\nxic go ton t1 5\nlint_to_int t1.acc i"
+        )
+
+      assert scan(p, %{"go" => 1}) == %{"i" => 0}
+
+      assert messages("var t1 ton\nvar i int\nsint_to_int t1.acc i") == [
+               "`sint_to_int` reads an sint, but `t1.acc` is a dint: use `dint_to_int`"
              ]
     end
 

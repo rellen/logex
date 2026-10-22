@@ -1236,8 +1236,9 @@ defmodule Logex.ApiContractTest do
 
   # Decision 171: a swap to a program under which a value the state holds is an integer
   # outside its tag's type, `r`'s 3 under a bool, is the host's mistake, refused by the
-  # swap's first call, the state kept as it was; the rule restated, with no call into
-  # Logex.Declarations.
+  # swap's first call, the state kept as it was; and since decision 173 so is a value that
+  # is no integer under a bool or a dint, a timer's map under what is now a bool; the rule
+  # restated, with no call into Logex.Declarations.
   defp swap(new, w), do: swapped(Enum.any?(w.s.env, &outside_type?(new.tags, &1)), new, w)
 
   defp swapped(true, new, w) do
@@ -1260,6 +1261,7 @@ defmodule Logex.ApiContractTest do
   defp outside_type?(%Tag{type: :dint}, value) when is_integer(value),
     do: value not in -2_147_483_648..2_147_483_647
 
+  defp outside_type?(%Tag{type: type}, _no_integer) when type in [:bool, :dint], do: true
   defp outside_type?(_tag, _value), do: false
 
   defp open_mistakes(%{e: nil}, _step, _bad), do: []
@@ -1871,7 +1873,7 @@ defmodule Logex.ApiContractTest do
     {:no_point, "is not an input point"},
     {:bool, "is a bool: only 0 or 1 fit"},
     {:dint, "is a dint: its value must be an integer"},
-    {:dint_range, "does not fit in 32 bits"},
+    {:dint_range, "is outside -2147483648 to 2147483647"},
     {:path, "is not an access path"},
     {:neither, "is neither a global nor a program instance"},
     {:too_deep, "goes too deep"},

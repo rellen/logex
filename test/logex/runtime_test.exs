@@ -281,12 +281,19 @@ defmodule Logex.RuntimeTest do
       assert {env[:skipped], env[7]} == {1, 1}
     end
 
-    # Decision 171: an integer outside its tag's type is the host's mistake; a value that
-    # is no integer is read as before, so M1-4's totality stays reachable.
-    test "a value that is no integer is read as before, so M1-4's totality stays reachable",
+    # Decision 171: an integer outside its tag's type is the host's mistake; and since
+    # decision 173 so is a value that is no integer, which M1-4 read as it was, a 1.5 in
+    # `start` closing its contact and a nil in `stop` leaving its xio closed.
+    test "a value that is no integer is refused, as an integer outside its type is",
          %{motor: m, state: s} do
       s = %{s | env: %{s.env | "start" => 1.5, "stop" => nil}}
-      assert {%{"motor" => 1}, _} = Runtime.call(m, s, %{}, %Scan{now: 0, first: true})
+
+      raises(
+        "state.env holds `start` outside its type: it is a bool, and only 0 or 1 fit, found " <>
+          "1.5\nstate.env holds `stop` outside its type: it is a bool, and only 0 or 1 fit, " <>
+          "found nil",
+        fn -> Runtime.call(m, s, %{}, %Scan{now: 0, first: true}) end
+      )
     end
   end
 
@@ -317,7 +324,7 @@ defmodule Logex.RuntimeTest do
       do: "state.env holds `#{name}` outside its type: it is #{type}, and #{misfit(type, value)}"
 
     defp misfit("a bool", value), do: "only 0 or 1 fit, found #{value}"
-    defp misfit("a dint", value), do: "#{value} does not fit in 32 bits"
+    defp misfit("a dint", value), do: "#{value} is outside -2147483648 to 2147483647"
 
     test "an integer outside its tag's type is refused by every entry point that takes a state",
          %{motor: m, state: s} do
@@ -400,14 +407,30 @@ defmodule Logex.RuntimeTest do
       end)
     end
 
-    test "what is no integer, a tag the program lacks, and an instance that is no map are " <>
-           "not looked into",
+    test "a tag the program lacks, one the env leaves out, and an instance that is no map " <>
+           "are not looked into, but a value that is no integer is (decision 173)",
          %{motor: m, state: s} do
       p = holder()
       ps = Runtime.instance(p)
 
+      raises(
+        "state.env holds `sp_in` outside its type: it is a dint, and its value must be an " <>
+          "integer, found 1.0e20\nstate.env holds `start` outside its type: it is a bool, and " <>
+          "only 0 or 1 fit, found \"x\"",
+        fn ->
+          Runtime.put_inputs(m, %{s | env: %{s.env | "sp_in" => 1.0e20, "start" => "x"}}, %{})
+        end
+      )
+
+      raises(
+        "state.env holds `p.n` outside its type: it is a dint, and its value must be an " <>
+          "integer, found nil",
+        fn ->
+          Runtime.put_inputs(p, %{ps | env: %{ps.env | "p" => %{ps.env["p"] | "n" => nil}}}, %{})
+        end
+      )
+
       for env <- [
-            %{s.env | "sp_in" => 1.0e20, "start" => "x"},
             Map.put(s.env, "extra", 5_000_000_000),
             Map.delete(s.env, "fault")
           ] do
@@ -486,8 +509,19 @@ defmodule Logex.RuntimeTest do
 
       raises(
         "runtime.globals holds `a` outside its type: it is a uint, and 70000 is outside 0 to 65535\n" <>
-          "runtime.globals holds `s` outside its type: it is an sint, and -129 does not fit in 8 bits",
+          "runtime.globals holds `s` outside its type: it is an sint, and -129 is outside -128 to 127",
         fn -> Runtime.cycle(by_hand, 0, %{}) end
+      )
+
+      # A value that is no integer is outside its type too (decision 173), shown as given.
+      no_integer = %{runtime | globals: %{globals | "a" => 37.5, "s" => nil}}
+
+      raises(
+        "runtime.globals holds `a` outside its type: it is a uint, and its value must be an " <>
+          "integer, found 37.5\n" <>
+          "runtime.globals holds `s` outside its type: it is an sint, and its value must be an " <>
+          "integer, found nil",
+        fn -> Runtime.cycle(no_integer, 0, %{}) end
       )
 
       # At its limits it is taken and widened.
@@ -555,9 +589,9 @@ defmodule Logex.RuntimeTest do
             {%{"start" => true}, "input `start` is a bool: only 0 or 1 fit, found true"},
             {%{"start" => 1.0}, "input `start` is a bool: only 0 or 1 fit, found 1.0"},
             {%{"sp_in" => 2_147_483_648},
-             "input `sp_in` is a dint: 2147483648 does not fit in 32 bits"},
+             "input `sp_in` is a dint: 2147483648 is outside -2147483648 to 2147483647"},
             {%{"sp_in" => -2_147_483_649},
-             "input `sp_in` is a dint: -2147483649 does not fit in 32 bits"},
+             "input `sp_in` is a dint: -2147483649 is outside -2147483648 to 2147483647"},
             {%{"sp_in" => 2.0},
              "input `sp_in` is a dint: its value must be an integer, found 2.0"},
             {%{"sp_in" => "12"},
@@ -1210,7 +1244,7 @@ defmodule Logex.RuntimeTest do
         fn -> Runtime.cycle(runtime, 0, inputs) end
       )
 
-      raises("input `sp` is a dint: 3000000000 does not fit in 32 bits", fn ->
+      raises("input `sp` is a dint: 3000000000 is outside -2147483648 to 2147483647", fn ->
         Runtime.cycle(runtime, 0, %{"sp" => 3_000_000_000})
       end)
 

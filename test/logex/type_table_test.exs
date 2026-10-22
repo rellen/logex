@@ -184,18 +184,23 @@ defmodule Logex.TypeTableTest do
                |> Enum.map(fn {word, article} -> "#{article} #{word}" end)
 
       assert Declarations.misfit(:bool, "`2`") == "only 0 or 1 fit, found `2`"
-      assert Declarations.misfit(:dint, "`2`") == "`2` does not fit in 32 bits"
+      assert Declarations.misfit(:dint, "`2`") == "`2` is outside -2147483648 to 2147483647"
       assert Declarations.misfit(:bool) == "only 0 or 1 fit"
-      assert Declarations.misfit(:dint) == "it does not fit in 32 bits"
-      assert Declarations.misfit(:sint, "`128`") == "`128` does not fit in 8 bits"
-      assert Declarations.misfit(:lint) == "it does not fit in 64 bits"
+      assert Declarations.misfit(:dint) == "it is outside -2147483648 to 2147483647"
+      assert Declarations.misfit(:sint, "`128`") == "`128` is outside -128 to 127"
+
+      assert Declarations.misfit(:lint) ==
+               "it is outside -9223372036854775808 to 9223372036854775807"
+
       assert Declarations.misfit(:usint, "`-1`") == "`-1` is outside 0 to 255"
       assert Declarations.misfit(:uint) == "it is outside 0 to 65535"
 
       assert Declarations.initial_misfit(:bool, "`2`") ==
                "its initial value must be 0 or 1, found `2`"
 
-      assert Declarations.initial_misfit(:dint, "`2`") == "`2` does not fit in 32 bits"
+      assert Declarations.initial_misfit(:dint, "`2`") ==
+               "`2` is outside -2147483648 to 2147483647"
+
       assert Declarations.initial_misfit(:udint, "`-2`") == "`-2` is outside 0 to 4294967295"
       assert Declarations.values(:bool) == "0 or 1"
       assert Declarations.values(:dint) == "an integer from -2147483648 to 2147483647"
@@ -294,8 +299,8 @@ defmodule Logex.TypeTableTest do
       assert messages("var b bool 2\nvar d dint 2147483648\nvar e dint -2147483649\nxic b ote b") ==
                [
                  "`b` is a bool: its initial value must be 0 or 1, found `2`",
-                 "`d` is a dint: `2147483648` does not fit in 32 bits",
-                 "`e` is a dint: `-2147483649` does not fit in 32 bits",
+                 "`d` is a dint: `2147483648` is outside -2147483648 to 2147483647",
+                 "`e` is a dint: `-2147483649` is outside -2147483648 to 2147483647",
                  "`b` is not declared"
                ]
 
@@ -303,14 +308,14 @@ defmodule Logex.TypeTableTest do
                "`b` is a bool: its initial value must be 0 or 1, found `2`"
 
       assert raised(fn -> Tag.new!("d", :dint, :var, 2_147_483_648) end) ==
-               "`d` is a dint: `2147483648` does not fit in 32 bits"
+               "`d` is a dint: `2147483648` is outside -2147483648 to 2147483647"
     end
 
     test "a literal in a dint slot, a literal moved into each type, and two types met" do
       assert messages("var d dint\nvar b bool\neq d 2147483648 ote b\nge -2147483649 d ote b") ==
                [
-                 "`eq` reads a dint: `2147483648` does not fit in 32 bits",
-                 "`ge` reads a dint: `-2147483649` does not fit in 32 bits"
+                 "`eq` reads a dint: `2147483648` is outside -2147483648 to 2147483647",
+                 "`ge` reads a dint: `-2147483649` is outside -2147483648 to 2147483647"
                ]
 
       assert messages(
@@ -318,7 +323,7 @@ defmodule Logex.TypeTableTest do
              ) ==
                [
                  "`move` writes `2` into `b`, a bool: only 0 or 1 fit",
-                 "`move` writes `2147483648` into `d`, a dint: it does not fit in 32 bits"
+                 "`move` writes `2147483648` into `d`, a dint: it is outside -2147483648 to 2147483647"
                ]
 
       # M5-3 (decision 147): `move` writes in its destination's type, and a bool and a dint
@@ -348,7 +353,7 @@ defmodule Logex.TypeTableTest do
 
       assert messages("var s1 seal\nvar q bool\ncal s1 7 2147483648 q", [seal]) == [
                "operand 1 of `cal s1` is `start` (var_input bool): only 0 or 1 fit, found `7`",
-               "operand 2 of `cal s1` is `sp` (var_input dint): `2147483648` does not fit in 32 bits"
+               "operand 2 of `cal s1` is `sp` (var_input dint): `2147483648` is outside -2147483648 to 2147483647"
              ]
     end
 
@@ -366,7 +371,7 @@ defmodule Logex.TypeTableTest do
                Runtime.put_inputs(program, state, %{"b" => 2, "d" => 2_147_483_648})
              end) ==
                "input `b` is a bool: only 0 or 1 fit, found 2\n" <>
-                 "input `d` is a dint: 2147483648 does not fit in 32 bits"
+                 "input `d` is a dint: 2147483648 is outside -2147483648 to 2147483647"
 
       assert raised(fn -> Runtime.put_inputs(program, state, %{"b" => 1.0, "d" => 1.5}) end) ==
                "input `b` is a bool: only 0 or 1 fit, found 1.0\n" <>
@@ -384,8 +389,8 @@ defmodule Logex.TypeTableTest do
                motor
              ) == [
                "`estop` is a bool: its initial value must be 0 or 1, found `2`",
-               "`x` is a dint: `2147483648` does not fit in 32 bits",
-               "`y` is a dint: `-2147483649` does not fit in 32 bits"
+               "`x` is a dint: `2147483648` is outside -2147483648 to 2147483647",
+               "`y` is a dint: `-2147483649` is outside -2147483648 to 2147483647"
              ]
 
       assert configured(
@@ -393,7 +398,7 @@ defmodule Logex.TypeTableTest do
                motor
              ) == [
                "`m1.run` is a bool: only 0 or 1 fit, found `2`",
-               "`m1.sp` is a dint: `2147483648` does not fit in 32 bits"
+               "`m1.sp` is a dint: `2147483648` is outside -2147483648 to 2147483647"
              ]
 
       assert configured(

@@ -7117,7 +7117,7 @@ the decisions the rest settle.
      recorded: a bit string compared with an integer tag is refused, naming the
      conversion, `int_to_word` or `word_to_int`; a literal is judged by its slot, so that
      `eq drive_status 16#0004` is taken.)*
-     *(Landed for `move` and every literal with M5-3, 2026-10-22; arithmetic and comparison over every width are M5-4's.)*
+     *(Landed for `move` and every literal with M5-3, 2026-10-22; arithmetic and comparison over every width are M5-4's, another width there refused until then, as the maintainer confirmed the same day, decision 175.)*
 
 148. **Converting a real to an integer, and what the conversions are called (Milestone
      5).** The fan's speed is worked out as a `real` percentage and written to the drive
@@ -7153,7 +7153,7 @@ the decisions the rest settle.
      `lreal_trunc_<integer>`, sixteen, decision 162, not `trunc_<integer>`; and "never
      hide a rounding mode inside a conversion name" is kept with `real_to_int`, as
      recorded.)*
-     *(The 56 integer conversions landed with M5-3, 2026-10-22.)*
+     *(The 56 integer conversions landed with M5-3, 2026-10-22; a conversion's source widens into its `from` type by Figure 11 since decision 176, and a conversion of a literal is warned since decision 178.)*
 
 149. **How literals are written (Milestone 5).** The fan setpoint is 37.5, a mask is hex
      FF, a batch is a million boxes.
@@ -7614,6 +7614,7 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      var_output holding an instance that nothing connects is refused too, since no text
      could have compiled the program either way; and, as a program under another's name
      is, it is left out of every diagnostic, so its instances and connections give none.
+     *(The first reading confirmed by the maintainer, 2026-10-22, decision 172.)*
 170. **The unit of the type table's width (Milestone 5),** following decision 144. The
      table in `Logex.Declarations` gives a dint a width of 32, which its messages print
      as "does not fit in 32 bits", while §4.12's table of the types gave the same column
@@ -7681,6 +7682,149 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
        the host restarts under the program whose values the state holds,
        or puts the value right; decision 26's restart of what does not fit is reached
        now by a value that is no integer, a timer's map under a bool among them.
+
+     *(Answered by the maintainer, 2026-10-22: a value that is no integer is refused too,
+     decision 173, superseding the first reading above, so decision 26's restart is
+     reached by neither; the checking place confirmed, decision 174; and the message
+     gives the range, "5000000000 is outside -2147483648 to 2147483647", decision 177,
+     where the words above say "does not fit in 32 bits".)*
+172. **A var_input or var_output holding an instance that nothing connects (Milestone 5),**
+     following decision 169. A host edits a compiled `motor` by hand so that its `run`
+     lamp output holds a timer, and no configuration line connects `m1.run`. Decision
+     169's reading refused the program whatever its connections.
+     - Refused whether or not it is connected, as decision 169's reading had it, since no
+       text could have compiled the program either way;
+     - or refused only where a connection names the tag, an unconnected one given the
+       usual "leaves its var_input unconnected" diagnostic.
+
+     IEC and Logix have no such program: a program's interface is what its text declares.
+
+     **Taken: refused whether or not it is connected, decision 169's reading confirmed**
+     (the maintainer, 2026-10-22). No code changed: `Logex.Configuration.check/1` already
+     refuses the program at the check, a line a tag, connected or not, and
+     `type_table_test.exs` pins both.
+173. **A value a state holds that is no integer (Milestone 5),** following decision 171.
+     The host hands the runtime a state whose fan `speed`, a dint, holds 37.5, whose run
+     lamp, a bool, holds `nil`, or whose box count holds `"x"`. Decision 171 refused an
+     integer outside its type and read any other value as M1-4 had: a contact read 2.5 as
+     closed and `nil` as open, `add` read `"x"` as 0, so the fan ran as if 0 were written.
+     - Read as before, M1-4's totality kept for a state handed in;
+     - or the host's mistake, refused with decision 171's `ArgumentError`, as every value
+       `fits?/2` refuses is.
+
+     IEC has no such value; Logix cannot store one.
+
+     **Taken: the host's mistake, refused with the same pinned `ArgumentError` as an
+     integer outside its type, retiring M1-4's lenient reading for a state handed in**
+     (the maintainer, 2026-10-22): "state.env holds `speed` outside its type: it is a
+     dint, and its value must be an integer, found 37.5", and for a bool "only 0 or 1
+     fit, found nil", each a line of decision 171's one message in path order, a member
+     of an instance by its path at any depth, every entry point that takes a state and a
+     resource's globals as each scan takes them alike ("runtime.globals holds `a` outside
+     its type: it is a uint, and its value must be an integer, found 37.5"). The check is
+     decision 171's walk, a guard a value, so its cost is unchanged and linear: a value
+     that fits passes the one guard, and only a value outside is looked at again.
+     Changed on purpose, each test keeping what it pinned with a value inside its type and
+     pinning the refusal of what it read before: M1-4's contacts (a 0.0, a 2.5, a
+     `false`, a `true`, a nil, an `:on`, a `"0"`), the comparisons on a hand-built env,
+     a one-shot's, a pulse coil's and a timer's storage bits and `.en`, the timers'
+     hand-built bits, the arithmetic's sources and divisor that read 0, a member of a
+     hand-built timer, a plain swap's map under a bool or a dint, which the first test of
+     an edit started again (decision 26) and which is now refused at the swap's next call,
+     and the restart under a recompile, a timer's map under a dint refused there too.
+     *Reading (the record's, provisional):* an integer type's value that is no integer is
+     told in the words an input that is no integer is told, "its value must be an
+     integer, found 37.5", rather than "37.5 is outside -2147483648 to 2147483647", which
+     reads as if 37.5 were not between them; what the check does not look into is read as
+     before: a tag or member the env leaves out reads 0, an instance's tag that holds no
+     map (a timer's tag holding 5) is read as an empty instance, and a built-in's internal
+     member, a timer's `last`, which is no bool or integer member, adds nothing where it is
+     no integer. Decision 26's restart of a var_input that does not fit, in `restart/3`, is
+     now reached by no state, every var_input being a bool or an integer checked first;
+     an edit's first test still starts again an integer a plain swap left under an
+     instance's tag, `k`'s 7 under what is now a timer.
+174. **Where a resource is checked (Milestone 5),** following decision 171. A
+     `%Logex.Runtime{}` a host builds by hand is checked as each scan takes an instance,
+     inside `cycle/3`, not on every call that takes a runtime, so a configuration edit's
+     steps, which scan nothing, carry a bad value to the next cycle, which refuses it, and
+     a global no instance reads is never checked.
+     - As each scan takes an instance, as decision 171's reading had it;
+     - or on every call that takes a runtime, at the cost of a walk of the whole resource
+       every cycle, the instances not due among them.
+
+     **Taken: as each scan takes an instance, decision 171's reading confirmed** (the
+     maintainer, 2026-10-22). No code changed. The runner never takes a runtime from a host,
+     so an operator sees no difference.
+175. **Another width in an `add` or a comparison before M5-4 (Milestone 5),** following
+     decision 147. M5-3 refuses `add fan_hz 10 speed` with a `uint` `fan_hz`, telling the
+     programmer to convert it first with `uint_to_dint`, and lands the widening of the
+     arithmetic and comparison slots with M5-4.
+     - Refused until M5-4, as M5-3 has it;
+     - or a `uint` taken into a dint slot now, as decision 147 will take it.
+
+     **Taken: refused until M5-4, decision 147's order of work confirmed** (the
+     maintainer, 2026-10-22). No code changed; M5-4 lifts it.
+176. **A conversion's source of a narrower type (Milestone 5),** following decision 148.
+     The box-count trim is an `sint`, put through `dint_to_int`. M5-3 took a conversion's
+     source as exactly the type its name gives and refused the trim naming `sint_to_int`.
+     - The source exactly its `from` type, as MatIEC requires;
+     - or any source that widens into its `from` type by Ed 3 Figure 11, as an input of
+       IEC's typed functions takes one (`ADD_REAL` with an INT, Table 21 Example 2).
+
+     **Taken: the source widens as IEC allows: `dint_to_int` takes any source that widens
+     into a dint by Figure 11, an `sint`, an `int` or a `usint` among them, and only one
+     that does not is refused, naming the conversion from its own type; the destination
+     stays exact** (the maintainer, 2026-10-22). `Logex.Compiler` reads a conversion's
+     source slot through `Logex.Declarations.widens?/2`, for a tag and a member alike, so
+     `dint_to_int trim small` compiles and writes what `sint_to_int` would; `dint_to_int
+     u small` with a `udint` `u` is refused "use `udint_to_int`", and `sint_to_int i i`
+     with an `int` `i` "use `move`". A literal is still judged by the `from` type's
+     range. `integer_width_test.exs` holds every conversion against every source type at
+     its limits, against Figure 11 and the wrap restated.
+177. **How a value that does not fit an integer type is told (Milestone 5),** following
+     decisions 144 and 145. A signed width said "`40000` does not fit in 16 bits", as the
+     dint always had; an unsigned one, since M5-3, "`-1` is outside 0 to 255", since -1
+     fits in 8 bits as a pattern.
+     - Two wordings, a signed width's bits and an unsigned one's range, as M5-3 has it;
+     - or the range for every width.
+
+     **Taken: the range for every width, signed included: "`-1` is outside 0 to 255",
+     "`128` is outside -128 to 127", "`5000000000` is outside -2147483648 to
+     2147483647", replacing "does not fit in N bits"** (the maintainer, 2026-10-22).
+     `Logex.Declarations.misfit/2` gives one wording from the table's row, and every
+     message that names a value outside an integer type reads it: a literal, a declared
+     initial value, a constant connected, a `cal` literal, a host's input, a device's
+     value, a force, a state's value and a global's. Every pinned message that said "does
+     not fit in N bits" is changed on purpose, in `validation_test.exs`,
+     `runtime_test.exs`, `configuration_test.exs`, `type_table_test.exs`,
+     `function_block_test.exs`, `arithmetic_test.exs`, `integer_width_test.exs` (its
+     restated misfit one range for every width) and `api_contract_test.exs`.
+178. **A conversion of a literal (Milestone 5),** following decision 98. `dint_to_sint
+     129 trim` compiles and always writes -127 with no power, as `add 1 2 x` always
+     writes 3, which draws a warning that its result never changes; M5-3 gave the
+     conversion none.
+     - No warning, as M5-3 has it;
+     - or the warning an all-literal arithmetic instruction draws.
+
+     IEC and Logix say nothing either way.
+
+     **Taken: the warning, "`dint_to_sint` reads a literal, `129`: its result never
+     changes", in the words `neg 5 x` is told** (the maintainer, 2026-10-22).
+     `Logex.Warnings` gives it for each of the 56 conversions, their symbols generated from
+     the type table as `Logex.Compiler`'s are, and a conversion of a tag or a member draws
+     none.
+179. **How `move` between a bool and an integer is refused (Milestone 5),** following
+     decisions 147 and 168. M5-3 told `move b d`, with a bool `b` and a dint `d`, "a bool
+     does not widen into a dint, and logex has no conversion between them", in the words
+     every narrowing `move` is told, where before it was "`move` takes operands of one
+     type".
+     - The words of every other narrowing `move`, as M5-3 has it;
+     - or the older sentence for this one pair.
+
+     IEC has `BOOL_TO_INT` and its kin; Logix's MOV takes no BOOL.
+
+     **Taken: "a bool does not widen into a dint, and logex has no conversion between
+     them", M5-3's wording confirmed** (the maintainer, 2026-10-22). No code changed.
 
 ---
 

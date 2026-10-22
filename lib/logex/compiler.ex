@@ -2146,7 +2146,19 @@ defmodule Logex.Compiler do
   defp check_member_type(diagnostics, {_access, type}, _name, %Member{type: type}, _at),
     do: diagnostics
 
-  defp check_member_type(diagnostics, {access, type}, name, member, {line, word}),
+  defp check_member_type(diagnostics, {access, type}, name, member, {_line, word} = at),
+    do:
+      member_widened(
+        widened?(Map.get(@conversions, String.downcase(word)), access, member.type, type),
+        diagnostics,
+        {access, type},
+        {name, member},
+        at
+      )
+
+  defp member_widened(true, diagnostics, _slot, _member, _at), do: diagnostics
+
+  defp member_widened(false, diagnostics, {access, type}, {name, member}, {line, word}),
     do: [
       diagnostic(
         line,
@@ -2155,6 +2167,15 @@ defmodule Logex.Compiler do
       )
       | diagnostics
     ]
+
+  # Decision 176: a conversion's source widens as an input of IEC's typed functions does,
+  # `ADD_REAL` taking an INT (Ed 3 Table 21, Example 2): `dint_to_int` takes an sint, an
+  # int or a usint, any type Figure 11 widens into a dint, as it takes a dint; its
+  # destination stays exact, and every other fixed slot takes its own type.
+  defp widened?({_symbol, _signature}, :value, found, type) when is_elementary(found),
+    do: Declarations.widens?(found, type)
+
+  defp widened?(_not_a_conversion, _access, _found, _type), do: false
 
   # Decision 4: members are read anywhere, and logic writes only those its type allows.
   defp check_member_write(
@@ -2186,7 +2207,19 @@ defmodule Logex.Compiler do
   defp check_type(diagnostics, _access, :any, _tag, _at), do: diagnostics
   defp check_type(diagnostics, _access, type, %Tag{type: type}, _at), do: diagnostics
 
-  defp check_type(diagnostics, access, type, tag, {line, word}) do
+  defp check_type(diagnostics, access, type, tag, {_line, word} = at),
+    do:
+      tag_widened(
+        widened?(Map.get(@conversions, String.downcase(word)), access, tag.type, type),
+        diagnostics,
+        {access, type},
+        tag,
+        at
+      )
+
+  defp tag_widened(true, diagnostics, _slot, _tag, _at), do: diagnostics
+
+  defp tag_widened(false, diagnostics, {access, type}, tag, {line, word}) do
     message =
       "`#{word}` #{verb(access)} #{a_type(type)}, but `#{tag.name}` is " <>
         "#{a_type(tag.type)}#{declared(tag)}" <> converted(word, access, tag.type, type)

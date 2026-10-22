@@ -447,7 +447,7 @@ defmodule Logex.ValidationTest do
                "line 1: `b` needs a type, as in `var b bool` or `var b dint`",
                "line 2: unknown type `dintt`: #{@has} — did you mean `dint`?",
                "line 3: `e` is a bool: its initial value must be 0 or 1, found `2`",
-               "line 4: `f` is a dint: `3000000000` does not fit in 32 bits",
+               "line 4: `f` is a dint: `3000000000` is outside -2147483648 to 2147483647",
                "line 5: `ote` is an instruction and cannot name a tag",
                "line 6: `Bool` is a type and cannot name a tag",
                "line 7: `var_input` is a keyword and cannot name a tag",
@@ -583,8 +583,8 @@ defmodule Logex.ValidationTest do
 
     test "the dint range ends exactly at 2147483647" do
       assert source_errors("var f dint 2147483648\nvar d dint\nmove 2147483648 d") == [
-               "line 1: `f` is a dint: `2147483648` does not fit in 32 bits",
-               "line 3: `move` writes `2147483648` into `d`, a dint: it does not fit in 32 bits"
+               "line 1: `f` is a dint: `2147483648` is outside -2147483648 to 2147483647",
+               "line 3: `move` writes `2147483648` into `d`, a dint: it is outside -2147483648 to 2147483647"
              ]
     end
 
@@ -923,7 +923,7 @@ defmodule Logex.ValidationTest do
                  "move 1 b\nmove 0 b\nmove 2147483647 d"
              ) == [
                "line 3: `move` writes `2` into `b`, a bool: only 0 or 1 fit",
-               "line 4: `move` writes `3000000000` into `d`, a dint: it does not fit in 32 bits"
+               "line 4: `move` writes `3000000000` into `d`, a dint: it is outside -2147483648 to 2147483647"
              ]
     end
 
@@ -1591,7 +1591,7 @@ defmodule Logex.ValidationTest do
                  "eq b d ote b\ngt d 2147483648 ote b\nge d ote b\nlt 2147483647 i le o i ote b"
              ) == [
                "line 5: `eq` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 6: `gt` reads a dint: `2147483648` does not fit in 32 bits",
+               "line 6: `gt` reads a dint: `2147483648` is outside -2147483648 to 2147483647",
                "line 7: `ge` expects 2 operands (a value, then a value), found 1 " <>
                  "before the instruction `ote`"
              ]
@@ -1640,8 +1640,8 @@ defmodule Logex.ValidationTest do
                  "add d b d\nadd d 1 b\nsub b 1 d\nsub d b d\nmul b 1 d\nmul d b d"
              ) == [
                "line 6: `add` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 7: `sub` reads a dint: `2147483648` does not fit in 32 bits",
-               "line 8: `mul` reads a dint: `-2147483649` does not fit in 32 bits",
+               "line 7: `sub` reads a dint: `2147483648` is outside -2147483648 to 2147483647",
+               "line 8: `mul` reads a dint: `-2147483649` is outside -2147483648 to 2147483647",
                "line 9: `add` expects 3 operands (a value, then a value, then a tag), found 2",
                "line 10: `sub` expects a tag, found `5`",
                "line 11: `mul` writes a dint, but `b` is a bool (declared on line 1)",
@@ -1717,7 +1717,7 @@ defmodule Logex.ValidationTest do
                  "neg d b\nabs b d"
              ) == [
                "line 5: `neg` reads a dint, but `b` is a bool (declared on line 1)",
-               "line 6: `abs` reads a dint: `2147483648` does not fit in 32 bits",
+               "line 6: `abs` reads a dint: `2147483648` is outside -2147483648 to 2147483647",
                "line 7: `neg` expects 2 operands (a value, then a tag), found 1",
                "line 8: `abs` expects a tag, found `5`",
                "line 9: `neg` writes `i`, a var_input (declared on line 3): logic must not " <>
@@ -2721,7 +2721,7 @@ xic a ton t1 7") == [
                "line 4: `xic` reads a bool, but `t1.acc` is a dint",
                "line 5: `move` writes `t1.dn`, a bool, into `d`, a dint: a bool does not widen " <>
                  "into a dint, and logex has no conversion between them",
-               "line 6: `move` writes `2147483648` into `t1.pre`, a dint: it does not fit in 32 bits",
+               "line 6: `move` writes `2147483648` into `t1.pre`, a dint: it is outside -2147483648 to 2147483647",
                "line 7: `lt` reads a dint, but `t1.tt` is a bool"
              ]
     end
@@ -3028,7 +3028,7 @@ xic a ton t1 7") == [
             {["a", :dint, :var, {1}], "the initial value of `a` must be an integer, found {1}"},
             {["a", :bool, :var, "1"], ~s(the initial value of `a` must be an integer, found "1")},
             {["x", :dint, :var, -2_147_483_649],
-             "`x` is a dint: `-2147483649` does not fit in 32 bits"},
+             "`x` is a dint: `-2147483649` is outside -2147483648 to 2147483647"},
             {["x", :bool, :var, -1],
              "`x` is a bool: its initial value must be 0 or 1, found `-1`"},
             {["x", :dintt, :var, 5],

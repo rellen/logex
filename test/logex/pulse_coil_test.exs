@@ -205,23 +205,15 @@ defmodule Logex.PulseCoilTest do
       end
     end
 
-    test "a storage bit holding anything is read as a contact reads it, but an integer " <>
-           "outside a bool is refused (decision 171)" do
+    test "a storage bit holding a bool's 0 or 1 is read as a contact reads it, and anything " <>
+           "else is refused (decisions 171 and 173)" do
       p = c!(@coils)
 
-      for {junk, rises, falls} <- [
-            {0, 1, 0},
-            {nil, 1, 0},
-            {false, 1, 0},
-            {0.0, 1, 0},
-            {1, 0, 1},
-            {"x", 0, 1},
-            {true, 0, 1}
-          ] do
-        env = Map.merge(Program.initial_env(p), %{"sr" => junk, "sf" => junk})
+      for {bit, rises, falls} <- [{0, 1, 0}, {1, 0, 1}] do
+        env = Map.merge(Program.initial_env(p), %{"sr" => bit, "sf" => bit})
         state = %Instance{type: "m", env: env, now: 0, first: false}
-        assert trace(p, go([1]), [["rise"], ["sr"]], state) == [[rises, 1]], inspect(junk)
-        assert trace(p, go([0]), [["fall"], ["sf"]], state) == [[falls, 0]], inspect(junk)
+        assert trace(p, go([1]), [["rise"], ["sr"]], state) == [[rises, 1]], inspect(bit)
+        assert trace(p, go([0]), [["fall"], ["sf"]], state) == [[falls, 0]], inspect(bit)
       end
 
       env = Map.merge(Program.initial_env(p), %{"sr" => 5, "sf" => -1})
@@ -232,6 +224,17 @@ defmodule Logex.PulseCoilTest do
                      "found -1\nstate.env holds `sr` outside its type: it is a bool, and only 0 " <>
                      "or 1 fit, found 5",
                    fn -> trace(p, go([1]), [["rise"]], state) end
+
+      # Until decision 173 a nil, a false or a 0.0 read as 0, a "x" or a true as 1.
+      for junk <- [nil, false, 0.0, "x", true] do
+        env = Map.merge(Program.initial_env(p), %{"sr" => junk})
+        state = %Instance{type: "m", env: env, now: 0, first: false}
+
+        assert_raise ArgumentError,
+                     "state.env holds `sr` outside its type: it is a bool, and only 0 or 1 " <>
+                       "fit, found #{inspect(junk)}",
+                     fn -> trace(p, go([1]), [["rise"]], state) end
+      end
     end
 
     test "one whose storage bit an instance's block list holds gives no pulse on that scan, " <>

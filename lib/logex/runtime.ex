@@ -222,15 +222,17 @@ defmodule Logex.Runtime do
   by name, and since decision 171 its values are checked wherever it is handed in, after
   its owner: an integer outside its tag's or member's type, 5000000000 in a dint or 5 in a
   bool, at any depth, is refused, every such value a line of one message, so that nothing
-  outside its type ever reaches a scan; a value that is no integer is read as it is
-  (provisional). A resource's instance is checked as each scan takes it, and before it
+  outside its type ever reaches a scan; and since decision 173 a value that is no integer
+  in a bool or an integer tag or member, 37.5, `nil` or `"x"`, is outside its type too,
+  "it is a dint, and its value must be an integer, found 37.5", retiring M1-4's reading
+  of one for a state handed in. A resource's instance is checked as each scan takes it, and before it
   each global a connection copies into it against the global's own type, which may be
   narrower than the var_input it fills (decision 159): "runtime.globals holds `a`
   outside its type: it is a uint, and 70000 is outside 0 to 65535". The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
   keeps its own records in a routine's env under atoms no tag can be, `:faults`, `:jump` and
   `:ran`, and takes each out before it ends, so an env holding one is refused, since it
   would change the run; a block instance's map holding one has it dropped before its body
-  runs, as any value a hand-built env holds that is no integer is read whatever it is.
+  runs.
   Scanning a recompile of
   the same name over a kept instance, a *plain swap*, stays in this contract: the instance
   keeps its values until `restart/3`, so a tag the recompile adds reads 0, an added timer
@@ -874,8 +876,9 @@ defmodule Logex.Runtime do
   # program's table looked up in the state, a member of an instance by its type's members,
   # a user block's type found in the program's one table of block types (decision 53), so
   # the check is linear in the state, a guard a value that fits; the lines are sorted only
-  # when there are any. A value that is no integer, or an instance that is no map, is
-  # read as before (provisional, decision 171).
+  # when there are any. A value that is no integer, 37.5, nil or "x", is outside its type
+  # too, since decision 173 retired M1-4's reading of one for a state handed in; an
+  # instance that is no map is read as before (provisional, decision 173).
   defp values!(%Instance{env: env} = state, %Program{tags: tags, blocks: blocks}),
     do: fitted(misfits(env, tags, as_map(blocks), [], []), state)
 
@@ -902,7 +905,7 @@ defmodule Logex.Runtime do
 
   defp of_type(type, value, _path, _blocks, acc) when is_fitting(type, value), do: acc
 
-  defp of_type(type, value, path, _blocks, acc) when is_elementary(type) and is_integer(value),
+  defp of_type(type, value, path, _blocks, acc) when is_elementary(type),
     do: [outside(type, value, path) | acc]
 
   defp of_type(%FbType{body: nil, members: members}, %{} = map, path, blocks, acc),
@@ -927,7 +930,19 @@ defmodule Logex.Runtime do
   defp outside(type, value, path),
     do:
       "state.env holds `#{Enum.join(Enum.reverse(path), ".")}` outside its type: it is " <>
-        "#{Declarations.a_type(type)}, and " <> Declarations.misfit(type, "#{value}")
+        "#{Declarations.a_type(type)}, and " <> unfitting(Declarations.kind(type), type, value)
+
+  # What a held value outside its type is told (decisions 171 and 173): an integer its
+  # type's misfit, a bool's 2 among them; a value that is no integer, 37.5, nil or "x", in
+  # a bool the same words, shown as the host gave it, and in an integer type the words an
+  # input that is no integer is told.
+  defp unfitting(_kind, type, value) when is_integer(value),
+    do: Declarations.misfit(type, "#{value}")
+
+  defp unfitting(:boolean, type, value), do: Declarations.misfit(type, inspect(value))
+
+  defp unfitting(_integer, _type, value),
+    do: "its value must be an integer, found #{inspect(value)}"
 
   defp scan!(%Scan{now: now}, _state) when not is_integer(now) or now < 0,
     do: raise(ArgumentError, "scan.now must be #{ms()}, got: #{inspect(now)}")
@@ -1427,15 +1442,12 @@ defmodule Logex.Runtime do
   defp global_fit(%Configuration.Global{type: type}, value, acc) when is_fitting(type, value),
     do: acc
 
-  defp global_fit(%Configuration.Global{name: name, type: type}, value, acc)
-       when is_integer(value),
-       do: [
-         "runtime.globals holds `#{name}` outside its type: it is " <>
-           "#{Declarations.a_type(type)}, and " <> Declarations.misfit(type, "#{value}")
-         | acc
-       ]
-
-  defp global_fit(_global, _no_integer, acc), do: acc
+  defp global_fit(%Configuration.Global{name: name, type: type}, value, acc),
+    do: [
+      "runtime.globals holds `#{name}` outside its type: it is " <>
+        "#{Declarations.a_type(type)}, and " <> unfitting(Declarations.kind(type), type, value)
+      | acc
+    ]
 
   defp read_fitted([]), do: :ok
 
@@ -1812,10 +1824,10 @@ defmodule Logex.Runtime do
   # 2147483647 + 1 giving -2147483648, with no fault, so no value outside a dint ever
   # reaches a state. The sources are read before the write, so the destination may be
   # one of them, `add total flow total`. De-energised, nothing is written and no
-  # power passes, as `move`. A source a hand-built env holds as no integer reads 0, so a
-  # scan never raises on one, and none it holds outside the dint reaches a scan: the state
-  # is refused where it is handed in (decision 171), superseding M5-2's provisional
-  # reading, computed exactly and then wrapped.
+  # power passes, as `move`. No source a hand-built env holds outside the dint reaches a
+  # scan, nor since decision 173 one that is no integer: the state is refused where it is
+  # handed in (decision 171), superseding M5-2's provisional reading, computed exactly and
+  # then wrapped; a member of an instance a hand-built env left as no map reads 0.
   defp evaluate({op, _, [a, b, destination]}, {true, env}, _scan) when op in @sums do
     {power, value} = wrapped(sum(op, integer(read(env, a)), integer(read(env, b))))
     {power, write(env, destination, value)}
@@ -1861,7 +1873,7 @@ defmodule Logex.Runtime do
   # destination, the type the mnemonic names, where it fits, with power; where it does not,
   # its low bits are kept, two's complement for a signed type, `dint_to_sint` of 129 giving
   # -127, as an arithmetic result is wrapped, and on that scan no power passes, with no
-  # fault. A source a hand-built env holds as no integer reads 0, as arithmetic's does.
+  # fault. A source reaches it as arithmetic's does, inside its type (decisions 171 and 173).
   # De-energised, nothing is written and no power passes, as `move`.
   defp evaluate({op, _, [source, destination]}, {true, env}, _scan)
        when is_map_key(@conversions, op) do
@@ -2069,8 +2081,9 @@ defmodule Logex.Runtime do
 
   # The map a body runs over: its instance's members. One a hand-built env left holding a
   # record of the runtime's own, which no member can be, has it dropped, so the body runs
-  # as its text says, as a counter's map is read whatever it holds that is no integer
-  # outside its type (decision 171), and a block's instance is a value (M3-5's review).
+  # as its text says, as a counter's map is read with a member it leaves out, every member
+  # it holds inside its type (decisions 171 and 173), and a block's instance is a value
+  # (M3-5's review).
   defp members_of(instance), do: Map.drop(as_map(instance), @own_keys)
 
   # M2-5: an instance records that its body ran, with what its own body's `cal`s recorded,
@@ -2135,8 +2148,9 @@ defmodule Logex.Runtime do
 
   defp unblocked(false, env, _name), do: env
 
-  # Whatever a hand-built env left in a counter, a well-formed one comes back: a member that
-  # is not an integer reads 0, and a bit is read as a contact.
+  # Whatever a hand-built env left out of a counter, a well-formed one comes back: a member
+  # it left out reads 0, and a bit is read as a contact; every member it holds is inside its
+  # type (decisions 171 and 173).
   defp count(kind, side, state, {power, edge}) do
     pv = integer(Map.get(state, "pv"))
     flags = {closed?(Map.get(state, "ov")), closed?(Map.get(state, "un"))}
@@ -2261,8 +2275,8 @@ defmodule Logex.Runtime do
   end
 
   # `ne`, `ge` and `le` are the negations of `eq`, `lt` and `gt`, so each pair is
-  # complementary by construction, as `xic` and `xio` are (M1-4). Erlang's term order is
-  # total, so a comparison of whatever a hand-built env holds never raises.
+  # complementary by construction, as `xic` and `xio` are (M1-4). Each reads integers: a
+  # state handed in holds no other value (decision 173), and a tag it leaves out reads 0.
   defp compare(:eq, a, b), do: a == b
   defp compare(:ne, a, b), do: not compare(:eq, a, b)
   defp compare(:lt, a, b), do: a < b
@@ -2270,9 +2284,10 @@ defmodule Logex.Runtime do
   defp compare(:gt, a, b), do: a > b
   defp compare(:le, a, b), do: not compare(:gt, a, b)
 
-  # Whatever a hand-built env left in a timer, a well-formed one comes back: a member that
-  # is not an integer reads 0, `.en` is read as a contact, and a `last` that is not an
-  # integer, or is later than now, adds nothing. A negative `.acc`, which logic may write,
+  # Whatever a hand-built env left in a timer, a well-formed one comes back: a member it
+  # leaves out reads 0, `.en` is read as a contact, and a `last` that is not an integer, an
+  # internal member no check looks into, or is later than now, adds nothing; every `.pre`,
+  # `.acc` and bit it holds is inside its type (decisions 171 and 173). A negative `.acc`, which logic may write,
   # counts from 0: it is floored before the time is added, not after.
   defp timing(timer, now) do
     pre = integer(Map.get(timer, "pre"))
@@ -2456,10 +2471,11 @@ defmodule Logex.Runtime do
 
   # M1-4: `xic` reads this and `xio` its negation, so the two are complementary by
   # construction, whatever the env holds. The compiler lets only a bool reach a contact,
-  # but an env the host builds by hand can hold a 5, a 0.0, a `false`, a nil, or leave a
-  # tag out. A number is read by value, nonzero closed (PLAN.md §5), and a boolean as
-  # itself; nil and a missing tag are open; anything else is closed. A member is read
-  # the same way (M1-6).
+  # and since decisions 171 and 173 a state handed in holds only a bool's 0 or 1 there, so
+  # what reaches it is a 0, a 1, or a tag or member left out, which reads open. A number
+  # is read by value, nonzero closed (PLAN.md §5), a boolean as itself, nil open and
+  # anything else closed, M1-4's totality kept for what no check looks into. A member is
+  # read the same way (M1-6).
   defp closed?(value) when is_number(value), do: value != 0
   defp closed?(value) when value in [nil, false], do: false
   defp closed?(_value), do: true
