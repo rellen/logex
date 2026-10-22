@@ -71,7 +71,8 @@ after M5-3): a value a state holds that is no integer refused as one outside its
 a conversion's source widening into its `from` type, every width's misfit told its range,
 and a conversion of a literal warned, the other four confirmed as built; and the fourth,
 M5-4, the same day: arithmetic and comparison over every integer width, computed in the
-destination's type, each source widening into it by Figure 11 (§3, M5-4).
+destination's type, each source widening into it by Figure 11 (§3, M5-4), its review's
+four findings fixed the same day.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -4921,6 +4922,49 @@ the walks' cross-type reach and the documents.
      told that the dint does not widen. The other reading names a signed type the source
      widens into, "write an int or wider", or tells both problems at once. IEC has no
      NEG; Logix's NEG into an unsigned tag is `unverified`.
+
+  **M5-4's review**, fixed on 2026-10-22, each with a test that fails when its fix is
+  reverted, judged by the full suite: (1) the destination's type is found totally, so a
+  program edited by hand after it compiled, its destination's tag taken out of the
+  table, retyped as a bool, or its member's instance taken out, retyped or left without
+  the member, runs as it did before M5-4, computing in the dint, rather than raise
+  `KeyError`, `MatchError` or `FunctionClauseError` out of `call/4` (provisional, the
+  fourth question below); `runtime_test.exs`'s "a program edited by hand after it
+  compiled", red with any one lookup's fallback reverted; (2) the arithmetic's growth
+  is measured as two tests, the compile and the scan apart, since a scan is about 4% of
+  the two together and the review's quadratic scan, a walk of the tag's keys at each
+  lookup, stayed green inside the sum, red now; (3) `mul`'s amendment in
+  `docs/naming.md` said that two `usint`s at 255 into an `int` give 65,025 with power, past
+  an int's 32,767: they give it into a `dint`, and wrap to −511 with no power in an
+  `int`, as it now says, and `neg`'s quoted refusal names the line its destination is
+  declared on, as the compiler does; every worked example of the arithmetic and
+  comparison amendments is a test in `arithmetic_test.exs`; (4) a `div` and a
+  `mod` whose divisor is narrower than its destination, or of another kind, are pinned in
+  the destination's type, an int's −32768 by an sint's −1 wrapping to −32768 with no power
+  and an int's −7 mod a usint's 3 giving −1, so that a division wrapped in its divisor's
+  type, the review's V7, which only the contract walk caught, is red in
+  `arithmetic_test.exs`. The comment by `@sums` now says a source "outside its
+  type". The review's other notes need nothing: a dint-only scan costs about 22% more
+  reductions than before M5-4 and is still linear, and the real-clock tests that failed
+  under three suites at once predate M5-4. The mutation table, 8 mutants each judged by
+  the full suite's exit code, every one red: the name's lookup strict, the member's
+  instance's lookup strict, and each of the four fallbacks, a tag's, a member's
+  instance's, a member's and a type that is no integer's, gone; the review's quadratic
+  scan; and its V7. 1641 tests (9 doctests), up from 1632.
+
+  4. *A program edited by hand whose destination has no integer type.* A program is
+     compiled from text; a host that changes the compiled `%Logex.Program{}`, retyping
+     `d` from an `sint` to a bool or deleting it from the tag table, hands the runtime a
+     program no text could give. logex runs it, computing `add 100 100 d` in the dint,
+     as every arithmetic instruction did before M5-4, so `d` takes 200 with power; a value
+     that then sits outside a retyped tag is refused at the next call (decision 171). On
+     the conveyor: a tool that rewrites the box counter's tag table between scans sees
+     the count keep counting as a dint, and the next scan refused if the count no longer
+     fits. The other reading refuses such a program where it is handed in, a pinned
+     `ArgumentError` naming each destination whose type is no integer, as decision 169
+     refuses a hand-edited port holding an instance, at the cost of a walk of the
+     program's arithmetic on every call. IEC and Logix have no compiled program a host
+     can edit: Logix downloads a project whose tags and code are checked together.
 - **M5-5 · Typed counters.** The stanzas, then `ctu_int ctu_lint ctu_udint ctu_ulint`,
   `ctd_*` and `ctud_*` of the same four (decision 158), rows of `Logex.FbType.rules/1`
   run by `ctu` and `ctd`, a preset judged in its instance's type, each stopping at its
