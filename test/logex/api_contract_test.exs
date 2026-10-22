@@ -142,7 +142,10 @@ defmodule Logex.ApiContractTest do
   `rto` with its reset above or below its rung, and a pulse inside a block a `cal` runs,
   in three versions of its body, over random inputs and scan intervals, restarts and online
   edits that change a preset, a rung, a reset's place, a block's body or a timer's presence,
-  and now and then the `tof`'s kind, which accept refuses. Its oracle restates each rule
+  and now and then the `tof`'s kind, which accept refuses. Since M5-6 each of the three
+  is a long timer half the time, `tof_ltime`, `tp_ltime` or `rto_ltime`, its preset the
+  same number of ms in ns and each millisecond adding 1,000,000 ns, restated, and an edit
+  now and then changes the `tof`'s unit, which accept refuses too. Its oracle restates each rule
   from the programs' text, IEC's TOF and TP and the conventional RTO, rung by rung over the
   input image at the scan's time, and knows nothing of the block list: every scan is exact
   but where a pulse a switch came before last ran under the same rung text, which may or
@@ -267,7 +270,7 @@ defmodule Logex.ApiContractTest do
     "name one of its members",
     "takes its preset as a number",
     "takes a preset of 0 to",
-    "`ton` runs a ton, but",
+    "`ton` runs a ton or ton_ltime, but",
     "`eq` reads a number, but",
     "`gt` reads a number: `18446744073709551616`",
     "`t9` is not declared",
@@ -5978,10 +5981,16 @@ defmodule Logex.ApiContractTest do
     :forecast_waits,
     :round_trip,
     :retype_refused,
-    :restarted
+    :restarted,
+    :long_timed,
+    :unit_refused
   ]
 
   @tm_inputs ~w(e1 e2 e3 rs on)
+
+  # M5-6 (decision 158): a long timer counts nanoseconds, IEC's LTIME's unit, on logex's
+  # clock of milliseconds, restated here: each millisecond adds 1,000,000.
+  @tm_ns 1_000_000
 
   test "the other timers run as IEC's and the conventional RTO, restated from the " <>
          "programs' text: every scan exact but where only an edit's block decides a pulse, " <>
@@ -6019,15 +6028,21 @@ defmodule Logex.ApiContractTest do
   # A program's timers, drawn: an off-delay `f`, a pulse `h`, a retentive `l` with its reset
   # above or below its rung, and a block `s1` holding a pulse, in one of three versions of
   # its body, which a `cal` on `on` runs. Presets are a few scans long.
+  # Since M5-6 each of `f`, `h` and `l` is drawn a long timer half the time, `ns`, its
+  # preset the same number of ms in ns.
   defp tm_spec,
     do: %{
-      f: tm_maybe(fn -> %{p: pick([0, 20, 40]), chain: tm_chain()} end),
+      f: tm_maybe(fn -> %{p: pick([0, 20, 40]), chain: tm_chain(), ns: tm_ns()} end),
       kind_f: "tof",
-      h: tm_maybe(fn -> %{p: pick([0, 20, 40]), chain: tm_chain()} end),
+      h: tm_maybe(fn -> %{p: pick([0, 20, 40]), chain: tm_chain(), ns: tm_ns()} end),
       l:
-        tm_maybe(fn -> %{p: pick([30, 60]), chain: tm_chain(), reset: pick([:above, :below])} end),
+        tm_maybe(fn ->
+          %{p: pick([30, 60]), chain: tm_chain(), reset: pick([:above, :below]), ns: tm_ns()}
+        end),
       s: tm_maybe(fn -> pick([1, 2, 3]) end)
     }
+
+  defp tm_ns, do: pick([false, true])
 
   defp tm_maybe(fun), do: if(:rand.uniform(4) == 1, do: nil, else: fun.())
 
@@ -6046,11 +6061,21 @@ defmodule Logex.ApiContractTest do
   defp tm_change(4, %{h: %{} = h} = spec), do: %{spec | h: %{h | chain: tm_chain()}}
   defp tm_change(5, %{l: %{} = l} = spec), do: %{spec | l: %{l | p: pick([10, 30, 60])}}
   defp tm_change(6, %{l: %{} = l} = spec), do: %{spec | l: %{l | reset: pick([:above, :below])}}
-  defp tm_change(7, spec), do: %{spec | h: pick([nil, %{p: 20, chain: tm_chain()}])}
+
+  defp tm_change(7, spec),
+    do: %{spec | h: pick([nil, %{p: 20, chain: tm_chain(), ns: tm_kept_ns(spec.h)}])}
+
   defp tm_change(8, spec), do: %{spec | s: pick([nil, 1, 2, 3])}
   defp tm_change(9, %{f: %{}} = spec), do: %{spec | kind_f: pick(["ton", spec.kind_f])}
-  defp tm_change(n, spec) when n in [10, 11], do: tm_change(pick([1, 3, 5]), spec)
-  defp tm_change(_n, spec), do: %{spec | f: pick([nil, %{p: 20, chain: tm_chain()}])}
+  defp tm_change(10, %{f: %{} = f} = spec), do: %{spec | f: %{f | ns: not f.ns}}
+  defp tm_change(11, spec), do: tm_change(pick([1, 3, 5]), spec)
+
+  defp tm_change(_n, spec),
+    do: %{spec | f: pick([nil, %{p: 20, chain: tm_chain(), ns: tm_kept_ns(spec.f)}])}
+
+  # A timer an edit adds keeps the unit of the one it replaces, or is drawn.
+  defp tm_kept_ns(%{ns: ns}), do: ns
+  defp tm_kept_ns(nil), do: tm_ns()
 
   @tm_bodies %{
     1 => "xic go tp t 20",
@@ -6088,28 +6113,52 @@ defmodule Logex.ApiContractTest do
     declarations =
       Enum.map(@tm_inputs, &"var_input #{&1} bool") ++
         ["var_output y bool"] ++
-        if(spec.f, do: ["var f #{spec.kind_f}"], else: []) ++
-        if(spec.h, do: ["var h tp"], else: []) ++
-        if(spec.l, do: ["var l rto"], else: []) ++ if(spec.s, do: ["var s1 pulse"], else: [])
+        for({name, word} <- Enum.sort(tm_words(spec)), name != "s1.t", do: "var #{name} #{word}") ++
+        if(spec.s, do: ["var s1 pulse"], else: [])
 
     Enum.join(declarations ++ Enum.map(tm_rungs(spec), &tm_text/1), "\n")
   end
 
   # The rungs, in order, as the model runs them: `{:timer, name, kind, chain, preset}`,
   # `{:set, name, member, input}` and `{:cal, version}`.
+  # A long timer's preset is in ns (M5-6).
   defp tm_rungs(spec),
     do:
-      if(spec.f, do: [{:timer, "f", spec.kind_f, spec.f.chain, spec.f.p}], else: []) ++
-        if(spec.h, do: [{:timer, "h", "tp", spec.h.chain, spec.h.p}], else: []) ++
+      if(spec.f, do: [{:timer, "f", spec.kind_f, spec.f.chain, tm_p(spec.f)}], else: []) ++
+        if(spec.h, do: [{:timer, "h", "tp", spec.h.chain, tm_p(spec.h)}], else: []) ++
         tm_l(spec.l) ++ if(spec.s, do: [{:cal, spec.s}], else: [])
+
+  defp tm_p(%{p: p, ns: true}), do: p * @tm_ns
+  defp tm_p(%{p: p}), do: p
 
   defp tm_l(nil), do: []
 
   defp tm_l(%{reset: :above} = l),
-    do: [{:set, "l", "r", "rs"}, {:timer, "l", "rto", l.chain, l.p}]
+    do: [{:set, "l", "r", "rs"}, {:timer, "l", "rto", l.chain, tm_p(l)}]
 
   defp tm_l(%{reset: :below} = l),
-    do: [{:timer, "l", "rto", l.chain, l.p}, {:set, "l", "r", "rs"}]
+    do: [{:timer, "l", "rto", l.chain, tm_p(l)}, {:set, "l", "r", "rs"}]
+
+  # Each timer's type word, its kind's or since M5-6 its long timer's, and what a
+  # millisecond adds to its `.acc`.
+  defp tm_words(spec),
+    do:
+      Map.new(
+        for(
+          {name, kind, %{ns: ns}} <- [
+            {"f", spec.kind_f, spec.f},
+            {"h", "tp", spec.h},
+            {"l", "rto", spec.l}
+          ],
+          do: {name, if(ns, do: "#{kind}_ltime", else: kind)}
+        )
+      )
+
+  defp tm_scales(spec),
+    do:
+      Map.new(tm_words(spec), fn {name, word} ->
+        {name, if(word =~ "_ltime", do: @tm_ns, else: 1)}
+      end)
 
   defp tm_text({:timer, name, kind, chain, preset}),
     do: "#{tm_chain_text(chain)} #{kind} #{name} #{preset}"
@@ -6189,10 +6238,20 @@ defmodule Logex.ApiContractTest do
       {:ok, edit, _forecast} ->
         %{w | e: edit, c: candidate}
 
+      # A timer of another type, a kind or since M5-6 a unit, changes only with a restart.
       {:error, [%Diagnostic{stage: :edit, message: message}]} ->
-        assert w.spec.f != nil and candidate.f != nil and candidate.kind_f != w.spec.kind_f
-        assert message =~ "`f` is a #{w.spec.kind_f} in the running program and a"
-        tm_reached(:retype_refused)
+        {old, new} = {tm_words(w.spec), tm_words(candidate)}
+        assert [name] = for({n, word} <- old, Map.get(new, n, word) != word, do: n)
+
+        assert message =~
+                 "`#{name}` is #{tm_a(old[name])} in the running program and #{tm_a(new[name])}"
+
+        tm_reached(
+          if old[name] =~ "_ltime" or new[name] =~ "_ltime",
+            do: :unit_refused,
+            else: :retype_refused
+        )
+
         w
     end
   end
@@ -6316,7 +6375,15 @@ defmodule Logex.ApiContractTest do
     image = Map.take(before.env, @tm_inputs)
     kinds = tm_kinds(spec)
     start = Map.new(kinds, fn {name, _} -> {name, tm_at(before.env, name)} end)
-    ctx = %{image: image, w: w, texts: tm_texts(spec), first: before.first, now: later.now}
+
+    ctx = %{
+      image: image,
+      w: w,
+      texts: tm_texts(spec),
+      first: before.first,
+      now: later.now,
+      scales: tm_scales(spec)
+    }
 
     {possible, ran} =
       Enum.reduce(tm_rungs(spec), {[{start, []}], %{}}, fn rung, acc -> tm_run(rung, acc, ctx) end)
@@ -6440,14 +6507,16 @@ defmodule Logex.ApiContractTest do
 
   defp tm_one({timers, notes}, name, {kind, cond}, ctx) do
     t = timers[name]
-    elapsed = if is_integer(t["last"]), do: max(ctx.now - t["last"], 0), else: 0
+    scale = Map.get(ctx.scales, name, 1)
+    elapsed = if is_integer(t["last"]), do: max(ctx.now - t["last"], 0) * scale, else: 0
+    long = if scale > 1 and elapsed > 0, do: [:long_timed], else: []
 
     edges = tm_edges(name, kind, ctx)
     first = if ctx.first and kind == "tp" and cond and t["en"] == 0, do: [:first_held], else: []
 
     for {t2, more} <- tm_rule(kind, t, cond, elapsed, edges) do
       {Map.put(timers, name, Map.put(t2, "last", ctx.now)),
-       notes ++ more ++ first ++ tm_why(:pulsed in more, edges, name, ctx)}
+       notes ++ more ++ first ++ long ++ tm_why(:pulsed in more, edges, name, ctx)}
     end
   end
 
@@ -6565,6 +6634,9 @@ defmodule Logex.ApiContractTest do
 
   defp tm_bit(true), do: 1
   defp tm_bit(false), do: 0
+
+  defp tm_a("rto" <> _ = word), do: "an #{word}"
+  defp tm_a(word), do: "a #{word}"
 
   # ---- M3-3: arithmetic, against IEC's rules restated as Elixir --------------------------
 

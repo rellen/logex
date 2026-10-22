@@ -2692,7 +2692,8 @@ defmodule Logex.Configuration do
       warning(
         instance.line,
         "`#{instance.name}` runs under the event task `#{instance.task}`, and " <>
-          "`#{program.name}` runs the timer `#{path}`#{cited}: " <> across(word)
+          "`#{program.name}` runs the timer `#{path}`#{cited}: " <>
+          across(FbType.family(FbType.builtin(word)), Declarations.a_or_an(word))
       )
 
   # M3-1 (decision 72): a counter sees its rung only at the task's runs, so an edge that
@@ -2740,28 +2741,30 @@ defmodule Logex.Configuration do
         "seen, the pulse it sets stays on until the task's next run, and a rung that is the " <>
         "task's trigger is true at every run and never pulses"
 
-  defp across("ton"),
+  # Since M5-6 by the timer's kind, its `family`, in its own words: a `ton_ltime`'s as a
+  # `ton`'s, "a ton_ltime times across the task's runs" (decision 158).
+  defp across("ton", a_word),
     do:
-      "a ton times across the task's runs, and one whose rung is true on two runs in a " <>
+      "#{a_word} times across the task's runs, and one whose rung is true on two runs in a " <>
         "row counts the whole time between them"
 
   # M3-2: a tof's delay ends only at a run, which may be long after its preset.
-  defp across("tof"),
+  defp across("tof", a_word),
     do:
-      "a tof's delay ends only at one of the task's runs, so what it holds on stays on " <>
+      "#{a_word}'s delay ends only at one of the task's runs, so what it holds on stays on " <>
         "until the first run after its preset has passed"
 
   # M3-2: an rto adds the time between two runs whose rung is true, as a ton counts it.
-  defp across("rto"),
+  defp across("rto", a_word),
     do:
-      "an rto times across the task's runs, and one whose rung is true on two runs in a " <>
+      "#{a_word} times across the task's runs, and one whose rung is true on two runs in a " <>
         "row adds the whole time between them"
 
   # M3-2: a tp's pulse ends only at a run, and it sees an edge only between two runs.
-  defp across("tp"),
+  defp across("tp", a_word),
     do:
-      "a tp's pulse ends only at one of the task's runs, so it lasts until the first run " <>
-        "after its preset has passed, and it starts only on an edge between two runs: a " <>
+      "#{a_word}'s pulse ends only at one of the task's runs, so it lasts until the first " <>
+        "run after its preset has passed, and it starts only on an edge between two runs: a " <>
         "rung that is the task's trigger is true at every run and never starts one"
 
   # The routine whose text holds a timer: the program's, or a block's body down its path,

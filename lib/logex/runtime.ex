@@ -1980,11 +1980,13 @@ defmodule Logex.Runtime do
   # stays in 0..max(.pre, 0), so it never leaves a dint however long the gap, and `.dn` is
   # set when it gets there. De-energised, `.acc .dn .tt .en` go to 0. `last` changes only
   # here, so a timer that does not run (a frozen function block, M2-5) catches up when it
-  # next does. The preset operand is not read: it is the timer's starting `.pre`, and logic
+  # next does. Since M5-6 a long timer, a `ton_ltime`, gains 1,000,000 ns of `.acc` for each
+  # millisecond, by its type's `per_ms` (clock/2), and every timer below so too. The
+  # preset operand is not read: it is the timer's starting `.pre`, and logic
   # may have written another. Nothing may follow a `ton` on its path (Logex.Compiler), so
   # the power each clause hands on is never read; which it should be is not settled.
-  defp evaluate({:ton, _, [timer, _preset]}, {true, env}, %Scan{now: now}) do
-    {true, write(env, timer, timing(as_map(read(env, timer)), now))}
+  defp evaluate({:ton, _, [timer, _preset]}, {true, env}, scan) do
+    {true, write(env, timer, timing(as_map(read(env, timer)), clock(timer, scan)))}
   end
 
   defp evaluate({:ton, _, [timer, _preset]}, {false, env}, %Scan{now: now}) do
@@ -2005,8 +2007,8 @@ defmodule Logex.Runtime do
     {true, write(env, timer, held_on(as_map(read(env, timer)), now))}
   end
 
-  defp evaluate({:tof, _, [timer, _preset]}, {false, env}, %Scan{now: now}) do
-    {false, write(env, timer, off_delay(as_map(read(env, timer)), now))}
+  defp evaluate({:tof, _, [timer, _preset]}, {false, env}, scan) do
+    {false, write(env, timer, off_delay(as_map(read(env, timer)), clock(timer, scan)))}
   end
 
   # M3-2: the pulse timer (docs/naming.md, `tp`; IEC's TP; decisions 74, 75 and 94). Rung
@@ -2035,12 +2037,12 @@ defmodule Logex.Runtime do
   # `.acc` and `.dn` are kept, so its time adds up across the rung's drops. `last` is stamped
   # on every run, and `r` is kept as logic left it. Every start and restart puts it at 0, as
   # every tag is put (decision 76). Nothing may follow it on its path (decision 73).
-  defp evaluate({:rto, _, [timer, _preset]}, {true, env}, %Scan{now: now}) do
-    {true, write(env, timer, retained(as_map(read(env, timer)), true, now))}
+  defp evaluate({:rto, _, [timer, _preset]}, {true, env}, scan) do
+    {true, write(env, timer, retained(as_map(read(env, timer)), true, clock(timer, scan)))}
   end
 
-  defp evaluate({:rto, _, [timer, _preset]}, {false, env}, %Scan{now: now}) do
-    {false, write(env, timer, retained(as_map(read(env, timer)), false, now))}
+  defp evaluate({:rto, _, [timer, _preset]}, {false, env}, scan) do
+    {false, write(env, timer, retained(as_map(read(env, timer)), false, clock(timer, scan)))}
   end
 
   # M3-1: IEC's counters (docs/naming.md, `ctu`, `ctd` and `ctud`; decisions 67 to 71 and
@@ -2433,10 +2435,28 @@ defmodule Logex.Runtime do
   # 173), and its `last` an integer (decision 186) no later than the instance's `now`
   # (decision 188), so never later than the scan's. A negative `.acc`, which logic may write,
   # counts from 0: it is floored before the time is added, not after.
-  defp timing(timer, now) do
+  #
+  # M5-6 (decision 158): a timer's clock is the scan's `now` with what each millisecond adds
+  # to its `.acc`, its type's `per_ms` (Logex.FbType.rules/1): 1 for a timer counted in ms,
+  # and 1,000,000 for a long timer, counted in ns, whose resolution is so a millisecond,
+  # a preset that is no whole number of them reached at the next. `last` stays a time on
+  # the scan's clock, in ms. A timer the routine's table does not hold as a built-in, which
+  # only a program built by hand gives, counts in ms, as the mnemonic's own type.
+  defp clock({:name, _, name}, %Scan{now: now, tags: tags}),
+    do: {now, per_ms(Map.get(tags, name))}
+
+  defp clock(_member, %Scan{now: now}), do: {now, 1}
+
+  defp per_ms(%Tag{type: %FbType{body: nil} = type}), do: per_ms_of(FbType.rules(type))
+  defp per_ms(_no_timer), do: 1
+
+  defp per_ms_of(%{per_ms: per_ms}) when is_integer(per_ms), do: per_ms
+  defp per_ms_of(_no_timer), do: 1
+
+  defp timing(timer, {now, _per_ms} = clock) do
     pre = integer(Map.get(timer, "pre"))
     limit = max(pre, 0)
-    elapsed = elapsed(closed?(Map.get(timer, "en")), Map.get(timer, "last"), now)
+    elapsed = elapsed(closed?(Map.get(timer, "en")), Map.get(timer, "last"), clock)
     acc = min(max(integer(Map.get(timer, "acc")), 0) + elapsed, limit)
     done = acc == limit
 
@@ -2471,13 +2491,13 @@ defmodule Logex.Runtime do
       "last" => now
     }
 
-  defp off_delay(timer, now),
-    do: delayed(closed?(Map.get(timer, "en")) or closed?(Map.get(timer, "tt")), timer, now)
+  defp off_delay(timer, clock),
+    do: delayed(closed?(Map.get(timer, "en")) or closed?(Map.get(timer, "tt")), timer, clock)
 
-  defp delayed(true, timer, now) do
+  defp delayed(true, timer, {now, _per_ms} = clock) do
     pre = integer(Map.get(timer, "pre"))
     limit = max(pre, 0)
-    elapsed = elapsed(closed?(Map.get(timer, "tt")), Map.get(timer, "last"), now)
+    elapsed = elapsed(closed?(Map.get(timer, "tt")), Map.get(timer, "last"), clock)
     acc = min(max(integer(Map.get(timer, "acc")), 0) + elapsed, limit)
     running = acc != limit
 
@@ -2491,7 +2511,7 @@ defmodule Logex.Runtime do
     }
   end
 
-  defp delayed(false, timer, now),
+  defp delayed(false, timer, {now, _per_ms}),
     do: %{
       "pre" => integer(Map.get(timer, "pre")),
       "acc" => integer(Map.get(timer, "acc")),
@@ -2502,9 +2522,10 @@ defmodule Logex.Runtime do
     }
 
   # M3-2: one run of an `rto`, its reset first.
-  defp retained(timer, power, now), do: retained(closed?(Map.get(timer, "r")), power, timer, now)
+  defp retained(timer, power, clock),
+    do: retained(closed?(Map.get(timer, "r")), power, timer, clock)
 
-  defp retained(true, power, timer, now),
+  defp retained(true, power, timer, {now, _per_ms}),
     do: %{
       "pre" => integer(Map.get(timer, "pre")),
       "acc" => 0,
@@ -2515,9 +2536,9 @@ defmodule Logex.Runtime do
       "last" => now
     }
 
-  defp retained(false, true, timer, now), do: Map.put(timing(timer, now), "r", 0)
+  defp retained(false, true, timer, clock), do: Map.put(timing(timer, clock), "r", 0)
 
-  defp retained(false, false, timer, now),
+  defp retained(false, false, timer, {now, _per_ms}),
     do: %{
       "pre" => integer(Map.get(timer, "pre")),
       "acc" => integer(Map.get(timer, "acc")),
@@ -2529,26 +2550,33 @@ defmodule Logex.Runtime do
     }
 
   # M3-2: one run of a `tp`. The compiler names a timer only whole, `{:name, _, timer}`.
-  defp pulsed(env, {:name, _, name} = timer, power, %Scan{now: now} = scan) do
+  defp pulsed(env, {:name, _, name} = timer, power, scan) do
     tree = as_map(Map.get(scan.ons_blocked, name))
     blocked = scan.first or Map.get(tree, "en") == true
     state = as_map(read(env, timer))
     edge = power and not blocked and not closed?(Map.get(state, "en"))
-    env = write(env, timer, pulse(closed?(Map.get(state, "tt")), edge, state, {power, now}))
+
+    env =
+      write(
+        env,
+        timer,
+        pulse(closed?(Map.get(state, "tt")), edge, state, {power, clock(timer, scan)})
+      )
+
     unblocked(map_size(tree) > 0, env, name)
   end
 
   # Pulsing: the time since its last run, whatever the rung or an edge.
-  defp pulse(true, _edge, timer, {power, now}) do
-    acc = max(integer(Map.get(timer, "acc")), 0) + elapsed(true, Map.get(timer, "last"), now)
-    pulsing(timer, acc, {power, now})
+  defp pulse(true, _edge, timer, {power, clock}) do
+    acc = max(integer(Map.get(timer, "acc")), 0) + elapsed(true, Map.get(timer, "last"), clock)
+    pulsing(timer, acc, {power, clock})
   end
 
   # A rising edge starts the pulse from 0.
   defp pulse(false, true, timer, at), do: pulsing(timer, 0, at)
 
   # Neither: held true, `.dn` and `.acc` as they were; false, both 0.
-  defp pulse(false, false, timer, {true, now}),
+  defp pulse(false, false, timer, {true, {now, _per_ms}}),
     do: %{
       "pre" => integer(Map.get(timer, "pre")),
       "acc" => integer(Map.get(timer, "acc")),
@@ -2558,7 +2586,7 @@ defmodule Logex.Runtime do
       "last" => now
     }
 
-  defp pulse(false, false, timer, {false, now}),
+  defp pulse(false, false, timer, {false, {now, _per_ms}}),
     do: %{
       "pre" => integer(Map.get(timer, "pre")),
       "acc" => 0,
@@ -2568,7 +2596,7 @@ defmodule Logex.Runtime do
       "last" => now
     }
 
-  defp pulsing(timer, acc, {power, now}) do
+  defp pulsing(timer, acc, {power, {now, _per_ms}}) do
     pre = integer(Map.get(timer, "pre"))
     limit = max(pre, 0)
     acc = min(acc, limit)
@@ -2580,7 +2608,7 @@ defmodule Logex.Runtime do
   defp ended(true, true, timer), do: Map.merge(timer, %{"dn" => 1, "tt" => 0})
   defp ended(true, false, timer), do: Map.merge(timer, %{"acc" => 0, "dn" => 0, "tt" => 0})
 
-  defp elapsed(true, last, now) when is_integer(last), do: max(now - last, 0)
+  defp elapsed(true, last, {now, per_ms}) when is_integer(last), do: max(now - last, 0) * per_ms
   defp elapsed(_enabled, _last, _now), do: 0
 
   defp integer(value) when is_integer(value), do: value

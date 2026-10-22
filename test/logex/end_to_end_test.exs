@@ -18,7 +18,7 @@ defmodule Logex.EndToEndTest do
          "`ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, " <>
          "`ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, " <>
          "`ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, " <>
-         "`rto`, `tof`, `ton` and `tp`"
+         "`rto`, `rto_ltime`, `tof`, `tof_ltime`, `ton`, `ton_ltime`, `tp` and `tp_ltime`"
 
   defp run(src, env) do
     {:ok, program} = compile(src)
@@ -5399,6 +5399,100 @@ defmodule Logex.EndToEndTest do
       # `ctu_dint` declared the very `ctu`: the program's tag holds the type `ctu` gives.
       {:ok, line} = Logex.compile_file(Path.join(dir, "line.ld"))
       assert line.tags["boxes"].type == Logex.FbType.ctu()
+    end
+  end
+
+  # PLAN M5-6's Done-when in a plant, from files on disk through
+  # Logex.Configuration.compile_file/1 and Logex.Runtime.cycle/3: a curing press's 30-day
+  # `ton_ltime`, and the one rung `ton t 2000000` on a `ton` and on a `ton_ltime`, over
+  # seeded presses and waits, against an oracle that knows nothing of logex: a lamp is lit
+  # once its press has been held, cycle after cycle, for its delay, 30 days, 2,000,000 ms
+  # or 2 ms, the time a cycle passes counted in whole ms.
+  describe "long timers (M5-6)" do
+    @describetag :tmp_dir
+
+    @press_ld """
+    var_input press bool
+    var_output cured bool
+    var_output slow_lamp bool
+    var_output quick_lamp bool
+    var cure ton_ltime
+    var slow ton
+    var quick ton_ltime
+    xic press ton cure 2592000000000000
+    xic press ton slow 2000000
+    xic press ton quick 2000000
+    xic cure.dn ote cured
+    xic slow.dn ote slow_lamp
+    xic quick.dn ote quick_lamp
+    """
+
+    # The continuous task runs the press at every cycle, whatever the time it passes.
+    @press_logex """
+    task main continuous
+    var_global press bool at panel.i.0
+    var_global cured bool at panel.q.0
+    var_global slow_lamp bool at panel.q.1
+    var_global quick_lamp bool at panel.q.2
+    program p press
+    p.press press
+    p.cured cured
+    p.slow_lamp slow_lamp
+    p.quick_lamp quick_lamp
+    """
+
+    test "M5-6's Done-when: a 30-day cure and the one rung's two units in a plant",
+         %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "press.ld"), @press_ld)
+      File.write!(Path.join(dir, "plant.logex"), @press_logex)
+      {:ok, config} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      day = 86_400_000
+      delays = %{"cured" => 30 * day, "slow_lamp" => 2_000_000, "quick_lamp" => 2}
+
+      # The oracle: the time the press has been held, from the first cycle that saw it.
+      lit = fn held ->
+        Map.new(delays, fn {lamp, delay} ->
+          {lamp, if(held != nil and held >= delay, do: 1, else: 0)}
+        end)
+      end
+
+      :rand.seed(:exsss, {2026, 10, 156})
+
+      waits =
+        for _ <- 1..400 do
+          {Enum.random([0, 1, 1, 2, 3, 1_000, 1_999_997, 3_600_000, day, 7 * day]),
+           Enum.random([1, 1, 1, 1, 1, 1, 1, 0])}
+        end
+
+      # Each delay's edge: held one ms short of it, then at it.
+      edges =
+        for delay <- [2, 2_000_000, 30 * day],
+            step <- [{0, 0}, {0, 1}, {delay - 1, 1}, {1, 1}],
+            do: step
+
+      seen =
+        Enum.reduce(edges ++ waits, {Logex.Runtime.start(config), nil, []}, fn
+          {elapsed, press}, {runtime, held, seen} ->
+            {runtime, outputs, _events} =
+              Logex.Runtime.cycle(runtime, elapsed, %{"press" => press})
+
+            held = if press == 1, do: (held && held + elapsed) || 0, else: nil
+            assert outputs == lit.(held), "held #{inspect(held)}"
+            {runtime, held, [outputs | seen]}
+        end)
+        |> elem(2)
+
+      # Each lamp was seen lit and dark, the slow one dark while the quick one was lit.
+      for lamp <- Map.keys(delays),
+          value <- [0, 1],
+          do: assert(Enum.any?(seen, &(&1[lamp] == value)))
+
+      assert Enum.any?(seen, &(&1["quick_lamp"] == 1 and &1["slow_lamp"] == 0))
+
+      # The rung's unit is its instance's: the two compiled tags differ in type alone.
+      {:ok, press} = Logex.compile_file(Path.join(dir, "press.ld"))
+      assert press.tags["slow"].type == Logex.FbType.ton()
+      assert press.tags["quick"].type == Logex.FbType.ton_ltime()
     end
   end
 end

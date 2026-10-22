@@ -1483,8 +1483,45 @@ defmodule Logex.RuntimeTest do
                "ctud_ulint" => FbType.ctud_ulint(),
                "ctu_dint" => FbType.ctu(),
                "ctd_dint" => FbType.ctd(),
-               "ctud_dint" => FbType.ctud()
+               "ctud_dint" => FbType.ctud(),
+               # M5-6: the long timers (decision 158).
+               "ton_ltime" => FbType.ton_ltime(),
+               "tof_ltime" => FbType.tof_ltime(),
+               "tp_ltime" => FbType.tp_ltime(),
+               "rto_ltime" => FbType.rto_ltime()
              }
+    end
+
+    # M5-6 (decision 158): each long timer is its kind's members with `pre` and `acc` lint
+    # nanoseconds, named by its word, and its kind's rules under its `family`, its
+    # `counts` a lint and a millisecond adding 1,000,000 ns to it, where a plain timer's
+    # `counts` is a dint and a millisecond adds 1.
+    test "the long timers' members and rules, each its kind's but for its type and unit" do
+      for kind <- ~w(ton tof tp rto) do
+        plain = FbType.builtin(kind)
+        long = FbType.builtin("#{kind}_ltime")
+        assert long.name == "#{kind}_ltime"
+        assert Enum.map(long.members, & &1.name) == Enum.map(plain.members, & &1.name)
+        assert Enum.map(long.members, & &1.role) == Enum.map(plain.members, & &1.role)
+        assert Enum.map(long.members, & &1.write) == Enum.map(plain.members, & &1.write)
+
+        for {one, other} <- Enum.zip(long.members, plain.members) do
+          assert one.type == if(one.name in ~w(pre acc), do: :lint, else: other.type)
+        end
+
+        assert Map.drop(FbType.rules(long), [:counts, :per_ms]) ==
+                 Map.drop(FbType.rules(plain), [:counts, :per_ms])
+
+        assert {FbType.rules(long).counts, FbType.rules(long).per_ms} == {:lint, 1_000_000}
+        assert {FbType.rules(plain).counts, FbType.rules(plain).per_ms} == {:dint, 1}
+        assert FbType.family(long) == kind
+        assert FbType.initial(long) == FbType.initial(plain)
+        refute long == plain
+      end
+
+      assert FbType.rules(FbType.ctu()).per_ms == nil
+      assert FbType.rules(FbType.ctu_lint()).per_ms == nil
+      assert FbType.runners() == [:ctd, :ctu, :rto, :tof, :ton, :tp]
     end
 
     # M5-5 (decision 158): each typed counter is its kind's members with `pv` and `cv` of
@@ -1514,7 +1551,8 @@ defmodule Logex.RuntimeTest do
       assert FbType.family(FbType.ton()) == "ton"
       assert FbType.family(FbType.ctu()) == "ctu"
       assert FbType.rules(FbType.ctu_int()).family == "ctu"
-      assert FbType.rules(FbType.ton()).counts == nil
+      # M5-6: a timer's `counts` is the type of its `pre` and `acc`.
+      assert FbType.rules(FbType.ton()).counts == :dint
     end
 
     # M3-2: the other timers keep the ton's members (decision 68), each its own type.
@@ -2270,14 +2308,18 @@ defmodule Logex.RuntimeTest do
                of: 1,
                public: 1,
                rto: 0,
+               rto_ltime: 0,
                rules: 1,
                runners: 0,
                runs?: 2,
                same?: 2,
                signature: 1,
                tof: 0,
+               tof_ltime: 0,
                ton: 0,
+               ton_ltime: 0,
                tp: 0,
+               tp_ltime: 0,
                type_of: 2,
                user?: 1,
                within: 2,

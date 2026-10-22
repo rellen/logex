@@ -38,7 +38,10 @@ defmodule Logex.FbType do
   `body` is nil for a built-in type: the `ton`, since M3-1 the counters `ctu`, `ctd` and
   `ctud`, since M3-2 the timers `tof`, `tp` and `rto`, and since M5-5 IEC's typed
   counters, `ctu_int` to `ctud_ulint`, each its kind's members with `pv` and `cv` of its
-  integer type, named by its word (decision 158) (`rules/1`). `ctu_dint`, `ctd_dint` and
+  integer type, named by its word (decision 158), and since M5-6 the long timers,
+  `ton_ltime`, `tof_ltime`, `tp_ltime` and `rto_ltime`, each its kind's members with `pre`
+  and `acc` lint counts of nanoseconds, a millisecond of the scan's clock adding 1,000,000
+  to its `acc`, so its resolution is a millisecond (decision 158) (`rules/1`). `ctu_dint`, `ctd_dint` and
   `ctud_dint` are no types of their own: each word gives the type of `ctu`, `ctd` or
   `ctud` (`builtins/0`, decision 163), so an instance keeps no spelling. For a user function block (M2-5) it is the block's compiled body,
   a `%Logex.Program{}` named after the block, whose tags are its members, whose `blocks`
@@ -195,6 +198,25 @@ defmodule Logex.FbType do
 
   defp counted(member, _count), do: member
 
+  # M5-6 (decision 158): the long timers, IEC's TON_LTIME, TOF_LTIME and TP_LTIME (Ed 3
+  # Table 46 features 2c, 3c and 1c) and `rto_ltime`, the retentive timer IEC's suffix
+  # names (decision 158's note): each its plain timer's members with `pre` and `acc` lint
+  # counts of nanoseconds, named by its word, the one instruction of its kind running it.
+  @timer_kinds [:ton, :tof, :tp, :rto]
+
+  for kind <- @timer_kinds do
+    @doc "The built-in #{kind} whose `pre` and `acc` are lint nanoseconds, as `var t #{kind}_ltime` declares it (M5-6)."
+    def unquote(:"#{kind}_ltime")(), do: long(unquote(kind)())
+  end
+
+  defp long(%__MODULE__{name: kind, members: members} = type),
+    do: %{type | name: "#{kind}_ltime", members: Enum.map(members, &nanoseconds/1)}
+
+  defp nanoseconds(%Member{name: name} = member) when name in ["pre", "acc"],
+    do: %{member | type: :lint}
+
+  defp nanoseconds(member), do: member
+
   # M5-5 (decision 163): IEC's names for the dint counters, second words for `ctu`, `ctd`
   # and `ctud`, which are the same types: a declaration with either word gives the one
   # type, and keeps no spelling.
@@ -203,7 +225,8 @@ defmodule Logex.FbType do
   @doc """
   The built-in function block types, by their lowercase type word. Since M5-5 the typed
   counters are among them, `ctu_int` and the rest (decision 158), and `ctu_dint`,
-  `ctd_dint` and `ctud_dint`, each the very type its plain word gives (decision 163).
+  `ctd_dint` and `ctud_dint`, each the very type its plain word gives (decision 163); and
+  since M5-6 the long timers, `ton_ltime`, `tof_ltime`, `tp_ltime` and `rto_ltime`.
   """
   def builtins, do: Logex.FbType.Builtins.table()
 
@@ -223,7 +246,8 @@ defmodule Logex.FbType do
           "ctud" => ctud()
         },
         Map.new(
-          for(kind <- @counter_kinds, count <- @counts, do: "#{kind}_#{count}"),
+          for(kind <- @counter_kinds, count <- @counts, do: "#{kind}_#{count}") ++
+            for(kind <- @timer_kinds, do: "#{kind}_ltime"),
           &{&1, apply(__MODULE__, String.to_existing_atom(&1), [])}
         )
       )
@@ -311,21 +335,42 @@ defmodule Logex.FbType do
   }
 
   # M5-5 (decision 158): every row says the kind of instance its instructions take, its
-  # `family`, its own word for each type so far, and each typed counter is its kind's row
+  # `family`, its own word for each plain type, and each typed counter is its kind's row
   # under its own word, the one instruction of its kind running it.
   # A counter's row says the type of its count, `counts`, the type of its `pv` and `cv`,
-  # whose limits it stops at (decision 71 by width), nil for a timer.
-  @rules Map.merge(
-           Map.new(@runs, fn {word, row} ->
-             {word, Map.merge(row, %{family: word, counts: Map.get(%{counter: :dint}, row.kind)})}
-           end),
+  # whose limits it stops at (decision 71 by width); since M5-6 a timer's says the type of
+  # its `pre` and `acc`, a dint for the plain timers and a lint for the long ones, and
+  # `per_ms`, what a millisecond adds to its `acc`: 1 for a plain timer, whose unit is the
+  # millisecond, and 1,000,000 for a long one, whose unit is the nanosecond, so that its
+  # resolution is a millisecond (§4.12, "Timers and counters"); nil for a counter.
+  @plain %{counter: {:dint, nil}, timer: {:dint, 1}}
+
+  @rules Map.new(@runs, fn {word, row} ->
+           {counts, per_ms} = Map.fetch!(@plain, row.kind)
+           {word, Map.merge(row, %{family: word, counts: counts, per_ms: per_ms})}
+         end)
+         |> Map.merge(
            Map.new(
              for(kind <- @counter_kinds, count <- @counts, do: {kind, count}),
              fn {kind, count} ->
                {"#{kind}_#{count}",
-                Map.merge(Map.fetch!(@runs, "#{kind}"), %{family: "#{kind}", counts: count})}
+                Map.merge(Map.fetch!(@runs, "#{kind}"), %{
+                  family: "#{kind}",
+                  counts: count,
+                  per_ms: nil
+                })}
              end
            )
+         )
+         |> Map.merge(
+           Map.new(@timer_kinds, fn kind ->
+             {"#{kind}_ltime",
+              Map.merge(Map.fetch!(@runs, "#{kind}"), %{
+                family: "#{kind}",
+                counts: :lint,
+                per_ms: 1_000_000
+              })}
+           end)
          )
 
   @doc """
@@ -345,7 +390,10 @@ defmodule Logex.FbType do
   `"ctu"` for a `ctu` and for each typed up counter, `ctu_int` among them (decision 158),
   and each type's own word for every other; and `counts`, a counter's integer type, that
   of its `pv` and `cv`, whose limits it stops at, `:dint` for a `ctu` and `:int` for a
-  `ctu_int`, nil for a timer.
+  `ctu_int`. Since M5-6 a timer's `counts` is the type of its `pre` and `acc`, `:dint` for
+  a `ton` and `:lint` for a `ton_ltime`, whose `family` is `"ton"` (decision 158); and
+  `per_ms` is what a millisecond adds to a timer's `acc`, 1 for a timer counted in
+  milliseconds and 1,000,000 for a long timer, counted in nanoseconds, nil for a counter.
   """
   def rules(%__MODULE__{name: name, body: nil}) when is_map_key(@rules, name),
     do: Map.fetch!(@rules, name)

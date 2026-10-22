@@ -124,13 +124,15 @@ defmodule Logex.Declarations do
   # letter by letter where it is no word, so `rto`, "R-T-O", takes `an`, as `tp` and `ctud`
   # take `a`, and `ton` and `tof` are said as words. A word with no row takes `a`: since
   # M5-5 each typed counter and alias, said as its kind, letter by letter, then its integer
-  # type's word, `a ctu_int` (decisions 158 and 163), so it needs none.
+  # type's word, `a ctu_int` (decisions 158 and 163), so it needs none; since M5-6 a long
+  # timer is said as its kind, so `rto_ltime` takes `an`, as `rto` does.
   # validation_test.exs holds every word of Logex.FbType.builtins/0 to its article.
   @articles Map.merge(Map.new(@table, &{&1.word, &1.article}), %{
               "ton" => "a",
               "tof" => "a",
               "tp" => "a",
               "rto" => "an",
+              "rto_ltime" => "an",
               "ctu" => "a",
               "ctd" => "a",
               "ctud" => "a"

@@ -26,7 +26,7 @@ defmodule Logex.ValidationTest do
          "`ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, " <>
          "`ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, " <>
          "`ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, " <>
-         "`rto`, `tof`, `ton` and `tp`"
+         "`rto`, `rto_ltime`, `tof`, `tof_ltime`, `ton`, `ton_ltime`, `tp` and `tp_ltime`"
 
   # The same from Elixir, each named as the value that declares it.
   # M5-5: an alias of a counter is named once, as the value its plain word gives (decision
@@ -38,8 +38,10 @@ defmodule Logex.ValidationTest do
                 "Logex.FbType.ctu_udint(), Logex.FbType.ctu_ulint(), " <>
                 "Logex.FbType.ctud(), Logex.FbType.ctud_int(), Logex.FbType.ctud_lint(), " <>
                 "Logex.FbType.ctud_udint(), Logex.FbType.ctud_ulint(), " <>
-                "Logex.FbType.rto(), Logex.FbType.tof(), " <>
-                "Logex.FbType.ton() and Logex.FbType.tp()"
+                "Logex.FbType.rto(), Logex.FbType.rto_ltime(), " <>
+                "Logex.FbType.tof(), Logex.FbType.tof_ltime(), " <>
+                "Logex.FbType.ton(), Logex.FbType.ton_ltime(), " <>
+                "Logex.FbType.tp() and Logex.FbType.tp_ltime()"
 
   alias Logex.Compiler
 
@@ -1999,12 +2001,12 @@ defmodule Logex.ValidationTest do
       assert source_errors(
                @timer <> "ton a 5\nton t1.acc 5\nton 5 5000\nton t1\nton t9 5\nton d 5"
              ) == [
-               "line 4: `ton` runs a ton, but `a` is a bool (declared on line 2)",
-               "line 5: `ton` runs a ton, but `t1.acc` is a dint",
-               "line 6: `ton` expects a ton, found `5`",
-               "line 7: `ton` expects 2 operands (a ton, then a preset), found 1",
+               "line 4: `ton` runs a ton or ton_ltime, but `a` is a bool (declared on line 2)",
+               "line 5: `ton` runs a ton or ton_ltime, but `t1.acc` is a dint",
+               "line 6: `ton` expects a ton or ton_ltime, found `5`",
+               "line 7: `ton` expects 2 operands (a ton or ton_ltime, then a preset), found 1",
                "line 8: `t9` is not declared",
-               "line 9: `ton` runs a ton, but `d` is a dint (declared on line 3)"
+               "line 9: `ton` runs a ton or ton_ltime, but `d` is a dint (declared on line 3)"
              ]
     end
 
@@ -2018,7 +2020,7 @@ defmodule Logex.ValidationTest do
                "line 5: `t1` is already run by the `ton` on line 4: one `ton` runs a timer",
                "line 6: `ton` takes a preset of 0 to 2147483647 ms, found `2147483648`",
                "line 6: `t1` is already run by the `ton` on line 4: one `ton` runs a timer",
-               "line 7: `ton` expects a ton, found `5`",
+               "line 7: `ton` expects a ton or ton_ltime, found `5`",
                "line 7: `ton` takes its preset as a number of milliseconds, found `d`"
              ]
 
@@ -2045,8 +2047,8 @@ defmodule Logex.ValidationTest do
             {"ton t1 t2.dn", "t2.dn", []},
             {"ton t1 bool", "bool", []},
             {"ton d t2.acc", "t2.acc",
-             ["`ton` runs a ton, but `d` is a dint (declared on line 3)"]},
-            {"ton t1.dn d", "d", ["`ton` runs a ton, but `t1.dn` is a bool"]},
+             ["`ton` runs a ton or ton_ltime, but `d` is a dint (declared on line 3)"]},
+            {"ton t1.dn d", "d", ["`ton` runs a ton or ton_ltime, but `t1.dn` is a bool"]},
             {"ton dint d", "d", ["`ton` expects a tag, found the type `dint`"]},
             # One name cannot be both the timer and the dint moved into it.
             {"ton b b", "b", ["`b` is not declared"]},
@@ -2117,9 +2119,9 @@ defmodule Logex.ValidationTest do
 
     test "a ton on a declared tag that is not a timer runs nothing, so a second is not counted" do
       assert source_errors(@timer <> "xic a ton a 5\nxic a ton d 6\nxic a ton a 7") == [
-               "line 4: `ton` runs a ton, but `a` is a bool (declared on line 2)",
-               "line 5: `ton` runs a ton, but `d` is a dint (declared on line 3)",
-               "line 6: `ton` runs a ton, but `a` is a bool (declared on line 2)"
+               "line 4: `ton` runs a ton or ton_ltime, but `a` is a bool (declared on line 2)",
+               "line 5: `ton` runs a ton or ton_ltime, but `d` is a dint (declared on line 3)",
+               "line 6: `ton` runs a ton or ton_ltime, but `a` is a bool (declared on line 2)"
              ]
     end
 
@@ -2258,9 +2260,9 @@ xic a ton t1 7") == [
                @paths <>
                  "xic go ton b 5 ote lamp\nxic go ton t1.dn 5 ote lamp\nxic go ton bool 5 ote lamp"
              ) == [
-               "line 6: `ton` runs a ton, but `b` is a bool (declared on line 2)",
+               "line 6: `ton` runs a ton or ton_ltime, but `b` is a bool (declared on line 2)",
                "line 6: `ote lamp` follows `ton b` " <> unnamed,
-               "line 7: `ton` runs a ton, but `t1.dn` is a bool",
+               "line 7: `ton` runs a ton or ton_ltime, but `t1.dn` is a bool",
                "line 7: `ote lamp` follows `ton t1.dn` " <> unnamed,
                "line 8: `ton` expects a tag, found the type `bool`",
                "line 8: `ote lamp` follows `ton bool` " <> unnamed
@@ -2329,7 +2331,7 @@ xic a ton t1 7") == [
       assert source_errors(@paths <> "xic go ton t9 5 ote lamp\nxic go ton ote lamp") == [
                "line 6: `t9` is not declared",
                after_ton(6, "`ote lamp`", "t9"),
-               "line 7: `ton` expects 2 operands (a ton, then a preset), found none " <>
+               "line 7: `ton` expects 2 operands (a ton or ton_ltime, then a preset), found none " <>
                  "before the instruction `ote`",
                "line 7: `ote lamp` follows `ton` on its path: what passes on after a `ton` is " <>
                  "not settled, so a `ton` ends its path; read the timer's `.dn` on a rung below"
@@ -2346,13 +2348,13 @@ xic a ton t1 7") == [
                  "xic a tof t1 5\nxic a ton f 5\nxic a tof c 5\nxic a ctu f 5\nxic a tof a 5\n" <>
                  "tof 5 5\ntof f"
              ) == [
-               "line 6: `tof` runs a tof, but `t1` is a ton (declared on line 2)",
-               "line 7: `ton` runs a ton, but `f` is a tof (declared on line 1)",
-               "line 8: `tof` runs a tof, but `c` is a ctu (declared on line 3)",
+               "line 6: `tof` runs a tof or tof_ltime, but `t1` is a ton (declared on line 2)",
+               "line 7: `ton` runs a ton or ton_ltime, but `f` is a tof (declared on line 1)",
+               "line 8: `tof` runs a tof or tof_ltime, but `c` is a ctu (declared on line 3)",
                "line 9: `ctu` runs #{@runs_ctu}, but `f` is a tof (declared on line 1)",
-               "line 10: `tof` runs a tof, but `a` is a bool (declared on line 4)",
-               "line 11: `tof` expects a tof, found `5`",
-               "line 12: `tof` expects 2 operands (a tof, then a preset), found 1"
+               "line 10: `tof` runs a tof or tof_ltime, but `a` is a bool (declared on line 4)",
+               "line 11: `tof` expects a tof or tof_ltime, found `5`",
+               "line 12: `tof` expects 2 operands (a tof or tof_ltime, then a preset), found 1"
              ]
 
       assert {:ok, program} =
@@ -2388,7 +2390,7 @@ xic a ton t1 7") == [
                ]
 
       assert source_errors("var a bool\nxic a tof a 3 ote a") == [
-               "line 2: `tof` runs a tof, but `a` is a bool (declared on line 1)",
+               "line 2: `tof` runs a tof or tof_ltime, but `a` is a bool (declared on line 1)",
                "line 2: `ote a` follows `tof a` on its path: what passes on after a `tof` is not " <>
                  "settled, so a `tof` ends its path; read the timer's `.dn` on a rung below"
              ]
@@ -2441,8 +2443,8 @@ xic a ton t1 7") == [
                  "xic a tp h 2147483648\nxic a tp h 5 ote a\nxic a ote h.tt\nxic a ote h.dn\n" <>
                  "xic a tp a 1 xic a"
              ) == [
-               "line 5: `tp` runs a tp, but `f` is a tof (declared on line 2)",
-               "line 6: `tof` runs a tof, but `h` is a tp (declared on line 1)",
+               "line 5: `tp` runs a tp or tp_ltime, but `f` is a tof (declared on line 2)",
+               "line 6: `tof` runs a tof or tof_ltime, but `h` is a tp (declared on line 1)",
                "line 8: `h` is already run by the `tp` on line 7: one `tp` runs a timer",
                "line 9: `tp` takes its preset as a number of milliseconds, found `n`: to preset " <>
                  "`h` from a tag, `move n h.pre` on a rung above",
@@ -2454,7 +2456,7 @@ xic a ton t1 7") == [
                  "settled, so a `tp` ends its path; read the timer with `xic h.tt` on a rung below",
                "line 12: `ote` writes `h.tt`, but logic may write only `.pre` and `.acc` of a tp",
                "line 13: `ote` writes `h.dn`, but logic may write only `.pre` and `.acc` of a tp",
-               "line 14: `tp` runs a tp, but `a` is a bool (declared on line 3)",
+               "line 14: `tp` runs a tp or tp_ltime, but `a` is a bool (declared on line 3)",
                "line 14: `xic a` follows `tp a` on its path: what passes on after a `tp` is not " <>
                  "settled, so a `tp` ends its path; read the timer's `.tt` on a rung below"
              ]
@@ -2484,8 +2486,8 @@ xic a ton t1 7") == [
                  "xic a rto t1 5\nxic a ton l 5\nxic a rto l 5\nxic a rto l 5\n" <>
                  "xic a rto l 5 ote a\nxic a ote l.dn\nxic a ons l.r ote a"
              ) == [
-               "line 4: `rto` runs an rto, but `t1` is a ton (declared on line 2)",
-               "line 5: `ton` runs a ton, but `l` is an rto (declared on line 1)",
+               "line 4: `rto` runs an rto or rto_ltime, but `t1` is a ton (declared on line 2)",
+               "line 5: `ton` runs a ton or ton_ltime, but `l` is an rto (declared on line 1)",
                "line 7: `l` is already run by the `rto` on line 6: one `rto` runs a timer",
                "line 8: `l` is already run by the `rto` on line 6: one `rto` runs a timer",
                "line 8: `ote a` follows `rto l` on its path: what passes on after an `rto` is not " <>
@@ -2541,7 +2543,12 @@ xic a ton t1 7") == [
                "ctud_dint" => "a ctud_dint",
                "ctud_lint" => "a ctud_lint",
                "ctud_udint" => "a ctud_udint",
-               "ctud_ulint" => "a ctud_ulint"
+               "ctud_ulint" => "a ctud_ulint",
+               # M5-6: the long timers, `an rto_ltime` said as `an rto` is.
+               "ton_ltime" => "a ton_ltime",
+               "tof_ltime" => "a tof_ltime",
+               "tp_ltime" => "a tp_ltime",
+               "rto_ltime" => "an rto_ltime"
              }
 
       assert Logex.Declarations.a_or_an("rto", "`rto`") == "an `rto`"
@@ -2578,7 +2585,7 @@ xic a ton t1 7") == [
                  "only counts up; declare it `var c ctud` to count both ways",
                "line 8: `ctu` runs #{@runs_ctu}, but `h` is a ctd (declared on line 2): a ctd " <>
                  "only counts down; declare it `var h ctud` to count both ways",
-               "line 9: `ton` runs a ton, but `k` is a ctud (declared on line 3)",
+               "line 9: `ton` runs a ton or ton_ltime, but `k` is a ctud (declared on line 3)",
                "line 10: `ctu` runs #{@runs_ctu}, but `t1` is a ton (declared on line 4)",
                "line 11: `ctu` runs #{@runs_ctu}, but `a` is a bool (declared on line 5)",
                "line 12: `ctu` runs #{@runs_ctu}, but `n` is a dint (declared on line 6)",

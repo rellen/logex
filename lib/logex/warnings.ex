@@ -19,6 +19,8 @@ defmodule Logex.Warnings do
     instruction of its type runs, in its type's words, a counter no `ctu` or `ctd` runs:
     it never counts;
   - an instance of a user function block no `cal` runs (M2-5): it never runs;
+  - a long timer's preset that is no whole number of milliseconds (M5-6, §4.12's routine
+    choice), `ton t 1500000` on a `ton_ltime`: it times as the next whole millisecond;
   - a label no `jmp` names (M3-5): nothing jumps to its rung.
 
   A write on a rung a jump may skip is still a write (decision 107): two `ote`s on one tag,
@@ -58,8 +60,38 @@ defmodule Logex.Warnings do
     |> Kernel.++(Enum.flat_map(instructions, &constant/1))
     |> Kernel.++(Enum.flat_map(instructions, &at_limit(&1, tags)))
     |> Kernel.++(unjumped(instructions))
+    |> Kernel.++(Enum.flat_map(instructions, &between_milliseconds(&1, tags)))
     |> Enum.sort_by(& &1.line)
   end
+
+  # M5-6 (§4.12's routine choice, decision 158): a long timer counts nanoseconds on a clock
+  # of whole milliseconds, so a preset that is no whole number of them is reached at the
+  # next whole millisecond, `ton t 1500000` on a `ton_ltime` at 2 ms. A timer counted in
+  # ms, and a counter, have no such preset; a program with a diagnostic gets no warning, so
+  # the instance here is one the instruction runs.
+  @runners FbType.runners()
+
+  defp between_milliseconds({symbol, line, [{:name, _, name}, {:int_lit, _, preset}]}, tags)
+       when symbol in @runners,
+       do: between(per_ms(Map.get(tags, name)), {symbol, line, name, preset})
+
+  defp between_milliseconds(_instruction, _tags), do: []
+
+  defp per_ms(%Tag{type: %FbType{body: nil} = type}), do: {FbType.rules(type).per_ms, type}
+  defp per_ms(_no_built_in), do: {nil, nil}
+
+  defp between({per_ms, type}, {symbol, line, name, preset})
+       when is_integer(per_ms) and rem(preset, per_ms) != 0,
+       do: [
+         warning(
+           line,
+           "`#{symbol}` gives `#{name}` a preset of #{preset} ns, which is no whole number " <>
+             "of milliseconds: #{Declarations.a_or_an(type.name)} counts whole milliseconds, " <>
+             "so it times as the next whole millisecond, #{div(preset, per_ms) + 1} ms"
+         )
+       ]
+
+  defp between(_whole, _run), do: []
 
   # M3-5 (decision 105): a label no `jmp` of its routine names. Its rung runs as any rung
   # does, so the label does nothing, and is likely left from a jump removed or misspelled

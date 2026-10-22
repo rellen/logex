@@ -100,7 +100,8 @@ defmodule Logex.NamingTest do
   test "a declaration line's words are those of the items that have landed" do
     # M1-3: the sections and `bool` and `dint`; M1-6: `ton`; M2-4: `var_external`; M3-1:
     # the counters; M3-2: the other timers; M5-3: the seven other integer types; M5-5:
-    # the twelve typed counters and the three dint aliases (decisions 158 and 163).
+    # the twelve typed counters and the three dint aliases (decisions 158 and 163); M5-6:
+    # the four long timers (decision 158).
     counters =
       for kind <- ~w(ctu ctd ctud), count <- ~w(int dint lint udint ulint), do: "#{kind}_#{count}"
 
@@ -108,7 +109,9 @@ defmodule Logex.NamingTest do
              Enum.sort(
                ~w(var var_input var_output var_external) ++
                  ~w(bool sint int dint lint usint uint udint ulint) ++
-                 ~w(ton tof tp rto ctu ctd ctud) ++ counters
+                 ~w(ton tof tp rto ctu ctd ctud) ++
+                 counters ++
+                 ~w(ton_ltime tof_ltime tp_ltime rto_ltime)
              )
 
     for word <- Map.keys(Logex.FbType.builtins()) do

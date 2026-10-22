@@ -260,7 +260,7 @@ defmodule Logex.TypedCounterTest do
              ]
 
       assert messages("var e bool\nvar c ctu_udint\nxic e ton c 1") == [
-               "line 3: `ton` runs a ton, but `c` is a ctu_udint (declared on line 2)"
+               "line 3: `ton` runs a ton or ton_ltime, but `c` is a ctu_udint (declared on line 2)"
              ]
     end
 

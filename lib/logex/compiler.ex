@@ -34,7 +34,9 @@ defmodule Logex.Compiler do
   # M1-6 adds two: `{:instance, type}` is an instance of that function block type, which
   # the instruction runs, the only slot where an instance is named whole; `:preset` is a
   # literal number, 0 to 2147483647, of milliseconds for a timer and a count for a counter;
-  # since M3-1 an instance slot names a list where it runs instances of several types. M3-5
+  # since M3-1 an instance slot names a list where it runs instances of several types, and
+  # since M5-5 and M5-6 each a kind, every type of that `family`; a preset is judged in its
+  # instance's type and unit (judged/3), a `ton_ltime`'s 0 to 2^63-1 ns. M3-5
   # adds `{:label, nil}`, a label of the routine's own, a namespace that holds no tag, which
   # the IR keeps as `{:label, line, name}`.
   # Type: an elementary type of `Logex.Declarations.table/0`, `:bool`, `:dint` or since M5-3
@@ -67,13 +69,15 @@ defmodule Logex.Compiler do
     "gt" => {:gt, [{:value, :any_num}, {:value, :any_num}]},
     "le" => {:le, [{:value, :any_num}, {:value, :any_num}]},
     "ge" => {:ge, [{:value, :any_num}, {:value, :any_num}]},
-    "ton" => {:ton, [{:instance, "ton"}, {:preset, :dint}]},
-    # M3-2: the off-delay timer, rung power its IN, the preset its starting `.pre` in ms.
-    "tof" => {:tof, [{:instance, "tof"}, {:preset, :dint}]},
-    # M3-2: the pulse timer, rung power its IN, the preset its starting `.pre` in ms.
-    "tp" => {:tp, [{:instance, "tp"}, {:preset, :dint}]},
-    # M3-2: the retentive timer, rung power its IN, the preset its starting `.pre` in ms.
-    "rto" => {:rto, [{:instance, "rto"}, {:preset, :dint}]},
+    # M5-6 (decision 158): each timer's slot names its kind, so the one `ton` runs a `ton`
+    # and a `ton_ltime`, its preset in its instance's unit, ms or ns.
+    "ton" => {:ton, [{:instance, ["ton"]}, {:preset, :dint}]},
+    # M3-2: the off-delay timer, rung power its IN, the preset its starting `.pre`.
+    "tof" => {:tof, [{:instance, ["tof"]}, {:preset, :dint}]},
+    # M3-2: the pulse timer, rung power its IN, the preset its starting `.pre`.
+    "tp" => {:tp, [{:instance, ["tp"]}, {:preset, :dint}]},
+    # M3-2: the retentive timer, rung power its IN, the preset its starting `.pre`.
+    "rto" => {:rto, [{:instance, ["rto"]}, {:preset, :dint}]},
     # M3-1: IEC's counters (decision 67). Rung power is the count input of the counter's
     # side the mnemonic names, `cu` or `cd`, and the preset is its starting `pv`, a count.
     # An instance slot may take several types, a list: a `ctud` is run by one of each
@@ -1760,8 +1764,8 @@ defmodule Logex.Compiler do
          diagnostics
        ) do
     message =
-      "`#{word}` takes its preset as #{unit(symbol)}, found `#{name}`" <>
-        moved(first, name, symbol, known)
+      "`#{word}` takes its preset as #{unit(symbol, runnable_of(first, symbol, known))}, " <>
+        "found `#{name}`" <> moved(first, name, symbol, known)
 
     [diagnostic(line, message) | diagnostics]
   end
@@ -1784,10 +1788,20 @@ defmodule Logex.Compiler do
 
   defp check_divisor(_symbol, _operands, _at, diagnostics), do: diagnostics
 
-  defp unit(symbol), do: unit_of(kind_of(symbol))
+  # Since M5-6 a timer's unit is its instance's, a long timer's nanoseconds (decision 158).
+  defp unit(symbol, type), do: unit_of(kind_of(symbol), per_ms(type), type)
 
-  defp unit_of(:timer), do: "a number of milliseconds"
-  defp unit_of(:counter), do: "a number, a count"
+  defp unit_of(:timer, 1, _type), do: "a number of milliseconds"
+
+  defp unit_of(:timer, _per_ms, %FbType{name: name}),
+    do: "a number of nanoseconds for #{Declarations.a_or_an(name)}"
+
+  defp unit_of(:counter, _per_ms, _type), do: "a number, a count"
+
+  # The type of the instance the instruction runs, where its first operand names one, or
+  # nil.
+  defp runnable_of({:name, _, instance}, symbol, known), do: runnable(symbol, instance, known)
+  defp runnable_of(_literal, _symbol, _known), do: nil
 
   # The `move` is named only where it would compile, once a name in it not declared yet is
   # declared: into an instance's preset member, from a dint. One name is never both, nor
@@ -1813,7 +1827,7 @@ defmodule Logex.Compiler do
   # own, and from a source `move` widens into its preset member's type, since M5-5 its
   # instance's, a `ctu_int`'s `pv` an int; into nothing the instruction runs, no hint.
   defp move(%FbType{} = type, instance, name, known),
-    do: move_from(widens_into?(name, known, preset_type(true, type)), type, instance, name)
+    do: move_from(widens_into?(name, known, preset_type(type)), type, instance, name)
 
   defp move(nil, _instance, _name, _known), do: ""
 
@@ -1876,17 +1890,20 @@ defmodule Logex.Compiler do
 
   defp judged(slots, _at, _scope), do: slots
 
+  # Since M5-6 the slot carries the instance's type too, whose rules give its unit: a
+  # `ton_ltime`'s preset is a lint of nanoseconds (decision 158).
   defp counts_in({:ok, %Tag{type: %FbType{} = type}}, {_, word}),
-    do: preset_type(FbType.runs?(type, symbol_of(word)), type)
+    do: judged_in(FbType.runs?(type, symbol_of(word)), type)
 
-  defp counts_in(_not_an_instance, _at), do: :dint
+  defp counts_in(_not_an_instance, _at), do: {:dint, nil}
 
-  defp preset_type(true, type) do
+  defp judged_in(true, type), do: {preset_type(type), type}
+  defp judged_in(false, _type), do: {:dint, nil}
+
+  defp preset_type(type) do
     {:ok, %Member{type: counts}} = FbType.member(type, FbType.rules(type).preset)
     counts
   end
-
-  defp preset_type(false, _type), do: :dint
 
   # A literal in a slot of an elementary type must fit it, as a declared initial value must
   # (M1-6: the comparisons, whose slots were dints; since M5-4 a conversion's source). An
@@ -1905,16 +1922,24 @@ defmodule Logex.Compiler do
   # Since decision 191 a counter's preset is any value of its `pv`'s type, as IEC's PV is,
   # a signed counter's negatives among them, `ctu offset -10` on a `ctu_int`, an unsigned
   # one's 0 to its top; a timer's is still 0 to 2147483647 ms.
-  defp check_tag({{:preset, type}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics) do
-    first = preset_first(kind_of(symbol_of(word)), type)
+  # Since M5-6 a long timer's is 0 to 2^63-1 ns, the lint's top (decision 158).
+  defp check_tag({{:preset, {type, of}}, {:int_lit, line, value}}, {_, word}, _scope, diagnostics) do
+    kind = kind_of(symbol_of(word))
+    first = preset_first(kind, type)
 
     preset(
       value >= first and Declarations.fits?(type, value),
-      {type, value, first},
+      {type, value, first, in_words(kind, type, of)},
       {line, word},
       diagnostics
     )
   end
+
+  # A preset no instance judges, its instance slot a literal or missing, is the
+  # mnemonic's own: a dint, in ms for a timer.
+  defp check_tag({{:preset, type}, {:int_lit, _, _} = preset}, at, scope, diagnostics)
+       when is_atom(type),
+       do: check_tag({{:preset, {type, nil}}, preset}, at, scope, diagnostics)
 
   defp check_tag({_slot, {:int_lit, _, _}}, _at, _scope, diagnostics), do: diagnostics
 
@@ -1935,24 +1960,27 @@ defmodule Logex.Compiler do
 
   defp preset(true, _value, _at, diagnostics), do: diagnostics
 
-  defp preset(false, {type, value, first}, {line, word}, diagnostics),
+  defp preset(false, {type, value, first, words}, {line, word}, diagnostics),
     do: [
       diagnostic(
         line,
         "`#{word}` takes a preset of #{first} to #{Declarations.range(type).last}" <>
-          "#{suffix(symbol_of(word))}#{of_type(type)}, found `#{value}`"
+          "#{words}, found `#{value}`"
       )
       | diagnostics
     ]
 
-  # M5-5: a preset of a type other than the dint says the type it is judged in.
-  defp of_type(:dint), do: ""
-  defp of_type(type), do: " for a counter of #{Declarations.word(type)}s"
+  # M5-5: a preset of a type other than the dint says the type it is judged in; since M5-6
+  # a timer's says its unit, a long timer's its type too, "ns for a ton_ltime".
+  defp in_words(:counter, :dint, _of), do: ""
+  defp in_words(:counter, type, _of), do: " for a counter of #{Declarations.word(type)}s"
+  defp in_words(:timer, _type, of), do: timer_unit(per_ms(of), of)
 
-  defp suffix(symbol), do: suffix_of(kind_of(symbol))
+  defp per_ms(%FbType{} = type), do: FbType.rules(type).per_ms
+  defp per_ms(nil), do: 1
 
-  defp suffix_of(:timer), do: " ms"
-  defp suffix_of(:counter), do: ""
+  defp timer_unit(1, _of), do: " ms"
+  defp timer_unit(_per_ms, %FbType{name: name}), do: " ns for #{Declarations.a_or_an(name)}"
 
   defp symbol_of(word), do: elem(Map.fetch!(@instructions, String.downcase(word)), 0)
 
@@ -2171,7 +2199,8 @@ defmodule Logex.Compiler do
          diagnostic(
            line,
            "`#{word}` runs #{a_type(types)}, but `#{tag.name}` is " <>
-             "#{Declarations.instance_of(type)}#{declared(tag)}" <> both_ways(type, tag)
+             "#{Declarations.instance_of(type)}#{declared(tag)}" <>
+             both_ways("ctud" in types, type, tag)
          )
          | diagnostics
        ]
@@ -2205,11 +2234,12 @@ defmodule Logex.Compiler do
     do: Enum.join(Enum.drop(words, -1), ", ") <> " or " <> List.last(words)
 
   # A counter of the other kind is one declaration from one that counts both ways, of its
-  # own type since M5-5: a `ctd_int` from a `ctud_int`.
-  defp both_ways(%FbType{name: name, body: nil} = type, tag),
+  # own type since M5-5: a `ctd_int` from a `ctud_int`. Since M5-6 a timer's slot runs a
+  # list too, and a counter given to it is told no such thing.
+  defp both_ways(true, %FbType{name: name, body: nil} = type, tag),
     do: one_way(FbType.family(type), name, tag)
 
-  defp both_ways(_type, _tag), do: ""
+  defp both_ways(_counter_slot, _type, _tag), do: ""
 
   defp one_way(kind, name, tag) when kind in ["ctu", "ctd"],
     do:

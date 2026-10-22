@@ -23,7 +23,7 @@ defmodule Logex.FunctionBlockTest do
          "`ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, " <>
          "`ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, " <>
          "`ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, " <>
-         "`rto`, `tof`, `ton` and `tp`"
+         "`rto`, `rto_ltime`, `tof`, `tof_ltime`, `ton`, `ton_ltime`, `tp` and `tp_ltime`"
 
   @seal """
   function_block seal
@@ -1513,7 +1513,7 @@ defmodule Logex.FunctionBlockTest do
              ]
 
       assert errors(@decl <> "cal s1 a b q\nxic a ton s1 5\nxic a ton t1 5", [seal]) == [
-               "line 8: `ton` runs a ton, but `s1` is an instance of `seal` (declared on line 6)"
+               "line 8: `ton` runs a ton or ton_ltime, but `s1` is an instance of `seal` (declared on line 6)"
              ]
     end
 
