@@ -88,7 +88,11 @@ comparison whose literal sits at its tag's type limit warned, a timer's `last` l
 `now` refused, a literal `neg` source told the type its negation fits, decision 182's
 check made once where a program is handed in, a scan costing what it did before it, a
 signed counter's preset negative too, and a counter slot naming every word it runs, the
-unknown type's list kept.
+unknown type's list kept. And the sixth, M5-6, the same day: the long timers, `ton_ltime`,
+`tof_ltime`, `tp_ltime` and `rto_ltime`, run by `ton`, `tof`, `tp` and `rto`, their `.pre`
+and `.acc` lint nanoseconds, each millisecond of the clock adding 1,000,000, a preset
+that is no whole number of milliseconds warned of (§3, M5-6), with three questions put to
+the maintainer.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -5361,6 +5365,96 @@ the walks' cross-type reach and the documents.
   long timer's rules of M3-2 hold for it from source through `call/4`, an edit resumes one
   by its type's `times` member, an edit from `ton` to `ton_ltime` is refused, and the
   contract walk's timer oracle draws them. *Size M.*
+
+  **Status: DONE — landed 2026-10-22**, as three commits: the four stanzas first, each a
+  type word, `ton_ltime`, `tof_ltime`, `tp_ltime` and `rto_ltime`, each saying its unit
+  is the nanosecond, its resolution a millisecond and a preset's unit its instance's;
+  then the code with its tests; then the documents. The four long timers are built-in
+  types, `Logex.FbType.ton_ltime/0` to `rto_ltime/0`, each its kind's members with `pre`
+  and `acc` lints, named by its word, and each its kind's row of `Logex.FbType.rules/1`
+  under its kind's `family`, its `counts` `:lint` and a new field, `per_ms`, 1,000,000,
+  what a millisecond adds to its `acc`; a plain timer's `counts` is now `:dint`, where it
+  was nil, and its `per_ms` 1, a counter's `per_ms` nil. The instructions stay `ton`,
+  `tof`, `tp` and `rto`: a timer's slot names its kind, `{:instance, ["ton"]}`, so each
+  runs both of its kind, and every message that names the slot names both words, by
+  decision 192's rule, "`ton` runs a ton or ton_ltime, but `a` is a bool", changed on
+  purpose in `validation_test.exs`, `function_block_test.exs`, `typed_counter_test.exs`,
+  `api_contract_test.exs` and `end_to_end_test.exs`; a counter given to a timer's slot is
+  told no `ctud`, which the list would otherwise have offered it. A long timer's preset is
+  judged 0 to 2^63−1 ns, "`ton` takes a preset of 0 to 9223372036854775807 ns for a
+  ton_ltime, found `-1`", never negative, as decision 191 leaves every timer's, and one
+  from a tag is told its unit, "`ton` takes its preset as a number of nanoseconds for a
+  ton_ltime, found `sp`", with the `move` where the tag widens into a lint. The runtime
+  reads each timer's `per_ms` from its type's rules in the routine's tag table and
+  multiplies each scan's elapsed milliseconds by it, so a long timer's `.acc` moves in
+  steps of 1,000,000 ns and its catch-up in a frozen block or on a skipped rung is its
+  kind's; `last` stays the clock's ms. `Logex.Warnings` warns of a long timer's preset
+  that is no whole number of milliseconds at its instruction's line, "`ton` gives `t` a
+  preset of 1500000 ns, which is no whole number of milliseconds: a ton_ltime counts whole
+  milliseconds, so it times as the next whole millisecond, 2 ms". The event task's timer
+  warning reads the timer's kind from its rules and names it by its word, "a ton_ltime
+  times across the task's runs". The four words are reserved in every `.ld` file in any
+  case, and the unknown type's list grows to 35. The Done-when is `long_timer_test.exs`:
+  a `ton_ltime` of 30 days in ns done at exactly 30 days of scans, one ms short not done;
+  1,500,000 ns done at the 2 ms scan and warned of, a whole-ms preset and a `ton`'s not;
+  the one rung `ton t 2000000` done at 2,000,000 ms on a `ton` and at 2 ms on a
+  `ton_ltime`; each of the four scanned beside its plain timer over seeded rungs, resets,
+  elapsed times and restarts, holding its members exactly with `.pre` and `.acc` a million
+  times theirs; each kind's own rules in ns; a frozen block's and a skipped rung's
+  catch-up; an edit to or from a plain timer refused at its line, a preset moved and
+  forecast in ns, a resume by the type's `times` member, `{:resumed, "t", 500}` in the
+  clock's ms, and a `tp_ltime`'s `.en` on the block list; the presets at 0 and 2^63−1 and
+  refused at −1 and 2^63; the messages, warnings and reserved words; a state's `t.acc`
+  past the lint refused; the event task's warning for each; a cycle and the runner on the
+  manual clock counting whole milliseconds, 2,000,000 ns lit at 2 ms; and a long timer's
+  scan within 1.2x a plain one's, 4x the timers under 4.8x. `end_to_end_test.exs` runs it
+  from files on disk: a press whose 30-day `ton_ltime` and whose one rung on a `ton` and
+  a `ton_ltime` light their lamps as an oracle that knows nothing of logex says, through
+  `cycle/3` over 400 seeded presses and waits. The contract walk's timer oracle draws each
+  of its `tof`, `tp` and `rto` a long timer half the time, its preset in ns and each
+  millisecond adding 1,000,000 restated, an edit of the `tof`'s unit refused, its reach a
+  long timer timing and the unit's refusal, under eight other seeds. README's "Long
+  timers" is the run of `cure.exs`, and its unknown-type example was run again.
+  The mutation table: 22 mutants of `lib/`, each judged by the full suite's exit code,
+  all 22 red: per_ms ignored in the elapsed time, read as 1, or 1,000; a long timer's
+  members left dints, its family its own word, its types out of `builtins/0`, its counts
+  a dint; the `ton` and the `tp` slot back to one word; the preset messages in ms; the
+  ctud hint on every slot; a negative timer preset; the warning dropped, its next
+  millisecond one short, or given for a whole millisecond too; the event warning in the
+  plain word; `an rto_ltime`'s article; and each of `ton`, `tof`, `tp` and `rto` alone
+  ignoring per_ms. 1710 tests (9 doctests), up from 1681.
+
+  *Provisional readings* (each a question below): a timer slot's messages name both words;
+  a value logic writes into a long timer's `.pre` or `.acc` is in ns and never warned of;
+  an edit's report gives a moved preset and a forecast in ns and a resume's gap in ms; and
+  the warning's next millisecond is the one after the preset, at its instruction's line.
+
+  **Questions for the maintainer** (each taken provisionally as written, the closest
+  reading to the record and to Logix):
+  1. *What a timer's slot is told* (decision 192, applied to timers). A slot is the place
+     on an instruction where its timer goes; `ton` now runs a `ton` and a `ton_ltime`.
+     Decision 192 has a counter's slot name every type word it runs, so logex tells a
+     `ton` given a bool "`ton` runs a ton or ton_ltime, but `a` is a bool", and every
+     timer slot message changed so, the fan's `tof` "a tof or tof_ltime". On the conveyor:
+     an engineer who typed `xic eye ton lamp 500` reads both words. The other reading
+     names the plain word alone, "`ton` runs a ton", as before M5-6, which hides that a
+     long timer would do. IEC's overloaded TON takes either; Logix has one TIMER.
+  2. *A long timer's `.pre` or `.acc` written by logic* (§4.12's routine choice). A preset
+     on the instruction that is no whole number of ms is warned of; a `move 1500000
+     cure.pre` on a rung, the literal moved by logic, is not, nor is a comparison `ge
+     cure.acc 3000` that a rung ported from a `ton` still reads as 3 s and is now 3 µs. On
+     the oven: the cure lamp's comparison lights 3 µs into the cure, not 3 s, with no
+     warning. The other readings warn of a literal moved into a long timer's `.pre` or
+     `.acc` that is no whole ms, or of any literal compared with a long timer's member
+     below 1,000,000. IEC types PT as LTIME, so `T#3s` says its unit; Logix has no such
+     timer.
+  3. *The units of an edit's report on a long timer* (decision 158 with §4.9). An edit
+     that moves the oven's 36 h preset reports `{:preset, "cure", {129600000000000, ...}}`
+     and its forecast in ns, a member's own unit, and a timer resumed after the edit
+     reports the time it was not run, `{:resumed, "cure", 500}`, in ms, the clock's unit,
+     as for every timer. An operator reading the report sees ns beside ms. The other
+     reading gives the gap in ns too, a million times larger. IEC and Logix have no such
+     report.
 - **M5-7 · Based literals and separators.** `16#`, `2#` and `_` (decision 149), through
   the lexer, `well_formed!/1`, the printer, the generator and curated golden sources.
   *Done when* each form is in the golden record's curated sources, an entry that held

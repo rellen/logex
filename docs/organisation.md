@@ -3160,7 +3160,8 @@ its second, M5-2, the dint's wrap, on 2026-10-22, decision 77's saturation super
 purpose, and its third, M5-3, the integer widths declared everywhere, `move` and literals
 by Figure 11 and the 56 integer conversions, the same day, and its fourth, M5-4,
 arithmetic and comparison over every integer width, the same day, and its fifth, M5-5,
-IEC's typed counters and the dint counters' IEC names, the same day**
+IEC's typed counters and the dint counters' IEC names, the same day, and its sixth, M5-6,
+the long timers in nanoseconds, the same day**
 (`PLAN.md` §3, Milestone 5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
 4, 8 byte integers (how does IEC and vendors handle signed?), 32/64 bit reals, arrays of
 all others, what else does IEC and vendors have."* It read IEC 61131-3 Ed 2:2003 and Ed
@@ -3713,6 +3714,18 @@ in milliseconds (§4.11), so a long timer's `acc` moves in steps of 1,000,000 ns
 whose preset is not a whole number of milliseconds is done at the first scan whose `acc`
 reaches it, at the millisecond after; the compiler warns of such a preset (a routine
 choice below). A finer clock would put nanoseconds into the core's `now`, a later item.
+*(Landed for the long timers with M5-6, 2026-10-22: `ton_ltime`, `tof_ltime`, `tp_ltime`
+and `rto_ltime` are built-in types, each its kind's members with `pre` and `acc` lints and
+its kind's row of `Logex.FbType.rules/1` under its kind's `family`, its `counts` a lint
+and its `per_ms` 1,000,000, a plain timer's a dint and 1; the one `ton`, `tof`, `tp` and
+`rto` run both, each scan's elapsed milliseconds multiplied by the timer's `per_ms`, so
+`ton t 1500000` on a `ton_ltime` is done at the 2 ms scan; a preset is judged in its
+instance's type and unit, "`ton` takes a preset of 0 to 9223372036854775807 ns for a
+ton_ltime"; a timer slot's messages name both words, "`ton` runs a ton or ton_ltime",
+as decision 192 has a counter slot's name every word it runs; and the edit, the walks,
+the event task's warning and the runner read the rules, so a long timer's catch-up,
+resume, forecast and block list are its kind's, in ns where they are a member's value and
+in ms where they are the clock's, `{:resumed, "t", 500}`.)*
 
 **Widening beyond an instruction** (decision 159). A `cal`'s inputs and a connection's
 copy-in widen as an instruction's sources do, and a `cal`'s outputs and a connection's
@@ -3738,7 +3751,8 @@ xor not shl shr rol ror`, the 182 conversions and `sqrt`. A family of
 conversions may share one stanza that names each member, `naming_test.exs` reading the
 family's names as data (a routine choice below).
 *(Landed for the fifteen counter words with M5-5, 2026-10-22, each with its own stanza,
-reserved in every `.ld` file in any case as a tag's and a label's name.)*
+reserved in every `.ld` file in any case as a tag's and a label's name; and for the four
+long timers with M5-6, the same day, alike.)*
 
 **Routine choices, each with the alternative it passes over.**
 - *One table of types* in `Logex.Declarations`, each type's word, kind, width, range,
@@ -3776,9 +3790,14 @@ reserved in every `.ld` file in any case as a tag's and a label's name.)*
   number of milliseconds, `ton t 2000` on a `ton_ltime`, and not this one, a valid preset
   either way. The alternative passed over would say the unit on the rung, `ton_ltime t
   2000000`, and refuse the rung whose mnemonic is not its instance's type. Each stanza and
-  the README's timer section say the unit is the instance's.
+  the README's timer section say the unit is the instance's. *(Landed for the counters
+  with M5-5 and for the timers with M5-6, 2026-10-22; `long_timer_test.exs` holds the one
+  rung on both, done at 2,000,000 ms and at 2 ms.)*
 - *A long timer's preset that is not a whole number of milliseconds is warned of*,
-  "times as the next whole millisecond"; over silence.
+  "times as the next whole millisecond"; over silence. *(Landed with M5-6, 2026-10-22, at
+  the instruction's line: "`ton` gives `t` a preset of 1500000 ns, which is no whole
+  number of milliseconds: a ton_ltime counts whole milliseconds, so it times as the next
+  whole millisecond, 2 ms"; a value logic moves into `.pre` is not looked at.)*
 - *`status.[n]` lexes as one name token*, as PLAN §5 made `t1.dn` one, `QUALIFIED` grown
   by `\.\[{NAME}\]` and the subscripts by `\[({NAME}|{INT})(,({NAME}|{INT})){0,2}\]`; over
   tokens and a grammar production, which would change every operand's shape.
@@ -3898,7 +3917,7 @@ suffixes.
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
 | VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
-| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
+| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap, and the typed counters and long timers with M5-5 and M5-6 the same day | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage *(arrays decided for Milestone 5, 2026-10-21, decisions 151–156; STRUCT still deferred)* | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays. *(Kept by Milestone 5, decision 158: the TIME and LTIME types and `T#` stay deferred, a preset stays a plain integer, ms for the `ton` family and ns for the long timers.)* |
@@ -7425,8 +7444,11 @@ the decisions the rest settle.
      `ctud_dint` exist as aliases of `ctu`, `ctd` and `ctud`, decision 163, otherwise
      than the record read it; and `rto_ltime` is taken, as recorded.)* *(Landed for the
      counters with M5-5, 2026-10-22: `ctu_int ctu_lint ctu_udint ctu_ulint` and the same
-     of `ctd` and `ctud`, run by `ctu` and `ctd`, each stopping at its type's limits; the
-     long timers are M5-6's.)*
+     of `ctd` and `ctud`, run by `ctu` and `ctd`, each stopping at its type's limits; and
+     for the long timers with M5-6, the same day: `ton_ltime tof_ltime tp_ltime rto_ltime`,
+     run by `ton`, `tof`, `tp` and `rto`, `.pre` and `.acc` lint nanoseconds, a preset 0 to
+     2^63−1 ns, as decision 191 leaves a timer's preset never negative, each millisecond
+     adding 1,000,000.)*
 159. **Where decision 147's widening applies beyond an instruction (Milestone 5),** added
      by the review. The shift's count is a `uint` and the block `seal` takes a `dint`
      input: `cal s1 shift_count`; the configuration connects a `uint` global to a
@@ -8183,7 +8205,8 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      and the three aliases among them, with the nearest suggested.
 
      **Taken: the list of all 31 words kept, M5-5's reading confirmed** (the maintainer,
-     2026-10-22). No code changed.
+     2026-10-22). No code changed. *(Grown to 35 by M5-6's four long timers, the list
+     still every type word.)*
 
 ---
 

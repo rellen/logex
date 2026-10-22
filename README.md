@@ -68,13 +68,14 @@ Source syntax today:
   sign begins a number, so it needs a space before it too: `move 5-3 aa` is an error naming
   `5-3`, and `ote a-5` one naming `a-5`; a difference is `sub`. A literal is judged by
   the slot it goes into: it must fit that slot's type, −2147483648 to 2147483647 for a
-  dint, 0 to 65535 for a `uint`, a timer's preset 0 to 2147483647 ms and a counter's any
+  dint, 0 to 65535 for a `uint`, a timer's preset 0 to 2147483647 ms, a long timer's 0
+  to 9223372036854775807 ns ("Long timers", below), and a counter's any
   value of its `pv`'s type, as IEC's PV is, −2147483648 to 2147483647 for a `ctu`,
   −32768 to 32767 for a `ctu_int` and 0 to 4294967295 for a `ctu_udint`
 - no operand parentheses, no terminator
 - `//` starts a comment, which runs to the end of its line
 - a name may have `.` parts: `t1.dn` is the member `dn` of the timer `t1`. A timer's
-  members are `.pre` and `.acc` (dint, which logic may write) and `.dn`, `.tt` and `.en`
+  members are `.pre` and `.acc` (dint, a long timer's lint, which logic may write) and `.dn`, `.tt` and `.en`
   (bool, which only its `ton` sets), read anywhere. A function block instance's inputs
   and outputs, `s1.run`, are read anywhere too; its own `var`s are named only inside it,
   and nothing outside it writes any of its members. Members are case-sensitive, and a
@@ -191,10 +192,10 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `osr s1 pulse` | two bool tags it writes, each not a `var_input`: the storage bit, then the pulse bit, which may be a member logic may write | one-shot rising, IEC's positive transition-sensing coil in the conventional set's form — sets `pulse` for the one scan in which the power reaching it rises, and clears it on every other run, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last run. It passes that power on, so anything may follow it on its rung. A second `ons`, `osr` or `osf` on `s1` is an error, as is `s1` for its pulse bit too, and any other write to `s1` a warning; a second coil on `pulse`, an `ote` among them, is the second-`ote` warning |
 | `osf s1 pulse` | as `osr` | one-shot falling, IEC's negative transition-sensing coil — sets `pulse` for the one scan in which the power reaching it falls, which its run on the false rung sees, and is `osr` in every other rule |
 | `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two integers of any widths, each a tag, a member or a literal | compare by value, whatever the two types — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`, so an `sint` −1 is less than a `udint` 0; none on a false rung. A literal its tag's type cannot hold is refused, and two literals are a warning, as is a literal at its tag's type's limit whose result never changes, `ge count 0` with a `usint` `count` |
-| `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
-| `tof run_on 30000` | an off-delay timer (`var run_on tof`), then a preset in ms | off-delay timer, IEC's TOF — rung power is its IN. True: `.dn` set, `.acc` 0. The first false scan starts the delay, and `.dn` stays set until `.acc` reaches `.pre`, then drops; a true rung during the delay ends it with `.dn` still set. A new or restarted one is at rest, `.dn` 0. Read it with `xic run_on.dn` on a rung below |
-| `tp horn_pulse 3000` | a pulse timer (`var horn_pulse tp`), then a preset in ms | pulse timer, IEC's TP — a rising edge of its rung, never on an instance's first scan, starts a pulse on `.tt` exactly `.pre` long, whatever the rung does meanwhile, an edge during it ignored; `.dn` is set as the pulse ends and holds while the rung does. Read the pulse with `xic horn_pulse.tt` on a rung below |
-| `rto lube 360000000` | a retentive timer (`var lube rto`), then a preset in ms | retentive on-delay timer, the conventional RTO — true, it times as `ton`; false, it keeps `.acc` and `.dn`, so its time adds up across the rung's drops. Its reset `.r`, an input a rung writes, `xic greased ote lube.r`, puts `.acc`, `.dn` and `.tt` to 0 at its next run; every restart, warm or cold, starts it at 0. Logic writes `.pre`, `.acc` and `.r` |
+| `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms, or a long timer (`var t1 ton_ltime`, M5-6) and 0 to 9223372036854775807 ns, the unit the instance's | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
+| `tof run_on 30000` | an off-delay timer (`var run_on tof`), then a preset in ms, or a `tof_ltime` and a preset in ns | off-delay timer, IEC's TOF — rung power is its IN. True: `.dn` set, `.acc` 0. The first false scan starts the delay, and `.dn` stays set until `.acc` reaches `.pre`, then drops; a true rung during the delay ends it with `.dn` still set. A new or restarted one is at rest, `.dn` 0. Read it with `xic run_on.dn` on a rung below |
+| `tp horn_pulse 3000` | a pulse timer (`var horn_pulse tp`), then a preset in ms, or a `tp_ltime` and a preset in ns | pulse timer, IEC's TP — a rising edge of its rung, never on an instance's first scan, starts a pulse on `.tt` exactly `.pre` long, whatever the rung does meanwhile, an edge during it ignored; `.dn` is set as the pulse ends and holds while the rung does. Read the pulse with `xic horn_pulse.tt` on a rung below |
+| `rto lube 360000000` | a retentive timer (`var lube rto`), then a preset in ms, or an `rto_ltime` and a preset in ns | retentive on-delay timer, the conventional RTO — true, it times as `ton`; false, it keeps `.acc` and `.dn`, so its time adds up across the rung's drops. Its reset `.r`, an input a rung writes, `xic greased ote lube.r`, puts `.acc`, `.dn` and `.tt` to 0 at its next run; every restart, warm or cold, starts it at 0. Logic writes `.pre`, `.acc` and `.r` |
 | `ctu boxes 12` | an up counter (`var boxes ctu`) or an up-down one (`ctud`), of any of IEC's typed counters too, `ctu_int` or `ctud_ulint` (M5-5), then a preset, any value of its `pv`'s type, −2147483648 to 2147483647 for a `ctu`, negatives among them, and 0 to its top for an unsigned typed counter | count up — rung power is the counter's count input `cu`. Each rising edge adds one to `.cv`, never on an instance's first scan, and `.q` is `.cv >= .pv`. Its reset `.r`, an input a rung writes, as `xic reset_pb ote boxes.r`, puts `.cv` to 0 at the counter's next run, and keeps its memory of `cu`, so a box on the eye at a reset is not counted again. At 2147483647, or a typed counter's top, the count stops and `.ov` stays on until a reset. The preset is where `.pv` starts; logic writes only `.r` and `.pv`, and a `ctud`'s `.ld`. One `ctu` runs a counter, and nothing may follow it on its path: read it with `xic boxes.q` on a rung below |
 | `ctd hopper 40` | a down counter (`var hopper ctd`) or an up-down one, then a preset | count down — rung power is `cd`. Its load `.ld` puts `.cv` to `.pv`; each rising edge takes one away, stopping at −2147483648, or a typed counter's bottom, 0 for a `ctd_udint`, with `.un` on until a load; `.q` is `.cv <= 0`. A `ctud`, `var stock ctud`, is run by one `ctu` and one `ctd` on two rungs, with one preset, and has `.r` and `.ld`, `.qu` at `.cv >= .pv` and `.qd` at `.cv <= 0` |
 | `add a b dst` `sub a b dst` `mul a b dst` | two integer sources, each a tag, a member or a literal, of `dst`'s type or one IEC's Figure 11 widens into it, then an integer tag or member it writes, not a `var_input`; any other source is refused naming its conversion | add, subtract (`a − b`), multiply, in `dst`'s type — true: writes the result and passes power; a result outside that type wraps, keeping its low bits, in two's complement where signed (2147483647 + 1 is −2147483648 in a `dint`, 127 + 1 −128 in an `sint`, 0 − 1 255 in a `usint`), and passes no power on that scan, with no fault. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
@@ -250,9 +251,10 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   strings `byte word dword lword` with `and or xor not shl shr rol ror`; the rest of IEC's
   typed conversions, `real_to_int` and `real_trunc_int` among them; bit access `word.3` and
   `word.[n]`; arrays `var temps real[8]`, up to three dimensions, of timers and blocks
-  too, and at I/O points; and long timers in nanoseconds, `ton_ltime`. IEC's typed
+  too, and at I/O points. IEC's typed
   counters have landed, `ctu_int` and the rest, with `ctu_dint` another word for `ctu`
-  (M5-5, "A counter", below). An arithmetic result past its type's limit wraps, with no
+  (M5-5, "A counter", below), and the long timers in nanoseconds, `ton_ltime`,
+  `tof_ltime`, `tp_ltime` and `rto_ltime` (M5-6, "Long timers", below). An arithmetic result past its type's limit wraps, with no
   power, in every integer width, as has landed (M5-2 and M5-4, "Arithmetic" and "Integer
   widths", below), replacing the stop at the limit the dint had until then. Each type
   word and mnemonic becomes a reserved word, `real`, `word`, `byte`, `and`, `or` and
@@ -681,6 +683,90 @@ ending, an `rto`'s `.dn` at its next run with its rung true. A `tp` an edit adds
 fault is present sounds no horn at the switch. Under an event task each is a
 configuration warning in its own words: a `tof`'s delay and a `tp`'s pulse end only when
 the task next runs.
+
+### Long timers
+
+A `ton` counts a dint of milliseconds, so it reaches 24.8 days at most. IEC's long timers,
+`ton_ltime`, `tof_ltime` and `tp_ltime`, and `rto_ltime`, IEC's suffix on the retentive
+timer, count a `lint` of **nanoseconds** in `.pre` and `.acc`, as IEC's LTIME does, so a
+preset may be up to 9223372036854775807 ns, about 292 years (decision 158, M5-6). The
+instructions stay `ton`, `tof`, `tp` and `rto`: each runs both of its kind, and every rule
+above is its kind's.
+
+`cure.ld` — a curing oven that cures a load for 36 hours with its door shut, and a fan
+that runs on for 90 s once the door opens:
+
+```
+var_input door_shut bool
+var_output cured bool
+var_output fan bool
+var_output cure_ns lint
+var cure ton_ltime
+var run_on tof_ltime
+
+xic door_shut ton cure 129600000000000
+xic cure.dn ote cured
+xic door_shut tof run_on 90000000000
+xic run_on.dn ote fan
+move cure.acc cure_ns
+```
+
+`cure.exs` scans it, each scan the given milliseconds after the last, and then compiles it
+again with the fan's run-on cut to 1,500,000 ns:
+
+```elixir
+{:ok, cure} = Logex.compile_file("cure.ld")
+
+scan = fn state, label, ms, inputs ->
+  state = Logex.Runtime.put_inputs(cure, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(cure, state, ms)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  state
+end
+
+hour = 3_600_000
+
+Logex.Runtime.instance(cure)
+|> scan.("door shut          ", 0, %{"door_shut" => 1})
+|> scan.("1 h on             ", hour, %{})
+|> scan.("36 h less 1 ms on  ", 35 * hour - 1, %{})
+|> scan.("36 h on: cured     ", 1, %{})
+|> scan.("door opened        ", 10, %{"door_shut" => 0})
+|> scan.("60 s later         ", 60_000, %{})
+|> scan.("90 s later: fan off", 30_000, %{})
+
+{:ok, short} =
+  Logex.compile(File.read!("cure.ld") |> String.replace("90000000000", "1500000"),
+    name: "short"
+  )
+
+Enum.each(short.warnings, &IO.puts(Logex.Diagnostic.format(&1)))
+```
+
+```
+$ mix run cure.exs
+door shut            %{"cure_ns" => 0, "cured" => 0, "fan" => 1}
+1 h on               %{"cure_ns" => 3600000000000, "cured" => 0, "fan" => 1}
+36 h less 1 ms on    %{"cure_ns" => 129599999000000, "cured" => 0, "fan" => 1}
+36 h on: cured       %{"cure_ns" => 129600000000000, "cured" => 1, "fan" => 1}
+door opened          %{"cure_ns" => 0, "cured" => 0, "fan" => 1}
+60 s later           %{"cure_ns" => 0, "cured" => 0, "fan" => 1}
+90 s later: fan off  %{"cure_ns" => 0, "cured" => 0, "fan" => 0}
+line 10: warning: `tof` gives `run_on` a preset of 1500000 ns, which is no whole number of milliseconds: a tof_ltime counts whole milliseconds, so it times as the next whole millisecond, 2 ms
+```
+
+**The unit is the instance's, not the rung's.** `ton t 2000000` is 2,000,000 ms, about 33
+minutes, where `t` is a `ton`, and 2 ms where it is a `ton_ltime`; a declaration changed
+from one to the other compiles with every preset a million times off, and nothing on the
+rung says which. **The resolution is a millisecond:** logex's clock and every elapsed time
+a host or the runner gives are whole milliseconds, so each millisecond adds 1,000,000 ns
+to `.acc`, and a preset that is no whole number of milliseconds, as the 1,500,000 ns
+above, is reached at the next whole millisecond, 2 ms, and warned of. A long timer's
+`.pre` and `.acc` take a `move` of a `lint` or of anything that widens into one, in ns. An
+online edit from a `ton` to a `ton_ltime`, or back, is a change of type and refused; an
+edit of its preset is reported and forecast in ns, a resumed timer's gap in ms, the
+clock's unit. Under an event task each is warned of in its own words, "a ton_ltime times
+across the task's runs".
 
 ### Arithmetic
 
@@ -1214,7 +1300,7 @@ And a block that holds an instance of itself, `var inner seal` on line 6 of `sea
 refused in its own file, and the program that names it is compiled no further:
 
 ```
-belts.ld: line 12: unknown type `sael`: logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, `ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, `ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, `rto`, `tof`, `ton` and `tp`, and the function block `seal` — did you mean `seal`?
+belts.ld: line 12: unknown type `sael`: logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, `ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, `ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, `rto`, `rto_ltime`, `tof`, `tof_ltime`, `ton`, `ton_ltime`, `tp` and `tp_ltime`, and the function block `seal` — did you mean `seal`?
 belts.ld: line 18: `ote` writes `s1.run`, but `s1` is an instance of `seal`, whose members only its body writes
 ./seal.ld: line 6: `seal` cannot hold an instance of `seal`: a function block never holds an instance of itself
 ```
