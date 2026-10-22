@@ -4454,6 +4454,21 @@ the walks' cross-type reach and the documents.
   found, on `main` as here, an `UndefinedFunctionError` that escapes
   `Logex.Configuration.compile/3` where a program's `var_external` names a global whose
   `var_global` line is broken (`var_global estop boo`), left to its own fix.
+
+  *M5-1's review* (2026-10-22) found no regression and three things to mend, each its
+  own commit after the item's two: that `UndefinedFunctionError`, reached by any broken
+  `var_global` line a `var_external` names (no type, an unknown one, an instance's, a
+  location missing), now passed over so the broken line's own diagnostic is the one
+  mistake (decision 42), with the text's totality property given a program type that
+  reads a global through a `var_external` and a source whose line for it is broken; the
+  one article still written by hand, `Logex.Configuration`'s `"a #{name}"` for a connected
+  member that holds an instance, which no text reaches but a program edited by hand does,
+  now `Logex.Declarations.instance_of/1`'s, "an rto"; and the grep for a hand-written
+  article, widened to an article before a backticked interpolation and to `"a " <>`, its
+  allowed articles a section, a configuration element's kind, a program type's name and
+  a one-shot's mnemonic. It noted for M5-3 the messages that name two types as an
+  example, below, and that a `put_inputs/3` of 400 inputs costs about a tenth more
+  reductions for the table's lookup, still linear.
 - **M5-2 · The dint wraps.** Decision 146 on the one width there is, before any other
   lands: `add`, `sub`, `mul`, `div`, `neg` and `abs` keep a result's low 32 bits, two's
   complement, and pass no power where the stored value is not the exact one, with no fault
@@ -4485,7 +4500,11 @@ the walks' cross-type reach and the documents.
   point through the sim and moves it into a `dint`; each refusal, a literal that does not
   fit, a narrowing `move`, a sign change, a host's or a device's or a force's value that
   does not fit, a `cal` formal, a connection and a `var_external` of another width, is
-  pinned in its type's words; an edit of a width is refused at its line; the contract walk
+  pinned in its type's words; an edit of a width is refused at its line; the messages that
+  give two types as an example, "needs a type: `x bool` or `x dint`" (`Logex.Declarations`,
+  `Logex.Compiler`, `Logex.Configuration.Text`) and the literal "a bool" in two of
+  `Logex.Compiler`'s, are read again so that none reads as if bool and dint were every
+  type there is (M5-1's review); the contract walk
   draws every width's limits, its oracle restating each range; `dint_to_sint` of 129
   gives −127 with no power, as Logix's truncation does (RM018A p.872); and the commit
   names what the seven reserved words and the 56 conversions break. *Size L.*
