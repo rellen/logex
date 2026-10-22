@@ -110,7 +110,9 @@ defmodule Logex.Configuration do
   `Logex.Compiler.instructionize/2` raises on a tree no source could say: a configuration
   whose name is not a name, or whose file is neither a string nor nil; programs that are
   not a map of names to `%Logex.Program{}`, each under its own name, one of them a
-  function block type among them; a field that is not a proper list of its element
+  function block type among them; a program edited by hand so that a var_input or
+  var_output holds an instance, which no text declares, each such tag a line, connected or
+  not (decision 169); a field that is not a proper list of its element
   struct, or a configuration or an element that lacks a key of its struct, as
   `Map.delete/2` can make one; a line that is not a positive integer or nil; lines that
   are neither all nil, as from Elixir, nor rising in each list, one element a line, as a
@@ -856,11 +858,39 @@ defmodule Logex.Configuration do
   defp block_type(key, name, type),
     do: "the program under #{label(key)} is #{label(name)}, " <> Declarations.not_a_program(type)
 
-  defp program_shaped(true, %Program{name: name} = program, ok, mistakes),
-    do: {Map.put(ok, name, program), mistakes}
+  defp program_shaped(true, %Program{} = program, ok, mistakes),
+    do: program_held(ports_held(program), program, ok, mistakes)
 
   defp program_shaped(false, %Program{name: name}, ok, mistakes),
     do: {ok, Enum.reverse(shaped(false, name, "a program"), mistakes)}
+
+  # Decision 169: no text declares a var_input or var_output that holds an instance
+  # (Logex.Declarations refuses `var_input t ton`, from source and from Elixir), so a
+  # compiled program whose own does was edited by hand after it compiled: the host's
+  # mistake, a line for each such tag in name order, and the program is left out of every
+  # diagnostic, as a misnamed one is.
+  defp program_held([], %Program{name: name} = program, ok, mistakes),
+    do: {Map.put(ok, name, program), mistakes}
+
+  defp program_held(lines, _program, ok, mistakes), do: {ok, Enum.reverse(lines, mistakes)}
+
+  defp ports_held(%Program{name: name, tags: tags}),
+    do:
+      for(
+        {tag, %Tag{section: section, type: type}} <- Enum.sort(tags),
+        section in [:var_input, :var_output],
+        word = held_word(type),
+        do:
+          "`#{name}`'s #{section} `#{tag}` holds #{word}, which no text declares: an " <>
+            "instance is the program's own, declared with `var`, so `#{name}` was edited by " <>
+            "hand after it compiled"
+      )
+
+  defp held_word(%FbType{name: name} = type) when is_binary(name),
+    do: Declarations.instance_of(type)
+
+  defp held_word({:block, name}) when is_binary(name), do: "an instance of `#{name}`"
+  defp held_word(_elementary_or_junk), do: nil
 
   # A part's elements: every one that is its struct, a bad line cleared; those whose line
   # is good, for the rule over lines; and the host's mistakes, each a line.
@@ -2062,7 +2092,7 @@ defmodule Logex.Configuration do
 
   defp declares_no(connection, program),
     do:
-      "`#{connection.instance}` is a `#{program.name}`, which declares no `#{connection.member}`"
+      "`#{connection.instance}` runs `#{program.name}`, which declares no `#{connection.member}`"
 
   defp connects(message, "", [], _type), do: message <> ": it has no var_input or var_output"
 
@@ -2155,9 +2185,8 @@ defmodule Logex.Configuration do
           "`#{global.name}` is #{Declarations.a_type(global.type)}#{where(global)}"
       )
 
-  # No text declares a connected var_input or var_output that holds an instance, but a
-  # program edited by hand may: it is named as an instance's type is, `an rto`.
-  defp type_word(%Logex.FbType{} = type), do: Declarations.instance_of(type)
+  # A var_input or var_output that holds an instance is the host's mistake, refused before
+  # any diagnostic (decision 169), so a connected member's type is elementary here.
   defp type_word(type), do: Declarations.a_type(type)
 
   # What a name where a global is wanted reads as: a global; nothing to report, its name

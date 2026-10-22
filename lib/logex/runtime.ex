@@ -218,14 +218,20 @@ defmodule Logex.Runtime do
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
   `first`; its `ons_blocked` is the runtime's, which `call/4` fills in with a map of the
   bits the instance's list names, so a host leaves it out. A state is matched to its program
-  by name, and its values are not checked each scan. Its env's keys are tag names: a scan
+  by name, and since decision 171 its values are checked wherever it is handed in, after
+  its owner: an integer outside its tag's or member's type, 5000000000 in a dint or 5 in a
+  bool, at any depth, is refused, every such value a line of one message, so that nothing
+  outside its type ever reaches a scan; a value that is no integer is read as it is
+  (provisional). The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
   keeps its own records in a routine's env under atoms no tag can be, `:faults`, `:jump` and
   `:ran`, and takes each out before it ends, so an env holding one is refused, since it
   would change the run; a block instance's map holding one has it dropped before its body
-  runs, as any value a hand-built env holds is read whatever it is. Scanning a recompile of
+  runs, as any value a hand-built env holds that is no integer is read whatever it is.
+  Scanning a recompile of
   the same name over a kept instance, a *plain swap*, stays in this contract: the instance
   keeps its values until `restart/3`, so a tag the recompile adds reads 0, an added timer
-  starting at a `.pre` of 0, a tag whose type it changes keeps its old value, a timer's map
+  starting at a `.pre` of 0, a tag whose type it changes keeps its old value, refused at
+  the next call where it is an integer outside its new type (decision 171), a timer's map
   reaching the outputs and the contacts, and a timer whose `ton` it gives back catches up
   all the time it was not run.
   `Logex.Edit` moves a state to a new program by rule instead: it starts what is added,
@@ -276,6 +282,7 @@ defmodule Logex.Runtime do
   }
 
   alias Logex.FbType.Member
+  import Logex.Declarations, only: [is_elementary: 1, is_fitting: 2]
 
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
 
@@ -790,7 +797,8 @@ defmodule Logex.Runtime do
     do: raise(ArgumentError, "state.switched must be true or false, got: #{inspect(switched)}")
 
   defp state!(%Instance{ons_blocked: blocked, faults: faults} = state, program),
-    do: owner!(faults!(faults?(faults), blocked!(bits?(blocked), state)), program)
+    do:
+      values!(owner!(faults!(faults?(faults), blocked!(bits?(blocked), state)), program), program)
 
   defp state!(other, _program),
     do:
@@ -846,6 +854,69 @@ defmodule Logex.Runtime do
 
   defp named(nil), do: "an unnamed program"
   defp named(name), do: "`#{name}`"
+
+  # Decision 171: no value outside its tag's type reaches a scan. An integer a state holds
+  # for a tag, or for a member of an instance it holds, at any depth, must fit the tag's or
+  # the member's type, as an input must (Logex.Declarations.fits?/2): 5000000000 in a dint
+  # is the host's mistake, refused where the state is handed in, after its owner, every
+  # value outside a line of one message in path order. Walked once, each tag of the
+  # program's table looked up in the state, a member of an instance by its type's members,
+  # a user block's type found in the program's one table of block types (decision 53), so
+  # the check is linear in the state, a guard a value that fits; the lines are sorted only
+  # when there are any. A value that is no integer, or an instance that is no map, is
+  # read as before (provisional, decision 171).
+  defp values!(%Instance{env: env} = state, %Program{tags: tags, blocks: blocks}),
+    do: fitted(misfits(env, tags, as_map(blocks), [], []), state)
+
+  defp fitted([], state), do: state
+  defp fitted(lines, _state), do: raise(ArgumentError, Enum.join(Enum.sort(lines), "\n"))
+
+  defp misfits(env, tags, blocks, path, acc),
+    do: misfits(Map.to_list(tags), env, {path, blocks}, acc)
+
+  # A tag whose value fits its type is passed by one guard, the common case; one the env
+  # leaves out, or holds as anything else, is looked at.
+  defp misfits([{name, %Tag{type: type}} | rest], env, at, acc)
+       when is_fitting(type, :erlang.map_get(name, env)),
+       do: misfits(rest, env, at, acc)
+
+  defp misfits([{name, %Tag{type: type}} | rest], env, {path, blocks} = at, acc),
+    do: misfits(rest, env, at, present(Map.fetch(env, name), type, [name | path], blocks, acc))
+
+  defp misfits([_not_a_tag | rest], env, at, acc), do: misfits(rest, env, at, acc)
+  defp misfits([], _env, _at, acc), do: acc
+
+  defp present({:ok, value}, type, path, blocks, acc), do: of_type(type, value, path, blocks, acc)
+  defp present(:error, _type, _path, _blocks, acc), do: acc
+
+  defp of_type(type, value, _path, _blocks, acc) when is_fitting(type, value), do: acc
+
+  defp of_type(type, value, path, _blocks, acc) when is_elementary(type) and is_integer(value),
+    do: [outside(type, value, path) | acc]
+
+  defp of_type(%FbType{body: nil, members: members}, %{} = map, path, blocks, acc),
+    do:
+      Enum.reduce(members, acc, fn %Member{name: name, type: type}, acc ->
+        present(Map.fetch(map, name), type, [name | path], blocks, acc)
+      end)
+
+  defp of_type(%FbType{body: %Program{tags: tags}}, %{} = map, path, blocks, acc),
+    do: misfits(map, tags, blocks, path, acc)
+
+  defp of_type({:block, name}, %{} = map, path, blocks, acc),
+    do: held_block(Map.fetch(blocks, name), map, path, blocks, acc)
+
+  defp of_type(_type, _value, _path, _blocks, acc), do: acc
+
+  defp held_block({:ok, %FbType{} = type}, map, path, blocks, acc),
+    do: of_type(type, map, path, blocks, acc)
+
+  defp held_block(_not_held, _map, _path, _blocks, acc), do: acc
+
+  defp outside(type, value, path),
+    do:
+      "state.env holds `#{Enum.join(Enum.reverse(path), ".")}` outside its type: it is " <>
+        "#{Declarations.a_type(type)}, and " <> Declarations.misfit(type, "#{value}")
 
   defp scan!(%Scan{now: now}, _state) when not is_integer(now) or now < 0,
     do: raise(ArgumentError, "scan.now must be #{ms()}, got: #{inspect(now)}")
@@ -1701,8 +1772,9 @@ defmodule Logex.Runtime do
   # reaches a state. The sources are read before the write, so the destination may be
   # one of them, `add total flow total`. De-energised, nothing is written and no
   # power passes, as `move`. A source a hand-built env holds as no integer reads 0, so a
-  # scan never raises on one, and one it holds outside the dint is read as the integer it
-  # is, the result computed exactly and then wrapped (provisional, M5-2's review).
+  # scan never raises on one, and none it holds outside the dint reaches a scan: the state
+  # is refused where it is handed in (decision 171), superseding M5-2's provisional
+  # reading, computed exactly and then wrapped.
   defp evaluate({op, _, [a, b, destination]}, {true, env}, _scan) when op in @sums do
     {power, value} = wrapped(sum(op, integer(read(env, a)), integer(read(env, b))))
     {power, write(env, destination, value)}
@@ -1938,8 +2010,8 @@ defmodule Logex.Runtime do
 
   # The map a body runs over: its instance's members. One a hand-built env left holding a
   # record of the runtime's own, which no member can be, has it dropped, so the body runs
-  # as its text says, as a counter's map is read whatever it holds: the values in a state
-  # are not checked each scan, and a block's instance is a value (M3-5's review).
+  # as its text says, as a counter's map is read whatever it holds that is no integer
+  # outside its type (decision 171), and a block's instance is a value (M3-5's review).
   defp members_of(instance), do: Map.drop(as_map(instance), @own_keys)
 
   # M2-5: an instance records that its body ran, with what its own body's `cal`s recorded,

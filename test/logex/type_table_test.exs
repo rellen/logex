@@ -160,14 +160,13 @@ defmodule Logex.TypeTableTest do
     end
 
     # An article before an interpolation, quoted in backticks or not, or joined on with
-    # `<>`: none names a type. A section, a kind of configuration element, a program type's
-    # name, which is any name, and a one-shot's mnemonic, each said letter by letter, are
-    # the articles allowed.
+    # `<>`: none names a type. A section, a kind of configuration element and a one-shot's
+    # mnemonic, each said letter by letter, are the articles allowed. A program type's name
+    # takes none, as a user block's does not (decision 168): an instance runs `motor`.
     test "lib/ gives a type no article by hand: each `a \#{...}` names a section or a part" do
       allowed = [
         "a \#{tag.section}",
         "a \#{kind(element)}",
-        "a `\#{program.name}",
         "an `\#{one_shot}",
         "an `\#{word}"
       ]
@@ -323,26 +322,78 @@ defmodule Logex.TypeTableTest do
              ) == [0, 0]
     end
 
-    # No text declares a connected var_input that holds an instance, but a program edited
-    # by hand may: its type is named with the table's article, `an rto`, never by hand.
-    test "a connected member a hand-edited program makes an instance is named with its article",
+    # Decision 169: no text declares a var_input or var_output that holds an instance, so a
+    # program edited by hand to hold one is the host's mistake, one ArgumentError at the
+    # check, never a diagnostic, connected or not, whatever it is connected to.
+    test "a var_input or var_output a hand-edited program makes an instance is the host's",
          %{motor: motor} do
-      motor = %{motor | tags: Map.update!(motor.tags, "run", &%{&1 | type: Logex.FbType.rto()})}
+      rto = &%{&1 | type: Logex.FbType.rto()}
+      seal = &%{&1 | type: {:block, "seal"}}
 
-      configuration = %Configuration{
+      for {member, to} <- [{"run", "g"}, {"run", 0}, {"run", "zz"}, {"lamp", "g"}, {"lamp", "zz"}] do
+        edited = %{motor | tags: Map.update!(motor.tags, member, rto)}
+
+        assert raised(fn -> Configuration.check(plant(edited, member, to)) end) ==
+                 "`motor`'s #{section(member)} `#{member}` holds an rto, which no text " <>
+                   "declares: an instance is the program's own, declared with `var`, so " <>
+                   "`motor` was edited by hand after it compiled"
+      end
+
+      both = %{motor | tags: motor.tags |> Map.update!("run", rto) |> Map.update!("lamp", seal)}
+
+      for check <- [
+            &Configuration.check/1,
+            &Logex.Runtime.start/1,
+            &Configuration.new!(
+              Map.to_list(
+                Map.take(
+                  %{&1 | programs: [both]},
+                  ~w(name programs tasks globals instances connections)a
+                )
+              )
+            )
+          ] do
+        assert raised(fn -> check.(plant(both, "run", "g")) end) =~
+                 ~r/\A`motor`'s var_output `lamp` holds an instance of `seal`, which no text declares: .*\n`motor`'s var_input `run` holds an rto, which no text declares: .*hand after it compiled\z/
+      end
+
+      # From a configuration file's text against the programs given as data too.
+      edited = %{motor | tags: Map.update!(motor.tags, "run", rto)}
+
+      assert raised(fn ->
+               Configuration.compile(
+                 "plant",
+                 "var_global estop bool\nvar_global g bool\nprogram m1 motor\nm1.run g\nm1.sp 0\n",
+                 %{"motor" => edited}
+               )
+             end) =~ ~r/\A`motor`'s var_input `run` holds an rto, which no text declares/
+
+      # Unconnected, it is refused all the same.
+      edited = %{motor | tags: Map.update!(motor.tags, "lamp", rto)}
+
+      assert raised(fn -> Configuration.check(%{plant(edited, "run", 0) | connections: []}) end) =~
+               "`motor`'s var_output `lamp` holds an rto"
+    end
+
+    defp section("run"), do: "var_input"
+    defp section("lamp"), do: "var_output"
+
+    defp plant(motor, member, to) do
+      %Configuration{
         name: "plant",
         programs: %{"motor" => motor},
         globals: [%Global{name: "estop", type: :bool}, %Global{name: "g", type: :bool}],
         instances: [%Instance{name: "m1", type: "motor"}],
-        connections: [
-          %Configuration.Connection{instance: "m1", member: "run", to: "g"},
-          %Configuration.Connection{instance: "m1", member: "sp", to: 0}
-        ]
+        connections:
+          Enum.uniq_by(
+            [
+              %Configuration.Connection{instance: "m1", member: member, to: to},
+              %Configuration.Connection{instance: "m1", member: "run", to: 0},
+              %Configuration.Connection{instance: "m1", member: "sp", to: 0}
+            ],
+            & &1.member
+          )
       }
-
-      assert Enum.map(Configuration.check(configuration), & &1.message) == [
-               "`m1.run` is an rto, but `g` is a bool"
-             ]
     end
 
     test "a configuration's type words, its did-you-mean, its printing and the host's type", %{

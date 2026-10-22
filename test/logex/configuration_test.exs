@@ -584,9 +584,9 @@ defmodule Logex.ConfigurationTest do
                  "`task ww interval 10 priority 1`",
                "line 11: no global `aa`: declare it, as in `var_global aa dint`",
                "line 12: no global `zz`: declare it, as in `var_global zz bool`",
-               "line 13: `m` is a `seal`, which declares no `qq`: its var_inputs and " <>
+               "line 13: `m` runs `seal`, which declares no `qq`: its var_inputs and " <>
                  "var_outputs are `motor`, `sp`, `start` and `stop`",
-               "line 14: `m` is a `seal`, which declares no `ww`",
+               "line 14: `m` runs `seal`, which declares no `ww`",
                "line 15: no instance `qq`: declare it, as in `program qq motor`",
                "line 16: no instance `ww`: declare it, as in `program ww motor`"
              ]
@@ -1336,14 +1336,14 @@ defmodule Logex.ConfigurationTest do
                  ~s|in `m1.start`, found "m" and :start|,
                "unknown program type `zzz`: the types given are `seal`",
                "no instance `q`: declare it, as in `program q motor`",
-               "`m` is a `seal`, which declares no `strt` — did you mean `start`?",
+               "`m` runs `seal`, which declares no `strt` — did you mean `start`?",
                "`m.t1.pre` goes too deep: a connection names an instance's var_input or " <>
                  "var_output, as in `m.start`",
                "`m.fault` is internal to `seal` (declared `var`): only a var_input or var_output " <>
                  "connects",
                "`m.t1` is internal to `seal` (declared `var`): only a var_input or var_output " <>
                  "connects",
-               "`m` is a `seal`, which declares no `zz`: its var_inputs and var_outputs are " <>
+               "`m` runs `seal`, which declares no `zz`: its var_inputs and var_outputs are " <>
                  "`motor`, `sp`, `start` and `stop`"
              ]
     end
@@ -1932,7 +1932,7 @@ defmodule Logex.ConfigurationTest do
                "line 7, column 1: unknown configuration line `progam` — did you mean `program`?",
                "line 9: no task `medium`: declare it with a `task` line, as in " <>
                  "`task medium interval 10 priority 1`",
-               "line 11: `m1` is a `motor`, which declares no `strat` — did you mean `start`?",
+               "line 11: `m1` runs `motor`, which declares no `strat` — did you mean `start`?",
                "line 12: `pb` is an input point (line 2): `m1.motor`, a var_output, cannot drive " <>
                  "it",
                "line 14: `k` is already driven by `m1.run_lamp` (line 13)",
@@ -2235,9 +2235,9 @@ defmodule Logex.ConfigurationTest do
                "line 5: unknown program type `zzz`",
                "line 8: no global `aa`: declare it, as in `var_global aa dint`",
                "line 9: no global `zz`: declare it, as in `var_global zz bool`",
-               "line 10: `m` is a `seal`, which declares no `qq`: its var_inputs and " <>
+               "line 10: `m` runs `seal`, which declares no `qq`: its var_inputs and " <>
                  "var_outputs are `motor`, `sp`, `start` and `stop`",
-               "line 11: `m` is a `seal`, which declares no `ww`",
+               "line 11: `m` runs `seal`, which declares no `ww`",
                "line 12: no instance `qq`: declare it, as in `program qq motor`",
                "line 13: no instance `ww`: declare it, as in `program ww motor`"
              ]
@@ -2607,14 +2607,14 @@ defmodule Logex.ConfigurationTest do
       assert errors(source, %{"seal" => seal}) == [
                "line 9: unknown program type `zzz`: the types given are `seal`",
                "line 10: no instance `q`: declare it, as in `program q motor`",
-               "line 12: `m` is a `seal`, which declares no `strt` — did you mean `start`?",
+               "line 12: `m` runs `seal`, which declares no `strt` — did you mean `start`?",
                "line 13: `m.t1.pre` goes too deep: a connection names an instance's var_input " <>
                  "or var_output, as in `m.start`",
                "line 14: `m.fault` is internal to `seal` (declared `var`): only a var_input or " <>
                  "var_output connects",
                "line 15: `m.t1` is internal to `seal` (declared `var`): only a var_input or " <>
                  "var_output connects",
-               "line 16: `m` is a `seal`, which declares no `zz`: its var_inputs and " <>
+               "line 16: `m` runs `seal`, which declares no `zz`: its var_inputs and " <>
                  "var_outputs are `motor`, `sp`, `start` and `stop`"
              ]
     end
@@ -3106,7 +3106,7 @@ defmodule Logex.ConfigurationTest do
       assert errors(source, %{"seal" => seal}) == [
                "line 2: `m2` leaves its var_input `start` unconnected: connect it to a global, " <>
                  "a point or a constant, as in `m2.start 0`",
-               "line 3: `m2` is a `seal`, which declares no `Start` — did you mean `start`? " <>
+               "line 3: `m2` runs `seal`, which declares no `Start` — did you mean `start`? " <>
                  "(members are case-sensitive)",
                "line 4: no global `pb` — did you mean `Pb`? (names are case-sensitive)",
                "line 5: no instance `M2` — did you mean `m2`? (names are case-sensitive)",
@@ -4321,7 +4321,7 @@ defmodule Logex.ConfigurationTest do
       assert file_errors(path) == [
                "#{path}: line 7: `pb` is an input point (line 1): `m1.motor`, a var_output, " <>
                  "cannot drive it",
-               "#{path}: line 8: `m1` is a `motor`, which declares no `strat` — did you " <>
+               "#{path}: line 8: `m1` runs `motor`, which declares no `strat` — did you " <>
                  "mean `start`?",
                "#{path}: line 9: `m2` leaves its var_input `stop` unconnected: connect it " <>
                  "to a global, a point or a constant, as in `m2.stop 0`",
@@ -4538,7 +4538,7 @@ defmodule Logex.ConfigurationTest do
                "#{renamed}: line 1: `m1` leaves its var_inputs `start` and `stop` " <>
                  "unconnected: connect each to a global, a point or a constant, as in " <>
                  "`m1.start 0`",
-               "#{renamed}: line 2: `m1` is a `motor`, which declares no `strat` — did you " <>
+               "#{renamed}: line 2: `m1` runs `motor`, which declares no `strat` — did you " <>
                  "mean `start`?"
              ]
 

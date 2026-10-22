@@ -802,6 +802,7 @@ defmodule Logex.ApiContractTest do
     :diagnosed,
     :forecast,
     :plain_swap,
+    :swap_outside,
     :misfit,
     :stale,
     :initial_started,
@@ -1069,12 +1070,7 @@ defmodule Logex.ApiContractTest do
   # that has run the state: a variant of it, which keeps its types, so a value the swap
   # left that does not fit is reached; or the program swapped out, whose tags the state
   # still holds.
-  defp edit_op(11, %{e: nil, p: old} = w) do
-    edit_reach(:plain_swap, true)
-    swapped = edit_scan(%{w | p: edit_program()}, :plain_swap)
-    candidate = pick([variant(swapped.p), old])
-    pick([&edit_op(1, &1), &accept(candidate, &1), &step(:test, accept(candidate, &1))]).(swapped)
-  end
+  defp edit_op(11, %{e: nil} = w), do: swap(edit_program(), w)
 
   # With an edit open, a trial run: a test, a scan of the candidate, an untest and a scan
   # of the original, each step refused where the stage does not allow it; or a test and an
@@ -1110,6 +1106,34 @@ defmodule Logex.ApiContractTest do
     assert :refused = edit_attempt(pick(calls))
     w
   end
+
+  # Decision 171: a swap to a program under which a value the state holds is an integer
+  # outside its tag's type, `r`'s 3 under a bool, is the host's mistake, refused by the
+  # swap's first call, the state kept as it was; the rule restated, with no call into
+  # Logex.Declarations.
+  defp swap(new, w), do: swapped(Enum.any?(w.s.env, &outside_type?(new.tags, &1)), new, w)
+
+  defp swapped(true, new, w) do
+    edit_reach(:swap_outside, true)
+    assert :refused = edit_attempt(fn -> Runtime.scan(new, w.s, 0) end)
+    w
+  end
+
+  defp swapped(false, new, %{p: old} = w) do
+    edit_reach(:plain_swap, true)
+    swapped = edit_scan(%{w | p: new}, :plain_swap)
+    candidate = pick([variant(swapped.p), old])
+    pick([&edit_op(1, &1), &accept(candidate, &1), &step(:test, accept(candidate, &1))]).(swapped)
+  end
+
+  defp outside_type?(tags, {name, value}), do: outside_type?(Map.get(tags, name), value)
+
+  defp outside_type?(%Tag{type: :bool}, value) when is_integer(value), do: value not in 0..1
+
+  defp outside_type?(%Tag{type: :dint}, value) when is_integer(value),
+    do: value not in -2_147_483_648..2_147_483_647
+
+  defp outside_type?(_tag, _value), do: false
 
   defp open_mistakes(%{e: nil}, _step, _bad), do: []
 

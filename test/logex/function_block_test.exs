@@ -2687,8 +2687,8 @@ defmodule Logex.FunctionBlockTest do
       with_dints =
         runs(
           holder.(
-            "var n dint\nvar k dint\nvar s dint",
-            "xic go move 7 n\nxic go move 3 k\nxic go move 2 s"
+            "var n ton\nvar k dint\nvar s dint",
+            "xic go ton n 7\nxic go move 3 k\nxic go move 2 s"
           )
         )
 
@@ -2701,12 +2701,13 @@ defmodule Logex.FunctionBlockTest do
         )
 
       {_, state} = running(with_dints, [{0, %{"a" => 1, "en" => 1}}])
-      assert %{"n" => 7, "k" => 3, "s" => 2} = state.env["p"]
+      assert %{"n" => %{"pre" => 7}, "k" => 3, "s" => 2} = state.env["p"]
 
-      # A plain swap keeps the 7, the 3 and the 2 under a bool, a timer and an instance of
-      # a block its program declares, while no cal runs the body.
+      # A plain swap keeps the timer's map, the 3 and the 2 under a bool, a timer and an
+      # instance of a block its program declares, while no cal runs the body. (A 7 under
+      # the bool would be an integer outside its type, refused since decision 171.)
       {_, state} = step(with_kinds, state, %{"en" => 0})
-      assert %{"n" => 7, "k" => 3, "s" => 2} = state.env["p"]
+      assert %{"n" => %{"pre" => 7}, "k" => 3, "s" => 2} = state.env["p"]
 
       {_edit, state, report} = Edit.test(accept!(with_kinds, with_kinds, state), state)
       timer = FbType.initial(FbType.ton(), %{"pre" => 40})

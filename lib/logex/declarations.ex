@@ -238,6 +238,22 @@ defmodule Logex.Declarations do
   @doc "Whether `type` is an elementary type, a row of `table/0`: a guard."
   defguard is_elementary(type) when type in @type_atoms
 
+  @doc """
+  A guard: whether `value` is an integer that fits the elementary type `type`, as
+  `fits?/2` says, built from the table's ranges (decision 171), so that a check of every
+  value a state holds costs a guard a value.
+  """
+  defmacro is_fitting(type, value) do
+    @table
+    |> Enum.map(fn %{type: atom, range: first..last//1} ->
+      quote do
+        unquote(type) === unquote(atom) and is_integer(unquote(value)) and
+          unquote(value) >= unquote(first) and unquote(value) <= unquote(last)
+      end
+    end)
+    |> Enum.reduce(&quote(do: unquote(&2) or unquote(&1)))
+  end
+
   @doc "An elementary type's word, `dint` for `:dint`."
   def word(type) when type in @type_atoms, do: Map.fetch!(@rows, type).word
 

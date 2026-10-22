@@ -407,12 +407,13 @@ defmodule Logex.EditTest do
            "again (decision 26)" do
       v0 =
         c!(
-          "var_input go bool\nvar k dint\nvar b dint\nvar t1 ton\nvar_output n dint\n" <>
-            "xic go move 7 k\nxic go move 5 b\nxic go ton t1 50"
+          "var_input go bool\nvar k dint\nvar b ton\nvar t1 ton\nvar_output n dint\n" <>
+            "xic go move 7 k\nxic go ton b 5\nxic go ton t1 50"
         )
 
-      # The plain swap keeps k's 7 under a timer, b's 5 under a bool, and t1's map under a
-      # dint; a well-typed n is kept.
+      # The plain swap keeps k's 7 under a timer, b's map under a bool, and t1's map under
+      # a dint; a well-typed n is kept. (A 5 under a bool is an integer outside its type, the
+      # host's mistake since decision 171, refused by the plain swap's scan.)
       v1 =
         c!(
           "var_input go bool\nvar k ton\nvar b bool\nvar t1 dint 3\nvar_output n dint\n" <>
@@ -423,7 +424,7 @@ defmodule Logex.EditTest do
       v2 = c!(v2)
       {_, state} = run(v0, [{0, %{"go" => 1}}])
       {_, state} = Runtime.scan(v1, state, 10)
-      assert %{"k" => 7, "b" => 5, "t1" => %{}, "n" => 4} = state.env
+      assert %{"k" => 7, "b" => %{"pre" => 5}, "t1" => %{}, "n" => 4} = state.env
       {:ok, edit, forecast} = Edit.accept(v1, v2, state)
       {_edit, state, report} = Edit.test(edit, state)
       fresh = Runtime.instance(v2).env
@@ -464,16 +465,17 @@ defmodule Logex.EditTest do
 
     test "a value that does not fit is started only at the first test, and only for the " <>
            "candidate's tags" do
-      # The plain swap leaves 7 under `b`, a bool of the original the candidate drops, and 9
-      # under `k`, a timer of it: the first test leaves both alone, and so does the untest,
-      # which starts nothing, and whose timer rules read no timer that is not a map.
-      v0 = c!("var_input go bool\nvar b dint\nvar k dint\nxic go move 7 b\nxic go move 9 k")
+      # The plain swap leaves a timer's map under `b`, a bool of the original the candidate
+      # drops, and 9 under `k`, a timer of it: the first test leaves both alone, and so does
+      # the untest, which starts nothing, and whose timer rules read no timer that is not a
+      # map.
+      v0 = c!("var_input go bool\nvar b ton\nvar k dint\nxic go ton b 7\nxic go move 9 k")
       v1 = c!("var_input go bool\nvar b bool\nvar k ton\nvar_output y bool\nxic go ote y")
       v2 = c!("var_input go bool\nvar_output y bool\nxic go ote y")
       {_, state} = run(v0, [{0, %{"go" => 1}}])
       {_, state} = Runtime.scan(v1, state, 10)
       {edit, state, []} = Edit.test(accept!(v1, v2, state), state)
-      assert {_, %Instance{env: %{"b" => 7, "k" => 9}}, []} = Edit.untest(edit, state)
+      assert {_, %Instance{env: %{"b" => %{"pre" => 7}, "k" => 9}}, []} = Edit.untest(edit, state)
     end
 
     test "a restart during the test drops what only the original declares, and untest " <>
@@ -848,7 +850,7 @@ defmodule Logex.EditTest do
     end
 
     test "is not reported for a tag the first test starts again, which :added reports" do
-      p0 = c!("var x dint\nvar_output y bool\nmove 7 x")
+      p0 = c!("var x ton\nvar_output y bool\nxio y ton x 7")
       v1 = c!("var x bool\nvar_output y bool\nxic x ote y")
       v2 = c!("var x bool 1\nvar_output y bool\nxic x ote y")
       {_, state} = run(p0, [{0, %{}}])

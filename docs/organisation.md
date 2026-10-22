@@ -583,6 +583,9 @@ line 15: `m1.fault` is internal to `motor` (declared `var`): only a var_input or
 line 16: `m1.speed_sp` is a dint, but `k` is a bool (line 3)
 ```
 
+*(Since decision 168, 2026-10-22, line 11 reads "`m1` runs `motor`, which declares no
+`strat` — did you mean `start`?": a program type's name takes no article.)*
+
 **Globals shared by name.** `var_external estop bool` in `motor.ld` binds to the
 configuration's `var_global estop bool` (Ed 2 §2.4.3). During a scan it reads and writes
 the global directly. Use it for what every instance shares, such as an e-stop. Per-instance
@@ -3297,13 +3300,17 @@ Overflow, side by side:
 `Logex.Declarations`, its word, kind, width, range, zero and article, which every message,
 guard, `fits?/2` and the configuration text's type words read (a routine choice below):
 
-| Word | Kind | Bytes | Range | Zero | In a message |
+| Word | Kind | Bits | Range | Zero | In a message |
 |---|---|---|---|---|---|
-| `bool` | Boolean | — | 0, 1 | 0 | a bool |
-| `sint` `int` `dint` `lint` | signed integer | 1 2 4 8 | −2^(N−1) … 2^(N−1)−1 | 0 | an sint, an int, a dint, an lint |
-| `usint` `uint` `udint` `ulint` | unsigned integer | 1 2 4 8 | 0 … 2^N−1 | 0 | a usint, a uint, a udint, a ulint |
-| `real` `lreal` | real | 4 8 | normal IEEE 754 single or double values and 0.0 | 0.0 | a real, an lreal |
-| `byte` `word` `dword` `lword` | bit string | 1 2 4 8 | 0 … 2^N−1, no arithmetic | 0 | a byte, a word, a dword, an lword |
+| `bool` | Boolean | 1 | 0, 1 | 0 | a bool |
+| `sint` `int` `dint` `lint` | signed integer | 8 16 32 64 | −2^(N−1) … 2^(N−1)−1 | 0 | an sint, an int, a dint, an lint |
+| `usint` `uint` `udint` `ulint` | unsigned integer | 8 16 32 64 | 0 … 2^N−1 | 0 | a usint, a uint, a udint, a ulint |
+| `real` `lreal` | real | 32 64 | normal IEEE 754 single or double values and 0.0 | 0.0 | a real, an lreal |
+| `byte` `word` `dword` `lword` | bit string | 8 16 32 64 | 0 … 2^N−1, no arithmetic | 0 | a byte, a word, a dword, an lword |
+
+*(Decision 170, 2026-10-22: the width is in bits, N in the ranges, as the table in
+`Logex.Declarations` holds it and its messages print it; the column gave bytes until then.
+The survey table above keeps its bytes.)*
 
 Every value is an Elixir integer or float, so a width is a range row and an unsigned type
 costs no more than a signed one. Bit 7 of an `sint` is its sign bit, read and written in
@@ -3817,7 +3824,7 @@ suffixes.
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays. *(Kept by Milestone 5, decision 158: the TIME and LTIME types and `T#` stay deferred, a preset stays a plain integer, ms for the `ton` family and ns for the long timers.)* |
 | IEC textual paste-compatibility (`END_*` blocks, `:=`, `;`) | not adopted | logex is a dialect (`PLAN.md` §5) |
-| Online edit (a new type, instances keep their state) | **OE-1 landed 2026-10-01** (§4.9): the staged edit of one program instance, `Logex.Edit`; OE-2, a configuration's, after Milestone 2, designed, decided and **landed 2026-10-13** as `Logex.Configuration.Edit` (§4.9, "OE-2's design"; decisions 55–65); the edit of a program that holds function blocks (decisions 31 and 32) landed with M2-5 on 2026-10-04 | Instance state stays keyed by declared tag name, which is what lets an edit move it by name. A *plain swap*, a recompile of the same name scanned over a kept instance with no edit, stays in the contract (decision 26) and does what it did before OE-1, since a state's values are not checked each scan: the instance keeps its values until a restart. So it keeps its old `.pre` under a changed preset; a tag the recompile adds reads 0, not its initial value, so an added timer starts at a `.pre` of 0 and is done at its first true scan; a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output; and an `ons` it adds fires on its first scan if its condition is already true (`end_to_end_test.exs` pins all but the type change). A restart puts the values right, keeping only the var_inputs whose values fit their types. `Logex.Edit` moves the state by rule instead: a switch moves `.pre` where it still holds the old preset, starts what is added at its initial value, at the first test restarts a value that does not fit its type, and blocks an added or changed `ons` for one scan; accept refuses a type change. |
+| Online edit (a new type, instances keep their state) | **OE-1 landed 2026-10-01** (§4.9): the staged edit of one program instance, `Logex.Edit`; OE-2, a configuration's, after Milestone 2, designed, decided and **landed 2026-10-13** as `Logex.Configuration.Edit` (§4.9, "OE-2's design"; decisions 55–65); the edit of a program that holds function blocks (decisions 31 and 32) landed with M2-5 on 2026-10-04 | Instance state stays keyed by declared tag name, which is what lets an edit move it by name. A *plain swap*, a recompile of the same name scanned over a kept instance with no edit, stays in the contract (decision 26) and does what it did before OE-1, since a state's values are not checked each scan: the instance keeps its values until a restart. *(Since decision 171, 2026-10-22, an integer outside its tag's type is checked for on every call and refused, so a swap that narrows a tag over such a value is refused; any other value is still kept.)* So it keeps its old `.pre` under a changed preset; a tag the recompile adds reads 0, not its initial value, so an added timer starts at a `.pre` of 0 and is done at its first true scan; a tag whose type it changes keeps its old value, so a timer recompiled as a `var_output` gives its map as an output; and an `ons` it adds fires on its first scan if its condition is already true (`end_to_end_test.exs` pins all but the type change). A restart puts the values right, keeping only the var_inputs whose values fit their types. `Logex.Edit` moves the state by rule instead: a switch moves `.pre` where it still holds the old preset, starts what is added at its initial value, at the first test restarts a value that does not fit its type, and blocks an added or changed `ons` for one scan; accept refuses a type change. |
 
 ---
 
@@ -4200,7 +4207,11 @@ the reasons stay with them.
     version check to OE-2's generation counter.* A review found a plain swap that left a
     dint's 7 under a tag the next program declares a timer; an edit then passed it
     silently, and the timer was done 10 ms into a 5000 ms preset. Adopted. *(Decision 60
-    gives the counter to the configuration edit only.)*
+    gives the counter to the configuration edit only.)* *(Since decision 171, 2026-10-22,
+    a plain swap that leaves an integer outside its tag's new type, a dint's 7 under a
+    bool, is refused at its next call: the state's values are checked where it is handed
+    in. One that leaves anything else, a timer's map under a bool or a 7 under a timer,
+    stays in the contract, and the first test's re-initialisation reaches it.)*
 27. **Accept and the state (E7):** `accept/2`, from the programs alone; or `accept/3`,
     which takes the state and returns a forecast, the report a test taken now would give,
     with nothing applied. *Recommend `accept/3`*, so that every step returns a report,
@@ -7506,6 +7517,115 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      the program compiles, as decision 78* (the maintainer, 2026-10-21). A negative
      source held in a tag stays decision 164's minor fault at run time; `-0.0`, which is
      no negative number, is taken.
+168. **How a message names a program type (Milestone 5),** following M5-1's review. The
+     plant's configuration connects `m1.strat`, a misspelling, and `m1` runs the program
+     type `motor`. The refusal said "`m1` is a `motor`, which declares no `strat`", the
+     one message that put an article before a program type's name; M5-1's grep for an
+     article written by hand allowed it by name.
+     - Keep the article, "is a `motor`";
+     - or none, "`m1` runs `motor`, which declares no `strat`", as a user function
+       block's type is named, "an instance of `seal`" (decision 53's `instance_of/1`),
+       since a program type's name is any name and `an outer` or `a user` would want an
+       article of its own.
+
+     IEC leaves an implementation's messages to it; how Logix's verifier words this
+     one is **unverified**.
+
+     **Taken: no article: "`m1` runs `motor`, which declares no `strat`"** (the
+     maintainer, 2026-10-22). Its entry is gone from `type_table_test.exs`'s allow-list,
+     so no `a `#{program.name}`` passes the grep again. *Checked, the record's:* every
+     other message that names a program type takes none already: `Logex.Runtime`'s "is a
+     program instance of `motor`" (the article is the instance's), `Logex.Configuration`'s
+     "is internal to `motor`", "is a var_external of `motor`", "`motor` declares
+     `var_external estop bool`" and "`motor` runs the timer `t1`", and
+     `Logex.Configuration.Edit`'s, which name a type by its name alone. The receipts of
+     §4.4 that print the old words are annotated where they stand.
+169. **A connected var_input or var_output that holds an instance (Milestone 5),**
+     following decision 36 and M5-1's review. No `.ld` text declares `var_input t ton`
+     (`Logex.Declarations` refuses it, and `Logex.Tag.new!/4` from Elixir), but a host may
+     edit a compiled `%Logex.Program{}` so that the conveyor's `motor` has a var_input
+     `run` holding an `rto`, and connect `m1.run` to the global `g`. Until now that was a
+     diagnostic, "`m1.run` is an rto, but `g` is a bool", and with a constant, `m1.run
+     0`, or a global no line declares, a `FunctionClauseError` or a
+     `Protocol.UndefinedError` escaped `check/1`.
+     - A diagnostic at the connection's line, as a type mismatch is;
+     - or the host's mistake, one `ArgumentError` at the check, as decision 36 has every
+       mistake no configuration text can make.
+
+     IEC and Logix have no counterpart: a program's interface is what its text declares.
+
+     **Taken: the host's mistake, one pinned `ArgumentError` at the configuration check,
+     not a diagnostic** (the maintainer, 2026-10-22): "`motor`'s var_input `run` holds an
+     rto, which no text declares: an instance is the program's own, declared with `var`,
+     so `motor` was edited by hand after it compiled", a line for each such tag, by name,
+     a user block's instance named "an instance of `seal`", through `check/1`,
+     `new!/1`, `compile/3` and `Logex.Runtime.start/1` alike. *Reading (the record's,
+     provisional):* the program is refused whatever its connections, so a var_input or
+     var_output holding an instance that nothing connects is refused too, since no text
+     could have compiled the program either way; and, as a program under another's name
+     is, it is left out of every diagnostic, so its instances and connections give none.
+170. **The unit of the type table's width (Milestone 5),** following decision 144. The
+     table in `Logex.Declarations` gives a dint a width of 32, which its messages print
+     as "does not fit in 32 bits", while §4.12's table of the types gave the same column
+     in bytes, 4, and a bool "—".
+     - Bits, as the code holds it and the messages say it;
+     - or bytes, as IEC's Table 10 and the vendors' tables mostly print a size.
+
+     **Taken: bits** (the maintainer, 2026-10-22). §4.12's column is renamed "Bits", 1
+     for a bool, 8, 16, 32 and 64 for the integers and bit strings, 32 and 64 for the
+     reals; the survey table above it, of IEC and the vendors, keeps its bytes, being
+     theirs.
+171. **A value a state holds outside its tag's type (Milestone 5),** superseding M5-2's
+     provisional reading. The host hands the runtime a state whose box count, a dint,
+     holds 5,000,000,000, or whose run lamp, a bool, holds 5: through `put_inputs/3`,
+     `call/4`, `scan/2,3`, `restart/3`, `Logex.Edit`'s steps, or a `%Logex.Runtime{}` it
+     built. Until now the runtime read it as it was: a contact read 5 as closed (M1-4),
+     and `add` computed 5,000,000,000 + 0 exactly and then wrapped it, so the count
+     showed 705,032,704 and its lamp went off for one scan (M5-2's review).
+     - Read as it is, as M1-4 and M5-2 had it;
+     - brought into the type first, so the count showed 2,147,483,647;
+     - or the host's mistake, refused where the state is handed in, so that no scan ever
+       sees it.
+
+     IEC gives each type its range (Ed 3 Table 10) and no way to put a value outside it
+     into a variable; Logix writes a tag only through an instruction, a download or a
+     message, each in the tag's type, so neither has the case (the record read no clause
+     on it, **unverified**).
+
+     **Taken: the host's mistake, one pinned `ArgumentError` where the state is handed
+     in, as the runtime already refuses its own keys in an env; nothing outside its type
+     ever reaches a scan** (the maintainer, 2026-10-22): "state.env holds `count` outside
+     its type: it is a dint, and 5000000000 does not fit in 32 bits", every such value a
+     line of one message, in path order, a member of an instance by its path at any
+     depth, `t1.acc` or `p.t.acc`, the range the type table's (`Logex.Declarations.
+     is_fitting/2`, a guard built from the table, so `fits?/2`'s rule). M5-2's test of a
+     hand-built source computed exactly and then wrapped is replaced by its refusal.
+     *The cost (the record's, as the maintainer asked):* the check walks the state once,
+     its program's tags against the env, a guard a value, and a member or a block's
+     instance its type's members, a user block's type found in the program's one table
+     (decision 53), so it is linear in the state, about five reductions a tag on Elixir
+     1.20.4; the lines are sorted only when there are any. A growth test holds
+     `put_inputs/3` of 2,000 dints and 2,000 timers to under 4.8 times its cost at 500
+     (4.02x at most over five runs). It is paid on every scan, a lone instance's and each
+     instance a cycle scans: a jump test's skipped rungs, 0.23 of running them before,
+     cost 0.30 now. *Reading (the record's, provisional), in each case:*
+     - only an integer outside its type is refused, a bool's 2 or 5 among them; a value
+       that is no integer, a 1.5, a nil, a `"x"` or a map where a bool or a dint goes,
+       is read as before, M1-4's totality and M3-3's "a source no integer reads 0", and
+       an instance's map that is no map is not looked into;
+     - the check comes after the state's shape and its owner, so a state of another
+       program is told its owner, never its values;
+     - a resource's instance is checked as each scan takes it, inside `call/4`, its
+       var_externals' globals merged in with it, and a connection's copy-in checked as
+       an input is: a `cycle/3` or `restart/2` of a runtime the host built holding one
+       raises before it returns, nothing changed, while a configuration edit's steps,
+       which scan nothing, carry it to that cycle;
+     - a plain swap that narrows a tag over a value outside its new type, a dint's 7
+       kept under what is now a bool, is refused at its next call, a `restart/3` under
+       the new program among them, and an edit refuses the type change itself (§4.9):
+       the host restarts under the program whose values the state holds,
+       or puts the value right; decision 26's restart of what does not fit is reached
+       now by a value that is no integer, a timer's map under a bool among them.
 
 ---
 

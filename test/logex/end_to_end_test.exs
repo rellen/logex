@@ -24,7 +24,8 @@ defmodule Logex.EndToEndTest do
   defp compile(src), do: Logex.compile(src, name: "t")
 
   # One scan through the public API, from an env the test chooses: an instance built by
-  # hand, which Logex.Runtime runs without checking its values (outside its contract).
+  # hand, which Logex.Runtime runs refusing only an integer outside its tag's type
+  # (decision 171), and reading any other value as it is (outside its contract).
   defp env_after(program, env) do
     state = %Logex.Instance{type: program.name, env: env, now: 0, first: true}
     {_outputs, state} = Logex.Runtime.call(program, state, %{}, %Logex.Scan{now: 0, first: true})
@@ -464,10 +465,16 @@ defmodule Logex.EndToEndTest do
     test "a storage bit holding anything is read as a contact reads it" do
       p = program(@ons)
 
-      for {junk, fires} <- [{0, 1}, {nil, 1}, {false, 1}, {0.0, 1}, {5, 0}, {"x", 0}, {true, 0}] do
+      for {junk, fires} <- [{0, 1}, {nil, 1}, {false, 1}, {0.0, 1}, {2.5, 0}, {"x", 0}, {true, 0}] do
         assert {%{"pulse" => ^fires}, %{"s1" => 1}} = later_scan(p, %{"s1" => junk, "go" => 1}),
                inspect(junk)
       end
+
+      # An integer outside a bool is the host's mistake (decision 171).
+      assert_raise ArgumentError,
+                   "state.env holds `s1` outside its type: it is a bool, and only 0 or 1 fit, " <>
+                     "found 5",
+                   fn -> later_scan(p, %{"s1" => 5, "go" => 1}) end
     end
   end
 
@@ -785,7 +792,7 @@ defmodule Logex.EndToEndTest do
     end
 
     test "a restart under a recompile of the same name starts again a var_input whose type " <>
-           "it changed" do
+           "it changed, and refuses an integer outside its new type (decision 171)" do
       {:ok, v1} =
         Logex.compile("var_input go bool\nvar_input x dint\nvar t1 ton\nxic go ton t1 50",
           name: "m"
@@ -803,9 +810,17 @@ defmodule Logex.EndToEndTest do
       {_, state} = Logex.Runtime.scan(v1, state, 10)
       assert %{"x" => 5, "t1" => %{"acc" => 10}} = state.env
 
-      # `go` still fits, and is kept as the input image is; `x` and `t1` no longer do.
+      # `x`'s 5 is outside its new type, a bool: the host's mistake.
+      assert_raise ArgumentError,
+                   "state.env holds `x` outside its type: it is a bool, and only 0 or 1 fit, " <>
+                     "found 5",
+                   fn -> Logex.Runtime.restart(v2, state, :cold) end
+
+      # `go` and a 1 in `x` still fit, and are kept as the input image is; `t1`, a timer's
+      # map where a dint now goes, no longer does.
+      state = %{state | env: %{state.env | "x" => 1}}
       restarted = Logex.Runtime.restart(v2, state, :cold)
-      assert restarted.env == %{"go" => 1, "x" => 0, "t1" => 0, "y" => 0}
+      assert restarted.env == %{"go" => 1, "x" => 1, "t1" => 0, "y" => 0}
     end
 
     test "a preset lowered below .acc is done at the next true scan, .acc brought down to it" do
@@ -1019,13 +1034,19 @@ defmodule Logex.EndToEndTest do
       assert {_, %{"t1" => %{"acc" => 5, "last" => 7}}} =
                later_scan(p, %{"t1" => Map.put(timer, "en", 1), "go" => 1})
 
-      for {en, acc} <- [{1, 7}, {true, 7}, {5, 7}, {0, 5}, {nil, 5}, {false, 5}] do
+      for {en, acc} <- [{1, 7}, {true, 7}, {2.5, 7}, {0, 5}, {nil, 5}, {false, 5}] do
         from_zero = %{timer | "last" => 5}
 
         assert {_, %{"t1" => %{"acc" => ^acc}}} =
                  later_scan(p, %{"t1" => Map.put(from_zero, "en", en), "go" => 1}),
                inspect(en)
       end
+
+      # An integer outside a bool is the host's mistake (decision 171).
+      assert_raise ArgumentError,
+                   "state.env holds `t1.en` outside its type: it is a bool, and only 0 or 1 " <>
+                     "fit, found 5",
+                   fn -> later_scan(p, %{"t1" => Map.put(timer, "en", 5), "go" => 1}) end
     end
   end
 
@@ -1116,8 +1137,6 @@ defmodule Logex.EndToEndTest do
       for {env, closed} <- [
             {%{"t" => 0}, 0},
             {%{"t" => 1}, 1},
-            {%{"t" => 5}, 1},
-            {%{"t" => -3}, 1},
             {%{"t" => 0.0}, 0},
             {%{"t" => -0.0}, 0},
             {%{"t" => 2.5}, 1},
@@ -1130,6 +1149,15 @@ defmodule Logex.EndToEndTest do
           ] do
         assert %{"hi" => ^closed, "lo" => lo} = run(@contacts, env)
         assert lo == 1 - closed, "xio must be the complement of xic for #{inspect(env)}"
+      end
+
+      # Since decision 171 an integer outside a bool, a 5 or a -3, never reaches a contact:
+      # it is the host's mistake, refused before the scan.
+      for t <- [5, -3] do
+        assert_raise ArgumentError,
+                     "state.env holds `t` outside its type: it is a bool, and only 0 or 1 " <>
+                       "fit, found #{t}",
+                     fn -> run(@contacts, %{"t" => t}) end
       end
     end
 
@@ -2148,7 +2176,7 @@ defmodule Logex.EndToEndTest do
                "#{wired}: line 8: `pb_1` is an input point (line 1): `m1.motor`, a " <>
                  "var_output, cannot drive it",
                # unknown: a member the program type does not declare
-               "#{wired}: line 9: `m1` is a `motor`, which declares no `strat` — did you " <>
+               "#{wired}: line 9: `m1` runs `motor`, which declares no `strat` — did you " <>
                  "mean `start`?",
                # undriven input: a var_input left unconnected
                "#{wired}: line 10: `m2` leaves its var_input `stop` unconnected: connect " <>

@@ -344,8 +344,9 @@ defmodule Logex.ArithmeticTest do
   end
 
   describe "a source a hand-built env holds outside the dint" do
-    # Provisional (M5-2's review): such a source is read as the integer it is, the result
-    # computed exactly and then wrapped, never brought into the dint first.
+    # Decision 171, superseding M5-2's provisional reading (computed exactly, then wrapped):
+    # a value outside its tag's type is the host's mistake, refused before the scan, so no
+    # such source ever reaches `add`.
     @outside """
     var v dint
     var r dint
@@ -356,14 +357,29 @@ defmodule Logex.ArithmeticTest do
     defp outside(v) do
       p = c!(@outside)
       state = %Instance{type: "m", env: %{"v" => v, "r" => 0, "k" => 1}, now: 0, first: true}
-      {_, state} = Runtime.call(p, state, %{}, %Scan{now: 0, first: true})
-      {state.env["r"], state.env["k"], state.faults}
+
+      try do
+        Runtime.call(p, state, %{}, %Scan{now: 0, first: true})
+      rescue
+        e in ArgumentError -> e.message
+      end
     end
 
-    test "is computed exactly and then wrapped, passing no power and raising no fault" do
-      assert outside(5_000_000_000) == {705_032_704, 0, []}
-      assert outside(-5_000_000_000) == {-705_032_704, 0, []}
-      assert outside(Integer.pow(2, 70)) == {0, 0, []}
+    test "is refused before the scan, as the host's mistake" do
+      for v <- [5_000_000_000, -5_000_000_000, Integer.pow(2, 70)] do
+        assert outside(v) ==
+                 "state.env holds `v` outside its type: it is a dint, and #{v} does not fit " <>
+                   "in 32 bits"
+      end
+
+      assert {%{}, %Instance{env: %{"r" => 2_147_483_647, "k" => 1}}} =
+               outside_ok(2_147_483_647)
+    end
+
+    defp outside_ok(v) do
+      p = c!(@outside)
+      state = %Instance{type: "m", env: %{"v" => v, "r" => 0, "k" => 1}, now: 0, first: true}
+      Runtime.call(p, state, %{}, %Scan{now: 0, first: true})
     end
   end
 

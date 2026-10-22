@@ -281,12 +281,212 @@ defmodule Logex.RuntimeTest do
       assert {env[:skipped], env[7]} == {1, 1}
     end
 
-    test "the values in a state's env are not checked, so M1-4's totality stays reachable", %{
+    # Decision 171: an integer outside its tag's type is the host's mistake; a value that
+    # is no integer is read as before, so M1-4's totality stays reachable.
+    test "a value that is no integer is read as before, so M1-4's totality stays reachable",
+         %{motor: m, state: s} do
+      s = %{s | env: %{s.env | "start" => 1.5, "stop" => nil}}
+      assert {%{"motor" => 1}, _} = Runtime.call(m, s, %{}, %Scan{now: 0, first: true})
+    end
+  end
+
+  describe "a state's values (decision 171)" do
+    @held """
+    var_input go bool
+    var_output q bool
+    var n dint
+    var t ton
+    xic go ton t 100
+    xic t.dn ote q
+    """
+
+    @holder """
+    var_input a bool
+    var_output y bool
+    var p held
+    cal p a y
+    """
+
+    defp holder do
+      {:ok, held} = Logex.compile("function_block held\n" <> @held, name: "held")
+      {:ok, holder} = Logex.compile(@holder, name: "holder", types: [held])
+      holder
+    end
+
+    defp outside(name, type, value),
+      do: "state.env holds `#{name}` outside its type: it is #{type}, and #{misfit(type, value)}"
+
+    defp misfit("a bool", value), do: "only 0 or 1 fit, found #{value}"
+    defp misfit("a dint", value), do: "#{value} does not fit in 32 bits"
+
+    test "an integer outside its tag's type is refused by every entry point that takes a state",
+         %{motor: m, state: s} do
+      bad = %{s | env: %{s.env | "speed_sp" => 5_000_000_000}}
+      message = outside("speed_sp", "a dint", 5_000_000_000)
+      {:ok, edit, _} = Logex.Edit.accept(m, m, s)
+
+      for call <- [
+            fn -> Runtime.call(m, bad, %{}, %Scan{now: 0, first: true}) end,
+            fn -> Runtime.put_inputs(m, bad, %{}) end,
+            fn -> Runtime.scan(m, bad) end,
+            fn -> Runtime.scan(m, bad, 10) end,
+            fn -> Runtime.restart(m, bad, :cold) end,
+            fn -> Logex.Edit.accept(m, m, bad) end,
+            fn -> Logex.Edit.test(edit, bad) end,
+            fn -> Logex.Edit.cancel(edit, bad) end
+          ] do
+        raises(message, call)
+      end
+    end
+
+    test "each limit fits and one past it does not, a bool's and a dint's", %{
       motor: m,
       state: s
     } do
-      s = %{s | env: %{s.env | "start" => 5, "stop" => nil}}
-      assert {%{"motor" => 1}, _} = Runtime.call(m, s, %{}, %Scan{now: 0, first: true})
+      for {tag, value} <- [
+            {"start", 0},
+            {"start", 1},
+            {"sp_in", -2_147_483_648},
+            {"sp_in", 2_147_483_647}
+          ] do
+        assert %Instance{} = Runtime.put_inputs(m, %{s | env: %{s.env | tag => value}}, %{})
+      end
+
+      for {tag, type, value} <- [
+            {"start", "a bool", -1},
+            {"fault", "a bool", 2},
+            {"motor", "a bool", 5},
+            {"sp_in", "a dint", -2_147_483_649},
+            {"speed_sp", "a dint", 2_147_483_648}
+          ] do
+        raises(outside(tag, type, value), fn ->
+          Runtime.put_inputs(m, %{s | env: %{s.env | tag => value}}, %{})
+        end)
+      end
+    end
+
+    test "every value outside is a line of one message, in path order, a member's and a " <>
+           "block's by their paths" do
+      p = holder()
+      s = Runtime.instance(p)
+      inner = s.env["p"]
+      inner = %{inner | "n" => -5_000_000_000, "t" => %{inner["t"] | "acc" => 2 ** 40}}
+      bad = %{s | env: %{s.env | "y" => 3, "p" => %{inner | "q" => 7}}}
+
+      raises(
+        Enum.join(
+          [
+            outside("p.n", "a dint", -5_000_000_000),
+            outside("p.q", "a bool", 7),
+            outside("p.t.acc", "a dint", 2 ** 40),
+            outside("y", "a bool", 3)
+          ],
+          "\n"
+        ),
+        fn -> Runtime.put_inputs(p, bad, %{}) end
+      )
+    end
+
+    test "is checked after the state's owner, and after its shape", %{motor: m, state: s} do
+      {:ok, other} = Logex.compile(@motor, name: "other")
+      bad = %{s | env: %{s.env | "speed_sp" => 5_000_000_000}}
+
+      raises("this state is an instance of `motor`, not of `other`", fn ->
+        Runtime.put_inputs(other, bad, %{})
+      end)
+
+      raises("state.now must be a non-negative integer of milliseconds, got: -1", fn ->
+        Runtime.put_inputs(m, %{bad | now: -1}, %{})
+      end)
+    end
+
+    test "what is no integer, a tag the program lacks, and an instance that is no map are " <>
+           "not looked into",
+         %{motor: m, state: s} do
+      p = holder()
+      ps = Runtime.instance(p)
+
+      for env <- [
+            %{s.env | "sp_in" => 1.0e20, "start" => "x"},
+            Map.put(s.env, "extra", 5_000_000_000),
+            Map.delete(s.env, "fault")
+          ] do
+        assert %Instance{} = Runtime.put_inputs(m, %{s | env: env}, %{})
+      end
+
+      for inner <- [7, nil, Map.delete(ps.env["p"], "n"), %{ps.env["p"] | "t" => 9}] do
+        assert %Instance{} = Runtime.put_inputs(p, %{ps | env: %{ps.env | "p" => inner}}, %{})
+      end
+    end
+
+    test "a plain swap that narrows a tag over a value outside it is refused at its next call" do
+      {:ok, v1} = Logex.compile("var_input go bool\nvar k dint\nxic go move 7 k", name: "m")
+      {:ok, v2} = Logex.compile("var_input go bool\nvar k bool\nxic go ote k", name: "m")
+
+      {_, state} =
+        Runtime.call(v1, Runtime.instance(v1), %{"go" => 1}, %Scan{now: 0, first: true})
+
+      raises(outside("k", "a bool", 7), fn -> Runtime.scan(v2, state) end)
+      raises(outside("k", "a bool", 7), fn -> Runtime.restart(v2, state, :cold) end)
+
+      # Restarted under the program whose values it holds, it is taken.
+      restarted = Runtime.restart(v1, state, :cold)
+      assert {_, %Instance{env: %{"k" => 1}}} = Runtime.scan(v2, restarted)
+    end
+
+    test "a resource's instance is checked as each scan takes it, a var_external's global with it" do
+      {:ok, m} =
+        Logex.compile("var_external e dint\nvar_output y dint\nvar k dint\nmove e y",
+          name: "m"
+        )
+
+      config =
+        Logex.Configuration.new!(
+          name: "plant",
+          programs: [m],
+          globals: [
+            %Logex.Configuration.Global{name: "e", type: :dint},
+            %Logex.Configuration.Global{name: "o", type: :dint}
+          ],
+          instances: [%Logex.Configuration.Instance{name: "m1", type: "m"}],
+          connections: [%Logex.Configuration.Connection{instance: "m1", member: "y", to: "o"}]
+        )
+
+      runtime = Runtime.start(config)
+      %Runtime{instances: %{"m1" => m1}, globals: globals} = runtime
+      by_hand = %{runtime | instances: %{"m1" => %{m1 | env: %{m1.env | "k" => 2 ** 32}}}}
+      raises(outside("k", "a dint", 2 ** 32), fn -> Runtime.cycle(by_hand, 0, %{}) end)
+      raises(outside("k", "a dint", 2 ** 32), fn -> Runtime.restart(by_hand, :cold) end)
+      by_hand = %{runtime | globals: %{globals | "e" => -(2 ** 32)}}
+      raises(outside("e", "a dint", -(2 ** 32)), fn -> Runtime.cycle(by_hand, 0, %{}) end)
+    end
+
+    # A state of n dints and n timers, checked whole by put_inputs/3 with no inputs: linear
+    # in the tags. 4x the tags took 3.99x to 4.02x over five runs on Elixir 1.20.4; the
+    # bound is a fifth above the highest.
+    defp reductions_to_check(n) do
+      {:ok, p} =
+        Logex.compile(
+          Enum.map_join(1..n, "\n", &"var d#{&1} dint\nvar t#{&1} ton") <>
+            "\n" <> Enum.map_join(1..n, "\n", &"xic t#{&1}.dn move 1 d#{&1}"),
+          name: "m"
+        )
+
+      s = Runtime.instance(p)
+
+      Enum.min(
+        for _ <- 1..3 do
+          {:reductions, before} = Process.info(self(), :reductions)
+          Runtime.put_inputs(p, s, %{})
+          {:reductions, later} = Process.info(self(), :reductions)
+          later - before
+        end
+      )
+    end
+
+    test "is linear in the state it checks" do
+      ratio = reductions_to_check(2000) / reductions_to_check(500)
+      assert ratio < 4.8, "4x the tags took #{Float.round(ratio, 2)}x the reductions"
     end
   end
 

@@ -975,7 +975,7 @@ defmodule LogexTest do
                "#{broken}: line 12: `estop` is an input point (line 4): `m1.motor`, a " <>
                  "var_output, cannot drive it",
                "#{broken}: line 13: `m1.speed_sp` is a dint, but `k1` is a bool (line 5)",
-               "#{broken}: line 14: `m1` is a `motor`, which declares no `strat` — did you mean " <>
+               "#{broken}: line 14: `m1` runs `motor`, which declares no `strat` — did you mean " <>
                  "`start`?",
                "#{broken}: line 15: program type `bad` does not compile: its mistakes follow, " <>
                  "cited in `bad.ld`",

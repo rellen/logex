@@ -285,7 +285,8 @@ defmodule Logex.Edit do
   **Host mistakes** raise `ArgumentError`, each with a message a test pins: something
   other than a program at accept, with the runtime's own message; a candidate with
   another name than the running program's (two unnamed programs count as one name);
-  something other than an edit; a state that is not the running program's, with the
+  something other than an edit; a state that is not the running program's, or that holds
+  an integer outside its tag's type in the program it runs (decision 171), with the
   runtime's own messages; and a step taken at the wrong stage. A step checks the edit,
   then the state, then the stage. Outside the contract, and not detected, since only a
   configuration's edit carries a generation (decision 60): scanning the program the edit
