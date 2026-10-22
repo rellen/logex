@@ -226,7 +226,10 @@ defmodule Logex.TypeTableTest do
         ":bool or :dint",
         "a `bool` or a `dint`",
         "-2147483648 to",
-        "is a dint"
+        "is a dint",
+        # M5-3: the two "a bool" Logex.Compiler wrote by hand, now `a_type(:bool)`'s.
+        ", a bool, which has no bits",
+        "in a bool of its own"
       ]
 
       found =
