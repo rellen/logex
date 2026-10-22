@@ -91,6 +91,32 @@ defmodule Logex.NamingTest do
     """
   end
 
+  # The test above reads `keywords/0`, so the list is pinned, as a configuration file's
+  # is below: a word dropped from it would drop its survey from the check unseen, and so
+  # every word a declaration line reserves as a section or type, each key of
+  # `Logex.FbType.builtins/0` among them, is one of it (M5-5's review: `ctu_dint`,
+  # `ctd_dint` and `ctud_dint` left out of the list kept their reservation and lost their
+  # survey's check).
+  test "a declaration line's words are those of the items that have landed" do
+    # M1-3: the sections and `bool` and `dint`; M1-6: `ton`; M2-4: `var_external`; M3-1:
+    # the counters; M3-2: the other timers; M5-3: the seven other integer types; M5-5:
+    # the twelve typed counters and the three dint aliases (decisions 158 and 163).
+    counters =
+      for kind <- ~w(ctu ctd ctud), count <- ~w(int dint lint udint ulint), do: "#{kind}_#{count}"
+
+    assert Enum.sort(Logex.Declarations.keywords()) ==
+             Enum.sort(
+               ~w(var var_input var_output var_external) ++
+                 ~w(bool sint int dint lint usint uint udint ulint) ++
+                 ~w(ton tof tp rto ctu ctd ctud) ++ counters
+             )
+
+    for word <- Map.keys(Logex.FbType.builtins()) do
+      assert word in Logex.Declarations.keywords()
+      assert Logex.Declarations.reserved(word) in [:type, :mnemonic]
+    end
+  end
+
   test "every word that heads a file of another kind has been surveyed (M2-5)" do
     words = Logex.Declarations.kinds() |> MapSet.new()
     unsurveyed = MapSet.difference(words, surveyed_mnemonics())
