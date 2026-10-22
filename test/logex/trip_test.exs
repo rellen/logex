@@ -1234,10 +1234,12 @@ defmodule Logex.TripTest do
           "var_global d bool at drive.i.0\nvar_global y bool at panel.q.0\n" <>
           "program r relay with fast\n  r.in x\n  r.out y\n"
 
+      # An idle watchdog of 1000 ms, so that on a busy machine the panel, which does not
+      # hang, is never taken for hung (M5-5's review: at 300 it was now and then).
       %{runner: runner, panel: panel, drive: drive} =
         rig(configured(text),
           poll: 10,
-          idle: 300,
+          idle: 1000,
           steps: Runtime,
           clock: {Logex.Runner.Clock.Monotonic, nil}
         )
@@ -1246,7 +1248,7 @@ defmodule Logex.TripTest do
       Sim.set(panel, [0], 1)
       assert written(panel, 200) == %{[0] => 1}
       Sim.fail(drive, :read, :hang)
-      assert_receive {Runner, ^runner, {:trip, {:io, "drive", :timeout}}}, 2000
+      assert_receive {Runner, ^runner, {:trip, {:io, "drive", :timeout}}}, 5000
       zeroed_once(panel, 1)
       Runner.stop(runner)
     end
@@ -1415,14 +1417,16 @@ defmodule Logex.TripTest do
           configuration: configured(text),
           io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
           clock: {Manual, clock},
-          poll: 200,
+          poll: 600,
           idle: 200,
           steps: Boom
         )
 
-      # The drive's zero sleeps 300 ms in real time, within 200 and 200.
+      # The drive's zero sleeps 400 ms in real time, past the idle watchdog alone and
+      # within it and a poll period, 800, a margin wide enough for a busy machine (M5-5's
+      # review: within 200 and 200, a 300 ms zero failed now and then under load).
       old = device_pid(runner, "drive")
-      Sim.fail(drive, :write, {:delay, 300})
+      Sim.fail(drive, :write, {:delay, 400})
       Sim.set(panel, [1], 5)
       Manual.advance(clock, 10)
       assert Runner.status(runner).trip == {:internal, "boom in the outputs"}
@@ -2070,15 +2074,19 @@ defmodule Logex.TripTest do
           configuration: configured(@speed),
           io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
           clock: {Logex.Runner.Clock.Monotonic, nil},
-          poll: 10
+          poll: 10,
+          idle: 2000
         )
 
       Sim.fail(panel, :read, {:value, [0], 2})
       tripped(runner, 0)
       assert Runner.status(runner).trip == {:io, "panel", {:bad_value, [0], 2}}
 
-      # The drive's reread sleeps 300 ms, the panel's polls going on meanwhile.
-      Sim.fail(drive, :read, {:delay, 300})
+      # The drive's reread sleeps 800 ms, the panel's polls going on meanwhile, the bad
+      # reading 100 ms in: wide margins on both sides for a busy machine, within the idle
+      # watchdog and a poll period (M5-5's review: a 300 ms sleep within 510 failed now and
+      # then under load).
+      Sim.fail(drive, :read, {:delay, 800})
       restart = Task.async(fn -> Runner.restart(runner, :cold) end)
       Process.sleep(100)
       Sim.fail(panel, :read, {:value, [0], 2})
