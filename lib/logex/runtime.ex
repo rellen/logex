@@ -2442,16 +2442,26 @@ defmodule Logex.Runtime do
   # a preset that is no whole number of them reached at the next. `last` stays a time on
   # the scan's clock, in ms. A timer the routine's table does not hold as a built-in, which
   # only a program built by hand gives, counts in ms, as the mnemonic's own type.
-  defp clock({:name, _, name}, %Scan{now: now, tags: tags}),
-    do: {now, per_ms(Map.get(tags, name))}
+  #
+  # M5-6's review: what each type's millisecond adds is settled when logex compiles, a
+  # clause of per_ms/1 for each built-in type whose `per_ms` is not 1, generated from
+  # Logex.FbType.rules/1 as wrapped/2 is from the type table, so that a run pays one look up
+  # of its tag and one match of its type's word, not a walk through the rules, which had
+  # made a plain timer's scan 8 to 10% dearer; a plain timer's scan still pays about 3
+  # reductions a run more than before long timers, 2 to 4%, which a test in
+  # `long_timer_test.exs` bounds (PLAN, M5-6's review).
+  defp clock({:name, _, name}, %Scan{now: now, tags: tags}) when is_map_key(tags, name),
+    do: {now, per_ms(:erlang.map_get(name, tags))}
 
-  defp clock(_member, %Scan{now: now}), do: {now, 1}
+  defp clock(_member_or_no_tag, %Scan{now: now}), do: {now, 1}
 
-  defp per_ms(%Tag{type: %FbType{body: nil} = type}), do: per_ms_of(FbType.rules(type))
-  defp per_ms(_no_timer), do: 1
+  for {word, type} <- FbType.builtins(),
+      %{per_ms: per_ms} = FbType.rules(type),
+      is_integer(per_ms) and per_ms != 1 do
+    defp per_ms(%Tag{type: %FbType{name: unquote(word), body: nil}}), do: unquote(per_ms)
+  end
 
-  defp per_ms_of(%{per_ms: per_ms}) when is_integer(per_ms), do: per_ms
-  defp per_ms_of(_no_timer), do: 1
+  defp per_ms(_plain_or_no_timer), do: 1
 
   defp timing(timer, {now, _per_ms} = clock) do
     pre = integer(Map.get(timer, "pre"))

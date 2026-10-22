@@ -670,6 +670,36 @@ defmodule Logex.LongTimerTest do
       long = cost.(400, "ton_ltime") / cost.(400, "ton")
       assert long < 1.2, "a long timer scanned in #{Float.round(long, 2)}x a plain one's"
     end
+
+    # M5-6's review: a plain timer's run pays for its unit no more than a look up of its tag
+    # and a match of its type's word. Its energised run, the one that reads its clock, costs
+    # about 21 reductions more than its de-energised one, which reads none, before long
+    # timers, about 24 now, and was about 29 while each run walked its type's rules.
+    test "a plain timer's energised run costs little more than before long timers" do
+      cost = fn e ->
+        text =
+          "var_input e bool\n" <>
+            Enum.map_join(1..400, "\n", &"var t#{&1} ton") <>
+            "\n" <> Enum.map_join(1..400, "\n", &"xic e ton t#{&1} 5000")
+
+        {:ok, p} = Logex.compile(text, name: "p")
+        state = Runtime.put_inputs(p, Runtime.instance(p), %{"e" => 1})
+        {_, state} = Runtime.scan(p, state, 1)
+        state = Runtime.put_inputs(p, state, %{"e" => e})
+
+        Enum.min(
+          for _ <- 1..5 do
+            {:reductions, before} = Process.info(self(), :reductions)
+            Runtime.scan(p, state, 1)
+            {:reductions, later} = Process.info(self(), :reductions)
+            later - before
+          end
+        )
+      end
+
+      clock = (cost.(1) - cost.(0)) / 400
+      assert clock < 26.5, "a plain timer's clock cost #{Float.round(clock, 1)} reductions a run"
+    end
   end
 
   defp article("rto" <> _), do: "an"
