@@ -74,6 +74,9 @@ defmodule Logex.Walk do
 
   defp tag_of({:name, _, name}), do: name
   defp tag_of({:member, _, [instance | _]}), do: instance
+  # M5-8: a bit is a use of its container, `status.3` of `status`, with its slot's access,
+  # so a coil on a bit is a write of the word (decision 155).
+  defp tag_of({:bit, _, [container | _], _n, _mask}), do: container
   defp tag_of({:int_lit, _, _}), do: nil
   defp tag_of({:int_lit, _, _, _spelling}), do: nil
   # M3-5: a label is a name of the routine's own, never a tag (decision 105).
@@ -90,19 +93,34 @@ defmodule Logex.Walk do
   def one_shots, do: @one_shots
 
   @doc """
+  The name of a bool an operand names, as a storage bit, a pulse bit or a coil's target is
+  named: a tag's own, `edge`, and since M5-8 a bit's path, `status.3` or `t1.pre.3`
+  (decision 155); any other operand is itself, equal to no name.
+  """
+  def bit_name({:name, _, name}), do: name
+  def bit_name({:bit, _, path, n, _mask}), do: Enum.join(path, ".") <> "." <> Integer.to_string(n)
+  def bit_name(operand), do: operand
+
+  @doc """
   Each one-shot of `rungs` whose storage bit is a tag, in rung order, as `{bit, line,
   symbol}`: the bit it names, and its instruction's line and symbol (`one_shots/0`). A
-  one-shot on a member, which the compiler refuses, is none.
+  one-shot on a member, which the compiler refuses, is none. Since M5-8 a storage bit may
+  be a bit of a tag, named by its path, `status.3` (decision 155).
   """
   def storage_bits(rungs), do: bits_of(instructions(rungs))
 
   defp bits_of(instructions),
     do:
       for(
-        {symbol, line, [{:name, _, bit} | _]} <- instructions,
+        {symbol, line, [storage | _]} <- instructions,
         symbol in @one_shots,
+        bit = own_bit(storage),
         do: {bit, line, symbol}
       )
+
+  defp own_bit({:name, _, bit}), do: bit
+  defp own_bit({:bit, _, [_container], _n, _mask} = bit), do: bit_name(bit)
+  defp own_bit(_member), do: nil
 
   @doc """
   Which tags `program` writes: each to the lines of its writes, in rung order, one line a
@@ -130,6 +148,16 @@ defmodule Logex.Walk do
   `Logex.Edit` reads it, for a member input an edit leaves unwritten.
   """
   def member_writes(%Program{} = program), do: reach(program, &members_written/2)
+
+  @doc """
+  Which bits of its tags `program` writes (M5-8, decision 155): each bit an operand in a
+  `:write` slot names, by its path, `status.3`, to the lines of its writes, in rung order,
+  one line a write, where `writes/1` counts the write as its word's, `status`. It reaches
+  into each block a `cal` runs, as `writes/1` does, `s1.status.3` for the body's
+  `status.3`. `Logex.Edit` reads it, for a storage bit of a word written by its one-shot
+  alone.
+  """
+  def bit_writes(%Program{} = program), do: reach(program, &bits_written/2)
 
   @doc """
   Which timers `program` runs: each timer a `ton` runs, or since M3-2 a `tof`, a `tp` or an `rto`, to
@@ -243,15 +271,34 @@ defmodule Logex.Walk do
     |> Map.new(fn {path, lines} -> {path, Enum.reverse(lines)} end)
   end
 
+  defp bits_written(instructions, tags) do
+    instructions
+    |> Enum.flat_map(fn {_symbol, line, operands} = instruction ->
+      for {{:write, _type}, {:bit, _, [_], _, _} = bit} <-
+            Enum.zip(Compiler.signature(instruction, tags), operands),
+          do: {bit_name(bit), line}
+    end)
+    |> Enum.reduce(%{}, fn {path, line}, writes ->
+      Map.update(writes, path, [line], &[line | &1])
+    end)
+    |> Map.new(fn {path, lines} -> {path, Enum.reverse(lines)} end)
+  end
+
   # Each member an instruction's `:write` slots name, by its path, with the instruction's
   # line.
   defp member_operands({_symbol, line, operands} = instruction, tags),
     do:
       for(
-        {{:write, _type}, {:member, _, path}} <-
-          Enum.zip(Compiler.signature(instruction, tags), operands),
-        do: {Enum.join(path, "."), line}
+        {{:write, _type}, operand} <- Enum.zip(Compiler.signature(instruction, tags), operands),
+        path = member_path(operand),
+        do: {path, line}
       )
+
+  # A member's path, `lube.r`, and since M5-8 a bit of one, a write of its member, `t1.pre`
+  # for `t1.pre.3`; a tag or a tag's bit is none.
+  defp member_path({:member, _, path}), do: Enum.join(path, ".")
+  defp member_path({:bit, _, [_, _ | _] = path, _n, _mask}), do: Enum.join(path, ".")
+  defp member_path(_tag), do: nil
 
   # A routine's one-shots, each storage bit to its first one-shot's line and symbol.
   defp oned(instructions, _tags),

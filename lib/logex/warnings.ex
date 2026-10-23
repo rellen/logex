@@ -183,19 +183,83 @@ defmodule Logex.Warnings do
   # M3-4 (decision 101): a pulse coil writes its pulse bit on every run, as an `ote` writes
   # its tag, so `ote`, `osr` and `osf` are one set of coils here, each later one citing the
   # first in that one's words.
+  #
+  # M5-8 (decision 155): a coil on a bit, `ote status.3`, decides that bit as an `ote` on a
+  # bool decides it, and so does any instruction that writes its word whole, `move x
+  # status`: either after the other is the second-`ote` warning, at its own line, citing
+  # the first in its words.
   defp second_otes(instructions, tags, owners) do
     {warnings, _firsts} =
       instructions
-      |> Enum.flat_map(&coil_target/1)
+      |> Enum.flat_map(&(coil_target(&1) ++ whole_writes(&1, tags)))
       |> Enum.filter(fn {name, instance, _line, _symbol} ->
         from_source?(tags, instance) and not Map.has_key?(owners, name)
       end)
-      |> Enum.flat_map_reduce(%{}, fn {name, _instance, line, symbol}, firsts ->
-        later_ote(Map.fetch(firsts, name), name, {line, symbol}, firsts)
+      |> Enum.flat_map_reduce({%{}, %{}, %{}}, fn {name, instance, line, symbol}, firsts ->
+        decided(name, instance, {line, symbol}, firsts)
       end)
 
     warnings
   end
+
+  # A coil on a tag or member, `{name, name}`; a coil on a bit, `{"status.3", "status"}`;
+  # a whole write, `{{:whole, "status"}, "status"}`. `firsts` holds each coil's first, each
+  # word's first whole write, and each word's first coiled bit.
+  defp decided({:whole, word}, word, at, {coils, wholes, bitted}),
+    do: whole_after(Map.fetch(bitted, word), at, {coils, Map.put_new(wholes, word, at), bitted})
+
+  defp decided(name, name, at, {coils, wholes, bitted}) do
+    {warnings, coils} = later_ote(Map.fetch(coils, name), name, at, coils)
+    {warnings, {coils, wholes, bitted}}
+  end
+
+  defp decided(bit, word, at, {coils, wholes, bitted}),
+    do:
+      bit_after(
+        Map.fetch(coils, bit),
+        Map.fetch(wholes, word),
+        {bit, word, at},
+        {coils, wholes, bitted}
+      )
+
+  defp bit_after({:ok, first}, _whole, {bit, _word, {line, _symbol}}, firsts),
+    do: {[second_ote(bit, first, line)], firsts}
+
+  defp bit_after(
+         :error,
+         {:ok, {first, symbol}},
+         {bit, word, {line, _} = at},
+         {coils, wholes, bitted}
+       ),
+       do:
+         {[
+            warning(
+              line,
+              "`#{bit}` is a bit of `#{word}`, which the `#{symbol}` #{where(first, line)} " <>
+                "writes whole: #{last()}"
+            )
+          ], {Map.put(coils, bit, at), wholes, Map.put_new(bitted, word, {bit, at})}}
+
+  defp bit_after(:error, :error, {bit, word, at}, {coils, wholes, bitted}),
+    do: {[], {Map.put(coils, bit, at), wholes, Map.put_new(bitted, word, {bit, at})}}
+
+  defp whole_after(:error, _at, firsts), do: {[], firsts}
+
+  defp whole_after({:ok, {bit, first}}, {line, _symbol}, firsts),
+    do: {[second_ote(bit, first, line)], firsts}
+
+  # Every tag an instruction other than a coil writes whole, by its write slots: a word
+  # whose bits a coil may name.
+  defp whole_writes({symbol, _line, _operands}, _tags) when symbol in [:ote, :osr, :osf, :ons],
+    do: []
+
+  defp whole_writes({_symbol, line, operands} = instruction, tags),
+    do:
+      for(
+        {{:write, _type}, {:name, _, name}} <-
+          Enum.zip(Logex.Compiler.signature(instruction, tags), operands),
+        do: {{:whole, name}, name, line, elem(instruction, 0)}
+      )
 
   defp coil_target({:ote, line, [target]}), do: target(target, line, :ote)
 
@@ -209,6 +273,9 @@ defmodule Logex.Warnings do
   defp target({:member, _, [instance | _] = path}, line, symbol),
     do: [{Enum.join(path, "."), instance, line, symbol}]
 
+  defp target({:bit, _, [container | _], _n, _mask} = bit, line, symbol),
+    do: [{Walk.bit_name(bit), container, line, symbol}]
+
   defp target(_literal, _line, _symbol), do: []
 
   defp later_ote(:error, name, first, firsts), do: {[], Map.put(firsts, name, first)}
@@ -221,11 +288,18 @@ defmodule Logex.Warnings do
   # walked in rung order, not grouped into a map, whose order stops being sorted past 32
   # keys. M3-4: so for every one-shot's storage bit (decision 80), every write but the
   # one-shot's own, its first operand, a coil's pulse bit among them.
+  #
+  # M5-8 (decision 155): a storage bit may be a bit of a word, `status.3`, written by a coil
+  # on it and by any write of the word whole, `move x status`, each warned of.
   defp storage_writes(instructions, tags, owners) do
+    words =
+      owners |> Map.keys() |> Enum.filter(&String.contains?(&1, ".")) |> Enum.group_by(&word_of/1)
+
     for instruction <- instructions,
-        {:write, name, line, symbol} <- others(instruction, Walk.uses_of(instruction, tags)),
+        {operand, line, symbol} <- others(instruction, written(instruction, tags)),
+        name <- storage_names(operand, words),
         {:ok, first} <- [Map.fetch(owners, name)],
-        from_source?(tags, name),
+        from_source?(tags, word_of(name)),
         do: storage_write(symbol, name, first, line)
   end
 
@@ -233,6 +307,24 @@ defmodule Logex.Warnings do
 
   defp others({symbol, _line, _operands}, [_storage | uses]) when symbol in @one_shots, do: uses
   defp others(_instruction, uses), do: uses
+
+  # Each operand an instruction writes, by its slots, `cal`'s var_outputs among them.
+  defp written({symbol, line, operands} = instruction, tags),
+    do:
+      for(
+        {{:write, _type}, operand} <-
+          Enum.zip(Logex.Compiler.signature(instruction, tags), operands),
+        do: {operand, line, symbol}
+      )
+
+  # The storage bits a write reaches: a bool's or a bit's own name, and every bit of a word
+  # written whole, in name order.
+  defp storage_names({:name, _, name}, words), do: [name | Enum.sort(Map.get(words, name, []))]
+  defp storage_names({:bit, _, [_], _, _} = bit, _words), do: [Walk.bit_name(bit)]
+  defp storage_names(_member, _words), do: []
+
+  # A storage bit's tag: a bool's own name, or the word a bit of one is in.
+  defp word_of(name), do: hd(String.split(name, "."))
 
   defp storage_write(symbol, name, {first, owner}, line),
     do:

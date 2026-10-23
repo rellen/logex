@@ -808,8 +808,22 @@ defmodule Logex.Runtime do
         do: {name, Map.get(env, name, 0)}
       )
 
-  # The block list as a tree, each name split at its `.`s once: linear in the list.
-  defp tree(bits), do: Enum.reduce(bits, %{}, &plant(String.split(&1, "."), &2))
+  # The block list as a tree, each name split at its `.`s once: linear in the list. Since
+  # M5-8 a bit of a tag, `status.3`, is one leaf, its last two parts, as the block list and
+  # the scan name it (decision 155).
+  defp tree(bits), do: Enum.reduce(bits, %{}, &plant(leafed(String.split(&1, ".")), &2))
+
+  defp leafed(parts), do: leaf_of(Enum.reverse(parts))
+
+  defp leaf_of([last, word | rest] = reversed),
+    do: numbered(Integer.parse(last), {last, word, rest}, reversed)
+
+  defp leaf_of(reversed), do: Enum.reverse(reversed)
+
+  defp numbered({_n, ""}, {last, word, rest}, _reversed),
+    do: Enum.reverse([word <> "." <> last | rest])
+
+  defp numbered(_no_bit, _parts, reversed), do: Enum.reverse(reversed)
 
   defp plant([bit], tree), do: Map.put(tree, bit, true)
 
@@ -1800,6 +1814,9 @@ defmodule Logex.Runtime do
   defp hold({symbol, _, [{:name, _, bit} | _]}, env) when symbol in @one_shots,
     do: mark(env, [bit])
 
+  defp hold({symbol, _, [{:bit, _, [_], _, _} = bit | _]}, env) when symbol in @one_shots,
+    do: mark(env, [Walk.bit_name(bit)])
+
   defp hold({symbol, _, [{:name, _, name} | _]}, env) when is_map_key(@memories, symbol),
     do: mark(env, [name, Map.fetch!(@memories, symbol)])
 
@@ -2306,6 +2323,12 @@ defmodule Logex.Runtime do
   # a storage bit is never named as an instance of its routine is.
   defp blocked?({:name, _, bit}, blocked), do: is_map_key(blocked, bit)
   defp blocked?({:member, _, _path}, _blocked), do: false
+
+  # M5-8: a bit of a tag, `status.3`, is a leaf of the tree under its path, as a bool is
+  # under its name; with no block its name is never made.
+  defp blocked?({:bit, _, [_], _, _}, blocked) when map_size(blocked) == 0, do: false
+  defp blocked?({:bit, _, [_], _, _} = bit, blocked), do: is_map_key(blocked, Walk.bit_name(bit))
+  defp blocked?({:bit, _, _member, _, _}, _blocked), do: false
 
   # M3-4: whether a pulse coil may see an edge on this scan: not on a first scan, nor where
   # its storage bit is blocked, as an `ons` passes no power then.
@@ -2882,6 +2905,11 @@ defmodule Logex.Runtime do
   defp read(_env, {:int_lit, _, value}), do: value
   defp read(env, {:name, _, name}), do: Map.get(env, name, 0)
   defp read(env, {:member, _, path}), do: walk(env, path)
+
+  # M5-8 (decision 155): a bit of a tag or a member, 1 where its mask's bits are set in the
+  # value, read in two's complement, a signed type's top bit its sign (Logex.Compiler).
+  defp read(env, {:bit, _, [name], _n, mask}), do: bit_set(Map.get(env, name, 0), mask)
+  defp read(env, {:bit, _, path, _n, mask}), do: bit_set(walk(env, path), mask)
   # Decision 202: a literal written other than as its plain decimal keeps its spelling,
   # which no scan reads.
   defp read(_env, {:int_lit, _, value, _spelling}), do: value
@@ -2894,6 +2922,21 @@ defmodule Logex.Runtime do
   # what is not a map on the way becomes one.
   defp write(env, {:name, _, name}, value), do: Map.put(env, name, value)
   defp write(env, {:member, _, path}, value), do: put_path(env, path, value)
+
+  # M5-8: a bit is written into its word, the rest of the word kept: 1 sets the mask's bits
+  # and 0 clears them, so a signed type's top bit, whose mask is every bit from it up, is
+  # its sign, and the word stays inside its type.
+  defp write(env, {:bit, _, [name], _n, mask}, value),
+    do: Map.put(env, name, with_bit(integer(Map.get(env, name, 0)), mask, value))
+
+  defp write(env, {:bit, _, path, _n, mask}, value),
+    do: put_path(env, path, with_bit(integer(walk(env, path)), mask, value))
+
+  defp bit_set(value, mask) when is_integer(value), do: one(Bitwise.band(value, mask) != 0)
+  defp bit_set(_not_an_integer, _mask), do: 0
+
+  defp with_bit(word, mask, 0), do: Bitwise.band(word, Bitwise.bnot(mask))
+  defp with_bit(word, mask, _one), do: Bitwise.bor(word, mask)
 
   defp put_path(map, [key], value), do: Map.put(map, key, value)
 

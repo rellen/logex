@@ -363,10 +363,10 @@ defmodule Logex.TypeTableTest do
                  "dint, and logex has no conversion between them"
              ]
 
+      # M5-8 (decision 155): `d.3` is a bit of the dint, a bool, read by a contact.
       assert messages("var d dint\nvar b bool\nxic d.x ote b\nxic d.3 ote b\nxic b ote d") == [
                "`d.x` names a member of `d`, but `d` is a dint (declared on line 1): only an " <>
                  "instance of a function block has members",
-               "`d.3` names a bit of `d`, a dint: bit access is not supported yet",
                "`ote` writes a bool, but `d` is a dint (declared on line 1)"
              ]
     end

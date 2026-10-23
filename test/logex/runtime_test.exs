@@ -2290,6 +2290,8 @@ defmodule Logex.RuntimeTest do
       # one instruction's uses; since its review one_shots/1, the one-shots a program runs,
       # at any depth (decision 103).
       assert Enum.sort(Logex.Walk.__info__(:functions)) == [
+               bit_name: 1,
+               bit_writes: 1,
                counters: 1,
                instructions: 1,
                member_writes: 1,

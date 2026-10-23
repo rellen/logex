@@ -896,6 +896,375 @@ defmodule Logex.BitStringTest do
     end
   end
 
+  describe "literal bit access (decision 155)" do
+    # Restated: bit n of a value in its type's N bits, two's complement where signed.
+    defp bit_of(type, value, n),
+      do: rem(div(Integer.mod(value, Integer.pow(2, width(type))), Integer.pow(2, n)), 2)
+
+    defp with_bit(type, value, n, b) do
+      p = Integer.mod(value, Integer.pow(2, width(type)))
+      cleared = p - bit_of(type, value, n) * Integer.pow(2, n)
+      signed(kind(type), cleared + b * Integer.pow(2, n), Integer.pow(2, width(type) - 1))
+    end
+
+    test "a bit of every integer and bit string is read by a contact and written by a coil, the rest of its word kept" do
+      for type <- @strings ++ Keyword.keys(@integers),
+          n <- Enum.uniq([0, 1, 3, width(type) - 1]) do
+        p =
+          program(
+            "var_input w #{type}\nvar_input set bool\nvar_output seen bool\nvar_output on #{type}\n" <>
+              "var_output off #{type}\nvar_output kept #{type}\nxic w.#{n} ote seen\nmove w on\n" <>
+              "move w off\nmove w kept\nxic set otl on.#{n}\nxic set otu off.#{n}\nxio set ote kept.#{n}"
+          )
+
+        for value <- samples(type), set <- [0, 1] do
+          assert scan(p, %{"w" => value, "set" => set}) == %{
+                   "seen" => bit_of(type, value, n),
+                   "on" => (set == 1 && with_bit(type, value, n, 1)) || value,
+                   "off" => (set == 1 && with_bit(type, value, n, 0)) || value,
+                   "kept" => with_bit(type, value, n, 1 - set)
+                 },
+                 inspect({type, n, value, set})
+        end
+      end
+    end
+
+    # PLAN M5-8's Done-when: every width's top bit is read and written in two's complement.
+    test "a signed type's top bit is its sign, read and written in two's complement" do
+      for {type, {:signed, n}} <- @integers do
+        {low, high} = limits(type)
+
+        p =
+          program(
+            "var_input w #{type}\nvar_output sign bool\nvar_output set #{type}\nvar_output clear #{type}\n" <>
+              "xic w.#{n - 1} ote sign\nmove w set\nmove w clear\nxic w.0 otl set.#{n - 1}\n" <>
+              "xic w.0 otu clear.#{n - 1}"
+          )
+
+        assert scan(p, %{"w" => -1}) == %{"sign" => 1, "set" => -1, "clear" => high}
+        assert scan(p, %{"w" => 1}) == %{"sign" => 0, "set" => low + 1, "clear" => 1}
+        assert scan(p, %{"w" => low}) == %{"sign" => 1, "set" => low, "clear" => low}
+      end
+    end
+
+    # PLAN M5-8's Done-when: a `bool`'s bit is a pinned refusal; a number past the width is
+    # refused when the program compiles.
+    test "a bit past the width, a bit of a bool and a bit of an instance are refused" do
+      assert messages(
+               "var w word\nvar b bool\nvar s sint\nvar t1 ton\nxic w.16 ote b\nxic b.0 ote b\n" <>
+                 "xic s.8 ote b\nxic t1.3 ote b\nxic t1.dn.0 ote b\nxic t1.acc.32 ote b"
+             ) == [
+               "`w.16` names bit 16 of `w`, a word (declared on line 1), which has bits 0 to 15",
+               "`b.0` names a bit of `b`, a bool, which has no bits",
+               "`s.8` names bit 8 of `s`, an sint (declared on line 3), which has bits 0 to 7",
+               "`t1.3` is not a member of `t1`, a ton: its members are `pre`, `acc`, `dn`, `tt` and `en`",
+               "`t1.dn.0` names a bit of `t1.dn`, a bool, which has no bits",
+               "`t1.acc.32` names bit 32 of `t1.acc`, a dint, which has bits 0 to 31"
+             ]
+
+      for type <- @strings ++ Keyword.keys(@integers) do
+        w = width(type)
+
+        assert messages("var w #{type}\nvar b bool\nxic w.#{w} ote b") == [
+                 "`w.#{w}` names bit #{w} of `w`, #{a(type)} (declared on line 1), which has " <>
+                   "bits 0 to #{w - 1}"
+               ]
+      end
+    end
+
+    test "a bit is a bool wherever one goes, a member's too, and writes only where its word may be written" do
+      p =
+        program(
+          "var_input w word\nvar t1 ton\nvar_input go bool\nvar_output a bool\nvar_output m word\n" <>
+            "xic go ton t1 5\nxic t1.pre.0 ote a\nmove w.3 m\nxic go ote t1.pre.4"
+        )
+
+      assert scan(p, %{"w" => 8, "go" => 1}) == %{"a" => 1, "m" => 1}
+
+      assert messages(
+               "var_input w word\nvar c ctu\nvar b bool\nxic b ote w.3\nxic b ote c.cv.0\n" <>
+                 "and w.1 1 w\neq w.1 1 ote b\nxic b ctu c 5"
+             ) == [
+               "`ote` writes `w.3`, a var_input (declared on line 1): logic must not write an input",
+               "`ote` writes `c.cv.0`, but logic may write only `.r` and `.pv` of a ctu",
+               "`and` reads a bit string or an integer, but `w.1` is a bool (declared on line 1)",
+               "`and` writes `w`, a var_input (declared on line 1): logic must not write an input",
+               "`eq` reads a number or a bit string, but `w.1` is a bool (declared on line 1)"
+             ]
+
+      # A `cal` formal takes a bit as it takes a bool.
+      seal =
+        program(
+          "function_block seal\nvar_input start bool\nvar_output run bool\nxic start ote run",
+          "seal"
+        )
+
+      {:ok, outer} =
+        Logex.compile(
+          "var_input w word\nvar s1 seal\nvar_output o byte\ncal s1 w.2 o.7",
+          name: "p",
+          types: [seal]
+        )
+
+      assert scan(outer, %{"w" => 4}) == %{"o" => 128}
+      assert scan(outer, %{"w" => 3}) == %{"o" => 0}
+    end
+
+    # A block's body holding bits is a compiled body like any other, which a type given
+    # must be (Logex.Compiler.lowered?/1): its bits relower to themselves, masks included.
+    test "a block's body reads and writes bits, and is taken as given" do
+      {:ok, unpack} =
+        Logex.compile(
+          "function_block unpack\nvar_input w int\nvar_output top bool\nvar_output low bool\n" <>
+            "var_output back int\nvar e int\nxic w.15 ote top\nxic w.0 ote low\nmove w back\n" <>
+            "xic w.0 otu back.15",
+          name: "unpack"
+        )
+
+      {:ok, outer} =
+        Logex.compile(
+          "var_input w int\nvar u1 unpack\nvar_output t bool\nvar_output l bool\n" <>
+            "var_output b int\ncal u1 w t l b",
+          name: "p",
+          types: [unpack]
+        )
+
+      assert scan(outer, %{"w" => -1}) == %{"t" => 1, "l" => 1, "b" => 32_767}
+      assert scan(outer, %{"w" => -32_768}) == %{"t" => 1, "l" => 0, "b" => -32_768}
+      assert Logex.FbType.user?(unpack)
+      assert Logex.Compiler.lowered?(unpack.body)
+
+      # A body whose bit's mask is not the one its type gives is no compiled body.
+      [{:rung, [{:xic, line, [{:bit, l, path, 15, mask}]} | rest]} | rungs] = unpack.body.rungs
+
+      forged =
+        put_in(unpack.body.rungs, [
+          {:rung, [{:xic, line, [{:bit, l, path, 15, -mask}]} | rest]} | rungs
+        ])
+
+      refute Logex.FbType.user?(forged)
+      refute Logex.Compiler.lowered?(forged.body)
+
+      unlined =
+        put_in(unpack.body.rungs, [
+          {:rung, [{:xic, line, [{:bit, -l, path, 15, mask}]} | rest]} | rungs
+        ])
+
+      refute Logex.Compiler.lowered?(unlined.body)
+    end
+
+    test "a one-shot's storage bit and a pulse coil's two bits may be bits of a word" do
+      p =
+        program(
+          "var_input go bool\nvar s word\nvar_output pulse bool\nvar_output rose bool\n" <>
+            "var_output fell bool\nxic go ons s.3 ote pulse\nxic go osr s.4 s.5\nxic s.5 ote rose\n" <>
+            "xic go osf s.6 s.7\nxic s.7 ote fell"
+        )
+
+      state = Runtime.instance(p)
+
+      {outputs, _state} =
+        Enum.reduce([0, 1, 1, 0, 0], {nil, state}, fn go, {seen, state} ->
+          {out, state} = Runtime.scan(p, Runtime.put_inputs(p, state, %{"go" => go}))
+          {[{out["pulse"], out["rose"], out["fell"]} | List.wrap(seen)], state}
+        end)
+
+      assert Enum.reverse(outputs) == [{0, 0, 0}, {1, 1, 0}, {0, 0, 0}, {0, 0, 1}, {0, 0, 0}]
+
+      assert messages(
+               "var go bool\nvar s word\nvar t1 ton\nxic go ons s.3\nxic go ons s.3\n" <>
+                 "xic go osr s.4 s.4\nxic go ons t1.pre.2\nxic go ton t1 5"
+             ) == [
+               "`s.3` is already the storage bit of the `ons` on line 4: each `ons` needs a " <>
+                 "storage bit of its own",
+               "`s.4` is both the storage bit and the pulse bit of this `osr`: its pulse bit is " <>
+                 "another tag, which it sets for one scan on an edge",
+               "`ons` keeps its storage bit in a bool or a bit of a tag of its own, not in " <>
+                 "`t1.pre.2`, a bit of a member of `t1`, which its instance reads"
+             ]
+    end
+
+    # PLAN M5-8's Done-when: `ote status.3` beside `move x status` draws the second-`ote`
+    # warning, in either order; two coils on one bit draw it, and on two bits none.
+    test "a coil on a bit and a write of its word decide it twice, and are warned of" do
+      warned = fn text ->
+        {:ok, p} = Logex.compile(text, name: "p")
+        Enum.map(p.warnings, &{&1.line, &1.message})
+      end
+
+      head = "var x word\nvar status word\nvar g bool\n"
+
+      assert warned.(head <> "xic g ote status.3\nmove x status") == [
+               {5,
+                "`status.3` already has an `ote` on line 4: the last one in the scan decides it"}
+             ]
+
+      assert warned.(head <> "move x status\nxic g ote status.3") == [
+               {5,
+                "`status.3` is a bit of `status`, which the `move` on line 4 writes whole: the " <>
+                  "last one in the scan decides it"}
+             ]
+
+      assert warned.(head <> "xic g ote status.3\nxic g ote status.3\nxic g ote status.4") == [
+               {1, "`x` is declared but no rung uses it"},
+               {5,
+                "`status.3` already has an `ote` on line 4: the last one in the scan decides it"}
+             ]
+
+      assert warned.(
+               head <> "var p bool\nxic g ons status.3 ote p\nmove x status\nxic g ote status.3"
+             ) ==
+               [
+                 {6,
+                  "`move` writes `status.3`, the storage bit of the `ons` on line 5: the one-shot " <>
+                    "then fires on the wrong scans"},
+                 {7,
+                  "`ote` writes `status.3`, the storage bit of the `ons` on line 5: the one-shot " <>
+                    "then fires on the wrong scans"}
+               ]
+    end
+
+    # PLAN M5-8's Done-when: a coil on a bit of a located input point is refused, and one on
+    # a bit of a `var_external` makes it a writer of its global.
+    test "a coil on a bit writes its word: a var_external's makes a writer, an input point's is refused" do
+      {:ok, writer} =
+        Logex.compile(
+          "var_input go bool\nvar_external status word\nxic go ote status.3",
+          name: "writer"
+        )
+
+      assert Logex.Walk.writes(writer) == %{"status" => [3]}
+
+      at = fn location ->
+        Configuration.compile(
+          "plant",
+          "var_global status word#{location}\nvar_global go bool\nprogram w1 writer\nw1.go go\n" <>
+            "program w2 writer\nw2.go go\n",
+          %{"writer" => writer}
+        )
+      end
+
+      assert {:error, [%{message: message} | _]} = at.(" at drive.i.4")
+
+      assert message ==
+               "`writer` writes its var_external `status` on its line 3, but `status` is an " <>
+                 "input point (line 1): nothing writes an input point"
+
+      assert {:ok, config} = at.("")
+
+      assert Enum.map(config.warnings, & &1.message) == [
+               "`w2` writes `status` through its var_external, as `w1` does (line 3): each scan " <>
+                 "reads what the other last wrote, and the later write in a cycle stands"
+             ]
+    end
+
+    # PLAN M5-8's Done-when: an edit of a rung with `ons status.3` blocks it once.
+    test "an edit that changes a one-shot's rung on a bit blocks it once, by the bit's path" do
+      v1 =
+        program(
+          "var_input go bool\nvar_input e bool\nvar s word\nvar_output p bool\nxic go ons s.3 ote p"
+        )
+
+      v2 =
+        program(
+          "var_input go bool\nvar_input e bool\nvar s word\nvar_output p bool\nxic go xio e ons s.3 ote p"
+        )
+
+      state = Runtime.put_inputs(v1, Runtime.instance(v1), %{"go" => 0})
+      {_out, state} = Runtime.scan(v1, state)
+      {_out, state} = Runtime.scan(v1, Runtime.put_inputs(v1, state, %{"go" => 1}))
+
+      # Reported with the bit's value, its word's bit 3, where its `ons` last left it: 1
+      # while `go` is held.
+      {:ok, edit, _forecast} = Edit.accept(v1, v2, state)
+      {_edit, held, report} = Edit.test(edit, state)
+      assert {:ons_blocked, "s.3", 1} in report
+      assert held.env["s"] == 8
+
+      {_out, state} = Runtime.scan(v1, Runtime.put_inputs(v1, state, %{"go" => 0}))
+      {:ok, edit, _forecast} = Edit.accept(v1, v2, state)
+      {_edit, state, report} = Edit.test(edit, state)
+      assert {:ons_blocked, "s.3", 0} in report
+      assert state.ons_blocked == ["s.3"]
+
+      # The edge on the first scan after the switch is blocked; the next real edge fires.
+      {out, state} = Runtime.scan(v2, Runtime.put_inputs(v2, state, %{"go" => 1}))
+      assert out == %{"p" => 0}
+      assert state.ons_blocked == []
+      {_out, state} = Runtime.scan(v2, Runtime.put_inputs(v2, state, %{"go" => 0}))
+      {out, _state} = Runtime.scan(v2, Runtime.put_inputs(v2, state, %{"go" => 1}))
+      assert out == %{"p" => 1}
+
+      # An edit that changes nothing on its rung blocks nothing.
+      {_out, ran} = Runtime.scan(v1, Runtime.instance(v1))
+      {:ok, _edit, forecast} = Edit.accept(v1, v1, ran)
+      refute Enum.any?(forecast, &match?({:ons_blocked, _, _}, &1))
+
+      # Unchanged, it is blocked where the program that last scanned also writes its word
+      # whole, and not where it writes another bit of the word (Logex.Walk.bit_writes/1).
+      blocked = fn text ->
+        p = program("var_input go bool\nvar x word\nvar s word\nvar_output p bool\n" <> text)
+        {_out, ran} = Runtime.scan(p, Runtime.instance(p))
+        {:ok, _edit, forecast} = Edit.accept(p, p, ran)
+        for {:ons_blocked, bit, _} <- forecast, do: bit
+      end
+
+      assert blocked.("xic go ons s.3 ote p\nmove x s") == ["s.3"]
+      assert blocked.("xic go ons s.3 ote p\nxic go ote s.3") == ["s.3"]
+      assert blocked.("xic go ons s.3 ote p\nxic go ote s.4\nxic go osr s.5 s.6") == []
+
+      assert Logex.Walk.bit_writes(
+               program("var g bool\nvar s word\nxic g ote s.4\nxic g ons s.3\nxic g otl s.4")
+             ) ==
+               %{"s.3" => [4], "s.4" => [3, 5]}
+    end
+
+    # Decision 106 for a bit: on a rung a jump skips, the bit stays listed until its
+    # one-shot runs.
+    test "a storage bit of a word on a rung a jump skips stays listed until its one-shot runs" do
+      p =
+        program(
+          "var_input skip bool\nvar_input go bool\nvar_output pulse bool\nvar s word\n" <>
+            "xic skip jmp done\nxic go ons s.3 ote pulse\nlbl done"
+        )
+
+      state = %{Runtime.instance(p) | first: false, ons_blocked: ["s.3"]}
+      {_out, state} = Runtime.scan(p, Runtime.put_inputs(p, state, %{"skip" => 1, "go" => 1}))
+      assert state.ons_blocked == ["s.3"]
+      {out, state} = Runtime.scan(p, Runtime.put_inputs(p, state, %{"skip" => 0, "go" => 1}))
+      assert out == %{"pulse" => 0}
+      assert state.ons_blocked == []
+    end
+
+    # A bit is lowered with its mask, so a contact or coil on one costs a bounded amount
+    # more than one on a bool, linearly.
+    test "a bit's read and write cost a bounded amount more than a bool's, linearly" do
+      text = fn n, operand, coil ->
+        "var_input w word\nvar_input b bool\nvar o word\nvar c bool\n" <>
+          String.duplicate("xic #{operand} ote #{coil}\n", n)
+      end
+
+      cost = fn source ->
+        {:ok, p} = Logex.compile(source, name: "p")
+        state = Runtime.put_inputs(p, Runtime.instance(p), %{"w" => 8, "b" => 1})
+
+        Enum.min(
+          for _ <- 1..3 do
+            {:reductions, before} = Process.info(self(), :reductions)
+            Runtime.scan(p, state)
+            {:reductions, later} = Process.info(self(), :reductions)
+            later - before
+          end
+        )
+      end
+
+      bits = cost.(text.(400, "w.3", "o.5"))
+      bools = cost.(text.(400, "b", "c"))
+      assert bits / bools < 1.6, "a bit took #{Float.round(bits / bools, 2)}x a bool's reductions"
+      assert cost.(text.(400, "w.3", "o.5")) / cost.(text.(100, "w.3", "o.5")) < 4.8
+    end
+  end
+
   describe "a cal formal and a connection widen, a var_external binds exactly (decision 159)" do
     test "a `cal` operand widens into the var_input it fills, and the var_output into its tag" do
       seal =

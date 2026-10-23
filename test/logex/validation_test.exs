@@ -2884,7 +2884,6 @@ xic a ton t1 7") == [
              ) == [
                "line 4: `a.b` names a member of `a`, but `a` is a bool (declared on line 2): " <>
                  "only an instance of a function block has members",
-               "line 5: `d.3` names a bit of `d`, a dint: bit access is not supported yet",
                "line 6: `t1.acc.x` goes too deep: `t1.acc` is a dint, which has no members",
                "line 7: `a.dn.x` names a member of `a`, but `a` is a bool (declared on line 2): " <>
                  "only an instance of a function block has members",
@@ -2897,7 +2896,8 @@ xic a ton t1 7") == [
                @timer <>
                  "move t1.acc.3 d\nxic t1.dn.0 ote a\nxic a.0 ote a\nmove t1.acc.3.x d\nmove t1.acc.3.4 d"
              ) == [
-               "line 4: `t1.acc.3` names a bit of `t1.acc`, a dint: bit access is not supported yet",
+               "line 4: `move` writes `t1.acc.3`, a bool, into `d`, a dint: a bool does not widen " <>
+                 "into a dint, and logex has no conversion between them",
                "line 5: `t1.dn.0` names a bit of `t1.dn`, a bool, which has no bits",
                "line 6: `a.0` names a bit of `a`, a bool, which has no bits",
                # Past a bit, as past a member, a path goes too deep, bit access or none.

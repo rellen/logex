@@ -133,6 +133,9 @@ defmodule Logex.Edit.Plan do
       outputs: section(tags, :var_output),
       shared: shared(externals, tags),
       writes: Map.new(Walk.writes(program), fn {name, lines} -> {name, length(lines)} end),
+      # M5-8: each bit of a word written, by its path, and each word's writes through its
+      # bits, so that a storage bit of a word is written alone where the word has no other.
+      bit_writes: bit_writes(Walk.bit_writes(program)),
       # Decision 96: each member of an instance logic writes, by its path.
       member_writes: Map.new(Walk.member_writes(program), fn {path, _lines} -> {path, true} end),
       ons: ons,
@@ -384,6 +387,11 @@ defmodule Logex.Edit.Plan do
         {symbol, _line, [{:name, _, bit} | _]}, {bits, cals} when symbol in @one_shots ->
           {[bit | bits], cals}
 
+        # M5-8 (decision 155): a bit of a word kept as a storage bit, by its path.
+        {symbol, _line, [{:bit, _, [_], _, _} = bit | _]}, {bits, cals}
+        when symbol in @one_shots ->
+          {[Walk.bit_name(bit) | bits], cals}
+
         instruction, {bits, cals} ->
           {edges(instruction, tags, bits), calling(instruction, tags, cals)}
       end)
@@ -451,6 +459,9 @@ defmodule Logex.Edit.Plan do
   defp formals(_not_a_block), do: nil
 
   defp operand({kind, _line, value}), do: {kind, value}
+  # M5-8: a bit by its path and number; its mask follows from its word's type, which an
+  # edit changes only with a restart.
+  defp operand({:bit, _line, path, n, _mask}), do: {:bit, path, n}
   # Decision 202: a literal is compared by its value, as a preset is, so an edit that only
   # respells one, `16#ff` for `255`, leaves its rung the same rung.
   defp operand({:int_lit, _line, value, _spelling}), do: {:int_lit, value}
@@ -618,12 +629,37 @@ defmodule Logex.Edit.Plan do
         {rung, bits} <- to.ons,
         same <- [is_map_key(from.ons_rungs, rung)],
         bit <- bits,
-        not (same and written_alone?(bit, from.writes)),
+        not (same and written_alone?(bit, from)),
         do: bit_name(bit)
       )
 
-  defp written_alone?({:edge, _path}, _writes), do: true
-  defp written_alone?(bit, writes), do: Map.get(writes, bit) == 1
+  defp written_alone?({:edge, _path}, _from), do: true
+
+  defp written_alone?(bit, %{writes: writes, bit_writes: {bits, words}}),
+    do: alone(Map.fetch(bits, bit), bit, {writes, words})
+
+  # A bool written once; or since M5-8 a bit of a word written once, its word written
+  # through its bits alone, never whole.
+  defp alone(:error, bit, {writes, _words}), do: Map.get(writes, bit) == 1
+
+  defp alone({:ok, 1}, bit, {writes, words}),
+    do: Map.get(writes, word_of(bit)) == Map.get(words, word_of(bit))
+
+  defp alone({:ok, _more}, _bit, _writes), do: false
+
+  defp bit_writes(written) do
+    bits = Map.new(written, fn {path, lines} -> {path, length(lines)} end)
+
+    words =
+      Enum.reduce(bits, %{}, fn {path, n}, words ->
+        Map.update(words, word_of(path), n, &(&1 + n))
+      end)
+
+    {bits, words}
+  end
+
+  # The word a bit's path is in, `s1.status` for `s1.status.3`.
+  defp word_of(path), do: path |> String.split(".") |> Enum.drop(-1) |> Enum.join(".")
 
   # ---- the per-instance half: a switch, between two scans, and a prune --------------------
 
@@ -690,7 +726,12 @@ defmodule Logex.Edit.Plan do
 
   defp path_at(value, []), do: value
   defp path_at(%{} = map, [key | path]), do: path_at(Map.get(map, key, 0), path)
+  # M5-8: a storage bit that is a bit of a word, `status.3`, is that bit's value.
+  defp path_at(word, [part]) when is_integer(word), do: bit_value(Integer.parse(part), word)
   defp path_at(_not_a_map, _path), do: 0
+
+  defp bit_value({n, ""}, word), do: Bitwise.band(Bitwise.bsr(word, n), 1)
+  defp bit_value(_no_bit, _word), do: 0
 
   # M2-5, the nested migration (§4.9): inside each instance of a user block both programs
   # declare, kept as a map and not started whole above, each member the program started
