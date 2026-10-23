@@ -3626,9 +3626,14 @@ integer; lowered to `{:bit_at, line, path, tag, {width, top}, name}`, its mask c
 from the number the scan reads; refused as a one-shot's storage bit and as a pulse coil's
 pulse bit (decision 154); a literal written in brackets, Logix's `variable3.[4]` (RM018A
 p.885), a lex error told to write `status.3`, and anything glued after the `]` one too
-(provisional). `Logex.Walk` gives it as two uses, its word's with its slot's access and
-its tag's read; a coil on it is a write of its word whole, for the second-`ote` warning
-and a storage bit in the word (provisional). A number outside the width when its
+(provisional), and since M5-9's review brackets no one name fills and closes, `s.[ n ]`,
+and a bracket held apart from its name's `.`, `s. [n]` or `s .[n]`, each a lex error
+naming its run whole through its `]`, where they were a bare illegal `.` (provisional).
+`Logex.Walk` gives it as two uses, its word's with its slot's access and its tag's read;
+a coil on it is a write of its word whole, for the second-`ote` warning and a storage bit
+in the word (provisional), and since M5-9's review a coil on it beside any write of its
+word whole, `move panel lamps` beside `ote lamps.[sel]`, is the second-`ote` warning in
+either order, as decision 207 has it for a coil on `lamps.3` (provisional). A number outside the width when its
 instruction reads or writes the bit is the major fault below.)*
 
 **Arrays** (decisions 151 to 154). `var temps real[8]`, `var grid int[4,8]`, `var cube
@@ -3689,9 +3694,16 @@ waits for M5-12. `%Logex.Fault{}` holds `severity` and `read`, the number read, 
 zero divisor (provisional, the field's name); the instruction that reads or writes the
 bit does nothing, a contact, a coil, `move`, a bitwise instruction or a shift, passing no
 power, and a `cal` whose operand is out of range runs nothing, its body's run dropped
-whether its copy-in or its copy-out met the number, as Logix's JSR whose parameter is out
-of bounds aborts and runs no subroutine (1756-PM014O p.9: *"the JSR instruction aborts
-(the subroutine does not run)"*; provisional); an instruction that reads and writes no
+whether its copy-in or its copy-out met the number, the minor faults of a body that ran
+before its copy-out met it dropped with its run (M5-9's review), as Logix's JSR whose
+parameter is out of bounds aborts and runs no subroutine (1756-PM014O p.9: *"the JSR
+instruction aborts (the subroutine does not run)"*) and as a faulted instruction, an
+Add-On Instruction among them, *"does not run"* (p.9; provisional). A `cal` is closer to
+an Add-On Instruction, an instance with its own state, than to a JSR, and there Logix
+differs from logex inside the body: *"When a fault occurs inside an Add-On Instruction,
+the remainder of the Add-On Instruction aborts"* (pp.9–10), where a major fault in a
+block's body does nothing at its instruction and the body runs on, as a program's rungs
+do (the first question put to the maintainer after M5-9); an instruction that reads and writes no
 bit, a de-energised contact or latch, checks nothing, and a de-energised `ote`, which
 writes its 0, does. `Logex.Runner` trips `{:fault, task, instance, fault}` at the end of
 the step whose run met the round's first, and a step that met one and outlasted its
@@ -8602,6 +8614,12 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
        writer warnings, the input-point refusal and the one-shots' rules, and no coil, so
        beside an `ote` on the same bool it draws no second-`ote` warning, as `move` does not
        (provisional).
+
+     *(M5-9's review: `not left mask` into a `word` departs from IEC's typing, where
+     `NOT(left)` of a BOOL is a BOOL, so `mask := NOT(left)` widens 0 or 1 into the word,
+     16#0000 for a made `left`, where logex computes in the destination's type by decision
+     147 and writes 16#fffe; `NOT(BOOL_TO_WORD(left))` is the IEC text that gives logex's
+     result. Put to the maintainer as M5-9's fifth question; nothing changed.)*
 
      Logix's AND, OR, XOR and NOT take SINT to LREAL, never a BOOL (1756-RM018A pp.494–496,
      the AND's Source A SINT, INT, DINT, LINT, USINT, UINT, UDINT, ULINT, REAL and LREAL),

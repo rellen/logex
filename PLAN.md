@@ -125,7 +125,8 @@ M5-9, the same day: a bit whose number a tag holds, `status.[n]`, read by a cont
 written by a coil, its number out of the word's bits the first major fault, the
 instruction doing nothing and the scan running on, on which `Logex.Runner` trips at the
 end of the step that met it, before the round's write, with four questions put to the
-maintainer (§3, M5-9).
+maintainer, and its review the same day, a warning grown, a bracket's lex error named
+whole and five tests that were missing, with a fifth (§3, M5-9).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -6137,16 +6138,59 @@ the walks' cross-type reach and the documents.
   R3 (the watchdog named before the fault) and R4 (a minor fault trips too), all red. 1855
   tests (10 doctests), up from 1814.
 
+  *M5-9's review (2026-10-23), in two gated commits and one of documents.* The review found
+  no defect in the code and five gaps in the tests, of which three were mutants that
+  survived the suite. ``6c77d60`` pins what was right, tests only: a step that meets two
+  major faults, `l` then `l2` in one task, trips for the first, in the order its instances
+  run (`trip_test.exs`, killing N3, the trip named for the step's last major fault, which
+  had failed only on a real-clock test and passed alone); a `cal` operand's bit number
+  checked as any instruction's, `cal b1 w.[x] y` told "`x` is not declared" and `w.[f]` of
+  a bool told it is no integer, on a var_input and on a var_output (killing N11, the check
+  removed); an edit that changes a one-shot's rung only by its bit's word, `s.[n]` to
+  `t.[n]`, blocking the one-shot (killing N13, the rung compared without the word); and a
+  `cal` whose copy-out is out of range dropping its body's minor faults with its run,
+  `state.faults` holding the `cal`'s major fault alone, which provisional reading 2 now
+  says. ``6f7d49c`` changes two things. A coil on a bit a tag numbers, `ote w.[n]`,
+  beside any write of its word whole, `move 5 w`, `and k k w`, or a member's, `move x
+  c.pv` beside `ote c.pv.[n]`, is the second-`ote` warning in either order, as decision
+  207 has it for `ote w.3`, where neither order warned, the coil never counted as one on
+  a bit of the word (provisional reading 4, grown; the third question grown with it). And
+  the lexer names a bracket's run whole through its `]` on the line: `s.[16#3]`, cut at
+  its `#`, and `s.[-1]` are `{:bracketed, run}`; brackets no one name fills and closes,
+  `s.[]`, `s.[n`, `s.[n.m]` and `s.[ n ]`, `{:bracket, run}`; and a bracket held apart
+  from its name's `.`, `s. [n]` and `s .[n]`, `{:detached, run}`, each until then a bare
+  illegal `.` (provisional reading 8); the golden record unchanged, each source failing
+  on its line as before. A program with no coil on a bit a tag numbers compiles in no more
+  reductions than at `6c77d60`, 25 literal bit coils beside 25 whole writes in 7 more,
+  and every source tokenizes in exactly what it did; README's `selected.exs` and
+  `fill.exs` re-run byte-identical. The mutation table, each judged by the full suite's
+  exit code (`rv9/run.log`): N3, N11 and N13 red on the tests above; on ``6f7d49c``,
+  W0 (the warnings' fix reverted whole), W1 (a coil on `w.[n]` not counted among the
+  coiled words), W2 (a whole write before it not looked at), W3 (it not a coiled bit for
+  a later whole write), W4 (it not a whole write for a later `ote w.3`), L0 (the lexer's
+  fix reverted whole), L1 (no `.[` beginning a lexeme), L2 (`s.[-1]` no literal), L3 (no
+  look past a `.` and a space), L4 (nothing glued after a closed bracket), L5 (an open
+  bracket's run cut at the `[`) and L6 (a bracketed literal cut at its `#`), all red. The
+  first question now cites the Add-On Instruction, which a `cal` is
+  closer to, and says where Logix differs inside the body; decision 206's `not` of a bool
+  into a word is annotated as IEC's departure and put as a fifth question. 1859 tests
+  (10 doctests), up from 1855.
+
   *Provisional readings* (M5-9): (1) the fault's field for the number read is `read`, and
   the fault names no operand, its file and line finding it; (2) a `cal` whose operand's
   number is out of range runs nothing, its body's run dropped, whether its copy-in or its
-  copy-out met the number; (3) a step that met a major fault and outlasted its watchdog
-  trips for the fault; (4) a coil on `w.[n]` is a coil on its word whole, two of them or
-  one beside a coil on a bit of the word the second-`ote` warning, and any write of one a
-  write of each storage bit in the word; (5) a literal in the brackets, `w.[3]`, is a lex
-  error told to write `w.3`; (6) a bit-string tag as a bit number is refused, told
-  `word_to_uint`; and (7) a member's bit through a tag, `t1.acc.[n]`, is taken, as
-  `t1.acc.3` is.
+  copy-out met the number, and with it, since M5-9's review, the minor faults of a body
+  that ran before its copy-out met the number; (3) a step that met a major fault and outlasted its watchdog
+  trips for the fault; (4) a coil on `w.[n]` is a coil on its word whole, two of them,
+  one beside a coil on a bit of the word or, since M5-9's review, one beside any write of
+  the word whole, `move 5 w`, either first, the second-`ote` warning, and any write of one
+  a write of each storage bit in the word; (5) a literal in the brackets, `w.[3]`, is a
+  lex error told to write `w.3`; (6) a bit-string tag as a bit number is refused, told
+  `word_to_uint`; (7) a member's bit through a tag, `t1.acc.[n]`, is taken, as
+  `t1.acc.3` is; and (8), since M5-9's review, a bracket the lexer cannot read is named
+  whole through its `]` on the line, `s.[16#3]` and `s.[-1]` as a literal in brackets,
+  `s.[ n ]` as brackets no one name fills and closes, and `s. [n]` and `s .[n]` as a
+  bracket held apart from its name's `.`.
 
   **Questions for the maintainer** (M5-9):
   1. *What a block call does when its bit number is out of range.* A conveyor's lamp
@@ -6156,8 +6200,18 @@ the walks' cross-type reach and the documents.
      The other reading runs the body with that one input left as it was, so a timer in the
      block moves on. Under the runner the operator sees the same thing, every output off;
      only a host that runs the program itself sees the difference, in the block's own
-     values. IEC says nothing; Logix's JSR whose input parameter is out of bounds aborts,
-     *"the subroutine does not run"* (1756-PM014O p.9), which is the reading built.
+     values. IEC says nothing. In Logix a faulted instruction *"does not run"* (1756-PM014O
+     p.9), a JSR whose input parameter is out of bounds *"aborts (the subroutine does not
+     run)"* (p.9), and so does an Add-On Instruction, which is closer to a `cal`, an
+     instance with its own state; that is the reading built. Logix and logex differ inside
+     the block, though: *"When a fault occurs inside an Add-On Instruction, the remainder
+     of the Add-On Instruction aborts"* (pp.9–10), where logex's body does nothing at the
+     faulting instruction and runs on, as a program's rungs do, so a lamp block whose first
+     rung faults still sets its second rung's output in logex and, where a fault routine
+     clears the fault, not in Logix. Under the
+     runner the operator sees every output off either way. A block that ran and then met
+     the number on its way out, `cal lamp1 go lamps.[sel]`, drops its whole run, the minor
+     faults it met among it, a zero divisor in the block reported by no event.
   2. *Which reason a trip names when one step both faults and runs too long.* The fast
      task's step reads `drive_faults.[sel]` with `sel` at 16 and also takes 60 ms against
      its 50 ms watchdog. As built, the trip names the fault, "bit 16 of `drive_faults` on
@@ -6170,7 +6224,10 @@ the walks' cross-type reach and the documents.
      As built, the second is warned of, "`lamps.[b]` already has an `ote` on line 4: the
      last one in the scan decides it", since either may write the bit the other does, as
      a coil on `lamps.3` beside `move x lamps` is; the other reading warns of nothing,
-     since the two are often meant to be different bits. The plant runs the same either
+     since the two are often meant to be different bits. Since M5-9's review the same goes
+     for `ote lamps.[sel]` beside `move panel lamps`, either first, which decision 207
+     already warns of for `ote lamps.3`: both drive the lamp, and the later rung wins every
+     scan. The plant runs the same either
      way; only the engineer's list of warnings differs. IEC defines no warnings; whether
      Studio 5000's verify reports a duplicate destructive bit for an indirect address is
      `unverified`.
@@ -6181,6 +6238,17 @@ the walks' cross-type reach and the documents.
      takes it as the very bit `status.4`, so text pasted from a Logix export compiles
      unchanged. Nothing the operator sees differs. IEC writes only `status.%X4` or
      `status.4` (Ed 3 Table 17).
+  5. *Whether `not` of a bool into a word inverts the word's every bit.* Decision 206 took
+     a bool as a bitwise operand. A lamp panel's `word` is set from one switch with `not
+     left mask`. As built, `mask` is 16#fffe while `left` is made and 16#ffff while it is open: logex computes in the
+     destination's type (decision 147), so the bool's one bit is widened to 16#0001 and the
+     word inverted, every lamp but the first lit, as IEC's `NOT(BOOL_TO_WORD(left))`
+     gives. The other reading is IEC's own typing of `mask := NOT(left)`: `NOT` of a BOOL
+     is a BOOL, 0, widened into the word, 16#0000, every lamp off, and 16#0001 while
+     `left` is open. IEC's Table 31 overloads NOT on ANY_BIT, its result the input's type
+     (Ed 3 p.89); Logix's NOT takes no BOOL (1756-RM018A pp.494–496). The decision's
+     record now says it departs from IEC there; nothing changed.
+
 - **M5-10 · Reals.** A spike first, on Elixir 1.20.4 and OTP 28, throwaway: the cost of a
   destination lookup and a single-rounding write, and the shortest spelling of a single
   that reads back to it, written and tested. Then the stanzas `real` and `lreal`, the 34

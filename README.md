@@ -1295,9 +1295,10 @@ line 3, column 5: "status.[4]" is no name: a bit number in brackets is a tag's, 
   manuals ask a bit number to be kept in range (1756-PM004L p.44) and do not say what
   fault one out of it raises.
 - A coil on a bit a tag numbers may set any bit of its word, so it is told as a write of
-  the word whole: two of them, or one beside a coil on a bit of the word, are told as two
-  `ote`s on one tag are, and one beside a one-shot's storage bit in the word as another
-  write of the storage bit (provisional).
+  the word whole: two of them, one beside a coil on a bit of the word, or one beside any
+  write of the word whole, `move panel lamps` beside `ote lamps.[sel]`, in either order,
+  are told as two `ote`s on one tag are, and one beside a one-shot's storage bit in the
+  word as another write of the storage bit (provisional).
 
 ### Two pulse coils
 
