@@ -52,15 +52,31 @@ defmodule Logex.NamingTest do
   end
 
   # M5-3 (decision 148): the integer conversions' stanza names every ordered pair of the
-  # eight integer types, each once, and its heading is one of them.
-  test "a family stanza's members are read as data: the 56 integer conversions" do
+  # eight integer types, each once, and its heading is one of them. M5-8 (decisions 148 and
+  # 155): so do the bit strings' two, the 12 between two bit strings and the 64 between a
+  # bit string and an integer type, either way: 132 conversions in three families.
+  test "a family stanza's members are read as data: the 132 integer and bit-string conversions" do
     integers = ~w(sint int dint lint usint uint udint ulint)
+    bits = ~w(byte word dword lword)
     pairs = for from <- integers, to <- integers, from != to, do: "#{from}_to_#{to}"
+    between = for from <- bits, to <- bits, from != to, do: "#{from}_to_#{to}"
 
-    assert [members] = families()
-    assert length(pairs) == 56
+    mixed =
+      for(from <- bits, to <- integers, do: "#{from}_to_#{to}") ++
+        for from <- integers, to <- bits, do: "#{from}_to_#{to}"
+
+    assert [members, bit_members, mixed_members] = families()
+    assert {length(pairs), length(between), length(mixed)} == {56, 12, 64}
     assert Enum.sort(members) == Enum.sort(pairs)
+    assert Enum.sort(bit_members) == Enum.sort(between)
+    assert Enum.sort(mixed_members) == Enum.sort(mixed)
+
+    assert Enum.uniq(members ++ bit_members ++ mixed_members) ==
+             members ++ bit_members ++ mixed_members
+
     assert "dint_to_int" in headed()
+    assert "byte_to_word" in headed()
+    assert "word_to_int" in headed()
   end
 
   test "every implemented instruction has been surveyed" do

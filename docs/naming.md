@@ -240,6 +240,10 @@ arise, since `or` stands where a mnemonic stands and a branch is `(`, `|` and `)
 fills 0, as the row says, on an integer too. Each word still gets its stanza before its
 code, and a stanza may still change a spelling.)*
 
+*(Amended 2026-10-23, M5-8: each of the eight words has its stanza below, `and` to `ror`,
+with the four bit strings `byte word dword lword` and the two families of their
+conversions, `byte_to_word` and `word_to_int`; no spelling changed.)*
+
 ### Data movement and conversion
 
 | Concept | IEC 61131-3 | Conventional | Siemens | CODESYS | Mitsubishi | logex | Notes |
@@ -1535,3 +1539,215 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `rto_ltime`, a type word.
 **Why:** IEC has no retentive timer, so `rto` is rule 2's vendor mnemonic, and its long form takes IEC's own suffix for the LTIME variant of a timer, `_LTIME`, on that mnemonic: the "rto equivalent if fitting" decision 158 allowed, taken as the maintainer answered §4.12's seventh question on 2026-10-21. No coined word: rule 3 holds, since both parts are standard names. It is run by `rto`, its preset in its instance's unit, its resolution a millisecond. It is reserved in any case in every `.ld` file (§4.12, "Reserved words").
 **Checked:** 2026-10-22. IEC 61131-3:2013 Table 46 (p.115), read directly in the copy `docs/instruction-sets.md` §9 lists; the `rto` stanza for the rest.
+
+### `byte` — the 8-bit bit string type
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var mask byte 16#0f`; `var_global panel_leds byte at panel.q.8`; `xic mask.3 ote lamp` | A row of 8 bits, 0 to 255, starting at 0 unless given a value, with **no arithmetic**: `add`, `sub`, `mul`, `div`, `mod`, `neg` and `abs` refuse it, told the conversion to an integer, `byte_to_usint`. Declared wherever an integer is: a tag of any section, `var_external` among them, a block's member, a global, located or not, a host's input, a device's value and a force, each an integer from 0 to 255 checked against that range. `move` widens a `bool` into it and it into `word dword lword` (Ed 3 Figure 11); anything else takes a conversion, `byte_to_word`, `byte_to_sint` or `sint_to_byte` among them, a binary transfer. It compares with a bit string as an unsigned integer, and with an integer tag only through a conversion, which the refusal names; a literal beside it must be one of its values. The bitwise instructions `and or xor not shl shr rol ror` take it, and its bits are `mask.0` to `mask.7`, read by a contact and written by a coil. A `var_external` binds only to a global of exactly its type. M5-8. |
+| IEC 61131-3 | **BYTE** | Ed 3:2013 §6.4.2 Table 10 feature 18, *"Bit string of length 8"*, initial value `16#00`, N = 8 (footnote j), no numeric range (footnote g); in the generic type ANY_BIT with BOOL, WORD, DWORD and LWORD (Figure 5). Figure 11 (p.67) widens BOOL into it and it into WORD, DWORD and LWORD; every other conversion is explicit, a binary transfer (Tables 24 and 25, pp.82–85). Partial access to a bit, `By.7` with `%X` left out (Table 17, pp.59–60). Ed 2:2003 Table 10 has it too. |
+| Conventional | none | No bit-string type for programs; an integer type holds the bits and any integer's bits are addressed, `variable3.[4]` of a SINT (general instructions reference, Sept 2025, *Bit Addressing*, pp.884–885). |
+| Siemens STEP 7 / TIA Portal LAD | **BYTE** | Carried from `docs/organisation.md` §4.12's survey table (TIA V21 *Data types*), not re-read for this stanza. |
+| CODESYS | **BYTE** | Carried from §4.12's survey table, not re-read for this stanza. |
+| Mitsubishi GX Works | | `unverified`: not read. |
+
+**Chosen:** `byte`
+**Why:** Rule 1: IEC names the type BYTE, lowercased, as every IEC type word logex takes (decision 155, the maintainer taking the bit strings with Milestone 5 on 2026-10-21). A bit string is a type of its own, IEC's, so it has no arithmetic, IEC's arithmetic taking ANY_NUM (Ed 3 Figure 5), and the reader sees from its declaration that `mask` is a row of bits; the conventional controller's integers serve where a program wants arithmetic on the same bits, through a conversion. Its values are the unsigned integers of 8 bits, as IEC compares a bit string (§6.6.2.5.10, p.90). It is reserved in any case in every `.ld` file, so a tag, label or instance named `byte` stops compiling (§4.12, "Reserved words").
+**Checked:** 2026-10-23. IEC 61131-3:2013 Table 10 and its footnotes (pp.31–33), Figure 5, Figure 11 (p.67), Tables 17, 24 and 25 (pp.59–60, 82–85), read directly in the copy `docs/instruction-sets.md` §9 lists; the conventional family's general instructions reference, Sept 2025, pp.884–885, in the copy Milestone 5's design pass saved. The Siemens and CODESYS rows are §4.12's; Mitsubishi was not read.
+
+### `word` — the 16-bit bit string type
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var_global drive_status word at drive.i.4`; `xic drive_status.3 ote run_lamp`; `and drive_status 16#00ff low_byte` | A row of 16 bits, 0 to 65535, every rule of `byte` (its stanza) at 16 bits: no arithmetic, `add` of a word told `word_to_uint`; declared wherever an integer is, a located point's and a force's value an integer from 0 to 65535, so a device giving 65536, −1 or 37.5 for `drive_status` is a bad value that trips the runner; `move` widening a `bool` or a `byte` into it and it into `dword lword`; compared with a bit string as an unsigned integer, and with an integer tag only through a conversion, `eq drive_status fault_code` with an int `fault_code` told `int_to_word` and `word_to_int`, while `eq drive_status 16#0004` is taken; the bitwise instructions; and its bits `drive_status.0` to `drive_status.15`. M5-8. |
+| IEC 61131-3 | **WORD** | Ed 3:2013 Table 10 feature 19, *"Bit string of length 16"*, initial value `16#0000`, as `byte` reads it; Figure 11, Tables 17, 24 and 25 as there. |
+| Conventional | none | As `byte`: an INT holds the 16 bits, `variable2.15` its top bit (p.885). |
+| Siemens STEP 7 / TIA Portal LAD | **WORD** | As `byte`. |
+| CODESYS | **WORD** | As `byte`. |
+| Mitsubishi GX Works | | `unverified`: not read. |
+
+**Chosen:** `word`
+**Why:** Rule 1, as for `byte`: IEC's WORD, lowercased (decision 155). A drive card's status register is the case the record names: a row of flags, read a bit at a time, never added. **The cost:** `word` is a plausible tag name, `var word dint` in a program today, and decision 155 said so when it took the bit strings; such a program stops compiling, told that `word` is a type. It is reserved in any case in every `.ld` file (§4.12, "Reserved words").
+**Checked:** 2026-10-23. As the `byte` stanza.
+
+### `dword` — the 32-bit bit string type
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var flags dword`; `xic flags.31 ote alarm` | A row of 32 bits, 0 to 4294967295, every rule of `byte` (its stanza) at 32 bits, `add` of a dword told `dword_to_udint`; `move` widening a `bool`, a `byte` or a `word` into it and it into `lword`; its bits `flags.0` to `flags.31`. M5-8. |
+| IEC 61131-3 | **DWORD** | Ed 3:2013 Table 10 feature 20, *"Bit string of length 32"*, initial value `16#0000_0000`, as `byte` reads it. |
+| Conventional | none for programs | As `byte`; DWORD appears only as a CIP type code (PM020I p.12, as §4.12's survey read it). |
+| Siemens STEP 7 / TIA Portal LAD | **DWORD** | As `byte`. |
+| CODESYS | **DWORD** | As `byte`. |
+| Mitsubishi GX Works | | `unverified`: not read. |
+
+**Chosen:** `dword`
+**Why:** Rule 1, as for `byte`: IEC's DWORD, lowercased (decision 155). It is reserved in any case in every `.ld` file (§4.12, "Reserved words").
+**Checked:** 2026-10-23. As the `byte` stanza.
+
+### `lword` — the 64-bit bit string type
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `var events lword`; `xic events.63 ote overflow_lamp` | A row of 64 bits, 0 to 18446744073709551615, every rule of `byte` (its stanza) at 64 bits, `add` of an lword told `lword_to_ulint`; `move` widening a `bool` and every narrower bit string into it, and it into nothing; its bits `events.0` to `events.63`. M5-8. |
+| IEC 61131-3 | **LWORD** | Ed 3:2013 Table 10 feature 21, *"Bit string of length 64"*, initial value `16#0000_0000_0000_0000`, as `byte` reads it; `Lo.63`, *"bit 63 of Lo"* (§6.6.1.3, p.60). |
+| Conventional | none | As `byte`; a LINT's bits are addressed, `variable0.42` (p.884). |
+| Siemens STEP 7 / TIA Portal LAD | **LWORD**, on the S7-1500 | As `byte`, §4.12's survey table. |
+| CODESYS | **LWORD** | As `byte`. |
+| Mitsubishi GX Works | | `unverified`: not read. |
+
+**Chosen:** `lword`
+**Why:** Rule 1, as for `byte`: IEC's LWORD, lowercased (decision 155). It is reserved in any case in every `.ld` file (§4.12, "Reserved words").
+**Checked:** 2026-10-23. As the `byte` stanza.
+
+### `and` — the bitwise AND of two values, into a tag
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `and drive_status 16#00ff low_byte`; `xic poll and flags mask flags` | `and a b dst`: `a` and `b` are each a tag, a member or a literal, `dst` a tag or member logic may write, all bit strings or all integers. It computes in `dst`'s type (decision 147): each source tag must be of a type Ed 3 Figure 11 widens into it, so a `byte` into a `word` and an `int` into a `dint`, and one of the other kind is refused, told the conversion, `and drive_status 16#00ff speed` with a word `drive_status` and an int `speed` "convert it first, with `word_to_int`"; a literal must be one of `dst`'s values. Energised, each bit of `dst` is 1 where that bit of both sources is, on an integer the two's-complement pattern of `dst`'s width, and the power passes: a bitwise instruction cannot fail. De-energised, it writes nothing and passes no power, as `move`. Anything may follow it on its path. M5-8. |
+| IEC 61131-3 | **AND**, symbol `&` | Ed 3:2013 §6.6.2.5.9 Table 31 feature 1, p.89, `OUT:= IN1 & IN2 &... & INn`, extensible, *"overloaded on all bit-string types"*, ANY_BIT in and out. Ed 2:2003 Table 26 feature 5, p.60. |
+| Conventional | **AND** | *"The AND instruction performs a bitwise AND operation using the bits in Source A and Source B and places the result in Dest"*, of SINT, INT, DINT and REAL and, on the 5x80 controllers, every integer type and LREAL; *"When integer promotion is required for the inputs, the smaller type is converted to the larger type using zero extension"*; rung-condition-out is rung-condition-in (general instructions reference, Sept 2025, pp.494–500). |
+| Siemens STEP 7 / TIA Portal LAD | TIA **AND** (word logic); classic **WAND_W**, **WAND_DW** | Carried from the Bitwise and shift table above, not re-read for this stanza. |
+| CODESYS | **AND** | Carried from the table above. |
+| Mitsubishi GX Works | **WAND**, **DAND**, **BKAND** | Carried from the table above. |
+
+**Chosen:** `and`
+**Why:** Rule 1: IEC names the operation AND, and the conventional set spells it so too. The `wand` the table above planned gave way to IEC's word when the bit strings came (decision 155, the table's amendment): its reason, that logex's env is untyped integers, ended with the types, and the destination's type is what lets IEC reuse AND. It takes integers too, the maintainer's "Logix-friendly" follow-up, as the conventional AND takes them, but never a mix of the two kinds in one instruction (§4.12's second question, answered as recorded), since a bit string is no number. A source widens by Figure 11, which the conventional controller's zero extension of a smaller operand matches for a bit string. **The cost:** `and` is reserved in any case in every `.ld` file, so a tag, label or instance named `and` stops compiling.
+**Checked:** 2026-10-23. IEC 61131-3:2013 §6.6.2.5.9 and Table 31 (pp.88–89), read directly in the copy `docs/instruction-sets.md` §9 lists; the conventional family's general instructions reference, Sept 2025, pp.494–500, in the copy Milestone 5's design pass saved. The Siemens, CODESYS and Mitsubishi rows are the Bitwise and shift table's.
+
+### `or` — the bitwise OR of two values, into a tag
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `or alarms new_alarms alarms` | `or a b dst`: every rule of `and` (its stanza), each bit of `dst` 1 where that bit of either source is. It stands where a mnemonic stands, so it is never read as a branch, which is `(`, `|` and `)`. M5-8. |
+| IEC 61131-3 | **OR**, symbol `>=1` | Ed 3:2013 Table 31 feature 2, p.89, `OUT:= IN1 OR IN2 OR... OR INn`; Ed 2:2003 Table 26 feature 6. |
+| Conventional | **OR** | *"The OR instruction performs a bitwise OR operation using the bits in Source A and Source B"*, its operands and rung condition as AND's (general instructions reference, Sept 2025, pp.514–520). |
+| Siemens STEP 7 / TIA Portal LAD | TIA **OR**; classic **WOR_W**, **WOR_DW** | Carried from the table above. |
+| CODESYS | **OR** | Carried from the table above. |
+| Mitsubishi GX Works | **WOR**, **DOR**, **BKOR** | Carried from the table above. |
+
+**Chosen:** `or`
+**Why:** Rule 1, as for `and`: IEC's OR (decision 155). The table's worry, that a bare `or` would read as a branch, does not arise in logex's grammar (B1). **The cost:** `or` is reserved in any case in every `.ld` file.
+**Checked:** 2026-10-23. IEC 61131-3:2013 Table 31 (p.89); the conventional reference, Sept 2025, pp.514–520. The other rows are the table's.
+
+### `xor` — the bitwise exclusive OR of two values, into a tag
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `xor inputs last_inputs changed` | `xor a b dst`: every rule of `and` (its stanza), each bit of `dst` 1 where that bit of exactly one source is. M5-8. |
+| IEC 61131-3 | **XOR**, symbol `=2k+1` | Ed 3:2013 Table 31 feature 3, p.89; Ed 2:2003 Table 26 feature 7. |
+| Conventional | **XOR** | *"The XOR instruction performs a bitwise XOR operation using the bits in Source A and Source B"* (general instructions reference, Sept 2025, pp.501–507). |
+| Siemens STEP 7 / TIA Portal LAD | TIA **XOR**; classic **WXOR_W** | Carried from the table above. |
+| CODESYS | **XOR** | Carried from the table above. |
+| Mitsubishi GX Works | **WXOR**, **DXOR**, **BKXOR** | Carried from the table above. |
+
+**Chosen:** `xor`
+**Why:** Rule 1, as for `and`: IEC's XOR (decision 155). **The cost:** `xor` is reserved in any case in every `.ld` file.
+**Checked:** 2026-10-23. IEC 61131-3:2013 Table 31 (p.89); the conventional reference, Sept 2025, pp.501–507. The other rows are the table's.
+
+### `not` — the bitwise complement of a value, into a tag
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `not mask inverted` | `not src dst`: `src` a tag, a member or a literal, `dst` a tag or member logic may write, both bit strings or both integers, computed in `dst`'s type as `and` is (its stanza): each bit of `dst` is the other value of that bit of `src`, so `not` of a `byte` 2#0000_1111 is 2#1111_0000 and of an `int` 0 is −1. Energised, it writes and passes power; de-energised, it writes nothing and passes no power. It is a complement of bits, not a contact: `xio` reads a bool's negation. M5-8. |
+| IEC 61131-3 | **NOT** | Ed 3:2013 Table 31 feature 4, p.89, `OUT:= NOT IN1`, not extensible; Ed 2:2003 Table 26 feature 8. |
+| Conventional | **NOT** | *"The NOT instruction performs a bitwise inversion of the Source and places the result in Dest"* (general instructions reference, Sept 2025, pp.508–513). |
+| Siemens STEP 7 / TIA Portal LAD | TIA **INV**, *"create ones complement"*; classic **INV_I**, **INV_DI** | Carried from the table above. |
+| CODESYS | **NOT** | Carried from the table above. |
+| Mitsubishi GX Works | **CML**, **DCML** | Carried from the table above. |
+
+**Chosen:** `not`
+**Why:** Rule 1, as for `and`: IEC's NOT (decision 155), which the conventional set and CODESYS spell the same; Siemens' INV is the outlier the table records. **The cost:** `not` is reserved in any case in every `.ld` file.
+**Checked:** 2026-10-23. IEC 61131-3:2013 Table 31 (p.89); the conventional reference, Sept 2025, pp.508–513. The other rows are the table's.
+
+### `shl` — shift a value left by a count, into a tag
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `shl mask 3 mask`; `shl status n shifted` | `shl src n dst`: `src` and `dst` as `not`'s (its stanza), both bit strings or both integers, computed in `dst`'s type; `n`, the count, a literal or an integer tag of any width, read by value, never widened into `dst`'s type, a bit string refused. Energised, the bits of `src` in `dst`'s width move `n` places left, 0 filling on the right, the bits past the top dropped, on an integer its two's-complement pattern, and the power passes. A count of the width or more writes 0, with its power in. A negative literal count is refused when the program compiles; a tag count that is negative when the rung runs acts as a count of 0, `src` written unshifted, and passes **no** power, so a lamp after it shows it; no fault in any case (decision 165). De-energised, it writes nothing and passes no power. M5-8. |
+| IEC 61131-3 | **SHL** | Ed 3:2013 §6.6.2.5.9 Table 30 feature 1, p.89, *"OUT:= IN left-shifted by N bits, zero-filled on right"*, IN of ANY_BIT and N of ANY_INT; *"It is an error if the value of the N input is less than zero"* (footnote a); `SHL(2#0001_1001, 3) = 2#1100_1000` of a BYTE. Ed 2:2003 Table 25 feature 1, p.59. |
+| Conventional | **none** | No shift-by-N instruction for integers; BSL and BSR shift a bit array one place (general instructions reference, Sept 2025, Chapter 9, p.622), as the table above records (`unverified` that none exists, §4.12). |
+| Siemens STEP 7 / TIA Portal LAD | TIA **SHL**; classic **SHL_W**, **SHL_DW** | Carried from the table above. |
+| CODESYS | **SHL** | Carried from the table above. |
+| Mitsubishi GX Works | **SFL**; SHL(_E) | Carried from the table above. |
+
+**Chosen:** `shl`
+**Why:** Rule 1: IEC names the operation SHL, which Siemens and CODESYS spell the same; the conventional set has none. It takes integers as well as bit strings, as the bitwise instructions do (decision 155), working on the destination's width, which a shift needs. IEC calls a negative count an error and leaves its handling to the implementer; the maintainer took no fault and no shift, the power off where the count was negative (decision 165), and a literal one is refused as IEC's error that a program can show. **The cost:** `shl` is reserved in any case in every `.ld` file.
+**Checked:** 2026-10-23. IEC 61131-3:2013 §6.6.2.5.9 and Table 30 (pp.88–89), read directly in the copy `docs/instruction-sets.md` §9 lists; the conventional reference, Sept 2025, its table of contents and p.622. The other rows are the table's.
+
+### `shr` — shift a value right by a count, into a tag
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `shr drive_status 8 high_byte` | `shr src n dst`: every rule of `shl` (its stanza), the bits moving `n` places right and **0 filling on the left**, a logical shift on an integer too, so `shr` of an `int` −2 by 1 gives 32767, not −1. A count of the width or more writes 0, with its power in; a negative tag count writes `src` unshifted with no power (decision 165). M5-8. |
+| IEC 61131-3 | **SHR** | Ed 3:2013 Table 30 feature 2, p.89, *"OUT:= IN right-shifted by N bits, zero-filled on left"*; `SHR(2#0001_1001, 3) = 2#0000_0011`. |
+| Conventional | **none** | As `shl`. |
+| Siemens STEP 7 / TIA Portal LAD | TIA **SHR**; classic **SHR_W**, and **SHR_I**, **SHR_DI**, which sign-extend | Carried from the table above. |
+| CODESYS | **SHR** | Carried from the table above. |
+| Mitsubishi GX Works | **SFR**; SHR(_E) | Carried from the table above. |
+
+**Chosen:** `shr`
+**Why:** Rule 1, as for `shl`: IEC's SHR, zero-filling as IEC defines it (decision 155), where the classic Siemens SHR_I sign-extends: the stanza and README say so, since a program ported from it that divided a negative value by a shift behaves differently. **The cost:** `shr` is reserved in any case in every `.ld` file.
+**Checked:** 2026-10-23. IEC 61131-3:2013 Table 30 (p.89). The other rows are the table's.
+
+### `rol` — rotate a value left by a count, into a tag
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `rol pattern 1 pattern` | `rol src n dst`: the operands of `shl` (its stanza); energised, the bits of `src` in `dst`'s width move `n` places left, each bit past the top coming in at the bottom, so `rol` of a `byte` 2#1001_0001 by 1 gives 2#0010_0011, and the power passes. The count is taken modulo the width, so a rotate of a `byte` by 9 gives what a rotate by 1 gives; a negative tag count writes `src` unrotated with no power, no fault (decision 165). De-energised, it writes nothing and passes no power. M5-8. |
+| IEC 61131-3 | **ROL** | Ed 3:2013 Table 30 feature 3, p.89, *"OUT:= IN left-rotated by N bits, circular"*; Ed 2:2003 lists it as feature 4, the reverse of Ed 3 (`docs/instruction-sets.md` §3.1). What it gives for N at or past the width: `unverified` (§4.12's eighth unverified item). |
+| Conventional | **none** | As `shl`. |
+| Siemens STEP 7 / TIA Portal LAD | TIA **ROL**; classic **ROL_DW** | Carried from the table above. |
+| CODESYS | **ROL** | Carried from the table above. |
+| Mitsubishi GX Works | **ROL**, **RCL** (through carry) | Carried from the table above. |
+
+**Chosen:** `rol`
+**Why:** Rule 1: IEC's ROL, circular within the destination's width, the width question the table above names a prerequisite answered by the destination's type; a count at or past the width taken modulo the width (decision 165). **The cost:** `rol` is reserved in any case in every `.ld` file.
+**Checked:** 2026-10-23. IEC 61131-3:2013 Table 30 (p.89). The other rows are the table's.
+
+### `ror` — rotate a value right by a count, into a tag
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `ror pattern 3 pattern` | `ror src n dst`: every rule of `rol` (its stanza), the bits moving right and each bit past the bottom coming in at the top, so `ror` of a `byte` 2#0001_1001 by 3 gives 2#0010_0011, IEC's own example; a count modulo the width, a negative tag count writing `src` unrotated with no power (decision 165). M5-8. |
+| IEC 61131-3 | **ROR** | Ed 3:2013 Table 30 feature 4, p.89, *"OUT:= IN right-rotated by N bits, circular"*; `ROR(2#0001_1001, 3) = 2#0010_0011`. |
+| Conventional | **none** | As `shl`. |
+| Siemens STEP 7 / TIA Portal LAD | TIA **ROR**; classic **ROR_DW** | Carried from the table above. |
+| CODESYS | **ROR** | Carried from the table above. |
+| Mitsubishi GX Works | **ROR**, **RCR** (through carry) | Carried from the table above. |
+
+**Chosen:** `ror`
+**Why:** Rule 1, as for `rol`: IEC's ROR (decision 155). **The cost:** `ror` is reserved in any case in every `.ld` file.
+**Checked:** 2026-10-23. IEC 61131-3:2013 Table 30 (p.89). The other rows are the table's.
+
+### `byte_to_word` — convert a bit string into another bit string type: the family of the 12 bit-string conversions
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `byte_to_word mask wide_mask`; `lword_to_byte events low_events` | `<from>_to_<to> src dst` for every ordered pair of the four bit strings, 12 mnemonics, a **binary transfer**: a widening fills 0 on the left, `byte_to_word` of 16#ff giving 16#00ff, and a narrowing keeps the rightmost bits, `word_to_byte` of 16#1234 giving 16#34. `src` is a tag, a member or a literal of the `from` type or of a type Ed 3 Figure 11 widens into it (decision 176), a `bool` or a narrower bit string, and `dst` a tag or member of exactly the `to` type. Energised, it writes and passes its power in: a binary transfer is defined for every value (provisional). De-energised, it writes nothing and passes no power, as `move`. A widening one does what `move` does. M5-8. |
+| IEC 61131-3 | **`<FROM>_TO_<TO>`**, `BYTE_TO_WORD` and the rest | Ed 3:2013 §6.6.2.5.4 Table 24, pp.82–83: *"Data type conversion is done as binary transfer"*; *"If the source data type is smaller than the target data type the source value is stored into the rightmost bytes of the target variable and the leftmost bytes are set to zero"*; *"If the source data type is bigger than the target data type only the rightmost bytes of the source variable are stored into the target data type"*. Its BOOL and CHAR rows are not taken (§4.12, "Conversions"). |
+| Conventional | none | No bit-string types (the `byte` stanza). |
+| Siemens STEP 7 / TIA Portal LAD | **CONV**; SCL `BYTE_TO_WORD(...)` | `unverified`, not read for this stanza. |
+| CODESYS | **`BYTE_TO_WORD`** and the rest | `unverified`, not read for this stanza. |
+| Mitsubishi GX Works | | `unverified`: not read. |
+
+**Chosen:** `<from>_to_<to>`, lowercased, for each of the 12 ordered pairs.
+**Why:** Rule 1: IEC names each conversion, typed, as the integer conversions' family (the `dint_to_int` stanza) and decision 148 take them; IEC defines each as a binary transfer, so nothing here rounds or wraps a value, it keeps bits. One stanza for the family, each member named (§4.12's routine choice); `naming_test.exs` reads the members below as data. Each is reserved in any case in every `.ld` file, as a mnemonic is.
+**Members:** `byte_to_word`, `byte_to_dword`, `byte_to_lword`, `word_to_byte`, `word_to_dword`, `word_to_lword`, `dword_to_byte`, `dword_to_word`, `dword_to_lword`, `lword_to_byte`, `lword_to_word`, `lword_to_dword`.
+**Checked:** 2026-10-23. IEC 61131-3:2013 §6.6.2.5.4 and Table 24 (pp.82–83), read directly in the copy `docs/instruction-sets.md` §9 lists. The Siemens, CODESYS and Mitsubishi rows were not read.
+
+### `word_to_int` — convert between a bit string and an integer type: the family of the 64 bit-string and integer conversions
+
+| Dialect | Name there | Notes |
+|---|---|---|
+| logex | `word_to_int drive_status status_code`; `int_to_word speed speed_bits`; `dword_to_udint flags flag_count` | `<from>_to_<to> src dst` for each of the four bit strings with each of the eight integer types, either way, 64 mnemonics, a **binary transfer**, never a sign extension: the source's bits in its own width are stored into the rightmost bits of the target, 0 filling on the left where it is wider, its rightmost bits kept where it is narrower, and a signed target reads its top bit as the sign. So `int_to_dword` of −1 is 16#0000_ffff, `word_to_int` of 16#ffff is −1, `word_to_dint` of 16#ffff 65535, and `word_to_sint` of 16#1234 52 (16#34). `src` a tag, a member or a literal of the `from` type or of a type Ed 3 Figure 11 widens into it (decision 176), `dst` a tag or member of exactly the `to` type. Energised, it writes and passes its power in: a binary transfer is defined for every value (provisional). De-energised, it writes nothing and passes no power. These are the conversions every refusal between a bit string and an integer names, `add` of a word told `word_to_uint`. M5-8. |
+| IEC 61131-3 | **`<FROM>_TO_<TO>`**, `WORD_TO_INT`, `INT_TO_WORD` and the rest | Ed 3:2013 §6.6.2.5.5 Table 25, pp.83–85: *"Data type conversion is done as binary transfer"*, the rules of Table 24, *"X: SINT := 18; W: WORD; W:= SINT_TO_WORD(X); and W gets 16#0012"* (Example 1) and *"W: WORD: = 16#1234; X: SINT; X := W; and X gets 54 (=16#34)"* (Example 2, where 16#34 is 52). Its BOOL rows and the real rows are not taken (§4.12, "Conversions"). |
+| Conventional | none | No bit-string types: `MOV` between integer types of one width keeps the bits (the `dint_to_int` stanza). |
+| Siemens STEP 7 / TIA Portal LAD | **CONV**; SCL `WORD_TO_INT(...)` | `unverified`, not read for this stanza. |
+| CODESYS | **`WORD_TO_INT`** and the rest | `unverified`, not read for this stanza. |
+| Mitsubishi GX Works | | `unverified`: not read. |
+
+**Chosen:** `<from>_to_<to>`, lowercased, for each of the 64 ordered pairs.
+**Why:** Rule 1, as for the 12 bit-string conversions (the `byte_to_word` stanza): IEC's typed names (decision 148), each a binary transfer (Table 25), so `int_to_dword` of −1 keeps the int's 16 bits and fills 0, never the 32 ones of a sign extension, as decision 148 has it. IEC's Example 2 prints 54 for 16#34, which is 52; logex gives 52, the rightmost byte the rule stores. One stanza for the family, each member named; `naming_test.exs` reads the members below as data. Each is reserved in any case in every `.ld` file, as a mnemonic is.
+**Members:** `byte_to_sint`, `byte_to_int`, `byte_to_dint`, `byte_to_lint`, `byte_to_usint`, `byte_to_uint`, `byte_to_udint`, `byte_to_ulint`, `word_to_sint`, `word_to_int`, `word_to_dint`, `word_to_lint`, `word_to_usint`, `word_to_uint`, `word_to_udint`, `word_to_ulint`, `dword_to_sint`, `dword_to_int`, `dword_to_dint`, `dword_to_lint`, `dword_to_usint`, `dword_to_uint`, `dword_to_udint`, `dword_to_ulint`, `lword_to_sint`, `lword_to_int`, `lword_to_dint`, `lword_to_lint`, `lword_to_usint`, `lword_to_uint`, `lword_to_udint`, `lword_to_ulint`, `sint_to_byte`, `sint_to_word`, `sint_to_dword`, `sint_to_lword`, `int_to_byte`, `int_to_word`, `int_to_dword`, `int_to_lword`, `dint_to_byte`, `dint_to_word`, `dint_to_dword`, `dint_to_lword`, `lint_to_byte`, `lint_to_word`, `lint_to_dword`, `lint_to_lword`, `usint_to_byte`, `usint_to_word`, `usint_to_dword`, `usint_to_lword`, `uint_to_byte`, `uint_to_word`, `uint_to_dword`, `uint_to_lword`, `udint_to_byte`, `udint_to_word`, `udint_to_dword`, `udint_to_lword`, `ulint_to_byte`, `ulint_to_word`, `ulint_to_dword`, `ulint_to_lword`.
+**Checked:** 2026-10-23. IEC 61131-3:2013 §6.6.2.5.5 and Table 25 (pp.83–85), read directly in the copy `docs/instruction-sets.md` §9 lists. The Siemens, CODESYS and Mitsubishi rows were not read.
