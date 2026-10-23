@@ -1403,6 +1403,63 @@ defmodule Logex.BitStringTest do
     end
   end
 
+  describe "M5-8's review" do
+    test "a coil on a bit of a member keeps the member's other bits" do
+      p =
+        program(
+          "var_input k bool\nvar c ctu\nvar_output v dint\nxic k ote c.pv.3\nmove c.pv v\n" <>
+            "ctu c 100"
+        )
+
+      # 100 is 2#110_0100: bit 3 set gives 108, and cleared again 100, the rest kept.
+      assert scan(p, %{"k" => 1}) == %{"v" => 108}
+      assert scan(p, %{"k" => 0}) == %{"v" => 100}
+    end
+
+    test "an edit that moves a one-shot's rung to another bit blocks it once" do
+      was = program("var_input s word\nvar x bool\nvar_output p bool\nxic s.3 ons x ote p")
+      now = program("var_input s word\nvar x bool\nvar_output p bool\nxic s.4 ons x ote p")
+      state = Runtime.put_inputs(was, Runtime.instance(was), %{"s" => 16})
+      {_out, state} = Runtime.scan(was, state)
+      {_out, state} = Runtime.scan(was, state)
+      {:ok, edit, _forecast} = Edit.accept(was, now, state)
+      {_edit, switched, report} = Edit.test(edit, state)
+      assert report == [{:ons_blocked, "x", 0}]
+      # Bit 4 of 16 is on: unblocked, the edit itself would make the edge.
+      assert {%{"p" => 0}, _state} = Runtime.scan(now, switched)
+    end
+
+    test "an edit that stops writing a member's bit reports the member unwritten" do
+      was =
+        program(
+          "var_input go bool\nvar_input k bool\nvar c ctu\nvar_output q bool\n" <>
+            "xic k ote c.pv.3\nxic go ctu c 10\nxic c.q ote q"
+        )
+
+      now =
+        program(
+          "var_input go bool\nvar_input k bool\nvar c ctu\nvar_output q bool\n" <>
+            "xic go ctu c 10\nxic c.q ote q"
+        )
+
+      state = Runtime.put_inputs(was, Runtime.instance(was), %{"go" => 0, "k" => 1})
+      {_out, state} = Runtime.scan(was, state)
+      assert {:ok, edit, forecast} = Edit.accept(was, now, state)
+      assert forecast == [{:unwritten, "c.pv", 10}]
+      assert {_edit, _state, [{:unwritten, "c.pv", 10}]} = Edit.test(edit, state)
+    end
+
+    test "a literal shift count of 0 is taken, and writes its source with power" do
+      p =
+        program(
+          "var_input a word\nvar_output w word\nvar_output q bool\n" <>
+            "shl a 0 w ote q\nshr a 0 w ote q\nrol a 0 w ote q\nror a 0 w ote q"
+        )
+
+      assert scan(p, %{"a" => 0x8001}) == %{"w" => 0x8001, "q" => 1}
+    end
+  end
+
   describe "the reserved words" do
     # PLAN M5-8: the commit names what `byte` and `word` break: a program with a tag of
     # either name stops compiling, told it is a type.
