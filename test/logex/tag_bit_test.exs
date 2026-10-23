@@ -556,6 +556,42 @@ defmodule Logex.TagBitTest do
              ]
     end
 
+    # M5-9's review: decision 207's warning for a coil on `w.3` beside a whole write of `w`
+    # holds for a coil on `w.[n]`, in either order, a member's and a bitwise write's too.
+    test "a coil on a bit a tag numbers beside a whole write of its word, either first" do
+      head =
+        "var w word\nvar_input n int\nvar_input a bool\nvar_input k word\n" <>
+          "var_input x dint\nvar c ctu\n"
+
+      later = "the last one in the scan decides it"
+      decides = fn source -> Enum.filter(warnings(source), &(elem(&1, 1) =~ later)) end
+
+      assert decides.(head <> "xic a ote w.[n]\nmove 5 w") == [
+               {8, "`w.[n]` already has an `ote` on line 7: #{later}"}
+             ]
+
+      assert decides.(head <> "move 5 w\nxic a ote w.[n]") == [
+               {8, "`w.[n]` is a bit of `w`, which the `move` on line 7 writes whole: #{later}"}
+             ]
+
+      assert decides.(head <> "xic a ote w.[n]\nand k k w") == [
+               {8, "`w.[n]` already has an `ote` on line 7: #{later}"}
+             ]
+
+      assert decides.(head <> "and k k w\nxic a ote w.[n]") == [
+               {8, "`w.[n]` is a bit of `w`, which the `and` on line 7 writes whole: #{later}"}
+             ]
+
+      assert decides.(head <> "xic a ote c.pv.[n]\nmove x c.pv\nctu c 9") == [
+               {8, "`c.pv.[n]` already has an `ote` on line 7: #{later}"}
+             ]
+
+      assert decides.(head <> "move x c.pv\nxic a ote c.pv.[n]\nctu c 9") == [
+               {8,
+                "`c.pv.[n]` is a bit of `c.pv`, which the `move` on line 7 writes whole: #{later}"}
+             ]
+    end
+
     test "a write into a bit a tag numbers, beside a coil on a bit of its word, is a whole write" do
       assert warnings(
                "var w word\nvar_input n int\nvar_input a bool\nxic a ote w.3\nmove a w.[n]"

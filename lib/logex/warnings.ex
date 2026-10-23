@@ -198,11 +198,7 @@ defmodule Logex.Warnings do
   defp second_otes(instructions, tags, owners) do
     coils = Enum.flat_map(instructions, &coil_target/1)
 
-    words =
-      for {:coil, _key, word, _tag, _at, _shown} <- coils,
-          word != nil,
-          into: %{},
-          do: {word, true}
+    words = Enum.reduce(coils, %{}, &coiled/2)
 
     {warnings, _firsts} =
       instructions
@@ -213,6 +209,11 @@ defmodule Logex.Warnings do
     warnings
   end
 
+  # The words a coil names a bit of, a literal one's or one a tag numbers.
+  defp coiled({:coil, _key, nil, _tag, _at, _shown}, words), do: words
+  defp coiled({:coil, _key, word, _tag, _at, _shown}, words), do: Map.put(words, word, true)
+  defp coiled({:coil_at, word, _tag, _at, _shown}, words), do: Map.put(words, word, true)
+
   defp decisions(_instructions, coils, words, _tags) when map_size(words) == 0, do: coils
 
   defp decisions(instructions, _coils, words, tags),
@@ -220,6 +221,9 @@ defmodule Logex.Warnings do
 
   defp decides?({:coil, key, _word, tag, _at, _shown}, tags, owners),
     do: from_source?(tags, tag) and not Map.has_key?(owners, key)
+
+  defp decides?({:coil_at, word, tag, _at, _shown}, tags, owners),
+    do: from_source?(tags, tag) and not Map.has_key?(owners, word)
 
   defp decides?({:whole, _word, tag, _at}, tags, _owners), do: from_source?(tags, tag)
 
@@ -240,6 +244,24 @@ defmodule Logex.Warnings do
         {key, word, at, shown},
         {coils, wholes, bitted}
       )
+
+  # A coil on a bit a tag numbers, `ote w.[n]`, keyed by its word: after another such coil
+  # on the word, after a coil on a bit of it, `ote w.3`, or after a whole write of it,
+  # `move x w`, the second-`ote` warning; and itself a coil on a bit of the word and a whole
+  # write of it for what comes later.
+  defp decided({:coil_at, word, _tag, {line, _symbol} = at, shown}, {coils, wholes, bitted}) do
+    warnings =
+      word_after(
+        Map.fetch(coils, word),
+        Map.fetch(bitted, word),
+        Map.fetch(wholes, word),
+        {word, line, shown}
+      )
+
+    {warnings,
+     {Map.put_new(coils, word, at), Map.put_new(wholes, word, at),
+      Map.put_new(bitted, word, {shown, at})}}
+  end
 
   defp decided({:whole, word, _tag, at}, {coils, wholes, bitted}),
     do: whole_after(Map.fetch(bitted, word), at, {coils, Map.put_new(wholes, word, at), bitted})
@@ -264,6 +286,23 @@ defmodule Logex.Warnings do
 
   defp bit_after(:error, :error, {key, word, at, shown}, {coils, wholes, bitted}),
     do: {[], {Map.put(coils, key, at), wholes, Map.put_new(bitted, word, {shown, at})}}
+
+  defp word_after({:ok, first}, _bitted, _whole, {_word, line, shown}),
+    do: [second_ote(shown, first, line)]
+
+  defp word_after(:error, {:ok, {bit, first}}, _whole, {_word, line, _shown}),
+    do: [second_ote(bit, first, line)]
+
+  defp word_after(:error, :error, {:ok, {first, symbol}}, {word, line, shown}),
+    do: [
+      warning(
+        line,
+        "`#{shown}` is a bit of `#{word}`, which the `#{symbol}` #{where(first, line)} " <>
+          "writes whole: #{last()}"
+      )
+    ]
+
+  defp word_after(:error, :error, :error, _coil), do: []
 
   defp whole_after(:error, _at, firsts), do: {[], firsts}
 
@@ -318,15 +357,10 @@ defmodule Logex.Warnings do
   # M5-9 (provisional): a coil on a bit whose number a tag holds decides whichever bit the
   # number names, so it is a coil on its word whole, keyed by the word: a second one on the
   # word, `ote s.[n]` beside `ote s.[m]`, is the second-`ote` warning, and so is a coil on
-  # a bit of the word, `ote s.3`, either first, as a whole write is.
-  defp target({:bit_at, _, [container | _] = path, _index, _width, shown}, line, symbol) do
-    word = Enum.join(path, ".")
-
-    [
-      {:coil, word, nil, container, {line, symbol}, shown},
-      {:whole, word, container, {line, symbol}}
-    ]
-  end
+  # a bit of the word, `ote s.3`, and, since M5-9's review, any write of the word whole,
+  # `move x s`, either first, as decision 207 has it for a coil on `s.3`.
+  defp target({:bit_at, _, [container | _] = path, _index, _width, shown}, line, symbol),
+    do: [{:coil_at, Enum.join(path, "."), container, {line, symbol}, shown}]
 
   defp target(_literal, _line, _symbol), do: []
 

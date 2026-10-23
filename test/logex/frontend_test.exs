@@ -176,20 +176,40 @@ defmodule Logex.FrontendTest do
              ]
     end
 
-    test "brackets a name does not fill and close end the name before its `.`" do
-      for {source, column} <- [
-            {"xic s.[]", 6},
-            {"xic s.[n", 6},
-            {"xic s.[n.m]", 6},
-            {"xic s.[ n ]", 6},
-            {"xic .[n]", 5},
-            {"xic s.[-1]", 6}
+    # Since M5-9's review each is named whole, through its `]` where one closes it on its
+    # line, where until then each ended the name before its `.`, an illegal character.
+    test "brackets no one name fills and closes, and a bracket held apart, are named whole" do
+      for {source, column, reason} <- [
+            {"xic s.[]", 5, {:bracket, "s.[]"}},
+            {"xic s.[n", 5, {:bracket, "s.[n"}},
+            {"xic s.[n ote q", 5, {:bracket, "s.[n"}},
+            {"xic s.[n.m]", 5, {:bracket, "s.[n.m]"}},
+            {"xic s.[ n ]", 5, {:bracket, "s.[ n ]"}},
+            {"xic s.[n ]x ote q", 5, {:bracket, "s.[n ]x"}},
+            {"xic s.[ n ote q\nxic b ]", 5, {:bracket, "s.["}},
+            {"xic s.[ n (ote q)]", 5, {:bracket, "s.["}},
+            {"xic s. [n]", 5, {:detached, "s. [n]"}},
+            {"xic s.\t [n] ote q", 5, {:detached, "s.\t [n]"}},
+            {"xic s .[n]", 7, {:detached, ".[n]"}},
+            {"xic .[n]", 5, {:detached, ".[n]"}}
           ] do
-        assert {:error, {{1, ^column}, Logex.Lexer, {:illegal, "."}}, 1} =
-                 Compiler.tokenize(source),
+        assert {:error, {{1, ^column}, Logex.Lexer, ^reason}, 1} = Compiler.tokenize(source),
                inspect(source)
       end
 
+      assert Logex.Lexer.format_error({:bracket, "s.[ n ]"}) ==
+               "\"s.[ n ]\" is no name: a bit number in brackets is one tag's name between " <>
+                 "`[` and `]`, with no space, `status.[n]`"
+
+      assert Logex.Lexer.format_error({:detached, "s. [n]"}) ==
+               "\"s. [n]\" is no name: a bit number in brackets is written straight after its " <>
+                 "name's `.`, with no space, `status.[n]`"
+
+      # A `.` and a space with no bracket after it still end the name before the `.`.
+      assert {:error, {{1, 6}, Logex.Lexer, {:illegal, "."}}, 1} =
+               Compiler.tokenize("xic s. ote q")
+
+      assert {:error, {{1, 6}, Logex.Lexer, {:illegal, "."}}, 1} = Compiler.tokenize("xic s.(")
       assert {:error, {{1, 6}, Logex.Lexer, {:illegal, "["}}, 1} = Compiler.tokenize("xic s[n]")
     end
 
@@ -204,6 +224,9 @@ defmodule Logex.FrontendTest do
             {"xic s.[n]]", 5, {:after_bracket, "s.[n]]"}},
             {"xic s.[3]", 5, {:bracketed, "s.[3]"}},
             {"xic s.[03]x", 5, {:bracketed, "s.[03]x"}},
+            {"xic s.[16#3]", 5, {:bracketed, "s.[16#3]"}},
+            {"xic s.[1_0] ote q", 5, {:bracketed, "s.[1_0]"}},
+            {"xic s.[-1]", 5, {:bracketed, "s.[-1]"}},
             {"xic a\n  xic t1.acc.[1]", 7, {:bracketed, "t1.acc.[1]"}},
             {"xic s.[n]-5", 5, {:signed_inside, "s.[n]-5"}}
           ] do

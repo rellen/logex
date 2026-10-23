@@ -90,6 +90,16 @@ defmodule Logex.Lexer do
       "#{inspect(text)} is no name: a bit number in brackets is a tag's, `status.[n]`, and " <>
         "a literal one is written with none, `status.3`"
 
+  def format_error({:bracket, text}),
+    do:
+      "#{inspect(text)} is no name: a bit number in brackets is one tag's name between `[` " <>
+        "and `]`, with no space, `status.[n]`"
+
+  def format_error({:detached, text}),
+    do:
+      "#{inspect(text)} is no name: a bit number in brackets is written straight after its " <>
+        "name's `.`, with no space, `status.[n]`"
+
   def format_error({:signed_inside, text}),
     do:
       "missing separator before `-`: #{inspect(text)} is neither a tag nor a number, " <>
@@ -137,6 +147,14 @@ defmodule Logex.Lexer do
 
   defp lex(<<h, _::binary>> = src, l, c, acc) when is_name_start(h),
     do: name(src, name_part(src, 0), l, c, acc)
+
+  # M5-9's review: a `.[` that begins a lexeme, `w .[n]` or `xic .[n]`, is a bit number
+  # held apart from its name, named whole through its `]`.
+  defp lex(<<?., ?[, _::binary>> = src, l, c, _acc) do
+    n = closing(src, 0)
+    <<run::binary-size(^n), _::binary>> = src
+    {:error, {{l, c}, __MODULE__, {:detached, run}}, l}
+  end
 
   defp lex(<<>>, l, _c, acc), do: {:ok, Enum.reverse(acc), l}
 
@@ -300,7 +318,8 @@ defmodule Logex.Lexer do
     {:error, {{l, c}, __MODULE__, {:missing_separator, run}}, l}
   end
 
-  defp name(src, {kind, n}, l, c, _acc) when kind in [:after_bracket, :bracketed] do
+  defp name(src, {kind, n}, l, c, _acc)
+       when kind in [:after_bracket, :bracketed, :bracket, :detached] do
     <<run::binary-size(^n), _::binary>> = src
     {:error, {{l, c}, __MODULE__, {kind, run}}, l}
   end
@@ -340,24 +359,66 @@ defmodule Logex.Lexer do
 
   # M5-9 (decision 160, §4.12's routine choice): a name's last part may be a tag's name in
   # brackets, `status.[n]` or `t1.acc.[n]`, a bit whose number the tag holds, Logix's form
-  # (RM018A p.885, `variable3.[4]`); the name is still one token, and ends at its `]`. A `[`
-  # that a name does not follow and a `]` close, `s.[3]`, `s.[]` or `s.[n`, ends the name
-  # before its `.`, which is then illegal; anything glued after the `]`, a letter, a digit,
-  # a `.` or a `[`, makes the run one mistyped lexeme, `s.[n]x`, named whole.
-  defp dot(<<?., ?[, h, rest::binary>>, n) when is_name_start(h), do: bracket(rest, n, n + 3)
+  # (RM018A p.885, `variable3.[4]`); the name is still one token, and ends at its `]`.
+  # Anything glued after the `]`, a letter, a digit, a `.` or a `[`, makes the run one
+  # mistyped lexeme, `s.[n]x`, named whole.
+  defp dot(<<?., ?[, h, rest::binary>>, n) when is_name_start(h), do: bracket(rest, n + 3)
 
-  # A literal in the brackets, `s.[3]`, is Logix's spelling of a literal bit, which logex
-  # writes `s.3`, IEC's (Ed 3 Table 17): the run named whole, with that spelling.
-  defp dot(<<?., ?[, d, rest::binary>>, n) when d in ?0..?9,
-    do: {:bracketed, n + 3 + glued(rest, 0)}
+  # A literal in the brackets, `s.[3]`, `s.[16#3]` or `s.[-1]`, is Logix's spelling of a
+  # literal bit, which logex writes `s.3`, IEC's (Ed 3 Table 17): the run named whole,
+  # through its `]`, with that spelling.
+  defp dot(<<?., ?[, d, _::binary>> = rest, n) when d in ?0..?9 or d == ?-,
+    do: {:bracketed, closing(rest, n)}
 
+  # Since M5-9's review, brackets that no one name fills and closes, `s.[]`, `s.[n`,
+  # `s.[n.m]` or `s.[ n ]`, are named whole through their `]`, and so is a bracket held
+  # apart from its name's `.`, `s. [n]`, where until then each ended the name before its
+  # `.`, an illegal character (provisional).
+  defp dot(<<?., ?[, _::binary>> = rest, n), do: {:bracket, closing(rest, n)}
+
+  defp dot(<<?., ws, _::binary>> = rest, n) when ws in [?\s, ?\t], do: spaced(rest, n)
   defp dot(_rest, n), do: {:ok, n}
 
-  defp bracket(<<ch, rest::binary>>, before, n) when is_name_char(ch),
-    do: bracket(rest, before, n + 1)
+  defp bracket(<<ch, rest::binary>>, n) when is_name_char(ch), do: bracket(rest, n + 1)
 
-  defp bracket(<<?], rest::binary>>, _before, n), do: closed(rest, n + 1)
-  defp bracket(_rest, before, _n), do: {:ok, before}
+  defp bracket(<<?], rest::binary>>, n), do: closed(rest, n + 1)
+  defp bracket(rest, n), do: {:bracket, closing(rest, n)}
+
+  # A `.` and then spaces: a bracket after them is held apart from its name, and anything
+  # else ends the name before the `.`, as it did.
+  defp spaced(<<?., rest::binary>> = dotted, n), do: spaced(rest, dotted, n, 1)
+
+  defp spaced(<<ws, rest::binary>>, dotted, n, gap) when ws in [?\s, ?\t],
+    do: spaced(rest, dotted, n, gap + 1)
+
+  defp spaced(<<?[, _::binary>> = rest, _dotted, n, gap), do: {:detached, closing(rest, n + gap)}
+  defp spaced(_rest, _dotted, n, _gap), do: {:ok, n}
+
+  # `n` plus the length of the run up to and through the first `]` on its line, and
+  # anything glued after it, or, with none before a newline, a delimiter or the end, up to
+  # the first space.
+  defp closing(rest, n), do: closing(rest, n, through(rest, 0))
+
+  defp closing(rest, n, {:closed, m}) do
+    <<_::binary-size(^m), after_bracket::binary>> = rest
+    n + m + glued(after_bracket, 0)
+  end
+
+  defp closing(rest, n, :open), do: n + unspaced(rest, 0)
+
+  defp through(<<?], _::binary>>, m), do: {:closed, m + 1}
+
+  defp through(<<ch, _::binary>>, _m) when ch in [?\n, ?\r, ?(, ?|, ?)] or ch > 127,
+    do: :open
+
+  defp through(<<_ch, rest::binary>>, m), do: through(rest, m + 1)
+  defp through(<<>>, _m), do: :open
+
+  defp unspaced(<<ch, rest::binary>>, m)
+       when ch not in [?\s, ?\t, ?\n, ?\r, ?(, ?|, ?)] and ch < 128,
+       do: unspaced(rest, m + 1)
+
+  defp unspaced(_rest, m), do: m
 
   defp closed(<<ch, _::binary>> = rest, n) when is_name_char(ch) or ch in [?., ?[, ?]],
     do: {:after_bracket, n + glued(rest, 0)}
