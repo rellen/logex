@@ -141,7 +141,8 @@ defmodule FrontendGolden do
       "ote aa\r\n\r\n( xic bb",
       deep,
       many
-    ] ++ signed() ++ based() ++ tag_bits() ++ literal_bits() ++ reals() ++ tiny_reals()
+    ] ++
+      signed() ++ based() ++ tag_bits() ++ literal_bits() ++ reals() ++ tiny_reals() ++ arrays()
   end
 
   # M3-3 (decision 97): negative literals, a sign glued to its digits. Added after the rest,
@@ -343,6 +344,57 @@ defmodule FrontendGolden do
       "move 0.0e-400 aa",
       "move -0.0e-999 aa",
       "gt aa 1.0e-310 ote bb"
+    ]
+  end
+
+  # M5-11 (decision 151): arrays, a declaration's type word with its sizes, `real[8]`, an
+  # initial list, an element with its subscripts, one to three, a literal or a tag's name
+  # in any spelling of a number, an element's member, bit or path below an instance, and
+  # the brackets that stay refused. Added after the rest, and recorded first by the front
+  # end before them, so that the diff of the commit that lands them is these entries alone.
+  defp arrays do
+    [
+      "var temps real[8]",
+      "var grid int[4,8]",
+      "var cube int[2,3,4]",
+      "var limits int[3] 10 20 30",
+      "var cells int[2,2,2,2]",
+      "xic edge[2] ote lamps[0]",
+      "move weights[3] total",
+      "move grid[1,7] x",
+      "move cube[0,1,2] x",
+      "xic flags[slot]",
+      "move grid[i,7] x",
+      "xic w[16#a]",
+      "xic w[1_0]",
+      "xic w[-1]",
+      "xic w[007]",
+      "ons edge[2]",
+      "( xic a[0] | xio a[1] ) ote b[2]",
+      "move m1.temps[3] x",
+      "xic w[2].3",
+      "xic w[2].[n]",
+      "xic t[2].dn",
+      "xic aa\nmove b[1,2] cc",
+      "xic a[1](",
+      "xic a[]",
+      "xic a[1",
+      "xic a[1,]",
+      "xic a[,1]",
+      "xic a[ 1]",
+      "xic a[1 ]",
+      "xic a[1, 2]",
+      "xic a[1.5]",
+      "xic a[x.y]",
+      "xic a[3x]",
+      "xic a[8#3]",
+      "xic a[1][2]",
+      "xic a[1]x",
+      "xic a [1]",
+      "xic a[1]-5",
+      "xic a.3[2]",
+      "xic a[1].",
+      "xic a[1]]"
     ]
   end
 
