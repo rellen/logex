@@ -190,6 +190,32 @@ defmodule Logex.TagBitTest do
              ]
     end
 
+    # M5-9's review: a `cal`'s operand is checked as any instruction's, its number's tag
+    # declared and of an integer type, whether the block reads it or writes it.
+    test "a `cal` operand's bit number is checked as any instruction's" do
+      {:ok, b} =
+        Logex.compile("function_block b\nvar_input s bool\nvar_output q bool\nxic s ote q",
+          name: "b"
+        )
+
+      assert messages("var w word\nvar b1 b\nvar_output y bool\ncal b1 w.[x] y", [b]) ==
+               [{4, "`x` is not declared"}]
+
+      assert messages("var w word\nvar f bool\nvar b1 b\nvar_output y bool\ncal b1 w.[f] y", [b]) ==
+               [
+                 {5,
+                  "`w.[f]` takes its bit number from `f`, a bool (declared on line 2), which is " <>
+                    "no integer: a bit number is held in a tag of an integer type"}
+               ]
+
+      assert messages("var_input go bool\nvar r word\nvar f bool\nvar b1 b\ncal b1 go r.[f]", [b]) ==
+               [
+                 {5,
+                  "`r.[f]` takes its bit number from `f`, a bool (declared on line 3), which is " <>
+                    "no integer: a bit number is held in a tag of an integer type"}
+               ]
+    end
+
     test "an undeclared number's tag is reported once, as any undeclared tag" do
       assert messages("var w word\nvar_output q bool\nxic w.[sel] ote q") ==
                [{3, "`sel` is not declared"}]
@@ -329,6 +355,40 @@ defmodule Logex.TagBitTest do
 
       assert scan(p, %{"w" => 0xFFFF, "n" => 15, "go" => 1}) ==
                {%{"runs" => 1, "runs2" => 1, "passed" => 1, "q" => 1, "out" => 0x8000}, []}
+    end
+
+    # M5-9's review (provisional reading 2): a copy-out that meets a number out of range
+    # drops the body's run whole, its minor faults among it, so the scan gives the `cal`'s
+    # major fault alone.
+    test "a `cal` whose copy-out is out of range drops its body's minor faults with its run" do
+      {:ok, ratio} =
+        Logex.compile(
+          "function_block ratio\nvar_input z dint\nvar_output q bool\nvar_output r dint\n" <>
+            "var on bool 1\ndiv 10 z r\nxic on ote q",
+          name: "ratio"
+        )
+
+      p =
+        program(
+          @word <> "var r1 ratio\nvar_output out word\nvar_output r dint\ncal r1 0 out.[n] r",
+          [ratio]
+        )
+
+      assert scan(p, %{"n" => 16}) == {%{"out" => 0, "r" => 0}, [fault(:cal, 7, 16)]}
+
+      assert scan(p, %{"n" => 2}) ==
+               {%{"out" => 4, "r" => 0},
+                [
+                  %Fault{
+                    severity: :minor,
+                    kind: :divide_by_zero,
+                    instruction: :div,
+                    path: "r1",
+                    file: nil,
+                    line: 6,
+                    read: nil
+                  }
+                ]}
     end
 
     # A `cal`'s formals are any number, so its catch is its own, wherever the bit stands.
@@ -530,6 +590,14 @@ defmodule Logex.TagBitTest do
 
       {:ok, _edit, forecast} = Edit.accept(v1, v1, ran)
       refute Enum.any?(forecast, &match?({:ons_blocked, _, _}, &1))
+
+      # M5-9's review: the rung is changed by its bit's word too, the number's tag kept.
+      worded = head <> "var t word\n"
+      w1 = program(worded <> "xic go xic s.[n] ons s.3 ote p\nxic go ote t.0")
+      w2 = program(worded <> "xic go xic t.[n] ons s.3 ote p\nxic go ote t.0")
+      {_out, ran} = Runtime.scan(w1, Runtime.instance(w1))
+      {:ok, _edit, forecast} = Edit.accept(w1, w2, ran)
+      assert Enum.any?(forecast, &match?({:ons_blocked, "s.3", _}, &1))
 
       # A member's bit written through a tag is a write of the member, which an edit does
       # not report unwritten (decision 96).

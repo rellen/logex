@@ -671,6 +671,37 @@ defmodule Logex.TripTest do
       assert Runner.get!(runner, "r.in") == 1
     end
 
+    test "a step that meets two major faults trips for the first, in the order its " <>
+           "instances run" do
+      text = """
+      task fast interval 10 priority 1
+      var_global faults word at panel.i.0
+      var_global sel    int  at panel.i.1
+      var_global sel2   int  at panel.i.2
+      var_global lamp   bool at panel.q.0
+      var_global lamp2  bool at panel.q.1
+      program l lamp with fast
+        l.faults faults
+        l.sel    sel
+        l.lamp   lamp
+      program l2 lamp with fast
+        l2.faults faults
+        l2.sel    sel2
+        l2.lamp   lamp2
+      """
+
+      %{runner: runner, clock: clock, panel: panel} = lamped(text)
+      Runner.subscribe(runner, [:fault, :trip])
+      Sim.set(panel, %{[1] => 16, [2] => -1})
+      Manual.advance(clock, 10)
+      first = out_of_range("fast", "l", 4, 16)
+      second = out_of_range("fast", "l2", 4, -1)
+      assert_receive {Runner, ^runner, ^first}
+      assert_receive {Runner, ^runner, ^second}
+      assert_receive {Runner, ^runner, {:trip, ^first}}
+      assert Runner.status(runner).trip == first
+    end
+
     test "a host driving the resource through cycle/3 runs every due step and sees the event" do
       {:ok, config} =
         Configuration.compile("plant", @lamped, %{
