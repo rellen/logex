@@ -165,6 +165,10 @@ defmodule Logex.Program do
   # instruction computes in and an arithmetic one never does.
   def destination({:bit, _, _path, _n, _mask, _name}, _tags, kind), do: computing(:bool, kind)
 
+  # M5-9: so is a bit whose number a tag holds, `status.[n]` (decision 160).
+  def destination({:bit_at, _, _path, _index, _width, _name}, _tags, kind),
+    do: computing(:bool, kind)
+
   def destination(_no_tag, _tags, _kind), do: {:error, :no_tag}
 
   defp tag_destination({:ok, %Logex.Tag{type: type}}, kind), do: computing(type, kind)
@@ -439,6 +443,7 @@ defmodule Logex.Program do
   defp shown({:name, _, name}), do: "`#{name}`"
   defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
   defp shown({:bit, _, _path, _n, _mask, name}), do: "`#{name}`"
+  defp shown({:bit_at, _, _path, _index, _width, name}), do: "`#{name}`"
   defp shown(other), do: "`#{inspect(other)}`"
 
   defp a(%Logex.FbType{} = type), do: Logex.Declarations.instance_of(type)

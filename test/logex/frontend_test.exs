@@ -158,6 +158,81 @@ defmodule Logex.FrontendTest do
     end
   end
 
+  describe "a bit number held in a tag (M5-9, decision 160)" do
+    test "`status.[n]` is one name token, its last part a tag's name in brackets" do
+      assert {:ok, tokens, 1} =
+               Compiler.tokenize("xic status.[n] ote t1.acc.[sel] xio a.[_b2]( ote q")
+
+      assert tokens == [
+               {:name, {1, 1}, "xic"},
+               {:name, {1, 5}, "status.[n]"},
+               {:name, {1, 16}, "ote"},
+               {:name, {1, 20}, "t1.acc.[sel]"},
+               {:name, {1, 33}, "xio"},
+               {:name, {1, 37}, "a.[_b2]"},
+               {:bst, {1, 44}},
+               {:name, {1, 46}, "ote"},
+               {:name, {1, 50}, "q"}
+             ]
+    end
+
+    test "brackets a name does not fill and close end the name before its `.`" do
+      for {source, column} <- [
+            {"xic s.[]", 6},
+            {"xic s.[n", 6},
+            {"xic s.[n.m]", 6},
+            {"xic s.[ n ]", 6},
+            {"xic .[n]", 5},
+            {"xic s.[-1]", 6}
+          ] do
+        assert {:error, {{1, ^column}, Logex.Lexer, {:illegal, "."}}, 1} =
+                 Compiler.tokenize(source),
+               inspect(source)
+      end
+
+      assert {:error, {{1, 6}, Logex.Lexer, {:illegal, "["}}, 1} = Compiler.tokenize("xic s[n]")
+    end
+
+    test "anything glued after the `]`, and a literal in the brackets, is named whole" do
+      for {source, column, reason} <- [
+            {"xic s.[n]x", 5, {:after_bracket, "s.[n]x"}},
+            {"xic s.[n]3", 5, {:after_bracket, "s.[n]3"}},
+            {"xic s.[n].x ote q", 5, {:after_bracket, "s.[n].x"}},
+            {"xic s.[n].3", 5, {:after_bracket, "s.[n].3"}},
+            {"xic s.[n][m]", 5, {:after_bracket, "s.[n][m]"}},
+            {"xic s.[n].[m]", 5, {:after_bracket, "s.[n].[m]"}},
+            {"xic s.[n]]", 5, {:after_bracket, "s.[n]]"}},
+            {"xic s.[3]", 5, {:bracketed, "s.[3]"}},
+            {"xic s.[03]x", 5, {:bracketed, "s.[03]x"}},
+            {"xic a\n  xic t1.acc.[1]", 7, {:bracketed, "t1.acc.[1]"}},
+            {"xic s.[n]-5", 5, {:signed_inside, "s.[n]-5"}}
+          ] do
+        assert {:error, {{line, ^column}, Logex.Lexer, ^reason}, line} =
+                 Compiler.tokenize(source),
+               inspect(source)
+      end
+
+      assert Logex.Lexer.format_error({:after_bracket, "s.[n]x"}) ==
+               ~s("s.[n]x" is no name: a bit number in brackets, `status.[n]`, ends its name, ) <>
+                 "and nothing may follow its `]` but a space"
+
+      assert Logex.Lexer.format_error({:bracketed, "s.[3]"}) ==
+               ~s("s.[3]" is no name: a bit number in brackets is a tag's, `status.[n]`, and ) <>
+                 "a literal one is written with none, `status.3`"
+
+      assert {:error, [%Logex.Diagnostic{stage: :lex, line: 1, column: 5} = d]} =
+               Logex.compile("xic s.[3] ote q", name: "m")
+
+      assert Logex.Diagnostic.format(d) =~ ~s(line 1, column 5: "s.[3]" is no name)
+    end
+
+    test "a tag bit number prints as written" do
+      {:ok, tokens, _} = Compiler.tokenize("xic   drive.[sel]  ote t1.acc.[n]")
+      {:ok, ast} = Compiler.parse(tokens)
+      assert Logex.Printer.print(ast) == "xic drive.[sel] ote t1.acc.[n]"
+    end
+  end
+
   describe "// comments" do
     test "a comment runs to the end of the line, and not past it" do
       assert {:ok, tokens, 2} = Compiler.tokenize("ote a // note\note b")

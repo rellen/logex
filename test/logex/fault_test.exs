@@ -72,6 +72,15 @@ defmodule Logex.FaultTest do
       assert %Fault{severity: :minor, kind: :divide_by_zero, read: nil} = fault
     end
 
+    # M5-9 (decisions 153 and 160): a bit whose number a tag holds, out of its word's bits,
+    # is a major fault, with the number read.
+    test "a bit out of range's fault is major, and reads its number" do
+      p = c!("var_input w word\nvar_input n int\nvar_output q bool\nxic w.[n] ote q")
+
+      assert {[{_, faults}], _} = scans(p, [%{"w" => 1, "n" => 16}])
+      assert [%Fault{severity: :major, kind: :bit_out_of_range, read: 16, line: 4}] = faults
+    end
+
     test "a new instance has none, and a scan with no zero divisor gives none" do
       p = c!(@rate)
       assert %Instance{faults: []} = Runtime.instance(p)

@@ -288,6 +288,13 @@ defmodule Logex.Warnings do
 
   defp whole({:name, _, name}), do: [{name, name}]
   defp whole({:member, _, [instance | _] = path}), do: [{Enum.join(path, "."), instance}]
+
+  # M5-9 (decision 160, provisional): a write of a bit whose number a tag holds may reach
+  # any bit of its word, so it is a write of the word whole, as a write through a tag
+  # subscript is of its array (§4.12's routine choice).
+  defp whole({:bit_at, _, [container | _] = path, _index, _width, _name}),
+    do: [{Enum.join(path, "."), container}]
+
   defp whole(_bit_or_literal), do: []
 
   defp coil_target({:ote, line, [target]}), do: target(target, line, :ote)
@@ -307,6 +314,19 @@ defmodule Logex.Warnings do
 
   defp target({:bit, _, [container | _] = path, _n, _mask, shown} = bit, line, symbol),
     do: [{:coil, Walk.bit_name(bit), Enum.join(path, "."), container, {line, symbol}, shown}]
+
+  # M5-9 (provisional): a coil on a bit whose number a tag holds decides whichever bit the
+  # number names, so it is a coil on its word whole, keyed by the word: a second one on the
+  # word, `ote s.[n]` beside `ote s.[m]`, is the second-`ote` warning, and so is a coil on
+  # a bit of the word, `ote s.3`, either first, as a whole write is.
+  defp target({:bit_at, _, [container | _] = path, _index, _width, shown}, line, symbol) do
+    word = Enum.join(path, ".")
+
+    [
+      {:coil, word, nil, container, {line, symbol}, shown},
+      {:whole, word, container, {line, symbol}}
+    ]
+  end
 
   defp target(_literal, _line, _symbol), do: []
 
@@ -376,6 +396,12 @@ defmodule Logex.Warnings do
     do: [{name, name} | Enum.map(Enum.sort(Map.get(words, name, [])), &{&1, nil})]
 
   defp storage_names({:bit, _, [_], _, _, shown} = bit, _words), do: [{Walk.bit_name(bit), shown}]
+
+  # M5-9: a bit whose number a tag holds may be any bit of its word, a storage bit's among
+  # them, as a write of the word whole is.
+  defp storage_names({:bit_at, _, [word], _index, _width, _shown}, words),
+    do: Enum.map(Enum.sort(Map.get(words, word, [])), &{&1, nil})
+
   defp storage_names(_member, _words), do: []
 
   # A storage bit's tag: a bool's own name, or the word a bit of one is in.

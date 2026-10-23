@@ -462,6 +462,8 @@ defmodule Logex.Edit.Plan do
   # M5-8: a bit by its path and number; its mask follows from its word's type, which an
   # edit changes only with a restart.
   defp operand({:bit, _line, path, n, _mask, _name}), do: {:bit, path, n}
+  # M5-9: a bit whose number a tag holds by its path and the tag.
+  defp operand({:bit_at, _line, path, index, _width, _name}), do: {:bit_at, path, operand(index)}
   # Decision 202: a literal is compared by its value, as a preset is, so an edit that only
   # respells one, `16#ff` for `255`, leaves its rung the same rung.
   defp operand({:int_lit, _line, value, _spelling}), do: {:int_lit, value}

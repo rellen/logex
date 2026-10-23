@@ -64,9 +64,11 @@ defmodule Logex.Runtime do
   The events, in the order they happened, are `{:ran, task, instance, now}`, `task` being
   the continuous task's name for an untimed instance where the configuration declares one
   (M4-2, decision 111), and `:none` where it declares none, `{:overlap, task, missed}`, just before its task's
-  scans, and since M3-3 `{:fault, task, instance, fault}`, a `%Logex.Fault{}`, each minor
-  fault the scan met, a zero divisor, just after its scan's `{:ran, ...}`, in the order
-  they happened (decision 99): the plant runs on. They are an open set: a host tolerates a
+  scans, and since M3-3 `{:fault, task, instance, fault}`, a `%Logex.Fault{}`, each
+  fault the scan met, just after its scan's `{:ran, ...}`, in the order they happened
+  (decision 99): a minor one, a zero divisor, which the plant runs on through, and since
+  M5-9 a major one, a bit whose number a tag holds out of its word's bits (decisions 153
+  and 160), whose instruction did nothing, the scan and the cycle running on. They are an open set: a host tolerates a
   kind it does not know; an event task's run is its `{:ran, ...}` events, with no kind of
   its own. `next_due_in/1` is when a
   periodic due time next comes, which a runner sleeps on: it counts periodic due times
@@ -203,8 +205,9 @@ defmodule Logex.Runtime do
   scan empties but for a bit inside an instance whose body it did not run (M2-5), and since
   M3-5 one on a rung a jump skipped (decision 106); and
   `switched`, which an edit's switch sets and a scan clears. Since M3-3 a third,
-  `faults`, the minor faults of its last scan (decision 99), which each scan replaces and
-  nothing else writes, is how a lone instance's host sees a zero divisor: after `call/4`,
+  `faults`, the faults of its last scan (decision 99), which each scan replaces and
+  nothing else writes, is how a lone instance's host sees a zero divisor, and since M5-9 a
+  bit number out of range, a major fault, the scan run on: after `call/4`,
   `scan/2` or `scan/3`, `state.faults` is every `%Logex.Fault{}` that scan met, in order,
   `[]` for none.
 
@@ -358,6 +361,9 @@ defmodule Logex.Runtime do
   # M3-3: the key under which a routine records the minor faults its scan met (decision
   # 99), an atom too, so no tag or member name can be it.
   @faults :faults
+  # M5-9: what a read or write of a bit whose number is out of range throws, to its
+  # instruction's element (element/3), never past it.
+  @out_of_range {__MODULE__, :bit_out_of_range}
 
   # M3-5: the key under which an energised `jmp` records its label until its rung is done
   # (decision 104), an atom too; and the mark a skipped rung's edge memory gets in the record
@@ -759,6 +765,22 @@ defmodule Logex.Runtime do
         line: line
       }
     ]
+
+  # M5-9 (decisions 153 and 160): a bit whose number a tag holds, read out of its word's
+  # bits, a major fault, with the number read.
+  defp placed({:bit_out_of_range, symbol, line, read}, path, file)
+       when is_atom(symbol) and is_integer(line),
+       do: [
+         %Fault{
+           severity: :major,
+           kind: :bit_out_of_range,
+           instruction: symbol,
+           path: path,
+           file: file,
+           line: line,
+           read: read
+         }
+       ]
 
   defp placed(%Fault{} = fault, nil, _file), do: [fault]
 
@@ -1846,7 +1868,52 @@ defmodule Logex.Runtime do
     {Enum.any?(powers), env}
   end
 
+  # M5-9 (decisions 153 and 160): an instruction whose bit's number, held in a tag, is
+  # outside its word's bits when it reads or writes the bit does nothing: it writes nothing
+  # and passes no power, the rest of the rung running on that power, and the scan finishes.
+  # The read or write that meets the number throws it (bit_mask/3), an instruction's clause
+  # never seeing it, and the fault is recorded in the routine's env under `@faults`, as a
+  # zero divisor is, major, and placed when the routine is done (faulted/2, raised/4). The
+  # catch is the instruction's own, so a body's instruction is caught in the body, and a
+  # `cal` whose operand is out of range does nothing, its body's run dropped, as Logix's
+  # JSR whose parameter is out of bounds aborts (1756-PM014O p.9).
+  #
+  # A catch costs a reduction, so only an instruction that may throw has one: one with such
+  # a bit among its first three operands, all any instruction but `cal` has, told from the
+  # rest by its clause's head, and every `cal`, whose formals are any number. Any other
+  # instruction runs as it did before M5-9.
+  defp element({_, _, [{:bit_at, _, _, _, _, _} | _]} = instruction, acc, scan) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, read} -> out_of_range(instruction, acc, read)
+  end
+
+  defp element({_, _, [_, {:bit_at, _, _, _, _, _} | _]} = instruction, acc, scan) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, read} -> out_of_range(instruction, acc, read)
+  end
+
+  defp element({_, _, [_, _, {:bit_at, _, _, _, _, _} | _]} = instruction, acc, scan) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, read} -> out_of_range(instruction, acc, read)
+  end
+
+  defp element({:cal, _, _} = instruction, acc, scan) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, read} -> out_of_range(instruction, acc, read)
+  end
+
   defp element(instruction, acc, scan), do: evaluate(instruction, acc, scan)
+
+  defp out_of_range({symbol, line, _operands}, {_power, env}, read),
+    do:
+      {false,
+       Map.put(env, @faults, [
+         {:bit_out_of_range, symbol, line, read} | as_list(Map.get(env, @faults))
+       ])}
 
   # One instruction: `(instruction, {power_flow, env}, %Scan{})` to `{power_flow, env}`, a
   # clause for an energised rung and one for a de-energised one (CLAUDE.md). An operand is
@@ -2924,6 +2991,15 @@ defmodule Logex.Runtime do
   # value, read in two's complement, a signed type's top bit its sign (Logex.Compiler).
   defp read(env, {:bit, _, [name], _n, mask, _name}), do: bit_set(Map.get(env, name, 0), mask)
   defp read(env, {:bit, _, path, _n, mask, _name}), do: bit_set(walk(env, path), mask)
+  # M5-9 (decision 160): a bit whose number a tag holds, the number read first, as an
+  # integer, and its mask computed from the width and top bit the compiler gave: one past
+  # the word's bits, or below 0, is out of range, thrown to the instruction (element/3).
+  defp read(env, {:bit_at, _, [name], index, {width, top}, _name}),
+    do: bit_set(Map.get(env, name, 0), bit_mask(integer(read(env, index)), width, top))
+
+  defp read(env, {:bit_at, _, path, index, {width, top}, _name}),
+    do: bit_set(walk(env, path), bit_mask(integer(read(env, index)), width, top))
+
   # Decision 202: a literal written other than as its plain decimal keeps its spelling,
   # which no scan reads.
   defp read(_env, {:int_lit, _, value, _spelling}), do: value
@@ -2945,6 +3021,22 @@ defmodule Logex.Runtime do
 
   defp write(env, {:bit, _, path, _n, mask, _name}, value),
     do: put_path(env, path, with_bit(integer(walk(env, path)), mask, value))
+
+  defp write(env, {:bit_at, _, [name], index, {width, top}, _name}, value) do
+    mask = bit_mask(integer(read(env, index)), width, top)
+    Map.put(env, name, with_bit(integer(Map.get(env, name, 0)), mask, value))
+  end
+
+  defp write(env, {:bit_at, _, path, index, {width, top}, _name}, value) do
+    mask = bit_mask(integer(read(env, index)), width, top)
+    put_path(env, path, with_bit(integer(walk(env, path)), mask, value))
+  end
+
+  # The mask of bit n of a word `width` bits wide, its top bit `top`, a signed type's sign
+  # (Logex.Compiler); a number outside 0 to width - 1 is thrown, with the number read.
+  defp bit_mask(n, width, _top) when n >= 0 and n < width - 1, do: Bitwise.bsl(1, n)
+  defp bit_mask(n, width, top) when n == width - 1, do: top
+  defp bit_mask(n, _width, _top), do: throw({@out_of_range, n})
 
   defp bit_set(value, mask) when is_integer(value), do: one(Bitwise.band(value, mask) != 0)
   defp bit_set(_not_an_integer, _mask), do: 0

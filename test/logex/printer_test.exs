@@ -44,7 +44,10 @@ defmodule Logex.PrinterTest do
                      # `2#1010_0000`
                      :binary_int_lit,
                      # decision 202: a decimal with a leading zero, `007`, `-007`, `-0`
-                     :padded_int_lit
+                     :padded_int_lit,
+                     # M5-9 (decision 160): a name whose last part is a tag's name in
+                     # brackets, `status.[n]`, a lexer rule, printed as written
+                     :tag_bit_name
                    ])
 
   describe "round trip" do
@@ -273,7 +276,7 @@ defmodule Logex.PrinterTest do
     for _ <- 1..@corpus_size, do: routine()
   end
 
-  @names ~w(aa bb start motor stop overtemp fault x1 speed_sp t1.dn word.3)
+  @names ~w(aa bb start motor stop overtemp fault x1 speed_sp t1.dn word.3 status.[n] t1.acc.[sel])
 
   # Each rung on a line of its own, the next below it, as parse/1 gives them, so every
   # tree is one Logex.Parser.well_formed!/1 takes. The lines draw nothing from :rand, so
@@ -473,7 +476,11 @@ defmodule Logex.PrinterTest do
   defp shapes({:rung, elements}, depth), do: shapes_of(elements, depth)
 
   defp shapes({:name, _, name}, _depth),
-    do: MapSet.new([:name | dotted_shape(String.contains?(name, "."))])
+    do:
+      MapSet.new(
+        [:name | dotted_shape(String.contains?(name, "."))] ++
+          tag_bit_shape(String.ends_with?(name, "]"))
+      )
 
   defp shapes({:int_lit, _, n}, _depth), do: MapSet.new([:int_lit | negative_shape(n < 0)])
 
@@ -510,6 +517,8 @@ defmodule Logex.PrinterTest do
   defp depth_shape(_), do: []
   defp dotted_shape(true), do: [:dotted_name]
   defp dotted_shape(false), do: []
+  defp tag_bit_shape(true), do: [:tag_bit_name]
+  defp tag_bit_shape(false), do: []
   defp negative_shape(true), do: [:negative_int_lit]
   defp negative_shape(false), do: []
 end

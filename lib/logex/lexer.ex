@@ -8,7 +8,9 @@ defmodule Logex.Lexer do
       {:bst, loc}  {:nxb, loc}  {:bnd, loc}  {:rnd, loc}
       {:name, loc, binary}  {:int_lit, loc, integer}  {:int_lit, loc, integer, spelling}
 
-  A name may have `.` parts, `t1.dn` or `word.3`, and is still one `name` token. An
+  A name may have `.` parts, `t1.dn` or `word.3`, and is still one `name` token, and since
+  M5-9 (decision 160) a last part that is a tag's name in brackets, `status.[n]`, a bit
+  whose number the tag holds. An
   integer may have a sign, `-5`, glued to its digits (M3-3): one `int_lit` token, located
   at the `-`. Since M5-7 (decision 149) it may be based, `16#ff`, `16#FF` or `2#1010`,
   with no sign, and any number may hold a single `_` between two digits, `1_000_000` or
@@ -26,15 +28,16 @@ defmodule Logex.Lexer do
 
   This replaced `src/ladder_lexer.xrl`. `test/fixtures/frontend_golden.txt` is the record
   that one first wrote, which this matched before B2, B8, PLAN.md §5's comment, `.` and
-  negative-literal rules and decision 149's based literals and separators changed it on
-  purpose. Eight things differ on purpose: locations
+  negative-literal rules, decision 149's based literals and separators and decision 160's
+  tag bit numbers changed it on purpose. Nine things differ on purpose: locations
   carry a column; a source that is not valid UTF-8 is a located error rather than the
   `UnicodeConversionError` that `String.to_charlist/1` raised before leex ever ran; a
   number running straight into a tag, `1bst`, is an error rather than two tokens (B2); a
   lone `\r` is a newline, not whitespace (B8); `//` starts a comment; a name may have `.`
   parts; a `-` glued to digits is a negative literal's sign (M3-3, decision 97); and a
-  number may be based or hold `_` (M5-7, decision 149). leex made the last four illegal
-  characters, or `1_000` a mistyped lexeme.
+  number may be based or hold `_` (M5-7, decision 149); and a name's last part may be a
+  tag's name in brackets, `status.[n]` (M5-9, decision 160). leex made the last five
+  illegal characters, or `1_000` a mistyped lexeme.
   """
 
   defguardp is_name_start(ch) when ch in ?a..?z or ch in ?A..?Z or ch == ?_
@@ -76,6 +79,16 @@ defmodule Logex.Lexer do
     do:
       "#{inspect(text)} is no number: a based number holds one `#`, between its base and " <>
         "its digits, `16#ff`"
+
+  def format_error({:after_bracket, text}),
+    do:
+      "#{inspect(text)} is no name: a bit number in brackets, `status.[n]`, ends its name, " <>
+        "and nothing may follow its `]` but a space"
+
+  def format_error({:bracketed, text}),
+    do:
+      "#{inspect(text)} is no name: a bit number in brackets is a tag's, `status.[n]`, and " <>
+        "a literal one is written with none, `status.3`"
 
   def format_error({:signed_inside, text}),
     do:
@@ -287,6 +300,11 @@ defmodule Logex.Lexer do
     {:error, {{l, c}, __MODULE__, {:missing_separator, run}}, l}
   end
 
+  defp name(src, {kind, n}, l, c, _acc) when kind in [:after_bracket, :bracketed] do
+    <<run::binary-size(^n), _::binary>> = src
+    {:error, {{l, c}, __MODULE__, {kind, run}}, l}
+  end
+
   # M3-3 (decision 97): a sign begins a number, so it needs a separator before it, as B2's
   # number needs one after it. A name or a number running straight on into a signed number,
   # `a-5`, `t1.dn-5` or `5-3`, is one mistyped lexeme, named whole from its start through
@@ -319,7 +337,37 @@ defmodule Logex.Lexer do
 
   defp dot(<<?., h, rest::binary>>, n) when is_name_start(h), do: name_part(rest, n + 2)
   defp dot(<<?., d, rest::binary>>, n) when d in ?0..?9, do: integer_part(rest, n + 2)
+
+  # M5-9 (decision 160, §4.12's routine choice): a name's last part may be a tag's name in
+  # brackets, `status.[n]` or `t1.acc.[n]`, a bit whose number the tag holds, Logix's form
+  # (RM018A p.885, `variable3.[4]`); the name is still one token, and ends at its `]`. A `[`
+  # that a name does not follow and a `]` close, `s.[3]`, `s.[]` or `s.[n`, ends the name
+  # before its `.`, which is then illegal; anything glued after the `]`, a letter, a digit,
+  # a `.` or a `[`, makes the run one mistyped lexeme, `s.[n]x`, named whole.
+  defp dot(<<?., ?[, h, rest::binary>>, n) when is_name_start(h), do: bracket(rest, n, n + 3)
+
+  # A literal in the brackets, `s.[3]`, is Logix's spelling of a literal bit, which logex
+  # writes `s.3`, IEC's (Ed 3 Table 17): the run named whole, with that spelling.
+  defp dot(<<?., ?[, d, rest::binary>>, n) when d in ?0..?9,
+    do: {:bracketed, n + 3 + glued(rest, 0)}
+
   defp dot(_rest, n), do: {:ok, n}
+
+  defp bracket(<<ch, rest::binary>>, before, n) when is_name_char(ch),
+    do: bracket(rest, before, n + 1)
+
+  defp bracket(<<?], rest::binary>>, _before, n), do: closed(rest, n + 1)
+  defp bracket(_rest, before, _n), do: {:ok, before}
+
+  defp closed(<<ch, _::binary>> = rest, n) when is_name_char(ch) or ch in [?., ?[, ?]],
+    do: {:after_bracket, n + glued(rest, 0)}
+
+  defp closed(_rest, n), do: {:ok, n}
+
+  defp glued(<<ch, rest::binary>>, n) when is_name_char(ch) or ch in [?., ?[, ?]],
+    do: glued(rest, n + 1)
+
+  defp glued(_rest, n), do: n
 
   # Each returns `n` plus the length of the run it starts on. Every lexeme is ASCII, so
   # its byte size is its width in characters. A mistyped run goes on through `.` parts, so
