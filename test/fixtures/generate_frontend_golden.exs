@@ -141,7 +141,7 @@ defmodule FrontendGolden do
       "ote aa\r\n\r\n( xic bb",
       deep,
       many
-    ] ++ signed() ++ based()
+    ] ++ signed() ++ based() ++ tag_bits()
   end
 
   # M3-3 (decision 97): negative literals, a sign glued to its digits. Added after the rest,
@@ -218,6 +218,38 @@ defmodule FrontendGolden do
       "#ff",
       "xic a.16#f",
       "xic aa\nmove 16#z bb"
+    ]
+  end
+
+  # M5-9 (decision 160): a bit number held in a tag, `status.[n]`, one name token whose last
+  # part is a tag's name in brackets, with the shapes around it that stay refused. Added after
+  # the rest, and recorded first by the front end before it, so that the diff of the commit
+  # that lands it is these entries alone.
+  defp tag_bits do
+    [
+      "xic status.[n] ote aa",
+      "xic drive_faults.[sel] ote fault_lamp",
+      "ote status.[n]",
+      "xic t1.acc.[n]",
+      "xic s.[_n2]",
+      "( xic s.[n] | xio s.[m] ) ote aa",
+      "xic aa\nxic status.[n]\nmove s.[i] bb",
+      "xic s.[3]",
+      "xic s.[-1]",
+      "xic s.[]",
+      "xic s.[n",
+      "xic s.[n.m]",
+      "xic s.[n]x",
+      "xic s.[n].x",
+      "xic s.[n].3",
+      "xic s.[n][m]",
+      "xic s.[n].[m]",
+      "xic s.[ n ]",
+      "xic s[n]",
+      "xic .[n]",
+      "xic s.[n]-5",
+      "xic s.[n](",
+      "xic s.[n]|"
     ]
   end
 
