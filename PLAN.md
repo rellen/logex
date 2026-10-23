@@ -147,7 +147,14 @@ literal outside its real's normal range is refused in both directions, `move 1.0
 fan_speed` as well as `move 1.0e39 fan_speed`; a forces file's real point takes any number
 that reads as a value of its type, `fan_hz 37.50` as 37.5; and a real literal its real
 rounds visibly, `16777217.0` in a `real`, compiles with a warning naming what it is held
-as.
+as. And the eleventh, M5-11, the same day: arrays of an elementary type, one
+to three dimensions, `var weights int[8]` and `var grid int[4,8]`, an initial list in the
+elements' order, each element named by literal subscripts, `weights[3]` and `grid[1,7]`,
+checked against its dimension when the program compiles; a one-shot on an element; a
+host's array input a list of its shape; an edit refusing a size changed and reporting an
+initial list element by element; and in a configuration unlocated global arrays,
+`var_external` arrays bound exactly, connections whole and by element and `get/2` paths,
+with four questions put to the maintainer (§3, M5-11).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -6733,6 +6740,129 @@ the walks' cross-type reach and the documents.
   an edit of a rung with `ons edge[2]` blocks it once; growth tests in reductions hold an
   element's read and write within a measured bound of a tag's; and the contract walk draws
   arrays of one, two and three dimensions with literal subscripts. *Size XL.*
+  *(Landed 2026-10-23, in three gated commits and one of documents.)* A spike first,
+  throwaway (`m511/spike`), on Elixir 1.20.4 and OTP 28: an element read from a tuple cost
+  9 reductions against a tag's 8 and a write 11 against 7, a map's 11 and 11; a write
+  copies the tuple of each dimension it passes through, about 1 ns an element, 1 µs into
+  an `int[1024]`, 4.6 µs into an `int[4096]`, 81 µs into an `int[16384]` and 0.2 ms into
+  an `int[65536]`, where an `int[256,256]` costs 2.8 µs; the state check of an
+  `int[65536]` some 1 ms a call. So an array's value is a tuple, a tuple of tuples for
+  more dimensions, and its limit 65,536 elements in all, §4.12's proposal (provisional
+  reading 1, question 1). `f43d82a` records 41 curated sources in the front end's golden
+  record, `printer_test.exs`'s generator and `@required_shapes` given an element and a
+  sized type word (`:element_name`, `:subscripted_name`) first. `fb31749` lands arrays in
+  a program: the lexer reads a name and one pair of brackets as one name token, so the
+  parser, `well_formed!/1` and the printer are unchanged, the golden record regenerated
+  and its diff read, 25 sources changed, the 23 that lex and `ote a[3]` and `xic s[n]`,
+  and the two mistakes named whole at their columns; `Logex.Array`, internal, the one
+  place an array's shape and values are read and made; the declaration and its initial
+  list in the elements' order, the rightmost subscript fastest (1756-PM004L p.35), four
+  dimensions, a dimension of 0, more than 65,536 elements, a list of the wrong length, an
+  array of instances and one sized by a tag each refused at its line; the IR's element
+  operand, `{:element, line, array, index, name}`, its type the elements', its subscripts
+  checked against each dimension, `weights[8]` in an `int[8]` refused at its line, a tag
+  subscript refused until M5-12; `Logex.Walk` and the warnings naming an element by its
+  subscripts' values; a one-shot's storage bit and a pulse coil's two bits on an element
+  (decision 154); the host contract, an array var_input a list of its shape, an array
+  var_output given as one, a state's tuple checked; and the edit, a type, dimension or
+  size change refused (Logix too changes one only offline, 1756-RM094N p.85), elements
+  moved by path, a changed initial list reported element by element (decision 157).
+  `0dcdab8` lands arrays in a configuration: an unlocated global array from its line and
+  from Elixir, printed back exactly; a `var_external` array bound to a global array of
+  exactly its type and sizes (decision 159); a connection naming an array whole, to a
+  global array of its sizes whose elements widen, or an element, `m1.temps[3]`; `get/2`
+  naming an array whole, as a list, and an element, `m1.grid[1,7]` or `limits[2]`; a
+  configuration edit reporting an array global's initial list element by element; the
+  Done-when's checkweigher from files on disk, `weights[3]` and `grid[1,7]` against an
+  oracle that knows nothing of logex; and the contract walk's arrays of one, two and
+  three dimensions. Cost against `f228105` (`m511/cost_base.txt`, `m511/cost_now.txt`):
+  25 programs of no array scan in exactly what they did and compile in 2 to 6 reductions
+  more or fewer, every source tokenizes in exactly what it did; a cycle of 20 connected
+  instances costs exactly what it did, a restart 2.7% more, its var_externals' globals
+  put into each state it checks, and a start 2.2% more. An element's read costs no more
+  than a tag's, its write a reduction more, a 2-D element's read two more and its write
+  six, a 3-D element's write nine, each pinned in `array_test.exs`. README's `weigh.exs`
+  run. The mutation table, each mutant judged by the full suite's exit code: on `fb31749`
+  (`m511/mut/run.log`), A1 to A4 (the lexer's subscripts), D1 to D11 (the declaration's
+  dimensions, limit, sizes, initial list and recovery), C1 to C8 (the compiler's bound,
+  count, element resolution, one-shots, order of subscripts and block formals), R1 to R14
+  but R6 (the runtime's reads, writes, outputs, inputs and state check), W1 to W6 (the
+  walk and the warnings), E1 to E7 (the edit's element-wise reports and refusals) and P1
+  to P5 (the program's `arrays` and a block's member) red; R6 (a real array's host input
+  not rounded to its single), R15 (a real element's check any float) and W7 (an
+  unwritten var_output array's warning) survived, each pinned by `0dcdab8`; and E8, the
+  edit's fit of an array value reduced to a tuple test, is equivalent, since every state
+  an edit takes is checked first. On `0dcdab8`
+  (`m511/mut/run3.log`), K1 to K34, the configuration's rules (an array global's sizes,
+  dimensions, initial list and location, a name with brackets, an element's bound, count
+  and tag subscript, a constant into an array, an array's connections typed and widened,
+  a `var_external` array bound exactly, the sources of an array var_input whole and by
+  element, the copy-in's order, the copy-out's widening, a host-built global's check,
+  `get/2`'s paths, a restart's externals, the edit's reports, and the text's initial list,
+  type word and sizes), and R6, R15 and W7 again, all red but K4, a located array's
+  location taken as a point, which changed no message a test read; the documents' commit
+  pins it, a point at a located array's location no second point there, after which K4
+  is red.
+  2002 tests (10 doctests), up from 1949.
+
+  *Provisional readings* (M5-11): (1) an array's value is a tuple of tuples, at most
+  65,536 elements in all, the spike's measure; (2) a bit of an element, `faults[2].3`, is
+  refused at its line, "move it into a tag of its own to reach its bits"; (3) an array is
+  never a function block's var_input or var_output, which a `cal` fills with one value,
+  though a block's own `var` may be one, as Logix takes an array into an Add-On
+  Instruction only as an InOut parameter (1756-RM094N p.59); (4) a host sets an array
+  var_input whole, a key naming one element refused; (5) a subscript may be written any
+  way a literal is, `w[16#a]` or `w[01]`, read by its value and quoted as written, its
+  element named by value, `w[10]`, as a bit is (decision 213); (6) an array reaches a host
+  as a list, a list of lists for more dimensions, in outputs, `get/2` and every edit report;
+  (7) a state that lacks an array is refused, where a missing bool or integer tag reads 0,
+  so that a write of an element always finds its array; (8) an array var_input in a
+  configuration is connected whole or at every element, a constant fills an element
+  alone, and a connection's far end is a global whole, never an element of a global
+  array, `no global "g[2]"`; (9) a var_output array no rung writes is warned to stay "at
+  its initial values".
+
+  **Questions for the maintainer** (M5-11), each taken provisionally as written, the
+  closest reading to the record:
+
+  1. *How big an array may be.* A line that weighs every box keeps a history of the last
+     weights in one array, `var history int[65536]`, and writes the newest weight into it
+     each scan. logex keeps an array as one block of values that a write copies whole, so
+     on the machine measured one write into an array of 65,536 elements takes about 0.2 ms
+     of the scan, into one of 4,096 about 5 µs, and into a grid of 256 by 256 about 3 µs,
+     since a write copies one row and the list of rows. The operator sees a longer scan,
+     and a task's watchdog trips sooner, only where a program writes into such an array.
+     The options: (a) as built, up to 65,536 elements in all, whatever the shape; (b) a
+     smaller limit, 4,096 elements in all, so no write costs more than a few µs; (c) the
+     limit as built, but a dimension of more than 4,096 refused, so a large array must be
+     a grid. IEC sets no limit; Logix limits an array to 2 MB of data (1756-RM094N p.85),
+     some 500,000 dints, and says a one-dimension array executes faster than two or three
+     (p.85).
+  2. *A bit of an element.* A drive's fault words are kept in `var faults word[4]`, and a
+     lamp shows bit 3 of the third, `xic faults[2].3 ote lamp`. As built this is refused at
+     its line, told to move the element into a tag of its own, `move faults[2] f`, and read
+     `f.3`. The options: (a) as built; (b) a literal bit of an element read and written as
+     a bit of a word is, `faults[2].3`, its storage bit for a one-shot named so too; (c)
+     (b) and a bit number in a tag as well, `faults[2].[n]`. Logix names a bit of an
+     array element so, the tag-name format `Name[Element].Bit` (1756-PM004L p.44); IEC
+     allows partial access of an element's bits (Ed 3 §6.4.4.5.1, unverified here).
+  3. *A host setting one element.* An operator's panel changes one step of a recipe held
+     in `var_input steps int[10]`. As built a host sends the whole list, all ten steps,
+     each time; a key naming one element, `"steps[3]"`, is refused, told to send the array
+     whole. The options: (a) as built; (b) a host may set one element by its name, the
+     rest kept. In a configuration a connection may already fill an array var_input
+     element by element. Logix has no host in this sense; an HMI writes a tag or an
+     element by its name over the network (unverified here).
+  4. *An element of a global array at a connection's far end.* A plant keeps every
+     line's speed in `var_global speeds int[4]`, and the second line's program reads its
+     own, `m2.speed speeds[1]`. As built a connection's far end is a global whole, so this
+     is refused, "no global `speeds[1]`", and the program must take the array whole or the
+     plant keep one global a line. The options: (a) as built; (b) an element of a global
+     array may be a connection's far end, read or driven as a global of the elements'
+     type, one connection at most driving each element. IEC connects a program's variable
+     to a global or an element of one by an access path (Ed 3 §6.5.2.2, unverified here);
+     Logix maps a program parameter to a tag or an element of one (1756-PM004L, unverified
+     here).
 - **M5-12 · Tag subscripts and the index fault.** Decisions 152 and 153: a tag subscript
   of any integer width, the run-time check where the element is read or written, the
   major fault `:index_out_of_range` with the subscripts read, on M5-9's path; a write
@@ -7381,7 +7511,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | **closed** — metadata, a `@moduledoc` on `Logex.Compiler`, no `:logger`; CI is B3's |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
-| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3, and literal bit access with M5-8 and a bit number held in a tag, `status.[n]`, with M5-9 on 2026-10-23; arrays open, decided for Milestone 5 on 2026-10-21 (§3, M5-11) |
+| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3, and literal bit access with M5-8 and a bit number held in a tag, `status.[n]`, with M5-9 on 2026-10-23, and arrays by literal subscripts, `Arr[3]`, with M5-11 the same day; a subscript held in a tag open, decided for Milestone 5 on 2026-10-21 (§3, M5-12) |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed; re-scoped 2026-10-01 as a one-way seed that emits a whole program as data |
 | B10 | nit | warnings | Second-`ote` warnings on one line come in map order, not rung order | `Logex.Warnings.second_otes/3` | **closed** — the uses walked in rung order; guarded by a 40-tag test in `validation_test.exs` |
 

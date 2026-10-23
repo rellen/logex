@@ -247,6 +247,25 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   (`slot_operands/4`, `real_operand/4`), the destination's, a comparison's other operand's
   or a conversion's `from` type, so that `eq sp 37.1` is true after `move 37.1 sp` in a
   `real`, and the scan reads it as any literal.
+  Since M5-11 it runs arrays of elementary types (`docs/organisation.md` §4.12, decisions
+  151, 154 and 157): an element operand, `{:element, line, array, index, name}`, read as
+  `elem/2` of its array's tuple and written as `put_elem/3`, a 1-D array's in one clause
+  and more dimensions through `Logex.Array.fetch/2` and `put/3`, an element's type found
+  through the program's `arrays`, nil where it holds none, so a program of no arrays
+  scans in exactly what it did; a host's array var_input a list of the declared shape,
+  every element checked, an element alone no key it sets; an array var_output given as a
+  list; a state's array a tuple of its sizes, one lacking an array refused; a resource's
+  array connections copied whole or element by element, `get/2` naming an array whole,
+  as a list, or an element, `m1.temps[3]` or `temps[3]`, and a resource's instance
+  restarted with its var_externals' globals in its state.
+- `lib/logex/array.ex` — `Logex.Array`, internal (no moduledoc, M5-11, decision 151), the
+  one place an array's shape and values are read and made: its type `{:array, type,
+  dims}`, one to three sizes, 65,536 elements at most (the spike's limit, provisional),
+  `is_array/1` (a guard), `started/2`, an array's first value, the one rule, a tuple of
+  tuples in the elements' order, the rightmost subscript fastest, `fetch/2`, `put/3`,
+  `to_list/2` and `from_list/3`, a host's form, `name/2`, an element's name by its
+  subscripts' values, `grid[1,7]`, and `split/1` and `subscript/1`, a name's subscripts
+  as written, a tag's `{:tag, name}` the seam M5-12 reads
 - `lib/logex/configuration.ex` — `%Logex.Configuration{}` (M2-1, `docs/organisation.md`
   §4.4 and §4.10): the program types, tasks, globals (located at `<device>.i|q.<address>`
   or not), program instances and connections, as plain data and lists in declaration
@@ -317,7 +336,13 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   destination has no integer type, and since decision 197 one whose timer units its tags
   do not give, a line each after the ports', in the runtime's words
   (`Logex.Program.edited_by_hand/1`); and since decision 168 a program type's name in a
-  message takes no article: "`m1` runs `motor`, which declares no `strat`".
+  message takes no article: "`m1` runs `motor`, which declares no `strat`". Since M5-11 a
+  global may be an array, `var_global limits int[3] 10 20 30`, never located yet, its
+  sizes and initial list judged as a declaration's (`Logex.Declarations.array_misfits/3`),
+  a name with brackets refused, a `var_external` array bound only to a global array of
+  exactly its type and sizes, and a connection naming an array whole, to a global array of
+  its sizes whose elements widen, or an element, `m1.temps[3]`, an array var_input
+  connected whole or at every element, a constant filling an element alone.
   `lib/logex/configuration/text.ex` is a configuration file's text (M2-2, its task lines
   and `with` since M2-3, `single` on a task line since M2-6, `continuous` straight after
   a task's name and `watchdog` after its priority since M4-2, each once): its words as data, `keywords/0`, which `naming_test.exs`
@@ -371,7 +396,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   memory blocked on a rung a jump skips stays listed until a scan runs its instruction, a
   ctud's two sides each by its own rung (decision 106); labels are names, so an edit that
   moves rungs leaves every jump as it was; and since decision 202 a literal is compared by
-  its value, so an edit that only respells one, `16#ff` for `255`, changes no rung. Its moduledoc gives every rule, report kind and
+  its value, so an edit that only respells one, `16#ff` for `255`, changes no rung; and since M5-11
+  (decision 157) an array's type, dimensions or sizes changed are refused, elements move
+  by path, a changed initial list is reported element by element, `{:initial_changed,
+  "lim[1]", {20, 25}}`, and an array added or a var_input array reported as a list, as
+  `Logex.Configuration.Edit` reports a global array. Its moduledoc gives every rule, report kind and
   host mistake; §4.9 the reasons
 - `lib/logex/configuration/edit.ex` — a staged edit of a running configuration (OE-2,
   `docs/organisation.md` §4.9, "OE-2's design"; decisions 55–66): `accept/2` takes the
@@ -511,6 +540,13 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   name is split once as it lowers, an instruction whose operands hold one class is
   checked with no grouping, and a program of no bit strings compiles, against its own
   parse, in no more reductions than before M5-8 (a test in `bit_string_test.exs`). Since
+  M5-11 (decision 151) a name ending in brackets is an element, resolved as a tag of its
+  elements' type, its subscripts literal and each within its dimension, lowered to
+  `{:element, line, array, index, name}`, `name` by the subscripts' values; an array named
+  whole where an instruction takes one tag, a count of subscripts not its dimensions', a
+  subscript out of its dimension, a tag subscript (M5-12's) and a member past an element,
+  `w[1].3`, each refused at its line; an array may not be a block's var_input or
+  var_output, which a `cal` fills with one value. Since
   decision 216 a real literal its slot's real would flush to 0.0 is refused by the literal
   rules, `move 1.0e-40 r` into a `real`, "it is too near 0.0 for a real, whose smallest
   above 0.0 is 1.1754943508222875e-38: it would be written as 0.0", in every slot they
@@ -591,7 +627,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   is a little cheaper than before; its write is its word's, and no bit's in
   `bit_writes/1`. The compiler, `Logex.Warnings` and
   `Logex.Edit` read it in place of walks of their own, and `Logex.Configuration.check/1`
-  what a program type writes through its var_externals
+  what a program type writes through its var_externals. Since M5-11 an element is a use
+  of its array, and its write a write of its array, its name, `edges[1]`, a one-shot's
+  storage bit
 - `lib/logex/declarations.ex` — declaration lines to a tag table, after parsing: the
   section and type words as data (`@sections`, the elementary types' table, and the
   function block type words of `Logex.FbType.builtins/0`); since M5-1 (`docs/organisation.md`
@@ -627,7 +665,13 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   literal lexes a line can say one, so a dint's may be negative, `var tare dint -120`, a
   bool's still 0 or 1 (decision 97). Since M2-4 `var_external` is a
   row of `@sections`: a bool or a dint with no initial value and no instance, and no
-  configuration file's keyword (`Logex.Configuration.Text.keywords/0`) names one
+  configuration file's keyword (`Logex.Configuration.Text.keywords/0`) names one. Since
+  M5-11 a declaration's type word may hold sizes, `int[8]`, `{:array, type, dims}`, one to
+  three dimensions of one element or more, 65,536 in all, and an initial list of one
+  literal an element, each judged as a tag's value, an array of instances or sized by a
+  tag refused, every rule in `array_misfits/3` too, which a configuration's global reads;
+  `a_type/1` names one "an array of 4 by 8 ints" and `a_global/1` "a global array of 8
+  ints"
 - `lib/logex/tag.ex` — `%Logex.Tag{}`, whose type is `:bool`, `:dint` or, for an instance
   of a function block such as `var t1 ton` or `var s1 seal`, the `%Logex.FbType{}` itself,
   one `Logex.FbType.user?/1` accepts for a user block, except in a compiled program or
@@ -703,7 +747,9 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   200): one walk of the rungs, a clause an element, each body once; and since M5-10
   `reals`, each real tag by name to its type, nil where the routine holds none, settled
   with `units` by `settled/1` in one pass of the tag table, a body holding its own, and
-  held to its tags by `edited_by_hand/1` as `units` are
+  held to its tags by `edited_by_hand/1` as `units` are; and since M5-11 `arrays`, each
+  array tag by name to its type, nil where the routine holds none, settled with them, a
+  real array's name among the `reals`, held to its tags by `edited_by_hand/1` too
 - `lib/logex/lexer.ex` / `lib/logex/parser.ex` — the front end, written by hand: binary
   pattern matching, and recursive descent (the parser's moduledoc gives the grammar and
   which function parses each production). `Logex.Parser.well_formed!/1` is the definition
@@ -751,6 +797,12 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   `1.0e-400`, `{:real_small, run}`, its digits not all 0, and
   `1.5L` B2's mistyped lexeme, "missing separator after a real"; `Logex.Parser` gives
   `is_real_lit/1` and `is_literal/1`, a literal of either kind, beside `is_int_lit/1`.
+  Since M5-11 (decision 151) a name may end in one pair of brackets straight after it,
+  subscripts split by `,` with no space, each a number the lexer reads or a tag's name,
+  `grid[1,7]`, `int[4,8]` or `w[slot]`, one name token, a `.` part allowed after the `]`,
+  so the parser and `well_formed!/1` are unchanged; brackets no subscripts fill and close,
+  or held apart, `{:subscripts, run}`, and anything but a `.` glued after the `]`
+  `{:after_subscripts, run}`, each named whole.
   grammar conflict: **a new syntax form goes into `printer_test.exs`'s generator and
   `@required_shapes` before it lands**, and the golden record below must stay green.
 - `lib/logex/printer.ex` — the parse AST back to canonical source text, one rung a line
@@ -1010,12 +1062,26 @@ reals scanning as it did at `5eac41f`, and since decisions 216, 218 and 219 a li
 write would flush refused in every slot and as an initial value, the edge at the smallest
 normal single, one below an lreal's a lex error, a forces file's real point read as any
 number, a literal its real rounds warned against the rule restated over 1500 seeded
-texts, and a program of none paying nothing for the warning, and `api_contract_test.exs` a seeded property over the host contract, which since M1-6 checks every accepted scan against an oracle for `ton` and `ons` and makes every accepted call twice, and since OE-1 walks online edits too, and since M2-1 configurations run as resources, against a model that scans each instance through `call/4` alone, and since M2-5 online edits of programs that hold blocks, two deep, with a one-shot oracle on every scan from the programs' text, and since M2-4 resources whose programs share globals through `var_external`, against a model that runs each program as Elixir over one map of globals, and since M2-6 configurations with event tasks, alone and with an interval, against a model of decision 39 in phase points and oracles that know only each trigger's samples, and since OE-2 staged edits of a running configuration, on a slow task that skips cycles among them, each step's writes rebuilding the resource, against a model of the scheduler seeded from the resource after every step and oracles for timers and one-shots that know nothing of the edit, and since M3-1 counters, alone and in a block, over scans, restarts and edits, against IEC's bodies restated from the programs' text, exact wherever no switch came since a counter last ran, with an oracle that knows nothing of the block list, and since M3-2 the other timers, `tof`, `tp` and `rto`, alone and a pulse in a block, over scans of random intervals, restarts and edits, against each rule restated from the programs' text, exact but where only an edit's block decides a pulse, and since M3-3 arithmetic, alone, in a block and in a resource, near the dint's limits and at zero divisors, against IEC's rules restated in Elixir, every scan's state, outputs and faults and every cycle's events exact, across an online edit whose kept values stay as they were, and since M3-4 the pulse coils, alone and in a block, over scans, restarts and edits that change a coil's rung, kind, presence or block, against IEC's transition-sensing coils restated from the programs' text, exact wherever no switch came since a coil last ran, with an oracle that knows nothing of the block list, and since M3-5 forward jumps over six rungs in a random order, a one-shot, a ctud's two sides, a timer and a `cal` of a block whose body jumps among them, each memory and the `cal` now and then on a leg of a group, over scans, restarts and edits that change a chain, add, remove or retarget a jump, swap two rungs, change a one-shot's kind or a block's body, or put a memory in a group or take it out, against the scan restated rung by rung from the programs' text, with an oracle that knows nothing of the block list, and since M4-2 a configuration's edits whose tasks have watchdogs and a continuous task half the time, a watchdog changed, `with main` added or taken away and a task's kind changed among the draws, against the same model with the untimed instances under the continuous task's name, and since M5-3 programs of every integer width, each width's two limits drawn as a host's input against its range restated, `move` into a wider width and a conversion's wrap restated as a remainder by 2^N, and since M5-6 the timer walk's `tof`, `tp` and `rto` each a long timer half the time, its preset in ns and each millisecond adding 1,000,000 restated, an edit of the `tof`'s unit refused, and since M5-4 the arithmetic walk's every tag of a width drawn from the eight, each source of a width Figure 11 widens into its destination's, the oracle wrapping in the destination's width, its reach a widened source and a wrap in each width, every width drawn from a list, since an atom-keyed map's keys come in an order the atom table sets, and since M5-5 the counter walk's every counter of a word drawn from the six, the alias `_dint` among them, its oracle stopping each at its width's limits restated, its reach a count in each width and in the alias, an unsigned counter stopped at 0, an edit of a width refused and of the alias accepted, and since decision 191 a negative preset drawn for a signed counter, and since M5-8 the host walk's bitwise instructions and bits over every integer width and bit string against an oracle restated in Elixir, its reach a shift past the width, a negative count and a bit written, since decision 206 a bool drawn among them, its two values and a bit inverted into a bool and each bit string, since decision 214 restated in the bool's one bit, and `not` and a shift of the drawn type into a wider one Figure 11 widens it into, in its own width, its reach each type with a wider one, and the configuration walk's word points read, forced and refused by bit, and since M4-6, in a module of its own, `Logex.ApiContractTest.RunnerWalk`, the runner on the manual clock over 30 seeded configurations, about three in four with untimed programs, with devices that report and that are only read, random waits and presses, forces, an online edit's steps, host mistakes, restarts, a crash and a fresh start from the forces file, and injected faults (a slow step, a slow request, the runner stuck, a device killed or hung, and each way a device's read, report or write fails), against a model that calls `cycle/3` with the elapsed times and inputs the runner gave the core, told it through the hidden seam `steps:`, with oracles on those times and inputs, and a model of the watchdogs and the trip, repeating exactly from fresh processes, its reach every event kind and every trip reason but `{:internal, message}`; since M4-6's review its real-time waits given an idle watchdog of 400 or 500 ms, which a device's open made 100 ms late, as on a loaded machine, must not trip, a restart's refusal in the device's own reason, drawn, a device up refusing a restart with its read's fault (decision 142), a start's and a restart's first round reading every device as it is then, and a read device's input allowed only the time passed inside steps while it was read, which a test of the check's own pins by giving the core such a change late; and since M5-10 a walk of real arithmetic, conversions and truncations over values near
+texts, and a program of none paying nothing for the warning, `array_test.exs` every rule
+of M5-11's arrays in a program from source, the syntax and its refusals at their columns,
+the declaration and its initial list in the elements' order, restated from Logix's text,
+an element of every elementary type read and written, every refusal at its line, a `cal`
+formal and a block's own array, one-shots and pulse coils on elements, an edit of a rung
+with `ons edge[2]` blocking it once, a jump's skip, the warnings, the host contract and
+the state check, an edit's refusals and its element-by-element reports, the walk, a hand
+edit, a seeded walk of `weights[3]` and `grid[1,7]` against an oracle, and the growth in
+reductions, an element's read and write within a measured bound of a tag's at one, two
+and three dimensions and a program of none scanning rung for rung as before, and
+`array_configuration_test.exs` M5-11 in a configuration, an array global from its line
+and from Elixir printed back exactly, its refusals, a located one refused, a
+`var_external` array bound exactly, connections whole and by element, widened, refused
+and unconnected, `get/2`'s paths and their refusals, a host-built runtime's array global
+refused, a restart, and a configuration edit's reports, and `api_contract_test.exs` a seeded property over the host contract, which since M1-6 checks every accepted scan against an oracle for `ton` and `ons` and makes every accepted call twice, and since OE-1 walks online edits too, and since M2-1 configurations run as resources, against a model that scans each instance through `call/4` alone, and since M2-5 online edits of programs that hold blocks, two deep, with a one-shot oracle on every scan from the programs' text, and since M2-4 resources whose programs share globals through `var_external`, against a model that runs each program as Elixir over one map of globals, and since M2-6 configurations with event tasks, alone and with an interval, against a model of decision 39 in phase points and oracles that know only each trigger's samples, and since OE-2 staged edits of a running configuration, on a slow task that skips cycles among them, each step's writes rebuilding the resource, against a model of the scheduler seeded from the resource after every step and oracles for timers and one-shots that know nothing of the edit, and since M3-1 counters, alone and in a block, over scans, restarts and edits, against IEC's bodies restated from the programs' text, exact wherever no switch came since a counter last ran, with an oracle that knows nothing of the block list, and since M3-2 the other timers, `tof`, `tp` and `rto`, alone and a pulse in a block, over scans of random intervals, restarts and edits, against each rule restated from the programs' text, exact but where only an edit's block decides a pulse, and since M3-3 arithmetic, alone, in a block and in a resource, near the dint's limits and at zero divisors, against IEC's rules restated in Elixir, every scan's state, outputs and faults and every cycle's events exact, across an online edit whose kept values stay as they were, and since M3-4 the pulse coils, alone and in a block, over scans, restarts and edits that change a coil's rung, kind, presence or block, against IEC's transition-sensing coils restated from the programs' text, exact wherever no switch came since a coil last ran, with an oracle that knows nothing of the block list, and since M3-5 forward jumps over six rungs in a random order, a one-shot, a ctud's two sides, a timer and a `cal` of a block whose body jumps among them, each memory and the `cal` now and then on a leg of a group, over scans, restarts and edits that change a chain, add, remove or retarget a jump, swap two rungs, change a one-shot's kind or a block's body, or put a memory in a group or take it out, against the scan restated rung by rung from the programs' text, with an oracle that knows nothing of the block list, and since M4-2 a configuration's edits whose tasks have watchdogs and a continuous task half the time, a watchdog changed, `with main` added or taken away and a task's kind changed among the draws, against the same model with the untimed instances under the continuous task's name, and since M5-3 programs of every integer width, each width's two limits drawn as a host's input against its range restated, `move` into a wider width and a conversion's wrap restated as a remainder by 2^N, and since M5-6 the timer walk's `tof`, `tp` and `rto` each a long timer half the time, its preset in ns and each millisecond adding 1,000,000 restated, an edit of the `tof`'s unit refused, and since M5-4 the arithmetic walk's every tag of a width drawn from the eight, each source of a width Figure 11 widens into its destination's, the oracle wrapping in the destination's width, its reach a widened source and a wrap in each width, every width drawn from a list, since an atom-keyed map's keys come in an order the atom table sets, and since M5-5 the counter walk's every counter of a word drawn from the six, the alias `_dint` among them, its oracle stopping each at its width's limits restated, its reach a count in each width and in the alias, an unsigned counter stopped at 0, an edit of a width refused and of the alias accepted, and since decision 191 a negative preset drawn for a signed counter, and since M5-8 the host walk's bitwise instructions and bits over every integer width and bit string against an oracle restated in Elixir, its reach a shift past the width, a negative count and a bit written, since decision 206 a bool drawn among them, its two values and a bit inverted into a bool and each bit string, since decision 214 restated in the bool's one bit, and `not` and a shift of the drawn type into a wider one Figure 11 widens it into, in its own width, its reach each type with a wider one, and the configuration walk's word points read, forced and refused by bit, and since M4-6, in a module of its own, `Logex.ApiContractTest.RunnerWalk`, the runner on the manual clock over 30 seeded configurations, about three in four with untimed programs, with devices that report and that are only read, random waits and presses, forces, an online edit's steps, host mistakes, restarts, a crash and a fresh start from the forces file, and injected faults (a slow step, a slow request, the runner stuck, a device killed or hung, and each way a device's read, report or write fails), against a model that calls `cycle/3` with the elapsed times and inputs the runner gave the core, told it through the hidden seam `steps:`, with oracles on those times and inputs, and a model of the watchdogs and the trip, repeating exactly from fresh processes, its reach every event kind and every trip reason but `{:internal, message}`; since M4-6's review its real-time waits given an idle watchdog of 400 or 500 ms, which a device's open made 100 ms late, as on a loaded machine, must not trip, a restart's refusal in the device's own reason, drawn, a device up refusing a restart with its read's fault (decision 142), a start's and a restart's first round reading every device as it is then, and a read device's input allowed only the time passed inside steps while it was read, which a test of the check's own pins by giving the core such a change late; and since M5-10 a walk of real arithmetic, conversions and truncations over values near
 each real's limits, at ties, zero divisors and subnormals, alone, across a restart and an
 edit, and in a resource, against IEEE 754's rounding and IEC's rules restated through the
 BEAM's 32-bit encoding, every state compared exactly, its reach a saturation and a flush
 in each real, −0.0, a tie and a wrap, and the configuration round trip's real globals,
-and since M5-9 a program whose bit number is the panel's dint, out of range at its -4 while `pb` is pressed, its model tripping a step whose run met a major fault at the step's end, no later step run, its reach `{:fault, ...}` among the trip reasons
+and since M5-9 a program whose bit number is the panel's dint, out of range at its -4 while `pb` is pressed, its model tripping a step whose run met a major fault at the step's end, no later step run, its reach `{:fault, ...}` among the trip reasons, and since M5-11 a walk of arrays drawn at one, two and three dimensions of an integer type and of bools, by literal subscripts, `move` and `add` between elements, a host's list whole, a one-shot on an element, over scans, restarts, host mistakes and edits of an initial list, and in a resource connected whole or element by element, against an oracle of each array as a map of its elements by index, the rightmost subscript fastest, its reach each dimension count, a wrap, a one-shot fired, a host's refusal, a restart, an element's report and both kinds of connection, and the configuration round trip's array globals
 - `test/logex/frontend_golden_test.exs` holds `tokenize/1` + `parse/1` to a recorded AST,
   end line or error line for ~1,400 sources (`test/fixtures/frontend_golden.txt`). It
   catches front-end changes the rest of the suite cannot see: B8, making a lone CR end a
@@ -1031,7 +1097,10 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   s.[-1]`. M5-10's real literals added 30, recorded by the front end before them,
   and changed 15 on landing, the ones that lex, the rest still lex errors; and decision
   216's literals nearer 0.0 than an lreal's smallest normal value added 11, recorded by
-  the front end before it, and changed 7 on landing, each now a lex error. It keeps the AST and error lines, not the tokens or
+  the front end before it, and changed 7 on landing, each now a lex error; and M5-11's
+  arrays, `temps[3]`, `int[8]` and their mistakes, added 41, recorded by the front end
+  before them, and changed 25 on landing, the 23 that lex and `ote a[3]` and `xic s[n]`,
+  the rest still lex errors. It keeps the AST and error lines, not the tokens or
   columns, so newline coalescing, columns and messages are pinned in
   `test/logex/frontend_test.exs` instead. Regenerate it only in a commit that changes the
   language or the generator on purpose, and read the diff:
@@ -1123,7 +1192,12 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
   nothing of logex, a single restated through the BEAM's 32-bit encoding, the
   configuration file's round trip, an integer reading stored as its nearest real, a force
   of 0.1 written `fan_hz 0.1` and read back across a restart and a fresh start, and 2^128
-  tripping the plant;
+  tripping the plant, and M5-11's, a checkweigher from files on disk keeping its last
+  eight weights in `weights int[8]`, shifted on a pick's edge through `ons edges[1]`, its
+  fourth copied into `grid[1,7]` and into a var_output array connected whole to a global
+  array, through `cycle/3` over seeded loads and picks against an oracle of eight weights
+  that knows nothing of logex, `get/2` reading `line.weights[3]`, `line.grid[1,7]` and
+  `history[3]`;
   `validation_test.exs` and
   `printer_test.exs` also run source to an environment in places.
   `lex_and_parse_test.exs` starts from a source string and so crosses the tokenize→parse

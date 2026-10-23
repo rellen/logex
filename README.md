@@ -32,8 +32,11 @@ them (Milestone 5's M5-3), and IEC's four bit strings, `byte word dword lword`, 
 bitwise instructions, bit access `status.3` and the 76 conversions between a bit string and
 another type (M5-8), and a bit whose number a tag holds, `status.[n]`, its number out of
 range a major fault that trips the plant (M5-9), and the reals, `real` and `lreal`,
-with `sqrt`, the 34 real conversions and the 16 truncations (M5-10). What does not exist
-yet: arrays, decided for Milestone 5 with the other data types (below). What logex is not, a safety controller first of all,
+with `sqrt`, the 34 real conversions and the 16 truncations (M5-10), and arrays of an
+elementary type, one to three dimensions, each element named by literal subscripts,
+`weights[3]` and `grid[1,7]` (M5-11). What does not exist yet: a subscript held in a tag,
+arrays of timers, counters and blocks, and located arrays, decided for Milestone 5 with
+the other data types (below). What logex is not, a safety controller first of all,
 is said plainly below ("What logex is not").
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
@@ -108,6 +111,12 @@ Source syntax today:
   `status`, an integer or a bit string, and `t1.acc.3` of a member: a bool wherever one
   goes, read by a contact and written by a coil, its number checked against the width
   ("Bit strings", below); a bit of a `bool` or of a real is an error. No tag is declared with a `.`
+- an array is declared with its sizes after its type, one to three, `var weights int[8]`,
+  `var grid int[4,8]`, `var cube real[2,3,4]`, and an initial list of one literal an
+  element, the rightmost subscript varying fastest, `var limits int[3] 10 20 30`; an
+  element is its name and one pair of brackets, literal subscripts from 0 split by `,`
+  with no space, `weights[3]` or `grid[1,7]`, a tag of the elements' type wherever one
+  goes ("Arrays", below)
 - a newline ends a rung: LF, CRLF or a lone CR
 - `(` … `|` … `)` open, separate and close a parallel branch group
 - a label, what `jmp auto` and `lbl auto` name, is a name with no `.` parts and no
@@ -138,7 +147,8 @@ file's does:
   1; with `interval` too, also due periodically while the trigger is 0, at most once a
   cycle. `single` comes first of the three inputs, as IEC orders them
 - `var_global <name> <type> [<initial>]`, a `bool`, any integer width, a bit string or a
-  real, `var_global sp real 0.1` printed back as `0.1`, and `var_global <name>
+  real, `var_global sp real 0.1` printed back as `0.1`, or an array of one, `var_global
+  limits int[3] 10 20 30`, never located yet, and `var_global <name>
   <type> at <device>.i.<n>` or `… at <device>.q.<n>`, an input or an output point, which
   takes no initial value: the `var_global … at` lines are the plant's I/O list
 - `program <instance> <type> [with <task>]`: an instance of the program type in
@@ -148,8 +158,10 @@ file's does:
   member's section fixes its direction. Every `var_input` is connected once, to a global
   of its type, or of one that widens into it as `move`'s source does, or a constant that
   fits it; a `var_output` drives a global of its type or one it widens into, never an
-  input point, and one connection at most drives a global. Names resolve over the whole
-  file
+  input point, and one connection at most drives a global. An array connects whole to a
+  global array of its sizes, its elements widening so, or an element by itself,
+  `m1.limits[2] 50`, an array `var_input` connected whole or at every element. Names
+  resolve over the whole file
 - `task single interval priority with program var_global at` and the type words, `bool`
   and the eight integer widths, are reserved in
   a configuration file, in any case, and nowhere else: a `.ld` program may still have a
@@ -287,8 +299,10 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   the 76 bit-string conversions (M5-8, "Bit strings", below), and a bit number in a tag,
   `word.[n]`, with the major fault (M5-9, "A bit number in a tag", below), and `real` and
   `lreal`, with literals `37.5` and `1.5e3`, `sqrt` and the real conversions, `real_to_int`
-  and `real_trunc_int` among them (M5-10, "Reals", below); still to land, arrays `var temps real[8]`, up to three dimensions, of timers and blocks
-  too, and at I/O points. IEC's typed
+  and `real_trunc_int` among them (M5-10, "Reals", below), and arrays `var temps
+  real[8]`, up to three dimensions, by literal subscripts (M5-11, "Arrays", below); still
+  to land, a subscript held in a tag, `weights[slot]`, an index out of range a major
+  fault, arrays of timers and blocks, and arrays at I/O points. IEC's typed
   counters have landed, `ctu_int` and the rest, with `ctu_dint` another word for `ctu`
   (M5-5, "A counter", below), and the long timers in nanoseconds, `ton_ltime`,
   `tof_ltime`, `tp_ltime` and `rto_ltime` (M5-6, "Long timers", below). An arithmetic result past its type's limit wraps, with no
@@ -1463,6 +1477,122 @@ line 2: warning: `16777217.0` has more digits than a real keeps: it is held as 1
   changed to `var x real 0.0` is reported, `{0, 0.0}` (decision 157).
 - `real`, `lreal`, `sqrt`, the 34 conversions and the 16 truncations are reserved in any
   case in every `.ld` file, and the two type words in every `.logex` file too.
+
+### Arrays
+
+`weigh.ld` — a checkweigher that keeps the last four weights in an array, newest first,
+shifting them along on each pick, copies the fourth into a corner of a grid, and lights a
+lamp while it is over 500:
+
+```
+var_input  load    int
+var_input  pick    bool
+var_output heavy   bool
+var_output fourth  int
+var weights int[4]
+var grid    int[2,8]
+var edges   bool[1]
+var shift   bool
+
+// the last four weights, newest first, shifted along on each pick
+xic pick ons edges[0] ote shift
+xic shift move weights[2] weights[3]
+xic shift move weights[1] weights[2]
+xic shift move weights[0] weights[1]
+xic shift move load weights[0]
+xic shift move weights[3] grid[1,7]
+gt weights[3] 500 ote heavy
+move grid[1,7] fourth
+```
+
+`weigh.exs` picks five loads, compiles six lines that cannot work, and sets an array
+input of the wrong length:
+
+```elixir
+{:ok, weigh} = Logex.compile_file("weigh.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(weigh, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(weigh, state)
+  IO.puts("#{label}  #{inspect(outputs)}  weights #{inspect(Tuple.to_list(state.env["weights"]))}")
+  state
+end
+
+state =
+  Enum.reduce([620, 410, 730, 550, 90], Logex.Runtime.instance(weigh), fn load, state ->
+    state
+    |> scan.("pick #{load}", %{"load" => load, "pick" => 1})
+    |> scan.("release ", %{"pick" => 0})
+  end)
+
+IO.inspect(state.env["grid"], label: "grid")
+
+{:error, diagnostics} =
+  Logex.compile(
+    "var weights int[8]\nvar grid int[4,8]\nvar slot int\nvar x int\n" <>
+      "var cells int[2,2,2,2]\nvar short int[3] 1 2\n" <>
+      "move weights[8] x\nmove grid[1] x\nmove weights[slot] x\nmove weights x",
+    name: "wrong"
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+
+{:ok, buffer} = Logex.compile("var_input w int[3]\nvar_output s int\nmove w[1] s", name: "buffer")
+
+try do
+  Logex.Runtime.put_inputs(buffer, Logex.Runtime.instance(buffer), %{"w" => [1, 2]})
+rescue
+  error in ArgumentError -> IO.puts(Exception.message(error))
+end
+```
+
+```
+$ mix run weigh.exs
+pick 620  %{"fourth" => 0, "heavy" => 0}  weights [0, 0, 0, 0]
+release   %{"fourth" => 0, "heavy" => 0}  weights [0, 0, 0, 0]
+pick 410  %{"fourth" => 0, "heavy" => 0}  weights [410, 0, 0, 0]
+release   %{"fourth" => 0, "heavy" => 0}  weights [410, 0, 0, 0]
+pick 730  %{"fourth" => 0, "heavy" => 0}  weights [730, 410, 0, 0]
+release   %{"fourth" => 0, "heavy" => 0}  weights [730, 410, 0, 0]
+pick 550  %{"fourth" => 0, "heavy" => 0}  weights [550, 730, 410, 0]
+release   %{"fourth" => 0, "heavy" => 0}  weights [550, 730, 410, 0]
+pick 90  %{"fourth" => 410, "heavy" => 0}  weights [90, 550, 730, 410]
+release   %{"fourth" => 410, "heavy" => 0}  weights [90, 550, 730, 410]
+grid: {{0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 410}}
+line 5: `cells` is declared with 4 dimensions, `[2,2,2,2]`: an array has one to three, as in `int[8]`, `int[4,8]` or `int[2,3,4]`
+line 6: `short` is an array of 3 ints: its initial list holds 2 values, and an array's holds one for every element, 3, in the elements' order
+line 7: `weights[8]`'s subscript `8` is outside the elements of `weights`, 0 to 7: `weights` is an array of 8 ints (declared on line 1)
+line 8: `grid[1]` names an element of `grid`, an array of 4 by 8 ints (declared on line 2), by 1 subscript, where it takes 2, one a dimension, as in `grid[0,0]`
+line 9: `weights[slot]`'s subscript `slot` is a tag's name: an element's subscript is a literal number, as in `weights[0]`, until a subscript held in a tag is supported
+line 10: `move` reads one tag, but `weights` is an array of 8 ints (declared on line 1): an instruction takes one of its elements, as in `weights[0]`
+input `w` is an array of 3 ints: its value must be a list of 3 elements, found [1, 2]
+```
+
+- An array is declared with its sizes after its elementary type, one to three
+  dimensions, each a count of elements from 0, Logix's form (1756-PM004L pp.34–36):
+  `int[4]`, `int[2,8]`, `real[2,3,4]`, 65,536 elements at most (decision 151, the limit
+  the spike's, provisional). It starts at its type's zero, or with an initial list of one
+  literal for every element, the rightmost subscript varying fastest, `var limits int[3]
+  10 20 30`; a list of another length is refused, where IEC truncates or fills.
+- An element, `weights[3]` or `grid[1,7]`, is a tag of the elements' type wherever one
+  goes, read by a contact or `move`, written by a coil or an instruction, and an
+  `ons edges[0]` keeps its storage bit there (decision 154); its subscripts are literal
+  numbers, checked against each dimension when the program compiles, so `weights[8]` in
+  an `int[8]` is refused at its line. A subscript held in a tag, `weights[slot]`, is
+  refused until M5-12 lands it; an instruction never takes an array whole. The first
+  pick above shifts nothing: a one-shot never fires on a first scan.
+- A host sets an array `var_input` whole, a list of its first dimension's size, a list of
+  lists for more, each element checked as a tag's value is; an array `var_output` comes
+  back as such a list, and so does `Logex.Runtime.get/2`, which names an element as logic
+  does, `m1.weights[3]` or a global's `limits[2]`. A state holds an array as a tuple, a
+  tuple of tuples for more dimensions.
+- In a configuration an array may be a `var_global`, not yet located (M5-13), a
+  `var_external` binding only to a global array of exactly its type and sizes (decision
+  159), and a connection names an array whole, to a global array of its sizes, or an
+  element, `m1.limits[2] 50`.
+- An online edit refuses an array whose type, dimensions or sizes change, and reports a
+  changed initial list element by element, `{:initial_changed, "limits[1]", {20, 25}}`,
+  the running values kept (decision 157).
 
 ### Two pulse coils
 
@@ -3322,8 +3452,8 @@ in every cycle's outputs at the value it holds.
   Function Block Diagram, SFC or Instruction List, no graphical editor, and no
   paste-compatibility with IEC's textual forms.
 - **Not everything a controller has.** One resource a configuration; bool, the eight
-  integer widths, the four bit strings and the two reals only, no
-  arrays or structures, and no NaN or infinity in a real; a jump forward only; no retained
+  integer widths, the four bit strings and the two reals only, arrays of those named by
+  literal subscripts only, no structures, and no NaN or infinity in a real; a jump forward only; no retained
   values, so a warm restart is a cold one; and forcing for inputs only, an output never
   forced.
 

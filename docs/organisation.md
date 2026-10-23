@@ -3713,7 +3713,14 @@ an element `m1.temps[3]`; a host's value for an array `var_input` is a list of t
 declared length, a list of lists for more dimensions, each element checked by `fits?/2`,
 any other an `ArgumentError` whose message a test pins; `get/2` gives a whole array the
 same shape. Size limits are a spike's to measure (a proposal: 1 to 65,536 elements in
-all); Logix's is 2 MB (RM094N p.85).
+all); Logix's is 2 MB (RM094N p.85). *(Landed with M5-11, 2026-10-23, for arrays of
+elementary types by literal subscripts: the spike measured a read of a tuple element at 9
+reductions against a tag's 8 and a write at 11 against 7, a map's 11 and 11, and a write
+copying about 1 ns an element, 0.2 ms into an `int[65536]` and 3 µs into an
+`int[256,256]`, so the value is a tuple of tuples and the limit 65,536 elements, both
+provisional; a connection names an element `m1.temps[3]`, an array var_input connected
+whole or at every element; `get/2` gives a whole array as a list; tag subscripts, arrays
+of instances and located arrays are M5-12's, M5-14's and M5-13's.)*
 
 **The major fault** (decisions 153 and 160, amending decisions 99 and 113). An index or a
 tag bit number out of range is a major fault. The instruction does nothing, each as the
@@ -7536,6 +7543,11 @@ the decisions the rest settle.
      element; `var_external` arrays allowed** (the maintainer, 2026-10-21). An initial
      list follows the elements' order, the rightmost subscript fastest, and one of another
      length is refused.
+     *(Landed with M5-11, 2026-10-23, for elementary types and literal subscripts: an
+     array's value a tuple, a tuple of tuples for more dimensions, its limit 65,536
+     elements, each the spike's measure, provisional; a host sets an array var_input whole
+     as a list and is given an array as one; a global array unlocated, its located form
+     M5-13's.)*
 152. **What may go inside the brackets (Milestone 5).** The box counter stores each box's
      weight in `weights[slot]`, `slot` stepping 0 to 7.
      - A literal only, `weights[3]`;
@@ -7550,6 +7562,8 @@ the decisions the rest settle.
      **Taken: a literal or an integer tag, never an expression** (the maintainer,
      2026-10-21), as recommended, of any integer type, each subscript of a dimension; a
      literal outside its dimension refused when the program compiles.
+     *(The literal landed with M5-11, 2026-10-23, refused at its line outside its
+     dimension; a tag subscript is lexed and refused at its line until M5-12.)*
 153. **An index out of range while running (Milestone 5).** A rung that resets `slot` was
      edited wrongly, and `slot` reaches 8 in `weights`, an `int[8]`.
      - A major fault: the scan runs on with that instruction doing nothing, and the
@@ -7593,6 +7607,10 @@ the decisions the rest settle.
      **Taken: allowed, with a literal index on whatever runs an instance and on a
      one-shot's storage or pulse bit** (the maintainer, 2026-10-21), as recommended; the
      same literal rule holds for a bit of a word as a one-shot's bit (decision 160).
+     *(Landed with M5-11, 2026-10-23, for the bits: a one-shot's storage bit and a pulse
+     coil's two bits on an element of a bool array, `ons edge[2]`, each by its element's
+     name on the edit's block list; arrays of instances are refused at their line until M5-14
+     lands them.)*
 155. **Bit strings and bit access (Milestone 5).** Bit 3 of the drive's status word is "at
      speed", and the run lamp should follow it: `xic drive_status.3 ote run_lamp`.
      - IEC's way: `byte word dword lword` as types of their own, no arithmetic on them,
@@ -7675,6 +7693,10 @@ the decisions the rest settle.
      *(Landed for the integer widths with M5-3, 2026-10-22.)*
      *(Landed for the reals with M5-10, 2026-10-23: `Logex.Edit.Plan.changed/2` compares
      with `!==`, `{:initial_changed, "x", {0, 0.0}}` pinned, the running 0.0 kept.)*
+     *(Landed for arrays with M5-11, 2026-10-23: an initial list compared element by
+     element, each change reported by its element's name, `{:initial_changed, "lim[1]",
+     {20, 25}}`, a tag's and a global's alike; an array's type, dimensions or sizes
+     changed refused.)*
 
 158. **Whether timers and counters change type (Milestone 5).** A timer longer than 24.8
      days, or a box count past 2,147,483,647.
@@ -7730,7 +7752,9 @@ the decisions the rest settle.
      **Taken: `cal` parameters and connections widen as instructions do; a `var_external`
      must match its global's type exactly** (the maintainer, 2026-10-21), as recommended,
      an array's element type and every dimension included.
-     *(Landed with M5-3, 2026-10-22.)*
+     *(Landed with M5-3, 2026-10-22; for arrays with M5-11, 2026-10-23, a `var_external`
+     array bound to a global array of exactly its type and sizes, a connection of an array
+     whole to a global array of its sizes whose elements widen.)*
 
 160. **A bit number held in a tag (Milestone 5),** following decision 155. The drive's
      fault word has sixteen bits, and a lamp shows the bit an operator selects, `xic

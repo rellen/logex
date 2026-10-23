@@ -135,6 +135,12 @@ defmodule Logex.ArrayConfigurationTest do
                "`w` is an array at `panel.i.0`: an array global is not located yet, so declare it with no `at`, or a global at each point"
              ]
 
+      # A located array is no point, so a point at its location is no second one there.
+      assert refused("var_global w int[3] at panel.i.0\nvar_global b bool at panel.i.0\n" <> tail) ==
+               [
+                 "`w` is an array at `panel.i.0`: an array global is not located yet, so declare it with no `at`, or a global at each point"
+               ]
+
       assert refused("var_global w[2] int\n" <> tail) == [
                "`w[2]` cannot name a global: brackets are kept for an element's subscripts, as in `m1.temps[3]`"
              ]
