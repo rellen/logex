@@ -290,6 +290,14 @@ defmodule Logex.RealTest do
                  "r" => 1
                }
 
+      # M5-10's review: an lreal's difference past its range, which the BEAM raises on,
+      # saturates at the sign of the difference, the minuend's, whatever the subtrahend's.
+      assert outputs(
+               "var_input l lreal\nvar_input m lreal\nvar_output y lreal\nvar_output z lreal\n" <>
+                 "var_output p bool\nvar_output q bool\nsub l m y ote p\nsub m l z ote q",
+               %{"l" => -1.7e308, "m" => 1.7e308}
+             ) == %{"y" => -@double_max, "z" => @double_max, "p" => 0, "q" => 0}
+
       # One that rounds, at the single's largest value itself, passes power.
       assert outputs(source, %{"a" => @single_max, "b" => 1.0, "l" => 1.0}) ==
                %{
@@ -384,6 +392,15 @@ defmodule Logex.RealTest do
                  "gt a i ote p\nlt l d ote q\neq a l ote r",
                %{"a" => 1.5, "i" => 1, "l" => 1.5, "d" => 2}
              ) == %{"p" => 1, "q" => 1, "r" => 1}
+
+      # M5-10's review: an integer and a real of one value are equal, by value (decision
+      # 147), an `int` 3 and a `real` 3.0, either side.
+      assert outputs(
+               "var_input a real\nvar_input i int\nvar_output p bool\nvar_output q bool\n" <>
+                 "var_output r bool\nvar_output s bool\n" <>
+                 "eq i a ote p\neq a i ote q\nne i a ote r\nge i a ote s",
+               %{"a" => 3.0, "i" => 3}
+             ) == %{"p" => 1, "q" => 1, "r" => 0, "s" => 1}
 
       assert messages(
                "var a real\nvar d dint\nvar w word\nvar_output q bool\ngt a d ote q\ngt a w ote q"
@@ -600,6 +617,23 @@ defmodule Logex.RealTest do
       # 3.4028235e38, which rounds to the single's largest value, is taken.
       assert %{env: %{"r" => @single_max}} =
                Runtime.put_inputs(program, state, %{"r" => 3.4028235e38})
+
+      # M5-10's review: 2^128 − 2^103, half a step past the single's largest value, is the
+      # least magnitude whose nearest single is infinite, IEEE 754's tie to even rounding it
+      # up, so it is refused, as a float, either sign, and the double just below it taken.
+      past = 3.4028235677973366e38
+      assert past == Integer.pow(2, 128) - Integer.pow(2, 103)
+      <<below::float-64>> = <<(<<past::float-64>> |> :binary.decode_unsigned()) - 1::64>>
+
+      for value <- [past, -past] do
+        assert_raise ArgumentError,
+                     "input `r` is a real: #{inspect(value)} is beyond a real's range, " <>
+                       "-3.4028234663852886e38 to 3.4028234663852886e38",
+                     fn -> Runtime.put_inputs(program, state, %{"r" => value}) end
+      end
+
+      assert %{env: %{"r" => @single_max}} = Runtime.put_inputs(program, state, %{"r" => below})
+      assert %{env: %{"r" => -@single_max}} = Runtime.put_inputs(program, state, %{"r" => -below})
     end
 
     test "a state's real holds one of its type's values: a float, never −0.0, no subnormal" do
@@ -691,10 +725,43 @@ defmodule Logex.RealTest do
           types: [half]
         )
 
-      {outputs, _state} =
+      {outputs, state} =
         Runtime.call(program, Runtime.instance(program), %{"i" => 7}, %Scan{now: 0, first: true})
 
       assert outputs == %{"x" => 3.5, "y" => 3.0}
+
+      # M5-10's review: compared exactly, since `==` takes 7 for 7.0. The formal holds the
+      # float its operand widens to, and the tag the float its formal widens to, so the state
+      # a scan leaves is one the next scan takes.
+      assert state.env["s"]["a"] === 7.0
+      assert state.env["y"] === 3.0
+      assert outputs["y"] === 3.0
+
+      {outputs, state} = Runtime.call(program, state, %{"i" => 8}, %Scan{now: 10, first: false})
+      assert outputs["x"] === 4.0 and outputs["y"] === 3.0
+      assert state.env["s"]["a"] === 8.0
+    end
+
+    # M5-10's review: a literal operand of a real formal is the formal's nearest value, a
+    # single's in a `real`, as `move 0.1 x` writes it, and the scan after takes it.
+    test "a real literal into a real formal is the formal's nearest value" do
+      {:ok, keep} =
+        Logex.compile(
+          "function_block keep\nvar_input a real\nvar_input b lreal\nvar_output h real\n" <>
+            "move a h",
+          name: "keep"
+        )
+
+      {:ok, program} =
+        Logex.compile("var_output x real\nvar s keep\ncal s 0.1 0.1 x", name: "p", types: [keep])
+
+      {outputs, state} =
+        Runtime.call(program, Runtime.instance(program), %{}, %Scan{now: 0, first: true})
+
+      assert outputs["x"] === 0.10000000149011612
+      assert state.env["s"]["a"] === 0.10000000149011612
+      assert state.env["s"]["b"] === 0.1
+      assert {_outputs, _state} = Runtime.call(program, state, %{}, %Scan{now: 10, first: false})
     end
   end
 
@@ -793,6 +860,15 @@ defmodule Logex.RealTest do
       assert z.initial === 0
       assert Configuration.Text.print(entries) == text
       assert Configuration.Text.read(Configuration.Text.print(entries)) == {:ok, entries}
+
+      # M5-10's review: a single whose shortest spelling takes nine significant digits, the
+      # most any single needs, 104.696724 for 104.69672393798828, which no eight-digit text
+      # reads back to.
+      nine = "var_global sp real 104.696724\n"
+      {:ok, [sp]} = Configuration.Text.read(nine)
+      assert sp.initial === 104.69672393798828
+      assert single(1.0469672e2) !== sp.initial and single(1.0469673e2) !== sp.initial
+      assert Configuration.Text.print([sp]) == nine
     end
 
     test "a real constant connects, judged by the literal rules" do
