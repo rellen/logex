@@ -37,12 +37,20 @@ defmodule Logex.Program do
     copy-out into a real, which writes the real's nearest value (decision 150), finds its
     type with the routine it runs, and a routine of no real runs them as it did before
     reals; a block's body holds its own.
+  - `arrays` (M5-11, decision 151) is the type of each tag of the routine that is an array,
+    `{:array, type, dims}`, by its name, nil, the default, where it holds none, as `reals`
+    is: settled once from the tag table with `units` and `reals`, so that the runtime,
+    which holds an array's value as a tuple and a host's as a list, takes a host's inputs
+    and gives its outputs as it did before arrays where a program holds none. An array of
+    reals is among the `reals` too, by its name, so that a write into one of its elements
+    writes the real's nearest value.
   - `warnings` are `%Logex.Diagnostic{severity: :warning}`, in line order. From
     `Logex.compile_file/1` the warnings of each block it loaded beside the file follow,
     each with its block's file (decision 34); a block's body holds only its own.
   """
 
   import Logex.Declarations, only: [is_elementary: 1]
+  import Logex.Array, only: [is_array: 1]
 
   @reals Logex.Declarations.reals()
 
@@ -56,7 +64,8 @@ defmodule Logex.Program do
     warnings: [],
     blocks: %{},
     units: nil,
-    reals: nil
+    reals: nil,
+    arrays: nil
   ]
 
   @type t :: %__MODULE__{
@@ -65,6 +74,7 @@ defmodule Logex.Program do
           blocks: %{String.t() => Logex.FbType.t()},
           units: nil | %{String.t() => pos_integer},
           reals: nil | %{String.t() => :real | :lreal},
+          arrays: nil | %{String.t() => {:array, atom, [pos_integer]}},
           name: String.t() | nil,
           source: String.t() | nil,
           file: String.t() | nil,
@@ -113,6 +123,12 @@ defmodule Logex.Program do
 
   defp start(%Logex.Tag{type: type, initial: nil}) when is_elementary(type),
     do: Logex.Declarations.zero(type)
+
+  # M5-11 (decision 151): an array is a tuple, a tuple of tuples for more dimensions, each
+  # element at its type's zero or at its initial list's value, in the elements' order, a
+  # real's held at its nearest.
+  defp start(%Logex.Tag{type: {:array, _, _} = type, initial: initial}),
+    do: Logex.Array.started(type, initial)
 
   defp start(%Logex.Tag{initial: nil}), do: 0
 
@@ -188,7 +204,19 @@ defmodule Logex.Program do
   def destination({:bit_at, _, _path, _index, _width, _name}, _tags, kind),
     do: computing(:bool, kind)
 
+  # M5-11 (decision 151): an element computes in its array's elements' type.
+  def destination({:element, _, array, _index, _name}, tags, kind),
+    do: element_destination(Map.fetch(tags, array), kind)
+
   def destination(_no_tag, _tags, _kind), do: {:error, :no_tag}
+
+  defp element_destination({:ok, %Logex.Tag{type: {:array, type, _dims}}}, kind),
+    do: computing(type, kind)
+
+  defp element_destination({:ok, %Logex.Tag{type: type}}, _kind),
+    do: {:error, {:not_an_array, type}}
+
+  defp element_destination(:error, _kind), do: {:error, :undeclared}
 
   defp tag_destination({:ok, %Logex.Tag{type: type}}, kind), do: computing(type, kind)
   defp tag_destination(:error, _kind), do: {:error, :undeclared}
@@ -236,18 +264,33 @@ defmodule Logex.Program do
   def units(tags) when is_map(tags), do: elem(settled(tags), 0)
 
   @doc """
-  A routine's `units` and, since M5-10, its `reals`, `{units, reals}`, settled in one walk
-  of its tags, the one rule for both (`units/1`, `reals/1`), which the compiler gives every
-  program and body it builds: an elementary tag is a real or nothing, and an instance a
-  timer of another unit or nothing.
+  M5-11: the type of each tag of `tags` that is an array, by its name, or nil where there is
+  none. The one rule for a program's `arrays`, which the compiler gives every program and
+  body it builds, and the check below holds a program handed in to.
+  """
+  def arrays(tags) when is_map(tags), do: elem(settled(tags), 2)
+
+  @doc """
+  A routine's `units` and, since M5-10, its `reals`, and since M5-11 its `arrays`, `{units,
+  reals, arrays}`, settled in one walk of its tags, the one rule for all three (`units/1`,
+  `reals/1`, `arrays/1`), which the compiler gives every program and body it builds: an
+  elementary tag is a real or nothing, an array an array and, of reals, a real, and an
+  instance a timer of another unit or nothing.
   """
   def settled(tags) when is_map(tags) do
-    {units, reals} = Enum.reduce(tags, {[], []}, &settle/2)
-    {some(units), some(reals)}
+    {units, reals, arrays} = Enum.reduce(tags, {[], [], []}, &settle/2)
+    {some(units), some(reals), some(arrays)}
   end
 
-  defp settle({name, %Logex.Tag{type: type}}, {units, reals}) when type in @reals,
-    do: {units, [{name, type} | reals]}
+  defp settle({name, %Logex.Tag{type: type}}, {units, reals, arrays}) when type in @reals,
+    do: {units, [{name, type} | reals], arrays}
+
+  defp settle({name, %Logex.Tag{type: {:array, element, _dims} = type}}, {units, reals, arrays})
+       when element in @reals,
+       do: {units, [{name, element} | reals], [{name, type} | arrays]}
+
+  defp settle({name, %Logex.Tag{type: type}}, {units, reals, arrays}) when is_array(type),
+    do: {units, reals, [{name, type} | arrays]}
 
   defp settle({_name, %Logex.Tag{type: type}}, acc) when is_atom(type), do: acc
 
@@ -257,7 +300,7 @@ defmodule Logex.Program do
   defp settle(_not_a_tag, acc), do: acc
 
   defp unit(nil, _name, acc), do: acc
-  defp unit(per_ms, name, {units, reals}), do: {[{name, per_ms} | units], reals}
+  defp unit(per_ms, name, {units, reals, arrays}), do: {[{name, per_ms} | units], reals, arrays}
 
   defp some([]), do: nil
   defp some(units), do: Map.new(units)
@@ -291,7 +334,14 @@ defmodule Logex.Program do
   end
 
   defp routine(
-         %__MODULE__{rungs: rungs, tags: tags, blocks: blocks, units: units, reals: reals},
+         %__MODULE__{
+           rungs: rungs,
+           tags: tags,
+           blocks: blocks,
+           units: units,
+           reals: reals,
+           arrays: arrays
+         },
          where,
          {lines, seen}
        )
@@ -299,6 +349,7 @@ defmodule Logex.Program do
     {program, _block} = where
     lines = Enum.reverse(unit_lines(units, tags, where), lines)
     lines = Enum.reverse(real_lines(reals, tags, where), lines)
+    lines = Enum.reverse(array_lines(arrays, tags, where), lines)
     {lines, called} = rungs(rungs, {tags, where}, {lines, []})
     acc = Enum.reduce(Enum.reverse(called), {lines, seen}, &once(&1, program, &2))
     held_bodies(blocks, program, acc)
@@ -452,6 +503,35 @@ defmodule Logex.Program do
         "#{inspect(reals)}: #{named(elem(where, 0))} was edited by hand after it compiled"
     ]
 
+  # M5-11: a routine's arrays against the ones its tags give, by name in order, as its reals.
+  defp array_lines(arrays, tags, where) when is_map(arrays) or arrays == nil do
+    given = table(arrays)
+    wanted = table(arrays(tags))
+
+    for name <- Enum.sort(Enum.uniq(Map.keys(wanted) ++ Map.keys(given))),
+        Map.fetch(given, name) != Map.fetch(wanted, name),
+        do:
+          "#{owner(where)} arrays give #{shown_name(name)} #{array_given(Map.fetch(given, name))}, " <>
+            "where #{real_wanted(Map.fetch(tags, name), where)}: " <>
+            "#{named(elem(where, 0))} was edited by hand after it compiled"
+  end
+
+  defp array_lines(arrays, _tags, where),
+    do: [
+      "#{owner(where)} arrays are neither nil nor a map of tag names to array types, got: " <>
+        "#{inspect(arrays)}: #{named(elem(where, 0))} was edited by hand after it compiled"
+    ]
+
+  defp array_given(:error), do: "no array type"
+
+  defp array_given({:ok, {:array, type, [_ | _]} = array}) when is_elementary(type),
+    do: shown_array(Enum.all?(elem(array, 2), &(is_integer(&1) and &1 > 0)), array)
+
+  defp array_given({:ok, type}), do: "the type #{inspect(type, charlists: :as_lists)}"
+
+  defp shown_array(true, array), do: a(array)
+  defp shown_array(false, array), do: "the type #{inspect(array, charlists: :as_lists)}"
+
   defp real_given(:error), do: "no real type"
   defp real_given({:ok, type}), do: "the type #{inspect(type)}"
 
@@ -511,6 +591,9 @@ defmodule Logex.Program do
   defp written(destination, {:bits, type}, _where),
     do: "#{shown(destination)}, #{a(type)}, which is no bool, integer or bit-string type"
 
+  defp written(destination, {:not_an_array, type}, _where),
+    do: "#{shown(destination)}, whose array is #{a(type)}, no array"
+
   defp written(destination, {:no_instance, instance}, where),
     do: "#{shown(destination)}, and #{declarer(where)} declares no `#{instance}`"
 
@@ -532,10 +615,12 @@ defmodule Logex.Program do
   defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
   defp shown({:bit, _, _path, _n, _mask, name}), do: "`#{name}`"
   defp shown({:bit_at, _, _path, _index, _width, name}), do: "`#{name}`"
+  defp shown({:element, _, _array, _index, name}), do: "`#{name}`"
   defp shown(other), do: "`#{inspect(other)}`"
 
   defp a(%Logex.FbType{} = type), do: Logex.Declarations.instance_of(type)
   defp a({:block, name}) when is_binary(name), do: "an instance of `#{name}`"
   defp a(type) when is_atom(type), do: Logex.Declarations.a_type(type)
+  defp a(type) when is_array(type), do: Logex.Declarations.a_type(type)
   defp a(other), do: inspect(other)
 end

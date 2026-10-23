@@ -15,6 +15,12 @@ defmodule Logex.Compiler do
   `lbl` first on its rung, one label to a rung, and each `jmp` naming a label of its own
   routine on a later rung, one to a rung (decisions 81, 104 and 105).
 
+  Since M5-11 (decision 151) an operand may be an element of an array, `temps[3]`, each
+  subscript a literal within its dimension, refused at its line otherwise, read and written
+  as a tag of its elements' type and lowered to `{:element, line, array, index, name}`,
+  its subscripts' values and its name as written; an array whole is no operand, and a
+  subscript held in a tag waits for M5-12 (decision 152).
+
   A host compiles through `Logex.compile/2` and `Logex.compile_file/1`. The stage
   functions stay public for the front end's golden record, the Elixir-side declarer and
   the naming test; `signature/2` for the walks (`Logex.Walk`), which look an instruction's
@@ -25,6 +31,7 @@ defmodule Logex.Compiler do
   alias Logex.{Declarations, Diagnostic, FbType, Parser, Program, Tag, Walk}
   alias Logex.FbType.Member
   import Logex.Declarations, only: [is_elementary: 1, is_class: 1]
+  import Logex.Array, only: [is_array: 1]
   import Logex.Parser, only: [is_int_lit: 1, is_literal: 1, is_real_lit: 1]
 
   # M5-10: a real literal whose value is 0.0, `0.0` or `-0.0`, which lexes as 0.0.
@@ -342,7 +349,7 @@ defmodule Logex.Compiler do
 
   defp rebuilt({:block, name}, name, {rungs, tags}, []) do
     {named, _reached} = Enum.map_reduce(tags, [], &naming/2)
-    {units, reals} = Program.settled(tags)
+    {units, reals, arrays} = Program.settled(tags)
 
     {:ok,
      %Program{
@@ -351,6 +358,7 @@ defmodule Logex.Compiler do
        tags: Map.new(named),
        units: units,
        reals: reals,
+       arrays: arrays,
        warnings: Logex.Warnings.of(rungs, tags)
      }}
   end
@@ -390,7 +398,8 @@ defmodule Logex.Compiler do
           blocks: blocks,
           warnings: warnings,
           units: units,
-          reals: reals
+          reals: reals,
+          arrays: arrays
         } = body
       )
       when is_list(rungs) and is_map(tags) and not is_struct(tags) and is_map(blocks) and
@@ -399,7 +408,7 @@ defmodule Logex.Compiler do
 
     relowered(
       proper?(rungs, &ir_rung?/1) and proper?(warnings, &any?/1) and
-        Enum.all?(typed, &typed?/1) and {units, reals} == Program.settled(typed),
+        Enum.all?(typed, &typed?/1) and {units, reals, arrays} == Program.settled(typed),
       rungs,
       typed,
       warnings
@@ -435,6 +444,7 @@ defmodule Logex.Compiler do
 
   # A tag of a type the lowering knows, once each held type is given (M2-5).
   defp typed?({_name, %Tag{type: type}}) when is_elementary(type), do: true
+  defp typed?({_name, %Tag{type: {:array, type, _dims}}}) when is_elementary(type), do: true
   defp typed?({_name, %Tag{type: %FbType{}}}), do: true
   defp typed?(_entry), do: false
 
@@ -487,6 +497,12 @@ defmodule Logex.Compiler do
          proper?(path, &is_binary/1) and path != [] and is_binary(index) and
            is_integer(width) and width > 0 and is_integer(top) and is_binary(name)
 
+  # M5-11: an element, its array's name, its subscripts' values and its name as written.
+  defp ir_operand?({:element, line, array, index, name}) when is_integer(line) and line > 0,
+    do:
+      is_binary(array) and index != [] and proper?(index, &(is_integer(&1) and &1 >= 0)) and
+        is_binary(name)
+
   defp ir_operand?(_operand), do: false
 
   # A rung back to the elements its text parses to, lowered again: the same IR, and no
@@ -505,6 +521,7 @@ defmodule Logex.Compiler do
 
   defp unlowered_operand({:bit, line, _path, _n, _mask, name}), do: {:name, line, name}
   defp unlowered_operand({:bit_at, line, _path, _index, _width, name}), do: {:name, line, name}
+  defp unlowered_operand({:element, line, _array, _index, name}), do: {:name, line, name}
 
   # M5-10's review: a real literal back to the leaf its spelling lexes to, its slot's
   # rounding undone, so that lowering it again must give the very value its slot computes
@@ -629,10 +646,24 @@ defmodule Logex.Compiler do
   # `cal` fills. Refused before the block's type is built, whose members are its var_inputs,
   # var_outputs and vars (Logex.FbType.of/1). A tag declared from Elixir, which no line can
   # cite, is refused as a host mistake, as header_tags/2's is.
+  #
+  # M5-11 (provisional): nor does it take an array var_input or var_output, which is one
+  # value its `cal` fills with one operand, so an array is a block's own `var`: a `cal`
+  # operand that is an array whole, and its copy, wait with whole-array copy (§4.12,
+  # "Deferred"). Read in the same pass over the block's tags, its filter a comparison.
   defp externals({:block, _name}, tags),
-    do: for({name, %Tag{section: :var_external, line: line}} <- tags, do: external(line, name))
+    do:
+      for(
+        {name, %Tag{section: section, type: type, line: line}} <- tags,
+        section == :var_external or
+          (is_array(type) and (section == :var_input or section == :var_output)),
+        do: block_section(section, line, name)
+      )
 
   defp externals(:program, _tags), do: []
+
+  defp block_section(:var_external, line, name), do: external(line, name)
+  defp block_section(section, line, name), do: array_formal(line, name, section)
 
   defp external(nil, name), do: raise(ArgumentError, external_message(name))
   defp external(line, name), do: diagnostic(line, external_message(name))
@@ -642,6 +673,18 @@ defmodule Logex.Compiler do
       "`#{name}` cannot be a var_external in a function block's file: a block reaches no " <>
         "global of a configuration, so it takes one through a var_input, which the `cal` " <>
         "that runs it fills"
+
+  # A tag declared from Elixir is refused as a host mistake, as an external's is.
+  defp array_formal(nil, name, section),
+    do: raise(ArgumentError, array_formal_message(name, section))
+
+  defp array_formal(line, name, section),
+    do: diagnostic(line, array_formal_message(name, section))
+
+  defp array_formal_message(name, section),
+    do:
+      "`#{name}` cannot be an array #{section} of a function block: a `cal` fills each " <>
+        "var_input and var_output with one value, so an array is the block's own `var`"
 
   # Recursion through a tag declared from Elixir, which no line can cite: a host mistake.
   # A type holds every type below it in its one table (decision 53), so whether it holds
@@ -864,6 +907,22 @@ defmodule Logex.Compiler do
     {first, own_pulse(Enum.map(pulse, &Walk.bit_name/1), tag, coil, diagnostics)}
   end
 
+  # M5-11 (decision 154): a storage bit may be an element of a bool array, `edge[2]`, its
+  # subscripts literal, named by its subscripts' values, `edge[2]`, under every rule a bool
+  # storage bit has, and so may a pulse coil's pulse bit.
+  defp shared_bit(
+         {symbol, line, [{:element, _, array, _, written} = element | pulse]},
+         {first, _} = acc,
+         tags
+       )
+       when symbol in @one_shots do
+    name = Walk.bit_name(element)
+    tag = %Tag{name: name, type: element_type(Map.get(tags, array)), section: :var}
+    coil = {name, line, symbol, written}
+    {first, diagnostics} = storage_bit(Map.fetch(first, name), tag, coil, acc)
+    {first, own_pulse(Enum.map(pulse, &Walk.bit_name/1), tag, coil, diagnostics)}
+  end
+
   # M5-9 (decisions 154 and 160): a storage bit is named by its path, which a bit whose
   # number a tag holds has none of: the bit it names moves as the tag does, so no rule of
   # one one-shot to a bit could hold, nor an edit's block list name it.
@@ -936,6 +995,9 @@ defmodule Logex.Compiler do
         "`#{numbered_example(written)}`, so that it is one bit whatever the program does"
 
   defp numbered_example(written), do: hd(String.split(written, ".[")) <> ".0"
+
+  defp element_type(%Tag{type: {:array, type, _dims}}), do: type
+  defp element_type(_no_array), do: nil
 
   defp writable?(%Tag{type: %FbType{} = type}, member),
     do: match?({:ok, %Member{write: true, type: :bool}}, FbType.member(type, member))
@@ -1186,6 +1248,7 @@ defmodule Logex.Compiler do
   defp text({:label, _, name}), do: name
   defp text({:bit, _, _path, _n, _mask, name}), do: name
   defp text({:bit_at, _, _path, _index, _width, name}), do: name
+  defp text({:element, _, _array, _index, name}), do: name
 
   # The member a rung below reads, the one the instance's type gives the instruction
   # (Logex.FbType.rules/1), or for a name not declared yet, the one the type the
@@ -1268,7 +1331,7 @@ defmodule Logex.Compiler do
   # the paths to a type. The warnings are of the table with each type itself.
   defp lowered(:program, rungs, {tags, held}, [], _routine) do
     {named, blocks} = hold(tags, held)
-    {units, reals} = Program.settled(tags)
+    {units, reals, arrays} = Program.settled(tags)
 
     {:ok,
      %Program{
@@ -1277,13 +1340,14 @@ defmodule Logex.Compiler do
        blocks: blocks,
        units: units,
        reals: reals,
+       arrays: arrays,
        warnings: Logex.Warnings.of(rungs, tags)
      }}
   end
 
   defp lowered({:block, name}, rungs, {tags, held}, [], routine) do
     {named, blocks} = hold(tags, held)
-    {units, reals} = Program.settled(tags)
+    {units, reals, arrays} = Program.settled(tags)
 
     body = %Program{
       name: name,
@@ -1293,6 +1357,7 @@ defmodule Logex.Compiler do
       blocks: blocks,
       units: units,
       reals: reals,
+      arrays: arrays,
       warnings: Logex.Warnings.of(rungs, tags)
     }
 
@@ -1797,6 +1862,16 @@ defmodule Logex.Compiler do
          | d
        ]
 
+  defp by_formal(
+         nil,
+         {:ok, %Tag{type: type}} = found,
+         {_formal, slot, operand},
+         {line, _at},
+         {_, d}
+       )
+       when is_array(type),
+       do: resolve(nil, found, slot, operand, {line, "cal"}, d)
+
   defp by_formal(nil, {:ok, %Tag{} = tag}, {formal, {access, type}, _}, {line, at}, {_, d}),
     do:
       d
@@ -1997,6 +2072,14 @@ defmodule Logex.Compiler do
 
   defp bit_operand(literal, _scope), do: literal
 
+  # M5-11 (decision 151): an element, `temps[3]` or `grid[1,7]`, its subscripts literal, is
+  # lowered to its array's name and its subscripts' values, `{:element, line, "grid", [1,
+  # 7], "grid[1,7]"}`, with its name as written, which a message quotes, so that a scan
+  # reads and writes it with no name split. Told from a tag by its name's last byte, which
+  # the clause's guard reads, so a tag lowers in what it did.
+  defp parted([one], {line, name}, scope) when binary_part(name, byte_size(name) - 1, 1) == "]",
+    do: element_ir(lookup_parts([one], scope), {line, name})
+
   defp parted([_one], {line, name}, _scope), do: {:name, line, name}
 
   defp parted(path, at, scope),
@@ -2039,6 +2122,15 @@ defmodule Logex.Compiler do
     do:
       {:bit_at, line, container, {:name, line, index},
        {width, mask(Declarations.kind(type), width - 1, width)}, name}
+
+  defp element_ir({:ok, %Tag{}}, {line, name}) do
+    {array, subscripts} = Logex.Array.split(name)
+    index = for text <- subscripts, do: elem(Logex.Array.subscript(text), 1)
+    {:element, line, array, index, name}
+  end
+
+  # One that is refused lowers as a name, which no scan runs.
+  defp element_ir(_refused, {line, name}), do: {:name, line, name}
 
   defp container_type({:ok, %Tag{type: type}}), do: type
   defp container_type({:member, _tag, %Member{type: type}}), do: type
@@ -2543,10 +2635,80 @@ defmodule Logex.Compiler do
   # §4.7). An internal member, such as a ton's last-scanned time, is not there to find.
   defp lookup(name, scope), do: lookup_parts(String.split(name, "."), scope)
 
+  # M5-11 (decision 151): an element, `temps[3]`, is read and written as a tag of its
+  # elements' type and its own name, as written, wherever a tag of that type goes, by its
+  # array's section and line: each subscript a literal within its dimension, one for every
+  # dimension. Told from a tag by its name's last byte, which the clause's guard reads.
+  defp lookup_parts([name], {tags, _members})
+       when binary_part(name, byte_size(name) - 1, 1) == "]",
+       do: element(Logex.Array.split(name), name, tags)
+
   defp lookup_parts([name], {tags, _members}), do: Map.fetch(tags, name)
+
+  # A name that goes on past an element, `w[2].3` or `t[2].dn`, reaches into nothing an
+  # array of elementary types holds (provisional: an element's bits, decision 155's on an
+  # element, and an instance's members, decision 154's, are not taken yet).
+  defp lookup_parts([head | _parts], {tags, _members} = scope)
+       when binary_part(head, byte_size(head) - 1, 1) == "]",
+       do: past_element(lookup_parts([head], scope), head, tags)
 
   defp lookup_parts([head | parts], {tags, _members} = scope),
     do: owned(Map.fetch(tags, head), head, parts, scope)
+
+  defp past_element({:ok, %Tag{}}, head, tags),
+    do: {:past_element, head, Map.fetch!(tags, elem(Logex.Array.split(head), 0))}
+
+  defp past_element(refused, _head, _tags), do: refused
+
+  defp element({array, subscripts}, name, tags),
+    do:
+      element_of(
+        Map.fetch(tags, array),
+        {array, Enum.map(subscripts, &{&1, Logex.Array.subscript(&1)})},
+        name
+      )
+
+  defp element_of(:error, {array, _subscripts}, _name),
+    do: undeclared_array(Declarations.reserved(array), array)
+
+  defp element_of({:ok, %Tag{type: {:array, type, dims}} = tag}, {_array, subscripts}, name),
+    do:
+      subscripted(
+        Enum.find(subscripts, &match?({_, {:tag, _}}, &1)),
+        {tag, type, dims},
+        subscripts,
+        name
+      )
+
+  defp element_of({:ok, tag}, _subscripts, _name), do: {:not_an_array, tag}
+
+  defp undeclared_array(nil, array), do: {:undeclared_array, array}
+  defp undeclared_array(reserved, array), do: {:reserved, reserved, array}
+
+  # A subscript held in a tag waits for M5-12 (decision 152), and is refused here.
+  defp subscripted({text, {:tag, _}}, {tag, _type, _dims}, _subscripts, _name),
+    do: {:tag_subscript, tag, text}
+
+  defp subscripted(nil, {tag, type, dims}, subscripts, name),
+    do: counted(length(subscripts) == length(dims), {tag, type, dims}, subscripts, name)
+
+  defp counted(false, {tag, _type, _dims}, subscripts, _name),
+    do: {:dimensions, tag, length(subscripts)}
+
+  defp counted(true, {tag, type, dims}, subscripts, name) do
+    outside =
+      subscripts
+      |> Enum.zip(dims)
+      |> Enum.with_index(1)
+      |> Enum.find(fn {{{_text, {:literal, n}}, dim}, _at} -> n < 0 or n >= dim end)
+
+    in_range(outside, {tag, type}, name)
+  end
+
+  defp in_range(nil, {%Tag{} = tag, type}, name), do: {:ok, %Tag{tag | name: name, type: type}}
+
+  defp in_range({{{text, _n}, dim}, at}, {tag, _type}, _name),
+    do: {:subscript_range, tag, {text, dim, at}}
 
   defp owned(:error, head, _parts, _scope), do: unowned(Declarations.reserved(head), head)
 
@@ -2705,6 +2867,86 @@ defmodule Logex.Compiler do
     [diagnostic(line, message) | diagnostics]
   end
 
+  # M5-11 (decision 151): an array is read and written by element, never whole: whole-array
+  # copy and fill are deferred (§4.12, "Deferred").
+  defp resolve(
+         nil,
+         {:ok, %Tag{type: type} = tag},
+         {access, _slot_type},
+         {:name, line, _},
+         {_, word},
+         d
+       )
+       when is_array(type),
+       do: [
+         diagnostic(
+           line,
+           "`#{word}` #{verb(access)} one tag, but `#{tag.name}` is #{a_type(type)}" <>
+             "#{declared(tag)}: an instruction takes one of its elements, as in " <>
+             "`#{tag.name}[#{Enum.map_join(elem(type, 2), ",", fn _ -> 0 end)}]`"
+         )
+         | d
+       ]
+
+  defp resolve(nil, {:undeclared_array, array}, _slot, {:name, line, _name}, _at, diagnostics),
+    do: [{:undeclared, line, array, :element} | diagnostics]
+
+  defp resolve(nil, {:not_an_array, tag}, _slot, {:name, line, name}, _at, diagnostics),
+    do: [
+      diagnostic(
+        line,
+        "`#{name}` names an element of `#{tag.name}`, but `#{tag.name}` is " <>
+          "#{named_type(tag.type)}#{declared(tag)}, no array"
+      )
+      | diagnostics
+    ]
+
+  defp resolve(nil, {:dimensions, tag, count}, _slot, {:name, line, name}, _at, diagnostics) do
+    dims = elem(tag.type, 2)
+
+    [
+      diagnostic(
+        line,
+        "`#{name}` names an element of `#{tag.name}`, #{a_type(tag.type)}#{declared(tag)}, " <>
+          "by #{count} #{subscripts(count)}, where it takes #{length(dims)}, one a " <>
+          "dimension, as in `#{tag.name}[#{Enum.map_join(dims, ",", fn _ -> 0 end)}]`"
+      )
+      | diagnostics
+    ]
+  end
+
+  defp resolve(nil, {:subscript_range, tag, {text, dim, at}}, _slot, {:name, line, name}, _at, d),
+    do: [
+      diagnostic(
+        line,
+        "`#{name}`'s subscript `#{text}` is outside #{dimension(length(elem(tag.type, 2)), at)} " <>
+          "of `#{tag.name}`, 0 to #{dim - 1}: `#{tag.name}` is #{a_type(tag.type)}#{declared(tag)}"
+      )
+      | d
+    ]
+
+  defp resolve(nil, {:tag_subscript, tag, text}, _slot, {:name, line, name}, _at, diagnostics),
+    do: [
+      diagnostic(
+        line,
+        "`#{name}`'s subscript `#{text}` is a tag's name: an element's subscript is a literal " <>
+          "number, as in `#{tag.name}[#{Enum.map_join(elem(tag.type, 2), ",", fn _ -> 0 end)}]`, " <>
+          "until a subscript held in a tag is supported"
+      )
+      | diagnostics
+    ]
+
+  defp resolve(nil, {:past_element, element, tag}, _slot, {:name, line, name}, _at, d),
+    do: [
+      diagnostic(
+        line,
+        "`#{name}` goes past `#{element}`, an element of `#{tag.name}`, " <>
+          "#{a_type(tag.type)}#{declared(tag)}: an element is read and written whole, so " <>
+          "move it into a tag of its own to reach its bits"
+      )
+      | d
+    ]
+
   # An instance is named whole only where an instruction runs it; anywhere else, by one of
   # its members, which the message suggests when one would fit the slot.
   defp resolve(nil, {:ok, %Tag{type: %FbType{name: type}}}, {:instance, type}, _, _, diagnostics),
@@ -2810,6 +3052,17 @@ defmodule Logex.Compiler do
 
     [diagnostic(line, message) | diagnostics]
   end
+
+  defp named_type(%FbType{} = type), do: Declarations.instance_of(type)
+  defp named_type(type), do: a_type(type)
+
+  defp subscripts(1), do: "subscript"
+  defp subscripts(_count), do: "subscripts"
+
+  defp dimension(1, _at), do: "the elements"
+  defp dimension(_dims, 1), do: "the first dimension"
+  defp dimension(_dims, 2), do: "the second dimension"
+  defp dimension(_dims, 3), do: "the third dimension"
 
   defp of_kind(true, _tag, _slot, _at, diagnostics), do: diagnostics
 
@@ -2981,6 +3234,7 @@ defmodule Logex.Compiler do
   defp a_type(:any), do: "a value"
   defp a_type(class) when is_class(class), do: Declarations.a_class(class)
   defp a_type([_ | _] = kinds), do: run_words(kinds)
+  defp a_type(type) when is_array(type), do: Declarations.a_type(type)
   defp a_type(type), do: Declarations.a_or_an(to_string(type))
 
   defp check_member_type(diagnostics, {_access, :any}, _name, _member, _at), do: diagnostics
@@ -3627,6 +3881,7 @@ defmodule Logex.Compiler do
   defp how(true, {:instance, [type | _]}, name), do: note("`var #{name} #{type}`")
   defp how(true, {:instance, type}, name), do: note("`var #{name} #{type}`")
   defp how(true, :block, _name), do: ""
+  defp how(true, :element, name), do: note("`var #{name} dint[8]`")
   defp how(true, _slot, name), do: note("in `var #{name} bool` or `var #{name} dint`")
 
   defp note(declaration),

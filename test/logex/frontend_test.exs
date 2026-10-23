@@ -211,7 +211,10 @@ defmodule Logex.FrontendTest do
                Compiler.tokenize("xic s. ote q")
 
       assert {:error, {{1, 6}, Logex.Lexer, {:illegal, "."}}, 1} = Compiler.tokenize("xic s.(")
-      assert {:error, {{1, 6}, Logex.Lexer, {:illegal, "["}}, 1} = Compiler.tokenize("xic s[n]")
+      # M5-11 (decision 151): a bracket glued to a name with no `.` is an element's
+      # subscripts, `s[n]` one name token, where until then the `[` was illegal.
+      assert {:ok, [{:name, {1, 1}, "xic"}, {:name, {1, 5}, "s[n]"}], 1} =
+               Compiler.tokenize("xic s[n]")
     end
 
     test "anything glued after the `]`, and brackets holding no one number, are named whole" do

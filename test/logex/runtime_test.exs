@@ -2330,9 +2330,9 @@ defmodule Logex.RuntimeTest do
       # body, hold the block types their instances reach in one table, `blocks` (decision
       # 53).
       # Decision 197: and each timer's unit where it is not the millisecond, `units`.
-      # M5-10: and each real's type, `reals`.
+      # M5-10: and each real's type, `reals`. M5-11: and each array's type, `arrays`.
       assert Enum.sort(Map.keys(Logex.Program.__struct__())) ==
-               [:__struct__, :blocks, :file, :name, :reals, :rungs, :source, :tags] ++
+               [:__struct__, :arrays, :blocks, :file, :name, :reals, :rungs, :source, :tags] ++
                  [:units, :warnings]
 
       # OE-1: the staged edit of one instance, whose struct is opaque.

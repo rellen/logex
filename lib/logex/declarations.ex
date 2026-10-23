@@ -13,6 +13,16 @@ defmodule Logex.Declarations do
                                                        Logex.FbType.builtins/0, ton
                                                        among them | a block's name
 
+  Since M5-11 (decision 151) a type word may carry an array's sizes, `real[8]`,
+  `int[4,8]` or `bool[2,3,4]`, Logix's form, and an array's initial value is one literal
+  for every element, `var limits int[3] 10 20 30`, in the elements' order, the rightmost
+  subscript fastest: `check/1` refuses an array of no elementary type, of more than three
+  dimensions, of a dimension of 0 or of more than 65,536 elements, an initial list of
+  another length and an element's value that its type does not hold, each naming the tag
+  or the element, `limits[2]`; a type word sized by a tag's name, or of an instance's type,
+  `ton[4]`, which waits for arrays of instances (decision 154), is refused for its type
+  word, its name's uses excused. No tag is named with brackets.
+
   The section and type words are data, in `@sections` and, since M5-1, the one table of
   elementary types, `table/0` (`docs/organisation.md` §4.12, "The types", decisions 144 and
   145): each type's word, kind, width, range, zero and article, which every range message,
@@ -39,6 +49,7 @@ defmodule Logex.Declarations do
 
   alias Logex.{Diagnostic, FbType, Parser, Tag}
   import Logex.Parser, only: [is_literal: 1]
+  import Logex.Array, only: [is_array: 1]
   alias Logex.Configuration.Text
 
   @sections %{
@@ -363,6 +374,8 @@ defmodule Logex.Declarations do
   """
   def a_type(type) when type in @type_atoms, do: a_or_an(word(type))
   def a_type(type) when is_atom(type), do: a_or_an(to_string(type))
+  # M5-11 (decision 151): an array by its sizes and its elements' type, `an array of 8 ints`.
+  def a_type(type) when is_array(type), do: Logex.Array.a_type(type)
 
   @doc """
   Whether a value of the elementary type `from` widens into `to` with no word (M5-3,
@@ -724,7 +737,17 @@ defmodule Logex.Declarations do
   defp recovered(%Tag{type: %FbType{}, name: name} = tag),
     do: recover(name(name), %{tag | section: :var, initial: nil})
 
+  # M5-11: an array whose type is one is declared with no initial list where its list is
+  # refused, so its uses are checked; one whose type is none declares nothing, and its
+  # uses are excused, as an unknown type's are (split/4).
+  defp recovered(%Tag{type: type, name: name} = tag) when is_array(type),
+    do: array_recovered(array_type(name, type), name(name), tag)
+
   defp recovered(_tag), do: []
+
+  defp array_recovered([], [], tag), do: [%{tag | initial: nil}]
+  defp array_recovered(_untyped, [], tag), do: [{:untyped, tag.name}]
+  defp array_recovered(_typed, _bad_name, _tag), do: []
 
   defp recover([], tag), do: [tag]
   defp recover(_problems, _tag), do: []
@@ -748,18 +771,76 @@ defmodule Logex.Declarations do
     do: {:error, "a declaration cannot hold a branch group"}
 
   defp shape([{:name, _, name}, {:name, _, word} | tail], kw, types) do
-    type = type_word(word, types)
-    salvaged(typed(type, name, word, tail, {kw, types}), type, name)
+    type = declared_type(word, types)
+    salvaged(typed(type, name, word, tail, {kw, types}), type, {name, kw})
   end
 
+  # M5-11 (decision 151): a type word with sizes, `int[8]`, `real[4,8]` or `bool[2,3,4]`,
+  # Logix's form (1756-PM004L pp.34-36), declares an array of that elementary type, each
+  # size a literal number, judged by check/1 with every array's rule, from Elixir too; one
+  # of an instance's type, `ton[4]`, waits for arrays of instances (decision 154), and one
+  # sized by a tag's name, `int[n]`, is no array a program can declare. Either is refused
+  # for its type word, its name's uses excused, as an unknown type's are.
+  # Told from a scalar's type word by its last byte, which the clause's guard reads, so a
+  # scalar's declaration costs what it did before arrays.
+  defp declared_type(word, types) when binary_part(word, byte_size(word) - 1, 1) == "]",
+    do: sized(Logex.Array.split(word), word, types)
+
+  defp declared_type(word, types), do: type_of(String.downcase(word), word, types)
+
+  defp sized(nil, word, types), do: type_word(word, types)
+
+  defp sized({base, sizes}, word, types),
+    do: array_of(type_word(base, types), Enum.map(sizes, &Logex.Array.subscript/1), {base, word})
+
+  defp array_of(type, sizes, at) when is_elementary(type),
+    do: literal_sizes(Enum.find(sizes, &match?({:tag, _}, &1)), type, sizes, at)
+
+  defp array_of(nil, _sizes, {base, _word}), do: {:unknown, base}
+  defp array_of(_instance_or_recursive, _sizes, {base, word}), do: {:of_instances, base, word}
+
+  defp literal_sizes(nil, type, sizes, _at),
+    do: {:array, type, Enum.map(sizes, fn {:literal, n} -> n end)}
+
+  defp literal_sizes({:tag, size}, _type, _sizes, {_base, word}), do: {:sized_by_tag, word, size}
+
   # `var t1 ton 5 6`: the name and the type word came before the mistake (M1-6).
-  defp salvaged({:error, message}, %FbType{} = type, name),
+  defp salvaged({:error, message}, %FbType{} = type, {name, _kw}),
     do: {:error, message, %Tag{name: name, type: type, section: :var}}
 
-  defp salvaged(shaped, _type, _name), do: shaped
+  # M5-11: `var w int[2] 1 x`, an array whose initial list is broken, is still plainly an
+  # array of its line's section, declared with no initial list, so its uses are checked.
+  defp salvaged({:error, message}, {:array, _, _} = type, {name, kw}),
+    do:
+      {:error, message,
+       %Tag{name: name, type: type, section: Map.fetch!(@sections, String.downcase(kw))}}
+
+  defp salvaged(shaped, _type, _named), do: shaped
 
   defp typed(nil, name, type, tail, {kw, types}),
     do: untyped(String.downcase(name), name, type, tail, {kw, types})
+
+  defp typed({:unknown, base}, name, _word, tail, {kw, types}),
+    do: untyped(String.downcase(name), name, base, tail, {kw, types})
+
+  defp typed({:of_instances, base, word}, name, _word, _tail, _kw),
+    do:
+      {:untyped, name,
+       "`#{name}` is declared `#{word}`, an array of #{base}s: an array holds elements of an " <>
+         "elementary type, a bool, an integer, a real or a bit string, and an array of " <>
+         "timers, counters or function blocks is not supported yet"}
+
+  defp typed({:sized_by_tag, word, size}, name, _word, _tail, _kw),
+    do:
+      {:untyped, name,
+       "`#{name}` is declared `#{word}`, sized by `#{size}`: an array's sizes are literal " <>
+         "numbers, as in `int[8]`, fixed when the program compiles"}
+
+  # M5-11 (decision 151): an array's initial list, one literal for every element in the
+  # elements' order, each quoted as written where it is spelled (decision 202).
+  defp typed({:array, _, _} = type, name, _word, [_ | _] = tail, _kw) do
+    listed(Enum.all?(tail, &is_literal/1), type, name, tail)
+  end
 
   # M2-5: a function block never holds an instance of itself, at any depth (Ed 2 §2.5,
   # docs/organisation.md §4.3). Logex.Compiler marks the types that would. The line's name
@@ -793,10 +874,29 @@ defmodule Logex.Declarations do
   defp typed(_type, name, _word, [extra | _], _kw),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
 
+  defp listed(true, type, name, tail),
+    do: {:ok, name, type, Enum.map(tail, &Parser.value/1), Enum.map(tail, &shown_literal/1)}
+
+  defp listed(false, _type, name, tail),
+    do: unlisted(Enum.find(tail, &(not is_literal(&1))), name)
+
+  defp unlisted({:branches, _}, _name), do: {:error, "a declaration cannot hold a branch group"}
+
+  defp unlisted(extra, name),
+    do:
+      {:error,
+       "unexpected #{describe(extra)} in the initial list of `#{name}`: an array's initial " <>
+         "list is one literal for every element"}
+
+  defp shown_literal({:int_lit, _, _}), do: nil
+  defp shown_literal(literal), do: Parser.spelling(literal)
+
   # The one word after a section: a type word first, since `ton` is a mnemonic too (M1-6).
-  defp one(word, types), do: one_of(type_word(word, types), word)
+  defp one(word, types), do: one_of(declared_type(word, types), word)
   defp one_of(nil, word), do: reserved(word)
   defp one_of({:recursive, _chain}, word), do: reserved(word)
+  defp one_of({:unknown, _base}, word), do: reserved(word)
+  defp one_of({kind, _, _}, word) when kind in [:of_instances, :sized_by_tag], do: reserved(word)
   defp one_of(type, _word), do: {:type, type}
 
   # A line with one word after its section: a tag with no type, or a type with no tag.
@@ -885,10 +985,13 @@ defmodule Logex.Declarations do
       "`#{block}` cannot hold an instance of `#{held}` (#{Enum.join(chain, " → ")}): " <>
         "a function block never holds an instance of itself, at any depth"
 
-  defp type_word?({:name, _, word}, types), do: type_word(word, types) != nil
+  defp type_word?({:name, _, word}, types),
+    do: declared_type(word, types) not in [nil, {:unknown, hd(String.split(word, "["))}]
+
   defp type_word?(_element, _types), do: false
 
   defp example(%FbType{name: name}), do: String.first(name) <> "1"
+  defp example(type) when is_array(type), do: "temps"
   defp example(_elementary), do: "fault"
 
   defp describe({:name, _, word}), do: "`#{word}`"
@@ -920,6 +1023,16 @@ defmodule Logex.Declarations do
     {name(tag.name) ++ known ++ section(tag.section) ++ looked_into(known, tag), checked}
   end
 
+  # M5-11 (decision 151): an array's initial list is judged once its type is one; told by
+  # its clause's head, so that a scalar's check costs what it did before arrays.
+  defp check(%Tag{type: {:array, _, _} = type} = tag, _types, checked, shown) do
+    typed = array_type(tag.name, type)
+
+    {name(tag.name) ++
+       typed ++ section(tag.section) ++ judged_initial(typed, tag, shown) ++ external(tag),
+     checked}
+  end
+
   defp check(%Tag{} = tag, _types, checked, shown),
     do:
       {name(tag.name) ++
@@ -931,6 +1044,15 @@ defmodule Logex.Declarations do
   defp name(:mnemonic, name, _), do: ["`#{name}` is an instruction and cannot name a tag"]
   defp name(:type, name, _), do: ["`#{name}` is a type and cannot name a tag"]
   defp name(:section, name, _), do: ["`#{name}` is a keyword and cannot name a tag"]
+
+  # M5-11: brackets name no tag either: they are kept for an element's subscripts (decision
+  # 151), told by the name's last byte, which the clause's guard reads.
+  defp name(nil, name, {:ok, [{:name, _, name}], _})
+       when binary_part(name, byte_size(name) - 1, 1) == "]",
+       do: [
+         "`#{name}` cannot name a tag: brackets are kept for an element's subscripts, as in " <>
+           "`temps[3]`"
+       ]
 
   defp name(nil, name, {:ok, [{:name, _, name}], _}),
     do: dotted(String.contains?(name, "."), name)
@@ -954,6 +1076,52 @@ defmodule Logex.Declarations do
       "unknown type #{inspect(type)}: logex has " <>
         listed(own_type_values()) <> spelled_as(type)
     ]
+
+  # M5-11 (decision 151): an array of an elementary type, of one to three dimensions, each
+  # of 1 element or more, and of 65,536 elements in all at most (§4.12's proposal, which
+  # M5-11's spike measured; provisional), each refusal naming the tag.
+  defp array_type(name, {:array, type, dims}) when type in @type_atoms,
+    do: dimensions(counts?(dims), name, dims)
+
+  defp array_type(name, {:array, type, _dims}),
+    do: [
+      "#{label(name)} is an array whose elements are of an elementary type, as in " <>
+        "{:array, :int, [8]}: logex has " <>
+        listed(Enum.map(@type_atoms, &inspect/1)) <> ", found #{inspect(type)}"
+    ]
+
+  defp counts?([_ | _] = dims), do: Enum.all?(dims, &is_integer/1)
+  defp counts?(_dims), do: false
+
+  defp dimensions(false, name, dims),
+    do: [
+      "#{label(name)} is an array whose sizes are a list of one to three counts, as in " <>
+        "{:array, :int, [4, 8]}, found #{inspect(dims)}"
+    ]
+
+  defp dimensions(true, name, dims) when length(dims) > 3,
+    do: [
+      "#{label(name)} is declared with #{length(dims)} dimensions, `[#{Enum.join(dims, ",")}]`: " <>
+        "an array has one to three, as in `int[8]`, `int[4,8]` or `int[2,3,4]`"
+    ]
+
+  defp dimensions(true, name, dims), do: sizes(Enum.find(dims, &(&1 < 1)), name, dims)
+
+  defp sizes(nil, name, dims), do: within_limit(Logex.Array.size(dims), name, dims)
+
+  defp sizes(size, name, dims),
+    do: [
+      "#{label(name)} is declared with a dimension of #{size}, `[#{Enum.join(dims, ",")}]`: " <>
+        "each dimension of an array holds 1 element or more"
+    ]
+
+  defp within_limit(size, name, dims) when size > 65_536,
+    do: [
+      "#{label(name)} would hold #{size} elements, `[#{Enum.join(dims, ",")}]`: an array " <>
+        "holds 65536 at most"
+    ]
+
+  defp within_limit(_size, _name, _dims), do: []
 
   defp as_value(word) when is_map_key(@types, word), do: inspect(Map.fetch!(@types, word))
   defp as_value(word), do: "Logex.FbType.#{FbType.builtin(word).name}()"
@@ -1052,6 +1220,9 @@ defmodule Logex.Declarations do
 
   # Messages name the tag with label/1, because from Elixir the name itself may be the
   # thing that is wrong.
+  defp judged_initial([], tag, shown), do: initial(tag, shown)
+  defp judged_initial(_untyped, _tag, _shown), do: []
+
   defp initial(%Tag{initial: nil}, _shown), do: []
 
   defp initial(%Tag{section: :var_input, name: name}, _shown),
@@ -1065,6 +1236,20 @@ defmodule Logex.Declarations do
     do: [
       "#{label(name)} is a var_external: its value is the configuration's global of that " <>
         "name, so it takes no initial value"
+    ]
+
+  # M5-11 (decision 151): an array's initial list, one value for every element in the
+  # elements' order, each judged as an initial value of its elements' type, by the
+  # element's name, `limits[2]`; one of another length is refused, where IEC truncates or
+  # fills with a warning (Ed 3 pp.39-40).
+  defp initial(%Tag{type: {:array, _, _} = type, name: name, initial: values}, shown)
+       when is_list(values),
+       do: initial_list(proper_length(values), type, name, {values, shown})
+
+  defp initial(%Tag{type: {:array, _, _} = type, name: name, initial: v}, _shown),
+    do: [
+      "#{label(name)} is #{a_type(type)}: its initial value is a list of its elements' " <>
+        "values, found #{inspect(v)}"
     ]
 
   # M5-10: a real's initial value is a number, an integer or a float; any other type's an
@@ -1081,6 +1266,53 @@ defmodule Logex.Declarations do
     do: fit(holds?(type, v), type, name, {quoted(shown, v), v})
 
   defp initial(_tag, _shown), do: []
+
+  defp initial_list(-1, array, name, {values, _shown}),
+    do: [
+      "#{label(name)} is #{a_type(array)}: its initial value is a list of its elements' " <>
+        "values, found #{inspect(values)}"
+    ]
+
+  defp initial_list(length, {:array, type, dims} = array, name, {values, shown}) do
+    size = Logex.Array.size(dims)
+
+    elements(
+      length == size,
+      {array, name, size, length},
+      Enum.zip([Logex.Array.indexes(dims), values, shown_list(shown, length)]),
+      type
+    )
+  end
+
+  defp elements(true, {_array, name, _size, _length}, elements, type),
+    do:
+      Enum.flat_map(elements, fn {index, v, shown} ->
+        tag = %Tag{type: type, name: element_name(name, index), section: :var, initial: v}
+        initial(tag, shown)
+      end)
+
+  defp elements(false, {array, name, size, length}, _elements, _type),
+    do: [
+      "#{label(name)} is #{a_type(array)}: its initial list holds #{length} " <>
+        "#{plural(length, "value")}, and an array's holds one for every element, #{size}, " <>
+        "in the elements' order"
+    ]
+
+  defp element_name(name, index) when is_binary(name), do: Logex.Array.name(name, index)
+  defp element_name(name, index), do: Logex.Array.name(inspect(name), index)
+
+  defp shown_list(shown, _length) when is_list(shown), do: shown
+  defp shown_list(_none, length), do: List.duplicate(nil, length)
+
+  defp plural(1, word), do: word
+  defp plural(_count, word), do: word <> "s"
+
+  defp proper_length([]), do: 0
+  defp proper_length([_ | rest]), do: plus_one(proper_length(rest))
+  defp proper_length(_improper), do: -1
+
+  defp plus_one(-1), do: -1
+  defp plus_one(n), do: n + 1
 
   defp quoted(nil, v) when is_float(v), do: "`#{Float.to_string(v)}`"
   defp quoted(nil, v), do: "`#{v}`"

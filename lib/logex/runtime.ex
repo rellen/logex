@@ -221,9 +221,12 @@ defmodule Logex.Runtime do
   dint an integer from -2147483648 to 2147483647, and since M5-3 each integer width an
   integer in its own range, a uint 0 to 65535, and since M5-10 a real any number within its
   range, stored as its nearest value, 16777217 in a `real` as 16777216.0, 2^128 refused
-  (decision 166). Every input problem in one call comes in
-  one raise, a line each, in key order. Inputs merge into the instance, so a host sends
-  only what changed. Outputs are every `var_output`.
+  (decision 166). Since M5-11 (decision 151) an array var_input is set whole, as a list of
+  its first dimension's size, a list of lists for more dimensions, each element fitting its
+  type, a misfit a line by the element's name, `w[1,2]`; an element alone is no key a host
+  sets; and an array var_output is given as such a list. Every input problem in one call
+  comes in one raise, a line each, in key order. Inputs merge into the instance, so a host
+  sends only what changed. Outputs are every `var_output`.
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
   `first`; its `ons_blocked` is the runtime's, which `call/4` fills in with a map of the
   bits the instance's list names, so a host leaves it out. A state is matched to its program
@@ -238,7 +241,11 @@ defmodule Logex.Runtime do
   decision 186 a timer's `last` that is no integer, and since decision 188 one later than the instance's `now`,
   and since M5-10 a real's value that is no value of its type, an integer, −0.0, a
   subnormal or, in a `real`, a float no single is, "it is a real, and 0.1 is no value of
-  a real, whose nearest is 0.10000000149011612" (decision 150). A resource's instance is checked as each scan takes it, and before it
+  a real, whose nearest is 0.10000000149011612" (decision 150), and since M5-11 an array
+  whose value is no tuple of its sizes, "its value must be a tuple of 2 tuples of 3
+  elements", an element outside its type by the element's name, `w[0,2]`, and a state
+  that lacks an array, which a state holds whole, so that a write of an element always
+  finds its array. A resource's instance is checked as each scan takes it, and before it
   each global a connection copies into it against the global's own type, which may be
   narrower than the var_input it fills (decision 159): "runtime.globals holds `a`
   outside its type: it is a uint, and 70000 is outside 0 to 65535". The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
@@ -708,10 +715,16 @@ defmodule Logex.Runtime do
       for(
         {name, %Tag{section: :var_input, type: type}} <- tags,
         {:ok, value} <- [Map.fetch(env, name)],
-        Declarations.fits?(type, value),
+        kept_input?(type, value),
         into: %{},
         do: {name, value}
       )
+
+  # M5-11: an array var_input is kept whole where its value is one, as a state holds it.
+  defp kept_input?({:array, type, dims}, value),
+    do: Logex.Array.held?(value, dims, &element_fits?(type, &1))
+
+  defp kept_input?(type, value), do: Declarations.fits?(type, value)
 
   defp mode!(mode) when mode in [:cold, :warm], do: :ok
 
@@ -873,14 +886,28 @@ defmodule Logex.Runtime do
   defp paths(inner, path, acc),
     do: Enum.reduce(inner, acc, fn {name, at}, acc -> paths(at, path <> "." <> name, acc) end)
 
-  # A var_output a hand-built env leaves out reads 0, as a contact reads it (M1-4).
-  defp outputs(%Program{tags: tags}, env),
+  # A var_output a hand-built env leaves out reads 0, as a contact reads it (M1-4). Since
+  # M5-11 an array var_output is given as a host is given an array, a list, a list of lists
+  # for more dimensions, where the program holds one (`arrays`), and every output as it
+  # was before arrays where it holds none.
+  defp outputs(%Program{tags: tags, arrays: nil}, env),
     do:
       for(
         {name, %Tag{section: :var_output}} <- tags,
         into: %{},
         do: {name, Map.get(env, name, 0)}
       )
+
+  defp outputs(%Program{tags: tags, arrays: arrays}, env),
+    do:
+      for(
+        {name, %Tag{section: :var_output}} <- tags,
+        into: %{},
+        do: {name, given(Map.get(arrays, name), Map.get(env, name, 0))}
+      )
+
+  defp given({:array, _type, dims}, value), do: Logex.Array.to_list(value, dims)
+  defp given(nil, value), do: value
 
   # The block list as a tree, each name split at its `.`s once: linear in the list. Since
   # M5-8 a bit of a tag, `status.3`, is one leaf, its last two parts, as the block list and
@@ -1043,6 +1070,11 @@ defmodule Logex.Runtime do
        when is_fitting(type, :erlang.map_get(name, env)),
        do: misfits(rest, env, at, acc)
 
+  # M5-11 (decision 151): an array is held whole, a tuple of its dimensions' sizes, so a
+  # state that lacks one is refused too: a write of an element writes into its array.
+  defp misfits([{name, %Tag{type: {:array, _, _} = type}} | rest], env, {path, blocks} = at, acc),
+    do: misfits(rest, env, at, held(Map.fetch(env, name), type, [name | path], blocks, acc))
+
   defp misfits([{name, %Tag{type: type}} | rest], env, {path, blocks} = at, acc),
     do: misfits(rest, env, at, present(Map.fetch(env, name), type, [name | path], blocks, acc))
 
@@ -1051,6 +1083,16 @@ defmodule Logex.Runtime do
 
   defp present({:ok, value}, type, path, blocks, acc), do: of_type(type, value, path, blocks, acc)
   defp present(:error, _type, _path, _blocks, acc), do: acc
+
+  defp held({:ok, value}, type, path, blocks, acc), do: of_type(type, value, path, blocks, acc)
+
+  defp held(:error, type, path, _blocks, acc),
+    do: [
+      "state.env lacks `#{Enum.join(Enum.reverse(path), ".")}`: it is " <>
+        "#{Declarations.a_type(type)}, which a state holds whole, as " <>
+        "`Logex.Runtime.instance/1` makes it"
+      | acc
+    ]
 
   defp of_type(type, value, _path, _blocks, acc) when is_fitting(type, value), do: acc
 
@@ -1061,6 +1103,18 @@ defmodule Logex.Runtime do
 
   defp of_type(type, value, path, _blocks, acc) when is_elementary(type),
     do: [outside(type, value, path) | acc]
+
+  # M5-11: an array's value is a tuple of its first dimension's size, of tuples of the next
+  # for more dimensions, each element of its elements' type, told by the element's name,
+  # `temps[3]`; a guard an element where every one fits.
+  defp of_type({:array, type, dims} = array, value, path, blocks, acc) do
+    shaped(
+      Logex.Array.held?(value, dims, &element_fits?(type, &1)),
+      Logex.Array.held?(value, dims, fn _element -> true end),
+      {array, value, path, blocks},
+      acc
+    )
+  end
 
   defp of_type(%FbType{body: nil, members: members}, %{} = map, path, blocks, acc),
     do:
@@ -1096,6 +1150,37 @@ defmodule Logex.Runtime do
     do: [described(Declarations.a_type(:clock), unfitting(:clock, :clock, value), path) | acc]
 
   defp later(value, now), do: "#{value} is later than the instance's now, #{now}"
+
+  defp element_fits?(type, value) when is_fitting(type, value), do: true
+  defp element_fits?(type, value) when type in @reals, do: Logex.Real.value?(type, value)
+  defp element_fits?(_type, _value), do: false
+
+  defp shaped(true, _shape, _array, acc), do: acc
+
+  defp shaped(false, true, {{:array, type, dims}, value, [name | path], blocks}, acc),
+    do:
+      Enum.reduce(Enum.zip(Logex.Array.indexes(dims), Logex.Array.to_flat(value, dims)), acc, fn
+        {index, element}, acc ->
+          of_type(type, element, [Logex.Array.name(name, index) | path], blocks, acc)
+      end)
+
+  defp shaped(false, false, {{:array, _, dims} = array, value, path, _blocks}, acc),
+    do: [
+      described(
+        Declarations.a_type(array),
+        "its value must be #{tuple_shape(dims)}, found #{inspect(value)}",
+        path
+      )
+      | acc
+    ]
+
+  defp tuple_shape(dims), do: "a tuple of " <> shape_of(dims, "tuple")
+
+  defp shape_of([count], _kind), do: "#{count} #{elements(count)}"
+  defp shape_of([count | dims], kind), do: "#{count} #{kind}s of " <> shape_of(dims, kind)
+
+  defp elements(1), do: "element"
+  defp elements(_count), do: "elements"
 
   defp real_held(true, _type, _value, _path, acc), do: acc
   defp real_held(false, type, value, path, acc), do: [outside(type, value, path) | acc]
@@ -1257,8 +1342,14 @@ defmodule Logex.Runtime do
           "got: #{inspect(inputs)}"
       )
 
-  defp merged([], state, {env, %Program{reals: nil}}, inputs),
+  defp merged([], state, {env, %Program{reals: nil, arrays: nil}}, inputs),
     do: %{state | env: Map.merge(env, inputs)}
+
+  # M5-11 (decision 151): an array var_input's value is a host's list, held as the tuple a
+  # state holds, each element of a real its nearest value.
+  defp merged([], state, {env, %Program{reals: reals, arrays: arrays}}, inputs)
+       when arrays != nil,
+       do: %{state | env: Map.merge(env, Map.new(inputs, &as_array_input(&1, reals, arrays)))}
 
   # M5-10 (decision 166): an input into a real is the real's nearest value, an integer's
   # precision lost silently, 16,777,217 into a `real` stored as 16777216.0.
@@ -1285,6 +1376,12 @@ defmodule Logex.Runtime do
   defp problem(key, value, %Program{tags: tags} = program),
     do: declared(Map.fetch(tags, key), key, value, program)
 
+  # M5-11: a key naming an element of an array var_input is told that a host sets the array
+  # whole (provisional).
+  defp declared(:error, key, _value, %Program{tags: tags} = program)
+       when binary_part(key, byte_size(key) - 1, 1) == "]",
+       do: element_key(Logex.Array.split(key), key, tags, program)
+
   # A key naming no tag is told what its first part is, an instance's type itself (tag_of/2).
   defp declared(:error, key, _value, %Program{tags: tags} = program) do
     [head | path] = String.split(key, ".")
@@ -1298,6 +1395,26 @@ defmodule Logex.Runtime do
     do:
       "input #{label(key)} is a #{tag.section}#{on_line(tag)}, not a var_input: " <>
         "only a var_input is set from outside"
+
+  defp element_key({array, _subscripts}, key, tags, program),
+    do: element_input(Map.fetch(tags, array), key, tags, program)
+
+  defp element_key(nil, key, tags, program), do: element_input(:error, key, tags, program)
+
+  defp element_input(
+         {:ok, %Tag{section: :var_input, type: {:array, _, dims} = type} = tag},
+         key,
+         _tags,
+         _program
+       ),
+       do:
+         "input #{inspect(key)} names an element of `#{tag.name}`, #{Declarations.a_type(type)}: " <>
+           "a host sets an array var_input whole, as #{list_shape(dims)}"
+
+  defp element_input(_not_an_input_array, key, tags, _program) do
+    inputs = for {name, %Tag{section: :var_input}} <- tags, do: name
+    hint("input #{inspect(key)} is not declared", "", inputs)
+  end
 
   # M1-6: the host never sets anything inside an instance. A key naming a declared tag was
   # found before this, so here a key found by its first part has a `.`, and it is called a
@@ -1330,6 +1447,17 @@ defmodule Logex.Runtime do
 
   defp hint(line, suggestion, _inputs), do: line <> suggestion
 
+  # M5-11 (decision 151): an array var_input's value is a list of its first dimension's
+  # size, of lists of the next for more dimensions, its every element fitting the elements'
+  # type, each misfit a line by the element's name, `w[3]`.
+  defp fit(%Tag{type: {:array, type, dims} = array} = tag, value) do
+    listed(
+      Logex.Array.listed?(value, dims, fn _element -> true end),
+      {tag, array},
+      {value, dims, type}
+    )
+  end
+
   # An integer type's value must be an integer, which a bool's is told by its range (M5-1:
   # the kind, from the one table of types).
   defp fit(%Tag{type: type} = tag, value), do: fit(Declarations.kind(type), tag, value)
@@ -1349,6 +1477,28 @@ defmodule Logex.Runtime do
 
   defp fit(_kind, %Tag{type: type} = tag, value),
     do: fits(Declarations.fits?(type, value), tag, value)
+
+  defp listed(true, {tag, _array}, {value, dims, type}) do
+    lines =
+      for {index, element} <- Enum.zip(Logex.Array.indexes(dims), listed_flat(value, dims)),
+          line = fit(%{tag | name: Logex.Array.name(tag.name, index), type: type}, element),
+          do: line
+
+    joined(lines)
+  end
+
+  defp listed(false, {tag, array}, {value, dims, _type}),
+    do:
+      "input `#{tag.name}` is #{Declarations.a_type(array)}: its value must be " <>
+        "#{list_shape(dims)}, found #{inspect(value)}"
+
+  defp listed_flat(value, [_count]), do: value
+  defp listed_flat(value, [_count | dims]), do: Enum.flat_map(value, &listed_flat(&1, dims))
+
+  defp joined([]), do: nil
+  defp joined(lines), do: Enum.join(lines, "\n")
+
+  defp list_shape(dims), do: "a list of " <> shape_of(dims, "list")
 
   defp fits(true, _tag, _value), do: nil
 
@@ -1985,6 +2135,9 @@ defmodule Logex.Runtime do
   defp hold({symbol, _, [{:bit, _, [_], _, _, _} = bit | _]}, env) when symbol in @one_shots,
     do: mark(env, [Walk.bit_name(bit)])
 
+  defp hold({symbol, _, [{:element, _, _, _, _} = bit | _]}, env) when symbol in @one_shots,
+    do: mark(env, [Walk.bit_name(bit)])
+
   defp hold({symbol, _, [{:name, _, name} | _]}, env) when is_map_key(@memories, symbol),
     do: mark(env, [name, Map.fetch!(@memories, symbol)])
 
@@ -2611,6 +2764,13 @@ defmodule Logex.Runtime do
 
   defp blocked?({:bit, _, _member, _, _, _}, _blocked), do: false
 
+  # M5-11 (decision 154): an element kept as a storage bit, `edge[2]`, a leaf of the tree by
+  # its name, its subscripts by value; with no block its name is never made.
+  defp blocked?({:element, _, _, _, _}, blocked) when map_size(blocked) == 0, do: false
+
+  defp blocked?({:element, _, _, _, _} = bit, blocked),
+    do: is_map_key(blocked, Walk.bit_name(bit))
+
   # M3-4: whether a pulse coil may see an edge on this scan: not on a first scan, nor where
   # its storage bit is blocked, as an `ons` passes no power then.
   defp edge?(storage, %Scan{first: first, ons_blocked: blocked}),
@@ -2949,7 +3109,17 @@ defmodule Logex.Runtime do
   defp type_at(at, {:member, _, [instance, member]} = destination, %Scan{tags: tags}),
     do: member_type(Map.get(tags, instance), member, {at, destination, tags})
 
+  # M5-11: an element computes in its array's elements' type.
+  defp type_at(at, {:element, _, array, _index, _name} = destination, %Scan{tags: tags}),
+    do: tag_type(element_tag(Map.get(tags, array)), {at, destination, tags})
+
   defp type_at(at, destination, %Scan{tags: tags}), do: refused_at({at, destination, tags})
+
+  # An array's tag as the tag of one of its elements, of its elements' type, for the
+  # destination rules above, which read a tag's type; anything else as none, which they
+  # refuse, the one rule saying what it is (`Logex.Program.destination/3`).
+  defp element_tag(%Tag{type: {:array, type, _dims}} = tag), do: %{tag | type: type}
+  defp element_tag(_no_array), do: nil
 
   # M5-8: the type a bitwise instruction computes in, its destination's, an integer's or,
   # since decision 155, a bit string's, and since decision 206 a bool's, by the one rule
@@ -2957,6 +3127,9 @@ defmodule Logex.Runtime do
   # destination it does not take raises as type_at/3's does.
   defp bits_at(at, {:name, _, name} = destination, %Scan{tags: tags}),
     do: bits_type(Map.get(tags, name), {at, destination, tags})
+
+  defp bits_at(at, {:element, _, array, _index, _name} = destination, %Scan{tags: tags}),
+    do: bits_type(element_tag(Map.get(tags, array)), {at, destination, tags})
 
   defp bits_at(at, destination, %Scan{tags: tags}),
     do: bits_refused({at, destination, tags})
@@ -2979,6 +3152,10 @@ defmodule Logex.Runtime do
     do: own_bits(:maps.get(name, tags, nil), type)
 
   defp source_bits({:bit, _, _, _, _, _}, _type, _scan), do: :bool
+
+  defp source_bits({:element, _, array, _index, _name}, type, %Scan{tags: tags}),
+    do: own_bits(element_tag(:maps.get(array, tags, nil)), type)
+
   defp source_bits({:bit_at, _, _, _, _, _}, _type, _scan), do: :bool
 
   defp source_bits({:member, _, _} = source, type, %Scan{tags: tags}),
@@ -3009,6 +3186,9 @@ defmodule Logex.Runtime do
   # type_at/3's does.
   defp root_type(at, {:name, _, name} = destination, %Scan{tags: tags}),
     do: root_of(Map.get(tags, name), {at, destination, tags})
+
+  defp root_type(at, {:element, _, array, _index, _name} = destination, %Scan{tags: tags}),
+    do: root_of(element_tag(Map.get(tags, array)), {at, destination, tags})
 
   defp root_type(at, destination, %Scan{tags: tags}), do: rooted_at({at, destination, tags})
 
@@ -3303,6 +3483,17 @@ defmodule Logex.Runtime do
 
   defp as_input({name, value}, reals), do: {name, as_real(:maps.get(name, reals, :none), value)}
 
+  defp as_array_input({name, value}, reals, arrays),
+    do: array_input(:maps.get(name, arrays, nil), {name, value}, as_map(reals))
+
+  defp array_input({:array, type, dims}, {name, value}, _reals),
+    do: {name, Logex.Array.from_list(value, dims, &as_real(real_type(type), &1))}
+
+  defp array_input(nil, input, reals), do: as_input(input, reals)
+
+  defp real_type(type) when type in @reals, do: type
+  defp real_type(_type), do: :none
+
   # M5-10: an arithmetic source, an integer or a real.
   defp number(value) when is_number(value), do: value
   defp number(_not_a_number), do: 0
@@ -3310,6 +3501,8 @@ defmodule Logex.Runtime do
   # M5-10 (decision 150): a value written into a real, its nearest value, an integer widened
   # into it, or into nothing that is a real, as it is.
   defp real_of({:name, _, name}, reals), do: :maps.get(name, reals, :none)
+  # M5-11: an element of an array of reals is its elements' real, by its array's name.
+  defp real_of({:element, _, array, _index, _name}, reals), do: :maps.get(array, reals, :none)
   defp real_of(_member, _reals), do: :none
 
   defp as_real(:none, value), do: value
@@ -3346,6 +3539,14 @@ defmodule Logex.Runtime do
   defp read(_env, {:real_lit, _, value}), do: value
   defp read(_env, {:real_lit, _, value, _spelling}), do: value
 
+  # M5-11 (decision 151): an element of an array, its subscripts literal, which the
+  # compiler checked against its dimensions: one `elem/2` a dimension of the tuple its
+  # array holds, which every state handed in holds whole (values!/2).
+  defp read(env, {:element, _, array, [i], _name}), do: elem(:erlang.map_get(array, env), i)
+
+  defp read(env, {:element, _, array, index, _name}),
+    do: Logex.Array.fetch(:erlang.map_get(array, env), index)
+
   defp walk(value, []), do: value
   defp walk(%{} = map, [key | path]), do: walk(Map.get(map, key, 0), path)
   defp walk(_not_a_map, _path), do: 0
@@ -3354,6 +3555,14 @@ defmodule Logex.Runtime do
   # what is not a map on the way becomes one.
   defp write(env, {:name, _, name}, value), do: Map.put(env, name, value)
   defp write(env, {:member, _, path}, value), do: put_path(env, path, value)
+
+  # M5-11: an element is written into its array, the tuple of each dimension it passes
+  # through copied, every other element kept.
+  defp write(env, {:element, _, array, [i], _name}, value),
+    do: %{env | array => put_elem(:erlang.map_get(array, env), i, value)}
+
+  defp write(env, {:element, _, array, index, _name}, value),
+    do: %{env | array => Logex.Array.put(:erlang.map_get(array, env), index, value)}
 
   # M5-8: a bit is written into its word, the rest of the word kept: 1 sets the mask's bits
   # and 0 clears them, so a signed type's top bit, whose mask is every bit from it up, is

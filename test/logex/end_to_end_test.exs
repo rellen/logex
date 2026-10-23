@@ -248,8 +248,17 @@ defmodule Logex.EndToEndTest do
       # Guards the character class. The original `a-zA-z` is a lowercase-z typo
       # spanning ASCII 91-96, so [ \ ] ^ ` were legal inside identifiers and
       # "ote a[3]" lexed as a single tag literally named "a[3]" — array indexing
-      # that looks like it works and does not.
-      assert lex_error?("ote a[3]")
+      # that looks like it works and does not. Since M5-11 (decision 151) it is indexing
+      # that works: `a[3]` is element 3 of the array `a`, refused where `a` is no array,
+      # and no tag is named with brackets.
+      refute lex_error?("ote a[3]")
+
+      assert {:error, [%{message: "`a[3]` names an element of `a`, but `a` is a bool" <> _}]} =
+               Logex.compile("var a bool\note a[3]", name: "p")
+
+      assert {:error, [%{message: "`a[3]` cannot name a tag: brackets are kept for" <> _} | _]} =
+               Logex.compile("var a[3] bool\nxic b ote c", name: "p")
+
       assert lex_error?("ote a]b")
       assert lex_error?("ote a^b")
       assert lex_error?("ote a\\b")

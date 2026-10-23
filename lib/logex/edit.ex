@@ -239,6 +239,22 @@ defmodule Logex.Edit do
   bits of its `:ons_blocked` entries, in order, as the block list a switch leaves, and
   `switched`, which a switch sets. The other kinds state facts and forecasts.
 
+  **Arrays** (M5-11, decisions 151, 154 and 157). An array's type is its elements' type and
+  its sizes, so an edit that changes either, `int[8]` to `int[10]` or `dint[8]`, `int[2,4]`
+  to `int[8]`, or an array to a tag or a tag to an array, is refused as every type change
+  is, ``line 1: `temps` is an array of 8 ints in the running program and an array of 10
+  ints in the candidate: a tag's type changes only with a restart``. An array both programs
+  declare moves whole, by its name, and one only the candidate declares starts at its
+  initial list, as any tag. A changed initial list is reported element by element, each
+  element whose declared value differs by its name, `{:initial_changed, "lim[1]", {20,
+  25}}`, an element a list does not give at its type's zero, a block's own array by its
+  path, `sh.buf[1]`, the running values kept. An element kept as a one-shot's storage bit
+  or a pulse coil's bit, `ons edge[2]`, is on the block list by its name, its subscripts by
+  value, `edge[2]`, under every rule a bool's is, and a rung that only respells a
+  subscript, `edge[16#2]`, is the same rung. A report gives an array's value to the host as
+  a list, a list of lists for more dimensions, as a host's input takes one, so that an
+  `{:input, "w", [0, 0]}` is sent back as it is.
+
   **Function blocks** (M2-5, decisions 31 and 32). An instance of a user function block
   keeps its type while the block keeps its name and every member both versions declare
   keeps its kind, at any depth: an edit may change the block's body, its members' order and

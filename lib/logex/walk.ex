@@ -3,6 +3,11 @@ defmodule Logex.Walk do
   The one walk of a program's IR (`PLAN.md` B5, M2-4; `docs/organisation.md` §4.10): what
   a compiled program's rungs do, read from the rungs alone, as public functions rather
   than a field of `%Logex.Program{}` that a program built by hand could get wrong.
+  Since M5-11 an element, `temps[3]`, is a use and a write of its array, `temps`, as a bit
+  is of its word, and is named by its subscripts' values, `temps[3]`, where a one-shot or a
+  coil keeps it (`bit_name/1`, `storage_bits/1`) and in `bit_writes/1`, so that the
+  warnings and an edit read an element as a bool or a bit is read.
+
   `Logex.Compiler`, `Logex.Warnings` and `Logex.Edit` read their instructions, uses,
   writes and timers here, and `Logex.Configuration.check/1` what each program type writes
   through its var_externals (M2-4), each instruction's slots through
@@ -91,6 +96,12 @@ defmodule Logex.Walk do
   defp tag_of({:bit_at, _, [container | _], {:name, _, index}, _width, _name}),
     do: {:numbered, container, index}
 
+  # M5-11 (decision 151): an element is a use of its array, `temps[3]` of `temps`, with its
+  # slot's access, as a bit is of its word, so a write of an element is a write of its
+  # array in `writes/1`; the element itself is named by `bit_name/1`, `temps[3]`, where a
+  # one-shot or a coil keeps it, and in `bit_writes/1`.
+  defp tag_of({:element, _, array, _index, _name}), do: array
+
   defp tag_of({:int_lit, _, _}), do: nil
   defp tag_of({:int_lit, _, _, _spelling}), do: nil
   # M5-10: a real literal, plain or spelled, is no tag either.
@@ -119,6 +130,10 @@ defmodule Logex.Walk do
   def bit_name({:bit, _, path, n, _mask, _name}),
     do: Enum.join(path, ".") <> "." <> Integer.to_string(n)
 
+  # M5-11 (decision 154): an element by its array and its subscripts' values, `edge[2]`, as
+  # a bit is named by its number's.
+  def bit_name({:element, _, array, index, _name}), do: Logex.Array.name(array, index)
+
   def bit_name(operand), do: operand
 
   @doc """
@@ -140,6 +155,7 @@ defmodule Logex.Walk do
 
   defp own_bit({:name, _, bit}), do: bit
   defp own_bit({:bit, _, [_container], _n, _mask, _name} = bit), do: bit_name(bit)
+  defp own_bit({:element, _, _array, _index, _name} = element), do: bit_name(element)
   defp own_bit(_member), do: nil
 
   @doc """
@@ -294,8 +310,8 @@ defmodule Logex.Walk do
   defp bits_written(instructions, tags) do
     instructions
     |> Enum.flat_map(fn {_symbol, line, operands} = instruction ->
-      for {{:write, _type}, {:bit, _, [_], _, _, _} = bit} <-
-            Enum.zip(Compiler.signature(instruction, tags), operands),
+      for {{:write, _type}, bit} <- Enum.zip(Compiler.signature(instruction, tags), operands),
+          own_bit?(bit),
           do: {bit_name(bit), line}
     end)
     |> Enum.reduce(%{}, fn {path, line}, writes ->
@@ -303,6 +319,10 @@ defmodule Logex.Walk do
     end)
     |> Map.new(fn {path, lines} -> {path, Enum.reverse(lines)} end)
   end
+
+  defp own_bit?({:bit, _, [_], _, _, _}), do: true
+  defp own_bit?({:element, _, _, _, _}), do: true
+  defp own_bit?(_other), do: false
 
   # Each member an instruction's `:write` slots name, by its path, with the instruction's
   # line.

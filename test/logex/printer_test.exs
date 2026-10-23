@@ -61,7 +61,14 @@ defmodule Logex.PrinterTest do
                      :exponent_real_lit,
                      # kept as written where it is not its float's plain text (decision
                      # 202's rule), `37.50`, `1_000.5`, `1.5E3` or `-0.0`
-                     :spelled_real_lit
+                     :spelled_real_lit,
+                     # M5-11 (decision 151): a name with an element's subscripts, `temps[3]`,
+                     # a lexer rule, printed as written, a declaration's sized type word,
+                     # `int[8]`, among them, and a subscript in any spelling of a number or a
+                     # tag's name, `w[16#a]` or `flags[slot]`
+                     :element_name,
+                     # with more than one subscript, `grid[1,7]` or `cube[0,1,2]`
+                     :subscripted_name
                    ])
 
   describe "round trip" do
@@ -308,7 +315,8 @@ defmodule Logex.PrinterTest do
   end
 
   @names ~w(aa bb start motor stop overtemp fault x1 speed_sp t1.dn word.3 status.[n] t1.acc.[sel]
-           status.[4] w.[16#a] t1.acc.[03] s.[-1])
+           status.[4] w.[16#a] t1.acc.[03] s.[-1] temps[3] grid[1,7] cube[0,1,2] w[16#a]
+           flags[slot] int[8] m1.temps[3])
 
   # Each rung on a line of its own, the next below it, as parse/1 gives them, so every
   # tree is one Logex.Parser.well_formed!/1 takes. The lines draw nothing from :rand, so
@@ -612,7 +620,8 @@ defmodule Logex.PrinterTest do
     do:
       MapSet.new(
         [:name | dotted_shape(String.contains?(name, "."))] ++
-          tag_bit_shape(String.ends_with?(name, "]"), String.match?(name, ~r/\.\[[-0-9]/))
+          tag_bit_shape(String.contains?(name, ".["), String.match?(name, ~r/\.\[[-0-9]/)) ++
+          element_shape(String.match?(name, ~r/[A-Za-z0-9_]\[/), String.contains?(name, ","))
       )
 
   defp shapes({:int_lit, _, n}, _depth), do: MapSet.new([:int_lit | negative_shape(n < 0)])
@@ -659,6 +668,9 @@ defmodule Logex.PrinterTest do
   defp tag_bit_shape(true, false), do: [:tag_bit_name]
   defp tag_bit_shape(true, true), do: [:literal_bit_name]
   defp tag_bit_shape(false, _literal), do: []
+  defp element_shape(true, true), do: [:element_name, :subscripted_name]
+  defp element_shape(true, false), do: [:element_name]
+  defp element_shape(false, _many), do: []
 
   defp real_shapes(x, spelling),
     do:

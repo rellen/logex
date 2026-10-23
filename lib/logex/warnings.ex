@@ -30,6 +30,10 @@ defmodule Logex.Warnings do
     in keeps, `move 16777217.0 r` into a `real`: it is held as 16777216.0, where `0.1` and
     `37.1`, each the shortest text of the single nearest it, are not warned of.
 
+  Since M5-11 an element, `lamps[2]`, is a tag of its own for each of them, keyed by its
+  subscripts' values and quoted as written, so a second `ote` on `lamps[2]` and `lamps[02]`
+  is the second-`ote` warning, and an array is used where any of its elements is.
+
   A write on a rung a jump may skip is still a write (decision 107): two `ote`s on one tag,
   one in a section a `jmp` skips and one outside it, are still two, the warning saying the
   last one in the scan decides it, which is the one that ran last. The maintainer
@@ -124,7 +128,14 @@ defmodule Logex.Warnings do
   defp ir_real(_access, {:member, _, [instance, member]}, tags),
     do: {:tag, member_real(Map.get(tags, instance), member)}
 
+  # M5-11: an element is its array's elements' real.
+  defp ir_real(_access, {:element, _, array, _index, _name}, tags),
+    do: {:tag, element_real(Map.get(tags, array))}
+
   defp ir_real(_access, _bit_or_deeper, _tags), do: {:tag, nil}
+
+  defp element_real(%Tag{type: {:array, type, _dims}}) when type in @reals, do: type
+  defp element_real(_other), do: nil
 
   defp tag_real(%Tag{type: type}) when type in @reals, do: type
   defp tag_real(_other), do: nil
@@ -234,6 +245,8 @@ defmodule Logex.Warnings do
     ]
 
   defp start(nil), do: 0
+  # M5-11: an array's initial list, which no one value says.
+  defp start(initial) when is_list(initial), do: "its initial values"
   defp start(initial), do: initial
 
   # Each `ote` after the first on a tag declared in source cites the first. An `ons`
@@ -417,6 +430,11 @@ defmodule Logex.Warnings do
   defp target({:bit, _, [container | _] = path, _n, _mask, shown} = bit, line, symbol),
     do: [{:coil, Walk.bit_name(bit), Enum.join(path, "."), container, {line, symbol}, shown}]
 
+  # M5-11 (decision 151): a coil on an element decides that element, keyed by its
+  # subscripts' values, `lamps[2]`, and quoted as written, its tag its array's.
+  defp target({:element, _, array, _index, shown} = element, line, symbol),
+    do: [{:coil, Walk.bit_name(element), nil, array, {line, symbol}, shown}]
+
   # M5-9 (provisional): a coil on a bit whose number a tag holds decides whichever bit the
   # number names, so it is a coil on its word whole, keyed by the word: a second one on the
   # word, `ote s.[n]` beside `ote s.[m]`, is the second-`ote` warning, and so is a coil on
@@ -494,6 +512,10 @@ defmodule Logex.Warnings do
 
   defp storage_names({:bit, _, [_], _, _, shown} = bit, _words), do: [{Walk.bit_name(bit), shown}]
 
+  # M5-11 (decision 154): an element kept as a storage bit, `edge[2]`, by its name.
+  defp storage_names({:element, _, _, _, shown} = element, _words),
+    do: [{Walk.bit_name(element), shown}]
+
   # M5-9: a bit whose number a tag holds may be any bit of its word, a storage bit's among
   # them, as a write of the word whole is.
   defp storage_names({:bit_at, _, [word], _index, _width, _shown}, words),
@@ -501,8 +523,9 @@ defmodule Logex.Warnings do
 
   defp storage_names(_member, _words), do: []
 
-  # A storage bit's tag: a bool's own name, or the word a bit of one is in.
-  defp word_of(name), do: hd(String.split(name, "."))
+  # A storage bit's tag: a bool's own name, the word a bit of one is in, or since M5-11 the
+  # array an element is of.
+  defp word_of(name), do: hd(String.split(name, [".", "["]))
 
   defp storage_write(symbol, name, {first, owner, _shown}, line),
     do: storage_write(symbol, name, {first, owner}, line)
@@ -641,6 +664,7 @@ defmodule Logex.Warnings do
 
   defp shown({:name, _, name}), do: "`#{name}`"
   defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
+  defp shown({:element, _, _array, _index, name}), do: "`#{name}`"
   defp shown(literal) when is_literal(literal), do: "`#{Parser.spelling(literal)}`"
 
   # An operand's integer type, a tag's or a member's of the built-in instance that holds
@@ -654,7 +678,14 @@ defmodule Logex.Warnings do
   defp integer_type({:member, _, [instance, member]}, tags),
     do: member_integer(Map.get(tags, instance), member)
 
+  # M5-11: an element is of its array's elements' type.
+  defp integer_type({:element, _, array, _index, _name}, tags),
+    do: element_integer(Map.get(tags, array))
+
   defp integer_type(_other, _tags), do: :error
+
+  defp element_integer(%Tag{type: {:array, type, _dims}}) when type in @integers, do: {:ok, type}
+  defp element_integer(_other), do: :error
 
   defp of_integer(%Tag{type: type}) when type in @integers, do: {:ok, type}
   defp of_integer(_other), do: :error

@@ -1956,24 +1956,40 @@ defmodule Logex.BitStringTest do
     # it took 11 and 23, and a narrower source, which a second read brings into the
     # destination, 3 more again.
     test "a `not` or a shift costs a bounded few reductions more than a `move`" do
-      cost = fn line, from ->
+      # Since M5-11 counted where the collector never runs, whose work the reductions count,
+      # and as the scan of 800 rungs less the scan of 400, so that neither a heap laid out
+      # otherwise by an unrelated change nor what a scan costs once moves the count a rung:
+      # counted in the test's own process over 400 rungs, a byte's `not` took 2 reductions
+      # a scan more once the program struct grew a field, and a byte's program 1 a scan more
+      # than a word's, which put it at 3.0025 against a bound of 3.
+      scan = fn line, from, rungs ->
         {:ok, p} =
           Logex.compile(
-            "var_input v #{from}\nvar d word\n" <> String.duplicate(line <> "\n", 400),
+            "var_input v #{from}\nvar d word\n" <> String.duplicate(line <> "\n", rungs),
             name: "p"
           )
 
         state = Runtime.put_inputs(p, Runtime.instance(p), %{"v" => 1})
+        parent = self()
 
-        Enum.min(
-          for _ <- 1..5 do
-            {:reductions, before} = Process.info(self(), :reductions)
-            Runtime.scan(p, state)
-            {:reductions, later} = Process.info(self(), :reductions)
-            later - before
-          end
-        )
+        {_pid, ref} =
+          :erlang.spawn_opt(
+            fn ->
+              Runtime.scan(p, state)
+              {:reductions, before} = Process.info(self(), :reductions)
+              Runtime.scan(p, state)
+              {:reductions, later} = Process.info(self(), :reductions)
+              send(parent, {:reductions, later - before})
+            end,
+            [:monitor, min_heap_size: 4_000_000]
+          )
+
+        assert_receive {:reductions, n}, 10_000
+        assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+        n
       end
+
+      cost = fn line, from -> scan.(line, from, 800) - scan.(line, from, 400) end
 
       move = cost.("move v d", :word)
       widening = cost.("move v d", :byte)

@@ -11,7 +11,13 @@ defmodule Logex.Lexer do
   A name may have `.` parts, `t1.dn` or `word.3`, and is still one `name` token, and since
   M5-9 (decision 160) a last part that is a tag's name in brackets, `status.[n]`, a bit
   whose number the tag holds, and since decision 213 a literal in brackets, `status.[4]`,
-  Logix's spelling of `status.4`, kept as written. An
+  Logix's spelling of `status.4`, kept as written. Since M5-11 (decision 151) a name part
+  may be followed by an element's subscripts in one pair of brackets, `temps[3]` or
+  `grid[1,7]`, each a tag's name or one number, `temps[16#3]`, split by `,` with no space,
+  and a declaration's type word by its sizes, `int[8]`, still one name token, which may go
+  on in `.` parts after the `]`; brackets that hold no subscripts, `a[]` or `a[1, 2]`, are
+  `{:subscripts, run}`, and anything glued after the `]` but a `.` part, `a[1][2]` or
+  `a[1]x`, `{:after_subscripts, run}`, each named whole. An
   integer may have a sign, `-5`, glued to its digits (M3-3): one `int_lit` token, located
   at the `-`. Since M5-7 (decision 149) it may be based, `16#ff`, `16#FF` or `2#1010`,
   with no sign, and any number may hold a single `_` between two digits, `1_000_000` or
@@ -101,6 +107,18 @@ defmodule Logex.Lexer do
     do:
       "#{inspect(text)} is no name: a bit number in brackets is written straight after its " <>
         "name's `.`, with no space, `status.[n]`"
+
+  def format_error({:subscripts, text}),
+    do:
+      "#{inspect(text)} is no name: an element's subscripts are one pair of brackets " <>
+        "straight after its array's name, each a number or a tag's name, split by `,` " <>
+        "with no space, as in `grid[1,7]`"
+
+  def format_error({:after_subscripts, text}),
+    do:
+      "#{inspect(text)} is no name: an element's subscripts end at their `]`, after which " <>
+        "only a `.` part may follow, so every subscript goes inside the one pair of " <>
+        "brackets, as in `grid[1,7]`"
 
   def format_error({:point, text}),
     do:
@@ -491,9 +509,17 @@ defmodule Logex.Lexer do
   end
 
   defp name(src, {kind, n}, l, c, _acc)
-       when kind in [:after_bracket, :bracketed, :bracket, :detached] do
+       when kind in [:after_bracket, :bracketed, :bracket, :detached, :after_subscripts] do
     <<run::binary-size(^n), _::binary>> = src
     {:error, {{l, c}, __MODULE__, {kind, run}}, l}
+  end
+
+  # M5-11: brackets that hold no subscripts a name may take are named whole, from the
+  # name's start through the first `]` on the line.
+  defp name(src, {:subscripts, _n}, l, c, _acc) do
+    n = closing(src, 0)
+    <<run::binary-size(^n), _::binary>> = src
+    {:error, {{l, c}, __MODULE__, {:subscripts, run}}, l}
   end
 
   # M3-3 (decision 97): a sign begins a number, so it needs a separator before it, as B2's
@@ -517,7 +543,60 @@ defmodule Logex.Lexer do
   # mistyped lexeme: `a.1b` is an error naming `a.1b`, not the name `a.1` and a tag `b`. A
   # `.` not followed by a name or an integer ends the name and is itself illegal.
   defp name_part(<<ch, rest::binary>>, n) when is_name_char(ch), do: name_part(rest, n + 1)
+  defp name_part(<<?[, rest::binary>>, n), do: subscript(rest, n + 1)
   defp name_part(rest, n), do: dot(rest, n)
+
+  # M5-11 (decision 151, §4.12's routine choice): a name part may be followed by an
+  # element's subscripts, `temps[3]` or `grid[1,7]`, Logix's form (1756-PM004L pp.34-35),
+  # and a declaration's type word by its sizes, `int[8]`, the name still one token: one to
+  # any number of subscripts in one pair of brackets, split by `,` with no space, each a
+  # tag's name or one number the lexer reads, `temps[16#3]`, `temps[-1]`, which the
+  # compiler judges, so that `int[2,2,2,2]` lexes and is refused at its line. After the
+  # `]` the name may go on in `.` parts, `t[2].dn`, and ends at anything else but a letter,
+  # a digit or a bracket glued on, which makes the run one mistyped lexeme, `a[1][2]` or
+  # `a[1]x`. Brackets that hold no subscript, a space or anything that is no name or
+  # number, `a[]`, `a[1, 2]` or `a[1.5]`, are named whole through their `]`.
+  defp subscript(<<h, rest::binary>>, n) when is_name_start(h), do: subscript_name(rest, n + 1)
+
+  defp subscript(<<?-, d, _::binary>> = rest, n) when d in ?0..?9 do
+    <<?-, digits::binary>> = rest
+    subscript_number(rest, numeral(digits, 1), n)
+  end
+
+  defp subscript(<<d, _::binary>> = rest, n) when d in ?0..?9,
+    do: subscript_number(rest, numeral(rest, 0), n)
+
+  defp subscript(_rest, n), do: subscripts_refused(n)
+
+  defp subscript_name(<<ch, rest::binary>>, n) when is_name_char(ch),
+    do: subscript_name(rest, n + 1)
+
+  defp subscript_name(rest, n), do: subscript_end(rest, n)
+
+  defp subscript_number(rest, {kind, m}, n) when kind in [:decimal, :separated, :based] do
+    <<text::binary-size(^m), tail::binary>> = rest
+    one_number(number?(kind, text), tail, n + m)
+  end
+
+  defp subscript_number(_rest, _not_a_number, n), do: subscripts_refused(n)
+
+  defp one_number(true, tail, n), do: subscript_end(tail, n)
+  defp one_number(false, _tail, n), do: subscripts_refused(n)
+
+  defp subscript_end(<<?,, rest::binary>>, n), do: subscript(rest, n + 1)
+  defp subscript_end(<<?], rest::binary>>, n), do: subscripted(rest, n + 1)
+  defp subscript_end(_rest, n), do: subscripts_refused(n)
+
+  defp subscripted(<<?., _::binary>> = rest, n), do: dot(rest, n)
+
+  defp subscripted(<<ch, _::binary>> = rest, n) when is_name_char(ch) or ch in [?[, ?]],
+    do: {:after_subscripts, n + glued(rest, 0)}
+
+  defp subscripted(_rest, n), do: {:ok, n}
+
+  # A refusal is measured from the name's start, `n` bytes back from where it stopped: the
+  # caller cuts the run, which closing/2 takes through the first `]` on its line.
+  defp subscripts_refused(n), do: {:subscripts, n}
 
   defp integer_part(<<d, rest::binary>>, n) when d in ?0..?9, do: integer_part(rest, n + 1)
 

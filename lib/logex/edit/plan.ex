@@ -9,6 +9,7 @@ defmodule Logex.Edit.Plan do
   alias Logex.{Declarations, Diagnostic, FbType, Instance, Program, Tag, Walk}
   alias Logex.FbType.Member
   import Logex.Declarations, only: [is_elementary: 1]
+  import Logex.Array, only: [is_array: 1]
 
   # The edit's record of one instance (F5): `shown`, the value each held output's point
   # holds, as the edit has learnt it (F4); `pre`, for each timer, the `.pre` the last
@@ -133,6 +134,9 @@ defmodule Logex.Edit.Plan do
       initial: Program.initial_env(program),
       inputs: section(tags, :var_input),
       outputs: section(tags, :var_output),
+      # M5-11: each array's sizes, by its name, so that a report gives a host an array as
+      # a host is given one, a list (decision 151).
+      arrays: for({name, %Tag{type: {:array, _, dims}}} <- tags, into: %{}, do: {name, dims}),
       shared: shared(externals, tags),
       writes: Map.new(Walk.writes(program), fn {name, lines} -> {name, length(lines)} end),
       # M5-8: each bit of a word written, by its path, and each word's writes through its
@@ -196,6 +200,7 @@ defmodule Logex.Edit.Plan do
           do: {name, not is_map_key(from.tags, name), fit(tag)}
         ),
       inputs: to.inputs,
+      lists: Map.merge(from.arrays, to.arrays),
       live: for(name <- Map.keys(to.inputs), not is_map_key(from.inputs, name), do: name),
       unread: for(name <- Map.keys(from.inputs), not is_map_key(to.inputs, name), do: name),
       held: held,
@@ -273,18 +278,39 @@ defmodule Logex.Edit.Plan do
   # and that is no var_input of `to`, since a restart keeps a var_input's value. OE-2: nor
   # a var_external that is a global in either, whose value and initial value are the
   # global's.
+  #
+  # M5-11 (decision 157): an array both declare, of one type, its sizes included, is
+  # compared element by element, each element whose declared value differs reported by its
+  # name, `limits[2]`, an element a list does not give at its type's zero; `name` is the
+  # tag's, which a switch starts whole where it starts it.
   defp changed(from, to),
     do:
       for(
         {name, %Tag{type: type}} <- to.tags,
-        is_elementary(type),
+        is_elementary(type) or is_array(type),
         not is_map_key(to.inputs, name),
         not is_map_key(to.shared, name) and not is_map_key(from.shared, name),
         {:ok, %Tag{type: ^type}} <- [Map.fetch(from.tags, name)],
-        {old, new} = {declared(Map.fetch!(from.tags, name)), declared(Map.fetch!(to.tags, name))},
+        {shown, old, new} <-
+          initials(type, name, Map.fetch!(from.tags, name), Map.fetch!(to.tags, name)),
         old !== new,
-        do: {name, old, new}
+        do: {name, shown, old, new}
       )
+
+  defp initials({:array, type, dims}, name, from, to),
+    do:
+      Enum.zip([
+        Enum.map(Logex.Array.indexes(dims), &Logex.Array.name(name, &1)),
+        listed(from, type, dims),
+        listed(to, type, dims)
+      ])
+
+  defp initials(_type, name, from, to), do: [{name, declared(from), declared(to)}]
+
+  defp listed(%Tag{initial: nil}, type, dims),
+    do: List.duplicate(Declarations.zero(type), Logex.Array.size(dims))
+
+  defp listed(%Tag{initial: values}, _type, _dims), do: values
 
   # A tag's declared initial value, or its type's zero where it declares none, as a new
   # instance starts it but for a real's rounding.
@@ -402,6 +428,11 @@ defmodule Logex.Edit.Plan do
         when symbol in @one_shots ->
           {[Walk.bit_name(bit) | bits], cals}
 
+        # M5-11 (decision 154): an element kept as a storage bit, by its name, `edge[2]`.
+        {symbol, _line, [{:element, _, _, _, _} = element | _]}, {bits, cals}
+        when symbol in @one_shots ->
+          {[Walk.bit_name(element) | bits], cals}
+
         instruction, {bits, cals} ->
           {edges(instruction, tags, bits), calling(instruction, tags, cals)}
       end)
@@ -479,6 +510,9 @@ defmodule Logex.Edit.Plan do
   defp operand({:int_lit, _line, value, _spelling}), do: {:int_lit, value}
   # M5-10: so is a real literal, `1.5e3` the same rung as `1500.0`.
   defp operand({:real_lit, _line, value, _spelling}), do: {:real_lit, value}
+  # M5-11: an element by its array and its subscripts' values, so that an edit that only
+  # respells a subscript, `temps[16#3]` for `temps[3]`, leaves its rung the same rung.
+  defp operand({:element, _line, array, index, _name}), do: {:element, array, index}
 
   # ---- M2-5: the state inside a user block's instances, across a switch -----------------
 
@@ -579,7 +613,7 @@ defmodule Logex.Edit.Plan do
   defp resolved(type, member), do: %{member | type: FbType.type_of(type, member)}
 
   defp member(%Member{type: type, initial: initial}, old, _context, memo, name)
-       when is_elementary(type),
+       when is_elementary(type) or is_array(type),
        do: {{:leaf, name, type, initial, old_initial(old), old != nil}, memo}
 
   defp member(
@@ -673,6 +707,9 @@ defmodule Logex.Edit.Plan do
   end
 
   # The word a bit's path is in, `s1.status` for `s1.status.3`.
+  defp word_of(path) when binary_part(path, byte_size(path) - 1, 1) == "]",
+    do: hd(:binary.split(path, "["))
+
   defp word_of(path), do: path |> String.split(".") |> Enum.drop(-1) |> Enum.join(".")
 
   # ---- the per-instance half: a switch, between two scans, and a prune --------------------
@@ -709,13 +746,16 @@ defmodule Logex.Edit.Plan do
     blocked = blocked(scanned, plan)
 
     report =
-      for(name <- added, do: {:added, name, Map.fetch!(env, name)}) ++
-        for(name <- Enum.uniq(plan.live ++ inputs), do: {:input, name, Map.fetch!(env, name)}) ++
-        for(name <- plan.unread, do: {:unread, name, Map.get(env, name, 0)}) ++
+      for(name <- added, do: {:added, name, host(plan, name, Map.fetch!(env, name))}) ++
         for(
-          {name, old, new} <- plan.changed,
+          name <- Enum.uniq(plan.live ++ inputs),
+          do: {:input, name, host(plan, name, Map.fetch!(env, name))}
+        ) ++
+        for(name <- plan.unread, do: {:unread, name, host(plan, name, Map.get(env, name, 0))}) ++
+        for(
+          {name, shown, old, new} <- plan.changed,
           not is_map_key(fresh, name),
-          do: {:initial_changed, name, {old, new}}
+          do: {:initial_changed, shown, {old, new}}
         ) ++
         for(bit <- blocked, do: {:ons_blocked, bit, bit_at(env, bit)}) ++
         holding(plan, shown, env)
@@ -734,15 +774,38 @@ defmodule Logex.Edit.Plan do
      Enum.sort(timed ++ inside ++ report ++ unwritten)}
   end
 
+  # M5-11: a value as a report gives it to a host, an array's as a list, a list of lists for
+  # more dimensions, as a host's input takes one, where the state holds it whole.
+  defp host(%{lists: lists}, name, value), do: listed_value(Map.get(lists, name), value)
+
+  defp listed_value(nil, value), do: value
+  defp listed_value(dims, value) when is_tuple(value), do: Logex.Array.to_list(value, dims)
+  defp listed_value(_dims, value), do: value
+
   # A storage bit's value, a bit inside an instance found by its path (M2-5); and since
   # decision 96 a member's, by its path, `lube.r`.
   defp bit_at(env, bit), do: path_at(env, String.split(bit, "."))
 
   defp path_at(value, []), do: value
+
+  # M5-11: an element kept as a storage bit, `edge[2]` or `s1.edge[2]`, is its value.
+  defp path_at(%{} = map, [key]) when binary_part(key, byte_size(key) - 1, 1) == "]",
+    do: element_at(Logex.Array.split(key), map)
+
   defp path_at(%{} = map, [key | path]), do: path_at(Map.get(map, key, 0), path)
   # M5-8: a storage bit that is a bit of a word, `status.3`, is that bit's value.
   defp path_at(word, [part]) when is_integer(word), do: bit_value(Integer.parse(part), word)
   defp path_at(_not_a_map, _path), do: 0
+
+  defp element_at({array, subscripts}, map),
+    do:
+      element_value(
+        Map.get(map, array),
+        Enum.map(subscripts, &elem(Logex.Array.subscript(&1), 1))
+      )
+
+  defp element_value(value, index) when is_tuple(value), do: Logex.Array.fetch(value, index)
+  defp element_value(_not_an_array, _index), do: 0
 
   defp bit_value({n, ""}, word), do: Bitwise.band(Bitwise.bsr(word, n), 1)
   defp bit_value(_no_bit, _word), do: 0
@@ -780,7 +843,7 @@ defmodule Logex.Edit.Plan do
 
     starts?(Map.fetch(elem(acc, 0), name), not kept?, type, first?)
     |> started(name, path, start_of(type, initial), acc)
-    |> initial_changed({kept?, old, initial}, path)
+    |> initials_changed(type, {kept?, old, initial}, path)
   end
 
   defp moved_member({:timer, name, keys, initial, {from, to}, kept?, type}, prefix, rules, acc) do
@@ -822,7 +885,9 @@ defmodule Logex.Edit.Plan do
         {map, reports, pre}
       )
 
-  # M5-10 (decision 150): a member that is a real starts at its declared value's nearest.
+  # M5-10 (decision 150): a member that is a real starts at its declared value's nearest,
+  # and since M5-11 one that is an array as an array tag does.
+  defp start_of({:array, _, _} = type, initial), do: Logex.Array.started(type, initial)
   defp start_of(type, initial) when type in @reals, do: Logex.Real.nearest(type, initial)
   defp start_of(_type, initial), do: initial
 
@@ -831,13 +896,37 @@ defmodule Logex.Edit.Plan do
 
   defp started(false, _name, _path, _initial, acc), do: {:kept, acc}
 
-  defp initial_changed({:started, acc}, _initials, _path), do: acc
+  # M5-11 (decision 157): an array member's initial list compared element by element, each
+  # element reported by its path, `s1.limits[2]`.
+  defp initials_changed(moved, {:array, _, dims} = type, {kept?, old, new}, path),
+    do:
+      Enum.reduce(
+        Enum.zip([
+          Logex.Array.indexes(dims),
+          Logex.Array.declared(type, old),
+          Logex.Array.declared(type, new)
+        ]),
+        moved,
+        fn {index, old, new}, moved ->
+          initial_changed(moved, {kept?, old, new}, Logex.Array.name(path, index))
+        end
+      )
+      |> unmoved()
+
+  defp initials_changed(moved, _type, initials, path),
+    do: unmoved(initial_changed(moved, initials, path))
+
+  defp unmoved({:started, acc}), do: acc
+  defp unmoved({:kept, acc}), do: acc
+  defp unmoved(acc), do: acc
+
+  defp initial_changed({:started, acc}, _initials, _path), do: {:started, acc}
 
   # Decision 157 (M5-10): compared exactly, so that 0 and 0.0 are two values.
   defp initial_changed({:kept, {map, reports, pre}}, {true, old, new}, path) when old !== new,
-    do: {map, [{:initial_changed, path, {old, new}} | reports], pre}
+    do: {:kept, {map, [{:initial_changed, path, {old, new}} | reports], pre}}
 
-  defp initial_changed({:kept, acc}, _initials, _path), do: acc
+  defp initial_changed({:kept, acc}, _initials, _path), do: {:kept, acc}
 
   defp timer_moved(true, {name, path, initial, _from, _to, _type}, _clocks, acc) do
     {map, reports, pre} = acc
@@ -914,7 +1003,14 @@ defmodule Logex.Edit.Plan do
   defp fits?(:block, value), do: is_map(value)
   defp fits?({:members, keys}, %{} = timer), do: Enum.sort(Map.keys(timer)) == keys
   defp fits?({:members, _keys}, _not_a_timer), do: false
+  # M5-11: an array fits where it is held whole, each element of its elements' type.
+  defp fits?({:array, type, dims}, value),
+    do: Logex.Array.held?(value, dims, &element_fits?(type, &1))
+
   defp fits?(type, value), do: Declarations.fits?(type, value)
+
+  defp element_fits?(type, value) when type in @reals, do: Logex.Real.value?(type, value)
+  defp element_fits?(type, value), do: Declarations.fits?(type, value)
 
   # ---- a timer across a switch (decision 23; fixes F1 and F6) -----------------------------
 
@@ -1109,7 +1205,7 @@ defmodule Logex.Edit.Plan do
       for(
         name <- plan.held,
         {:ok, value} <- [holds(name, plan.shows, shown, env)],
-        do: {:held, name, value}
+        do: {:held, name, host(plan, name, value)}
       )
 
   defp holds(name, shows, _shown, env) when is_map_key(shows, name),

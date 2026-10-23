@@ -16,6 +16,11 @@ defmodule Logex.Tag do
   type's one table holds, once, in its `blocks` (decision 53;
   `Logex.Program.typed_tags/1` gives the tag table with each type itself); a tag from
   Elixir holds the type itself, as `Logex.compile/2` gives it.
+
+  Since M5-11 (decision 151) a type may be an array, `{:array, type, dims}`, of an
+  elementary type and one to three sizes, `{:array, :int, [4, 8]}` for `int[4,8]`, its
+  `initial` nil or a list of one value for every element, in the elements' order, the
+  rightmost subscript fastest.
   """
 
   @enforce_keys [:name, :type, :section]

@@ -443,6 +443,11 @@ defmodule Logex.FbType do
   defp start(%Member{type: {:block, _name}, initial: overrides} = member, owner),
     do: initial(type_of(owner, member), overrides)
 
+  # M5-11 (decision 151): a member that is an array, a block's own `var`, starts as an
+  # array tag does.
+  defp start(%Member{type: {:array, _, _} = type, initial: initial}, _owner),
+    do: Logex.Array.started(type, initial)
+
   # M5-10 (decision 150): a member that is a real starts at its declared value's nearest.
   defp start(%Member{type: type, initial: initial}, _owner) when type in @reals,
     do: Logex.Real.nearest(type, initial)
@@ -498,6 +503,8 @@ defmodule Logex.FbType do
   declared from Elixir first, which have no line, by name, then the source's in the order
   they are declared. No member of a user block is written from outside it.
   """
+  # M5-11: a block's own `var` may be an array, a member of its array type, which starts
+  # at its initial list or its elements' zero (`Logex.Array.started/2`).
   def of(%Program{name: name, tags: tags} = body),
     do: %__MODULE__{
       name: name,
@@ -515,6 +522,9 @@ defmodule Logex.FbType do
   defp role(:var_output), do: :output
   defp role(:var), do: :local
 
+  # M5-11: an array member keeps its initial list, or nil for its elements' zero, which
+  # `initial/2` makes its value from (`Logex.Array.started/2`).
+  defp starts({:array, _, _}, initial), do: initial
   defp starts(%__MODULE__{}, nil), do: %{}
   defp starts({:block, _name}, nil), do: %{}
   defp starts(type, nil) when type in @reals, do: 0.0
