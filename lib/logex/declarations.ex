@@ -378,6 +378,15 @@ defmodule Logex.Declarations do
   def a_type(type) when is_array(type), do: Logex.Array.a_type(type)
 
   @doc """
+  A global of `type` as a message names it, `a dint global`, and since M5-11 an array
+  global by its sizes, `a global array of 8 ints`.
+  """
+  def a_global(type) when is_array(type),
+    do: "a global " <> String.replace_prefix(a_type(type), "an ", "")
+
+  def a_global(type), do: a_type(type) <> " global"
+
+  @doc """
   Whether a value of the elementary type `from` widens into `to` with no word (M5-3,
   decision 147): the same type, or one of `from`'s `widens`, Ed 3 Figure 11's "i" cells, so
   that every value of `from` is one of `to`.
@@ -996,6 +1005,31 @@ defmodule Logex.Declarations do
 
   defp describe({:name, _, word}), do: "`#{word}`"
   defp describe(literal) when is_literal(literal), do: "`#{Parser.spelling(literal)}`"
+
+  @doc """
+  M5-11 (decision 151): an array's type word, `int[8]`, as a configuration file's
+  `var_global` line reads it, `{:ok, {:array, type, dims}}` for an elementary type and
+  literal sizes, whatever their values, which `array_misfits/3` judges, or `:error` for
+  any other: a type word with no sizes, an unknown base, sizes held in tags, or an
+  instance's type.
+  """
+  def array_word(word) when is_binary(word), do: array_word_of(declared_type(word, %{}), word)
+
+  defp array_word_of({:array, _, _} = type, _word), do: {:ok, type}
+  defp array_word_of(_other, _word), do: :error
+
+  @doc """
+  M5-11 (decision 151): what an array named `name`, of `type` and the initial list
+  `initial`, nil for none, breaks of the rules every array meets, as messages naming it: its
+  dimensions and sizes, and its initial list, its length and each element's value. The
+  rules a declaration line's array meets, which a configuration's global array meets too.
+  """
+  def array_misfits(name, {:array, _, _} = type, initial) do
+    typed = array_type(name, type)
+
+    typed ++
+      judged_initial(typed, %Tag{name: name, type: type, section: :var, initial: initial}, nil)
+  end
 
   @doc """
   The rules a tag must meet however it is declared, as messages: the one validator for a

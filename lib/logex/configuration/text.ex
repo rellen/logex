@@ -9,9 +9,12 @@ defmodule Logex.Configuration.Text do
       task        -> 'task' NAME ['continuous'] ['single' NAME] ['interval' INT]
                      ['priority' INT] ['watchdog' INT]
       global      -> 'var_global' NAME TYPE [INT] ['at' NAME]
+                   | 'var_global' NAME ARRAY INT* ['at' NAME]
       program     -> 'program' NAME NAME ['with' NAME]
-      connection  -> PATH (NAME | INT)         PATH: a name with `.` parts, as `m1.start`
+      connection  -> PATH (NAME | INT)         PATH: a name with `.` parts, as `m1.start`,
+                                               or an element's, `m1.temps[3]` (M5-11)
       TYPE        -> 'bool' | 'dint' | each of Logex.Declarations.type_words/0 (M5-3)
+      ARRAY       -> a TYPE with its sizes, one NAME token, `int[8]` or `real[4,8]` (M5-11)
 
   `line/1` reads `line` by its first token; `task/3` reads `task`, with `inputs/2` its
   words, `order/4` their order and `value/5` each one's number, for `single` its name and
@@ -367,6 +370,7 @@ defmodule Logex.Configuration.Text do
         "`continuous`, `single`, `interval`, `priority` and `watchdog`"
 
   # global -> 'var_global' NAME TYPE [INT] ['at' NAME]
+  #         | 'var_global' NAME ARRAY INT* ['at' NAME]   (M5-11)
   defp global([], first, _line),
     do:
       {:error, fail(first, "`var_global` needs a name and a type, as in `var_global estop bool`"),
@@ -420,10 +424,37 @@ defmodule Logex.Configuration.Text do
   defp type_word(key, _word, _token, {rest, global}) when is_map_key(@types, key),
     do: initial(rest, %{global | type: Map.fetch!(@types, key)})
 
+  # M5-11 (decision 151): an array's type word, `int[8]` or `real[4,8]`, its sizes literal
+  # numbers, then an initial list of one literal an element, as a declaration line's, which
+  # check/1 judges, its length and each value.
+  defp type_word(key, word, token, {rest, global})
+       when binary_part(key, byte_size(key) - 1, 1) == "]",
+       do: array_word(Declarations.array_word(word), word, token, {rest, global})
+
   defp type_word(_key, word, token, {_rest, global}),
     do:
       {:error, fail(token, unknown_type(FbType.builtin(word), word, global.name)),
        declared(global)}
+
+  defp array_word({:ok, {:array, type, _dims} = array}, _word, _token, {rest, global}),
+    do: listed(rest, %{global | type: array}, type, [])
+
+  defp array_word(:error, word, token, {_rest, global}),
+    do:
+      {:error,
+       fail(
+         token,
+         "unknown type `#{word}`: a global array's type is #{a_global()} with its sizes, " <>
+           "literal numbers, as in `var_global #{global.name} int[8]`"
+       ), declared(global)}
+
+  defp listed([value | rest], global, type, values) when is_literal(value),
+    do: listed(rest, global, type, [held(type, Parser.value(value)) | values])
+
+  defp listed(rest, global, _type, []), do: located(rest, global)
+
+  defp listed(rest, global, _type, values),
+    do: located(rest, %{global | initial: Enum.reverse(values)})
 
   defp unknown_type(%FbType{name: type}, _word, name),
     do:
@@ -729,8 +760,8 @@ defmodule Logex.Configuration.Text do
   defp printed(%Global{} = global),
     do:
       Enum.join(
-        ["var_global", global.name, Declarations.word(global.type)] ++
-          given(nil, spelled(global.type, global.initial)) ++ given("at", global.at),
+        ["var_global", global.name, type_text(global.type)] ++
+          initial_text(global.type, global.initial) ++ given("at", global.at),
         " "
       ) <> "\n"
 
@@ -739,6 +770,16 @@ defmodule Logex.Configuration.Text do
 
   defp printed(%Connection{to: to} = connection),
     do: "#{path(connection)} #{spelled(nil, to)}\n"
+
+  # M5-11: an array's type word, its elements' type and its sizes, `int[4,8]`, and its
+  # initial list, a literal an element.
+  defp type_text({:array, type, dims}), do: "#{Declarations.word(type)}[#{Enum.join(dims, ",")}]"
+  defp type_text(type), do: Declarations.word(type)
+
+  defp initial_text({:array, type, _dims}, values) when is_list(values),
+    do: Enum.map(values, &"#{spelled(type, &1)}")
+
+  defp initial_text(type, value), do: given(nil, spelled(type, value))
 
   defp flagged(true), do: ["continuous"]
   defp flagged(false), do: []
@@ -770,9 +811,11 @@ defmodule Logex.Configuration.Text do
     integer; and whether it is continuous true or false (M4-2);
   - a `%Logex.Configuration.Global{}`, its name one name token to the lexer and none of
     `at` or a type word in any case, which a line reads as that keyword; its type an
-    elementary type, `:bool`, `:dint` or since M5-3 any integer type; its initial value
-    nil or an integer; its location nil
-    or one name token;
+    elementary type, `:bool`, `:dint` or since M5-3 any integer type, or since M5-11 an
+    array of one, `{:array, :int, [4, 8]}`, its sizes a non-empty list of integers; its
+    initial value nil or an integer, a real's a float of its values too, and an array's
+    nil or a non-empty list of its elements' values, each as a global's own; its location
+    nil or one name token;
   - a `%Logex.Configuration.Instance{}`, its name, its type and its task, if it has one,
     each one name token, its type not `with` in any case, which a line reads as that
     keyword;
@@ -869,8 +912,21 @@ defmodule Logex.Configuration.Text do
 
   defp type!(type, _entry) when is_elementary(type), do: :ok
 
+  # M5-11: an array of an elementary type, its sizes one integer a dimension, which a type
+  # word holds as written, so that it reads back as it is.
+  defp type!({:array, type, [_ | _] = dims}, entry) when is_elementary(type),
+    do: sizes!(proper?(dims) and Enum.all?(dims, &is_integer/1), entry)
+
   defp type!(_type, entry),
-    do: unsaid!("a global's type is " <> Declarations.either(&inspect/1), entry)
+    do:
+      unsaid!(
+        "a global's type is " <>
+          Declarations.either(&inspect/1) <> ", or an array of one, as in `{:array, :int, [8]}`",
+        entry
+      )
+
+  defp sizes!(true, _entry), do: :ok
+  defp sizes!(false, entry), do: unsaid!("an array's sizes are a list of integers", entry)
 
   # A connection's first word is one name token, split at its first `.`: what `read/1`
   # reads as instance and member is exactly what joins back into that token.
@@ -936,7 +992,22 @@ defmodule Logex.Configuration.Text do
   defp initial!(type, initial, entry) when type in @reals and is_float(initial),
     do: real_value!(Logex.Real.value?(type, initial), entry)
 
+  # M5-11: an array's initial list, a literal an element, each as a global's own value is,
+  # and never empty, since a line with no initial value says nil.
+  defp initial!({:array, type, _dims}, [_ | _] = initial, entry),
+    do: listed!(proper?(initial), type, initial, entry)
+
+  defp initial!({:array, _type, _dims}, nil, _entry), do: :ok
+
+  defp initial!({:array, _type, _dims}, _initial, entry),
+    do: unsaid!("an array global's initial value is nil or a list of its elements' values", entry)
+
   defp initial!(_type, initial, entry), do: count!(initial, entry)
+
+  defp listed!(true, type, initial, entry), do: Enum.each(initial, &initial!(type, &1, entry))
+
+  defp listed!(false, _type, _initial, entry),
+    do: unsaid!("an array global's initial value is nil or a list of its elements' values", entry)
 
   defp real_value!(true, _entry), do: :ok
 

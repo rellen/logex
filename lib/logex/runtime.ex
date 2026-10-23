@@ -248,7 +248,10 @@ defmodule Logex.Runtime do
   finds its array. A resource's instance is checked as each scan takes it, and before it
   each global a connection copies into it against the global's own type, which may be
   narrower than the var_input it fills (decision 159): "runtime.globals holds `a`
-  outside its type: it is a uint, and 70000 is outside 0 to 65535". The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
+  outside its type: it is a uint, and 70000 is outside 0 to 65535", and since M5-11 a
+  global array a connection copies whole whose value is no tuple of its sizes of its
+  elements' values. A resource's instance is restarted with its var_externals' globals in
+  its state, as a scan takes it. The check is linear in the state, a guard a value. Its env's keys are tag names: a scan
   keeps its own records in a routine's env under atoms no tag can be, `:faults`, `:jump` and
   `:ran`, and takes each out before it ends, so an env holding one is refused, since it
   would change the run; a block instance's map holding one has it dropped before its body
@@ -618,7 +621,13 @@ defmodule Logex.Runtime do
       | globals: Map.new(config.globals, &{&1.name, restarted(&1, runtime)}),
         instances:
           Map.new(runtime.instances, fn {name, state} ->
-            restarted = restart(Map.fetch!(config.programs, state.type), state, mode)
+            restarted =
+              restart(
+                Map.fetch!(config.programs, state.type),
+                attached(state, runtime, name),
+                mode
+              )
+
             {name, detached(restarted, runtime.wiring, name)}
           end),
         tasks: Map.new(config.tasks, &{&1.name, task_state(&1, now)}),
@@ -646,6 +655,14 @@ defmodule Logex.Runtime do
     do: %{next_due: nil, overlaps: 0, last: 0}
 
   defp task_state(%Configuration.Task{}, due), do: %{next_due: due, overlaps: 0, last: 0}
+
+  # M5-11: a state is restarted, and checked, with its var_externals' globals in it, as a
+  # scan takes it, so that an array var_external, which a state holds whole, is there.
+  defp attached(%Instance{env: env} = state, runtime, name),
+    do: %{
+      state
+      | env: Map.merge(env, Map.take(runtime.globals, Map.fetch!(runtime.wiring.externals, name)))
+    }
 
   # M2-4: one copy of each global. Between scans an instance's state holds none of its
   # var_externals, which instance/1 and restart/3 start at 0 as any tag: the resource's
@@ -675,7 +692,10 @@ defmodule Logex.Runtime do
   The value at an access path, the resource omitted (`docs/organisation.md` §4.7), as
   `{:ok, value}`: a global, `"estop"`; a program instance's tag, `"m1.fault"`, a
   var_external read as its global, `"m1.estop"` the value of `"estop"` (M2-4); or a member
-  of a function block instance in it, `"m1.t1.acc"`, as logic names one. A string that
+  of a function block instance in it, `"m1.t1.acc"`, as logic names one; and since M5-11
+  an array whole, global or tag, given as a host is given one, a list, a list of lists for
+  more dimensions, or an element of one by literal subscripts, `"temps[3]"` or
+  `"m1.grid[1,7]"`, a var_external's read in its global. A string that
   names no such value, an instance named whole, an internal member, a task, the
   configuration, a path that names nothing, or no path at all, gives `{:error, reason}`,
   `reason` the message `get!/2` raises (decision 41). Something other than a resource,
@@ -699,14 +719,110 @@ defmodule Logex.Runtime do
 
   defp value!(runtime, path) do
     [head | rest] = String.split(path!(path), ".")
-
-    at_path(
-      Map.fetch(runtime.wiring.globals, head),
-      Map.fetch(runtime.wiring.types, head),
-      {head, rest, path},
-      runtime
-    )
+    at_head(Logex.Array.split(head), {head, rest, path}, runtime)
   end
+
+  defp at_head(nil, {head, _rest, _path} = at, runtime),
+    do:
+      at_path(
+        Map.fetch(runtime.wiring.globals, head),
+        Map.fetch(runtime.wiring.types, head),
+        at,
+        runtime
+      )
+
+  # M5-11 (§4.12): an element of a global array, `temps[3]`, by literal subscripts.
+  defp at_head({array, subscripts}, at, runtime),
+    do: global_element(Map.fetch(runtime.wiring.globals, array), {array, subscripts}, at, runtime)
+
+  defp global_element({:ok, global}, {array, subscripts}, {head, [], _path}, runtime),
+    do:
+      element_at(
+        global.type,
+        subscripts,
+        {head, array, Declarations.a_global(global.type)},
+        Map.fetch!(runtime.globals, array)
+      )
+
+  defp global_element({:ok, _global}, _array, {head, _rest, path}, _runtime),
+    do:
+      raise(
+        ArgumentError,
+        "`#{path}` goes too deep: `#{head}` is an element, which has no members"
+      )
+
+  defp global_element(:error, {array, _subscripts}, {head, _rest, _path}, runtime),
+    do:
+      raise(
+        ArgumentError,
+        unknown_element_head(Map.fetch(runtime.wiring.types, array), array, head, runtime)
+      )
+
+  defp unknown_element_head({:ok, _type}, array, head, _runtime),
+    do:
+      "`#{head}` names an element of `#{array}`, a program instance: an access path names " <>
+        "an element of one of its tags, as in `#{array}.temps[3]`"
+
+  defp unknown_element_head(:error, array, _head, runtime),
+    do: unknown_head(kind(runtime, array), array, runtime)
+
+  # An element of an array, by its subscripts as written, each a literal number in its
+  # dimension, of a tag or a global `what` names.
+  defp element_at({:array, _type, dims}, subscripts, {head, array, what}, value),
+    do:
+      Logex.Array.fetch(
+        value,
+        path_index(Enum.map(subscripts, &Logex.Array.subscript/1), dims, {head, array, what})
+      )
+
+  defp element_at(_type, _subscripts, {head, array, what}, _value),
+    do:
+      raise(
+        ArgumentError,
+        "`#{head}` names an element of `#{array}`, but `#{array}` is #{what}, no array"
+      )
+
+  defp path_index(subscripts, dims, {head, array, what}) do
+    tags = for {:tag, name} <- subscripts, do: name
+    index = for {:literal, n} <- subscripts, do: n
+    indexed(tags, index, dims, {head, array, what})
+  end
+
+  defp indexed([name | _], _index, _dims, {head, array, _what}),
+    do:
+      raise(
+        ArgumentError,
+        "`#{head}`'s subscript `#{name}` is a tag's name: an access path names an element by " <>
+          "literal subscripts, as in `#{array}[0]`"
+      )
+
+  defp indexed([], index, dims, {head, array, what}) when length(index) != length(dims),
+    do:
+      raise(
+        ArgumentError,
+        "`#{head}` names an element of `#{array}`, #{what}, by #{length(index)} " <>
+          "subscript#{plural(length(index))}, where it takes #{length(dims)}, one a dimension"
+      )
+
+  defp indexed([], index, dims, {head, array, what}),
+    do:
+      index_in(
+        Enum.find(Enum.zip(index, dims), fn {i, n} -> i < 0 or i >= n end),
+        index,
+        {head, array, what}
+      )
+
+  defp index_in(nil, index, _at), do: index
+
+  defp index_in({i, n}, _index, {head, array, what}),
+    do:
+      raise(
+        ArgumentError,
+        "`#{head}`'s subscript `#{i}` is outside 0 to #{n - 1}: `#{array}` is #{what}"
+      )
+
+  defp plural(1), do: ""
+  defp plural(_n), do: "s"
 
   # A var_input whose value does not fit its type, as after a recompile of the same name
   # that changed the type, starts again with the rest.
@@ -1559,7 +1675,11 @@ defmodule Logex.Runtime do
         end),
       untimed: {untimed, Map.get(by_task, nil, [])},
       types: types,
-      copy_in: grouped(config.instances, Map.get(sections, :var_input, [])),
+      copy_in:
+        grouped(
+          config.instances,
+          arrays_in(Map.get(sections, :var_input, []), config, types)
+        ),
       copy_out:
         grouped(
           config.instances,
@@ -1584,16 +1704,88 @@ defmodule Logex.Runtime do
 
   # M5-10: a connection's copy-out of an integer into a real global, decision 159's widening,
   # which writes the real's nearest value, marked with the real's type; every other kept as
-  # it was.
+  # it was. M5-11: an array's whole, `{:array, member, to, dims, global}`, and an element's,
+  # `{:element, array, index, to, global}`, `to` the real type it widens into or `:none`,
+  # each read from the instance's state after its scan.
   defp widened_out({instance, {member, global}} = connection, config, {types, globals}) do
-    %Tag{type: from} =
-      Map.fetch!(Map.fetch!(config.programs, Map.fetch!(types, instance)).tags, member)
-
-    %Configuration.Global{type: to} =
-      Map.fetch!(globals, global)
-
-    out_as(from in @integers and to in @reals, connection, to)
+    program = Map.fetch!(config.programs, Map.fetch!(types, instance))
+    %Configuration.Global{type: to} = Map.fetch!(globals, global)
+    out_of(connected_tag(program, member), connection, to)
   end
+
+  defp out_of(
+         {:whole, %Tag{type: {:array, from, dims}}},
+         {instance, {member, global}},
+         {:array, to, _}
+       ),
+       do: {instance, {:array, member, real_widened(from, to), dims, global}}
+
+  defp out_of({:element, array, index, from}, {instance, {_member, global}}, to),
+    do: {instance, {:element, array, index, real_widened(from, to), global}}
+
+  defp out_of({:whole, %Tag{type: from}}, connection, to),
+    do: out_as(from in @integers and to in @reals, connection, to)
+
+  defp real_widened(from, to) when from in @integers and to in @reals, do: to
+  defp real_widened(_from, _to), do: :none
+
+  # A connection's member: a tag whole, or an element of an array by its subscripts' values,
+  # with the element's type.
+  defp connected_tag(%Program{tags: tags}, member)
+       when binary_part(member, byte_size(member) - 1, 1) == "]" do
+    {array, subscripts} = Logex.Array.split(member)
+    %Tag{type: {:array, type, _dims}} = Map.fetch!(tags, array)
+    {:element, array, Enum.map(subscripts, &literal_subscript/1), type}
+  end
+
+  defp connected_tag(%Program{tags: tags}, member), do: {:whole, Map.fetch!(tags, member)}
+
+  defp literal_subscript(text) do
+    {:literal, n} = Logex.Array.subscript(text)
+    n
+  end
+
+  # M5-11: the copy-in of an array var_input whole, from a global array, given as a host
+  # gives one, `{member, {:array, dims, global}}`, and of one connected element by element,
+  # every element connected, one entry for the array, `{array, {:elements, dims, ends}}`,
+  # `ends` each element's global or constant in the elements' order; every other kept.
+  defp arrays_in(connections, config, types) do
+    {elements, plain} =
+      Enum.reduce(connections, {%{}, []}, fn {instance, {member, _to}} = connection,
+                                             {elements, plain} ->
+        program = Map.fetch!(config.programs, Map.fetch!(types, instance))
+        in_of(connected_tag(program, member), connection, {elements, plain}, program)
+      end)
+
+    Enum.reverse(plain) ++
+      for {{instance, array}, ends} <- Enum.sort(elements) do
+        %Tag{type: {:array, _type, dims}} =
+          Map.fetch!(Map.fetch!(config.programs, Map.fetch!(types, instance)).tags, array)
+
+        {instance,
+         {array, {:elements, dims, Enum.map(Logex.Array.indexes(dims), &Map.fetch!(ends, &1))}}}
+      end
+  end
+
+  defp in_of(
+         {:whole, %Tag{type: {:array, _type, dims}}},
+         {instance, {member, global}},
+         {elements, plain},
+         _program
+       ),
+       do: {elements, [{instance, {member, {:array, dims, global}}} | plain]}
+
+  defp in_of(
+         {:element, array, index, _type},
+         {instance, {_member, to}},
+         {elements, plain},
+         _program
+       ),
+       do:
+         {Map.update(elements, {instance, array}, %{index => to}, &Map.put(&1, index, to)), plain}
+
+  defp in_of({:whole, _tag}, connection, {elements, plain}, _program),
+    do: {elements, [connection | plain]}
 
   defp out_as(true, {instance, {member, global}}, to), do: {instance, {member, {to, global}}}
   defp out_as(false, connection, _to), do: connection
@@ -1611,14 +1803,14 @@ defmodule Logex.Runtime do
   defp timed_task(task, _untimed), do: task
 
   defp section(config, types, connection) do
-    %Tag{section: section} =
-      Map.fetch!(
-        Map.fetch!(config.programs, Map.fetch!(types, connection.instance)).tags,
-        connection.member
-      )
-
-    section
+    program = Map.fetch!(config.programs, Map.fetch!(types, connection.instance))
+    section_of(connected_tag(program, connection.member), program)
   end
+
+  defp section_of({:whole, %Tag{section: section}}, _program), do: section
+
+  defp section_of({:element, array, _index, _type}, %Program{tags: tags}),
+    do: Map.fetch!(tags, array).section
 
   defp grouped(instances, connections) do
     by_instance = Enum.group_by(connections, &elem(&1, 0), &elem(&1, 1))
@@ -1847,13 +2039,21 @@ defmodule Logex.Runtime do
     globals = Map.merge(globals, Map.take(state.env, externals))
     state = %{state | env: Map.drop(state.env, externals), faults: []}
 
+    env = state.env
+
     globals =
       Enum.reduce(Map.fetch!(wiring.copy_out, name), globals, fn
         {member, {to, global}}, globals ->
           Map.put(globals, global, as_real(to, Map.fetch!(outputs, member)))
 
-        {member, global}, globals ->
+        {member, global}, globals when is_binary(member) ->
           Map.put(globals, global, Map.fetch!(outputs, member))
+
+        {:array, member, to, dims, global}, globals ->
+          Map.put(globals, global, array_out(to, Map.fetch!(env, member), dims))
+
+        {:element, array, index, to, global}, globals ->
+          Map.put(globals, global, as_real(to, Logex.Array.fetch(Map.fetch!(env, array), index)))
       end)
 
     {%{runtime | instances: Map.put(runtime.instances, name, state), globals: globals},
@@ -1871,10 +2071,21 @@ defmodule Logex.Runtime do
   defp misread({_member, global}, globals, declared, acc) when is_binary(global),
     do: global_fit(Map.fetch!(declared, global), Map.fetch!(globals, global), acc)
 
+  defp misread({_member, {:array, _dims, global}}, globals, declared, acc),
+    do: global_fit(Map.fetch!(declared, global), Map.fetch!(globals, global), acc)
+
+  defp misread({_array, {:elements, _dims, ends}}, globals, declared, acc),
+    do: Enum.reduce(ends, acc, &misread({nil, &1}, globals, declared, &2))
+
   defp misread(_constant, _globals, _declared, acc), do: acc
 
   defp global_fit(%Configuration.Global{type: type}, value, acc) when is_fitting(type, value),
     do: acc
+
+  # M5-11: an array global holds a tuple of its sizes, a tuple of tuples for more
+  # dimensions, its every element one of its elements' type's values.
+  defp global_fit(%Configuration.Global{type: {:array, type, dims}} = global, value, acc),
+    do: array_global(Logex.Array.held?(value, dims, &element_fits?(type, &1)), global, value, acc)
 
   defp global_fit(%Configuration.Global{type: type} = global, value, acc) when type in @reals,
     do: real_global(Logex.Real.value?(type, value), global, value, acc)
@@ -1883,6 +2094,16 @@ defmodule Logex.Runtime do
     do: [
       "runtime.globals holds `#{name}` outside its type: it is " <>
         "#{Declarations.a_type(type)}, and " <> unfitting(Declarations.kind(type), type, value)
+      | acc
+    ]
+
+  defp array_global(true, _global, _value, acc), do: acc
+
+  defp array_global(false, %Configuration.Global{name: name, type: type}, value, acc),
+    do: [
+      "runtime.globals holds `#{name}` outside its type: it is #{Declarations.a_type(type)}, " <>
+        "and its value must be #{tuple_shape(elem(type, 2))} of #{Declarations.word(elem(type, 1))}s, " <>
+        "found #{inspect(value)}"
       | acc
     ]
 
@@ -1901,7 +2122,22 @@ defmodule Logex.Runtime do
     do: raise(ArgumentError, lines |> Enum.sort() |> Enum.dedup() |> Enum.join("\n"))
 
   defp value(global, globals) when is_binary(global), do: Map.fetch!(globals, global)
+
+  defp value({:array, dims, global}, globals),
+    do: Logex.Array.to_list(Map.fetch!(globals, global), dims)
+
+  defp value({:elements, dims, ends}, globals),
+    do:
+      Logex.Array.to_list(Logex.Array.from_flat(Enum.map(ends, &value(&1, globals)), dims), dims)
+
   defp value(constant, _globals), do: constant
+
+  # M5-11: an array var_output's copy-out into a global array, each element widened into
+  # the global's real where it is one.
+  defp array_out(:none, value, _dims), do: value
+
+  defp array_out(to, value, dims),
+    do: Logex.Array.from_flat(Enum.map(Logex.Array.to_flat(value, dims), &as_real(to, &1)), dims)
 
   # An access path: one name token to the lexer, as `m1.t1.acc` is.
   defp path!(path) when is_binary(path), do: path_lexed(Logex.Lexer.tokenize(path), path)
@@ -1918,14 +2154,15 @@ defmodule Logex.Runtime do
       "#{inspect(path)} is not an access path: a global, or a program instance, its tag and " <>
         ~s|the members below it, joined by `.`, as in "m1.t1.acc"|
 
-  defp at_path({:ok, _global}, _instance, {head, [], _path}, runtime),
-    do: Map.fetch!(runtime.globals, head)
+  defp at_path({:ok, global}, _instance, {head, [], _path}, runtime),
+    do: given(array_of(global.type), Map.fetch!(runtime.globals, head))
 
   defp at_path({:ok, global}, _instance, {head, _rest, path}, _runtime),
     do:
       raise(
         ArgumentError,
-        "`#{path}` goes too deep: `#{head}` is #{Declarations.a_type(global.type)} global, which has no members"
+        "`#{path}` goes too deep: `#{head}` is #{Declarations.a_global(global.type)}, which " <>
+          "has no members"
       )
 
   defp at_path(:error, {:ok, type}, {head, [], _path}, runtime),
@@ -1938,7 +2175,7 @@ defmodule Logex.Runtime do
 
   defp at_path(:error, {:ok, type}, {head, [tag | members], path}, runtime) do
     program = Map.fetch!(runtime.config.programs, type)
-    read_tag(tag_of(program, tag), {head, tag, members, path}, program, runtime)
+    tag_at(Logex.Array.split(tag), program, {head, tag, members, path}, runtime)
   end
 
   defp at_path(:error, :error, {head, _rest, _path}, runtime),
@@ -1975,10 +2212,54 @@ defmodule Logex.Runtime do
   defp fetched({:ok, tag}, blocks), do: {:ok, typed(tag, blocks)}
   defp fetched(:error, _blocks), do: :error
 
+  defp tag_at(nil, program, {_head, tag, _members, _path} = at, runtime),
+    do: read_tag(tag_of(program, tag), at, program, runtime)
+
+  # M5-11 (§4.12): an element of an instance's array, `m1.temps[3]`, a var_external's read
+  # in its global, and nothing below it.
+  defp tag_at({array, subscripts}, program, {head, tag, [], _path}, runtime),
+    do: element_tag(tag_of(program, array), {array, subscripts}, {head, tag}, {program, runtime})
+
+  defp tag_at(_split, _program, {head, tag, _members, path}, _runtime),
+    do:
+      raise(
+        ArgumentError,
+        "`#{path}` goes too deep: `#{head}.#{tag}` is an element, which has no members"
+      )
+
+  defp element_tag(:error, {array, _subscripts}, {head, _tag}, {program, _runtime}),
+    do: in_program(:error, {head, array, [], nil}, program, %{})
+
+  defp element_tag({:ok, %Tag{} = found}, {array, subscripts}, {head, tag}, {_program, runtime}),
+    do:
+      element_at(
+        found.type,
+        subscripts,
+        {"#{head}.#{tag}", "#{head}.#{array}", shown_type(found.type)},
+        element_source(found, head, runtime)
+      )
+
+  defp element_source(%Tag{section: :var_external, name: name}, _head, runtime),
+    do: Map.fetch!(runtime.globals, name)
+
+  defp element_source(%Tag{name: name}, head, runtime),
+    do: Map.fetch!(Map.fetch!(runtime.instances, head).env, name)
+
+  defp shown_type(%FbType{} = type), do: Declarations.instance_of(type)
+  defp shown_type(type), do: Declarations.a_type(type)
+
+  defp array_of({:array, _type, _dims} = array), do: array
+  defp array_of(_type), do: nil
+
   # M2-4: a var_external is read as its global, the one copy, directly; a path below one
   # goes too deep, as below any bool or integer.
-  defp read_tag({:ok, %Tag{section: :var_external}}, {_head, tag, [], _path}, _program, runtime),
-    do: Map.fetch!(runtime.globals, tag)
+  defp read_tag(
+         {:ok, %Tag{section: :var_external, type: type}},
+         {_head, tag, [], _path},
+         _program,
+         runtime
+       ),
+       do: given(array_of(type), Map.fetch!(runtime.globals, tag))
 
   defp read_tag(found, {head, _tag, _members, _path} = at, program, runtime),
     do: in_program(found, at, program, Map.fetch!(runtime.instances, head).env)
@@ -1994,7 +2275,8 @@ defmodule Logex.Runtime do
   defp in_program({:ok, %Tag{type: %FbType{} = type}}, {head, tag, members, path}, _program, env),
     do: in_block(type, "#{head}.#{tag}", members, {[tag], path}, env)
 
-  defp in_program({:ok, %Tag{}}, {_head, tag, [], _path}, _program, env), do: walk(env, [tag])
+  defp in_program({:ok, %Tag{type: type}}, {_head, tag, [], _path}, _program, env),
+    do: given(array_of(type), walk(env, [tag]))
 
   defp in_program({:ok, %Tag{type: type}}, {head, tag, _members, path}, _program, _env),
     do:

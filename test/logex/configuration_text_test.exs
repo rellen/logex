@@ -696,7 +696,7 @@ defmodule Logex.Configuration.TextTest do
             {%{a | name: :a}, "a name lexes as one name token"},
             {%{a | at: "%ix0.0"}, "a name lexes as one name token"},
             {%{a | type: :float},
-             "a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword"},
+             "a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, or an array of one, as in `{:array, :int, [8]}`"},
             {%{a | initial: 1.0}, "a number is an integer"},
             {%{m1 | type: "a b"}, "a name lexes as one name token"},
             {%{m1 | task: "a b"}, "a name lexes as one name token"},

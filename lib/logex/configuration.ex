@@ -105,6 +105,16 @@ defmodule Logex.Configuration do
   decision 103): a one-shot sees its rung only at the task's runs, so an edge between two
   runs is never seen, and the pulse a coil sets stays on until the task's next run.
 
+  **Arrays** (M5-11, `docs/organisation.md` §4.12, decisions 151 and 159). A global may be
+  an array of an elementary type, `var_global temps int[8] 1 2 3 4 5 6 7 8`, never located
+  yet (M5-13's), its sizes and initial list judged as a declaration line's; a
+  `var_external` array binds only to a global array of exactly its element type and every
+  dimension's size; and a connection names an array var_input or var_output whole, to a
+  global array of its sizes whose elements widen as a value does, or an element by literal
+  subscripts, `m1.temps[3]`, as a tag of its element's type, an array var_input connected
+  whole or at every element, a constant filling an element alone. A name with brackets
+  names nothing in a configuration.
+
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
   `Logex.Compiler.instructionize/2` raises on a tree no source could say: a configuration
@@ -120,7 +130,9 @@ defmodule Logex.Configuration do
   name token; a task's single that is neither nil nor one name token; a task's continuous
   that is neither true nor false (M4-2); a number that is not an integer, a watchdog's
   among them; a global's type that is no elementary type, `:bool`, `:dint` or since M5-3 another
-  integer type; and a connection's
+  integer type, nor since M5-11 an array of one whose sizes are a non-empty list of
+  integers, and an array global's initial value that is neither nil nor a list of numbers
+  its elements could take; and a connection's
   instance that is not a name, or with its member makes no one path. A negative number was
   one too, until a negative literal lexed (M3-3, decision 97): a line can say one now, so
   a negative interval or priority is a diagnostic, in the file's words, as one too large is.
@@ -135,6 +147,7 @@ defmodule Logex.Configuration do
   alias Logex.{Declarations, Diagnostic, FbType, Program, Tag, Walk}
   alias Logex.Configuration.{Connection, Global, Instance, Text}
   import Logex.Declarations, only: [is_elementary: 1]
+  import Logex.Array, only: [is_array: 1]
 
   defstruct name: nil,
             file: nil,
@@ -192,7 +205,9 @@ defmodule Logex.Configuration do
   defmodule Global do
     @moduledoc """
     A global: `name`, `type` (an elementary type, `:bool`, `:dint` or since M5-3 any
-    integer type, `:uint` among them), an `initial` value or nil for 0, and
+    integer type, `:uint` among them, or since M5-11 an array of one, `{:array, :int,
+    [8]}`), an `initial` value or nil for 0, an array's a list of its elements' values in
+    the elements' order, and
     `at`, a location such as `"panel.i.0"`, or nil. A global located at an `i` address is
     an input point, set by the host; one at a `q` address an output point, given back to
     the host after every cycle.
@@ -1023,13 +1038,45 @@ defmodule Logex.Configuration do
 
   defp global_type(%Global{type: type}) when is_elementary(type), do: []
 
-  defp global_type(%Global{name: name, type: type}),
+  # M5-11 (decision 151): an array of an elementary type, its sizes any integers a line can
+  # say, which check/1 judges as a declaration's, a line's diagnostic.
+  defp global_type(%Global{type: {:array, type, [_ | _] = dims}} = global)
+       when is_elementary(type),
+       do: sizes_said(Enum.all?(proper_or_not(dims), &is_integer/1), global)
+
+  defp global_type(global), do: sizes_said(false, global)
+
+  defp sizes_said(true, _global), do: []
+
+  defp sizes_said(false, %Global{name: name, type: type}),
     do: [
       "global #{label(name)} has type #{inspect(type)}: a global is " <>
-        Declarations.either(&inspect/1)
+        Declarations.either(&inspect/1) <>
+        ", or an array of one of them, as in `{:array, :int, [8]}`, its sizes a list of " <>
+        "one integer a dimension"
     ]
 
-  defp global_initial(%Global{initial: initial}) when initial == nil or is_integer(initial),
+  defp proper_or_not(list), do: proper_elements(list, [])
+
+  defp proper_elements([], acc), do: acc
+  defp proper_elements([element | rest], acc), do: proper_elements(rest, [element | acc])
+  defp proper_elements(_improper, _acc), do: [:improper]
+
+  defp global_initial(%Global{initial: nil}), do: []
+
+  # M5-11 (decision 151): an array global's initial value is a list of its elements' values,
+  # each an integer, or a real's a number, whose length and each value check/1 judges.
+  defp global_initial(%Global{type: {:array, type, _dims}, initial: initial} = global)
+       when is_list(initial),
+       do: array_initial(Enum.all?(proper_or_not(initial), &element_said?(type, &1)), global)
+
+  defp global_initial(%Global{name: name, type: {:array, _type, _dims}, initial: initial}),
+    do: [
+      "the initial value of global #{label(name)}, an array, must be a list of its " <>
+        "elements' values, found #{inspect(initial)}"
+    ]
+
+  defp global_initial(%Global{initial: initial}) when is_integer(initial),
     do: []
 
   # M5-10: a real global's initial value may be a float, as its line's real literal is.
@@ -1046,6 +1093,21 @@ defmodule Logex.Configuration do
     do: [
       "the initial value of global #{label(name)} must be an integer, found #{inspect(initial)}"
     ]
+
+  defp array_initial(true, _global), do: []
+
+  defp array_initial(false, %Global{name: name, type: {:array, type, _dims}, initial: initial}),
+    do: [
+      "the initial value of global #{label(name)}, an array of #{Declarations.word(type)}s, " <>
+        "must be a list of its elements' values, each #{element_value(type)}, found " <>
+        inspect(initial)
+    ]
+
+  defp element_said?(type, value) when type in @reals, do: is_number(value)
+  defp element_said?(_type, value), do: is_integer(value)
+
+  defp element_value(type) when type in @reals, do: "a number"
+  defp element_value(_type), do: "an integer"
 
   defp global_at(%Global{at: nil}), do: []
   defp global_at(%Global{at: at} = global), do: of_word(word?(at), not_a_location(global))
@@ -1221,7 +1283,7 @@ defmodule Logex.Configuration do
 
   defp take_name({ref, element}, acc) do
     {kind, name, line} = held(element)
-    refusal = refusal(String.contains?(name, "."), reserved?(name), name, kind)
+    refusal = refusal(String.contains?(name, [".", "["]), reserved?(name), name, kind)
     take(refusal, {ref, kind, name, line, stored(ref, element)}, acc)
   end
 
@@ -1232,6 +1294,12 @@ defmodule Logex.Configuration do
   defp held(%Global{name: name, line: line}), do: {:global, name, line}
   defp held(%Instance{name: name, line: line}), do: {:instance, name, line}
   defp held({:declared, line, %{kind: kind, name: name}}), do: {kind, name, line}
+
+  # M5-11: brackets are kept for an element's subscripts, `m1.temps[3]`, as in a program.
+  defp refusal(true, _reserved, name, kind) when binary_part(name, byte_size(name) - 1, 1) == "]",
+    do:
+      "`#{name}` cannot name #{a(kind)}: brackets are kept for an element's subscripts, as " <>
+        "in `m1.temps[3]`"
 
   defp refusal(true, _reserved, name, kind),
     do:
@@ -1569,7 +1637,29 @@ defmodule Logex.Configuration do
   defp global(%Global{type: type} = global) when is_elementary(type),
     do: initial(global, location(global.at))
 
+  # M5-11 (decision 151): an array global meets every rule a declared array meets, its
+  # dimensions, sizes and initial list, each a diagnostic at its line, and is never located
+  # yet, which is M5-13's (decision 156).
+  defp global(%Global{type: type} = global) when is_array(type),
+    do:
+      Enum.map(
+        Declarations.array_misfits(global.name, type, global.initial),
+        &diagnostic(global.line, &1)
+      ) ++
+        located_array(global)
+
   defp global(%Global{}), do: []
+
+  defp located_array(%Global{at: nil}), do: []
+
+  defp located_array(%Global{name: name, at: at, line: line}),
+    do: [
+      diagnostic(
+        line,
+        "`#{name}` is an array at `#{at}`: an array global is not located yet, so declare " <>
+          "it with no `at`, or a global at each point"
+      )
+    ]
 
   # A located global takes no initial value: an input point's value is the host's, and an
   # output point starts at 0, the safe value, until the instance that drives it first
@@ -1626,6 +1716,10 @@ defmodule Logex.Configuration do
   A global's value before anything sets it: its `initial`, or 0 without one, so that an
   input point and an output point start at 0.
 
+  Since M5-11 an array global's value is a tuple, a tuple of tuples for more dimensions,
+  each element at its type's zero or its initial list's value in the elements' order
+  (decision 151), as a state holds an array.
+
   The one rule for a new global (`docs/organisation.md` §4.9), as
   `Logex.Program.initial_env/1` is for a tag: `Logex.Runtime.start/1` starts every global
   by it, `Logex.Runtime.restart/2` every global but an input point, whose value it keeps,
@@ -1646,7 +1740,15 @@ defmodule Logex.Configuration do
   def initial(%Global{type: type, initial: nil}) when is_elementary(type),
     do: Declarations.zero(type)
 
-  def initial(%Global{initial: nil}), do: 0
+  # M5-11 (decision 151): an array global starts as a declared array does, each element at
+  # its type's zero or its initial list's value in the elements' order, a real's at its
+  # nearest, held as a state holds an array, a tuple of tuples.
+  def initial(%Global{type: {:array, type, dims} = array, initial: initial})
+      when is_elementary(type) and (initial == nil or is_list(initial)),
+      do:
+        initial_array(initial == nil or length(initial) == Logex.Array.size(dims), array, initial)
+
+  def initial(%Global{type: type, initial: nil}) when not is_array(type), do: 0
 
   # M5-10 (decision 150): a real global's initial value is held as its nearest value, a
   # `real`'s rounded to a single, an integer one as the real it is.
@@ -1662,6 +1764,16 @@ defmodule Logex.Configuration do
         "expected a %Logex.Configuration.Global{} whose initial value is an integer, a real's a " <>
           "number, or nil, " <>
           "got: #{inspect(other)}"
+      )
+
+  defp initial_array(true, array, initial), do: Logex.Array.started(array, initial)
+
+  defp initial_array(false, array, initial),
+    do:
+      raise(
+        ArgumentError,
+        "expected an initial list of #{Logex.Array.size(elem(array, 2))} values for " <>
+          "#{Declarations.a_type(array)}, got: #{inspect(initial)}"
       )
 
   @doc """
@@ -1761,6 +1873,8 @@ defmodule Logex.Configuration do
   end
 
   defp at(false, _global, _keeps, acc), do: acc
+  # M5-11: an array global at a location is refused by global/1, and is no point.
+  defp at(true, %Global{type: type}, _keeps, acc) when is_array(type), do: acc
   defp at(true, global, keeps, acc), do: at_spelled(spelled(global.at), global, keeps, acc)
 
   defp at_spelled(:error, global, _keeps, acc),
@@ -2034,7 +2148,7 @@ defmodule Logex.Configuration do
     do: declare(Declarations.suggest(name, known(world, kind), & &1, "names"), kind, name, type)
 
   defp declare("", :global, name, type),
-    do: "no global `#{name}`: declare it, as in `var_global #{name} #{type}`"
+    do: "no global `#{name}`: declare it, as in `var_global #{name} #{written_type(type)}`"
 
   defp declare("", :instance, name, _type),
     do: "no instance `#{name}`: declare it, as in `program #{name} motor`"
@@ -2062,13 +2176,93 @@ defmodule Logex.Configuration do
   defp on_instance({:ok, instance, program}, connection, acc, world),
     do:
       of_member(
-        Map.fetch(program.tags, connection.member),
+        member_tag(program, connection),
         instance,
         program,
         connection,
         acc,
         world
       )
+
+  # M5-11 (decision 151, §4.12): a connection names an array var_input or var_output whole,
+  # `m1.temps`, or an element of one by literal subscripts, `m1.temps[3]`, read as the tag
+  # of its element's type under its element's name, `temps[3]` by its subscripts' values.
+  defp member_tag(program, %Connection{member: member} = connection)
+       when binary_part(member, byte_size(member) - 1, 1) == "]",
+       do: element_tag(Logex.Array.split(member), program, "#{connection.instance}.#{member}")
+
+  defp member_tag(program, %Connection{member: member}), do: Map.fetch(program.tags, member)
+
+  defp element_tag({array, subscripts}, program, member),
+    do: element_of_tag(Map.fetch(program.tags, array), {array, subscripts}, program, member)
+
+  defp element_of_tag(:error, {array, _subscripts}, program, _member),
+    do: {:element, "`#{program.name}` declares no `#{array}`"}
+
+  defp element_of_tag({:ok, %Tag{type: {:array, type, dims}} = tag}, {_, subscripts}, _p, member),
+    do:
+      subscripted(
+        Enum.map(subscripts, &Logex.Array.subscript/1),
+        {tag, type, dims},
+        member
+      )
+
+  defp element_of_tag({:ok, %Tag{} = tag}, {array, _subscripts}, program, member),
+    do:
+      {:element,
+       "`#{member}` names an element of `#{array}`, but `#{array}` is " <>
+         "#{shown_type(tag.type)}#{in_type(tag.line, program)}, no array"}
+
+  defp subscripted(subscripts, {tag, type, dims}, member) do
+    tags = for {:tag, name} <- subscripts, do: name
+    literal = for {:literal, n} <- subscripts, do: n
+    element_index(tags, {literal, subscripts}, {tag, type, dims}, member)
+  end
+
+  defp element_index([name | _], _subscripts, _array, member),
+    do:
+      {:element,
+       "`#{member}`'s subscript `#{name}` is a tag's name: a connection names an element by " <>
+         "literal subscripts, as in `#{elem(Logex.Array.split(member), 0)}[0]`"}
+
+  defp element_index([], {index, _}, {tag, _type, dims}, member)
+       when length(index) != length(dims),
+       do:
+         {:element,
+          "`#{member}` names an element of `#{tag.name}`, #{Declarations.a_type(tag.type)}, " <>
+            "by #{length(index)} subscript#{plural(length(index))}, where it takes " <>
+            "#{length(dims)}, one a dimension"}
+
+  defp element_index([], {index, _}, {tag, type, dims}, member),
+    do:
+      in_bounds(
+        Enum.find(Enum.zip(index, dims), fn {i, n} -> i < 0 or i >= n end),
+        index,
+        {tag, type},
+        member
+      )
+
+  defp in_bounds(nil, index, {tag, type}, _member),
+    do: {:ok, %{tag | name: Logex.Array.name(tag.name, index), type: type}}
+
+  defp in_bounds({i, n}, _index, {tag, _type}, member),
+    do:
+      {:element,
+       "`#{member}`'s subscript `#{i}` is outside 0 to #{n - 1}: `#{tag.name}` is " <>
+         "#{Declarations.a_type(tag.type)}"}
+
+  defp plural(1), do: ""
+  defp plural(_n), do: "s"
+
+  # A type as a message names it, an instance's by its type.
+  defp shown_type(type) when is_elementary(type) or is_array(type), do: Declarations.a_type(type)
+  defp shown_type(type), do: Declarations.instance_of(type)
+
+  # A type as a declaration line writes it, `dint` or `int[8]`.
+  defp written_type({:array, type, dims}),
+    do: "#{Declarations.word(type)}[#{Enum.join(dims, ",")}]"
+
+  defp written_type(type), do: "#{type}"
 
   defp of_member({:ok, %Tag{section: :var_input} = tag}, _i, _p, connection, acc, world),
     do: input(connection, tag, acc, world)
@@ -2098,6 +2292,9 @@ defmodule Logex.Configuration do
 
   defp of_member({:ok, _not_a_tag}, _instance, program, connection, acc, _world),
     do: problem(acc, connection, declares_no(connection, program))
+
+  defp of_member({:element, message}, _instance, _program, connection, acc, _world),
+    do: problem(acc, connection, message)
 
   defp of_member(:error, _instance, program, connection, acc, _world),
     do: unknown_member(String.contains?(connection.member, "."), program, connection, acc)
@@ -2146,8 +2343,34 @@ defmodule Logex.Configuration do
   # A var_input: connected once, to a global of its type or a constant that fits it.
   defp input(connection, tag, {wiring, problems}, world) do
     key = {connection.instance, tag.name}
-    sourced(Map.get(wiring.inputs, key), key, connection, tag, {wiring, problems}, world)
+    first = first_source(Logex.Array.split(tag.name), wiring.inputs, key)
+
+    sourced(
+      first,
+      key,
+      connection,
+      tag,
+      {%{wiring | inputs: parted(key, wiring.inputs, connection)}, problems},
+      world
+    )
   end
+
+  # M5-11: an array var_input has one source whole, or one for each element: an element's
+  # is its array's where the array is connected whole, and an array's the first of its
+  # elements' where any is connected, kept under `{:elements, instance, array}`.
+  defp first_source({array, _subscripts}, inputs, {instance, _element} = key),
+    do: Map.get(inputs, key) || Map.get(inputs, {instance, array})
+
+  defp first_source(nil, inputs, {instance, name} = key),
+    do: Map.get(inputs, key) || Map.get(inputs, {:elements, instance, name})
+
+  defp parted({instance, name}, inputs, connection),
+    do: element_part(Logex.Array.split(name), instance, inputs, connection)
+
+  defp element_part({array, _subscripts}, instance, inputs, connection),
+    do: Map.put_new(inputs, {:elements, instance, array}, connection)
+
+  defp element_part(nil, _instance, inputs, _connection), do: inputs
 
   defp sourced(nil, key, connection, tag, {wiring, problems}, world),
     do:
@@ -2164,7 +2387,29 @@ defmodule Logex.Configuration do
   defp sourced(:broken, _key, connection, tag, acc, world),
     do: source(other_end(connection.to), connection, tag, acc, world)
 
-  defp sourced(first, _key, connection, _tag, acc, _world),
+  defp sourced(first, key, connection, tag, acc, world),
+    do:
+      already(
+        parted?(first.member) == parted?(connection.member),
+        first,
+        {key, connection, tag},
+        acc,
+        world
+      )
+
+  defp parted?(member), do: Logex.Array.split(member) != nil
+
+  defp already(false, %Connection{member: member} = first, {_key, connection, _tag}, acc, _world),
+    do:
+      problem(
+        acc,
+        connection,
+        "`#{connection.instance}.#{connection.member}` is already connected, by " <>
+          "`#{connection.instance}.#{member}` to #{end_label(first.to)}#{where(first)}: a " <>
+          "var_input has one source, an array whole or each of its elements"
+      )
+
+  defp already(true, first, {_key, connection, _tag}, acc, _world),
     do:
       problem(
         acc,
@@ -2179,6 +2424,19 @@ defmodule Logex.Configuration do
 
   defp source(:global, connection, tag, acc, world),
     do: read_global(global_of(connection.to, tag.type, world), connection, tag, acc)
+
+  # M5-11: a constant is one value, so it fills an element, never an array whole.
+  defp source(:constant, connection, %Tag{type: type} = tag, acc, _world) when is_array(type),
+    do:
+      problem(
+        acc,
+        connection,
+        "`#{connection.instance}.#{connection.member}` is #{Declarations.a_type(type)}, and " <>
+          "the constant `#{shown_number(connection.to)}` is one value: connect it to a global " <>
+          "array of its sizes, or each element to a constant, as in " <>
+          "`#{connection.instance}.#{Logex.Array.name(tag.name, Enum.map(elem(type, 2), fn _ -> 0 end))} " <>
+          "#{shown_number(connection.to)}`"
+      )
 
   defp source(:constant, %Connection{to: to} = connection, %Tag{type: type} = tag, acc, _world),
     do: constant(Declarations.holds?(type, to), connection, tag, acc)
@@ -2198,7 +2456,7 @@ defmodule Logex.Configuration do
 
   # A global whose type is the host's mistake is refused already: one mistake, one message.
   defp read_global({:ok, %Global{type: type} = global}, _connection, _tag, acc)
-       when not is_elementary(type),
+       when not is_elementary(type) and not is_array(type),
        do: used(acc, global)
 
   # M5-3 (decision 159): a connection's copy-in widens as an instruction's source does, so
@@ -2206,7 +2464,7 @@ defmodule Logex.Configuration do
   defp read_global({:ok, global}, connection, tag, acc),
     do:
       same_type(
-        Declarations.widens?(global.type, tag.type),
+        widens?(global.type, tag.type),
         {global.type, tag.type},
         {global, connection, tag},
         used(acc, global)
@@ -2216,6 +2474,12 @@ defmodule Logex.Configuration do
     do: problem(acc, connection, message)
 
   defp read_global(:skip, _connection, _tag, acc), do: acc
+
+  # M5-11 (decisions 151 and 159): an array connects to an array of its sizes, each element
+  # widening as a value does, and to nothing else.
+  defp widens?({:array, from, dims}, {:array, to, dims}), do: Declarations.widens?(from, to)
+  defp widens?(from, to) when is_array(from) or is_array(to), do: false
+  defp widens?(from, to), do: Declarations.widens?(from, to)
 
   defp used({wiring, problems}, global),
     do: {%{wiring | used: MapSet.put(wiring.used, global.name)}, problems}
@@ -2341,7 +2605,7 @@ defmodule Logex.Configuration do
   defp output(:junk, _connection, _tag, acc, _world), do: acc
 
   defp sink({:ok, %Global{type: type} = global}, _connection, _tag, acc)
-       when not is_elementary(type),
+       when not is_elementary(type) and not is_array(type),
        do: used(acc, global)
 
   defp sink({:ok, global}, connection, tag, acc),
@@ -2362,7 +2626,7 @@ defmodule Logex.Configuration do
   # M5-3 (decision 159): a copy-out widens as a destination takes a value, so the global's
   # type is the var_output's or one Ed 3 Figure 11 widens it into.
   defp drives(_location, global, connection, tag, acc),
-    do: typed_sink(Declarations.widens?(tag.type, global.type), global, connection, tag, acc)
+    do: typed_sink(widens?(tag.type, global.type), global, connection, tag, acc)
 
   defp typed_sink(false, global, connection, tag, acc),
     do: same_type(false, {tag.type, global.type}, {global, connection, tag}, acc)
@@ -2400,12 +2664,27 @@ defmodule Logex.Configuration do
     do:
       leaves(
         for(
-          %Tag{section: :var_input, name: name} <- declared(program),
+          %Tag{section: :var_input, name: name} = tag <- declared(program),
           not Map.has_key?(inputs, {instance.name, name}),
-          do: name
+          left <- unconnected_part(tag, instance.name, inputs),
+          do: left
         ),
         instance
       )
+
+  # M5-11: an array var_input none of whose elements is connected is left whole, and one
+  # some of whose elements are, at each other element, in the elements' order.
+  defp unconnected_part(%Tag{name: name, type: {:array, _type, dims}}, instance, inputs)
+       when is_map_key(inputs, {:elements, instance, name}),
+       do:
+         for(
+           index <- Logex.Array.indexes(dims),
+           element = Logex.Array.name(name, index),
+           not Map.has_key?(inputs, {instance, element}),
+           do: element
+         )
+
+  defp unconnected_part(%Tag{name: name}, _instance, _inputs), do: [name]
 
   defp leaves([], _instance), do: []
 
@@ -2511,7 +2790,7 @@ defmodule Logex.Configuration do
 
   # A global whose type is the host's mistake is refused already: one mistake, one message.
   defp bound_to({:global, _line, %Global{type: type}}, _tag, _typed, _world)
-       when not is_elementary(type),
+       when not is_elementary(type) and not is_array(type),
        do: []
 
   defp bound_to(
@@ -2525,7 +2804,7 @@ defmodule Logex.Configuration do
   defp bound_to({:global, _line, global}, tag, {_writes, program}, _world),
     do: [
       "#{declares(tag, program)}, but `#{global.name}` is #{Declarations.a_type(global.type)}#{where(global)}" <>
-        exactly(Declarations.conversion(global.type, tag.type))
+        exactly(conversion_of(global.type, tag.type))
     ]
 
   defp bound_to({kind, line, _ref}, tag, {_writes, program}, _world),
@@ -2537,13 +2816,23 @@ defmodule Logex.Configuration do
   # only to a global of exactly its type, where a connection would widen.
   defp exactly(nil), do: ""
 
+  # M5-11 (decision 159): an array var_external binds to an array of exactly its element
+  # type and every dimension's size.
+  defp exactly(:array),
+    do:
+      ": a var_external is its global, so it is an array of exactly the global's type and " <>
+        "sizes, every dimension included"
+
   defp exactly(_conversion),
     do: ": a var_external is its global, so its type is exactly the global's, never widened"
+
+  defp conversion_of(from, to) when is_array(from) or is_array(to), do: :array
+  defp conversion_of(from, to), do: Declarations.conversion(from, to)
 
   defp no_global("", tag, program),
     do:
       "#{declares(tag, program)}, but there is no global `#{tag.name}`: declare it, as in " <>
-        "`var_global #{tag.name} #{tag.type}`"
+        "`var_global #{tag.name} #{written_type(tag.type)}`"
 
   defp no_global(suggestion, tag, program),
     do: "#{declares(tag, program)}, but there is no global `#{tag.name}`" <> suggestion
@@ -2558,7 +2847,7 @@ defmodule Logex.Configuration do
 
   defp declares(%Tag{} = tag, program),
     do:
-      "`#{program.name}` declares `var_external #{tag.name} #{tag.type}`" <>
+      "`#{program.name}` declares `var_external #{tag.name} #{written_type(tag.type)}`" <>
         in_type(tag.line, program)
 
   # Where in a program type's own text a line is: in its file, when it was read from one.

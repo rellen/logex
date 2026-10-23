@@ -626,6 +626,15 @@ defmodule Logex.ArrayTest do
   end
 
   describe "the warnings" do
+    test "a var_output array no rung writes stays at its initial values, or at 0" do
+      assert warnings(
+               "var_output w int[2] 5 6\nvar_output v int[2]\nvar x int\nmove w[0] x\nmove v[1] x"
+             ) == [
+               "line 1: warning: `w` is a var_output, but no rung writes it: it stays at its initial values",
+               "line 2: warning: `v` is a var_output, but no rung writes it: it stays at 0"
+             ]
+    end
+
     test "name an element by its name, its array by its own" do
       assert warnings(
                "var l bool[3]\nvar a bool\nxic a ote l[1]\nxic a ote l[01]\nxic a ote l[2]"
@@ -740,6 +749,22 @@ defmodule Logex.ArrayTest do
           ] do
         assert_raise ArgumentError, message, fn -> Runtime.scan(p, %{state | env: broken}) end
       end
+    end
+  end
+
+  describe "a real array's input" do
+    test "each element a host gives is stored as its real's nearest value, an integer too" do
+      program =
+        compiled!("var_input hz real[2]\nvar_input big lreal[1]\nvar_output s real\nmove hz[0] s")
+
+      <<single::float-32>> = <<0.1::float-32>>
+
+      state =
+        Runtime.put_inputs(program, Runtime.instance(program), %{"hz" => [0.1, 3], "big" => [7]})
+
+      # Compared exactly: a real holds a float, never an integer, so `3` is held as 3.0.
+      assert state.env["hz"] === {single, 3.0}
+      assert state.env["big"] === {7.0}
     end
   end
 

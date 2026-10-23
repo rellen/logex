@@ -5942,4 +5942,132 @@ defmodule Logex.EndToEndTest do
       assert press.tags["quick"].type == Logex.FbType.ton_ltime()
     end
   end
+
+  # PLAN M5-11's Done-when in a plant, from files on disk through
+  # `Logex.Configuration.compile_file/1` and `Logex.Runtime.cycle/3`: a checkweigher keeps
+  # the last eight weights in `weights int[8]`, shifting them along on each pick's rising
+  # edge, `ons edges[1]` (decision 154), copies the fourth, `weights[3]`, into `grid[1,7]`
+  # of an `int[4,8]` and into a var_output array connected whole to a global array, and
+  # lights a lamp while `weights[3]` is over 500, over seeded loads and picks, against an
+  # oracle that knows nothing of logex: a list of eight weights, shifted.
+  describe "arrays in the plant (M5-11)" do
+    @describetag :tmp_dir
+
+    @weigh_ld """
+    var_input  load    int
+    var_input  pick    bool
+    var_output heavy   bool
+    var_output corner  int
+    var_output history int[8]
+    var weights int[8]
+    var grid    int[4,8]
+    var edges   bool[2]
+    var p       bool
+    xic pick ons edges[1] ote p
+    xic p move weights[6] weights[7]
+    xic p move weights[5] weights[6]
+    xic p move weights[4] weights[5]
+    xic p move weights[3] weights[4]
+    xic p move weights[2] weights[3]
+    xic p move weights[1] weights[2]
+    xic p move weights[0] weights[1]
+    xic p move load weights[0]
+    xic p move weights[3] grid[1,7]
+    xic p move weights[3] history[3]
+    gt weights[3] 500 ote heavy
+    move grid[1,7] corner
+    """
+
+    @weigh_logex """
+    task fast interval 10 priority 1
+    var_global load    int  at panel.i.0
+    var_global pick    bool at panel.i.1
+    var_global heavy   bool at panel.q.0
+    var_global corner  int  at panel.q.1
+    var_global history int[8] 1 1 1 1 1 1 1 1
+    program line weigh with fast
+    line.load    load
+    line.pick    pick
+    line.heavy   heavy
+    line.corner  corner
+    line.history history
+    """
+
+    test "M5-11's Done-when: `weights[3]` and `grid[1,7]` run in a plant against an oracle",
+         %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "weigh.ld"), @weigh_ld)
+      File.write!(Path.join(dir, "plant.logex"), @weigh_logex)
+      {:ok, config} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+
+      assert Logex.Configuration.Text.print(config) =~
+               "var_global history int[8] 1 1 1 1 1 1 1 1\n"
+
+      runtime = Logex.Runtime.start(config)
+      assert Logex.Runtime.get!(runtime, "history") == List.duplicate(1, 8)
+
+      :rand.seed(:exsss, {2026, 10, 23})
+
+      steps =
+        for _ <- 1..400,
+            do: %{"load" => :rand.uniform(1000) - 1, "pick" => :rand.uniform(2) - 1}
+
+      # The oracle: the last eight weights, newest first, shifted on a pick's rising edge,
+      # never on the first scan; the corner and the history's fourth the fourth weight
+      # once a pick has shifted it there, the history's copy-out writing over the global's
+      # initial list from the first scan on.
+      model = %{
+        weights: List.duplicate(0, 8),
+        last: 0,
+        first: true,
+        corner: 0,
+        history3: 0,
+        shifts: 0
+      }
+
+      {_runtime, model} =
+        Enum.reduce(steps, {runtime, model}, fn step, {runtime, model} ->
+          {runtime, outputs, _events} = Logex.Runtime.cycle(runtime, 10, step)
+          rose = step["pick"] == 1 and model.last == 0 and not model.first
+
+          model =
+            case rose do
+              true ->
+                weights = [step["load"] | Enum.take(model.weights, 7)]
+
+                %{
+                  model
+                  | weights: weights,
+                    corner: Enum.at(weights, 3),
+                    history3: Enum.at(weights, 3),
+                    shifts: model.shifts + 1
+                }
+
+              false ->
+                model
+            end
+
+          model = %{model | last: step["pick"], first: false}
+          fourth = Enum.at(model.weights, 3)
+
+          assert Logex.Runtime.get!(runtime, "line.weights") == model.weights
+          assert Logex.Runtime.get!(runtime, "line.weights[3]") == fourth
+          assert Logex.Runtime.get!(runtime, "line.grid[1,7]") == model.corner
+          assert Logex.Runtime.get!(runtime, "history[3]") == model.history3
+          assert Logex.Runtime.get!(runtime, "line.history[3]") == model.history3
+
+          heavy =
+            case fourth > 500 do
+              true -> 1
+              false -> 0
+            end
+
+          assert outputs == %{"heavy" => heavy, "corner" => model.corner}
+          {runtime, Map.update(model, :lit, [heavy], &[heavy | &1])}
+        end)
+
+      # The walk lit the lamp and left it dark, and shifted every weight along many times.
+      assert 1 in model.lit and 0 in model.lit
+      assert model.shifts > 50
+    end
+  end
 end

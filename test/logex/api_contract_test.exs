@@ -8110,6 +8110,356 @@ defmodule Logex.ApiContractTest do
 
   @pc_inputs ~w(e1 e2 e3 on)
 
+  # ---- M5-11: arrays of one, two and three dimensions, literal subscripts ---------------
+
+  # PLAN M5-11: a program of arrays drawn at one, two and three dimensions, of an integer
+  # type and of bools, each element read and written by literal subscripts, `move` and
+  # `add` between elements, a var_input array the host sets whole as a list, a var_output
+  # array given as one, a one-shot on an element, over scans, restarts, host mistakes and
+  # online edits of an initial list, and in a resource connected whole and element by
+  # element, against an oracle that knows nothing of logex: each array a map of its
+  # elements by their subscripts, the rightmost varying fastest (1756-PM004L p.35), and
+  # each value wrapped into its type's width.
+  @ay_reach [
+    :one_dimension,
+    :two_dimensions,
+    :three_dimensions,
+    :element_read,
+    :element_written,
+    :wrapped,
+    :one_shot_fired,
+    :host_list,
+    :host_refused,
+    :restarted,
+    :initial_changed,
+    :resource_element,
+    :resource_whole
+  ]
+
+  @ay_types %{int: {16, :signed}, dint: {32, :signed}, usint: {8, :unsigned}}
+
+  test "arrays of one, two and three dimensions run as their text says, element by element, " <>
+         "alone, across a restart, a host mistake and an edit, and in a resource" do
+    :rand.seed(:exsss, {2026, 10, 511})
+
+    for _ <- 1..150 do
+      spec = ay_spec()
+      program = ay_program(spec)
+      ay_lone(spec, program, 12)
+      ay_resource(spec, program, 4)
+    end
+
+    assert Process.get(:ay_reach, MapSet.new()) == MapSet.new(@ay_reach)
+  end
+
+  defp ay_reached(name), do: reached(:ay_reach, name)
+
+  defp ay_dims, do: for(_ <- 1..Enum.random(1..3), do: Enum.random(1..3))
+
+  defp ay_spec do
+    type = pick(Map.keys(@ay_types) |> Enum.sort())
+    dims = %{"a" => ay_dims(), "i" => ay_dims(), "o" => ay_dims(), "b" => [Enum.random(1..3)]}
+
+    for {_name, d} <- dims do
+      ay_reached(Enum.at([:one_dimension, :two_dimensions, :three_dimensions], length(d) - 1))
+    end
+
+    initial = for _ <- ay_indexes(dims["a"]), do: ay_value(type)
+
+    %{
+      type: type,
+      dims: dims,
+      initial: initial,
+      rungs: for(at <- 0..Enum.random(0..4), do: ay_rung(type, dims, at))
+    }
+  end
+
+  # Every index of an array of `dims`, the rightmost subscript fastest, restated.
+  defp ay_indexes([n]), do: for(i <- 0..(n - 1), do: [i])
+  defp ay_indexes([n | dims]), do: for(i <- 0..(n - 1), rest <- ay_indexes(dims), do: [i | rest])
+
+  defp ay_value(type) do
+    {bits, sign} = @ay_types[type]
+
+    case sign do
+      :signed -> Enum.random(-Bitwise.bsl(1, bits - 1)..(Bitwise.bsl(1, bits - 1) - 1))
+      :unsigned -> Enum.random(0..(Bitwise.bsl(1, bits) - 1))
+    end
+  end
+
+  defp ay_wrap(type, value) do
+    {bits, sign} = @ay_types[type]
+    low = Integer.mod(value, Bitwise.bsl(1, bits))
+
+    case sign == :signed and low >= Bitwise.bsl(1, bits - 1) do
+      true -> low - Bitwise.bsl(1, bits)
+      false -> low
+    end
+  end
+
+  defp ay_element(dims, array), do: {array, pick(ay_indexes(dims[array]))}
+
+  defp ay_source(type, dims) do
+    case :rand.uniform(4) do
+      1 -> {:lit, ay_value(type)}
+      _ -> {:el, ay_element(dims, pick(["a", "i", "o"]))}
+    end
+  end
+
+  defp ay_rung(type, dims, at) do
+    contact = pick([nil, {:go}, {:bit, ay_element(dims, "b")}])
+
+    case :rand.uniform(5) do
+      1 ->
+        {:ons, contact, at, ay_element(dims, "b")}
+
+      _ ->
+        instructions =
+          for _ <- 1..Enum.random(1..2) do
+            destination = ay_element(dims, pick(["a", "o"]))
+
+            case :rand.uniform(2) do
+              1 -> {:move, [ay_source(type, dims)], destination}
+              2 -> {:add, [ay_source(type, dims), ay_source(type, dims)], destination}
+            end
+          end
+
+        {:run, contact, instructions}
+    end
+  end
+
+  defp ay_name({array, index}), do: "#{array}[#{Enum.join(index, ",")}]"
+
+  defp ay_operand({:lit, n}), do: Integer.to_string(n)
+  defp ay_operand({:el, element}), do: ay_name(element)
+
+  defp ay_contact(nil), do: []
+  defp ay_contact({:go}), do: ["xic go"]
+  defp ay_contact({:bit, element}), do: ["xic #{ay_name(element)}"]
+
+  defp ay_text({:ons, contact, at, bit}),
+    do: Enum.join(ay_contact(contact) ++ ["ons edges[#{at}]", "ote #{ay_name(bit)}"], " ")
+
+  defp ay_text({:run, contact, instructions}),
+    do:
+      Enum.join(
+        ay_contact(contact) ++
+          Enum.map(instructions, fn {op, sources, destination} ->
+            Enum.join(["#{op}" | Enum.map(sources, &ay_operand/1)] ++ [ay_name(destination)], " ")
+          end),
+        " "
+      )
+
+  defp ay_word(type, dims), do: "#{type}[#{Enum.join(dims, ",")}]"
+
+  defp ay_source_text(spec) do
+    declarations = [
+      "var_input go bool",
+      "var_input i #{ay_word(spec.type, spec.dims["i"])}",
+      "var a #{ay_word(spec.type, spec.dims["a"])} #{Enum.join(spec.initial, " ")}",
+      "var b #{ay_word(:bool, spec.dims["b"])}",
+      "var edges bool[5]",
+      "var_output o #{ay_word(spec.type, spec.dims["o"])}"
+    ]
+
+    Enum.join(declarations ++ Enum.map(spec.rungs, &ay_text/1), "\n")
+  end
+
+  defp ay_program(spec) do
+    {:ok, program} = Logex.compile(ay_source_text(spec), name: "ay")
+    program
+  end
+
+  # The oracle's state: each array a map of its elements by index, restated.
+  defp ay_start(spec, inputs) do
+    zeros = fn dims -> Map.new(ay_indexes(dims), &{&1, 0}) end
+
+    %{
+      "a" => Map.new(Enum.zip(ay_indexes(spec.dims["a"]), spec.initial)),
+      "i" => inputs,
+      "o" => zeros.(spec.dims["o"]),
+      "b" => zeros.(spec.dims["b"]),
+      "edges" => zeros.([5]),
+      "go" => 0
+    }
+  end
+
+  defp ay_read(_model, {:lit, n}), do: n
+
+  defp ay_read(model, {:el, {array, index}}) do
+    ay_reached(:element_read)
+    Map.fetch!(model[array], index)
+  end
+
+  defp ay_write(model, {array, index}, value) do
+    ay_reached(:element_written)
+    put_in(model, [array, index], value)
+  end
+
+  defp ay_power(_model, nil), do: true
+  defp ay_power(model, {:go}), do: model["go"] == 1
+  defp ay_power(model, {:bit, {array, index}}), do: Map.fetch!(model[array], index) == 1
+
+  defp ay_scan(spec, model, first) do
+    Enum.reduce(spec.rungs, model, fn
+      {:ons, contact, at, bit}, model ->
+        power = ay_power(model, contact)
+        stored = model["edges"][[at]] == 1
+        pulse = power and not stored and not first
+        if pulse, do: ay_reached(:one_shot_fired)
+        model = put_in(model, ["edges", [at]], if(power, do: 1, else: 0))
+        ay_write(model, bit, if(pulse, do: 1, else: 0))
+
+      {:run, contact, instructions}, model ->
+        {_power, model} =
+          Enum.reduce(instructions, {ay_power(model, contact), model}, fn
+            _instruction, {false, model} ->
+              {false, model}
+
+            {:move, [source], destination}, {true, model} ->
+              {true, ay_write(model, destination, ay_read(model, source))}
+
+            {:add, [x, y], destination}, {true, model} ->
+              sum = ay_read(model, x) + ay_read(model, y)
+              wrapped = ay_wrap(spec.type, sum)
+              if wrapped != sum, do: ay_reached(:wrapped)
+              {wrapped == sum, ay_write(model, destination, wrapped)}
+          end)
+
+        model
+    end)
+  end
+
+  # A map of an array's elements as a host is given it, a list of lists, restated.
+  defp ay_listed(elements, [_n]), do: elements |> Enum.sort() |> Enum.map(&elem(&1, 1))
+
+  defp ay_listed(elements, [n | dims]),
+    do:
+      for(
+        row <- 0..(n - 1),
+        do:
+          ay_listed(
+            for({[^row | rest], v} <- elements, into: %{}, do: {rest, v}),
+            dims
+          )
+      )
+
+  defp ay_input(spec) do
+    Map.new(ay_indexes(spec.dims["i"]), &{&1, ay_value(spec.type)})
+  end
+
+  defp ay_lone(spec, program, scans) do
+    inputs = ay_input(spec)
+    state = Runtime.instance(program)
+    model = ay_start(spec, inputs)
+    now = 0
+
+    Enum.reduce(1..scans, {state, model, now, true}, fn _scan, {state, model, now, first} ->
+      case :rand.uniform(8) do
+        1 ->
+          # A host's list of the wrong length or shape is refused, the state unchanged.
+          ay_reached(:host_refused)
+
+          wrong =
+            pick([
+              [],
+              :x,
+              ay_listed(model["i"], spec.dims["i"]) ++ [0],
+              [ay_listed(model["i"], spec.dims["i"])]
+            ])
+
+          assert_raise ArgumentError, ~r/^input `i/, fn ->
+            Runtime.call(program, state, %{"i" => wrong}, %Scan{now: now, first: first})
+          end
+
+          {state, model, now, first}
+
+        2 ->
+          ay_reached(:restarted)
+          state = Runtime.restart(program, state, :cold)
+          {state, ay_start(spec, model["i"]), now, true}
+
+        3 ->
+          # An edit that changes the initial list of `a` reports each element changed.
+          changed = for v <- spec.initial, do: pick([v, ay_value(spec.type)])
+          candidate = ay_program(%{spec | initial: changed})
+          {:ok, edit, forecast} = Logex.Edit.accept(program, candidate, state)
+
+          expected =
+            for {index, old, new} <- Enum.zip([ay_indexes(spec.dims["a"]), spec.initial, changed]),
+                old != new,
+                do: {:initial_changed, ay_name({"a", index}), {old, new}}
+
+          if expected != [], do: ay_reached(:initial_changed)
+          assert Enum.filter(forecast, &match?({:initial_changed, _, _}, &1)) == expected
+          assert Logex.Edit.stage(edit) == :accepted
+          {state, model, now, first}
+
+        _ ->
+          go = :rand.uniform(2) - 1
+          inputs = if :rand.uniform(3) == 1, do: ay_input(spec), else: model["i"]
+          ay_reached(:host_list)
+          host = %{"go" => go, "i" => ay_listed(inputs, spec.dims["i"])}
+
+          {outputs, state} =
+            Runtime.call(program, state, host, %Scan{now: now + 10, first: first})
+
+          model = ay_scan(spec, %{model | "go" => go, "i" => inputs}, first)
+          assert outputs == %{"o" => ay_listed(model["o"], spec.dims["o"])}
+
+          for array <- ["a", "b", "o"] do
+            assert ay_tupled(ay_listed(model[array], spec.dims[array])) == state.env[array]
+          end
+
+          {state, model, now + 10, false}
+      end
+    end)
+  end
+
+  defp ay_tupled(list) when is_list(list), do: list |> Enum.map(&ay_tupled/1) |> List.to_tuple()
+  defp ay_tupled(value), do: value
+
+  # In a resource: `i` connected whole to a global array, or element by element, half the
+  # time each, and `o` whole to another, `get/2` reading each by its path.
+  defp ay_resource(spec, program, cycles) do
+    inputs = ay_input(spec)
+    word = ay_word(spec.type, spec.dims["i"])
+    listed = Enum.join(Enum.map(ay_indexes(spec.dims["i"]), &inputs[&1]), " ")
+
+    {connection, globals} =
+      case :rand.uniform(2) do
+        1 ->
+          ay_reached(:resource_whole)
+          {"m1.i gi\n", "var_global gi #{word} #{listed}\n"}
+
+        2 ->
+          ay_reached(:resource_element)
+
+          {Enum.map_join(ay_indexes(spec.dims["i"]), &"#{ay_name({"m1.i", &1})} #{inputs[&1]}\n"),
+           ""}
+      end
+
+    text =
+      "var_global go bool\n" <>
+        globals <>
+        "var_global go_out #{ay_word(spec.type, spec.dims["o"])}\n" <>
+        "program m1 ay\nm1.go go\nm1.o go_out\n" <> connection
+
+    {:ok, config} = Logex.Configuration.compile("c", text, %{"ay" => program})
+    runtime = Runtime.start(config)
+
+    Enum.reduce(1..cycles, {runtime, ay_start(spec, inputs), true}, fn _,
+                                                                       {runtime, model, first} ->
+      {runtime, _outputs, _events} = Runtime.cycle(runtime, 10, %{})
+      model = ay_scan(spec, model, first)
+      assert Runtime.get!(runtime, "go_out") == ay_listed(model["o"], spec.dims["o"])
+      assert Runtime.get!(runtime, "m1.a") == ay_listed(model["a"], spec.dims["a"])
+      {index, value} = pick(Enum.to_list(model["a"]))
+      assert Runtime.get!(runtime, ay_name({"m1.a", index})) == value
+      {runtime, model, false}
+    end)
+  end
+
   test "pulse coils run as IEC's restated from the text: every scan exact where no switch " <>
          "came since a coil last ran, no pulse an edit made, and the power passed on" do
     :rand.seed(:exsss, {2026, 10, 444})

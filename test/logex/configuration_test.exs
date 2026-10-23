@@ -1163,9 +1163,9 @@ defmodule Logex.ConfigurationTest do
       # M3-3 (decision 97): a negative initial value is one a line can say, so a dint's
       # is taken, `d`'s -1, and a bool's or a located global's told what is wrong with it.
       assert refused(Keyword.put(base(seal), :globals, base(seal)[:globals] ++ globals)) == [
-               "global `a` has type :float: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword",
+               "global `a` has type :float: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, or an array of one of them, as in `{:array, :int, [8]}`, its sizes a list of one integer a dimension",
                "the initial value of global `e` must be an integer, found 1.0",
-               "global `n` has type nil: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword",
+               "global `n` has type nil: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, or an array of one of them, as in `{:array, :int, [8]}`, its sizes a list of one integer a dimension",
                "`b` is a bool: its initial value must be 0 or 1, found `2`",
                "`c` is a dint: `2147483648` is outside -2147483648 to 2147483647",
                "`f` is an input point: its value comes from the input image, so it takes no " <>
@@ -3489,6 +3489,37 @@ defmodule Logex.ConfigurationTest do
     ])
   end
 
+  # M5-11 (decision 151): a global array now and then, of one to three dimensions, its
+  # initial list given or not, a real's drawn near its type's limits, printed back exactly.
+  defp arrays do
+    Enum.random([
+      [],
+      [
+        %Global{
+          name: "buf",
+          type: {:array, :int, [3]},
+          initial: Enum.random([nil, [1, -32_768, 32_767]])
+        }
+      ],
+      [
+        %Global{
+          name: "grid",
+          type: {:array, :usint, [2, 2]},
+          initial: Enum.random([nil, [0, 255, 7, 1]])
+        }
+      ],
+      [
+        %Global{
+          name: "cube",
+          type: {:array, :real, [1, 2, 1]},
+          initial: Enum.random([nil, [real_value(), real_value()]])
+        }
+      ]
+    ])
+  end
+
+  defp real_value, do: Enum.random(Enum.reject(@real_initials, &is_nil/1))
+
   defp generated(programs) do
     count = Enum.random(1..3)
     snapshot? = Enum.random([true, false])
@@ -3527,6 +3558,7 @@ defmodule Logex.ConfigurationTest do
         end) ++
         Enum.random([[], [%Global{name: "spare", type: :dint, initial: 7}]]) ++
         reals() ++
+        arrays() ++
         snapshots(snapshot?)
 
     instances =
@@ -4809,8 +4841,8 @@ defmodule Logex.ConfigurationTest do
         )
 
       assert refused(fields) == [
-               "global `pb` has type {:t}: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword",
-               "global `k` has type %{}: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword",
+               "global `pb` has type {:t}: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, or an array of one of them, as in `{:array, :int, [8]}`, its sizes a list of one integer a dimension",
+               "global `k` has type %{}: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, or an array of one of them, as in `{:array, :int, [8]}`, its sizes a list of one integer a dimension",
                "{:x} cannot name a program instance: a name is a letter or `_`, then letters, " <>
                  "digits or `_`",
                "`y.z` cannot name an instance: `.` is kept for a path, as in `m1.start`, and a " <>
@@ -4825,7 +4857,7 @@ defmodule Logex.ConfigurationTest do
                 "%Logex.Configuration.Instance{} or %Logex.Configuration.Connection{}, with " <>
                 "its struct's keys",
               "a line is a positive integer, or nil for an entry built in Elixir",
-              "a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword",
+              "a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, or an array of one, as in `{:array, :int, [8]}`",
               "a task's name is not `continuous`, `interval`, `priority`, `single` or " <>
                 "`watchdog`, in any case: a line reads that word as its keyword",
               "a task's single is not `continuous`, `interval`, `priority`, `single` or " <>
@@ -5368,7 +5400,7 @@ defmodule Logex.ConfigurationTest do
                ],
                connections: gone(["w"])
              ) == [
-               "global `alarm` has type :float: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword",
+               "global `alarm` has type :float: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, or an array of one of them, as in `{:array, :int, [8]}`, its sizes a list of one integer a dimension",
                "`reader` declares `var_external estop bool` on its line 1, but `estop` is an " <>
                  "instance, not a global"
              ]

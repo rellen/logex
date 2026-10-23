@@ -525,7 +525,7 @@ defmodule Logex.Configuration.Edit do
 
   defp typed(was, type, name),
     do: [
-      "`#{name}` is #{Declarations.a_type(was)} global in the running configuration and " <>
+      "`#{name}` is #{Declarations.a_global(was)} in the running configuration and " <>
         "#{Declarations.a_type(type)} in the " <>
         "candidate: a global's type changes only with a restart"
     ]
@@ -930,16 +930,43 @@ defmodule Logex.Configuration.Edit do
 
   defp global_moved(:error, _was, global, {values, reports}) do
     value = Configuration.initial(global)
-    {Map.put(values, global.name, value), [{:added, global.name, value} | reports]}
+
+    {Map.put(values, global.name, value),
+     [{:added, global.name, reported(global.type, value)} | reports]}
   end
 
   # Decision 157 (M5-10): the declared initial values are compared exactly, as decision 44
   # takes for a global what decision 29 does for a tag, so that a real's `0` and `0.0` are
   # two values, the running value kept either way.
+  # M5-11 (decision 157): an array global's initial list is compared element by element,
+  # each element whose declared value changed reported by its name, `limits[2]`, in the
+  # elements' order; its type, so its sizes, is the same here, a change refused at accept.
+  defp global_moved(
+         {:ok, _value},
+         %Configuration.Global{type: {:array, _, dims} = type} = was,
+         global,
+         acc
+       ),
+       do:
+         [
+           Logex.Array.indexes(dims),
+           Logex.Array.declared(type, was.initial),
+           Logex.Array.declared(type, global.initial)
+         ]
+         |> Enum.zip()
+         |> Enum.reduce(acc, fn {index, old, new}, acc ->
+           initial_changed(old, new, %{global | name: Logex.Array.name(global.name, index)}, acc)
+         end)
+
   defp global_moved({:ok, _value}, %Configuration.Global{} = was, global, acc),
     do: initial_changed(declared(was), declared(global), global, acc)
 
   defp global_moved({:ok, _value}, nil, _global, acc), do: acc
+
+  # M5-11: an array global's value is reported as a host is given one, a list, a list of
+  # lists for more dimensions.
+  defp reported({:array, _type, dims}, value), do: Logex.Array.to_list(value, dims)
+  defp reported(_type, value), do: value
 
   defp declared(%Configuration.Global{initial: nil} = global), do: Configuration.initial(global)
   defp declared(%Configuration.Global{initial: initial}), do: initial
