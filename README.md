@@ -1429,7 +1429,7 @@ line 10: `sqrt` takes the root of the literal `-4.0`: a negative source gives 0.
 line 11: `sqrt` writes a real, but `rpm` is an int (declared on line 3): a square root is a real's, so declare it a real or an lreal
 line 12: `speed.3` names a bit of `speed`, a real, which has no bits
 line 13: `move` writes `1.0e-40` into `speed`, a real: it is too near 0.0 for a real, whose smallest above 0.0 is 1.1754943508222875e-38: it would be written as 0.0
-line 2: warning: `16777217.0` has more digits than a real keeps: it is held as 16777216.0
+line 2: warning: `16777217.0` is more precise than a real keeps: it is held as 16777216.0
 ```
 
 - `real` and `lreal` are IEC's 32- and 64-bit floating point, declared wherever an
@@ -1456,7 +1456,7 @@ line 2: warning: `16777217.0` has more digits than a real keeps: it is held as 1
   spells, refused where the real cannot hold it exactly, `16777217` in a `real` told its
   nearest, 16777216.0; a real literal is no integer's. A real literal is a value of the
   real its slot computes in, so `move 37.1 sp` then `eq sp 37.1` is true in a `real`;
-  one with more digits than that real keeps, whose number is neither the value held nor
+  one more precise than that real keeps, whose number is neither the value held nor
   the shortest text of it, compiles with a warning naming what it is held as,
   `16777217.0` above, where `0.1` and `37.1` are not warned of (decision 219). An
   integer at a real point, from a host, a device or a force, is stored as its nearest
@@ -1585,11 +1585,18 @@ input `w` is an array of 3 ints: its value must be a list of 3 elements, found [
   lists for more, each element checked as a tag's value is; an array `var_output` comes
   back as such a list, and so does `Logex.Runtime.get/2`, which names an element as logic
   does, `m1.weights[3]` or a global's `limits[2]`. A state holds an array as a tuple, a
-  tuple of tuples for more dimensions.
+  tuple of tuples for more dimensions, which every scan checks as it takes the state, an
+  integer array's element by one guard, so that holding an `int[65536]` costs about
+  0.3 ms a scan, and an `int[4096]` some 20 µs, whether or not anything writes it.
+  A label is never an element, `jmp a[0]` refused.
 - In a configuration an array may be a `var_global`, not yet located (M5-13), a
   `var_external` binding only to a global array of exactly its type and sizes (decision
   159), and a connection names an array whole, to a global array of its sizes, or an
-  element, `m1.limits[2] 50`.
+  element, `m1.limits[2] 50`. A global is always named whole, so a connection's far end
+  or a task's single that names an element, `limits[2]`, is refused, and a single that is
+  an array is no bool. Two instances that write different elements of one global array
+  through their `var_external`s each keep theirs, and are warned only where they write
+  the same element.
 - An online edit refuses an array whose type, dimensions or sizes change, and reports a
   changed initial list element by element, `{:initial_changed, "limits[1]", {20, 25}}`,
   the running values kept (decision 157).

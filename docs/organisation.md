@@ -3720,7 +3720,16 @@ copying about 1 ns an element, 0.2 ms into an `int[65536]` and 3 µs into an
 `int[256,256]`, so the value is a tuple of tuples and the limit 65,536 elements, both
 provisional; a connection names an element `m1.temps[3]`, an array var_input connected
 whole or at every element; `get/2` gives a whole array as a list; tag subscripts, arrays
-of instances and located arrays are M5-12's, M5-14's and M5-13's.)*
+of instances and located arrays are M5-12's, M5-14's and M5-13's.)* *(M5-11's review, 2026-10-23: a state's array is checked each time
+the state is handed in, a scan's among them, so holding one costs a scan whether or not
+anything writes it: an integer, bit-string or bool array about one reduction an element,
+one guard, an `int[65536]` some 66,000 reductions and 0.3 ms, a `real[65536]` about
+eight an element and 6 ms, where M5-11 as landed checked each element twice through a
+function, 917,000 reductions; a write copies besides, as the spike measured. A global is
+named whole, so a connection's far end or a task's single naming an element is refused;
+two instances writing different elements of one global array through their
+`var_external`s are each a writer of their own element (decision 48's warnings by
+element).)*
 
 **The major fault** (decisions 153 and 160, amending decisions 99 and 113). An index or a
 tag bit number out of range is a major fault. The instruction does nothing, each as the
@@ -9009,6 +9018,13 @@ Decisions 215 and 217 confirm the readings built; 216, 218 and 219 change three.
 
      Logix keeps forces in the project, not in a text file (1756-PM004L pp.52–53), so it
      offers no precedent for a file's spelling (**unverified** for any file form).
+     *(Amended by M5-11's review, 2026-10-23, provisional: a line's value is the number's
+     text and nothing else, so `n 1//c`, `hz 1.5//c` and a value followed by a tab, which
+     the lexer passes over, are no force, as at decision 140; and a real point's value
+     that a float holds nearer 0.0 than an lreal's smallest normal, `hz 1.0e-310` or
+     `-4.9e-324`, which the lexer refuses as a literal, is held as 0.0, as `1.0e-40` is,
+     a force being no literal (decision 216's last bullet), while `1.0e-400`, which no
+     float holds, stays no force.)*
 219. **A real literal with more digits than its slot's real keeps (Milestone 5),** M5-10's
      fifth question, following M5-10's review's provisional reading 11. The setpoint is
      `move 37.1 sp` into a `real`, and a programmer writes `move 16777217.0 count` into a
@@ -9048,6 +9064,11 @@ Decisions 215 and 217 confirm the readings built; 216, 218 and 219 change three.
      Logix stores an unsuffixed floating-point immediate as a REAL (1756-RM018A p.870);
      what its editor shows of a literal it rounds is **unverified**, and IEC's type for an
      untyped real literal is **unverified** in the extracts.
+     *(Changed by M5-11's review, 2026-10-23, provisional: the warning's words are
+     "`16777217.0` is more precise than a real keeps: it is held as 16777216.0", since
+     the settled rule warns literals of no more digits than S, `1.1754943e-38` held as
+     `1.1754944e-38` among them, of which "has more digits" was untrue; the rule is
+     unchanged, `PLAN.md` M5-11's fifth question.)*
 
 ---
 

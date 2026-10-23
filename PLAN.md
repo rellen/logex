@@ -154,7 +154,8 @@ checked against its dimension when the program compiles; a one-shot on an elemen
 host's array input a list of its shape; an edit refusing a size changed and reporting an
 initial list element by element; and in a configuration unlocated global arrays,
 `var_external` arrays bound exactly, connections whole and by element and `get/2` paths,
-with four questions put to the maintainer (§3, M5-11).
+with four questions put to the maintainer (§3, M5-11), and its review's fixes the same
+day, with two more (questions 5 and 6).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -6749,8 +6750,10 @@ the walks' cross-type reach and the documents.
   `int[65536]` some 1 ms a call. So an array's value is a tuple, a tuple of tuples for
   more dimensions, and its limit 65,536 elements in all, §4.12's proposal (provisional
   reading 1, question 1). `f43d82a` records 41 curated sources in the front end's golden
-  record, `printer_test.exs`'s generator and `@required_shapes` given an element and a
-  sized type word (`:element_name`, `:subscripted_name`) first. `fb31749` lands arrays in
+  record. `printer_test.exs`'s generator and `@required_shapes` were given an element and
+  a sized type word (`:element_name`, `:subscripted_name`) in `fb31749`, together with the
+  syntax, not before it as CLAUDE.md asks; an earlier version of this paragraph said
+  `f43d82a`, which M5-11's review found untrue (`git log -- test/logex/printer_test.exs`). `fb31749` lands arrays in
   a program: the lexer reads a name and one pair of brackets as one name token, so the
   parser, `well_formed!/1` and the printer are unchanged, the golden record regenerated
   and its diff read, 25 sources changed, the 23 that lex and `ote a[3]` and `xic s[n]`,
@@ -6805,6 +6808,65 @@ the walks' cross-type reach and the documents.
   is red.
   2002 tests (10 doctests), up from 1949.
 
+  *M5-11's review (2026-10-23), in one gated commit and one of documents.* The review
+  found five inputs that raised outside the public API, a cost question 1 understated,
+  a forces reader that took more than decision 218 records, a false writer warning, five
+  wrong messages, a label spelled as an element, a claim of this item's untrue, and three
+  gaps in the tests. ``a87010f`` fixes them: a dotted name with a subscript, `t.acc[0]`,
+  `x.y[0]` or `s.e[1]` into a block, is a member's diagnostic at its line, where the
+  lowering raised a `FunctionClauseError` (the lexer reads brackets after any name part,
+  so 120 to 155 of the review's every 4,000 fuzzed sources reached it, none after); `cal
+  e` of an array is told it runs no array, where a message interpolated a tuple; a
+  literal written into an array whole, `move 1 w`, is told the instruction takes an
+  element, as a tag source is, where the literal was judged as a value of the array's
+  type; a task's single that is an array is refused by `check/1`, "is an array of 2
+  bools (line 1): a single is a bool global", where `cycle/3` raised; and sizes from
+  Elixir that are no proper list, `[2 | 3]`, are refused in the pinned words. A label is
+  a name with no subscript, `jmp a[0]` refused (provisional reading 10). Decision 48's
+  writer warnings read an array global by element (`written_of/2`), so two instances
+  writing different elements of one through their `var_external`s, which each keep
+  theirs, `g` reading `[1, 2]` after one cycle, are told nothing, and two writing one
+  element are told it by name, `g[0]` (provisional reading 11). A global named by an
+  element where a global is wanted, a connection's far end or a task's single, is told
+  "`ws[0]` names an element of `ws`, a global array of 3 ints (line 1): a global is named
+  here whole, never by one of its elements", or with no such array "no global `ws[0]`:
+  …", where it was offered a `var_global ws[0] bool` that is itself refused. A host's
+  list is shown as a list, `found [72, 105]`, never `~c"Hi"`; an array's misfits, a
+  host's, a state's or an initial list's, are listed to ten in the elements' order, then
+  one line counting the rest (provisional reading 12), where 65,536 bad elements made a
+  message of 4 MB; an array of one element is "an array of 1 int"; and decision 219's
+  warning reads "is more precise than a real keeps", true of every literal its rule
+  warns, `1.1754943e-38` among them (provisional, question 5). A force's value is the
+  number's text alone, so `n 1//c`, `hz 1.5//c` and a value followed by a tab, which the
+  lexer passes over, are no force again, as at `a8a4f8f`; and a real point's value that a
+  float holds nearer 0.0 than an lreal's smallest normal, `hz 1.0e-310`, which the lexer
+  refuses as a literal, is held as 0.0 as `hz 1.0e-40` is, a force being no literal
+  (decision 216's last bullet), `1.0e-400`, which no float holds, still no force
+  (provisional reading 13). A state's integer, bit-string or bool array is checked by one
+  guard an element, its shape looked at only on a misfit, where every element was checked
+  twice through a function: holding an `int[65536]` costs 65,701 reductions a scan and
+  about 0.3 ms, where it cost 458,920 at `79dbc1d` measured the same way, one scan in a
+  fresh process (`fx11/big.exs`; the review counted 917,727 by its own script); an
+  `int[4096]` 4,261, where it cost 28,840; a `real[65536]` 532,516, about 6 ms, where it
+  cost 729,126, its elements judged by their rule. And `instance/1` settles a program's tags once
+  for its units, reals and arrays, comparing nothing where a routine holds none, so it
+  costs 144 to 224 reductions on the review's small programs where it cost 253 to 367 at
+  `79dbc1d` and 197 to 298 at `f228105`, before arrays. Every scan of those programs and
+  of the review's six others costs exactly what it did at `79dbc1d`, and each compiles in
+  what it did to within 4 reductions (`fx11/cost_parent.txt`, `fx11/cost_now.txt`).
+  README's `weigh.exs` re-runs byte-identical and `fan.exs` changes only in the warning's
+  words. The mutation table, each mutant judged by the full suite's exit code
+  (`fx11/mut/run.log`): on ``a87010f``, V1 (the lowering's member clause for a subscripted part removed), V2
+  (an array named whole typed as a tag), V3 (`cal`'s array clause), V4 (a single's array
+  read as a host's mistake), V5 (sizes read by `Enum.all?/2`), V6 (a subscripted label
+  taken), V7 (a var_external array's writers by the array), V8 and V19 (a connection's
+  subscripted global offered a line, or told no array), V9 (a single's so), V10 (a list
+  inspected as a charlist), V11 and V17 (no cap, a host's and a state's, and an initial
+  list's), V12 (a force's text read through a comment), V13 and V18 (a subnormal force
+  refused, or `1.0e-400` taken), V14 (the state check through a function, the growth
+  test red), V15 (the tags settled three times, the growth test red), V16 (`an array of 1
+  ints`), and the review's X2, X3 and X13 with X3b (the guard's own row count), all red. 2013 tests (10 doctests), up from 2002.
+
   *Provisional readings* (M5-11): (1) an array's value is a tuple of tuples, at most
   65,536 elements in all, the spike's measure; (2) a bit of an element, `faults[2].3`, is
   refused at its line, "move it into a tag of its own to reach its bits"; (3) an array is
@@ -6820,24 +6882,39 @@ the walks' cross-type reach and the documents.
   configuration is connected whole or at every element, a constant fills an element
   alone, and a connection's far end is a global whole, never an element of a global
   array, `no global "g[2]"`; (9) a var_output array no rung writes is warned to stay "at
-  its initial values".
+  its initial values"; and since M5-11's review (10) a label is a name with no subscript,
+  `jmp a[0]` refused, as a dotted one is; (11) decision 48's writer warnings take an
+  array global by element, so two instances writing different elements of one are told
+  nothing; (12) an array's misfits are listed to ten, the rest counted (question 6); and
+  (13) a forces file's value is the number's text alone, and a real point's value a float
+  holds nearer 0.0 than an lreal's smallest normal is held as 0.0, as decision 216's last
+  bullet holds a force that is no literal, within decision 218.
 
   **Questions for the maintainer** (M5-11), each taken provisionally as written, the
   closest reading to the record:
 
   1. *How big an array may be.* A line that weighs every box keeps a history of the last
      weights in one array, `var history int[65536]`, and writes the newest weight into it
-     each scan. logex keeps an array as one block of values that a write copies whole, so
-     on the machine measured one write into an array of 65,536 elements takes about 0.2 ms
-     of the scan, into one of 4,096 about 5 µs, and into a grid of 256 by 256 about 3 µs,
-     since a write copies one row and the list of rows. The operator sees a longer scan,
-     and a task's watchdog trips sooner, only where a program writes into such an array.
-     The options: (a) as built, up to 65,536 elements in all, whatever the shape; (b) a
-     smaller limit, 4,096 elements in all, so no write costs more than a few µs; (c) the
-     limit as built, but a dimension of more than 4,096 refused, so a large array must be
-     a grid. IEC sets no limit; Logix limits an array to 2 MB of data (1756-RM094N p.85),
-     some 500,000 dints, and says a one-dimension array executes faster than two or three
-     (p.85).
+     each scan. Two costs come with it. Every scan checks every element of the state it
+     is handed (decision 171's rule, a guard an element since M5-11's review), so merely
+     holding the array costs each scan whether or not anything writes it; and a write
+     copies the row it writes. Measured after the review on Elixir 1.20.4, the best of
+     five runs of 200 scans each on the last's state (`fx11/wr.exs`): holding an
+     `int[65536]` takes about 0.31 ms a scan (65,701 reductions), and writing one element
+     of it each scan about 0.1 ms more; an `int[4096]` about 19 µs, a write 1.6 µs more; a
+     grid of 256 by 256 about 0.3 ms to hold, as the flat array, its write a row's copy,
+     too small to see; and a `real[65536]` about 5 ms to hold, its elements judged by the
+     real rule (532,516 reductions). In a resource each instance holding one pays it every
+     cycle. The operator sees a longer scan, and a task's watchdog trips sooner, for every
+     program that holds such an array, not only one that writes it; an earlier version of
+     this question said 0.2 ms a write and "only where a program writes", which the
+     review found untrue. The options: (a) as built, up to 65,536 elements in all,
+     whatever the shape; (b) a smaller limit, 4,096 elements in all, so no array costs a
+     scan more than some 20 µs of an integer type, or 0.3 ms of a real; (c) the limit as
+     built, but a dimension of more than 4,096 refused, so a large array must be a grid,
+     which makes its write cheap but not its holding. IEC sets no limit; Logix limits an
+     array to 2 MB of data (1756-RM094N p.85), some 500,000 dints, and says a
+     one-dimension array executes faster than two or three (p.85).
   2. *A bit of an element.* A drive's fault words are kept in `var faults word[4]`, and a
      lamp shows bit 3 of the third, `xic faults[2].3 ote lamp`. As built this is refused at
      its line, told to move the element into a tag of its own, `move faults[2] f`, and read
@@ -6863,6 +6940,30 @@ the walks' cross-type reach and the documents.
      to a global or an element of one by an access path (Ed 3 §6.5.2.2, unverified here);
      Logix maps a program parameter to a tag or an element of one (1756-PM004L, unverified
      here).
+  5. *The words of decision 219's warning.* A programmer writes `move 16777217.0 count`
+     into a `real`, which holds 16777216.0, and the compile warns of it. Decision 219
+     quoted the warning as "`16777217.0` has more digits than a real keeps: it is held as
+     16777216.0", but its rule also warns `move 1.1754943e-38 r`, held as 1.1754944e-38,
+     a literal of exactly as many digits as the value held, of which "more digits" is
+     untrue (and `16777217.0` and 16777216.0 have the same count too). As built after the
+     review it reads "`16777217.0` is more precise than a real keeps: it is held as
+     16777216.0", the rule unchanged. The options, by what the programmer reads: (a) as
+     built, one wording for every literal warned; (b) decision 219's words, as quoted,
+     loose where the digits are no more; (c) two wordings, "has more digits than a real
+     keeps" where the literal has more significant digits than the value held's shortest
+     text, and "is no value of a real" otherwise. IEC says nothing of such a warning, and
+     what Logix's editor shows of a constant it rounds is **unverified** (1756-RM018A
+     p.870 says only that an unsuffixed immediate is stored as a REAL).
+  6. *How many of an array's bad values a refusal lists.* An HMI sends a recipe of
+     `var_input steps sint[64]` with every step at 500, which no sint holds. Decision
+     171 lists every value of a state outside its type a line each, and M5-11 listed every
+     element so, which for 65,536 bad elements made a message of 4 MB. As built after the
+     review a refusal lists the first ten elements in the elements' order, then one line,
+     "input `steps` is an array of 64 sints, with 54 more elements outside its type, not
+     listed", and so for a state's array and an initial list. The options: (a) as built,
+     ten; (b) every element, a line each, as decision 171 reads; (c) a count alone with
+     the first element named. IEC and Logix have no host contract of this kind
+     (unverified).
 - **M5-12 · Tag subscripts and the index fault.** Decisions 152 and 153: a tag subscript
   of any integer width, the run-time check where the element is read or written, the
   major fault `:index_out_of_range` with the subscripts read, on M5-9's path; a write
