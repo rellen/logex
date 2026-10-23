@@ -7446,6 +7446,10 @@ the decisions the rest settle.
      *(Landed with M5-8, 2026-10-23, all but `status.[n]`, decision 160's, M5-9's, as
      §4.12's "Bit strings" says; `and`, `or`, `not`, `byte` and `word` among the new
      reserved words, so a tag of any of those names stops compiling.)*
+     *(M5-8's review, 2026-10-23, the record's readings, provisional: a bit is quoted as
+     written in every message that names it, `w.03`, its number keyed by its value, as
+     decision 202 quotes a literal; and a coil on a bit of a member and a write of the member
+     whole, `ote c.pv.3` and `move x c.pv`, are the second-`ote` warning, as for a tag.)*
 156. **What types an I/O point may have, and what a device gives (Milestone 5).** The
      drive card gives the fan's speed as a 16-bit register, the analog card the eight zone
      temperatures as reals, the panel the lamp's bool.
@@ -8187,6 +8191,10 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      every integer type holds 0 and 1, so it is not looked at, nor is a tag of no integer
      type, whose own diagnostic is given. Changed on purpose: `validation_test.exs`'s literal on the left of a comparison,
      `lt 2147483647 i`, now `lt 2147483646 i`, which no value of a dint makes fixed.
+     *(Since M5-8's review, 2026-10-23, the record's reading, provisional, the maintainer
+     asked (PLAN §3, M5-8's review): a bit string has no such diagnostic since M5-8 and
+     compares as unsigned, so `ge drive_status 0` on a `word` is warned in the same words,
+     "and a word holds nothing below `0`", at 0 and at 2^N − 1, as on a `uint`.)*
 188. **A timer's `last` later than the instance's now (Milestone 5),** following decision
      186. A host hands in the fan's run-on timer with `last`, the time it last ran, of 5000
      while the instance's own clock, `now`, reads 1000; decision 186's reading took it,

@@ -113,7 +113,10 @@ built, with two more questions. And the eighth, M5-8, the same day: IEC's bit st
 arithmetic; the bitwise instructions `and or xor not shl shr rol ror` on bit strings and
 integers alike, in the destination's type; literal bit access, `status.3`, read by a
 contact and written by a coil; and the 76 bit-string conversions, binary transfers, with
-four questions put to the maintainer (§3, M5-8).
+four questions put to the maintainer (§3, M5-8); and M5-8's review's six findings fixed
+the same day, four rules pinned, a bit quoted as written, a member's bit warned beside a
+whole write of the member, decision 187's warning given for a bit string, and a program
+of no bit strings compiling in what it did before M5-8, with two more questions.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -5922,6 +5925,77 @@ the walks' cross-type reach and the documents.
      comes later wins that bit each scan, so logex warns as for two `ote`s on one tag. The
      other reading warns only where two coils meet one bit, as a program that builds a
      word whole and then sets one bit is common.
+
+  **M5-8's review**, fixed on 2026-10-23, each with a test that fails when it is
+  reverted. No wrong result; four rules with no test, two warnings missing, a compile
+  cost nobody recorded, and two small points. (1) Four of the review's mutants survived
+  the full suite, each now a test in `bit_string_test.exs` (`f4da93e`, tests only): a coil
+  on a bit of a member keeps the member's other bits, `ote c.pv.3` on a `pv` of 100
+  giving 108 (R11); an edit that moves a one-shot's rung from `s.3` to `s.4` blocks it
+  once, `{:ons_blocked, "x", 0}`, so the edge the edit makes fires no pulse (R6); an edit
+  that stops writing a member's bit forecasts and reports the member `{:unwritten,
+  "c.pv", 10}` (R7, decision 96); and a literal shift count of 0 is taken, each of `shl
+  shr rol ror` writing its source with power (R8). (2) Decision 187's warning is given for
+  a bit string, which compares as unsigned: `ge w 0`, `lt w 0`, `le w 65535` and `gt 0 w`
+  on a `word` are warned, "and a word holds nothing below `0`", at each bit string's two
+  limits (provisional, question 5 below; `7658181`). (3) M5-8 made a program of no bit
+  strings 1.13x to 1.18x dearer to compile, its reductions counted where the collector
+  never runs: each name was split twice as it lowered, every instruction's operands were
+  grouped by class, and the warnings looked for whole writes and storage-bit writes in
+  every program. Now each name is split once, an instruction whose operands hold one
+  class is checked with no grouping, and the warnings look for no whole write where no
+  coil names a bit, nor for a storage bit's writes where no one-shot keeps one: 200 rungs
+  of `add a 1234 d` compile in 157,250 reductions, 164,442 before M5-8 (`ebf44ee`) and
+  194,053 as it landed, and a test holds six programs, `add`, `move`, a comparison,
+  contacts, a conversion and a member, to their ratio of compile to parse before M5-8
+  (`7658181`). The spelling commit's smaller rise the review measured, a lone `0` lexing
+  in 8,286 reductions for 8,002, is the collector's: counted where it never runs, 200
+  lines of `move 0 hh` lex in 6,222 reductions and parse in 8,631 at `f546772` and now
+  alike, and `frontend_test.exs` already holds `0` to a name's cost plus 2. (4) A coil on a
+  bit of a member and a write of the member whole, `ote c.pv.3` and `move x c.pv`, either
+  first, are the second-`ote` warning, as for a tag's bit (provisional reading 9
+  extended; `7658181`). (5) README's "Bit strings" cites decision 155 for a signed type's
+  top bit, where it cited 156. (6) A bit is quoted as written, `w.03`, in every warning and
+  refusal that names it, the IR's bit carrying its name, `{:bit, line, path, n, mask,
+  name}`, keyed everywhere by its number's value, and `lowered?/1` holding the name to the
+  bit (provisional, question 6 below; `7658181`). The mutation table, each judged by the
+  full suite's exit code: on `f4da93e` the review's R6, R7, R8 and R11 red; on `7658181`
+  the same four restated on the new IR red, N1 (no bit string at decision 187) red, N2 (a
+  member's whole write not looked for) red, N3 (a coiled bit quoted by its value) red, N4
+  (a second one-shot's bit by its value) red, N5 (a pulse bit that is its storage bit by
+  its value) red, N6 (a member's storage bit by its path) red, N7 (a storage bit's write
+  quoted by its value) red once its test wrote `s.002` beside `ons s.02`, where it
+  survived when the two spelled the bit alike, N8 (a whole write's storage bit unquoted)
+  red, N9 (a bit relowered from its value) red, N10 (a bit's name unchecked by
+  `lowered?/1`) red, and the four cost mutants, C1 (a name split twice), C2 (every
+  instruction's operands grouped), C3 (whole writes looked for always) and C4 (storage
+  writes looked for always), red, each on the cost test alone. The whole of `7658181`'s
+  `lib/` reverted fails its five new tests. 1808 tests (10 doctests), up from 1800.
+
+  *Provisional readings* (M5-8's review): (13) decision 187's warning for a bit string,
+  at 0 and 2^N − 1; (14) a bit quoted as written, its number keyed by its value; and (9)
+  extended to a member's bit beside a whole write of the member.
+
+  **Questions for the maintainer** (M5-8's review, taken provisionally as written):
+  5. *Whether a comparison of a bit string at its limit is warned of* (decision 187). An
+     engineer lights a "drive status present" lamp with `ge drive_status 0`, where
+     `drive_status` is a `word`, a 16-bit pattern read from the drive. A word holds 0 to
+     65535, so the comparison always passes power and the lamp is always lit, whatever the
+     drive sends. logex warns of it, "`ge` compares `drive_status` with `0`, and a word
+     holds nothing below `0`: its result never changes", as it warns of `ge count 0` on a
+     `usint`; the other reading gives no warning, as decision 187 named only the integer
+     types, so the engineer sees the lamp always lit and no message. IEC defines no
+     warnings; Logix has no bit-string types, and whether
+     Studio 5000 warns of a comparison that never changes is `unverified`.
+  6. *Whether a message quotes a bit as typed.* An engineer writes `ote conveyor.03` for
+     bit 3 of a conveyor's status word, and `ote conveyor.3` on another rung. logex warns
+     at the second, "`conveyor.3` already has an `ote` on line 5", and quotes each bit as
+     its rung spells it, `conveyor.03` where it was typed so, as a literal is quoted
+     (decision 202); bit 3 is one bit however it is written. The other reading quotes every
+     bit by its number's value, `conveyor.3`, so the engineer searching for the text of
+     the message finds no `conveyor.3` on the rung it names. IEC writes a bit's number as
+     an integer, and Logix's tag syntax gives a bit of an integer as `tag.bit` (1756-PM004L,
+     p.45); whether either takes or shows a leading zero is `unverified`.
 - **M5-9 · A bit number in a tag, and the major fault.** `status.[n]` (decision 160), an
   integer tag of any width, never an expression, refused on a one-shot's bit; a number
   outside the width at run time the first major fault: `%Logex.Fault{}` gains `severity`,

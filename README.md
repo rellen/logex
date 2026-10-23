@@ -1140,9 +1140,12 @@ line 9: `shl` shifts by the literal `-1`: a count is never negative, so a negati
 - `status.3` is bit 3 of `status`, a word or an integer, a bool wherever one goes: a
   contact reads it, a coil writes it and leaves every other bit, and an `ons`, `osr` or
   `osf` may keep its storage bit there, as `flags.15` is latched here, the top bit of a
-  signed type its sign (decision 156). Its number is a literal, checked against the
-  width, `status.16` of a word refused; a bit of a member, `t1.acc.3`, reads as one of a
-  tag. A bit number held in a tag, `status.[n]`, has not landed.
+  signed type its sign (decision 155). Its number is a literal, checked against the
+  width, `status.16` of a word refused, and quoted as written in a message, `status.03`;
+  a bit of a member, `t1.acc.3`, reads as one of a tag. A coil on a bit and a write of
+  its word or member whole, `ote status.3` and `move x status`, are told as two `ote`s
+  on one tag are: the last one in the scan decides the bit. A bit number held in a tag,
+  `status.[n]`, has not landed.
 - The 76 conversions between a bit string and another bit string or an integer type,
   `word_to_int`, `byte_to_word`, `int_to_dword` and the rest, are binary transfers, as
   IEC's Tables 24 and 25 give them (decision 148): the source's bits, in two's complement
