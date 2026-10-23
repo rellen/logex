@@ -141,7 +141,7 @@ defmodule FrontendGolden do
       "ote aa\r\n\r\n( xic bb",
       deep,
       many
-    ] ++ signed() ++ based() ++ tag_bits()
+    ] ++ signed() ++ based() ++ tag_bits() ++ literal_bits()
   end
 
   # M3-3 (decision 97): negative literals, a sign glued to its digits. Added after the rest,
@@ -250,6 +250,36 @@ defmodule FrontendGolden do
       "xic s.[n]-5",
       "xic s.[n](",
       "xic s.[n]|"
+    ]
+  end
+
+  # A literal in the brackets, `status.[4]`, Logix's spelling of `status.4` (M5-9's fourth
+  # question, answered on 2026-10-23), in each spelling of a number, and the brackets that
+  # begin as a number and hold no one number. Added after the rest, and recorded first by
+  # the front end before it, so that the diff of the commit that lands it is these entries
+  # alone.
+  defp literal_bits do
+    [
+      "xic status.[4] ote aa",
+      "xic s.[03] ote s.[15]",
+      "xic s.[16#3]",
+      "xic s.[16#F] ote aa",
+      "xic s.[2#11]",
+      "xic s.[1_0]",
+      "xic s.[-0]",
+      "xic t1.acc.[1]",
+      "( xic s.[2] | xio s.[n] ) ote aa",
+      "xic s.[3x]",
+      "xic s.[3",
+      "xic s.[3 ]",
+      "xic s.[8#3]",
+      "xic s.[16#3#]",
+      "xic s.[-16#3]",
+      "xic s.[1__0]",
+      "xic s.[-]",
+      "xic s.[3]x",
+      "xic s.[3].4",
+      "xic s.[3]-5"
     ]
   end
 
