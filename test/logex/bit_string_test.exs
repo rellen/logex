@@ -48,6 +48,9 @@ defmodule Logex.BitStringTest do
 
   @articles %{lword: "an", int: "an", sint: "an", lint: "an"}
 
+  # A bool is one bit (Ed 3 Table 10 feature 1), an unsigned pattern of one bit to a bitwise
+  # instruction since decision 206.
+  defp width(:bool), do: 1
   defp width(type), do: Keyword.get(@bits, type) || elem(Keyword.fetch!(@integers, type), 1)
   defp kind(type), do: kind_of(Keyword.fetch(@integers, type))
   defp kind_of({:ok, {kind, _n}}), do: kind
@@ -507,7 +510,8 @@ defmodule Logex.BitStringTest do
 
   describe "the bitwise instructions (decisions 147, 155 and 165)" do
     # The four bit strings and the eight integer types, each a destination.
-    defp computing, do: @strings ++ Keyword.keys(@integers)
+    # Decision 206: a bool computes as a one-bit pattern too, IEC's ANY_BIT holding BOOL.
+    defp computing, do: [:bool | @strings] ++ Keyword.keys(@integers)
 
     # Restated with arithmetic, not Bitwise: a value's pattern in a type's N bits, and the
     # value that pattern is in the type, two's complement where signed.
@@ -568,6 +572,8 @@ defmodule Logex.BitStringTest do
       r = Integer.mod(n, w)
       div(p, Integer.pow(2, r)) + Integer.mod(p, Integer.pow(2, r)) * Integer.pow(2, w - r)
     end
+
+    defp samples(:bool), do: [0, 1]
 
     defp samples(type) do
       {low, high} = limits(type)
@@ -767,10 +773,11 @@ defmodule Logex.BitStringTest do
                  "an int does not widen into a word, so convert it first, with `int_to_word`"
              ]
 
-      assert messages("var w word\nvar b bool\nand w 65536 w\nand w b w\nand w w b") == [
+      # Since decision 206 a bool widens into a bit string, and a bit string into no bool.
+      assert messages("var w word\nvar b bool\nand w 65536 w\nand w b w\nand w 1 b") == [
                "`and` computes in `w`'s type, a word: `65536` is outside 0 to 65535",
-               "`and` reads a bit string or an integer, but `b` is a bool (declared on line 2)",
-               "`and` writes a bit string or an integer, but `b` is a bool (declared on line 2)"
+               "`and` computes in `b`'s type, a bool, but `w` is a word (declared on line 1): " <>
+                 "a word does not widen into a bool, and logex has no conversion between them"
              ]
 
       # The count is an integer of any width, held to no other operand; a bit string is
@@ -821,14 +828,28 @@ defmodule Logex.BitStringTest do
     end
 
     # Decision 182 for a bitwise destination: a program edited by hand whose destination
-    # has no integer or bit-string type is refused where it is handed in, a line each.
-    test "a program edited by hand whose bitwise destination is no integer nor bit string is refused" do
+    # has no bool, integer or bit-string type is refused where it is handed in, a line each.
+    # Since decision 206 a bool destination is one a compile gives.
+    test "a program edited by hand whose bitwise destination is no bool, integer nor bit string is refused" do
       {:ok, p} = Logex.compile("var w word\nvar b bool\nxic b and w 1 w", name: "p")
-      broken = %{p | tags: Map.put(p.tags, "w", %{p.tags["w"] | type: :bool})}
+      broken = %{p | tags: Map.put(p.tags, "w", %{p.tags["w"] | type: Logex.FbType.ton()})}
 
       assert raised(fn -> Runtime.instance(broken) end) ==
-               "`p`'s `and` on line 3 computes in the type of `w`, a bool, which is no integer or " <>
-                 "bit-string type: `p` was edited by hand after it compiled"
+               "`p`'s `and` on line 3 computes in the type of `w`, a ton, which is no bool, " <>
+                 "integer or bit-string type: `p` was edited by hand after it compiled"
+
+      retyped = %{p | tags: Map.put(p.tags, "w", %{p.tags["w"] | type: :bool})}
+      assert Runtime.instance(retyped).env["w"] == 0
+
+      # A bit is a bool, which an arithmetic instruction never computes in: one edited in as
+      # `add`'s destination is quoted as its rung spells it.
+      {:ok, p} = Logex.compile("var w word\nvar d dint\nxic w.03 add d 1 d", name: "p")
+      [rung: [{:xic, 3, [bit]}, {:add, 3, [d, one, _d]} = _add]] = p.rungs
+      broken = %{p | rungs: [rung: [{:xic, 3, [bit]}, {:add, 3, [d, one, bit]}]]}
+
+      assert raised(fn -> Runtime.instance(broken) end) ==
+               "`p`'s `add` on line 3 computes in the type of `w.03`, a bool, which is no " <>
+                 "integer type: `p` was edited by hand after it compiled"
     end
 
     test "each of the eight words names no tag, label or global's tag, in any case" do
@@ -840,15 +861,15 @@ defmodule Logex.BitStringTest do
 
     # The destination's type is found in the routine's table with one guard for a bit
     # string as for an integer, so an `and` into a word costs what one into a uint does.
-    test "a bitwise instruction into a bit string costs what one into an integer does" do
+    test "a bitwise instruction into a bit string or a bool costs what one into an integer does" do
       cost = fn type ->
         {:ok, p} =
           Logex.compile(
-            "var_input v #{type}\nvar d #{type}\n" <> String.duplicate("and v 3 d\n", 400),
+            "var_input v #{type}\nvar d #{type}\n" <> String.duplicate("and v 1 d\n", 400),
             name: "p"
           )
 
-        state = Runtime.put_inputs(p, Runtime.instance(p), %{"v" => 5})
+        state = Runtime.put_inputs(p, Runtime.instance(p), %{"v" => 1})
 
         Enum.min(
           for _ <- 1..5 do
@@ -862,6 +883,10 @@ defmodule Logex.BitStringTest do
 
       ratio = cost.(:word) / cost.(:uint)
       assert ratio < 1.05, "a word destination took #{Float.round(ratio, 2)}x a uint's reductions"
+
+      # Decision 206: and so does one into a bool.
+      ratio = cost.(:bool) / cost.(:uint)
+      assert ratio < 1.05, "a bool destination took #{Float.round(ratio, 2)}x a uint's reductions"
     end
 
     # One map lookup an instruction and one clause, so a program of 4x the bitwise
@@ -893,6 +918,150 @@ defmodule Logex.BitStringTest do
 
       ratio = cost.(400) / cost.(100)
       assert ratio < 4.8, "4x the instructions took #{Float.round(ratio, 2)}x the reductions"
+    end
+  end
+
+  # Decision 206 (the maintainer, 2026-10-23): a bool is a bitwise operand, as IEC's ANY_BIT
+  # holds BOOL (Ed 3 Figure 5, Tables 30 and 31): three bools compute in a bool, a bool
+  # widens into a bit string by Figure 11 and into no integer, and a shift or rotate of a
+  # bool is one of a one-bit pattern.
+  describe "a bool as a bitwise operand (decision 206)" do
+    test "and, or, xor and not of bools compute in a bool, not writing its inverse" do
+      p =
+        program(
+          "var_input a bool\nvar_input b bool\nvar_output c bool\nvar_output d bool\n" <>
+            "var_output e bool\nvar_output f bool\nvar_output ok bool\n" <>
+            "and a b c\nor a b d\nxor a b e\nnot a f ote ok"
+        )
+
+      for a <- [0, 1], b <- [0, 1] do
+        assert scan(p, %{"a" => a, "b" => b}) == %{
+                 "c" => a * b,
+                 "d" => max(a, b),
+                 "e" => rem(a + b, 2),
+                 "f" => 1 - a,
+                 "ok" => 1
+               }
+      end
+
+      # A literal source of a bool destination is 0 or 1, and warned of where every source
+      # is one.
+      assert messages("var a bool\nvar b bool\nand a 2 b") == [
+               "`and` computes in `b`'s type, a bool: only 0 or 1 fit, found `2`"
+             ]
+
+      {:ok, p} = Logex.compile("var_output b bool\nnot 1 b", name: "p")
+
+      assert Enum.map(p.warnings, & &1.message) == [
+               "`not` reads a literal, `1`: its result never changes"
+             ]
+    end
+
+    test "a bool widens into each bit string, and into no integer" do
+      for type <- @strings do
+        {_low, high} = limits(type)
+
+        p =
+          program(
+            "var_input a bool\nvar_input w #{type}\nvar_output o #{type}\n" <>
+              "var_output n #{type}\nvar_output s #{type}\nor a w o\nnot a n\nshl a 3 s"
+          )
+
+        assert scan(p, %{"a" => 1, "w" => 0x10}) == %{"o" => 0x11, "n" => high - 1, "s" => 8}
+        assert scan(p, %{"a" => 0, "w" => 0x10}) == %{"o" => 0x10, "n" => high, "s" => 0}
+      end
+
+      for {type, _} <- @integers do
+        assert messages("var a bool\nvar i #{type}\nand a i i") == [
+                 "`and` computes in `i`'s type, #{a(type)}, but `a` is a bool (declared on " <>
+                   "line 1): a bool does not widen into #{a(type)}, and logex has no " <>
+                   "conversion between them"
+               ]
+
+        assert messages("var b bool\nvar i #{type}\nxor i 1 b") == [
+                 "`xor` computes in `b`'s type, a bool, but `i` is #{a(type)} (declared on " <>
+                   "line 2): #{a(type)} does not widen into a bool, and logex has no " <>
+                   "conversion between them"
+               ]
+      end
+    end
+
+    # IEC's SHL, SHR, ROL and ROR take an ANY_BIT IN (Ed 3 Table 30), so a bool's one bit is
+    # shifted out by a count of 1 or more and rotated into itself, decision 165's rules at
+    # a width of 1.
+    test "a shift or rotate of a bool is one of a one-bit pattern" do
+      for op <- ~w(shl shr rol ror) do
+        p =
+          program(
+            "var_input a bool\nvar_input n int\nvar_output d bool\nvar_output ok bool\n" <>
+              "#{op} a n d ote ok"
+          )
+
+        for a <- [0, 1], n <- [-3, -1, 0, 1, 2, 17] do
+          expected =
+            cond do
+              n < 0 -> %{"d" => a, "ok" => 0}
+              op in ~w(shl shr) and n >= 1 -> %{"d" => 0, "ok" => 1}
+              true -> %{"d" => a, "ok" => 1}
+            end
+
+          assert scan(p, %{"a" => a, "n" => n}) == expected, inspect({op, a, n})
+        end
+      end
+
+      # The count stays an integer, so a bool count is refused.
+      assert messages("var w word\nvar b bool\nshl w b w") == [
+               "`shl` reads an integer, but `b` is a bool (declared on line 2)"
+             ]
+    end
+
+    test "a bit and a bool member are bools to a bitwise instruction" do
+      p =
+        program(
+          "var_input a bool\nvar_input w word\nvar_output o word\nvar_output x bool\n" <>
+            "move w o\nand a w.3 o.4\nxor w.0 w.1 x"
+        )
+
+      assert scan(p, %{"a" => 1, "w" => 0b1001}) == %{"o" => 0b11001, "x" => 1}
+      assert scan(p, %{"a" => 0, "w" => 0b10011}) == %{"o" => 0b00011, "x" => 0}
+
+      p =
+        program(
+          "var_input a bool\nvar c ctu\nvar_output q bool\n" <>
+            "not a c.r\nxic a ctu c 1\nxic c.q ote q"
+        )
+
+      state = Runtime.put_inputs(p, Runtime.instance(p), %{"a" => 0})
+      {_, state} = Runtime.scan(p, state)
+      assert state.env["c"]["r"] == 1
+      state = Runtime.put_inputs(p, state, %{"a" => 1})
+      {%{"q" => 1}, state} = Runtime.scan(p, state)
+      assert state.env["c"]["r"] == 0
+      state = Runtime.put_inputs(p, state, %{"a" => 0})
+      {%{"q" => 0}, state} = Runtime.scan(p, state)
+      assert {state.env["c"]["r"], state.env["c"]["cv"]} == {1, 0}
+    end
+
+    # The slot is named with its bool, and an instance named whole is offered a member the
+    # slot takes, a counter's `r` among them.
+    test "an instance named whole is told the slot's bool, bit string or integer" do
+      assert messages("var t1 ton\nvar w word\nand t1 1 w") == [
+               "`and` reads a bool, a bit string or an integer, but `t1` is a ton (declared on " <>
+                 "line 1): name one of its members, as in `t1.acc`"
+             ]
+
+      assert messages("var c ctu\nvar w word\nnot w c") == [
+               "`not` writes a bool, a bit string or an integer, but `c` is a ctu (declared on " <>
+                 "line 1): name one of its members, as in `c.r`"
+             ]
+    end
+
+    # A comparison's slot is still a number or a bit string (decision 205), so a bool there
+    # stays refused.
+    test "a comparison still refuses a bool" do
+      assert messages("var b bool\nvar l bool\nne b 0 ote l") == [
+               "`ne` reads a number or a bit string, but `b` is a bool (declared on line 1)"
+             ]
     end
   end
 
@@ -987,7 +1156,6 @@ defmodule Logex.BitStringTest do
              ) == [
                "`ote` writes `w.3`, a var_input (declared on line 1): logic must not write an input",
                "`ote` writes `c.cv.0`, but logic may write only `.r` and `.pv` of a ctu",
-               "`and` reads a bit string or an integer, but `w.1` is a bool (declared on line 1)",
                "`and` writes `w`, a var_input (declared on line 1): logic must not write an input",
                "`eq` reads a number or a bit string, but `w.1` is a bool (declared on line 1)"
              ]

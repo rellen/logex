@@ -152,14 +152,18 @@ defmodule Logex.Program do
   @doc """
   The type an instruction of `kind` computes in, its destination's, by the rule of
   `destination/2`: `:arithmetic`, an integer type, and since M5-8 `:bitwise`, the type of
-  a bitwise instruction's destination, an integer or a bit string (decision 155), `{:error,
-  {:bits, type}}` for any other.
+  a bitwise instruction's destination, an integer or a bit string (decision 155), and since
+  decision 206 a bool, a bit `status.3` among them, `{:error, {:bits, type}}` for any other.
   """
   def destination({:name, _, name}, tags, kind),
     do: tag_destination(Map.fetch(tags, name), kind)
 
   def destination({:member, _, [instance, member]}, tags, kind),
     do: instance_destination(Map.fetch(tags, instance), {instance, member}, kind)
+
+  # Decision 206: a bit of a tag or member, `status.3`, is a bool, which a bitwise
+  # instruction computes in and an arithmetic one never does.
+  def destination({:bit, _, _path, _n, _mask, _name}, _tags, kind), do: computing(:bool, kind)
 
   def destination(_no_tag, _tags, _kind), do: {:error, :no_tag}
 
@@ -191,6 +195,7 @@ defmodule Logex.Program do
 
   defp computing(type, _kind) when type in @integers, do: {:ok, type}
   defp computing(type, :bitwise) when type in @bit_strings, do: {:ok, type}
+  defp computing(:bool, :bitwise), do: {:ok, :bool}
   defp computing(type, :arithmetic), do: {:error, {:type, type}}
   defp computing(type, :bitwise), do: {:error, {:bits, type}}
 
@@ -412,7 +417,7 @@ defmodule Logex.Program do
     do: "#{shown(destination)}, #{a(type)}, which is no integer type"
 
   defp written(destination, {:bits, type}, _where),
-    do: "#{shown(destination)}, #{a(type)}, which is no integer or bit-string type"
+    do: "#{shown(destination)}, #{a(type)}, which is no bool, integer or bit-string type"
 
   defp written(destination, {:no_instance, instance}, where),
     do: "#{shown(destination)}, and #{declarer(where)} declares no `#{instance}`"
@@ -433,6 +438,7 @@ defmodule Logex.Program do
 
   defp shown({:name, _, name}), do: "`#{name}`"
   defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
+  defp shown({:bit, _, _path, _n, _mask, name}), do: "`#{name}`"
   defp shown(other), do: "`#{inspect(other)}`"
 
   defp a(%Logex.FbType{} = type), do: Logex.Declarations.instance_of(type)

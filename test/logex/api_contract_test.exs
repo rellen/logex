@@ -424,7 +424,8 @@ defmodule Logex.ApiContractTest do
     # widens it into and converted into another, wrapping where it does not fit.
     widths = Enum.take([width_draw()], min(:rand.uniform(3) - 1, 1))
     # M5-8: and a third take a value of a bit string or an integer type, its bits and a
-    # bitwise instruction, a shift by an sint tag and one by a literal.
+    # bitwise instruction, a shift by an sint tag and one by a literal; since decision 206
+    # of a bool too.
     bits = Enum.take([bits_draw()], min(:rand.uniform(3) - 1, 1) * (:rand.uniform(2) - 1))
 
     declarations =
@@ -505,12 +506,17 @@ defmodule Logex.ApiContractTest do
 
   # M5-8: a value of a bit string or an integer type, its bits read by a contact and
   # cleared by a coil, a bitwise instruction with a literal mask, and a shift or rotate by
-  # an sint tag and by a literal, each restated below in the oracle (bitwised/3).
-  defp bits_draw, do: bits_draw(pick(@bit_types ++ @width_types), pick(~w(shl shr rol ror)))
+  # an sint tag and by a literal, each restated below in the oracle (bitwised/3). Since
+  # decision 206 a bool's too, a one-bit pattern read and cleared whole, its literal shift
+  # 0 or 1; and for a bool or a bit string the bit read inverted by `not` into the type, a
+  # bool widening into a bit string.
+  defp bits_draw,
+    do: bits_draw(pick([:bool | @bit_types] ++ @width_types), pick(~w(shl shr rol ror)))
 
   defp bits_draw(type, shift) do
     n = bits_n(type)
     {low, high} = bits_range(type)
+    {read, cleared} = bits_named(type, n)
 
     {[
        "var_input bw #{type}",
@@ -521,20 +527,37 @@ defmodule Logex.ApiContractTest do
        "var_output bok bool",
        "var_output bb bool",
        "var_output bset #{type}"
-     ],
+     ] ++ inverted_declared(type),
      [
        "#{pick(~w(and or xor))} bw #{pick(Enum.uniq([0, 1, high, max(low, -1), div(high, 3)]))} bm",
        "#{shift} bw bn bs ote bok",
-       "#{pick(~w(shl shr rol ror))} bw #{:rand.uniform(n - 1)} bl",
-       "xic bw.#{:rand.uniform(n) - 1} ote bb",
+       "#{pick(~w(shl shr rol ror))} bw #{literal_count(n)} bl",
+       "xic #{read} ote bb",
        "move bw bset",
-       "xic bb otu bset.#{pick([0, n - 1])}"
-     ]}
+       "xic bb otu #{cleared}"
+     ] ++ inverted_rung(type)}
   end
 
+  # A bool has no bits: it is read and cleared whole, its one bit bit 0.
+  defp bits_named(:bool, _n), do: {"bw", "bset"}
+  defp bits_named(_type, n), do: {"bw.#{:rand.uniform(n) - 1}", "bset.#{pick([0, n - 1])}"}
+
+  defp literal_count(1), do: pick([0, 1])
+  defp literal_count(n), do: :rand.uniform(n - 1)
+
+  defp inverted_declared(type) when type in [:bool | @bit_types],
+    do: ["var_output bv #{type}"]
+
+  defp inverted_declared(_integer), do: []
+
+  defp inverted_rung(type) when type in [:bool | @bit_types], do: ["not bb bv"]
+  defp inverted_rung(_integer), do: []
+
+  defp bits_n(:bool), do: 1
   defp bits_n(type) when is_map_key(@bit_widths, type), do: Map.fetch!(@bit_widths, type)
   defp bits_n(type), do: elem(Map.fetch!(@widths, type), 1)
 
+  defp bits_kind(:bool), do: :unsigned
   defp bits_kind(type) when is_map_key(@bit_widths, type), do: :unsigned
   defp bits_kind(type), do: elem(Map.fetch!(@widths, type), 0)
 
@@ -645,7 +668,7 @@ defmodule Logex.ApiContractTest do
     draws =
       Enum.map(@width_types, &width_draw/1) ++
         Enum.zip_with(
-          @bit_types ++ @width_types,
+          [:bool | @bit_types] ++ @width_types,
           Stream.cycle(~w(shl shr rol ror)),
           &bits_draw/2
         )
@@ -681,9 +704,13 @@ defmodule Logex.ApiContractTest do
              MapSet.new(limits ++ [{:wrapped, true}, {:wrapped, false}])
 
     # M5-8: every bit string's two limits, each bitwise instruction, each shift or rotate
-    # by a negative count, one past the width and one inside it, and a bit set and clear.
+    # by a negative count, one past the width and one inside it, and a bit set and clear;
+    # since decision 206 a bool's two values, and a bool's bit inverted into a bool and
+    # into each bit string.
     bits =
       for(type <- @bit_types, limit <- [:low, :high, :inside], do: {type, limit}) ++
+        [{:bool, :low}, {:bool, :high}] ++
+        for(type <- [:bool | @bit_types], do: {:inverted, type}) ++
         for(op <- ~w(and or xor)a, do: {:bitwise, op}) ++
         for(op <- ~w(shl shr rol ror)a, count <- [:negative, :past, :inside], do: {op, count}) ++
         [{:bit, 0}, {:bit, 1}]
@@ -880,28 +907,41 @@ defmodule Logex.ApiContractTest do
     [_, op, mask] = Regex.run(~r/^(and|or|xor) bw (-?\d+) bm$/m, source)
     [_, tagged] = Regex.run(~r/^(shl|shr|rol|ror) bw bn bs ote bok$/m, source)
     [_, literal, count] = Regex.run(~r/^(shl|shr|rol|ror) bw (\d+) bl$/m, source)
-    [_, bit] = Regex.run(~r/^xic bw\.(\d+) ote bb$/m, source)
-    [_, cleared] = Regex.run(~r/^xic bb otu bset\.(\d+)$/m, source)
+    bit = bit_drawn(Regex.run(~r/^xic bw(?:\.(\d+))? ote bb$/m, source))
+    cleared = bit_drawn(Regex.run(~r/^xic bb otu bset(?:\.(\d+))?$/m, source))
 
     assert outputs["bm"] == bitwise_of(op, type, w, String.to_integer(mask))
     {shifted, power} = shift_of(tagged, type, w, env["bn"])
     assert {outputs["bs"], outputs["bok"]} == {shifted, power}
     assert outputs["bl"] == elem(shift_of(literal, type, w, String.to_integer(count)), 0)
-    b = bit_at(type, w, String.to_integer(bit))
+    b = bit_at(type, w, bit)
     assert outputs["bb"] == b
-    assert outputs["bset"] == cleared_of(b, type, w, String.to_integer(cleared))
+    assert outputs["bset"] == cleared_of(b, type, w, cleared)
+    inverted_of(type, b, outputs)
 
     first..last//1 = width_range_of({bits_kind(type), n})
     bits_reached({:bitwise, String.to_atom(op)})
     bits_reached({String.to_atom(tagged), count_kind(env["bn"], n)})
-    bits_reached({String.to_atom(literal), :inside})
+    bits_reached({String.to_atom(literal), count_kind(String.to_integer(count), n)})
     bits_reached({:bit, b})
     bits_kind_reached(type, limit_of(w, first, last))
   end
 
   defp bitwised(_program, _env, _outputs), do: :ok
 
-  defp bits_kind_reached(type, limit) when is_map_key(@bit_widths, type),
+  defp bit_drawn([_, bit]), do: String.to_integer(bit)
+  defp bit_drawn([_]), do: 0
+
+  # `not bb bv`: the bool's pattern, bb widened into bv's type by Figure 11, every bit of
+  # bv's width inverted, so 1 - bb in a bool and 2^N - 1 - bb in a bit string.
+  defp inverted_of(type, b, %{"bv" => bv}) do
+    assert bv == from_bits(Enum.map(bits_list(b, bits_n(type)), &(1 - &1)))
+    bits_reached({:inverted, type})
+  end
+
+  defp inverted_of(_integer, _b, _outputs), do: :ok
+
+  defp bits_kind_reached(type, limit) when is_map_key(@bit_widths, type) or type == :bool,
     do: bits_reached({type, limit})
 
   defp bits_kind_reached(_integer, _limit), do: :ok

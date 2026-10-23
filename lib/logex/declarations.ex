@@ -108,14 +108,18 @@ defmodule Logex.Declarations do
   # Figure 5): ANY_INT, the integers, and ANY_NUM, the integers and the reals, which hold
   # no row until M5-10. IEC's ANY_MAGNITUDE, which ADD's inputs are, adds TIME, which logex
   # defers (§4.12), so logex's arithmetic takes ANY_NUM. M5-8 adds two (decisions 147 and
-  # 155): the bitwise instructions' slots, IEC's ANY_BIT less its BOOL, with the integers
-  # the maintainer's "Logix-friendly" follow-up added, `:any_bitwise`; and the comparisons',
+  # 155): the bitwise instructions' slots, IEC's ANY_BIT, with the integers the
+  # maintainer's "Logix-friendly" follow-up added, `:any_bitwise`, which holds a bool since
+  # decision 206, as IEC's ANY_BIT holds BOOL (Ed 3 Figure 5); and the comparisons',
   # IEC's ANY_ELEMENTARY less its BOOL (Ed 3 Table 33), the numbers and the bit strings,
   # `:any_elementary`, a bit string compared as the unsigned integer IEC reads it as.
   @classes %{
     any_int: %{kinds: [:signed, :unsigned], word: "an integer"},
     any_num: %{kinds: [:signed, :unsigned, :real], word: "a number"},
-    any_bitwise: %{kinds: [:signed, :unsigned, :bit_string], word: "a bit string or an integer"},
+    any_bitwise: %{
+      kinds: [:boolean, :signed, :unsigned, :bit_string],
+      word: "a bool, a bit string or an integer"
+    },
     any_elementary: %{
       kinds: [:signed, :unsigned, :real, :bit_string],
       word: "a number or a bit string"

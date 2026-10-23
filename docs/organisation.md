@@ -8485,6 +8485,87 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      number: a based number holds one `#`, between its base and its digits, `16#ff`", so
      the engineer sees the whole number marked and the spelling to use. No code changed;
      `frontend_test.exs` pins it.
+204. **Whether a bit-string conversion passes power always (Milestone 5),** M5-8's first
+     question, following decision 148. A drive's status `word` read 16#1234 is cut into a
+     `byte` for a lamp panel by `word_to_byte`, which writes 16#34; an integer conversion
+     that keeps low bits passes no power, so a lamp after it shows the value did not fit.
+     **Taken: confirmed as built** (the maintainer, 2026-10-23): a bit-string conversion,
+     each of the 76 binary transfers, always passes its power in, since no pattern is out
+     of range of another, and the lamp after `word_to_byte` stays lit. IEC's binary
+     transfers (Ed 3 Tables 24 and 25) raise no error; Logix has no bit-string types
+     (1756-RM018A, Data type conversions, p.874). No code changed; `bit_string_test.exs`
+     pins it.
+205. **What a comparison's slot is called in a message (Milestone 5),** M5-8's second
+     question. `eq` on a `bool` is refused, "`eq` reads a number or a bit string, but `b` is
+     a bool (declared on line 1)". **Kept: the lead's reading, as built**, the maintainer
+     confirming M5-8's answers as a whole on 2026-10-23 without taking this one up
+     separately: the slot, IEC's ANY_ELEMENTARY less what logex has not landed, is named
+     "a number or a bit string" until the times and strings land, when its words are
+     looked at again. No code changed; `bit_string_test.exs` pins it.
+206. **Whether a `bool` may be a bitwise operand (Milestone 5),** M5-8's third question,
+     changing its provisional reading 4. Two limit switches on a conveyor, `left` and
+     `right`, should light a "both made" lamp: `and left right both`. M5-8 refused it,
+     "`and` reads a bit string or an integer, but `left` is a bool", a bool's AND being a
+     series of contacts, `xic left xic right ote both`.
+
+     **Taken: a bool is a bitwise operand, as IEC's ANY_BIT holds BOOL** (the maintainer,
+     2026-10-23). *The reading (the record's, closest to IEC, provisional where marked):*
+     - `and or xor not` and `shl shr rol ror` take a bool wherever they take a bit string,
+       `:any_bitwise` now IEC's ANY_BIT with the integers, named "a bool, a bit string or an
+       integer": IEC's AND, OR, XOR and NOT are *"overloaded on all bit-string types"*, ANY_BIT
+       in and out (Ed 3 Table 31, p.89), and SHL, SHR, ROL and ROR take an IN of ANY_BIT
+       (Table 30, p.89), whose generic type holds BOOL beside BYTE, WORD, DWORD and LWORD
+       (Ed 3 Figure 5).
+     - Each still computes in its destination's type (decision 147): `and left right both`
+       with three bools computes in a bool, the lamp lit only when both switches are made;
+       `not left none` writes the inverse, 1 for 0 and 0 for 1.
+     - A bool source widens into a bit-string destination, as Figure 11 widens BOOL into
+       each bit string (p.67): `or left status status_out` with a `word` sets bit 0 where
+       `left` is made, and `not left mask` into a `word` writes 16#fffe for 1, the bool's
+       one bit widened to 16#0001 and then inverted, as IEC's `NOT(BOOL_TO_WORD(x))`.
+     - A bool beside an integer stays refused, either way, since Figure 11 widens a bool into
+       no integer and logex has no conversion between them, "`and` computes in `i`'s type,
+       an int, but `a` is a bool (declared on line 1): a bool does not widen into an int,
+       and logex has no conversion between them"; so is a bit string into a bool
+       destination, "a word does not widen into a bool, and logex has no conversion between
+       them", and a literal into a bool destination other than 0 or 1, "only 0 or 1 fit,
+       found `2`".
+     - A shift or rotate of a bool is one of a one-bit pattern, decision 165's rules at a
+       width of 1 (provisional): `shl` or `shr` by 0 writes the source and by 1 or more
+       writes 0, each with its power in; `rol` and `ror` by any count of 0 or more write the
+       source, the count modulo 1 being 0; and a negative tag count writes the source with no
+       power. IEC's Table 30 types IN as ANY_BIT and so takes a BOOL, defining no other rule
+       for it. The count stays IEC's ANY_INT, a bool count refused.
+     - A bit, `status.3`, is a bool there too, read and written in place, `and run
+       status.3 lamps.4`, and so is a bool member that logic may write, a counter's `r`.
+     - A comparison's slot is unchanged (decision 205): a bool there stays refused.
+     - A bitwise write of a bool or a bit is a write as `move`'s is, for the walks, the
+       writer warnings, the input-point refusal and the one-shots' rules, and no coil, so
+       beside an `ote` on the same bool it draws no second-`ote` warning, as `move` does not
+       (provisional).
+
+     Logix's AND, OR, XOR and NOT take SINT to LREAL, never a BOOL (1756-RM018A pp.494–496,
+     the AND's Source A SINT, INT, DINT, LINT, USINT, UINT, UDINT, ULINT, REAL and LREAL),
+     its BOOL AND being the function block diagram's BAND; so this is IEC's reading, not
+     Logix's. *Cost:* a program with no bool bitwise operand compiles and scans in exactly
+     the reductions it did at `83cbf3e`, and a bool destination is found by the same guard
+     as an integer's, its scan within 5% of a `uint`'s (`bit_string_test.exs`).
+207. **Whether a coil on a bit and a write of its whole word warn (Milestone 5),** M5-8's
+     fourth question and its review's extension to a member. **Taken: confirmed as built**
+     (the maintainer, 2026-10-23): `ote status.3` and `move status_in status`, in either
+     order, draw the second-`ote` warning, and so do `ote c.pv.3` and `move x c.pv`, since
+     whichever comes later decides that bit each scan. No code changed;
+     `bit_string_test.exs` pins both orders, a tag's and a member's.
+208. **Whether decision 187's warning is given for a bit string (Milestone 5),** M5-8's
+     review's fifth question. **Taken: confirmed as built** (the maintainer, 2026-10-23):
+     `ge drive_status 0` on a `word` is warned, "`ge` compares `drive_status` with `0`, and
+     a word holds nothing below `0`: its result never changes", at each bit string's two
+     limits, 0 and 2^N − 1, as on a `usint`. No code changed; `bit_string_test.exs` pins it.
+209. **Whether a message quotes a bit as typed (Milestone 5),** M5-8's review's sixth
+     question, following decision 202. **Taken: confirmed as built** (the maintainer,
+     2026-10-23): every warning and refusal that names a bit quotes it as its rung spells
+     it, `conveyor.03` where it was typed so, its number keyed by its value, so bit 3 is one
+     bit however it is written. No code changed; `bit_string_test.exs` pins it.
 
 ---
 

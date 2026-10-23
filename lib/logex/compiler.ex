@@ -115,7 +115,9 @@ defmodule Logex.Compiler do
     # and the integers alike, each computing in its destination's type as `add` does, its
     # sources all of the destination's kind, widening into it by Figure 11 (decision 147):
     # `and a b dst`, `or`, `xor` and `not src dst`. A bitwise instruction cannot fail, so its
-    # power out is its power in, settled (§4.12's routine choice).
+    # power out is its power in, settled (§4.12's routine choice). Since decision 206 a bool
+    # too, IEC's ANY_BIT holding BOOL: `and a b c` of three bools is IEC's AND of bools, and a
+    # bool widens into a bit string by Figure 11, never into an integer.
     "and" => {:and, [{:value, :any_bitwise}, {:value, :any_bitwise}, {:write, :any_bitwise}]},
     "or" => {:or, [{:value, :any_bitwise}, {:value, :any_bitwise}, {:write, :any_bitwise}]},
     "xor" => {:xor, [{:value, :any_bitwise}, {:value, :any_bitwise}, {:write, :any_bitwise}]},
@@ -123,7 +125,8 @@ defmodule Logex.Compiler do
     # M5-8: IEC's bit shift functions (Table 30): `shl src n dst`, `shr`, `rol` and `ror`, the
     # source and destination as `and`'s, and `n`, the count, IEC's ANY_INT, an integer of any
     # width held to no other operand, a negative literal refused. A count negative at run
-    # time passes no power (decision 165), so the power out is settled too.
+    # time passes no power (decision 165), so the power out is settled too. Since decision
+    # 206 the source and destination may be bools, one bit wide, as IEC's ANY_BIT IN is.
     "shl" => {:shl, [{:value, :any_bitwise}, {:value, :any_int}, {:write, :any_bitwise}]},
     "shr" => {:shr, [{:value, :any_bitwise}, {:value, :any_int}, {:write, :any_bitwise}]},
     "rol" => {:rol, [{:value, :any_bitwise}, {:value, :any_int}, {:write, :any_bitwise}]},
@@ -2972,11 +2975,16 @@ defmodule Logex.Compiler do
     message =
       "`#{word}` computes in `#{destination.name}`'s type, #{a_type(destination.type)}, " <>
         "but `#{source.name}` is #{a_type(source.type)}#{declared(source)}: " <>
-        "#{a_type(source.type)} does not widen into #{a_type(destination.type)}, so " <>
-        "convert it first, with `#{Declarations.conversion(source.type, destination.type)}`"
+        "#{a_type(source.type)} does not widen into #{a_type(destination.type)}" <>
+        first_with(Declarations.conversion(source.type, destination.type))
 
     [diagnostic(line, message) | diagnostics]
   end
+
+  # Decision 206: a bool and an integer, or a bit string into a bool, have no conversion
+  # between them, as `move`'s refusal says.
+  defp first_with(nil), do: ", and logex has no conversion between them"
+  defp first_with(conversion), do: ", so convert it first, with `#{conversion}`"
 
   defp literal_in(true, _literal, _destination, _at, diagnostics), do: diagnostics
 

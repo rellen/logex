@@ -2604,16 +2604,18 @@ defmodule Logex.Runtime do
   defp type_at(at, destination, %Scan{tags: tags}), do: refused_at({at, destination, tags})
 
   # M5-8: the type a bitwise instruction computes in, its destination's, an integer's or,
-  # since decision 155, a bit string's, by the one rule `Logex.Program.destination/3` reads
-  # as `:bitwise`; a destination it does not take raises as type_at/3's does.
+  # since decision 155, a bit string's, and since decision 206 a bool's, by the one rule
+  # `Logex.Program.destination/3` reads as `:bitwise`, a bit's or a member's read there; a
+  # destination it does not take raises as type_at/3's does.
   defp bits_at(at, {:name, _, name} = destination, %Scan{tags: tags}),
     do: bits_type(Map.get(tags, name), {at, destination, tags})
 
   defp bits_at(at, destination, %Scan{tags: tags}),
     do: bits_refused({at, destination, tags})
 
-  defp bits_type(%Tag{type: type}, _met) when type in @integers or type in @bit_strings,
-    do: type
+  defp bits_type(%Tag{type: type}, _met)
+       when type in @integers or type in @bit_strings or type == :bool,
+       do: type
 
   defp bits_type(_neither, met), do: bits_refused(met)
 
@@ -2662,9 +2664,9 @@ defmodule Logex.Runtime do
 
   # M5-8: a bit pattern into a type of the table, its low bits kept, read in two's
   # complement for a signed type and as unsigned for an unsigned type and a bit string (a
-  # binary transfer, Ed 3 Tables 24 and 25).
-  for %{type: type, kind: kind, width: width} <- Declarations.table(),
-      kind in [:signed, :unsigned, :bit_string] do
+  # binary transfer, Ed 3 Tables 24 and 25), and since decision 206 for a bool, one bit,
+  # which a bitwise instruction computes in.
+  for %{type: type, kind: kind, width: width} <- Declarations.table() do
     defp transfer(unquote(type), pattern),
       do: low(unquote(Map.get(%{signed: :signed}, kind, :unsigned)), unquote(width), pattern)
   end
