@@ -454,7 +454,9 @@ defmodule Logex.Declarations do
   Whether a literal's value is one of a type's (M5-10, decision 147's literal rules): an
   integer type's, a bool's and a bit string's as `fits?/2` has it, an integer, so a real
   literal is never one; a real's an integer it holds exactly, 16777216 and never 16777217
-  for a `real`, or a real literal whose nearest value is finite, which a write rounds.
+  for a `real`, or a real literal whose nearest value is finite, which a write rounds, and
+  since decision 216 not nearer 0.0 than the type's smallest normal value, so that a write
+  would flush it to 0.0, `1.0e-40` in a `real`, 0.0 itself taken.
   """
   for %{type: type, range: range} <- @ranged do
     def holds?(unquote(type), value), do: value in unquote(Macro.escape(range))
@@ -463,7 +465,8 @@ defmodule Logex.Declarations do
   def holds?(type, value) when type in @reals and is_integer(value),
     do: Logex.Real.exact?(type, value)
 
-  def holds?(type, value) when type in @reals, do: Logex.Real.in_range?(type, value)
+  def holds?(type, value) when type in @reals,
+    do: Logex.Real.in_range?(type, value) and not Logex.Real.flushed?(type, value)
 
   @doc """
   What a message says of a literal's value that `holds?/2` refuses, after the type is
@@ -480,6 +483,9 @@ defmodule Logex.Declarations do
   def literal_misfit(type, value, shown) when is_float(value) and type not in @reals,
     do: "#{shown} is a real, and #{a_type(type)} #{integers_only(kind(type), type)}"
 
+  def literal_misfit(type, value, shown) when is_float(value),
+    do: real_misfit(Logex.Real.in_range?(type, value), type, shown)
+
   def literal_misfit(type, _value, "it"), do: misfit(type)
   def literal_misfit(type, _value, shown), do: misfit(type, shown)
 
@@ -492,6 +498,16 @@ defmodule Logex.Declarations do
 
   def class_holds?(class, value) when is_float(value),
     do: :real in Map.fetch!(@classes, class).kinds
+
+  # Decision 216: a real literal nearer 0.0 than the type's smallest normal value, which a
+  # write would flush to 0.0, told so, as one past the range is told the range.
+  defp real_misfit(true, type, shown),
+    do:
+      "#{shown} is too near 0.0 for #{a_type(type)}, whose smallest above 0.0 is " <>
+        "#{Float.to_string(Logex.Real.min(type))}: it would be written as 0.0"
+
+  defp real_misfit(false, type, "it"), do: misfit(type)
+  defp real_misfit(false, type, shown), do: misfit(type, shown)
 
   defp nearest_misfit(true, type, value, shown),
     do:

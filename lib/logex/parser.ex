@@ -62,7 +62,8 @@ defmodule Logex.Parser do
   `{:real_lit, line, x}` where it is written as the plain text of its float,
   `Float.to_string/1`'s, the shortest that reads back to it, and `{:real_lit, line, x,
   spelling}` otherwise, `37.50`, `1.5E3` or `-0.0`, whose value is 0.0, so no leaf holds
-  −0.0 (decision 150). Until then what the compiler does with one, an
+  −0.0 (decision 150), nor, since decision 216, a value nearer 0.0 than an lreal's
+  smallest normal one, which no text lexes as. Until then what the compiler does with one, an
   element cited at a line of its own, is kept for it, but nothing reaches it.
   """
 

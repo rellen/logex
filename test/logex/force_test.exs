@@ -539,7 +539,7 @@ defmodule Logex.ForceTest do
         file,
         Enum.join(
           ["levle 1", "y 1", "x 2", "x 1", "level 5000000000", "nonsense", "level 01"] ++
-            ["", "level  2", "e 1", "e 0", "seen 1"],
+            ["", "level  2", "e 1", "e 0", "seen 1", "level 16#ff", "levle 01"],
           "\n"
         ) <> "\n"
       )
@@ -566,7 +566,13 @@ defmodule Logex.ForceTest do
             "#{file}: line 9: `level  2` is no force: a line holds an input point's name and " <>
               "its value, as `eye_1 1`",
             "#{file}: line 11: `e` is forced on line 10 already",
-            "#{file}: line 12: `seen` is no input point of `plant`"
+            "#{file}: line 12: `seen` is no input point of `plant`",
+            # Decision 218 takes any number at a real point only: an integer point's line is
+            # its plain decimal.
+            "#{file}: line 13: `level 16#ff` is no force: a line holds an input point's name " <>
+              "and its value, as `eye_1 1`",
+            "#{file}: line 14: `levle 01` is no force: a line holds an input point's name and " <>
+              "its value, as `eye_1 1`"
           ],
           "\n"
         ),
@@ -582,6 +588,18 @@ defmodule Logex.ForceTest do
 
       # Nothing started: no device was opened.
       assert {Sim.reads(panel), Sim.writes(panel), Sim.writes(drive)} == {0, [], []}
+
+      # A real at a bool point, written any way the lexer reads one, does not fit.
+      File.write!(file, "x 37.50\n")
+
+      raises("#{file}: line 1: `x` is a bool, forced to 0 or 1, got: 37.5", fn ->
+        Runner.start_link(
+          configuration: plant(),
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock},
+          forces: file
+        )
+      end)
     end
 
     test "a file that cannot be read refuses the start", %{tmp_dir: dir} do

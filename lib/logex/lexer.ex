@@ -123,6 +123,11 @@ defmodule Logex.Lexer do
       "#{inspect(text)} is no number logex holds: an lreal's largest is " <>
         "1.7976931348623157e308"
 
+  def format_error({:real_small, text}),
+    do:
+      "#{inspect(text)} is no number logex holds: an lreal's smallest above 0.0 is " <>
+        "2.2250738585072014e-308"
+
   def format_error({:signed_inside, text}),
     do:
       "missing separator before `-`: #{inspect(text)} is neither a tag nor a number, " <>
@@ -368,8 +373,9 @@ defmodule Logex.Lexer do
 
   # A real's value: each of its digit runs held to the `_` rule an integer's is, then read
   # with its `_`s left out, and −0.0 kept as 0.0. One past an lreal's largest value,
-  # `1.0e400`, which no float holds, is named whole; one below its smallest is 0.0, as a
-  # write flushes it (decision 150).
+  # `1.0e400`, which no float holds, is named whole, and since decision 216 so is one
+  # nearer 0.0 than an lreal's smallest normal value, `1.0e-310` or `1.0e-400`, which no
+  # real logex holds is, the zero itself, `0.0e-400` among its spellings, taken.
   defp real_value(text) do
     {unsigned, _negative} = unsigned(text)
     [whole, rest] = :binary.split(unsigned, ".")
@@ -391,13 +397,26 @@ defmodule Logex.Lexer do
 
   defp real_read(true, text) do
     float = IO.iodata_to_binary(:binary.split(text, "_", [:global]))
-    {:ok, zeroed(:erlang.binary_to_float(float))}
+    held(:erlang.binary_to_float(float), text)
   rescue
     ArgumentError -> {:error, {:real_range, text}}
   end
 
-  defp zeroed(value) when value == 0, do: 0.0
-  defp zeroed(value), do: value
+  @lreal_min 2.2250738585072014e-308
+
+  defp held(value, text) when value > -@lreal_min and value < @lreal_min,
+    do: zero(written_zero?(text), text)
+
+  defp held(value, _text), do: {:ok, value}
+
+  defp zero(true, _text), do: {:ok, 0.0}
+  defp zero(false, text), do: {:error, {:real_small, text}}
+
+  # Whether a real's digits before its exponent are all 0, `-0.0e-400` and `0_0.0`.
+  defp written_zero?(<<ch, rest::binary>>) when ch in [?0, ?., ?_, ?-], do: written_zero?(rest)
+  defp written_zero?(<<e, _::binary>>) when e in [?e, ?E], do: true
+  defp written_zero?(<<>>), do: true
+  defp written_zero?(_nonzero), do: false
 
   # Decision 149: a number is decimal, or based in 16 or 2 (IEC Ed 3 Table 5 features 4 and
   # 6), with no sign, which IEC gives a based number none of; octal, `8#`, which Ed 3

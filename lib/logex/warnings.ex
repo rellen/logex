@@ -25,7 +25,10 @@ defmodule Logex.Warnings do
     since decision 196 a literal that is no whole number of them taken beside a long
     timer's `.pre` or `.acc` by `move`, a conversion, a comparison, `add` or `sub`, `ge
     cure.acc 3000`;
-  - a label no `jmp` names (M3-5): nothing jumps to its rung.
+  - a label no `jmp` names (M3-5): nothing jumps to its rung;
+  - since decision 219, a real literal with more digits than the real its slot computes
+    in keeps, `move 16777217.0 r` into a `real`: it is held as 16777216.0, where `0.1` and
+    `37.1`, each the shortest text of the single nearest it, are not warned of.
 
   A write on a rung a jump may skip is still a write (decision 107): two `ote`s on one tag,
   one in a section a `jmp` skips and one outside it, are still two, the warning saying the
@@ -36,8 +39,8 @@ defmodule Logex.Warnings do
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
   """
 
-  alias Logex.{Declarations, Diagnostic, FbType, Parser, Tag, Walk}
-  import Logex.Parser, only: [is_int_lit: 1, is_literal: 1]
+  alias Logex.{Compiler, Declarations, Diagnostic, FbType, Parser, Tag, Walk}
+  import Logex.Parser, only: [is_int_lit: 1, is_literal: 1, is_real_lit: 1]
 
   @one_shots Walk.one_shots()
 
@@ -67,12 +70,72 @@ defmodule Logex.Warnings do
     |> Kernel.++(second_otes(instructions, tags, owners))
     |> Kernel.++(storage_writes(instructions, tags, owners))
     |> Kernel.++(Enum.flat_map(instructions, &constant/1))
-    |> Kernel.++(Enum.flat_map(instructions, &at_limit(&1, tags)))
+    |> Kernel.++(Enum.flat_map(instructions, &by_literal(&1, tags)))
     |> Kernel.++(unjumped(instructions))
     |> Kernel.++(Enum.flat_map(instructions, &between_milliseconds(&1, tags)))
     |> Kernel.++(Enum.flat_map(instructions, &timed_literals(&1, tags)))
     |> Enum.sort_by(& &1.line)
   end
+
+  # Decision 219: a real literal with more digits than the real its slot computes in
+  # keeps, `move 16777217.0 r` into a `real`, held as 16777216.0, which compiles, as every
+  # real literal its slot rounds does (M5-10's review), and is told what it is held as.
+  # The slot's real is `Logex.Compiler.literal_real/4`'s, the one rule the lowering reads;
+  # a literal in no real's slot, a comparison of two, is passed over. Only an instruction
+  # that holds a real literal is looked at, told by its clause's guard, so a program of none
+  # pays nothing; a `cal`'s operands past its third, any number of them, are looked through.
+  @reals Declarations.reals()
+
+  defp rounded_literals({:cal, _line, operands} = instruction, tags),
+    do: rounding(real_literal?(operands), instruction, tags)
+
+  defp rounded_literals(instruction, tags), do: rounding(true, instruction, tags)
+
+  defp real_literal?([operand | _]) when is_real_lit(operand), do: true
+  defp real_literal?([_ | operands]), do: real_literal?(operands)
+  defp real_literal?([]), do: false
+
+  defp rounding(false, _instruction, _tags), do: []
+
+  defp rounding(true, {_symbol, line, operands} = instruction, tags) do
+    slots = Compiler.signature(instruction, tags)
+    type_of = &ir_real(&1, &2, tags)
+
+    for {slot, literal} <- Enum.zip(slots, operands),
+        is_real_lit(literal),
+        type = Compiler.literal_real(slot, slots, operands, type_of),
+        type != nil,
+        {:rounded, held} <- [Logex.Real.held_as(type, Parser.value(literal), text(literal))],
+        do:
+          warning(
+            line,
+            "#{shown(literal)} has more digits than #{Declarations.a_type(type)} keeps: it is " <>
+              "held as #{held}"
+          )
+  end
+
+  # The text a literal was written as: its spelling, or a plain one's float's own text.
+  defp text(literal), do: Parser.spelling(literal)
+
+  # An IR operand's real, as Logex.Compiler.literal_real/4 reads one.
+  defp ir_real(_access, literal, _tags) when is_literal(literal), do: :literal
+  defp ir_real(_access, {:name, _, name}, tags), do: {:tag, tag_real(Map.get(tags, name))}
+
+  defp ir_real(_access, {:member, _, [instance, member]}, tags),
+    do: {:tag, member_real(Map.get(tags, instance), member)}
+
+  defp ir_real(_access, _bit_or_deeper, _tags), do: {:tag, nil}
+
+  defp tag_real(%Tag{type: type}) when type in @reals, do: type
+  defp tag_real(_other), do: nil
+
+  defp member_real(%Tag{type: %FbType{} = type}, member),
+    do: member_type_real(FbType.member(type, member))
+
+  defp member_real(_other, _member), do: nil
+
+  defp member_type_real({:ok, %FbType.Member{type: type}}) when type in @reals, do: type
+  defp member_type_real(_other), do: nil
 
   # M5-6 (§4.12's routine choice, decision 158): a long timer counts nanoseconds on a clock
   # of whole milliseconds, so a preset that is no whole number of them is reached at the
@@ -519,15 +582,29 @@ defmodule Logex.Warnings do
   # on the left the mirror, `le lo x` and `ge hi x` always, `gt lo x` and `lt hi x` never.
   # `eq` and `ne` at a limit, and every comparison inside the range, can go either way, and
   # a literal outside the range is decision 183's refusal.
-  defp at_limit({symbol, line, [operand, literal]}, tags)
+  # One pass over the instructions for the warnings a literal raises, decision 187's and,
+  # since decision 219, a real literal's, each told by its clause's guard.
+  defp by_literal({symbol, line, [operand, literal]}, tags)
        when symbol in @comparisons and is_int_lit(literal),
        do: limited(integer_type(operand, tags), {symbol, :right}, {operand, literal}, line)
 
-  defp at_limit({symbol, line, [literal, operand]}, tags)
+  defp by_literal({symbol, line, [literal, operand]}, tags)
        when symbol in @comparisons and is_int_lit(literal),
        do: limited(integer_type(operand, tags), {symbol, :left}, {operand, literal}, line)
 
-  defp at_limit(_instruction, _tags), do: []
+  defp by_literal({_, _, [a | _]} = instruction, tags) when is_real_lit(a),
+    do: rounded_literals(instruction, tags)
+
+  defp by_literal({_, _, [_, b | _]} = instruction, tags) when is_real_lit(b),
+    do: rounded_literals(instruction, tags)
+
+  defp by_literal({_, _, [_, _, c | _]} = instruction, tags) when is_real_lit(c),
+    do: rounded_literals(instruction, tags)
+
+  defp by_literal({:cal, _, [_, _, _, _ | _]} = instruction, tags),
+    do: rounded_literals(instruction, tags)
+
+  defp by_literal(_instruction, _tags), do: []
 
   defp limited({:ok, type}, at, {operand, literal}, line) do
     lo..hi//_ = Declarations.range(type)

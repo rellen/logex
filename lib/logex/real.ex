@@ -40,6 +40,13 @@ defmodule Logex.Real do
   def in_range?(_type, _value), do: false
 
   @doc false
+  # Whether a number within a real type's range is flushed to 0.0 when it is written there,
+  # nonzero and nearer 0.0 than the type's smallest normal value once rounded, `1.0e-40` in
+  # a `real`: decision 216's rule for a literal, which is refused, where a device's, a
+  # host's and a force's value is written as 0.0 (decision 166).
+  def flushed?(type, value), do: value != 0 and nearest(type, value) == 0.0
+
+  @doc false
   # Whether an integer is a value of a real type exactly, decision 147's rule for an
   # integer literal in a real slot: 16777216 is a `real`'s, and 16777217 is not.
   def exact?(type, value) when is_integer(value),
@@ -145,18 +152,89 @@ defmodule Logex.Real do
   defp shorter(false, _read, value, digits), do: shortest(value, digits + 1)
 
   @doc false
-  # A real's value read from the text `spelled/2` gives, or `:error`: exactly that text, so
-  # that a file read back holds what was written, and no other.
-  def read(type, text) when is_binary(text), do: read_float(Float.parse(text), type, text)
+  # Decision 219: what a real literal written `text`, of value `value`, is held as in a real
+  # type, where its digits are more than the type keeps: `{:rounded, held}`, the shortest
+  # text that reads back to the value it is held as, or `:kept`. It is warned where the
+  # number the text writes is neither the value held nor the number that text writes, so
+  # `16777217.0` in a `real` is held as 16777216.0 and warned, and `0.1` and `37.1` are
+  # not, each the shortest text of the single nearest it; nor is a text that writes the
+  # value held exactly, `0.100000001490116119384765625` in a `real`, which loses nothing.
+  def held_as(type, value, text) do
+    rounded_in(in_range?(type, value), type, value, text)
+  end
 
-  defp read_float({value, ""}, type, text) when is_float(value),
-    do: written(spelled_as?(type, value, text), type, value)
+  defp rounded_in(false, _type, _value, _text), do: :kept
 
-  defp read_float(_other, _type, _text), do: :error
+  defp rounded_in(true, type, value, text),
+    do: spelled_so(spelled(type, nearest(type, value)) == text, type, value, text)
 
-  defp spelled_as?(type, value, text),
-    do: in_range?(type, value) and spelled(type, nearest(type, value)) == text
+  # A literal written as the shortest text of the value it is held as keeps every digit,
+  # `0.1` in a `real`, with no fraction computed.
+  defp spelled_so(true, _type, _value, _text), do: :kept
 
-  defp written(true, type, value), do: {:ok, nearest(type, value)}
-  defp written(false, _type, _value), do: :error
+  defp spelled_so(false, type, value, text),
+    do: written(Logex.Lexer.tokenize(text), type, value, text)
+
+  # Only a text that lexes as one real literal is read, so a hand-edited body's spelling,
+  # which `Logex.Compiler.lowered?/1` refuses, is passed over rather than raising.
+  defp written({:ok, [{:real_lit, _at, _value}], _end_line}, type, value, text),
+    do: held_in(type, value, text)
+
+  defp written({:ok, [{:real_lit, _at, _value, _spelling}], _end_line}, type, value, text),
+    do: held_in(type, value, text)
+
+  defp written(_other, _type, _value, _text), do: :kept
+
+  defp held_in(type, value, text) do
+    held = nearest(type, value)
+    held_text = spelled(type, held)
+    written = decimal(text)
+    lost(written != binary_value(held) and written != decimal(held_text), held_text)
+  end
+
+  defp lost(true, held_text), do: {:rounded, held_text}
+  defp lost(false, _held_text), do: :kept
+
+  # The number a real literal's text writes, exactly, as a fraction of two integers in
+  # lowest terms, `16777217.0` 16777217/1 and `0.1` 1/10: its digits with the `_`s left
+  # out, the sign and the exponent applied.
+  defp decimal(text) do
+    plain = IO.iodata_to_binary(:binary.split(text, "_", [:global]))
+    {sign, unsigned} = signed(plain)
+    [mantissa | power] = :binary.split(unsigned, ["e", "E"])
+    [whole, fraction] = :binary.split(mantissa, ".")
+    digits = String.to_integer(whole <> fraction)
+    scaled(sign * digits, exponent(power) - byte_size(fraction))
+  end
+
+  defp signed(<<?-, rest::binary>>), do: {-1, rest}
+  defp signed(text), do: {1, text}
+
+  defp exponent([]), do: 0
+  defp exponent([power]), do: String.to_integer(power)
+
+  defp scaled(digits, power) when power >= 0, do: lowest(digits * Integer.pow(10, power), 1)
+  defp scaled(digits, power), do: lowest(digits, Integer.pow(10, -power))
+
+  # A float's value, exactly, as the same fraction: its 53-bit significand over a power of
+  # two, a subnormal's and 0.0's too.
+  defp binary_value(value) do
+    <<sign::1, biased::11, fraction::52>> = <<value::float>>
+    significand(1 - 2 * sign, biased, fraction)
+  end
+
+  defp significand(sign, 0, fraction), do: power_of_two(sign * fraction, -1074)
+
+  defp significand(sign, biased, fraction),
+    do: power_of_two(sign * ((1 <<< 52) + fraction), biased - 1075)
+
+  defp power_of_two(n, power) when power >= 0, do: lowest(n <<< power, 1)
+  defp power_of_two(n, power), do: lowest(n, 1 <<< -power)
+
+  defp lowest(0, _denominator), do: {0, 1}
+
+  defp lowest(numerator, denominator) do
+    common = Integer.gcd(numerator, denominator)
+    {div(numerator, common), div(denominator, common)}
+  end
 end

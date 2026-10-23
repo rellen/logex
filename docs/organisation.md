@@ -8868,6 +8868,141 @@ Decisions 210 to 212 confirm the readings built; 213 and 214 change two.
      shifts; a program that counted on the destination's width, `not` of a narrower
      unsigned tag or a shift of a narrower tag, writes another value.
 
+**The answers to M5-10's questions, 2026-10-23** (`PLAN.md` §3, M5-10 and its review).
+Decisions 215 and 217 confirm the readings built; 216, 218 and 219 change three.
+
+215. **What `sqrt` takes and writes (Milestone 5),** M5-10's first question, following
+     decisions 148 and 164. **Taken: confirmed as built** (the maintainer, 2026-10-23):
+     `sqrt` reads any number Figure 11 widens into its destination's real, an `int` count
+     into a `real`, `sqrt boxes side` computing the root of 9 as 3.0, and writes only a
+     `real` or an `lreal`, so `sqrt boxes side` into an `int` is refused, "a square root is
+     a real's, so declare it a real or an lreal", and a `dint` into a `real`, which Figure
+     11 does not widen, told `dint_to_real`. IEC's SQRT is ANY_REAL in and out (Ed 3 Table
+     28); Logix takes any integer or real on either side (1756-RM018A pp.471–472 and
+     p.474). No code changed; `real_test.exs` pins it ("sqrt (decisions 164 and 167)").
+216. **A real literal outside a real's normal range (Milestone 5),** M5-10's second
+     question, changing provisional reading 3. The fan's setpoint is `move 1.0e-40
+     fan_speed` into a `real`; M5-10 took it and wrote 0.0 on every scan, the operator
+     seeing 0.0 where the program says otherwise.
+
+     **Taken: a real literal outside its slot's real's normal range is refused when the
+     program compiles, in both directions, 0.0 itself taken** (the maintainer,
+     2026-10-23). *The reading (the record's, provisional where marked):*
+     - Past the range, as built: `move 1.0e39 fan_speed` is told "it is beyond a real's
+       range, -3.4028234663852886e38 to 3.4028234663852886e38".
+     - Too near 0.0: a literal whose value, written into its slot's real, would be flushed
+       to 0.0, nonzero and its nearest value of the type, rounded once, below the type's
+       smallest normal value (`Logex.Real.flushed?/2`, the one rule, read by
+       `Logex.Declarations.holds?/2`): `move 1.0e-40 fan_speed` is told "`move` writes
+       `1.0e-40` into `fan_speed`, a real: it is too near 0.0 for a real, whose smallest
+       above 0.0 is 1.1754943508222875e-38: it would be written as 0.0" (provisional
+       words). The edge is the literal's nearest single: `1.1754943e-38` rounds up to the
+       smallest normal single and is taken, `1.1754942e-38` rounds to a subnormal and is
+       refused.
+     - 0.0 itself is taken however it is written, `0.0`, `-0.0` or `0.0e-400`.
+     - Every slot that judges a literal by the literal rules judges it so: `move`'s, the
+       arithmetic's and `sqrt`'s source, a comparison's literal beside a real tag, a
+       conversion's source, a block's real formal, a declaration's initial value, a
+       configuration global's initial value and a constant, and a tag declared from
+       Elixir, `Logex.Tag.new!/4`.
+     - An lreal's slot: an lreal's smallest normal value is 2.2250738585072014e-308, and a
+       literal nearer 0.0 than it is a value no real logex holds, in any slot, so the lexer
+       refuses it, at its column, as it refuses one past an lreal's largest, `1.0e400`:
+       "`1.0e-310` is no number logex holds: an lreal's smallest above 0.0 is
+       2.2250738585072014e-308", `1.0e-400`, which no float holds, among them (provisional
+       words). `move 1.0e-40 l` into an `lreal` is an lreal's value and taken. An lreal's
+       subnormal initial value given from Elixir is refused in the slot's words, "too near
+       0.0 for an lreal". The front end's golden record's eleven sources recorded before
+       this, `move 1.0e-310 aa` among them, change in the seven that now lex as errors.
+     - Two literals compared, `lt 1.0e-40 0.0`, are the doubles they lex as, with no real
+       slot, and any value the lexer takes is taken.
+     - A value that is no literal, a device's, a host's or a force's, is still written as
+       0.0 (decision 166), so a host's 1.0e-40 at a `real` input reads 0.0.
+
+     Logix's stated ranges are exactly the normal ones and zero, REAL "-3.4028235E38 to
+     -1.1754944E-38 … and 0.0 and 1.1754944E-38 to 3.4028235E38" (1756-RM018A p.873) and
+     LREAL "-1.7976931348623157E308 to -2.2250738585072014E-308 … and 0.0 and
+     2.2250738585072014E-308 to 1.7976931348623157E308" (p.874), and it treats denormalized
+     numbers as 0.0 (p.882); what its editor does with a constant outside them is
+     **unverified**. IEC says nothing of a constant outside a type's range. This
+     supersedes provisional reading 3's second half and M5-10's review's "a literal below
+     the normal range is 0.0 in either real's slot, `eq l 1.0e-310` true of an lreal 0.0".
+217. **A flushed result's power (Milestone 5),** M5-10's third question, following
+     decision 150. **Taken: confirmed as built** (the maintainer, 2026-10-23): `mul a a
+     speed` with `a` at 1.0e-30 writes 0.0 into a `real` `speed` and passes power, the
+     rung's lamp after it lit, as for any rounding, where a result past the range passes
+     none. Logix treats denormalized numbers and −0.0 as 0.0 (1756-RM018A p.882) and says
+     nothing there of a status bit; IEC leaves it to the implementer (Ed 3 Table 10
+     footnotes e and f). No code changed; `real_test.exs` pins it ("−0.0 and a subnormal
+     are written as 0.0").
+218. **A hand-edited forces file's real point (Milestone 5),** M5-10's fourth question,
+     changing decision 140's reading for a real point and M5-10's provisional reading 5.
+     An engineer writes `fan_hz 37.50` into the forces file before a start; M5-10 refused
+     the start, told the line the runner writes, `fan_hz 37.5`.
+
+     **Taken: a real point's line takes any number that reads as a value of the point's
+     type, held at its nearest value, the next force rewriting the file in the runner's
+     spelling** (the maintainer, 2026-10-23). *The reading (the record's, provisional
+     where marked):*
+     - A line's value is one number of the lexer's literal grammar, decision 149's forms
+       among them, so that one rule says what a number is: `fan_hz 37.50`, `3.75e1`,
+       `375.0E-1`, `37`, `16#25`, `3_7.5` and `-37.5` are each taken, the based and `_`
+       spellings provisional, following the lexer as the maintainer suggested.
+     - Its value is held at the point's nearest, as `force/3` holds a host's: `16777217`
+       as 16777216.0, `0.10000000149011612` as the single 0.1, and `1.0e-40` as 0.0, a
+       force being no literal, so decision 216 does not refuse it (provisional).
+     - The file stays as written until the next force or unforce, which writes the whole
+       set in the runner's spelling, `fan_hz 37.5`, as decision 127 writes it.
+     - A value outside the type is refused as before, "`fan_hz` is a real, forced to a
+       number from -3.4028234663852886e38 to 3.4028234663852886e38, got: 1.0e39"; text
+       that is no one number, `1.`, `1e5`, `+3`, `1.5L` or `1.0e-400`, is no force.
+     - An integer or bool point's line keeps decision 140's reading, its plain decimal
+       only, so `eye_1 01` and `level 16#ff` are still no force (provisional: the answer
+       named a real point); a real at an integer point, `level 37.50`, is told it does not
+       fit, as `level 37.5` was.
+
+     Logix keeps forces in the project, not in a text file (1756-PM004L pp.52–53), so it
+     offers no precedent for a file's spelling (**unverified** for any file form).
+219. **A real literal with more digits than its slot's real keeps (Milestone 5),** M5-10's
+     fifth question, following M5-10's review's provisional reading 11. The setpoint is
+     `move 37.1 sp` into a `real`, and a programmer writes `move 16777217.0 count` into a
+     `real`, which holds 16777216.0 and compiles silently.
+
+     **Taken: rounding as built, and a compile warning where a real literal has more
+     significant digits than the real its slot computes in keeps** (the maintainer,
+     2026-10-23, the lead's recommendation). *The rule, settled here so that a test can
+     restate it:*
+     - Let T be the real the literal's slot computes in, `Logex.Compiler.literal_real/4`'s,
+       the rule the lowering reads (M5-10's review); H the value of T nearest the literal,
+       rounded once from the double it lexes as; and S the shortest decimal whose nearest
+       value of T is H, decision 156's spelling, at most 9 significant digits for a `real`
+       and 17 for an `lreal` (`Logex.Real.spelled/2`). The literal is warned of where the
+       number its text writes, exactly, as a fraction, is neither H nor the number S
+       writes: "`16777217.0` has more digits than a real keeps: it is held as 16777216.0",
+       S quoted.
+     - The maintainer's wording asked for two conditions, the exact decimal differing from
+       H **and** more significant digits than 9 or 17. `16777217.0` has eight, nine
+       counting its last zero, so those two would not warn it, against the example given;
+       the settled rule replaces the count with S, which has at most 9 or 17 digits, so it
+       warns every literal the two conditions warn, and those of fewer digits whose number
+       S does not write, `16777217.0` among them.
+     - Not warned: `0.1` and `37.1` in a `real`, each S itself; `37.50` and `3.75e1`, which
+       a real holds exactly; and `0.100000001490116119384765625`, H's own decimal, which
+       loses nothing. Warned: `0.10000000149011612` in a `real`, "held as 0.1", which an
+       `lreal` keeps; `9007199254740993.0` in an `lreal`, "held as 9.007199254740992e15";
+       and a literal in a block's real formal, which its copy-in rounds.
+     - Not looked at (provisional): two literals compared, which have no real slot, and a
+       declaration's or a configuration line's initial value, since a tag table keeps no
+       literal's spelling.
+     - *Cost:* the pass that looks at each instruction for a literal, decision 187's, tells
+       an instruction that holds a real literal by its clause's guard, so a program of none
+       compiles in exactly what it did at `a8a4f8f`, and one of real literals in 6% to 13%
+       more, measured on 25 programs (`a9/cost_base.txt` and `a9/cost_now.txt`).
+
+     Logix stores an unsuffixed floating-point immediate as a REAL (1756-RM018A p.870);
+     what its editor shows of a literal it rounds is **unverified**, and IEC's type for an
+     untyped real literal is **unverified** in the extracts.
+
 ---
 
 ## 8. Sources, and what is unverified

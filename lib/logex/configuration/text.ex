@@ -447,9 +447,10 @@ defmodule Logex.Configuration.Text do
 
   # M5-10 (decision 156): a real global's real initial value is read as the real's nearest
   # value, so that `print/1` spells it as the shortest text that reads back to it, and the
-  # round trip is exact; any other value is read as it is written, which `check/1` judges.
+  # round trip is exact; any other value is read as it is written, which `check/1` judges,
+  # one past the range or, since decision 216, one a write would flush to 0.0 among them.
   defp held(type, value) when type in @reals and is_float(value),
-    do: real_held(Logex.Real.in_range?(type, value), type, value)
+    do: real_held(Declarations.holds?(type, value), type, value)
 
   defp held(_type, value), do: value
 

@@ -2274,6 +2274,7 @@ defmodule Logex.RuntimeTest do
                instructionize: 2,
                instructionize: 3,
                instructions: 0,
+               literal_real: 4,
                lowered?: 1,
                parse: 1,
                recompiled: 3,

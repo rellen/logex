@@ -184,7 +184,10 @@ defmodule Logex.Runner do
   line each, `<path>: line <n>: ...`, the runner not started, or at a restart left
   tripped: the file is read exactly as the runner writes it, a last line with no newline
   read, and an unforce of a point not forced is accepted, writing the set again
-  (decision 140). A point a restart's file no longer forces reads its device's last value
+  (decision 140), but for a real point's value, which since decision 218 is any number
+  the lexer reads as one literal and the point's type holds, `fan_hz 37.50`, `3.75e1` or
+  `37`, held at the type's nearest value as `force/3` holds one, the next force or
+  unforce writing the whole file again in the runner's spelling, `fan_hz 37.5`. A point a restart's file no longer forces reads its device's last value
   again. With no runner, the host clears every force by deleting the file. A runner
   started without `forces:` takes no force, an
   output point or a name that is no input point's is forced by no one, and a value that
@@ -926,38 +929,33 @@ defmodule Logex.Runner do
   defp force_line({text, line}, acc, points),
     do: force_read(parsed(String.split(text, " ")), text, line, acc, points)
 
-  # M5-10 (decision 156): a value is an integer or a real as the runner writes it, a real
-  # point's checked against its type's spelling once its type is known (spelled_force/4).
-  defp parsed([name, value]), do: valued(Integer.parse(value), name, value)
+  # M5-10 (decision 156): a value is one number, and since decision 218 any number the
+  # lexer reads as one literal, decision 149's forms among them, `37.50`, `3.75e1`, `16#ff`
+  # or `1_000`, with whether it is written as the runner writes a number, its plain text,
+  # which an integer or bool point's force must be (force_problem/4).
+  defp parsed([name, value]), do: valued(Logex.Lexer.tokenize(value), name)
   defp parsed(_parts), do: :error
 
-  defp valued({integer, ""}, name, value),
-    do: spelled(Integer.to_string(integer) == value, name, integer)
+  defp valued({:ok, [{kind, _at, number}], _end_line}, name) when kind in [:int_lit, :real_lit],
+    do: {:ok, name, {number, :plain}}
 
-  defp valued(_other, name, value), do: real_valued(Float.parse(value), name, value)
+  defp valued({:ok, [{kind, _at, number, _spelling}], _end_line}, name)
+       when kind in [:int_lit, :real_lit],
+       do: {:ok, name, {number, :spelled}}
 
-  defp real_valued({real, ""}, name, value),
-    do:
-      spelled(
-        Float.to_string(real) == value or Logex.Real.read(:real, value) != :error,
-        name,
-        real
-      )
+  defp valued(_other, _name), do: :error
 
-  defp real_valued(_other, _name, _value), do: :error
-
-  defp spelled(true, name, number), do: {:ok, name, number}
-  defp spelled(false, _name, _number), do: :error
+  defp no_force,
+    do: "is no force: a line holds an input point's name and its value, as `eye_1 1`"
 
   defp force_read(:error, text, line, {forces, lines, problems}, _points),
-    do:
-      {forces, lines,
-       [
-         {line,
-          "`#{text}` is no force: a line holds an input point's name and its value, as " <>
-            "`eye_1 1`"}
-         | problems
-       ]}
+    do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
+
+  # A number spelled other than as its plain decimal, `01` or `16#1`, is a force only of a
+  # real point (decision 218), and no force otherwise, as before.
+  defp force_read({:ok, name, {value, :spelled}} = read, text, line, acc, points)
+       when is_integer(value),
+       do: spelled_read(input(name, points), read, text, line, acc, points)
 
   defp force_read({:ok, name, value}, text, line, {forces, lines, problems}, points),
     do:
@@ -969,45 +967,41 @@ defmodule Logex.Runner do
         points
       )
 
+  defp spelled_read({:ok, type}, {:ok, name, {value, :spelled}}, text, line, acc, points)
+       when type in [:real, :lreal],
+       do: force_read({:ok, name, {value, :plain}}, text, line, acc, points)
+
+  defp spelled_read(_not_real, _read, text, line, acc, points),
+    do: force_read(:error, text, line, acc, points)
+
   defp once({:ok, first}, {name, _value, _text}, line, {forces, lines, problems}, _points),
     do: {forces, lines, [{line, "`#{name}` is forced on line #{first} already"} | problems]}
 
-  defp once(:error, {name, value, text}, line, {forces, lines, problems}, points),
+  defp once(:error, {name, value, _text}, line, {forces, lines, problems}, points),
     do:
       taken_from_file(
-        force_problem(input(name, points), name, value, text),
+        force_problem(input(name, points), name, value),
         name,
         value,
         line,
         {forces, lines, problems}
       )
 
-  # A real point's line holds the text the runner writes for its value, exactly, so that
-  # the file read back holds what was written: `fan_speed 0.1` for a real, never
-  # `fan_speed 0.10000000149011612` nor `fan_speed 3`.
-  defp force_problem({:ok, type}, name, value, text) when type in [:real, :lreal],
-    do: real_force(Logex.Real.read(type, value_text(text)), name, type, value)
+  # Decision 218: a real point's line holds any number that is a value of its type, held
+  # at its nearest, as `force/3` holds one, `fan_hz 37.50` as 37.5 and `big 3` as 3.0, the
+  # next force or unforce writing the file again in the runner's spelling; an integer or
+  # bool point's still the text the runner writes, its plain decimal, as decision 140 reads
+  # the file, `eye_1 1` and never `eye_1 01` nor `eye_1 16#1`.
+  defp force_problem({:ok, type}, name, {value, _written}) when type in [:real, :lreal],
+    do: real_force(Declarations.fits?(type, value), name, type, value)
 
-  defp force_problem(found, name, value, _text), do: force_problem(found, name, value)
-
-  defp force_problem({:ok, type}, name, value),
+  defp force_problem({:ok, type}, name, {value, _written}),
     do: fitting_force(Declarations.fits?(type, value), name, type, value)
 
   defp force_problem({:error, message}, _name, _value), do: message
 
-  defp value_text(text), do: text |> String.split(" ") |> List.last()
-
-  defp real_force({:ok, real}, _name, _type, _value), do: {:take, real}
-
-  defp real_force(:error, name, type, value),
-    do: real_spelling(Declarations.fits?(type, value), name, type, value)
-
-  defp real_spelling(true, name, type, value),
-    do:
-      "`#{name}` is #{Declarations.a_type(type)}, whose force the runner writes as " <>
-        "`#{name} #{Logex.Real.spelled(type, forced(type, value))}`"
-
-  defp real_spelling(false, name, type, value), do: misfit(name, type, value)
+  defp real_force(true, _name, type, value), do: {:take, forced(type, value)}
+  defp real_force(false, name, type, value), do: misfit(name, type, value)
 
   defp fitting_force(true, _name, _type, value), do: {:take, value}
   defp fitting_force(false, name, type, value), do: misfit(name, type, value)

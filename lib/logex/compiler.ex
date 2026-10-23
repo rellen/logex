@@ -1927,23 +1927,46 @@ defmodule Logex.Compiler do
   # In a `real` it is the nearest single, rounded once, so that `move 0.1 r` then `eq r 0.1`
   # is true; its spelling kept, `{:real_lit, line, 0.10000000149011612, "0.1"}`, so every
   # message quotes it as written. A literal past its slot's range was refused, and is left.
-  defp real_operand({:value, type}, literal, _whole, _scope) when type in @reals,
-    do: in_real(type, literal)
+  defp real_operand(slot, literal, {signature, operands}, scope),
+    do: in_real(literal_real(slot, signature, operands, &parsed_real(&1, &2, scope)), literal)
 
-  defp real_operand(_slot, literal, {signature, operands}, scope),
-    do: in_real(context(signature, operands, operands, scope), literal)
+  @doc false
+  # The real a real literal's slot computes in, nil where none is, the one rule, which the
+  # lowering above reads over a rung's operands and `Logex.Warnings` over the IR's
+  # (decision 219): a slot of a real type its own, a conversion's source or a `cal`'s real
+  # formal; otherwise the first operand a slot writes, `move`'s, the arithmetic's and
+  # `sqrt`'s destination; and with none, the first tag among the operands, a comparison's
+  # other. `type_of` gives an operand's real, `{:tag, type}` for a tag or member, `type`
+  # nil where it is no real, and `:literal` for a literal.
+  def literal_real({_access, type}, _slots, _operands, _type_of) when type in @reals, do: type
 
-  defp context([{:write, _} | _], [operand | _], _all, scope),
-    do: real_type(typed(:write, operand, scope))
+  def literal_real(_slot, slots, operands, type_of),
+    do: written_real(slots, operands, operands, type_of)
 
-  defp context([_ | slots], [_ | operands], all, scope), do: context(slots, operands, all, scope)
-  defp context(_slots, _operands, all, scope), do: compared_with(all, scope)
+  defp written_real([{:write, _} | _], [operand | _], _all, type_of),
+    do: tag_real(type_of.(:write, operand))
 
-  defp compared_with([{:name, _, _} = operand | _], scope),
-    do: real_type(typed(:value, operand, scope))
+  defp written_real([_ | slots], [_ | operands], all, type_of),
+    do: written_real(slots, operands, all, type_of)
 
-  defp compared_with([_ | operands], scope), do: compared_with(operands, scope)
-  defp compared_with([], _scope), do: nil
+  defp written_real(_slots, _operands, all, type_of), do: compared_with(all, type_of)
+
+  defp compared_with([operand | operands], type_of),
+    do: compared(type_of.(:value, operand), operands, type_of)
+
+  defp compared_with([], _type_of), do: nil
+
+  defp compared({:tag, type}, _operands, _type_of), do: type
+  defp compared(:literal, operands, type_of), do: compared_with(operands, type_of)
+
+  defp tag_real({:tag, type}), do: type
+  defp tag_real(:literal), do: nil
+
+  # An operand of a rung, as the lowering reads it.
+  defp parsed_real(_access, literal, _scope) when is_literal(literal), do: :literal
+
+  defp parsed_real(access, {:name, _, _} = operand, scope),
+    do: {:tag, real_type(typed(access, operand, scope))}
 
   defp real_type(%Tag{type: type}) when type in @reals, do: type
   defp real_type(_other), do: nil

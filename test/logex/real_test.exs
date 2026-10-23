@@ -229,15 +229,19 @@ defmodule Logex.RealTest do
 
       assert outputs("var_output r real\nmove 16777216 r") == %{"r" => 16_777_216.0}
 
-      # Provisional: a real literal past its slot's range is refused, and one below the
-      # normal range taken, written as 0.0.
+      # A real literal past its slot's range is refused, and since decision 216 one a write
+      # would flush to 0.0 too.
       assert messages("var x real\nmove 1.0e39 x") == [
                {2,
                 "`move` writes `1.0e39` into `x`, a real: it is beyond a real's range, " <>
                   "-3.4028234663852886e38 to 3.4028234663852886e38"}
              ]
 
-      assert outputs("var_output x real\nmove 1.0e-40 x") == %{"x" => 0.0}
+      assert messages("var x real\nmove 1.0e-40 x") == [
+               {2,
+                "`move` writes `1.0e-40` into `x`, a real: it is too near 0.0 for a real, " <>
+                  "whose smallest above 0.0 is 1.1754943508222875e-38: it would be written as 0.0"}
+             ]
     end
   end
 
@@ -474,9 +478,11 @@ defmodule Logex.RealTest do
                %{"l" => single(0.1)}
              ) == %{"p" => 0, "q" => 1}
 
-      # A subnormal literal in an lreal's slot is 0.0, a value an lreal holds.
-      assert outputs("var_input l lreal\nvar_output p bool\neq l 1.0e-310 ote p", %{"l" => 0.0}) ==
-               %{"p" => 1}
+      # A subnormal literal is no number logex holds (decision 216), in any slot.
+      assert {:error, [%Logex.Diagnostic{stage: :lex, line: 3, column: 6}]} =
+               Logex.compile("var_input l lreal\nvar_output p bool\neq l 1.0e-310 ote p",
+                 name: "m"
+               )
 
       # 16777217.0 in a `real`'s slot is the single 16777216.0.
       assert outputs("var_input r real\nvar_output p bool\neq r 16777217.0 ote p", %{
@@ -510,17 +516,28 @@ defmodule Logex.RealTest do
       {outputs, _env, []} =
         scan(
           "var_output l lreal\nvar_output r real\nvar_output k lreal\nvar_output z real\n" <>
-            "var_output y lreal\n" <>
-            "real_to_lreal 0.1 l\nlreal_to_real 0.1 r\nsqrt 0.1 k\nsqrt 1.0e-40 z\n" <>
-            "real_to_lreal 1.0e-40 y"
+            "var_output y real\n" <>
+            "real_to_lreal 0.1 l\nlreal_to_real 0.1 r\nsqrt 0.1 k\nsqrt 1.0e-30 z\n" <>
+            "lreal_to_real 1.0e-40 y"
         )
 
       assert outputs["l"] === 0.10000000149011612
       assert outputs["r"] === single(0.1)
       assert outputs["k"] === :math.sqrt(0.1)
-      # 1.0e-40 is below a single's normal range, so in a `real`'s slot it is 0.0.
-      assert outputs["z"] === 0.0
+      assert outputs["z"] === single(:math.sqrt(single(1.0e-30)))
+      # 1.0e-40 is an lreal's, and the conversion flushes it into the real.
       assert outputs["y"] === 0.0
+
+      # In a `real`'s slot 1.0e-40 is refused (decision 216), sqrt's and a conversion's
+      # source alike.
+      assert messages("var z real\nvar y lreal\nsqrt 1.0e-40 z\nreal_to_lreal 1.0e-40 y") == [
+               {3,
+                "`sqrt` computes in `z`'s type, a real: `1.0e-40` is too near 0.0 for a real, " <>
+                  "whose smallest above 0.0 is 1.1754943508222875e-38: it would be written as 0.0"},
+               {4,
+                "`real_to_lreal` reads a real: `1.0e-40` is too near 0.0 for a real, whose " <>
+                  "smallest above 0.0 is 1.1754943508222875e-38: it would be written as 0.0"}
+             ]
     end
 
     # The rounded literal keeps its spelling, so every message quotes it as written, and an
@@ -1198,13 +1215,20 @@ defmodule Logex.RealTest do
         Runner.stop(runner)
       end
 
-      # A real point's line is read only as the runner writes it.
-      File.write!(file, "hz 0.10000000149011612\nbig 3\nhz 1.0\n")
+      # Since decision 218 a real point's line is any number that is a value of its type,
+      # held at its nearest, and the next force writes the file in the runner's spelling.
+      File.write!(file, "hz 0.10000000149011612\nbig 3\n")
+      {{:ok, runner}, _clock, _sim} = run_fan(file)
+      assert Runner.status(runner).forces === %{"hz" => single(0.1), "big" => 3.0}
+      assert File.read!(file) == "hz 0.10000000149011612\nbig 3\n"
+      assert Runner.unforce(runner, "big") == :ok
+      assert File.read!(file) == "hz 0.1\n"
+      Runner.stop(runner)
+
+      File.write!(file, "hz 1.0\nhz 2.0\n")
 
       assert raised(fn -> run_fan(file) end) ==
-               "#{file}: line 1: `hz` is a real, whose force the runner writes as `hz 0.1`\n" <>
-                 "#{file}: line 2: `big` is an lreal, whose force the runner writes as `big 3.0`\n" <>
-                 "#{file}: line 3: `hz` is forced on line 1 already"
+               "#{file}: line 2: `hz` is forced on line 1 already"
 
       File.write!(file, "hz 1.0e39\nbig 0.5x\n")
 
@@ -1367,5 +1391,392 @@ defmodule Logex.RealTest do
       assert compile.(400) / compile.(200) < 2.2
       assert scan.(400) / scan.(200) < 2.2
     end
+  end
+
+  # The maintainer's answers to M5-10's five questions, 2026-10-23 (docs/organisation.md §7).
+  # Decision 215, sqrt's source any number that widens into its destination's real and its
+  # destination a real, is pinned in "sqrt (decisions 164 and 167)" above, and decision 217,
+  # a flushed result passing power, in "−0.0 and a subnormal are written as 0.0".
+  describe "a real literal nearer 0.0 than its slot's real holds (decision 216)" do
+    @flushed "it would be written as 0.0"
+
+    test "is refused in every slot of a real, and 0.0 is taken however it is written" do
+      assert messages(
+               "var_input a real\nvar r real\nvar i int\nvar_output q bool\n" <>
+                 "move 1.0e-40 r\nadd a -1.0e-40 r\nlt a 1.0e-40 ote q\nreal_to_int 1.0e-40 i"
+             ) == [
+               {5,
+                "`move` writes `1.0e-40` into `r`, a real: it is too near 0.0 for a real, " <>
+                  "whose smallest above 0.0 is 1.1754943508222875e-38: " <> @flushed},
+               {6,
+                "`add` computes in `r`'s type, a real: `-1.0e-40` is too near 0.0 for a real, " <>
+                  "whose smallest above 0.0 is 1.1754943508222875e-38: " <> @flushed},
+               {7,
+                "`lt` compares `1.0e-40` with `a`, a real (declared on line 1), which never " <>
+                  "holds it: `1.0e-40` is too near 0.0 for a real, whose smallest above 0.0 is " <>
+                  "1.1754943508222875e-38: " <> @flushed},
+               {8,
+                "`real_to_int` reads a real: `1.0e-40` is too near 0.0 for a real, whose " <>
+                  "smallest above 0.0 is 1.1754943508222875e-38: " <> @flushed}
+             ]
+
+      for zero <- ["0.0", "-0.0", "0.0e-400", "-0_0.0e-9_99"] do
+        assert outputs("var_output r real\nvar_output l lreal\nmove #{zero} r\nmove #{zero} l") ===
+                 %{"r" => 0.0, "l" => 0.0},
+               zero
+      end
+    end
+
+    # The edge is the literal's nearest single: one that rounds up to the smallest normal is
+    # a single's, and one that rounds to the largest subnormal is not.
+    test "is judged by the value a write gives it, at the smallest normal's edge" do
+      assert outputs("var_output r real\nmove 1.1754943e-38 r") === %{"r" => @single_min}
+
+      assert outputs("var_output r real\nmove -1.1754943508222875e-38 r") === %{
+               "r" => -@single_min
+             }
+
+      assert single(1.1754942e-38) < @single_min
+      assert [{2, message}] = messages("var r real\nmove 1.1754942e-38 r")
+      assert message =~ "it is too near 0.0 for a real"
+    end
+
+    # A literal an lreal would flush is no float logex holds, so the lexer refuses it in
+    # every slot, as it refuses one past an lreal's largest; 1.0e-40 is an lreal's.
+    test "below an lreal's smallest normal, it is no number logex holds" do
+      for source <- [
+            "move 1.0e-310 x",
+            "move -4.9e-324 x",
+            "move 1.0e-400 x",
+            "move 1_0.0e-4_00 x"
+          ] do
+        [_move, run, _x] = String.split(source, " ")
+
+        assert {:error, {{1, 6}, Logex.Lexer, {:real_small, ^run}}, 1} = lexed(source), source
+
+        assert {:error, [%Logex.Diagnostic{stage: :lex, line: 2, column: 6, message: message}]} =
+                 Logex.compile("var x lreal\n" <> source, name: "p")
+
+        assert message ==
+                 "#{inspect(run)} is no number logex holds: an lreal's smallest above 0.0 is " <>
+                   "2.2250738585072014e-308"
+      end
+
+      assert {:ok, _, 1} = lexed("move 2.2250738585072014e-308 x")
+      assert outputs("var_output l lreal\nmove 1.0e-40 l") === %{"l" => 1.0e-40}
+
+      assert outputs("var_output l lreal\nmove 2.2250738585072014e-308 l") ===
+               %{"l" => 2.2250738585072014e-308}
+    end
+
+    test "is refused as a block's real formal" do
+      {:ok, keep} =
+        Logex.compile(
+          "function_block keep\nvar_input a real\nvar_output b real\nmove a b",
+          name: "keep"
+        )
+
+      assert {:error, [%Logex.Diagnostic{line: 3, message: message}]} =
+               Logex.compile("var k keep\nvar_output r real\ncal k 1.0e-40 r",
+                 name: "p",
+                 types: [keep]
+               )
+
+      assert message ==
+               "operand 1 of `cal k` is `a` (var_input real): `1.0e-40` is too near 0.0 for a " <>
+                 "real, whose smallest above 0.0 is 1.1754943508222875e-38: " <> @flushed
+    end
+
+    test "is refused as a declaration's, a global's and an Elixir tag's initial value" do
+      assert messages("var r real 1.0e-40\nxic r") |> hd() ==
+               {1,
+                "`r` is a real: `1.0e-40` is too near 0.0 for a real, whose smallest above 0.0 " <>
+                  "is 1.1754943508222875e-38: " <> @flushed}
+
+      assert {:error, [%Logex.Diagnostic{line: 1, message: message} | _]} =
+               Configuration.compile("c", "var_global sp real 1.0e-40\n", %{})
+
+      assert message ==
+               "`sp` is a real: `1.0e-40` is too near 0.0 for a real, whose smallest above 0.0 " <>
+                 "is 1.1754943508222875e-38: " <> @flushed
+
+      assert_raise ArgumentError,
+                   "`x` is an lreal: `1.0e-310` is too near 0.0 for an lreal, whose smallest " <>
+                     "above 0.0 is 2.2250738585072014e-308: " <> @flushed,
+                   fn -> Logex.Tag.new!("x", :lreal, :var, 1.0e-310) end
+
+      assert %Logex.Tag{initial: +0.0} = Logex.Tag.new!("x", :real, :var, 0.0)
+    end
+
+    # A device's, a host's and a force's value is no literal: it is written as 0.0, as
+    # decision 166 has it.
+    test "a host's value so small is still written as 0.0" do
+      assert outputs("var_input a real\nvar_output r real\nmove a r", %{"a" => 1.0e-40}) ===
+               %{"r" => 0.0}
+    end
+  end
+
+  describe "a forces file's real point (decision 218)" do
+    @tag :tmp_dir
+    test "takes any number that is a value of its type, held at its nearest", %{tmp_dir: dir} do
+      file = Path.join(dir, "forces")
+
+      for {text, hz} <- [
+            {"37.50", 37.5},
+            {"3.75e1", 37.5},
+            {"375.0E-1", 37.5},
+            {"37", 37.0},
+            {"16#25", 37.0},
+            {"3_7.5", 37.5},
+            {"-37.5", -37.5},
+            {"16777217", 16_777_216.0},
+            {"0.10000000149011612", single(0.1)},
+            {"1.0e-40", 0.0},
+            {"-0.0", 0.0}
+          ] do
+        File.write!(file, "big #{text}\nhz #{text}\n")
+        {{:ok, runner}, clock, _sim} = run_fan(file)
+        forces = Runner.status(runner).forces
+        assert forces["hz"] === hz, text
+
+        assert forces["big"] === elem(Float.parse(String.replace(text, "_", "")), 0) * 1.0 or
+                 text in ["16#25", "-0.0", "37"],
+               text
+
+        Manual.advance(clock, 10)
+        assert Runner.get!(runner, "hz") === hz, text
+        # The file stays as written until the next force, which writes it whole in the
+        # runner's spelling.
+        assert File.read!(file) == "big #{text}\nhz #{text}\n"
+        assert Runner.force(runner, "big", 1.5) == :ok
+        assert File.read!(file) == "big 1.5\nhz #{Logex.Real.spelled(:real, hz)}\n"
+        Runner.stop(runner)
+      end
+    end
+
+    @tag :tmp_dir
+    test "refuses a number outside its type, and anything that is no one number",
+         %{tmp_dir: dir} do
+      file = Path.join(dir, "forces")
+      File.write!(file, "hz 1.0e39\nbig 1.0e-400\n")
+
+      assert raised(fn -> run_fan(file) end) ==
+               "#{file}: line 1: `hz` is a real, forced to a number from " <>
+                 "-3.4028234663852886e38 to 3.4028234663852886e38, got: 1.0e39\n" <>
+                 "#{file}: line 2: `big 1.0e-400` is no force: a line holds an input point's " <>
+                 "name and its value, as `eye_1 1`"
+
+      for text <- ["1.", "1e5", "+3", "0x10", "8#7", "1.5L", "3 4", "x"] do
+        File.write!(file, "hz #{text}\n")
+
+        assert raised(fn -> run_fan(file) end) ==
+                 "#{file}: line 1: `hz #{text}` is no force: a line holds an input point's " <>
+                   "name and its value, as `eye_1 1`",
+               text
+      end
+    end
+  end
+
+  describe "a real literal with more digits than its slot's real keeps (decision 219)" do
+    test "is warned of, told what it is held as, and 0.1 and 37.1 are not" do
+      assert warnings(
+               "var_input a real\nvar_input l lreal\nvar_output r real\nvar_output m lreal\n" <>
+                 "var_output q bool\nvar_output i int\n" <>
+                 "move 16777217.0 r\nmove 0.1 r\nge a 37.1 ote q\neq 3.14159265358979 a ote q\n" <>
+                 "add a 1.000000001 r\nreal_to_int 0.10000000149011612 i\n" <>
+                 "move 9007199254740993.0 m\nmove 0.10000000149011612 m\nmove 16777217.0 m\n" <>
+                 "lreal_to_int 3.14159265358979 i\nmove 0.100000001490116119384765625 r\n" <>
+                 "move 1.6777216e7 r\nmove 37.50 r"
+             ) == [
+               {2, "`l` is declared but no rung uses it"},
+               {7, "`16777217.0` has more digits than a real keeps: it is held as 16777216.0"},
+               {10, "`q` already has an `ote` on line 9: the last one in the scan decides it"},
+               {10,
+                "`3.14159265358979` has more digits than a real keeps: it is held as 3.1415927"},
+               {11, "`1.000000001` has more digits than a real keeps: it is held as 1.0"},
+               {12,
+                "`real_to_int` reads a literal, `0.10000000149011612`: its result never changes"},
+               {12, "`0.10000000149011612` has more digits than a real keeps: it is held as 0.1"},
+               {13,
+                "`9007199254740993.0` has more digits than an lreal keeps: it is held as " <>
+                  "9.007199254740992e15"},
+               {16,
+                "`lreal_to_int` reads a literal, `3.14159265358979`: its result never changes"}
+             ]
+    end
+
+    test "is warned of in a block's real formal and beside its real member, not beside a literal" do
+      {:ok, keep} =
+        Logex.compile(
+          "function_block keep\nvar_input a real\nvar_output b real\nmove a b",
+          name: "keep"
+        )
+
+      {:ok, program} =
+        Logex.compile(
+          "var k keep\nvar_output r real\nvar_output q bool\nvar_output p bool\n" <>
+            "cal k 16777217.0 r\neq 16777217.0 1.0 ote q\ngt k.b 16777217.0 ote p",
+          name: "p",
+          types: [keep]
+        )
+
+      assert Enum.map(program.warnings, &{&1.line, &1.message}) == [
+               {5, "`16777217.0` has more digits than a real keeps: it is held as 16777216.0"},
+               {6,
+                "`eq` compares two literals, `16777217.0` and `1.0`: its result never changes"},
+               {7, "`16777217.0` has more digits than a real keeps: it is held as 16777216.0"}
+             ]
+    end
+
+    test "is warned of in a block's formal past its third operand" do
+      {:ok, mix} =
+        Logex.compile(
+          "function_block mix\nvar_input a real\nvar_input b real\nvar_input c real\n" <>
+            "var_output d real\nadd a b d\nadd d c d",
+          name: "mix"
+        )
+
+      {:ok, program} =
+        Logex.compile(
+          "var m mix\nvar_output r real\ncal m 1.0 2.0 16777217.0 r",
+          name: "p",
+          types: [mix]
+        )
+
+      assert Enum.map(program.warnings, &{&1.line, &1.message}) == [
+               {3, "`16777217.0` has more digits than a real keeps: it is held as 16777216.0"}
+             ]
+    end
+
+    # The pass is told an instruction that holds a real literal by its clause's guard, so a
+    # program of none costs what it did at a8a4f8f, rung for rung, measured on its warnings
+    # alone.
+    test "a program of no real literal pays nothing for it" do
+      for {head, rung, cost} <- [
+            {"var_input a dint\nvar_output d dint\n", "add a 1234 d", 113.09},
+            {"var_input a bool\nvar_output q bool\n", "xic a ote q", 187.34},
+            {"var_input a int\nvar_output q bool\n", "gt a 5 ote q", 221.34},
+            {"var_input a real\nvar_output d real\n", "move a d", 104.09}
+          ] do
+        warned = fn n ->
+          p = program(head <> Enum.map_join(1..n, "\n", fn _ -> rung end))
+          tags = Logex.Program.typed_tags(p)
+          reductions(fn -> Logex.Warnings.of(p.rungs, tags) end)
+        end
+
+        assert (warned.(200) - warned.(100)) / 100 == cost, rung
+      end
+    end
+
+    # Provisional: a declaration's initial value keeps no spelling in a tag table, so it is
+    # not looked at.
+    test "a declaration's initial value is not warned of" do
+      assert warnings("var_output r real 16777217.0\nvar_input a bool\nxic a move 1.0 r") == []
+    end
+
+    # The rule restated: the number the text writes, as a fraction, is warned of where it is
+    # neither the value held nor the number of the shortest decimal whose nearest value of
+    # the type is the value held, each judged exactly, over a seeded draw of texts.
+    test "is warned of exactly where the restated rule says so" do
+      :rand.seed(:exsss, {21, 9, 2})
+
+      reached =
+        for _ <- 1..1500 do
+          text = drawn_real()
+          {type, value} = drawn_type(text)
+
+          expected = restated(type, value, text)
+
+          source =
+            "var_output x #{type}\nvar_input g bool\nxic g move #{text} x"
+
+          assert {:ok, program} = Logex.compile(source, name: "p"), text
+
+          assert Enum.map(program.warnings, & &1.message) ==
+                   Enum.map(
+                     expected,
+                     &"`#{text}` has more digits than #{article(type)} keeps: it is held as #{&1}"
+                   ),
+                 text
+
+          {type, expected == []}
+        end
+
+      # Its reach: in each real, a hundred literals warned of and a hundred not.
+      for type <- [:real, :lreal], kept <- [true, false] do
+        assert Enum.count(reached, &(&1 == {type, kept})) >= 100, inspect({type, kept})
+      end
+    end
+
+    # A real only where the text is within a single's normal range, which decision 216 and
+    # the range refuse otherwise.
+    defp types_of(x) when x == 0 or (x >= 1.2e-38 and x <= 3.0e38), do: [:real, :lreal]
+    defp types_of(_x), do: [:lreal]
+
+    defp article(:real), do: "a real"
+    defp article(:lreal), do: "an lreal"
+
+    defp drawn_real do
+      digits = Enum.random([1, 2, 3, 6, 7, 8, 9, 10, 12, 16, 17, 18, 25])
+      mantissa = for _ <- 1..digits, into: "", do: Integer.to_string(:rand.uniform(10) - 1)
+      point = :rand.uniform(digits)
+      whole = binary_part(mantissa, 0, point)
+      fraction = binary_part(mantissa, point, digits - point)
+      fraction = if fraction == "", do: "0", else: fraction
+      exponent = Enum.random(["", "", "e3", "e-5", "e20", "e-30", "E7"])
+      sign = Enum.random(["", "-"])
+      "#{sign}#{whole}.#{fraction}#{exponent}"
+    end
+
+    defp drawn_type(text) do
+      {double, ""} = Float.parse(text)
+      {Enum.random(types_of(abs(double))), double}
+    end
+
+    # The value held, the BEAM's nearest single or the double, and its shortest decimal
+    # found by trying 1 to 17 significant digits; a text whose double is 0.0 is 0.0 itself.
+    defp restated(type, double, text) do
+      held = held(type, double)
+      shortest = shortest(type, held, 1)
+      written = fraction(text)
+      lost = written != binary_fraction(held) and written != fraction(shortest)
+      if lost, do: [Float.to_string(elem(Float.parse(shortest), 0))], else: []
+    end
+
+    defp held(:real, x), do: single(x)
+    defp held(:lreal, x), do: x
+
+    defp shortest(type, held, digits) do
+      text = :erlang.float_to_binary(held, [{:scientific, digits - 1}])
+      {read, ""} = Float.parse(text)
+      if held(type, read) === held, do: text, else: shortest(type, held, digits + 1)
+    end
+
+    defp fraction(text) do
+      [mantissa | power] = String.split(text, ["e", "E"])
+
+      {sign, mantissa} =
+        if String.starts_with?(mantissa, "-"),
+          do: {-1, String.slice(mantissa, 1..-1//1)},
+          else: {1, mantissa}
+
+      [whole, part] =
+        if String.contains?(mantissa, "."), do: String.split(mantissa, "."), else: [mantissa, ""]
+
+      power = if power == [], do: 0, else: String.to_integer(hd(power))
+      n = sign * String.to_integer(whole <> part)
+      e = power - String.length(part)
+      if e >= 0, do: reduce(n * Integer.pow(10, e), 1), else: reduce(n, Integer.pow(10, -e))
+    end
+
+    defp binary_fraction(x) do
+      <<s::1, e::11, f::52>> = <<x::float>>
+      {m, p} = if e == 0, do: {f, -1074}, else: {f + Integer.pow(2, 52), e - 1075}
+      m = if s == 1, do: -m, else: m
+      if p >= 0, do: reduce(m * Integer.pow(2, p), 1), else: reduce(m, Integer.pow(2, -p))
+    end
+
+    defp reduce(0, _d), do: {0, 1}
+    defp reduce(n, d), do: {div(n, Integer.gcd(n, d)), div(d, Integer.gcd(n, d))}
   end
 end

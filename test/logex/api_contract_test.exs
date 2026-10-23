@@ -7603,7 +7603,7 @@ defmodule Logex.ApiContractTest do
   # Literals by the real type they are written for: each of its type's range, a real one
   # spelled by Float.to_string/1, which the lexer reads back as written.
   @re_literals %{
-    real: [0.0, 1.5, -2.5, 0.1, 3.0e38, 1.0e-30, 16_777_216, 7, -3, 0.5, 1.0e-40],
+    real: [0.0, 1.5, -2.5, 0.1, 3.0e38, 1.0e-30, 16_777_216, 7, -3, 0.5, 1.2e-38],
     lreal: [0.0, 0.1, 1.0e308, -1.0e308, 1.0e-300, 2.5, 7, -3, 9_007_199_254_740_992]
   }
 
@@ -7847,8 +7847,9 @@ defmodule Logex.ApiContractTest do
   end
 
   # A real literal is a value of the real its instruction computes in, its destination's
-  # (M5-10's review, provisional): a `real`'s 0.1 the single nearest it, and 1.0e-40, below
-  # a single's normal range, 0.0; an integer literal the integer it spells.
+  # (M5-10's review, provisional): a `real`'s 0.1 the single nearest it, and an integer
+  # literal the integer it spells; one a write would flush to 0.0 is refused (decision
+  # 216), so none is drawn, and 1.2e-38, just above a single's smallest normal, is drawn.
   defp re_value({:lit, n}, _env, into) when is_float(n), do: re_literal(into, n)
   defp re_value({:lit, n}, _env, _into), do: n
   defp re_value({:tag, tag}, env, _into), do: Map.fetch!(env, tag)
