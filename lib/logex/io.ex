@@ -11,7 +11,8 @@ defmodule Logex.IO do
   A device's points are its globals with `at`, each a `%Logex.IO.Point{}`: its name, its
   direction, `:input` for an `i` location and `:output` for a `q` one, its address, the
   location's integer fields, leftmost highest, `panel.i.1.3` being `[1, 3]`, and its type.
-  Values go by address, `%{[0] => 1, [1] => 0}`, each an integer.
+  Values go by address, `%{[0] => 1, [1] => 0}`, each an integer, or for a `real` or
+  `lreal` point a number, `%{[2] => 37.5}`, which the runner stores as its nearest real.
 
   - `init/3` opens the device, given its name, its points and the options it was bound
     with, in the device's process, which is where an adapter that reports its changes
@@ -56,7 +57,7 @@ defmodule Logex.IO do
   @type address :: [non_neg_integer, ...]
 
   @typedoc "Values by address."
-  @type values :: %{address => integer}
+  @type values :: %{address => number}
 
   @typedoc "An adapter's own state, which the device's process holds between callbacks."
   @type state :: term

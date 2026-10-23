@@ -65,7 +65,9 @@ defmodule Logex.Real do
 
   @doc false
   # The nearest value of a real type to a number within its range, 0.0 for −0.0 and for a
-  # subnormal.
+  # subnormal. A float past a single's range has no single, the BEAM's 32-bit encoding
+  # giving infinity's bits, which no pattern reads back, so every caller holds a `real`'s
+  # value to in_range?/2 first.
   def nearest(:real, value) when is_float(value) do
     <<single::float-32>> = <<value::float-32>>
     normal(single, @single_min)
@@ -134,7 +136,7 @@ defmodule Logex.Real do
 
   defp shortest(value, digits) when digits <= 9 do
     {read, ""} = Float.parse(:erlang.float_to_binary(value, [{:scientific, digits - 1}]))
-    shorter(nearest(:real, read) === value, read, value, digits)
+    shorter(in_range?(:real, read) and nearest(:real, read) === value, read, value, digits)
   end
 
   defp shortest(value, _digits), do: Float.to_string(value)

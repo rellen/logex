@@ -19,7 +19,9 @@ defmodule Logex.RealTest do
   """
   use ExUnit.Case, async: true
 
-  alias Logex.{Configuration, Edit, Fault, Runtime, Scan}
+  alias Logex.{Configuration, Edit, Fault, Runner, Runtime, Scan}
+  alias Logex.IO.Sim
+  alias Logex.Runner.Clock.Manual
 
   # Restated: a single's largest finite value and smallest normal one.
   @single_max 3.4028234663852886e38
@@ -288,6 +290,22 @@ defmodule Logex.RealTest do
                  "q" => 1,
                  "r" => 1
                }
+    end
+
+    # PLAN M5-10's Done-when: 3.5e38, past a single's largest value, is what the BEAM's
+    # 32-bit encoding would turn silently into an infinity's bits, so it is saturated before
+    # it is stored.
+    test "an lreal of 3.5e38 into a real is the single's largest value, with no power" do
+      {outputs, env, []} =
+        scan(
+          "var_input l lreal\nvar_output x real\nvar_output q bool\nlreal_to_real l x ote q",
+          %{"l" => 3.5e38}
+        )
+
+      assert outputs == %{"x" => @single_max, "q" => 0}
+      assert env["x"] === @single_max
+      assert <<0x7F7FFFFF::32>> == <<env["x"]::float-32>>
+      assert <<0x7F800000::32>> == <<3.5e38::float-32>>
     end
 
     # Decision 150: −0.0 is written as 0.0, and a subnormal flushed to 0.0, with power.
@@ -808,6 +826,143 @@ defmodule Logex.RealTest do
       assert forecast == [{:initial_changed, "x", {0, 0.0}}]
       {_edit, _runtime, report} = Configuration.Edit.test(edit, runtime)
       assert report == forecast
+    end
+  end
+
+  describe "points and forces through the runner (decisions 156 and 166)" do
+    defp fan_plant do
+      {:ok, fan} =
+        Logex.compile(
+          "var_input hz real\nvar_input big lreal\nvar_output speed real\nmul hz 2.0 speed",
+          name: "fan"
+        )
+
+      {:ok, config} =
+        Configuration.compile(
+          "plant",
+          "task fast interval 10 priority 1\n" <>
+            "var_global hz real at drive.i.0\nvar_global big lreal at drive.i.1\n" <>
+            "var_global speed real at drive.q.0\n" <>
+            "program f fan with fast\nf.hz hz\nf.big big\nf.speed speed\n",
+          %{"fan" => fan}
+        )
+
+      config
+    end
+
+    defp run_fan(file) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, sim} = Sim.start_link(clock: clock)
+
+      started =
+        Runner.start_link(
+          configuration: fan_plant(),
+          io: %{"drive" => {Sim, sim: sim}},
+          clock: {Manual, clock},
+          forces: file
+        )
+
+      {started, clock, sim}
+    end
+
+    defp raised(fun) do
+      fun.()
+      flunk("no raise")
+    rescue
+      error in ArgumentError -> error.message
+    end
+
+    @tag :tmp_dir
+    test "a device's reading is stored as its nearest real, and one past the range trips",
+         %{tmp_dir: dir} do
+      {{:ok, runner}, clock, sim} = run_fan(Path.join(dir, "forces"))
+
+      for {reading, stored} <- [
+            {37.5, 37.5},
+            {0.1, single(0.1)},
+            {16_777_217, 16_777_216.0},
+            {-0.0, 0.0},
+            {1.0e-40, 0.0},
+            {3.4028235e38, @single_max}
+          ] do
+        Sim.set(sim, [0], reading)
+        Manual.advance(clock, 10)
+        assert Runner.get!(runner, "hz") === stored, inspect(reading)
+      end
+
+      Sim.set(sim, [0], 37.5)
+      Sim.set(sim, [1], Integer.pow(2, 53) + 1)
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "big") === Integer.pow(2, 53) * 1.0
+      Sim.set(sim, [1], 0.1)
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "big") === 0.1
+      assert Sim.outputs(sim) == %{[0] => 75.0}
+
+      Sim.set(sim, [0], Integer.pow(2, 128))
+      Manual.advance(clock, 10)
+
+      assert Runner.status(runner).trip ==
+               {:io, "drive", {:bad_value, [0], Integer.pow(2, 128)}}
+
+      Runner.stop(runner)
+    end
+
+    @tag :tmp_dir
+    test "a force is held to its type's nearest value, and the forces file reads back exactly",
+         %{tmp_dir: dir} do
+      file = Path.join(dir, "forces")
+      {{:ok, runner}, clock, _sim} = run_fan(file)
+
+      assert raised(fn -> Runner.force(runner, "hz", Integer.pow(2, 128)) end) ==
+               "`hz` is a real, forced to a number from -3.4028234663852886e38 to " <>
+                 "3.4028234663852886e38, got: 340282366920938463463374607431768211456"
+
+      assert raised(fn -> Runner.force(runner, "hz", :fast) end) =~ "got: :fast"
+
+      assert Runner.force(runner, "hz", 16_777_217) == :ok
+      assert Runner.status(runner).forces == %{"hz" => 16_777_216.0}
+      assert Runner.force(runner, "hz", 0.1) == :ok
+      assert Runner.force(runner, "big", 0.1) == :ok
+      assert Runner.status(runner).forces == %{"hz" => single(0.1), "big" => 0.1}
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "hz") === single(0.1)
+
+      # The shortest text that reads back to each value, a single's for a `real`.
+      assert File.read!(file) == "big 0.1\nhz 0.1\n"
+      Runner.stop(runner)
+
+      {{:ok, runner}, clock, _sim} = run_fan(file)
+      assert Runner.status(runner).forces == %{"hz" => single(0.1), "big" => 0.1}
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "hz") === single(0.1)
+      assert Runner.get!(runner, "big") === 0.1
+      Runner.stop(runner)
+
+      for value <- [@single_max, -@single_min, 37.5, 1.0e10, 16_777_216.0] do
+        {{:ok, runner}, _clock, _sim} = run_fan(file)
+        assert Runner.force(runner, "hz", value) == :ok
+        Runner.stop(runner)
+        {{:ok, runner}, _clock, _sim} = run_fan(file)
+        assert Runner.status(runner).forces["hz"] === value
+        Runner.stop(runner)
+      end
+
+      # A real point's line is read only as the runner writes it.
+      File.write!(file, "hz 0.10000000149011612\nbig 3\nhz 1.0\n")
+
+      assert raised(fn -> run_fan(file) end) ==
+               "#{file}: line 1: `hz` is a real, whose force the runner writes as `hz 0.1`\n" <>
+                 "#{file}: line 2: `big` is an lreal, whose force the runner writes as `big 3.0`\n" <>
+                 "#{file}: line 3: `hz` is forced on line 1 already"
+
+      File.write!(file, "hz 1.0e39\nbig 0.5x\n")
+
+      assert raised(fn -> run_fan(file) end) ==
+               "#{file}: line 1: `hz` is a real, forced to a number from " <>
+                 "-3.4028234663852886e38 to 3.4028234663852886e38, got: 1.0e39\n" <>
+                 "#{file}: line 2: `big 0.5x` is no force: a line holds an input point's name " <>
+                 "and its value, as `eye_1 1`"
     end
   end
 

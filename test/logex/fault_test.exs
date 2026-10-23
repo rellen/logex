@@ -81,6 +81,24 @@ defmodule Logex.FaultTest do
       assert [%Fault{severity: :major, kind: :bit_out_of_range, read: 16, line: 4}] = faults
     end
 
+    # M5-10 (decision 164): a negative square root is a minor fault, the third kind, which
+    # reads the source it met, and the plant runs on through it.
+    test "a negative square root's fault is minor, and reads its source" do
+      p = c!("var_input a real\nvar_output r real\nvar_output q bool\nsqrt a r ote q")
+
+      assert {[{%{"r" => +0.0, "q" => 0}, faults}], _} = scans(p, [%{"a" => -0.25}])
+
+      assert [
+               %Fault{
+                 severity: :minor,
+                 kind: :negative_sqrt,
+                 instruction: :sqrt,
+                 read: -0.25,
+                 line: 4
+               }
+             ] = faults
+    end
+
     test "a new instance has none, and a scan with no zero divisor gives none" do
       p = c!(@rate)
       assert %Instance{faults: []} = Runtime.instance(p)

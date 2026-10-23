@@ -15,6 +15,26 @@ defmodule Logex.ConfigurationTest do
   doctest Logex.Configuration
 
   alias Logex.{Configuration, Diagnostic}
+
+  @real_initials [
+    nil,
+    0,
+    37.5,
+    0.10000000149011612,
+    3.4028234663852886e38,
+    -1.1754943508222875e-38,
+    16_777_216.0,
+    -0.0024999999441206455
+  ]
+  @lreal_initials [
+    nil,
+    0,
+    0.1,
+    1.7976931348623157e308,
+    -2.5e-3,
+    1.0e-300,
+    2.2250738585072014e-308
+  ]
   alias Logex.Configuration.{Connection, Global, Instance, Text}
 
   # A seal-in with a dint output, an internal var and a timer: every kind of member a
@@ -3458,6 +3478,17 @@ defmodule Logex.ConfigurationTest do
   # not, a snapshot of the first two contactors or none, and a spare global or none, so
   # each kind of warning, a task that runs no instance among them; its tasks, globals and
   # connections in a seeded order.
+  # M5-10 (decision 156): a real global now and then, its initial value drawn near its
+  # type's limits, a single's for a `real`, each printed as the shortest text that reads
+  # back to it.
+  defp reals do
+    Enum.random([
+      [],
+      [%Global{name: "rate", type: :real, initial: Enum.random(@real_initials)}],
+      [%Global{name: "total", type: :lreal, initial: Enum.random(@lreal_initials)}]
+    ])
+  end
+
   defp generated(programs) do
     count = Enum.random(1..3)
     snapshot? = Enum.random([true, false])
@@ -3495,6 +3526,7 @@ defmodule Logex.ConfigurationTest do
           ]
         end) ++
         Enum.random([[], [%Global{name: "spare", type: :dint, initial: 7}]]) ++
+        reals() ++
         snapshots(snapshot?)
 
     instances =

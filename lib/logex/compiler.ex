@@ -2111,8 +2111,7 @@ defmodule Logex.Compiler do
 
   # M5-10 (decision 167): a literal negative source of `sqrt`, `sqrt -4.0 root`, would raise
   # `:negative_sqrt` on every scan, so it is refused where it stands, as decision 78
-  # refuses a literal zero divisor; `-0.0`, whose value is 0.0, is no negative number. And
-  # its destination is a real, IEC's SQRT being ANY_REAL's (Ed 3 Table 28).
+  # refuses a literal zero divisor; `-0.0`, whose value is 0.0, is no negative number.
   defp check_literals(:sqrt, [source, _destination], {at, _scope}, d),
     do: root_source(source, at, d)
 

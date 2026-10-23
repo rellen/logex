@@ -678,7 +678,7 @@ defmodule Logex.Runner do
     filed!(state)
     type = input!(input(name, state))
     fits!(Declarations.fits?(type, value), name, type, value)
-    kept(state, Map.put(state.forces, name, value), [name])
+    kept(state, Map.put(state.forces, name, forced(type, value)), [name])
   end
 
   defp serve({:unforce, name}, state) do
@@ -834,6 +834,13 @@ defmodule Logex.Runner do
   defp input!({:ok, type}), do: type
   defp input!({:error, message}), do: raise(ArgumentError, message)
 
+  # M5-10 (decision 166): a real point is forced to the nearest value of its type, as a
+  # device's reading is stored, `fan_speed` forced to 16777217 held at 16777216.0.
+  defp forced(type, value) when type in [:real, :lreal],
+    do: elem(Logex.Real.stored(type, value), 1)
+
+  defp forced(_type, value), do: value
+
   defp fits!(true, _name, _type, _value), do: :ok
   defp fits!(false, name, type, value), do: raise(ArgumentError, misfit(name, type, value))
 
@@ -846,7 +853,8 @@ defmodule Logex.Runner do
   # a write that fails changes nothing, `{:error, {:forces, reason}}`. Each input point
   # unforced reads its device's last value again; each trigger whose reading changed makes
   # its own round (decision 120), in kicked/1.
-  defp kept(state, forces, names), do: taken(stored(state.file, forces), forces, names, state)
+  defp kept(state, forces, names),
+    do: taken(stored(state.file, forces, state.types), forces, names, state)
 
   defp taken({:error, reason}, _forces, _names, state), do: {{:error, {:forces, reason}}, state}
 
@@ -918,16 +926,28 @@ defmodule Logex.Runner do
   defp force_line({text, line}, acc, points),
     do: force_read(parsed(String.split(text, " ")), text, line, acc, points)
 
+  # M5-10 (decision 156): a value is an integer or a real as the runner writes it, a real
+  # point's checked against its type's spelling once its type is known (spelled_force/4).
   defp parsed([name, value]), do: valued(Integer.parse(value), name, value)
   defp parsed(_parts), do: :error
 
   defp valued({integer, ""}, name, value),
     do: spelled(Integer.to_string(integer) == value, name, integer)
 
-  defp valued(_other, _name, _value), do: :error
+  defp valued(_other, name, value), do: real_valued(Float.parse(value), name, value)
 
-  defp spelled(true, name, integer), do: {:ok, name, integer}
-  defp spelled(false, _name, _integer), do: :error
+  defp real_valued({real, ""}, name, value),
+    do:
+      spelled(
+        Float.to_string(real) == value or Logex.Real.read(:real, value) != :error,
+        name,
+        real
+      )
+
+  defp real_valued(_other, _name, _value), do: :error
+
+  defp spelled(true, name, number), do: {:ok, name, number}
+  defp spelled(false, _name, _number), do: :error
 
   defp force_read(:error, text, line, {forces, lines, problems}, _points),
     do:
@@ -939,39 +959,60 @@ defmodule Logex.Runner do
          | problems
        ]}
 
-  defp force_read({:ok, name, value}, _text, line, {forces, lines, problems}, points),
+  defp force_read({:ok, name, value}, text, line, {forces, lines, problems}, points),
     do:
       once(
         Map.fetch(lines, name),
-        name,
-        value,
+        {name, value, text},
         line,
         {forces, Map.put_new(lines, name, line), problems},
         points
       )
 
-  defp once({:ok, first}, name, _value, line, {forces, lines, problems}, _points),
+  defp once({:ok, first}, {name, _value, _text}, line, {forces, lines, problems}, _points),
     do: {forces, lines, [{line, "`#{name}` is forced on line #{first} already"} | problems]}
 
-  defp once(:error, name, value, line, {forces, lines, problems}, points),
+  defp once(:error, {name, value, text}, line, {forces, lines, problems}, points),
     do:
       taken_from_file(
-        force_problem(input(name, points), name, value),
+        force_problem(input(name, points), name, value, text),
         name,
         value,
         line,
         {forces, lines, problems}
       )
 
+  # A real point's line holds the text the runner writes for its value, exactly, so that
+  # the file read back holds what was written: `fan_speed 0.1` for a real, never
+  # `fan_speed 0.10000000149011612` nor `fan_speed 3`.
+  defp force_problem({:ok, type}, name, value, text) when type in [:real, :lreal],
+    do: real_force(Logex.Real.read(type, value_text(text)), name, type, value)
+
+  defp force_problem(found, name, value, _text), do: force_problem(found, name, value)
+
   defp force_problem({:ok, type}, name, value),
     do: fitting_force(Declarations.fits?(type, value), name, type, value)
 
   defp force_problem({:error, message}, _name, _value), do: message
 
-  defp fitting_force(true, _name, _type, _value), do: nil
+  defp value_text(text), do: text |> String.split(" ") |> List.last()
+
+  defp real_force({:ok, real}, _name, _type, _value), do: {:take, real}
+
+  defp real_force(:error, name, type, value),
+    do: real_spelling(Declarations.fits?(type, value), name, type, value)
+
+  defp real_spelling(true, name, type, value),
+    do:
+      "`#{name}` is #{Declarations.a_type(type)}, whose force the runner writes as " <>
+        "`#{name} #{Logex.Real.spelled(type, forced(type, value))}`"
+
+  defp real_spelling(false, name, type, value), do: misfit(name, type, value)
+
+  defp fitting_force(true, _name, _type, value), do: {:take, value}
   defp fitting_force(false, name, type, value), do: misfit(name, type, value)
 
-  defp taken_from_file(nil, name, value, _line, {forces, lines, problems}),
+  defp taken_from_file({:take, value}, name, _read, _line, {forces, lines, problems}),
     do: {Map.put(forces, name, value), lines, problems}
 
   defp taken_from_file(problem, _name, _value, line, {forces, lines, problems}),
@@ -991,14 +1032,22 @@ defmodule Logex.Runner do
   # The forces file, written whole: one force a line, `name value`, in name order, to a file
   # beside it, flushed to the disk and renamed over it, so that a crash at any moment leaves
   # the old set or the new (decision 127); a write that fails leaves the file as it was.
-  defp stored(path, forces) do
+  defp stored(path, forces, types) do
     beside = path <> ".tmp"
 
     text =
-      for {name, value} <- Enum.sort(forces), do: [name, ?\s, Integer.to_string(value), ?\n]
+      for {name, value} <- Enum.sort(forces),
+          do: [name, ?\s, spelled_force(Map.fetch!(types, name), value), ?\n]
 
     renamed(written_out(:file.open(beside, [:write, :raw, :binary]), text), beside, path)
   end
+
+  # M5-10 (decision 156): a real's value in the shortest text that reads back to it, a
+  # single's for a `real`, `0.1` and never `0.10000000149011612`.
+  defp spelled_force(type, value) when type in [:real, :lreal],
+    do: Logex.Real.spelled(type, value)
+
+  defp spelled_force(_type, value), do: Integer.to_string(value)
 
   defp written_out({:ok, io}, text), do: synced(:file.write(io, text), io)
   defp written_out(error, _text), do: error

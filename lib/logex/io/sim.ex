@@ -441,7 +441,7 @@ defmodule Logex.IO.Sim do
     do:
       raise(
         ArgumentError,
-        "values go by address, a map of addresses to integers, got: #{inspect(other)}"
+        "values go by address, a map of addresses to numbers, got: #{inspect(other)}"
       )
 
   defp address!([_ | _] = address), do: whole!(fields?(address), address)
@@ -461,10 +461,12 @@ defmodule Logex.IO.Sim do
           "got: #{inspect(other)}"
       )
 
-  defp value!(value) when is_integer(value), do: value
+  # M5-10: a real point's value is a float or an integer, which the runner stores as its
+  # nearest real (decision 166); every other point's an integer, which the runner checks.
+  defp value!(value) when is_number(value), do: value
 
   defp value!(other),
-    do: raise(ArgumentError, "a point's value is an integer, got: #{inspect(other)}")
+    do: raise(ArgumentError, "a point's value is a number, got: #{inspect(other)}")
 
   defp callback!(callback) when callback in @callbacks, do: callback
 

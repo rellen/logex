@@ -5540,6 +5540,162 @@ defmodule Logex.EndToEndTest do
     end
   end
 
+  # PLAN M5-10's Done-when: §4.4's plant reads its fan's speed as a `real` point through
+  # the simulated drive, `var_global fan_hz real at drive.i.0`, and computes its speed in
+  # revolutions a minute in a `real` and an `lreal`, lighting an alarm over an `int` limit
+  # (decisions 147, 150, 156 and 166), from files on disk through `Logex.Runner` on the
+  # manual clock, against an oracle that knows nothing of logex: a single is restated
+  # through the BEAM's own 32-bit float encoding. An integer reading is stored as its
+  # nearest real, one past a real's range trips the plant, and a force of `0.1` is written
+  # and read back exactly, across a restart and a fresh start.
+  describe "a real in the plant (M5-10)" do
+    @describetag :tmp_dir
+
+    alias Logex.Configuration.Text
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    @speed_ld """
+    var_input  hz    real
+    var_input  limit int
+    var_output speed real
+    var_output rpm   lreal
+    var_output over  bool
+    // revolutions a minute, in a real and in an lreal, and the alarm over the limit
+    mul hz 60.0 speed
+    mul hz 60.0 rpm
+    gt speed limit ote over
+    """
+
+    @speed_lines """
+
+    var_global fan_hz    real  at drive.i.0
+    var_global fan_limit int   3000
+    var_global fan_speed real
+    var_global fan_rpm   lreal 0.1
+    var_global fan_over  bool  at panel.q.7
+
+    program fan1 speed with fast
+      fan1.hz    fan_hz
+      fan1.limit fan_limit
+      fan1.speed fan_speed
+      fan1.rpm   fan_rpm
+      fan1.over  fan_over
+    """
+
+    # The oracle: a single is the 32-bit float nearest a double, as IEEE 754 rounds it,
+    # the BEAM's encoding restated, with −0.0 and a single too small to be normal 0.0.
+    defp single(x) do
+      <<y::float-32>> = <<x::float-32>>
+      if abs(y) < 1.1754943508222875e-38, do: 0.0, else: y
+    end
+
+    defp speed_plant(dir) do
+      files = [
+        {"seal.ld", cut("**A function block type** is")},
+        {"motor.ld", cut("**The motor, rewritten to use it**")},
+        {"snapshot.ld", @snapshot_ld},
+        {"speed.ld", @speed_ld},
+        {"plant.logex", whole_plant() <> @speed_lines}
+      ]
+
+      for {name, text} <- files, do: File.write!(Path.join(dir, name), text)
+      {:ok, plant} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      plant
+    end
+
+    defp speed_runner(plant, dir) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: plant,
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock},
+          forces: Path.join(dir, "forces")
+        )
+
+      {runner, clock, panel, drive}
+    end
+
+    test "M5-10's Done-when: the fan's speed is a real read from the drive", %{tmp_dir: dir} do
+      plant = speed_plant(dir)
+      assert plant.warnings == []
+      assert %{type: :real, at: "drive.i.0"} = Enum.find(plant.globals, &(&1.name == "fan_hz"))
+
+      # The configuration file's round trip holds with reals, `0.1` in an lreal printed as
+      # written.
+      text = Text.print(plant)
+      assert text =~ "var_global fan_rpm lreal 0.1\n"
+
+      assert Logex.Configuration.compile("plant", text, plant.programs) ==
+               {:ok, %{plant | file: nil}}
+
+      {runner, clock, panel, drive} = speed_runner(plant, dir)
+      :rand.seed(:exsss, {5, 10, 150})
+
+      readings =
+        [0, 50, 37.5, 0.1, 16_777_217, -0.0, 1.0e-40, 3.4028235e38, -12.25] ++
+          for(_ <- 1..60, do: Enum.random([:rand.uniform() * 100, :rand.uniform(100)]))
+
+      for reading <- readings do
+        Sim.set(drive, [0], reading)
+        Manual.advance(clock, 10)
+        hz = single(reading * 1.0)
+
+        speed =
+          if abs(hz * 60.0) > 3.4028234663852886e38,
+            do: 3.4028234663852886e38,
+            else: single(hz * 60.0)
+
+        over = if speed > 3000, do: 1, else: 0
+        assert Runner.get!(runner, "fan_hz") === hz, inspect(reading)
+        assert Runner.get!(runner, "fan_speed") === speed, inspect(reading)
+        assert Runner.get!(runner, "fan_rpm") === hz * 60.0 + 0.0, inspect(reading)
+        assert Sim.outputs(panel)[[7]] == over, inspect(reading)
+      end
+
+      # A force is held to the real's nearest value, written as the shortest text that
+      # reads back to it, and read back exactly across a restart and a fresh start.
+      assert_raise ArgumentError,
+                   "`fan_hz` is a real, forced to a number from -3.4028234663852886e38 to " <>
+                     "3.4028234663852886e38, got: 1.0e39",
+                   fn -> Runner.force(runner, "fan_hz", 1.0e39) end
+
+      assert :ok = Runner.force(runner, "fan_hz", 0.1)
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "fan_hz") === single(0.1)
+      assert Runner.get!(runner, "fan_speed") === single(single(0.1) * 60.0)
+      assert File.read!(Path.join(dir, "forces")) == "fan_hz 0.1\n"
+
+      # A reading past the real's range is a bad value, and the plant trips on it.
+      assert :ok = Runner.unforce(runner, "fan_hz")
+      Sim.set(drive, [0], Integer.pow(2, 128))
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).trip == {:io, "drive", {:bad_value, [0], Integer.pow(2, 128)}}
+      Sim.set(drive, [0], 50.5)
+      assert :ok = Runner.force(runner, "fan_hz", 0.1)
+      assert Runner.restart(runner, :cold) == :ok
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "fan_hz") === single(0.1)
+      Runner.stop(runner)
+
+      {runner, clock, _panel, drive} = speed_runner(plant, dir)
+      Sim.set(drive, [0], 50.5)
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).forces == %{"fan_hz" => single(0.1)}
+      assert Runner.get!(runner, "fan_hz") === single(0.1)
+      assert :ok = Runner.unforce(runner, "fan_hz")
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "fan_speed") === 3030.0
+      assert Runner.get!(runner, "fan_over") == 1
+      Runner.stop(runner)
+    end
+  end
+
   # PLAN M5-5's Done-when: IEC's typed counters in a plant, from files on disk through
   # Logex.Configuration.compile_file/1 and Logex.Runtime.cycle/3: a stock counted as an
   # int stopping at 32767 with `ov` on, a hopper of udints stopping at 0 with `un` on, and

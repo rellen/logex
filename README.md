@@ -31,8 +31,9 @@ integer widths, `sint` to `ulint`, signed and unsigned, with the 56 conversions 
 them (Milestone 5's M5-3), and IEC's four bit strings, `byte word dword lword`, with the
 bitwise instructions, bit access `status.3` and the 76 conversions between a bit string and
 another type (M5-8), and a bit whose number a tag holds, `status.[n]`, its number out of
-range a major fault that trips the plant (M5-9). What does not exist yet: a real type,
-which `sqrt` waits for, decided for Milestone 5 with the other data types (below). What logex is not, a safety controller first of all,
+range a major fault that trips the plant (M5-9), and the reals, `real` and `lreal`,
+with `sqrt`, the 34 real conversions and the 16 truncations (M5-10). What does not exist
+yet: arrays, decided for Milestone 5 with the other data types (below). What logex is not, a safety controller first of all,
 is said plainly below ("What logex is not").
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
@@ -47,10 +48,10 @@ Source syntax today:
 - declaration lines before the first rung, one tag each: `<section> <name> <type>
   [<initial>]`, the section `var`, `var_input`, `var_output` or `var_external`, the type
   `bool`, an integer width, `sint int dint lint` signed and `usint uint udint ulint`
-  unsigned, of 8, 16, 32 and 64 bits, a bit string, `byte word dword lword`, `ton` or a
-  function block's name, as in `var_output speed_sp dint 1200`, `var tare dint -120`,
-  `var_input hz uint` or `var mask word 16#00ff` ("Integer widths" and "Bit strings",
-  below).
+  unsigned, of 8, 16, 32 and 64 bits, a bit string, `byte word dword lword`, a real,
+  `real` or `lreal`, `ton` or a function block's name, as in `var_output speed_sp dint
+  1200`, `var tare dint -120`, `var_input hz uint`, `var mask word 16#00ff` or `var
+  ratio real 0.5` ("Integer widths", "Bit strings" and "Reals", below).
   Every tag a rung uses must be declared. A `var_input` is supplied from outside and no
   instruction may write it; a tag with no initial value starts at 0. A timer, `var t1
   ton`, is declared only with `var` and with no initial value: its preset is the number on
@@ -84,7 +85,11 @@ Source syntax today:
   whole otherwise: `8#17` and `-8#17`, octal and every other base; `16#-1`, a sign;
   `16#ff#`, a second `#`; `16#_ff`, `1__0` and `1_`, a `_` not between two digits;
   `2#102`, a digit outside its base; and Logix's
-  `5U` and `5L` as `1bst` is. `_1` is a name. A rung keeps each literal as it was typed:
+  `5U` and `5L` as `1bst` is. `_1` is a name.
+  A real literal is digits, a `.` and digits, then an exponent if wanted, `37.5`,
+  `-0.25`, `1.5e3` or `2.5E-3`, `_` between two digits as an integer's; `1.`, `.5`,
+  `1e5`, `1.5e+3` and Logix's `1.5L` are each an error naming the number, at its column
+  ("Reals", below). A rung keeps each literal as it was typed:
   printed back, `move 16#00ff mask` reads as written, `007` and `-0` too, and every
   message quotes a literal so, "`move` writes `16#ffff` into `i`", while its value is
   what every rule judges, so an edit that only respells one changes nothing. A
@@ -99,7 +104,7 @@ Source syntax today:
   dotted name that is not a declared member is an error. `status.3` is bit 3 of
   `status`, an integer or a bit string, and `t1.acc.3` of a member: a bool wherever one
   goes, read by a contact and written by a coil, its number checked against the width
-  ("Bit strings", below); a bit of a `bool` is an error. No tag is declared with a `.`
+  ("Bit strings", below); a bit of a `bool` or of a real is an error. No tag is declared with a `.`
 - a newline ends a rung: LF, CRLF or a lone CR
 - `(` … `|` … `)` open, separate and close a parallel branch group
 - a label, what `jmp auto` and `lbl auto` name, is a name with no `.` parts and no
@@ -129,7 +134,8 @@ file's does:
   cycle its trigger, a bool global, rises from 0 to 1, and in the first if it is already
   1; with `interval` too, also due periodically while the trigger is 0, at most once a
   cycle. `single` comes first of the three inputs, as IEC orders them
-- `var_global <name> <type> [<initial>]`, a `bool` or any integer width, and `var_global <name>
+- `var_global <name> <type> [<initial>]`, a `bool`, any integer width, a bit string or a
+  real, `var_global sp real 0.1` printed back as `0.1`, and `var_global <name>
   <type> at <device>.i.<n>` or `… at <device>.q.<n>`, an input or an output point, which
   takes no initial value: the `var_global … at` lines are the plant's I/O list
 - `program <instance> <type> [with <task>]`: an instance of the program type in
@@ -206,19 +212,22 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `otl xx` | bool tag, not a `var_input` | output latch — writes 1 on a true rung, leaves the tag alone otherwise |
 | `otu xx` | bool tag, not a `var_input` | output unlatch — writes 0 on a true rung, leaves the tag alone otherwise |
 | `move 123 hh` | source, then a destination, not a `var_input`, of the source's type or one it widens into | copies a literal or a tag into a tag, in the destination's type: the source is of that type or one IEC's Figure 11 widens into it, a `uint` into a `dint`, and any other is refused naming its conversion; a literal must fit the destination (`mov` until M1-2; it now gets a diagnostic pointing here) |
+| `real_to_int a dst`, `lreal_to_real a dst` and the 32 others | a source of the `from` type or one that widens into it, then a tag of the `to` type, one of them a real, not a `var_input`; a literal source is a warning | a real converted, IEC's typed conversions — into an integer the nearest, a tie to the even neighbour (`real_to_int` of 2.5 is 2 and of 3.5 is 4), and where that does not fit its low bits, with no power, `real_to_int` of 40000.7 −25535; into a real its nearest value, an integer rounded once, `dint_to_real` of 16777217 16777216.0, an lreal past a real's range its largest value with no power. False: writes nothing, passes no power |
+| `real_trunc_int a dst` and the 15 others, `<real>_trunc_<integer>` | a real or an lreal source, then an integer tag | IEC's TRUNC — the source with its fraction dropped, toward zero, `real_trunc_int` of −1.6 −1, and where that does not fit its low bits, with no power, 40000.7 −25536 |
+| `sqrt a dst` | a number of `dst`'s type or one that widens into it, then a real or an lreal tag it writes | square root, IEC's SQRT, in `dst`'s type — true: writes the root and passes power; a negative source writes 0.0, passes no power and is the minor fault `:negative_sqrt`, and a literal negative one is refused. False: writes nothing, passes no power |
 | `dint_to_int a dst` and the 55 others, `<from>_to_<to>` | a source of the `from` integer type or one that widens into it, a tag, a member or a literal, then a tag of the `to` type it writes, not a `var_input`; a literal source is a warning | converts between two integer widths, IEC's typed conversions — true: writes the value where it fits, with power, and where it does not keeps its low bits, two's complement where signed, and passes no power, with no fault: `dint_to_sint` of 129 gives −127. False: writes nothing, passes no power. Anything may follow it on the rung |
 | `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
 | `osr s1 pulse` | two bool tags it writes, each not a `var_input`: the storage bit, then the pulse bit, which may be a member logic may write | one-shot rising, IEC's positive transition-sensing coil in the conventional set's form — sets `pulse` for the one scan in which the power reaching it rises, and clears it on every other run, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last run. It passes that power on, so anything may follow it on its rung. A second `ons`, `osr` or `osf` on `s1` is an error, as is `s1` for its pulse bit too, and any other write to `s1` a warning; a second coil on `pulse`, an `ote` among them, is the second-`ote` warning |
 | `osf s1 pulse` | as `osr` | one-shot falling, IEC's negative transition-sensing coil — sets `pulse` for the one scan in which the power reaching it falls, which its run on the false rung sees, and is `osr` in every other rule |
-| `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two integers of any widths, or two bit strings, each a tag, a member or a literal; a bit string with an integer tag is refused, naming the conversions | compare by value, whatever the two types — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`, so an `sint` −1 is less than a `udint` 0; none on a false rung. A literal its tag's type cannot hold is refused, and two literals are a warning, as is a literal at its tag's type's limit whose result never changes, `ge count 0` with a `usint` `count` |
+| `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two integers of any widths, two reals, an integer with a real it widens into, or two bit strings, each a tag, a member or a literal; a bit string with an integer tag is refused, naming the conversions | compare by value, whatever the two types — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`, so an `sint` −1 is less than a `udint` 0; none on a false rung. A literal its tag's type cannot hold is refused, and two literals are a warning, as is a literal at its tag's type's limit whose result never changes, `ge count 0` with a `usint` `count` |
 | `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms, or a long timer (`var t1 ton_ltime`, M5-6) and 0 to 9223372036854775807 ns, the unit the instance's | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
 | `tof run_on 30000` | an off-delay timer (`var run_on tof`), then a preset in ms, or a `tof_ltime` and a preset in ns | off-delay timer, IEC's TOF — rung power is its IN. True: `.dn` set, `.acc` 0. The first false scan starts the delay, and `.dn` stays set until `.acc` reaches `.pre`, then drops; a true rung during the delay ends it with `.dn` still set. A new or restarted one is at rest, `.dn` 0. Read it with `xic run_on.dn` on a rung below |
 | `tp horn_pulse 3000` | a pulse timer (`var horn_pulse tp`), then a preset in ms, or a `tp_ltime` and a preset in ns | pulse timer, IEC's TP — a rising edge of its rung, never on an instance's first scan, starts a pulse on `.tt` exactly `.pre` long, whatever the rung does meanwhile, an edge during it ignored; `.dn` is set as the pulse ends and holds while the rung does. Read the pulse with `xic horn_pulse.tt` on a rung below |
 | `rto lube 360000000` | a retentive timer (`var lube rto`), then a preset in ms, or an `rto_ltime` and a preset in ns | retentive on-delay timer, the conventional RTO — true, it times as `ton`; false, it keeps `.acc` and `.dn`, so its time adds up across the rung's drops. Its reset `.r`, an input a rung writes, `xic greased ote lube.r`, puts `.acc`, `.dn` and `.tt` to 0 at its next run; every restart, warm or cold, starts it at 0. Logic writes `.pre`, `.acc` and `.r` |
 | `ctu boxes 12` | an up counter (`var boxes ctu`) or an up-down one (`ctud`), of any of IEC's typed counters too, `ctu_int` or `ctud_ulint` (M5-5), then a preset, any value of its `pv`'s type, −2147483648 to 2147483647 for a `ctu`, negatives among them, and 0 to its top for an unsigned typed counter | count up — rung power is the counter's count input `cu`. Each rising edge adds one to `.cv`, never on an instance's first scan, and `.q` is `.cv >= .pv`. Its reset `.r`, an input a rung writes, as `xic reset_pb ote boxes.r`, puts `.cv` to 0 at the counter's next run, and keeps its memory of `cu`, so a box on the eye at a reset is not counted again. At 2147483647, or a typed counter's top, the count stops and `.ov` stays on until a reset. The preset is where `.pv` starts; logic writes only `.r` and `.pv`, and a `ctud`'s `.ld`. One `ctu` runs a counter, and nothing may follow it on its path: read it with `xic boxes.q` on a rung below |
 | `ctd hopper 40` | a down counter (`var hopper ctd`) or an up-down one, then a preset | count down — rung power is `cd`. Its load `.ld` puts `.cv` to `.pv`; each rising edge takes one away, stopping at −2147483648, or a typed counter's bottom, 0 for a `ctd_udint`, with `.un` on until a load; `.q` is `.cv <= 0`. A `ctud`, `var stock ctud`, is run by one `ctu` and one `ctd` on two rungs, with one preset, and has `.r` and `.ld`, `.qu` at `.cv >= .pv` and `.qd` at `.cv <= 0` |
-| `add a b dst` `sub a b dst` `mul a b dst` | two integer sources, each a tag, a member or a literal, of `dst`'s type or one IEC's Figure 11 widens into it, then an integer tag or member it writes, not a `var_input`; any other source is refused naming its conversion | add, subtract (`a − b`), multiply, in `dst`'s type — true: writes the result and passes power; a result outside that type wraps, keeping its low bits, in two's complement where signed (2147483647 + 1 is −2147483648 in a `dint`, 127 + 1 −128 in an `sint`, 0 − 1 255 in a `usint`), and passes no power on that scan, with no fault. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
-| `div a b dst` `mod a b dst` | as `add` | divide, truncated toward zero (`div -7 2 q` is −3), and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. A signed type's minimum divided by −1 wraps to itself, `div -2147483648 -1` to −2147483648 in a `dint`, with no power |
+| `add a b dst` `sub a b dst` `mul a b dst` | two number sources, each a tag, a member or a literal, of `dst`'s type or one IEC's Figure 11 widens into it, then an integer or real tag or member it writes, not a `var_input`; any other source is refused naming its conversion | add, subtract (`a − b`), multiply, in `dst`'s type — true: writes the result and passes power; a result outside an integer type wraps, keeping its low bits, in two's complement where signed (2147483647 + 1 is −2147483648 in a `dint`, 127 + 1 −128 in an `sint`, 0 − 1 255 in a `usint`), and passes no power on that scan, with no fault; a real's result is rounded to its nearest value, a `real`'s a single, so `add 16777216 1.0 x` is 16777216.0 in a `real`, and past its range is its largest value, the sign kept, with no power. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
+| `div a b dst` `mod a b dst` | as `add`, `mod`'s integers only | divide, an integer's truncated toward zero (`div -7 2 q` is −3), a real's exactly, and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, or 0.0 into a real, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. A signed type's minimum divided by −1 wraps to itself, `div -2147483648 -1` to −2147483648 in a `dint`, with no power |
 | `neg a dst` `abs a dst` | a source as `add`'s, then an integer it writes; `neg` into an unsigned type is refused | negate, absolute value — as `add`, one source: a signed type's minimum, −2147483648 in a `dint`, has no positive twin, so each wraps to it itself for it, with no power |
 | `and a b dst` `or a b dst` `xor a b dst` | two sources, each a tag, a member, a bit or a literal, then a tag, member or bit it writes, not a `var_input`: all bools and bit strings or all integers, each source of `dst`'s type or one Figure 11 widens into it, a bool into a bit string, any other refused naming its conversion | bitwise AND, OR and exclusive OR, IEC's, in `dst`'s type, a bool's one bit too, on an integer its two's-complement pattern — true: writes and passes power, as it cannot fail; false: writes nothing, passes no power. Anything may follow it on the rung |
 | `not src dst` | a source, then a destination, as `and`'s | each bit of the source inverted in the source's type and the result widened into `dst`'s by value, IEC's typing, `not` of a `byte` 2#0000_1111 2#1111_0000, of an `int` 0 −1, of a `bool` 1 0, and of a `bool` 1 into a `word` 16#0000 |
@@ -273,9 +282,9 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   below), and arithmetic and comparison over every width (M5-4), and the bit strings
   `byte word dword lword` with `and or xor not shl shr rol ror`, bit access `word.3` and
   the 76 bit-string conversions (M5-8, "Bit strings", below), and a bit number in a tag,
-  `word.[n]`, with the major fault (M5-9, "A bit number in a tag", below); `real` and
-  `lreal`, with literals `37.5` and `1.5e3`; the rest of IEC's
-  typed conversions, `real_to_int` and `real_trunc_int` among them; arrays `var temps real[8]`, up to three dimensions, of timers and blocks
+  `word.[n]`, with the major fault (M5-9, "A bit number in a tag", below), and `real` and
+  `lreal`, with literals `37.5` and `1.5e3`, `sqrt` and the real conversions, `real_to_int`
+  and `real_trunc_int` among them (M5-10, "Reals", below); still to land, arrays `var temps real[8]`, up to three dimensions, of timers and blocks
   too, and at I/O points. IEC's typed
   counters have landed, `ctu_int` and the rest, with `ctu_dint` another word for `ctu`
   (M5-5, "A counter", below), and the long timers in nanoseconds, `ton_ltime`,
@@ -284,7 +293,7 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   widths", below), replacing the stop at the limit the dint had until then. Each type
   word and mnemonic becomes a reserved word, `real` among them, as `int`, `word`, `byte`,
   `and`, `or` and `not` already are.
-- **`sqrt`**, waiting for a real type, which Milestone 5 brings. Milestone 3 (`PLAN.md` §3, decisions 67–107 in
+- Milestone 3 (`PLAN.md` §3, decisions 67–107 in
   [`docs/organisation.md`](docs/organisation.md) §7) has otherwise landed whole: the
   counters, the other timers, integer arithmetic, the pulse coils and the forward jump
   ("A counter", "Three more timers", "Arithmetic", "Two pulse coils" and "A forward
@@ -1313,6 +1322,125 @@ status.[16#4] of 16#0010: %{"on" => 1}
   write of the word whole, `move panel lamps` beside `ote lamps.[sel]`, in either order,
   are told as two `ote`s on one tag are, and one beside a one-shot's storage bit in the
   word as another write of the storage bit (provisional).
+
+### Reals
+
+`fan.ld` — a fan whose drive reports its speed in hertz, a `real`, computed in
+revolutions a minute in a `real` and in an `lreal`, rounded and truncated into `int`s,
+with the square root of its frequency and a lamp that is off when there is none:
+
+```
+var_input  hz      real
+var_output speed   real
+var_output precise lreal
+var_output rpm     int
+var_output whole   int
+var_output root    real
+var_output root_ok bool
+
+// the fan's speed in revolutions a minute, in a real and in an lreal
+mul hz 60.0 speed
+mul hz 60.0 precise
+real_to_int speed rpm
+real_trunc_int speed whole
+sqrt hz root ote root_ok
+```
+
+`fan.exs` scans it five times, gives it a frequency too big for a `real`, and compiles a
+literal and eight instructions that cannot work:
+
+```elixir
+{:ok, fan} = Logex.compile_file("fan.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(fan, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(fan, state)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  for fault <- state.faults, do: IO.puts("    #{inspect(fault)}")
+  state
+end
+
+state =
+  Logex.Runtime.instance(fan)
+  |> scan.("0.1 Hz      ", %{"hz" => 0.1})
+  |> scan.("12.5 Hz     ", %{"hz" => 12.5})
+  |> scan.("-0.25 Hz    ", %{"hz" => -0.25})
+  |> scan.("600 Hz      ", %{"hz" => 600})
+  |> scan.("16777217 Hz ", %{"hz" => 16_777_217})
+
+try do
+  Logex.Runtime.put_inputs(fan, state, %{"hz" => Integer.pow(2, 128)})
+rescue
+  error in ArgumentError -> IO.puts(Exception.message(error))
+end
+
+{:error, [lexed]} = Logex.compile("var x real\nmove 1.5e+3 x", name: "lexed")
+IO.puts(Logex.Diagnostic.format(lexed))
+
+{:error, diagnostics} =
+  Logex.compile(
+    "var speed real\nvar count dint\nvar rpm int\nvar on bool\n" <>
+      "move 16777217 speed\nmove speed rpm\ngt speed count ote on\ndiv speed 0.0 speed\n" <>
+      "mod speed 2 rpm\nsqrt -4.0 speed\nsqrt speed rpm\nxic speed.3 ote on",
+    name: "wrong"
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```
+$ mix run fan.exs
+0.1 Hz        %{"precise" => 6.000000089406967, "root" => 0.3162277638912201, "root_ok" => 1, "rpm" => 6, "speed" => 6.0, "whole" => 6}
+12.5 Hz       %{"precise" => 750.0, "root" => 3.535533905029297, "root_ok" => 1, "rpm" => 750, "speed" => 750.0, "whole" => 750}
+-0.25 Hz      %{"precise" => -15.0, "root" => 0.0, "root_ok" => 0, "rpm" => -15, "speed" => -15.0, "whole" => -15}
+    %Logex.Fault{severity: :minor, kind: :negative_sqrt, instruction: :sqrt, path: nil, file: "fan.ld", line: 14, read: -0.25}
+600 Hz        %{"precise" => 36000.0, "root" => 24.494897842407227, "root_ok" => 1, "rpm" => -29536, "speed" => 36000.0, "whole" => -29536}
+16777217 Hz   %{"precise" => 1006632960.0, "root" => 4096.0, "root_ok" => 1, "rpm" => 0, "speed" => 1006632960.0, "whole" => 0}
+input `hz` is a real: 340282366920938463463374607431768211456 is beyond a real's range, -3.4028234663852886e38 to 3.4028234663852886e38
+line 2, column 6: "1.5e+3" is no number: logex takes no `+`, so an exponent is `e3` or `e-3`
+line 5: `move` writes `16777217` into `speed`, a real: it is no value of a real, which holds integers exactly only to 2^24: the nearest it holds is 16777216.0
+line 6: `move` writes `speed`, a real, into `rpm`, an int: a real does not widen into an int, so convert it with `real_to_int`
+line 7: `gt` compares `speed`, a real (declared on line 1), with `count`, a dint (declared on line 2): a dint does not widen into a real, so convert it first, with `dint_to_real`
+line 8: `div` divides by the literal `0.0`: a zero divisor gives 0.0 and passes no power on every scan, so a literal one is refused
+line 9: `mod` reads an integer, but `speed` is a real (declared on line 1)
+line 10: `sqrt` takes the root of the literal `-4.0`: a negative source gives 0.0, passes no power and raises a minor fault on every scan, so a literal one is refused
+line 11: `sqrt` writes a real, but `rpm` is an int (declared on line 3): a square root is a real's, so declare it a real or an lreal
+line 12: `speed.3` names a bit of `speed`, a real, which has no bits
+```
+
+- `real` and `lreal` are IEC's 32- and 64-bit floating point, declared wherever an
+  integer is, a tag of any section, a block's member, a global, located or not, their
+  zero 0.0 (decisions 144 and 150). A `real` holds a single: every write into one, a
+  scan's, a host's, a device's or a force's, is rounded to the nearest single, so 0.1 Hz
+  reads back as 0.10000000149011612 and 60 times it is exactly 6.0 in a `real` but
+  6.000000089406967 in an `lreal`, which holds the double the single widens to.
+- No value logex holds is an infinity, a NaN, −0.0 or a subnormal (decision 150): a
+  result past a type's largest value is that value, the sign kept, with no power; one too
+  small to be normal is 0.0, as −0.0 is, with power; a zero divisor writes 0.0, passes no
+  power and is the minor fault `:divide_by_zero`. `sqrt` of a negative source writes 0.0,
+  passes no power and is the minor fault `:negative_sqrt`, reading the source, where Logix
+  roots its absolute value (1756-RM018A p.474), so that a root of −0.25 never reads as 0.5
+  (decision 164); a literal negative source, a literal `0.0` divisor and `mod` of a real
+  are refused when the program compiles.
+- A real meets an integer by Figure 11 (decision 147): an `int` or a `uint` widens into a
+  `real`, a `dint` into an `lreal` only, and a `real` into an `lreal`; any other pair is
+  told its conversion, `dint_to_real`. An integer literal in a real's slot is the value it
+  spells, refused where the real cannot hold it exactly, `16777217` in a `real` told its
+  nearest, 16777216.0; a real literal is no integer's. An integer at a real point, from a
+  host, a device or a force, is stored as its nearest real, and only one past the real's
+  range is refused, or trips the plant as a bad value (decision 166).
+- The 34 real conversions round to the nearest integer, a tie to the even one, as IEC's
+  rounding is, and then wrap, with no power, where the result does not fit (decision 161):
+  `real_to_int` of 36000.0 is −29536, as above. The 16 truncations, `real_trunc_int` and
+  the rest, drop the fraction toward zero first (decision 162). A real has no bits:
+  `speed.3` is refused (decision 155).
+- A force of a real point and a configuration file's real value are written as the
+  shortest text that reads back to the value, a single's for a `real`, `fan_hz 0.1` and
+  never `fan_hz 0.10000000149011612`, and read back exactly, the file read only as the
+  runner writes it (decision 156). An online edit compares an initial value exactly, so
+  `var x real 0` changed to `var x real 0.0` is reported, `{0, 0.0}` (decision 157).
+- `real`, `lreal`, `sqrt`, the 34 conversions and the 16 truncations are reserved in any
+  case in every `.ld` file, and the two type words in every `.logex` file too.
 
 ### Two pulse coils
 
@@ -3172,8 +3300,8 @@ in every cycle's outputs at the value it holds.
   Function Block Diagram, SFC or Instruction List, no graphical editor, and no
   paste-compatibility with IEC's textual forms.
 - **Not everything a controller has.** One resource a configuration; bool, the eight
-  integer widths and the four bit strings only, no real, no
-  arrays or structures; a jump forward only; no retained
+  integer widths, the four bit strings and the two reals only, no
+  arrays or structures, and no NaN or infinity in a real; a jump forward only; no retained
   values, so a warm restart is a cold one; and forcing for inputs only, an output never
   forced.
 

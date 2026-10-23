@@ -7505,6 +7505,577 @@ defmodule Logex.ApiContractTest do
     end)
   end
 
+  # ---- M5-10: the reals, against IEEE 754 and IEC's rules restated ---------------------
+
+  # What the real walk must be seen to do, at least once each.
+  @re_reach [
+    :single_rounded,
+    :saturated_real,
+    :saturated_lreal,
+    :flushed_real,
+    :flushed_lreal,
+    :negative_zero,
+    :div_by_zero,
+    :negative_sqrt,
+    :widened_int,
+    :rounded_tie,
+    :conversion_wrapped,
+    :truncation_wrapped,
+    :narrowed,
+    :de_energised,
+    :restarted,
+    :edit_kept,
+    :event_fault
+  ]
+
+  # A single's largest finite value and its smallest normal one, a double's, and the least
+  # magnitude a single rounds to infinity from, 2^128 - 2^103, half a step past its
+  # largest: IEEE 754's binary32 and binary64, restated, never read from Logex.Real.
+  @re_single_max 3.4028234663852886e38
+  @re_single_min 1.1754943508222875e-38
+  @re_single_past 3.4028235677973366e38
+  @re_double_max 1.7976931348623157e308
+  @re_double_min 2.2250738585072014e-308
+
+  # The tags: two real inputs and two integer ones, two vars, two real outputs, two integer
+  # outputs and two coils. A real is held to a single, an lreal to a double.
+  @re_types %{
+    "x0" => :real,
+    "x1" => :lreal,
+    "i0" => :int,
+    "d0" => :dint,
+    "v0" => :real,
+    "v1" => :lreal,
+    "y0" => :real,
+    "y1" => :lreal,
+    "k0" => :int,
+    "k1" => :dint
+  }
+
+  @re_inputs ~w(g x0 x1 i0 d0)
+
+  # Values near each type's limits, at 0, at ties, at subnormals and past an integer's
+  # range, which an input and a var take.
+  @re_pool %{
+    real: [
+      0.0,
+      1.0,
+      -1.0,
+      0.1,
+      2.5,
+      -2.5,
+      0.5,
+      -1.5,
+      32767.5,
+      40000.7,
+      -32768.4,
+      1.0e20,
+      -1.0e20,
+      1.0e-20,
+      3.0e38,
+      -3.0e38,
+      @re_single_max,
+      1.2e-38,
+      16_777_217.0
+    ],
+    lreal: [
+      0.0,
+      1.0,
+      -0.5,
+      0.1,
+      2.5,
+      3.5,
+      2_147_483_648.5,
+      -2_147_483_649.5,
+      1.0e300,
+      -1.0e300,
+      @re_double_max,
+      2.3e-308,
+      1.0e-160,
+      3.5e38,
+      -3.5e38,
+      1.0e-40
+    ],
+    int: [0, 1, -1, 7, -4, 32_767, -32_768],
+    dint: [0, -7, 9, 2_147_483_647, -2_147_483_648, 16_777_217]
+  }
+
+  # Literals by the real type they are written for: each of its type's range, a real one
+  # spelled by Float.to_string/1, which the lexer reads back as written.
+  @re_literals %{
+    real: [0.0, 1.5, -2.5, 0.1, 3.0e38, 1.0e-30, 16_777_216, 7, -3, 0.5, 1.0e-40],
+    lreal: [0.0, 0.1, 1.0e308, -1.0e308, 1.0e-300, 2.5, 7, -3, 9_007_199_254_740_992]
+  }
+
+  @re_ops [:add, :sub, :mul, :div, :neg, :abs, :sqrt, :conv, :conv]
+
+  # Each conversion and truncation the walk draws, its source tag and its destination.
+  @re_conversions [
+    {:real_to_int, "v0", "k0"},
+    {:real_to_dint, "x0", "k1"},
+    {:lreal_to_int, "x1", "k0"},
+    {:lreal_to_dint, "v1", "k1"},
+    {:real_trunc_int, "x0", "k0"},
+    {:lreal_trunc_dint, "x1", "k1"},
+    {:real_to_lreal, "x0", "y1"},
+    {:lreal_to_real, "x1", "y0"},
+    {:lreal_to_real, "v1", "v0"}
+  ]
+
+  test "real arithmetic and conversions run as IEEE 754 and IEC's rules restated: every " <>
+         "scan's results, power out and faults agree with an oracle that knows nothing of " <>
+         "logex, alone, across a restart and an edit, and in a resource" do
+    :rand.seed(:exsss, {2026, 10, 510})
+
+    for _ <- 1..120 do
+      spec = re_spec()
+      program = re_program(spec)
+      re_lone(spec, program, 16)
+      re_resource(spec, program, 6)
+    end
+
+    assert Process.get(:re_reach, MapSet.new()) == MapSet.new(@re_reach)
+  end
+
+  defp re_reached(name), do: reached(:re_reach, name)
+
+  defp re_spec do
+    %{
+      inits: %{"v0" => pick(@re_literals.real), "v1" => pick(@re_literals.lreal)},
+      rungs: for(_ <- 1..Enum.random(2..6), do: re_rung())
+    }
+  end
+
+  defp re_rung do
+    {pick([nil, nil, {:xic, "g"}, {:xio, "g"}]),
+     for(_ <- 1..Enum.random(1..3), do: re_instruction(pick(@re_ops))), pick([nil, "ok0", "ok1"])}
+  end
+
+  # The sources an instruction into a real destination may read: the tags of a type
+  # Figure 11 widens into it, an int into either real and a dint into an lreal alone, and
+  # literals of its range; a literal zero divisor and a literal negative root are refused
+  # (decisions 150 and 167), so neither is drawn.
+  defp re_sources(:real), do: ~w(x0 v0 y0 i0)
+  defp re_sources(:lreal), do: ~w(x0 x1 v0 v1 y0 y1 i0 d0)
+
+  defp re_instruction(:conv), do: pick(@re_conversions)
+
+  defp re_instruction(op) do
+    destination = pick(~w(v0 v1 y0 y1))
+    into = @re_types[destination]
+    {op, re_operands(op, into), destination}
+  end
+
+  defp re_operands(op, into) when op in [:neg, :abs], do: [re_source(into)]
+  defp re_operands(:sqrt, into), do: [re_nonnegative(re_source(into))]
+  defp re_operands(:div, into), do: [re_source(into), re_nonzero(re_source(into))]
+  defp re_operands(_op, into), do: [re_source(into), re_source(into)]
+
+  defp re_source(into) do
+    if :rand.uniform(3) == 1,
+      do: {:lit, pick(@re_literals[into])},
+      else: {:tag, pick(re_sources(into))}
+  end
+
+  defp re_nonzero({:lit, n}) when n == 0, do: {:lit, 0.5}
+  defp re_nonzero(source), do: source
+  defp re_nonnegative({:lit, n}) when n < 0, do: {:lit, -n}
+  defp re_nonnegative(source), do: source
+
+  defp re_text({contact, instructions, coil}) do
+    Enum.join(
+      re_contact(contact) ++
+        Enum.map(instructions, &re_instruction_text/1) ++ if(coil, do: ["ote #{coil}"], else: []),
+      " "
+    )
+  end
+
+  defp re_contact(nil), do: []
+  defp re_contact({c, tag}), do: ["#{c} #{tag}"]
+
+  defp re_instruction_text({op, sources, destination}) when is_list(sources),
+    do: Enum.join(["#{op}" | Enum.map(sources, &re_operand_text/1)] ++ [destination], " ")
+
+  defp re_instruction_text({op, source, destination}), do: "#{op} #{source} #{destination}"
+
+  defp re_operand_text({:lit, n}) when is_float(n), do: Float.to_string(n)
+  defp re_operand_text({:lit, n}), do: Integer.to_string(n)
+  defp re_operand_text({:tag, tag}), do: tag
+
+  defp re_declarations(spec),
+    do: [
+      "var_input g bool",
+      "var_input x0 real",
+      "var_input x1 lreal",
+      "var_input i0 int",
+      "var_input d0 dint",
+      "var v0 real #{re_operand_text({:lit, spec.inits["v0"]})}",
+      "var v1 lreal #{re_operand_text({:lit, spec.inits["v1"]})}",
+      "var_output y0 real",
+      "var_output y1 lreal",
+      "var_output k0 int",
+      "var_output k1 dint",
+      "var_output ok0 bool",
+      "var_output ok1 bool"
+    ]
+
+  defp re_source_text(spec),
+    do: Enum.join(re_declarations(spec) ++ Enum.map(spec.rungs, &re_text/1), "\n")
+
+  defp re_program(spec) do
+    {:ok, program} = Logex.compile(re_source_text(spec), name: "re")
+    program
+  end
+
+  # ---- the oracle: IEEE 754's rounding and IEC's rules, restated -----------------------
+
+  # A single: the nearest binary32 value to a double, by the BEAM's own 32-bit encoding,
+  # which rounds to even, below the least magnitude that rounds to infinity.
+  defp re_single(x) do
+    <<y::float-32>> = <<x::float-32>>
+    y
+  end
+
+  # A value stored into a real type, with its power: past the type's largest finite value
+  # saturated there, the sign kept, with no power; −0.0 and a magnitude below the smallest
+  # normal value 0.0, with power (decision 150); a `real` rounded to its single.
+  defp re_store(:real, x) when abs(x) >= @re_single_past do
+    re_reached(:saturated_real)
+    {false, if(x > 0, do: @re_single_max, else: -@re_single_max)}
+  end
+
+  defp re_store(:real, x) do
+    y = re_single(x * 1.0)
+    if y != x, do: re_reached(:single_rounded)
+    {true, re_flushed(y, @re_single_min, :flushed_real)}
+  end
+
+  defp re_store(:lreal, {:overflow, sign}) do
+    re_reached(:saturated_lreal)
+    {false, sign * @re_double_max}
+  end
+
+  defp re_store(:lreal, x), do: {true, re_flushed(x * 1.0, @re_double_min, :flushed_lreal)}
+
+  defp re_flushed(y, _min, _flush) when y === -0.0 do
+    re_reached(:negative_zero)
+    0.0
+  end
+
+  defp re_flushed(y, min, flush) when y != 0 and abs(y) < min do
+    re_reached(flush)
+    0.0
+  end
+
+  defp re_flushed(y, _min, _flush), do: y
+
+  # An lreal's result past a double's range, which the BEAM raises on, by its sign.
+  defp re_computed(fun, sign) do
+    fun.()
+  rescue
+    ArithmeticError -> {:overflow, sign}
+  end
+
+  defp re_sign(x) when x < 0, do: -1
+  defp re_sign(_x), do: 1
+
+  defp re_initial(spec) do
+    Map.merge(
+      %{
+        "g" => 0,
+        "x0" => 0.0,
+        "x1" => 0.0,
+        "i0" => 0,
+        "d0" => 0,
+        "y0" => 0.0,
+        "y1" => 0.0,
+        "k0" => 0,
+        "k1" => 0,
+        "ok0" => 0,
+        "ok1" => 0
+      },
+      %{
+        "v0" => elem(re_store(:real, spec.inits["v0"]), 1),
+        "v1" => elem(re_store(:lreal, spec.inits["v1"]), 1)
+      }
+    )
+  end
+
+  defp re_scan(spec, env) do
+    {env, faults, _line} =
+      Enum.reduce(spec.rungs, {env, [], length(re_declarations(spec)) + 1}, fn rung,
+                                                                               {env, faults, line} ->
+        {env, more} = re_rung_run(rung, env, line)
+        {env, faults ++ more, line + 1}
+      end)
+
+    {env, faults}
+  end
+
+  defp re_rung_run({contact, instructions, coil}, env, line) do
+    power = re_powered(contact, env)
+    if not power, do: re_reached(:de_energised)
+
+    {powered, env, faults} =
+      Enum.reduce(instructions, {power, env, []}, fn instruction, {now, env, faults} ->
+        re_run(instruction, now, env, line, faults)
+      end)
+
+    env = if coil, do: Map.put(env, coil, if(powered, do: 1, else: 0)), else: env
+    {env, Enum.reverse(faults)}
+  end
+
+  defp re_powered(nil, _env), do: true
+  defp re_powered({:xic, tag}, env), do: env[tag] == 1
+  defp re_powered({:xio, tag}, env), do: env[tag] != 1
+
+  defp re_run(_instruction, false, env, _line, faults), do: {false, env, faults}
+
+  defp re_run({op, source, destination}, true, env, _line, faults) when is_binary(source) do
+    {power, value} = re_converted(op, env[source])
+    {power, Map.put(env, destination, value), faults}
+  end
+
+  defp re_run({op, sources, destination}, true, env, line, faults) do
+    values = Enum.map(sources, &re_value(&1, env))
+    into = @re_types[destination]
+
+    if Enum.any?(sources, &match?({:tag, tag} when tag in ["i0", "d0"], &1)),
+      do: re_reached(:widened_int)
+
+    re_arithmetic(op, values, {into, destination, line}, env, faults)
+  end
+
+  defp re_value({:lit, n}, _env), do: n
+  defp re_value({:tag, tag}, env), do: Map.fetch!(env, tag)
+
+  # A zero divisor writes 0.0 with no power and the minor fault (decision 150); a negative
+  # root 0.0 with no power and `:negative_sqrt`, reading the source (decision 164).
+  defp re_arithmetic(:div, [_a, b], {_into, destination, line}, env, faults) when b == 0 do
+    re_reached(:div_by_zero)
+    {false, Map.put(env, destination, 0.0), [{:divide_by_zero, :div, line, nil} | faults]}
+  end
+
+  defp re_arithmetic(:sqrt, [a], {_into, destination, line}, env, faults) when a < 0 do
+    re_reached(:negative_sqrt)
+    {false, Map.put(env, destination, 0.0), [{:negative_sqrt, :sqrt, line, a} | faults]}
+  end
+
+  defp re_arithmetic(op, values, {into, destination, _line}, env, faults) do
+    {power, value} = re_store(into, re_exact(op, values, into))
+    {power, Map.put(env, destination, value), faults}
+  end
+
+  # Each operation on the doubles the sources widen to, an integer's exactly where it is
+  # one, computed once and rounded once into its destination's type; an lreal's past the
+  # double's range an overflow of its sign.
+  # An overflow of a sum or a difference comes only of two values of one sign, the first's.
+  defp re_exact(:add, [a, b], into), do: re_in(into, fn -> a + b end, re_sign(a))
+  defp re_exact(:sub, [a, b], into), do: re_in(into, fn -> a - b end, re_sign(a))
+  defp re_exact(:mul, [a, b], into), do: re_in(into, fn -> a * b end, re_sign(a) * re_sign(b))
+  defp re_exact(:div, [a, b], into), do: re_in(into, fn -> a / b end, re_sign(a) * re_sign(b))
+  defp re_exact(:neg, [a], _into), do: -a
+  defp re_exact(:abs, [a], _into), do: abs(a)
+  defp re_exact(:sqrt, [a], _into), do: :math.sqrt(a)
+
+  # A `real`'s sources are singles and small integers, whose results a double holds.
+  defp re_in(:lreal, fun, sign), do: re_computed(fun, sign)
+  defp re_in(:real, fun, _sign), do: fun.()
+
+  # IEC's conversions, restated: into an integer, the nearest, a tie to the even
+  # neighbour, wrapped into the target by its remainder 2^N, with no power where it did not
+  # fit (decisions 148 and 161); a truncation toward zero, wrapped so too (decision 162);
+  # and between the reals, the nearest value of the target (decision 150).
+  defp re_converted(op, value) do
+    case Atom.to_string(op) |> String.split(["_to_", "_trunc_"]) do
+      [_from, "lreal"] -> re_store(:lreal, value)
+      [_from, "real"] -> re_narrowed(value)
+      [from, to] -> re_integer(op, from, value, String.to_atom(to))
+    end
+  end
+
+  defp re_narrowed(value) do
+    re_reached(:narrowed)
+    re_store(:real, value)
+  end
+
+  defp re_integer(op, _from, value, to) do
+    truncating = String.contains?(Atom.to_string(op), "_trunc_")
+    whole = if truncating, do: trunc(value), else: re_even(value)
+    {bits, low, high} = re_range(to)
+
+    if whole in low..high//1 do
+      {true, whole}
+    else
+      re_reached(if(truncating, do: :truncation_wrapped, else: :conversion_wrapped))
+      span = Integer.pow(2, bits)
+      r = Integer.mod(whole - low, span) + low
+      {false, r}
+    end
+  end
+
+  defp re_range(:int), do: {16, -32_768, 32_767}
+  defp re_range(:dint), do: {32, -2_147_483_648, 2_147_483_647}
+
+  # The nearest integer, a tie to the even one, from the floor and the fraction left.
+  defp re_even(value) do
+    floor = floor(value)
+    fraction = value - floor
+
+    cond do
+      fraction > 0.5 ->
+        floor + 1
+
+      fraction < 0.5 ->
+        floor
+
+      true ->
+        re_reached(:rounded_tie)
+        if rem(floor, 2) == 0, do: floor, else: floor + 1
+    end
+  end
+
+  defp re_fault({kind, instruction, line, read}),
+    do: %Logex.Fault{
+      severity: :minor,
+      kind: kind,
+      instruction: instruction,
+      path: nil,
+      file: nil,
+      line: line,
+      read: read
+    }
+
+  defp re_outputs(env), do: Map.take(env, ~w(y0 y1 k0 k1 ok0 ok1))
+
+  # A host's input: a real's drawn from its pool, an integer's from its type's, each stored
+  # by the scan as its type's nearest value.
+  defp re_inputs do
+    %{
+      "g" => pick([1, 1, 1, 0]),
+      "x0" => pick(@re_pool.real),
+      "x1" => pick(@re_pool.lreal),
+      "i0" => pick(@re_pool.int),
+      "d0" => pick(@re_pool.dint)
+    }
+  end
+
+  defp re_taken(inputs),
+    do: %{
+      inputs
+      | "x0" => elem(re_store(:real, inputs["x0"]), 1),
+        "x1" => elem(re_store(:lreal, inputs["x1"]), 1)
+    }
+
+  # Every real a state holds is one of its type's values: a float, never −0.0, an
+  # infinity or a subnormal, a `real`'s a single.
+  defp re_held?(env),
+    do:
+      Enum.all?(@re_types, fn
+        {name, :real} ->
+          re_value?(env[name], @re_single_min) and re_single(env[name]) === env[name]
+
+        {name, :lreal} ->
+          re_value?(env[name], @re_double_min)
+
+        {name, _integer} ->
+          is_integer(env[name])
+      end)
+
+  defp re_value?(x, min), do: is_float(x) and x !== -0.0 and (x === 0.0 or abs(x) >= min)
+
+  # ---- the walks ------------------------------------------------------------------------
+
+  defp re_lone(spec, program, scans) do
+    Enum.reduce(1..scans, {spec, program, Runtime.instance(program), re_initial(spec)}, fn
+      n, {spec, program, state, model} ->
+        {state, model} = re_maybe_restart(n == div(scans, 3), spec, program, state, model)
+        {spec, program, state} = re_maybe_edit(n == div(scans, 2), spec, program, state)
+        inputs = re_inputs()
+        {model, faults} = re_scan(spec, Map.merge(model, re_taken(inputs)))
+
+        {outputs, state} =
+          Runtime.call(program, state, inputs, %Scan{now: state.now + 10, first: state.first})
+
+        assert outputs === re_outputs(model), re_source_text(spec) <> "\n" <> inspect(inputs)
+        assert state.env === model, re_source_text(spec) <> "\n" <> inspect(inputs)
+        assert state.faults == Enum.map(faults, &re_fault/1), re_source_text(spec)
+        assert re_held?(state.env)
+        {spec, program, state, model}
+    end)
+  end
+
+  defp re_maybe_restart(false, _spec, _program, state, model), do: {state, model}
+
+  defp re_maybe_restart(true, spec, program, state, model) do
+    restarted = Runtime.restart(program, state, pick([:cold, :warm]))
+    model = Map.merge(re_initial(spec), Map.take(model, @re_inputs))
+    assert restarted.env === model
+    re_reached(:restarted)
+    {restarted, model}
+  end
+
+  defp re_maybe_edit(false, spec, program, state), do: {spec, program, state}
+
+  # An edit to another program of the same tags and initial values keeps every value as it
+  # was, each compared exactly.
+  defp re_maybe_edit(true, spec, program, state) do
+    candidate_spec = %{re_spec() | inits: spec.inits}
+    candidate = re_program(candidate_spec)
+    {:ok, edit, _forecast} = Edit.accept(program, candidate, state)
+    {edit, switched, report} = Edit.test(edit, state)
+    {_program, switched, _report} = Edit.assemble(edit, switched)
+    refute Enum.any?(report, &match?({:initial_changed, _, _}, &1))
+    assert switched.env === state.env
+    re_reached(:edit_kept)
+    {candidate_spec, candidate, switched}
+  end
+
+  # A resource whose instance's real inputs come from real and lreal input points, each
+  # stored as its nearest value, and whose faults are events.
+  defp re_resource(spec, program, cycles) do
+    config =
+      Logex.Configuration.new!(
+        name: "plant",
+        programs: [program],
+        tasks: [%Logex.Configuration.Task{name: "fast", interval: 10, priority: 1}],
+        globals:
+          for(
+            {name, i} <- Enum.with_index(@re_inputs),
+            do: %Logex.Configuration.Global{
+              name: name,
+              type: Map.get(@re_types, name, :bool),
+              at: "panel.i.#{i}"
+            }
+          ),
+        instances: [%Logex.Configuration.Instance{name: "m1", type: "re", task: "fast"}],
+        connections:
+          for(
+            input <- @re_inputs,
+            do: %Logex.Configuration.Connection{instance: "m1", member: input, to: input}
+          )
+      )
+
+    Enum.reduce(1..cycles, {Runtime.start(config), re_initial(spec), 0}, fn
+      _, {rt, m1, now} ->
+        sample = re_inputs()
+        {m1, faults} = re_scan(spec, Map.merge(m1, re_taken(sample)))
+        {rt, _outputs, events} = Runtime.cycle(rt, if(now == 0, do: 0, else: 10), sample)
+        at = if now == 0, do: 0, else: now
+        now = if now == 0, do: 10, else: now + 10
+
+        assert events ==
+                 [{:ran, "fast", "m1", at}] ++
+                   Enum.map(faults, &{:fault, "fast", "m1", re_fault(&1)})
+
+        if faults != [], do: re_reached(:event_fault)
+        %Runtime{instances: %{"m1" => s1}} = rt
+        assert s1.env === m1
+        for input <- ~w(x0 x1), do: assert(Runtime.get!(rt, input) === m1[input])
+        {rt, m1, now}
+    end)
+  end
+
   # ---- M3-4: the pulse coils, against IEC's transition-sensing coils restated ----------
 
   # What the coil walk must be seen to do, at least once each.

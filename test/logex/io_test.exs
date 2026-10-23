@@ -629,19 +629,19 @@ defmodule Logex.IOTest do
                      fn -> Sim.set(sim, opaque(%{address => 1})) end
       end
 
-      for value <- [1.5, :on] do
-        assert_raise ArgumentError, "a point's value is an integer, got: #{inspect(value)}", fn ->
+      for value <- [nil, :on, "1"] do
+        assert_raise ArgumentError, "a point's value is a number, got: #{inspect(value)}", fn ->
           Sim.set(sim, [0], opaque(value))
         end
 
-        assert_raise ArgumentError, "a point's value is an integer, got: #{inspect(value)}", fn ->
+        assert_raise ArgumentError, "a point's value is a number, got: #{inspect(value)}", fn ->
           Sim.write(opaque(%{[0] => value}), state)
         end
       end
 
       for values <- [[{[0], 1}], MapSet.new([1])] do
         message =
-          "values go by address, a map of addresses to integers, got: #{inspect(values)}"
+          "values go by address, a map of addresses to numbers, got: #{inspect(values)}"
 
         assert_raise ArgumentError, message, fn -> Sim.set(sim, opaque(values)) end
         assert_raise ArgumentError, message, fn -> Sim.write(opaque(values), state) end
