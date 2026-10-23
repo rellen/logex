@@ -7837,8 +7837,8 @@ defmodule Logex.ApiContractTest do
   end
 
   defp re_run({op, sources, destination}, true, env, line, faults) do
-    values = Enum.map(sources, &re_value(&1, env))
     into = @re_types[destination]
+    values = Enum.map(sources, &re_value(&1, env, into))
 
     if Enum.any?(sources, &match?({:tag, tag} when tag in ["i0", "d0"], &1)),
       do: re_reached(:widened_int)
@@ -7846,8 +7846,18 @@ defmodule Logex.ApiContractTest do
     re_arithmetic(op, values, {into, destination, line}, env, faults)
   end
 
-  defp re_value({:lit, n}, _env), do: n
-  defp re_value({:tag, tag}, env), do: Map.fetch!(env, tag)
+  # A real literal is a value of the real its instruction computes in, its destination's
+  # (M5-10's review, provisional): a `real`'s 0.1 the single nearest it, and 1.0e-40, below
+  # a single's normal range, 0.0; an integer literal the integer it spells.
+  defp re_value({:lit, n}, _env, into) when is_float(n), do: re_literal(into, n)
+  defp re_value({:lit, n}, _env, _into), do: n
+  defp re_value({:tag, tag}, env, _into), do: Map.fetch!(env, tag)
+
+  defp re_literal(:real, x), do: re_normal(re_single(x), @re_single_min)
+  defp re_literal(:lreal, x), do: re_normal(x, @re_double_min)
+
+  defp re_normal(x, min) when abs(x) < min, do: 0.0
+  defp re_normal(x, _min), do: x
 
   # A zero divisor writes 0.0 with no power and the minor fault (decision 150); a negative
   # root 0.0 with no power and `:negative_sqrt`, reading the source (decision 164).

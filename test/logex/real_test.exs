@@ -435,6 +435,163 @@ defmodule Logex.RealTest do
     end
   end
 
+  # M5-10's review (provisional): a real literal is a value of the real its slot computes
+  # in, as Logix stores an unsuffixed floating-point immediate as a REAL (1756-RM018A
+  # p.870), IEC's rule for an untyped literal's type unverified, so a setpoint moved into a
+  # `real` and compared with the very literal is reached. Each is restated through the
+  # BEAM's 32-bit encoding, `single/1`.
+  describe "a real literal is its slot's real (M5-10's review)" do
+    test "`move 37.1 sp` then `ge sp 37.1` and `eq sp 37.1` are true, in a real and an lreal" do
+      source =
+        "var sp real\nvar lp lreal\nvar_output lamp bool\nvar_output same bool\n" <>
+          "var_output under bool\nvar_output l bool\nvar_output m bool\n" <>
+          "move 37.1 sp\nmove 0.1 lp\nge sp 37.1 ote lamp\neq sp 37.1 ote same\n" <>
+          "gt 37.1 sp ote under\neq lp 0.1 ote l\neq 0.1 lp ote m"
+
+      program = program(source)
+      state = Runtime.instance(program)
+      scan = %Scan{now: 0, first: true}
+      {outputs, state} = Runtime.call(program, state, %{}, scan)
+
+      assert outputs == %{"lamp" => 1, "same" => 1, "under" => 0, "l" => 1, "m" => 1}
+      assert state.env["sp"] === single(37.1)
+      assert state.env["lp"] === 0.1
+      assert {^outputs, _state} = Runtime.call(program, state, %{}, %{scan | first: false})
+    end
+
+    test "a comparison's literal is the other operand's real, either side" do
+      assert outputs(
+               "var_input r real\nvar_output p bool\nvar_output q bool\nvar_output s bool\n" <>
+                 "var_output t bool\neq r 0.1 ote p\neq 0.1 r ote q\ngt r 0.1 ote s\n" <>
+                 "lt 0.1 r ote t",
+               %{"r" => single(0.1)}
+             ) == %{"p" => 1, "q" => 1, "s" => 0, "t" => 0}
+
+      # An lreal's literal is the double, which the single 0.1 is not.
+      assert outputs(
+               "var_input l lreal\nvar_output p bool\nvar_output q bool\neq l 0.1 ote p\n" <>
+                 "gt l 0.1 ote q",
+               %{"l" => single(0.1)}
+             ) == %{"p" => 0, "q" => 1}
+
+      # A subnormal literal in an lreal's slot is 0.0, a value an lreal holds.
+      assert outputs("var_input l lreal\nvar_output p bool\neq l 1.0e-310 ote p", %{"l" => 0.0}) ==
+               %{"p" => 1}
+
+      # 16777217.0 in a `real`'s slot is the single 16777216.0.
+      assert outputs("var_input r real\nvar_output p bool\neq r 16777217.0 ote p", %{
+               "r" => 16_777_216.0
+             }) == %{"p" => 1}
+    end
+
+    # The review's cases: `mul` and `div` by a literal computed on the double differ from
+    # the single's in 10% to 57% of draws; here, one of each, in a `real` and an `lreal`.
+    test "an arithmetic literal is its destination's real, rounded once" do
+      {outputs, env, []} =
+        scan(
+          "var_input a real\nvar_output q real\nvar_output m real\nvar_output s real\n" <>
+            "var_output l lreal\nvar_output n lreal\n" <>
+            "div a 0.1 q\nmul a 1.1 m\nadd a 0.3 s\ndiv a 0.1 l\nmul a 1.1 n",
+          %{"a" => 37.1}
+        )
+
+      a = single(37.1)
+      assert env["a"] === a
+      assert outputs["q"] === single(a / single(0.1))
+      assert outputs["q"] === 370.9999694824219
+      assert single(a / 0.1) === 371.0
+      assert outputs["m"] === single(a * single(1.1))
+      assert outputs["s"] === single(a + single(0.3))
+      assert outputs["l"] === a / 0.1
+      assert outputs["n"] === a * 1.1
+    end
+
+    test "a conversion's literal is its source type's real, and sqrt's its destination's" do
+      {outputs, _env, []} =
+        scan(
+          "var_output l lreal\nvar_output r real\nvar_output k lreal\nvar_output z real\n" <>
+            "var_output y lreal\n" <>
+            "real_to_lreal 0.1 l\nlreal_to_real 0.1 r\nsqrt 0.1 k\nsqrt 1.0e-40 z\n" <>
+            "real_to_lreal 1.0e-40 y"
+        )
+
+      assert outputs["l"] === 0.10000000149011612
+      assert outputs["r"] === single(0.1)
+      assert outputs["k"] === :math.sqrt(0.1)
+      # 1.0e-40 is below a single's normal range, so in a `real`'s slot it is 0.0.
+      assert outputs["z"] === 0.0
+      assert outputs["y"] === 0.0
+    end
+
+    # The rounded literal keeps its spelling, so every message quotes it as written, and an
+    # edit that only respells it changes no rung.
+    test "a rounded literal is quoted as written, and lowers to its single" do
+      program = program("var_output x real\nvar_output y lreal\nmove 0.1 x move 0.1 y")
+
+      assert [
+               rung: [
+                 {:move, 3, [{:real_lit, 3, 0.10000000149011612, "0.1"}, {:name, 3, "x"}]},
+                 {:move, 3, [{:real_lit, 3, 0.1}, {:name, 3, "y"}]}
+               ]
+             ] = program.rungs
+
+      assert warnings("var_output x real\nadd 0.1 1.0e-1 x") == [
+               {2, "`add` reads two literals, `0.1` and `1.0e-1`: its result never changes"}
+             ]
+
+      running = program("var_output x real\nvar r real\nmove r x\nmove 0.1 r")
+      state = Runtime.instance(running)
+      {_outputs, state} = Runtime.call(running, state, %{}, %Scan{now: 0, first: true})
+
+      assert {:ok, _edit, []} =
+               Edit.accept(
+                 running,
+                 program("var_output x real\nvar r real\nmove r x\nmove 1.0e-1 r"),
+                 state
+               )
+    end
+
+    # A compiled body holds each real literal at its slot's value, which lowering its
+    # spelling again gives, and no other: a hand edit of the value, a single in an lreal's
+    # slot or a double in a real's, is no compiled body.
+    test "a compiled body's real literal is its slot's value, and no other" do
+      {:ok, keep} =
+        Logex.compile(
+          "function_block keep\nvar_output x real\nvar_output y lreal\nmove 0.1 x\nmove 0.1 y",
+          name: "keep"
+        )
+
+      body = keep.body
+      assert Logex.Compiler.lowered?(body)
+
+      [
+        rung: [{:move, 4, [rounded, x]}],
+        rung: [{:move, 5, [plain, y]}]
+      ] = body.rungs
+
+      assert rounded == {:real_lit, 4, 0.10000000149011612, "0.1"}
+      assert plain == {:real_lit, 5, 0.1}
+
+      for {real, lreal} <- [
+            {{:real_lit, 4, 0.1, "0.1"}, plain},
+            {{:real_lit, 4, 0.1}, plain},
+            {rounded, {:real_lit, 5, 0.10000000149011612, "0.1"}},
+            {rounded, {:real_lit, 5, 0.2, "0.1"}},
+            {rounded, {:real_lit, 5, 0.1, "0.1"}},
+            {rounded, {:real_lit, 5, 0.1, "zero"}}
+          ] do
+        rungs = [rung: [{:move, 4, [real, x]}], rung: [{:move, 5, [lreal, y]}]]
+
+        refute Logex.Compiler.lowered?(%{
+                 body
+                 | rungs: rungs,
+                   warnings: Logex.Warnings.of(rungs, body.tags)
+               }),
+               inspect({real, lreal})
+      end
+    end
+  end
+
   describe "the 34 real conversions (decisions 148 and 161)" do
     defp converted(word, from, value) do
       to = word |> String.split(["_to_", "_trunc_"]) |> List.last()

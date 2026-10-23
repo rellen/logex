@@ -465,7 +465,7 @@ defmodule Logex.Compiler do
     do: Parser.plain_real?(value)
 
   defp ir_operand?({:real_lit, line, value, spelling}) when is_integer(line) and line > 0,
-    do: is_float(value) and Parser.spelled?(value, spelling)
+    do: is_float(value) and is_binary(spelling) and real_spelling(spelling) != nil
 
   defp ir_operand?({:member, line, path}) when is_integer(line) and line > 0,
     do: proper?(path, &is_binary/1)
@@ -506,7 +506,22 @@ defmodule Logex.Compiler do
   defp unlowered_operand({:bit, line, _path, _n, _mask, name}), do: {:name, line, name}
   defp unlowered_operand({:bit_at, line, _path, _index, _width, name}), do: {:name, line, name}
 
+  # M5-10's review: a real literal back to the leaf its spelling lexes to, its slot's
+  # rounding undone, so that lowering it again must give the very value its slot computes
+  # in and no other.
+  defp unlowered_operand({:real_lit, line, _value, spelling}),
+    do: real_leaf(real_spelling(spelling), line)
+
   defp unlowered_operand(operand), do: operand
+
+  defp real_spelling(spelling), do: real_token(Logex.Lexer.tokenize(spelling))
+
+  defp real_token({:ok, [{:real_lit, _at, _value} = token], _end}), do: token
+  defp real_token({:ok, [{:real_lit, _at, _value, _spelling} = token], _end}), do: token
+  defp real_token(_other), do: nil
+
+  defp real_leaf({:real_lit, _at, value}, line), do: {:real_lit, line, value}
+  defp real_leaf({:real_lit, _at, value, spelling}, line), do: {:real_lit, line, value, spelling}
 
   # A timer's preset is the compiler's to give, from the `ton` that runs it.
   defp unpreset(tags),
@@ -1571,7 +1586,7 @@ defmodule Logex.Compiler do
     diagnostics = check_preset(signature, operands, {symbol, at}, known, diagnostics)
     diagnostics = check_literals(symbol, operands, {at, scope}, diagnostics)
     diagnostics = check_shift(symbol, operands, at, diagnostics)
-    lowered = {symbol, line, Enum.zip_with(signature, operands, &slot_operand(&1, &2, scope))}
+    lowered = {symbol, line, slot_operands(signature, operands, scope, {signature, operands})}
     lower(rest, [lowered | ir], diagnostics, known)
   end
 
@@ -1887,6 +1902,64 @@ defmodule Logex.Compiler do
   # whatever it holds; anything else lowers as any operand does.
   defp slot_operand({:label, _}, {:name, line, name}, _scope), do: {:label, line, name}
   defp slot_operand(_slot, operand, scope), do: bit_operand(operand, scope)
+
+  # Each operand lowered in its slot, the instruction whole carried along for a real
+  # literal's, which alone needs the others; operands past the slots were reported by
+  # check_count/5. A recursion of its own, as M5-9's walk has, so an instruction of no real
+  # literal lowers in fewer reductions than a zip did.
+  defp slot_operands([slot | slots], [operand | operands], scope, whole)
+       when is_real_lit(operand),
+       do: [
+         real_operand(slot, operand, whole, scope) | slot_operands(slots, operands, scope, whole)
+       ]
+
+  defp slot_operands([slot | slots], [operand | operands], scope, whole),
+    do: [slot_operand(slot, operand, scope) | slot_operands(slots, operands, scope, whole)]
+
+  defp slot_operands(_slots, _operands, _scope, _whole), do: []
+
+  # M5-10's review (provisional): a real literal is a value of the real its slot computes
+  # in, as Logix stores an unsuffixed floating-point immediate as a REAL (1756-RM018A
+  # p.870), IEC's rule for an untyped literal's type unverified: a conversion's source its
+  # `from` type, `real_to_int 0.1 i` a `real`'s 0.1; `move`, the arithmetic and `sqrt`
+  # their destination's, `add a 0.1 r` a `real`'s; a comparison the other operand's, `eq r
+  # 0.1` a `real`'s; and anything else, two literals among them, as it lexed, a double.
+  # In a `real` it is the nearest single, rounded once, so that `move 0.1 r` then `eq r 0.1`
+  # is true; its spelling kept, `{:real_lit, line, 0.10000000149011612, "0.1"}`, so every
+  # message quotes it as written. A literal past its slot's range was refused, and is left.
+  defp real_operand({:value, type}, literal, _whole, _scope) when type in @reals,
+    do: in_real(type, literal)
+
+  defp real_operand(_slot, literal, {signature, operands}, scope),
+    do: in_real(context(signature, operands, operands, scope), literal)
+
+  defp context([{:write, _} | _], [operand | _], _all, scope),
+    do: real_type(typed(:write, operand, scope))
+
+  defp context([_ | slots], [_ | operands], all, scope), do: context(slots, operands, all, scope)
+  defp context(_slots, _operands, all, scope), do: compared_with(all, scope)
+
+  defp compared_with([{:name, _, _} = operand | _], scope),
+    do: real_type(typed(:value, operand, scope))
+
+  defp compared_with([_ | operands], scope), do: compared_with(operands, scope)
+  defp compared_with([], _scope), do: nil
+
+  defp real_type(%Tag{type: type}) when type in @reals, do: type
+  defp real_type(_other), do: nil
+
+  defp in_real(nil, literal), do: literal
+
+  defp in_real(type, literal),
+    do: nearer(Logex.Real.in_range?(type, Parser.value(literal)), type, literal)
+
+  defp nearer(false, _type, literal), do: literal
+
+  defp nearer(true, type, literal),
+    do: kept(Logex.Real.nearest(type, Parser.value(literal)), literal)
+
+  defp kept(value, literal) when value === elem(literal, 2), do: literal
+  defp kept(value, literal), do: {:real_lit, elem(literal, 1), value, Parser.spelling(literal)}
 
   # M5-8 (decision 155): a bit, `status.3` or `t1.acc.3`, is lowered to its container's path
   # and its number, `{:bit, line, ["status"], 3, mask, "status.3"}`, with the mask a scan reads and
