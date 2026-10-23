@@ -219,7 +219,9 @@ defmodule Logex.Runtime do
   `Logex.compile/2`. Only a declared `var_input` may be set, by its name as a string, with
   a value that fits its type exactly, by `Logex.Declarations.fits?/2`: a bool is 0 or 1, a
   dint an integer from -2147483648 to 2147483647, and since M5-3 each integer width an
-  integer in its own range, a uint 0 to 65535. Every input problem in one call comes in
+  integer in its own range, a uint 0 to 65535, and since M5-10 a real any number within its
+  range, stored as its nearest value, 16777217 in a `real` as 16777216.0, 2^128 refused
+  (decision 166). Every input problem in one call comes in
   one raise, a line each, in key order. Inputs merge into the instance, so a host sends
   only what changed. Outputs are every `var_output`.
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
@@ -233,7 +235,10 @@ defmodule Logex.Runtime do
   "it is a dint, and its value must be an integer, found 37.5", retiring M1-4's reading
   of one for a state handed in; so since decision 184 is an instance's tag that holds no
   map, "it is a ton, and its value must be a map of its members, found 5", and since
-  decision 186 a timer's `last` that is no integer, and since decision 188 one later than the instance's `now`. A resource's instance is checked as each scan takes it, and before it
+  decision 186 a timer's `last` that is no integer, and since decision 188 one later than the instance's `now`,
+  and since M5-10 a real's value that is no value of its type, an integer, −0.0, a
+  subnormal or, in a `real`, a float no single is, "it is a real, and 0.1 is no value of
+  a real, whose nearest is 0.10000000149011612" (decision 150). A resource's instance is checked as each scan takes it, and before it
   each global a connection copies into it against the global's own type, which may be
   narrower than the var_input it fills (decision 159): "runtime.globals holds `a`
   outside its type: it is a uint, and 70000 is outside 0 to 65535". The check is linear in the state, a guard a value. Its env's keys are tag names: a scan

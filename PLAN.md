@@ -131,7 +131,14 @@ answers to its five questions (decisions 210 to 214, §3, M5-9) the same day, th
 confirming what was built and two changes: a literal in brackets, `status.[4]`, is the
 very bit `status.4`, so that text pasted from Logix compiles, and `not` and the shifts
 follow IEC's typing, computing in their source's type, so `not left mask` of a bool into
-a `word` is 16#0000 or 16#0001.
+a `word` is 16#0000 or 16#0001. And the tenth, M5-10, the same day: the reals, `real` and
+`lreal`, declared everywhere an integer is, every write rounded to its type's nearest
+value, a `real`'s a single, so `move 0.1 x` reads back as 0.10000000149011612, with no
+infinity, NaN, −0.0 or subnormal ever held; real literals, `37.5` and `1.5e3`; the
+arithmetic and comparisons by Figure 11; `sqrt`, a negative source 0.0 and a minor fault;
+the 34 real conversions, rounding a tie to even and then wrapping, and the 16
+truncations; and real points and forces, the forces file spelling a real so that it reads
+back exactly, with four questions put to the maintainer (§3, M5-10).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -6378,6 +6385,158 @@ the walks' cross-type reach and the documents.
   configuration file's round trip holds with reals; the contract walk's arithmetic oracle
   covers both reals; and the fan's speed in §4.4's plant is a `real` read from the sim,
   against an oracle that knows nothing of logex. *Size XL.*
+  *(Landed 2026-10-23, in four gated commits and one of documents.)* A spike first,
+  throwaway (`m510/spike`): a destination looked up in `move` cost two reductions a rung,
+  17 to 19, 12%, and a match on the scan in a clause's head none, so the reals follow
+  decision 197's pattern rather than §4.12's routine choice of a look-up at run time
+  (provisional reading 1); the BEAM's `<<x::float-32>>` rounds to the nearest single but
+  encodes infinity's bits past a single's range, which no match reads back, and an integer
+  rounded through a double rounds twice, `2^60 + 2^36 + 1` coming out at `2^60` where its
+  single is `2^60 + 2^37`; and the shortest decimal that rounds back to a single, tried at
+  1 to 9 significant digits, read back exactly over 50,000 random singles and 20,000
+  doubles. `360cb6a` surveys `real`, `lreal`, the 34 real conversions and the 16
+  truncations as two family stanzas, and `sqrt`, its conventional row from 1756-RM018A
+  pp.470–475, where Logix roots the absolute value of a negative source (p.474), and
+  `naming_test.exs` counts the five families, 182 mnemonics. `e10436d` records 30 curated
+  sources in the front end's golden record, each a lex error before M5-10. `a6c0a75`
+  lands the reals: the literal through the lexer, the parser, `well_formed!/1`, the
+  printer, `printer_test.exs`'s generator and `@required_shapes` (`:real_lit`,
+  `:negative_real_lit`, `:exponent_real_lit`, `:spelled_real_lit`), the golden record
+  regenerated and its diff read, 15 sources changed, the ones that now lex; `real` and
+  `lreal` as rows of the type table, declared everywhere an integer is, their zero 0.0;
+  `Logex.Real`, internal, the one place a real's value is made, read and spelled;
+  `move`, the arithmetic, the comparisons, `sqrt`, the 34 conversions and the 16
+  truncations, each through `Logex.Real.stored/2`, so that every write into a real is its
+  type's nearest value, saturated before it encodes, −0.0 and a subnormal 0.0; the zero
+  divisor's 0.0, the negative root's fault, a literal negative root and a literal `0.0`
+  divisor refused, a real's bit refused; a host's, a connection's and a state's reals held
+  to decision 166's and 150's rules; an edit's initial values compared with `!==`; and a
+  configuration's real globals and constants, `print/1` spelling a real as the shortest
+  text that reads back to it. `5f64be8` takes the reals to the plant: a real point's value
+  from the sim any number, stored as its nearest real; a force held at that value and
+  written to the forces file in the same spelling, read back only as written; the fan in
+  §4.4's plant from files on disk; the contract walk's real arithmetic; and README's
+  "Reals", its output a real run. The shortest spelling of the largest single crashed a
+  force of it until a candidate past a single's range was passed over, a fix the force
+  test pins.
+
+  Done when: a seeded walk of 2,000 scans of every arithmetic instruction, conversion,
+  truncation and root over values near each real's limits, at zero divisors and at
+  subnormals, raises nothing and leaves no state holding −0.0, a subnormal or a value no
+  single is (`real_test.exs`), and the contract walk's 120 programs, alone, across a
+  restart and an edit and in a resource, every state compared exactly against IEEE 754's
+  rounding and IEC's rules restated, reach a saturation and a flush in each real, −0.0, a
+  tie and a wrap (`api_contract_test.exs`); `lreal_to_real` of 3.5e38, the value the 32-bit
+  encoding turns silently into an infinity's bits, is the single's largest with no power;
+  `move 0.1 x` is 0.10000000149011612 in a `real` and 0.1 in an `lreal`, and `add
+  16777216 1.0 x` 16777216.0 and 16777217.0, R1 below failing them; a literal `0.0` or
+  `-0.0` divisor and a `mod` of a real are refused at their lines (R11); `1.`, `.5`, `1e5`,
+  `1.5e+3` and `1.5L` are refused at column 6 of `move … x`, each failing when its lexer
+  clause is reverted (L1 to L5); `fan_speed.3` and `fan_speed.[sel]` on a `real` and an
+  `lreal` are refused at their lines; IEC's examples, `real_to_int` of 1.5, 2.5, −1.5,
+  −2.5, 1.6 and 1.4 giving 2, 2, −2, −2, 2 and 1 and of 0.5 and 3.5 0 and 4, Elixir's
+  `round/1` failing them (R2), `real_trunc_int` and `lreal_trunc_int` of −1.6 −1, and
+  `trunc_int` a pinned unknown instruction; `real_to_int` of 32767.6 −32768, of 32768.4
+  −32768, of 40000.7 −25535 and of 70000.4 4464, each with no power, of 32767.4 32767
+  with power, a truncation before the wrap failing it (R7), and `real_trunc_int` of
+  40000.7 −25536 with no power (R8); `sqrt` of −0.25 writes 0.0 with no power and
+  `%Logex.Fault{severity: :minor, kind: :negative_sqrt, instruction: :sqrt, read: -0.25}`
+  in `state.faults` and as a cycle's event, `fault_test.exs` pinning its kind and severity,
+  the source unchecked failing it (R6); 16,777,217 at a `real` point from the sim, a
+  host's `put_inputs/3` and a force reads back as 16777216.0, 2^128 trips the runner from
+  the sim and is refused from a host and a force in the real's words, and 2^53 + 1 at an
+  `lreal` point reads back as 2^53 (R5, R15, F1, F5); a `real` forced or printed as `0.1`
+  reads back exactly (F2, F3); `var x real 0` edited to `var x real 0.0` is
+  `{:initial_changed, "x", {0, 0.0}}`, the running 0.0 kept, `!=` failing it (R9); the
+  configuration file's seeded round trip draws real globals; and the fan's speed in §4.4's
+  plant is a `real` read from the sim, against an oracle that knows nothing of logex,
+  through a restart and a fresh start from the forces file (`end_to_end_test.exs`).
+
+  Cost against `5eac41f`: a program of no reals scans rung for rung in exactly what it
+  did, 21 programs measured, contacts, branches, timers, counters, one-shots, jumps, a
+  `cal`, every integer instruction and bit (`m510/cost_base.txt` and `cost_now.txt`), and
+  compiles in no more reductions, 28 to 727 fewer, and every source tokenizes in exactly
+  what it did; `real_test.exs` pins `move` of a dint at 17 reductions a rung, `add` at 34
+  and `gt` at 27, as before. A real's `move` costs 35 a rung and an lreal's 29, within
+  2.5x a dint's, its `add` and `sqrt` 46 and 36, within 1.5x a dint's `add`; a dint's
+  `move` in a program that holds a real 21, its destination looked up; and a program of
+  reals compiles and scans in linear reductions.
+
+  The mutation table, each judged by the full suite's exit code (`m510/mut/run.log`), on
+  `a6c0a75`: R1 (a `real`'s write not rounded to its single), R2 (a tie rounded away
+  from zero), R3 (a saturation passing power), R4 (no subnormal flushed), R5 (an integer
+  into a `real` rounded through a double), R6 (no negative root checked), R7 (a
+  conversion truncating before it wraps), R8 (a truncation rounding), R9 (the edit's
+  `!=`), R10 (a literal negative root taken), R11 (a literal real zero divisor taken), R12
+  (an integer literal taken in a real that does not hold it exactly), R13 (`-0.0` lexed as
+  itself), R14 (`move` into a real not rounded), R15 (a host's real input not rounded),
+  R16 (a host's `scan.reals` taken), R17 (any float taken in a state's real), R18 (a
+  real's zero divisor writing the integer 0) and R19 (`sqrt`'s destination message
+  dropped), all red; R20 (an integer's tie between two singles rounded down) survived, and
+  is red on a test added for it, 16777219 into a `real` 16777220.0, the even single; and,
+  run on `5f64be8`, whose lexer is `a6c0a75`'s, L1 (`.5` not refused), L2 (`1.` not
+  refused as a point), L3 (`1.5e+3` not refused for its `+`), L4 (`1e5` not refused for
+  its missing point) and L5 (`1.5L` taken as `1.5` and a name), all red; on `5f64be8`: F1 (a force not held at its nearest real), F2 (a force spelled as the double that
+  holds the single), F3 (a real point's line read as any number), F4 (a single's
+  spelling trying a candidate past its range) and F5 (the sim refusing a float), all red. 1928 tests (10 doctests), up from 1872.
+
+  *Provisional readings* (M5-10): (1) a compiled program carries `reals`, each real tag by
+  name to its type, nil where its routine holds none, as decision 197 carries `units`,
+  which `move`'s first clause and a zero divisor's match as nil, where §4.12's routine
+  choice was a look-up of the destination in `scan.tags` at run time, which the spike
+  found 12% dearer for every `move`; (2) `sqrt` writes a real, an integer destination
+  refused, and reads any number Figure 11 widens into its destination's real, an `int`
+  into a `real`, as `add` reads, the first question; (3) a real literal past its slot's
+  range, `move 1.0e39 x` into a `real`, is refused when the program compiles, told the
+  range, and one below the normal range, `1.0e-40`, taken and stored as 0.0, the second;
+  (4) a result too small to be normal is written as 0.0 **with** power, as a rounding is,
+  the third; (5) a real point's line in the forces file is read only as the runner writes
+  it, `fan_hz 0.10000000149011612` and `big 3` refused, told the line it would write, the
+  fourth; (6) the negative root's `read` is the source as held, an `int`'s −4 an integer;
+  (7) a configuration line's real initial value is read as its nearest, `var_global sp
+  real 0.1` holding 0.10000000149011612 and printing back `0.1`, and one given from Elixir
+  that is no value of its type refused by `entries!/1`; (8) `16#ff.3` is named whole as a
+  digit outside base 16, and `1.5L` and `1.5.2` as a mistyped lexeme "after a real"; (9)
+  a state handed in whose real tag holds an integer, `0` for 0.0, is refused, a real's
+  zero being 0.0; and (10) the class-check names `sqrt`'s destination "a real", "so
+  declare it a real or an lreal", a member among them.
+
+  **Questions for the maintainer** (M5-10), each taken provisionally as written, the
+  closest reading to the record:
+
+  1. *`sqrt` and integers.* The fan's vibration is `sqrt fan_var fan_dev`; a programmer
+     with an `int` count wants `sqrt boxes side` into an `int`. As built, the source may
+     be any number that widens into the destination's real, an `int` into a `real`, and
+     the destination must be a `real` or an `lreal`, so `sqrt boxes side` with an `int`
+     `side` is refused at compile time, "so declare it a real or an lreal"; the operator
+     sees the same values either way, the difference is which programs compile. The
+     options: (a) as built; (b) IEC's strict ANY_REAL in and out, `sqrt boxes x` refused
+     too, told `int_to_real`; (c) Logix's, any integer or real on either side, an integer
+     destination rounded from the real root (1756-RM018A pp.471–472 and p.474). IEC's
+     SQRT is ANY_REAL in and out (Ed 3 Table 28).
+  2. *A real literal outside a real's range.* `move 1.0e39 fan_speed` into a `real`: as
+     built, refused when the program compiles, told the real's range, the operator never
+     seeing it run; a literal too small to be normal, `move 1.0e-40 fan_speed`, compiles
+     and writes 0.0, the operator seeing 0.0. The options: (a) as built; (b) both
+     refused, the second told it is written as 0.0; (c) both taken, the first saturated at
+     3.4028235e38 with no power on every scan, as a result past the range is. IEC says
+     nothing of a constant outside a type's range; what Logix's editor does with one is
+     **unverified**.
+  3. *A flushed result's power.* `mul a a speed` with `a` at 1.0e-30 gives 1.0e-60, too
+     small for a `real`: as built, `speed` is 0.0 and the rung's lamp after the `mul`
+     stays lit, as for any rounding; a result past the range lights no lamp. The options:
+     (a) as built, power passed; (b) no power, the lamp out for the scan, as for a
+     saturation. Logix treats denormalized numbers and −0.0 as 0.0 (1756-RM018A p.882)
+     and says nothing there of a status bit; IEC leaves it to the implementer (Ed 3 Table
+     10 footnotes e and f).
+  4. *A hand-edited forces file.* An engineer edits the forces file before a start,
+     writing `fan_hz 37.50` or `fan_hz 3` for a `real` point: as built, the start is
+     refused, "`fan_hz` is a real, whose force the runner writes as `fan_hz 37.5`", so the
+     plant does not run until the line is put right, decision 140's strict reading kept
+     for reals. The options: (a) as built; (b) any number that reads as a value of the
+     point's type taken, the file rewritten in the runner's spelling at the next force or
+     unforce. Logix keeps forces in the project, not in a text file, so it offers no
+     precedent (**unverified** for any file form).
 - **M5-11 · Arrays of elementary types, literal subscripts.** A spike first, throwaway:
   the representation (a tuple, §4.12's routine choice) and the size limit, measured. Then
   decision 151 with literal subscripts only, one to three dimensions: the syntax through

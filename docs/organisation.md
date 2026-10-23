@@ -3167,7 +3167,9 @@ the long timers in nanoseconds, the same day, and its seventh, M5-7, the based l
 instructions, literal bit access and the 76 bit-string conversions, on 2026-10-23, with
 the maintainer's answers to its six questions the same day, decisions 204 to 209, a bool
 a bitwise operand since decision 206, and its ninth, M5-9, a bit number held in a tag,
-`status.[n]`, and the first major fault, the same day**
+`status.[n]`, and the first major fault, the same day, and its tenth, M5-10, the reals,
+`real` and `lreal`, with `sqrt`, the 34 real conversions and the 16 truncations, the same
+day**
 (`PLAN.md` §3, Milestone 5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
 4, 8 byte integers (how does IEC and vendors handle signed?), 32/64 bit reals, arrays of
 all others, what else does IEC and vendors have."* It read IEC 61131-3 Ed 2:2003 and Ed
@@ -3526,6 +3528,14 @@ golden sources; reals wait for M5-10. Since decision 202, 2026-10-23, a rung kee
 literal's spelling: a literal written other than as the plain decimal of its value is
 the leaf `{:int_lit, line, value, spelling}`, printed back as typed and quoted as written
 in every message, its value what every stage computes with.)*
+*(Landed with M5-10, 2026-10-23: the leaf `{:real_lit, line, float}`, or `{:real_lit, line, float,
+spelling}` wherever its text is not `Float.to_string/1` of its value, `1.5e3` or `37.50`,
+`-0.0` lexing as 0.0 spelled; `1.`, `.5`, `1e5`, `1.5e+3` and a dangling `1.5e` each a
+located lex error naming the number, Logix's `1.5L` B2's mistyped lexeme, told "after a
+real"; one past an lreal, `1.0e400`, named with the lreal's largest; a `_` between two
+digits of a real's runs too, `1_000.5` (provisional); and `16#ff.3` named whole as a
+digit outside base 16. Its four shapes in `printer_test.exs`'s generator and
+`@required_shapes`, and 15 of the curated golden sources changing, the diff read.)*
 
 **Reals** (decision 150). No infinity and no NaN ever reaches a state, an output, a
 `get/2` answer or the forces file. A zero divisor gives 0.0, no power and the minor fault
@@ -3547,6 +3557,14 @@ gives 1.4e−45), so the flush is logex's own; and `0.0 === -0.0` is false, a ma
 which raises on the BEAM, writes 0.0, passes no power and raises the minor fault
 `:negative_sqrt` (decision 164), the source checked before the BEAM's square root is
 called, as a divisor is checked before it divides.
+*(Landed with M5-10, 2026-10-23, in `Logex.Real`, internal, the one place a real's value
+is made, read and spelled: every write rounds to its type's nearest value and saturates
+**before** it encodes, a single's shortest spelling tried only within a single's range;
+an integer into a `real` is rounded once from the integer itself, since through a double
+2^60 + 2^36 + 1 would round twice; a zero divisor writes 0.0 only into a real, so that a
+routine of no real writes the integer 0 it did; `sqrt` of a negative source reads the
+source as it was, an integer's an integer, into the fault's `read` (provisional); and a
+flushed subnormal passes power, as a rounding does (provisional).)*
 
 **Bit strings, the bitwise instructions and bit access** (decisions 155 and 160). `byte
 word dword lword` are types of their own, IEC's, with no arithmetic: `add` of a `word` is
@@ -3752,6 +3770,14 @@ it as the integer, a device's value outside its width a bad value that trips the
 *(Landed for the bit strings with M5-8, 2026-10-23: a point of each, its value an integer
 from 0 to 2^N − 1, a device's 65,536, −1 or 37.5 at a `word` point a bad value that trips
 the runner, a force held to the word and spelled in the forces file as the integer.)*
+*(Landed with M5-10, 2026-10-23: a real point's value from a device, a host and a force any number
+within its range, stored as its nearest real, the sim taking a float since; a force held
+at that value, `16777217` forced as 16777216.0; the forces file's line read only as the
+runner writes it, so that `fan_hz 0.10000000149011612` and `big 3` are refused, each told
+the line the runner would write, `fan_hz 0.1` and `big 3.0` (provisional words); and
+`print/1` spelling a real global's initial value as the forces file does, a real global's
+initial value that is no value of its type, `0.1` given from Elixir to a `real`, refused
+by `entries!/1`, a line's read as its nearest (provisional).)*
 
 **An online edit** (decision 157). A tag's, member's or global's type, an array's element
 type, its dimensions and its sizes, change only with a restart, as §4.9's type rule has it
@@ -3770,6 +3796,10 @@ edit.
 *(Landed for the integers with M5-3, 2026-10-22: an edit from `usint` to `uint` is refused at its
 line in §4.9's words, a global's alike, and a changed initial value of every width
 reported; the comparison stays `!=`, exact on integers, until the reals.)*
+*(Landed with M5-10, 2026-10-23: `Logex.Edit.Plan` compares the declared values with `!==`, a value
+not declared its type's zero, so `var x real 0` to `var x real 0.0` is `{0, 0.0}`, and a
+configuration's global alike; a type change between `real` and `lreal` refused; and an
+edit that only respells a real literal, `1500.0` as `1.5e3`, changes no rung.)*
 
 **Timers and counters** (decision 158). The counters take IEC's typed variants, one for
 each integer type Ed 3 Table 45 gives a counter, INT, LINT, UDINT and ULINT, the type
@@ -3863,11 +3893,20 @@ long timers with M5-6, the same day, alike.)*
   bits, the record's "Bytes" times eight, and its kinds `:boolean` and `:signed` so far.)*
 - *A real's zero is 0.0 in every state*, never 0, from `initial_env/1` and
   `Configuration.initial/1`; `get/2` gives a float for a real; over a zero that is an
-  integer until first written.
+  integer until first written. *(Landed with M5-10, 2026-10-23.)*
 - *An instruction's destination type is looked up in the routine's table, `scan.tags`, at
   run time*, which `cal` already reads, so the IR, `lowered?/1`, `Logex.Walk` and the
   edit's rung comparison keep their shape; over a typed IR symbol, the fallback should
   the spike find the lookup dear.
+  *(Landed otherwise with M5-10, 2026-10-23, provisional: M5-10's spike found the lookup
+  dear, two reductions on every `move`, 17 to 19 a rung, 12%, against none for a match in
+  a clause's head, so a compiled program carries `reals`, each real tag by name to its
+  type, nil where the routine holds none, settled from the tag table as decision 197's
+  `units` are and held to its tags where a program is first handed in; a scan's `reals`
+  is the routine's, which `move`'s first clause and a zero divisor's match as nil, so a
+  program of no real scans in exactly what it did; neither the IR nor `lowered?/1`
+  changes. A routine that holds a real looks a `move`'s destination up there, a `move`
+  into a dint beside a real 21 reductions a rung.)*
 - *An array's value in a state is a tuple* (a tuple of tuples for more dimensions), read
   in constant time and copied on a write; over a map keyed by subscripts. A growth test in
   reductions settles it.
@@ -4019,7 +4058,7 @@ suffixes.
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
 | VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
-| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap, the typed counters and long timers with M5-5 and M5-6 the same day, the based literals with M5-7, and the bit strings, the bitwise instructions, literal bit access and the 76 bit-string conversions with M5-8 on 2026-10-23 | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
+| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap, the typed counters and long timers with M5-5 and M5-6 the same day, the based literals with M5-7, and the bit strings, the bitwise instructions, literal bit access and the 76 bit-string conversions with M5-8 on 2026-10-23, a bit number in a tag with M5-9, and the reals, `sqrt`, the 34 real conversions and the 16 truncations with M5-10 the same day | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage *(arrays decided for Milestone 5, 2026-10-21, decisions 151–156; STRUCT still deferred)* | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays. *(Kept by Milestone 5, decision 158: the TIME and LTIME types and `T#` stay deferred, a preset stays a plain integer, ms for the `ton` family and ns for the long timers.)* |
@@ -7314,6 +7353,13 @@ the decisions the rest settle.
      their source's type, IEC's typing, and widen the result into the destination by
      value; `and`, `or` and `xor` still compute in the destination's, which gives the same
      bits.)*
+     *(Landed for the reals with M5-10, 2026-10-23: an `int` or a `uint` widens into a
+     `real`, a `dint` into an `lreal` only, a `real` into an `lreal`, each in `move`, the
+     arithmetic, `sqrt`, a `cal` formal and a connection; `move d r` of a dint into a real
+     told `dint_to_real`; `gt fan_speed fan_limit` of a real and an int taken and of a real
+     and a dint told `dint_to_real`; a real with a bit string refused with no conversion to
+     name; `16777217` in a `real`'s slot refused, told its nearest, 16777216.0, and a real
+     literal in an integer's slot told it is a real.)*
 
 148. **Converting a real to an integer, and what the conversions are called (Milestone
      5).** The fan's speed is worked out as a `real` percentage and written to the drive
@@ -7355,6 +7401,10 @@ the decisions the rest settle.
      sign extension, `int_to_dword` of −1 16#0000ffff, decisions 176 and 178 holding for
      them as for the integers'; each always passing power, confirmed by the maintainer on
      2026-10-23, decision 204.)*
+     *(The 34 real conversions landed with M5-10, 2026-10-23, `real_to_int` of 2.5 2 and of
+     3.5 4, ties to even on the integer itself, never Elixir's `round/1`, and the 16
+     truncations with them, decisions 161 and 162, a family stanza each in
+     `docs/naming.md`.)*
 
 149. **How literals are written (Milestone 5).** The fan setpoint is 37.5, a mask is hex
      FF, a batch is a million boxes.
@@ -7392,6 +7442,9 @@ the decisions the rest settle.
      literal's spelling, `{:int_lit, line, 255, "16#ff"}` wherever it is not the plain
      decimal of its value, so the printer writes `16#ff` back as typed and a message
      quotes `16#ffff` as written; and decision 203 confirms the second `#`'s refusal.)*
+     *(Landed for the reals with M5-10, 2026-10-23, as §4.12's "Literals" says: `37.5`,
+     `-0.25`, `1.5e3` and `1.5E-3` lex, each kept as written; `1.`, `.5`, `1e5`, `1.5e+3`
+     and `1.5L` are located lex errors; `1.5_` is now a misplaced `_`.)*
 150. **What a real does with a zero divisor, an overflow, NaN and −0.0 (Milestone 5).**
      The fan's speed per box is `div fan_speed boxes_per_min rate`, and just after
      start-up `boxes_per_min` is 0.0; elsewhere `mul big big product` passes 3.4E38 in a
@@ -7416,6 +7469,13 @@ the decisions the rest settle.
      to single precision** (the maintainer, 2026-10-21), as recommended, with a literal
      `0.0` or `-0.0` divisor refused as decision 78 refuses `0`, and `mod` kept integer
      only.
+     *(Landed with M5-10, 2026-10-23, as §4.12's "Reals" says: `mul a b x` of 2.0e38 by
+     2.0 in a `real` is 3.4028234663852886e38 with no power, an `lreal`'s 1.0e308 squared
+     its largest likewise, the BEAM's `ArithmeticError` caught there and nowhere else;
+     `lreal_to_real` of 3.5e38, which the 32-bit encoding would turn into an infinity's
+     bits, saturated first; `neg 0.0` and a subnormal product written as 0.0 with power;
+     a zero divisor, an int's 0 or a real's 0.0, giving 0.0 into a real; and a seeded walk
+     of values near each real's limits from which no exception leaves a scan.)*
 151. **How an array is declared and written (Milestone 5).** The oven conveyor has eight
      zone temperatures, `temps`; a reject lamp for each of four lanes; a grid of
      setpoints by zone and recipe.
@@ -7524,6 +7584,8 @@ the decisions the rest settle.
      decision 202 quotes a literal; and a coil on a bit of a member and a write of the member
      whole, `ote c.pv.3` and `move x c.pv`, are the second-`ote` warning, as for a tag;
      both confirmed by the maintainer on 2026-10-23, decisions 209 and 207.)*
+     *(Landed for a real's bit with M5-10, 2026-10-23: `fan_speed.3` and `fan_speed.[sel]`
+     on a `real` or an `lreal` refused at their lines, "which has no bits".)*
      *(Since decision 206, 2026-10-23, the maintainer answering M5-8's third question: a
      `bool` is a bitwise operand, as IEC's ANY_BIT holds BOOL, three bools computing in a
      bool and a bool widening into a bit string, never into an integer.)*
@@ -7549,6 +7611,8 @@ the decisions the rest settle.
      read back exactly.
      *(Landed for every integer width with M5-3, 2026-10-22, and for the bit strings with
      M5-8, 2026-10-23, `var_global drive_status word at drive.i.4` among them.)*
+     *(Landed for the reals with M5-10, 2026-10-23, `var_global fan_hz real at drive.i.0`
+     read from the sim in §4.4's plant, as §4.12's "I/O points" says.)*
 
 157. **An online edit that changes a type or an array's size (Milestone 5).** The box
      counter's `usint` overflows at 255, so the programmer edits it to a `uint` while the
@@ -7568,6 +7632,8 @@ the decisions the rest settle.
      reported, `{:initial_changed, "x", {0, 0.0}}`, the running value kept, although a
      real starts at 0.0 under either (§4.12, "An online edit").
      *(Landed for the integer widths with M5-3, 2026-10-22.)*
+     *(Landed for the reals with M5-10, 2026-10-23: `Logex.Edit.Plan.changed/2` compares
+     with `!==`, `{:initial_changed, "x", {0, 0.0}}` pinned, the running 0.0 kept.)*
 
 158. **Whether timers and counters change type (Milestone 5).** A timer longer than 24.8
      days, or a box count past 2,147,483,647.
@@ -7689,6 +7755,9 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      power. A truncation, `real_trunc_int` (decision 162), truncates toward zero and then
      wraps, with no power where the truncated value does not fit, so `real_trunc_int` of
      40000.7 is −25536. No fault is recorded for either (decision 146's follow-up).
+     *(Landed with M5-10, 2026-10-23: each of these values pinned, `real_to_int` of 32767.6
+     −32768 with no power, a test that fails where the real is truncated before it wraps,
+     and `real_trunc_int` of 40000.7 −25536.)*
 162. **What the truncations are called (Milestone 5),** following decision 148.
      Converting the fan's speed for a display that must never show a value it has not
      reached, the programmer drops the fraction: 37.9 shown as 37.
@@ -7706,6 +7775,8 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      conversions are 182: the 90 numeric, the 16 truncations and the 76 of the bit
      strings (decision 155), each reserved in every `.ld` file and named in a family
      stanza (§4.12, "Reserved words"); `trunc_int` is no mnemonic.
+     *(Landed with M5-10, 2026-10-23: the sixteen, `real_trunc_int` of −1.6 −1, and
+     `trunc_int` a pinned unknown instruction.)*
 163. **`ctu_dint`, `ctd_dint` and `ctud_dint` (Milestone 5),** following decision 158.
      A programmer used to IEC's typed counters declares `var boxes ctu_dint`, beside a
      colleague's `var cases ctu`.
@@ -7762,6 +7833,11 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      The source is checked before the BEAM's square root is called, so no
      `ArithmeticError` leaves a scan. A literal negative source, `sqrt -4.0 x`, is
      refused when the program compiles (decision 167).
+     *(Landed with M5-10, 2026-10-23: `sqrt` of −0.25 writes 0.0 with no power,
+     `%Logex.Fault{severity: :minor, kind: :negative_sqrt, instruction: :sqrt, read:
+     -0.25}`, in `state.faults` and as a cycle's event; `sqrt` writes a real, IEC's
+     ANY_REAL, an integer destination refused, its source any number that widens into the
+     destination's real, an `int` taken, as `add`'s (provisional).)*
 165. **A shift or rotate count out of range (Milestone 5),** left open by §4.12. The
      drive's status word is shifted by `shl status n mask`, `n` an `int` tag an operator
      sets, which reaches −1, or 40 for a 16-bit `word`.
@@ -7816,6 +7892,10 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      type's words. A literal is judged otherwise: one a real slot cannot hold exactly is
      refused when the program compiles, the nearest it can named (decision 147), since
      the programmer can write the nearest and a device cannot.
+     *(Landed with M5-10, 2026-10-23, as read: 16,777,217 at a `real` point from the sim,
+     a host's `put_inputs/3` and a force reads back as 16777216.0, 2^53 + 1 at an `lreal`
+     point as 2^53, and 2^128 at a `real` point trips the runner as a bad value from the
+     sim and is refused from a host and a force, "beyond a real's range".)*
 
 167. **A literal negative square root (Milestone 5),** left open by decision 164. A rung
      says `sqrt -4.0 root`: its source is negative on every scan, so the minor fault of
@@ -7829,6 +7909,8 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      the program compiles, as decision 78* (the maintainer, 2026-10-21). A negative
      source held in a tag stays decision 164's minor fault at run time; `-0.0`, which is
      no negative number, is taken.
+     *(Landed with M5-10, 2026-10-23: `sqrt -4.0 x` refused at its line, `sqrt -0.0 x`
+     taken.)*
 168. **How a message names a program type (Milestone 5),** following M5-1's review. The
      plant's configuration connects `m1.strat`, a misspelling, and `m1` runs the program
      type `motor`. The refusal said "`m1` is a `motor`, which declares no `strat`", the

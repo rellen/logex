@@ -11,8 +11,11 @@ defmodule Logex.Fault do
     was 0, which gives 0 and passes no power on that scan (decision 78); and since M5-9
     `:bit_out_of_range`, major, a bit whose number a tag holds, `status.[n]`, outside its
     word's bits when its instruction read or wrote it, which did nothing and passed no
-    power (decision 160).
-  - `instruction` is the mnemonic that met it, `:div` or `:mod` for a zero divisor, and
+    power (decision 160); and since M5-10 `:negative_sqrt`, minor, a `sqrt` whose source
+    was negative, which gives 0.0 and passes no power on that scan (decision 164). A
+    zero divisor of a real destination gives 0.0.
+  - `instruction` is the mnemonic that met it, `:div` or `:mod` for a zero divisor, `:sqrt`
+    for a negative root, and
     for a bit out of range the instruction whose operand the bit is, `:xic`, `:ote`,
     `:move`, `:and`, `:cal` and the rest.
   - `path` is where it ran inside the program instance: nil for the program's own rungs,
@@ -22,7 +25,8 @@ defmodule Logex.Fault do
     `Logex.compile_file/1` read it, or nil for one compiled from text.
   - `line` is the instruction's line in that file.
   - `read` is what the scan read that was out of range: the bit number, 16 for
-    `drive_faults.[sel]` with `sel` at 16 in a `word`; nil for a zero divisor.
+    `drive_faults.[sel]` with `sel` at 16 in a `word`; the source of a negative root,
+    −0.25 for `sqrt fan_var fan_dev` with `fan_var` at −0.25; nil for a zero divisor.
 
   A host sees a lone instance's in `state.faults`, every fault of the scan that returned
   the state, in the order they happened, `[]` for none (`Logex.Instance`), after
@@ -37,11 +41,11 @@ defmodule Logex.Fault do
 
   @type t :: %__MODULE__{
           severity: :minor | :major,
-          kind: :divide_by_zero | :bit_out_of_range,
+          kind: :divide_by_zero | :bit_out_of_range | :negative_sqrt,
           instruction: atom,
           path: String.t() | nil,
           file: String.t() | nil,
           line: pos_integer,
-          read: integer | nil
+          read: number | nil
         }
 end

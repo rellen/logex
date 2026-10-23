@@ -228,6 +228,16 @@ defmodule Logex.RealTest do
              ]
 
       assert outputs("var_output r real\nmove 16777216 r") == %{"r" => 16_777_216.0}
+
+      # Provisional: a real literal past its slot's range is refused, and one below the
+      # normal range taken, written as 0.0.
+      assert messages("var x real\nmove 1.0e39 x") == [
+               {2,
+                "`move` writes `1.0e39` into `x`, a real: it is beyond a real's range, " <>
+                  "-3.4028234663852886e38 to 3.4028234663852886e38"}
+             ]
+
+      assert outputs("var_output x real\nmove 1.0e-40 x") == %{"x" => 0.0}
     end
   end
 
@@ -465,6 +475,13 @@ defmodule Logex.RealTest do
 
     test "an integer into a real is its nearest, rounded once, and always fits" do
       assert converted("dint_to_real", "dint", 16_777_217) == {16_777_216.0, 1}
+      # A tie between two singles goes to the even one: 16777219 lies halfway between
+      # 16777218 and 16777220, whose last bit is 0, and 16777221 between 16777220 and
+      # 16777222, the even one 16777220 again.
+      assert converted("dint_to_real", "dint", 16_777_219) == {single(16_777_219.0), 1}
+      assert single(16_777_219.0) === 16_777_220.0
+      assert converted("dint_to_real", "dint", 16_777_221) == {16_777_220.0, 1}
+      assert converted("dint_to_real", "dint", -16_777_219) == {-16_777_220.0, 1}
 
       assert converted("lint_to_lreal", "lint", 9_007_199_254_740_993) ==
                {9_007_199_254_740_992.0, 1}
