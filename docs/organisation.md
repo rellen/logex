@@ -3163,7 +3163,9 @@ arithmetic and comparison over every integer width, the same day, and its fifth,
 IEC's typed counters and the dint counters' IEC names, the same day, and its sixth, M5-6,
 the long timers in nanoseconds, the same day, and its seventh, M5-7, the based literals and
 `_` separators, the same day, and its eighth, M5-8, the bit strings, the bitwise
-instructions, literal bit access and the 76 bit-string conversions, on 2026-10-23**
+instructions, literal bit access and the 76 bit-string conversions, on 2026-10-23, with
+the maintainer's answers to its six questions the same day, decisions 204 to 209, a bool
+a bitwise operand since decision 206**
 (`PLAN.md` §3, Milestone 5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
 4, 8 byte integers (how does IEC and vendors handle signed?), 32/64 bit reals, arrays of
 all others, what else does IEC and vendors have."* It read IEC 61131-3 Ed 2:2003 and Ed
@@ -3605,6 +3607,15 @@ one leaf; `Logex.Walk.writes/1` counts a coil on a bit as a write of its word, a
 word's storage bit where the word is written whole or the bit another way. `ote status.3`
 and `move x status` draw the second-`ote` warning in either order, and a write of a word
 whole is a write of each storage bit it holds.)*
+*(The maintainer's answers to M5-8's questions, 2026-10-23, decisions 204 to 209: a
+bit-string conversion always passes power (204); a comparison's slot keeps its words, "a
+number or a bit string" (205); a `bool` is a bitwise operand, as IEC's ANY_BIT holds
+BOOL, `:any_bitwise` now "a bool, a bit string or an integer", three bools computing in a
+bool, `not` writing a bool's inverse, a bool widening into a bit string by Figure 11 and
+refused beside an integer, and a bool's shifts and rotates a one-bit pattern's under
+decision 165 (206, the last provisional); a coil on a bit beside a whole write of its
+word or member warned in either order (207); decision 187's warning for a bit string
+(208); and a bit quoted as typed, `conveyor.03` (209).)*
 
 **Arrays** (decisions 151 to 154). `var temps real[8]`, `var grid int[4,8]`, `var cube
 int[2,3,4]`: Logix's form (PM004L pp.34–36), a count for each dimension, one to three
@@ -7282,7 +7293,8 @@ the decisions the rest settle.
      *(The 76 bit-string conversions landed with M5-8, 2026-10-23, two family stanzas in
      `docs/naming.md`, `byte_to_word` and `word_to_int`, each a binary transfer, never a
      sign extension, `int_to_dword` of −1 16#0000ffff, decisions 176 and 178 holding for
-     them as for the integers'.)*
+     them as for the integers'; each always passing power, confirmed by the maintainer on
+     2026-10-23, decision 204.)*
 
 149. **How literals are written (Milestone 5).** The fan setpoint is 37.5, a mask is hex
      FF, a batch is a million boxes.
@@ -7449,7 +7461,11 @@ the decisions the rest settle.
      *(M5-8's review, 2026-10-23, the record's readings, provisional: a bit is quoted as
      written in every message that names it, `w.03`, its number keyed by its value, as
      decision 202 quotes a literal; and a coil on a bit of a member and a write of the member
-     whole, `ote c.pv.3` and `move x c.pv`, are the second-`ote` warning, as for a tag.)*
+     whole, `ote c.pv.3` and `move x c.pv`, are the second-`ote` warning, as for a tag;
+     both confirmed by the maintainer on 2026-10-23, decisions 209 and 207.)*
+     *(Since decision 206, 2026-10-23, the maintainer answering M5-8's third question: a
+     `bool` is a bitwise operand, as IEC's ANY_BIT holds BOOL, three bools computing in a
+     bool and a bool widening into a bit string, never into an integer.)*
 156. **What types an I/O point may have, and what a device gives (Milestone 5).** The
      drive card gives the fan's speed as a 16-bit register, the analog card the eight zone
      temperatures as reals, the panel the lamp's bool.
@@ -8194,7 +8210,8 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      *(Since M5-8's review, 2026-10-23, the record's reading, provisional, the maintainer
      asked (PLAN §3, M5-8's review): a bit string has no such diagnostic since M5-8 and
      compares as unsigned, so `ge drive_status 0` on a `word` is warned in the same words,
-     "and a word holds nothing below `0`", at 0 and at 2^N − 1, as on a `uint`.)*
+     "and a word holds nothing below `0`", at 0 and at 2^N − 1, as on a `uint`; confirmed
+     by the maintainer on 2026-10-23, decision 208.)*
 188. **A timer's `last` later than the instance's now (Milestone 5),** following decision
      186. A host hands in the fan's run-on timer with `last`, the time it last ran, of 5000
      while the instance's own clock, `now`, reads 1000; decision 186's reading took it,

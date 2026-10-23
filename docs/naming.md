@@ -1615,6 +1615,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Why:** Rule 1: IEC names the operation AND, and the conventional set spells it so too. The `wand` the table above planned gave way to IEC's word when the bit strings came (decision 155, the table's amendment): its reason, that logex's env is untyped integers, ended with the types, and the destination's type is what lets IEC reuse AND. It takes integers too, the maintainer's "Logix-friendly" follow-up, as the conventional AND takes them, but never a mix of the two kinds in one instruction (§4.12's second question, answered as recorded), since a bit string is no number. A source widens by Figure 11, which the conventional controller's zero extension of a smaller operand matches for a bit string. **The cost:** `and` is reserved in any case in every `.ld` file, so a tag, label or instance named `and` stops compiling.
 **Checked:** 2026-10-23. IEC 61131-3:2013 §6.6.2.5.9 and Table 31 (pp.88–89), read directly in the copy `docs/instruction-sets.md` §9 lists; the conventional family's general instructions reference, Sept 2025, pp.494–500, in the copy Milestone 5's design pass saved. The Siemens, CODESYS and Mitsubishi rows are the Bitwise and shift table's.
 
+*(Amended 2026-10-23, `docs/organisation.md` decision 206, the maintainer answering M5-8's third question: a `bool` is an operand too, as IEC's ANY_BIT holds BOOL (Ed 3 Figure 5), so `and left right both` of three bools computes in a bool, the AND of two limit switches, and a bool source widens into a bit-string destination by Figure 11, setting its bit 0; a bool beside an integer stays refused, "a bool does not widen into an int, and logex has no conversion between them". The conventional AND takes no BOOL (1756-RM018A p.496), so this follows IEC.)*
+
 ### `or` — the bitwise OR of two values, into a tag
 
 | Dialect | Name there | Notes |
@@ -1629,6 +1631,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `or`
 **Why:** Rule 1, as for `and`: IEC's OR (decision 155). The table's worry, that a bare `or` would read as a branch, does not arise in logex's grammar (B1). **The cost:** `or` is reserved in any case in every `.ld` file.
 **Checked:** 2026-10-23. IEC 61131-3:2013 Table 31 (p.89); the conventional reference, Sept 2025, pp.514–520. The other rows are the table's.
+
+*(Amended 2026-10-23, `docs/organisation.md` decision 206, the maintainer answering M5-8's third question: a `bool` is an operand too, as IEC's ANY_BIT holds BOOL (Ed 3 Figure 5), so `and left right both` of three bools computes in a bool, the AND of two limit switches, and a bool source widens into a bit-string destination by Figure 11, setting its bit 0; a bool beside an integer stays refused, "a bool does not widen into an int, and logex has no conversion between them". The conventional AND takes no BOOL (1756-RM018A p.496), so this follows IEC.)*
 
 ### `xor` — the bitwise exclusive OR of two values, into a tag
 
@@ -1645,6 +1649,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Why:** Rule 1, as for `and`: IEC's XOR (decision 155). **The cost:** `xor` is reserved in any case in every `.ld` file.
 **Checked:** 2026-10-23. IEC 61131-3:2013 Table 31 (p.89); the conventional reference, Sept 2025, pp.501–507. The other rows are the table's.
 
+*(Amended 2026-10-23, `docs/organisation.md` decision 206, the maintainer answering M5-8's third question: a `bool` is an operand too, as IEC's ANY_BIT holds BOOL (Ed 3 Figure 5), so `and left right both` of three bools computes in a bool, the AND of two limit switches, and a bool source widens into a bit-string destination by Figure 11, setting its bit 0; a bool beside an integer stays refused, "a bool does not widen into an int, and logex has no conversion between them". The conventional AND takes no BOOL (1756-RM018A p.496), so this follows IEC.)*
+
 ### `not` — the bitwise complement of a value, into a tag
 
 | Dialect | Name there | Notes |
@@ -1659,6 +1665,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `not`
 **Why:** Rule 1, as for `and`: IEC's NOT (decision 155), which the conventional set and CODESYS spell the same; Siemens' INV is the outlier the table records. **The cost:** `not` is reserved in any case in every `.ld` file.
 **Checked:** 2026-10-23. IEC 61131-3:2013 Table 31 (p.89); the conventional reference, Sept 2025, pp.508–513. The other rows are the table's.
+
+*(Amended 2026-10-23, `docs/organisation.md` decision 206: a `bool` is an operand too, as IEC's ANY_BIT holds BOOL, so `not at_speed slow` of two bools writes the inverse, 1 for 0 and 0 for 1, and `not ready mask` of a bool into a `word` 16#fffe for 1, the bool widened by Figure 11 and then inverted; a bool beside an integer stays refused.)*
 
 ### `shl` — shift a value left by a count, into a tag
 
@@ -1675,6 +1683,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Why:** Rule 1: IEC names the operation SHL, which Siemens and CODESYS spell the same; the conventional set has none. It takes integers as well as bit strings, as the bitwise instructions do (decision 155), working on the destination's width, which a shift needs. IEC calls a negative count an error and leaves its handling to the implementer; the maintainer took no fault and no shift, the power off where the count was negative (decision 165), and a literal one is refused as IEC's error that a program can show. **The cost:** `shl` is reserved in any case in every `.ld` file.
 **Checked:** 2026-10-23. IEC 61131-3:2013 §6.6.2.5.9 and Table 30 (pp.88–89), read directly in the copy `docs/instruction-sets.md` §9 lists; the conventional reference, Sept 2025, its table of contents and p.622. The other rows are the table's.
 
+*(Amended 2026-10-23, `docs/organisation.md` decision 206: IEC's IN is ANY_BIT, which holds BOOL, so the source and destination may be bools, a one-bit pattern under decision 165's rules (provisional): a shift by 0 writes the source, by 1 or more 0, a rotate by any count of 0 or more the source, and a negative tag count the source with no power. The count stays an integer, a bool count refused.)*
+
 ### `shr` — shift a value right by a count, into a tag
 
 | Dialect | Name there | Notes |
@@ -1689,6 +1699,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `shr`
 **Why:** Rule 1, as for `shl`: IEC's SHR, zero-filling as IEC defines it (decision 155), where the classic Siemens SHR_I sign-extends: the stanza and README say so, since a program ported from it that divided a negative value by a shift behaves differently. **The cost:** `shr` is reserved in any case in every `.ld` file.
 **Checked:** 2026-10-23. IEC 61131-3:2013 Table 30 (p.89). The other rows are the table's.
+
+*(Amended 2026-10-23, `docs/organisation.md` decision 206: IEC's IN is ANY_BIT, which holds BOOL, so the source and destination may be bools, a one-bit pattern under decision 165's rules (provisional): a shift by 0 writes the source, by 1 or more 0, a rotate by any count of 0 or more the source, and a negative tag count the source with no power. The count stays an integer, a bool count refused.)*
 
 ### `rol` — rotate a value left by a count, into a tag
 
@@ -1705,6 +1717,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Why:** Rule 1: IEC's ROL, circular within the destination's width, the width question the table above names a prerequisite answered by the destination's type; a count at or past the width taken modulo the width (decision 165). **The cost:** `rol` is reserved in any case in every `.ld` file.
 **Checked:** 2026-10-23. IEC 61131-3:2013 Table 30 (p.89). The other rows are the table's.
 
+*(Amended 2026-10-23, `docs/organisation.md` decision 206: IEC's IN is ANY_BIT, which holds BOOL, so the source and destination may be bools, a one-bit pattern under decision 165's rules (provisional): a shift by 0 writes the source, by 1 or more 0, a rotate by any count of 0 or more the source, and a negative tag count the source with no power. The count stays an integer, a bool count refused.)*
+
 ### `ror` — rotate a value right by a count, into a tag
 
 | Dialect | Name there | Notes |
@@ -1719,6 +1733,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Chosen:** `ror`
 **Why:** Rule 1, as for `rol`: IEC's ROR (decision 155). **The cost:** `ror` is reserved in any case in every `.ld` file.
 **Checked:** 2026-10-23. IEC 61131-3:2013 Table 30 (p.89). The other rows are the table's.
+
+*(Amended 2026-10-23, `docs/organisation.md` decision 206: IEC's IN is ANY_BIT, which holds BOOL, so the source and destination may be bools, a one-bit pattern under decision 165's rules (provisional): a shift by 0 writes the source, by 1 or more 0, a rotate by any count of 0 or more the source, and a negative tag count the source with no power. The count stays an integer, a bool count refused.)*
 
 ### `byte_to_word` — convert a bit string into another bit string type: the family of the 12 bit-string conversions
 

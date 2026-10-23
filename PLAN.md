@@ -116,7 +116,11 @@ contact and written by a coil; and the 76 bit-string conversions, binary transfe
 four questions put to the maintainer (§3, M5-8); and M5-8's review's six findings fixed
 the same day, four rules pinned, a bit quoted as written, a member's bit warned beside a
 whole write of the member, decision 187's warning given for a bit string, and a program
-of no bit strings compiling in what it did before M5-8, with two more questions.
+of no bit strings compiling in what it did before M5-8, with two more questions; and the
+maintainer's answers to M5-8's six questions (decisions 204 to 209, §3, M5-8) the same
+day, five confirming what was built and one a change: a `bool` is a bitwise operand, as
+IEC's ANY_BIT holds BOOL, so `and left right both` of three bools is the AND of two
+switches and a bool widens into a bit string, never into an integer.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -5898,7 +5902,7 @@ the walks' cross-type reach and the documents.
   message's words; and (12) a configuration's writer warning names no one-shot on a bit
   of a shared word, only the word's first writer.
 
-  **Questions for the maintainer** (taken provisionally as written):
+  **Questions for the maintainer**, answered on 2026-10-23 (decisions 204 to 207, below):
   1. *Whether a bit-string conversion passes power always* (decision 148). A drive's
      status `word` read 16#1234 is cut into a `byte` for a lamp panel by `word_to_byte`,
      which writes 16#34. An integer conversion that keeps low bits passes no power, so a
@@ -5976,7 +5980,8 @@ the walks' cross-type reach and the documents.
   at 0 and 2^N − 1; (14) a bit quoted as written, its number keyed by its value; and (9)
   extended to a member's bit beside a whole write of the member.
 
-  **Questions for the maintainer** (M5-8's review, taken provisionally as written):
+  **Questions for the maintainer** (M5-8's review), answered on 2026-10-23 (decisions 208
+  and 209, below):
   5. *Whether a comparison of a bit string at its limit is warned of* (decision 187). An
      engineer lights a "drive status present" lamp with `ge drive_status 0`, where
      `drive_status` is a `word`, a 16-bit pattern read from the drive. A word holds 0 to
@@ -5996,6 +6001,52 @@ the walks' cross-type reach and the documents.
      the message finds no `conveyor.3` on the rung it names. IEC writes a bit's number as
      an integer, and Logix's tag syntax gives a bit of an integer as `tag.bit` (1756-PM004L,
      p.45); whether either takes or shows a leading zero is `unverified`.
+  **The maintainer's answers**, 2026-10-23 (decisions 204 to 209). (1) *Confirmed*: a
+  bit-string conversion always passes power (decision 204). (2) *Kept, the lead's
+  reading*: a comparison's slot is "a number or a bit string" in a message, the
+  maintainer confirming the answers as a whole without taking it up separately (decision
+  205). (3) *Changed*: a `bool` is a bitwise operand, as IEC's ANY_BIT holds BOOL (Ed 3
+  Figure 5, Tables 30 and 31; decision 206), superseding provisional reading (4).
+  `:any_bitwise` holds the bool, named "a bool, a bit string or an integer"; each
+  instruction still computes in its destination's type, so `and left right both` of three
+  bools computes in a bool and `not at_speed slow` writes the inverse; a bool source widens
+  into a bit-string destination by Figure 11, `not ready mask` into a `word` writing
+  16#fffe for 1; a bool beside an integer, and a bit string into a bool, are refused, "a
+  bool does not widen into an int, and logex has no conversion between them", and a
+  literal into a bool must be 0 or 1. A shift or rotate of a bool is one of a one-bit
+  pattern under decision 165's rules, a shift by 1 or more writing 0 and a rotate writing
+  it back (provisional: IEC's Table 30 types IN as ANY_BIT and states no rule of its own
+  for a BOOL); the count stays ANY_INT, a bool count refused. A bit, `w.3`, and a bool
+  member logic may write, a counter's `r`, are bools there too, `Logex.Program.destination/3`
+  giving a bit `:bool` for `:bitwise`. A bitwise write of a bool is a write as `move`'s,
+  no coil, so beside an `ote` on the same bool it draws no second-`ote` warning
+  (provisional). Logix's AND takes no BOOL (1756-RM018A p.496), so this is IEC's reading.
+  Two messages change: the slot's words, and the member offered for an instance named
+  whole, now `c.r` for a counter where it was `c.pv`. (4) *Confirmed*: a coil on a bit and
+  a whole write of its word, or of a member, warn in either order (decision 207). (5)
+  *Confirmed*: decision 187's warning holds for a bit string (decision 208). (6)
+  *Confirmed*: a message quotes a bit as typed, `conveyor.03` (decision 209). No code
+  changed for the five.
+
+  The commit (`ebf0363`) holds the code, its tests and decisions 204 to 209.
+  `bit_string_test.exs` drops M5-8's bool refusals and adds decision 206's rules, three
+  bools at each of their values, a bool widening into each bit string and refused beside
+  each integer either way, a bool's shifts and rotates at counts −3, −1, 0, 1, 2 and 17, a bit
+  and a counter's `r` read and written, the slot's words, a bit edited in by hand as an
+  arithmetic destination, quoted as written, and a bool destination's scan within 5% of a
+  `uint`'s; `api_contract_test.exs`'s host walk draws a bool among the types, its oracle
+  restating a one-bit pattern, and reaches a bool's two values and a bit inverted into a
+  bool and each bit string. A program with no bool bitwise operand compiles and scans in
+  exactly the reductions it took at `83cbf3e`, an `and` into a `word`, a `shl` into a
+  `uint`, 200 `add`s and 200 rungs of contacts measured. The mutation table, each judged
+  by the full suite's exit code: A1 (no bool in the class), A2 (a bool no bitwise
+  destination), A3 (a bit no destination), A4 (a bool destination found by the fallback,
+  red on the cost test alone), A5 (no transfer into a bool), A6 (a missing conversion's
+  message naming an empty one), A7 (the slot's old words), A8 (a bit destination shown
+  unquoted), A9 (a bit an arithmetic destination too), A10 (a bool kept to 8 bits) and A11
+  (every refusal's conversion dropped), all 11 red, A1, A5 and A10 by the host walk's
+  oracle too. 1814 tests (10 doctests), up from 1808.
+
 - **M5-9 · A bit number in a tag, and the major fault.** `status.[n]` (decision 160), an
   integer tag of any width, never an expression, refused on a one-shot's bit; a number
   outside the width at run time the first major fault: `%Logex.Fault{}` gains `severity`,
