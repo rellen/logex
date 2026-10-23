@@ -3536,6 +3536,21 @@ real"; one past an lreal, `1.0e400`, named with the lreal's largest; a `_` betwe
 digits of a real's runs too, `1_000.5` (provisional); and `16#ff.3` named whole as a
 digit outside base 16. Its four shapes in `printer_test.exs`'s generator and
 `@required_shapes`, and 15 of the curated golden sources changing, the diff read.)*
+*(Since M5-10's review, 2026-10-23, provisional: a real literal is a value of the real its
+slot computes in, as Logix stores an unsuffixed floating-point immediate as a REAL (RM018A
+p.870), IEC's rule for an untyped literal's type **unverified** in the extracts, where
+Ed 3 gives a typed literal, `REAL#0.1`, to name one (p.27, Table 5 feature 9, deferred by
+decision 149), and where until then it stayed
+the double it lexed as wherever no write rounded it. A conversion's source is its `from`
+type's, `real_to_lreal 0.1 l` writing 0.10000000149011612; `move`, the arithmetic and
+`sqrt` their destination's, `div a 0.1 r` dividing by the single 0.1; a comparison the
+other operand's, so that after `move 37.1 sp` both `ge sp 37.1` and `eq sp 37.1` are true;
+two literals, the doubles they lex as. The compiler settles it, the IR holding the nearest
+single with the spelling, `{:real_lit, line, 0.10000000149011612, "0.1"}`, so that every
+message quotes `0.1` and a scan pays nothing; a literal below the normal range is 0.0 in
+either real's slot, `eq l 1.0e-310` true of an lreal 0.0; and a literal the single rounds,
+`eq r 16777217.0`, is taken silently, where `16777217` is refused (decision 147), `PLAN.md`
+M5-10's fifth question.)*
 
 **Reals** (decision 150). No infinity and no NaN ever reaches a state, an output, a
 `get/2` answer or the forces file. A zero divisor gives 0.0, no power and the minor fault
@@ -7360,6 +7375,10 @@ the decisions the rest settle.
      and a dint told `dint_to_real`; a real with a bit string refused with no conversion to
      name; `16777217` in a `real`'s slot refused, told its nearest, 16777216.0, and a real
      literal in an integer's slot told it is a real.)*
+     *(Since M5-10's review, 2026-10-23, provisional: a real literal is a value of the real
+     its slot computes in, the destination's, a comparison's other operand's or a
+     conversion's `from` type, `eq sp 37.1` true after `move 37.1 sp` in a `real`, as §4.12's
+     "Literals" says; `PLAN.md` M5-10's fifth question.)*
 
 148. **Converting a real to an integer, and what the conversions are called (Milestone
      5).** The fan's speed is worked out as a `real` percentage and written to the drive

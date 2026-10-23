@@ -242,7 +242,11 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   real tags are the program's `reals`, by name, which the scan holds, nil where it holds
   none, so `move`'s first clause and a zero divisor's match `%Scan{reals: nil}` and a
   program of no real scans in exactly what it did at `5eac41f`; a `cal` narrows it to its
-  body's, and a host's scan that sets it is refused.
+  body's, and a host's scan that sets it is refused. Since M5-10's review (provisional) a
+  real literal is a value of the real its slot computes in, settled by the compiler
+  (`slot_operands/4`, `real_operand/4`), the destination's, a comparison's other operand's
+  or a conversion's `from` type, so that `eq sp 37.1` is true after `move 37.1 sp` in a
+  `real`, and the scan reads it as any literal.
 - `lib/logex/configuration.ex` — `%Logex.Configuration{}` (M2-1, `docs/organisation.md`
   §4.4 and §4.10): the program types, tasks, globals (located at `<device>.i|q.<address>`
   or not), program instances and connections, as plain data and lists in declaration
@@ -977,7 +981,9 @@ at their columns, the zero 0.0, `move`, the arithmetic, comparisons, the 34 conv
 against IEC's examples, a tie to even and the wrap after the rounding restated, the 16
 truncations, `sqrt` and its negative root's fault alone and as a cycle's event, 3.5e38
 saturated before it encodes, −0.0 and subnormals, an integer input stored as its nearest
-real, a state's real held to its type's values, `scan.reals` and a hand-edited program's
+real, a state's real held to its type's values, since M5-10's review a real literal read
+as the real its slot computes in, `eq sp 37.1` true after `move 37.1 sp`, a block's real
+formals compared exactly and scanned twice, `scan.reals` and a hand-edited program's
 `reals` refused, a block's formals, an edit's `{0, 0.0}`, a configuration's real
 globals, constants and print, points and forces through the runner, a seeded walk near
 each real's limits from which no exception leaves a scan, and its cost, a program of no
@@ -1192,7 +1198,11 @@ and since M5-9 a program whose bit number is the panel's dint, out of range at i
 - A mistake in the source is a `%Logex.Diagnostic{}`, returned; a mistake by the host is an `ArgumentError`, raised, whose message a test pins. Nothing else may escape the public API (`api_contract_test.exs`)
 - An operand in the AST is `{:name, line, tag}` or `{:int_lit, line, value}` — a 3-tuple, not a keyword pair — or, since decision 202, a literal written other than as the plain decimal of its value, `{:int_lit, line, value, spelling}`, which every reader of a literal meets too, by `Logex.Parser.is_int_lit/1` or a clause of its own, its value what every rule judges and its spelling what every message quotes. Since M5-10 a real
   literal is `{:real_lit, line, float}` or `{:real_lit, line, float, spelling}`, which
-  `Logex.Parser.is_literal/1` holds with an integer's, its value a float, never −0.0. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. `Logex.Parser.well_formed!/1` states the whole tree `parse/1` can produce, and `instructionize/2` raises `ArgumentError` on any other (OE-1): every line a positive integer, every element of a rung on its one line, each rung on a line after the last, a name that lexes as one name token, a literal an integer, negative too since M3-3 (decision 97), a rung of one element or more and a group of one leg or more. A test that builds a tree by hand builds one of those. The lexer's tokens carry `{line, column}`; the parser keeps only the line, because the suite pins that shape. An instruction in the IR is `{symbol, line, operands}`, carrying its mnemonic's line; a `{:branches, legs}` node carries no line of its own. In the IR, and only there, a member of an instance is `{:member, line, path}`, `t1.acc` becoming `{:member, 3, ["t1", "acc"]}` (M1-6): the runtime's `read/2` and `write/3` take it as they take a tag, and anything that walks IR operands must handle it, as it must a label, `{:label, line, name}` (M3-5), a `jmp`'s or `lbl`'s operand, which is no tag. A walk that reads what an instruction's operands do looks its slots up through `Logex.Compiler.signature/2`, given the program's tag table, never in a table of its own (M2-5), as `Logex.Walk` does, which `Logex.Warnings` and `Logex.Edit` read: a `cal`'s slots are its block's, so the outputs it fills are writes
+  `Logex.Parser.is_literal/1` holds with an integer's, its value a float, never −0.0; in
+  the IR, since M5-10's review (provisional), a real literal in a slot that computes in a
+  `real` holds its nearest single with its spelling, `{:real_lit, line,
+  0.10000000149011612, "0.1"}`, which `Logex.Compiler.lowered?/1` reads back from the
+  spelling. Destructure the line as `_`; never drop it from the AST, it is what diagnostics will cite. `Logex.Parser.well_formed!/1` states the whole tree `parse/1` can produce, and `instructionize/2` raises `ArgumentError` on any other (OE-1): every line a positive integer, every element of a rung on its one line, each rung on a line after the last, a name that lexes as one name token, a literal an integer, negative too since M3-3 (decision 97), a rung of one element or more and a group of one leg or more. A test that builds a tree by hand builds one of those. The lexer's tokens carry `{line, column}`; the parser keeps only the line, because the suite pins that shape. An instruction in the IR is `{symbol, line, operands}`, carrying its mnemonic's line; a `{:branches, legs}` node carries no line of its own. In the IR, and only there, a member of an instance is `{:member, line, path}`, `t1.acc` becoming `{:member, 3, ["t1", "acc"]}` (M1-6): the runtime's `read/2` and `write/3` take it as they take a tag, and anything that walks IR operands must handle it, as it must a label, `{:label, line, name}` (M3-5), a `jmp`'s or `lbl`'s operand, which is no tag. A walk that reads what an instruction's operands do looks its slots up through `Logex.Compiler.signature/2`, given the program's tag table, never in a table of its own (M2-5), as `Logex.Walk` does, which `Logex.Warnings` and `Logex.Edit` read: a `cal`'s slots are its block's, so the outputs it fills are writes
 - New instructions, step 1 — **survey the name before writing any code**: add a
   ``### `mnemonic` `` stanza to `docs/naming.md` (IEC 61131-3 element, function or
   function block with clause and table number, then the major vendor toolchains, then the

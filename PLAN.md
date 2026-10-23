@@ -138,7 +138,10 @@ infinity, NaN, −0.0 or subnormal ever held; real literals, `37.5` and `1.5e3`;
 arithmetic and comparisons by Figure 11; `sqrt`, a negative source 0.0 and a minor fault;
 the 34 real conversions, rounding a tie to even and then wrapping, and the 16
 truncations; and real points and forces, the forces file spelling a real so that it reads
-back exactly, with four questions put to the maintainer (§3, M5-10).
+back exactly, with four questions put to the maintainer (§3, M5-10); and its review the
+same day, a real literal read as the real its slot computes in, so that a setpoint moved
+into a `real` equals the very literal, and six tests that were missing, with a fifth
+question (§3, M5-10).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -6457,8 +6460,11 @@ the walks' cross-type reach and the documents.
   `cal`, every integer instruction and bit (`m510/cost_base.txt` and `cost_now.txt`), and
   compiles in no more reductions, 28 to 727 fewer, and every source tokenizes in exactly
   what it did; `real_test.exs` pins `move` of a dint at 17 reductions a rung, `add` at 34
-  and `gt` at 27, as before. A real's `move` costs 35 a rung and an lreal's 29, within
-  2.5x a dint's, its `add` and `sqrt` 46 and 36, within 1.5x a dint's `add`; a dint's
+  and `gt` at 27, as before. A real's `move` costs 29 a rung on a scan measured alone, as
+  the review found, and 35.45 in `real_test.exs`'s harness, which hands the inputs to each
+  call, an lreal's 29 in both, within 2.5x a dint's (the figure 35 recorded here before the
+  review was the harness's), its `add` and `sqrt` 46 and 36, within 1.5x a dint's `add`; a
+  dint's
   `move` in a program that holds a real 21, its destination looked up; and a program of
   reals compiles and scans in linear reductions.
 
@@ -6498,8 +6504,13 @@ the walks' cross-type reach and the documents.
   that is no value of its type refused by `entries!/1`; (8) `16#ff.3` is named whole as a
   digit outside base 16, and `1.5L` and `1.5.2` as a mistyped lexeme "after a real"; (9)
   a state handed in whose real tag holds an integer, `0` for 0.0, is refused, a real's
-  zero being 0.0; and (10) the class-check names `sqrt`'s destination "a real", "so
-  declare it a real or an lreal", a member among them.
+  zero being 0.0; (10) the class-check names `sqrt`'s destination "a real", "so
+  declare it a real or an lreal", a member among them; and (11), since M5-10's review, a
+  real literal is a value of the real its slot computes in, a conversion's source its
+  `from` type's, `move`'s, the arithmetic's and `sqrt`'s their destination's, a
+  comparison's the other operand's, two literals the doubles they lex as, rounded
+  silently, `eq r 16777217.0` reading 16777216.0, the fifth question; a `cal` formal's
+  copy-in rounding it as before.
 
   **Questions for the maintainer** (M5-10), each taken provisionally as written, the
   closest reading to the record:
@@ -6537,6 +6548,65 @@ the walks' cross-type reach and the documents.
      point's type taken, the file rewritten in the runner's spelling at the next force or
      unforce. Logix keeps forces in the project, not in a text file, so it offers no
      precedent (**unverified** for any file form).
+  5. *A real literal its slot rounds.* Asked after M5-10's review, below. The setpoint is
+     `move 37.1 sp` into a `real` and the lamp `ge sp 37.1 ote lamp`. A `real` holds only
+     singles, numbers of 24 significant bits, and 37.1 is none, so it holds
+     37.099998474121094. As built since the review, a real literal is a value of the real
+     its slot computes in, so the `37.1` in `ge sp 37.1` is the same single and the lamp
+     lights; and a literal the single rounds visibly, `eq r 16777217.0` or `move
+     16777217.0 r`, compiles silently, reading as 16777216.0, where the integer `16777217`
+     in the same slot is refused, told its nearest (decision 147). The options: (a) as
+     built, every real literal rounded to its slot's real silently, the operator seeing
+     the lamp light; (b) as built, with a warning where a literal written with more
+     significant digits than a single keeps, nine, is rounded, so `16777217.0` is warned
+     and `0.1` and `37.1` are not; (c) Logix's literal rule, an unsuffixed real literal
+     always a REAL, so in an `lreal`'s slot too `0.1` is the single, and `eq l 0.1` of an
+     `lreal` that was given the double 0.1 is false, where as built it is the double there
+     and true. What type IEC gives an untyped real literal in an instruction is
+     **unverified** (the review read it as the context's, which is (a)); Ed 3 gives a
+     typed literal, `REAL#0.1`, to name one (p.27, Table 5 feature 9, deferred by decision
+     149). Logix stores an unsuffixed floating-point immediate as a REAL and one suffixed
+     `L` as an LREAL (1756-RM018A p.870); what Logix's editor shows of a literal it rounds
+     is **unverified**.
+
+  *M5-10's review (2026-10-23), in two gated commits and one of documents.* The review
+  found one defect and five gaps in the tests, the gaps six mutants that survived the
+  suite. ``e4b13eb`` pins what was right, tests only: a block's formals compared with
+  `===` and scanned twice, an `int` 7 into a `real` formal 7.0 and an `int` formal into a
+  `real` tag 3.0, where `==` took 3 for 3.0, and a real literal into a `real` formal its
+  single (killing X1, the copy-out not rounded, and X2, the copy-in not rounded, each of
+  which left an integer in a real for the next scan to refuse); `eq i a` of an `int` 3 and
+  a `real` 3.0 true, either side (X9, `===`); an `lreal` `sub` past its range, `sub
+  -1.7e308 1.7e308`, saturating at −max with no power and its mirror at +max (X5, the sign
+  taken from the subtrahend); a host's input of 2^128 − 2^103, the least magnitude with no
+  finite single, refused in the pinned words, either sign, and the double below it taken
+  as the single's largest (X3, `<=`, under which it raised a `MatchError`); and a single
+  whose shortest spelling takes nine digits, 104.696724 for 104.69672393798828, printed so
+  by a configuration (X7, eight digits at most). ``e9286b0`` fixes the defect: a real
+  literal stayed the double it lexed as wherever no write rounded it, so after `move 37.1
+  sp` into a `real` `eq sp 37.1` and `ge sp 37.1` were false on every scan and `div a 0.1
+  r` divided by the double 0.1, then rounded again. It is now a value of the real its slot
+  computes in (provisional reading 11), settled by the compiler: a literal its slot rounds
+  lowers to `{:real_lit, line, single, spelling}`, quoted as written, `lowered?/1` reading
+  it back from its spelling, so a hand edit of its value is no compiled body; and the
+  contract walk's oracle types its literals so, `sqrt 1.0e-40 y0` the root of 0.0. Each
+  instruction's operands are lowered by a recursion of their own in place of a zip, so a
+  program of no real literal compiles in 9 to 1210 fewer reductions than at `64a47d1`, 25
+  programs measured (`rv10/cost_base.txt` and `cost_now.txt`), and scans in exactly what
+  it did; a program of real literals compiles in 0.6% to 3.8% more and scans in what it
+  did; a compile refused for a literal zero divisor, the review's sixth finding, now takes
+  4 fewer reductions than at `64a47d1` and 2 fewer than at `5eac41f`; and every source
+  tokenizes in what it did. README's `fan.exs`, `status.exs` and `selected.exs` re-run
+  byte-identical. The mutation table, each judged by the full suite's exit code
+  (`rv10/mut/run.log`): on ``e4b13eb``, X1, X2, X3, X5, X7 and X9 red; on ``e9286b0``, N1
+  (the fix reverted whole, a real literal lowered as it lexed; the contract walk red too),
+  N2 (a conversion's source slot not read as its `from` type), N3 (the destination not
+  read, a comparison's rule used for every instruction), N4 (a comparison's other operand
+  not read), N5 (no literal settled in an lreal's slot, a subnormal kept), N6 (a literal
+  its slot does not change rewritten with a spelling), N7 (a real literal not read back
+  from its spelling as `lowered?/1` lowers a body again), N8 (`lowered?/1` holding a
+  spelled real literal's value to its spelling, as before) and N9 (a literal past its
+  slot's range rounded, which raised), all red. 1935 tests (10 doctests), up from 1928.
 - **M5-11 · Arrays of elementary types, literal subscripts.** A spike first, throwaway:
   the representation (a tuple, §4.12's routine choice) and the size limit, measured. Then
   decision 151 with literal subscripts only, one to three dimensions: the syntax through

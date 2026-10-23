@@ -89,7 +89,10 @@ Source syntax today:
   A real literal is digits, a `.` and digits, then an exponent if wanted, `37.5`,
   `-0.25`, `1.5e3` or `2.5E-3`, `_` between two digits as an integer's; `1.`, `.5`,
   `1e5`, `1.5e+3` and Logix's `1.5L` are each an error naming the number, at its column
-  ("Reals", below). A rung keeps each literal as it was typed:
+  ("Reals", below). A real literal is a value of the real its slot computes in, the
+  destination's, the other side of a comparison's or a conversion's source type, so in a
+  `real`'s slot it is the nearest single and `eq sp 37.1` is true after `move 37.1 sp`
+  (provisional). A rung keeps each literal as it was typed:
   printed back, `move 16#00ff mask` reads as written, `007` and `-0` too, and every
   message quotes a literal so, "`move` writes `16#ffff` into `i`", while its value is
   what every rule judges, so an edit that only respells one changes nothing. A
