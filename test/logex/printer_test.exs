@@ -68,7 +68,11 @@ defmodule Logex.PrinterTest do
                      # tag's name, `w[16#a]` or `flags[slot]`
                      :element_name,
                      # with more than one subscript, `grid[1,7]` or `cube[0,1,2]`
-                     :subscripted_name
+                     :subscripted_name,
+                     # the maintainer's answers of 2026-10-23: a bit of an element, a
+                     # literal one or one a tag numbers, `faults[2].3` or `grid[1,2].[n]`,
+                     # a lexer rule, printed as written
+                     :element_bit_name
                    ])
 
   describe "round trip" do
@@ -316,7 +320,7 @@ defmodule Logex.PrinterTest do
 
   @names ~w(aa bb start motor stop overtemp fault x1 speed_sp t1.dn word.3 status.[n] t1.acc.[sel]
            status.[4] w.[16#a] t1.acc.[03] s.[-1] temps[3] grid[1,7] cube[0,1,2] w[16#a]
-           flags[slot] int[8] m1.temps[3])
+           flags[slot] int[8] m1.temps[3] faults[2].3 grid[1,2].[n])
 
   # Each rung on a line of its own, the next below it, as parse/1 gives them, so every
   # tree is one Logex.Parser.well_formed!/1 takes. The lines draw nothing from :rand, so
@@ -621,7 +625,8 @@ defmodule Logex.PrinterTest do
       MapSet.new(
         [:name | dotted_shape(String.contains?(name, "."))] ++
           tag_bit_shape(String.contains?(name, ".["), String.match?(name, ~r/\.\[[-0-9]/)) ++
-          element_shape(String.match?(name, ~r/[A-Za-z0-9_]\[/), String.contains?(name, ","))
+          element_shape(String.match?(name, ~r/[A-Za-z0-9_]\[/), String.contains?(name, ",")) ++
+          if_shape(String.contains?(name, "]."), :element_bit_name)
       )
 
   defp shapes({:int_lit, _, n}, _depth), do: MapSet.new([:int_lit | negative_shape(n < 0)])

@@ -142,7 +142,14 @@ defmodule FrontendGolden do
       deep,
       many
     ] ++
-      signed() ++ based() ++ tag_bits() ++ literal_bits() ++ reals() ++ tiny_reals() ++ arrays()
+      signed() ++
+      based() ++
+      tag_bits() ++
+      literal_bits() ++
+      reals() ++
+      tiny_reals() ++
+      arrays() ++
+      element_bits()
   end
 
   # M3-3 (decision 97): negative literals, a sign glued to its digits. Added after the rest,
@@ -395,6 +402,32 @@ defmodule FrontendGolden do
       "xic a.3[2]",
       "xic a[1].",
       "xic a[1]]"
+    ]
+  end
+
+  # The maintainer's answers of 2026-10-23 (M5-11's second question): a bit of an
+  # element, a literal one or one a tag numbers, in every spelling a bit takes, as a
+  # contact, a coil and a one-shot's storage bit, and the shapes that stay refused. Added
+  # after the rest, and recorded first by the front end before the answer, so that the diff
+  # of the commit that lands it is these entries alone.
+  defp element_bits do
+    [
+      "xic faults[2].3 ote lamp",
+      "xic faults[02].15 ote lamp",
+      "xic grid[1,2].[n] ote lamp",
+      "xic faults[2].[16#3] ote lamp",
+      "xic faults[2].[03] ote lamp",
+      "ote faults[2].3",
+      "ons edge[1].0 ote x",
+      "osr edge[1].0 pulse[0].1",
+      "move faults[2].3 x",
+      "xic faults[2].3.4",
+      "xic faults[2].[n].1",
+      "xic faults[2].[n",
+      "xic faults[2].[]",
+      "xic faults[2]. [n]",
+      "xic faults[2] .3",
+      "xic faults[2].[3x]"
     ]
   end
 
