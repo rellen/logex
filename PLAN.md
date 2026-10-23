@@ -120,7 +120,12 @@ of no bit strings compiling in what it did before M5-8, with two more questions;
 maintainer's answers to M5-8's six questions (decisions 204 to 209, §3, M5-8) the same
 day, five confirming what was built and one a change: a `bool` is a bitwise operand, as
 IEC's ANY_BIT holds BOOL, so `and left right both` of three bools is the AND of two
-switches and a bool widens into a bit string, never into an integer.
+switches and a bool widens into a bit string, never into an integer. And the ninth,
+M5-9, the same day: a bit whose number a tag holds, `status.[n]`, read by a contact and
+written by a coil, its number out of the word's bits the first major fault, the
+instruction doing nothing and the scan running on, on which `Logex.Runner` trips at the
+end of the step that met it, before the round's write, with four questions put to the
+maintainer (§3, M5-9).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -6069,6 +6074,113 @@ the walks' cross-type reach and the documents.
   reaches the new trip reason, its model running a tripping round's steps up to the one
   that raised it; and an element read stays within a measured bound of a tag's in
   reductions. *Size L.*
+  *(Landed 2026-10-23, in four gated commits and one of documents.)* `80f55e6` records 23 curated sources in
+  the front end's golden record, each a lex error before M5-9, the commit that lands the
+  syntax changing 9 of them, the seven that now lex and two whose error moves to the
+  parser, the diff read. `deae114` gives `%Logex.Fault{}` an enforced `severity`, `:minor`
+  for a zero divisor, and `read`, the number read out of range, nil for a zero divisor,
+  every test's pattern on it brought to the field. ``1cb3a31`` lands `status.[n]`: a name's last
+  part a tag's name in brackets, one name token, put into `printer_test.exs`'s generator
+  and `@required_shapes` as `:tag_bit_name` in the same commit, a literal in the brackets
+  and anything glued after the `]` a located lex error; the bit resolved as a bool, its
+  word an integer, a bit string or a member of one, its tag declared and of an integer
+  type, any width; lowered to `{:bit_at, line, path, tag, {width, top}, name}`; refused as
+  a one-shot's storage bit and as a pulse coil's pulse bit; read and written by the scan
+  through a mask from the number read, a number outside the word's bits thrown to the
+  instruction's own catch, which only an instruction with such a bit among its first
+  three operands and every `cal` have, the instruction doing nothing and passing no power,
+  its `%Logex.Fault{severity: :major, kind: :bit_out_of_range}` placed as decision 99
+  places a zero divisor's, a block's by its path and in its body's file; `Logex.Walk`'s
+  two uses, the warnings' whole-word coil and the edit's rung by its tag. ``0e73741`` trips
+  `Logex.Runner` at the end of the step whose run met the round's first major fault,
+  before any later step and the round's write, on decision 113's one path, the reason
+  `{:fault, task, instance, fault}`; `cycle/3` is unchanged, every due step run and the
+  fault an event. Done when: §4.4's plant from files on disk lights its run lamp from
+  `drive_faults.[sel]` over 60 seeded readings against an oracle that knows nothing of
+  logex, and `sel` at 16 trips it at the fast task's step as the slow task falls due,
+  every output 0 once and nothing after, the trip naming `lamp1`, `selected.ld`, line 5
+  and 16, the slow task's step never run (`end_to_end_test.exs`); `trip_test.exs`'s round
+  of a lamp, a counter after it in the faulting task and a slow task, the counter scanned
+  and the slow task's instances read as the round before left them, which fails when the
+  runner runs the round's every step (R2 below); a lone instance's faults through
+  `call/4`, a test for each kind of instruction, a contact, a coil energised and not,
+  `move`, a bitwise instruction and a shift, and a `cal`; a rung a jump skips and a block
+  whose `cal` is false raising nothing; `fault_test.exs` pins both severities; every
+  pattern on `%Logex.Fault{}` in the tests and README brought to the new field, README's
+  "Arithmetic" output re-run; the runner walk reaches `{:fault, ...}` among its trip
+  reasons, a program whose bit number is the panel's dint, its model tripping a step whose
+  run met a major fault at its end, no later step run; and a bit read through a tag costs
+  35 reductions a rung against a literal bit's 27 and a bool's 24, within 8 of the first
+  and 1.5x the second (`tag_bit_test.exs`). Cost against `1ee676b`: a program of no bit a
+  tag numbers scans rung for rung in exactly what it did, contacts, a literal bit and a
+  `move` measured, and a `cal` one reduction more a run, its catch, which a test pins
+  (a `try` costs a reduction on the BEAM, measured); every program compiles in fewer
+  reductions than before, `Logex.Walk.uses_of/2` now a recursion over the slots and
+  operands where it zipped them, 1.4% fewer for 200 `add`s.
+
+  The mutation table, each judged by the full suite's exit code (`mut3/run.log`,
+  `mut4/run.log`): on `1cb3a31`, T1 (no bracket in a name), T2 (a glued `]`
+  taken), T3 (a bracketed literal taken), T4 (no tag bit resolved), T5 (its tag
+  unchecked), T6 (a bit-string tag taken), T7 (no member's tag bit), T8 (lowered as a
+  member), T9 and T10 (a one-shot's storage bit, a pulse bit, through a tag taken), T11 (an
+  unsigned top bit for a signed word), T12 (the top bit out of range), T13 (no number out
+  of range), T14 (power passed on a fault), T15 (the fault dropped), T16 (the fault
+  minor), T17 and T19 (no catch for a second or a third operand), T18 (no catch for a
+  `cal`), T20 (the tag no use), T21 (a member's bit no member write), T22 to T24 (a coil,
+  a write and a storage bit not the word's whole), T25 (an edit's rung blind to the tag),
+  T26 (no destination type), T27 and T28 (no IR operand or unlowering for `lowered?/1`)
+  and T29 (a negative number in range), all red, T18, T27 and T28 on tests added for them
+  after they survived, T18 at first on the cost test alone; T30 (no declaration note for
+  the tag) survived, its clause dead, no program that declares nothing reaching the tag,
+  and was removed. On `0e73741`, R1 (no major fault trips), R2 (the trip at the end of the
+  round, every step run, the test that fails when the runner runs the round's every step),
+  R3 (the watchdog named before the fault) and R4 (a minor fault trips too), all red. 1855
+  tests (10 doctests), up from 1814.
+
+  *Provisional readings* (M5-9): (1) the fault's field for the number read is `read`, and
+  the fault names no operand, its file and line finding it; (2) a `cal` whose operand's
+  number is out of range runs nothing, its body's run dropped, whether its copy-in or its
+  copy-out met the number; (3) a step that met a major fault and outlasted its watchdog
+  trips for the fault; (4) a coil on `w.[n]` is a coil on its word whole, two of them or
+  one beside a coil on a bit of the word the second-`ote` warning, and any write of one a
+  write of each storage bit in the word; (5) a literal in the brackets, `w.[3]`, is a lex
+  error told to write `w.3`; (6) a bit-string tag as a bit number is refused, told
+  `word_to_uint`; and (7) a member's bit through a tag, `t1.acc.[n]`, is taken, as
+  `t1.acc.3` is.
+
+  **Questions for the maintainer** (M5-9):
+  1. *What a block call does when its bit number is out of range.* A conveyor's lamp
+     block is called `cal lamp1 drive_faults.[sel] lamp`, and `sel` reaches 16. As built,
+     the call does nothing on that scan: the block's body does not run, so its timers do not
+     move and its outputs keep last scan's values; the runner then trips, every output off.
+     The other reading runs the body with that one input left as it was, so a timer in the
+     block moves on. Under the runner the operator sees the same thing, every output off;
+     only a host that runs the program itself sees the difference, in the block's own
+     values. IEC says nothing; Logix's JSR whose input parameter is out of bounds aborts,
+     *"the subroutine does not run"* (1756-PM014O p.9), which is the reading built.
+  2. *Which reason a trip names when one step both faults and runs too long.* The fast
+     task's step reads `drive_faults.[sel]` with `sel` at 16 and also takes 60 ms against
+     its 50 ms watchdog. As built, the trip names the fault, "bit 16 of `drive_faults` on
+     line 5 of `selected.ld`", which is the cause the engineer must fix; the other reading
+     names the watchdog, "task fast took 60 ms", which is what a scan timer measured last.
+     Either way every output goes off once. IEC says nothing; Logix halts logic at the
+     faulting instruction (1756-PM014O p.9), so its watchdog never sees that scan end.
+  3. *Whether two coils on bits a tag numbers warn.* A program lights `ote lamps.[a]` on
+     one rung and `ote lamps.[b]` on another, `a` and `b` set by two selector switches.
+     As built, the second is warned of, "`lamps.[b]` already has an `ote` on line 4: the
+     last one in the scan decides it", since either may write the bit the other does, as
+     a coil on `lamps.3` beside `move x lamps` is; the other reading warns of nothing,
+     since the two are often meant to be different bits. The plant runs the same either
+     way; only the engineer's list of warnings differs. IEC defines no warnings; whether
+     Studio 5000's verify reports a duplicate destructive bit for an indirect address is
+     `unverified`.
+  4. *Whether `status.[4]`, a literal in brackets, is taken.* Logix writes a bit both ways,
+     `variable3.[4]` (1756-RM018A p.885) and `variable1.2` (p.884). As built, logex
+     refuses `status.[4]` with a message telling the engineer to write `status.4`, so that
+     one bit has one spelling and an online edit compares rungs by it; the other reading
+     takes it as the very bit `status.4`, so text pasted from a Logix export compiles
+     unchanged. Nothing the operator sees differs. IEC writes only `status.%X4` or
+     `status.4` (Ed 3 Table 17).
 - **M5-10 · Reals.** A spike first, on Elixir 1.20.4 and OTP 28, throwaway: the cost of a
   destination lookup and a single-rounding write, and the shortest spelling of a single
   that reads back to it, written and tested. Then the stanzas `real` and `lreal`, the 34
@@ -6612,7 +6724,9 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   `word.3`, bit access, is refused with its own message until it lands. **Bit access
   landed with M5-8** (2026-10-23): `status.3` is a bit of an integer or a bit string,
   lowered to `{:bit, line, path, n, mask}`; a bit of a `bool` is refused, and a bit
-  number held in a tag waits for M5-9.
+  number held in a tag waits for M5-9. **A bit number held in a tag landed with M5-9**
+  (2026-10-23): `status.[n]`, one name token, lowered to `{:bit_at, line, path, tag,
+  {width, top}, name}`.
 - **Comments — `//` to end of line.** `//[^\r\n]* : skip_token.` — it must **not**
   consume the newline, or `ote a // note\note b` silently becomes one rung. Test exactly
   that. Keep `;` a lex error: it is the rung *terminator* in neutral text and reusing it
@@ -6788,7 +6902,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | **closed** — metadata, a `@moduledoc` on `Logex.Compiler`, no `:logger`; CI is B3's |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
-| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3, and literal bit access with M5-8 on 2026-10-23; a bit number in a tag and arrays open, decided for Milestone 5 on 2026-10-21 (§3, M5-9 and M5-11) |
+| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3, and literal bit access with M5-8 and a bit number held in a tag, `status.[n]`, with M5-9 on 2026-10-23; arrays open, decided for Milestone 5 on 2026-10-21 (§3, M5-11) |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed; re-scoped 2026-10-01 as a one-way seed that emits a whole program as data |
 | B10 | nit | warnings | Second-`ote` warnings on one line come in map order, not rung order | `Logex.Warnings.second_otes/3` | **closed** — the uses walked in rung order; guarded by a 40-tag test in `validation_test.exs` |
 

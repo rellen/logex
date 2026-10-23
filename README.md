@@ -30,9 +30,9 @@ than an exception, a misspelt tag included. Its types are `bool` and IEC's eight
 integer widths, `sint` to `ulint`, signed and unsigned, with the 56 conversions between
 them (Milestone 5's M5-3), and IEC's four bit strings, `byte word dword lword`, with the
 bitwise instructions, bit access `status.3` and the 76 conversions between a bit string and
-another type (M5-8). What does not exist yet: a bit number held in a tag, `status.[n]`,
-and a real type, which `sqrt` waits for, both decided for Milestone 5 with the other data
-types (below). What logex is not, a safety controller first of all,
+another type (M5-8), and a bit whose number a tag holds, `status.[n]`, its number out of
+range a major fault that trips the plant (M5-9). What does not exist yet: a real type,
+which `sqrt` waits for, decided for Milestone 5 with the other data types (below). What logex is not, a safety controller first of all,
 is said plainly below ("What logex is not").
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
@@ -272,10 +272,10 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   with `move` by Figure 11 and the 56 integer conversions (M5-3, "Integer widths",
   below), and arithmetic and comparison over every width (M5-4), and the bit strings
   `byte word dword lword` with `and or xor not shl shr rol ror`, bit access `word.3` and
-  the 76 bit-string conversions (M5-8, "Bit strings", below); `real` and
+  the 76 bit-string conversions (M5-8, "Bit strings", below), and a bit number in a tag,
+  `word.[n]`, with the major fault (M5-9, "A bit number in a tag", below); `real` and
   `lreal`, with literals `37.5` and `1.5e3`; the rest of IEC's
-  typed conversions, `real_to_int` and `real_trunc_int` among them; a bit number in a tag,
-  `word.[n]`; arrays `var temps real[8]`, up to three dimensions, of timers and blocks
+  typed conversions, `real_to_int` and `real_trunc_int` among them; arrays `var temps real[8]`, up to three dimensions, of timers and blocks
   too, and at I/O points. IEC's typed
   counters have landed, `ctu_int` and the rest, with `ctu_dint` another word for `ctu`
   (M5-5, "A counter", below), and the long timers in nanoseconds, `ton_ltime`,
@@ -883,7 +883,7 @@ IO.puts(Logex.Diagnostic.format(diagnostic))
 ```
 $ mix run fill.exs
 400 in, no minutes yet  %{"overflow" => 0, "per_minute" => 0, "total" => 400, "total_ok" => 1, "valve" => 1}
-    %Logex.Fault{kind: :divide_by_zero, instruction: :div, path: nil, file: "fill.ld", line: 15}
+    %Logex.Fault{severity: :minor, kind: :divide_by_zero, instruction: :div, path: nil, file: "fill.ld", line: 15, read: nil}
 a minute in             %{"overflow" => 0, "per_minute" => 800, "total" => 800, "total_ok" => 1, "valve" => 1}
 past the setpoint       %{"overflow" => 0, "per_minute" => 600, "total" => 1200, "total_ok" => 1, "valve" => 0}
 a meter gone wild       %{"overflow" => 1, "per_minute" => -1073741548, "total" => -2147483096, "total_ok" => 0, "valve" => 1}
@@ -891,7 +891,7 @@ still wild              %{"overflow" => 1, "per_minute" => -48, "total" => -96, 
 a backflow of 5         %{"overflow" => 1, "per_minute" => -50, "total" => -101, "total_ok" => 1, "valve" => 1}
 a cycle: %{"valve" => 1}
     {:ran, "fill", "f1", 0}
-    {:fault, "fill", "f1", %Logex.Fault{kind: :divide_by_zero, instruction: :div, path: nil, file: "fill.ld", line: 15}}
+    {:fault, "fill", "f1", %Logex.Fault{severity: :minor, kind: :divide_by_zero, instruction: :div, path: nil, file: "fill.ld", line: 15, read: nil}}
 line 3: `div` divides by the literal `0`: a zero divisor gives 0 and passes no power on every scan, so a literal one is refused
 line 2, column 6: missing separator before `-`: "5-3" is neither a tag nor a number, and a sign begins a number
 ```
@@ -909,7 +909,7 @@ line 2, column 6: missing separator before `-`: "5-3" is neither a tag nor a num
   nearer limit instead; the dint now wraps, as Logix and the S7-1200 do, with no power out
   as on the S7-1200, and so does every integer width ("Integer widths", below).
 - A zero divisor, the minutes at start-up, gives 0 and no power on that scan, and is a
-  minor fault the scan reports: a lone instance's `state.faults` is every
+  minor fault the scan reports, `severity: :minor`: a lone instance's `state.faults` is every
   `%Logex.Fault{}` of the scan that returned it, `[]` for none, and a cycle gives each as
   an event just after its scan's `{:ran, ...}`, naming the task and the instance. The
   fault names the instruction, the file and the line, and `path`, the block instance it
@@ -1154,8 +1154,8 @@ line 10: `and` computes in `code`'s type, an int, but `lamp` is a bool (declared
   width, `status.16` of a word refused, and quoted as written in a message, `status.03`;
   a bit of a member, `t1.acc.3`, reads as one of a tag. A coil on a bit and a write of
   its word or member whole, `ote status.3` and `move x status`, are told as two `ote`s
-  on one tag are: the last one in the scan decides the bit. A bit number held in a tag,
-  `status.[n]`, has not landed.
+  on one tag are: the last one in the scan decides the bit. A bit whose number a tag
+  holds, `status.[n]`, is the next section's.
 - The 76 conversions between a bit string and another bit string or an integer type,
   `word_to_int`, `byte_to_word`, `int_to_dword` and the rest, are binary transfers, as
   IEC's Tables 24 and 25 give them (decision 148): the source's bits, in two's complement
@@ -1165,6 +1165,139 @@ line 10: `and` computes in `code`'s type, an int, but `lamp` is a bool (declared
 - The four type words and the eight bitwise mnemonics, `and`, `or` and `not` among them,
   and the 76 conversions are reserved in any case in every `.ld` file, and the type words
   in every `.logex` file too, so a tag named `word` or `or` stops compiling.
+
+### A bit number in a tag
+
+`selected.ld` — a fault lamp that shows the bit of a drive's 16-bit fault word that the
+operator selects, and a lamp lit while that bit is clear:
+
+```
+var_input  faults  word
+var_input  sel     int
+var_output lamp    bool
+var_output checked bool
+
+xic faults.[sel] ote lamp
+xio faults.[sel] ote checked
+```
+
+`selected.exs` scans it with the selector at 4, 15 and 16, then runs it in a plant on the
+manual clock, the drive's fault word and the selector its points, and moves the selector
+to 16 there; then it compiles three bits that cannot work and a literal written in
+brackets:
+
+```elixir
+{:ok, selected} = Logex.compile_file("selected.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(selected, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(selected, state)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  for fault <- state.faults, do: IO.puts("    #{inspect(fault)}")
+  state
+end
+
+Logex.Runtime.instance(selected)
+|> scan.("16#0010, bit 4 ", %{"faults" => 0x0010, "sel" => 4})
+|> scan.("16#0010, bit 15", %{"sel" => 15})
+|> scan.("16#0010, bit 16", %{"sel" => 16})
+
+{:ok, plant} =
+  Logex.Configuration.compile(
+    "plant",
+    """
+    task fast interval 10 priority 1
+    var_global drive_faults word at drive.i.0
+    var_global sel          int  at panel.i.0
+    var_global fault_lamp   bool at panel.q.0
+    program lamp1 selected with fast
+      lamp1.faults drive_faults
+      lamp1.sel    sel
+      lamp1.lamp   fault_lamp
+    """,
+    %{"selected" => selected}
+  )
+
+{:ok, clock} = Logex.Runner.Clock.Manual.start_link()
+{:ok, panel} = Logex.IO.Sim.start_link(reports: true, clock: clock)
+{:ok, drive} = Logex.IO.Sim.start_link(clock: clock)
+
+{:ok, runner} =
+  Logex.Runner.start_link(
+    configuration: plant,
+    io: %{"panel" => {Logex.IO.Sim, sim: panel}, "drive" => {Logex.IO.Sim, sim: drive}},
+    clock: {Logex.Runner.Clock.Manual, clock}
+  )
+
+Logex.IO.Sim.set(drive, [0], 0x0010)
+Logex.IO.Sim.set(panel, [0], 4)
+Logex.Runner.Clock.Manual.advance(clock, 10)
+IO.puts("bit 4:  the lamp #{inspect(Logex.IO.Sim.outputs(panel))}")
+Logex.IO.Sim.set(panel, [0], 16)
+Logex.Runner.Clock.Manual.advance(clock, 10)
+IO.puts("bit 16: the lamp #{inspect(Logex.IO.Sim.outputs(panel))}, #{inspect(Logex.Runner.status(runner).status)}")
+IO.puts("    #{inspect(Logex.Runner.status(runner).trip)}")
+Logex.Runner.stop(runner)
+
+{:error, diagnostics} =
+  Logex.compile(
+    "var status word\nvar code word\nvar on bool\nvar n int\n" <>
+      "xic status.[code] ote on\nxic on.[n] ote on\nxic on ons status.[n]",
+    name: "wrong"
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+
+{:error, [diagnostic]} = Logex.compile("var status word\nvar on bool\nxic status.[4] ote on", name: "literal")
+IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```
+$ mix run selected.exs
+16#0010, bit 4   %{"checked" => 0, "lamp" => 1}
+16#0010, bit 15  %{"checked" => 1, "lamp" => 0}
+16#0010, bit 16  %{"checked" => 0, "lamp" => 0}
+    %Logex.Fault{severity: :major, kind: :bit_out_of_range, instruction: :xic, path: nil, file: "selected.ld", line: 6, read: 16}
+    %Logex.Fault{severity: :major, kind: :bit_out_of_range, instruction: :xio, path: nil, file: "selected.ld", line: 7, read: 16}
+bit 4:  the lamp %{[0] => 1}
+bit 16: the lamp %{[0] => 0}, :tripped
+    {:fault, "fast", "lamp1", %Logex.Fault{severity: :major, kind: :bit_out_of_range, instruction: :xic, path: nil, file: "selected.ld", line: 6, read: 16}}
+line 5: `status.[code]` takes its bit number from `code`, a word (declared on line 2), which is no integer: a bit number is held in a tag of an integer type, so convert it first, with `word_to_uint`
+line 6: `on.[n]` names a bit of `on`, a bool, which has no bits
+line 7: `ons` keeps its storage bit in `status.[n]`, whose number `n` holds: a one-shot's storage bit is a bool or a bit with a literal number, as in `status.0`, so that it is one bit whatever the program does
+line 3, column 5: "status.[4]" is no name: a bit number in brackets is a tag's, `status.[n]`, and a literal one is written with none, `status.3`
+```
+
+- `faults.[sel]` is the bit of `faults` whose number `sel` holds when the instruction runs,
+  as Logix writes it (`MyDint.[Index]`, RM094N p.86), a bool wherever one goes, read by a
+  contact and written by a coil as `faults.3` is (decision 160). The word is an integer or
+  a bit string, or a member of one, `t1.acc.[n]`; the number is a tag of any integer
+  width, never an expression, which logex has no syntax for, and never a bit string,
+  which is told the conversion that makes it a number, `word_to_uint`. A literal number
+  is written with no brackets, `faults.4`. A one-shot's storage bit and a pulse coil's
+  pulse bit take a literal number only, so that each is one bit, which an online edit can
+  block (decision 154).
+- A number outside the word's bits when the instruction runs, 16 or −1 in a `word`, is a
+  major fault (decision 153's rule, decision 160): the instruction does nothing, writes
+  nothing and passes no power, the rest of its rung runs on that, and the scan finishes,
+  the fault in the state's `faults` with the number it read, `read: 16`, and its
+  `severity: :major`. An instruction that runs without reading or writing its bit checks
+  nothing: a contact or a latch on a rung with no power, a rung a jump skips and a block
+  whose `cal` is false (decision 82). A de-energised `ote` writes its 0, so it checks.
+- `Logex.Runner` trips at the end of the step whose run met a round's first major fault,
+  before it writes the round's outputs, on the trip's one path: every output 0 once and
+  nothing after, the reason `{:fault, task, instance, fault}`, naming the instance, the
+  file, the line and the number. That step's run scans every instance it holds; no later
+  step of the round runs, so `get/2` reads a later task's instances as the round before
+  left them. A host that runs the resource itself through `cycle/3`, which runs every due
+  step, is given the fault as an event and decides. Logix raises major fault 4/20 for a
+  subscript out of range and halts logic (1756-RM018A p.884, 1756-PM014O pp.9 and 20); its
+  manuals ask a bit number to be kept in range (1756-PM004L p.44) and do not say what
+  fault one out of it raises.
+- A coil on a bit a tag numbers may set any bit of its word, so it is told as a write of
+  the word whole: two of them, or one beside a coil on a bit of the word, are told as two
+  `ote`s on one tag are, and one beside a one-shot's storage bit in the word as another
+  write of the storage bit (provisional).
 
 ### Two pulse coils
 
@@ -2286,7 +2419,9 @@ the panel's outputs: %{[0] => 0, [4] => 0}
   an error, raised, threw, exited or gave no result the behaviour gives, a value that does
   not fit its point, an address that is no point's, a device that did not answer within
   its deadline, `:timeout`, a device hung inside its own read or report, `:timeout` too,
-  or one whose process went down; and `{:internal, message}`, an exception out of the
+  or one whose process went down; since M5-9 `{:fault, task, instance, fault}`, a major
+  fault, a bit whose number a tag holds out of its word's bits, the round's first, at the
+  end of the step that met it ("A bit number in a tag", above); and `{:internal, message}`, an exception out of the
   core, which no host can cause. A device's notices that waited for the runner, a latch or
   a fault of its own, are taken in the order they were raised, ties in device-name order,
   so a run on the manual clock trips for the same reason every time.
@@ -3022,7 +3157,7 @@ in every cycle's outputs at the value it holds.
   Function Block Diagram, SFC or Instruction List, no graphical editor, and no
   paste-compatibility with IEC's textual forms.
 - **Not everything a controller has.** One resource a configuration; bool, the eight
-  integer widths and the four bit strings only, no real, no bit number held in a tag, no
+  integer widths and the four bit strings only, no real, no
   arrays or structures; a jump forward only; no retained
   values, so a warm restart is a cold one; and forcing for inputs only, an output never
   forced.

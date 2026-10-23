@@ -2858,7 +2858,8 @@ one of:
 - *(Decided 2026-10-21 for Milestone 5, decisions 153 and 160:)* `{:fault, task,
   instance, fault}`, a major fault, an index or a tag bit number out of range, the
   round's first, at the end of the step that raised it and before its write (§4.12, "The
-  major fault"; decision 153's note).
+  major fault"; decision 153's note). *(Landed with M5-9, 2026-10-23, for a tag bit
+  number: the runner walk reaches it.)*
 
 *(Landed with M4-4, 2026-10-18, as this section says, with the readings the record left,
 five of them put to the maintainer and answered on 2026-10-19 as decisions 133 to 137,
@@ -3165,7 +3166,8 @@ the long timers in nanoseconds, the same day, and its seventh, M5-7, the based l
 `_` separators, the same day, and its eighth, M5-8, the bit strings, the bitwise
 instructions, literal bit access and the 76 bit-string conversions, on 2026-10-23, with
 the maintainer's answers to its six questions the same day, decisions 204 to 209, a bool
-a bitwise operand since decision 206**
+a bitwise operand since decision 206, and its ninth, M5-9, a bit number held in a tag,
+`status.[n]`, and the first major fault, the same day**
 (`PLAN.md` §3, Milestone 5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
 4, 8 byte integers (how does IEC and vendors handle signed?), 32/64 bit reals, arrays of
 all others, what else does IEC and vendors have."* It read IEC 61131-3 Ed 2:2003 and Ed
@@ -3616,6 +3618,18 @@ refused beside an integer, and a bool's shifts and rotates a one-bit pattern's u
 decision 165 (206, the last provisional); a coil on a bit beside a whole write of its
 word or member warned in either order (207); decision 187's warning for a bit string
 (208); and a bit quoted as typed, `conveyor.03` (209).)*
+*(Landed with M5-9, 2026-10-23: `status.[n]`, one name token whose last part is a tag's
+name in brackets, as the routine choice below has it, on every integer type and bit
+string and on a member of one, `t1.acc.[n]`; its tag declared and of an integer type, any
+width, a bit string refused, told `word_to_uint`, a bool and an instance told they are no
+integer; lowered to `{:bit_at, line, path, tag, {width, top}, name}`, its mask computed
+from the number the scan reads; refused as a one-shot's storage bit and as a pulse coil's
+pulse bit (decision 154); a literal written in brackets, Logix's `variable3.[4]` (RM018A
+p.885), a lex error told to write `status.3`, and anything glued after the `]` one too
+(provisional). `Logex.Walk` gives it as two uses, its word's with its slot's access and
+its tag's read; a coil on it is a write of its word whole, for the second-`ote` warning
+and a storage bit in the word (provisional). A number outside the width when its
+instruction reads or writes the bit is the major fault below.)*
 
 **Arrays** (decisions 151 to 154). `var temps real[8]`, `var grid int[4,8]`, `var cube
 int[2,3,4]`: Logix's form (PM004L pp.34–36), a count for each dimension, one to three
@@ -3670,6 +3684,23 @@ the outputs are not written either way, and only the state `get/2` reads after t
 differs. The S7-1500 goes to STOP; the S7-1200 stays in RUN with a diagnostic entry (TIA
 V21 *Addressing ARRAY components*); CODESYS checks only with `CheckBounds`; no vendor
 clamps or wraps an index.
+*(Landed with M5-9, 2026-10-23, for its bit kind, `:bit_out_of_range`; the index kind
+waits for M5-12. `%Logex.Fault{}` holds `severity` and `read`, the number read, nil for a
+zero divisor (provisional, the field's name); the instruction that reads or writes the
+bit does nothing, a contact, a coil, `move`, a bitwise instruction or a shift, passing no
+power, and a `cal` whose operand is out of range runs nothing, its body's run dropped
+whether its copy-in or its copy-out met the number, as Logix's JSR whose parameter is out
+of bounds aborts and runs no subroutine (1756-PM014O p.9: *"the JSR instruction aborts
+(the subroutine does not run)"*; provisional); an instruction that reads and writes no
+bit, a de-energised contact or latch, checks nothing, and a de-energised `ote`, which
+writes its 0, does. `Logex.Runner` trips `{:fault, task, instance, fault}` at the end of
+the step whose run met the round's first, and a step that met one and outlasted its
+watchdog trips for the fault (provisional). Logix's manuals ask that a bit number be kept
+within the integer's bits (1756-PM004L p.44) and do not say what fault one past it raises;
+4/20 is the subscript's (1756-RM018A p.884, 1756-PM014O p.20), so that logex's bit kind is
+Logix's 4/20 by analogy, **unverified** for a bit. Logix runs on past a fault its handler
+clears, *"the faulted instruction does not run and execution resumes with the next
+instruction"* (1756-PM014O p.9), as logex's scan runs on.)*
 
 **I/O points** (decision 156). Every elementary scalar type may be located, and so may an
 array: `var_global temps real[8] at card.i.0` occupies `card.i.0` to `card.i.7`, in the
@@ -5594,6 +5625,8 @@ the record keeps; 99 is the shape of the report decision 78 asked for and left t
     to a dint's limit" was not.)* *(Amended 2026-10-21 by decision 164: a minor kind more,
     `:negative_sqrt`, `instruction: :sqrt`, so that the kinds are `:divide_by_zero` and
     `:negative_sqrt`, minor, and `:index_out_of_range` and `:bit_out_of_range`, major.)*
+    *(Landed with M5-9, 2026-10-23, for `severity` and `:bit_out_of_range`, with `read`, the
+    number read, nil for a zero divisor.)*
 
 **M3-4's own choices, 2026-10-14.** Decisions 100–103 are M3-4's routine choices for the
 pulse coils decision 80 adopted, each with the alternative the record keeps; where the
@@ -6029,7 +6062,8 @@ over.
      reasons, and the runner walk's "every trip reason", gain it with `PLAN.md`'s M5-9.)*
      *(Settled 2026-10-21, the maintainer answering §4.12's tenth question as recorded:
      the runner trips at the end of the step that raised the round's first major fault,
-     no later step of the round running, decision 153's note.)*
+     no later step of the round running, decision 153's note.)* *(Landed with M5-9,
+     2026-10-23, for a tag bit number.)*
 114. **A device that fails or is lost (Milestone 4).** The drive's network cable comes
      loose, or an input card stops answering.
      - It is treated as the watchdog is: everything off, and wait for a restart;
@@ -7411,7 +7445,8 @@ the decisions the rest settle.
      tenth question, of when in a round the runner trips: at the end of the step that
      raised the fault, no later step of the round running. *(Settled 2026-10-21, the
      maintainer answering that question as recorded: the runner trips at the end of the
-     step that raised the round's first major fault.)*
+     step that raised the round's first major fault.)* *(Landed with M5-9, 2026-10-23,
+     for a tag bit number, `:bit_out_of_range`; an index out of range waits for M5-12.)*
 154. **Arrays of timers, counters and blocks, and one-shots on elements (Milestone 5).**
      Each lane has its own reject timer, `var lane_t ton[4]`, and its own one-shot, `var
      edge bool[4]`.
@@ -7584,6 +7619,13 @@ the decisions the rest settle.
      out of range does** (the maintainer, 2026-10-21), as recommended in the follow-up. A
      one-shot's storage bit, or a pulse coil's bit, on a bit takes a literal number
      (decision 154).
+     *(Landed with M5-9, 2026-10-23, as §4.12's "Bit strings" and "The major fault" say,
+     with the record's readings, provisional, each put to the maintainer in `PLAN.md`'s
+     M5-9: a `cal` whose operand's number is out of range runs nothing; a step that met a
+     major fault and outlasted its watchdog trips for the fault; a coil on `w.[n]` is a
+     coil on the word whole, for the warnings; and a literal in the brackets, `w.[3]`, is
+     refused, told `w.3`. The run lamp follows `drive_faults.[sel]` in §4.4's plant and
+     `sel` at 16 trips it.)*
 
 **The answers to Milestone 5's questions put back, 2026-10-21** (§4.12, "Put to the
 maintainer"). Decisions 161–163 are the three of §4.12's ten questions the maintainer
