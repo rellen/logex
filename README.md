@@ -1349,8 +1349,8 @@ real_trunc_int speed whole
 sqrt hz root ote root_ok
 ```
 
-`fan.exs` scans it five times, gives it a frequency too big for a `real`, and compiles a
-literal and eight instructions that cannot work:
+`fan.exs` scans it five times, gives it a frequency too big for a `real`, compiles a
+literal and nine instructions that cannot work, and one whose literal a `real` rounds:
 
 ```elixir
 {:ok, fan} = Logex.compile_file("fan.ld")
@@ -1384,11 +1384,16 @@ IO.puts(Logex.Diagnostic.format(lexed))
   Logex.compile(
     "var speed real\nvar count dint\nvar rpm int\nvar on bool\n" <>
       "move 16777217 speed\nmove speed rpm\ngt speed count ote on\ndiv speed 0.0 speed\n" <>
-      "mod speed 2 rpm\nsqrt -4.0 speed\nsqrt speed rpm\nxic speed.3 ote on",
+      "mod speed 2 rpm\nsqrt -4.0 speed\nsqrt speed rpm\nxic speed.3 ote on\nmove 1.0e-40 speed",
     name: "wrong"
   )
 
 for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+
+{:ok, rounded} =
+  Logex.compile("var_output speed real\nmove 16777217.0 speed\nmove 37.1 speed", name: "rounded")
+
+for warning <- rounded.warnings, do: IO.puts(Logex.Diagnostic.format(warning))
 ```
 
 ```
@@ -1409,6 +1414,8 @@ line 9: `mod` reads an integer, but `speed` is a real (declared on line 1)
 line 10: `sqrt` takes the root of the literal `-4.0`: a negative source gives 0.0, passes no power and raises a minor fault on every scan, so a literal one is refused
 line 11: `sqrt` writes a real, but `rpm` is an int (declared on line 3): a square root is a real's, so declare it a real or an lreal
 line 12: `speed.3` names a bit of `speed`, a real, which has no bits
+line 13: `move` writes `1.0e-40` into `speed`, a real: it is too near 0.0 for a real, whose smallest above 0.0 is 1.1754943508222875e-38: it would be written as 0.0
+line 2: warning: `16777217.0` has more digits than a real keeps: it is held as 16777216.0
 ```
 
 - `real` and `lreal` are IEC's 32- and 64-bit floating point, declared wherever an
@@ -1424,14 +1431,23 @@ line 12: `speed.3` names a bit of `speed`, a real, which has no bits
   passes no power and is the minor fault `:negative_sqrt`, reading the source, where Logix
   roots its absolute value (1756-RM018A p.474), so that a root of −0.25 never reads as 0.5
   (decision 164); a literal negative source, a literal `0.0` divisor and `mod` of a real
-  are refused when the program compiles.
+  are refused when the program compiles. So is a real literal outside its real's normal
+  range, in both directions (decision 216): past the largest, and so near 0.0 that a
+  write would flush it, `move 1.0e-40 speed` above, 0.0 itself taken however it is
+  written; one nearer 0.0 than an lreal's smallest normal value, `1.0e-310`, is no number
+  logex holds at all, refused as it lexes.
 - A real meets an integer by Figure 11 (decision 147): an `int` or a `uint` widens into a
   `real`, a `dint` into an `lreal` only, and a `real` into an `lreal`; any other pair is
   told its conversion, `dint_to_real`. An integer literal in a real's slot is the value it
   spells, refused where the real cannot hold it exactly, `16777217` in a `real` told its
-  nearest, 16777216.0; a real literal is no integer's. An integer at a real point, from a
-  host, a device or a force, is stored as its nearest real, and only one past the real's
-  range is refused, or trips the plant as a bad value (decision 166).
+  nearest, 16777216.0; a real literal is no integer's. A real literal is a value of the
+  real its slot computes in, so `move 37.1 sp` then `eq sp 37.1` is true in a `real`;
+  one with more digits than that real keeps, whose number is neither the value held nor
+  the shortest text of it, compiles with a warning naming what it is held as,
+  `16777217.0` above, where `0.1` and `37.1` are not warned of (decision 219). An
+  integer at a real point, from a host, a device or a force, is stored as its nearest
+  real, and only one past the real's range is refused, or trips the plant as a bad value
+  (decision 166).
 - The 34 real conversions round to the nearest integer, a tie to the even one, as IEC's
   rounding is, and then wrap, with no power, where the result does not fit (decision 161):
   `real_to_int` of 36000.0 is −29536, as above. The 16 truncations, `real_trunc_int` and
@@ -1439,9 +1455,12 @@ line 12: `speed.3` names a bit of `speed`, a real, which has no bits
   `speed.3` is refused (decision 155).
 - A force of a real point and a configuration file's real value are written as the
   shortest text that reads back to the value, a single's for a `real`, `fan_hz 0.1` and
-  never `fan_hz 0.10000000149011612`, and read back exactly, the file read only as the
-  runner writes it (decision 156). An online edit compares an initial value exactly, so
-  `var x real 0` changed to `var x real 0.0` is reported, `{0, 0.0}` (decision 157).
+  never `fan_hz 0.10000000149011612`, and read back exactly (decision 156); a forces
+  file edited by hand may give a real point any number the lexer reads as one literal,
+  `fan_hz 37.50`, `3.75e1` or `37`, held at its nearest value and written again in the
+  runner's spelling at the next force (decision 218), an integer point's line still its
+  plain decimal. An online edit compares an initial value exactly, so `var x real 0`
+  changed to `var x real 0.0` is reported, `{0, 0.0}` (decision 157).
 - `real`, `lreal`, `sqrt`, the 34 conversions and the 16 truncations are reserved in any
   case in every `.ld` file, and the two type words in every `.logex` file too.
 

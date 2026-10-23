@@ -141,7 +141,13 @@ truncations; and real points and forces, the forces file spelling a real so that
 back exactly, with four questions put to the maintainer (§3, M5-10); and its review the
 same day, a real literal read as the real its slot computes in, so that a setpoint moved
 into a `real` equals the very literal, and six tests that were missing, with a fifth
-question (§3, M5-10).
+question (§3, M5-10); and the maintainer's answers to its five questions (decisions 215
+to 219, §3, M5-10) the same day, two confirming what was built and three changes: a real
+literal outside its real's normal range is refused in both directions, `move 1.0e-40
+fan_speed` as well as `move 1.0e39 fan_speed`; a forces file's real point takes any number
+that reads as a value of its type, `fan_hz 37.50` as 37.5; and a real literal its real
+rounds visibly, `16777217.0` in a `real`, compiles with a warning naming what it is held
+as.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -6513,7 +6519,7 @@ the walks' cross-type reach and the documents.
   copy-in rounding it as before.
 
   **Questions for the maintainer** (M5-10), each taken provisionally as written, the
-  closest reading to the record:
+  closest reading to the record, answered on 2026-10-23 (decisions 215 to 219, below):
 
   1. *`sqrt` and integers.* The fan's vibration is `sqrt fan_var fan_dev`; a programmer
      with an `int` count wants `sqrt boxes side` into an `int`. As built, the source may
@@ -6607,6 +6613,108 @@ the walks' cross-type reach and the documents.
   from its spelling as `lowered?/1` lowers a body again), N8 (`lowered?/1` holding a
   spelled real literal's value to its spelling, as before) and N9 (a literal past its
   slot's range rounded, which raised), all red. 1935 tests (10 doctests), up from 1928.
+
+  **The maintainer's answers**, 2026-10-23 (decisions 215 to 219). (1) *Confirmed*:
+  `sqrt` reads any number that widens into its destination's real and writes only a
+  `real` or an `lreal` (decision 215). (2) *Changed*: a real literal outside its slot's
+  real's normal range is refused when the program compiles in both directions, 0.0
+  itself taken however it is written (decision 216), superseding provisional reading
+  (3)'s second half: `move 1.0e-40 fan_speed` into a `real` is told "it is too near 0.0
+  for a real, whose smallest above 0.0 is 1.1754943508222875e-38: it would be written as
+  0.0", judged by the literal's nearest single, so `1.1754943e-38`, which rounds up to the
+  smallest normal, is taken, in every slot the literal rules judge and as an initial
+  value; and an lreal's slot is held to its own normal range, a literal nearer 0.0 than
+  2.2250738585072014e-308 no number logex holds, a lex error at its column, as one past an
+  lreal's largest is (provisional words), Logix's stated ranges being exactly the normal
+  ones and 0.0 (1756-RM018A pp.873–874). (3) *Confirmed*: a result flushed to 0.0 passes
+  power (decision 217). (4) *Changed*: a forces file's real point takes any number the
+  lexer reads as one literal, `fan_hz 37.50`, `3.75e1`, `37`, `16#25` or `3_7.5`, held at
+  its nearest value, the next force or unforce rewriting the file in the runner's
+  spelling, a value outside the type still refused (decision 218), superseding
+  provisional reading (5); an integer or bool point's line keeps decision 140's plain
+  decimal (provisional), and a force's 1.0e-40 is 0.0, a force being no literal
+  (provisional). (5) *Changed, the lead's recommendation*: rounding as built, and a
+  warning where a real literal has more digits than its slot's real keeps (decision 219).
+  The rule settled: with H the value held and S the shortest decimal whose nearest value
+  of the type is H, a literal is warned of where the number its text writes, exactly, is
+  neither H nor S's, "`16777217.0` has more digits than a real keeps: it is held as
+  16777216.0", `0.1` and `37.1` not; the maintainer's two conditions as worded, the
+  decimal differing from H and more significant digits than 9 or 17, would not have warned
+  `16777217.0`, which has eight, so the count is replaced by S, which has at most 9 or
+  17, and every literal the two conditions warn is still warned. Two literals compared and
+  a declaration's initial value are not looked at (provisional).
+
+  **Questions for the maintainer** (the answers' open readings), each taken
+  provisionally as written, the closest reading to the record:
+
+  1. *An integer point's line in a hand-edited forces file.* The engineer who may now
+     write `fan_hz 37.50` for the fan's `real` frequency writes `eye_1 01` or `level
+     16#ff` for the photo-eye's `bool` and the tank's `dint`. As built, those lines are
+     still refused at the start, "is no force", decision 140's strict reading kept for
+     every point but a real one, so the plant does not start until the line is put right.
+     The options: (a) as built; (b) any number the lexer reads that fits the point, `01`
+     as 1 and `16#ff` as 255, as a real point's is now taken, the file rewritten at the
+     next force. Logix keeps forces in the project (1756-PM004L pp.52–53), so it offers
+     no precedent for a file (**unverified** for any file form); IEC says nothing of
+     forcing.
+  2. *A rounded initial value.* `var_output sp real 16777217.0` declares a setpoint the
+     `real` holds as 16777216.0, as `move 16777217.0 sp` does. As built, the `move` is
+     warned of (decision 219) and the declaration is not, nor a configuration's
+     `var_global sp real 16777217.0`, since a tag table keeps a value and not its
+     spelling, so the engineer reading the warnings sees one and not the other. The
+     options: (a) as built; (b) the declaration and the global warned of too, in the same
+     words, which needs each declaration's spelling kept. IEC and Logix say nothing that
+     was found; what Logix's editor shows of a rounded constant is **unverified**.
+  3. *A literal nearer 0.0 than an lreal holds.* `move 1.0e-310 big` into an `lreal` is
+     refused as the program is read, "`1.0e-310` is no number logex holds: an lreal's
+     smallest above 0.0 is 2.2250738585072014e-308", at its column, the words of `1.0e400`
+     past an lreal's largest, where `move 1.0e-40 speed` into a `real` is refused naming
+     the instruction and the tag, "too near 0.0 for a real … it would be written as 0.0".
+     The operator never sees either run. The options: (a) as built, the one an lreal
+     cannot hold refused as no number at all, in any slot; (b) both refused naming the
+     instruction and the tag, the lexer taking `1.0e-310` and the slot refusing it.
+     Logix states the LREAL range as its normal values and 0.0 (1756-RM018A p.874); what
+     its editor does with such a constant is **unverified**.
+
+  In three gated commits and one of documents. `396c459` records 11 curated sources in the
+  front end's golden record, real literals nearer 0.0 than an lreal's smallest normal
+  value and their edges, recorded by the front end before decision 216. `770ea48` lands
+  the three changes with decisions 215 to 219: the lexer's `{:real_small, run}` for a
+  literal whose digits are not all 0 and whose double is nearer 0.0 than an lreal's
+  smallest normal, the golden record regenerated, its diff read, 7 of the 11 changed, each
+  now a lex error, and every other source unchanged; `Logex.Real.flushed?/2`, read by
+  `Logex.Declarations.holds?/2`, the literal rules, and by a configuration line's real
+  global, which is kept as written for `check/1` to refuse; the runner's forces file read
+  through the lexer, `Logex.Real.read/2` gone; `Logex.Compiler.literal_real/4`, the slot's
+  real, shared by the lowering and `Logex.Warnings`, whose pass over literals,
+  `by_literal/2`, tells an instruction holding a real literal by its clause's guard; and
+  `Logex.Real.held_as/3`, the rule, each number compared exactly as a fraction of two
+  integers. Tests: `real_test.exs`'s three new groups, a literal a write would flush in
+  every slot and as each kind of initial value, its edge at the smallest normal single,
+  one below an lreal's a lex error in four spellings, a forces file's real point read
+  in eleven spellings and rewritten by the next force, its refusals, and the warning, its
+  cases, a block's formal before and after its third operand and a block's real member,
+  and the rule restated over 1500 seeded texts, a hundred warned and a hundred not in
+  each real, with the cost of a program of none pinned at what it was at `a8a4f8f`;
+  `force_test.exs`'s integer point spelled `16#ff` still no force and a real at a bool
+  point told it does not fit; and the contract walk's real literals drawn within a
+  single's normal range. Cost against `a8a4f8f`, 25 programs (`a9/cost_base.txt` and
+  `a9/cost_now.txt`): a program of no real literal compiles in exactly what it did, or 2
+  to 4 reductions fewer, scans in exactly what it did, and every source tokenizes in
+  exactly what it did; one of 200 real literals compiles in 6% to 13% more, each literal
+  its slot rounds spelled and compared for the warning. README's `fan.exs` re-run, a
+  literal too near 0.0 refused and `16777217.0` warned of. The mutation table, each judged
+  by the full suite's exit code (`a9/mut/run.log`), on `770ea48`:
+  D1 to D9 (decision 216: the lexer's lreal edge, its zero spellings, `flushed?/2` and its reading by the literal rules and a configuration
+  line's global) all red; F1 to F5 (decision 218: a spelled real force taken, held at
+  its nearest, refused outside its type, and the integer point's strict reading) all
+  red; W1, W2, W5 to W7 and W9 to W11 (decision 219: the pass's guards, the rule's two
+  comparisons, the exponent, a member's real and a text that lexes as no literal) red,
+  and W3, W4 and W8 (a cal's literal at its third operand and past it, and a negative
+  literal's sign) survived, so `526e18e` pins a cal's one real literal at each of its
+  operands and `-0.100000001490116119384765625` not warned of, after which all three
+  are red on it.
+  1949 tests (10 doctests), up from 1935.
 - **M5-11 · Arrays of elementary types, literal subscripts.** A spike first, throwaway:
   the representation (a tuple, §4.12's routine choice) and the size limit, measured. Then
   decision 151 with literal subscripts only, one to three dimensions: the syntax through

@@ -3169,7 +3169,8 @@ the maintainer's answers to its six questions the same day, decisions 204 to 209
 a bitwise operand since decision 206, and its ninth, M5-9, a bit number held in a tag,
 `status.[n]`, and the first major fault, the same day, and its tenth, M5-10, the reals,
 `real` and `lreal`, with `sqrt`, the 34 real conversions and the 16 truncations, the same
-day**
+day, with the maintainer's answers to its five questions the same day, decisions 215 to
+219**
 (`PLAN.md` §3, Milestone 5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
 4, 8 byte integers (how does IEC and vendors handle signed?), 32/64 bit reals, arrays of
 all others, what else does IEC and vendors have."* It read IEC 61131-3 Ed 2:2003 and Ed
@@ -3551,6 +3552,13 @@ message quotes `0.1` and a scan pays nothing; a literal below the normal range i
 either real's slot, `eq l 1.0e-310` true of an lreal 0.0; and a literal the single rounds,
 `eq r 16777217.0`, is taken silently, where `16777217` is refused (decision 147), `PLAN.md`
 M5-10's fifth question.)*
+*(Changed by decisions 216 and 219, 2026-10-23: a real literal its slot's real would flush
+to 0.0 is refused, `move 1.0e-40 r` into a `real`, 0.0 itself taken however it is written,
+and one nearer 0.0 than an lreal's smallest normal value, `1.0e-310`, is a lex error, as
+one past an lreal's largest is; and a literal its real rounds compiles with a warning
+where the number it writes is neither the value held nor that value's shortest decimal,
+"`16777217.0` has more digits than a real keeps: it is held as 16777216.0", `0.1` and
+`37.1` not warned of.)*
 
 **Reals** (decision 150). No infinity and no NaN ever reaches a state, an output, a
 `get/2` answer or the forces file. A zero divisor gives 0.0, no power and the minor fault
@@ -3793,6 +3801,10 @@ the line the runner would write, `fan_hz 0.1` and `big 3.0` (provisional words);
 `print/1` spelling a real global's initial value as the forces file does, a real global's
 initial value that is no value of its type, `0.1` given from Elixir to a `real`, refused
 by `entries!/1`, a line's read as its nearest (provisional).)*
+*(Changed by decision 218, 2026-10-23: a real point's line in the forces file is any number
+the lexer reads as one literal, `fan_hz 37.50`, `3.75e1` or `37`, held at its nearest
+value, the next force or unforce writing the file in the runner's spelling; an integer or
+bool point's line is still its plain decimal.)*
 
 **An online edit** (decision 157). A tag's, member's or global's type, an array's element
 type, its dimensions and its sizes, change only with a restart, as §4.9's type rule has it
@@ -7060,6 +7072,10 @@ photo-eye that counts boxes.
      **Taken: read exactly as the runner writes it,** and an unforce of a point not
      forced accepted (the maintainer, 2026-10-19), as built: a strict file is the safest
      for a list that decides what the plant reads.
+     *(Changed for a real point by decision 218, 2026-10-23: its line takes any number
+     the lexer reads as one literal and its type holds, held at its nearest value, the
+     next force or unforce writing the file again in the runner's spelling; every other
+     point's line is still read exactly as the runner writes it.)*
 141. **Two engineers stepping one edit (Milestone 4),** following decisions 60, 66 and
      119. Engineer A accepts a change to the fan's interval from one laptop while
      engineer B, from another, takes a step of the edit the controller already holds.
@@ -7464,6 +7480,9 @@ the decisions the rest settle.
      *(Landed for the reals with M5-10, 2026-10-23, as §4.12's "Literals" says: `37.5`,
      `-0.25`, `1.5e3` and `1.5E-3` lex, each kept as written; `1.`, `.5`, `1e5`, `1.5e+3`
      and `1.5L` are located lex errors; `1.5_` is now a misplaced `_`.)*
+     *(Since decision 216, 2026-10-23, a real literal nearer 0.0 than an lreal's smallest
+     normal value, `1.0e-310` or `1.0e-400`, is a located lex error too, as one past an
+     lreal's largest is, `0.0e-400` the zero.)*
 150. **What a real does with a zero divisor, an overflow, NaN and −0.0 (Milestone 5).**
      The fan's speed per box is `div fan_speed boxes_per_min rate`, and just after
      start-up `boxes_per_min` is 0.0; elsewhere `mul big big product` passes 3.4E38 in a
@@ -7495,6 +7514,9 @@ the decisions the rest settle.
      bits, saturated first; `neg 0.0` and a subnormal product written as 0.0 with power;
      a zero divisor, an int's 0 or a real's 0.0, giving 0.0 into a real; and a seeded walk
      of values near each real's limits from which no exception leaves a scan.)*
+     *(Since decision 216, 2026-10-23, a literal a write would flush is refused when the
+     program compiles, so a subnormal is flushed only from a result or an input; decision
+     217 confirms that a flushed result passes power.)*
 151. **How an array is declared and written (Milestone 5).** The oven conveyor has eight
      zone temperatures, `temps`; a reject lamp for each of four lanes; a grid of
      setpoints by zone and recipe.
