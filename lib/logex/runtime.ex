@@ -1223,14 +1223,15 @@ defmodule Logex.Runtime do
   # M5-11: an array's value is a tuple of its first dimension's size, of tuples of the next
   # for more dimensions, each element of its elements' type, told by the element's name,
   # `temps[3]`; a guard an element where every one fits.
-  defp of_type({:array, type, dims} = array, value, path, blocks, acc) do
-    shaped(
-      Logex.Array.held?(value, dims, &element_fits?(type, &1)),
-      Logex.Array.held?(value, dims, fn _element -> true end),
-      {array, value, path, blocks},
-      acc
-    )
-  end
+  defp of_type({:array, type, dims} = array, value, path, blocks, acc),
+    do:
+      fitted_array(
+        all_fit?(value, dims, type),
+        array,
+        value,
+        {path, blocks},
+        acc
+      )
 
   defp of_type(%FbType{body: nil, members: members}, %{} = map, path, blocks, acc),
     do:
@@ -1267,28 +1268,76 @@ defmodule Logex.Runtime do
 
   defp later(value, now), do: "#{value} is later than the instance's now, #{now}"
 
+  # Its shape is looked at only where an element does not fit, so a state whose every
+  # element fits is walked once (M5-11's review).
+  defp fitted_array(true, _array, _value, _at, acc), do: acc
+
+  defp fitted_array(false, {:array, _, dims} = array, value, {path, blocks}, acc),
+    do:
+      shaped(
+        false,
+        Logex.Array.held?(value, dims, fn _element -> true end),
+        {array, value, path, blocks},
+        acc
+      )
+
+  # Every element of an integer, bit-string or bool array is judged by one guard, with no
+  # function called, and a real's by its rule (M5-11's review): a state's array is walked
+  # once each time it is handed in, so this is the cost of holding one.
+  defp all_fit?(value, [count], type)
+       when type not in @reals and is_tuple(value) and tuple_size(value) == count,
+       do: guarded(value, count, type)
+
+  defp all_fit?(value, [count | [_ | _] = dims], type)
+       when is_tuple(value) and tuple_size(value) == count,
+       do: rows_fit?(value, count, {dims, type})
+
+  defp all_fit?(value, dims, type), do: Logex.Array.held?(value, dims, &element_fits?(type, &1))
+
+  defp guarded(_value, 0, _type), do: true
+
+  defp guarded(value, i, type) when is_fitting(type, :erlang.element(i, value)),
+    do: guarded(value, i - 1, type)
+
+  defp guarded(_value, _i, _type), do: false
+
+  defp rows_fit?(_value, 0, _row), do: true
+
+  defp rows_fit?(value, i, {dims, type} = row),
+    do: all_fit?(:erlang.element(i, value), dims, type) and rows_fit?(value, i - 1, row)
+
   defp element_fits?(type, value) when is_fitting(type, value), do: true
   defp element_fits?(type, value) when type in @reals, do: Logex.Real.value?(type, value)
   defp element_fits?(_type, _value), do: false
 
-  defp shaped(true, _shape, _array, acc), do: acc
-
-  defp shaped(false, true, {{:array, type, dims}, value, [name | path], blocks}, acc),
-    do:
-      Enum.reduce(Enum.zip(Logex.Array.indexes(dims), Logex.Array.to_flat(value, dims)), acc, fn
-        {index, element}, acc ->
-          of_type(type, element, [Logex.Array.name(name, index) | path], blocks, acc)
-      end)
+  defp shaped(false, true, {{:array, type, dims} = array, value, [name | path], blocks}, acc) do
+    Enum.zip(Logex.Array.indexes(dims), Logex.Array.to_flat(value, dims))
+    |> Enum.reduce([], fn {index, element}, lines ->
+      of_type(type, element, [Logex.Array.name(name, index) | path], blocks, lines)
+    end)
+    |> Enum.reverse()
+    |> Logex.Array.capped(&more_outside(array, [name | path], &1))
+    |> Enum.reverse(acc)
+  end
 
   defp shaped(false, false, {{:array, _, dims} = array, value, path, _blocks}, acc),
     do: [
       described(
         Declarations.a_type(array),
-        "its value must be #{tuple_shape(dims)}, found #{inspect(value)}",
+        "its value must be #{tuple_shape(dims)}, found #{shown_value(value)}",
         path
       )
       | acc
     ]
+
+  defp more_outside(array, path, count),
+    do:
+      "state.env holds `#{Enum.join(Enum.reverse(path), ".")}`, #{Declarations.a_type(array)}, " <>
+        "with #{count} more #{elements(count)} outside its type, not listed"
+
+  # A host's value as a message shows it, a list of integers as a list, never as the
+  # charlist it may also be read as, `[72, 105]` and not `~c"Hi"`.
+  defp shown_value(value), do: inspect(value, charlists: :as_lists)
 
   defp tuple_shape(dims), do: "a tuple of " <> shape_of(dims, "tuple")
 
@@ -1325,7 +1374,7 @@ defmodule Logex.Runtime do
     do:
       described(
         Declarations.instance_of(type),
-        "its value must be a map of its members, found #{inspect(value)}",
+        "its value must be a map of its members, found #{shown_value(value)}",
         path
       )
 
@@ -1344,7 +1393,7 @@ defmodule Logex.Runtime do
     do: unreal(Logex.Real.in_range?(type, value), type, value)
 
   defp unfitting(:real, _type, value),
-    do: "its value must be a float, found #{inspect(value)}"
+    do: "its value must be a float, found #{shown_value(value)}"
 
   defp unfitting(_kind, type, value) when is_integer(value),
     do: Declarations.misfit(type, "#{value}")
@@ -1352,7 +1401,7 @@ defmodule Logex.Runtime do
   defp unfitting(:boolean, type, value), do: Declarations.misfit(type, inspect(value))
 
   defp unfitting(_integer, _type, value),
-    do: "its value must be an integer, found #{inspect(value)}"
+    do: "its value must be an integer, found #{shown_value(value)}"
 
   defp unreal(true, type, value),
     do:
@@ -1582,31 +1631,36 @@ defmodule Logex.Runtime do
        when kind in [:signed, :unsigned, :bit_string] and not is_integer(value),
        do:
          "input `#{tag.name}` is #{Declarations.a_type(tag.type)}: its value must be an integer, " <>
-           "found #{inspect(value)}"
+           "found #{shown_value(value)}"
 
   # M5-10 (decision 166): a real's input is a number, an integer or a float, stored as the
   # real's nearest value, only one past its range refused.
   defp fit(:real, tag, value) when not is_number(value),
     do:
       "input `#{tag.name}` is #{Declarations.a_type(tag.type)}: its value must be a number, " <>
-        "found #{inspect(value)}"
+        "found #{shown_value(value)}"
 
   defp fit(_kind, %Tag{type: type} = tag, value),
     do: fits(Declarations.fits?(type, value), tag, value)
 
-  defp listed(true, {tag, _array}, {value, dims, type}) do
+  defp listed(true, {tag, array}, {value, dims, type}) do
     lines =
       for {index, element} <- Enum.zip(Logex.Array.indexes(dims), listed_flat(value, dims)),
           line = fit(%{tag | name: Logex.Array.name(tag.name, index), type: type}, element),
           do: line
 
-    joined(lines)
+    joined(Logex.Array.capped(lines, &more_unfit(tag, array, &1)))
   end
 
   defp listed(false, {tag, array}, {value, dims, _type}),
     do:
       "input `#{tag.name}` is #{Declarations.a_type(array)}: its value must be " <>
-        "#{list_shape(dims)}, found #{inspect(value)}"
+        "#{list_shape(dims)}, found #{shown_value(value)}"
+
+  defp more_unfit(tag, array, count),
+    do:
+      "input `#{tag.name}` is #{Declarations.a_type(array)}, with #{count} more " <>
+        "#{elements(count)} outside its type, not listed"
 
   defp listed_flat(value, [_count]), do: value
   defp listed_flat(value, [_count | dims]), do: Enum.flat_map(value, &listed_flat(&1, dims))
@@ -2103,7 +2157,7 @@ defmodule Logex.Runtime do
     do: [
       "runtime.globals holds `#{name}` outside its type: it is #{Declarations.a_type(type)}, " <>
         "and its value must be #{tuple_shape(elem(type, 2))} of #{Declarations.word(elem(type, 1))}s, " <>
-        "found #{inspect(value)}"
+        "found #{shown_value(value)}"
       | acc
     ]
 

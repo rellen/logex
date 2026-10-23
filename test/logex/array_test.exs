@@ -664,7 +664,7 @@ defmodule Logex.ArrayTest do
              ]
 
       assert warnings("var r real[2]\nmove 16777217.0 r[1]\nmove r[1] r[0]") == [
-               "line 2: warning: `16777217.0` has more digits than a real keeps: it is held as " <>
+               "line 2: warning: `16777217.0` is more precise than a real keeps: it is held as " <>
                  "16777216.0"
              ]
     end
@@ -989,6 +989,225 @@ defmodule Logex.ArrayTest do
     defp added(0, sums, _w), do: sums
   end
 
+  describe "M5-11's review" do
+    # Each a crash outside the public API before the review, now a pinned diagnostic.
+    test "a dotted name with a subscript is a diagnostic at its line, never a raise" do
+      {:ok, block} =
+        Logex.compile(
+          "function_block k\nvar_input x bool\nvar e bool[3]\nvar_output q bool\n" <>
+            "xic x ote e[1]\nxic e[1] ote q",
+          name: "k"
+        )
+
+      block_messages = fn source ->
+        {:error, diagnostics} = Logex.compile(source, name: "p", types: [block])
+        Enum.map(diagnostics, &Logex.Diagnostic.format/1)
+      end
+
+      assert messages("var t ton\nvar x dint\nmove t.acc[0] x") ==
+               ["line 3: `t.acc[0]` is not a member of `t`, a ton — did you mean `t.acc`?"]
+
+      assert messages("var t ton\nvar x bool\nxic t.dn[0] ote x") == [
+               "line 3: `t.dn[0]` is not a member of `t`, a ton: its members are `pre`, " <>
+                 "`acc`, `dn`, `tt` and `en`"
+             ]
+
+      assert messages("var x dint\nmove x.y[0] x") == [
+               "line 2: `x.y[0]` names a member of `x`, but `x` is a dint (declared on line 1): " <>
+                 "only an instance of a function block has members"
+             ]
+
+      assert messages("var x dint\nmove y.z[0] x") == ["line 2: `y` is not declared"]
+
+      assert messages("var a int[2]\nvar x int\nmove 1 a.b[0]\nmove a[0] x") == [
+               "line 3: `a.b[0]` names a member of `a`, but `a` is an array of 2 ints " <>
+                 "(declared on line 1): only an instance of a function block has members"
+             ]
+
+      assert messages("var w word\nvar n int\nvar q bool\nxic w.n[0] ote q\nmove n n") == [
+               "line 4: `w.n[0]` names a member of `w`, but `w` is a word (declared on line 1): " <>
+                 "only an instance of a function block has members"
+             ]
+
+      # A block's own array is no member a program reaches, nor is a bool output an array.
+      assert block_messages.("var i bool\nvar s k\nvar o bool\ncal s i o\nxic s.e[1] ote o") ==
+               [
+                 "line 5: `s.e[1]` is not a member of `s`, an instance of `k`: its members are " <>
+                   "`x` and `q`"
+               ]
+
+      assert block_messages.("var i bool\nvar s k\nvar o bool\ncal s i o\nxic s.q[0] ote o") ==
+               [
+                 "line 5: `s.q[0]` is not a member of `s`, an instance of `k`: its members are " <>
+                   "`x` and `q`"
+               ]
+    end
+
+    test "an array named whole where an instance or one tag goes is a diagnostic" do
+      assert messages("var e int[8]\ncal e") == [
+               "line 2: `cal` runs an instance of a function block, but `e` is an array of 8 " <>
+                 "ints (declared on line 1)"
+             ]
+
+      assert messages("var e bool[2]\nvar x bool\ncal e x") == [
+               "line 3: `cal` runs an instance of a function block, but `e` is an array of 2 " <>
+                 "bools (declared on line 1)"
+             ]
+
+      # A literal written into an array whole is told so, as a tag is, and never judged
+      # as a value of the array's type.
+      for {source, written} <- [
+            {"var w bool[2]\nmove 1 w", "an array of 2 bools"},
+            {"var w real[2]\nmove 1.5 w", "an array of 2 reals"},
+            {"var w lint[2]\nmove 16#ff w", "an array of 2 lints"},
+            {"var w int[2]\nadd 1 2 w", "an array of 2 ints"}
+          ] do
+        word = source |> String.split("\n") |> List.last() |> String.split(" ") |> hd()
+
+        assert messages(source) == [
+                 "line 2: `#{word}` writes one tag, but `w` is #{written} (declared on line 1): " <>
+                   "an instruction takes one of its elements, as in `w[0]`"
+               ],
+               source
+      end
+    end
+
+    test "a label is a name with no subscript" do
+      assert messages("var a int[2]\nvar x int\njmp a[0]\nlbl a[0]\nmove x x") == [
+               "line 3: `jmp` takes a label, a name with no subscript, found `a[0]`",
+               "line 4: `lbl` takes a label, a name with no subscript, found `a[0]`"
+             ]
+
+      assert messages("var x int\njmp done[1]\nmove x x\nlbl done[1]\nmove x x") == [
+               "line 2: `jmp` takes a label, a name with no subscript, found `done[1]`",
+               "line 4: `lbl` takes a label, a name with no subscript, found `done[1]`"
+             ]
+    end
+
+    test "sizes from Elixir that are no proper list of counts are refused" do
+      for dims <- [[2 | 3], [2, 3 | 4], [2 | :x]] do
+        assert_raise ArgumentError,
+                     "`a` is an array whose sizes are a list of one to three counts, as in " <>
+                       "{:array, :int, [4, 8]}, found #{inspect(dims)}",
+                     fn -> Tag.new!("a", {:array, :int, dims}, :var, nil) end
+      end
+    end
+
+    test "a host's list is shown as a list, never as a charlist" do
+      p =
+        compiled!(
+          "var_input w int[3]\nvar_input g int[2,3]\nvar x int\nmove w[1] x\nmove g[0,0] x"
+        )
+
+      state = Runtime.instance(p)
+
+      assert_raise ArgumentError,
+                   "input `w` is an array of 3 ints: its value must be a list of 3 elements, " <>
+                     "found [72, 105]",
+                   fn -> Runtime.put_inputs(p, state, %{"w" => [72, 105]}) end
+
+      assert_raise ArgumentError,
+                   "input `g` is an array of 2 by 3 ints: its value must be a list of 2 lists " <>
+                     "of 3 elements, found [[7, 8, 9]]",
+                   fn -> Runtime.put_inputs(p, state, %{"g" => [[7, 8, 9]]}) end
+
+      assert_raise ArgumentError,
+                   "input `w[0]` is an int: its value must be an integer, found [72, 105]",
+                   fn -> Runtime.put_inputs(p, state, %{"w" => [[72, 105], 1, 2]}) end
+
+      assert_raise ArgumentError,
+                   "state.env holds `w` outside its type: it is an array of 3 ints, and its " <>
+                     "value must be a tuple of 3 elements, found [7, 8, 9]",
+                   fn -> Runtime.scan(p, %{state | env: Map.put(state.env, "w", [7, 8, 9])}) end
+    end
+
+    test "a host's list or a state's tuple with an extra row, or of one element, is refused" do
+      p =
+        compiled!(
+          "var_input g int[2,3]\nvar_input o int[1]\nvar x int\nmove g[0,0] x\nmove o[0] x"
+        )
+
+      state = Runtime.instance(p)
+
+      assert_raise ArgumentError,
+                   "input `g` is an array of 2 by 3 ints: its value must be a list of 2 lists " <>
+                     "of 3 elements, found [[1, 2, 3], [4, 5, 6], [7, 8, 9]]",
+                   fn ->
+                     Runtime.put_inputs(p, state, %{"g" => [[1, 2, 3], [4, 5, 6], [7, 8, 9]]})
+                   end
+
+      assert_raise ArgumentError,
+                   "input `o` is an array of 1 int: its value must be a list of 1 element, " <>
+                     "found [1, 2]",
+                   fn -> Runtime.put_inputs(p, state, %{"o" => [1, 2]}) end
+
+      assert_raise ArgumentError,
+                   "state.env holds `g` outside its type: it is an array of 2 by 3 ints, and " <>
+                     "its value must be a tuple of 2 tuples of 3 elements, found " <>
+                     "{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}",
+                   fn ->
+                     Runtime.scan(p, %{
+                       state
+                       | env: Map.put(state.env, "g", {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}})
+                     })
+                   end
+
+      assert_raise ArgumentError,
+                   "state.env holds `o` outside its type: it is an array of 1 int, and its " <>
+                     "value must be a tuple of 1 element, found {0, 0}",
+                   fn -> Runtime.scan(p, %{state | env: Map.put(state.env, "o", {0, 0})}) end
+    end
+
+    test "an array's elements outside their type are listed to ten, the rest counted" do
+      p = compiled!("var_input w sint[12]\nvar x int\nmove w[0] x")
+      state = Runtime.instance(p)
+      named = for i <- 0..9, do: "w[#{i}]"
+
+      assert_raise ArgumentError,
+                   Enum.map_join(
+                     named,
+                     "\n",
+                     &"input `#{&1}` is an sint: 500 is outside -128 to 127"
+                   ) <>
+                     "\ninput `w` is an array of 12 sints, with 2 more elements outside its " <>
+                     "type, not listed",
+                   fn -> Runtime.put_inputs(p, state, %{"w" => List.duplicate(500, 12)}) end
+
+      # Ten and no more are each listed, with no count.
+      assert_raise ArgumentError,
+                   Enum.map_join(
+                     named,
+                     "\n",
+                     &"input `#{&1}` is an sint: 500 is outside -128 to 127"
+                   ),
+                   fn ->
+                     Runtime.put_inputs(p, state, %{"w" => List.duplicate(500, 10) ++ [0, 0]})
+                   end
+
+      assert_raise ArgumentError,
+                   Enum.map_join(
+                     named,
+                     "\n",
+                     &"state.env holds `#{&1}` outside its type: it is an sint, and 500 is outside -128 to 127"
+                   ) <>
+                     "\nstate.env holds `w`, an array of 12 sints, with 1 more element outside " <>
+                     "its type, not listed",
+                   fn ->
+                     env = Map.put(state.env, "w", List.to_tuple(List.duplicate(500, 11) ++ [0]))
+                     Runtime.scan(p, %{state | env: env})
+                   end
+
+      initial = "var a sint[12] " <> Enum.join(List.duplicate("900", 12), " ")
+
+      assert messages(initial <> "\nvar x int\nmove a[0] x") ==
+               Enum.map(0..9, &"line 1: `a[#{&1}]` is an sint: `900` is outside -128 to 127") ++
+                 [
+                   "line 1: `a` is an array of 12 sints: its initial list holds 2 more values " <>
+                     "outside its type, not listed"
+                 ]
+    end
+  end
+
   describe "growth, in reductions" do
     # Counted in a process of its own with a heap the collector never visits, so each count
     # is the same on every run: a scan's reductions for each rung, the difference of 200
@@ -1042,6 +1261,43 @@ defmodule Logex.ArrayTest do
       assert contact1 <= contact, "elements took #{contact1} a rung, bools #{contact}"
     end
 
+    # M5-11's review: `instance/1` settles a program's tags once for its units, reals and
+    # arrays, where it settled them once for each, and compares nothing where a routine
+    # holds none: beyond the instance's first env, its check costs less than one more walk.
+    test "instance/1 walks a program's tags once to check its units, reals and arrays" do
+      {:ok, p} =
+        Logex.compile(
+          Enum.map_join(1..200, "\n", &"var t#{&1} dint") <> "\nvar x bool\nxic x ote x",
+          name: "p"
+        )
+
+      cost = fn f ->
+        parent = self()
+
+        {_pid, ref} =
+          :erlang.spawn_opt(
+            fn ->
+              {:reductions, before} = Process.info(self(), :reductions)
+              f.()
+              {:reductions, later} = Process.info(self(), :reductions)
+              send(parent, {:reductions, later - before})
+            end,
+            [:monitor, min_heap_size: 8_000_000]
+          )
+
+        assert_receive {:reductions, r}, 10_000
+        assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+        r
+      end
+
+      instance = cost.(fn -> Runtime.instance(p) end)
+      env = cost.(fn -> Logex.Program.initial_env(p) end)
+      walk = cost.(fn -> Logex.Program.settled(p.tags) end)
+
+      assert instance - env < 1.5 * walk,
+             "instance/1 took #{instance}, env #{env}, a walk #{walk}"
+    end
+
     # A program of no arrays scans, rung for rung, in exactly what it took at f43d82a,
     # before M5-11: an element is told from a tag by its operand's shape in the clause head.
     test "a program of none scans as it did before M5-11" do
@@ -1075,6 +1331,36 @@ defmodule Logex.ArrayTest do
       end
 
       assert check.(16_000) / check.(8_000) < 2.1
+
+      # M5-11's review: each element of an integer array costs about one reduction a scan,
+      # one guard with no function called, where it cost fourteen, every element checked
+      # twice through a function; a real's about eight.
+      per_element = (check.(16_000) - check.(8_000)) / 8_000
+      assert per_element < 1.5, "an int element's check took #{per_element} reductions"
+
+      real = fn n ->
+        {:ok, p} = Logex.compile("var a real[#{n}]\nvar d real\nmove a[0] d", name: "p")
+        state = Runtime.instance(p)
+        parent = self()
+
+        {_pid, ref} =
+          :erlang.spawn_opt(
+            fn ->
+              {:reductions, before} = Process.info(self(), :reductions)
+              Runtime.call(p, state, %{}, %Scan{now: 0, first: true})
+              {:reductions, later} = Process.info(self(), :reductions)
+              send(parent, {:reductions, later - before})
+            end,
+            [:monitor, min_heap_size: 8_000_000]
+          )
+
+        assert_receive {:reductions, r}, 10_000
+        assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+        r
+      end
+
+      per_real = (real.(16_000) - real.(8_000)) / 8_000
+      assert per_real < 12, "a real element's check took #{per_real} reductions"
 
       compile = fn n ->
         text =

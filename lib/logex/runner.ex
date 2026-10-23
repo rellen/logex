@@ -933,17 +933,42 @@ defmodule Logex.Runner do
   # lexer reads as one literal, decision 149's forms among them, `37.50`, `3.75e1`, `16#ff`
   # or `1_000`, with whether it is written as the runner writes a number, its plain text,
   # which an integer or bool point's force must be (force_problem/4).
-  defp parsed([name, value]), do: valued(Logex.Lexer.tokenize(value), name)
+  # The value is the number's text and nothing else, so a comment or a tab the lexer would
+  # pass over, `1//c` or `1\t`, is no force, as before decision 218 (M5-11's review); and
+  # a real literal nearer zero than an lreal's smallest normal value that a float holds,
+  # `1.0e-310`, which the lexer refuses as a literal (decision 216), is a value all the
+  # same, a force being no literal, held as 0.0, as `1.0e-40` is in a `real`.
+  defp parsed([name, value]),
+    do: valued(number_text?(value), Logex.Lexer.tokenize(value), name)
+
   defp parsed(_parts), do: :error
 
-  defp valued({:ok, [{kind, _at, number}], _end_line}, name) when kind in [:int_lit, :real_lit],
-    do: {:ok, name, {number, :plain}}
+  defp number_text?(<<c, rest::binary>>)
+       when c in ?0..?9 or c in ?a..?z or c in ?A..?Z or c in [?-, ?#, ?_, ?.],
+       do: number_text?(rest)
 
-  defp valued({:ok, [{kind, _at, number, _spelling}], _end_line}, name)
+  defp number_text?(<<>>), do: true
+  defp number_text?(_other), do: false
+
+  defp valued(false, _tokens, _name), do: :error
+
+  defp valued(true, {:ok, [{kind, _at, number}], _end_line}, name)
+       when kind in [:int_lit, :real_lit],
+       do: {:ok, name, {number, :plain}}
+
+  defp valued(true, {:ok, [{kind, _at, number, _spelling}], _end_line}, name)
        when kind in [:int_lit, :real_lit],
        do: {:ok, name, {number, :spelled}}
 
-  defp valued(_other, _name), do: :error
+  defp valued(true, {:error, {_at, Logex.Lexer, {:real_small, text}}, _end_line}, name),
+    do: small(Float.parse(IO.iodata_to_binary(:binary.split(text, "_", [:global]))), name)
+
+  defp valued(true, _other, _name), do: :error
+
+  # A float holds it, a subnormal double, `1.0e-310`; one no float holds, `1.0e-400`, which
+  # reads as 0.0 only by underflow, is still no force (decision 218).
+  defp small({float, ""}, name) when float != 0, do: {:ok, name, {0.0, :spelled}}
+  defp small(_underflow, _name), do: :error
 
   defp no_force,
     do: "is no force: a line holds an input point's name and its value, as `eye_1 1`"

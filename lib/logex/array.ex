@@ -26,6 +26,8 @@ defmodule Logex.Array do
   @max_dimensions 3
 
   @doc false
+  @shown_lines 10
+
   def max_elements, do: @max_elements
 
   @doc false
@@ -42,7 +44,11 @@ defmodule Logex.Array do
   @doc false
   # An array's type as a message names it: `an array of 8 ints`, `an array of 4 by 8 reals`.
   def a_type({:array, type, dims}),
-    do: "an array of #{Enum.join(dims, " by ")} #{Declarations.word(type)}s"
+    do: "an array of #{Enum.join(dims, " by ")} #{Declarations.word(type)}#{plural(size(dims))}"
+
+  # An array of one element holds one, `an array of 1 int` (M5-11's review).
+  defp plural(1), do: ""
+  defp plural(_size), do: "s"
 
   @doc false
   # An array's first value, the one rule for it (`Logex.Program.initial_env/1`'s, a block's
@@ -127,6 +133,15 @@ defmodule Logex.Array do
 
   def indexes([count | dims]),
     do: for(i <- 0..(count - 1)//1, rest <- indexes(dims), do: [i | rest])
+
+  @doc false
+  # The lines a message gives for an array's elements, at most the first 10, then one line
+  # that counts the rest, `more.(count)` (provisional): an array of 65,536 elements every one
+  # outside its type would otherwise give a message of megabytes.
+  def capped(lines, more), do: capped_at(Enum.split(lines, @shown_lines), more)
+
+  defp capped_at({shown, []}, _more), do: shown
+  defp capped_at({shown, rest}, more), do: shown ++ [more.(length(rest))]
 
   @doc false
   # An element's name, by its subscripts' values, `grid[1,7]`: how the walks, the warnings,

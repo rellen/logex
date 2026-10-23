@@ -1124,8 +1124,13 @@ defmodule Logex.Declarations do
         listed(Enum.map(@type_atoms, &inspect/1)) <> ", found #{inspect(type)}"
     ]
 
-  defp counts?([_ | _] = dims), do: Enum.all?(dims, &is_integer/1)
+  # A proper list of integers, one or more: Enum.all?/2 raises on an improper one.
+  defp counts?([_ | _] = dims), do: integers?(dims)
   defp counts?(_dims), do: false
+
+  defp integers?([n | rest]) when is_integer(n), do: integers?(rest)
+  defp integers?([]), do: true
+  defp integers?(_improper), do: false
 
   defp dimensions(false, name, dims),
     do: [
@@ -1283,7 +1288,7 @@ defmodule Logex.Declarations do
   defp initial(%Tag{type: {:array, _, _} = type, name: name, initial: v}, _shown),
     do: [
       "#{label(name)} is #{a_type(type)}: its initial value is a list of its elements' " <>
-        "values, found #{inspect(v)}"
+        "values, found #{inspect(v, charlists: :as_lists)}"
     ]
 
   # M5-10: a real's initial value is a number, an integer or a float; any other type's an
@@ -1304,7 +1309,7 @@ defmodule Logex.Declarations do
   defp initial_list(-1, array, name, {values, _shown}),
     do: [
       "#{label(name)} is #{a_type(array)}: its initial value is a list of its elements' " <>
-        "values, found #{inspect(values)}"
+        "values, found #{inspect(values, charlists: :as_lists)}"
     ]
 
   defp initial_list(length, {:array, type, dims} = array, name, {values, shown}) do
@@ -1318,12 +1323,14 @@ defmodule Logex.Declarations do
     )
   end
 
-  defp elements(true, {_array, name, _size, _length}, elements, type),
+  defp elements(true, {array, name, _size, _length}, elements, type),
     do:
-      Enum.flat_map(elements, fn {index, v, shown} ->
+      elements
+      |> Enum.flat_map(fn {index, v, shown} ->
         tag = %Tag{type: type, name: element_name(name, index), section: :var, initial: v}
         initial(tag, shown)
       end)
+      |> Logex.Array.capped(&more_misfits(array, name, &1))
 
   defp elements(false, {array, name, size, length}, _elements, _type),
     do: [
@@ -1331,6 +1338,11 @@ defmodule Logex.Declarations do
         "#{plural(length, "value")}, and an array's holds one for every element, #{size}, " <>
         "in the elements' order"
     ]
+
+  defp more_misfits(array, name, count),
+    do:
+      "#{label(name)} is #{a_type(array)}: its initial list holds #{count} more " <>
+        "#{plural(count, "value")} outside its type, not listed"
 
   defp element_name(name, index) when is_binary(name), do: Logex.Array.name(name, index)
   defp element_name(name, index), do: Logex.Array.name(inspect(name), index)

@@ -64,6 +64,108 @@ defmodule Logex.ArrayConfigurationTest do
     {runtime, events}
   end
 
+  describe "M5-11's review" do
+    defp types(sources),
+      do:
+        Map.new(sources, fn {name, text} -> {name, elem(Logex.compile(text, name: name), 1)} end)
+
+    test "two instances writing different elements of one global array are told nothing" do
+      types =
+        types(%{
+          "a" => "var_external g int[2]\nmove 1 g[0]",
+          "b" => "var_external g int[2]\nmove 2 g[1]",
+          "c" => "var_external g int[2]\nmove 3 g[0]",
+          "e" => "var_external g bool[2]\nvar x bool\nxic x ons g[1] ote x"
+        })
+
+      {:ok, apart} =
+        Configuration.compile("c", "var_global g int[2]\nprogram a1 a\nprogram b1 b\n", types)
+
+      assert apart.warnings == []
+      # Both writes stand: one copy of the global, each scan writing its own element.
+      {runtime, _, _} = Runtime.cycle(Runtime.start(apart), 10, %{})
+      assert Runtime.get!(runtime, "g") == [1, 2]
+
+      {:ok, one} =
+        Configuration.compile("c", "var_global g int[2]\nprogram a1 a\nprogram c1 c\n", types)
+
+      assert Enum.map(one.warnings, & &1.message) == [
+               "`c1` writes `g[0]` through its var_external, as `a1` does (line 2): each scan " <>
+                 "reads what the other last wrote, and the later write in a cycle stands"
+             ]
+
+      {:ok, bit} =
+        Configuration.compile("c", "var_global g bool[2]\nprogram e1 e\nprogram e2 e\n", types)
+
+      assert Enum.map(bit.warnings, & &1.message) == [
+               "`e2` writes `g[1]` through its var_external, as `e1` does (line 2): `g[1]` is " <>
+                 "the storage bit of an `ons`: the one-shot then fires on the wrong scans"
+             ]
+    end
+
+    test "a global named by an element is told a global is named whole" do
+      types = types(%{"k" => "var_input k bool\nvar kk bool\nxic k ote kk"})
+
+      refused = fn text ->
+        {:error, diagnostics} = Configuration.compile("c", text, types)
+        Enum.map(diagnostics, & &1.message)
+      end
+
+      assert refused.("var_global ws int[3]\nprogram m1 k\nm1.k ws[0]\n") == [
+               "`ws[0]` names an element of `ws`, a global array of 3 ints (line 1): a global " <>
+                 "is named here whole, never by one of its elements"
+             ]
+
+      for text <- ["var_global ws bool\nprogram m1 k\nm1.k ws[0]\n", "program m1 k\nm1.k ws[0]\n"] do
+        assert refused.(text) == [
+                 "no global `ws[0]`: a global is named here whole, never by one of its elements"
+               ],
+               text
+      end
+
+      assert refused.(
+               "var_global e bool[2]\ntask t single e[0] interval 10 priority 1\n" <>
+                 "program m1 k with t\nm1.k 0\n"
+             ) == [
+               "the single of `t`: `e[0]` names an element of `e`, a global array of 2 bools " <>
+                 "(line 1): a global is named here whole, never by one of its elements"
+             ]
+
+      assert refused.("task t single e[0] interval 10 priority 1\nprogram m1 k with t\nm1.k 0\n") ==
+               [
+                 "the single of `t`: no global `e[0]`: a global is named here whole, never by " <>
+                   "one of its elements"
+               ]
+    end
+
+    test "a task's single that is an array is refused, never run" do
+      types = types(%{"k" => "var_input k bool\nvar kk bool\nxic k ote kk"})
+
+      {:error, diagnostics} =
+        Configuration.compile(
+          "c",
+          "var_global e bool[2]\ntask t single e interval 10 priority 1\nprogram m1 k with t\nm1.k 0\n",
+          types
+        )
+
+      assert Enum.map(diagnostics, & &1.message) == [
+               "the single of `t`, `e`, is an array of 2 bools (line 1): a single is a bool global"
+             ]
+
+      # From Elixir too, where it raised inside a cycle before the review.
+      assert_raise ArgumentError, ~r/a single is a bool global/, fn ->
+        Configuration.new!(
+          name: "c",
+          programs: [types["k"]],
+          tasks: [%Logex.Configuration.Task{name: "t", single: "e", interval: 10, priority: 1}],
+          globals: [%Global{name: "e", type: {:array, :bool, [2]}}],
+          instances: [%Instance{name: "m1", type: "k", task: "t"}],
+          connections: [%Connection{instance: "m1", member: "k", to: 0}]
+        )
+      end
+    end
+  end
+
   describe "a global array" do
     test "is read from its line, an initial list in the elements' order, and printed back exactly" do
       text = """

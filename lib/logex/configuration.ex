@@ -1611,12 +1611,19 @@ defmodule Logex.Configuration do
   defp no_trigger(true, name, world), do: unnamed(true, :global, name, world, :bool)
 
   defp no_trigger(false, name, world),
+    do: untriggered(String.split(name, "[", parts: 2), name, world)
+
+  defp untriggered([array, _subscripts], name, world),
+    do: element_named(Map.get(world.names, array), array, name)
+
+  defp untriggered([_whole], name, world),
     do: declare(Declarations.suggest(name, world.bools, & &1, "names"), :global, name, :bool)
 
   defp triggered({:ok, %Global{name: name, type: :bool}}, _task), do: {[], MapSet.new([name])}
 
+  # M5-11: an array of bools is no bool, so it is no single either.
   defp triggered({:ok, %Global{name: name, type: type} = global}, task)
-       when is_elementary(type),
+       when is_elementary(type) or is_array(type),
        do:
          {[
             diagnostic(
@@ -1773,7 +1780,7 @@ defmodule Logex.Configuration do
       raise(
         ArgumentError,
         "expected an initial list of #{Logex.Array.size(elem(array, 2))} values for " <>
-          "#{Declarations.a_type(array)}, got: #{inspect(initial)}"
+          "#{Declarations.a_type(array)}, got: #{inspect(initial, charlists: :as_lists)}"
       )
 
   @doc """
@@ -2144,8 +2151,34 @@ defmodule Logex.Configuration do
       "no #{noun(kind)} `#{name}`: `#{name}` is a keyword of a configuration file, and " <>
         "nothing in one is named so"
 
+  # M5-11: a name with a subscript, `ws[0]`, where a global is wanted names no global,
+  # which is named whole (provisional reading 8), and no line declares one so.
+  defp unnamed(false, :global, name, world, type),
+    do: subscripted(String.split(name, "[", parts: 2), name, world, type)
+
   defp unnamed(false, kind, name, world, type),
     do: declare(Declarations.suggest(name, known(world, kind), & &1, "names"), kind, name, type)
+
+  defp subscripted([array, _subscripts], name, world, _type),
+    do: element_named(Map.get(world.names, array), array, name)
+
+  defp subscripted([_whole], name, world, type),
+    do:
+      declare(
+        Declarations.suggest(name, known(world, :global), & &1, "names"),
+        :global,
+        name,
+        type
+      )
+
+  defp element_named({:global, _line, %Global{type: type} = global}, array, name)
+       when is_array(type),
+       do:
+         "`#{name}` names an element of `#{array}`, #{Declarations.a_global(type)}" <>
+           "#{where(global)}: a global is named here whole, never by one of its elements"
+
+  defp element_named(_none, _array, name),
+    do: "no global `#{name}`: a global is named here whole, never by one of its elements"
 
   defp declare("", :global, name, type),
     do: "no global `#{name}`: declare it, as in `var_global #{name} #{written_type(type)}`"
@@ -2743,19 +2776,31 @@ defmodule Logex.Configuration do
     {facts, first} = facts(Map.fetch(found.types, instance.type), program)
 
     writers =
-      for %Tag{name: name} <- facts.externals,
+      for %Tag{name: name} = tag <- facts.externals,
           is_map_key(facts.writes, name),
-          do: {name, instance, Map.get(facts.bits, name)}
+          written <- written_of(tag, facts.elements),
+          do: {written, name, instance, Map.get(facts.bits, written)}
 
     %{
       found
       | types: Map.put(found.types, instance.type, facts),
         diagnostics: checked_once(first, facts, instance, program, world) ++ found.diagnostics,
         used: Enum.reduce(facts.externals, found.used, &MapSet.put(&2, &1.name)),
-        driving: Enum.reduce(writers, found.driving, &MapSet.put(&2, elem(&1, 0))),
+        driving: Enum.reduce(writers, found.driving, &MapSet.put(&2, elem(&1, 1))),
         writers: Enum.reverse(writers, found.writers)
     }
   end
+
+  # What a write through a var_external writes: its global, or, for an array, each element
+  # the program writes, by its subscripts' values, `g[1]`, since a scan copies the array
+  # in and out whole and so two instances that write different elements each keep theirs.
+  defp written_of(%Tag{name: name, type: type}, elements) when is_array(type),
+    do: for({element, _lines} <- elements, element_of?(element, name), do: element)
+
+  defp written_of(%Tag{name: name}, _elements), do: [name]
+
+  defp element_of?(element, name),
+    do: String.starts_with?(element, name) and binary_part(element, byte_size(name), 1) == "["
 
   defp facts({:ok, facts}, _program), do: {facts, false}
 
@@ -2763,6 +2808,7 @@ defmodule Logex.Configuration do
     {%{
        externals: for(%Tag{section: :var_external} = tag <- declared(program), do: tag),
        writes: Walk.writes(program),
+       elements: Walk.bit_writes(program),
        bits:
          Map.new(Walk.storage_bits(program.rungs), fn {bit, _line, symbol} -> {bit, symbol} end)
      }, true}
@@ -2896,25 +2942,30 @@ defmodule Logex.Configuration do
   # runs second never fires on the edge the first saw.
   #
   # M3-4: the bit's one-shot named, `ons`, `osr` or `osf`, that of the first writer in line
-  # order whose storage bit it is.
+  # order whose storage bit it is. M5-11: an array global is written by element, each
+  # element its own, so two instances that write different elements of one are told
+  # nothing (`written_of/2`).
   defp writers(writers, driven) do
     bits =
       Enum.reduce(writers, %{}, fn
-        {global, _instance, symbol}, bits when symbol != nil -> Map.put_new(bits, global, symbol)
-        _writer, bits -> bits
+        {written, _global, _instance, symbol}, bits when symbol != nil ->
+          Map.put_new(bits, written, symbol)
+
+        _writer, bits ->
+          bits
       end)
 
-    by_global = Enum.group_by(writers, &elem(&1, 0), &elem(&1, 1))
+    by_written = Enum.group_by(writers, &elem(&1, 0), &elem(&1, 2))
 
     twice =
-      for {global, [first | later]} <- by_global,
+      for {written, [first | later]} <- by_written,
           instance <- later,
-          do: twice(global, instance, first, Map.get(bits, global))
+          do: twice(written, instance, first, Map.get(bits, written))
 
     connected =
-      for {global, instance, _bit} <- writers,
+      for {written, global, instance, _bit} <- writers,
           {:ok, connection} <- [Map.fetch(driven, global)],
-          do: connected(global, instance, connection, Map.get(bits, global))
+          do: connected(written, instance, connection, Map.get(bits, written))
 
     twice ++ connected
   end

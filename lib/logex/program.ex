@@ -347,9 +347,12 @@ defmodule Logex.Program do
        )
        when is_list(rungs) and is_map(tags) do
     {program, _block} = where
-    lines = Enum.reverse(unit_lines(units, tags, where), lines)
-    lines = Enum.reverse(real_lines(reals, tags, where), lines)
-    lines = Enum.reverse(array_lines(arrays, tags, where), lines)
+    # The tags settled once for all three (M5-11's review), and nothing compared where a
+    # routine holds none and gives none, the common case.
+    {wanted_units, wanted_reals, wanted_arrays} = settled(tags)
+    lines = Enum.reverse(unit_lines(units, {tags, wanted_units}, where), lines)
+    lines = Enum.reverse(real_lines(reals, {tags, wanted_reals}, where), lines)
+    lines = Enum.reverse(array_lines(arrays, {tags, wanted_arrays}, where), lines)
     {lines, called} = rungs(rungs, {tags, where}, {lines, []})
     acc = Enum.reduce(Enum.reverse(called), {lines, seen}, &once(&1, program, &2))
     held_bodies(blocks, program, acc)
@@ -466,9 +469,11 @@ defmodule Logex.Program do
     ]
 
   # Decision 197: a routine's units against the ones its tags give, by name in order.
-  defp unit_lines(units, tags, where) when is_map(units) or units == nil do
+  defp unit_lines(nil, {_tags, nil}, _where), do: []
+
+  defp unit_lines(units, {tags, wanted}, where) when is_map(units) or units == nil do
     given = table(units)
-    wanted = table(units(tags))
+    wanted = table(wanted)
 
     for name <- Enum.sort(Enum.uniq(Map.keys(wanted) ++ Map.keys(given))),
         Map.fetch(given, name) != Map.fetch(wanted, name),
@@ -485,9 +490,11 @@ defmodule Logex.Program do
     ]
 
   # M5-10: a routine's reals against the ones its tags give, by name in order, as its units.
-  defp real_lines(reals, tags, where) when is_map(reals) or reals == nil do
+  defp real_lines(nil, {_tags, nil}, _where), do: []
+
+  defp real_lines(reals, {tags, wanted}, where) when is_map(reals) or reals == nil do
     given = table(reals)
-    wanted = table(reals(tags))
+    wanted = table(wanted)
 
     for name <- Enum.sort(Enum.uniq(Map.keys(wanted) ++ Map.keys(given))),
         Map.fetch(given, name) != Map.fetch(wanted, name),
@@ -504,9 +511,11 @@ defmodule Logex.Program do
     ]
 
   # M5-11: a routine's arrays against the ones its tags give, by name in order, as its reals.
-  defp array_lines(arrays, tags, where) when is_map(arrays) or arrays == nil do
+  defp array_lines(nil, {_tags, nil}, _where), do: []
+
+  defp array_lines(arrays, {tags, wanted}, where) when is_map(arrays) or arrays == nil do
     given = table(arrays)
-    wanted = table(arrays(tags))
+    wanted = table(wanted)
 
     for name <- Enum.sort(Enum.uniq(Map.keys(wanted) ++ Map.keys(given))),
         Map.fetch(given, name) != Map.fetch(wanted, name),

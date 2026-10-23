@@ -539,7 +539,8 @@ defmodule Logex.ForceTest do
         file,
         Enum.join(
           ["levle 1", "y 1", "x 2", "x 1", "level 5000000000", "nonsense", "level 01"] ++
-            ["", "level  2", "e 1", "e 0", "seen 1", "level 16#ff", "levle 01"],
+            ["", "level  2", "e 1", "e 0", "seen 1", "level 16#ff", "levle 01"] ++
+            ["level 1//c", "level 1\t", "x 1 // on"],
           "\n"
         ) <> "\n"
       )
@@ -572,7 +573,15 @@ defmodule Logex.ForceTest do
             "#{file}: line 13: `level 16#ff` is no force: a line holds an input point's name " <>
               "and its value, as `eye_1 1`",
             "#{file}: line 14: `levle 01` is no force: a line holds an input point's name and " <>
-              "its value, as `eye_1 1`"
+              "its value, as `eye_1 1`",
+            # A comment or a tab after the value, which the lexer passes over, is no part of
+            # a force (M5-11's review): the line holds the number's text alone.
+            "#{file}: line 15: `level 1//c` is no force: a line holds an input point's name " <>
+              "and its value, as `eye_1 1`",
+            "#{file}: line 16: `level 1\t` is no force: a line holds an input point's name " <>
+              "and its value, as `eye_1 1`",
+            "#{file}: line 17: `x 1 // on` is no force: a line holds an input point's name " <>
+              "and its value, as `eye_1 1`"
           ],
           "\n"
         ),

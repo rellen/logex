@@ -1532,15 +1532,21 @@ defmodule Logex.RealTest do
             {"16777217", 16_777_216.0},
             {"0.10000000149011612", single(0.1)},
             {"1.0e-40", 0.0},
+            # A force is no literal: a value a float holds nearer 0.0 than an lreal's
+            # smallest normal, which the lexer refuses as a literal (decision 216), is held
+            # as 0.0 at either real, as `1.0e-40` is at a `real` (M5-11's review).
+            {"1.0e-310", 0.0},
+            {"-4.9e-324", 0.0},
             {"-0.0", 0.0}
           ] do
         File.write!(file, "big #{text}\nhz #{text}\n")
         {{:ok, runner}, clock, _sim} = run_fan(file)
         forces = Runner.status(runner).forces
         assert forces["hz"] === hz, text
+        assert forces["big"] === 0.0 or text not in ["1.0e-310", "-4.9e-324"], text
 
         assert forces["big"] === elem(Float.parse(String.replace(text, "_", "")), 0) * 1.0 or
-                 text in ["16#25", "-0.0", "37"],
+                 text in ["16#25", "-0.0", "37", "1.0e-310", "-4.9e-324"],
                text
 
         Manual.advance(clock, 10)
@@ -1566,7 +1572,11 @@ defmodule Logex.RealTest do
                  "#{file}: line 2: `big 1.0e-400` is no force: a line holds an input point's " <>
                  "name and its value, as `eye_1 1`"
 
-      for text <- ["1.", "1e5", "+3", "0x10", "8#7", "1.5L", "3 4", "x"] do
+      # Nor is a comment, a tab or a return after the number, which the lexer would pass
+      # over (M5-11's review), nor a number no float holds, `1.0e-400`.
+      for text <-
+            ["1.", "1e5", "+3", "0x10", "8#7", "1.5L", "3 4", "x"] ++
+              ["1.5//c", "1.5 //c", "1.5\t", "1.5\r", "1.0e-400", "1_0.0e-400"] do
         File.write!(file, "hz #{text}\n")
 
         assert raised(fn -> run_fan(file) end) ==
@@ -1590,20 +1600,20 @@ defmodule Logex.RealTest do
                  "move -16777217.0 r"
              ) == [
                {2, "`l` is declared but no rung uses it"},
-               {7, "`16777217.0` has more digits than a real keeps: it is held as 16777216.0"},
+               {7, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"},
                {10, "`q` already has an `ote` on line 9: the last one in the scan decides it"},
                {10,
-                "`3.14159265358979` has more digits than a real keeps: it is held as 3.1415927"},
-               {11, "`1.000000001` has more digits than a real keeps: it is held as 1.0"},
+                "`3.14159265358979` is more precise than a real keeps: it is held as 3.1415927"},
+               {11, "`1.000000001` is more precise than a real keeps: it is held as 1.0"},
                {12,
                 "`real_to_int` reads a literal, `0.10000000149011612`: its result never changes"},
-               {12, "`0.10000000149011612` has more digits than a real keeps: it is held as 0.1"},
+               {12, "`0.10000000149011612` is more precise than a real keeps: it is held as 0.1"},
                {13,
-                "`9007199254740993.0` has more digits than an lreal keeps: it is held as " <>
+                "`9007199254740993.0` is more precise than an lreal keeps: it is held as " <>
                   "9.007199254740992e15"},
                {16,
                 "`lreal_to_int` reads a literal, `3.14159265358979`: its result never changes"},
-               {21, "`-16777217.0` has more digits than a real keeps: it is held as -16777216.0"}
+               {21, "`-16777217.0` is more precise than a real keeps: it is held as -16777216.0"}
              ]
     end
 
@@ -1623,10 +1633,10 @@ defmodule Logex.RealTest do
         )
 
       assert Enum.map(program.warnings, &{&1.line, &1.message}) == [
-               {5, "`16777217.0` has more digits than a real keeps: it is held as 16777216.0"},
+               {5, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"},
                {6,
                 "`eq` compares two literals, `16777217.0` and `1.0`: its result never changes"},
-               {7, "`16777217.0` has more digits than a real keeps: it is held as 16777216.0"}
+               {7, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"}
              ]
     end
 
@@ -1650,7 +1660,7 @@ defmodule Logex.RealTest do
           )
 
         assert Enum.map(program.warnings, &{&1.line, &1.message}) == [
-                 {5, "`16777217.0` has more digits than a real keeps: it is held as 16777216.0"}
+                 {5, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"}
                ],
                operands
       end
@@ -1666,7 +1676,7 @@ defmodule Logex.RealTest do
         Logex.compile("var k sum\nvar x real\ncal k x 16777217.0", name: "p", types: [sum])
 
       assert Enum.map(program.warnings, &{&1.line, &1.message}) == [
-               {3, "`16777217.0` has more digits than a real keeps: it is held as 16777216.0"}
+               {3, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"}
              ]
     end
 
@@ -1717,7 +1727,7 @@ defmodule Logex.RealTest do
           assert Enum.map(program.warnings, & &1.message) ==
                    Enum.map(
                      expected,
-                     &"`#{text}` has more digits than #{article(type)} keeps: it is held as #{&1}"
+                     &"`#{text}` is more precise than #{article(type)} keeps: it is held as #{&1}"
                    ),
                  text
 

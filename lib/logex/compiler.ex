@@ -1726,6 +1726,15 @@ defmodule Logex.Compiler do
       )
     ]
 
+  defp not_run(nil, {:ok, %Tag{type: type} = tag}, line, name, word) when is_array(type),
+    do: [
+      diagnostic(
+        line,
+        "`#{word}` runs an instance of a function block, but `#{name}` is " <>
+          "#{a_type(type)}#{declared(tag)}"
+      )
+    ]
+
   defp not_run(nil, {:ok, tag}, line, name, word),
     do: [
       diagnostic(
@@ -2115,6 +2124,9 @@ defmodule Logex.Compiler do
     type = container_type(lookup(Enum.join(container, "."), scope))
     tag_bit_ir(bits(type), {type, container, numbered_by(bracketed)}, path, at)
   end
+
+  defp bracketed_bit(_element, _container, path, {line, _name}, _scope),
+    do: {:member, line, path}
 
   defp tag_bit_ir(nil, _bit, path, {line, _name}), do: {:member, line, path}
 
@@ -2604,6 +2616,12 @@ defmodule Logex.Compiler do
       | diagnostics
     ]
 
+  defp label_shape(:subscripted, {line, word, name}, diagnostics),
+    do: [
+      diagnostic(line, "`#{word}` takes a label, a name with no subscript, found `#{name}`")
+      | diagnostics
+    ]
+
   defp label_shape(reserved, {line, word, name}, diagnostics),
     do: [
       diagnostic(line, "`#{word}` takes a label, found #{reserved_word(reserved)} `#{name}`")
@@ -2624,7 +2642,13 @@ defmodule Logex.Compiler do
   defp label_word(name), do: label_word(String.contains?(name, "."), name)
 
   defp label_word(true, _name), do: :dotted
-  defp label_word(false, name), do: label_or(Declarations.reserved(name))
+
+  # M5-11: a label is a name, never an element's, `a[0]`, which the lexer reads as one
+  # name token.
+  defp label_word(false, name), do: label_subscripted(String.contains?(name, "["), name)
+
+  defp label_subscripted(true, _name), do: :subscripted
+  defp label_subscripted(false, name), do: label_or(Declarations.reserved(name))
 
   defp label_or(nil), do: :label
   defp label_or(reserved), do: reserved
@@ -3423,6 +3447,8 @@ defmodule Logex.Compiler do
   # that logic may not write, were reported by resolve/6 and are not looked at again.
   defp typed_ref(access, {:tag_bit, bit, _index, _found}), do: typed_ref(access, bit)
   defp typed_ref(_access, {:ok, %Tag{type: %FbType{}}}), do: nil
+  # M5-11: an array named whole, reported by resolve/6.
+  defp typed_ref(_access, {:ok, %Tag{type: type}}) when is_array(type), do: nil
   defp typed_ref(_access, {:ok, %Tag{} = tag}), do: tag
   defp typed_ref(:write, {:member, _tag, %Member{write: false}}), do: nil
 

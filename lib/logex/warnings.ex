@@ -113,7 +113,7 @@ defmodule Logex.Warnings do
         do:
           warning(
             line,
-            "#{shown(literal)} has more digits than #{Declarations.a_type(type)} keeps: it is " <>
+            "#{shown(literal)} is more precise than #{Declarations.a_type(type)} keeps: it is " <>
               "held as #{held}"
           )
   end
