@@ -141,7 +141,7 @@ defmodule FrontendGolden do
       "ote aa\r\n\r\n( xic bb",
       deep,
       many
-    ] ++ signed() ++ based() ++ tag_bits() ++ literal_bits()
+    ] ++ signed() ++ based() ++ tag_bits() ++ literal_bits() ++ reals()
   end
 
   # M3-3 (decision 97): negative literals, a sign glued to its digits. Added after the rest,
@@ -280,6 +280,48 @@ defmodule FrontendGolden do
       "xic s.[3]x",
       "xic s.[3].4",
       "xic s.[3]-5"
+    ]
+  end
+
+  # M5-10 (decision 149): real literals, digits, a `.`, digits and an optional exponent, a
+  # sign glued to them, and the forms decision 149 refuses, `1.`, `.5`, `1e5`, `1.5e+3` and
+  # Logix's `1.5L`, with `_` between digits and a real beside a tag's `.` parts. Added after
+  # the rest, and recorded first by the front end before them, so that the diff of the
+  # commit that lands them is these entries alone.
+  defp reals do
+    [
+      "move 37.5 fan_speed",
+      "move -0.25 aa",
+      "move 1.5e3 aa",
+      "move 1.5E-3 aa",
+      "move 0.0 aa",
+      "move -0.0 aa",
+      "move 1.0e20 aa",
+      "move 1_000.5 aa",
+      "move 1.000_5 aa",
+      "move 1.5e1_0 aa",
+      "move 007.5 aa",
+      "gt fan_speed 37.5 ote aa",
+      "( gt aa 1.5 | lt aa -1.5 ) ote bb",
+      "sqrt -4.0 root",
+      "move 37.5\nmove 1.25 bb",
+      "move 1. aa",
+      "move .5 aa",
+      "move 1e5 aa",
+      "move 1.5e+3 aa",
+      "move 1.5L aa",
+      "move 1.5e aa",
+      "move 1.5e- aa",
+      "move 1.5x aa",
+      "move 1.5.2 aa",
+      "move 1._5 aa",
+      "move 1_.5 aa",
+      "move 1.5_ aa",
+      "move 16#f.5 aa",
+      "move 1.0e400 aa",
+      "move a-1.5 aa",
+      "xic fan_speed.3 ote aa",
+      "xic fan_speed.[3] ote aa"
     ]
   end
 
