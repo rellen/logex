@@ -102,7 +102,9 @@ run costs what it did before long timers, and an edit's accept checking the prog
 running as well as its candidate, the other five confirmed as built. And the seventh,
 M5-7, the same day: based literals, `16#ff` and `2#1010_0000`, and `_` between digits,
 `1_000`, each the number it spells, judged by its slot, so that `16#ffff` fits a `uint`
-and is refused for an `int`, with one question put to the maintainer (§3, M5-7).
+and is refused for an `int`, with one question put to the maintainer (§3, M5-7); and
+M5-7's review's five findings fixed the same day, two rules of decisions 196 and 200
+pinned and a based number with a second `#` named whole.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -5612,6 +5614,28 @@ the walks' cross-type reach and the documents.
   `lib/logex/lexer.ex`, each judged by the full suite's exit code, every one red (the
   second commit's message lists them). 1738 tests (9 doctests), up from 1725.
 
+  **M5-7's review**, fixed on 2026-10-22, each with a test that fails when it is
+  reverted. No correctness bug; two rules the record words exactly had no test, and three
+  small lexer points. (1) Decision 196's "the first long timer's member among the
+  operands is the one named": `add c2.acc 5 cure.pre`, a `tof_ltime`'s member before a
+  `ton_ltime`'s, names `c2.acc` and its tof_ltime, and the mirror `cure.acc`
+  (`long_timer_test.exs`, `b0b467c`). (2) Decision 200's "in name order": 33 program
+  types edited by hand, past the 32 at which a map's keys stop coming in name order, are
+  named in name order in one message (`runtime_test.exs`, `b0b467c`). (3) A `#` after a
+  based number's digits is in the number, so `16#ff#`, Ada's spelling, `2#1#1`,
+  `16#ff#1` and `16##1` are each one lex error at the number's start, `{:hash, run}`,
+  "a based number holds one `#`, between its base and its digits, `16#ff`", where they
+  failed at the second `#` as an illegal character, provisional in its words (`90242e4`).
+  (4) A signed based number's base is judged before its sign, so `-8#17` is told that
+  logex reads no other base, `-16#1` still that a based number takes no sign. (5) The
+  base-16 digits message says "a to f, in either case". The golden record keeps an
+  error's line, so no entry changes. The mutation table, each judged by the full suite's
+  exit code: B2 (operands reversed before the search) red; B4 (`Enum.sort(:desc)`) red;
+  B4b (no sort) red; H1 (`based_run` stops at `#`) red; H2 (the sign judged first) red;
+  H3 (the old wording) red; H4 (`#` in the digits a digit refusal) red; H5 (`#` first a
+  digit refusal) red; H6 (`{:hash, …}` given as `{:digits, …}`) red. 1740 tests (9
+  doctests), up from 1738.
+
   *Provisional readings*: the parse tree keeps a literal's value, not its spelling, so
   `well_formed!/1` takes what it took, the printer writes `16#ff` as `255`, and a
   message cites `65535` for `16#ffff` (the question below); a base is `16#` or `2#`
@@ -5633,6 +5657,14 @@ the walks' cross-type reach and the documents.
      defines a literal's value, and Ed 3 p.26 reads `16#ffff` as a bit-string literal,
      not how a tool shows it; how Logix shows an immediate typed as `16#00FF` back in a
      rung is `unverified`.
+  2. *What a based number with a second `#` is told* (M5-7's review, provisional). Ada
+     and some engineers write hex as `16#FF#`, closing it with a `#`. IEC has no closing
+     `#` (Ed 3 Table 5), and logex refuses it either way; the reading taken names the
+     number whole at its start, `"16#FF#" is no number: a based number holds one `#`,
+     between its base and its digits, `16#ff``, so an engineer typing `move 16#FF# fan_mask`
+     sees the whole number marked and the spelling to use. The other options: tell it as a
+     digit outside base 16, the message `16#fg` gets; or take `16#FF#` as 255, which IEC
+     does not define. Logix's reading of a closing `#` is `unverified`.
 - **M5-8 · Bit strings, the bitwise instructions and literal bit access.** The stanzas
   first: `byte word dword lword`, `and or xor not shl shr rol ror`, and the bit-string
   conversions' family stanzas, `docs/naming.md`'s `wand` rows amended (decision 155). The

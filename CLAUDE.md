@@ -588,9 +588,10 @@ Logex is a Ladder Logic compiler/interpreter in Elixir. The toolchain is Elixir 
   149) a number may be based, `16#ff`, `16#FF` or `2#1010`, in base 16 or 2 alone, with no
   sign, or hold a single `_` between two digits, `1_000`, one `int_lit` token holding the
   value it spells, a plain decimal still read by `String.to_integer/1`; another base, a
-  sign, a misplaced `_` or a digit outside its base is a located lex error naming the
-  number whole, `{:base, run}`, `{:signed_based, run}`, `{:separator, run}` or `{:digits,
-  base, run}`, and `5U` B2's; the tree keeps the value, so `well_formed!/1` is unchanged
+  sign, a misplaced `_`, a digit outside its base or, since M5-7's review, a second `#`,
+  `16#ff#`, is a located lex error naming the number whole, `{:base, run}`,
+  `{:signed_based, run}`, `{:separator, run}`, `{:digits, base, run}` or `{:hash, run}`,
+  a base judged before a sign, so `-8#17` is `{:base, run}`, and `5U` B2's; the tree keeps the value, so `well_formed!/1` is unchanged
   and the printer writes `16#ff` as `255`. There is no generator, so nothing reports a
   grammar conflict: **a new syntax form goes into `printer_test.exs`'s generator and
   `@required_shapes` before it lands**, and the golden record below must stay green.

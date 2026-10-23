@@ -7269,7 +7269,9 @@ the decisions the rest settle.
      every other base, `10#5` and `016#ff` among them, a based number with a sign,
      `16#-1` or `-16#1`, a `_` anywhere but between two digits, `16#_ff`, `1__0` or `1_`,
      and a digit outside its base, `2#102` or `16#fg`, are each a located lex error
-     naming the number whole; `5U` and `5L` stay B2's mistyped lexeme, and `_1` is a
+     naming the number whole, and since M5-7's review a second `#`, Ada's `16#ff#`, too,
+     and a signed number's base is judged before its sign, so `-8#17` is told that logex
+     reads no octal; `5U` and `5L` stay B2's mistyped lexeme, and `_1` is a
      name. The parse tree keeps the value, not the spelling, so `well_formed!/1` takes
      what it took and the printer writes `16#ff` as `255`, and a message cites `65535`
      for `16#ffff`, provisional (`PLAN.md` M5-7's question). A configuration file's
