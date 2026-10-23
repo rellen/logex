@@ -419,11 +419,12 @@ defmodule Logex.Compiler do
 
   defp ir_operand?({:label, line, name}) when is_integer(line) and line > 0, do: is_binary(name)
 
-  # M5-8: a bit, its container's path, its number and its mask, which the rung's lowering
+  # M5-8: a bit, its container's path, its number, its mask and its name as written, which the rung's lowering
   # again must give exactly (lowers_to_itself?/2).
-  defp ir_operand?({:bit, line, path, n, mask}) when is_integer(line) and line > 0,
+  defp ir_operand?({:bit, line, path, n, mask, name}) when is_integer(line) and line > 0,
     do:
-      proper?(path, &is_binary/1) and path != [] and is_integer(n) and n >= 0 and is_integer(mask)
+      proper?(path, &is_binary/1) and path != [] and is_integer(n) and n >= 0 and
+        is_integer(mask) and is_binary(name)
 
   defp ir_operand?(_operand), do: false
 
@@ -441,8 +442,7 @@ defmodule Logex.Compiler do
   defp unlowered_operand({:member, line, path}), do: {:name, line, Enum.join(path, ".")}
   defp unlowered_operand({:label, line, name}), do: {:name, line, name}
 
-  defp unlowered_operand({:bit, line, path, n, _mask}),
-    do: {:name, line, Enum.join(path ++ [Integer.to_string(n)], ".")}
+  defp unlowered_operand({:bit, line, _path, _n, _mask, name}), do: {:name, line, name}
 
   defp unlowered_operand(operand), do: operand
 
@@ -765,24 +765,36 @@ defmodule Logex.Compiler do
   defp shared_bit({symbol, line, [{:name, _, bit} | pulse]}, {first, _} = acc, tags)
        when symbol in @one_shots do
     tag = Map.get(tags, bit)
-    {first, diagnostics} = storage_bit(Map.fetch(first, bit), tag, {bit, line, symbol}, acc)
-    {first, own_pulse(Enum.map(pulse, &Walk.bit_name/1), tag, {bit, line, symbol}, diagnostics)}
+    coil = {bit, line, symbol, bit}
+    {first, diagnostics} = storage_bit(Map.fetch(first, bit), tag, coil, acc)
+    {first, own_pulse(Enum.map(pulse, &Walk.bit_name/1), tag, coil, diagnostics)}
   end
 
   # M5-8 (decision 155): a one-shot's storage bit may be a bit of a tag, `status.3`, named
   # by its path, under every rule a bool storage bit has; a bit of a member, as a member,
-  # is the instance's, and is refused.
-  defp shared_bit({symbol, line, [{:bit, _, [_], _, _} = bit | pulse]}, {first, _} = acc, _tags)
+  # is the instance's, and is refused. A bit is keyed by its number's value and quoted as
+  # written, `status.03`.
+  defp shared_bit(
+         {symbol, line, [{:bit, _, [_], _, _, written} = bit | pulse]},
+         {first, _} = acc,
+         _tags
+       )
        when symbol in @one_shots do
     name = Walk.bit_name(bit)
     tag = %Tag{name: name, type: :bool, section: :var}
-    {first, diagnostics} = storage_bit(Map.fetch(first, name), tag, {name, line, symbol}, acc)
-    {first, own_pulse(Enum.map(pulse, &Walk.bit_name/1), tag, {name, line, symbol}, diagnostics)}
+    coil = {name, line, symbol, written}
+    {first, diagnostics} = storage_bit(Map.fetch(first, name), tag, coil, acc)
+    {first, own_pulse(Enum.map(pulse, &Walk.bit_name/1), tag, coil, diagnostics)}
   end
 
-  defp shared_bit({symbol, line, [{:bit, _, [instance, member], n, _} | _]}, {first, d}, tags)
+  defp shared_bit(
+         {symbol, line, [{:bit, _, [instance, member], _, _, bit} | _]},
+         {first, d},
+         tags
+       )
        when symbol in @one_shots,
-       do: {first, member_bits(Map.get(tags, instance), {line, symbol}, {instance, member, n}, d)}
+       do:
+         {first, member_bits(Map.get(tags, instance), {line, symbol}, {instance, member, bit}, d)}
 
   # M3-1: a counter's `r` and `ld` are the first bool members logic may write, and neither
   # is a storage bit: the counter reads it as its input, and an online edit's block list
@@ -802,11 +814,11 @@ defmodule Logex.Compiler do
   # M3-4 (decision 101): a coil's pulse bit is not its storage bit. Each run writes both, the
   # pulse and then the power received, so one tag would hold only the power and never pulse.
   # A storage bit that is no declared bool was reported already.
-  defp own_pulse([bit], %Tag{type: :bool}, {bit, line, symbol}, diagnostics),
+  defp own_pulse([bit], %Tag{type: :bool}, {bit, line, symbol, written}, diagnostics),
     do: [
       diagnostic(
         line,
-        "`#{bit}` is both the storage bit and the pulse bit of this `#{symbol}`: its pulse " <>
+        "`#{written}` is both the storage bit and the pulse bit of this `#{symbol}`: its pulse " <>
           "bit is another tag, which it sets for one scan on an edge"
       )
       | diagnostics
@@ -840,12 +852,12 @@ defmodule Logex.Compiler do
 
   defp member_bits(_not_an_instance, _at, _bit, diagnostics), do: diagnostics
 
-  defp member_bits_of({:ok, %Member{write: true}}, {line, symbol}, {instance, member, n}, d),
+  defp member_bits_of({:ok, %Member{write: true}}, {line, symbol}, {instance, _member, bit}, d),
     do: [
       diagnostic(
         line,
         "`#{symbol}` keeps its storage bit in #{Declarations.a_type(:bool)} or a bit of a tag " <>
-          "of its own, not in `#{instance}.#{member}.#{n}`, a bit of a member of `#{instance}`, " <>
+          "of its own, not in `#{bit}`, a bit of a member of `#{instance}`, " <>
           "which its instance reads"
       )
       | d
@@ -853,12 +865,22 @@ defmodule Logex.Compiler do
 
   defp member_bits_of(_unwritable, _at, _bit, diagnostics), do: diagnostics
 
-  defp storage_bit(:error, %Tag{type: :bool}, {bit, line, symbol}, {first, diagnostics}),
-    do: {Map.put(first, bit, {line, symbol}), diagnostics}
+  defp storage_bit(
+         :error,
+         %Tag{type: :bool},
+         {bit, line, symbol, _written},
+         {first, diagnostics}
+       ),
+       do: {Map.put(first, bit, {line, symbol}), diagnostics}
 
-  defp storage_bit({:ok, {first_line, other}}, %Tag{}, {bit, line, symbol}, {first, diagnostics}) do
+  defp storage_bit(
+         {:ok, {first_line, other}},
+         %Tag{},
+         {_bit, line, symbol, written},
+         {first, diagnostics}
+       ) do
     message =
-      "`#{bit}` is already the storage bit of the `#{other}` #{where(first_line, line)}: " <>
+      "`#{written}` is already the storage bit of the `#{other}` #{where(first_line, line)}: " <>
         "each #{one_shot(other, symbol)} needs a storage bit of its own"
 
     {first, [diagnostic(line, message) | diagnostics]}
@@ -1051,7 +1073,7 @@ defmodule Logex.Compiler do
   defp text(literal) when is_int_lit(literal), do: Parser.spelling(literal)
   defp text({:member, _, path}), do: Enum.join(path, ".")
   defp text({:label, _, name}), do: name
-  defp text({:bit, _, _path, _n, _mask} = bit), do: Walk.bit_name(bit)
+  defp text({:bit, _, _path, _n, _mask, name}), do: name
 
   # The member a rung below reads, the one the instance's type gives the instruction
   # (Logex.FbType.rules/1), or for a name not declared yet, the one the type the
@@ -1761,11 +1783,7 @@ defmodule Logex.Compiler do
   # M1-6: a member is lowered to its path, so the runtime reads and writes it without
   # splitting its name again: `t1.acc` becomes `{:member, line, ["t1", "acc"]}`. A dotted
   # name that resolves to nothing has a diagnostic, and a program with one never runs.
-  defp operand({:name, line, name}), do: dotted(String.split(name, "."), line, name)
-  defp operand(literal), do: literal
-
-  defp dotted([_one], line, name), do: {:name, line, name}
-  defp dotted(path, line, _name), do: {:member, line, path}
+  # Since M5-8 bit_operand/2 below lowers every operand.
 
   # M3-5: in a label slot a name is a label, `{:label, line, name}`, never a tag or a member,
   # whatever it holds; anything else lowers as any operand does.
@@ -1773,39 +1791,41 @@ defmodule Logex.Compiler do
   defp slot_operand(_slot, operand, scope), do: bit_operand(operand, scope)
 
   # M5-8 (decision 155): a bit, `status.3` or `t1.acc.3`, is lowered to its container's path
-  # and its number, `{:bit, line, ["status"], 3, mask}`, with the mask a scan reads and
+  # and its number, `{:bit, line, ["status"], 3, mask, "status.3"}`, with the mask a scan reads and
   # writes it through: 2^n, or for a signed type's top bit, its sign, every bit from n up,
   # -(2^n), so that the bit is read and written in two's complement with no type looked
   # up. A dotted name whose container has no bits lowers as a member, and is reported.
-  defp bit_operand({:name, line, name} = operand, scope),
-    do: as_bit(Enum.split(String.split(name, "."), -1), {line, operand}, scope)
+  # The name is split once: a name with no `.` is a tag, and one with a last part that is no
+  # number a member, each with no table looked up, so that a program of bools and integers
+  # lowers its operands in what it did before bits.
+  defp bit_operand({:name, line, name}, scope),
+    do: parted(String.split(name, "."), {line, name}, scope)
 
-  defp bit_operand(operand, _scope), do: operand(operand)
+  defp bit_operand(literal, _scope), do: literal
 
-  defp as_bit({[_ | _] = path, [part]}, {line, operand}, scope),
-    do:
-      bit_ir(
-        Integer.parse(part),
-        container_type(lookup(Enum.join(path, "."), scope)),
-        {path, line},
-        operand
-      )
+  defp parted([_one], {line, name}, _scope), do: {:name, line, name}
 
-  defp as_bit(_one_part, {_line, operand}, _scope), do: operand(operand)
+  defp parted(path, at, scope),
+    do: as_bit(Integer.parse(List.last(path)), path, at, scope)
+
+  defp as_bit({n, ""}, path, at, scope) do
+    container = Enum.drop(path, -1)
+    type = container_type(lookup(Enum.join(container, "."), scope))
+    bit_ir_of(bits(type), {n, type, container}, path, at)
+  end
+
+  defp as_bit(_no_number, path, {line, _name}, _scope), do: {:member, line, path}
 
   defp container_type({:ok, %Tag{type: type}}), do: type
   defp container_type({:member, _tag, %Member{type: type}}), do: type
   defp container_type(_nothing), do: nil
 
-  defp bit_ir({n, ""}, type, {path, line}, operand),
-    do: bit_ir_of(bits(type), {n, type}, {path, line}, operand)
+  # A bit carries its name as written, `status.03`, which a message quotes (decision 202's
+  # rule for a literal, provisional for a bit's number); its number is its value.
+  defp bit_ir_of(nil, _n, path, {line, _name}), do: {:member, line, path}
 
-  defp bit_ir(_no_bit, _type, _at, operand), do: operand(operand)
-
-  defp bit_ir_of(nil, _n, _at, operand), do: operand(operand)
-
-  defp bit_ir_of(_width, {n, type}, {path, line}, _operand),
-    do: {:bit, line, path, n, mask(Declarations.kind(type), n, Declarations.width(type))}
+  defp bit_ir_of(width, {n, type, container}, _path, {line, name}),
+    do: {:bit, line, container, n, mask(Declarations.kind(type), n, width), name}
 
   defp mask(:signed, n, width) when n == width - 1, do: -Integer.pow(2, n)
   defp mask(_kind, n, _width), do: Integer.pow(2, n)
@@ -2790,7 +2810,21 @@ defmodule Logex.Compiler do
   # Since M5-8 the operands of each class are held together apart from the others', in
   # the order their classes first come, so a shift's count, ANY_INT, is no source of the
   # type its bit string computes in.
-  defp classed(operands, at, diagnostics) do
+  # Every instruction but a shift holds one class, held with no grouping, so that it
+  # checks in what it did before M5-8.
+  defp classed([], _at, diagnostics), do: diagnostics
+
+  defp classed([{_access, class, _typed} | _] = operands, at, diagnostics),
+    do: of_classes(one_class?(operands, class), class, operands, {at, diagnostics})
+
+  defp one_class?([{_access, class, _typed} | rest], class), do: one_class?(rest, class)
+  defp one_class?([], _class), do: true
+  defp one_class?(_other, _class), do: false
+
+  defp of_classes(true, class, operands, {at, diagnostics}),
+    do: class_held(class, operands, at, diagnostics)
+
+  defp of_classes(false, _class, operands, {at, diagnostics}) do
     classes = operands |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
 
     Enum.reduce(classes, diagnostics, fn class, diagnostics ->

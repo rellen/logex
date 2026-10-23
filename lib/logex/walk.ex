@@ -76,7 +76,7 @@ defmodule Logex.Walk do
   defp tag_of({:member, _, [instance | _]}), do: instance
   # M5-8: a bit is a use of its container, `status.3` of `status`, with its slot's access,
   # so a coil on a bit is a write of the word (decision 155).
-  defp tag_of({:bit, _, [container | _], _n, _mask}), do: container
+  defp tag_of({:bit, _, [container | _], _n, _mask, _name}), do: container
   defp tag_of({:int_lit, _, _}), do: nil
   defp tag_of({:int_lit, _, _, _spelling}), do: nil
   # M3-5: a label is a name of the routine's own, never a tag (decision 105).
@@ -98,7 +98,10 @@ defmodule Logex.Walk do
   (decision 155); any other operand is itself, equal to no name.
   """
   def bit_name({:name, _, name}), do: name
-  def bit_name({:bit, _, path, n, _mask}), do: Enum.join(path, ".") <> "." <> Integer.to_string(n)
+
+  def bit_name({:bit, _, path, n, _mask, _name}),
+    do: Enum.join(path, ".") <> "." <> Integer.to_string(n)
+
   def bit_name(operand), do: operand
 
   @doc """
@@ -119,7 +122,7 @@ defmodule Logex.Walk do
       )
 
   defp own_bit({:name, _, bit}), do: bit
-  defp own_bit({:bit, _, [_container], _n, _mask} = bit), do: bit_name(bit)
+  defp own_bit({:bit, _, [_container], _n, _mask, _name} = bit), do: bit_name(bit)
   defp own_bit(_member), do: nil
 
   @doc """
@@ -274,7 +277,7 @@ defmodule Logex.Walk do
   defp bits_written(instructions, tags) do
     instructions
     |> Enum.flat_map(fn {_symbol, line, operands} = instruction ->
-      for {{:write, _type}, {:bit, _, [_], _, _} = bit} <-
+      for {{:write, _type}, {:bit, _, [_], _, _, _} = bit} <-
             Enum.zip(Compiler.signature(instruction, tags), operands),
           do: {bit_name(bit), line}
     end)
@@ -297,7 +300,7 @@ defmodule Logex.Walk do
   # A member's path, `lube.r`, and since M5-8 a bit of one, a write of its member, `t1.pre`
   # for `t1.pre.3`; a tag or a tag's bit is none.
   defp member_path({:member, _, path}), do: Enum.join(path, ".")
-  defp member_path({:bit, _, [_, _ | _] = path, _n, _mask}), do: Enum.join(path, ".")
+  defp member_path({:bit, _, [_, _ | _] = path, _n, _mask, _name}), do: Enum.join(path, ".")
   defp member_path(_tag), do: nil
 
   # A routine's one-shots, each storage bit to its first one-shot's line and symbol.

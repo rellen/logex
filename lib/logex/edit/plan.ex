@@ -388,7 +388,7 @@ defmodule Logex.Edit.Plan do
           {[bit | bits], cals}
 
         # M5-8 (decision 155): a bit of a word kept as a storage bit, by its path.
-        {symbol, _line, [{:bit, _, [_], _, _} = bit | _]}, {bits, cals}
+        {symbol, _line, [{:bit, _, [_], _, _, _} = bit | _]}, {bits, cals}
         when symbol in @one_shots ->
           {[Walk.bit_name(bit) | bits], cals}
 
@@ -461,7 +461,7 @@ defmodule Logex.Edit.Plan do
   defp operand({kind, _line, value}), do: {kind, value}
   # M5-8: a bit by its path and number; its mask follows from its word's type, which an
   # edit changes only with a restart.
-  defp operand({:bit, _line, path, n, _mask}), do: {:bit, path, n}
+  defp operand({:bit, _line, path, n, _mask, _name}), do: {:bit, path, n}
   # Decision 202: a literal is compared by its value, as a preset is, so an edit that only
   # respells one, `16#ff` for `255`, leaves its rung the same rung.
   defp operand({:int_lit, _line, value, _spelling}), do: {:int_lit, value}

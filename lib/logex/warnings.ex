@@ -39,6 +39,8 @@ defmodule Logex.Warnings do
   alias Logex.{Declarations, Diagnostic, FbType, Parser, Tag, Walk}
   import Logex.Parser, only: [is_int_lit: 1]
 
+  @one_shots Walk.one_shots()
+
   @doc """
   The warnings for lowered `rungs` checked against the tag table `tags`, each instance's
   type itself: for a block's body, `Logex.Program.typed_tags/1`'s table (M2-5).
@@ -53,8 +55,10 @@ defmodule Logex.Warnings do
     # M1-6: each `ons` storage bit, to the line of the one `ons` that writes it. The
     # compiler refuses a second `ons` on one bit, so a program that compiles has one. M3-4:
     # each one-shot's, an `ons`, an `osr` or an `osf`, to its line and symbol.
+    # Since M5-8's review each with its bit as written, `status.03`, which a message quotes.
     owners =
       Map.new(Walk.storage_bits(rungs), fn {bit, line, symbol} -> {bit, {line, symbol}} end)
+      |> written_bits(instructions)
 
     tags
     |> Map.values()
@@ -187,79 +191,104 @@ defmodule Logex.Warnings do
   # M5-8 (decision 155): a coil on a bit, `ote status.3`, decides that bit as an `ote` on a
   # bool decides it, and so does any instruction that writes its word whole, `move x
   # status`: either after the other is the second-`ote` warning, at its own line, citing
-  # the first in its words.
+  # the first in its words. Since M5-8's review so for a bit of a member and a write of the
+  # member whole, `ote c.pv.3` and `move x c.pv` (provisional reading 9). A bit is keyed by
+  # its number's value and quoted as written, `status.03`. A program with no coil on a bit
+  # has no whole write to compare, and none is looked for.
   defp second_otes(instructions, tags, owners) do
+    coils = Enum.flat_map(instructions, &coil_target/1)
+
+    words =
+      for {:coil, _key, word, _tag, _at, _shown} <- coils,
+          word != nil,
+          into: %{},
+          do: {word, true}
+
     {warnings, _firsts} =
       instructions
-      |> Enum.flat_map(&(coil_target(&1) ++ whole_writes(&1, tags)))
-      |> Enum.filter(fn {name, instance, _line, _symbol} ->
-        from_source?(tags, instance) and not Map.has_key?(owners, name)
-      end)
-      |> Enum.flat_map_reduce({%{}, %{}, %{}}, fn {name, instance, line, symbol}, firsts ->
-        decided(name, instance, {line, symbol}, firsts)
-      end)
+      |> decisions(coils, words, tags)
+      |> Enum.filter(&decides?(&1, tags, owners))
+      |> Enum.flat_map_reduce({%{}, %{}, %{}}, &decided/2)
 
     warnings
   end
 
-  # A coil on a tag or member, `{name, name}`; a coil on a bit, `{"status.3", "status"}`;
-  # a whole write, `{{:whole, "status"}, "status"}`. `firsts` holds each coil's first, each
-  # word's first whole write, and each word's first coiled bit.
-  defp decided({:whole, word}, word, at, {coils, wholes, bitted}),
-    do: whole_after(Map.fetch(bitted, word), at, {coils, Map.put_new(wholes, word, at), bitted})
+  defp decisions(_instructions, coils, words, _tags) when map_size(words) == 0, do: coils
 
-  defp decided(name, name, at, {coils, wholes, bitted}) do
-    {warnings, coils} = later_ote(Map.fetch(coils, name), name, at, coils)
+  defp decisions(instructions, _coils, words, tags),
+    do: Enum.flat_map(instructions, &(coil_target(&1) ++ whole_writes(&1, tags, words)))
+
+  defp decides?({:coil, key, _word, tag, _at, _shown}, tags, owners),
+    do: from_source?(tags, tag) and not Map.has_key?(owners, key)
+
+  defp decides?({:whole, _word, tag, _at}, tags, _owners), do: from_source?(tags, tag)
+
+  # A coil on a tag or member, keyed by its name, on no word; a coil on a bit, `status.3` on
+  # the word `status`, or `c.pv.3` on the member `c.pv`; a whole write of a word or member.
+  # `firsts` holds each coil's first, each word's first whole write, and each word's first
+  # coiled bit.
+  defp decided({:coil, key, nil, _tag, at, shown}, {coils, wholes, bitted}) do
+    {warnings, coils} = later_ote(Map.fetch(coils, key), {key, shown}, at, coils)
     {warnings, {coils, wholes, bitted}}
   end
 
-  defp decided(bit, word, at, {coils, wholes, bitted}),
+  defp decided({:coil, key, word, _tag, at, shown}, {coils, wholes, bitted}),
     do:
       bit_after(
-        Map.fetch(coils, bit),
+        Map.fetch(coils, key),
         Map.fetch(wholes, word),
-        {bit, word, at},
+        {key, word, at, shown},
         {coils, wholes, bitted}
       )
 
-  defp bit_after({:ok, first}, _whole, {bit, _word, {line, _symbol}}, firsts),
-    do: {[second_ote(bit, first, line)], firsts}
+  defp decided({:whole, word, _tag, at}, {coils, wholes, bitted}),
+    do: whole_after(Map.fetch(bitted, word), at, {coils, Map.put_new(wholes, word, at), bitted})
+
+  defp bit_after({:ok, first}, _whole, {_key, _word, {line, _symbol}, shown}, firsts),
+    do: {[second_ote(shown, first, line)], firsts}
 
   defp bit_after(
          :error,
          {:ok, {first, symbol}},
-         {bit, word, {line, _} = at},
+         {key, word, {line, _} = at, shown},
          {coils, wholes, bitted}
        ),
        do:
          {[
             warning(
               line,
-              "`#{bit}` is a bit of `#{word}`, which the `#{symbol}` #{where(first, line)} " <>
+              "`#{shown}` is a bit of `#{word}`, which the `#{symbol}` #{where(first, line)} " <>
                 "writes whole: #{last()}"
             )
-          ], {Map.put(coils, bit, at), wholes, Map.put_new(bitted, word, {bit, at})}}
+          ], {Map.put(coils, key, at), wholes, Map.put_new(bitted, word, {shown, at})}}
 
-  defp bit_after(:error, :error, {bit, word, at}, {coils, wholes, bitted}),
-    do: {[], {Map.put(coils, bit, at), wholes, Map.put_new(bitted, word, {bit, at})}}
+  defp bit_after(:error, :error, {key, word, at, shown}, {coils, wholes, bitted}),
+    do: {[], {Map.put(coils, key, at), wholes, Map.put_new(bitted, word, {shown, at})}}
 
   defp whole_after(:error, _at, firsts), do: {[], firsts}
 
   defp whole_after({:ok, {bit, first}}, {line, _symbol}, firsts),
     do: {[second_ote(bit, first, line)], firsts}
 
-  # Every tag an instruction other than a coil writes whole, by its write slots: a word
-  # whose bits a coil may name.
-  defp whole_writes({symbol, _line, _operands}, _tags) when symbol in [:ote, :osr, :osf, :ons],
-    do: []
+  # Every tag or member an instruction other than a coil writes whole, by its write slots,
+  # among the words whose bits a coil names.
+  defp whole_writes({symbol, _line, _operands}, _tags, _words)
+       when symbol in [:ote, :osr, :osf, :ons],
+       do: []
 
-  defp whole_writes({_symbol, line, operands} = instruction, tags),
+  defp whole_writes({symbol, line, operands} = instruction, tags, words),
     do:
       for(
-        {{:write, _type}, {:name, _, name}} <-
+        {{:write, _type}, operand} <-
           Enum.zip(Logex.Compiler.signature(instruction, tags), operands),
-        do: {{:whole, name}, name, line, elem(instruction, 0)}
+        {word, tag} <- whole(operand),
+        is_map_key(words, word),
+        do: {:whole, word, tag, {line, symbol}}
       )
+
+  defp whole({:name, _, name}), do: [{name, name}]
+  defp whole({:member, _, [instance | _] = path}), do: [{Enum.join(path, "."), instance}]
+  defp whole(_bit_or_literal), do: []
 
   defp coil_target({:ote, line, [target]}), do: target(target, line, :ote)
 
@@ -268,20 +297,23 @@ defmodule Logex.Warnings do
 
   defp coil_target(_instruction), do: []
 
-  defp target({:name, _, name}, line, symbol), do: [{name, name, line, symbol}]
+  defp target({:name, _, name}, line, symbol),
+    do: [{:coil, name, nil, name, {line, symbol}, name}]
 
-  defp target({:member, _, [instance | _] = path}, line, symbol),
-    do: [{Enum.join(path, "."), instance, line, symbol}]
+  defp target({:member, _, [instance | _] = path}, line, symbol) do
+    name = Enum.join(path, ".")
+    [{:coil, name, nil, instance, {line, symbol}, name}]
+  end
 
-  defp target({:bit, _, [container | _], _n, _mask} = bit, line, symbol),
-    do: [{Walk.bit_name(bit), container, line, symbol}]
+  defp target({:bit, _, [container | _] = path, _n, _mask, shown} = bit, line, symbol),
+    do: [{:coil, Walk.bit_name(bit), Enum.join(path, "."), container, {line, symbol}, shown}]
 
   defp target(_literal, _line, _symbol), do: []
 
-  defp later_ote(:error, name, first, firsts), do: {[], Map.put(firsts, name, first)}
+  defp later_ote(:error, {key, _shown}, first, firsts), do: {[], Map.put(firsts, key, first)}
 
-  defp later_ote({:ok, first}, name, {line, _symbol}, firsts),
-    do: {[second_ote(name, first, line)], firsts}
+  defp later_ote({:ok, first}, {_key, shown}, {line, _symbol}, firsts),
+    do: {[second_ote(shown, first, line)], firsts}
 
   # M1-6: every other write to an `ons` storage bit declared in source, before or after
   # the `ons` in the scan, is warned about at its own line, citing the `ons`. The uses are
@@ -290,20 +322,41 @@ defmodule Logex.Warnings do
   # one-shot's own, its first operand, a coil's pulse bit among them.
   #
   # M5-8 (decision 155): a storage bit may be a bit of a word, `status.3`, written by a coil
-  # on it and by any write of the word whole, `move x status`, each warned of.
+  # on it and by any write of the word whole, `move x status`, each warned of, a bit quoted
+  # as written. A program with no one-shot has no storage bit to write, and none is looked
+  # for.
+  defp storage_writes(_instructions, _tags, owners) when map_size(owners) == 0, do: []
+
   defp storage_writes(instructions, tags, owners) do
     words =
       owners |> Map.keys() |> Enum.filter(&String.contains?(&1, ".")) |> Enum.group_by(&word_of/1)
 
     for instruction <- instructions,
         {operand, line, symbol} <- others(instruction, written(instruction, tags)),
-        name <- storage_names(operand, words),
+        {name, shown} <- storage_names(operand, words),
         {:ok, first} <- [Map.fetch(owners, name)],
         from_source?(tags, word_of(name)),
-        do: storage_write(symbol, name, first, line)
+        do: storage_write(symbol, shown(shown, first), first, line)
   end
 
-  @one_shots Walk.one_shots()
+  # Each storage bit that is a bit of a word, with its spelling as its one-shot writes it.
+  defp written_bits(owners, instructions),
+    do:
+      Enum.reduce(instructions, owners, fn
+        {symbol, _line, [{:bit, _, [_], _, _, shown} = bit | _]}, owners
+        when symbol in @one_shots ->
+          Map.update!(owners, Walk.bit_name(bit), &with_shown(&1, shown))
+
+        _instruction, owners ->
+          owners
+      end)
+
+  defp with_shown({line, owner}, shown), do: {line, owner, shown}
+  defp with_shown(shown_already, _shown), do: shown_already
+
+  # A bit as the write names it, or, where a whole write reaches it, as its one-shot does.
+  defp shown(nil, {_first, _owner, shown}), do: shown
+  defp shown(shown, _owner), do: shown
 
   defp others({symbol, _line, _operands}, [_storage | uses]) when symbol in @one_shots, do: uses
   defp others(_instruction, uses), do: uses
@@ -319,12 +372,17 @@ defmodule Logex.Warnings do
 
   # The storage bits a write reaches: a bool's or a bit's own name, and every bit of a word
   # written whole, in name order.
-  defp storage_names({:name, _, name}, words), do: [name | Enum.sort(Map.get(words, name, []))]
-  defp storage_names({:bit, _, [_], _, _} = bit, _words), do: [Walk.bit_name(bit)]
+  defp storage_names({:name, _, name}, words),
+    do: [{name, name} | Enum.map(Enum.sort(Map.get(words, name, [])), &{&1, nil})]
+
+  defp storage_names({:bit, _, [_], _, _, shown} = bit, _words), do: [{Walk.bit_name(bit), shown}]
   defp storage_names(_member, _words), do: []
 
   # A storage bit's tag: a bool's own name, or the word a bit of one is in.
   defp word_of(name), do: hd(String.split(name, "."))
+
+  defp storage_write(symbol, name, {first, owner, _shown}, line),
+    do: storage_write(symbol, name, {first, owner}, line)
 
   defp storage_write(symbol, name, {first, owner}, line),
     do:
@@ -441,8 +499,9 @@ defmodule Logex.Warnings do
 
   # An operand's integer type, a tag's or a member's of the built-in instance that holds
   # it; anything else, a bool or a member of a user block's instance, which no comparison
-  # takes, is passed over.
-  @integers Declarations.integers()
+  # takes, is passed over. Since M5-8's review a bit string too, which compares as unsigned
+  # (decision 155), so `ge status 0` on a `word` is warned as on a `uint` (provisional).
+  @integers Declarations.integers() ++ Declarations.bit_strings()
 
   defp integer_type({:name, _, name}, tags), do: of_integer(Map.get(tags, name))
 

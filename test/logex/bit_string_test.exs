@@ -1035,11 +1035,14 @@ defmodule Logex.BitStringTest do
       assert Logex.Compiler.lowered?(unpack.body)
 
       # A body whose bit's mask is not the one its type gives is no compiled body.
-      [{:rung, [{:xic, line, [{:bit, l, path, 15, mask}]} | rest]} | rungs] = unpack.body.rungs
+      [{:rung, [{:xic, line, [{:bit, l, path, 15, mask, name}]} | rest]} | rungs] =
+        unpack.body.rungs
+
+      assert name == "w.15"
 
       forged =
         put_in(unpack.body.rungs, [
-          {:rung, [{:xic, line, [{:bit, l, path, 15, -mask}]} | rest]} | rungs
+          {:rung, [{:xic, line, [{:bit, l, path, 15, -mask, name}]} | rest]} | rungs
         ])
 
       refute Logex.FbType.user?(forged)
@@ -1047,10 +1050,27 @@ defmodule Logex.BitStringTest do
 
       unlined =
         put_in(unpack.body.rungs, [
-          {:rung, [{:xic, line, [{:bit, -l, path, 15, mask}]} | rest]} | rungs
+          {:rung, [{:xic, line, [{:bit, -l, path, 15, mask, name}]} | rest]} | rungs
         ])
 
       refute Logex.Compiler.lowered?(unlined.body)
+
+      # Since M5-8's review a bit carries its name as written, which must name that bit.
+      for misnamed <- ["w.14", "x.15", :w] do
+        renamed =
+          put_in(unpack.body.rungs, [
+            {:rung, [{:xic, line, [{:bit, l, path, 15, mask, misnamed}]} | rest]} | rungs
+          ])
+
+        refute Logex.Compiler.lowered?(renamed.body), inspect(misnamed)
+      end
+
+      spelled =
+        put_in(unpack.body.rungs, [
+          {:rung, [{:xic, line, [{:bit, l, path, 15, mask, "w.015"}]} | rest]} | rungs
+        ])
+
+      assert Logex.Compiler.lowered?(spelled.body)
     end
 
     test "a one-shot's storage bit and a pulse coil's two bits may be bits of a word" do
@@ -1457,6 +1477,173 @@ defmodule Logex.BitStringTest do
         )
 
       assert scan(p, %{"a" => 0x8001}) == %{"w" => 0x8001, "q" => 1}
+    end
+
+    # A program of no bit strings compiles, against its own parse, in no more reductions than
+    # it did before M5-8 (`ebf44ee`), whose ratios these are, measured in a process of its
+    # own with a heap the collector never visits, so exact: each name is split once, an
+    # instruction of one class holds its operands with no grouping, and the warnings look
+    # for no whole write where no coil names a bit, nor for a storage bit's writes where no
+    # one-shot keeps one. M5-8 as it landed made them 1.13x to 1.18x dearer.
+    test "a program of no bit strings compiles in what it did before M5-8" do
+      cost = fn f ->
+        parent = self()
+
+        {_pid, ref} =
+          :erlang.spawn_opt(
+            fn ->
+              {:reductions, before} = Process.info(self(), :reductions)
+              f.()
+              {:reductions, later} = Process.info(self(), :reductions)
+              send(parent, {:reductions, later - before})
+            end,
+            [:monitor, min_heap_size: 8_000_000]
+          )
+
+        assert_receive {:reductions, n}, 10_000
+        assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+        n
+      end
+
+      rungs = fn rung -> Enum.map_join(1..200, "\n", fn _ -> rung end) end
+
+      for {source, before} <- [
+            {"var_input a dint\nvar_output d dint\n" <> rungs.("add a 1234 d"), 15.32},
+            {"var_input a uint\nvar_output d uint\n" <> rungs.("move a d"), 16.84},
+            {"var_input a dint\nvar_output q bool\n" <> rungs.("gt a 5 ote q"), 16.32},
+            {"var_input a bool\nvar_input b bool\nvar_output q bool\n" <>
+               rungs.("xic a xio b ote q"), 17.02},
+            {"var_input a dint\nvar_output d int\n" <> rungs.("dint_to_int a d"), 14.26},
+            {"var t ton\nvar_input a bool\nvar_output d dint\nxic a ton t 100\n" <>
+               rungs.("move t.acc d"), 16.13}
+          ] do
+        {:ok, _program} = Logex.compile(source, name: "p")
+        compiled = cost.(fn -> Logex.compile(source, name: "p") end)
+
+        parsed =
+          cost.(fn ->
+            {:ok, tokens, _end} = Logex.Compiler.tokenize(source)
+            Logex.Compiler.parse(tokens)
+          end)
+
+        assert compiled / parsed <= before,
+               "#{String.slice(source, -20, 20)} compiled in #{Float.round(compiled / parsed, 2)}x " <>
+                 "its parse, #{before}x before M5-8"
+      end
+    end
+
+    # Decision 187 for a bit string, which compares as unsigned: a comparison at its limits
+    # whose result never changes is warned of as on a uint (provisional).
+    test "a comparison of a bit string with a literal at its limit is warned of" do
+      for type <- @strings do
+        {_low, high} = limits(type)
+
+        {:ok, p} =
+          Logex.compile(
+            "var_input w #{type}\nvar_output q1 bool\nvar_output q2 bool\nvar_output q3 bool\n" <>
+              "var_output q4 bool\nvar_output q5 bool\nge w 0 ote q1\nlt w 0 ote q2\n" <>
+              "le w #{high} ote q3\ngt 0 w ote q4\nge w 1 ote q5\nlt w #{high} ote q5",
+            name: "p"
+          )
+
+        never = ": its result never changes"
+
+        assert Enum.map(p.warnings, &{&1.line, &1.message}) == [
+                 {7,
+                  "`ge` compares `w` with `0`, and #{a(type)} holds nothing below `0`" <> never},
+                 {8,
+                  "`lt` compares `w` with `0`, and #{a(type)} holds nothing below `0`" <> never},
+                 {9,
+                  "`le` compares `w` with `#{high}`, and #{a(type)} holds nothing above " <>
+                    "`#{high}`" <> never},
+                 {10,
+                  "`gt` compares `0` with `w`, and #{a(type)} holds nothing below `0`" <> never},
+                 {12, "`q5` already has an `ote` on line 11: the last one in the scan decides it"}
+               ]
+      end
+    end
+
+    test "a coil on a bit of a member and a write of the member whole draw the second-ote warning" do
+      for {rungs, message} <- [
+            {"move x c.pv\nxic k ote c.pv.3",
+             "`c.pv.3` is a bit of `c.pv`, which the `move` on line 5 writes whole: the last " <>
+               "one in the scan decides it"},
+            {"xic k ote c.pv.03\nmove x c.pv",
+             "`c.pv.03` already has an `ote` on line 5: the last one in the scan decides it"}
+          ] do
+        {:ok, p} =
+          Logex.compile(
+            "var_input k bool\nvar_input x dint\nvar c ctu\nvar_output q bool\n" <>
+              rungs <> "\nxic k ctu c 10\nxic c.q ote q",
+            name: "p"
+          )
+
+        assert Enum.map(p.warnings, &{&1.line, &1.message}) == [{6, message}]
+      end
+
+      # A whole write of a member whose bits no coil names, beside a coil on another word's
+      # bit, is no such write.
+      {:ok, p} =
+        Logex.compile(
+          "var_input k bool\nvar_input x dint\nvar c ctu\nvar w word\nvar_output q bool\n" <>
+            "move x c.pv\nxic k ote w.3\nxic k ctu c 10\nxic c.q xic w.0 ote q",
+          name: "p"
+        )
+
+      assert p.warnings == []
+    end
+
+    # A bit's number is quoted as written, `w.03`, wherever a warning or a refusal names
+    # the bit, as decision 202 quotes a literal (provisional).
+    test "a bit is quoted as written in every warning and refusal that names it" do
+      {:ok, p} =
+        Logex.compile(
+          "var_input k bool\nvar w word\nvar s word\nvar_output q bool\n" <>
+            "xic k ote w.3\nxic k ote w.03\nxic k ons s.02 ote q\nxic k ote s.002\nmove 1 s\n" <>
+            "xic w.0 xic s.0 ote q",
+          name: "p"
+        )
+
+      assert Enum.map(p.warnings, &{&1.line, &1.message}) == [
+               {6, "`w.03` already has an `ote` on line 5: the last one in the scan decides it"},
+               {8,
+                "`ote` writes `s.002`, the storage bit of the `ons` on line 7: the one-shot then " <>
+                  "fires on the wrong scans"},
+               {9,
+                "`move` writes `s.02`, the storage bit of the `ons` on line 7: the one-shot " <>
+                  "then fires on the wrong scans"},
+               {10, "`q` already has an `ote` on line 7: the last one in the scan decides it"}
+             ]
+
+      {:ok, p} =
+        Logex.compile(
+          "var_input k bool\nvar w word\nvar_output q bool\nmove 5 w\nxic k ote w.03\n" <>
+            "xic w.0 ote q",
+          name: "p"
+        )
+
+      assert Enum.map(p.warnings, & &1.message) == [
+               "`w.03` is a bit of `w`, which the `move` on line 4 writes whole: the last one " <>
+                 "in the scan decides it"
+             ]
+
+      assert messages(
+               "var_input k bool\nvar w word\nvar_output q bool\nxic k ons w.3 ote q\n" <>
+                 "xic k ons w.03 ote q"
+             ) == [
+               "`w.03` is already the storage bit of the `ons` on line 4: each `ons` " <>
+                 "needs a storage bit of its own"
+             ]
+
+      assert messages("var_input k bool\nvar w word\nxic k osr w.03 w.3") == [
+               "`w.03` is both the storage bit and the pulse bit of this `osr`: its " <>
+                 "pulse bit is another tag, which it sets for one scan on an edge"
+             ]
+
+      assert messages("var_input k bool\nvar c ctu\nxic k ons c.pv.03 ctu c 5") == [
+               "`ons` keeps its storage bit in a bool or a bit of a tag of its own, not " <>
+                 "in `c.pv.03`, a bit of a member of `c`, which its instance reads"
+             ]
     end
   end
 

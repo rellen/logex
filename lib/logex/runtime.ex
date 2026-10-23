@@ -1814,7 +1814,7 @@ defmodule Logex.Runtime do
   defp hold({symbol, _, [{:name, _, bit} | _]}, env) when symbol in @one_shots,
     do: mark(env, [bit])
 
-  defp hold({symbol, _, [{:bit, _, [_], _, _} = bit | _]}, env) when symbol in @one_shots,
+  defp hold({symbol, _, [{:bit, _, [_], _, _, _} = bit | _]}, env) when symbol in @one_shots,
     do: mark(env, [Walk.bit_name(bit)])
 
   defp hold({symbol, _, [{:name, _, name} | _]}, env) when is_map_key(@memories, symbol),
@@ -2326,9 +2326,12 @@ defmodule Logex.Runtime do
 
   # M5-8: a bit of a tag, `status.3`, is a leaf of the tree under its path, as a bool is
   # under its name; with no block its name is never made.
-  defp blocked?({:bit, _, [_], _, _}, blocked) when map_size(blocked) == 0, do: false
-  defp blocked?({:bit, _, [_], _, _} = bit, blocked), do: is_map_key(blocked, Walk.bit_name(bit))
-  defp blocked?({:bit, _, _member, _, _}, _blocked), do: false
+  defp blocked?({:bit, _, [_], _, _, _}, blocked) when map_size(blocked) == 0, do: false
+
+  defp blocked?({:bit, _, [_], _, _, _} = bit, blocked),
+    do: is_map_key(blocked, Walk.bit_name(bit))
+
+  defp blocked?({:bit, _, _member, _, _, _}, _blocked), do: false
 
   # M3-4: whether a pulse coil may see an edge on this scan: not on a first scan, nor where
   # its storage bit is blocked, as an `ons` passes no power then.
@@ -2908,8 +2911,8 @@ defmodule Logex.Runtime do
 
   # M5-8 (decision 155): a bit of a tag or a member, 1 where its mask's bits are set in the
   # value, read in two's complement, a signed type's top bit its sign (Logex.Compiler).
-  defp read(env, {:bit, _, [name], _n, mask}), do: bit_set(Map.get(env, name, 0), mask)
-  defp read(env, {:bit, _, path, _n, mask}), do: bit_set(walk(env, path), mask)
+  defp read(env, {:bit, _, [name], _n, mask, _name}), do: bit_set(Map.get(env, name, 0), mask)
+  defp read(env, {:bit, _, path, _n, mask, _name}), do: bit_set(walk(env, path), mask)
   # Decision 202: a literal written other than as its plain decimal keeps its spelling,
   # which no scan reads.
   defp read(_env, {:int_lit, _, value, _spelling}), do: value
@@ -2926,10 +2929,10 @@ defmodule Logex.Runtime do
   # M5-8: a bit is written into its word, the rest of the word kept: 1 sets the mask's bits
   # and 0 clears them, so a signed type's top bit, whose mask is every bit from it up, is
   # its sign, and the word stays inside its type.
-  defp write(env, {:bit, _, [name], _n, mask}, value),
+  defp write(env, {:bit, _, [name], _n, mask, _name}, value),
     do: Map.put(env, name, with_bit(integer(Map.get(env, name, 0)), mask, value))
 
-  defp write(env, {:bit, _, path, _n, mask}, value),
+  defp write(env, {:bit, _, path, _n, mask, _name}, value),
     do: put_path(env, path, with_bit(integer(walk(env, path)), mask, value))
 
   defp bit_set(value, mask) when is_integer(value), do: one(Bitwise.band(value, mask) != 0)
