@@ -1586,7 +1586,8 @@ defmodule Logex.RealTest do
                  "add a 1.000000001 r\nreal_to_int 0.10000000149011612 i\n" <>
                  "move 9007199254740993.0 m\nmove 0.10000000149011612 m\nmove 16777217.0 m\n" <>
                  "lreal_to_int 3.14159265358979 i\nmove 0.100000001490116119384765625 r\n" <>
-                 "move 1.6777216e7 r\nmove 37.50 r"
+                 "move 1.6777216e7 r\nmove 37.50 r\nmove -0.100000001490116119384765625 r\n" <>
+                 "move -16777217.0 r"
              ) == [
                {2, "`l` is declared but no rung uses it"},
                {7, "`16777217.0` has more digits than a real keeps: it is held as 16777216.0"},
@@ -1601,7 +1602,8 @@ defmodule Logex.RealTest do
                 "`9007199254740993.0` has more digits than an lreal keeps: it is held as " <>
                   "9.007199254740992e15"},
                {16,
-                "`lreal_to_int` reads a literal, `3.14159265358979`: its result never changes"}
+                "`lreal_to_int` reads a literal, `3.14159265358979`: its result never changes"},
+               {21, "`-16777217.0` has more digits than a real keeps: it is held as -16777216.0"}
              ]
     end
 
@@ -1628,7 +1630,7 @@ defmodule Logex.RealTest do
              ]
     end
 
-    test "is warned of in a block's formal past its third operand" do
+    test "is warned of in a block's formal at its third operand and past it" do
       {:ok, mix} =
         Logex.compile(
           "function_block mix\nvar_input a real\nvar_input b real\nvar_input c real\n" <>
@@ -1636,12 +1638,32 @@ defmodule Logex.RealTest do
           name: "mix"
         )
 
-      {:ok, program} =
+      # The literal alone among the tags, so that it is the only real literal the
+      # instruction holds, at the cal's second, third and fourth operands.
+      for operands <- ["16777217.0 x y", "x 16777217.0 y", "x y 16777217.0"] do
+        {:ok, program} =
+          Logex.compile(
+            "var m mix\nvar_output r real\nvar x real\nvar y real\n" <>
+              "cal m #{operands} r",
+            name: "p",
+            types: [mix]
+          )
+
+        assert Enum.map(program.warnings, &{&1.line, &1.message}) == [
+                 {5, "`16777217.0` has more digits than a real keeps: it is held as 16777216.0"}
+               ],
+               operands
+      end
+
+      # A block of two inputs and no output, its literal its last operand, the third.
+      {:ok, sum} =
         Logex.compile(
-          "var m mix\nvar_output r real\ncal m 1.0 2.0 16777217.0 r",
-          name: "p",
-          types: [mix]
+          "function_block sum\nvar_input a real\nvar_input b real\nvar c real\nadd a b c",
+          name: "sum"
         )
+
+      {:ok, program} =
+        Logex.compile("var k sum\nvar x real\ncal k x 16777217.0", name: "p", types: [sum])
 
       assert Enum.map(program.warnings, &{&1.line, &1.message}) == [
                {3, "`16777217.0` has more digits than a real keeps: it is held as 16777216.0"}
