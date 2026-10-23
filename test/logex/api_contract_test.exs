@@ -347,6 +347,11 @@ defmodule Logex.ApiContractTest do
     ulint: []
   }
 
+  # M5-8: IEC's four bit strings, each its N (Ed 3 Table 10 features 18 to 21), in the
+  # table's order, restated here: 0 to 2^N - 1, the unsigned integer IEC compares one as.
+  @bit_types [:byte, :word, :dword, :lword]
+  @bit_widths %{byte: 8, word: 16, dword: 32, lword: 64}
+
   # Each width's range from IEC's footnotes c and d.
   defp width_range(type), do: width_range_of(Map.fetch!(@widths, type))
   defp width_range_of({:signed, n}), do: -Integer.pow(2, n - 1)..(Integer.pow(2, n - 1) - 1)//1
@@ -364,6 +369,12 @@ defmodule Logex.ApiContractTest do
              {type, {:unsigned, n}} ->
                high = Integer.pow(2, n) - 1
                {type, [0, 1, high, -1, high + 1, 1.0, %{}]}
+           end)
+         )
+         |> Map.merge(
+           Map.new(@bit_widths, fn {type, n} ->
+             high = Integer.pow(2, n) - 1
+             {type, [0, 1, high, div(high, 3), -1, high + 1, 1.0, %{}]}
            end)
          )
 
@@ -412,10 +423,14 @@ defmodule Logex.ApiContractTest do
     # M5-3: half the programs take an input of a random width, moved into a width Figure 11
     # widens it into and converted into another, wrapping where it does not fit.
     widths = Enum.take([width_draw()], min(:rand.uniform(3) - 1, 1))
+    # M5-8: and a third take a value of a bit string or an integer type, its bits and a
+    # bitwise instruction, a shift by an sint tag and one by a literal.
+    bits = Enum.take([bits_draw()], min(:rand.uniform(3) - 1, 1) * (:rand.uniform(2) - 1))
 
     declarations =
       Enum.map(inputs, &"var_input #{&1} bool") ++
         Enum.flat_map(widths, &elem(&1, 0)) ++
+        Enum.flat_map(bits, &elem(&1, 0)) ++
         dint_input ++
         Enum.map(~w(a b c), &"#{pick(~w(var var_output))} #{&1} bool") ++
         ["var_output n dint 7"] ++
@@ -465,6 +480,7 @@ defmodule Logex.ApiContractTest do
         rungs ++
         moves ++
         Enum.flat_map(widths, &elem(&1, 1)) ++
+        Enum.flat_map(bits, &elem(&1, 1)) ++
         Enum.flat_map(warned, &elem(&1, 1)) ++ member_moves ++ timing,
       "\n"
     )
@@ -485,6 +501,46 @@ defmodule Logex.ApiContractTest do
        "var_output narrow #{to}",
        "var_output wok bool"
      ], ["move w wide", "#{from}_to_#{to} w narrow ote wok"]}
+  end
+
+  # M5-8: a value of a bit string or an integer type, its bits read by a contact and
+  # cleared by a coil, a bitwise instruction with a literal mask, and a shift or rotate by
+  # an sint tag and by a literal, each restated below in the oracle (bitwised/3).
+  defp bits_draw, do: bits_draw(pick(@bit_types ++ @width_types), pick(~w(shl shr rol ror)))
+
+  defp bits_draw(type, shift) do
+    n = bits_n(type)
+    {low, high} = bits_range(type)
+
+    {[
+       "var_input bw #{type}",
+       "var_input bn sint",
+       "var_output bm #{type}",
+       "var_output bs #{type}",
+       "var_output bl #{type}",
+       "var_output bok bool",
+       "var_output bb bool",
+       "var_output bset #{type}"
+     ],
+     [
+       "#{pick(~w(and or xor))} bw #{pick(Enum.uniq([0, 1, high, max(low, -1), div(high, 3)]))} bm",
+       "#{shift} bw bn bs ote bok",
+       "#{pick(~w(shl shr rol ror))} bw #{:rand.uniform(n - 1)} bl",
+       "xic bw.#{:rand.uniform(n) - 1} ote bb",
+       "move bw bset",
+       "xic bb otu bset.#{pick([0, n - 1])}"
+     ]}
+  end
+
+  defp bits_n(type) when is_map_key(@bit_widths, type), do: Map.fetch!(@bit_widths, type)
+  defp bits_n(type), do: elem(Map.fetch!(@widths, type), 1)
+
+  defp bits_kind(type) when is_map_key(@bit_widths, type), do: :unsigned
+  defp bits_kind(type), do: elem(Map.fetch!(@widths, type), 0)
+
+  defp bits_range(type) do
+    %{first: first, last: last} = width_range_of({bits_kind(type), bits_n(type)})
+    {first, last}
   end
 
   # Programs that compile with an M1-6 warning: declarations, then rungs.
@@ -583,14 +639,23 @@ defmodule Logex.ApiContractTest do
     end
 
     # M5-3: and a program of each width, a call at each of its edges, so every width's two
-    # limits are drawn whatever the seed, each judged by the contract's own words.
-    for from <- @width_types do
-      {inputs, rungs} = width_draw(from)
+    # limits are drawn whatever the seed, each judged by the contract's own words; since
+    # M5-8 each bit string's and each width's bits and bitwise instructions so too.
+    # Each of the twelve types a bits draw, the tagged shift's four kinds in turn.
+    draws =
+      Enum.map(@width_types, &width_draw/1) ++
+        Enum.zip_with(
+          @bit_types ++ @width_types,
+          Stream.cycle(~w(shl shr rol ror)),
+          &bits_draw/2
+        )
+
+    for {inputs, rungs} <- draws do
+      from = draw_type(inputs)
       {:ok, program} = Logex.compile(Enum.join(inputs ++ rungs, "\n"), name: "p")
       state = Runtime.instance(program)
 
-      for value <- @edges[from] do
-        inputs = %{"w" => value}
+      for inputs <- edge_calls(inputs, from) do
         scan = %Scan{now: state.now, first: state.first}
 
         call = fn ->
@@ -614,12 +679,40 @@ defmodule Logex.ApiContractTest do
 
     assert Process.get(:widths, MapSet.new()) ==
              MapSet.new(limits ++ [{:wrapped, true}, {:wrapped, false}])
+
+    # M5-8: every bit string's two limits, each bitwise instruction, each shift or rotate
+    # by a negative count, one past the width and one inside it, and a bit set and clear.
+    bits =
+      for(type <- @bit_types, limit <- [:low, :high, :inside], do: {type, limit}) ++
+        for(op <- ~w(and or xor)a, do: {:bitwise, op}) ++
+        for(op <- ~w(shl shr rol ror)a, count <- [:negative, :past, :inside], do: {op, count}) ++
+        [{:bit, 0}, {:bit, 1}]
+
+    assert Process.get(:bits, MapSet.new()) == MapSet.new(bits)
   end
+
+  # A call at each of a draw's input's edges, and for a bits draw at each of its count's,
+  # a negative one, one past every width and 0 among them.
+  defp edge_calls(inputs, from) do
+    own = for value <- @edges[from], do: %{draw_input(inputs) => value}
+    own ++ count_calls(draw_input(inputs))
+  end
+
+  defp count_calls("bw"), do: for(value <- @edges[:sint], do: %{"bw" => 1, "bn" => value})
+  defp count_calls(_w), do: []
+
+  # The input and its type a draw's program reads: the width draw's `w` or the bits draw's
+  # `bw`.
+  defp draw_type(["var_input " <> declaration | _]),
+    do: declaration |> String.split(" ") |> List.last() |> String.to_existing_atom()
+
+  defp draw_input(["var_input " <> declaration | _]), do: hd(String.split(declaration, " "))
 
   # A timed program walks longer, so a timer is seen through its edges: a preset set while
   # it is reset and then timed, a gap long enough to clamp.
   defp steps(%Program{tags: %{"go" => _}}), do: 90
   defp steps(%Program{tags: %{"w" => _}}), do: 60
+  defp steps(%Program{tags: %{"bw" => _}}), do: 60
   defp steps(_program), do: 30
 
   # Random operations on one instance. Each says whether it is a host mistake, and the
@@ -736,6 +829,9 @@ defmodule Logex.ApiContractTest do
   defp fits?(%Tag{section: :var_input, type: type}, value) when is_map_key(@widths, type),
     do: is_integer(value) and value in width_range(type)
 
+  defp fits?(%Tag{section: :var_input, type: type}, value) when is_map_key(@bit_widths, type),
+    do: is_integer(value) and value in 0..(Integer.pow(2, @bit_widths[type]) - 1)
+
   defp fits?(_tag, _value), do: false
 
   defp scanned(program, {outputs, %Instance{} = state}) do
@@ -749,6 +845,7 @@ defmodule Logex.ApiContractTest do
   defp scanned(program, before, inputs, {outputs, %Instance{} = later} = result) do
     timed(program, before, Map.merge(before.env, inputs), outputs, later)
     widened(program, Map.merge(before.env, inputs), outputs)
+    bitwised(program, Map.merge(before.env, inputs), outputs)
     scanned(program, result)
   end
 
@@ -773,6 +870,105 @@ defmodule Logex.ApiContractTest do
   end
 
   defp widened(_program, _env, _outputs), do: :ok
+
+  # M5-8's oracle, restated with arithmetic and never Bitwise: a value's pattern in its
+  # type's N bits, the bitwise function bit by bit, a shift or rotate by decision 165's
+  # rules, and a bit read and cleared in two's complement where signed.
+  defp bitwised(%Program{tags: %{"bw" => %Tag{type: type}}, source: source}, env, outputs) do
+    w = env["bw"]
+    n = bits_n(type)
+    [_, op, mask] = Regex.run(~r/^(and|or|xor) bw (-?\d+) bm$/m, source)
+    [_, tagged] = Regex.run(~r/^(shl|shr|rol|ror) bw bn bs ote bok$/m, source)
+    [_, literal, count] = Regex.run(~r/^(shl|shr|rol|ror) bw (\d+) bl$/m, source)
+    [_, bit] = Regex.run(~r/^xic bw\.(\d+) ote bb$/m, source)
+    [_, cleared] = Regex.run(~r/^xic bb otu bset\.(\d+)$/m, source)
+
+    assert outputs["bm"] == bitwise_of(op, type, w, String.to_integer(mask))
+    {shifted, power} = shift_of(tagged, type, w, env["bn"])
+    assert {outputs["bs"], outputs["bok"]} == {shifted, power}
+    assert outputs["bl"] == elem(shift_of(literal, type, w, String.to_integer(count)), 0)
+    b = bit_at(type, w, String.to_integer(bit))
+    assert outputs["bb"] == b
+    assert outputs["bset"] == cleared_of(b, type, w, String.to_integer(cleared))
+
+    first..last//1 = width_range_of({bits_kind(type), n})
+    bits_reached({:bitwise, String.to_atom(op)})
+    bits_reached({String.to_atom(tagged), count_kind(env["bn"], n)})
+    bits_reached({String.to_atom(literal), :inside})
+    bits_reached({:bit, b})
+    bits_kind_reached(type, limit_of(w, first, last))
+  end
+
+  defp bitwised(_program, _env, _outputs), do: :ok
+
+  defp bits_kind_reached(type, limit) when is_map_key(@bit_widths, type),
+    do: bits_reached({type, limit})
+
+  defp bits_kind_reached(_integer, _limit), do: :ok
+
+  defp count_kind(count, _n) when count < 0, do: :negative
+  defp count_kind(count, n) when count >= n, do: :past
+  defp count_kind(_count, _n), do: :inside
+
+  defp bits_reached(atom),
+    do: Process.put(:bits, MapSet.put(Process.get(:bits, MapSet.new()), atom))
+
+  defp pattern_of(type, value), do: Integer.mod(value, Integer.pow(2, bits_n(type)))
+
+  defp valued_of(type, p) do
+    half = Integer.pow(2, bits_n(type) - 1)
+    signed_of(bits_kind(type), p, half)
+  end
+
+  defp signed_of(:signed, p, half) when p >= half, do: p - 2 * half
+  defp signed_of(_kind, p, _half), do: p
+
+  defp bits_list(p, n), do: for(i <- 0..(n - 1), do: rem(div(p, Integer.pow(2, i)), 2))
+
+  defp from_bits(bits),
+    do:
+      bits |> Enum.with_index() |> Enum.map(fn {b, i} -> b * Integer.pow(2, i) end) |> Enum.sum()
+
+  defp bitwise_of(op, type, a, b) do
+    n = bits_n(type)
+    pairs = Enum.zip(bits_list(pattern_of(type, a), n), bits_list(pattern_of(type, b), n))
+    valued_of(type, from_bits(Enum.map(pairs, &one_bit(op, &1))))
+  end
+
+  defp one_bit("and", {a, b}), do: a * b
+  defp one_bit("or", {a, b}), do: max(a, b)
+  defp one_bit("xor", {a, b}), do: rem(a + b, 2)
+
+  defp shift_of(_op, _type, a, count) when count < 0, do: {a, 0}
+
+  defp shift_of(op, type, a, count) do
+    n = bits_n(type)
+    {valued_of(type, moved_of(op, pattern_of(type, a), count, n)), 1}
+  end
+
+  defp moved_of(op, _p, count, n) when op in ["shl", "shr"] and count >= n, do: 0
+  defp moved_of("shl", p, count, n), do: Integer.mod(p * Integer.pow(2, count), Integer.pow(2, n))
+  defp moved_of("shr", p, count, _n), do: div(p, Integer.pow(2, count))
+
+  defp moved_of("rol", p, count, n) do
+    r = Integer.mod(count, n)
+    Integer.mod(p * Integer.pow(2, r) + div(p, Integer.pow(2, n - r)), Integer.pow(2, n))
+  end
+
+  defp moved_of("ror", p, count, n) do
+    r = Integer.mod(count, n)
+    div(p, Integer.pow(2, r)) + Integer.mod(p, Integer.pow(2, r)) * Integer.pow(2, n - r)
+  end
+
+  defp bit_at(type, value, i), do: rem(div(pattern_of(type, value), Integer.pow(2, i)), 2)
+
+  # `bset` is the value with bit i cleared where `bb`, the drawn bit, is set.
+  defp cleared_of(0, _type, value, _i), do: value
+
+  defp cleared_of(1, type, value, i) do
+    p = pattern_of(type, value)
+    valued_of(type, p - bit_at(type, value, i) * Integer.pow(2, i))
+  end
 
   defp limit_of(w, w, _last), do: :low
   defp limit_of(w, _first, w), do: :high
@@ -1890,6 +2086,8 @@ defmodule Logex.ApiContractTest do
     {:bool, "is a bool: only 0 or 1 fit"},
     {:dint, "is a dint: its value must be an integer"},
     {:dint_range, "is outside -2147483648 to 2147483647"},
+    # M5-8: a word point's value, an integer from 0 to 65535 (decision 156).
+    {:word_range, "is a word: "},
     {:path, "is not an access path"},
     {:neither, "is neither a global nor a program instance"},
     {:too_deep, "goes too deep"},
@@ -1945,7 +2143,9 @@ defmodule Logex.ApiContractTest do
     :restart_refire,
     :logic_trigger,
     :overlap_under_single,
-    :tie_event_periodic
+    :tie_event_periodic,
+    # M5-8: a word's bit read through a connection, at a point or not.
+    :word_bit
   ]
 
   # The program types a configuration of the walk draws from: a contact, a latch, a timer
@@ -1957,10 +2157,15 @@ defmodule Logex.ApiContractTest do
     "timer" =>
       "var_input go bool\nvar_input sp dint\nvar_output done bool\nvar_output acc dint\n" <>
         "var t1 ton\nxio go move sp t1.pre\nxic t1.dn ote done\nmove t1.acc acc\nxic go ton t1 30",
-    "pulse" => "var_input in bool\nvar_output out bool\nvar s bool\nxic in ons s ote out"
+    "pulse" => "var_input in bool\nvar_output out bool\nvar s bool\nxic in ons s ote out",
+    # M5-8: a word's bit 3 read by a contact and its low byte masked into a word.
+    "bits" =>
+      "var_input w word\nvar_output out bool\nvar_output lo word\nxic w.3 ote out\n" <>
+        "and w 16#00ff lo"
   }
 
-  # The globals: input points, output points and unlocated globals, bool and dint.
+  # The globals: input points, output points and unlocated globals, bool and dint, and
+  # since M5-8 a word at each kind of point and one unlocated.
   @points [
     {"i0", :bool, "panel.i.0"},
     {"i1", :bool, "panel.i.1"},
@@ -1972,7 +2177,10 @@ defmodule Logex.ApiContractTest do
     {"a0", :dint, "drive.q.0"},
     {"g0", :bool, nil},
     {"g1", :bool, nil},
-    {"n0", :dint, nil}
+    {"n0", :dint, nil},
+    {"w0", :word, "drive.i.1"},
+    {"w1", :word, "drive.q.1"},
+    {"wn", :word, nil}
   ]
 
   # The one global with an initial value, which a restart puts back.
@@ -2109,6 +2317,7 @@ defmodule Logex.ApiContractTest do
   # constant.
   defp source_for(:bool), do: pick(~w(i0 i1 i2 i0 i1 o0 g0 g1) ++ [0, 1])
   defp source_for(:dint), do: pick(["d0", "d0", "n0", "a0", 0, 40, 25])
+  defp source_for(:word), do: pick(["w0", "w0", "wn", "w1", 0, 8, 65_535])
 
   # The walk's own model of a resource, from the rules in Logex.Runtime's moduledoc and
   # docs/organisation.md §4.6, each instance scanned by Runtime.call/4 alone: the input
@@ -2282,6 +2491,8 @@ defmodule Logex.ApiContractTest do
     {outputs, state} =
       Runtime.call(program, state, inputs, %Scan{now: model.now, first: state.first})
 
+    bits_scanned(instance.type, inputs, outputs)
+
     globals =
       for c <- mine, section.(c) == :var_output, reduce: model.globals do
         globals -> Map.put(globals, c.to, outputs[c.member])
@@ -2290,6 +2501,16 @@ defmodule Logex.ApiContractTest do
     {%{model | states: Map.put(model.states, instance.name, state), globals: globals},
      [{:ran, task, instance.name, model.now} | events]}
   end
+
+  # M5-8: a `bits` instance's outputs against an oracle that knows nothing of logex, a
+  # word's bit 3 and its low byte, by division.
+  defp bits_scanned("bits", %{"w" => w}, outputs) do
+    assert outputs["out"] == rem(div(w, 8), 2)
+    assert outputs["lo"] == rem(w, 256)
+    config_reach(:word_bit, outputs["out"] == 1)
+  end
+
+  defp bits_scanned(_type, _inputs, _outputs), do: :ok
 
   defp config_walk(_config, _runtime, _model, 0), do: :ok
 
@@ -2655,13 +2876,17 @@ defmodule Logex.ApiContractTest do
   end
 
   # Inputs: a few input points with values that fit, and, for a bad step, one mistake.
+  defp input_value(:bool), do: pick([0, 1])
+  defp input_value(:dint), do: pick([0, 20, 40, -5])
+  defp input_value(:word), do: pick([0, 8, 9, 0x00F7, 0xFFFF, 0x1234])
+
   defp config_inputs(false) do
     inputs =
       for {name, type, at} <- @points,
           at != nil and String.contains?(at, ".i."),
           :rand.uniform(3) == 1,
           into: %{},
-          do: {name, if(type == :bool, do: pick([0, 1]), else: pick([0, 20, 40, -5]))}
+          do: {name, input_value(type)}
 
     {inputs, false}
   end
@@ -2682,7 +2907,9 @@ defmodule Logex.ApiContractTest do
         {"zz", 1},
         {"i0", 2},
         {"d0", 1.5},
-        {"d0", 3_000_000_000}
+        {"d0", 3_000_000_000},
+        {"w0", 65_536},
+        {"w0", -1}
       ])
 
     case pick([:pair, :pair, :pair, :list]) do

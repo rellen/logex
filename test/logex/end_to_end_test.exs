@@ -5259,6 +5259,161 @@ defmodule Logex.EndToEndTest do
     end
   end
 
+  # PLAN M5-8's Done-when: §4.4's plant reads its drive's status as a `word` point through
+  # the simulated drive, `var_global drive_status word at drive.i.4`, and its bit 3, "at
+  # speed", lights the run lamp (decisions 155 and 156), from files on disk through
+  # `Logex.Runner` on the manual clock, against an oracle that knows nothing of logex; a
+  # reading the word cannot hold, 65,536, -1 or a float, is a bad value that trips the
+  # plant, and a force is held to the word, read back from the forces file across a
+  # restart and a fresh start.
+  describe "a bit string in the plant (M5-8)" do
+    @describetag :tmp_dir
+
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    @lamp_ld """
+    var_input  status word
+    var_output lamp   bool
+    xic status.3 ote lamp
+    """
+
+    @lamp_lines """
+
+    var_global drive_status word at drive.i.4
+    var_global run_lamp     bool at panel.q.6
+
+    program lamp1 lamp with fast
+      lamp1.status drive_status
+      lamp1.lamp   run_lamp
+    """
+
+    defp lamp_plant(dir) do
+      files = [
+        {"seal.ld", cut("**A function block type** is")},
+        {"motor.ld", cut("**The motor, rewritten to use it**")},
+        {"snapshot.ld", @snapshot_ld},
+        {"lamp.ld", @lamp_ld},
+        {"plant.logex", whole_plant() <> @lamp_lines}
+      ]
+
+      for {name, text} <- files, do: File.write!(Path.join(dir, name), text)
+      {:ok, plant} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      plant
+    end
+
+    defp lamp_runner(plant, dir) do
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: plant,
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock},
+          forces: Path.join(dir, "forces")
+        )
+
+      {runner, clock, panel, drive}
+    end
+
+    # The oracle: bit 3 of a 16-bit register, by division.
+    defp at_speed(status), do: rem(div(status, 8), 2)
+
+    test "M5-8's Done-when: the drive's status read as a word point, its bit 3 lighting the run lamp",
+         %{tmp_dir: dir} do
+      plant = lamp_plant(dir)
+      assert plant.warnings == []
+      assert %{type: :word} = Enum.find(plant.globals, &(&1.name == "drive_status"))
+
+      assert {"drive_status", :input, [4], :word} in Enum.map(
+               Map.fetch!(Logex.IO.points(plant), "drive"),
+               &{&1.name, &1.direction, &1.address, &1.type}
+             )
+
+      {runner, clock, panel, drive} = lamp_runner(plant, dir)
+
+      :rand.seed(:exsss, {8, 5, 8})
+
+      statuses =
+        [0, 8, 7, 0xFFFF, 0xFFF7, 0x8008, 0x8000] ++
+          for(_ <- 1..40, do: :rand.uniform(65_536) - 1)
+
+      for status <- statuses do
+        Sim.set(drive, [4], status)
+        Manual.advance(clock, 10)
+        assert Runner.get!(runner, "drive_status") == status
+        assert Runner.get!(runner, "run_lamp") == at_speed(status), inspect(status)
+        assert Sim.outputs(panel)[[6]] == at_speed(status)
+      end
+
+      # A force is held to the word, read as the device's is, and kept in the forces file.
+      assert_raise ArgumentError,
+                   "`drive_status` is a word, forced to an integer from 0 to 65535, got: 65536",
+                   fn -> Runner.force(runner, "drive_status", 65_536) end
+
+      assert_raise ArgumentError,
+                   "`drive_status` is a word, forced to an integer from 0 to 65535, got: -1",
+                   fn -> Runner.force(runner, "drive_status", -1) end
+
+      Sim.set(drive, [4], 0)
+      assert :ok = Runner.force(runner, "drive_status", 65_535)
+      Manual.advance(clock, 10)
+      assert Runner.get!(runner, "run_lamp") == 1
+      assert File.read!(Path.join(dir, "forces")) == "drive_status 65535\n"
+
+      # Each reading the word cannot hold is a bad value, and the plant trips on it; put
+      # right, it restarts with the force still on.
+      for {bad, how} <- [{65_536, :set}, {-1, :set}, {37.5, :read}] do
+        assert :ok = Runner.unforce(runner, "drive_status")
+        bad_reading(how, drive, bad)
+        Manual.advance(clock, 10)
+        assert Runner.status(runner).trip == {:io, "drive", {:bad_value, [4], bad}}
+        Sim.set(drive, [4], 0)
+        assert :ok = Runner.force(runner, "drive_status", 65_535)
+        assert Runner.restart(runner, :cold) == :ok
+        Manual.advance(clock, 10)
+        assert Runner.get!(runner, "run_lamp") == 1
+      end
+
+      Runner.stop(runner)
+
+      # A fresh start reads the force back from its file.
+      {runner, clock, _panel, drive} = lamp_runner(plant, dir)
+      Sim.set(drive, [4], 0)
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).forces == %{"drive_status" => 65_535}
+      assert Runner.get!(runner, "run_lamp") == 1
+      Runner.stop(runner)
+
+      # A host's input is held to the word too, in its words.
+      {:ok, lamp} = Logex.compile_file(Path.join(dir, "lamp.ld"))
+
+      for value <- [65_536, -1] do
+        assert_raise ArgumentError,
+                     "input `status` is a word: #{value} is outside 0 to 65535",
+                     fn ->
+                       Logex.Runtime.put_inputs(lamp, Logex.Runtime.instance(lamp), %{
+                         "status" => value
+                       })
+                     end
+      end
+
+      assert_raise ArgumentError,
+                   "input `status` is a word: its value must be an integer, found 37.5",
+                   fn ->
+                     Logex.Runtime.put_inputs(lamp, Logex.Runtime.instance(lamp), %{
+                       "status" => 37.5
+                     })
+                   end
+    end
+
+    defp bad_reading(:set, drive, value), do: Sim.set(drive, [4], value)
+    defp bad_reading(:read, drive, value), do: Sim.fail(drive, :read, {:value, [4], value})
+  end
+
   # PLAN M5-5's Done-when: IEC's typed counters in a plant, from files on disk through
   # Logex.Configuration.compile_file/1 and Logex.Runtime.cycle/3: a stock counted as an
   # int stopping at 32767 with `ov` on, a hopper of udints stopping at 0 with `un` on, and
