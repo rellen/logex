@@ -169,6 +169,49 @@ defmodule Logex.Configuration.Text do
   defp lexed({:error, {location, module, reason}, _line}),
     do: {:error, [problem(:lex, location, module.format_error(reason))], []}
 
+  @doc false
+  # Decision 227: `read/1`'s result and, from the same tokens, each real initial value a
+  # `var_global` line writes with more digits than its global's real keeps, `var_global sp
+  # real 16777217.0`, as `{line, spelling, type, held}`, `held` the shortest text of the
+  # value it is held as (`Logex.Real.held_as/3`), an array's initial list element by element:
+  # the line's text keeps a value's spelling, which a global, a value, does not.
+  def read_rounded(source) when is_binary(source), do: lexed_rounded(Logex.Lexer.tokenize(source))
+
+  defp lexed_rounded({:ok, tokens, _end_line}) do
+    split = split(tokens, [], [])
+    {lines(split, [], []), Enum.flat_map(split, &rounded_line/1)}
+  end
+
+  defp lexed_rounded(error), do: {lexed(error), []}
+
+  defp rounded_line([{:name, {line, _}, word}, {:name, _, _name}, {:name, _, type} | values]),
+    do: rounded_global(String.downcase(word), line, real_word(String.downcase(type)), values)
+
+  defp rounded_line(_tokens), do: []
+
+  defp real_word(word) when is_map_key(@types, word), do: Map.fetch!(@types, word)
+
+  defp real_word(word) when binary_part(word, byte_size(word) - 1, 1) == "]",
+    do: array_real(Declarations.array_word(word))
+
+  defp real_word(_word), do: nil
+
+  defp array_real({:ok, {:array, type, _dims}}), do: type
+  defp array_real(:error), do: nil
+
+  defp rounded_global("var_global", line, type, values) when type in @reals,
+    do:
+      for(
+        value <- Enum.take_while(values, &is_literal/1),
+        elem(value, 0) == :real_lit,
+        {:rounded, held} <- [
+          Logex.Real.held_as(type, Parser.value(value), Parser.spelling(value))
+        ],
+        do: {line, Parser.spelling(value), type, held}
+      )
+
+  defp rounded_global(_word, _line, _type, _values), do: []
+
   defp lines([], entries, []), do: {:ok, Enum.reverse(entries)}
   defp lines([], entries, problems), do: {:error, Enum.reverse(problems), Enum.reverse(entries)}
 

@@ -428,10 +428,6 @@ defmodule Logex.ArrayTest do
             {"var g bool[2,2]\nxic g ote g[0,0]",
              "line 2: `xic` reads one tag, but `g` is an array of 2 by 2 bools (declared on line " <>
                "1): an instruction takes one of its elements, as in `g[0,0]`"},
-            {"var w word[4]\nvar x bool\nxic w[1].3 ote x",
-             "line 3: `w[1].3` goes past `w[1]`, an element of `w`, an array of 4 words " <>
-               "(declared on line 1): an element is read and written whole, so move it into a " <>
-               "tag of its own to reach its bits"},
             {"var_input w int[8]\nmove 1 w[2]",
              "line 2: `move` writes `w[2]`, a var_input (declared on line 1): logic must not " <>
                "write an input"},
@@ -693,7 +689,7 @@ defmodule Logex.ArrayTest do
       assert Runtime.restart(p, state, :cold).env["w"] == {{1, 2, 3}, {4, 5, 6}}
     end
 
-    test "a host's array of another shape, or an element, is refused, a line each", %{program: p} do
+    test "a host's array of another shape is refused, a line each", %{program: p} do
       state = Runtime.instance(p)
 
       for {inputs, message} <- [
@@ -714,10 +710,7 @@ defmodule Logex.ArrayTest do
                "input `w[1,2]` is an int: its value must be an integer, found 6.5"},
             {%{"r" => [0.0, 1.0e40]},
              "input `r[1]` is a real: 1.0e40 is beyond a real's range, " <>
-               "-3.4028234663852886e38 to 3.4028234663852886e38"},
-            {%{"w[1,2]" => 5},
-             "input \"w[1,2]\" names an element of `w`, an array of 2 by 3 ints: a host sets " <>
-               "an array var_input whole, as a list of 2 lists of 3 elements"}
+               "-3.4028234663852886e38 to 3.4028234663852886e38"}
           ] do
         assert_raise ArgumentError, message, fn -> Runtime.put_inputs(p, state, inputs) end
       end
@@ -1205,6 +1198,123 @@ defmodule Logex.ArrayTest do
                    "line 1: `a` is an array of 12 sints: its initial list holds 2 more values " <>
                      "outside its type, not listed"
                  ]
+    end
+  end
+
+  # Decision 220: an array holds up to 65,536 elements in all, of any shape, confirmed by the
+  # maintainer on 2026-10-23.
+  describe "the size limit (decision 220)" do
+    test "65,536 elements in any shape are taken, and one more in any shape refused" do
+      for dims <- ["65536", "256,256", "16,64,64", "1,1,65536"] do
+        assert {:ok, _} = compile("var a bool[#{dims}]\nvar x bool\nxic x ote x"), dims
+      end
+
+      for {dims, count} <- [{"65537", 65537}, {"257,256", 65792}, {"2,2,16385", 65540}] do
+        assert messages("var a bool[#{dims}]\nvar x bool\nxic x ote x") == [
+                 "line 1: `a` would hold #{count} elements, `[#{dims}]`: an array holds 65536 " <>
+                   "at most"
+               ],
+               dims
+      end
+    end
+  end
+
+  # Decision 222: a host sets one element of an input array by its name, the rest kept.
+  describe "a host's element (decision 222)" do
+    setup do
+      program =
+        compiled!(
+          "var_input steps int[10]\nvar_input grid real[2,3]\nvar w int[2]\n" <>
+            "var_output o int[10]\nvar_output g real[2,3]\nmove steps[3] w[0]\n" <>
+            "move steps[0] o[0]\nmove grid[1,2] g[1,2]\nmove grid[0,0] g[0,0]"
+        )
+
+      {:ok, program: program}
+    end
+
+    test "an element's key sets that element, every other kept", %{program: p} do
+      state = Runtime.put_inputs(p, Runtime.instance(p), %{"steps" => Enum.to_list(1..10)})
+      state = Runtime.put_inputs(p, state, %{"steps[3]" => 40, "grid[1,2]" => 16_777_217})
+
+      assert state.env["steps"] == {1, 2, 3, 40, 5, 6, 7, 8, 9, 10}
+      assert state.env["grid"] == {{0.0, 0.0, 0.0}, {0.0, 0.0, 16_777_216.0}}
+
+      # In call/4 too, and in any spelling a literal subscript takes.
+      {_outputs, state} =
+        Runtime.call(p, state, %{"steps[16#0]" => -7, "steps[09]" => 0}, %Scan{
+          now: 0,
+          first: true
+        })
+
+      assert state.env["steps"] == {-7, 2, 3, 40, 5, 6, 7, 8, 9, 0}
+      {outputs, _state} = Runtime.scan(p, state, 10)
+      assert hd(outputs["o"]) == -7
+    end
+
+    test "each key a host cannot set is refused, a line each", %{program: p} do
+      state = Runtime.instance(p)
+
+      for {inputs, message} <- [
+            {%{"steps[3]" => 40_000},
+             "input `steps[3]` is an int: 40000 is outside -32768 to 32767"},
+            {%{"steps[3]" => 1.5},
+             "input `steps[3]` is an int: its value must be an integer, found 1.5"},
+            {%{"steps[10]" => 1},
+             "input `steps[10]`'s subscript 10 is outside the elements of `steps`, 0 to 9: " <>
+               "`steps` is an array of 10 ints (declared on line 1)"},
+            {%{"steps[-1]" => 1},
+             "input `steps[-1]`'s subscript -1 is outside the elements of `steps`, 0 to 9: " <>
+               "`steps` is an array of 10 ints (declared on line 1)"},
+            {%{"grid[1,3]" => 1.0},
+             "input `grid[1,3]`'s subscript 3 is outside the second dimension of `grid`, 0 to " <>
+               "2: `grid` is an array of 2 by 3 reals (declared on line 2)"},
+            {%{"grid[1]" => 1.0},
+             "input `grid[1]` names an element of `grid`, an array of 2 by 3 reals (declared " <>
+               "on line 2), by 1 subscript, where it takes 2, one a dimension, as in `grid[0,0]`"},
+            {%{"steps[n]" => 1},
+             "input `steps[n]`'s subscript `n` is a tag's name: a host names an element by " <>
+               "numbers, as in `steps[0]`"},
+            {%{"w[1]" => 1},
+             "input \"w[1]\" names an element of `w`, a var (declared on line 3), not a " <>
+               "var_input: only a var_input is set from outside"},
+            {%{"steps[3x]" => 1},
+             "input \"steps[3x]\" is not declared: the var_inputs are `grid`, `steps`"},
+            {%{"steps" => List.duplicate(0, 10), "steps[3]" => 1},
+             "inputs `steps` and `steps[3]` each set `steps`, an array of 10 ints (declared on " <>
+               "line 1): a call sets an array whole or by its elements, not both"},
+            {%{"steps[3]" => 1, "steps[03]" => 2},
+             "inputs `steps[03]` and `steps[3]` each set `steps[3]`, an element of `steps`, an " <>
+               "array of 10 ints (declared on line 1): a call sets each element once"}
+          ] do
+        assert_raise ArgumentError, message, fn -> Runtime.put_inputs(p, state, inputs) end
+
+        assert_raise ArgumentError, message, fn ->
+          Runtime.call(p, state, inputs, %Scan{now: 0, first: true})
+        end
+      end
+    end
+
+    # A program of no array checks no key for an element, so a call costs what it did.
+    test "a program of no array pays nothing for the rule" do
+      {:ok, p} = Logex.compile("var_input a bool\nvar_output q bool\nxic a ote q", name: "p")
+      state = Runtime.instance(p)
+      parent = self()
+
+      {_pid, ref} =
+        :erlang.spawn_opt(
+          fn ->
+            {:reductions, before} = Process.info(self(), :reductions)
+            Runtime.put_inputs(p, state, %{"a" => 1})
+            {:reductions, later} = Process.info(self(), :reductions)
+            send(parent, {:reductions, later - before})
+          end,
+          [:monitor, min_heap_size: 1_000_000]
+        )
+
+      assert_receive {:reductions, r}, 10_000
+      assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+      # Measured at e60cc0a, before decision 222, and after it.
+      assert r == 76
     end
   end
 

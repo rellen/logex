@@ -28,7 +28,13 @@ defmodule Logex.Warnings do
   - a label no `jmp` names (M3-5): nothing jumps to its rung;
   - since decision 219, a real literal with more digits than the real its slot computes
     in keeps, `move 16777217.0 r` into a `real`: it is held as 16777216.0, where `0.1` and
-    `37.1`, each the shortest text of the single nearest it, are not warned of.
+    `37.1`, each the shortest text of the single nearest it, are not warned of; and since
+    decision 227 a declaration's real initial value so, `var sp real 16777217.0`
+    (`initials/2`, which the compiler calls with the parse tree's declaration lines).
+
+  Since decision 221 a bit of an element, `faults[2].3`, is a bit of the element's word
+  for each of them, keyed by its subscripts' and number's values, a write of the element
+  whole, `move x faults[2]`, a whole write of that word.
 
   Since M5-11 an element, `lamps[2]`, is a tag of its own for each of them, keyed by its
   subscripts' values and quoted as written, so a second `ote` on `lamps[2]` and `lamps[02]`
@@ -81,6 +87,46 @@ defmodule Logex.Warnings do
     |> Enum.sort_by(& &1.line)
   end
 
+  @doc """
+  Decision 227: the warnings of a routine's declaration lines, a real initial value with
+  more digits than its tag's real keeps, `var sp real 16777217.0`, told as decision 219
+  tells a literal in a rung, "`16777217.0` is more precise than a real keeps: it is held
+  as 16777216.0", at its declaration's line, an array's initial list element by element.
+  `rungs` are the routine's rungs as `Logex.Parser.parse/1` gives them, whose literal
+  leaves keep each value's spelling, which the tag table does not (decision 202); `reals`
+  is the routine's real tags, by name, `Logex.Program`'s `reals`, nil for none, so a
+  routine of no real looks at nothing.
+  """
+  def initials(_rungs, nil), do: []
+
+  def initials(rungs, reals),
+    do: Enum.flat_map(rungs, &initial_of(&1, reals)) |> Enum.sort_by(& &1.line)
+
+  defp initial_of({:rung, [{:name, line, section}, {:name, _, name}, _type | values]}, reals)
+       when is_map_key(reals, name),
+       do: initial_in(Declarations.reserved(section), line, Map.fetch!(reals, name), values)
+
+  defp initial_of(_rung, _reals), do: []
+
+  defp initial_in(:section, line, type, values),
+    do:
+      for(
+        literal <- values,
+        is_real_lit(literal),
+        {:rounded, held} <- [Logex.Real.held_as(type, Parser.value(literal), text(literal))],
+        do: rounded_warning(line, literal, type, held)
+      )
+
+  defp initial_in(_not_a_declaration, _line, _type, _values), do: []
+
+  defp rounded_warning(line, literal, type, held),
+    do:
+      warning(
+        line,
+        "#{shown(literal)} is more precise than #{Declarations.a_type(type)} keeps: it is " <>
+          "held as #{held}"
+      )
+
   # Decision 219: a real literal with more digits than the real its slot computes in
   # keeps, `move 16777217.0 r` into a `real`, held as 16777216.0, which compiles, as every
   # real literal its slot rounds does (M5-10's review), and is told what it is held as.
@@ -110,12 +156,7 @@ defmodule Logex.Warnings do
         type = Compiler.literal_real(slot, slots, operands, type_of),
         type != nil,
         {:rounded, held} <- [Logex.Real.held_as(type, Parser.value(literal), text(literal))],
-        do:
-          warning(
-            line,
-            "#{shown(literal)} is more precise than #{Declarations.a_type(type)} keeps: it is " <>
-              "held as #{held}"
-          )
+        do: rounded_warning(line, literal, type, held)
   end
 
   # The text a literal was written as: its spelling, or a plain one's float's own text.
@@ -410,6 +451,15 @@ defmodule Logex.Warnings do
   defp whole({:bit_at, _, [container | _] = path, _index, _width, _name}),
     do: [{Enum.join(path, "."), container}]
 
+  # Decision 221: a word is an element too, `faults[2]`, keyed by its subscripts' values, a
+  # write of the element whole, `move x faults[2]`, or of a bit a tag numbers in it, a write
+  # of that word whole, its tag its array.
+  defp whole({:bit_at, _, {:element, _, array, _, _} = element, _index, _width, _name}),
+    do: [{Walk.bit_name(element), array}]
+
+  defp whole({:element, _, array, _index, _name} = element),
+    do: [{Walk.bit_name(element), array}]
+
   defp whole(_bit_or_literal), do: []
 
   defp coil_target({:ote, line, [target]}), do: target(target, line, :ote)
@@ -427,6 +477,11 @@ defmodule Logex.Warnings do
     [{:coil, name, nil, instance, {line, symbol}, name}]
   end
 
+  # Decision 221: a coil on a bit of an element, `ote faults[2].3`, decides that bit of the
+  # element's word, keyed by its subscripts' values, its tag its array.
+  defp target({:bit, _, {:element, _, array, _, _} = element, _n, _mask, shown} = bit, line, at),
+    do: [{:coil, Walk.bit_name(bit), Walk.bit_name(element), array, {line, at}, shown}]
+
   defp target({:bit, _, [container | _] = path, _n, _mask, shown} = bit, line, symbol),
     do: [{:coil, Walk.bit_name(bit), Enum.join(path, "."), container, {line, symbol}, shown}]
 
@@ -440,6 +495,13 @@ defmodule Logex.Warnings do
   # word, `ote s.[n]` beside `ote s.[m]`, is the second-`ote` warning, and so is a coil on
   # a bit of the word, `ote s.3`, and, since M5-9's review, any write of the word whole,
   # `move x s`, either first, as decision 207 has it for a coil on `s.3`.
+  defp target(
+         {:bit_at, _, {:element, _, array, _, _} = element, _index, _width, shown},
+         line,
+         at
+       ),
+       do: [{:coil_at, Walk.bit_name(element), array, {line, at}, shown}]
+
   defp target({:bit_at, _, [container | _] = path, _index, _width, shown}, line, symbol),
     do: [{:coil_at, Enum.join(path, "."), container, {line, symbol}, shown}]
 
@@ -464,7 +526,10 @@ defmodule Logex.Warnings do
 
   defp storage_writes(instructions, tags, owners) do
     words =
-      owners |> Map.keys() |> Enum.filter(&String.contains?(&1, ".")) |> Enum.group_by(&word_of/1)
+      owners
+      |> Map.keys()
+      |> Enum.filter(&String.contains?(&1, "."))
+      |> Enum.group_by(&container_of/1)
 
     for instruction <- instructions,
         {operand, line, symbol} <- others(instruction, written(instruction, tags)),
@@ -479,6 +544,10 @@ defmodule Logex.Warnings do
     do:
       Enum.reduce(instructions, owners, fn
         {symbol, _line, [{:bit, _, [_], _, _, shown} = bit | _]}, owners
+        when symbol in @one_shots ->
+          Map.update!(owners, Walk.bit_name(bit), &with_shown(&1, shown))
+
+        {symbol, _line, [{:bit, _, {:element, _, _, _, _}, _, _, shown} = bit | _]}, owners
         when symbol in @one_shots ->
           Map.update!(owners, Walk.bit_name(bit), &with_shown(&1, shown))
 
@@ -512,20 +581,36 @@ defmodule Logex.Warnings do
 
   defp storage_names({:bit, _, [_], _, _, shown} = bit, _words), do: [{Walk.bit_name(bit), shown}]
 
-  # M5-11 (decision 154): an element kept as a storage bit, `edge[2]`, by its name.
-  defp storage_names({:element, _, _, _, shown} = element, _words),
-    do: [{Walk.bit_name(element), shown}]
+  # Decision 221: a bit of an element, `faults[2].3`, by its name.
+  defp storage_names({:bit, _, {:element, _, _, _, _}, _, _, shown} = bit, _words),
+    do: [{Walk.bit_name(bit), shown}]
+
+  # M5-11 (decision 154): an element kept as a storage bit, `edge[2]`, by its name, and
+  # since decision 221 every storage bit kept in a bit of it, a write of the element whole.
+  defp storage_names({:element, _, _, _, shown} = element, words) do
+    name = Walk.bit_name(element)
+    [{name, shown} | Enum.map(Enum.sort(Map.get(words, name, [])), &{&1, nil})]
+  end
 
   # M5-9: a bit whose number a tag holds may be any bit of its word, a storage bit's among
-  # them, as a write of the word whole is.
+  # them, as a write of the word whole is, and since decision 221 so in an element.
   defp storage_names({:bit_at, _, [word], _index, _width, _shown}, words),
     do: Enum.map(Enum.sort(Map.get(words, word, [])), &{&1, nil})
+
+  defp storage_names({:bit_at, _, {:element, _, _, _, _} = element, _index, _width, _}, words),
+    do: Enum.map(Enum.sort(Map.get(words, Walk.bit_name(element), [])), &{&1, nil})
 
   defp storage_names(_member, _words), do: []
 
   # A storage bit's tag: a bool's own name, the word a bit of one is in, or since M5-11 the
   # array an element is of.
   defp word_of(name), do: hd(String.split(name, [".", "["]))
+
+  # A storage bit's word, the name before its last `.`: a tag's, `status` of `status.3`, or
+  # since decision 221 an element's, `faults[2]` of `faults[2].3`, whose whole write reaches
+  # it.
+  defp container_of(name),
+    do: binary_part(name, 0, elem(List.last(:binary.matches(name, ".")), 0))
 
   defp storage_write(symbol, name, {first, owner, _shown}, line),
     do: storage_write(symbol, name, {first, owner}, line)

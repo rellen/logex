@@ -391,9 +391,9 @@ defmodule Logex.Lexer do
 
   # A real's value: each of its digit runs held to the `_` rule an integer's is, then read
   # with its `_`s left out, and −0.0 kept as 0.0. One past an lreal's largest value,
-  # `1.0e400`, which no float holds, is named whole, and since decision 216 so is one
-  # nearer 0.0 than an lreal's smallest normal value, `1.0e-310` or `1.0e-400`, which no
-  # real logex holds is, the zero itself, `0.0e-400` among its spellings, taken.
+  # `1.0e400`, which no float holds, is named whole, and so, since decision 228, is one no
+  # float holds but 0.0, `1.0e-400`, a subnormal double, `1.0e-310`, read as itself, and the
+  # zero itself, `0.0e-400` among its spellings, taken.
   defp real_value(text) do
     {unsigned, _negative} = unsigned(text)
     [whole, rest] = :binary.split(unsigned, ".")
@@ -420,10 +420,12 @@ defmodule Logex.Lexer do
     ArgumentError -> {:error, {:real_range, text}}
   end
 
-  @lreal_min 2.2250738585072014e-308
-
-  defp held(value, text) when value > -@lreal_min and value < @lreal_min,
-    do: zero(written_zero?(text), text)
+  # Decision 228: a literal whose double is subnormal, nearer 0.0 than an lreal's smallest
+  # normal value, `1.0e-310`, is read as that double, which its slot refuses when the
+  # program compiles, told it is too near 0.0 for its real (decision 216's rule, through
+  # `Logex.Real.flushed?/2`); one no double holds but 0.0, `1.0e-400`, its digits not all
+  # 0, is still no number logex holds (provisional), and 0.0 written any way is 0.0.
+  defp held(value, text) when value == 0.0, do: zero(written_zero?(text), text)
 
   defp held(value, _text), do: {:ok, value}
 

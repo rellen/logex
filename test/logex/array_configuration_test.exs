@@ -103,24 +103,14 @@ defmodule Logex.ArrayConfigurationTest do
              ]
     end
 
-    test "a global named by an element is told a global is named whole" do
+    # Since decision 223 a connection's far end may be an element (the tests of decision
+    # 223); a task's single is still a global named whole.
+    test "a single named by an element is told a global is named whole" do
       types = types(%{"k" => "var_input k bool\nvar kk bool\nxic k ote kk"})
 
       refused = fn text ->
         {:error, diagnostics} = Configuration.compile("c", text, types)
         Enum.map(diagnostics, & &1.message)
-      end
-
-      assert refused.("var_global ws int[3]\nprogram m1 k\nm1.k ws[0]\n") == [
-               "`ws[0]` names an element of `ws`, a global array of 3 ints (line 1): a global " <>
-                 "is named here whole, never by one of its elements"
-             ]
-
-      for text <- ["var_global ws bool\nprogram m1 k\nm1.k ws[0]\n", "program m1 k\nm1.k ws[0]\n"] do
-        assert refused.(text) == [
-                 "no global `ws[0]`: a global is named here whole, never by one of its elements"
-               ],
-               text
       end
 
       assert refused.(
@@ -619,6 +609,158 @@ defmodule Logex.ArrayConfigurationTest do
 
       assert diagnostic.message ==
                "`more` is a global array of 2 by 2 ints in the running configuration and an array of 4 ints in the candidate: a global's type changes only with a restart"
+    end
+  end
+
+  # Decision 223: a connection's far end may be an element of a global array, read or
+  # driven as a global of its elements' type, widening by Figure 11, one connection at most
+  # driving each element, the writer warnings element by element.
+  describe "an element at a connection's far end (decision 223)" do
+    defp line_types,
+      do:
+        types(%{
+          "line" =>
+            "var_input speed int\nvar_output out dint\nvar_output r real\n" <>
+              "move speed out\nmove speed r",
+          "wide" => "var_input speed dint\nvar_output out dint\nmove speed out",
+          "w" => "var_output o int[2]\nvar_output s int\nmove 1 o[0]\nmove 2 s",
+          "ext" => "var_external g int[2]\nvar_input go bool\nxic go move 5 g[1]",
+          "e" => "var_input e int[2]\nvar_output o int\nadd e[0] e[1] o"
+        })
+
+    defp configured(text) do
+      case Configuration.compile("c", text, line_types()) do
+        {:ok, configuration} -> {:ok, configuration}
+        {:error, diagnostics} -> Enum.map(diagnostics, & &1.message)
+      end
+    end
+
+    test "each line reads and drives its own element, every other kept, widening as a global's" do
+      {:ok, configuration} =
+        configured(
+          "var_global speeds int[4] 1 2 3 4\nvar_global outs dint[2]\nvar_global rs real[3]\n" <>
+            "program m1 line\nprogram m2 line\nm1.speed speeds[1]\nm2.speed speeds[03]\n" <>
+            "m1.out outs[0]\nm2.out outs[1]\nm1.r rs[2]\nm2.r rs[0]\n"
+        )
+
+      assert configuration.warnings == []
+      {runtime, _outputs, _events} = Runtime.cycle(Runtime.start(configuration), 0, %{})
+      assert Runtime.get!(runtime, "outs") == [2, 4]
+      assert Runtime.get!(runtime, "rs") == [4.0, 0.0, 2.0]
+      assert Runtime.get!(runtime, "speeds") == [1, 2, 3, 4]
+
+      # An element of an array var_input names one too, the printed text read back exactly.
+      text =
+        "var_global speeds int[4] 1 2 3 4\nvar_global o int\nprogram m1 e\n" <>
+          "m1.e[0] speeds[3]\nm1.e[1] speeds[2]\nm1.o o\n"
+
+      {:ok, configuration} = configured(text)
+      assert Configuration.Text.print(configuration) == text
+      {runtime, _outputs, _events} = Runtime.cycle(Runtime.start(configuration), 0, %{})
+      assert Runtime.get!(runtime, "o") == 7
+    end
+
+    test "an element is a global of its elements' type, which widens as decision 159 has it" do
+      assert configured(
+               "var_global outs int[2]\nvar_global r real\nprogram m1 line\nm1.speed 1\n" <>
+                 "m1.out outs[0]\nm1.r r\n"
+             ) == [
+               "`m1.out` is a dint, but `outs[0]` is an int (line 1): a dint does not widen " <>
+                 "into an int, and a connection converts nothing: convert it inside the " <>
+                 "program, with `dint_to_int`"
+             ]
+
+      assert configured(
+               "var_global s dint[2]\nvar_global o dint\nvar_global r real\nprogram m1 line\n" <>
+                 "m1.speed s[1]\nm1.out o\nm1.r r\n"
+             ) == [
+               "`m1.speed` is an int, but `s[1]` is a dint (line 1): a dint does not widen " <>
+                 "into an int, and a connection converts nothing: convert it inside the " <>
+                 "program, with `dint_to_int`"
+             ]
+
+      {:ok, configuration} =
+        configured(
+          "var_global s int[2] 0 -9\nvar_global o dint\nprogram m1 wide\nm1.speed s[1]\nm1.out o\n"
+        )
+
+      {runtime, _outputs, _events} = Runtime.cycle(Runtime.start(configuration), 0, %{})
+      assert Runtime.get!(runtime, "o") == -9
+    end
+
+    test "each wrong element is told at its line" do
+      for {far, message} <- [
+            {"speeds[4]",
+             "`speeds[4]`'s subscript `4` is outside 0 to 3: `speeds` is a global array of 4 " <>
+               "ints (line 1)"},
+            {"speeds[1,1]",
+             "`speeds[1,1]` names an element of `speeds`, a global array of 4 ints (line 1), by " <>
+               "2 subscripts, where it takes 1, one a dimension, as in `speeds[0]`"},
+            {"speeds[n]",
+             "`speeds[n]`'s subscript `n` is a tag's name: a connection names an element of a " <>
+               "global by literal subscripts, as in `speeds[0]`"},
+            {"x[1]",
+             "`x[1]` names an element of `x`, but `x` is an int global (line 2), no array"},
+            {"m1[0]",
+             "`m1[0]` names an element of `m1`, but `m1` is an instance (line 3), not a global"},
+            {"spedes[0]",
+             "no global `spedes[0]`: there is no global array `spedes` — did you mean `speeds`?"}
+          ] do
+        assert configured(
+                 "var_global speeds int[4]\nvar_global x int\nprogram m1 line\n" <>
+                   "m1.speed #{far}\nm1.out 0\n"
+               )
+               |> Enum.reject(&(&1 =~ "m1.out")) == [message],
+               far
+      end
+    end
+
+    test "one connection drives each element, and one driving the array whole drives them all" do
+      assert configured("var_global g int[2]\nprogram a w\na.o g\na.s g[1]\n") == [
+               "`g[1]` is already driven by `a.o` (line 3), which drives `g` whole: one " <>
+                 "connection drives each element"
+             ]
+
+      assert configured("var_global g int[2]\nprogram a w\na.s g[1]\na.o g\n") == [
+               "`g` is already driven at its element `g[1]`, by `a.s` (line 3): one connection " <>
+                 "drives each element"
+             ]
+
+      assert configured("var_global g int[2]\nprogram a w\nprogram b w\na.s g[1]\nb.s g[01]\n") ==
+               ["`g[1]` is already driven by `a.s` (line 4)"]
+
+      assert {:ok, _} =
+               configured("var_global g int[2]\nprogram a w\nprogram b w\na.s g[1]\nb.s g[0]\n")
+    end
+
+    test "the writer warnings are element by element" do
+      {:ok, c} =
+        configured("var_global g int[2]\nprogram a w\nprogram x ext\na.s g[1]\nx.go 1\n")
+
+      assert Enum.map(c.warnings, & &1.message) == [
+               "`x` writes `g[1]` through its var_external, and `a.s` drives it (line 4): each " <>
+                 "scan reads what the other last wrote, and the later write in a cycle stands"
+             ]
+
+      {:ok, c} = configured("var_global g int[2]\nprogram a w\nprogram x ext\na.s g[0]\nx.go 1\n")
+      assert c.warnings == []
+
+      {:ok, c} = configured("var_global g int[2]\nprogram a w\nprogram x ext\na.o g\nx.go 1\n")
+
+      assert Enum.map(c.warnings, & &1.message) == [
+               "`x` writes `g[1]` through its var_external, and `a.o` drives it (line 4): each " <>
+                 "scan reads what the other last wrote, and the later write in a cycle stands"
+             ]
+    end
+
+    test "an element no connection drives any more after an edit is held, by its name" do
+      {:ok, before} = configured("var_global g int[2]\nprogram a w\na.s g[1]\n")
+      {:ok, later} = configured("var_global g int[2]\nprogram a w\n")
+      {runtime, _outputs, _events} = Runtime.cycle(Runtime.start(before), 0, %{})
+      {:ok, edit, forecast} = Configuration.Edit.accept(runtime, later)
+      assert {:held, "g[1]", 2} in forecast
+      {_edit, _runtime, report} = Configuration.Edit.test(edit, runtime)
+      assert {:held, "g[1]", 2} in report
     end
   end
 

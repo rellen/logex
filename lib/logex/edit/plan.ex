@@ -428,6 +428,11 @@ defmodule Logex.Edit.Plan do
         when symbol in @one_shots ->
           {[Walk.bit_name(bit) | bits], cals}
 
+        # Decision 221: a bit of an element kept as a storage bit, by its name.
+        {symbol, _line, [{:bit, _, {:element, _, _, _, _}, _, _, _} = bit | _]}, {bits, cals}
+        when symbol in @one_shots ->
+          {[Walk.bit_name(bit) | bits], cals}
+
         # M5-11 (decision 154): an element kept as a storage bit, by its name, `edge[2]`.
         {symbol, _line, [{:element, _, _, _, _} = element | _]}, {bits, cals}
         when symbol in @one_shots ->
@@ -502,8 +507,15 @@ defmodule Logex.Edit.Plan do
   defp operand({kind, _line, value}), do: {kind, value}
   # M5-8: a bit by its path and number; its mask follows from its word's type, which an
   # edit changes only with a restart.
+  # Decision 221: a bit of an element by its element, as an element is compared.
+  defp operand({:bit, _line, {:element, _, _, _, _} = element, n, _mask, _name}),
+    do: {:bit, operand(element), n}
+
   defp operand({:bit, _line, path, n, _mask, _name}), do: {:bit, path, n}
   # M5-9: a bit whose number a tag holds by its path and the tag.
+  defp operand({:bit_at, _line, {:element, _, _, _, _} = element, index, _width, _name}),
+    do: {:bit_at, operand(element), operand(index)}
+
   defp operand({:bit_at, _line, path, index, _width, _name}), do: {:bit_at, path, operand(index)}
   # Decision 202: a literal is compared by its value, as a preset is, so an edit that only
   # respells one, `16#ff` for `255`, leaves its rung the same rung.
@@ -684,16 +696,23 @@ defmodule Logex.Edit.Plan do
   defp written_alone?({:edge, _path}, _from), do: true
 
   defp written_alone?(bit, %{writes: writes, bit_writes: {bits, words}}),
-    do: alone(Map.fetch(bits, bit), bit, {writes, words})
+    do: alone(Map.fetch(bits, bit), bit, {writes, words, bits})
 
   # A bool written once; or since M5-8 a bit of a word written once, its word written
-  # through its bits alone, never whole.
-  defp alone(:error, bit, {writes, _words}), do: Map.get(writes, bit) == 1
+  # through its bits alone, never whole; and since decision 221 a bit of an element so,
+  # its element never written whole, which the walk counts among the array's bit writes.
+  defp alone(:error, bit, {writes, _words, _bits}), do: Map.get(writes, bit) == 1
 
-  defp alone({:ok, 1}, bit, {writes, words}),
-    do: Map.get(writes, word_of(bit)) == Map.get(words, word_of(bit))
+  defp alone({:ok, 1}, bit, {writes, words, bits}),
+    do:
+      Map.get(writes, word_of(bit)) == Map.get(words, word_of(bit)) and
+        not is_map_key(bits, element_of(:binary.split(bit, "]."), bit))
 
   defp alone({:ok, _more}, _bit, _writes), do: false
+
+  # The element a bit of one is in, `e[1]` of `e[1].3`; any other bit is in none.
+  defp element_of([element, _number], _bit), do: element <> "]"
+  defp element_of([_none], _bit), do: nil
 
   defp bit_writes(written) do
     bits = Map.new(written, fn {path, lines} -> {path, length(lines)} end)
@@ -706,11 +725,15 @@ defmodule Logex.Edit.Plan do
     {bits, words}
   end
 
-  # The word a bit's path is in, `s1.status` for `s1.status.3`.
-  defp word_of(path) when binary_part(path, byte_size(path) - 1, 1) == "]",
-    do: hd(:binary.split(path, "["))
+  # The word a bit's path is in, `s1.status` for `s1.status.3`; an element's, `edge[2]`, and
+  # since decision 221 a bit of an element's, `faults[2].3`, its array, which the walk
+  # counts their writes under.
+  defp word_of(path), do: word_in(:binary.split(path, "["), path)
 
-  defp word_of(path), do: path |> String.split(".") |> Enum.drop(-1) |> Enum.join(".")
+  defp word_in([array, _subscripts], _path), do: array
+
+  defp word_in([_no_element], path),
+    do: path |> String.split(".") |> Enum.drop(-1) |> Enum.join(".")
 
   # ---- the per-instance half: a switch, between two scans, and a prune --------------------
 

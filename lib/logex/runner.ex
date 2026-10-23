@@ -184,10 +184,11 @@ defmodule Logex.Runner do
   line each, `<path>: line <n>: ...`, the runner not started, or at a restart left
   tripped: the file is read exactly as the runner writes it, a last line with no newline
   read, and an unforce of a point not forced is accepted, writing the set again
-  (decision 140), but for a real point's value, which since decision 218 is any number
-  the lexer reads as one literal and the point's type holds, `fan_hz 37.50`, `3.75e1` or
-  `37`, held at the type's nearest value as `force/3` holds one, the next force or
-  unforce writing the whole file again in the runner's spelling, `fan_hz 37.5`. A point a restart's file no longer forces reads its device's last value
+  (decision 140), but for a point's value, which since decision 218 for a real point and
+  decision 226 for every other is any number the lexer reads as one literal and the
+  point's type holds, `fan_hz 37.50`, `3.75e1` or `37`, `eye_1 01` or `level 16#ff`, held
+  at the type's nearest value as `force/3` holds one, the next force or unforce writing
+  the whole file again in the runner's spelling, `fan_hz 37.5` and `level 255`. A point a restart's file no longer forces reads its device's last value
   again. With no runner, the host clears every force by deleting the file. A runner
   started without `forces:` takes no force, an
   output point or a name that is no input point's is forced by no one, and a value that
@@ -931,13 +932,9 @@ defmodule Logex.Runner do
 
   # M5-10 (decision 156): a value is one number, and since decision 218 any number the
   # lexer reads as one literal, decision 149's forms among them, `37.50`, `3.75e1`, `16#ff`
-  # or `1_000`, with whether it is written as the runner writes a number, its plain text,
-  # which an integer or bool point's force must be (force_problem/4).
+  # or `1_000`, for a real point and since decision 226 for every point.
   # The value is the number's text and nothing else, so a comment or a tab the lexer would
-  # pass over, `1//c` or `1\t`, is no force, as before decision 218 (M5-11's review); and
-  # a real literal nearer zero than an lreal's smallest normal value that a float holds,
-  # `1.0e-310`, which the lexer refuses as a literal (decision 216), is a value all the
-  # same, a force being no literal, held as 0.0, as `1.0e-40` is in a `real`.
+  # pass over, `1//c` or `1\t`, is no force, as before decision 218 (M5-11's review).
   defp parsed([name, value]),
     do: valued(number_text?(value), Logex.Lexer.tokenize(value), name)
 
@@ -954,33 +951,21 @@ defmodule Logex.Runner do
 
   defp valued(true, {:ok, [{kind, _at, number}], _end_line}, name)
        when kind in [:int_lit, :real_lit],
-       do: {:ok, name, {number, :plain}}
+       do: {:ok, name, number}
 
   defp valued(true, {:ok, [{kind, _at, number, _spelling}], _end_line}, name)
        when kind in [:int_lit, :real_lit],
-       do: {:ok, name, {number, :spelled}}
+       do: {:ok, name, number}
 
-  defp valued(true, {:error, {_at, Logex.Lexer, {:real_small, text}}, _end_line}, name),
-    do: small(Float.parse(IO.iodata_to_binary(:binary.split(text, "_", [:global]))), name)
-
+  # Since decision 228 a subnormal double, `1.0e-310`, lexes as itself, and is held as 0.0
+  # (forced/2); one no float holds, `1.0e-400`, which the lexer refuses, is no force.
   defp valued(true, _other, _name), do: :error
-
-  # A float holds it, a subnormal double, `1.0e-310`; one no float holds, `1.0e-400`, which
-  # reads as 0.0 only by underflow, is still no force (decision 218).
-  defp small({float, ""}, name) when float != 0, do: {:ok, name, {0.0, :spelled}}
-  defp small(_underflow, _name), do: :error
 
   defp no_force,
     do: "is no force: a line holds an input point's name and its value, as `eye_1 1`"
 
   defp force_read(:error, text, line, {forces, lines, problems}, _points),
     do: {forces, lines, [{line, "`#{text}` " <> no_force()} | problems]}
-
-  # A number spelled other than as its plain decimal, `01` or `16#1`, is a force only of a
-  # real point (decision 218), and no force otherwise, as before.
-  defp force_read({:ok, name, {value, :spelled}} = read, text, line, acc, points)
-       when is_integer(value),
-       do: spelled_read(input(name, points), read, text, line, acc, points)
 
   defp force_read({:ok, name, value}, text, line, {forces, lines, problems}, points),
     do:
@@ -991,13 +976,6 @@ defmodule Logex.Runner do
         {forces, Map.put_new(lines, name, line), problems},
         points
       )
-
-  defp spelled_read({:ok, type}, {:ok, name, {value, :spelled}}, text, line, acc, points)
-       when type in [:real, :lreal],
-       do: force_read({:ok, name, {value, :plain}}, text, line, acc, points)
-
-  defp spelled_read(_not_real, _read, text, line, acc, points),
-    do: force_read(:error, text, line, acc, points)
 
   defp once({:ok, first}, {name, _value, _text}, line, {forces, lines, problems}, _points),
     do: {forces, lines, [{line, "`#{name}` is forced on line #{first} already"} | problems]}
@@ -1014,13 +992,14 @@ defmodule Logex.Runner do
 
   # Decision 218: a real point's line holds any number that is a value of its type, held
   # at its nearest, as `force/3` holds one, `fan_hz 37.50` as 37.5 and `big 3` as 3.0, the
-  # next force or unforce writing the file again in the runner's spelling; an integer or
-  # bool point's still the text the runner writes, its plain decimal, as decision 140 reads
-  # the file, `eye_1 1` and never `eye_1 01` nor `eye_1 16#1`.
-  defp force_problem({:ok, type}, name, {value, _written}) when type in [:real, :lreal],
+  # next force or unforce writing the file again in the runner's spelling; and since
+  # decision 226 so does an integer or bool point's, any integer the lexer reads as one
+  # literal, `eye_1 01` as 1 and `level 16#ff` as 255, held to its type, one outside it
+  # refused and a real told it does not fit, the next force writing it in plain decimal.
+  defp force_problem({:ok, type}, name, value) when type in [:real, :lreal],
     do: real_force(Declarations.fits?(type, value), name, type, value)
 
-  defp force_problem({:ok, type}, name, {value, _written}),
+  defp force_problem({:ok, type}, name, value),
     do: fitting_force(Declarations.fits?(type, value), name, type, value)
 
   defp force_problem({:error, message}, _name, _value), do: message

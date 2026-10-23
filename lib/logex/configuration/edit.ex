@@ -650,8 +650,10 @@ defmodule Logex.Configuration.Edit do
 
     Enum.sort(
       for name <- Map.keys(drives(from)),
-          is_map_key(keep, name),
+          [array | _] = :binary.split(name, "["),
+          is_map_key(keep, array),
           not is_map_key(driven, name),
+          not is_map_key(driven, array),
           do: name
     )
   end
@@ -673,7 +675,7 @@ defmodule Logex.Configuration.Edit do
             connections,
           is_binary(global),
           is_map_key(Map.fetch!(writes, Map.fetch!(types, instance)), member),
-          do: global
+          do: driven_name(global)
 
     through =
       for {type, written} <- writes,
@@ -684,8 +686,26 @@ defmodule Logex.Configuration.Edit do
     Map.new(copied ++ through, &{&1, true})
   end
 
+  # Decision 223: a connection may drive an element of a global array, `speeds[1]`, named by
+  # its subscripts' values, held and reported as that element.
+  defp driven_name(global), do: element_name(Logex.Array.split(global), global)
+
+  defp element_name(nil, global), do: global
+
+  defp element_name({array, subscripts}, _global),
+    do: Logex.Array.name(array, for(text <- subscripts, do: elem(Logex.Array.subscript(text), 1)))
+
   defp holding(names, globals),
-    do: for(name <- names, do: {:held, name, Map.fetch!(globals, name)})
+    do: for(name <- names, do: {:held, name, held_value(Logex.Array.split(name), name, globals)})
+
+  defp held_value(nil, name, globals), do: Map.fetch!(globals, name)
+
+  defp held_value({array, subscripts}, _name, globals),
+    do:
+      Logex.Array.fetch(
+        Map.fetch!(globals, array),
+        for(text <- subscripts, do: elem(Logex.Array.subscript(text), 1))
+      )
 
   # ---- a switch, between two cycles -------------------------------------------------------
 

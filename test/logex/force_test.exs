@@ -560,20 +560,17 @@ defmodule Logex.ForceTest do
               "2147483647, got: 5000000000",
             "#{file}: line 6: `nonsense` is no force: a line holds an input point's name and " <>
               "its value, as `eye_1 1`",
-            "#{file}: line 7: `level 01` is no force: a line holds an input point's name and " <>
-              "its value, as `eye_1 1`",
+            # Since decision 226 an integer point's line takes any number the lexer reads,
+            # `level 01` a force of 1, so it is a second force of `level`.
+            "#{file}: line 7: `level` is forced on line 5 already",
             "#{file}: line 8: `` is no force: a line holds an input point's name and its " <>
               "value, as `eye_1 1`",
             "#{file}: line 9: `level  2` is no force: a line holds an input point's name and " <>
               "its value, as `eye_1 1`",
             "#{file}: line 11: `e` is forced on line 10 already",
             "#{file}: line 12: `seen` is no input point of `plant`",
-            # Decision 218 takes any number at a real point only: an integer point's line is
-            # its plain decimal.
-            "#{file}: line 13: `level 16#ff` is no force: a line holds an input point's name " <>
-              "and its value, as `eye_1 1`",
-            "#{file}: line 14: `levle 01` is no force: a line holds an input point's name and " <>
-              "its value, as `eye_1 1`",
+            "#{file}: line 13: `level` is forced on line 5 already",
+            "#{file}: line 14: `levle` is forced on line 1 already",
             # A comment or a tab after the value, which the lexer passes over, is no part of
             # a force (M5-11's review): the line holds the number's text alone.
             "#{file}: line 15: `level 1//c` is no force: a line holds an input point's name " <>
@@ -609,6 +606,55 @@ defmodule Logex.ForceTest do
           forces: file
         )
       end)
+    end
+
+    # Decision 226: an integer or bool point's line takes any number the lexer reads as
+    # one literal, held to its type, the next force writing the file in plain decimal.
+    test "an integer or bool point's line takes any spelling of a number (decision 226)",
+         %{tmp_dir: dir} do
+      file = Path.join(dir, "forces")
+
+      for {x, level, held} <- [
+            {"01", "16#ff", {1, 255}},
+            {"1", "1_000", {1, 1000}},
+            {"0", "-0", {0, 0}},
+            {"2#1", "-007", {1, -7}},
+            {"00", "2#1010", {0, 10}}
+          ] do
+        File.write!(file, "level #{level}\nx #{x}\n")
+        %{runner: runner} = started(dir)
+        {x_held, level_held} = held
+        assert Runner.status(runner).forces == %{"x" => x_held, "level" => level_held}, level
+        # The file stays as written until the next force, which writes it whole.
+        assert File.read!(file) == "level #{level}\nx #{x}\n"
+        assert Runner.force(runner, "e", 1) == :ok
+
+        assert File.read!(file) ==
+                 "e 1\nlevel #{Integer.to_string(level_held)}\nx #{Integer.to_string(x_held)}\n"
+
+        Runner.stop(runner)
+      end
+
+      # Held to its type: a spelling of a number outside it is refused as a plain one is.
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+      File.write!(file, "x 2#10\nlevel 16#ffffffff\ne 1.0\n")
+
+      raises(
+        "#{file}: line 1: `x` is a bool, forced to 0 or 1, got: 2\n" <>
+          "#{file}: line 2: `level` is a dint, forced to an integer from -2147483648 to " <>
+          "2147483647, got: 4294967295\n" <>
+          "#{file}: line 3: `e` is a bool, forced to 0 or 1, got: 1.0",
+        fn ->
+          Runner.start_link(
+            configuration: plant(),
+            io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+            clock: {Manual, clock},
+            forces: file
+          )
+        end
+      )
     end
 
     test "a file that cannot be read refuses the start", %{tmp_dir: dir} do

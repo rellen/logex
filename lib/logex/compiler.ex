@@ -19,7 +19,12 @@ defmodule Logex.Compiler do
   subscript a literal within its dimension, refused at its line otherwise, read and written
   as a tag of its elements' type and lowered to `{:element, line, array, index, name}`,
   its subscripts' values and its name as written; an array whole is no operand, and a
-  subscript held in a tag waits for M5-12 (decision 152).
+  subscript held in a tag waits for M5-12 (decision 152). Since decision 221 a bit of an
+  element, `faults[2].3` or `faults[2].[n]`, is a bit as a tag's is, by every rule of a
+  tag's bit, its container the element's own operand, `{:bit, line, {:element, ...}, n,
+  mask, name}`. Since decision 227 a routine of real tags is warned of each real initial
+  value its declaration lines write with more digits than its real keeps
+  (`Logex.Warnings.initials/2`), read from the parse tree, which keeps each spelling.
 
   A host compiles through `Logex.compile/2` and `Logex.compile_file/1`. The stage
   functions stay public for the front end's golden record, the Elixir-side declarer and
@@ -339,7 +344,7 @@ defmodule Logex.Compiler do
     {rungs, tags, diagnostics} =
       lowering(routine, {kind, heading}, Declarations.split(rungs, declared, held))
 
-    rebuilt(kind, name, {rungs, tags}, diagnostics)
+    rebuilt(kind, name, {rungs, tags, routine}, diagnostics)
   rescue
     # A tag declared from Elixir that no host could have given: no such body.
     ArgumentError -> :error
@@ -347,7 +352,7 @@ defmodule Logex.Compiler do
 
   defp reparsed(_error, _name, _given), do: :error
 
-  defp rebuilt({:block, name}, name, {rungs, tags}, []) do
+  defp rebuilt({:block, name}, name, {rungs, tags, routine}, []) do
     {named, _reached} = Enum.map_reduce(tags, [], &naming/2)
     {units, reals, arrays} = Program.settled(tags)
 
@@ -359,7 +364,7 @@ defmodule Logex.Compiler do
        units: units,
        reals: reals,
        arrays: arrays,
-       warnings: Logex.Warnings.of(rungs, tags)
+       warnings: warned(rungs, tags, reals, routine)
      }}
   end
 
@@ -411,7 +416,7 @@ defmodule Logex.Compiler do
         Enum.all?(typed, &typed?/1) and {units, reals, arrays} == Program.settled(typed),
       rungs,
       typed,
-      warnings
+      {warnings, reals, body.source}
     )
   end
 
@@ -419,7 +424,7 @@ defmodule Logex.Compiler do
 
   defp relowered(false, _rungs, _tags, _warnings), do: false
 
-  defp relowered(true, rungs, tags, warnings) do
+  defp relowered(true, rungs, tags, {warnings, reals, source}) do
     known = {scope(tags), folded(tags)}
     instructions = Walk.instructions(rungs)
     {timed, timing} = presets(instructions, unpreset(tags))
@@ -429,8 +434,25 @@ defmodule Logex.Compiler do
       shared_bits(instructions, tags) == [] and calls(instructions) == [] and timing == [] and
       jumps(rungs, {:block, nil}) == [] and timed == tags and
       Enum.flat_map(rungs, fn {:rung, elements} -> path(elements, known) end) == [] and
-      lines?(rungs, tags) and Enum.map(warnings, &fileless/1) == Logex.Warnings.of(rungs, tags)
+      lines?(rungs, tags) and
+      Enum.map(warnings, &fileless/1) == rewarned(rungs, tags, {reals, source})
   end
+
+  # A body's warnings, its declarations' among them since decision 227, read again from its
+  # source, the text it was compiled from, which alone keeps an initial value's spelling; a
+  # body of no real tag, or none whose source is held, has none of those.
+  defp rewarned(rungs, tags, {reals, source}),
+    do: warned(rungs, tags, reals, reparsed_source(reals, source))
+
+  defp reparsed_source(nil, _source), do: nil
+  defp reparsed_source(_reals, source) when is_binary(source), do: parsed_source(tokenize(source))
+  defp reparsed_source(_reals, _source), do: {:routine, {:rungs, []}}
+
+  defp parsed_source({:ok, tokens, _end_line}), do: parsed_routine(parse(tokens))
+  defp parsed_source(_error), do: {:routine, {:rungs, []}}
+
+  defp parsed_routine({:ok, routine}), do: routine
+  defp parsed_routine(_error), do: {:routine, {:rungs, []}}
 
   # Each IR symbol back to its mnemonic.
   @mnemonics Map.new(@instructions, fn {word, {symbol, _signature}} -> {symbol, word} end)
@@ -485,17 +507,15 @@ defmodule Logex.Compiler do
   # M5-8: a bit, its container's path, its number, its mask and its name as written, which the rung's lowering
   # again must give exactly (lowers_to_itself?/2).
   defp ir_operand?({:bit, line, path, n, mask, name}) when is_integer(line) and line > 0,
-    do:
-      proper?(path, &is_binary/1) and path != [] and is_integer(n) and n >= 0 and
-        is_integer(mask) and is_binary(name)
+    do: container?(path) and is_integer(n) and n >= 0 and is_integer(mask) and is_binary(name)
 
   # M5-9: a bit whose number a tag holds, its container's path, the tag, the width and top
   # bit, and its name as written.
   defp ir_operand?({:bit_at, line, path, {:name, at, index}, {width, top}, name})
        when is_integer(line) and line > 0 and is_integer(at) and at > 0,
        do:
-         proper?(path, &is_binary/1) and path != [] and is_binary(index) and
-           is_integer(width) and width > 0 and is_integer(top) and is_binary(name)
+         container?(path) and is_binary(index) and is_integer(width) and width > 0 and
+           is_integer(top) and is_binary(name)
 
   # M5-11: an element, its array's name, its subscripts' values and its name as written.
   defp ir_operand?({:element, line, array, index, name}) when is_integer(line) and line > 0,
@@ -504,6 +524,10 @@ defmodule Logex.Compiler do
         is_binary(name)
 
   defp ir_operand?(_operand), do: false
+
+  # A bit's container: a tag's or a member's path, or since decision 221 an element.
+  defp container?({:element, _, _, _, _} = element), do: ir_operand?(element)
+  defp container?(path), do: proper?(path, &is_binary/1) and path != []
 
   # A rung back to the elements its text parses to, lowered again: the same IR, and no
   # diagnostic.
@@ -896,16 +920,21 @@ defmodule Logex.Compiler do
   # written, `status.03`.
   defp shared_bit(
          {symbol, line, [{:bit, _, [_], _, _, written} = bit | pulse]},
-         {first, _} = acc,
+         acc,
          _tags
        )
-       when symbol in @one_shots do
-    name = Walk.bit_name(bit)
-    tag = %Tag{name: name, type: :bool, section: :var}
-    coil = {name, line, symbol, written}
-    {first, diagnostics} = storage_bit(Map.fetch(first, name), tag, coil, acc)
-    {first, own_pulse(Enum.map(pulse, &Walk.bit_name/1), tag, coil, diagnostics)}
-  end
+       when symbol in @one_shots,
+       do: bit_storage(bit, {line, symbol, written}, pulse, acc)
+
+  # Decision 221: so may a bit of an element, `faults[2].3`, its number literal, named by
+  # its element's subscripts' values and its number's, `faults[2].3`.
+  defp shared_bit(
+         {symbol, line, [{:bit, _, {:element, _, _, _, _}, _, _, written} = bit | pulse]},
+         acc,
+         _tags
+       )
+       when symbol in @one_shots,
+       do: bit_storage(bit, {line, symbol, written}, pulse, acc)
 
   # M5-11 (decision 154): a storage bit may be an element of a bool array, `edge[2]`, its
   # subscripts literal, named by its subscripts' values, `edge[2]`, under every rule a bool
@@ -957,6 +986,14 @@ defmodule Logex.Compiler do
          )
 
   defp shared_bit(_instruction, acc, _tags), do: acc
+
+  defp bit_storage(bit, {line, symbol, written}, pulse, {first, _} = acc) do
+    name = Walk.bit_name(bit)
+    tag = %Tag{name: name, type: :bool, section: :var}
+    coil = {name, line, symbol, written}
+    {first, diagnostics} = storage_bit(Map.fetch(first, name), tag, coil, acc)
+    {first, own_pulse(Enum.map(pulse, &Walk.bit_name/1), tag, coil, diagnostics)}
+  end
 
   # M3-4 (decision 101): a coil's pulse bit is not its storage bit. Each run writes both, the
   # pulse and then the power received, so one tag would hold only the power and never pulse.
@@ -1329,7 +1366,7 @@ defmodule Logex.Compiler do
   # docs/organisation.md §4.10, "Held types"): a type held in every instance's tag would
   # grow, copied flat, as the width to the power of the depth, and one table per body as
   # the paths to a type. The warnings are of the table with each type itself.
-  defp lowered(:program, rungs, {tags, held}, [], _routine) do
+  defp lowered(:program, rungs, {tags, held}, [], routine) do
     {named, blocks} = hold(tags, held)
     {units, reals, arrays} = Program.settled(tags)
 
@@ -1341,7 +1378,7 @@ defmodule Logex.Compiler do
        units: units,
        reals: reals,
        arrays: arrays,
-       warnings: Logex.Warnings.of(rungs, tags)
+       warnings: warned(rungs, tags, reals, routine)
      }}
   end
 
@@ -1358,7 +1395,7 @@ defmodule Logex.Compiler do
       units: units,
       reals: reals,
       arrays: arrays,
-      warnings: Logex.Warnings.of(rungs, tags)
+      warnings: warned(rungs, tags, reals, routine)
     }
 
     {:ok, FbType.of(body)}
@@ -1368,6 +1405,18 @@ defmodule Logex.Compiler do
   # merged by line. The sort is stable: within a line, the order each list gave is kept.
   defp lowered(_kind, _rungs, _tags, diagnostics, _routine),
     do: {:error, Enum.sort_by(diagnostics, & &1.line)}
+
+  # The warnings of the lowered rungs and, since decision 227, of the declaration lines'
+  # real initial values, read from the parse tree, where each keeps its spelling, merged by
+  # line as the warnings are.
+  defp warned(rungs, tags, nil, _routine), do: Logex.Warnings.of(rungs, tags)
+
+  defp warned(rungs, tags, reals, {:routine, {:rungs, parsed}}),
+    do:
+      Enum.sort_by(
+        Logex.Warnings.initials(parsed, reals) ++ Logex.Warnings.of(rungs, tags),
+        & &1.line
+      )
 
   # A block built here from a parse tree, its members perhaps declared from Elixir, keeps a
   # source text that compiles again to its body (decision 54): each rung printed on the
@@ -2132,8 +2181,17 @@ defmodule Logex.Compiler do
 
   defp tag_bit_ir(width, {type, container, index}, _path, {line, name}),
     do:
-      {:bit_at, line, container, {:name, line, index},
+      {:bit_at, line, held_in(container, line), {:name, line, index},
        {width, mask(Declarations.kind(type), width - 1, width)}, name}
+
+  # Decision 221: a bit of an element, `faults[2].3`, is held in the element, its container
+  # the element's own operand, `{:element, line, "faults", [2], "faults[2]"}`, in place of a
+  # path, so that a scan reads and writes the element and then its bit; a tag's or a
+  # member's container is its path, as before.
+  defp held_in([one], line) when binary_part(one, byte_size(one) - 1, 1) == "]",
+    do: element_at(line, one)
+
+  defp held_in(path, _line), do: path
 
   defp element_ir({:ok, %Tag{}}, {line, name}) do
     {array, subscripts} = Logex.Array.split(name)
@@ -2143,6 +2201,12 @@ defmodule Logex.Compiler do
 
   # One that is refused lowers as a name, which no scan runs.
   defp element_ir(_refused, {line, name}), do: {:name, line, name}
+
+  defp element_at(line, name) do
+    {array, subscripts} = Logex.Array.split(name)
+    index = for text <- subscripts, do: elem(Logex.Array.subscript(text), 1)
+    {:element, line, array, index, name}
+  end
 
   defp container_type({:ok, %Tag{type: type}}), do: type
   defp container_type({:member, _tag, %Member{type: type}}), do: type
@@ -2154,6 +2218,13 @@ defmodule Logex.Compiler do
   # A negative number, `status.[-1]`, which is refused, lowers as nothing a scan runs.
   defp bit_ir_of(_width, {n, _type, _container}, path, {line, _name}) when n < 0,
     do: {:member, line, path}
+
+  # Decision 221: a bit of an element is held in the element (held_in/2), told by its
+  # container's last byte in the clause's head, so a tag's or a member's bit lowers in
+  # what it did.
+  defp bit_ir_of(width, {n, type, [one]}, _path, {line, name})
+       when binary_part(one, byte_size(one) - 1, 1) == "]",
+       do: {:bit, line, element_at(line, one), n, mask(Declarations.kind(type), n, width), name}
 
   defp bit_ir_of(width, {n, type, container}, _path, {line, name}),
     do: {:bit, line, container, n, mask(Declarations.kind(type), n, width), name}
@@ -2669,20 +2740,21 @@ defmodule Logex.Compiler do
 
   defp lookup_parts([name], {tags, _members}), do: Map.fetch(tags, name)
 
-  # A name that goes on past an element, `w[2].3` or `t[2].dn`, reaches into nothing an
-  # array of elementary types holds (provisional: an element's bits, decision 155's on an
-  # element, and an instance's members, decision 154's, are not taken yet).
-  defp lookup_parts([head | _parts], {tags, _members} = scope)
+  # Decision 221: a name that goes on past an element, `faults[2].3` or `faults[2].[n]`, is
+  # a bit of the element, read and written as a bit of a tag of the element's type is, by
+  # every rule a tag's bit has, the element's name as written its container's; an element
+  # refused is refused as it is alone.
+  defp lookup_parts([head | parts], scope)
        when binary_part(head, byte_size(head) - 1, 1) == "]",
-       do: past_element(lookup_parts([head], scope), head, tags)
+       do: past_element(lookup_parts([head], scope), head, parts, scope)
 
   defp lookup_parts([head | parts], {tags, _members} = scope),
     do: owned(Map.fetch(tags, head), head, parts, scope)
 
-  defp past_element({:ok, %Tag{}}, head, tags),
-    do: {:past_element, head, Map.fetch!(tags, elem(Logex.Array.split(head), 0))}
+  defp past_element({:ok, %Tag{}} = element, head, parts, scope),
+    do: owned(element, head, parts, scope)
 
-  defp past_element(refused, _head, _tags), do: refused
+  defp past_element(refused, _head, _parts, _scope), do: refused
 
   defp element({array, subscripts}, name, tags),
     do:
@@ -2958,17 +3030,6 @@ defmodule Logex.Compiler do
           "until a subscript held in a tag is supported"
       )
       | diagnostics
-    ]
-
-  defp resolve(nil, {:past_element, element, tag}, _slot, {:name, line, name}, _at, d),
-    do: [
-      diagnostic(
-        line,
-        "`#{name}` goes past `#{element}`, an element of `#{tag.name}`, " <>
-          "#{a_type(tag.type)}#{declared(tag)}: an element is read and written whole, so " <>
-          "move it into a tag of its own to reach its bits"
-      )
-      | d
     ]
 
   # An instance is named whole only where an instruction runs it; anywhere else, by one of

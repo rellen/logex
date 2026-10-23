@@ -2244,7 +2244,7 @@ defmodule Logex.RuntimeTest do
 
       # M2-2: a configuration file's text, read and printed back.
       assert Enum.sort(Logex.Configuration.Text.__info__(:functions)) ==
-               [entries!: 1, keywords: 0, print: 1, read: 1]
+               [entries!: 1, keywords: 0, print: 1, read: 1, read_rounded: 1]
 
       for {module, keys} <- [
             {Logex.Configuration.Task,
@@ -2294,6 +2294,7 @@ defmodule Logex.RuntimeTest do
                bit_name: 1,
                bit_writes: 1,
                counters: 1,
+               element_writes: 1,
                instructions: 1,
                member_writes: 1,
                one_shots: 0,

@@ -478,11 +478,13 @@ defmodule Logex.RealTest do
                %{"l" => single(0.1)}
              ) == %{"p" => 0, "q" => 1}
 
-      # A subnormal literal is no number logex holds (decision 216), in any slot.
-      assert {:error, [%Logex.Diagnostic{stage: :lex, line: 3, column: 6}]} =
-               Logex.compile("var_input l lreal\nvar_output p bool\neq l 1.0e-310 ote p",
-                 name: "m"
-               )
+      # A subnormal literal beside an lreal is one it never holds (decisions 216 and 228).
+      assert messages("var_input l lreal\nvar_output p bool\neq l 1.0e-310 ote p") == [
+               {3,
+                "`eq` compares `1.0e-310` with `l`, an lreal (declared on line 1), which never " <>
+                  "holds it: `1.0e-310` is too near 0.0 for an lreal, whose smallest above 0.0 " <>
+                  "is 2.2250738585072014e-308: it would be written as 0.0"}
+             ]
 
       # 16777217.0 in a `real`'s slot is the single 16777216.0.
       assert outputs("var_input r real\nvar_output p bool\neq r 16777217.0 ote p", %{
@@ -1441,14 +1443,14 @@ defmodule Logex.RealTest do
       assert message =~ "it is too near 0.0 for a real"
     end
 
-    # A literal an lreal would flush is no float logex holds, so the lexer refuses it in
-    # every slot, as it refuses one past an lreal's largest; 1.0e-40 is an lreal's.
-    test "below an lreal's smallest normal, it is no number logex holds" do
+    # Since decision 228 a literal whose double is subnormal is that double, refused by its
+    # slot (below); one no double holds but 0.0 is still no number logex holds, refused by
+    # the lexer as one past an lreal's largest is; 1.0e-40 is an lreal's.
+    test "below every double but 0.0, it is no number logex holds" do
       for source <- [
-            "move 1.0e-310 x",
-            "move -4.9e-324 x",
             "move 1.0e-400 x",
-            "move 1_0.0e-4_00 x"
+            "move 1_0.0e-4_00 x",
+            "move -2.0e-324 x"
           ] do
         [_move, run, _x] = String.split(source, " ")
 
@@ -1700,10 +1702,12 @@ defmodule Logex.RealTest do
       end
     end
 
-    # Provisional: a declaration's initial value keeps no spelling in a tag table, so it is
-    # not looked at.
-    test "a declaration's initial value is not warned of" do
-      assert warnings("var_output r real 16777217.0\nvar_input a bool\nxic a move 1.0 r") == []
+    # Since decision 227 a declaration's initial value is warned of, read from the parse
+    # tree's literal, which keeps its spelling, where the tag table keeps its value.
+    test "a declaration's initial value is warned of (decision 227)" do
+      assert warnings("var_output r real 16777217.0\nvar_input a bool\nxic a move 1.0 r") == [
+               {1, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"}
+             ]
     end
 
     # The rule restated: the number the text writes, as a fraction, is warned of where it is
@@ -1810,5 +1814,147 @@ defmodule Logex.RealTest do
 
     defp reduce(0, _d), do: {0, 1}
     defp reduce(n, d), do: {div(n, Integer.gcd(n, d)), div(d, Integer.gcd(n, d))}
+  end
+
+  # Decision 227: a declaration's real initial value with more digits than its tag's real
+  # keeps is warned of in decision 219's words, read from the literal's spelling, which the
+  # parse tree keeps and the tag table does not; a configuration's global too.
+  describe "a rounded initial value (decision 227)" do
+    test "a declaration's, at its line, an array's list element by element" do
+      assert warnings(
+               "var_input a bool\nvar_output r real 16777217.0\nvar_output l lreal 9007199254740993.0\n" <>
+                 "var_output s real[4] 0.1 16777217.0 0.10000000149011612 37.50\n" <>
+                 "var_output k real 0.1\nvar_output m real 0.100000001490116119384765625\n" <>
+                 "var_output n real 16777216\nxic a move 1.0 r\nxic a move 1.0 l\n" <>
+                 "xic a move 1.0 s[0]\nxic a move 1.0 k\nxic a move 1.0 m\nxic a move 1.0 n"
+             ) == [
+               {2, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"},
+               {3,
+                "`9007199254740993.0` is more precise than an lreal keeps: it is held as " <>
+                  "9.007199254740992e15"},
+               {4, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"},
+               {4, "`0.10000000149011612` is more precise than a real keeps: it is held as 0.1"}
+             ]
+
+      # Late, after the first rung, it is still a declaration, reported and warned.
+      assert {:error, [late]} =
+               Logex.compile("var a bool\nxic a ote a\nvar r real 16777217.0", name: "p")
+
+      assert late.message =~ "declarations come first"
+    end
+
+    test "a block's, among its body's warnings, which its body compiles again to" do
+      {:ok, block} =
+        Logex.compile(
+          "function_block blk\nvar_input i bool\nvar_output o bool\nvar s real 16777217.0\n" <>
+            "xic i ote o\nxic i move 1.0 s",
+          name: "blk"
+        )
+
+      assert Enum.map(block.body.warnings, &{&1.line, &1.message}) == [
+               {4, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"}
+             ]
+
+      assert Logex.Compiler.lowered?(block.body)
+      assert Logex.FbType.user?(block)
+      refute Logex.Compiler.lowered?(%{block.body | warnings: []})
+    end
+
+    test "a configuration's global, at its line, an array's element by element" do
+      {:ok, m} = Logex.compile("var_input x real\nvar_output y real\nmove x y", name: "m")
+
+      {:ok, configuration} =
+        Configuration.compile(
+          "c",
+          "var_global sp real 16777217.0\nvar_global ok real 0.1\n" <>
+            "var_global rs lreal[2] 1.0 9007199254740993.0\nprogram m1 m\nm1.x sp\nm1.y ok\n",
+          %{"m" => m}
+        )
+
+      assert Enum.map(configuration.warnings, &{&1.line, &1.message}) == [
+               {1, "`16777217.0` is more precise than a real keeps: it is held as 16777216.0"},
+               {3,
+                "`9007199254740993.0` is more precise than an lreal keeps: it is held as " <>
+                  "9.007199254740992e15"},
+               {3, "`rs` is declared but nothing uses it"}
+             ]
+
+      # Printed, a real is the shortest text of its value, which reads back unwarned.
+      printed = Configuration.Text.print(configuration)
+      assert printed =~ "var_global sp real 16777216.0"
+      {:ok, again} = Configuration.compile("c", printed, %{"m" => m})
+      assert Enum.map(again.warnings, & &1.message) == ["`rs` is declared but nothing uses it"]
+    end
+
+    test "from Elixir there is no spelling and nothing is warned" do
+      tag = Logex.Tag.new!("r", :real, :var_output, 16_777_216.0)
+      {:ok, tokens, _} = Logex.Compiler.tokenize("var_input a bool\nxic a move 1.0 r")
+      {:ok, tree} = Logex.Compiler.parse(tokens)
+      {:ok, program} = Logex.Compiler.instructionize(tree, [tag])
+      assert program.warnings == []
+    end
+  end
+
+  # Decision 228: a literal whose double is subnormal is read as that double by the lexer
+  # and refused by its slot, naming the instruction and the tag, as a `real`'s is.
+  describe "a literal nearer 0.0 than an lreal holds (decision 228)" do
+    @too_near "is too near 0.0 for an lreal, whose smallest above 0.0 is " <>
+                "2.2250738585072014e-308: it would be written as 0.0"
+
+    test "is the double the lexer reads, refused in every slot that judges a literal" do
+      assert {:ok, [{:real_lit, {1, 6}, 1.0e-310}, _], 1} =
+               lexed("move 1.0e-310 l")
+               |> then(fn {:ok, [_ | t], e} -> {:ok, Enum.take(t, 2), e} end)
+
+      head = "var_input a lreal\nvar_output l lreal\nvar_output r real\nvar_output q bool\n"
+
+      for {rung, message} <- [
+            {"move 1.0e-310 l", "`move` writes `1.0e-310` into `l`, an lreal: it #{@too_near}"},
+            {"move -4.9e-324 l", "`move` writes `-4.9e-324` into `l`, an lreal: it #{@too_near}"},
+            {"add a 1.0e-310 l",
+             "`add` computes in `l`'s type, an lreal: `1.0e-310` #{@too_near}"},
+            {"sqrt 1.0e-310 l",
+             "`sqrt` computes in `l`'s type, an lreal: `1.0e-310` #{@too_near}"},
+            {"gt a 1.0e-310 ote q",
+             "`gt` compares `1.0e-310` with `a`, an lreal (declared on line 1), which never " <>
+               "holds it: `1.0e-310` #{@too_near}"},
+            {"lreal_to_real 1.0e-310 r",
+             "`lreal_to_real` reads an lreal: `1.0e-310` #{@too_near}"}
+          ] do
+        assert messages(head <> rung) == [{5, message}], rung
+      end
+
+      assert messages("var l lreal 1.0e-310\nxic l") |> hd() ==
+               {1, "`l` is an lreal: `1.0e-310` #{@too_near}"}
+
+      {:ok, keep} =
+        Logex.compile("function_block keep\nvar_input a lreal\nvar_output b lreal\nmove a b",
+          name: "keep"
+        )
+
+      assert {:error, [%Logex.Diagnostic{line: 3, message: message}]} =
+               Logex.compile("var k keep\nvar_output r lreal\ncal k 1.0e-310 r",
+                 name: "p",
+                 types: [keep]
+               )
+
+      assert message == "operand 1 of `cal k` is `a` (var_input lreal): `1.0e-310` #{@too_near}"
+
+      assert {:error, [%Logex.Diagnostic{line: 1, message: message} | _]} =
+               Configuration.compile("c", "var_global sp lreal 1.0e-310\n", %{})
+
+      assert message == "`sp` is an lreal: `1.0e-310` #{@too_near}"
+    end
+
+    test "an lreal's smallest normal is taken, two literals compared are the doubles" do
+      assert outputs("var_output l lreal\nmove 2.2250738585072014e-308 l") ===
+               %{"l" => 2.2250738585072014e-308}
+
+      assert warnings("var_output q bool\nlt 1.0e-310 0.0 ote q") == [
+               {2, "`lt` compares two literals, `1.0e-310` and `0.0`: its result never changes"}
+             ]
+
+      assert outputs("var_output q bool\ngt 1.0e-310 0.0 ote q") == %{"q" => 1}
+    end
   end
 end

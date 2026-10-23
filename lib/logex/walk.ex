@@ -6,7 +6,10 @@ defmodule Logex.Walk do
   Since M5-11 an element, `temps[3]`, is a use and a write of its array, `temps`, as a bit
   is of its word, and is named by its subscripts' values, `temps[3]`, where a one-shot or a
   coil keeps it (`bit_name/1`, `storage_bits/1`) and in `bit_writes/1`, so that the
-  warnings and an edit read an element as a bool or a bit is read.
+  warnings and an edit read an element as a bool or a bit is read. Since decision 221 a bit
+  of an element, `faults[2].3`, is a use and a write of its array too, named so by
+  `bit_name/1`, and `element_writes/1` gives each element a program writes, a write of a bit
+  of one among them.
 
   `Logex.Compiler`, `Logex.Warnings` and `Logex.Edit` read their instructions, uses,
   writes and timers here, and `Logex.Configuration.check/1` what each program type writes
@@ -21,6 +24,8 @@ defmodule Logex.Walk do
   - `one_shots/1`: which one-shots a program runs, at any depth (M3-4);
   - `writes/1`: which tags a program writes, and where;
   - `member_writes/1`: which members of its instances it writes, and where (decision 96);
+  - `bit_writes/1` and `element_writes/1`: which bits of its tags, and which elements of
+    its arrays, it writes, and where (M5-8, decision 221);
   - `presets/1`: which built-in instances a program runs, and at what preset (M3-1);
   - `timers/1`: which of them are timers;
   - `counters/1`: which of them are counters.
@@ -92,9 +97,14 @@ defmodule Logex.Walk do
   # M5-8: a bit is a use of its container, `status.3` of `status`, with its slot's access,
   # so a coil on a bit is a write of the word (decision 155).
   defp tag_of({:bit, _, [container | _], _n, _mask, _name}), do: container
+  # Decision 221: a bit of an element is a use of the element's array, as the element is.
+  defp tag_of({:bit, _, {:element, _, array, _, _}, _n, _mask, _name}), do: array
 
   defp tag_of({:bit_at, _, [container | _], {:name, _, index}, _width, _name}),
     do: {:numbered, container, index}
+
+  defp tag_of({:bit_at, _, {:element, _, array, _, _}, {:name, _, index}, _width, _name}),
+    do: {:numbered, array, index}
 
   # M5-11 (decision 151): an element is a use of its array, `temps[3]` of `temps`, with its
   # slot's access, as a bit is of its word, so a write of an element is a write of its
@@ -127,6 +137,10 @@ defmodule Logex.Walk do
   """
   def bit_name({:name, _, name}), do: name
 
+  # Decision 221: a bit of an element by its element's name and its number, `faults[2].3`.
+  def bit_name({:bit, _, {:element, _, _, _, _} = element, n, _mask, _name}),
+    do: bit_name(element) <> "." <> Integer.to_string(n)
+
   def bit_name({:bit, _, path, n, _mask, _name}),
     do: Enum.join(path, ".") <> "." <> Integer.to_string(n)
 
@@ -155,6 +169,7 @@ defmodule Logex.Walk do
 
   defp own_bit({:name, _, bit}), do: bit
   defp own_bit({:bit, _, [_container], _n, _mask, _name} = bit), do: bit_name(bit)
+  defp own_bit({:bit, _, {:element, _, _, _, _}, _n, _mask, _name} = bit), do: bit_name(bit)
   defp own_bit({:element, _, _array, _index, _name} = element), do: bit_name(element)
   defp own_bit(_member), do: nil
 
@@ -194,6 +209,15 @@ defmodule Logex.Walk do
   alone.
   """
   def bit_writes(%Program{} = program), do: reach(program, &bits_written/2)
+
+  @doc """
+  Which elements of its arrays `program` writes (decision 221): each element an operand in
+  a `:write` slot names, by its subscripts' values, `g[1]`, a bit of one, `g[1].3` or
+  `g[1].[n]`, a write of its element, to the lines of its writes, in rung order, as
+  `bit_writes/1` gives a bit's. `Logex.Configuration.check/1` reads it, for the writers of
+  a global array element by element (decision 48).
+  """
+  def element_writes(%Program{} = program), do: reach(program, &elements_written/2)
 
   @doc """
   Which timers `program` runs: each timer a `ton` runs, or since M3-2 a `tof`, a `tp` or an `rto`, to
@@ -320,7 +344,26 @@ defmodule Logex.Walk do
     |> Map.new(fn {path, lines} -> {path, Enum.reverse(lines)} end)
   end
 
+  defp elements_written(instructions, tags) do
+    instructions
+    |> Enum.flat_map(fn {_symbol, line, operands} = instruction ->
+      for {{:write, _type}, operand} <- Enum.zip(Compiler.signature(instruction, tags), operands),
+          element = element_of(operand),
+          do: {bit_name(element), line}
+    end)
+    |> Enum.reduce(%{}, fn {path, line}, writes ->
+      Map.update(writes, path, [line], &[line | &1])
+    end)
+    |> Map.new(fn {path, lines} -> {path, Enum.reverse(lines)} end)
+  end
+
+  defp element_of({:element, _, _, _, _} = element), do: element
+  defp element_of({:bit, _, {:element, _, _, _, _} = element, _, _, _}), do: element
+  defp element_of({:bit_at, _, {:element, _, _, _, _} = element, _, _, _}), do: element
+  defp element_of(_other), do: nil
+
   defp own_bit?({:bit, _, [_], _, _, _}), do: true
+  defp own_bit?({:bit, _, {:element, _, _, _, _}, _, _, _}), do: true
   defp own_bit?({:element, _, _, _, _}), do: true
   defp own_bit?(_other), do: false
 

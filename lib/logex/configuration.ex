@@ -112,8 +112,13 @@ defmodule Logex.Configuration do
   dimension's size; and a connection names an array var_input or var_output whole, to a
   global array of its sizes whose elements widen as a value does, or an element by literal
   subscripts, `m1.temps[3]`, as a tag of its element's type, an array var_input connected
-  whole or at every element, a constant filling an element alone. A name with brackets
-  names nothing in a configuration.
+  whole or at every element, a constant filling an element alone. Since decision 223 a
+  connection's far end may be an element of a global array, `m2.speed speeds[1]`, read or
+  driven as a global of its elements' type, widening as a global does, one connection at
+  most driving each element and one that drives the array whole driving them all, decision
+  48's writer warnings element by element. Since decision 227 a real initial value a
+  `var_global` line writes with more digits than its real keeps is warned of, in decision
+  219's words, at its line. A name with brackets names nothing else in a configuration.
 
   A mistake no configuration text can make is the host's, and `check/1` raises it as one
   `ArgumentError`, every such mistake a line each (decision 36), as
@@ -450,7 +455,8 @@ defmodule Logex.Configuration do
   def compile(name, source, programs) when is_binary(source) do
     {_programs, mistakes} = programs(programs)
     checked(configuration_name(name) ++ mistakes, [])
-    compiled(Text.read(source), name, programs, {nil, [], MapSet.new()})
+    {read, rounded} = Text.read_rounded(source)
+    with_rounded(compiled(read, name, programs, {nil, [], MapSet.new()}), rounded)
   end
 
   def compile(_name, source, _programs),
@@ -459,6 +465,26 @@ defmodule Logex.Configuration do
         ArgumentError,
         "Logex.Configuration.compile/3 takes source text as a binary, got: #{inspect(source)}"
       )
+
+  # Decision 227: a configuration that compiles is told each real initial value its line
+  # writes with more digits than its global's real keeps, in decision 219's words, at the
+  # global's line, in its file, among its warnings by line.
+  defp with_rounded({:ok, config}, [_ | _] = rounded) do
+    told =
+      for {line, spelling, type, held} <- rounded,
+          do: %{
+            warning(
+              line,
+              "`#{spelling}` is more precise than #{Declarations.a_type(type)} keeps: it is " <>
+                "held as #{held}"
+            )
+            | file: config.file
+          }
+
+    {:ok, %{config | warnings: Enum.sort_by(told ++ config.warnings, &line_order/1)}}
+  end
+
+  defp with_rounded(compiled, _rounded), do: compiled
 
   @doc """
   A configuration from its configuration file on disk (`.logex`, decision 35), its program
@@ -554,7 +580,7 @@ defmodule Logex.Configuration do
   # The program types the `program` lines name, each loaded once from beside the file,
   # through one memo, and what is cited at the line of each one's first instance.
   defp loaded_file(name, source, path) do
-    read = Text.read(source)
+    {read, rounded} = Text.read_rounded(source)
     types = program_types(read)
     file = &Path.join(Path.dirname(path), &1 <> ".ld")
     {found, missing} = Enum.split_with(types, fn {type, _line} -> File.exists?(file.(type)) end)
@@ -572,7 +598,11 @@ defmodule Logex.Configuration do
       for {type, _line} <- types, not Map.has_key?(programs, type), into: MapSet.new(), do: type
 
     loaded = {path, Enum.reverse(cited, absent), uncited}
-    with_theirs(compiled(read, name, programs, loaded), Enum.reverse(theirs))
+
+    with_theirs(
+      with_rounded(compiled(read, name, programs, loaded), rounded),
+      Enum.reverse(theirs)
+    )
   end
 
   # Each type a `program` line names that could be a file's, once, at its first line: one
@@ -2089,7 +2119,7 @@ defmodule Logex.Configuration do
     {wiring, problems} =
       Enum.reduce(
         connections,
-        {%{inputs: inputs, driven: %{}, used: MapSet.new()}, []},
+        {%{inputs: inputs, driven: %{}, parts: %{}, used: MapSet.new()}, []},
         &connect(&1, &2, world)
       )
 
@@ -2151,8 +2181,9 @@ defmodule Logex.Configuration do
       "no #{noun(kind)} `#{name}`: `#{name}` is a keyword of a configuration file, and " <>
         "nothing in one is named so"
 
-  # M5-11: a name with a subscript, `ws[0]`, where a global is wanted names no global,
-  # which is named whole (provisional reading 8), and no line declares one so.
+  # M5-11: a name with a subscript, `ws[0]`, where a global is wanted whole, a task's
+  # single, names no global (provisional reading 8), and no line declares one so; a
+  # connection's far end takes an element since decision 223 (element_global/4).
   defp unnamed(false, :global, name, world, type),
     do: subscripted(String.split(name, "[", parts: 2), name, world, type)
 
@@ -2514,8 +2545,11 @@ defmodule Logex.Configuration do
   defp widens?(from, to) when is_array(from) or is_array(to), do: false
   defp widens?(from, to), do: Declarations.widens?(from, to)
 
+  # An element of a global array, `speeds[1]`, is a use of its array (decision 223).
   defp used({wiring, problems}, global),
-    do: {%{wiring | used: MapSet.put(wiring.used, global.name)}, problems}
+    do: {%{wiring | used: MapSet.put(wiring.used, array_of(global.name))}, problems}
+
+  defp array_of(name), do: hd(:binary.split(name, "["))
 
   defp same_type(true, _types, _ends, acc), do: acc
 
@@ -2562,7 +2596,95 @@ defmodule Logex.Configuration do
   defp global_held({kind, line, _ref}, name, _type, _world),
     do: {:error, "`#{name}` is #{a(kind)}#{at_line(line)}, not a global"}
 
+  # Decision 223: a connection's far end may be an element of a global array, by literal
+  # subscripts, `speeds[1]`, read and driven as a global of the elements' type under the
+  # element's name by its subscripts' values, at the array's line.
+  defp global_held(nil, name, type, world)
+       when binary_part(name, byte_size(name) - 1, 1) == "]",
+       do: element_global(String.split(name, "[", parts: 2), name, type, world)
+
   defp global_held(nil, name, type, world), do: {:error, no_named(:global, name, world, type)}
+
+  defp element_global([array, _subscripts], name, type, world),
+    do: global_element(Map.get(world.names, array), name, type, world)
+
+  defp element_global([_whole], name, type, world),
+    do: {:error, no_named(:global, name, world, type)}
+
+  defp global_element(
+         {:global, _line, %Global{type: {:array, etype, dims}} = global},
+         name,
+         _,
+         _
+       ),
+       do:
+         global_subscripts(
+           Enum.map(elem(Logex.Array.split(name), 1), &Logex.Array.subscript/1),
+           {global, etype, dims},
+           name
+         )
+
+  defp global_element({:global, _line, %Global{} = global}, name, _type, _world),
+    do:
+      {:error,
+       "`#{name}` names an element of `#{global.name}`, but `#{global.name}` is " <>
+         "#{Declarations.a_global(global.type)}#{where(global)}, no array"}
+
+  defp global_element(nil, name, _type, world) do
+    [array | _] = String.split(name, "[")
+
+    {:error,
+     "no global `#{name}`: there is no global array `#{array}`" <>
+       Declarations.suggest(array, world.globals, & &1, "names")}
+  end
+
+  defp global_element({kind, line, _ref}, name, _type, _world) do
+    [array | _] = String.split(name, "[")
+
+    {:error,
+     "`#{name}` names an element of `#{array}`, but `#{array}` is #{a(kind)}#{at_line(line)}, " <>
+       "not a global"}
+  end
+
+  defp global_subscripts(subscripts, {global, etype, dims}, name) do
+    tags = for {:tag, tag} <- subscripts, do: tag
+    index = for {:literal, n} <- subscripts, do: n
+    global_index(tags, index, {global, etype, dims}, name)
+  end
+
+  defp global_index([tag | _], _index, {global, _etype, dims}, name),
+    do:
+      {:error,
+       "`#{name}`'s subscript `#{tag}` is a tag's name: a connection names an element of a " <>
+         "global by literal subscripts, as in `#{global.name}[#{zeros(dims)}]`"}
+
+  defp global_index([], index, {global, _etype, dims}, name) when length(index) != length(dims),
+    do:
+      {:error,
+       "`#{name}` names an element of `#{global.name}`, " <>
+         "#{Declarations.a_global(global.type)}#{where(global)}, by #{length(index)} " <>
+         "subscript#{plural(length(index))}, where it takes #{length(dims)}, one a dimension, " <>
+         "as in `#{global.name}[#{zeros(dims)}]`"}
+
+  defp global_index([], index, {global, etype, dims}, name),
+    do:
+      global_in_bounds(
+        Enum.find(Enum.zip(index, dims), fn {i, n} -> i < 0 or i >= n end),
+        index,
+        {global, etype},
+        name
+      )
+
+  defp global_in_bounds(nil, index, {%Global{} = global, etype}, _name),
+    do: {:ok, %Global{global | name: Logex.Array.name(global.name, index), type: etype}}
+
+  defp global_in_bounds({i, n}, _index, {global, _etype}, name),
+    do:
+      {:error,
+       "`#{name}`'s subscript `#{i}` is outside 0 to #{n - 1}: `#{global.name}` is " <>
+         "#{Declarations.a_global(global.type)}#{where(global)}"}
+
+  defp zeros(dims), do: Enum.map_join(dims, ",", fn _ -> 0 end)
 
   # A name with `.` parts: a location a global is at reads as that location first, written
   # another way or not, whatever its device is called, since a device may share an
@@ -2665,10 +2787,51 @@ defmodule Logex.Configuration do
     do: same_type(false, {tag.type, global.type}, {global, connection, tag}, acc)
 
   defp typed_sink(true, global, connection, _tag, {wiring, _problems} = acc),
-    do: driver(Map.get(wiring.driven, global.name), global, connection, acc)
+    do: driver(first_driver(wiring, global.name), global, connection, acc)
+
+  # Decision 223: one connection at most drives each element of a global array, and one
+  # that drives the array whole drives every element: an element's first driver is its own
+  # or its array's, and an array's its own or that of any element of it, kept in `parts`.
+  defp first_driver(wiring, name),
+    do: driven_by(Map.get(wiring.driven, name), :binary.split(name, "["), wiring)
+
+  defp driven_by(nil, [array, _subscripts], wiring),
+    do: whole_driver(Map.get(wiring.driven, array), array)
+
+  defp driven_by(nil, [array], wiring), do: part_driver(Map.get(wiring.parts, array), array)
+  defp driven_by(first, _name, _wiring), do: first
+
+  defp whole_driver(nil, _array), do: nil
+  defp whole_driver(first, array), do: {:whole, first, array}
+
+  defp part_driver(nil, _array), do: nil
+  defp part_driver({element, first}, _array), do: {:part, first, element}
 
   defp driver(nil, global, connection, {wiring, problems}),
-    do: {%{wiring | driven: Map.put(wiring.driven, global.name, connection)}, problems}
+    do:
+      {%{
+         wiring
+         | driven: Map.put(wiring.driven, global.name, connection),
+           parts: driven_part(:binary.split(global.name, "["), global.name, connection, wiring)
+       }, problems}
+
+  defp driver({:whole, first, array}, global, connection, acc),
+    do:
+      problem(
+        acc,
+        connection,
+        "`#{global.name}` is already driven by `#{first.instance}.#{first.member}`" <>
+          "#{where(first)}, which drives `#{array}` whole: one connection drives each element"
+      )
+
+  defp driver({:part, first, element}, global, connection, acc),
+    do:
+      problem(
+        acc,
+        connection,
+        "`#{global.name}` is already driven at its element `#{element}`, by " <>
+          "`#{first.instance}.#{first.member}`#{where(first)}: one connection drives each element"
+      )
 
   defp driver(first, global, connection, acc),
     do:
@@ -2678,6 +2841,11 @@ defmodule Logex.Configuration do
         "`#{global.name}` is already driven by `#{first.instance}.#{first.member}`" <>
           "#{where(first)}"
       )
+
+  defp driven_part([array, _subscripts], element, connection, wiring),
+    do: Map.put_new(wiring.parts, array, {element, connection})
+
+  defp driven_part([_whole], _name, _connection, wiring), do: wiring.parts
 
   # Decision 7: every var_input is connected, to a global, a point or a constant. An
   # instance that leaves any unconnected is told them all, in the program's declaration
@@ -2793,7 +2961,9 @@ defmodule Logex.Configuration do
 
   # What a write through a var_external writes: its global, or, for an array, each element
   # the program writes, by its subscripts' values, `g[1]`, since a scan copies the array
-  # in and out whole and so two instances that write different elements each keep theirs.
+  # in and out whole and so two instances that write different elements each keep theirs;
+  # since decision 221 a write of a bit of an element is its element's, as a bit of a word
+  # global is the word's.
   defp written_of(%Tag{name: name, type: type}, elements) when is_array(type),
     do: for({element, _lines} <- elements, element_of?(element, name), do: element)
 
@@ -2808,7 +2978,7 @@ defmodule Logex.Configuration do
     {%{
        externals: for(%Tag{section: :var_external} = tag <- declared(program), do: tag),
        writes: Walk.writes(program),
-       elements: Walk.bit_writes(program),
+       elements: Walk.element_writes(program),
        bits:
          Map.new(Walk.storage_bits(program.rungs), fn {bit, _line, symbol} -> {bit, symbol} end)
      }, true}
@@ -2964,11 +3134,21 @@ defmodule Logex.Configuration do
 
     connected =
       for {written, global, instance, _bit} <- writers,
-          {:ok, connection} <- [Map.fetch(driven, global)],
+          {:ok, connection} <- [driven_at(driven, written, global)],
           do: connected(written, instance, connection, Map.get(bits, written))
 
     twice ++ connected
   end
+
+  # Decision 223: an element a var_external writes is driven where a connection drives it or
+  # its array whole.
+  defp driven_at(driven, global, global), do: Map.fetch(driven, global)
+
+  defp driven_at(driven, written, global),
+    do: or_whole(Map.fetch(driven, written), driven, global)
+
+  defp or_whole(:error, driven, global), do: Map.fetch(driven, global)
+  defp or_whole(found, _driven, _global), do: found
 
   defp twice(global, instance, first, bit),
     do:

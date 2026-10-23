@@ -9070,6 +9070,257 @@ Decisions 215 and 217 confirm the readings built; 216, 218 and 219 change three.
      `1.1754944e-38` among them, of which "has more digits" was untrue; the rule is
      unchanged, `PLAN.md` M5-11's fifth question.)*
 
+
+**The answers to M5-11's questions and M5-10's three follow-ups, 2026-10-23** (`PLAN.md`
+§3, M5-10 and M5-11 and their reviews). Decisions 220, 224 and 225 confirm the readings
+built; 221, 222, 223, 226, 227 and 228 change six.
+
+220. **How big an array may be (Milestone 5),** M5-11's first question, following
+     decision 151 and M5-11's provisional reading 1. **Taken: confirmed as built** (the
+     maintainer, 2026-10-23): an array holds up to 65,536 elements in all, of any shape,
+     `int[65536]`, `int[256,256]` or `int[16,64,64]`, and one of 65,537, `int[65537]` or
+     `bool[257,256]`, is refused at its line, "an array holds 65536 at most"; what holding
+     and writing a large array costs a scan, about 0.31 ms for an `int[65536]` and 5 ms for
+     a `real[65536]` on Elixir 1.20.4 (M5-11's review), is the engineer's to weigh against a
+     task's watchdog. IEC sets no limit; Logix limits an array to 2 MB of data and says a
+     one-dimension array executes faster than two or three (1756-RM094N p.85). No code
+     changed; `array_test.exs` pins the limit in each shape.
+221. **A bit of an array element (Milestone 5),** M5-11's second question, changing
+     M5-11's provisional reading 2. A drive's fault words are `var faults word[4]`, and a
+     lamp shows bit 3 of the third, `xic faults[2].3 ote lamp`; M5-11 refused it, told to
+     move the element into a tag of its own.
+
+     **Taken: a bit of an element is allowed, a literal one, `faults[2].3`, and one a tag
+     numbers, `faults[2].[n]`, wherever the same bit of a plain tag is** (the maintainer,
+     2026-10-23). *The reading (the record's, provisional where marked):*
+     - It is read and written as the bit of a tag of the element's type is: a contact, a
+       coil, a source or destination a bool takes, a `cal` operand, its mask its element
+       type's, a signed type's top bit its sign (decision 155); a bit of a bool element,
+       `b[1].3`, is told the element "has no members", and of a real element refused as a
+       real's bit is (decision 155). Its element's subscripts are literal, until M5-12.
+     - A one-shot's storage bit and a pulse coil's bits may be a literal bit of an element,
+       `ons edge[1].0`, and never one a tag numbers, refused in decision 154's words, "a
+       one-shot's storage bit is a bool or a bit with a literal number, as in
+       `edge[1].0`".
+     - Every message quotes it as written, `faults[02].15` (decision 209), and every rule
+       keys it by its subscripts' and number's values, `faults[2].15`: the second-`ote`
+       warning between two coils on one bit of an element, between a coil on a bit and a
+       write of the element whole, `move x faults[2]`, either first (decision 207), and
+       between a coil on `faults[2].[n]`, a write of the element whole, and any other
+       coil on a bit of it (decision 212); a write of the element whole reaches every
+       storage bit kept in it; an edit that only respells `faults[2].3` as
+       `faults[02].[3]` changes no rung, and an edit's block list names the storage bit
+       `edge[1].0`, blocking it where the program that last scanned writes its element
+       whole.
+     - `Logex.Walk` reads it as a use of its array, so a write of the bit is a write of
+       the array in `writes/1`, its bit by name in `bit_writes/1`, and its element by name
+       in `element_writes/1` (new), which decision 48's writer warnings read: a bit of an
+       element written through a `var_external` is a write of that element (decision
+       223).
+     - `faults[2].[n]` with `n` out of the word's bits is decision 160's major fault, the
+       instruction doing nothing, `read` the number, and on a rung a jump skips or in a
+       block whose `cal` is false nothing is checked (decision 82).
+     - In the IR the bit's container is the element's own operand, `{:bit, line,
+       {:element, line, "faults", [2], "faults[2]"}, 3, 8, "faults[2].3"}`, and so for
+       `{:bit_at, ...}`, where a tag's or a member's container is its path (provisional),
+       so that a scan reads the element and then its bit, a tag's bit and a member's
+       scanning in what they did.
+     - *Cost:* a bit of an element reads in what a tag's bit does, 27 reductions a rung,
+       and is written in one more, 31 against 30, a two-dimension element's bit read in two
+       more and written in eight, its element's copy, and so for a bit a tag numbers
+       (pinned in `element_bit_test.exs`); a program of no element bit scans in exactly
+       what it did and compiles in what it did to two reductions.
+
+     Logix names a bit of an element so, the tag-name format `Name[Element].Bit`, its bit
+     index a tag or expression within the integer's bits (1756-PM004L p.44); IEC's partial
+     access of an element's bits is **unverified** here (Ed 3 §6.4.4.5.1). This supersedes
+     M5-11's provisional reading 2.
+222. **A host setting one element of an input array (Milestone 5),** M5-11's third
+     question, changing M5-11's provisional reading 4. An operator's panel changes one
+     step of a recipe held in `var_input steps int[10]`; M5-11 refused a key naming one
+     element, told to send the array whole.
+
+     **Taken: a host may set one element of an input array by its name, `%{"steps[3]" =>
+     5}`, the other elements keeping their values** (the maintainer, 2026-10-23). *The
+     reading (the record's, provisional where marked):*
+     - Wherever a host hands a program's inputs, `Logex.Runtime.put_inputs/3` and
+       `call/4`, and so `scan/2` and `scan/3` after them; a configuration's instances take
+       their inputs from connections, which name an element already (M5-11).
+     - The value fits the elements' type as a whole array's element must, a real element
+       its nearest value; a misfit is told by the key, "input `steps[3]` is an int: 40000
+       is outside -32768 to 32767".
+     - A key names an element where the lexer reads it as one name, its subscripts
+       numbers in any spelling a literal takes, `"steps[16#3]"` the element `steps[3]`
+       (provisional, as a rung's subscript, M5-11's provisional reading 5).
+     - A multi-dimensional array takes one subscript a dimension, `"grid[1,2]"`; a key
+       with another count, `"grid[1]"`, is refused, "input `grid[1]` names an element of
+       `grid`, an array of 2 by 3 reals (declared on line 2), by 1 subscript, where it
+       takes 2, one a dimension, as in `grid[0,0]`" (provisional: a row is no element).
+     - A subscript outside its dimension is a pinned `ArgumentError`, in the compiler's
+       words, "input `steps[10]`'s subscript 10 is outside the elements of `steps`, 0 to
+       9: `steps` is an array of 10 ints (declared on line 1)", and so is one negative; a
+       subscript that is a tag's name, `"steps[n]"`, is refused, "a host names an element
+       by numbers, as in `steps[0]`"; an element of an array that is no var_input is told
+       so, as a whole tag is.
+     - One call sets an array whole or by its elements, not both, and each element once
+       (provisional): `%{"steps" => [...], "steps[3]" => 1}` is refused, "inputs `steps`
+       and `steps[3]` each set `steps`, an array of 10 ints (declared on line 1): a call
+       sets an array whole or by its elements, not both", and `"steps[3]"` beside
+       `"steps[03]"`, "… each set `steps[3]` … a call sets each element once", rather than
+       let one of two values win by an order the host cannot see.
+     - *Cost:* the keys are looked at for an element only for a program that holds an
+       array, so any other call costs exactly what it did (`array_test.exs` pins
+       `put_inputs/3` of a bool at 76 reductions, as at `e60cc0a`), and a program of arrays
+       pays a reduction a key and four more where no key names an element.
+
+     Logix has no host contract of this kind; an HMI writes a tag or an element by its
+     name over the network (**unverified** here). IEC says nothing of it. This supersedes
+     M5-11's provisional reading 4.
+223. **An element of a global array at a connection's far end (Milestone 5),** M5-11's
+     fourth question, changing M5-11's provisional reading 8's last clause. A plant keeps
+     every line's speed in `var_global speeds int[4]`, and the second line's program reads
+     its own, `m2.speed speeds[1]`; M5-11 refused it, "no global `speeds[1]`".
+
+     **Taken: a connection's far end may be an element of a global array, read or driven
+     as a global of the element's type, widening by Figure 11** (the maintainer,
+     2026-10-23). *The reading (the record's, provisional where marked):*
+     - `m2.speed speeds[1]` copies the element into the var_input at each scan, a
+       var_output into the element after it, the rest of the array kept, and either end
+       widens by decision 159's rule, an `int` element into a `dint` var_input, a `dint`
+       var_output refused into an `int` element, told `dint_to_int`; an element of an
+       array var_input or var_output may name one too, `m1.e[0] speeds[2]`.
+     - Its subscripts are literal, one a dimension, each within it, each mistake told at
+       the connection's line: "`speeds[4]`'s subscript `4` is outside 0 to 3: `speeds` is
+       a global array of 4 ints (line 1)", "… by 2 subscripts, where it takes 1, one a
+       dimension, as in `speeds[0]`", "`speeds[n]`'s subscript `n` is a tag's name: a
+       connection names an element of a global by literal subscripts"; `x[1]` of a global
+       that is no array, "but `x` is an int global (line 2), no array", of an instance,
+       "but `m1` is an instance (line 3), not a global", and with no such global, "no
+       global `q[0]`: there is no global array `q`", with a did-you-mean (provisional
+       words). A task's `single` is still a global named whole.
+     - One connection at most drives each element, and one that drives the array whole
+       drives every element: `a.o g` and `a.s g[1]` are refused in either order, "`g[1]`
+       is already driven by `a.o` (line 3), which drives `g` whole" or "`g` is already
+       driven at its element `g[1]`, by `a.s` (line 3): one connection drives each
+       element"; two connections driving different elements, `m1.out outs[0]` and
+       `m2.out outs[1]`, are taken.
+     - The writer warnings are element by element, as M5-11's review's fix 4 made them for
+       `var_external`s (decision 48): an instance that writes `g[1]` through its
+       var_external is told of a connection that drives `g[1]` or `g` whole, and not of
+       one that drives `g[0]`; a bit of an element written so is a write of its element
+       (decision 221).
+     - An element at a far end is a use of its array, so the array is not "a global
+       nothing uses"; and an online edit that leaves an element no connection drives any
+       more reports it held by its name and value, `{:held, "speeds[1]", 3}`
+       (decisions 20 and 58, provisional: an array driven whole held whole).
+
+     IEC connects a program's variable to a global, or an element of one, by an access
+     path (Ed 3 §6.5.2.2, **unverified** here); Logix lets a tag alias an element of an
+     array, `north_tank` an alias for `tanks[0,1]` (1756-PM004L p.45), and maps a program
+     parameter to a tag or an element of one in its Program Parameters manual, which the
+     extracts do not hold (**unverified**). This supersedes M5-11's provisional reading
+     8's "a connection's far end is a global whole, never an element of a global array".
+224. **The words of decision 219's warning (Milestone 5),** M5-11's fifth question.
+     **Taken: confirmed as built** (the maintainer, 2026-10-23): "`16777217.0` is more
+     precise than a real keeps: it is held as 16777216.0", one wording for every literal
+     the rule warns, `1.1754943e-38` among them, and, since decision 227, for an initial
+     value. No code changed; `real_test.exs` pins it.
+225. **How many of an array's bad values a refusal lists (Milestone 5),** M5-11's sixth
+     question. **Taken: confirmed as built** (the maintainer, 2026-10-23): a host's, a
+     state's and an initial list's refusal lists the first ten elements outside their
+     type in the elements' order, then one line counting the rest, "input `steps` is an
+     array of 64 sints, with 54 more elements outside its type, not listed". No code
+     changed; `array_test.exs` pins it.
+226. **An integer or bool point's line in a hand-edited forces file (Milestone 5),**
+     M5-10's follow-up first question, changing decision 218's last bullet. The engineer
+     who may write `fan_hz 37.50` writes `eye_1 01` or `level 16#ff`; decision 218 kept
+     those "no force".
+
+     **Taken: an integer or bool point's line takes any number spelling the lexer reads as
+     one literal, held to the point's type** (the maintainer, 2026-10-23). *The reading:*
+     - `eye_1 01` forces the photo-eye's `bool` to 1 and `level 16#ff` the tank's `dint`
+       to 255, `1_000`, `2#1010` and `-0` taken as the lexer reads them.
+     - A value outside the type is refused as one written plainly is, "`eye_1` is a bool,
+       forced to 0 or 1, got: 2", and a real at an integer point, `level 37.50`, is told
+       it does not fit.
+     - The file stays as written until the next force or unforce, which writes the whole
+       set in plain decimal, `eye_1 1` and `level 255`, as decision 127 writes it.
+     - A value's text is still the number alone, `n 01//c` no force (M5-11's review).
+
+     Logix keeps forces in the project (1756-PM004L pp.52–53), so it offers no precedent
+     for a file (**unverified** for any file form); IEC says nothing of forcing. This
+     supersedes decision 218's "an integer or bool point's line keeps decision 140's
+     reading, its plain decimal only".
+227. **A rounded initial value (Milestone 5),** M5-10's follow-up second question,
+     changing decision 219's "a declaration's or a configuration line's initial value is
+     not looked at". `var sp real 16777217.0` declares a setpoint the `real` holds as
+     16777216.0, as `move 16777217.0 sp` does, and only the `move` was warned of.
+
+     **Taken: a rounded initial value is warned of in decision 219's words, at the
+     declaration's line** (the maintainer, 2026-10-23). *The reading (the record's,
+     provisional where marked):*
+     - Decision 219's rule, with T the tag's real type: `var sp real 16777217.0` is told
+       "`16777217.0` is more precise than a real keeps: it is held as 16777216.0" at its
+       line, `var sp real 0.1` is not; an array's initial list element by element, `var r
+       real[3] 0.1 16777217.0 0.10000000149011612` warned twice; a block's declaration
+       among its body's warnings; and a configuration's `var_global sp real 16777217.0`
+       at its line, in its file, among the configuration's warnings.
+     - *Where the spelling lives:* in the parse tree's literal leaf of the declaration
+       line, `{:real_lit, line, value}` or `{:real_lit, line, value, spelling}` (decision
+       202), which the compiler reads as it takes the declaration lines off
+       (`Logex.Warnings.initials/2`), and in a configuration file's tokens, which its
+       reader reads for its `var_global` lines
+       (`Logex.Configuration.Text.read_rounded/1`, internal). A `%Logex.Tag{}` and a
+       `%Logex.Configuration.Global{}` keep values only, as before; a block's body,
+       which keeps its source text, is read again by `Logex.Compiler.lowered?/1` for
+       them (provisional).
+     - From Elixir there is no spelling, and nothing is warned (a value no real holds is
+       refused already, M5-10's provisional reading 7).
+     - A configuration printed by `print/1` spells each real as the shortest text that
+       reads back to its value, so it reads back with no such warning; its warnings are
+       the text's, which the round trip of a printed configuration does not change.
+     - *Cost:* only a routine that holds a real tag reads its declaration lines, so a
+       program of none compiles in what it did.
+
+     IEC and Logix say nothing found of a rounded constant's warning; what Logix's editor
+     shows of one is **unverified** (1756-RM018A p.870 says only that an unsuffixed
+     immediate is a REAL).
+228. **A literal nearer 0.0 than an lreal holds (Milestone 5),** M5-10's follow-up third
+     question, changing decision 216's lreal bullet. `move 1.0e-310 big` into an `lreal`
+     was refused by the lexer, "no number logex holds", where `move 1.0e-40 speed` into a
+     `real` was refused naming the instruction and the tag.
+
+     **Taken: a real literal too near 0.0 for an lreal is refused when the program
+     compiles, in the words of the real case, naming the instruction and the tag** (the
+     maintainer, 2026-10-23): "`move` writes `1.0e-310` into `big`, an lreal: it is too
+     near 0.0 for an lreal, whose smallest above 0.0 is 2.2250738585072014e-308: it would
+     be written as 0.0". *The reading (the record's, provisional where marked):*
+     - *How the lexer reads it:* a literal whose double is subnormal, `1.0e-310`,
+       `-1.0e-320` or `4.9e-324`, is the token and leaf of that very double,
+       `{:real_lit, line, 1.0e-310}`, its spelling kept by decision 202's rule, and every
+       slot the literal rules judge refuses it through `Logex.Real.flushed?/2`, decision
+       216's one rule: `move`'s, the arithmetic's and `sqrt`'s source, a comparison's
+       literal beside an lreal tag, a conversion's source, a block's formal, a
+       declaration's initial value, a configuration global's initial value and a
+       constant.
+     - A literal no double holds but 0.0, its digits not all 0, `1.0e-400`, stays a lex
+       error at its column, "`1.0e-400` is no number logex holds: an lreal's smallest
+       above 0.0 is 2.2250738585072014e-308", since there is no value a slot could be
+       told it would be written as (provisional); 0.0 written any way, `0.0e-400`, is
+       0.0, as before.
+     - Two literals compared, `lt 1.0e-310 0.0`, are the doubles they lex as, decision
+       216's rule, and warned only as a comparison of two literals is.
+     - A forces file's `hz 1.0e-310`, read through the lexer, is now a literal and held
+       as 0.0, as decision 216's last bullet holds it, `1.0e-400` still no force.
+     - The front end's golden record is regenerated on purpose, its diff read: the
+       sources that were `{:real_small, run}` for a subnormal double now parse, and every
+       other source is unchanged.
+
+     Logix states the LREAL range as its normal values and 0.0 (1756-RM018A p.874); what
+     its editor does with such a constant is **unverified**. This supersedes decision
+     216's "a literal nearer 0.0 than [an lreal's smallest normal] is a value no real logex
+     holds, in any slot, so the lexer refuses it" for a literal a double holds.
+
 ---
 
 ## 8. Sources, and what is unverified

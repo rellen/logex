@@ -223,8 +223,10 @@ defmodule Logex.Runtime do
   range, stored as its nearest value, 16777217 in a `real` as 16777216.0, 2^128 refused
   (decision 166). Since M5-11 (decision 151) an array var_input is set whole, as a list of
   its first dimension's size, a list of lists for more dimensions, each element fitting its
-  type, a misfit a line by the element's name, `w[1,2]`; an element alone is no key a host
-  sets; and an array var_output is given as such a list. Every input problem in one call
+  type, a misfit a line by the element's name, `w[1,2]`, and since decision 222 one element
+  alone may be set by its name, `%{"steps[3]" => 5}`, every other kept, one subscript a
+  dimension, each a number within it, and one call setting an array whole or by its
+  elements, each once; and an array var_output is given as such a list. Every input problem in one call
   comes in one raise, a line each, in key order. Inputs merge into the instance, so a host
   sends only what changed. Outputs are every `var_output`.
   Time never goes backwards for an instance, and a `%Logex.Scan{}` must agree with it about
@@ -1507,14 +1509,91 @@ defmodule Logex.Runtime do
           "got: #{inspect(inputs)}"
       )
 
+  # Decision 222 (provisional): one call sets an array whole or by its elements, never both,
+  # and each element once, `"steps[3]"` and `"steps[03]"` naming one; a line an array, in
+  # name order. A program of no array has none.
+  defp clashes(%Program{tags: tags} = program, inputs) do
+    inputs
+    |> Map.keys()
+    |> Enum.flat_map(&element_index(&1, program))
+    |> Enum.group_by(&elem(&1, 0), &Tuple.delete_at(&1, 0))
+    |> Enum.sort()
+    |> Enum.flat_map(&clash(&1, Map.get(tags, elem(&1, 0)), inputs))
+  end
+
+  defp clash({array, keyed}, tag, inputs),
+    do: clash(is_map_key(inputs, array), {array, keyed}, tag)
+
+  defp clash(true, {array, keyed}, tag),
+    do: [
+      "inputs #{keyed_list([array | Enum.sort(for {_index, key} <- keyed, do: key)])} each set " <>
+        "`#{array}`, #{Declarations.a_type(tag.type)}#{on_line(tag)}: a call sets an array " <>
+        "whole or by its elements, not both"
+    ]
+
+  defp clash(false, {array, keyed}, tag),
+    do:
+      for(
+        {index, [_, _ | _] = keys} <- Enum.sort(Enum.group_by(keyed, &elem(&1, 0), &elem(&1, 1))),
+        do:
+          "inputs #{keyed_list(Enum.sort(keys))} each set `#{Logex.Array.name(array, index)}`, " <>
+            "an element of `#{array}`, #{Declarations.a_type(tag.type)}#{on_line(tag)}: a call " <>
+            "sets each element once"
+      )
+
+  defp keyed_list(keys), do: Enum.map_join(keys, " and ", &"`#{&1}`")
+
+  # An element key's array and index, its subscripts' values, where it names an element of
+  # an array var_input within its dimensions, and nothing for any other key.
+  defp element_index(key, %Program{tags: tags})
+       when is_binary(key) and not is_map_key(tags, key) and byte_size(key) > 0 and
+              binary_part(key, byte_size(key) - 1, 1) == "]",
+       do: indexed(Logex.Array.split(key), key, tags)
+
+  defp element_index(_key, _program), do: []
+
+  defp indexed({array, subscripts}, key, tags),
+    do: of_input(Map.fetch(tags, array), Logex.Lexer.tokenize(key), {array, subscripts, key})
+
+  defp indexed(nil, _key, _tags), do: []
+
+  defp of_input(
+         {:ok, %Tag{section: :var_input, type: {:array, _, dims}}},
+         {:ok, [{:name, _, key}], _line},
+         {array, subscripts, key}
+       ),
+       do: in_dims(Enum.map(subscripts, &Logex.Array.subscript/1), dims, {array, key})
+
+  defp of_input(_not_an_input, _tokens, _key), do: []
+
+  defp in_dims(subscripts, dims, {array, key}) when length(subscripts) == length(dims),
+    do: indexed_within(Enum.zip(subscripts, dims), [], {array, key})
+
+  defp in_dims(_subscripts, _dims, _key), do: []
+
+  defp indexed_within([], index, {array, key}), do: [{array, Enum.reverse(index), key}]
+
+  defp indexed_within([{{:literal, n}, dim} | rest], index, key) when n >= 0 and n < dim,
+    do: indexed_within(rest, [n | index], key)
+
+  defp indexed_within(_outside, _index, _key), do: []
+
   defp merged([], state, {env, %Program{reals: nil, arrays: nil}}, inputs),
     do: %{state | env: Map.merge(env, inputs)}
 
   # M5-11 (decision 151): an array var_input's value is a host's list, held as the tuple a
-  # state holds, each element of a real its nearest value.
-  defp merged([], state, {env, %Program{reals: reals, arrays: arrays}}, inputs)
+  # state holds, each element of a real its nearest value; and since decision 222 an
+  # element's key sets that element in its array, the rest kept, once the keys are seen to
+  # set no array twice (clashes/2).
+  defp merged([], state, {env, %Program{arrays: arrays, tags: tags} = program}, inputs)
        when arrays != nil,
-       do: %{state | env: Map.merge(env, Map.new(inputs, &as_array_input(&1, reals, arrays)))}
+       do:
+         by_element(
+           untagged(:maps.keys(inputs), tags),
+           state,
+           {env, program},
+           inputs
+         )
 
   # M5-10 (decision 166): an input into a real is the real's nearest value, an integer's
   # precision lost silently, 16,777,217 into a `real` stored as 16777216.0.
@@ -1523,6 +1602,31 @@ defmodule Logex.Runtime do
 
   defp merged(problems, _state, _env, _inputs),
     do: raise(ArgumentError, Enum.join(once(problems), "\n"))
+
+  # The keys that name no tag, an element's among them, in one recursion, a reduction a key.
+  defp untagged([], _tags), do: []
+  defp untagged([key | keys], tags) when is_map_key(tags, key), do: untagged(keys, tags)
+  defp untagged([key | keys], tags), do: [key | untagged(keys, tags)]
+
+  # No key names an element: the inputs are merged as M5-11 merged them.
+  defp by_element([], state, {env, %Program{reals: reals, arrays: arrays}}, inputs),
+    do: %{state | env: Map.merge(env, Map.new(inputs, &as_array_input(&1, reals, arrays)))}
+
+  defp by_element(elements, state, {env, program}, inputs),
+    do: elements_merged(clashes(program, inputs), {state, elements}, {env, program}, inputs)
+
+  defp elements_merged([], {state, elements}, {env, %Program{} = program}, inputs) do
+    wholes = Map.drop(inputs, elements)
+    env = Map.merge(env, Map.new(wholes, &as_array_input(&1, program.reals, program.arrays)))
+
+    %{
+      state
+      | env: Enum.reduce(Map.take(inputs, elements), env, &as_element_input(&1, &2, program))
+    }
+  end
+
+  defp elements_merged(clashes, _state, _env, _inputs),
+    do: raise(ArgumentError, Enum.join(clashes, "\n"))
 
   # A refusal lists the names a key could have been once, on the first line that needs
   # them: each line that does gives its key and a function that lists them, so that n
@@ -1541,11 +1645,11 @@ defmodule Logex.Runtime do
   defp problem(key, value, %Program{tags: tags} = program),
     do: declared(Map.fetch(tags, key), key, value, program)
 
-  # M5-11: a key naming an element of an array var_input is told that a host sets the array
-  # whole (provisional).
-  defp declared(:error, key, _value, %Program{tags: tags} = program)
+  # Decision 222: a key naming an element of an array var_input, `"steps[3]"`, sets that
+  # element, its value fitting the elements' type, the rest of the array kept.
+  defp declared(:error, key, value, %Program{tags: tags} = program)
        when binary_part(key, byte_size(key) - 1, 1) == "]",
-       do: element_key(Logex.Array.split(key), key, tags, program)
+       do: element_key(Logex.Array.split(key), {key, value}, tags, program)
 
   # A key naming no tag is told what its first part is, an instance's type itself (tag_of/2).
   defp declared(:error, key, _value, %Program{tags: tags} = program) do
@@ -1561,25 +1665,90 @@ defmodule Logex.Runtime do
       "input #{label(key)} is a #{tag.section}#{on_line(tag)}, not a var_input: " <>
         "only a var_input is set from outside"
 
-  defp element_key({array, _subscripts}, key, tags, program),
-    do: element_input(Map.fetch(tags, array), key, tags, program)
+  defp element_key({array, subscripts}, {key, value}, tags, program),
+    do: element_input(Map.fetch(tags, array), {key, subscripts, value}, tags, program)
 
-  defp element_key(nil, key, tags, program), do: element_input(:error, key, tags, program)
+  defp element_key(nil, {key, value}, tags, program),
+    do: element_input(:error, {key, [], value}, tags, program)
 
+  # A key is an element's name only where the lexer reads it as one name, its subscripts
+  # numbers a literal may spell, `"steps[16#3]"` the element `steps[3]` (provisional), one a
+  # dimension and each within it, as a rung's element is judged when the program compiles.
   defp element_input(
-         {:ok, %Tag{section: :var_input, type: {:array, _, dims} = type} = tag},
-         key,
-         _tags,
-         _program
+         {:ok, %Tag{section: :var_input, type: {:array, _, _}} = tag},
+         {key, subscripts, value},
+         tags,
+         program
        ),
-       do:
-         "input #{inspect(key)} names an element of `#{tag.name}`, #{Declarations.a_type(type)}: " <>
-           "a host sets an array var_input whole, as #{list_shape(dims)}"
+       do: one_name(Logex.Lexer.tokenize(key), {tag, key, subscripts, value}, {tags, program})
 
-  defp element_input(_not_an_input_array, key, tags, _program) do
+  defp element_input({:ok, %Tag{type: {:array, _, _}} = tag}, {key, _, _}, _tags, _program),
+    do:
+      "input #{inspect(key)} names an element of `#{tag.name}`, a #{tag.section}#{on_line(tag)}, " <>
+        "not a var_input: only a var_input is set from outside"
+
+  defp element_input(_not_an_array, {key, _, _}, tags, _program) do
     inputs = for {name, %Tag{section: :var_input}} <- tags, do: name
     hint("input #{inspect(key)} is not declared", "", inputs)
   end
+
+  defp one_name({:ok, [{:name, _, key}], _line}, {tag, key, subscripts, value}, _world),
+    do: subscripted_input(Enum.map(subscripts, &Logex.Array.subscript/1), {tag, key, value})
+
+  defp one_name(_not_one_name, {_tag, key, _subscripts, _value}, {tags, program}),
+    do: element_input(:error, {key, [], nil}, tags, program)
+
+  defp subscripted_input(subscripts, {%Tag{type: {:array, type, dims}} = tag, key, value}) do
+    count = length(subscripts)
+
+    counted_input(
+      Enum.find(subscripts, &match?({:tag, _}, &1)),
+      count == length(dims),
+      {tag, key, value},
+      {subscripts, type, dims}
+    )
+  end
+
+  defp counted_input({:tag, name}, _counted, {tag, key, _value}, {_subscripts, _type, dims}),
+    do:
+      "input `#{key}`'s subscript `#{name}` is a tag's name: a host names an element by " <>
+        "numbers, as in `#{tag.name}[#{zeros(dims)}]`"
+
+  defp counted_input(nil, false, {tag, key, _value}, {subscripts, _type, dims}),
+    do:
+      "input `#{key}` names an element of `#{tag.name}`, " <>
+        "#{Declarations.a_type(tag.type)}#{on_line(tag)}, by #{length(subscripts)} " <>
+        "#{subscripts_word(length(subscripts))}, where it takes #{length(dims)}, one a " <>
+        "dimension, as in `#{tag.name}[#{zeros(dims)}]`"
+
+  defp counted_input(nil, true, {tag, key, value}, {subscripts, type, dims}) do
+    outside =
+      subscripts
+      |> Enum.zip(dims)
+      |> Enum.with_index(1)
+      |> Enum.find(fn {{{:literal, n}, dim}, _at} -> n < 0 or n >= dim end)
+
+    within(outside, {tag, key, value}, {type, dims})
+  end
+
+  defp within(nil, {tag, key, value}, {type, _dims}),
+    do: fit(%{tag | name: key, type: type}, value)
+
+  defp within({{{:literal, n}, dim}, at}, {tag, key, _value}, {_type, dims}),
+    do:
+      "input `#{key}`'s subscript #{n} is outside #{dimension_word(length(dims), at)} " <>
+        "of `#{tag.name}`, 0 to #{dim - 1}: `#{tag.name}` is " <>
+        "#{Declarations.a_type(tag.type)}#{on_line(tag)}"
+
+  defp zeros(dims), do: Enum.map_join(dims, ",", fn _ -> 0 end)
+
+  defp subscripts_word(1), do: "subscript"
+  defp subscripts_word(_count), do: "subscripts"
+
+  defp dimension_word(1, _at), do: "the elements"
+  defp dimension_word(_dims, 1), do: "the first dimension"
+  defp dimension_word(_dims, 2), do: "the second dimension"
+  defp dimension_word(_dims, 3), do: "the third dimension"
 
   # M1-6: the host never sets anything inside an instance. A key naming a declared tag was
   # found before this, so here a key found by its first part has a `.`, and it is called a
@@ -1713,7 +1882,7 @@ defmodule Logex.Runtime do
       Enum.group_by(
         config.connections,
         &section(config, types, &1),
-        &{&1.instance, {&1.member, &1.to}}
+        &{&1.instance, {&1.member, far_end(&1.to)}}
       )
 
     points = Enum.map(config.globals, &{&1, Configuration.location(&1.at)})
@@ -1753,6 +1922,15 @@ defmodule Logex.Runtime do
     }
   end
 
+  # Decision 223: a connection's far end that is an element of a global array, `speeds[1]`,
+  # is `{:at, array, index}`, its subscripts' values, which check/1 took; any other is kept.
+  defp far_end(to) when is_binary(to) and binary_part(to, byte_size(to) - 1, 1) == "]" do
+    {array, subscripts} = Logex.Array.split(to)
+    {:at, array, Enum.map(subscripts, &literal_subscript/1)}
+  end
+
+  defp far_end(to), do: to
+
   defp some([]), do: nil
   defp some(pairs), do: Map.new(pairs)
 
@@ -1763,9 +1941,15 @@ defmodule Logex.Runtime do
   # each read from the instance's state after its scan.
   defp widened_out({instance, {member, global}} = connection, config, {types, globals}) do
     program = Map.fetch!(config.programs, Map.fetch!(types, instance))
-    %Configuration.Global{type: to} = Map.fetch!(globals, global)
-    out_of(connected_tag(program, member), connection, to)
+    out_of(connected_tag(program, member), connection, global_type(global, globals))
   end
+
+  defp global_type({:at, array, _index}, globals) do
+    %Configuration.Global{type: {:array, type, _dims}} = Map.fetch!(globals, array)
+    type
+  end
+
+  defp global_type(global, globals), do: Map.fetch!(globals, global).type
 
   defp out_of(
          {:whole, %Tag{type: {:array, from, dims}}},
@@ -2097,6 +2281,17 @@ defmodule Logex.Runtime do
 
     globals =
       Enum.reduce(Map.fetch!(wiring.copy_out, name), globals, fn
+        # Decision 223: into an element of a global array, the rest of it kept.
+        {member, {:at, array, index}}, globals ->
+          at_element(globals, {array, index}, Map.fetch!(outputs, member))
+
+        {member, {to, {:at, array, index}}}, globals ->
+          at_element(globals, {array, index}, as_real(to, Map.fetch!(outputs, member)))
+
+        {:element, from, i, to, {:at, array, index}}, globals ->
+          value = as_real(to, Logex.Array.fetch(Map.fetch!(env, from), i))
+          at_element(globals, {array, index}, value)
+
         {member, {to, global}}, globals ->
           Map.put(globals, global, as_real(to, Map.fetch!(outputs, member)))
 
@@ -2114,6 +2309,9 @@ defmodule Logex.Runtime do
      Enum.reduce(faults, [{:ran, task, name, now} | events], &[{:fault, task, name, &1} | &2])}
   end
 
+  defp at_element(globals, {array, index}, value),
+    do: %{globals | array => Logex.Array.put(Map.fetch!(globals, array), index, value)}
+
   # The globals an instance's connections copy in, each checked against its own type
   # before the copy-in, whose var_input it may widen into (decision 159), so that a value a
   # host left in a runtime it built is refused where its global is narrower than the
@@ -2124,6 +2322,10 @@ defmodule Logex.Runtime do
 
   defp misread({_member, global}, globals, declared, acc) when is_binary(global),
     do: global_fit(Map.fetch!(declared, global), Map.fetch!(globals, global), acc)
+
+  # Decision 223: an element of a global array is checked as its array.
+  defp misread({_member, {:at, array, _index}}, globals, declared, acc),
+    do: global_fit(Map.fetch!(declared, array), Map.fetch!(globals, array), acc)
 
   defp misread({_member, {:array, _dims, global}}, globals, declared, acc),
     do: global_fit(Map.fetch!(declared, global), Map.fetch!(globals, global), acc)
@@ -2176,6 +2378,9 @@ defmodule Logex.Runtime do
     do: raise(ArgumentError, lines |> Enum.sort() |> Enum.dedup() |> Enum.join("\n"))
 
   defp value(global, globals) when is_binary(global), do: Map.fetch!(globals, global)
+
+  defp value({:at, array, index}, globals),
+    do: Logex.Array.fetch(Map.fetch!(globals, array), index)
 
   defp value({:array, dims, global}, globals),
     do: Logex.Array.to_list(Map.fetch!(globals, global), dims)
@@ -2470,6 +2675,10 @@ defmodule Logex.Runtime do
 
   defp hold({symbol, _, [{:bit, _, [_], _, _, _} = bit | _]}, env) when symbol in @one_shots,
     do: mark(env, [Walk.bit_name(bit)])
+
+  defp hold({symbol, _, [{:bit, _, {:element, _, _, _, _}, _, _, _} = bit | _]}, env)
+       when symbol in @one_shots,
+       do: mark(env, [Walk.bit_name(bit)])
 
   defp hold({symbol, _, [{:element, _, _, _, _} = bit | _]}, env) when symbol in @one_shots,
     do: mark(env, [Walk.bit_name(bit)])
@@ -3096,6 +3305,13 @@ defmodule Logex.Runtime do
   defp blocked?({:bit, _, [_], _, _, _}, blocked) when map_size(blocked) == 0, do: false
 
   defp blocked?({:bit, _, [_], _, _, _} = bit, blocked),
+    do: is_map_key(blocked, Walk.bit_name(bit))
+
+  # Decision 221: so is a bit of an element, `faults[2].3`, by its name.
+  defp blocked?({:bit, _, {:element, _, _, _, _}, _, _, _}, blocked) when map_size(blocked) == 0,
+    do: false
+
+  defp blocked?({:bit, _, {:element, _, _, _, _}, _, _, _} = bit, blocked),
     do: is_map_key(blocked, Walk.bit_name(bit))
 
   defp blocked?({:bit, _, _member, _, _, _}, _blocked), do: false
@@ -3827,6 +4043,13 @@ defmodule Logex.Runtime do
 
   defp array_input(nil, input, reals), do: as_input(input, reals)
 
+  defp as_element_input({key, value}, env, program) do
+    [{array, index, _key}] = element_index(key, program)
+    {:array, type, _dims} = :maps.get(array, program.arrays)
+    stored = as_real(real_type(type), value)
+    %{env | array => Logex.Array.put(:erlang.map_get(array, env), index, stored)}
+  end
+
   defp real_type(type) when type in @reals, do: type
   defp real_type(_type), do: :none
 
@@ -3857,12 +4080,19 @@ defmodule Logex.Runtime do
   # M5-8 (decision 155): a bit of a tag or a member, 1 where its mask's bits are set in the
   # value, read in two's complement, a signed type's top bit its sign (Logex.Compiler).
   defp read(env, {:bit, _, [name], _n, mask, _name}), do: bit_set(Map.get(env, name, 0), mask)
+  # Decision 221: a bit of an element, its element read first.
+  defp read(env, {:bit, _, {:element, _, _, _, _} = element, _n, mask, _name}),
+    do: bit_set(read(env, element), mask)
+
   defp read(env, {:bit, _, path, _n, mask, _name}), do: bit_set(walk(env, path), mask)
   # M5-9 (decision 160): a bit whose number a tag holds, the number read first, as an
   # integer, and its mask computed from the width and top bit the compiler gave: one past
   # the word's bits, or below 0, is out of range, thrown to the instruction (element/3).
   defp read(env, {:bit_at, _, [name], index, {width, top}, _name}),
     do: bit_set(Map.get(env, name, 0), bit_mask(integer(read(env, index)), width, top))
+
+  defp read(env, {:bit_at, _, {:element, _, _, _, _} = element, index, {width, top}, _name}),
+    do: bit_set(read(env, element), bit_mask(integer(read(env, index)), width, top))
 
   defp read(env, {:bit_at, _, path, index, {width, top}, _name}),
     do: bit_set(walk(env, path), bit_mask(integer(read(env, index)), width, top))
@@ -3906,12 +4136,22 @@ defmodule Logex.Runtime do
   defp write(env, {:bit, _, [name], _n, mask, _name}, value),
     do: Map.put(env, name, with_bit(integer(Map.get(env, name, 0)), mask, value))
 
+  # Decision 221: a bit of an element is written into the element, the rest of its word
+  # kept, and the element into its array.
+  defp write(env, {:bit, _, {:element, _, _, _, _} = element, _n, mask, _name}, value),
+    do: write(env, element, with_bit(integer(read(env, element)), mask, value))
+
   defp write(env, {:bit, _, path, _n, mask, _name}, value),
     do: put_path(env, path, with_bit(integer(walk(env, path)), mask, value))
 
   defp write(env, {:bit_at, _, [name], index, {width, top}, _name}, value) do
     mask = bit_mask(integer(read(env, index)), width, top)
     Map.put(env, name, with_bit(integer(Map.get(env, name, 0)), mask, value))
+  end
+
+  defp write(env, {:bit_at, _, {:element, _, _, _, _} = element, index, {width, top}, _}, value) do
+    mask = bit_mask(integer(read(env, index)), width, top)
+    write(env, element, with_bit(integer(read(env, element)), mask, value))
   end
 
   defp write(env, {:bit_at, _, path, index, {width, top}, _name}, value) do

@@ -72,7 +72,10 @@ defmodule Logex.PrinterTest do
                      # the maintainer's answers of 2026-10-23: a bit of an element, a
                      # literal one or one a tag numbers, `faults[2].3` or `grid[1,2].[n]`,
                      # a lexer rule, printed as written
-                     :element_bit_name
+                     :element_bit_name,
+                     # decision 228: a real literal whose double is subnormal, `1.0e-310`,
+                     # which the lexer reads as that double and a slot refuses
+                     :subnormal_real_lit
                    ])
 
   describe "round trip" do
@@ -476,9 +479,14 @@ defmodule Logex.PrinterTest do
     {{:branches, Enum.map(pairs, &elem(&1, 0))}, ["("] ++ words ++ [")"]}
   end
 
-  defp real_leaf(line, n) do
-    x = n + :rand.uniform(8) / 8
-    word = real_spelling(x, :rand.uniform(6))
+  defp real_leaf(line, n), do: real_leaf(line, n + :rand.uniform(8) / 8, :rand.uniform(7))
+
+  # Decision 228: one draw in seven a subnormal double, its plain text.
+  defp real_leaf(line, x, 7), do: real_word(line, x * 1.0e-310, &Float.to_string/1)
+  defp real_leaf(line, x, draw), do: real_word(line, x, &real_spelling(&1, draw))
+
+  defp real_word(line, x, spelt) do
+    word = spelt.(x)
     {real_kept(Float.to_string(x) == word, line, x, word), [word]}
   end
 
@@ -679,7 +687,8 @@ defmodule Logex.PrinterTest do
 
   defp real_shapes(x, spelling),
     do:
-      if_shape(x < 0, :negative_real_lit) ++
+      if_shape(x != 0 and abs(x) < 2.2250738585072014e-308, :subnormal_real_lit) ++
+        if_shape(x < 0, :negative_real_lit) ++
         if_shape(String.contains?(String.downcase(spelling), "e"), :exponent_real_lit)
 
   defp if_shape(true, shape), do: [shape]

@@ -8133,7 +8133,14 @@ defmodule Logex.ApiContractTest do
     :restarted,
     :initial_changed,
     :resource_element,
-    :resource_whole
+    :resource_whole,
+    # The maintainer's answers of 2026-10-23: a bit of an element read and written
+    # (decision 221), a host's element key (decision 222) and an element of a global
+    # array at a connection's far end (decision 223).
+    :element_bit_read,
+    :element_bit_written,
+    :host_element,
+    :resource_far_element
   ]
 
   @ay_types %{int: {16, :signed}, dint: {32, :signed}, usint: {8, :unsigned}}
@@ -8207,11 +8214,20 @@ defmodule Logex.ApiContractTest do
   end
 
   defp ay_rung(type, dims, at) do
-    contact = pick([nil, {:go}, {:bit, ay_element(dims, "b")}])
+    contact =
+      pick([
+        nil,
+        {:go},
+        {:bit, ay_element(dims, "b")},
+        {:ebit, ay_element(dims, pick(["a", "i", "o"])), ay_bit(type)}
+      ])
 
-    case :rand.uniform(5) do
+    case :rand.uniform(6) do
       1 ->
         {:ons, contact, at, ay_element(dims, "b")}
+
+      2 ->
+        {:coil, contact, ay_element(dims, pick(["a", "o"])), ay_bit(type)}
 
       _ ->
         instructions =
@@ -8230,15 +8246,30 @@ defmodule Logex.ApiContractTest do
 
   defp ay_name({array, index}), do: "#{array}[#{Enum.join(index, ",")}]"
 
+  defp ay_bit(type), do: Enum.random(0..(elem(@ay_types[type], 0) - 1))
+
+  # Bit n of a value in its type's width, two's complement where signed, restated.
+  defp ay_bit_of(type, value, n),
+    do:
+      rem(div(Integer.mod(value, Bitwise.bsl(1, elem(@ay_types[type], 0))), Bitwise.bsl(1, n)), 2)
+
+  defp ay_with_bit(type, value, n, b),
+    do:
+      ay_wrap(type, value - ay_bit_of(type, value, n) * Bitwise.bsl(1, n) + b * Bitwise.bsl(1, n))
+
   defp ay_operand({:lit, n}), do: Integer.to_string(n)
   defp ay_operand({:el, element}), do: ay_name(element)
 
   defp ay_contact(nil), do: []
   defp ay_contact({:go}), do: ["xic go"]
   defp ay_contact({:bit, element}), do: ["xic #{ay_name(element)}"]
+  defp ay_contact({:ebit, element, n}), do: ["xic #{ay_name(element)}.#{n}"]
 
   defp ay_text({:ons, contact, at, bit}),
     do: Enum.join(ay_contact(contact) ++ ["ons edges[#{at}]", "ote #{ay_name(bit)}"], " ")
+
+  defp ay_text({:coil, contact, element, n}),
+    do: Enum.join(ay_contact(contact) ++ ["ote #{ay_name(element)}.#{n}"], " ")
 
   defp ay_text({:run, contact, instructions}),
     do:
@@ -8280,7 +8311,8 @@ defmodule Logex.ApiContractTest do
       "o" => zeros.(spec.dims["o"]),
       "b" => zeros.(spec.dims["b"]),
       "edges" => zeros.([5]),
-      "go" => 0
+      "go" => 0,
+      type: spec.type
     }
   end
 
@@ -8300,8 +8332,23 @@ defmodule Logex.ApiContractTest do
   defp ay_power(model, {:go}), do: model["go"] == 1
   defp ay_power(model, {:bit, {array, index}}), do: Map.fetch!(model[array], index) == 1
 
+  defp ay_power(model, {:ebit, {array, index}, n}) do
+    ay_reached(:element_bit_read)
+    ay_bit_of(model.type, Map.fetch!(model[array], index), n) == 1
+  end
+
   defp ay_scan(spec, model, first) do
     Enum.reduce(spec.rungs, model, fn
+      {:coil, contact, {array, index}, n}, model ->
+        ay_reached(:element_bit_written)
+        b = if ay_power(model, contact), do: 1, else: 0
+
+        put_in(
+          model,
+          [array, index],
+          ay_with_bit(spec.type, Map.fetch!(model[array], index), n, b)
+        )
+
       {:ons, contact, at, bit}, model ->
         power = ay_power(model, contact)
         stored = model["edges"][[at]] == 1
@@ -8349,9 +8396,10 @@ defmodule Logex.ApiContractTest do
   end
 
   defp ay_lone(spec, program, scans) do
-    inputs = ay_input(spec)
+    # The instance's input image starts at its zeros, which a host's element key keeps
+    # but for the element it names (decision 222).
     state = Runtime.instance(program)
-    model = ay_start(spec, inputs)
+    model = ay_start(spec, Map.new(ay_indexes(spec.dims["i"]), &{&1, 0}))
     now = 0
 
     Enum.reduce(1..scans, {state, model, now, true}, fn _scan, {state, model, now, first} ->
@@ -8397,15 +8445,27 @@ defmodule Logex.ApiContractTest do
 
         _ ->
           go = :rand.uniform(2) - 1
-          inputs = if :rand.uniform(3) == 1, do: ay_input(spec), else: model["i"]
-          ay_reached(:host_list)
-          host = %{"go" => go, "i" => ay_listed(inputs, spec.dims["i"])}
+
+          {inputs, host} =
+            case :rand.uniform(4) do
+              1 ->
+                # Decision 222: one element set by its name, every other kept.
+                ay_reached(:host_element)
+                index = pick(ay_indexes(spec.dims["i"]))
+                value = ay_value(spec.type)
+                {Map.put(model["i"], index, value), %{"go" => go, ay_name({"i", index}) => value}}
+
+              _ ->
+                ay_reached(:host_list)
+                inputs = if :rand.uniform(3) == 1, do: ay_input(spec), else: model["i"]
+                {inputs, %{"go" => go, "i" => ay_listed(inputs, spec.dims["i"])}}
+            end
 
           {outputs, state} =
             Runtime.call(program, state, host, %Scan{now: now + 10, first: first})
 
           model = ay_scan(spec, %{model | "go" => go, "i" => inputs}, first)
-          assert outputs == %{"o" => ay_listed(model["o"], spec.dims["o"])}
+          assert outputs == %{"o" => ay_listed(model["o"], spec.dims["o"])}, ay_source_text(spec)
 
           for array <- ["a", "b", "o"] do
             assert ay_tupled(ay_listed(model[array], spec.dims[array])) == state.env[array]
@@ -8427,7 +8487,7 @@ defmodule Logex.ApiContractTest do
     listed = Enum.join(Enum.map(ay_indexes(spec.dims["i"]), &inputs[&1]), " ")
 
     {connection, globals} =
-      case :rand.uniform(2) do
+      case :rand.uniform(3) do
         1 ->
           ay_reached(:resource_whole)
           {"m1.i gi\n", "var_global gi #{word} #{listed}\n"}
@@ -8437,6 +8497,17 @@ defmodule Logex.ApiContractTest do
 
           {Enum.map_join(ay_indexes(spec.dims["i"]), &"#{ay_name({"m1.i", &1})} #{inputs[&1]}\n"),
            ""}
+
+        3 ->
+          # Decision 223: each element from an element of a global array, the global's
+          # elements in reverse order.
+          ay_reached(:resource_far_element)
+          indexes = ay_indexes(spec.dims["i"])
+          reversed = Enum.join(Enum.map(Enum.reverse(indexes), &inputs[&1]), " ")
+
+          {Enum.map_join(Enum.zip(indexes, Enum.reverse(indexes)), fn {index, far} ->
+             "#{ay_name({"m1.i", index})} #{ay_name({"gi", far})}\n"
+           end), "var_global gi #{word} #{reversed}\n"}
       end
 
     text =
