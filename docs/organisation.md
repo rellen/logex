@@ -3161,7 +3161,9 @@ purpose, and its third, M5-3, the integer widths declared everywhere, `move` and
 by Figure 11 and the 56 integer conversions, the same day, and its fourth, M5-4,
 arithmetic and comparison over every integer width, the same day, and its fifth, M5-5,
 IEC's typed counters and the dint counters' IEC names, the same day, and its sixth, M5-6,
-the long timers in nanoseconds, the same day**
+the long timers in nanoseconds, the same day, and its seventh, M5-7, the based literals and
+`_` separators, the same day, and its eighth, M5-8, the bit strings, the bitwise
+instructions, literal bit access and the 76 bit-string conversions, on 2026-10-23**
 (`PLAN.md` §3, Milestone 5). A design pass on `0c55e36` answered the maintainer's request: *"More data types. 1, 2,
 4, 8 byte integers (how does IEC and vendors handle signed?), 32/64 bit reals, arrays of
 all others, what else does IEC and vendors have."* It read IEC 61131-3 Ed 2:2003 and Ed
@@ -3584,6 +3586,25 @@ addresses of its 64-bit and unsigned types in ONS, OSR and OSF (release notes), 
 need not, since a storage bit is looked up by its path. IEC defines partial access on bit
 strings only, `By.7` with `%X` omitted (Ed 3 Table 17), so a bit of an integer and a tag
 bit number are Logix's, rule 2's.
+*(Landed with M5-8, 2026-10-23, all but `status.[n]`, which is M5-9's: `byte word dword
+lword` are rows of the type table, kind `:bit_string`, 0 to 2^N − 1, Figure 11's cells for
+them read by `widens?/2`; the eight bitwise instructions compute in their destination's
+type, their slots IEC's ANY_BIT with the integers, `:any_bitwise`, each class's operands
+held together apart from the others', so a shift's count, ANY_INT, is no source; a
+comparison's slots take IEC's ANY_ELEMENTARY less its BOOL, `:any_elementary`, "a number
+or a bit string", a bit string with an integer tag refused naming both conversions; an
+arithmetic slot given a bit string is told the conversion through its own width's
+unsigned integer, `word_to_uint` before a read and `uint_to_word` after a write
+(provisional). A bit `status.3` is lowered to `{:bit, line, ["status"], 3, mask}`, the
+mask 2^n or, for a signed type's top bit, −(2^n), so that a scan reads and writes it in
+two's complement with no type looked up; a bit of a member, `t1.acc.3`, is read and, where
+its member may be, written; a one-shot's storage bit may be a bit of a tag, never of a
+member, named by its path, `status.3`, on the edit's block list and in the scan's tree as
+one leaf; `Logex.Walk.writes/1` counts a coil on a bit as a write of its word, and
+`Logex.Walk.bit_writes/1` gives each bit written, by its path, so that an edit blocks a
+word's storage bit where the word is written whole or the bit another way. `ote status.3`
+and `move x status` draw the second-`ote` warning in either order, and a write of a word
+whole is a write of each storage bit it holds.)*
 
 **Arrays** (decisions 151 to 154). `var temps real[8]`, `var grid int[4,8]`, `var cube
 int[2,3,4]`: Logix's form (PM004L pp.34–36), a count for each dimension, one to three
@@ -3664,6 +3685,9 @@ declared type carries the size (§4.5).
 *(Landed for the integers with M5-3, 2026-10-22: a point of any integer width, its value from a
 device, a host's `put_inputs/3` and a force checked by `fits?/2`, the forces file spelling
 it as the integer, a device's value outside its width a bad value that trips the runner.)*
+*(Landed for the bit strings with M5-8, 2026-10-23: a point of each, its value an integer
+from 0 to 2^N − 1, a device's 65,536, −1 or 37.5 at a `word` point a bad value that trips
+the runner, a force held to the word and spelled in the forces file as the integer.)*
 
 **An online edit** (decision 157). A tag's, member's or global's type, an array's element
 type, its dimensions and its sizes, change only with a restart, as §4.9's type rule has it
@@ -3790,6 +3814,9 @@ long timers with M5-6, the same day, alike.)*
 - *A bitwise instruction's power out is its power in*, since it cannot fail; over no
   power where a shift drops a 1, which IEC does not call an error. *(Amended by decision
   165: a shift or rotate whose count is a tag negative at run time passes no power.)*
+  *(Landed with M5-8, 2026-10-23, and so, the record's reading, for the 76 bit-string
+  conversions, each a binary transfer defined for every value, whose power out is its
+  power in where an integer conversion that does not fit passes none (provisional).)*
 - *A counter's or timer's instruction runs every typed variant of its kind*, `ton` a
   `ton_ltime`, `ctu` a `ctu_int`, its preset judged in its instance's type and unit; over
   an instruction for each variant, `ton_ltime lt 30000000000`, twelve more mnemonics in
@@ -3928,7 +3955,7 @@ suffixes.
 | `var_external` in a function block's file | refused (Milestone 2's design, §4.8) | A deliberate, reversible departure from IEC: a block takes a global through a var_input operand |
 | VAR_CONFIG, RETAIN / warm restart, forcing | target | VAR_CONFIG: when two instances need different internal initial values, and with it a warning for a global something reads and nothing writes (§4.10). RETAIN: on M1-5's `restart/3`, which landed without it (`:warm` is `:cold` until then). Forcing: a force map applied after the input latch and before the output return, in `cycle/3`. *(Input forcing comes first, in the runner, decision 117, its forces kept in a file across a crash, decision 127; output forcing waits for this.)* *(Input forcing landed with M4-5 on 2026-10-19, `Logex.Runner.force/3`, decisions 138–140; VAR_CONFIG, RETAIN and output forcing are still targets, and `:warm` is still `:cold`.)* |
 | VAR_ACCESS; a host write path | deferred | VAR_ACCESS serves IEC 61131-5 communication services. `Runtime.get/2` reads by the same path shape. A host write, if wanted, is limited to unlocated globals |
-| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap, and the typed counters and long timers with M5-5 and M5-6 the same day | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
+| Data types beyond `bool` and `dint` | **decided for Milestone 5**, 2026-10-21 (§4.12, decisions 144–160, and 161–167 answering the record's questions the same day; `PLAN.md` §3, Milestone 5); the integer widths landed with M5-3 on 2026-10-22, after M5-1's table and M5-2's wrap, the typed counters and long timers with M5-5 and M5-6 the same day, the based literals with M5-7, and the bit strings, the bitwise instructions, literal bit access and the 76 bit-string conversions with M5-8 on 2026-10-23 | IEC's eight integer widths, signed and unsigned, wrapping on overflow; `real` and `lreal`; `byte word dword lword` with `and or xor not shl shr rol ror` on bit strings and integers; bit access `x.3` and `x.[n]`; IEC's typed conversions; arrays of up to three dimensions, of instances and at I/O points; typed counters; long timers in ns. Deferred: TIME, LTIME and the dates, `T#` literals, strings, enumerations, named values, subranges, structures, typed literals, octal, references |
 | STRUCT, arrays (data hierarchy) | deferred, as a named later stage *(arrays decided for Milestone 5, 2026-10-21, decisions 151–156; STRUCT still deferred)* | Independent of the organisation model. A TON instance is logex's first structured value, and M1-6's nested state is what a STRUCT will reuse |
 | Namespaces, CLASS, METHOD, INTERFACE (Ed 3) | deferred | These are library and module tools, not runtime structure |
 | VAR_IN_OUT, VAR_TEMP, CONSTANT, user FUNCTIONs, `T#` literals | deferred | Each gets its own naming survey. Integer ms stays. *(Kept by Milestone 5, decision 158: the TIME and LTIME types and `T#` stay deferred, a preset stays a plain integer, ms for the `ton` family and ns for the long timers.)* |
@@ -7210,6 +7237,12 @@ the decisions the rest settle.
      *(Since decision 183, 2026-10-22, a literal compared with a tag is judged in the
      tag's type, the comparison's slot taking it, so `lt s 200` with an `sint` `s` is
      refused.)*
+     *(Landed for the bit strings with M5-8, 2026-10-23: a bit string compares with a bit
+     string by value, and `eq drive_status fault_code` with a word and an int is refused
+     naming `int_to_word` and `word_to_int`, while `eq drive_status 16#0004` is taken; a
+     bitwise instruction computes in its destination's type, `and drive_status 16#00ff
+     speed` with an int `speed` told `word_to_int`; `move` widens a bool and a narrower bit
+     string into a bit string by Figure 11.)*
 
 148. **Converting a real to an integer, and what the conversions are called (Milestone
      5).** The fan's speed is worked out as a `real` percentage and written to the drive
@@ -7246,6 +7279,10 @@ the decisions the rest settle.
      hide a rounding mode inside a conversion name" is kept with `real_to_int`, as
      recorded.)*
      *(The 56 integer conversions landed with M5-3, 2026-10-22; a conversion's source widens into its `from` type by Figure 11 since decision 176, and a conversion of a literal is warned since decision 178.)*
+     *(The 76 bit-string conversions landed with M5-8, 2026-10-23, two family stanzas in
+     `docs/naming.md`, `byte_to_word` and `word_to_int`, each a binary transfer, never a
+     sign extension, `int_to_dword` of −1 16#0000ffff, decisions 176 and 178 holding for
+     them as for the integers'.)*
 
 149. **How literals are written (Milestone 5).** The fan setpoint is 37.5, a mask is hex
      FF, a batch is a million boxes.
@@ -7406,6 +7443,9 @@ the decisions the rest settle.
      bitwise instruction's operands are all bit strings or all integers, a mix refused
      naming the conversion. Decision 165 gives a shift's or a rotate's count out of range
      its rule.)*
+     *(Landed with M5-8, 2026-10-23, all but `status.[n]`, decision 160's, M5-9's, as
+     §4.12's "Bit strings" says; `and`, `or`, `not`, `byte` and `word` among the new
+     reserved words, so a tag of any of those names stops compiling.)*
 156. **What types an I/O point may have, and what a device gives (Milestone 5).** The
      drive card gives the fan's speed as a 16-bit register, the analog card the eight zone
      temperatures as reals, the panel the lamp's bool.
@@ -7426,7 +7466,8 @@ the decisions the rest settle.
      range must not overlap another point. An integer point takes only an integer that
      fits; a real point a float or an integer; the forces file spells reals so that they
      read back exactly.
-     *(Landed for every integer width with M5-3, 2026-10-22.)*
+     *(Landed for every integer width with M5-3, 2026-10-22, and for the bit strings with
+     M5-8, 2026-10-23, `var_global drive_status word at drive.i.4` among them.)*
 
 157. **An online edit that changes a type or an array's size (Milestone 5).** The box
      counter's `usint` overflows at 255, so the programmer edits it to a `uint` while the
@@ -7653,6 +7694,11 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      refused when the program compiles (§4.12), and an unsigned tag is never negative.
      This amends §4.12's routine choice that a bitwise instruction's power out is its
      power in, for this one case, and decision 98's note.
+     *(Landed with M5-8, 2026-10-23: `shl` of a word 16#00ff by an int tag at −1 writes
+     16#00ff with no power and no fault, by 16 and by 40 writes 0 with its power in, `rol`
+     of a byte by 9 gives what a rotate by 1 gives, and a negative literal count is refused,
+     "`shl` shifts by the literal `-1`: a count is never negative, so a negative literal one
+     is refused" (provisional words); a count far past the width shifts nothing by itself.)*
 166. **An integer at a real I/O point (Milestone 5),** left open by §4.12. The analog
      card's driver gives a zone temperature as the integer 16,777,217 to a `real` point,
      or a host forces 10^40 onto it.

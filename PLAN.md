@@ -108,7 +108,12 @@ pinned and a based number with a second `#` named whole; and the maintainer's an
 M5-7's two questions (decisions 202 and 203, §3, M5-7) on 2026-10-23: a rung keeps a
 literal's spelling, so `16#00ff` prints back as typed and every message quotes a literal
 as written, its value still what every stage computes with, and a second `#` refused as
-built, with two more questions.
+built, with two more questions. And the eighth, M5-8, the same day: IEC's bit strings,
+`byte word dword lword`, declared everywhere an integer is, located too, with no
+arithmetic; the bitwise instructions `and or xor not shl shr rol ror` on bit strings and
+integers alike, in the destination's type; literal bit access, `status.3`, read by a
+contact and written by a coil; and the 76 bit-string conversions, binary transfers, with
+four questions put to the maintainer (§3, M5-8).
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -5771,6 +5776,152 @@ the walks' cross-type reach and the documents.
   across a restart and a fresh start; a `bool`'s bit is a pinned refusal; and the contract
   walk draws bit strings, their points, bitwise instructions and bits. The commit names
   what `and`, `or`, `not`, `byte` and `word` break. *Size L.*
+
+  **Status: DONE — landed 2026-10-23**, as six commits, each gated by the full suite's
+  exit code: the stanzas first (`c9eeeac`), `byte word dword lword`, the eight mnemonics
+  and two family stanzas, `byte_to_word` for the 12 conversions between bit strings and
+  `word_to_int` for the 64 between a bit string and an integer, with `docs/naming.md`'s
+  `wand` rows amended (decision 155); then the four types, their conversions, the
+  comparisons and the arithmetic's refusal (`c784078`); then the bitwise instructions
+  (`bb7dab7`); then literal bit access (`e46ede4`); then §4.4's plant and the contract walks
+  (`4bd5ce9`); then the documents. The words `byte word dword lword and or xor not shl shr
+  rol ror` and the 76 conversions are reserved in any case in every `.ld` file, and the
+  type words in every `.logex` file, so a program with a tag named `and`, `or`, `not`,
+  `byte` or `word`, a word an engineer may well have used for a status register or a
+  mask, stops compiling, told the word is reserved.
+
+  `Logex.Declarations`'s table gains four rows of kind `:bit_string`, 8 to 64 bits, 0 to
+  2^N − 1, a `bool` widening into each and each into a wider one by Figure 11, never
+  into or out of an integer; `convertible/0` is the integers and the bit strings, over
+  which the conversions are generated, `conversion/2` names one and `unsigned_of/1`
+  gives the unsigned integer of a bit string's width. An arithmetic slot refuses a bit
+  string, "`add` reads a number, but `status` is a word (declared on line 1): a word is
+  a bit string, not a number: convert it first, with `word_to_uint`", and one written,
+  "compute in an integer and convert the result, with `uint_to_word`"; a comparison's
+  slot is `:any_elementary`, two bit strings or two integers, a bit string beside an
+  integer tag refused naming both conversions, "`eq` compares `status`, a word …, with
+  `code`, an int …: a bit string compares only with a bit string, so convert one of them
+  first, with `int_to_word` or `word_to_int`", a literal judged by the tag's type. The 76
+  conversions are binary transfers: the source's pattern, two's complement where signed,
+  kept to the destination's width and read as its type, `int_to_dword` of −1 giving
+  16#0000ffff and `word_to_int` of 16#ffff −1, each always with power (provisional
+  below). `and or xor not` take `:any_bitwise`, all bit strings or all integers, a source
+  widening into the destination's type and any other told its conversion, computed on the
+  pattern and written in the destination's type, always with power; `shl shr rol ror`
+  take a count of `:any_int`, its own class, so a `sint` count shifts a `word`, a
+  negative literal refused, "`shl` shifts by the literal `-1`: a count is never negative,
+  so a negative literal one is refused", and at run time a shift of the width or more
+  writes 0 with power, a rotation turns by the count modulo the width, and a negative tag
+  count writes the source unshifted with no power and no fault (decision 165).
+  `status.3` is a bit of a tag or member of an integer or bit-string type: its number a
+  literal checked against the width, "`w.16` names bit 16 of `w`, a word (declared on
+  line 1), which has bits 0 to 15", a bool's refused, "which has no bits"; read and
+  written in place, every other bit kept, the top bit of a signed type its sign; a
+  one-shot's storage bit in a bit of a tag of its own, never of a member, blocked across
+  an edit by its name, `status.3`; a write of a bit a write of its word, for the writer
+  warnings, a `var_external`'s global and the input-point refusal; a coil on a bit and a
+  whole-word write of its word the second-`ote` warning, either first; and an edit that
+  changes a one-shot's rung on a bit blocks it once, as an `ons` on a bool.
+
+  The Done-when is `bit_string_test.exs`'s, rule by rule: `shr` of an `int` −2 by 1
+  32767, `rol` of a `byte` 2#1001_0001 by 1 2#0010_0011, a shift by the width 0, a
+  negative literal count refused, `shl` of a `word` 16#00ff by an `int` at −1 16#00ff with
+  no power and no fault and by 16 and 40 0 with power, `rol` of a `byte` by 9 as by 1,
+  `ror` by −3 the source with no power, every width's top bit read and written in two's
+  complement, the three refusals, the coil on a located input's bit and a
+  `var_external`'s bit, the second-`ote` warning, the edit's block and a `bool`'s bit;
+  and `end_to_end_test.exs`'s, §4.4's plant from files on disk with `var_global
+  drive_status word at drive.i.4` and a lamp program `xic status.3 ote lamp` through the
+  sim and the runner on the manual clock against an oracle that knows nothing of logex,
+  65536, −1 and 37.5 refused from the device, from `put_inputs/3` and as a force in the
+  word's words, a force of 65535 read back from the forces file across a restart and a
+  fresh start. `api_contract_test.exs`'s host walk draws the bitwise instructions and
+  bits over every integer width and bit string against an oracle restated in Elixir, its
+  reach a shift past the width, a negative count and a bit written, and its configuration
+  walk word points, read, forced, refused and read by bit, each reach held over 10 and 6
+  seeds. A bitwise scan's cost in reductions is linear and a `word` destination costs
+  within 5% of a `uint`'s; a bit read or written is linear too.
+
+  The mutation table, each judged by the full suite's exit code. The types (`c784078`): B1
+  (`bool` widening into no bit string), B2 (a `byte`'s range 0..127), B3 (`lword`'s
+  article), B4 (`conversion/2` over the integers only), B5 (a transfer's pattern read
+  signed), B6 (a conversion passing no power), B7 (the arithmetic's bit-string refusal
+  gone), B8 (the written refusal's conversion reversed), B9 (a mixed comparison taken),
+  B10 (`eq`'s slot `:any_num`), B11 (a bit string's non-integer value taken), B12 (the
+  unsigned of a width chosen signed), B13 (`word` an unsigned row), B14 (a `byte` not
+  widening into a `word`), B15 (the warnings' conversions over the integers only), B16
+  (a transfer keyed by the source's width), B17 (`:any_elementary` gone) and B18 (a mixed
+  comparison's conversions in the other order) red; B19 (`class_range/1` over every row)
+  equivalent, every class range read being an integer class's, so the code was taken
+  back. The bitwise instructions (`bb7dab7`): X1 (`and` an OR), X2 (`not` the identity), X3
+  (a negative count passing power), X4 (a negative count writing 0), X5 (a shift past the
+  width keeping bits), X6 (a rotation not taken modulo the width), X7 (`ror` turning
+  left), X8 (`not` of the unmasked pattern), X9 (a bitwise instruction passing no power),
+  X10 (no negative-literal refusal), X11 (every operand held to one class), X12 (a bit
+  string no bitwise destination), X13 (no hand-edit check of a bitwise destination), X14
+  and X15 (no all-literal warning for the binary and for `not`), X16 (a bit-string
+  destination found by its fallback, a cost only), X17 (a count of `:any_bitwise`), X18
+  (`not` writing its unmasked value), X19 (`shr` by one more) and X20 (`:any_bitwise`
+  the bit strings only) red, X16 since the test that a `word` destination costs within 5%
+  of a `uint`'s. Bit access (`e46ede4`): Y1 (bit N of an N-bit type taken), Y2 (no signed
+  top-bit mask), Y4 (a 0 clearing every other bit), Y5 (a written bit clearing its word),
+  Y6 (a bit storage bit never blocked), Y7 (a frozen block's bit storage not held), Y8
+  (the block tree's bit leaves), Y9 and Y10 (the walk's bit use and storage bit gone),
+  Y11 (a second one-shot on one bit taken), Y12 (a member's bit refused as unwritable),
+  Y13 and Y14 (the second-`ote` warning's two orders), Y15 (the storage-write warning by
+  the word), Y16 (an edit's bit storage not blocked), Y17 (an edit's report giving a
+  bit's value as 0), Y18 (an edit blocking on any write of the word), Y19 (`bit_writes/1`
+  empty), Y20 (the bit lowering's mask), Y21 (`lowered?/1` taking no bit), Y22 (the
+  width message's top bit) and Y23 (a member's bit unchecked) red, Y17 and Y21 since a
+  test of their own, the report's bit value 1 and a block body's bit held to
+  `lowered?/1`; Y3 (a bit read as `band(value, mask) == mask`) equivalent, the two
+  readings agreeing for every value in range, which the entry check holds every value to.
+  The plant and the walks (`4bd5ce9`) are tests. 1800 tests (10 doctests), up from 1753.
+
+  *Provisional readings* (the record's, the questions below the first four): (1) a
+  bit-string conversion always passes power, no pattern being out of range of another;
+  (2) the arithmetic's refusal names the unsigned integer of the bit string's width,
+  `word_to_uint`, not every integer it could be read as; (3) a comparison's slot is named
+  "a number or a bit string"; (4) a `bool` is refused as a bitwise operand, IEC's ANY_BIT
+  holding it; (5) a shift's count is an integer tag of any width or a literal, a bit
+  string refused, and a literal count of the width or more taken, writing 0; (6) a
+  bitwise instruction of literals draws the all-literal warning; (7) `status.03` is bit
+  3, its number read by its value; (8) a member's bit is read where the member is read
+  and written where logic writes the member, and refused as a one-shot's storage bit;
+  (9) a coil on a bit and a whole-word write of its word draw the second-`ote` warning in
+  either order, and another write to a word holding a one-shot's storage bit draws the
+  storage-write warning; (10) an edit blocks a one-shot on a bit where the program that
+  last scanned writes its word another way, as it does for a bool; (11) every new
+  message's words; and (12) a configuration's writer warning names no one-shot on a bit
+  of a shared word, only the word's first writer.
+
+  **Questions for the maintainer** (taken provisionally as written):
+  1. *Whether a bit-string conversion passes power always* (decision 148). A drive's
+     status `word` read 16#1234 is cut into a `byte` for a lamp panel by `word_to_byte`,
+     which writes 16#34. An integer conversion that keeps low bits passes no power, so a
+     lamp after it shows the value did not fit; a bit-string conversion keeps the low
+     bits too, but nothing about a pattern is "out of range", so logex passes power
+     always, and the lamp after `word_to_byte` stays lit. The other reading passes no
+     power where a bit above the destination's width is set, as the integer conversions
+     do. IEC's binary transfers (Ed 3 Tables 24 and 25) raise no error; Logix has no
+     bit-string types, and a value put into a narrower integer has "the upper portion of
+     the larger integer" truncated and "generates an overflow" (1756-RM018A, Data type
+     conversions, p.874).
+  2. *What a comparison's slot is called in a message.* `eq` on a `bool` is refused,
+     "`eq` reads a number or a bit string, but `b` is a bool (declared on line 1)". IEC's ANY_ELEMENTARY
+     takes more than numbers and bit strings, times and strings, which logex has not
+     landed; the other readings name it "an elementary value" or list every type word.
+  3. *Whether a `bool` may be a bitwise operand.* IEC's ANY_BIT holds BOOL, so `and a b
+     c` on three bools is IEC's AND of bools; logex refuses it, since a bool's AND is a
+     series of contacts, `xic a xic b ote c`, the ladder way, and a `bool` widens into a
+     `word` with `move`. Logix's AND takes SINT to LREAL, never a BOOL (1756-RM018A,
+     pp.494–496, its operands SINT to LREAL). The other reading takes bools as one-bit
+     strings.
+  4. *Whether a coil on a bit and a write of its whole word warn.* A conveyor's status
+     word is written by `move status_in status` and its bit 3 by `ote status.3`; whichever
+     comes later wins that bit each scan, so logex warns as for two `ote`s on one tag. The
+     other reading warns only where two coils meet one bit, as a program that builds a
+     word whole and then sets one bit is common.
 - **M5-9 · A bit number in a tag, and the major fault.** `status.[n]` (decision 160), an
   integer tag of any width, never an expression, refused on a one-shot's bit; a number
   outside the width at run time the first major fault: `%Logex.Fault{}` gains `severity`,
@@ -6333,7 +6484,10 @@ Each of these was blocked on the dialect question. Full rationale and sources in
   one name, the same commit forbids a `.` in a declared tag's name. **Members landed with
   M1-6:** `t1.dn` is a member of the timer `t1`, resolved in the compiler and lowered to
   `{:member, line, path}`; a dotted name that is not a declared member is a diagnostic;
-  `word.3`, bit access, is refused with its own message until it lands.
+  `word.3`, bit access, is refused with its own message until it lands. **Bit access
+  landed with M5-8** (2026-10-23): `status.3` is a bit of an integer or a bit string,
+  lowered to `{:bit, line, path, n, mask}`; a bit of a `bool` is refused, and a bit
+  number held in a tag waits for M5-9.
 - **Comments — `//` to end of line.** `//[^\r\n]* : skip_token.` — it must **not**
   consume the newline, or `ote a // note\note b` silently becomes one rung. Test exactly
   that. Keep `;` a lex error: it is the rung *terminator* in neutral text and reusing it
@@ -6509,7 +6663,7 @@ as of `1b1b1df` unless a cell says otherwise.
 | B6 | low | project | No CI, no `@spec`/`@moduledoc`, no mix.exs metadata, unused `:logger` | `mix.exs` | **closed** — metadata, a `@moduledoc` on `Logex.Compiler`, no `:logger`; CI is B3's |
 | B7 | nit | style | 5 `{false, env}` clauses with identical bodies; `Enum.any?(o, &(&1==true))`; intermediate list in branch reducer | `Logex.Runtime`, the evaluate clauses (was `Logex.Compiler.evaluate/2`) | open — B5's `Enum.map_reduce` took the `&(&1==true)` with it; the rest stands |
 | M1-1 | nit | IR | AST nodes were keyword-list-shaped with duplicate keys where order is the meaning; `Keyword.get/2` would silently return only the first | the `elem ->` productions | **closed** `a22bf39` — elems are `{kind, line, value}` 3-tuples, not pairs |
-| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3; bit access and arrays open, decided for Milestone 5 on 2026-10-21 (§3, M5-8, M5-9 and M5-11) |
+| §5 | nit | domain | No comments, no negative literals, no structured addressing (`Timer.DN`, `Arr[3]`) | `Logex.Lexer` (was `ladder_lexer.xrl:3`) | **partly closed** — `//` comments and the `.` lexer rule landed 2026-09-30, members with M1-6, and negative literals with M3-3, and literal bit access with M5-8 on 2026-10-23; a bit number in a tag and arrays open, decided for Milestone 5 on 2026-10-21 (§3, M5-9 and M5-11) |
 | B9 | low | surface | An Elixir-embedded `defladder` front end: studied, spiked, judged; recommendation and open decisions in `docs/defladder.md` | — | proposed; re-scoped 2026-10-01 as a one-way seed that emits a whole program as data |
 | B10 | nit | warnings | Second-`ote` warnings on one line come in map order, not rung order | `Logex.Warnings.second_otes/3` | **closed** — the uses walked in rung order; guarded by a 40-tag test in `validation_test.exs` |
 

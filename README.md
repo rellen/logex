@@ -28,8 +28,11 @@ switching every output off once, with input forcing and online edits while it ru
 configuration with mistakes in it gets every one reported with its file and line rather
 than an exception, a misspelt tag included. Its types are `bool` and IEC's eight
 integer widths, `sint` to `ulint`, signed and unsigned, with the 56 conversions between
-them (Milestone 5's M5-3). What does not exist yet: bit access, and a real type, which
-`sqrt` waits for, both decided for Milestone 5 with the other data types (below). What logex is not, a safety controller first of all,
+them (Milestone 5's M5-3), and IEC's four bit strings, `byte word dword lword`, with the
+bitwise instructions, bit access `status.3` and the 76 conversions between a bit string and
+another type (M5-8). What does not exist yet: a bit number held in a tag, `status.[n]`,
+and a real type, which `sqrt` waits for, both decided for Milestone 5 with the other data
+types (below). What logex is not, a safety controller first of all,
 is said plainly below ("What logex is not").
 `PLAN.md` is a full review of the codebase and says precisely what is missing, in what
 order it gets fixed, and why.
@@ -44,9 +47,10 @@ Source syntax today:
 - declaration lines before the first rung, one tag each: `<section> <name> <type>
   [<initial>]`, the section `var`, `var_input`, `var_output` or `var_external`, the type
   `bool`, an integer width, `sint int dint lint` signed and `usint uint udint ulint`
-  unsigned, of 8, 16, 32 and 64 bits, `ton` or a function block's name, as in
-  `var_output speed_sp dint 1200`, `var tare dint -120` or `var_input hz uint`
-  ("Integer widths", below).
+  unsigned, of 8, 16, 32 and 64 bits, a bit string, `byte word dword lword`, `ton` or a
+  function block's name, as in `var_output speed_sp dint 1200`, `var tare dint -120`,
+  `var_input hz uint` or `var mask word 16#00ff` ("Integer widths" and "Bit strings",
+  below).
   Every tag a rung uses must be declared. A `var_input` is supplied from outside and no
   instruction may write it; a tag with no initial value starts at 0. A timer, `var t1
   ton`, is declared only with `var` and with no initial value: its preset is the number on
@@ -92,8 +96,10 @@ Source syntax today:
   (bool, which only its `ton` sets), read anywhere. A function block instance's inputs
   and outputs, `s1.run`, are read anywhere too; its own `var`s are named only inside it,
   and nothing outside it writes any of its members. Members are case-sensitive, and a
-  dotted name that is not a declared member is an error. `word.3`, bit access, is
-  refused for now. No tag is declared with a `.`
+  dotted name that is not a declared member is an error. `status.3` is bit 3 of
+  `status`, an integer or a bit string, and `t1.acc.3` of a member: a bool wherever one
+  goes, read by a contact and written by a coil, its number checked against the width
+  ("Bit strings", below); a bit of a `bool` is an error. No tag is declared with a `.`
 - a newline ends a rung: LF, CRLF or a lone CR
 - `(` … `|` … `)` open, separate and close a parallel branch group
 - a label, what `jmp auto` and `lbl auto` name, is a name with no `.` parts and no
@@ -204,7 +210,7 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `ons s1` | bool tag, the storage bit, not a `var_input` | one-shot — passes power for the one scan in which the power reaching it rises, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last scan. A second `ons` on `s1` is an error, and any other write to `s1` a warning |
 | `osr s1 pulse` | two bool tags it writes, each not a `var_input`: the storage bit, then the pulse bit, which may be a member logic may write | one-shot rising, IEC's positive transition-sensing coil in the conventional set's form — sets `pulse` for the one scan in which the power reaching it rises, and clears it on every other run, never on an instance's first scan, nor on the first scan after an online edit that adds it or changes its rung; `s1` holds the power it saw last run. It passes that power on, so anything may follow it on its rung. A second `ons`, `osr` or `osf` on `s1` is an error, as is `s1` for its pulse bit too, and any other write to `s1` a warning; a second coil on `pulse`, an `ote` among them, is the second-`ote` warning |
 | `osf s1 pulse` | as `osr` | one-shot falling, IEC's negative transition-sensing coil — sets `pulse` for the one scan in which the power reaching it falls, which its run on the false rung sees, and is `osr` in every other rule |
-| `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two integers of any widths, each a tag, a member or a literal | compare by value, whatever the two types — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`, so an `sint` −1 is less than a `udint` 0; none on a false rung. A literal its tag's type cannot hold is refused, and two literals are a warning, as is a literal at its tag's type's limit whose result never changes, `ge count 0` with a `usint` `count` |
+| `eq a b` `ne a b` `lt a b` `gt a b` `le a b` `ge a b` | two integers of any widths, or two bit strings, each a tag, a member or a literal; a bit string with an integer tag is refused, naming the conversions | compare by value, whatever the two types — pass power when `a = b`, `a ≠ b`, `a < b`, `a > b`, `a ≤ b`, `a ≥ b`, so an `sint` −1 is less than a `udint` 0; none on a false rung. A literal its tag's type cannot hold is refused, and two literals are a warning, as is a literal at its tag's type's limit whose result never changes, `ge count 0` with a `usint` `count` |
 | `ton t1 5000` | a timer, then a preset of 0 to 2147483647 ms, or a long timer (`var t1 ton_ltime`, M5-6) and 0 to 9223372036854775807 ns, the unit the instance's | on-delay timer — rung power is its IN. True: `.acc` counts the milliseconds since the scan that first saw the rung true, up to `.pre`, where `.dn` is set. False: the timer resets. The preset is where `.pre` starts, when the instance starts or restarts; a `move` into `.pre` holds until then. An online edit that changes the preset moves `.pre` to it where `.pre` still holds the old one, and keeps a `.pre` that logic changed. One `ton` runs a timer, and nothing may follow it on its path: read it with `xic t1.dn` on a rung below |
 | `tof run_on 30000` | an off-delay timer (`var run_on tof`), then a preset in ms, or a `tof_ltime` and a preset in ns | off-delay timer, IEC's TOF — rung power is its IN. True: `.dn` set, `.acc` 0. The first false scan starts the delay, and `.dn` stays set until `.acc` reaches `.pre`, then drops; a true rung during the delay ends it with `.dn` still set. A new or restarted one is at rest, `.dn` 0. Read it with `xic run_on.dn` on a rung below |
 | `tp horn_pulse 3000` | a pulse timer (`var horn_pulse tp`), then a preset in ms, or a `tp_ltime` and a preset in ns | pulse timer, IEC's TP — a rising edge of its rung, never on an instance's first scan, starts a pulse on `.tt` exactly `.pre` long, whatever the rung does meanwhile, an edge during it ignored; `.dn` is set as the pulse ends and holds while the rung does. Read the pulse with `xic horn_pulse.tt` on a rung below |
@@ -214,6 +220,10 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `add a b dst` `sub a b dst` `mul a b dst` | two integer sources, each a tag, a member or a literal, of `dst`'s type or one IEC's Figure 11 widens into it, then an integer tag or member it writes, not a `var_input`; any other source is refused naming its conversion | add, subtract (`a − b`), multiply, in `dst`'s type — true: writes the result and passes power; a result outside that type wraps, keeping its low bits, in two's complement where signed (2147483647 + 1 is −2147483648 in a `dint`, 127 + 1 −128 in an `sint`, 0 − 1 255 in a `usint`), and passes no power on that scan, with no fault. False: writes nothing, passes no power. The sources are read first, so `add total flow total` runs a total on. Anything may follow on the rung: its power out is IEC's ENO |
 | `div a b dst` `mod a b dst` | as `add` | divide, truncated toward zero (`div -7 2 q` is −3), and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. A signed type's minimum divided by −1 wraps to itself, `div -2147483648 -1` to −2147483648 in a `dint`, with no power |
 | `neg a dst` `abs a dst` | a source as `add`'s, then an integer it writes; `neg` into an unsigned type is refused | negate, absolute value — as `add`, one source: a signed type's minimum, −2147483648 in a `dint`, has no positive twin, so each wraps to it itself for it, with no power |
+| `and a b dst` `or a b dst` `xor a b dst` | two sources, each a tag, a member or a literal, then a tag or member it writes, not a `var_input`: all bit strings or all integers, each source of `dst`'s type or one Figure 11 widens into it, any other refused naming its conversion | bitwise AND, OR and exclusive OR, IEC's, in `dst`'s type, on an integer its two's-complement pattern — true: writes and passes power, as it cannot fail; false: writes nothing, passes no power. Anything may follow it on the rung |
+| `not src dst` | a source, then a destination, as `and`'s | each bit of the source inverted in `dst`'s type, `not` of a `byte` 2#0000_1111 2#1111_0000 and of an `int` 0 −1 |
+| `shl src n dst` `shr src n dst` `rol src n dst` `ror src n dst` | a source and a destination as `and`'s, between them a count, an integer tag of any width or a literal, never negative | shift left or right, 0 filling, so `shr` of an `int` −2 by 1 is 32767, and rotate left or right within `dst`'s width, by `n` modulo the width — true: writes and passes power; a shift of the width or more writes 0; a tag count that is negative when the rung runs writes the source unshifted and passes **no** power, with no fault; false: writes nothing, passes no power |
+| `word_to_int a dst`, `byte_to_word a dst` and the 74 others | a source of the `from` type or one that widens into it, then a tag of the `to` type it writes; a literal source is a warning | a binary transfer between a bit string and another bit string or an integer type, never a sign extension, `int_to_dword` of −1 16#0000ffff and `word_to_int` of 16#ffff −1 — true: writes and passes power; false: writes nothing, passes no power |
 | `cal s1 a b q` | an instance of a function block, then a value for each of its var_inputs (a tag, a member or a literal of its type) and a tag for each of its var_outputs, which it writes, so not a `var_input`, in the block's declaration order | runs the instance: rung power is its EN, and passes on. True: copies `a` and `b` in, runs the block's rungs over the instance's state and copies its outputs out to `q`. False: copies nothing in or out and runs nothing, so the instance and `q` are frozen; a timer inside catches up when the block next runs. One `cal` runs an instance, and a `ton` is run by its `ton`, never by `cal` |
 | `jmp auto` | a label, a name declared nowhere | jump — true: once the rest of its rung has run, skips the rungs after its own up to the one `lbl auto` heads, which runs, and passes on the power it receives, so anything may follow it. False: skips nothing and passes no power. The label is on a later rung of the same routine: a jump back or to its own rung is refused, and a rung holds one `jmp`. A skipped rung runs nothing, so its coils hold and its counters, one-shots and timers are frozen, as in a block whose `cal` is false, a timer catching up when it next runs |
 | `lbl auto` | a label | label — first on its rung, which it names as a jump's target, and passes on the power it receives. A label names one rung of its routine, a block's body its own, and a label no `jmp` names is a warning |
@@ -260,10 +270,11 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   IEC's integer widths `sint int lint usint uint udint ulint` beside `dint` have landed,
   with based literals `16#ff` and `2#1010` and `_` between digits, `1_000` (M5-7),
   with `move` by Figure 11 and the 56 integer conversions (M5-3, "Integer widths",
-  below), and arithmetic and comparison over every width (M5-4); `real` and
-  `lreal`, with literals `37.5` and `1.5e3`; the bit
-  strings `byte word dword lword` with `and or xor not shl shr rol ror`; the rest of IEC's
-  typed conversions, `real_to_int` and `real_trunc_int` among them; bit access `word.3` and
+  below), and arithmetic and comparison over every width (M5-4), and the bit strings
+  `byte word dword lword` with `and or xor not shl shr rol ror`, bit access `word.3` and
+  the 76 bit-string conversions (M5-8, "Bit strings", below); `real` and
+  `lreal`, with literals `37.5` and `1.5e3`; the rest of IEC's
+  typed conversions, `real_to_int` and `real_trunc_int` among them; a bit number in a tag,
   `word.[n]`; arrays `var temps real[8]`, up to three dimensions, of timers and blocks
   too, and at I/O points. IEC's typed
   counters have landed, `ctu_int` and the rest, with `ctu_dint` another word for `ctu`
@@ -271,8 +282,8 @@ continuous task" and "Running a plant on the clock", below). Still to land:
   `tof_ltime`, `tp_ltime` and `rto_ltime` (M5-6, "Long timers", below). An arithmetic result past its type's limit wraps, with no
   power, in every integer width, as has landed (M5-2 and M5-4, "Arithmetic" and "Integer
   widths", below), replacing the stop at the limit the dint had until then. Each type
-  word and mnemonic becomes a reserved word, `real`, `word`, `byte`, `and`, `or` and
-  `not` among them, as `int` and the other widths already are.
+  word and mnemonic becomes a reserved word, `real` among them, as `int`, `word`, `byte`,
+  `and`, `or` and `not` already are.
 - **`sqrt`**, waiting for a real type, which Milestone 5 brings. Milestone 3 (`PLAN.md` §3, decisions 67–107 in
   [`docs/organisation.md`](docs/organisation.md) §7) has otherwise landed whole: the
   counters, the other timers, integer arithmetic, the pulse coils and the forward jump
@@ -1028,6 +1039,119 @@ line 9: `lt` compares `70000` with `hz`, a uint (declared on line 2), which neve
 - The seven new type words are reserved in any case in every `.ld` and `.logex` file, so a
   tag or a global named `int` stops compiling, and so are the 56 mnemonics in every `.ld`
   file.
+
+### Bit strings
+
+`status.ld` — a drive card's 16-bit status word, a `word`, its bit 3 the at-speed bit,
+its low byte masked off, its pattern read as an `int` code, shifted by a count the
+program is given, with a lamp that is off when the count was negative, and copied into a
+word of flags whose top bit the program latches while the drive is at speed:
+
+```
+var_input  status   word
+var_input  shift    sint
+var_output at_speed bool
+var_output low      word
+var_output code     int
+var_output moved    word
+var_output moved_ok bool
+var_output flags    word
+
+xic status.3 ote at_speed
+and status 16#00ff low
+word_to_int status code
+shl status shift moved ote moved_ok
+move status flags
+xic at_speed otl flags.15
+```
+
+`status.exs` scans it three times, gives it a status too big for a `word`, and compiles
+an `add`, an `and`, a comparison, two bits and a shift that cannot work:
+
+```elixir
+{:ok, status} = Logex.compile_file("status.ld")
+
+scan = fn state, label, inputs ->
+  state = Logex.Runtime.put_inputs(status, state, inputs)
+  {outputs, state} = Logex.Runtime.scan(status, state)
+  IO.puts("#{label}  #{inspect(outputs)}")
+  state
+end
+
+state =
+  Logex.Runtime.instance(status)
+  |> scan.("at speed, shifted by 4    ", %{"status" => 0x0008, "shift" => 4})
+  |> scan.("16#fff7, shifted by -1    ", %{"status" => 0xFFF7, "shift" => -1})
+  |> scan.("16#8000, shifted by 16    ", %{"status" => 0x8000, "shift" => 16})
+
+try do
+  Logex.Runtime.put_inputs(status, state, %{"status" => 65_536})
+rescue
+  error in ArgumentError -> IO.puts(Exception.message(error))
+end
+
+{:error, diagnostics} =
+  Logex.compile(
+    "var status word\nvar code int\nvar lamp bool\n" <>
+      "add status 1 status\nand status 16#00ff code\neq status code ote lamp\n" <>
+      "xic status.16 ote lamp\nxic lamp.0 ote lamp\nshl status -1 status",
+    name: "wrong"
+  )
+
+for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
+```
+
+```
+$ mix run status.exs
+at speed, shifted by 4      %{"at_speed" => 1, "code" => 8, "flags" => 32776, "low" => 8, "moved" => 128, "moved_ok" => 1}
+16#fff7, shifted by -1      %{"at_speed" => 0, "code" => -9, "flags" => 65527, "low" => 247, "moved" => 65527, "moved_ok" => 0}
+16#8000, shifted by 16      %{"at_speed" => 0, "code" => -32768, "flags" => 32768, "low" => 0, "moved" => 0, "moved_ok" => 1}
+input `status` is a word: 65536 is outside 0 to 65535
+line 4: `add` reads a number, but `status` is a word (declared on line 1): a word is a bit string, not a number: convert it first, with `word_to_uint`
+line 4: `add` writes a number, but `status` is a word (declared on line 1): a word is a bit string, not a number: compute in an integer and convert the result, with `uint_to_word`
+line 5: `and` computes in `code`'s type, an int, but `status` is a word (declared on line 1): a word does not widen into an int, so convert it first, with `word_to_int`
+line 6: `eq` compares `status`, a word (declared on line 1), with `code`, an int (declared on line 2): a bit string compares only with a bit string, so convert one of them first, with `int_to_word` or `word_to_int`
+line 7: `status.16` names bit 16 of `status`, a word (declared on line 1), which has bits 0 to 15
+line 8: `lamp.0` names a bit of `lamp`, a bool, which has no bits
+line 9: `shl` shifts by the literal `-1`: a count is never negative, so a negative literal one is refused
+```
+
+- IEC's four bit strings, `byte word dword lword`, of 8, 16, 32 and 64 bits, IEC's words
+  lowercased, are rows of the one type table (decisions 144 and 145), declared wherever
+  an integer is, a tag of any section, a block's member, a global, located or not, with
+  a value of 0 to 2^N − 1, a host's, a device's or a force's checked against it: "65536
+  is outside 0 to 65535". A literal for one is written as any other, `16#00ff` or
+  `2#1000` (M5-7).
+- A bit string is a pattern of bits, not a number (decision 147): `add`, `neg` and the
+  rest refuse one, told the unsigned conversion of its width, `word_to_uint` to read it
+  and `uint_to_word` to write one; `move` widens it by Figure 11, a `bool` into any bit
+  string and a `byte` into a `word`, never between a bit string and an integer. A
+  comparison takes two bit strings or two integers, a bit string with an integer tag
+  refused naming both conversions, a literal compared with either as a value of its type.
+- `and or xor not` work in their destination's type, all bit strings or all integers, a
+  source widening into it as `move`'s, an integer by its two's-complement pattern, so
+  `not` of an `int` 0 is −1 and `and` of an `sint` −1 and 16#0f is 15. `shl` and `shr`
+  fill with 0, never extending a sign, so `shr` of an `int` −2 by 1 is 32767, and a shift
+  of the width or more writes 0, the low bits of IEC's SHL and SHR; `rol` and `ror`
+  rotate within the width, by the count modulo it. The count is an integer tag of any
+  width or a literal: a negative literal is refused, and a tag that holds a negative
+  count when the rung runs writes the source unshifted and passes no power, with no fault
+  (decision 165). Every other bitwise instruction always passes power.
+- `status.3` is bit 3 of `status`, a word or an integer, a bool wherever one goes: a
+  contact reads it, a coil writes it and leaves every other bit, and an `ons`, `osr` or
+  `osf` may keep its storage bit there, as `flags.15` is latched here, the top bit of a
+  signed type its sign (decision 156). Its number is a literal, checked against the
+  width, `status.16` of a word refused; a bit of a member, `t1.acc.3`, reads as one of a
+  tag. A bit number held in a tag, `status.[n]`, has not landed.
+- The 76 conversions between a bit string and another bit string or an integer type,
+  `word_to_int`, `byte_to_word`, `int_to_dword` and the rest, are binary transfers, as
+  IEC's Tables 24 and 25 give them (decision 148): the source's bits, in two's complement
+  where signed, are kept up to the destination's width and zero-filled above it, never
+  sign-extended, so `word_to_int` of 16#ffff is −1 and `int_to_dword` of −1 16#0000ffff,
+  and each always passes power, since no pattern is out of range of another.
+- The four type words and the eight bitwise mnemonics, `and`, `or` and `not` among them,
+  and the 76 conversions are reserved in any case in every `.ld` file, and the type words
+  in every `.logex` file too, so a tag named `word` or `or` stops compiling.
 
 ### Two pulse coils
 
@@ -2884,9 +3008,9 @@ in every cycle's outputs at the value it holds.
   where IEC names the operation ("The dialect", above); there is no Structured Text,
   Function Block Diagram, SFC or Instruction List, no graphical editor, and no
   paste-compatibility with IEC's textual forms.
-- **Not everything a controller has.** One resource a configuration; bool and the eight
-  integer widths only, no real, no bit
-  strings or bit access, no arrays or structures; a jump forward only; no retained
+- **Not everything a controller has.** One resource a configuration; bool, the eight
+  integer widths and the four bit strings only, no real, no bit number held in a tag, no
+  arrays or structures; a jump forward only; no retained
   values, so a warm restart is a cold one; and forcing for inputs only, an output never
   forced.
 
