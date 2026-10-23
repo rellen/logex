@@ -505,6 +505,397 @@ defmodule Logex.BitStringTest do
     end
   end
 
+  describe "the bitwise instructions (decisions 147, 155 and 165)" do
+    # The four bit strings and the eight integer types, each a destination.
+    defp computing, do: @strings ++ Keyword.keys(@integers)
+
+    # Restated with arithmetic, not Bitwise: a value's pattern in a type's N bits, and the
+    # value that pattern is in the type, two's complement where signed.
+    defp pattern(type, value), do: Integer.mod(value, Integer.pow(2, width(type)))
+    defp valued(type, p), do: signed(kind(type), p, Integer.pow(2, width(type) - 1))
+
+    defp bits_of(p, n), do: for(i <- 0..(n - 1), do: rem(div(p, Integer.pow(2, i)), 2))
+
+    defp of_bits(bits),
+      do:
+        bits
+        |> Enum.with_index()
+        |> Enum.map(fn {b, i} -> b * Integer.pow(2, i) end)
+        |> Enum.sum()
+
+    defp both(:and, a, b), do: a * b
+    defp both(:or, a, b), do: max(a, b)
+    defp both(:xor, a, b), do: rem(a + b, 2)
+
+    defp combined(op, type, a, b) do
+      n = width(type)
+
+      valued(
+        type,
+        of_bits(
+          Enum.zip_with(
+            bits_of(pattern(type, a), n),
+            bits_of(pattern(type, b), n),
+            &both(op, &1, &2)
+          )
+        )
+      )
+    end
+
+    defp inverted(type, a),
+      do: valued(type, of_bits(Enum.map(bits_of(pattern(type, a), width(type)), &(1 - &1))))
+
+    # Decision 165 restated: a negative count leaves the source with no power; a shift of
+    # the width or more, 0; a rotate by its count modulo the width.
+    defp moved(_op, _type, a, n) when n < 0, do: {a, 0}
+
+    defp moved(op, type, a, n) do
+      w = width(type)
+      p = pattern(type, a)
+      {valued(type, moved_pattern(op, p, n, w)), 1}
+    end
+
+    defp moved_pattern(op, _p, n, w) when op in [:shl, :shr] and n >= w, do: 0
+    defp moved_pattern(:shl, p, n, w), do: Integer.mod(p * Integer.pow(2, n), Integer.pow(2, w))
+    defp moved_pattern(:shr, p, n, _w), do: div(p, Integer.pow(2, n))
+
+    defp moved_pattern(:rol, p, n, w) do
+      r = Integer.mod(n, w)
+      Integer.mod(p * Integer.pow(2, r) + div(p, Integer.pow(2, w - r)), Integer.pow(2, w))
+    end
+
+    defp moved_pattern(:ror, p, n, w) do
+      r = Integer.mod(n, w)
+      div(p, Integer.pow(2, r)) + Integer.mod(p, Integer.pow(2, r)) * Integer.pow(2, w - r)
+    end
+
+    defp samples(type) do
+      {low, high} = limits(type)
+      Enum.uniq([low, high, 0, 1, -1 |> max(low), div(high, 3), low + 5, high - 2])
+    end
+
+    test "and, or and xor compute each bit in the destination's type, and pass their power" do
+      for type <- computing(), op <- [:and, :or, :xor] do
+        p =
+          program(
+            "var_input go bool\nvar_input a #{type}\nvar_input b #{type}\n" <>
+              "var_output d #{type}\nvar_output ok bool\nxic go #{op} a b d ote ok"
+          )
+
+        for a <- samples(type), b <- samples(type) do
+          assert scan(p, %{"go" => 1, "a" => a, "b" => b}) ==
+                   %{"d" => combined(op, type, a, b), "ok" => 1},
+                 inspect({op, type, a, b})
+        end
+
+        assert scan(p, %{"go" => 0, "a" => 1, "b" => 1}) == %{"d" => 0, "ok" => 0}
+      end
+    end
+
+    test "not inverts each bit in the destination's type" do
+      for type <- computing() do
+        p =
+          program(
+            "var_input go bool\nvar_input a #{type}\nvar_output d #{type}\n" <>
+              "var_output ok bool\nxic go not a d ote ok"
+          )
+
+        for a <- samples(type),
+            do: assert(scan(p, %{"go" => 1, "a" => a}) == %{"d" => inverted(type, a), "ok" => 1})
+
+        assert scan(p, %{"go" => 0, "a" => 1}) == %{"d" => 0, "ok" => 0}
+      end
+
+      p =
+        program(
+          "var_input a byte\nvar_input i int\nvar_output b byte\nvar_output j int\nnot a b\nnot i j"
+        )
+
+      assert scan(p, %{"a" => 0b0000_1111, "i" => 0}) == %{"b" => 0b1111_0000, "j" => -1}
+    end
+
+    test "a shift or rotate moves the destination's bits by its count, decision 165's rules at every count" do
+      for type <- computing(), op <- [:shl, :shr, :rol, :ror] do
+        p =
+          program(
+            "var_input go bool\nvar_input a #{type}\nvar_input n lint\n" <>
+              "var_output d #{type}\nvar_output ok bool\nxic go #{op} a n d ote ok"
+          )
+
+        w = width(type)
+
+        for a <- samples(type), n <- Enum.uniq([-1, -w, 0, 1, 3, w - 1, w, w + 1, 2 * w + 3]) do
+          {d, ok} = moved(op, type, a, n)
+
+          assert scan(p, %{"go" => 1, "a" => a, "n" => n}) == %{"d" => d, "ok" => ok},
+                 inspect({op, type, a, n})
+        end
+
+        assert scan(p, %{"go" => 0, "a" => 1, "n" => 1}) == %{"d" => 0, "ok" => 0}
+      end
+    end
+
+    # PLAN M5-8's Done-when, each a rule a test fails without: the count read as its
+    # value, the power passed or not, and no fault.
+    test "the Done-when's shifts and rotates" do
+      run = fn text, inputs ->
+        {:ok, p} = Logex.compile(text, name: "p")
+        state = Runtime.put_inputs(p, Runtime.instance(p), inputs)
+        {outputs, state} = Runtime.scan(p, state)
+        {outputs, state.faults}
+      end
+
+      # `shr` of an int -2 by 1 gives 32767: zero fill, not a sign extension.
+      assert run.("var_input i int\nvar_output o int\nvar_output ok bool\nshr i 1 o ote ok", %{
+               "i" => -2
+             }) ==
+               {%{"o" => 32_767, "ok" => 1}, []}
+
+      # `rol` of a byte 2#1001_0001 by 1 gives 2#0010_0011, and by 9 the same.
+      assert run.(
+               "var_input b byte\nvar_output o byte\nvar_output p byte\nrol b 1 o\nrol b 9 p",
+               %{"b" => 0b1001_0001}
+             ) == {%{"o" => 0b0010_0011, "p" => 0b0010_0011}, []}
+
+      # A shift by the width gives 0.
+      assert run.(
+               "var_input b byte\nvar_output o byte\nvar_output p byte\nshl b 8 o\nshr b 8 p",
+               %{"b" => 255}
+             ) ==
+               {%{"o" => 0, "p" => 0}, []}
+
+      shl =
+        "var_input w word\nvar_input n int\nvar_output o word\nvar_output ok bool\nshl w n o ote ok"
+
+      # `shl` of a word 16#00ff by an int tag at -1 writes 16#00ff with no power and no
+      # fault; by 16 and by 40, 0 with its power in.
+      assert run.(shl, %{"w" => 0x00FF, "n" => -1}) == {%{"o" => 0x00FF, "ok" => 0}, []}
+      assert run.(shl, %{"w" => 0x00FF, "n" => 16}) == {%{"o" => 0, "ok" => 1}, []}
+      assert run.(shl, %{"w" => 0x00FF, "n" => 40}) == {%{"o" => 0, "ok" => 1}, []}
+
+      # `ror` by an int tag at -3 writes its source with no power.
+      assert run.(
+               "var_input w word\nvar_input n int\nvar_output o word\nvar_output ok bool\nror w n o ote ok",
+               %{"w" => 0x0019, "n" => -3}
+             ) == {%{"o" => 0x0019, "ok" => 0}, []}
+
+      # A count far past the width shifts everything out and rotates by its remainder,
+      # without shifting by the count itself.
+      top = Integer.pow(2, 63) - 1
+
+      assert run.(
+               "var_input b byte\nvar_input n lint\nvar_output o byte\nvar_output p byte\n" <>
+                 "shl b n o\nrol b n p",
+               %{"b" => 1, "n" => top}
+             ) == {%{"o" => 0, "p" => 0b1000_0000}, []}
+
+      # A member is a destination too, in its own type: a timer's `.pre`, a dint.
+      assert run.(
+               "var_input v dint\nvar t1 ton\nvar_input go bool\nvar_output p dint\n" <>
+                 "xic go or v 16#0f00 t1.pre\nxic go ton t1 5\nmove t1.pre p",
+               %{"v" => 1, "go" => 1}
+             ) == {%{"p" => 0x0F01}, []}
+
+      # IEC's own examples, Table 30, of a byte 2#0001_1001 by 3.
+      assert run.(
+               "var_input b byte\nvar_output l byte\nvar_output r byte\nvar_output x byte\n" <>
+                 "var_output y byte\nshl b 3 l\nshr b 3 r\nrol b 3 x\nror b 3 y",
+               %{"b" => 0b0001_1001}
+             ) ==
+               {%{"l" => 0b1100_1000, "r" => 0b0000_0011, "x" => 0b1100_1000, "y" => 0b0010_0011},
+                []}
+
+      # A negative literal count is refused when the program compiles, as written.
+      assert messages("var w word\nshl w -1 w\nrol w -1_0 w") == [
+               "`shl` shifts by the literal `-1`: a count is never negative, so a negative " <>
+                 "literal one is refused",
+               "`rol` shifts by the literal `-1_0`: a count is never negative, so a negative " <>
+                 "literal one is refused"
+             ]
+    end
+
+    test "every width's top bit is read and written in two's complement" do
+      for {type, {:signed, n}} <- @integers do
+        {low, high} = limits(type)
+
+        p =
+          program(
+            "var_input a #{type}\nvar_output top #{type}\nvar_output down #{type}\n" <>
+              "var_output flipped #{type}\nvar_output masked #{type}\nshl a #{n - 1} top\n" <>
+              "shr a #{n - 1} down\nnot a flipped\nand a #{high} masked"
+          )
+
+        assert scan(p, %{"a" => 1}) == %{
+                 "top" => low,
+                 "down" => 0,
+                 "flipped" => -2,
+                 "masked" => 1
+               }
+
+        assert scan(p, %{"a" => -1}) == %{
+                 "top" => low,
+                 "down" => 1,
+                 "flipped" => 0,
+                 "masked" => high
+               }
+
+        assert scan(p, %{"a" => low}) == %{
+                 "top" => 0,
+                 "down" => 1,
+                 "flipped" => high,
+                 "masked" => 0
+               }
+      end
+    end
+
+    # PLAN M5-8's Done-when: `and` of a word with an int destination is a pinned refusal
+    # naming what to use. Every source is of the destination's kind, widening into its type
+    # by Figure 11; a literal must be one of its values.
+    test "a source of the other kind, or one that does not widen, is refused naming its conversion" do
+      assert messages("var drive_status word\nvar speed int\nand drive_status 16#00ff speed") == [
+               "`and` computes in `speed`'s type, an int, but `drive_status` is a word " <>
+                 "(declared on line 1): a word does not widen into an int, so convert it " <>
+                 "first, with `word_to_int`"
+             ]
+
+      assert messages("var w word\nvar i int\nvar d dword\nor i 1 w\nxor d 1 w\nnot i w") == [
+               "`or` computes in `w`'s type, a word, but `i` is an int (declared on line 2): an " <>
+                 "int does not widen into a word, so convert it first, with `int_to_word`",
+               "`xor` computes in `w`'s type, a word, but `d` is a dword (declared on line 3): " <>
+                 "a dword does not widen into a word, so convert it first, with `dword_to_word`",
+               "`not` computes in `w`'s type, a word, but `i` is an int (declared on line 2): " <>
+                 "an int does not widen into a word, so convert it first, with `int_to_word`"
+             ]
+
+      assert messages("var w word\nvar b bool\nand w 65536 w\nand w b w\nand w w b") == [
+               "`and` computes in `w`'s type, a word: `65536` is outside 0 to 65535",
+               "`and` reads a bit string or an integer, but `b` is a bool (declared on line 2)",
+               "`and` writes a bit string or an integer, but `b` is a bool (declared on line 2)"
+             ]
+
+      # The count is an integer of any width, held to no other operand; a bit string is
+      # told its conversion.
+      p = program("var_input w byte\nvar_input n ulint\nvar_output o byte\nshl w n o")
+      assert scan(p, %{"w" => 1, "n" => 3}) == %{"o" => 8}
+
+      assert messages("var w word\nvar n word\nshl w n w") == [
+               "`shl` reads an integer, but `n` is a word (declared on line 2): a word is a " <>
+                 "bit string, not an integer: convert it first, with `word_to_uint`"
+             ]
+
+      p =
+        program(
+          "var_input y byte\nvar_input s sint\nvar_output w word\nvar_output i int\n" <>
+            "or y 16#0100 w\nand s -1 i"
+        )
+
+      assert scan(p, %{"y" => 0xFF, "s" => -128}) == %{"w" => 0x01FF, "i" => -128}
+    end
+
+    test "anything may follow one on its path, and a literal source is warned of" do
+      p =
+        program(
+          "var_input a word\nvar_output b word\nvar_output c word\nvar_output ok bool\n" <>
+            "and a 16#00ff b shr b 4 c ote ok"
+        )
+
+      assert scan(p, %{"a" => 0x1234}) == %{"b" => 0x34, "c" => 0x3, "ok" => 1}
+
+      {:ok, p} =
+        Logex.compile(
+          "var m byte\nand 16#0f 3 m\nor 1 2 m\nxor 1 1 m\nnot 0 m\nshl 1 3 m\nshr 8 1 m\n" <>
+            "rol 1 1 m\nror 1 1 m\nand m 1 m",
+          name: "p"
+        )
+
+      assert Enum.map(p.warnings, &{&1.line, &1.message}) == [
+               {2, "`and` reads two literals, `16#0f` and `3`: its result never changes"},
+               {3, "`or` reads two literals, `1` and `2`: its result never changes"},
+               {4, "`xor` reads two literals, `1` and `1`: its result never changes"},
+               {5, "`not` reads a literal, `0`: its result never changes"},
+               {6, "`shl` reads two literals, `1` and `3`: its result never changes"},
+               {7, "`shr` reads two literals, `8` and `1`: its result never changes"},
+               {8, "`rol` reads two literals, `1` and `1`: its result never changes"},
+               {9, "`ror` reads two literals, `1` and `1`: its result never changes"}
+             ]
+    end
+
+    # Decision 182 for a bitwise destination: a program edited by hand whose destination
+    # has no integer or bit-string type is refused where it is handed in, a line each.
+    test "a program edited by hand whose bitwise destination is no integer nor bit string is refused" do
+      {:ok, p} = Logex.compile("var w word\nvar b bool\nxic b and w 1 w", name: "p")
+      broken = %{p | tags: Map.put(p.tags, "w", %{p.tags["w"] | type: :bool})}
+
+      assert raised(fn -> Runtime.instance(broken) end) ==
+               "`p`'s `and` on line 3 computes in the type of `w`, a bool, which is no integer or " <>
+                 "bit-string type: `p` was edited by hand after it compiled"
+    end
+
+    test "each of the eight words names no tag, label or global's tag, in any case" do
+      for word <- ~w(and or xor not shl shr rol ror), shown <- [word, String.upcase(word)] do
+        assert hd(messages("var #{shown} bool\nxic #{shown} ote #{shown}")) ==
+                 "`#{shown}` is an instruction and cannot name a tag"
+      end
+    end
+
+    # The destination's type is found in the routine's table with one guard for a bit
+    # string as for an integer, so an `and` into a word costs what one into a uint does.
+    test "a bitwise instruction into a bit string costs what one into an integer does" do
+      cost = fn type ->
+        {:ok, p} =
+          Logex.compile(
+            "var_input v #{type}\nvar d #{type}\n" <> String.duplicate("and v 3 d\n", 400),
+            name: "p"
+          )
+
+        state = Runtime.put_inputs(p, Runtime.instance(p), %{"v" => 5})
+
+        Enum.min(
+          for _ <- 1..5 do
+            {:reductions, before} = Process.info(self(), :reductions)
+            Runtime.scan(p, state)
+            {:reductions, later} = Process.info(self(), :reductions)
+            later - before
+          end
+        )
+      end
+
+      ratio = cost.(:word) / cost.(:uint)
+      assert ratio < 1.05, "a word destination took #{Float.round(ratio, 2)}x a uint's reductions"
+    end
+
+    # One map lookup an instruction and one clause, so a program of 4x the bitwise
+    # instructions compiles and scans in about 4x the reductions.
+    test "a program's bitwise instructions cost linear reductions to compile and to scan" do
+      rungs = fn n ->
+        "var_input v word\nvar_input k int\nvar w word\nvar i int\n" <>
+          String.duplicate("and v 16#0f0f w\nshl w k w\nnot w w\nror k 3 i\n", n)
+      end
+
+      cost = fn n ->
+        source = rungs.(n)
+
+        Enum.min(
+          for _ <- 1..3 do
+            {:reductions, before} = Process.info(self(), :reductions)
+            {:ok, p} = Logex.compile(source, name: "p")
+
+            Runtime.scan(
+              p,
+              Runtime.put_inputs(p, Runtime.instance(p), %{"v" => 0x1234, "k" => 3})
+            )
+
+            {:reductions, later} = Process.info(self(), :reductions)
+            later - before
+          end
+        )
+      end
+
+      ratio = cost.(400) / cost.(100)
+      assert ratio < 4.8, "4x the instructions took #{Float.round(ratio, 2)}x the reductions"
+    end
+  end
+
   describe "a cal formal and a connection widen, a var_external binds exactly (decision 159)" do
     test "a `cal` operand widens into the var_input it fills, and the var_output into its tag" do
       seal =

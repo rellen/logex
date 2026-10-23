@@ -134,6 +134,10 @@ defmodule Logex.Program do
   # decision 147), each writing its last operand.
   @computing [:add, :sub, :mul, :div, :mod, :neg, :abs]
 
+  # M5-8 (decisions 147 and 155): the bitwise instructions, which compute in their
+  # destination's type too, an integer's or a bit string's, each writing its last operand.
+  @bitwise [:and, :or, :xor, :not, :shl, :shr, :rol, :ror]
+
   @doc """
   The type an arithmetic instruction computes in, its destination's, in the tag table of
   the routine that holds it: a tag's, or a member's of the built-in instance that holds
@@ -143,34 +147,52 @@ defmodule Logex.Program do
   and which `edited_by_hand/1` refuses where the program is handed in (decision 182). It is
   the one rule the runtime's scan and that check read.
   """
-  def destination({:name, _, name}, tags), do: tag_destination(Map.fetch(tags, name), name)
+  def destination(destination, tags), do: destination(destination, tags, :arithmetic)
 
-  def destination({:member, _, [instance, member]}, tags),
-    do: instance_destination(Map.fetch(tags, instance), instance, member)
+  @doc """
+  The type an instruction of `kind` computes in, its destination's, by the rule of
+  `destination/2`: `:arithmetic`, an integer type, and since M5-8 `:bitwise`, the type of
+  a bitwise instruction's destination, an integer or a bit string (decision 155), `{:error,
+  {:bits, type}}` for any other.
+  """
+  def destination({:name, _, name}, tags, kind),
+    do: tag_destination(Map.fetch(tags, name), kind)
 
-  def destination(_no_tag, _tags), do: {:error, :no_tag}
+  def destination({:member, _, [instance, member]}, tags, kind),
+    do: instance_destination(Map.fetch(tags, instance), {instance, member}, kind)
 
-  defp tag_destination({:ok, %Logex.Tag{type: type}}, name), do: integer(type, name)
-  defp tag_destination(:error, _name), do: {:error, :undeclared}
+  def destination(_no_tag, _tags, _kind), do: {:error, :no_tag}
 
-  defp instance_destination({:ok, %Logex.Tag{type: %Logex.FbType{body: nil} = type}}, i, m),
-    do: member_destination(Logex.FbType.member(type, m), type, "#{i}.#{m}")
+  defp tag_destination({:ok, %Logex.Tag{type: type}}, kind), do: computing(type, kind)
+  defp tag_destination(:error, _kind), do: {:error, :undeclared}
 
-  defp instance_destination({:ok, %Logex.Tag{type: type}}, instance, _member),
+  defp instance_destination(
+         {:ok, %Logex.Tag{type: %Logex.FbType{body: nil} = type}},
+         {_instance, member},
+         kind
+       ),
+       do: member_destination(Logex.FbType.member(type, member), type, kind)
+
+  defp instance_destination({:ok, %Logex.Tag{type: type}}, {instance, _member}, _kind),
     do: {:error, {:instance, instance, type}}
 
-  defp instance_destination(:error, instance, _member), do: {:error, {:no_instance, instance}}
+  defp instance_destination(:error, {instance, _member}, _kind),
+    do: {:error, {:no_instance, instance}}
 
-  defp member_destination({:ok, %Logex.FbType.Member{type: type}}, _owner, path),
-    do: integer(type, path)
+  defp member_destination({:ok, %Logex.FbType.Member{type: type}}, _owner, kind),
+    do: computing(type, kind)
 
-  defp member_destination(:error, owner, _path), do: {:error, {:no_member, owner}}
+  defp member_destination(:error, owner, _kind), do: {:error, {:no_member, owner}}
 
-  # The integer types, the one table's (Logex.Declarations.integers/0), read once here.
+  # The integer types, the one table's (Logex.Declarations.integers/0), read once here,
+  # and since M5-8 the bit strings, which a bitwise instruction computes in too.
   @integers Logex.Declarations.integers()
+  @bit_strings Logex.Declarations.bit_strings()
 
-  defp integer(type, _name) when type in @integers, do: {:ok, type}
-  defp integer(type, _name), do: {:error, {:type, type}}
+  defp computing(type, _kind) when type in @integers, do: {:ok, type}
+  defp computing(type, :bitwise) when type in @bit_strings, do: {:ok, type}
+  defp computing(type, :arithmetic), do: {:error, {:type, type}}
+  defp computing(type, :bitwise), do: {:error, {:bits, type}}
 
   @doc """
   Decision 197: a timer's unit, what each millisecond of the clock adds to its `acc`, for
@@ -271,7 +293,23 @@ defmodule Logex.Program do
            rest,
            at,
            {computes(
-              destination(List.last(operands), tags),
+              destination(List.last(operands), tags, :arithmetic),
+              symbol,
+              line,
+              operands,
+              where,
+              lines
+            ), called}
+         )
+
+  defp elements([{symbol, line, [_ | _] = operands} | rest], {tags, where} = at, {lines, called})
+       when symbol in @bitwise,
+       do:
+         elements(
+           rest,
+           at,
+           {computes(
+              destination(List.last(operands), tags, :bitwise),
               symbol,
               line,
               operands,
@@ -372,6 +410,9 @@ defmodule Logex.Program do
 
   defp written(destination, {:type, type}, _where),
     do: "#{shown(destination)}, #{a(type)}, which is no integer type"
+
+  defp written(destination, {:bits, type}, _where),
+    do: "#{shown(destination)}, #{a(type)}, which is no integer or bit-string type"
 
   defp written(destination, {:no_instance, instance}, where),
     do: "#{shown(destination)}, and #{declarer(where)} declares no `#{instance}`"

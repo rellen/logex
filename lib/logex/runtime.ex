@@ -311,6 +311,11 @@ defmodule Logex.Runtime do
   @divisions [:div, :mod]
   @signs [:neg, :abs]
 
+  # M5-8: the bitwise instructions of two sources (decision 155), and the shifts and
+  # rotates, whose second operand is a count (decision 165).
+  @bitwise [:and, :or, :xor]
+  @shifts [:shl, :shr, :rol, :ror]
+
   # The dint's limits, from the one table of types (M5-1): a counter of no tag's.
   @dint Declarations.range(:dint)
 
@@ -2026,6 +2031,52 @@ defmodule Logex.Runtime do
     {false, env}
   end
 
+  # M5-8: `and`, `or` and `xor` (docs/naming.md; IEC's Table 31; decision 155), on bit
+  # strings and integers alike. Energised, both sources are read, each a value of the
+  # destination's type or of one Figure 11 widens into it (decision 147), and the bitwise
+  # function of their two's-complement patterns is written in the destination's type,
+  # `bits_at/3`'s, which keeps every bit the two sources have there; it cannot fail, so the
+  # power out is the power in. De-energised, nothing is written and no power passes.
+  defp evaluate({op, line, [a, b, destination]}, {true, env}, scan) when op in @bitwise do
+    value = bitwise(op, integer(read(env, a)), integer(read(env, b)))
+    {true, write(env, destination, transfer(bits_at({op, line}, destination, scan), value))}
+  end
+
+  defp evaluate({op, _, _}, {false, env}, _scan) when op in @bitwise do
+    {false, env}
+  end
+
+  # M5-8: `not` (IEC's NOT): each bit of the source in the destination's width inverted,
+  # so `not` of a byte 2#0000_1111 is 2#1111_0000 and of an int 0 is -1.
+  defp evaluate({:not, line, [source, destination]}, {true, env}, scan) do
+    value = Bitwise.bnot(integer(read(env, source)))
+    {true, write(env, destination, transfer(bits_at({:not, line}, destination, scan), value))}
+  end
+
+  defp evaluate({:not, _, _}, {false, env}, _scan) do
+    {false, env}
+  end
+
+  # M5-8: `shl`, `shr`, `rol` and `ror` (IEC's Table 30; decision 165). Energised, the
+  # source's bits in the destination's width, its two's-complement pattern for an integer,
+  # are shifted by the count, 0 filling the end left empty, so `shr` of an int -2 by 1
+  # gives 32767, or rotated, circular within the width, the count taken modulo the width;
+  # a shift of the width or more gives 0. Each passes its power in, but for a count that is
+  # negative when the rung runs, which writes the source unshifted and passes no power,
+  # with no fault. De-energised, nothing is written and no power passes.
+  defp evaluate({op, line, [source, count, destination]}, {true, env}, scan)
+       when op in @shifts do
+    type = bits_at({op, line}, destination, scan)
+    width = Declarations.width(type)
+    pattern = low(:unsigned, width, integer(read(env, source)))
+    {power, value} = shifted(op, pattern, integer(read(env, count)), width)
+    {power, write(env, destination, transfer(type, value))}
+  end
+
+  defp evaluate({op, _, _}, {false, env}, _scan) when op in @shifts do
+    {false, env}
+  end
+
   # The on-delay timer (docs/naming.md, `ton`; docs/organisation.md §4.6). Rung power is
   # its IN. `last` is the time this `ton` last ran, energised or not (decision 5), and
   # energised, `.acc` gains `now - last`, unless `.en` shows it was not already enabled:
@@ -2474,6 +2525,40 @@ defmodule Logex.Runtime do
   defp signed(:neg, a), do: -a
   defp signed(:abs, a), do: abs(a)
 
+  # M5-8: the bitwise function of two values, on Elixir's integers, whose negatives are
+  # two's complement of any width.
+  defp bitwise(:and, a, b), do: Bitwise.band(a, b)
+  defp bitwise(:or, a, b), do: Bitwise.bor(a, b)
+  defp bitwise(:xor, a, b), do: Bitwise.bxor(a, b)
+
+  # M5-8 (decision 165): a shift or rotate of an N-bit pattern, as `{power, pattern}`: a
+  # negative count leaves it as it is with no power; a shift of N or more shifts every bit
+  # out; a rotate by its count modulo N, a right one by N less that, as a left one.
+  defp shifted(_op, pattern, count, _width) when count < 0, do: {false, pattern}
+
+  defp shifted(op, _pattern, count, width) when op in [:shl, :shr] and count >= width,
+    do: {true, 0}
+
+  defp shifted(:shl, pattern, count, width),
+    do: {true, Bitwise.band(Bitwise.bsl(pattern, count), mask(width))}
+
+  defp shifted(:shr, pattern, count, _width), do: {true, Bitwise.bsr(pattern, count)}
+
+  defp shifted(:rol, pattern, count, width),
+    do: {true, rotated(pattern, rem(count, width), width)}
+
+  defp shifted(:ror, pattern, count, width),
+    do: {true, rotated(pattern, width - rem(count, width), width)}
+
+  defp rotated(pattern, by, width),
+    do:
+      Bitwise.band(
+        Bitwise.bor(Bitwise.bsl(pattern, by), Bitwise.bsr(pattern, width - by)),
+        mask(width)
+      )
+
+  defp mask(width), do: Bitwise.bsl(1, width) - 1
+
   # M5-4 (decision 147): the type an arithmetic instruction computes in, its destination's,
   # a tag's in the routine's table or a member's of the built-in instance that holds it,
   # by the one rule `Logex.Program.destination/2`, which the entry point where a program is
@@ -2491,6 +2576,23 @@ defmodule Logex.Runtime do
     do: member_type(Map.get(tags, instance), member, {at, destination, tags})
 
   defp type_at(at, destination, %Scan{tags: tags}), do: refused_at({at, destination, tags})
+
+  # M5-8: the type a bitwise instruction computes in, its destination's, an integer's or,
+  # since decision 155, a bit string's, by the one rule `Logex.Program.destination/3` reads
+  # as `:bitwise`; a destination it does not take raises as type_at/3's does.
+  defp bits_at(at, {:name, _, name} = destination, %Scan{tags: tags}),
+    do: bits_type(Map.get(tags, name), {at, destination, tags})
+
+  defp bits_at(at, destination, %Scan{tags: tags}),
+    do: bits_refused({at, destination, tags})
+
+  defp bits_type(%Tag{type: type}, _met) when type in @integers or type in @bit_strings,
+    do: type
+
+  defp bits_type(_neither, met), do: bits_refused(met)
+
+  defp bits_refused({at, destination, tags}),
+    do: computes_in(Program.destination(destination, tags, :bitwise), at, destination)
 
   defp tag_type(%Tag{type: type}, _met) when type in @integers, do: type
   defp tag_type(_no_integer, met), do: refused_at(met)

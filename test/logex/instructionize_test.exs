@@ -110,7 +110,8 @@ defmodule Logex.InstructionizeTest do
       """
 
       # M5-3: each of the 56 integer conversions, a tag of each integer type into another;
-      # M5-8: and the 76 with a bit string at either end, 132 in all, every ordered pair.
+      # M5-8: and the 76 with a bit string at either end, 132 in all, every ordered pair;
+      # and the eight bitwise instructions.
       integers = ~w(sint int dint lint usint uint udint ulint byte word dword lword)
 
       source =
@@ -123,7 +124,10 @@ defmodule Logex.InstructionizeTest do
               from != to,
               do: "xic a #{from}_to_#{to} v_#{from} v_#{to}\n"
             )
-          )
+          ) <>
+          "and v_word v_byte v_word or v_int 3 v_int xor v_dword v_word v_dword\n" <>
+          "not v_byte v_byte shl v_word v_int v_word shr v_int 1 v_int\n" <>
+          "rol v_lword v_usint v_lword ror v_byte 9 v_byte\n"
 
       assert {:ok, %Logex.Program{rungs: rungs} = program} =
                Logex.compile(source, name: "every", types: [seal])

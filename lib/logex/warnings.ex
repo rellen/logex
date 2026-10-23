@@ -11,7 +11,8 @@ defmodule Logex.Warnings do
     is an `osr`'s or an `osf`'s storage bit, and a coil's pulse bit is written as an
     `ote` writes its tag, so a second coil on it is the second-`ote` warning;
   - a comparison of two literals (M1-6): its result never changes; since M3-3 so is an
-    arithmetic instruction whose every source is a literal, `add 2 3 x` or `neg 5 x`,
+    arithmetic instruction whose every source is a literal, `add 2 3 x` or `neg 5 x`, and
+    since M5-8 a bitwise one, `and 16#0f 3 x`, `not 0 x` or `shl 1 3 x`,
     and since decision 178 a conversion of a literal, `dint_to_sint 129 trim`; and since
     decision 187 a comparison of a tag with a literal at its type's limit whose result
     never changes, `ge count 0` with a `usint` `count`;
@@ -260,8 +261,9 @@ defmodule Logex.Warnings do
        ]
 
   # M3-3: an arithmetic instruction whose every source is a literal compiles, as IEC's
-  # ADD(2, 3) does, but its result never changes.
-  @arithmetic [:add, :sub, :mul, :div, :mod]
+  # ADD(2, 3) does, but its result never changes. Since M5-8 so does a bitwise one, a
+  # shift's count among its sources, `shl 1 3 mask` (provisional, decisions 98 and 178).
+  @arithmetic [:add, :sub, :mul, :div, :mod, :and, :or, :xor, :shl, :shr, :rol, :ror]
 
   defp constant({symbol, line, [a, b, _destination]})
        when symbol in @arithmetic and is_int_lit(a) and is_int_lit(b),
@@ -284,7 +286,7 @@ defmodule Logex.Warnings do
                  do: String.to_atom(word)
                )
 
-  @one_source [:neg, :abs] ++ @conversions
+  @one_source [:neg, :abs, :not] ++ @conversions
 
   defp constant({symbol, line, [a, _destination]}) when symbol in @one_source and is_int_lit(a),
     do: [warning(line, "`#{symbol}` reads a literal, #{shown(a)}: its result never changes")]

@@ -111,6 +111,23 @@ defmodule Logex.Compiler do
     # overflows; `neg` into an unsigned type is refused (decision 145).
     "neg" => {:neg, [{:value, :any_num}, {:write, :any_num}]},
     "abs" => {:abs, [{:value, :any_num}, {:write, :any_num}]},
+    # M5-8: IEC's bitwise Boolean functions (Ed 3 Table 31; decision 155), on the bit strings
+    # and the integers alike, each computing in its destination's type as `add` does, its
+    # sources all of the destination's kind, widening into it by Figure 11 (decision 147):
+    # `and a b dst`, `or`, `xor` and `not src dst`. A bitwise instruction cannot fail, so its
+    # power out is its power in, settled (§4.12's routine choice).
+    "and" => {:and, [{:value, :any_bitwise}, {:value, :any_bitwise}, {:write, :any_bitwise}]},
+    "or" => {:or, [{:value, :any_bitwise}, {:value, :any_bitwise}, {:write, :any_bitwise}]},
+    "xor" => {:xor, [{:value, :any_bitwise}, {:value, :any_bitwise}, {:write, :any_bitwise}]},
+    "not" => {:not, [{:value, :any_bitwise}, {:write, :any_bitwise}]},
+    # M5-8: IEC's bit shift functions (Table 30): `shl src n dst`, `shr`, `rol` and `ror`, the
+    # source and destination as `and`'s, and `n`, the count, IEC's ANY_INT, an integer of any
+    # width held to no other operand, a negative literal refused. A count negative at run
+    # time passes no power (decision 165), so the power out is settled too.
+    "shl" => {:shl, [{:value, :any_bitwise}, {:value, :any_int}, {:write, :any_bitwise}]},
+    "shr" => {:shr, [{:value, :any_bitwise}, {:value, :any_int}, {:write, :any_bitwise}]},
+    "rol" => {:rol, [{:value, :any_bitwise}, {:value, :any_int}, {:write, :any_bitwise}]},
+    "ror" => {:ror, [{:value, :any_bitwise}, {:value, :any_int}, {:write, :any_bitwise}]},
     # M3-5: the forward jump (decisions 81 and 104): `jmp done` names the label that a later
     # rung of its routine begins with, `lbl done`, and passes on the power it receives. A
     # label is a name of the routine's own, never a tag (decision 105).
@@ -1387,6 +1404,7 @@ defmodule Logex.Compiler do
     diagnostics = check_tags(signature, operands, at, scope, diagnostics)
     diagnostics = check_preset(signature, operands, {symbol, at}, known, diagnostics)
     diagnostics = check_divisor(symbol, operands, at, diagnostics)
+    diagnostics = check_shift(symbol, operands, at, diagnostics)
     lowered = {symbol, line, Enum.zip_with(signature, operands, &slot_operand/2)}
     lower(rest, [lowered | ir], diagnostics, known)
   end
@@ -1849,6 +1867,29 @@ defmodule Logex.Compiler do
        do: zero_divisor(line, zero, at, diagnostics)
 
   defp check_divisor(_symbol, _operands, _at, diagnostics), do: diagnostics
+
+  # M5-8 (decision 165): a negative literal count is refused, IEC's "It is an error if the
+  # value of the N input is less than zero" (Ed 3 Table 30 footnote a) where a program can
+  # show it; a tag count negative at run time shifts nothing and passes no power.
+  @shifts [:shl, :shr, :rol, :ror]
+
+  defp check_shift(symbol, [_source, count | _], at, diagnostics)
+       when symbol in @shifts and is_int_lit(count),
+       do: negative_count(Parser.value(count) < 0, count, at, diagnostics)
+
+  defp check_shift(_symbol, _operands, _at, diagnostics), do: diagnostics
+
+  defp negative_count(false, _count, _at, diagnostics), do: diagnostics
+
+  defp negative_count(true, count, {line, word}, diagnostics),
+    do: [
+      diagnostic(
+        line,
+        "`#{word}` shifts by the literal `#{Parser.spelling(count)}`: a count is never " <>
+          "negative, so a negative literal one is refused"
+      )
+      | diagnostics
+    ]
 
   defp zero_divisor(line, zero, {_, word}, diagnostics),
     do: [
@@ -2608,9 +2649,18 @@ defmodule Logex.Compiler do
   # range, as must one whose destination is not of the class or is not resolved, reported
   # already. `neg` into an unsigned destination is refused (decision
   # 145): such a type holds no negative value, so its only results would be 0 and a wrap.
-  defp classed([], _at, diagnostics), do: diagnostics
+  # Since M5-8 the operands of each class are held together apart from the others', in
+  # the order their classes first come, so a shift's count, ANY_INT, is no source of the
+  # type its bit string computes in.
+  defp classed(operands, at, diagnostics) do
+    classes = operands |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
 
-  defp classed([{_access, class, _typed} | _] = operands, at, diagnostics) do
+    Enum.reduce(classes, diagnostics, fn class, diagnostics ->
+      class_held(class, Enum.filter(operands, &(elem(&1, 1) == class)), at, diagnostics)
+    end)
+  end
+
+  defp class_held(class, operands, at, diagnostics) do
     {writes, reads} = Enum.split_with(operands, &match?({:write, _class, _typed}, &1))
     compared(writes, reads, class, at, diagnostics)
   end
