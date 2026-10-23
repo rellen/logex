@@ -127,7 +127,10 @@ defmodule Logex.InstructionizeTest do
           ) <>
           "and v_word v_byte v_word or v_int 3 v_int xor v_dword v_word v_dword\n" <>
           "not v_byte v_byte shl v_word v_int v_word shr v_int 1 v_int\n" <>
-          "rol v_lword v_usint v_lword ror v_byte 9 v_byte\n"
+          "rol v_lword v_usint v_lword ror v_byte 9 v_byte\n" <>
+          real_lines(~w(sint int dint lint usint uint udint ulint))
+
+      source = "var v_real real\nvar v_lreal lreal\n" <> source
 
       assert {:ok, %Logex.Program{rungs: rungs} = program} =
                Logex.compile(source, name: "every", types: [seal])
@@ -160,6 +163,24 @@ defmodule Logex.InstructionizeTest do
 
       for {symbol, _line, _operands} = instruction <- instructions,
           do: assert(Logex.Compiler.signature(instruction, tags) == Map.fetch!(expected, symbol))
+    end
+
+    # M5-10: the reals' tags, each of the 34 real conversions and the 16 truncations, and
+    # `sqrt`.
+    defp real_lines(integers) do
+      reals = ~w(real lreal)
+
+      Enum.join(
+        for(
+          from <- integers ++ reals,
+          to <- integers ++ reals,
+          from in reals or to in reals,
+          from != to,
+          do: "xic a #{from}_to_#{to} v_#{from} v_#{to}\n"
+        ) ++
+          for(from <- reals, to <- integers, do: "xic a #{from}_trunc_#{to} v_#{from} v_#{to}\n")
+      ) <>
+        "sqrt v_real v_lreal\n"
     end
 
     # Total: the lookup never raises, whatever a program built by hand holds. A `cal` has

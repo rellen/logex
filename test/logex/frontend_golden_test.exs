@@ -72,6 +72,8 @@ defmodule Logex.FrontendGoldenTest do
                :int_lit,
                :spelled,
                :negative,
+               :real_lit,
+               :spelled_real,
                :dotted,
                :nested,
                :no_line
@@ -126,6 +128,13 @@ defmodule Logex.FrontendGoldenTest do
   # Decision 202: a literal written other than as its plain decimal keeps its spelling.
   defp element_reach({:int_lit, line, n, _spelling}, _depth),
     do: [:leaf, :int_lit, :spelled | later(line)] ++ negative(n < 0)
+
+  # M5-10: a real literal, plain or spelled.
+  defp element_reach({:real_lit, line, x}, _depth),
+    do: [:leaf, :real_lit | later(line)] ++ negative(x < 0)
+
+  defp element_reach({:real_lit, line, x, _spelling}, _depth),
+    do: [:leaf, :real_lit, :spelled_real | later(line)] ++ negative(x < 0)
 
   defp nested(0), do: []
   defp nested(_depth), do: [:nested]

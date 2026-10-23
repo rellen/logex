@@ -141,14 +141,15 @@ defmodule Logex.FrontendTest do
                ~s(missing separator after integer: "a.1b" is neither a number nor a tag)
     end
 
-    test "a `.` with no name or integer after it is illegal, and there are no decimals" do
+    # Since M5-10 digits before a `.` make a real (decision 149), `1.5`, so a `.` is illegal
+    # only after a name, or at a lexeme's start before no digit.
+    test "a `.` with no name or integer after it is illegal" do
       for {source, column} <- [
             {"a.", 2},
             {"a. b", 2},
             {".a", 1},
             {"a..b", 2},
             {"a.b.", 4},
-            {"1.5", 2},
             {"a.(", 2}
           ] do
         assert {:error, {{1, ^column}, Logex.Lexer, {:illegal, "."}}, 1} =
@@ -555,13 +556,14 @@ defmodule Logex.FrontendTest do
       assert {:ok, [_, {:name, {1, 6}, "_1"}, _], 1} = Compiler.tokenize("move _1 x")
     end
 
-    # Reals are M5-10's, so until then a `.` after digits is illegal where it stands, as
-    # before decision 149; and a sign after a based number is the next lexeme's.
+    # Since M5-10 a `.` after digits makes a real (decision 149): `1.5_` holds a misplaced
+    # `_`, `1.5L` is B2's mistyped lexeme, and a based number has no fraction, each named
+    # whole; and a sign after a based number is the next lexeme's.
     test "what follows a number is read as it was before" do
       for {source, column, reason} <- [
-            {"move 1.5_ x", 7, {:illegal, "."}},
-            {"move 1.5L x", 7, {:illegal, "."}},
-            {"move 16#ff.3 x", 11, {:illegal, "."}},
+            {"move 1.5_ x", 6, {:separator, "1.5_"}},
+            {"move 1.5L x", 6, {:missing_separator, "1.5L"}},
+            {"move 16#ff.3 x", 6, {:digits, 16, "16#ff.3"}},
             {"move 16 #ff x", 9, {:illegal, "#"}},
             {"move 16#ff-1 x", 6, {:signed_inside, "16#ff-1"}},
             {"move 1_0-1 x", 6, {:signed_inside, "1_0-1"}}

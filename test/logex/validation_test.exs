@@ -23,7 +23,7 @@ defmodule Logex.ValidationTest do
   # M3-2: logex's own type words, as an unknown type's message lists them: the elementary
   # types, then every built-in function block type, each set in order.
   @has "logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, " <>
-         "`byte`, `word`, `dword`, `lword`, " <>
+         "`real`, `lreal`, `byte`, `word`, `dword`, `lword`, " <>
          "`ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, " <>
          "`ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, " <>
          "`ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, " <>
@@ -32,7 +32,7 @@ defmodule Logex.ValidationTest do
   # The same from Elixir, each named as the value that declares it.
   # M5-5: an alias of a counter is named once, as the value its plain word gives (decision
   # 163).
-  @has_elixir "logex has :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword, :lword, " <>
+  @has_elixir "logex has :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword, :lword, " <>
                 "Logex.FbType.ctd(), Logex.FbType.ctd_int(), Logex.FbType.ctd_lint(), " <>
                 "Logex.FbType.ctd_udint(), Logex.FbType.ctd_ulint(), " <>
                 "Logex.FbType.ctu(), Logex.FbType.ctu_int(), Logex.FbType.ctu_lint(), " <>
@@ -258,7 +258,8 @@ defmodule Logex.ValidationTest do
         refused(
           rungs([@good, {:rung, [{:name, 2, "xic"}, element]}]),
           "an element is {:name, line, word}, {:int_lit, line, n}, " <>
-            "{:int_lit, line, n, spelling} or {:branches, legs}, got: #{inspect(element)}"
+            "{:int_lit, line, n, spelling}, {:real_lit, line, x}, {:real_lit, line, x, spelling} " <>
+            "or {:branches, legs}, got: #{inspect(element)}"
         )
       end
     end
@@ -3166,8 +3167,8 @@ xic a ton t1 7") == [
 
     test "are checked again as they enter the table, however they were built" do
       for {declared, message} <- [
-            {[%Logex.Tag{name: "a", type: :real, section: :var}],
-             "unknown type :real: #{@has_elixir}"},
+            {[%Logex.Tag{name: "a", type: :float, section: :var}],
+             "unknown type :float: #{@has_elixir}"},
             {[%Logex.Tag{name: "a", type: :bool, section: :var, initial: 7}],
              "`a` is a bool: its initial value must be 0 or 1, found `7`"},
             {[%Logex.Tag{name: "a", type: :bool, section: :var, initial: -7}],

@@ -50,7 +50,18 @@ defmodule Logex.PrinterTest do
                      :tag_bit_name,
                      # decision 213: a literal in the brackets, `status.[4]`, in any spelling
                      # of a number, `w.[16#a]`, `t1.acc.[03]`, `s.[-1]`, printed as written
-                     :literal_bit_name
+                     :literal_bit_name,
+                     # M5-10 (decision 149): a real literal, `{:real_lit, line, x}`, digits, a
+                     # `.` and digits, reached by the real corpus below, written as its
+                     # float's plain text, `37.5`
+                     :real_lit,
+                     # its sign glued to its digits, `-0.25`
+                     :negative_real_lit,
+                     # with an exponent, `1.5e3` or `1.5E-3`
+                     :exponent_real_lit,
+                     # kept as written where it is not its float's plain text (decision
+                     # 202's rule), `37.50`, `1_000.5`, `1.5E3` or `-0.0`
+                     :spelled_real_lit
                    ])
 
   describe "round trip" do
@@ -58,9 +69,22 @@ defmodule Logex.PrinterTest do
       spellings = for {_ast, _source, spelt} <- spelled_corpus(), shape <- spelt, do: shape
 
       assert @required_shapes ==
-               (corpus() ++ spelled_trees())
+               (corpus() ++ spelled_trees() ++ real_trees())
                |> Enum.map(&shapes/1)
                |> Enum.reduce(MapSet.new(spellings), &MapSet.union/2)
+    end
+
+    # M5-10 (decision 149): a real literal is written with digits on both sides of its `.`
+    # and an optional exponent, and reads back as the real tree, each spelling that is not
+    # its float's plain text kept, and prints back exactly as written.
+    test "every spelling of a real literal reads back as the real AST, and prints as written" do
+      for {ast, source} <- real_corpus() do
+        real = parse!(source)
+        assert strip_lines(real) == strip_lines(ast), source
+        assert Printer.print(real) == source
+        assert strip_lines(parse!(Printer.print(ast))) == strip_lines(ast)
+        assert Logex.Parser.well_formed!(ast) == ast
+      end
     end
 
     # M5-7 (decision 149): a literal may be written in decimal, with `_` between its digits,
@@ -78,13 +102,13 @@ defmodule Logex.PrinterTest do
     end
 
     test "parse . print restores the AST, modulo line numbers" do
-      for ast <- corpus() ++ spelled_trees() do
+      for ast <- corpus() ++ spelled_trees() ++ real_trees() do
         assert strip_lines(parse!(Printer.print(ast))) == strip_lines(ast)
       end
     end
 
     test "print . parse reaches a fixed point" do
-      for ast <- corpus() ++ spelled_trees() do
+      for ast <- corpus() ++ spelled_trees() ++ real_trees() do
         once = Printer.print(ast)
         assert Printer.print(parse!(once)) == once
       end
@@ -207,18 +231,22 @@ defmodule Logex.PrinterTest do
       name: [:junk, :line_zero, :two_words, :not_a_word],
       int_lit: [:not_an_integer, :line_nil],
       spelled: [:plain_spelling, :other_value, :spelling_not_a_binary],
+      # M5-10: a real leaf that is no float, or that holds −0.0, which is no float's plain
+      # text, and a spelled one whose spelling is its plain text or another float's.
+      real_lit: [:not_a_float, :negative_zero],
+      spelled_real: [:plain_real_spelling, :other_real, :real_spelling_not_a_binary],
       branches: [:no_legs, :leg_not_a_list, :improper]
     }
 
     test "takes every spelled tree, as parse/1 could produce each" do
-      for ast <- spelled_trees() do
+      for ast <- spelled_trees() ++ real_trees() do
         assert Logex.Parser.well_formed!(ast) == ast
       end
     end
 
     test "refuses a generated tree broken at any one node, with nothing but ArgumentError" do
       broken =
-        for ast <- corpus() ++ spelled_trees(),
+        for ast <- corpus() ++ spelled_trees() ++ real_trees(),
             {kind, count} <- counts(ast),
             how <- @breaks[kind] do
           tree = break_nth(ast, kind, :rand.uniform(count), how)
@@ -269,7 +297,7 @@ defmodule Logex.PrinterTest do
   defp strip_lines({:rung, elements}), do: {:rung, strip_lines(elements)}
   defp strip_lines({:branches, legs}), do: {:branches, Enum.map(legs, &strip_lines/1)}
   defp strip_lines({kind, _line, value}), do: {kind, 0, value}
-  defp strip_lines({:int_lit, _line, value, spelling}), do: {:int_lit, 0, value, spelling}
+  defp strip_lines({kind, _line, value, spelling}), do: {kind, 0, value, spelling}
   defp strip_lines(elements) when is_list(elements), do: Enum.map(elements, &strip_lines/1)
 
   # A seeded generator rather than a dependency: the repository has none and takes
@@ -319,6 +347,7 @@ defmodule Logex.PrinterTest do
   defp kinds({:branches, legs}), do: [:branches | kinds(Enum.concat(legs))]
   defp kinds({kind, _line, _value}), do: [kind]
   defp kinds({:int_lit, _line, _value, _spelling}), do: [:spelled]
+  defp kinds({:real_lit, _line, _value, _spelling}), do: [:spelled_real]
 
   # The tree with the nth node of a kind, counted as counts/1 counts, broken `how`.
   defp break_nth({:routine, {:rungs, rungs}}, kind, n, how) do
@@ -345,6 +374,10 @@ defmodule Logex.PrinterTest do
   defp broken({node_kind, _, _} = node, kind, n, _how), do: {node, n - here(node_kind, kind)}
   defp broken({:int_lit, _, _, _} = node, :spelled, 1, how), do: {break(how, node), 0}
   defp broken({:int_lit, _, _, _} = node, kind, n, _how), do: {node, n - here(:spelled, kind)}
+  defp broken({:real_lit, _, _, _} = node, :spelled_real, 1, how), do: {break(how, node), 0}
+
+  defp broken({:real_lit, _, _, _} = node, kind, n, _how),
+    do: {node, n - here(:spelled_real, kind)}
 
   defp here(kind, kind), do: 1
   defp here(_node_kind, _kind), do: 0
@@ -367,6 +400,18 @@ defmodule Logex.PrinterTest do
   defp break(:spelling_not_a_binary, {:int_lit, line, n, spelling}),
     do: {:int_lit, line, n, String.to_charlist(spelling)}
 
+  defp break(:not_a_float, {:real_lit, line, x}), do: {:real_lit, line, trunc(x)}
+  defp break(:negative_zero, {:real_lit, line, _x}), do: {:real_lit, line, -0.0}
+
+  defp break(:plain_real_spelling, {:real_lit, line, x, _}),
+    do: {:real_lit, line, x, Float.to_string(x)}
+
+  defp break(:other_real, {:real_lit, line, x, spelling}),
+    do: {:real_lit, line, x + 1.0, spelling}
+
+  defp break(:real_spelling_not_a_binary, {:real_lit, line, x, spelling}),
+    do: {:real_lit, line, x, String.to_charlist(spelling)}
+
   # The corpus again, each tree written as source with every literal spelled in a way drawn
   # for it, the spelled tree, which keeps each spelling that is not the plain decimal of
   # its value (decision 202), and the spellings it took. The draws come after the corpus's
@@ -381,6 +426,90 @@ defmodule Logex.PrinterTest do
   end
 
   defp spelled_trees, do: for({ast, _source, _spelt} <- spelled_corpus(), do: ast)
+
+  # M5-10: the corpus again, each integer literal made a real one of a value drawn for it, a
+  # number of eighths, so that its plain text is short, written in a way drawn for it, and
+  # each spelling that is not its float's plain text kept; the draws come after the
+  # corpus's own and the spelled corpus's.
+  defp real_corpus do
+    trees = spelled_trees()
+    for ast <- trees, do: real_spell(ast)
+  end
+
+  defp real_trees, do: for({ast, _source} <- real_corpus(), do: ast)
+
+  defp real_spell({:routine, {:rungs, rungs}}) do
+    {rungs, lines} =
+      Enum.map_reduce(rungs, [], fn {:rung, elements}, lines ->
+        {elements, words} = real_all(elements)
+        {{:rung, elements}, [Enum.join(words, " ") | lines]}
+      end)
+
+    {{:routine, {:rungs, rungs}}, Enum.join(Enum.reverse(lines), "\n")}
+  end
+
+  defp real_all(elements) do
+    pairs = Enum.map(elements, &real_one/1)
+    {Enum.map(pairs, &elem(&1, 0)), Enum.flat_map(pairs, &elem(&1, 1))}
+  end
+
+  defp real_one({:name, _, name} = leaf), do: {leaf, [name]}
+
+  defp real_one({:int_lit, line, n}), do: real_leaf(line, n)
+  defp real_one({:int_lit, line, n, _spelling}), do: real_leaf(line, n)
+
+  defp real_one({:branches, legs}) do
+    pairs = Enum.map(legs, &real_all/1)
+    words = Enum.concat(Enum.intersperse(Enum.map(pairs, &elem(&1, 1)), ["|"]))
+    {{:branches, Enum.map(pairs, &elem(&1, 0))}, ["("] ++ words ++ [")"]}
+  end
+
+  defp real_leaf(line, n) do
+    x = n + :rand.uniform(8) / 8
+    word = real_spelling(x, :rand.uniform(6))
+    {real_kept(Float.to_string(x) == word, line, x, word), [word]}
+  end
+
+  # Decision 202's rule for a real: a spelling is kept where it is not its float's plain
+  # text, and −0.0 is no value a leaf holds.
+  defp real_kept(true, line, x, _word), do: {:real_lit, line, x}
+  defp real_kept(false, line, x, word), do: {:real_lit, line, zeroed(x), word}
+
+  defp zeroed(x) when x == 0, do: 0.0
+  defp zeroed(x), do: x
+
+  # Plain, a trailing zero, an exponent of each case, `_` between digits, or a zero's
+  # minus sign.
+  defp real_spelling(x, 1), do: Float.to_string(x)
+  defp real_spelling(x, 2), do: Float.to_string(x) <> "0"
+  defp real_spelling(x, 3), do: exponent_spelling(x)
+  defp real_spelling(x, 4), do: String.upcase(exponent_spelling(x))
+  defp real_spelling(x, 5), do: separated_real(Float.to_string(x))
+  defp real_spelling(x, 6) when x == 0, do: "-0.0"
+  defp real_spelling(x, 6), do: real_spelling(x, 1)
+
+  # The float's own digits, its point moved to after the first and an exponent, exactly:
+  # 157.875 as `1.57875e2` and 0.375 as `3.75e-1`.
+  defp exponent_spelling(x) when x < 0, do: "-" <> exponent_spelling(-x)
+  defp exponent_spelling(x) when x == 0, do: "0.0e0"
+
+  defp exponent_spelling(x) do
+    [whole, fraction] = String.split(Float.to_string(x), ".")
+    digits = String.trim_leading(whole <> fraction, "0")
+
+    power = String.length(whole) - 1 - (String.length(whole <> fraction) - String.length(digits))
+
+    {first, rest} = String.split_at(String.trim_trailing(digits, "0"), 1)
+    first <> "." <> fill(rest) <> "e" <> Integer.to_string(power)
+  end
+
+  defp fill(""), do: "0"
+  defp fill(rest), do: rest
+
+  defp separated_real(text) do
+    [whole, fraction] = String.split(text, ".", parts: 2)
+    separated(whole) <> "." <> fraction
+  end
 
   # A spelled tree with every spelling dropped: the tree of the values it spells.
   defp values({:routine, {:rungs, rungs}}), do: {:routine, {:rungs, Enum.map(rungs, &values/1)}}
@@ -491,6 +620,12 @@ defmodule Logex.PrinterTest do
   defp shapes({:int_lit, _, n, spelling}, _depth),
     do: MapSet.new([:int_lit, spelt(spelling) | negative_shape(n < 0)])
 
+  defp shapes({:real_lit, _, x}, _depth),
+    do: MapSet.new([:real_lit | real_shapes(x, Float.to_string(x))])
+
+  defp shapes({:real_lit, _, x, spelling}, _depth),
+    do: MapSet.new([:real_lit, :spelled_real_lit | real_shapes(x, spelling)])
+
   defp shapes({:branches, legs}, depth) do
     flags =
       [:group] ++
@@ -524,6 +659,15 @@ defmodule Logex.PrinterTest do
   defp tag_bit_shape(true, false), do: [:tag_bit_name]
   defp tag_bit_shape(true, true), do: [:literal_bit_name]
   defp tag_bit_shape(false, _literal), do: []
+
+  defp real_shapes(x, spelling),
+    do:
+      if_shape(x < 0, :negative_real_lit) ++
+        if_shape(String.contains?(String.downcase(spelling), "e"), :exponent_real_lit)
+
+  defp if_shape(true, shape), do: [shape]
+  defp if_shape(false, _shape), do: []
+
   defp negative_shape(true), do: [:negative_int_lit]
   defp negative_shape(false), do: []
 end

@@ -48,14 +48,20 @@ defmodule Logex.TypeTableTest do
     # ranges restated here from IEC's footnotes c and d, not read from the table, and each
     # row's `widens` Ed 3 Figure 11's "i" cells among the integer types.
     @widths [
-      {"sint", :signed, 8, "an", ~w(int dint lint)a},
-      {"int", :signed, 16, "an", ~w(dint lint)a},
-      {"dint", :signed, 32, "a", ~w(lint)a},
+      # M5-10 (decision 147): and Figure 11's cells into the reals, `sint int usint uint`
+      # into both, `dint udint` into an `lreal` alone.
+      {"sint", :signed, 8, "an", ~w(int dint lint real lreal)a},
+      {"int", :signed, 16, "an", ~w(dint lint real lreal)a},
+      {"dint", :signed, 32, "a", ~w(lint lreal)a},
       {"lint", :signed, 64, "an", []},
-      {"usint", :unsigned, 8, "a", ~w(uint udint ulint int dint lint)a},
-      {"uint", :unsigned, 16, "a", ~w(udint ulint dint lint)a},
-      {"udint", :unsigned, 32, "a", ~w(ulint lint)a},
+      {"usint", :unsigned, 8, "a", ~w(uint udint ulint int dint lint real lreal)a},
+      {"uint", :unsigned, 16, "a", ~w(udint ulint dint lint real lreal)a},
+      {"udint", :unsigned, 32, "a", ~w(ulint lint lreal)a},
       {"ulint", :unsigned, 64, "a", []},
+      # M5-10 (decisions 144 and 150): IEC's two reals, of no integer range, their zero 0.0,
+      # a `real` widening into an `lreal`.
+      {"real", :real, 32, "a", ~w(lreal)a},
+      {"lreal", :real, 64, "an", []},
       # M5-8 (decisions 147 and 155): IEC's four bit strings, each 0..2^N - 1, Figure 11
       # widening each into the wider ones and nothing else into one but a bool.
       {"byte", :bit_string, 8, "a", ~w(word dword lword)a},
@@ -64,10 +70,14 @@ defmodule Logex.TypeTableTest do
       {"lword", :bit_string, 64, "an", []}
     ]
 
+    defp range_of(:real, _n), do: nil
     defp range_of(:signed, n), do: -Integer.pow(2, n - 1)..(Integer.pow(2, n - 1) - 1)
     defp range_of(_unsigned_or_bits, n), do: 0..(Integer.pow(2, n) - 1)
 
-    test "holds bool, the eight integer widths and the four bit strings, each a row of the record's columns, in its order" do
+    defp zero_of(:real), do: 0.0
+    defp zero_of(_kind), do: 0
+
+    test "holds bool, the eight integer widths, the two reals and the four bit strings, each a row of the record's columns, in its order" do
       rows =
         for {word, kind, n, article, widens} <- @widths,
             do: %{
@@ -76,7 +86,7 @@ defmodule Logex.TypeTableTest do
               kind: kind,
               width: n,
               range: range_of(kind, n),
-              zero: 0,
+              zero: zero_of(kind),
               article: article,
               widens: widens
             }
@@ -94,27 +104,30 @@ defmodule Logex.TypeTableTest do
 
       assert Declarations.table() == [bool | rows]
 
-      types = ~w(bool sint int dint lint usint uint udint ulint byte word dword lword)a
+      types = ~w(bool sint int dint lint usint uint udint ulint real lreal byte word dword lword)a
       assert Declarations.elementary() == types
       assert Declarations.type_words() == Enum.map(types, &Atom.to_string/1)
       assert Declarations.integers() == ~w(sint int dint lint usint uint udint ulint)a
+      assert Declarations.reals() == ~w(real lreal)a
       assert Declarations.bit_strings() == ~w(byte word dword lword)a
-      assert Declarations.convertible() == tl(types)
+      assert Declarations.convertible() == Declarations.integers() ++ Declarations.bit_strings()
       assert Enum.map(types, &Declarations.word/1) == Enum.map(types, &Atom.to_string/1)
 
       assert Enum.map(types, &Declarations.kind/1) ==
                [:boolean | List.duplicate(:signed, 4) ++ List.duplicate(:unsigned, 4)] ++
-                 List.duplicate(:bit_string, 4)
+                 [:real, :real] ++ List.duplicate(:bit_string, 4)
 
       assert Declarations.range(:dint) == -2_147_483_648..2_147_483_647
       assert Declarations.range(:ulint) == 0..18_446_744_073_709_551_615
       assert Declarations.range(:sint) == -128..127
       assert Declarations.range(:word) == 0..65_535
       assert Declarations.range(:lword) == 0..18_446_744_073_709_551_615
-      assert Enum.map(types, &Declarations.zero/1) == List.duplicate(0, 13)
+
+      assert Enum.map(types, &Declarations.zero/1) ==
+               List.duplicate(0, 9) ++ [0.0, 0.0] ++ List.duplicate(0, 4)
 
       assert Enum.map(types, &Declarations.width/1) ==
-               [1, 8, 16, 32, 64, 8, 16, 32, 64, 8, 16, 32, 64]
+               [1, 8, 16, 32, 64, 8, 16, 32, 64, 32, 64, 8, 16, 32, 64]
     end
 
     test "fits?/2 is each row's range, an integer only" do
@@ -128,7 +141,7 @@ defmodule Logex.TypeTableTest do
       end
 
       # Every width at its two limits and one past each.
-      for {word, kind, n, _article, _widens} <- @widths do
+      for {word, kind, n, _article, _widens} <- @widths, kind != :real do
         type = String.to_atom(word)
         first..last//1 = range_of(kind, n)
 
@@ -171,8 +184,16 @@ defmodule Logex.TypeTableTest do
       assert Declarations.widens?(:bool, :word)
       refute Declarations.widens?(:word, :byte)
 
+      # M5-10 (decision 148): the 34 real conversions too, and none with a bit string.
+      assert Declarations.conversion(:real, :int) == "real_to_int"
+      assert Declarations.conversion(:udint, :lreal) == "udint_to_lreal"
+      assert Declarations.conversion(:real, :lreal) == "real_to_lreal"
+      assert Declarations.conversion(:real, :word) == nil
+      assert Declarations.conversion(:lword, :lreal) == nil
+      assert Declarations.conversion(:real, :bool) == nil
+
       conversions = for from <- types, to <- types, c = Declarations.conversion(from, to), do: c
-      assert length(conversions) == 56 + 76
+      assert length(conversions) == 56 + 76 + 34
       assert Enum.all?(conversions, &Map.has_key?(Logex.Compiler.instructions(), &1))
     end
 
@@ -189,11 +210,24 @@ defmodule Logex.TypeTableTest do
       import Logex.Declarations, only: [is_elementary: 1]
 
       kept =
-        for t <- [:bool, :dint, :int, :usint, :ulint, :clock, :real, nil, "bool", %{}],
+        for t <- [
+              :bool,
+              :dint,
+              :int,
+              :usint,
+              :ulint,
+              :real,
+              :lreal,
+              :clock,
+              :float,
+              nil,
+              "bool",
+              %{}
+            ],
             is_elementary(t),
             do: t
 
-      assert kept == [:bool, :dint, :int, :usint, :ulint]
+      assert kept == [:bool, :dint, :int, :usint, :ulint, :real, :lreal]
     end
 
     test "each message's words come from the row: its article, its values and its width" do
@@ -231,12 +265,12 @@ defmodule Logex.TypeTableTest do
       assert Declarations.values(:ulint) == "an integer from 0 to 18446744073709551615"
 
       assert Declarations.either(&inspect/1) ==
-               ":bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword"
+               ":bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword"
     end
 
     test "the type words are a declaration's and a configuration file's keywords" do
       words = Declarations.type_words()
-      assert length(words) == 13
+      assert length(words) == 15
       assert Enum.all?(words, &(&1 in Declarations.keywords()))
       assert Enum.all?(words, &(&1 in Text.keywords()))
 
@@ -533,8 +567,8 @@ defmodule Logex.TypeTableTest do
       motor: motor
     } do
       assert configured("var_global estop boo\nvar_global t ton\n", motor) == [
-               "unknown type `boo`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `byte`, `word`, `dword` or `lword` — did you mean `bool`?",
-               "`t` cannot be a `ton`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `byte`, `word`, `dword` or `lword`, and a ton is declared " <>
+               "unknown type `boo`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword` or `lword` — did you mean `bool`?",
+               "`t` cannot be a `ton`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword` or `lword`, and a ton is declared " <>
                  "inside a program, as in `var t ton`",
                "this configuration declares no `program`: it would run nothing"
              ]
@@ -542,20 +576,20 @@ defmodule Logex.TypeTableTest do
       assert Text.print([%Global{name: "e", type: :bool}, %Global{name: "n", type: :dint}]) ==
                "var_global e bool\nvar_global n dint\n"
 
-      assert raised(fn -> Text.entries!([%Global{name: "e", type: :real}]) end) ==
-               "not an entry a configuration file can say: a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword, " <>
-                 "got: %Logex.Configuration.Global{name: \"e\", type: :real, initial: nil, at: nil, " <>
+      assert raised(fn -> Text.entries!([%Global{name: "e", type: :float}]) end) ==
+               "not an entry a configuration file can say: a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword, " <>
+                 "got: %Logex.Configuration.Global{name: \"e\", type: :float, initial: nil, at: nil, " <>
                  "line: nil}"
 
       assert raised(fn ->
                Configuration.new!(
                  name: "plant",
                  programs: [motor],
-                 globals: [%Global{name: "estop", type: :real}],
+                 globals: [%Global{name: "estop", type: :float}],
                  instances: [%Instance{name: "m1", type: "motor"}]
                )
              end) =~
-               "global `estop` has type :real: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword\n"
+               "global `estop` has type :float: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword\n"
     end
 
     test "an edit's type change and a path too deep, each type named with its article", %{

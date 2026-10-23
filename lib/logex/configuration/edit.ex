@@ -933,10 +933,16 @@ defmodule Logex.Configuration.Edit do
     {Map.put(values, global.name, value), [{:added, global.name, value} | reports]}
   end
 
+  # Decision 157 (M5-10): the declared initial values are compared exactly, as decision 44
+  # takes for a global what decision 29 does for a tag, so that a real's `0` and `0.0` are
+  # two values, the running value kept either way.
   defp global_moved({:ok, _value}, %Configuration.Global{} = was, global, acc),
-    do: initial_changed(Configuration.initial(was), Configuration.initial(global), global, acc)
+    do: initial_changed(declared(was), declared(global), global, acc)
 
   defp global_moved({:ok, _value}, nil, _global, acc), do: acc
+
+  defp declared(%Configuration.Global{initial: nil} = global), do: Configuration.initial(global)
+  defp declared(%Configuration.Global{initial: initial}), do: initial
 
   defp initial_changed(same, same, _global, acc), do: acc
 

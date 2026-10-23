@@ -15,7 +15,7 @@ defmodule Logex.EndToEndTest do
   # M3-2: logex's own type words, as an unknown type's message lists them: the elementary
   # types, then every built-in function block type, each set in order.
   @has "logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, " <>
-         "`byte`, `word`, `dword`, `lword`, " <>
+         "`real`, `lreal`, `byte`, `word`, `dword`, `lword`, " <>
          "`ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, " <>
          "`ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, " <>
          "`ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, " <>

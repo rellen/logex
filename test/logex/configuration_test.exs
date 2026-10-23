@@ -1113,8 +1113,8 @@ defmodule Logex.ConfigurationTest do
           do:
             assert_raise(
               ArgumentError,
-              "expected a %Logex.Configuration.Global{} whose initial value is an integer " <>
-                "or nil, got: #{inspect(other)}",
+              "expected a %Logex.Configuration.Global{} whose initial value is an integer, " <>
+                "a real's a number, or nil, got: #{inspect(other)}",
               fn -> Configuration.initial(opaque(other)) end
             )
     end
@@ -1125,7 +1125,7 @@ defmodule Logex.ConfigurationTest do
            "on a located global",
          %{seal: seal} do
       globals = [
-        %Global{name: "a", type: :real},
+        %Global{name: "a", type: :float},
         %Global{name: "b", type: :bool, initial: 2},
         %Global{name: "c", type: :dint, initial: 2_147_483_648},
         %Global{name: "d", type: :dint, initial: -1},
@@ -1143,9 +1143,9 @@ defmodule Logex.ConfigurationTest do
       # M3-3 (decision 97): a negative initial value is one a line can say, so a dint's
       # is taken, `d`'s -1, and a bool's or a located global's told what is wrong with it.
       assert refused(Keyword.put(base(seal), :globals, base(seal)[:globals] ++ globals)) == [
-               "global `a` has type :real: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword",
+               "global `a` has type :float: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword",
                "the initial value of global `e` must be an integer, found 1.0",
-               "global `n` has type nil: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword",
+               "global `n` has type nil: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword",
                "`b` is a bool: its initial value must be 0 or 1, found `2`",
                "`c` is a dint: `2147483648` is outside -2147483648 to 2147483647",
                "`f` is an input point: its value comes from the input image, so it takes no " <>
@@ -1354,13 +1354,14 @@ defmodule Logex.ConfigurationTest do
         %Connection{instance: "m", member: "start", to: "pbb"},
         %Connection{instance: "m", member: "stop", to: "sp"},
         %Connection{instance: "m", member: "stop", to: 1},
-        %Connection{instance: "m", member: "start", to: 1.5},
+        # Since M5-10 a float is a constant, a real's, so the host's mistake is another.
+        %Connection{instance: "m", member: "start", to: {:x}},
         %Connection{instance: "m", member: "motor", to: "k"}
       ]
 
       # A second connection is refused as one, whatever its other end.
       assert refused(Keyword.put(base(seal), :connections, connections)) == [
-               "`m.start` is connected to 1.5: a connection's other end is a global, by name, " <>
+               "`m.start` is connected to {:x}: a connection's other end is a global, by name, " <>
                  "or a constant",
                "no global `pbb` — did you mean `pb`?",
                "`m.stop` is a bool, but `sp` is a dint",
@@ -1372,12 +1373,12 @@ defmodule Logex.ConfigurationTest do
       # mistake, one message.
       constants = [
         %Connection{instance: "m", member: "start", to: 2},
-        %Connection{instance: "m", member: "stop", to: 1.5},
+        %Connection{instance: "m", member: "stop", to: {:x}},
         %Connection{instance: "m", member: "motor", to: "k"}
       ]
 
       assert refused(Keyword.put(base(seal), :connections, constants)) == [
-               "`m.stop` is connected to 1.5: a connection's other end is a global, by name, or " <>
+               "`m.stop` is connected to {:x}: a connection's other end is a global, by name, or " <>
                  "a constant",
                "`m.start` is a bool: only 0 or 1 fit, found `2`"
              ]
@@ -1553,14 +1554,14 @@ defmodule Logex.ConfigurationTest do
     test "a connection whose end is the host's mistake connects nothing", %{seal: seal} do
       ends = [
         %Connection{instance: "m", member: :start, to: "pb"},
-        %Connection{instance: "m", member: "stop", to: 1.5},
+        %Connection{instance: "m", member: "stop", to: {:x}},
         %Connection{instance: "m", member: "motor", to: "k"}
       ]
 
       assert refused(Keyword.put(base(seal), :connections, ends)) == [
                ~s|a connection's instance is a name, and with its member makes one path, as | <>
                  ~s|in `m1.start`, found "m" and :start|,
-               "`m.stop` is connected to 1.5: a connection's other end is a global, by name, or " <>
+               "`m.stop` is connected to {:x}: a connection's other end is a global, by name, or " <>
                  "a constant",
                "`m` leaves its var_input `start` unconnected: connect it to a global, a point " <>
                  "or a constant, as in `m.start 0`"
@@ -4776,8 +4777,8 @@ defmodule Logex.ConfigurationTest do
         )
 
       assert refused(fields) == [
-               "global `pb` has type {:t}: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword",
-               "global `k` has type %{}: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword",
+               "global `pb` has type {:t}: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword",
+               "global `k` has type %{}: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword",
                "{:x} cannot name a program instance: a name is a letter or `_`, then letters, " <>
                  "digits or `_`",
                "`y.z` cannot name an instance: `.` is kept for a path, as in `m1.start`, and a " <>
@@ -4792,7 +4793,7 @@ defmodule Logex.ConfigurationTest do
                 "%Logex.Configuration.Instance{} or %Logex.Configuration.Connection{}, with " <>
                 "its struct's keys",
               "a line is a positive integer, or nil for an entry built in Elixir",
-              "a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword",
+              "a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword",
               "a task's name is not `continuous`, `interval`, `priority`, `single` or " <>
                 "`watchdog`, in any case: a line reads that word as its keyword",
               "a task's single is not `continuous`, `interval`, `priority`, `single` or " <>
@@ -4802,9 +4803,10 @@ defmodule Logex.ConfigurationTest do
               "a name lexes as one name token",
               "a connection's instance has no `.`: its first `.` begins the member",
               "a connection is to a global, by its name, or to a constant",
-              "a global's name is not `at`, `bool`, `dint`, `int`, `lint`, `sint`, `udint`, `uint`, `ulint` or `usint`, in any case: a line reads that " <>
+              "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `real`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
                 "word as its keyword",
               "a number is an integer",
+              "a real global's real initial value is one of its type's values, as a line reads it",
               "a task's continuous is true or false"
             ]
             |> Enum.map(&Regex.escape/1)
@@ -5325,7 +5327,7 @@ defmodule Logex.ConfigurationTest do
                name: "plant",
                programs: Map.values(sharing()),
                globals: [
-                 %Global{name: "alarm", type: :real},
+                 %Global{name: "alarm", type: :float},
                  %Global{name: "count", type: :dint}
                ],
                instances: [
@@ -5334,7 +5336,7 @@ defmodule Logex.ConfigurationTest do
                ],
                connections: gone(["w"])
              ) == [
-               "global `alarm` has type :real: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword",
+               "global `alarm` has type :float: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword",
                "`reader` declares `var_external estop bool` on its line 1, but `estop` is an " <>
                  "instance, not a global"
              ]
@@ -5348,13 +5350,13 @@ defmodule Logex.ConfigurationTest do
       instance = "\nprogram r reader\nvar_global lamp bool\nr.lamp lamp"
 
       assert errors("var_global estop boo" <> instance, reader) == [
-               "line 1, column 18: unknown type `boo`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `byte`, `word`, `dword` or `lword` — " <>
+               "line 1, column 18: unknown type `boo`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword` or `lword` — " <>
                  "did you mean `bool`?"
              ]
 
       assert errors("var_global estop ton" <> instance, reader) == [
                "line 1, column 18: `estop` cannot be a `ton`: a global's type is `bool`, " <>
-                 "`sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `byte`, `word`, `dword` or `lword`, and a ton " <>
+                 "`sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword` or `lword`, and a ton " <>
                  "is declared inside a program, as in `var estop ton`"
              ]
 

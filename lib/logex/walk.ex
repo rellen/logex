@@ -93,6 +93,9 @@ defmodule Logex.Walk do
 
   defp tag_of({:int_lit, _, _}), do: nil
   defp tag_of({:int_lit, _, _, _spelling}), do: nil
+  # M5-10: a real literal, plain or spelled, is no tag either.
+  defp tag_of({:real_lit, _, _}), do: nil
+  defp tag_of({:real_lit, _, _, _spelling}), do: nil
   # M3-5: a label is a name of the routine's own, never a tag (decision 105).
   defp tag_of({:label, _, _}), do: nil
 

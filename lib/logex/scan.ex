@@ -8,7 +8,7 @@ defmodule Logex.Scan do
   rung (`evaluate/3`); M1-6's timers read `now`, and `ons` reads `first` (PLAN.md M1-6)
   and `ons_blocked`, as M3-1's counters and M3-4's pulse coils, `osr` and `osf`, do.
 
-  `ons_blocked`, `tags`, `blocks` and `units` are the runtime's, not the host's: a host builds a
+  `ons_blocked`, `tags`, `blocks`, `units` and `reals` are the runtime's, not the host's: a host builds a
   scan with `now` and `first` only, leaving them out, and one that fills any in is refused.
 
   - `ons_blocked` (OE-1) holds the storage bits whose `ons` this scan blocks, as a first
@@ -31,14 +31,17 @@ defmodule Logex.Scan do
   - `units` (decision 197) is the routine's own `units` (`Logex.Program`), each timer's
     unit where it is not the millisecond, so that a timer's run reads its unit with the
     routine and a plain timer's, in no table, costs no look-up.
+  - `reals` (M5-10) is the routine's own `reals` (`Logex.Program`), the type of each tag
+    that is a real, so that a `move` or a `cal`'s copy-out into one writes its nearest
+    value, and a routine of no real, `reals` nil, pays no look-up.
 
   A `cal` runs its block's body with this scan narrowed to its instance: `tags` and
-  `units` the body's own and `ons_blocked` the instance's own tree, `now`, `first` and `blocks` unchanged. So
+  `units` and `reals` the body's own and `ons_blocked` the instance's own tree, `now`, `first` and `blocks` unchanged. So
   every instruction of one routine, a program's rungs or one run of a body, sees one scan.
   """
 
   @enforce_keys [:now, :first]
-  defstruct [:now, :first, ons_blocked: [], tags: nil, blocks: nil, units: nil]
+  defstruct [:now, :first, ons_blocked: [], tags: nil, blocks: nil, units: nil, reals: nil]
 
   @type blocked :: %{optional(String.t()) => true | blocked}
 
@@ -48,6 +51,7 @@ defmodule Logex.Scan do
           ons_blocked: [] | blocked,
           tags: nil | %{String.t() => Logex.Tag.t()},
           blocks: nil | %{String.t() => Logex.FbType.t()},
-          units: nil | %{String.t() => pos_integer}
+          units: nil | %{String.t() => pos_integer},
+          reals: nil | %{String.t() => :real | :lreal}
         }
 end

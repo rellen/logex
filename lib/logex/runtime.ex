@@ -348,6 +348,22 @@ defmodule Logex.Runtime do
                  into: %{},
                  do: {String.to_atom(word), {Declarations.width(from), to}}
 
+  # M5-10 (decisions 148, 150, 161 and 162): the reals, the 34 real conversions, each
+  # symbol to the type it writes, and the 16 truncations, each to its integer type.
+  @reals Declarations.reals()
+
+  @real_conversions for from <- @integers ++ @reals,
+                        to <- @integers ++ @reals,
+                        from in @reals or to in @reals,
+                        word = Declarations.conversion(from, to),
+                        into: %{},
+                        do: {String.to_atom(word), to}
+
+  @truncations for from <- @reals,
+                   to <- @integers,
+                   into: %{},
+                   do: {String.to_atom("#{from}_trunc_#{to}"), to}
+
   # The resource (M2-1): the configuration it runs; `now`, its clock; `globals`, one value
   # for each global, the input points' among them; `instances`, each program instance's
   # state by name; `tasks`, each task's next due time and overlap count by name; and
@@ -715,7 +731,8 @@ defmodule Logex.Runtime do
   # whose one-shots, counters and pulse timers did not run either.
   defp run(
          %Instance{env: env, ons_blocked: blocked} = state,
-         %Program{rungs: rungs, tags: tags, blocks: blocks, units: units} = program,
+         %Program{rungs: rungs, tags: tags, blocks: blocks, units: units, reals: reals} =
+           program,
          %Scan{now: now, first: first}
        ) do
     tree = tree(blocked)
@@ -726,7 +743,8 @@ defmodule Logex.Runtime do
       ons_blocked: tree,
       tags: tags,
       blocks: blocks,
-      units: units
+      units: units,
+      reals: reals
     }
 
     {unrun, env} = unrun(tree, rungs(rungs, env, scan))
@@ -779,6 +797,21 @@ defmodule Logex.Runtime do
          %Fault{
            severity: :major,
            kind: :bit_out_of_range,
+           instruction: symbol,
+           path: path,
+           file: file,
+           line: line,
+           read: read
+         }
+       ]
+
+  # M5-10 (decision 164): a negative source of `sqrt`, a minor fault, with the value read.
+  defp placed({:negative_sqrt, {symbol, line}, read}, path, file)
+       when is_atom(symbol) and is_integer(line),
+       do: [
+         %Fault{
+           severity: :minor,
+           kind: :negative_sqrt,
            instruction: symbol,
            path: path,
            file: file,
@@ -1016,6 +1049,11 @@ defmodule Logex.Runtime do
 
   defp of_type(type, value, _path, _blocks, acc) when is_fitting(type, value), do: acc
 
+  # M5-10 (decision 150): a real holds a float that is one of its values, a single's for a
+  # `real`, never −0.0 and no subnormal, and never an integer: a real's zero is 0.0.
+  defp of_type(type, value, path, _blocks, acc) when type in @reals,
+    do: real_held(Logex.Real.value?(type, value), type, value, path, acc)
+
   defp of_type(type, value, path, _blocks, acc) when is_elementary(type),
     do: [outside(type, value, path) | acc]
 
@@ -1054,6 +1092,9 @@ defmodule Logex.Runtime do
 
   defp later(value, now), do: "#{value} is later than the instance's now, #{now}"
 
+  defp real_held(true, _type, _value, _path, acc), do: acc
+  defp real_held(false, type, value, path, acc), do: [outside(type, value, path) | acc]
+
   defp held_block({:ok, %FbType{} = type}, map, path, blocks, acc),
     do: of_type(type, map, path, blocks, acc)
 
@@ -1091,6 +1132,14 @@ defmodule Logex.Runtime do
   # type's misfit, a bool's 2 among them; a value that is no integer, 37.5, nil or "x", in
   # a bool the same words, shown as the host gave it, and in an integer type the words an
   # input that is no integer is told.
+  # M5-10: a real's value is a float, and one of its own: a float past a `real`'s range is
+  # told its range, and any other float that is no value of the type the nearest that is.
+  defp unfitting(:real, type, value) when is_float(value),
+    do: unreal(Logex.Real.in_range?(type, value), type, value)
+
+  defp unfitting(:real, _type, value),
+    do: "its value must be a float, found #{inspect(value)}"
+
   defp unfitting(_kind, type, value) when is_integer(value),
     do: Declarations.misfit(type, "#{value}")
 
@@ -1098,6 +1147,13 @@ defmodule Logex.Runtime do
 
   defp unfitting(_integer, _type, value),
     do: "its value must be an integer, found #{inspect(value)}"
+
+  defp unreal(true, type, value),
+    do:
+      "#{inspect(value)} is no value of #{Declarations.a_type(type)}, whose nearest is " <>
+        inspect(Logex.Real.nearest(type, value))
+
+  defp unreal(false, type, value), do: Declarations.misfit(type, inspect(value))
 
   defp scan!(%Scan{now: now}, _state) when not is_integer(now) or now < 0,
     do: raise(ArgumentError, "scan.now must be #{ms()}, got: #{inspect(now)}")
@@ -1127,6 +1183,14 @@ defmodule Logex.Runtime do
         ArgumentError,
         "scan.units is the runtime's, taken from the program: a host leaves it out, " <>
           "got: #{inspect(units)}"
+      )
+
+  defp scan!(%Scan{reals: reals}, _state) when reals != nil,
+    do:
+      raise(
+        ArgumentError,
+        "scan.reals is the runtime's, taken from the program: a host leaves it out, " <>
+          "got: #{inspect(reals)}"
       )
 
   defp scan!(%Scan{blocks: blocks}, _state) when blocks != nil,
@@ -1177,7 +1241,7 @@ defmodule Logex.Runtime do
     problems =
       for {key, value} <- Enum.sort(inputs), problem = problem(key, value, program), do: problem
 
-    merged(problems, state, env, inputs)
+    merged(problems, state, {env, program}, inputs)
   end
 
   defp merge!(_state, _program, inputs),
@@ -1188,7 +1252,13 @@ defmodule Logex.Runtime do
           "got: #{inspect(inputs)}"
       )
 
-  defp merged([], state, env, inputs), do: %{state | env: Map.merge(env, inputs)}
+  defp merged([], state, {env, %Program{reals: nil}}, inputs),
+    do: %{state | env: Map.merge(env, inputs)}
+
+  # M5-10 (decision 166): an input into a real is the real's nearest value, an integer's
+  # precision lost silently, 16,777,217 into a `real` stored as 16777216.0.
+  defp merged([], state, {env, %Program{reals: reals}}, inputs),
+    do: %{state | env: Map.merge(env, Map.new(inputs, &as_input(&1, reals)))}
 
   defp merged(problems, _state, _env, _inputs),
     do: raise(ArgumentError, Enum.join(once(problems), "\n"))
@@ -1265,6 +1335,13 @@ defmodule Logex.Runtime do
          "input `#{tag.name}` is #{Declarations.a_type(tag.type)}: its value must be an integer, " <>
            "found #{inspect(value)}"
 
+  # M5-10 (decision 166): a real's input is a number, an integer or a float, stored as the
+  # real's nearest value, only one past its range refused.
+  defp fit(:real, tag, value) when not is_number(value),
+    do:
+      "input `#{tag.name}` is #{Declarations.a_type(tag.type)}: its value must be a number, " <>
+        "found #{inspect(value)}"
+
   defp fit(_kind, %Tag{type: type} = tag, value),
     do: fits(Declarations.fits?(type, value), tag, value)
 
@@ -1315,6 +1392,7 @@ defmodule Logex.Runtime do
       )
 
     points = Enum.map(config.globals, &{&1, Configuration.location(&1.at)})
+    by_name = Map.new(config.globals, &{&1.name, &1})
 
     %{
       tasks:
@@ -1327,14 +1405,43 @@ defmodule Logex.Runtime do
       untimed: {untimed, Map.get(by_task, nil, [])},
       types: types,
       copy_in: grouped(config.instances, Map.get(sections, :var_input, [])),
-      copy_out: grouped(config.instances, Map.get(sections, :var_output, [])),
+      copy_out:
+        grouped(
+          config.instances,
+          Enum.map(Map.get(sections, :var_output, []), &widened_out(&1, config, {types, by_name}))
+        ),
       inputs: Map.new(for {global, {:ok, {_, "i", _}}} <- points, do: {global.name, global.type}),
+      reals:
+        some(
+          for {global, {:ok, {_, "i", _}}} <- points,
+              global.type in @reals,
+              do: {global.name, global.type}
+        ),
       outputs: for({global, {:ok, {_, "q", _}}} <- points, do: global.name),
-      globals: Map.new(config.globals, &{&1.name, &1}),
+      globals: by_name,
       externals:
         Map.new(config.instances, &{&1.name, externals(Map.fetch!(config.programs, &1.type))})
     }
   end
+
+  defp some([]), do: nil
+  defp some(pairs), do: Map.new(pairs)
+
+  # M5-10: a connection's copy-out of an integer into a real global, decision 159's widening,
+  # which writes the real's nearest value, marked with the real's type; every other kept as
+  # it was.
+  defp widened_out({instance, {member, global}} = connection, config, {types, globals}) do
+    %Tag{type: from} =
+      Map.fetch!(Map.fetch!(config.programs, Map.fetch!(types, instance)).tags, member)
+
+    %Configuration.Global{type: to} =
+      Map.fetch!(globals, global)
+
+    out_as(from in @integers and to in @reals, connection, to)
+  end
+
+  defp out_as(true, {instance, {member, global}}, to), do: {instance, {member, {to, global}}}
+  defp out_as(false, connection, _to), do: connection
 
   defp externals(%Program{tags: tags}),
     do: for({name, %Tag{section: :var_external}} <- tags, do: name)
@@ -1381,7 +1488,7 @@ defmodule Logex.Runtime do
           problem = point_problem(key, value, runtime),
           do: problem
 
-    imaged(problems, globals, inputs)
+    imaged(problems, {globals, runtime.wiring}, inputs)
   end
 
   defp image!(_runtime, inputs),
@@ -1392,7 +1499,11 @@ defmodule Logex.Runtime do
           "got: #{inspect(inputs)}"
       )
 
-  defp imaged([], globals, inputs), do: Map.merge(globals, inputs)
+  defp imaged([], {globals, %{reals: nil}}, inputs), do: Map.merge(globals, inputs)
+
+  # M5-10 (decision 166): a real input point's value is the real's nearest value.
+  defp imaged([], {globals, %{reals: reals}}, inputs),
+    do: Map.merge(globals, Map.new(inputs, &as_input(&1, reals)))
 
   defp imaged(problems, _globals, _inputs),
     do: raise(ArgumentError, Enum.join(once(problems), "\n"))
@@ -1582,8 +1693,12 @@ defmodule Logex.Runtime do
     state = %{state | env: Map.drop(state.env, externals), faults: []}
 
     globals =
-      Enum.reduce(Map.fetch!(wiring.copy_out, name), globals, fn {member, global}, globals ->
-        Map.put(globals, global, Map.fetch!(outputs, member))
+      Enum.reduce(Map.fetch!(wiring.copy_out, name), globals, fn
+        {member, {to, global}}, globals ->
+          Map.put(globals, global, as_real(to, Map.fetch!(outputs, member)))
+
+        {member, global}, globals ->
+          Map.put(globals, global, Map.fetch!(outputs, member))
       end)
 
     {%{runtime | instances: Map.put(runtime.instances, name, state), globals: globals},
@@ -1606,10 +1721,22 @@ defmodule Logex.Runtime do
   defp global_fit(%Configuration.Global{type: type}, value, acc) when is_fitting(type, value),
     do: acc
 
+  defp global_fit(%Configuration.Global{type: type} = global, value, acc) when type in @reals,
+    do: real_global(Logex.Real.value?(type, value), global, value, acc)
+
   defp global_fit(%Configuration.Global{name: name, type: type}, value, acc),
     do: [
       "runtime.globals holds `#{name}` outside its type: it is " <>
         "#{Declarations.a_type(type)}, and " <> unfitting(Declarations.kind(type), type, value)
+      | acc
+    ]
+
+  defp real_global(true, _global, _value, acc), do: acc
+
+  defp real_global(false, %Configuration.Global{name: name, type: type}, value, acc),
+    do: [
+      "runtime.globals holds `#{name}` outside its type: it is " <>
+        "#{Declarations.a_type(type)}, and " <> unfitting(:real, type, value)
       | acc
     ]
 
@@ -1965,8 +2092,16 @@ defmodule Logex.Runtime do
     {false, env}
   end
 
-  defp evaluate({:move, _, [source, destination]}, {true, env}, _scan) do
+  # M5-10 (decision 150): a `move` into a real writes the real's nearest value, an integer
+  # widened into it and a real literal rounded to a single, which a routine's `reals` names
+  # (`Logex.Program`); a routine of no real, `reals` nil, matches the first clause and moves
+  # as it did before reals.
+  defp evaluate({:move, _, [source, destination]}, {true, env}, %Scan{reals: nil}) do
     {true, write(env, destination, read(env, source))}
+  end
+
+  defp evaluate({:move, _, [source, destination]}, {true, env}, %Scan{reals: reals}) do
+    {true, write(env, destination, as_real(real_of(destination, reals), read(env, source)))}
   end
 
   defp evaluate({:move, _, _}, {false, env}, _scan) do
@@ -2049,7 +2184,7 @@ defmodule Logex.Runtime do
     {power, value} =
       wrapped(
         type_at({op, line}, destination, scan),
-        sum(op, integer(read(env, a)), integer(read(env, b)))
+        sum(op, number(read(env, a)), number(read(env, b)))
       )
 
     {power, write(env, destination, value)}
@@ -2068,7 +2203,7 @@ defmodule Logex.Runtime do
   # `add`'s sum does (decision 146); a remainder always fits. The power out is otherwise true. De-energised, nothing is
   # written and no power passes.
   defp evaluate({op, line, [a, b, destination]}, {true, env}, scan) when op in @divisions do
-    divided({op, line}, integer(read(env, a)), integer(read(env, b)), {destination, scan}, env)
+    divided({op, line}, number(read(env, a)), number(read(env, b)), {destination, scan}, env)
   end
 
   defp evaluate({op, _, _}, {false, env}, _scan) when op in @divisions do
@@ -2082,7 +2217,7 @@ defmodule Logex.Runtime do
   # written and no power passes.
   defp evaluate({op, line, [a, destination]}, {true, env}, scan) when op in @signs do
     {power, value} =
-      wrapped(type_at({op, line}, destination, scan), signed(op, integer(read(env, a))))
+      wrapped(type_at({op, line}, destination, scan), signed(op, number(read(env, a))))
 
     {power, write(env, destination, value)}
   end
@@ -2126,6 +2261,53 @@ defmodule Logex.Runtime do
   end
 
   defp evaluate({op, _, _}, {false, env}, _scan) when is_map_key(@transfers, op) do
+    {false, env}
+  end
+
+  # M5-10: the 34 real conversions (docs/naming.md's `real_to_int` family stanza; IEC's
+  # typed `<FROM>_TO_<TO>`, Ed 3 Tables 22 and 23; decisions 148, 150 and 161). Energised,
+  # a real into an integer type is rounded to the nearest, a tie to the even neighbour, and
+  # wrapped into the type where it does not fit, its low bits kept, with no power and no
+  # fault: `real_to_int` of 2.5 is 2 and of 40000.7 -25535; anything into a real is the
+  # real's nearest value, an integer rounded once, a real past a `real`'s range saturated
+  # with no power. De-energised, nothing is written and no power passes.
+  defp evaluate({op, _, [source, destination]}, {true, env}, _scan)
+       when is_map_key(@real_conversions, op) do
+    {power, value} = converted(:erlang.map_get(op, @real_conversions), number(read(env, source)))
+    {power, write(env, destination, value)}
+  end
+
+  defp evaluate({op, _, _}, {false, env}, _scan) when is_map_key(@real_conversions, op) do
+    {false, env}
+  end
+
+  # M5-10: the 16 truncations, `real_trunc_int` and the rest (docs/naming.md's
+  # `real_trunc_int` family stanza; IEC's Table 22 feature 2b; decisions 161 and 162):
+  # energised, the source's fraction dropped, toward zero, `real_trunc_int` of -1.6 giving
+  # -1, and wrapped where the whole part does not fit, with no power and no fault, 40000.7
+  # giving -25536. De-energised, nothing is written and no power passes.
+  defp evaluate({op, _, [source, destination]}, {true, env}, _scan)
+       when is_map_key(@truncations, op) do
+    {power, value} = wrapped(:erlang.map_get(op, @truncations), trunc(number(read(env, source))))
+    {power, write(env, destination, value)}
+  end
+
+  defp evaluate({op, _, _}, {false, env}, _scan) when is_map_key(@truncations, op) do
+    {false, env}
+  end
+
+  # M5-10: `sqrt` (docs/naming.md; IEC's SQRT, Ed 3 Table 28; decisions 79 and 164).
+  # Energised, the source is read, a number, and its root computed in the destination's
+  # type, a real's, rounded to it, with power; a negative source writes 0.0, passes no power
+  # and raises the minor fault `:negative_sqrt`, recorded in the routine's env as a zero
+  # divisor is, with the value read, the source checked before the BEAM's root is called,
+  # which would raise. `-0.0` is no value a state holds, so a source is never one.
+  # De-energised, nothing is written and no power passes.
+  defp evaluate({:sqrt, line, [source, destination]}, {true, env}, scan) do
+    rooted({:sqrt, line}, number(read(env, source)), {destination, scan}, env)
+  end
+
+  defp evaluate({:sqrt, _, _}, {false, env}, _scan) do
     {false, env}
   end
 
@@ -2442,7 +2624,10 @@ defmodule Logex.Runtime do
   # for a hand-built env a `ton` finds no timer in.
   defp called(
          %Tag{
-           type: %FbType{body: %Program{rungs: rungs, tags: own, file: file, units: units}} = type
+           type:
+             %FbType{
+               body: %Program{rungs: rungs, tags: own, file: file, units: units, reals: own_reals}
+             } = type
          },
          instance,
          operands,
@@ -2453,10 +2638,10 @@ defmodule Logex.Runtime do
     slots = Enum.zip(formals, operands)
     state = Enum.reduce(slots, members_of(Map.get(env, instance)), &copy_in(&1, &2, env))
     inner = as_map(Map.get(blocked, instance))
-    body = %{scan | tags: own, ons_blocked: inner, units: units}
+    body = %{scan | tags: own, ons_blocked: inner, units: units, reals: own_reals}
     {state, env} = ran(instance, rungs(rungs, state, body), env)
     {state, env} = raised(Map.pop(state, @faults, []), instance, file, env)
-    Enum.reduce(slots, Map.put(env, instance, state), &copy_out(&1, &2, state))
+    Enum.reduce(slots, Map.put(env, instance, state), &copy_out(&1, &2, state, scan.reals))
   end
 
   defp called(_not_a_block, _instance, _operands, env, _scan), do: env
@@ -2486,15 +2671,25 @@ defmodule Logex.Runtime do
   end
 
   # M2-5: a `cal`'s copy-in and copy-out, by the formal each operand fills.
+  # M5-10 (decisions 150 and 159): a formal that is a real takes its operand's nearest value,
+  # an integer widened into it, and an operand that is a real takes its formal's, by the
+  # routine's `reals`, nil for a routine of none, which copies as it did before reals.
+  defp copy_in({{{:value, type}, %Member{name: name}}, operand}, state, env)
+       when type in @reals,
+       do: Map.put(state, name, as_real(type, read(env, operand)))
+
   defp copy_in({{{:value, _}, %Member{name: name}}, operand}, state, env),
     do: Map.put(state, name, read(env, operand))
 
   defp copy_in(_output, state, _env), do: state
 
-  defp copy_out({{{:write, _}, %Member{name: name}}, operand}, env, state),
+  defp copy_out({{{:write, _}, %Member{name: name}}, operand}, env, state, nil),
     do: write(env, operand, Map.get(state, name, 0))
 
-  defp copy_out(_input, env, _state), do: env
+  defp copy_out({{{:write, _}, %Member{name: name}}, operand}, env, state, reals),
+    do: write(env, operand, as_real(real_of(operand, reals), Map.get(state, name, 0)))
+
+  defp copy_out(_input, env, _state, _reals), do: env
 
   # M3-1: one run of a counter's side. Its kind is its tag's type in the routine's table;
   # an instance a program built by hand holds no tag for counts as the mnemonic's own. The
@@ -2620,24 +2815,81 @@ defmodule Logex.Runtime do
   defp bit(value), do: one(closed?(value))
 
   # M3-3: the exact result of two sources, before it is wrapped into a dint.
-  defp sum(:add, a, b), do: a + b
-  defp sum(:sub, a, b), do: a - b
-  defp sum(:mul, a, b), do: a * b
+  defp sum(:add, a, b) when is_integer(a) and is_integer(b), do: a + b
+  defp sum(:sub, a, b) when is_integer(a) and is_integer(b), do: a - b
+  defp sum(:mul, a, b) when is_integer(a) and is_integer(b), do: a * b
+
+  # M5-10: a sum of reals, one past an `lreal`'s range an overflow of its sign.
+  defp sum(:add, a, b), do: floated(fn -> a + b end, sign(a))
+  defp sum(:sub, a, b), do: floated(fn -> a - b end, sign(a))
+  defp sum(:mul, a, b), do: floated(fn -> a * b end, sign(a) * sign(b))
+
+  defp sign(b) when b < 0, do: -1
+  defp sign(_b), do: 1
 
   # M3-3: a division, by a divisor that is 0 or not. A zero divisor is a minor fault the
   # scan reports (decision 99), recorded in the routine's env as `{symbol, line}` until the
   # routine is done, which places it (`faulted/2`, `raised/4`).
-  defp divided(at, _a, 0, {destination, _scan}, env),
+  # M5-10 (decision 150): a real's zero divisor, 0.0 or an integer 0, writes 0.0, a real's
+  # zero, which a routine of no real, `reals` nil, never meets.
+  defp divided(at, _a, b, {destination, %Scan{reals: nil}}, env) when b == 0,
     do:
       {false, Map.put(write(env, destination, 0), @faults, [at | as_list(Map.get(env, @faults))])}
 
+  defp divided(at, _a, b, {destination, %Scan{reals: reals}}, env) when b == 0,
+    do:
+      {false,
+       Map.put(
+         write(env, destination, zero_in(real_of(destination, reals))),
+         @faults,
+         [at | as_list(Map.get(env, @faults))]
+       )}
+
   defp divided({op, _line} = at, a, b, {destination, scan}, env) do
-    {power, value} = wrapped(type_at(at, destination, scan), quotient(op, a, b))
+    type = type_at(at, destination, scan)
+    {power, value} = wrapped(type, quotient(type, op, a, b))
     {power, write(env, destination, value)}
   end
 
-  defp quotient(:div, a, b), do: div(a, b)
-  defp quotient(:mod, a, b), do: rem(a, b)
+  # M5-10: `div` into a real is real division, its sources' integers too, `div i j r`
+  # computing 7 / 2 as 3.5 in a real; one past an `lreal`'s range, which raises on the BEAM,
+  # is an overflow the wrap saturates (decision 150).
+  defp quotient(type, :div, a, b) when type in @reals,
+    do: floated(fn -> a / b end, sign(a) * sign(b))
+
+  defp quotient(_type, :div, a, b), do: div(a, b)
+  defp quotient(_type, :mod, a, b), do: rem(a, b)
+
+  defp zero_in(:none), do: 0
+  defp zero_in(_real), do: 0.0
+
+  # M5-10: a real result the BEAM cannot hold, an `lreal`'s past its range, which raises,
+  # given as an overflow of the sign it would have had, the wrap saturating it (wrapped/2).
+  defp floated(computed, sign) do
+    computed.()
+  rescue
+    ArithmeticError -> {:overflow, sign}
+  end
+
+  defp rooted(at, value, {destination, _scan}, env) when value < 0,
+    do:
+      {false,
+       Map.put(write(env, destination, 0.0), @faults, [
+         {:negative_sqrt, at, value} | as_list(Map.get(env, @faults))
+       ])}
+
+  defp rooted(at, value, {destination, scan}, env) do
+    {power, root} = wrapped(root_type(at, destination, scan), :math.sqrt(value))
+    {power, write(env, destination, root)}
+  end
+
+  # A real conversion's result, rounded into an integer and wrapped, or the nearest value
+  # of a real.
+  defp converted(to, value) when to in @reals, do: Logex.Real.stored(to, value)
+  defp converted(to, value), do: wrapped(to, rounded(value))
+
+  defp rounded(value) when is_float(value), do: Logex.Real.round_even(value)
+  defp rounded(value), do: value
 
   defp signed(:neg, a), do: -a
   defp signed(:abs, a), do: abs(a)
@@ -2743,7 +2995,23 @@ defmodule Logex.Runtime do
   defp widened(from, type, pattern), do: transfer(type, transfer(from, pattern))
 
   defp tag_type(%Tag{type: type}, _met) when type in @integers, do: type
+  # M5-10: a real, which the arithmetic computes in too (decision 147).
+  defp tag_type(%Tag{type: type}, _met) when type in @reals, do: type
   defp tag_type(_no_integer, met), do: refused_at(met)
+
+  # M5-10: the type `sqrt` computes in, its destination's, a real's, by the one rule
+  # `Logex.Program.destination/3` reads as `:real`; a destination it does not take raises as
+  # type_at/3's does.
+  defp root_type(at, {:name, _, name} = destination, %Scan{tags: tags}),
+    do: root_of(Map.get(tags, name), {at, destination, tags})
+
+  defp root_type(at, destination, %Scan{tags: tags}), do: rooted_at({at, destination, tags})
+
+  defp root_of(%Tag{type: type}, _met) when type in @reals, do: type
+  defp root_of(_no_real, met), do: rooted_at(met)
+
+  defp rooted_at({at, destination, tags}),
+    do: computes_in(Program.destination(destination, tags, :real), at, destination)
 
   defp member_type(%Tag{type: %FbType{body: nil} = type}, member, met),
     do: member_of(FbType.member(type, member), met)
@@ -2782,11 +3050,18 @@ defmodule Logex.Runtime do
     defp wrapped(unquote(type), value), do: {false, low(unquote(kind), unquote(width), value)}
   end
 
+  # M5-10 (decision 150): a real result is the real's nearest value, with power, or past its
+  # range saturated at its largest finite value, the sign kept, with no power.
+  defp wrapped(type, {:overflow, sign}) when type in @reals,
+    do: {false, sign * Logex.Real.max(type)}
+
+  defp wrapped(type, value) when type in @reals, do: Logex.Real.stored(type, value)
+
   # M5-8: a bit pattern into a type of the table, its low bits kept, read in two's
   # complement for a signed type and as unsigned for an unsigned type and a bit string (a
   # binary transfer, Ed 3 Tables 24 and 25), and since decision 206 for a bool, one bit,
   # which a bitwise instruction computes in.
-  for %{type: type, kind: kind, width: width} <- Declarations.table() do
+  for %{type: type, kind: kind, width: width} <- Declarations.table(), kind != :real do
     defp transfer(unquote(type), pattern),
       do: low(unquote(Map.get(%{signed: :signed}, kind, :unsigned)), unquote(width), pattern)
   end
@@ -3021,6 +3296,20 @@ defmodule Logex.Runtime do
   defp integer(value) when is_integer(value), do: value
   defp integer(_not_an_integer), do: 0
 
+  defp as_input({name, value}, reals), do: {name, as_real(:maps.get(name, reals, :none), value)}
+
+  # M5-10: an arithmetic source, an integer or a real.
+  defp number(value) when is_number(value), do: value
+  defp number(_not_a_number), do: 0
+
+  # M5-10 (decision 150): a value written into a real, its nearest value, an integer widened
+  # into it, or into nothing that is a real, as it is.
+  defp real_of({:name, _, name}, reals), do: :maps.get(name, reals, :none)
+  defp real_of(_member, _reals), do: :none
+
+  defp as_real(:none, value), do: value
+  defp as_real(type, value), do: elem(Logex.Real.stored(type, value), 1)
+
   defp one(true), do: 1
   defp one(false), do: 0
 
@@ -3047,6 +3336,10 @@ defmodule Logex.Runtime do
   # Decision 202: a literal written other than as its plain decimal keeps its spelling,
   # which no scan reads.
   defp read(_env, {:int_lit, _, value, _spelling}), do: value
+
+  # M5-10: a real literal's own value, its spelling unread.
+  defp read(_env, {:real_lit, _, value}), do: value
+  defp read(_env, {:real_lit, _, value, _spelling}), do: value
 
   defp walk(value, []), do: value
   defp walk(%{} = map, [key | path]), do: walk(Map.get(map, key, 0), path)

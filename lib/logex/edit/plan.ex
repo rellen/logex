@@ -22,6 +22,8 @@ defmodule Logex.Edit.Plan do
   # The instructions that run a built-in instance (Logex.FbType.rules/1, M3-1).
   @runners FbType.runners()
   @one_shots Walk.one_shots()
+  # M5-10: the reals, whose initial values start at their nearest values.
+  @reals Declarations.reals()
 
   @doc false
   # The record an edit starts with, of each instance it moves.
@@ -265,7 +267,9 @@ defmodule Logex.Edit.Plan do
   defp type_of(type, %Member{} = member), do: FbType.type_of(type, member)
 
   # Decision 29: an elementary tag both declare, of one type, a bool or any integer width
-  # since M5-3 (decision 157), whose initial value differs,
+  # since M5-3 (decision 157), whose initial value differs, since M5-10 a real's too, its
+  # declared values compared exactly, as decision 157 has it, `var x real 0` and `var x real
+  # 0.0` two values, `{0, 0.0}`, though either starts a new instance at 0.0,
   # and that is no var_input of `to`, since a restart keeps a var_input's value. OE-2: nor
   # a var_external that is a global in either, whose value and initial value are the
   # global's.
@@ -277,9 +281,15 @@ defmodule Logex.Edit.Plan do
         not is_map_key(to.inputs, name),
         not is_map_key(to.shared, name) and not is_map_key(from.shared, name),
         {:ok, %Tag{type: ^type}} <- [Map.fetch(from.tags, name)],
-        Map.fetch!(from.initial, name) != Map.fetch!(to.initial, name),
-        do: {name, Map.fetch!(from.initial, name), Map.fetch!(to.initial, name)}
+        {old, new} = {declared(Map.fetch!(from.tags, name)), declared(Map.fetch!(to.tags, name))},
+        old !== new,
+        do: {name, old, new}
       )
+
+  # A tag's declared initial value, or its type's zero where it declares none, as a new
+  # instance starts it but for a real's rounding.
+  defp declared(%Tag{type: type, initial: nil}), do: Declarations.zero(type)
+  defp declared(%Tag{initial: initial}), do: initial
 
   # M2-5: an instance of a user block fits by being a map: which members it holds is the
   # nested migration's to settle, member by member (below).
@@ -467,6 +477,8 @@ defmodule Logex.Edit.Plan do
   # Decision 202: a literal is compared by its value, as a preset is, so an edit that only
   # respells one, `16#ff` for `255`, leaves its rung the same rung.
   defp operand({:int_lit, _line, value, _spelling}), do: {:int_lit, value}
+  # M5-10: so is a real literal, `1.5e3` the same rung as `1500.0`.
+  defp operand({:real_lit, _line, value, _spelling}), do: {:real_lit, value}
 
   # ---- M2-5: the state inside a user block's instances, across a switch -----------------
 
@@ -767,7 +779,7 @@ defmodule Logex.Edit.Plan do
     path = prefix <> "." <> name
 
     starts?(Map.fetch(elem(acc, 0), name), not kept?, type, first?)
-    |> started(name, path, initial, acc)
+    |> started(name, path, start_of(type, initial), acc)
     |> initial_changed({kept?, old, initial}, path)
   end
 
@@ -810,6 +822,10 @@ defmodule Logex.Edit.Plan do
         {map, reports, pre}
       )
 
+  # M5-10 (decision 150): a member that is a real starts at its declared value's nearest.
+  defp start_of(type, initial) when type in @reals, do: Logex.Real.nearest(type, initial)
+  defp start_of(_type, initial), do: initial
+
   defp started(true, name, path, initial, {map, reports, pre}),
     do: {:started, {Map.put(map, name, initial), [{:added, path, initial} | reports], pre}}
 
@@ -817,7 +833,8 @@ defmodule Logex.Edit.Plan do
 
   defp initial_changed({:started, acc}, _initials, _path), do: acc
 
-  defp initial_changed({:kept, {map, reports, pre}}, {true, old, new}, path) when old != new,
+  # Decision 157 (M5-10): compared exactly, so that 0 and 0.0 are two values.
+  defp initial_changed({:kept, {map, reports, pre}}, {true, old, new}, path) when old !== new,
     do: {map, [{:initial_changed, path, {old, new}} | reports], pre}
 
   defp initial_changed({:kept, acc}, _initials, _path), do: acc

@@ -438,9 +438,9 @@ defmodule Logex.Configuration.TextTest do
                "line 6, column 15: `e2` needs a type before its initial value `1`",
                "line 7, column 15: `k1` needs a type before `at`, as in " <>
                  "`var_global k1 bool at panel.q.0`",
-               "line 8, column 14: unknown type `boolean`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `byte`, `word`, `dword` or `lword` " <>
+               "line 8, column 14: unknown type `boolean`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword` or `lword` " <>
                  "— did you mean `bool`?",
-               "line 9, column 15: `t1` cannot be a `ton`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `byte`, `word`, `dword` or `lword`, " <>
+               "line 9, column 15: `t1` cannot be a `ton`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword` or `lword`, " <>
                  "and a ton is declared inside a program, as in `var t1 ton`",
                "line 10, column 19: `at` needs a location, as in `at panel.i.0`",
                "line 11, column 22: `at` needs a location, as in `at panel.i.0`, found `5`",
@@ -452,9 +452,9 @@ defmodule Logex.Configuration.TextTest do
 
       # M3-2: each built-in type with its article by how its word is said, `an rto`.
       assert errors("var_global l rto\nvar_global h tp\n") == [
-               "line 1, column 14: `l` cannot be an `rto`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `byte`, `word`, `dword` or `lword`, " <>
+               "line 1, column 14: `l` cannot be an `rto`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword` or `lword`, " <>
                  "and an rto is declared inside a program, as in `var l rto`",
-               "line 2, column 14: `h` cannot be a `tp`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `byte`, `word`, `dword` or `lword`, " <>
+               "line 2, column 14: `h` cannot be a `tp`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword` or `lword`, " <>
                  "and a tp is declared inside a program, as in `var h tp`"
              ]
 
@@ -534,7 +534,7 @@ defmodule Logex.Configuration.TextTest do
       source = """
       var_global a bool
       var_global estop
-      var_global b real
+      var_global b float
       var_global c bool at
       program m1
       program m2 motor fast
@@ -695,8 +695,8 @@ defmodule Logex.Configuration.TextTest do
             {%{a | name: "a b"}, "a name lexes as one name token"},
             {%{a | name: :a}, "a name lexes as one name token"},
             {%{a | at: "%ix0.0"}, "a name lexes as one name token"},
-            {%{a | type: :real},
-             "a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword"},
+            {%{a | type: :float},
+             "a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :real, :lreal, :byte, :word, :dword or :lword"},
             {%{a | initial: 1.0}, "a number is an integer"},
             {%{m1 | type: "a b"}, "a name lexes as one name token"},
             {%{m1 | task: "a b"}, "a name lexes as one name token"},
@@ -735,18 +735,22 @@ defmodule Logex.Configuration.TextTest do
             {%{start | member: ""}, "a name lexes as one name token"},
             {%{start | member: :start}, "a name lexes as one name token"},
             {%{start | to: "x y"}, "a name lexes as one name token"},
-            {%{start | to: 1.0}, "a connection is to a global, by its name, or to a constant"},
+            # M5-10: a constant may be a real, `m1.sp 37.5`, so a float is one; a real
+            # global's real initial value is one of its type's values, as a line reads it.
+            {%{start | to: [1]}, "a connection is to a global, by its name, or to a constant"},
+            {%{a | type: :real, initial: 0.1},
+             "a real global's real initial value is one of its type's values, as a line reads it"},
             {%{start | to: {:global, "g"}},
              "a connection is to a global, by its name, or to a constant"},
             # A keyword a line reads in a global's name place: no line can say these.
             {%{a | name: "AT"},
-             "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lword`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
+             "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `real`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
                "word as its keyword"},
             {%{a | name: "bool"},
-             "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lword`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
+             "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `real`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
                "word as its keyword"},
             {%{a | name: "Dint"},
-             "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lword`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
+             "a global's name is not `at`, `bool`, `byte`, `dint`, `dword`, `int`, `lint`, `lreal`, `lword`, `real`, `sint`, `udint`, `uint`, `ulint`, `usint` or `word`, in any case: a line reads that " <>
                "word as its keyword"}
           ] do
         assert_raise ArgumentError, unsaid(rule, entry), fn -> Text.entries!([m1, entry]) end

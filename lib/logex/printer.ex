@@ -64,6 +64,10 @@ defmodule Logex.Printer do
   defp tokens({:int_lit, _, value}), do: [Integer.to_string(value)]
   defp tokens({:int_lit, _, _value, spelling}), do: [spelling]
 
+  # M5-10: a real literal as written too, a plain one as its float's plain text.
+  defp tokens({:real_lit, _, value}), do: [Float.to_string(value)]
+  defp tokens({:real_lit, _, _value, spelling}), do: [spelling]
+
   defp tokens({:branches, []}) do
     raise ArgumentError,
           "cannot print a branch group with no legs: it would print as `( )`, " <>

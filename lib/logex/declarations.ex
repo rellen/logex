@@ -38,7 +38,7 @@ defmodule Logex.Declarations do
   """
 
   alias Logex.{Diagnostic, FbType, Parser, Tag}
-  import Logex.Parser, only: [is_int_lit: 1]
+  import Logex.Parser, only: [is_literal: 1]
   alias Logex.Configuration.Text
 
   @sections %{
@@ -60,19 +60,26 @@ defmodule Logex.Declarations do
   # adds IEC's four bit strings (Table 10 features 18 to 21, decision 155), each a row of N
   # bits, 0..2^N - 1, the unsigned integer IEC compares it as (§6.6.2.5.10), with no
   # arithmetic, and Figure 11's cells for them: a bool widens into each, and each into the
-  # wider ones, never into an integer nor an integer into one.
+  # wider ones, never into an integer nor an integer into one. M5-10 adds IEC's two reals
+  # (Table 10 features 10 and 11, decision 150), each of kind `:real` and no integer range,
+  # its zero 0.0, and Figure 11's cells for them: `sint int usint uint` widen into both,
+  # `dint` and `udint` into an `lreal` alone, and a `real` into an `lreal`.
   @table Enum.map(
            [
              {"bool", :boolean, 1, 0..1, "a", [:byte, :word, :dword, :lword]},
-             {"sint", :signed, 8, -128..127, "an", [:int, :dint, :lint]},
-             {"int", :signed, 16, -32_768..32_767, "an", [:dint, :lint]},
-             {"dint", :signed, 32, -2_147_483_648..2_147_483_647, "a", [:lint]},
+             {"sint", :signed, 8, -128..127, "an", [:int, :dint, :lint, :real, :lreal]},
+             {"int", :signed, 16, -32_768..32_767, "an", [:dint, :lint, :real, :lreal]},
+             {"dint", :signed, 32, -2_147_483_648..2_147_483_647, "a", [:lint, :lreal]},
              {"lint", :signed, 64, -9_223_372_036_854_775_808..9_223_372_036_854_775_807, "an",
               []},
-             {"usint", :unsigned, 8, 0..255, "a", [:uint, :udint, :ulint, :int, :dint, :lint]},
-             {"uint", :unsigned, 16, 0..65_535, "a", [:udint, :ulint, :dint, :lint]},
-             {"udint", :unsigned, 32, 0..4_294_967_295, "a", [:ulint, :lint]},
+             {"usint", :unsigned, 8, 0..255, "a",
+              [:uint, :udint, :ulint, :int, :dint, :lint, :real, :lreal]},
+             {"uint", :unsigned, 16, 0..65_535, "a",
+              [:udint, :ulint, :dint, :lint, :real, :lreal]},
+             {"udint", :unsigned, 32, 0..4_294_967_295, "a", [:ulint, :lint, :lreal]},
              {"ulint", :unsigned, 64, 0..18_446_744_073_709_551_615, "a", []},
+             {"real", :real, 32, nil, "a", [:lreal]},
+             {"lreal", :real, 64, nil, "an", []},
              {"byte", :bit_string, 8, 0..255, "a", [:word, :dword, :lword]},
              {"word", :bit_string, 16, 0..65_535, "a", [:dword, :lword]},
              {"dword", :bit_string, 32, 0..4_294_967_295, "a", [:lword]},
@@ -85,7 +92,7 @@ defmodule Logex.Declarations do
                kind: kind,
                width: width,
                range: range,
-               zero: 0,
+               zero: Map.get(%{real: 0.0}, kind, 0),
                article: article,
                widens: widens
              }
@@ -93,6 +100,11 @@ defmodule Logex.Declarations do
          )
 
   @types Map.new(@table, &{&1.word, &1.type})
+  # M5-10: the reals, `real` and `lreal`, of IEEE 754 single and double precision, held as
+  # BEAM floats (Logex.Real), whose range is no integer range: a row of the table with no
+  # `range`, which every guard and range message built from the table passes over.
+  @reals for %{kind: :real, type: type} <- @table, do: type
+  @ranged for %{range: range} = row <- @table, range != nil, do: row
   @rows Map.new(@table, &{&1.type, &1})
   @integers for %{kind: kind, type: type} <- @table, kind in [:signed, :unsigned], do: type
   @bit_strings for %{kind: :bit_string, type: type} <- @table, do: type
@@ -116,6 +128,8 @@ defmodule Logex.Declarations do
   @classes %{
     any_int: %{kinds: [:signed, :unsigned], word: "an integer"},
     any_num: %{kinds: [:signed, :unsigned, :real], word: "a number"},
+    # M5-10: IEC's ANY_REAL, what `sqrt` writes (Ed 3 Figure 5, Table 28).
+    any_real: %{kinds: [:real], word: "a real"},
     any_bitwise: %{
       kinds: [:boolean, :signed, :unsigned, :bit_string],
       word: "a bool, a bit string or an integer"
@@ -297,6 +311,9 @@ defmodule Logex.Declarations do
   @doc "The bit-string types, `byte word dword lword`, in the table's order (M5-8)."
   def bit_strings, do: @bit_strings
 
+  @doc "The real types, `real` and `lreal`, in the table's order (M5-10)."
+  def reals, do: @reals
+
   @typedoc "An elementary type, a row of `table/0`."
   @type elementary ::
           unquote(
@@ -311,10 +328,11 @@ defmodule Logex.Declarations do
   @doc """
   A guard: whether `value` is an integer that fits the elementary type `type`, as
   `fits?/2` says, built from the table's ranges (decision 171), so that a check of every
-  value a state holds costs a guard a value.
+  value a state holds costs a guard a value. A real, which has no integer range, never
+  passes it: its value is checked by `Logex.Real.value?/2` (M5-10).
   """
   defmacro is_fitting(type, value) do
-    @table
+    @ranged
     |> Enum.map(fn %{type: atom, range: first..last//1} ->
       quote do
         unquote(type) === unquote(atom) and is_integer(unquote(value)) and
@@ -391,6 +409,13 @@ defmodule Logex.Declarations do
   def conversion(from, to) when from in @convertible and to in @convertible and from != to,
     do: "#{word(from)}_to_#{word(to)}"
 
+  # M5-10 (decision 148): between a real and an integer type, either way, and between the
+  # two reals, Ed 3 Table 23's 34; none with a bit string or a bool (§4.12, "Conversions").
+  def conversion(from, to)
+      when (from in @reals and to in @integers) or (from in @integers and to in @reals) or
+             (from in @reals and to in @reals and from != to),
+      do: "#{word(from)}_to_#{word(to)}"
+
   def conversion(_from, _to), do: nil
 
   @doc "The types a conversion runs between, the integers and then the bit strings (M5-8)."
@@ -414,10 +439,72 @@ defmodule Logex.Declarations do
   """
   def unsigned_of(bits) when bits in @bit_strings, do: Map.fetch!(@unsigned_of, bits)
 
-  @doc "Whether an integer fits a type."
-  for %{type: type, range: range} <- @table do
+  @doc """
+  Whether a value fits a type, the rule for a value a host, a device or a force gives: an
+  integer of the type's range, and since M5-10 for a real a number, integer or float, whose
+  nearest value of the real is finite, its precision lost silently (decision 166).
+  """
+  for %{type: type, range: range} <- @ranged do
     def fits?(unquote(type), value), do: value in unquote(Macro.escape(range))
   end
+
+  def fits?(type, value) when type in @reals, do: Logex.Real.in_range?(type, value)
+
+  @doc """
+  Whether a literal's value is one of a type's (M5-10, decision 147's literal rules): an
+  integer type's, a bool's and a bit string's as `fits?/2` has it, an integer, so a real
+  literal is never one; a real's an integer it holds exactly, 16777216 and never 16777217
+  for a `real`, or a real literal whose nearest value is finite, which a write rounds.
+  """
+  for %{type: type, range: range} <- @ranged do
+    def holds?(unquote(type), value), do: value in unquote(Macro.escape(range))
+  end
+
+  def holds?(type, value) when type in @reals and is_integer(value),
+    do: Logex.Real.exact?(type, value)
+
+  def holds?(type, value) when type in @reals, do: Logex.Real.in_range?(type, value)
+
+  @doc """
+  What a message says of a literal's value that `holds?/2` refuses, after the type is
+  named (M5-10): a real literal where an integer or a bit string is wanted, `` `1.5` is a
+  real, and an int holds integers ``; an integer a real holds only to the nearest, ``
+  `16777217` is no real's: the nearest is 16777216.0 ``; and otherwise `misfit/2`'s words.
+  `shown` is the literal as written.
+  """
+  def literal_misfit(type, value, nil), do: literal_misfit(type, value, "it")
+
+  def literal_misfit(type, value, shown) when type in @reals and is_integer(value),
+    do: nearest_misfit(Logex.Real.in_range?(type, value), type, value, shown)
+
+  def literal_misfit(type, value, shown) when is_float(value) and type not in @reals,
+    do: "#{shown} is a real, and #{a_type(type)} #{integers_only(kind(type), type)}"
+
+  def literal_misfit(type, _value, "it"), do: misfit(type)
+  def literal_misfit(type, _value, shown), do: misfit(type, shown)
+
+  @doc """
+  Whether a literal's value is one of the generic type `class`'s, where no type is known
+  for it, a comparison's of two literals (M5-4): an integer within `class_range/1`, and
+  since M5-10 a real literal where the class holds a real.
+  """
+  def class_holds?(class, value) when is_integer(value), do: value in class_range(class)
+
+  def class_holds?(class, value) when is_float(value),
+    do: :real in Map.fetch!(@classes, class).kinds
+
+  defp nearest_misfit(true, type, value, shown),
+    do:
+      "#{shown} is no value of #{a_type(type)}, which holds integers exactly only to " <>
+        "#{exact_to(type)}: the nearest it holds is #{trunc(Logex.Real.nearest(type, value))}.0"
+
+  defp nearest_misfit(false, type, _value, shown), do: misfit(type, shown)
+
+  defp exact_to(:real), do: "2^24"
+  defp exact_to(:lreal), do: "2^53"
+
+  defp integers_only(:boolean, type), do: "holds only #{values(type)}"
+  defp integers_only(_integer_or_bits, _type), do: "holds only integers"
 
   @doc """
   What a message says of a value that does not fit a type, after the type is named, from
@@ -430,10 +517,19 @@ defmodule Logex.Declarations do
   def misfit(type, shown \\ nil) when type in @type_atoms,
     do: misfit_of(Map.fetch!(@rows, type), shown)
 
+  defp misfit_of(%{kind: :real} = row, nil), do: "it is #{range_words(row)}"
+  defp misfit_of(%{kind: :real} = row, shown), do: "#{shown} is #{range_words(row)}"
   defp misfit_of(%{kind: :boolean} = row, nil), do: "only #{values(row)} fit"
   defp misfit_of(%{kind: :boolean} = row, shown), do: "only #{values(row)} fit, found #{shown}"
   defp misfit_of(%{range: first..last//1}, nil), do: "it is outside #{first} to #{last}"
   defp misfit_of(%{range: first..last//1}, shown), do: "#{shown} is outside #{first} to #{last}"
+
+  # M5-10 (decision 166): a real's range, past which a number's nearest value is no finite
+  # value of the type.
+  defp range_words(%{type: type, article: article, word: word}),
+    do:
+      "beyond #{article} #{word}'s range, #{Float.to_string(-Logex.Real.max(type))} to " <>
+        "#{Float.to_string(Logex.Real.max(type))}"
 
   @doc """
   What a message says of a declared initial value that does not fit a type, after the type
@@ -453,6 +549,12 @@ defmodule Logex.Declarations do
   2147483647` for a dint, and so for every integer type.
   """
   def values(type) when type in @type_atoms, do: values(Map.fetch!(@rows, type))
+
+  def values(%{kind: :real, type: type}),
+    do:
+      "a number from #{Float.to_string(-Logex.Real.max(type))} to " <>
+        "#{Float.to_string(Logex.Real.max(type))}"
+
   def values(%{kind: :boolean, range: first..last//1}), do: "#{first} or #{last}"
   def values(%{range: first..last//1}), do: "an integer from #{first} to #{last}"
 
@@ -558,7 +660,10 @@ defmodule Logex.Declarations do
 
   defp line_in([{:branches, legs} | rest]), do: Enum.find_value(legs, &line_in/1) || line_in(rest)
   defp line_in([{_, line, _} | _]), do: line
-  defp line_in([{:int_lit, line, _value, _spelling} | _]), do: line
+
+  defp line_in([{kind, line, _value, _spelling} | _]) when kind in [:int_lit, :real_lit],
+    do: line
+
   defp line_in([]), do: nil
 
   defp declare({:late, rung, late}, diagnostics, types),
@@ -615,12 +720,12 @@ defmodule Logex.Declarations do
   defp shape([{:branches, _} | _], _kw, _types),
     do: {:error, "a declaration cannot hold a branch group"}
 
-  defp shape([literal | _], kw, _types) when is_int_lit(literal),
+  defp shape([literal | _], kw, _types) when is_literal(literal),
     do: {:error, "expected a tag name after `#{kw}`, found `#{Parser.spelling(literal)}`"}
 
   defp shape([{:name, _, name}], kw, types), do: {:error, short(one(name, types), name, nil, kw)}
 
-  defp shape([{:name, _, name}, literal | _], kw, types) when is_int_lit(literal),
+  defp shape([{:name, _, name}, literal | _], kw, types) when is_literal(literal),
     do: {:error, short(one(name, types), name, Parser.spelling(literal), kw)}
 
   defp shape([{:name, _, _}, {:branches, _} | _], _kw, _types),
@@ -652,13 +757,21 @@ defmodule Logex.Declarations do
   defp typed(type, name, _word, [{:int_lit, _, v, spelling}], _kw),
     do: {:ok, name, type, v, spelling}
 
+  # M5-10: a real initial value, `var setpoint real 37.5`, quoted as written where its
+  # spelling is kept.
+  defp typed(type, name, _word, [{:real_lit, _, v} = literal], _kw),
+    do: {:ok, name, type, v, Parser.spelling(literal)}
+
+  defp typed(type, name, _word, [{:real_lit, _, v, spelling}], _kw),
+    do: {:ok, name, type, v, spelling}
+
   defp typed(_type, _name, _word, [{:branches, _} | _], _kw),
     do: {:error, "a declaration cannot hold a branch group"}
 
-  defp typed(_type, _name, _word, [literal, {:branches, _} | _], _kw) when is_int_lit(literal),
+  defp typed(_type, _name, _word, [literal, {:branches, _} | _], _kw) when is_literal(literal),
     do: {:error, "a declaration cannot hold a branch group"}
 
-  defp typed(_type, name, _word, [literal, extra | _], _kw) when is_int_lit(literal),
+  defp typed(_type, name, _word, [literal, extra | _], _kw) when is_literal(literal),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
 
   defp typed(_type, name, _word, [extra | _], _kw),
@@ -763,7 +876,7 @@ defmodule Logex.Declarations do
   defp example(_elementary), do: "fault"
 
   defp describe({:name, _, word}), do: "`#{word}`"
-  defp describe(literal) when is_int_lit(literal), do: "`#{Parser.spelling(literal)}`"
+  defp describe(literal) when is_literal(literal), do: "`#{Parser.spelling(literal)}`"
 
   @doc """
   The rules a tag must meet however it is declared, as messages: the one validator for a
@@ -938,14 +1051,22 @@ defmodule Logex.Declarations do
         "name, so it takes no initial value"
     ]
 
-  defp initial(%Tag{name: name, initial: v}, _shown) when not is_integer(v),
-    do: ["the initial value of #{label(name)} must be an integer, found #{inspect(v)}"]
+  # M5-10: a real's initial value is a number, an integer or a float; any other type's an
+  # integer, a real one refused as a real literal in its slot is (decision 147).
+  defp initial(%Tag{type: type, name: name, initial: v}, _shown)
+       when type in @reals and not is_number(v),
+       do: ["the initial value of #{label(name)} must be a number, found #{inspect(v)}"]
+
+  defp initial(%Tag{type: type, name: name, initial: v}, _shown)
+       when type not in @reals and not is_integer(v),
+       do: ["the initial value of #{label(name)} must be an integer, found #{inspect(v)}"]
 
   defp initial(%Tag{type: type, name: name, initial: v}, shown) when type in @type_atoms,
-    do: fit(fits?(type, v), type, name, quoted(shown, v))
+    do: fit(holds?(type, v), type, name, {quoted(shown, v), v})
 
   defp initial(_tag, _shown), do: []
 
+  defp quoted(nil, v) when is_float(v), do: "`#{Float.to_string(v)}`"
   defp quoted(nil, v), do: "`#{v}`"
   defp quoted(spelling, _v), do: "`#{spelling}`"
 
@@ -967,8 +1088,13 @@ defmodule Logex.Declarations do
 
   defp fit(true, _type, _name, _v), do: []
 
-  defp fit(false, type, name, shown),
-    do: ["#{label(name)} is #{a_type(type)}: #{initial_misfit(type, shown)}"]
+  defp fit(false, type, name, {shown, v}),
+    do: ["#{label(name)} is #{a_type(type)}: #{initial_of_literal(type, v, shown)}"]
+
+  defp initial_of_literal(type, v, shown) when is_float(v) or type in @reals,
+    do: literal_misfit(type, v, shown)
+
+  defp initial_of_literal(type, _v, shown), do: initial_misfit(type, shown)
 
   defp label(name) when is_binary(name), do: "`#{name}`"
   defp label(name), do: inspect(name)

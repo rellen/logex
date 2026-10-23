@@ -25,7 +25,12 @@ defmodule Logex.Compiler do
   alias Logex.{Declarations, Diagnostic, FbType, Parser, Program, Tag, Walk}
   alias Logex.FbType.Member
   import Logex.Declarations, only: [is_elementary: 1, is_class: 1]
-  import Logex.Parser, only: [is_int_lit: 1]
+  import Logex.Parser, only: [is_int_lit: 1, is_literal: 1, is_real_lit: 1]
+
+  # M5-10: a real literal whose value is 0.0, `0.0` or `-0.0`, which lexes as 0.0.
+  defguardp is_real_zero(term)
+            when is_tuple(term) and tuple_size(term) in 3..4 and elem(term, 0) == :real_lit and
+                   elem(term, 2) == 0
 
   defdelegate tokenize(source), to: Logex.Lexer
   defdelegate parse(tokens), to: Logex.Parser
@@ -111,6 +116,13 @@ defmodule Logex.Compiler do
     # overflows; `neg` into an unsigned type is refused (decision 145).
     "neg" => {:neg, [{:value, :any_num}, {:write, :any_num}]},
     "abs" => {:abs, [{:value, :any_num}, {:write, :any_num}]},
+    # M5-10: IEC's SQRT (Ed 3 Table 28 feature 2; decisions 79 and 164), computed in its
+    # destination's type as `add`'s is, its source a number of a type Figure 11 widens into
+    # it, an `int` into a `real`, which classed/3 holds together; its destination a real,
+    # IEC's ANY_REAL, a class of its own. A negative source writes 0.0
+    # and passes no power, so what it passes on is settled; a literal negative one is
+    # refused (decision 167).
+    "sqrt" => {:sqrt, [{:value, :any_num}, {:write, :any_real}]},
     # M5-8: IEC's bitwise Boolean functions (Ed 3 Table 31; decision 155), on the bit strings
     # and the integers alike, each computing in its destination's type as `add` does, its
     # sources all of the destination's kind, widening into it by Figure 11 (decision 147):
@@ -156,6 +168,29 @@ defmodule Logex.Compiler do
                    word = Declarations.conversion(from, to),
                    into: %{},
                    do: {word, {String.to_atom(word), [{:value, from}, {:write, to}]}}
+
+  # M5-10 (decisions 148 and 162): the 34 real conversions, between a real and an integer
+  # type either way and between the two reals, `real_to_int fan_pct drive_sp` (Ed 3 Table
+  # 23), and the 16 truncations, `real_trunc_int` (Table 22 feature 2b), each its source of
+  # the `from` type and its destination of the `to` type. A real into an integer rounds, a
+  # tie to the even neighbour, and passes no power where the rounded value wraps (decision
+  # 161); a truncation truncates; and an integer into a real always fits.
+  @reals Declarations.reals()
+
+  @real_conversions for from <- Declarations.integers() ++ @reals,
+                        to <- Declarations.integers() ++ @reals,
+                        from in @reals or to in @reals,
+                        word = Declarations.conversion(from, to),
+                        into: %{},
+                        do: {word, {String.to_atom(word), [{:value, from}, {:write, to}]}}
+
+  @truncations for from <- @reals,
+                   to <- Declarations.integers(),
+                   word = "#{from}_trunc_#{to}",
+                   into: %{},
+                   do: {word, {String.to_atom(word), [{:value, from}, {:write, to}]}}
+
+  @conversions @conversions |> Map.merge(@real_conversions) |> Map.merge(@truncations)
 
   @instructions Map.merge(@instructions, @conversions)
 
@@ -307,13 +342,15 @@ defmodule Logex.Compiler do
 
   defp rebuilt({:block, name}, name, {rungs, tags}, []) do
     {named, _reached} = Enum.map_reduce(tags, [], &naming/2)
+    {units, reals} = Program.settled(tags)
 
     {:ok,
      %Program{
        name: name,
        rungs: rungs,
        tags: Map.new(named),
-       units: Program.units(tags),
+       units: units,
+       reals: reals,
        warnings: Logex.Warnings.of(rungs, tags)
      }}
   end
@@ -347,8 +384,14 @@ defmodule Logex.Compiler do
   raise.
   """
   def lowered?(
-        %Program{rungs: rungs, tags: tags, blocks: blocks, warnings: warnings, units: units} =
-          body
+        %Program{
+          rungs: rungs,
+          tags: tags,
+          blocks: blocks,
+          warnings: warnings,
+          units: units,
+          reals: reals
+        } = body
       )
       when is_list(rungs) and is_map(tags) and not is_struct(tags) and is_map(blocks) and
              is_list(warnings) do
@@ -356,7 +399,7 @@ defmodule Logex.Compiler do
 
     relowered(
       proper?(rungs, &ir_rung?/1) and proper?(warnings, &any?/1) and
-        Enum.all?(typed, &typed?/1) and units == Program.units(typed),
+        Enum.all?(typed, &typed?/1) and {units, reals} == Program.settled(typed),
       rungs,
       typed,
       warnings
@@ -415,7 +458,14 @@ defmodule Logex.Compiler do
 
   # Decision 202: a literal keeps its spelling in the IR, by the parse tree's rule.
   defp ir_operand?({:int_lit, line, value, spelling}) when is_integer(line) and line > 0,
-    do: Parser.spelled?(value, spelling)
+    do: is_integer(value) and Parser.spelled?(value, spelling)
+
+  # M5-10: a real literal so, plain or spelled, by the parse tree's rules.
+  defp ir_operand?({:real_lit, line, value}) when is_integer(line) and line > 0,
+    do: Parser.plain_real?(value)
+
+  defp ir_operand?({:real_lit, line, value, spelling}) when is_integer(line) and line > 0,
+    do: is_float(value) and Parser.spelled?(value, spelling)
 
   defp ir_operand?({:member, line, path}) when is_integer(line) and line > 0,
     do: proper?(path, &is_binary/1)
@@ -1116,7 +1166,7 @@ defmodule Logex.Compiler do
     do: "`#{symbol} #{Enum.map_join(operands, " ", &text/1)}`"
 
   defp text({:name, _, name}), do: name
-  defp text(literal) when is_int_lit(literal), do: Parser.spelling(literal)
+  defp text(literal) when is_literal(literal), do: Parser.spelling(literal)
   defp text({:member, _, path}), do: Enum.join(path, ".")
   defp text({:label, _, name}), do: name
   defp text({:bit, _, _path, _n, _mask, name}), do: name
@@ -1203,19 +1253,22 @@ defmodule Logex.Compiler do
   # the paths to a type. The warnings are of the table with each type itself.
   defp lowered(:program, rungs, {tags, held}, [], _routine) do
     {named, blocks} = hold(tags, held)
+    {units, reals} = Program.settled(tags)
 
     {:ok,
      %Program{
        rungs: rungs,
        tags: named,
        blocks: blocks,
-       units: Program.units(tags),
+       units: units,
+       reals: reals,
        warnings: Logex.Warnings.of(rungs, tags)
      }}
   end
 
   defp lowered({:block, name}, rungs, {tags, held}, [], routine) do
     {named, blocks} = hold(tags, held)
+    {units, reals} = Program.settled(tags)
 
     body = %Program{
       name: name,
@@ -1223,7 +1276,8 @@ defmodule Logex.Compiler do
       rungs: rungs,
       tags: named,
       blocks: blocks,
-      units: Program.units(tags),
+      units: units,
+      reals: reals,
       warnings: Logex.Warnings.of(rungs, tags)
     }
 
@@ -1254,7 +1308,7 @@ defmodule Logex.Compiler do
 
   defp element_line([{:branches, [leg | _legs]} | _elements]), do: element_line(leg)
   defp element_line([{_kind, line, _value} | _elements]), do: line
-  defp element_line([{:int_lit, line, _value, _spelling} | _elements]), do: line
+  defp element_line([{_literal, line, _value, _spelling} | _elements]), do: line
 
   # The tags, each instance of a user block naming its type, and the table: every type the
   # instances reach, at any depth, once, by name, the one version of it the compile holds,
@@ -1488,11 +1542,8 @@ defmodule Logex.Compiler do
 
   # The grammar allows a literal anywhere an element can go, including where an
   # instruction must start: `123 aa`, or an extra operand as in `xic aa 7 ote bb`.
-  defp lower([{:int_lit, line, _value} = literal | rest], ir, diagnostics, known),
-    do: stray(line, literal, rest, {ir, diagnostics, known})
-
-  defp lower([{:int_lit, line, _value, _spelling} = literal | rest], ir, diagnostics, known),
-    do: stray(line, literal, rest, {ir, diagnostics, known})
+  defp lower([literal | rest], ir, diagnostics, known) when is_literal(literal),
+    do: stray(elem(literal, 1), literal, rest, {ir, diagnostics, known})
 
   defp stray(line, literal, rest, {ir, diagnostics, known}) do
     found = diagnostic(line, "expected an instruction, found `#{Parser.spelling(literal)}`")
@@ -1518,7 +1569,7 @@ defmodule Logex.Compiler do
     diagnostics = check_kinds(signature, operands, at, diagnostics)
     diagnostics = check_tags(signature, operands, at, scope, diagnostics)
     diagnostics = check_preset(signature, operands, {symbol, at}, known, diagnostics)
-    diagnostics = check_divisor(symbol, operands, at, diagnostics)
+    diagnostics = check_literals(symbol, operands, {at, scope}, diagnostics)
     diagnostics = check_shift(symbol, operands, at, diagnostics)
     lowered = {symbol, line, Enum.zip_with(signature, operands, &slot_operand(&1, &2, scope))}
     lower(rest, [lowered | ir], diagnostics, known)
@@ -1535,7 +1586,7 @@ defmodule Logex.Compiler do
     lower(rest, ir, [diagnostic(line, message) | diagnostics], known)
   end
 
-  defp cal([literal], {line, word}, {rest, ir, diagnostics, known}) when is_int_lit(literal) do
+  defp cal([literal], {line, word}, {rest, ir, diagnostics, known}) when is_literal(literal) do
     message =
       "`#{word}` expects an instance of a function block, found `#{Parser.spelling(literal)}`"
 
@@ -1665,17 +1716,8 @@ defmodule Logex.Compiler do
         cal_operand(formal, operand, {n, at}, scope, acc)
       end)
 
-  defp cal_operand(formal, {:int_lit, line, _value} = literal, at, _scope, diagnostics),
-    do: cal_literal(formal, literal, {line, at}, diagnostics)
-
-  defp cal_operand(
-         formal,
-         {:int_lit, line, _value, _spelling} = literal,
-         at,
-         _scope,
-         diagnostics
-       ),
-       do: cal_literal(formal, literal, {line, at}, diagnostics)
+  defp cal_operand(formal, literal, at, _scope, diagnostics) when is_literal(literal),
+    do: cal_literal(formal, literal, {elem(literal, 1), at}, diagnostics)
 
   defp cal_operand({slot, _} = formal, {:name, line, name} = operand, at, scope, diagnostics),
     do:
@@ -1690,7 +1732,7 @@ defmodule Logex.Compiler do
   defp cal_literal({{:value, type}, _} = formal, literal, at, diagnostics),
     do:
       fits_formal(
-        Declarations.fits?(type, Parser.value(literal)),
+        Declarations.holds?(type, Parser.value(literal)),
         formal,
         literal,
         at,
@@ -1714,7 +1756,11 @@ defmodule Logex.Compiler do
         line,
         of_formal(formal, at) <>
           ": " <>
-          Declarations.misfit(type, "`#{Parser.spelling(literal)}`")
+          Declarations.literal_misfit(
+            type,
+            Parser.value(literal),
+            "`#{Parser.spelling(literal)}`"
+          )
       )
       | diagnostics
     ]
@@ -1943,7 +1989,7 @@ defmodule Logex.Compiler do
   # at a mnemonic: that is the next instruction, so `move src ote bb` leaves `ote bb` intact.
   defp take_operands(rest, 0, taken), do: {Enum.reverse(taken), rest}
 
-  defp take_operands([literal | rest], n, taken) when is_int_lit(literal),
+  defp take_operands([literal | rest], n, taken) when is_literal(literal),
     do: take_operands(rest, n - 1, [literal | taken])
 
   defp take_operands([{:name, _, word} = name | rest] = elements, n, taken),
@@ -2005,12 +2051,12 @@ defmodule Logex.Compiler do
   defp check_kind({:write, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
   defp check_kind({:value, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
 
-  defp check_kind({:value, _type}, literal, _at, diagnostics) when is_int_lit(literal),
+  defp check_kind({:value, _type}, literal, _at, diagnostics) when is_literal(literal),
     do: diagnostics
 
   defp check_kind({:instance, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
 
-  defp check_kind({:preset, _type}, literal, _at, diagnostics) when is_int_lit(literal),
+  defp check_kind({:preset, _type}, literal, _at, diagnostics) when is_literal(literal),
     do: diagnostics
 
   defp check_kind({:label, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
@@ -2018,7 +2064,7 @@ defmodule Logex.Compiler do
   # A preset from a tag is not a preset: check_preset/4 names the `move` that is meant.
   defp check_kind({:preset, _type}, {:name, _, _}, _at, diagnostics), do: diagnostics
 
-  defp check_kind(kind, literal, {line, word}, diagnostics) when is_int_lit(literal),
+  defp check_kind(kind, literal, {line, word}, diagnostics) when is_literal(literal),
     do: [
       diagnostic(line, "`#{word}` expects #{kind(kind)}, found `#{Parser.spelling(literal)}`")
       | diagnostics
@@ -2045,17 +2091,50 @@ defmodule Logex.Compiler do
 
   # M3-3 (decision 78): a zero divisor gives 0 and passes no power, so a literal one could
   # never divide, and is refused where it stands, `-0` among them, which lexes as 0. A tag
-  # that is 0 for a while is the run's to report (Logex.Runtime).
-  defp check_divisor(symbol, [_dividend, {:int_lit, line, 0} = zero | _], at, diagnostics)
+  # that is 0 for a while is the run's to report (Logex.Runtime). Since M5-10 so is a
+  # literal negative source of `sqrt`, whose destination must be a real (decisions 164 and
+  # 167): one call an instruction, as before reals.
+  defp check_literals(symbol, [_dividend, {:int_lit, line, 0} = zero | _], {at, _scope}, d)
        when symbol in [:div, :mod],
-       do: zero_divisor(line, zero, at, diagnostics)
+       do: zero_divisor(line, zero, at, d)
 
   # Decision 202: `16#0`, `0_0`, `00` and `-0` are zero too, each quoted as written.
-  defp check_divisor(symbol, [_dividend, {:int_lit, line, 0, _} = zero | _], at, diagnostics)
+  defp check_literals(symbol, [_dividend, {:int_lit, line, 0, _} = zero | _], {at, _scope}, d)
        when symbol in [:div, :mod],
-       do: zero_divisor(line, zero, at, diagnostics)
+       do: zero_divisor(line, zero, at, d)
 
-  defp check_divisor(_symbol, _operands, _at, diagnostics), do: diagnostics
+  # M5-10 (decision 150): a real literal zero, `0.0` or `-0.0`, which lexes as 0.0, as an
+  # integer's is refused.
+  defp check_literals(symbol, [_dividend, zero | _], {at, _scope}, d)
+       when symbol in [:div, :mod] and is_real_zero(zero),
+       do: zero_divisor(elem(zero, 1), zero, at, d)
+
+  # M5-10 (decision 167): a literal negative source of `sqrt`, `sqrt -4.0 root`, would raise
+  # `:negative_sqrt` on every scan, so it is refused where it stands, as decision 78
+  # refuses a literal zero divisor; `-0.0`, whose value is 0.0, is no negative number. And
+  # its destination is a real, IEC's SQRT being ANY_REAL's (Ed 3 Table 28).
+  defp check_literals(:sqrt, [source, _destination], {at, _scope}, d),
+    do: root_source(source, at, d)
+
+  defp check_literals(_symbol, _operands, _at, diagnostics), do: diagnostics
+
+  defp root_source(source, at, diagnostics) when is_literal(source),
+    do: negative_root(Parser.value(source) < 0, source, at, diagnostics)
+
+  defp root_source(_source, _at, diagnostics), do: diagnostics
+
+  defp negative_root(false, _source, _at, diagnostics), do: diagnostics
+
+  defp negative_root(true, source, {_line, word}, diagnostics),
+    do: [
+      diagnostic(
+        elem(source, 1),
+        "`#{word}` takes the root of the literal `#{Parser.spelling(source)}`: a negative " <>
+          "source gives 0.0, passes no power and raises a minor fault on every scan, so a " <>
+          "literal one is refused"
+      )
+      | diagnostics
+    ]
 
   # M5-8 (decision 165): a negative literal count is refused, IEC's "It is an error if the
   # value of the N input is less than zero" (Ed 3 Table 30 footnote a) where a program can
@@ -2084,11 +2163,14 @@ defmodule Logex.Compiler do
     do: [
       diagnostic(
         line,
-        "`#{word}` divides by the literal `#{Parser.spelling(zero)}`: a zero divisor gives 0 " <>
-          "and passes no power on every scan, so a literal one is refused"
+        "`#{word}` divides by the literal `#{Parser.spelling(zero)}`: a zero divisor gives " <>
+          "#{zero_of(zero)} and passes no power on every scan, so a literal one is refused"
       )
       | diagnostics
     ]
+
+  defp zero_of(literal) when is_int_lit(literal), do: "0"
+  defp zero_of(_real), do: "0.0"
 
   # Since M5-6 a timer's unit is its instance's, a long timer's nanoseconds (decision 158).
   defp unit(symbol, type), do: unit_of(kind_of(symbol), per_ms(type), type)
@@ -2212,13 +2294,23 @@ defmodule Logex.Compiler do
   # `:any` slot's literal is checked against the tag beside it, by unify/3, and a generic
   # slot's against the type its instruction computes in, by classed/3. Since M3-3 a literal may be negative (decision
   # 97), so each meets one too small too.
+  # Since M5-10 by the literal rules, `Logex.Declarations.holds?/2` (decision 147): a real
+  # literal is no integer slot's, and an integer literal a real slot's only exactly.
   defp check_tag({{:value, type}, {:int_lit, line, value} = lit}, {_, word}, _scope, d)
        when is_elementary(type),
-       do: literal(Declarations.fits?(type, value), {type, lit}, {line, word}, d)
+       do: literal(Declarations.holds?(type, value), {type, lit}, {line, word}, d)
 
   defp check_tag({{:value, type}, {:int_lit, line, value, _} = lit}, {_, word}, _scope, d)
        when is_elementary(type),
-       do: literal(Declarations.fits?(type, value), {type, lit}, {line, word}, d)
+       do: literal(Declarations.holds?(type, value), {type, lit}, {line, word}, d)
+
+  defp check_tag({{:value, type}, {:real_lit, line, value} = lit}, {_, word}, _scope, d)
+       when is_elementary(type),
+       do: literal(Declarations.holds?(type, value), {type, lit}, {line, word}, d)
+
+  defp check_tag({{:value, type}, {:real_lit, line, value, _} = lit}, {_, word}, _scope, d)
+       when is_elementary(type),
+       do: literal(Declarations.holds?(type, value), {type, lit}, {line, word}, d)
 
   # A preset is a dint, a number of milliseconds for a timer or a count for a counter, and
   # never negative (docs/naming.md, `ton`): a negative literal lexes since M3-3, and is
@@ -2235,13 +2327,17 @@ defmodule Logex.Compiler do
   defp check_tag({{:preset, {type, of}}, {:int_lit, line, v, _} = lit}, at, _scope, diagnostics),
     do: preset_in(type, of, {line, v, lit}, at, diagnostics)
 
+  # M5-10: a real literal is no preset, a number of milliseconds or a count.
+  defp check_tag({{:preset, {type, of}}, lit}, at, _scope, diagnostics) when is_real_lit(lit),
+    do: preset_in(type, of, {elem(lit, 1), Parser.value(lit), lit}, at, diagnostics)
+
   # A preset no instance judges, its instance slot a literal or missing, is the
   # mnemonic's own: a dint, in ms for a timer.
   defp check_tag({{:preset, type}, preset}, at, scope, diagnostics)
-       when is_atom(type) and is_int_lit(preset),
+       when is_atom(type) and is_literal(preset),
        do: check_tag({{:preset, {type, nil}}, preset}, at, scope, diagnostics)
 
-  defp check_tag({_slot, literal}, _at, _scope, diagnostics) when is_int_lit(literal),
+  defp check_tag({_slot, literal}, _at, _scope, diagnostics) when is_literal(literal),
     do: diagnostics
 
   # Reported by check_preset/4, and never looked up.
@@ -2261,7 +2357,7 @@ defmodule Logex.Compiler do
     first = preset_first(kind, type)
 
     preset(
-      value >= first and Declarations.fits?(type, value),
+      is_integer(value) and value >= first and Declarations.fits?(type, value),
       {type, literal, first, in_words(kind, type, of)},
       {line, word},
       diagnostics
@@ -2304,7 +2400,11 @@ defmodule Logex.Compiler do
       diagnostic(
         line,
         "`#{word}` reads #{Declarations.a_type(type)}: " <>
-          Declarations.misfit(type, "`#{Parser.spelling(literal)}`")
+          Declarations.literal_misfit(
+            type,
+            Parser.value(literal),
+            "`#{Parser.spelling(literal)}`"
+          )
       )
       | diagnostics
     ]
@@ -2479,6 +2579,8 @@ defmodule Logex.Compiler do
   defp bits(_type), do: nil
 
   defp of_bits(:boolean, _type), do: nil
+  # M5-10 (decision 155): a real has no bits a program may name.
+  defp of_bits(:real, _type), do: nil
   defp of_bits(_integer_or_bits, type), do: Declarations.width(type)
 
   defp beyond({_bit, ""}, tag, _part), do: {:past_bit, tag}
@@ -2908,6 +3010,9 @@ defmodule Logex.Compiler do
   defp converted(word, access, found, type),
     do: converting(Map.get(@conversions, String.downcase(word)), access, found, type)
 
+  defp classless(_kind, :write, _found, :any_real),
+    do: ": a square root is a real's, so declare it a real or an lreal"
+
   defp classless(:bit_string, :write, found, class),
     do:
       ": #{a_type(found)} is a bit string, not #{a_type(class)}: compute in an integer and " <>
@@ -2959,6 +3064,9 @@ defmodule Logex.Compiler do
   # quotes (decision 202).
   defp typed(_access, {:int_lit, _, value} = literal, _scope), do: {:literal, value, literal}
   defp typed(_access, {:int_lit, _, value, _} = literal, _scope), do: {:literal, value, literal}
+  # M5-10: a real literal so, by its float.
+  defp typed(_access, {:real_lit, _, value} = literal, _scope), do: {:literal, value, literal}
+  defp typed(_access, {:real_lit, _, value, _} = literal, _scope), do: {:literal, value, literal}
 
   defp typed(access, {:name, _, name}, scope), do: typed_ref(access, lookup(name, scope))
 
@@ -2983,7 +3091,7 @@ defmodule Logex.Compiler do
        do: widens(Declarations.widens?(from, to), source, destination, at, diagnostics)
 
   defp unify([{:literal, value, literal}, %Tag{type: type} = tag], at, diagnostics),
-    do: fits(Declarations.fits?(type, value), literal, tag, at, diagnostics)
+    do: fits(Declarations.holds?(type, value), literal, tag, at, diagnostics)
 
   defp unify(_typed, _at, diagnostics), do: diagnostics
 
@@ -3019,6 +3127,21 @@ defmodule Logex.Compiler do
   # Every instruction but a shift holds one class, held with no grouping, so that it
   # checks in what it did before M5-8.
   defp classed([], _at, diagnostics), do: diagnostics
+
+  # M5-10: `sqrt` writes a real, IEC's ANY_REAL, its slot told so by check_type/5, and
+  # reads any number, which computes in its destination's real as `add`'s sources do; a
+  # destination of no real type has been reported, and its source is held to the class
+  # alone.
+  defp classed(
+         [{:value, :any_num, _} = source, {:write, :any_real, %Tag{type: type} = tag}],
+         at,
+         diagnostics
+       )
+       when type in @reals,
+       do: class_held(:any_num, [source, {:write, :any_num, tag}], at, diagnostics)
+
+  defp classed([{:value, :any_num, _} = source, {:write, :any_real, _}], at, diagnostics),
+    do: class_held(:any_num, [source], at, diagnostics)
 
   defp classed([{_access, class, _typed} | _] = operands, at, diagnostics),
     do: of_classes(one_class?(operands, class), class, operands, {at, diagnostics})
@@ -3088,9 +3211,31 @@ defmodule Logex.Compiler do
 
   defp compared_kinds(:bit_string, kind) when kind in [:signed, :unsigned], do: :mixed
   defp compared_kinds(kind, :bit_string) when kind in [:signed, :unsigned], do: :mixed
+  # M5-10 (decision 147): an integer compares with a real only where Figure 11 widens it
+  # into the real's type, and a real with a bit string never, logex having no conversion
+  # between them (§4.12, "Conversions").
+  defp compared_kinds(:real, kind) when kind in [:signed, :unsigned], do: :real_first
+  defp compared_kinds(kind, :real) when kind in [:signed, :unsigned], do: :real_second
+  defp compared_kinds(:real, :bit_string), do: :unconverted
+  defp compared_kinds(:bit_string, :real), do: :unconverted
   defp compared_kinds(_one, _other), do: :met
 
   defp kinds_met(:met, _one, _other, _at, diagnostics), do: diagnostics
+
+  defp kinds_met(:real_first, real, integer, at, diagnostics),
+    do: real_met(Declarations.widens?(integer.type, real.type), {real, integer}, at, diagnostics)
+
+  defp kinds_met(:real_second, integer, real, at, diagnostics),
+    do: real_met(Declarations.widens?(integer.type, real.type), {real, integer}, at, diagnostics)
+
+  defp kinds_met(:unconverted, one, other, {line, word}, diagnostics) do
+    message =
+      "`#{word}` compares `#{one.name}`, #{a_type(one.type)}#{declared(one)}, with " <>
+        "`#{other.name}`, #{a_type(other.type)}#{declared(other)}: a real compares only with " <>
+        "a number, and logex has no conversion between a real and a bit string"
+
+    [diagnostic(line, message) | diagnostics]
+  end
 
   defp kinds_met(:mixed, one, other, {line, word}, diagnostics) do
     {bits, integer} = bits_first(Declarations.kind(one.type), one, other)
@@ -3101,6 +3246,18 @@ defmodule Logex.Compiler do
         "only with a bit string, so convert one of them first, with " <>
         "`#{Declarations.conversion(integer.type, bits.type)}` or " <>
         "`#{Declarations.conversion(bits.type, integer.type)}`"
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp real_met(true, _compared, _at, diagnostics), do: diagnostics
+
+  defp real_met(false, {real, integer}, {line, word}, diagnostics) do
+    message =
+      "`#{word}` compares `#{real.name}`, #{a_type(real.type)}#{declared(real)}, with " <>
+        "`#{integer.name}`, #{a_type(integer.type)}#{declared(integer)}: " <>
+        "#{a_type(integer.type)} does not widen into #{a_type(real.type)}, so convert it " <>
+        "first, with `#{Declarations.conversion(integer.type, real.type)}`"
 
     [diagnostic(line, message) | diagnostics]
   end
@@ -3118,7 +3275,7 @@ defmodule Logex.Compiler do
   # A tag outside the class, a bool, was reported by its slot; its literal is held to the
   # class alone.
   defp held(true, {:literal, value, _} = literal, %Tag{type: type} = tag, _class, at, d),
-    do: holds(Declarations.fits?(type, value), literal, tag, at, d)
+    do: holds(Declarations.holds?(type, value), literal, tag, at, d)
 
   defp held(false, literal, _tag, class, at, diagnostics),
     do: source({:value, class, literal}, {:class, class}, at, diagnostics)
@@ -3130,7 +3287,8 @@ defmodule Logex.Compiler do
 
     message =
       "`#{word}` compares `#{shown}` with `#{tag.name}`, #{a_type(type)}#{declared(tag)}, " <>
-        "which never holds it: " <> Declarations.misfit(type, "`#{shown}`")
+        "which never holds it: " <>
+        Declarations.literal_misfit(type, Parser.value(literal), "`#{shown}`")
 
     [diagnostic(line, message) | diagnostics]
   end
@@ -3165,10 +3323,17 @@ defmodule Logex.Compiler do
          at,
          diagnostics
        ),
-       do: literal_in(Declarations.fits?(type, value), literal, destination, at, diagnostics)
+       do: literal_in(Declarations.holds?(type, value), literal, destination, at, diagnostics)
 
+  defp source({:value, _class, {:literal, value, literal}}, {:class, class}, at, diagnostics)
+       when is_integer(value),
+       do:
+         class_literal(value in Declarations.class_range(class), literal, class, at, diagnostics)
+
+  # M5-10: a real literal where no type is known for it, a comparison's beside a literal,
+  # held to the class, which takes it where it holds a real.
   defp source({:value, _class, {:literal, value, literal}}, {:class, class}, at, diagnostics),
-    do: class_literal(value in Declarations.class_range(class), literal, class, at, diagnostics)
+    do: class_literal(Declarations.class_holds?(class, value), literal, class, at, diagnostics)
 
   defp source(_operand, _computed, _at, diagnostics), do: diagnostics
 
@@ -3197,12 +3362,23 @@ defmodule Logex.Compiler do
         line,
         "`#{word}` computes in `#{destination.name}`'s type, " <>
           "#{a_type(destination.type)}: " <>
-          Declarations.misfit(destination.type, "`#{Parser.spelling(literal)}`")
+          Declarations.literal_misfit(
+            destination.type,
+            Parser.value(literal),
+            "`#{Parser.spelling(literal)}`"
+          )
       )
       | diagnostics
     ]
 
   defp class_literal(true, _literal, _class, _at, diagnostics), do: diagnostics
+
+  # M5-10: a real literal where the class holds no real, `mod`'s ANY_INT.
+  defp class_literal(false, {:real_lit, _, _} = literal, class, at, diagnostics),
+    do: real_literal(literal, class, at, diagnostics)
+
+  defp class_literal(false, {:real_lit, _, _, _} = literal, class, at, diagnostics),
+    do: real_literal(literal, class, at, diagnostics)
 
   defp class_literal(false, literal, class, {line, word}, diagnostics) do
     first..last//1 = Declarations.class_range(class)
@@ -3214,6 +3390,16 @@ defmodule Logex.Compiler do
 
     [diagnostic(line, message) | diagnostics]
   end
+
+  defp real_literal(literal, class, {line, word}, diagnostics),
+    do: [
+      diagnostic(
+        line,
+        "`#{word}` reads #{a_type(class)}: `#{Parser.spelling(literal)}` is a real, which " <>
+          "#{a_type(class)} never is"
+      )
+      | diagnostics
+    ]
 
   # A `neg` refused for its unsigned destination is told that, and since decision 181 the
   # narrowest signed type its source widens into, or a literal source fits, to declare the
@@ -3294,7 +3480,7 @@ defmodule Logex.Compiler do
     message =
       "`#{word}` writes `#{Parser.spelling(literal)}` into `#{tag.name}`, " <>
         "#{Declarations.a_type(type)}: " <>
-        Declarations.misfit(type)
+        Declarations.literal_misfit(type, Parser.value(literal), nil)
 
     [diagnostic(line, message) | diagnostics]
   end
@@ -3355,7 +3541,7 @@ defmodule Logex.Compiler do
 
   # After a word that is not an instruction there is no signature to go by, so everything
   # up to the next instruction or branch group is taken to belong to it.
-  defp skip_operands([literal | rest]) when is_int_lit(literal), do: skip_operands(rest)
+  defp skip_operands([literal | rest]) when is_literal(literal), do: skip_operands(rest)
 
   defp skip_operands([{:name, _, word} | rest] = elements),
     do: skip_name(mnemonic?(word), rest, elements)

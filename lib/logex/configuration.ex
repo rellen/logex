@@ -248,6 +248,8 @@ defmodule Logex.Configuration do
   @interval 1..2_147_483_647
   @priority 0..65_535
   @parts [:tasks, :globals, :instances, :connections]
+  # M5-10: the reals, whose globals take a float initial value too.
+  @reals Logex.Declarations.reals()
   @elements [Logex.Configuration.Task, Global, Instance, Connection]
   @lines ": a configuration's lines are all nil, as from Elixir, or rise in each list, " <>
            "one element a line"
@@ -1030,6 +1032,16 @@ defmodule Logex.Configuration do
   defp global_initial(%Global{initial: initial}) when initial == nil or is_integer(initial),
     do: []
 
+  # M5-10: a real global's initial value may be a float, as its line's real literal is.
+  defp global_initial(%Global{type: type, initial: initial})
+       when type in @reals and is_float(initial),
+       do: []
+
+  defp global_initial(%Global{name: name, type: type, initial: initial}) when type in @reals,
+    do: [
+      "the initial value of global #{label(name)} must be a number, found #{inspect(initial)}"
+    ]
+
   defp global_initial(%Global{name: name, initial: initial}),
     do: [
       "the initial value of global #{label(name)} must be an integer, found #{inspect(initial)}"
@@ -1069,7 +1081,7 @@ defmodule Logex.Configuration do
         "a global, by name, or a constant"
 
   # What a connection's other end is: a global's name, a constant, or the host's mistake.
-  defp other_end(to) when is_integer(to), do: :constant
+  defp other_end(to) when is_integer(to) or is_float(to), do: :constant
   defp other_end(to), do: global_or_junk(word?(to))
 
   defp global_or_junk(true), do: :global
@@ -1564,7 +1576,10 @@ defmodule Logex.Configuration do
   # scans.
   defp initial(%Global{initial: nil}, _location), do: []
 
-  defp initial(%Global{initial: v}, _location) when not is_integer(v), do: []
+  # A value the host's check refused already, any but an integer, and a real's float.
+  defp initial(%Global{type: type, initial: v}, _location)
+       when not is_integer(v) and not (type in @reals and is_float(v)),
+       do: []
 
   defp initial(%Global{name: name, line: line}, {:ok, {_device, "i", _address}}),
     do: [
@@ -1584,8 +1599,10 @@ defmodule Logex.Configuration do
       )
     ]
 
+  # Since M5-10 by the literal rules, as a declaration's initial value (decision 147): a
+  # real one is no integer type's, and an integer one a real's only exactly.
   defp initial(%Global{type: type, name: name, initial: v, line: line}, _location),
-    do: fit(Declarations.fits?(type, v), type, v, "`#{name}`", line)
+    do: fit(Declarations.holds?(type, v), type, v, "`#{name}`", line)
 
   defp fit(true, _type, _v, _what, _line), do: []
 
@@ -1593,10 +1610,17 @@ defmodule Logex.Configuration do
     do: [
       diagnostic(
         line,
-        "#{what} is #{Declarations.a_type(type)}: " <>
-          Declarations.initial_misfit(type, "`#{v}`")
+        "#{what} is #{Declarations.a_type(type)}: " <> initial_misfit(type, v)
       )
     ]
+
+  defp initial_misfit(type, v) when is_float(v) or type in @reals,
+    do: Declarations.literal_misfit(type, v, "`#{shown_number(v)}`")
+
+  defp initial_misfit(type, v), do: Declarations.initial_misfit(type, "`#{v}`")
+
+  defp shown_number(v) when is_float(v), do: Float.to_string(v)
+  defp shown_number(v), do: "#{v}"
 
   @doc """
   A global's value before anything sets it: its `initial`, or 0 without one, so that an
@@ -1623,13 +1647,20 @@ defmodule Logex.Configuration do
     do: Declarations.zero(type)
 
   def initial(%Global{initial: nil}), do: 0
+
+  # M5-10 (decision 150): a real global's initial value is held as its nearest value, a
+  # `real`'s rounded to a single, an integer one as the real it is.
+  def initial(%Global{type: type, initial: initial}) when type in @reals and is_number(initial),
+    do: Logex.Real.nearest(type, initial)
+
   def initial(%Global{initial: initial}) when is_integer(initial), do: initial
 
   def initial(other),
     do:
       raise(
         ArgumentError,
-        "expected a %Logex.Configuration.Global{} whose initial value is an integer or nil, " <>
+        "expected a %Logex.Configuration.Global{} whose initial value is an integer, a real's a " <>
+          "number, or nil, " <>
           "got: #{inspect(other)}"
       )
 
@@ -2143,13 +2174,14 @@ defmodule Logex.Configuration do
       )
 
   defp end_label(to) when is_binary(to) or is_integer(to), do: "`#{to}`"
+  defp end_label(to) when is_float(to), do: "`#{Float.to_string(to)}`"
   defp end_label(to), do: inspect(to)
 
   defp source(:global, connection, tag, acc, world),
     do: read_global(global_of(connection.to, tag.type, world), connection, tag, acc)
 
   defp source(:constant, %Connection{to: to} = connection, %Tag{type: type} = tag, acc, _world),
-    do: constant(Declarations.fits?(type, to), connection, tag, acc)
+    do: constant(Declarations.holds?(type, to), connection, tag, acc)
 
   defp source(:junk, _connection, _tag, acc, _world), do: acc
 
@@ -2161,7 +2193,7 @@ defmodule Logex.Configuration do
         acc,
         connection,
         "`#{connection.instance}.#{connection.member}` is #{Declarations.a_type(type)}: " <>
-          Declarations.misfit(type, "`#{connection.to}`")
+          Declarations.literal_misfit(type, connection.to, "`#{shown_number(connection.to)}`")
       )
 
   # A global whose type is the host's mistake is refused already: one mistake, one message.

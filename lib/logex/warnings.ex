@@ -37,7 +37,7 @@ defmodule Logex.Warnings do
   """
 
   alias Logex.{Declarations, Diagnostic, FbType, Parser, Tag, Walk}
-  import Logex.Parser, only: [is_int_lit: 1]
+  import Logex.Parser, only: [is_int_lit: 1, is_literal: 1]
 
   @one_shots Walk.one_shots()
 
@@ -461,7 +461,7 @@ defmodule Logex.Warnings do
 
   # Each literal is quoted as written (decision 202).
   defp constant({symbol, line, [a, b]})
-       when symbol in @comparisons and is_int_lit(a) and is_int_lit(b),
+       when symbol in @comparisons and is_literal(a) and is_literal(b),
        do: [
          warning(
            line,
@@ -476,7 +476,7 @@ defmodule Logex.Warnings do
   @arithmetic [:add, :sub, :mul, :div, :mod, :and, :or, :xor, :shl, :shr, :rol, :ror]
 
   defp constant({symbol, line, [a, b, _destination]})
-       when symbol in @arithmetic and is_int_lit(a) and is_int_lit(b),
+       when symbol in @arithmetic and is_literal(a) and is_literal(b),
        do: [
          warning(
            line,
@@ -489,16 +489,25 @@ defmodule Logex.Warnings do
   # the same words: `dint_to_sint 129 trim` always writes -127 with no power. Its symbols
   # are the type table's, as `Logex.Compiler` generates them, every ordered pair of two
   # integer types, and since M5-8 of the bit strings too (decision 148).
+  # Since M5-10 the 34 real conversions and the 16 truncations too, and `sqrt` among the
+  # instructions of one source.
+  @numbers Declarations.convertible() ++ Declarations.reals()
+
   @conversions for(
-                 from <- Declarations.convertible(),
-                 to <- Declarations.convertible(),
+                 from <- @numbers,
+                 to <- @numbers,
                  word = Declarations.conversion(from, to),
                  do: String.to_atom(word)
-               )
+               ) ++
+                 for(
+                   from <- Declarations.reals(),
+                   to <- Declarations.integers(),
+                   do: String.to_atom("#{from}_trunc_#{to}")
+                 )
 
-  @one_source [:neg, :abs, :not] ++ @conversions
+  @one_source [:neg, :abs, :not, :sqrt] ++ @conversions
 
-  defp constant({symbol, line, [a, _destination]}) when symbol in @one_source and is_int_lit(a),
+  defp constant({symbol, line, [a, _destination]}) when symbol in @one_source and is_literal(a),
     do: [warning(line, "`#{symbol}` reads a literal, #{shown(a)}: its result never changes")]
 
   defp constant(_instruction), do: []
@@ -555,7 +564,7 @@ defmodule Logex.Warnings do
 
   defp shown({:name, _, name}), do: "`#{name}`"
   defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
-  defp shown(literal) when is_int_lit(literal), do: "`#{Parser.spelling(literal)}`"
+  defp shown(literal) when is_literal(literal), do: "`#{Parser.spelling(literal)}`"
 
   # An operand's integer type, a tag's or a member's of the built-in instance that holds
   # it; anything else, a bool or a member of a user block's instance, which no comparison

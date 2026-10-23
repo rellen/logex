@@ -53,7 +53,8 @@ defmodule Logex.Lexer do
   def format_error({:illegal, text}), do: "illegal character #{inspect(text)}"
 
   def format_error({:missing_separator, text}),
-    do: "missing separator after integer: #{inspect(text)} is neither a number nor a tag"
+    do:
+      "missing separator after #{after_what(text)}: #{inspect(text)} is neither a number nor a tag"
 
   def format_error({:separator, text}),
     do: "#{inspect(text)} is no number: a `_` in a number stands only between two digits"
@@ -101,10 +102,38 @@ defmodule Logex.Lexer do
       "#{inspect(text)} is no name: a bit number in brackets is written straight after its " <>
         "name's `.`, with no space, `status.[n]`"
 
+  def format_error({:point, text}),
+    do:
+      "#{inspect(text)} is no number: a real has digits on both sides of its `.`, " <>
+        "`1.0` or `0.5`"
+
+  def format_error({:no_point, text}),
+    do:
+      "#{inspect(text)} is no number: a real has a `.` with digits on both sides before its " <>
+        "exponent, `1.0e5`"
+
+  def format_error({:plus, text}),
+    do: "#{inspect(text)} is no number: logex takes no `+`, so an exponent is `e3` or `e-3`"
+
+  def format_error({:exponent, text}),
+    do: "#{inspect(text)} is no number: an exponent is `e` and its digits, `1.5e3` or `1.5e-3`"
+
+  def format_error({:real_range, text}),
+    do:
+      "#{inspect(text)} is no number logex holds: an lreal's largest is " <>
+        "1.7976931348623157e308"
+
   def format_error({:signed_inside, text}),
     do:
       "missing separator before `-`: #{inspect(text)} is neither a tag nor a number, " <>
         "and a sign begins a number"
+
+  # M5-10: B2's lexeme after a real, `1.5L`, is told so, and after an integer as it was.
+  defp after_what(text),
+    do: if_real(String.match?(text, ~r/\A-?[0-9][0-9_]*\.[0-9]/), "a real", "integer")
+
+  defp if_real(true, real, _integer), do: real
+  defp if_real(false, _real, integer), do: integer
 
   # `(`, `|` and `)` are punctuation, outside the NAME character set, so a missing space
   # cannot fuse a delimiter into a neighbouring tag (PLAN.md §4·B1).
@@ -148,6 +177,15 @@ defmodule Logex.Lexer do
 
   defp lex(<<h, _::binary>> = src, l, c, acc) when is_name_start(h),
     do: name(src, name_part(src, 0), l, c, acc)
+
+  # M5-10 (decision 149): a `.` that begins a lexeme before a digit, `.5`, is a real with no
+  # digit before its point, named whole.
+  defp lex(<<?., d, _::binary>> = src, l, c, _acc) when d in ?0..?9 do
+    <<?., rest::binary>> = src
+    n = 1 + word(rest, 0)
+    <<run::binary-size(^n), _::binary>> = src
+    {:error, {{l, c}, __MODULE__, {:point, run}}, l}
+  end
 
   # M5-9's review: a `.[` that begins a lexeme, `w .[n]` or `xic .[n]`, is a bit number
   # held apart from its name, named whole through its `]`.
@@ -198,6 +236,8 @@ defmodule Logex.Lexer do
   defp numeral(<<d, rest::binary>>, n) when d in ?0..?9, do: numeral(rest, n + 1)
   defp numeral(<<?_, rest::binary>>, n), do: separated(rest, n + 1)
   defp numeral(<<?#, _::binary>> = rest, n), do: based(rest, n)
+  defp numeral(<<?., _::binary>> = rest, n), do: point(rest, n)
+  defp numeral(<<e, _::binary>> = rest, n) when e in [?e, ?E], do: exponent_only(rest, n)
   defp numeral(<<h, _::binary>> = rest, n) when is_name_start(h), do: {:mistyped, word(rest, n)}
   defp numeral(_rest, n), do: {:decimal, n}
 
@@ -205,17 +245,74 @@ defmodule Logex.Lexer do
     do: separated(rest, n + 1)
 
   defp separated(<<?#, _::binary>> = rest, n), do: based(rest, n)
+  defp separated(<<?., _::binary>> = rest, n), do: point(rest, n)
+  defp separated(<<e, _::binary>> = rest, n) when e in [?e, ?E], do: exponent_only(rest, n)
 
   defp separated(<<h, _::binary>> = rest, n) when is_name_start(h),
     do: {:mistyped, word(rest, n)}
 
   defp separated(_rest, n), do: {:separated, n}
 
+  # M5-10 (decision 149): a real is digits, a `.`, digits and an optional exponent, an `e`
+  # or `E`, a `-` if negative, and digits, `37.5`, `1.5e3` or `1.5E-3`, as IEC's grammar
+  # has it (Ed 3 Annex A p.222, Table 5 features 2 and 3), a single `_` between two digits
+  # as in an integer. Its forms decision 149 refuses are each named whole: digits and a `.`
+  # with no digit after it, `1.`, `{:point, run}`; an exponent with no `.` before it, `1e5`,
+  # `{:no_point, run}`; a `+`, which logex keeps out (decision 97), `1.5e+3`, `{:plus, run}`;
+  # an `e` with no digits, `1.5e`, `{:exponent, run}`; and, as B2's mistyped lexeme, a run
+  # glued on after it, Logix's `1.5L` among them (RM018A p.870). A `.` that begins a lexeme
+  # before a digit, `.5`, is `{:point, run}` too (lex/4).
+  defp point(<<?., d, rest::binary>>, n) when d in ?0..?9, do: fraction(rest, n + 2)
+  defp point(<<?., rest::binary>>, n), do: {:point, n + 1 + word(rest, 0)}
+
+  defp fraction(<<ch, rest::binary>>, n) when ch in ?0..?9 or ch == ?_, do: fraction(rest, n + 1)
+  defp fraction(<<e, ?+, rest::binary>>, n) when e in [?e, ?E], do: {:plus, n + 2 + word(rest, 0)}
+
+  defp fraction(<<e, ?-, d, rest::binary>>, n) when e in [?e, ?E] and d in ?0..?9,
+    do: exponent(rest, n + 3)
+
+  defp fraction(<<e, d, rest::binary>>, n) when e in [?e, ?E] and d in ?0..?9,
+    do: exponent(rest, n + 2)
+
+  defp fraction(<<e, rest::binary>>, n) when e in [?e, ?E],
+    do: {:exponent, n + 1 + dangling(rest)}
+
+  defp fraction(rest, n), do: real_end(rest, n)
+
+  defp exponent(<<ch, rest::binary>>, n) when ch in ?0..?9 or ch == ?_, do: exponent(rest, n + 1)
+  defp exponent(rest, n), do: real_end(rest, n)
+
+  # B2's rule after a real: a letter or a `.` part glued on makes the run one mistyped
+  # lexeme, `1.5L`, `1.5x` or `1.5.2`.
+  defp real_end(<<ch, _::binary>> = rest, n) when is_name_char(ch),
+    do: {:mistyped, word(rest, n)}
+
+  defp real_end(<<?., ch, _::binary>> = rest, n) when is_name_char(ch),
+    do: {:mistyped, word(rest, n)}
+
+  defp real_end(_rest, n), do: {:real, n}
+
+  defp exponent_only(<<_e, sign, d, _::binary>> = rest, n)
+       when sign in [?-, ?+] and d in ?0..?9,
+       do: {:no_point, n + 2 + word(binary_part(rest, 2, byte_size(rest) - 2), 0)}
+
+  defp exponent_only(<<_e, d, _::binary>> = rest, n) when d in ?0..?9,
+    do: {:no_point, word(rest, n)}
+
+  defp exponent_only(rest, n), do: {:mistyped, word(rest, n)}
+
+  defp dangling(<<?-, rest::binary>>), do: 1 + word(rest, 0)
+  defp dangling(rest), do: word(rest, 0)
+
   defp based(<<?#, ?-, rest::binary>>, n), do: {:based, based_run(rest, n + 2)}
   defp based(<<?#, rest::binary>>, n), do: {:based, based_run(rest, n + 1)}
 
   defp based_run(<<ch, rest::binary>>, n) when is_name_char(ch) or ch == ?#,
     do: based_run(rest, n + 1)
+
+  # M5-10: a based number has no fraction, so `16#ff.3` is named whole, a digit outside its
+  # base, where a `.` would end it and leave `.3` for the next lexeme.
+  defp based_run(<<?., ch, rest::binary>>, n) when is_name_char(ch), do: based_run(rest, n + 2)
 
   defp based_run(_rest, n), do: n
 
@@ -235,6 +332,11 @@ defmodule Logex.Lexer do
     lexeme(rest, text, {:int_lit, {l, c}, String.to_integer(text)}, {l, c}, acc)
   end
 
+  defp number(src, {:real, n}, l, c, acc) do
+    <<text::binary-size(^n), rest::binary>> = src
+    real(real_value(text), text, rest, {l, c}, acc)
+  end
+
   defp number(src, {kind, n}, l, c, acc) do
     <<text::binary-size(^n), rest::binary>> = src
     literal(value(kind, text), text, rest, l, c, acc)
@@ -251,6 +353,52 @@ defmodule Logex.Lexer do
   defp literal({:error, reason}, _text, _rest, l, c, _acc),
     do: {:error, {{l, c}, __MODULE__, reason}, l}
 
+  # M5-10: a real's token, `{:real_lit, loc, 37.5}`, keeps its spelling as decision 202
+  # keeps an integer's, wherever it is not the plain text of its value, the shortest that
+  # reads back to it, `Float.to_string/1`'s: `1.5e3`, which is 1500.0, `37.50` and `-0.0`,
+  # whose value is 0.0, since no value logex holds is −0.0 (decision 150).
+  defp real({:ok, value}, text, rest, at, acc),
+    do: lexeme(rest, text, real_token(Float.to_string(value) == text, at, value, text), at, acc)
+
+  defp real({:error, reason}, _text, _rest, {l, _c} = at, _acc),
+    do: {:error, {at, __MODULE__, reason}, l}
+
+  defp real_token(true, at, value, _text), do: {:real_lit, at, value}
+  defp real_token(false, at, value, text), do: {:real_lit, at, value, text}
+
+  # A real's value: each of its digit runs held to the `_` rule an integer's is, then read
+  # with its `_`s left out, and −0.0 kept as 0.0. One past an lreal's largest value,
+  # `1.0e400`, which no float holds, is named whole; one below its smallest is 0.0, as a
+  # write flushes it (decision 150).
+  defp real_value(text) do
+    {unsigned, _negative} = unsigned(text)
+    [whole, rest] = :binary.split(unsigned, ".")
+    {fraction, power} = exponent_split(rest)
+    runs = [whole, fraction | power]
+    real_read(Enum.all?(runs, &(digits(&1, 10) == :ok)), text)
+  end
+
+  defp unsigned(<<?-, unsigned::binary>>), do: {unsigned, true}
+  defp unsigned(text), do: {text, false}
+
+  defp exponent_split(rest), do: split_exponent(:binary.split(rest, ["e", "E"]))
+
+  defp split_exponent([fraction, <<?-, power::binary>>]), do: {fraction, [power]}
+  defp split_exponent([fraction, power]), do: {fraction, [power]}
+  defp split_exponent([fraction]), do: {fraction, []}
+
+  defp real_read(false, text), do: {:error, {:separator, text}}
+
+  defp real_read(true, text) do
+    float = IO.iodata_to_binary(:binary.split(text, "_", [:global]))
+    {:ok, zeroed(:erlang.binary_to_float(float))}
+  rescue
+    ArgumentError -> {:error, {:real_range, text}}
+  end
+
+  defp zeroed(value) when value == 0, do: 0.0
+  defp zeroed(value), do: value
+
   # Decision 149: a number is decimal, or based in 16 or 2 (IEC Ed 3 Table 5 features 4 and
   # 6), with no sign, which IEC gives a based number none of; octal, `8#`, which Ed 3
   # deprecates (NOTE 2), is deferred, and refused as any other base. A single `_` may stand
@@ -259,6 +407,10 @@ defmodule Logex.Lexer do
   # `16#ffff` 65,535, judged by its slot as any literal is: a bit-string literal, read as
   # IEC reads one (p.26), and as Logix reads it (RM018A p.869).
   defp value(:mistyped, text), do: {:error, {:missing_separator, text}}
+
+  defp value(kind, text) when kind in [:point, :no_point, :plus, :exponent],
+    do: {:error, {kind, text}}
+
   defp value(:separated, <<?-, numeral::binary>> = text), do: negated(read(numeral, 10, text))
   defp value(:separated, text), do: read(text, 10, text)
   # A based number's base is judged before its sign, so `-8#17` is told that logex reads no

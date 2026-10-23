@@ -95,7 +95,7 @@ defmodule Logex.Configuration.Text do
   alias Logex.{Declarations, Diagnostic, FbType, Parser}
   alias Logex.Configuration.{Connection, Global, Instance}
   import Logex.Declarations, only: [is_elementary: 1]
-  import Logex.Parser, only: [is_int_lit: 1]
+  import Logex.Parser, only: [is_int_lit: 1, is_literal: 1]
 
   # Each word of a configuration file's lines, and the place a line reads it: `:line`
   # starts one, `:task` goes on a `task` line, `:program` on a `program` line, and
@@ -115,6 +115,8 @@ defmodule Logex.Configuration.Text do
             })
 
   @types Map.new(Declarations.elementary(), &{Declarations.word(&1), &1})
+  # M5-10: the reals, whose globals take a real initial value.
+  @reals Declarations.reals()
 
   # A task's inputs, in IEC's order (Ed 2 Annex B.1.7, `task_initialization`), each with
   # its rank in that order and the field it fills; since M4-2, `continuous` before them,
@@ -219,7 +221,7 @@ defmodule Logex.Configuration.Text do
   defp line([{:name, _, word} = first | rest]),
     do: keyed(Map.get(@keywords, String.downcase(word)), String.downcase(word), first, rest)
 
-  defp line([first | _rest]) when is_int_lit(first),
+  defp line([first | _rest]) when is_literal(first),
     do: {:error, fail(first, unknown(plain(first))), []}
 
   defp keyed(:line, "task", first, rest), do: task(rest, first, line_of(first))
@@ -259,7 +261,7 @@ defmodule Logex.Configuration.Text do
   defp task([], first, _line),
     do: {:error, fail(first, "`task` needs a name, as in `task fast interval 10 priority 1`"), []}
 
-  defp task([token | _rest], _first, _line) when is_int_lit(token),
+  defp task([token | _rest], _first, _line) when is_literal(token),
     do: {:error, fail(token, "expected a task's name after `task`, found #{describe(token)}"), []}
 
   defp task([{:name, _, word} = token | rest], _first, line),
@@ -370,7 +372,7 @@ defmodule Logex.Configuration.Text do
       {:error, fail(first, "`var_global` needs a name and a type, as in `var_global estop bool`"),
        []}
 
-  defp global([token | _rest], _first, _line) when is_int_lit(token),
+  defp global([token | _rest], _first, _line) when is_literal(token),
     do:
       {:error,
        fail(token, "expected a global's name after `var_global`, found #{describe(token)}"), []}
@@ -397,7 +399,7 @@ defmodule Logex.Configuration.Text do
            "`var_global #{global.name} dint`"
        ), declared(global)}
 
-  defp typed([token | _rest], global, _first) when is_int_lit(token),
+  defp typed([token | _rest], global, _first) when is_literal(token),
     do:
       {:error,
        fail(token, "`#{global.name}` needs a type before its initial value #{describe(token)}"),
@@ -438,10 +440,21 @@ defmodule Logex.Configuration.Text do
   # `sint`, … or `ulint` (M5-3).
   defp a_global, do: Declarations.either(&"`#{Declarations.word(&1)}`")
 
-  defp initial([value | rest], global) when is_int_lit(value),
-    do: located(rest, %{global | initial: Parser.value(value)})
+  defp initial([value | rest], global) when is_literal(value),
+    do: located(rest, %{global | initial: held(global.type, Parser.value(value))})
 
   defp initial(rest, global), do: located(rest, global)
+
+  # M5-10 (decision 156): a real global's real initial value is read as the real's nearest
+  # value, so that `print/1` spells it as the shortest text that reads back to it, and the
+  # round trip is exact; any other value is read as it is written, which `check/1` judges.
+  defp held(type, value) when type in @reals and is_float(value),
+    do: real_held(Logex.Real.in_range?(type, value), type, value)
+
+  defp held(_type, value), do: value
+
+  defp real_held(true, type, value), do: Logex.Real.nearest(type, value)
+  defp real_held(false, _type, value), do: value
 
   defp located([], global), do: {:ok, global}
 
@@ -476,7 +489,7 @@ defmodule Logex.Configuration.Text do
          "`program` needs an instance name and a program type, as in `program m1 motor`"
        ), []}
 
-  defp program([token | _rest], _first, _line) when is_int_lit(token),
+  defp program([token | _rest], _first, _line) when is_literal(token),
     do:
       {:error, fail(token, "expected an instance name after `program`, found #{describe(token)}"),
        []}
@@ -493,7 +506,7 @@ defmodule Logex.Configuration.Text do
            "`program #{instance.name} motor`"
        ), declared(instance)}
 
-  defp typed_program([token | _rest], instance, _first) when is_int_lit(token),
+  defp typed_program([token | _rest], instance, _first) when is_literal(token),
     do:
       {:error,
        fail(
@@ -557,7 +570,7 @@ defmodule Logex.Configuration.Text do
 
   defp wire([{:name, _, global}], connection, _first), do: {:ok, %{connection | to: global}}
 
-  defp wire([value], connection, _first) when is_int_lit(value),
+  defp wire([value], connection, _first) when is_literal(value),
     do: {:ok, %{connection | to: Parser.value(value)}}
 
   defp wire([], connection, first),
@@ -598,10 +611,10 @@ defmodule Logex.Configuration.Text do
   defp found([token | _rest]), do: ", found #{describe(token)}"
 
   defp describe({:name, _, word}), do: "`#{word}`"
-  defp describe(literal) when is_int_lit(literal), do: "`#{Parser.spelling(literal)}`"
+  defp describe(literal) when is_literal(literal), do: "`#{Parser.spelling(literal)}`"
 
   defp plain({:name, _, word}), do: word
-  defp plain(literal) when is_int_lit(literal), do: Parser.spelling(literal)
+  defp plain(literal) when is_literal(literal), do: Parser.spelling(literal)
 
   defp symbol({:bst, _}), do: "("
   defp symbol({:nxb, _}), do: "|"
@@ -611,7 +624,7 @@ defmodule Logex.Configuration.Text do
 
   defp fail({_kind, location, _value}, message), do: problem(:configure, location, message)
 
-  defp fail({:int_lit, location, _value, _spelling}, message),
+  defp fail({kind, location, _value, _spelling}, message) when kind in [:int_lit, :real_lit],
     do: problem(:configure, location, message)
 
   defp fail({_kind, location}, message), do: problem(:configure, location, message)
@@ -716,17 +729,28 @@ defmodule Logex.Configuration.Text do
     do:
       Enum.join(
         ["var_global", global.name, Declarations.word(global.type)] ++
-          given(nil, global.initial) ++ given("at", global.at),
+          given(nil, spelled(global.type, global.initial)) ++ given("at", global.at),
         " "
       ) <> "\n"
 
   defp printed(%Instance{name: name, type: type, task: task}),
     do: Enum.join(["program", name, type] ++ given("with", task), " ") <> "\n"
 
-  defp printed(%Connection{to: to} = connection), do: "#{path(connection)} #{to}\n"
+  defp printed(%Connection{to: to} = connection),
+    do: "#{path(connection)} #{spelled(nil, to)}\n"
 
   defp flagged(true), do: ["continuous"]
   defp flagged(false), do: []
+
+  # M5-10 (decision 156): a real global's float initial value in the shortest text that reads
+  # back to it, a `real`'s the shortest whose nearest single it is, and any other float, a
+  # constant's, whose type the line does not say, `Float.to_string/1`'s, the shortest that
+  # reads back to the double.
+  defp spelled(type, value) when type in @reals and is_float(value),
+    do: Logex.Real.spelled(type, value)
+
+  defp spelled(_type, value) when is_float(value), do: Float.to_string(value)
+  defp spelled(_type, value), do: value
 
   defp given(_word, nil), do: []
   defp given(nil, value), do: ["#{value}"]
@@ -820,7 +844,7 @@ defmodule Logex.Configuration.Text do
     name!(name, entry)
     keyword!(name, @unnamed, "a global's name", entry)
     type!(type, entry)
-    count!(initial, entry)
+    initial!(type, initial, entry)
     optional_name!(at, entry)
   end
 
@@ -864,6 +888,7 @@ defmodule Logex.Configuration.Text do
 
   defp to!(to, entry) when is_binary(to), do: name!(to, entry)
   defp to!(to, entry) when is_integer(to), do: count!(to, entry)
+  defp to!(to, _entry) when is_float(to), do: :ok
 
   defp to!(_to, entry),
     do: unsaid!("a connection is to a global, by its name, or to a constant", entry)
@@ -904,6 +929,22 @@ defmodule Logex.Configuration.Text do
 
   defp one_name!({:ok, [{:name, _, word}], _end_line}, word, _entry), do: :ok
   defp one_name!(_lexed, _word, entry), do: unsaid!("a name lexes as one name token", entry)
+
+  # M5-10: a real global's initial value may be a float, as a line reads one: its nearest
+  # value, which `print/1` spells so that it reads back as it is.
+  defp initial!(type, initial, entry) when type in @reals and is_float(initial),
+    do: real_value!(Logex.Real.value?(type, initial), entry)
+
+  defp initial!(_type, initial, entry), do: count!(initial, entry)
+
+  defp real_value!(true, _entry), do: :ok
+
+  defp real_value!(false, entry),
+    do:
+      unsaid!(
+        "a real global's real initial value is one of its type's values, as a line reads it",
+        entry
+      )
 
   defp count!(nil, _entry), do: :ok
   defp count!(n, _entry) when is_integer(n), do: :ok

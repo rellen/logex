@@ -31,12 +31,20 @@ defmodule Logex.Program do
     reads it with the routine it runs, and a timer of a routine whose `units` are nil, every
     routine of plain timers, runs with no look-up, as it did before long timers; a
     block's body holds its own.
+  - `reals` (M5-10) is the type of each tag of the routine that is a real, `real` or
+    `lreal`, by its name, nil, the default, where it holds none, as `units` is: settled
+    once from the tag table, `reals/1`, the one rule, so that a `move` or a `cal`'s
+    copy-out into a real, which writes the real's nearest value (decision 150), finds its
+    type with the routine it runs, and a routine of no real runs them as it did before
+    reals; a block's body holds its own.
   - `warnings` are `%Logex.Diagnostic{severity: :warning}`, in line order. From
     `Logex.compile_file/1` the warnings of each block it loaded beside the file follow,
     each with its block's file (decision 34); a block's body holds only its own.
   """
 
   import Logex.Declarations, only: [is_elementary: 1]
+
+  @reals Logex.Declarations.reals()
 
   @enforce_keys [:rungs, :tags]
   defstruct [
@@ -47,7 +55,8 @@ defmodule Logex.Program do
     file: nil,
     warnings: [],
     blocks: %{},
-    units: nil
+    units: nil,
+    reals: nil
   ]
 
   @type t :: %__MODULE__{
@@ -55,6 +64,7 @@ defmodule Logex.Program do
           tags: %{String.t() => Logex.Tag.t()},
           blocks: %{String.t() => Logex.FbType.t()},
           units: nil | %{String.t() => pos_integer},
+          reals: nil | %{String.t() => :real | :lreal},
           name: String.t() | nil,
           source: String.t() | nil,
           file: String.t() | nil,
@@ -105,6 +115,13 @@ defmodule Logex.Program do
     do: Logex.Declarations.zero(type)
 
   defp start(%Logex.Tag{initial: nil}), do: 0
+
+  # M5-10 (decision 150): a real's initial value is held as its nearest value, a `real`'s
+  # rounded to a single, `var x real 0.1` starting at 0.10000000149011612, and an integer
+  # one as the real it is, `var x real 0` at 0.0.
+  defp start(%Logex.Tag{type: type, initial: initial}) when type in @reals,
+    do: Logex.Real.nearest(type, initial)
+
   defp start(%Logex.Tag{initial: initial}), do: initial
 
   @doc """
@@ -133,6 +150,8 @@ defmodule Logex.Program do
   # Decision 182: the instructions that compute in their destination's type (M5-4,
   # decision 147), each writing its last operand.
   @computing [:add, :sub, :mul, :div, :mod, :neg, :abs]
+  # M5-10: `sqrt`, which computes in its destination's type, always a real.
+  @rooting [:sqrt]
 
   # M5-8 (decisions 147 and 155): the bitwise instructions, which compute in their
   # destination's type too, an integer's or a bit string's, each writing its last operand.
@@ -198,6 +217,9 @@ defmodule Logex.Program do
   @bit_strings Logex.Declarations.bit_strings()
 
   defp computing(type, _kind) when type in @integers, do: {:ok, type}
+  # M5-10: a real, which the arithmetic computes in, and `sqrt`'s destination always.
+  defp computing(type, kind) when type in @reals and kind in [:arithmetic, :real], do: {:ok, type}
+  defp computing(type, :real), do: {:error, {:real, type}}
   defp computing(type, :bitwise) when type in @bit_strings, do: {:ok, type}
   defp computing(:bool, :bitwise), do: {:ok, :bool}
   defp computing(type, :arithmetic), do: {:error, {:type, type}}
@@ -211,23 +233,44 @@ defmodule Logex.Program do
   compiler gives every program and body it builds, and the check below holds a program
   handed in to.
   """
-  def units(tags) when is_map(tags),
-    do:
-      tags
-      |> Enum.flat_map(&unit/1)
-      |> some()
+  def units(tags) when is_map(tags), do: elem(settled(tags), 0)
 
-  defp unit({name, %Logex.Tag{type: type}}), do: unit(per_ms(Logex.FbType.rules(type)), name)
-  defp unit(_not_a_tag), do: []
+  @doc """
+  A routine's `units` and, since M5-10, its `reals`, `{units, reals}`, settled in one walk
+  of its tags, the one rule for both (`units/1`, `reals/1`), which the compiler gives every
+  program and body it builds: an elementary tag is a real or nothing, and an instance a
+  timer of another unit or nothing.
+  """
+  def settled(tags) when is_map(tags) do
+    {units, reals} = Enum.reduce(tags, {[], []}, &settle/2)
+    {some(units), some(reals)}
+  end
 
-  defp unit(nil, _name), do: []
-  defp unit(per_ms, name), do: [{name, per_ms}]
+  defp settle({name, %Logex.Tag{type: type}}, {units, reals}) when type in @reals,
+    do: {units, [{name, type} | reals]}
+
+  defp settle({_name, %Logex.Tag{type: type}}, acc) when is_atom(type), do: acc
+
+  defp settle({name, %Logex.Tag{type: type}}, acc),
+    do: unit(per_ms(Logex.FbType.rules(type)), name, acc)
+
+  defp settle(_not_a_tag, acc), do: acc
+
+  defp unit(nil, _name, acc), do: acc
+  defp unit(per_ms, name, {units, reals}), do: {[{name, per_ms} | units], reals}
 
   defp some([]), do: nil
   defp some(units), do: Map.new(units)
 
   defp per_ms(%{per_ms: per_ms}) when is_integer(per_ms) and per_ms != 1, do: per_ms
   defp per_ms(_plain_or_no_timer), do: nil
+
+  @doc """
+  M5-10: the type of each tag of `tags` that is a real, `real` or `lreal`, by its name, or
+  nil where there is none. The one rule for a program's `reals`, which the compiler gives
+  every program and body it builds, and the check below holds a program handed in to.
+  """
+  def reals(tags) when is_map(tags), do: elem(settled(tags), 1)
 
   @doc """
   What only a program edited by hand after it compiled holds, a line each: decision 182's
@@ -248,13 +291,14 @@ defmodule Logex.Program do
   end
 
   defp routine(
-         %__MODULE__{rungs: rungs, tags: tags, blocks: blocks, units: units},
+         %__MODULE__{rungs: rungs, tags: tags, blocks: blocks, units: units, reals: reals},
          where,
          {lines, seen}
        )
        when is_list(rungs) and is_map(tags) do
     {program, _block} = where
     lines = Enum.reverse(unit_lines(units, tags, where), lines)
+    lines = Enum.reverse(real_lines(reals, tags, where), lines)
     {lines, called} = rungs(rungs, {tags, where}, {lines, []})
     acc = Enum.reduce(Enum.reverse(called), {lines, seen}, &once(&1, program, &2))
     held_bodies(blocks, program, acc)
@@ -327,6 +371,22 @@ defmodule Logex.Program do
             ), called}
          )
 
+  defp elements([{symbol, line, [_ | _] = operands} | rest], {tags, where} = at, {lines, called})
+       when symbol in @rooting,
+       do:
+         elements(
+           rest,
+           at,
+           {computes(
+              destination(List.last(operands), tags, :real),
+              symbol,
+              line,
+              operands,
+              where,
+              lines
+            ), called}
+         )
+
   # A `cal` runs the body of the type its instance's tag holds: one named in the program's
   # table is walked with the table, and one a tag holds as itself, which only a program
   # built by hand gives, is walked where a `cal` runs it.
@@ -372,6 +432,31 @@ defmodule Logex.Program do
       "#{owner(where)} units are neither nil nor a map of timer names to units, got: #{inspect(units)}: " <>
         "#{named(elem(where, 0))} was edited by hand after it compiled"
     ]
+
+  # M5-10: a routine's reals against the ones its tags give, by name in order, as its units.
+  defp real_lines(reals, tags, where) when is_map(reals) or reals == nil do
+    given = table(reals)
+    wanted = table(reals(tags))
+
+    for name <- Enum.sort(Enum.uniq(Map.keys(wanted) ++ Map.keys(given))),
+        Map.fetch(given, name) != Map.fetch(wanted, name),
+        do:
+          "#{owner(where)} reals give #{shown_name(name)} #{real_given(Map.fetch(given, name))}, " <>
+            "where #{real_wanted(Map.fetch(tags, name), where)}: " <>
+            "#{named(elem(where, 0))} was edited by hand after it compiled"
+  end
+
+  defp real_lines(reals, _tags, where),
+    do: [
+      "#{owner(where)} reals are neither nil nor a map of tag names to real types, got: " <>
+        "#{inspect(reals)}: #{named(elem(where, 0))} was edited by hand after it compiled"
+    ]
+
+  defp real_given(:error), do: "no real type"
+  defp real_given({:ok, type}), do: "the type #{inspect(type)}"
+
+  defp real_wanted({:ok, %Logex.Tag{type: type}}, _where), do: "it is #{a(type)}"
+  defp real_wanted(_undeclared, where), do: "#{declarer(where)} declares no such tag"
 
   # No units, nil, are an empty table: a routine of plain timers.
   defp table(nil), do: %{}
@@ -419,6 +504,9 @@ defmodule Logex.Program do
 
   defp written(destination, {:type, type}, _where),
     do: "#{shown(destination)}, #{a(type)}, which is no integer type"
+
+  defp written(destination, {:real, type}, _where),
+    do: "#{shown(destination)}, #{a(type)}, which is no real type"
 
   defp written(destination, {:bits, type}, _where),
     do: "#{shown(destination)}, #{a(type)}, which is no bool, integer or bit-string type"

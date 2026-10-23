@@ -174,7 +174,7 @@ defmodule Logex.RuntimeTest do
             {%{s | env: nil}, "state.env must be a map of tag names to values, got: nil"},
             {%{s | env: %Scan{now: 0, first: true}},
              "state.env must be a map of tag names to values, " <>
-               "got: %Logex.Scan{now: 0, first: true, ons_blocked: [], tags: nil, blocks: nil, units: nil}"},
+               "got: %Logex.Scan{now: 0, first: true, ons_blocked: [], tags: nil, blocks: nil, units: nil, reals: nil}"},
             # M3-5's review: the keys a scan keeps its own records under, which no tag can
             # be, and which it takes out before it ends, so no state holds one.
             {%{s | env: Map.put(s.env, :jump, "nowhere")},
@@ -2320,16 +2320,19 @@ defmodule Logex.RuntimeTest do
       assert Logex.Fault.__info__(:functions) == [__struct__: 0, __struct__: 1]
 
       # M2-5: the scan also carries the tag table of the routine it runs, and the block types
-      # it holds, the runtime's; since decision 197 the routine's timer units too.
+      # it holds, the runtime's; since decision 197 the routine's timer units too, and since
+      # M5-10 its reals' types.
       assert Enum.sort(Map.keys(Scan.__struct__())) ==
-               [:__struct__, :blocks, :first, :now, :ons_blocked, :tags, :units]
+               [:__struct__, :blocks, :first, :now, :ons_blocked, :reals, :tags, :units]
 
       # M2-5 (fix F15): a program keeps the file it was read from; a program, and a block's
       # body, hold the block types their instances reach in one table, `blocks` (decision
       # 53).
       # Decision 197: and each timer's unit where it is not the millisecond, `units`.
+      # M5-10: and each real's type, `reals`.
       assert Enum.sort(Map.keys(Logex.Program.__struct__())) ==
-               [:__struct__, :blocks, :file, :name, :rungs, :source, :tags, :units, :warnings]
+               [:__struct__, :blocks, :file, :name, :reals, :rungs, :source, :tags] ++
+                 [:units, :warnings]
 
       # OE-1: the staged edit of one instance, whose struct is opaque.
       assert Enum.sort(Logex.Edit.__info__(:functions)) == [
@@ -2383,10 +2386,14 @@ defmodule Logex.RuntimeTest do
       # OE-1: the definition of a well-formed tree, which instructionize/2 checks on entry.
       # Decision 202: a literal's value and spelling whichever its shape, the one rule for a
       # spelling, and the guard, the one macro.
+      # M5-10: plain_real?/1, the rule for a real literal written as its float's plain text,
+      # and the guards of a real literal and of a literal of either kind.
       assert Enum.sort(Logex.Parser.__info__(:functions)) ==
-               [format_error: 1, parse: 1, spelled?: 2, spelling: 1, value: 1, well_formed!: 1]
+               [format_error: 1, parse: 1, plain_real?: 1, spelled?: 2, spelling: 1] ++
+                 [value: 1, well_formed!: 1]
 
-      assert Logex.Parser.__info__(:macros) == [is_int_lit: 1]
+      assert Enum.sort(Logex.Parser.__info__(:macros)) ==
+               [is_int_lit: 1, is_literal: 1, is_real_lit: 1]
 
       # M2-5: same?/2, the one definition of one version of a block, which a compile's
       # one-version check uses. Decision 53: held/1 and within/2, a type as the one table

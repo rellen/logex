@@ -55,6 +55,8 @@ defmodule Logex.FbType do
   """
 
   alias Logex.{Program, Tag}
+  # M5-10: the reals, whose members start at their nearest values.
+  @reals Logex.Declarations.reals()
 
   defmodule Member do
     @moduledoc "One member of a function block type. See `Logex.FbType`."
@@ -441,6 +443,10 @@ defmodule Logex.FbType do
   defp start(%Member{type: {:block, _name}, initial: overrides} = member, owner),
     do: initial(type_of(owner, member), overrides)
 
+  # M5-10 (decision 150): a member that is a real starts at its declared value's nearest.
+  defp start(%Member{type: type, initial: initial}, _owner) when type in @reals,
+    do: Logex.Real.nearest(type, initial)
+
   defp start(%Member{initial: initial}, _owner), do: initial
 
   @doc """
@@ -511,6 +517,7 @@ defmodule Logex.FbType do
 
   defp starts(%__MODULE__{}, nil), do: %{}
   defp starts({:block, _name}, nil), do: %{}
+  defp starts(type, nil) when type in @reals, do: 0.0
   defp starts(_type, nil), do: 0
   defp starts(_type, initial), do: initial
 

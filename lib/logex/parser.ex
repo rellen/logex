@@ -8,7 +8,7 @@ defmodule Logex.Parser do
       rung     -> branch
       branch   -> elems | '$empty'            (an empty leg is a jumper)
       elems    -> elem | elem elems
-      elem     -> int_lit | name | bst branches bnd
+      elem     -> int_lit | real_lit | name | bst branches bnd
       branches -> branch | branch nxb branches
 
   `rungs/2` and `line_end/3` parse `routine`, `rungs` and `rung`; `branch/2` parses
@@ -39,6 +39,11 @@ defmodule Logex.Parser do
                | {:int_lit, line, n, spelling}         spelling lexes as one literal
                                                        token of n, and is not n's
                                                        plain decimal
+               | {:real_lit, line, x}                  x a float, written as its plain
+                                                       text, Float.to_string(x)
+               | {:real_lit, line, x, spelling}        spelling lexes as one real
+                                                       token of x, and is not x's
+                                                       plain text
                | {:branches, [leg, ...]}               one leg or more
       leg      = [element, ...]                        possibly empty: a jumper
 
@@ -52,7 +57,12 @@ defmodule Logex.Parser do
   a rung keeping a literal's spelling: a literal written other than as the plain decimal
   of its value, `16#ff`, `1_000`, `007` or `-0`, is the four-element leaf, its spelling
   last, and one written so, `255` or `-5`, the three-element leaf it always was, so a
-  spelling is held exactly where the text differs from what the value prints as. Until then what the compiler does with one, an
+  spelling is held exactly where the text differs from what the value prints as. M5-10
+  (decision 149) widened it by the real literal, `37.5` or `1.5e3`, its leaf
+  `{:real_lit, line, x}` where it is written as the plain text of its float,
+  `Float.to_string/1`'s, the shortest that reads back to it, and `{:real_lit, line, x,
+  spelling}` otherwise, `37.50`, `1.5E3` or `-0.0`, whose value is 0.0, so no leaf holds
+  −0.0 (decision 150). Until then what the compiler does with one, an
   element cited at a line of its own, is kept for it, but nothing reaches it.
   """
 
@@ -87,10 +97,27 @@ defmodule Logex.Parser do
            when is_tuple(term) and tuple_size(term) in 3..4 and elem(term, 0) == :int_lit
 
   @doc """
-  An integer literal's value, whichever its shape: `255` for `16#ff`.
+  Whether a term is a real literal (M5-10), a lexer token, a parse tree's leaf or an IR
+  operand, plain, `{:real_lit, _, value}`, or spelled, `{:real_lit, _, value, spelling}`.
+  A guard.
+  """
+  defguard is_real_lit(term)
+           when is_tuple(term) and tuple_size(term) in 3..4 and elem(term, 0) == :real_lit
+
+  @doc """
+  Whether a term is a literal of either kind, an integer's or, since M5-10, a real's. A
+  guard.
+  """
+  defguard is_literal(term) when is_int_lit(term) or is_real_lit(term)
+
+  @doc """
+  A literal's value, whichever its shape: `255` for `16#ff`, and since M5-10 a real's
+  float, `1500.0` for `1.5e3`.
   """
   def value({:int_lit, _at, value}), do: value
   def value({:int_lit, _at, value, _spelling}), do: value
+  def value({:real_lit, _at, value}), do: value
+  def value({:real_lit, _at, value, _spelling}), do: value
 
   @doc """
   An integer literal as it was written, whichever its shape (decision 202): its spelling,
@@ -104,6 +131,8 @@ defmodule Logex.Parser do
   """
   def spelling({:int_lit, _at, value}), do: Integer.to_string(value)
   def spelling({:int_lit, _at, _value, spelling}), do: spelling
+  def spelling({:real_lit, _at, value}), do: Float.to_string(value)
+  def spelling({:real_lit, _at, _value, spelling}), do: spelling
 
   @doc """
   Whether `spelling` is a spelling a literal of value `n` keeps (decision 202): a text the
@@ -118,7 +147,31 @@ defmodule Logex.Parser do
         Logex.Lexer.tokenize(spelling)
       )
 
+  # M5-10: a real's spelling so, one real token of its float that holds it, `1.5E3` of
+  # 1500.0 or `-0.0` of 0.0, matched exactly, so −0.0 is no value any spelling holds.
+  def spelled?(x, spelling) when is_float(x) and is_binary(spelling),
+    do:
+      match?(
+        {:ok, [{:real_lit, _location, ^x, ^spelling}], _end_line},
+        Logex.Lexer.tokenize(spelling)
+      )
+
   def spelled?(_n, _spelling), do: false
+
+  @doc """
+  Whether a float is a real literal written as its plain text (M5-10): the text
+  `Float.to_string/1` gives, the shortest that reads back to it, lexes as the plain token
+  of that very float. −0.0 never is, its text `-0.0` the spelling of 0.0. The one rule for
+  a plain real leaf, of a parse tree and of a compiled body.
+  """
+  def plain_real?(x) when is_float(x),
+    do:
+      match?(
+        {:ok, [{:real_lit, _location, ^x}], _end_line},
+        Logex.Lexer.tokenize(Float.to_string(x))
+      )
+
+  def plain_real?(_x), do: false
 
   def format_error({:unexpected, text, expected}),
     do: "expected #{Enum.join(expected, " or ")}, found #{text}"
@@ -151,6 +204,13 @@ defmodule Logex.Parser do
 
   defp branch([{:int_lit, {line, _}, value, spelling} | rest], acc),
     do: branch(rest, [{:int_lit, line, value, spelling} | acc])
+
+  # M5-10 (decision 149): a real literal, plain or spelled, as an integer is.
+  defp branch([{:real_lit, {line, _}, value} | rest], acc),
+    do: branch(rest, [{:real_lit, line, value} | acc])
+
+  defp branch([{:real_lit, {line, _}, value, spelling} | rest], acc),
+    do: branch(rest, [{:real_lit, line, value, spelling} | acc])
 
   defp branch([{:bst, open} | rest], acc) do
     case legs(rest, open, []) do
@@ -214,6 +274,24 @@ defmodule Logex.Parser do
   defp element!({:int_lit, _line, _n, _spelling} = literal, _at),
     do: refuse!("a literal is an integer", literal)
 
+  # M5-10: a real leaf, its float written as its plain text, or spelled, its spelling the
+  # one text that lexes as it, so a tree holds what `parse/1` would, never −0.0.
+  defp element!({:real_lit, line, x} = literal, at) when is_float(x) do
+    plain_real!(plain_real?(x), literal)
+    line!(line, literal, at)
+  end
+
+  defp element!({:real_lit, _line, _x} = literal, _at),
+    do: refuse!("a real literal is a float", literal)
+
+  defp element!({:real_lit, line, x, spelling} = literal, at) when is_float(x) do
+    one_real!(spelled?(x, spelling), literal)
+    line!(line, literal, at)
+  end
+
+  defp element!({:real_lit, _line, _x, _spelling} = literal, _at),
+    do: refuse!("a real literal is a float", literal)
+
   defp element!({:branches, [_ | _] = legs}, at), do: legs!(legs, at)
 
   defp element!({:branches, _legs} = group, _at),
@@ -227,7 +305,8 @@ defmodule Logex.Parser do
     do:
       refuse!(
         "an element is {:name, line, word}, {:int_lit, line, n}, " <>
-          "{:int_lit, line, n, spelling} or {:branches, legs}",
+          "{:int_lit, line, n, spelling}, {:real_lit, line, x}, " <>
+          "{:real_lit, line, x, spelling} or {:branches, legs}",
         element
       )
 
@@ -255,6 +334,25 @@ defmodule Logex.Parser do
 
   defp one_literal!(true, _literal), do: :ok
   defp one_literal!(false, literal), do: refuse!(@one_literal, literal)
+
+  defp plain_real!(true, _literal), do: :ok
+
+  defp plain_real!(false, literal),
+    do:
+      refuse!(
+        "a plain real literal's float is written as its plain text, which lexes as it",
+        literal
+      )
+
+  defp one_real!(true, _literal), do: :ok
+
+  defp one_real!(false, literal),
+    do:
+      refuse!(
+        "a real literal's spelling lexes as one real token of its float, other than the " <>
+          "float's plain text",
+        literal
+      )
 
   defp line!(line, node, _at) when not is_integer(line) or line < 1,
     do: refuse!("a line is a positive integer", node)
