@@ -221,8 +221,8 @@ necessarily a dialect; the point of surveying is to know what you are diverging 
 | `div a b dst` `mod a b dst` | as `add` | divide, truncated toward zero (`div -7 2 q` is −3), and IEC's remainder, its sign the dividend's (`mod -7 3 r` is −1). A zero divisor writes 0, passes no power and is a minor fault the scan reports, `state.faults` or a cycle's `{:fault, task, instance, fault}` event; a literal 0 divisor is refused. A signed type's minimum divided by −1 wraps to itself, `div -2147483648 -1` to −2147483648 in a `dint`, with no power |
 | `neg a dst` `abs a dst` | a source as `add`'s, then an integer it writes; `neg` into an unsigned type is refused | negate, absolute value — as `add`, one source: a signed type's minimum, −2147483648 in a `dint`, has no positive twin, so each wraps to it itself for it, with no power |
 | `and a b dst` `or a b dst` `xor a b dst` | two sources, each a tag, a member, a bit or a literal, then a tag, member or bit it writes, not a `var_input`: all bools and bit strings or all integers, each source of `dst`'s type or one Figure 11 widens into it, a bool into a bit string, any other refused naming its conversion | bitwise AND, OR and exclusive OR, IEC's, in `dst`'s type, a bool's one bit too, on an integer its two's-complement pattern — true: writes and passes power, as it cannot fail; false: writes nothing, passes no power. Anything may follow it on the rung |
-| `not src dst` | a source, then a destination, as `and`'s | each bit of the source inverted in `dst`'s type, `not` of a `byte` 2#0000_1111 2#1111_0000, of an `int` 0 −1 and of a `bool` 1 0 |
-| `shl src n dst` `shr src n dst` `rol src n dst` `ror src n dst` | a source and a destination as `and`'s, between them a count, an integer tag of any width or a literal, never negative | shift left or right, 0 filling, so `shr` of an `int` −2 by 1 is 32767, and rotate left or right within `dst`'s width, by `n` modulo the width — true: writes and passes power; a shift of the width or more writes 0; a tag count that is negative when the rung runs writes the source unshifted and passes **no** power, with no fault; false: writes nothing, passes no power |
+| `not src dst` | a source, then a destination, as `and`'s | each bit of the source inverted in the source's type and the result widened into `dst`'s by value, IEC's typing, `not` of a `byte` 2#0000_1111 2#1111_0000, of an `int` 0 −1, of a `bool` 1 0, and of a `bool` 1 into a `word` 16#0000 |
+| `shl src n dst` `shr src n dst` `rol src n dst` `ror src n dst` | a source and a destination as `and`'s, between them a count, an integer tag of any width or a literal, never negative | shift left or right, 0 filling, so `shr` of an `int` −2 by 1 is 32767, and rotate left or right, each within the source's width, by `n` modulo the width, the result widened into `dst`'s type by value, so `rol` of a `byte` into a `word` rotates within 8 bits — true: writes and passes power; a shift of the width or more writes 0; a tag count that is negative when the rung runs writes the source unshifted and passes **no** power, with no fault; false: writes nothing, passes no power |
 | `word_to_int a dst`, `byte_to_word a dst` and the 74 others | a source of the `from` type or one that widens into it, then a tag of the `to` type it writes; a literal source is a warning | a binary transfer between a bit string and another bit string or an integer type, never a sign extension, `int_to_dword` of −1 16#0000ffff and `word_to_int` of 16#ffff −1 — true: writes and passes power; false: writes nothing, passes no power |
 | `cal s1 a b q` | an instance of a function block, then a value for each of its var_inputs (a tag, a member or a literal of its type) and a tag for each of its var_outputs, which it writes, so not a `var_input`, in the block's declaration order | runs the instance: rung power is its EN, and passes on. True: copies `a` and `b` in, runs the block's rungs over the instance's state and copies its outputs out to `q`. False: copies nothing in or out and runs nothing, so the instance and `q` are frozen; a timer inside catches up when the block next runs. One `cal` runs an instance, and a `ton` is run by its `ton`, never by `cal` |
 | `jmp auto` | a label, a name declared nowhere | jump — true: once the rest of its rung has run, skips the rungs after its own up to the one `lbl auto` heads, which runs, and passes on the power it receives, so anything may follow it. False: skips nothing and passes no power. The label is on a later rung of the same routine: a jump back or to its own rung is refused, and a rung holds one `jmp`. A skipped rung runs nothing, so its coils hold and its counters, one-shots and timers are frozen, as in a block whose `cal` is false, a timer catching up when it next runs |
@@ -1046,7 +1046,7 @@ line 9: `lt` compares `70000` with `hz`, a uint (declared on line 2), which neve
 its low byte masked off, its pattern read as an `int` code, shifted by a count the
 program is given, with a lamp that is off when the count was negative, and copied into a
 word of flags whose top bit the program latches while the drive is at speed, and a
-`slow` lamp, a bool, the inverse of the at-speed bit:
+`slow` lamp, a bool, the inverse of the at-speed bit, and the same inverse in a `word`:
 
 ```
 var_input  status   word
@@ -1058,9 +1058,11 @@ var_output moved    word
 var_output moved_ok bool
 var_output flags    word
 var_output slow     bool
+var_output slow_w   word
 
 xic status.3 ote at_speed
 not at_speed slow
+not at_speed slow_w
 and status 16#00ff low
 word_to_int status code
 shl status shift moved ote moved_ok
@@ -1107,9 +1109,9 @@ for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
 
 ```
 $ mix run status.exs
-at speed, shifted by 4      %{"at_speed" => 1, "code" => 8, "flags" => 32776, "low" => 8, "moved" => 128, "moved_ok" => 1, "slow" => 0}
-16#fff7, shifted by -1      %{"at_speed" => 0, "code" => -9, "flags" => 65527, "low" => 247, "moved" => 65527, "moved_ok" => 0, "slow" => 1}
-16#8000, shifted by 16      %{"at_speed" => 0, "code" => -32768, "flags" => 32768, "low" => 0, "moved" => 0, "moved_ok" => 1, "slow" => 1}
+at speed, shifted by 4      %{"at_speed" => 1, "code" => 8, "flags" => 32776, "low" => 8, "moved" => 128, "moved_ok" => 1, "slow" => 0, "slow_w" => 0}
+16#fff7, shifted by -1      %{"at_speed" => 0, "code" => -9, "flags" => 65527, "low" => 247, "moved" => 65527, "moved_ok" => 0, "slow" => 1, "slow_w" => 1}
+16#8000, shifted by 16      %{"at_speed" => 0, "code" => -32768, "flags" => 32768, "low" => 0, "moved" => 0, "moved_ok" => 1, "slow" => 1, "slow_w" => 1}
 input `status` is a word: 65536 is outside 0 to 65535
 line 4: `add` reads a number, but `status` is a word (declared on line 1): a word is a bit string, not a number: convert it first, with `word_to_uint`
 line 4: `add` writes a number, but `status` is a word (declared on line 1): a word is a bit string, not a number: compute in an integer and convert the result, with `uint_to_word`
@@ -1133,17 +1135,22 @@ line 10: `and` computes in `code`'s type, an int, but `lamp` is a bool (declared
   string and a `byte` into a `word`, never between a bit string and an integer. A
   comparison takes two bit strings or two integers, a bit string with an integer tag
   refused naming both conversions, a literal compared with either as a value of its type.
-- `and or xor not` work in their destination's type, all bit strings or all integers, a
+- `and or xor` work in their destination's type, all bit strings or all integers, a
   source widening into it as `move`'s, an integer by its two's-complement pattern, so
-  `not` of an `int` 0 is −1 and `and` of an `sint` −1 and 16#0f is 15. A `bool` is one
-  bit to them, as IEC's ANY_BIT holds BOOL (decision 206): `and left right both` of three
-  bools is the AND of two switches and `not at_speed slow` the inverse of a bit, a bool
-  source widens into a bit string, `or ready status out` setting bit 0 of a `word`, and
-  a bool with an integer is refused, as `move` refuses it. A shift or rotate takes a bool
-  as a one-bit pattern, so a shift by 1 or more writes 0 and a rotate writes it back. `shl` and `shr`
-  fill with 0, never extending a sign, so `shr` of an `int` −2 by 1 is 32767, and a shift
-  of the width or more writes 0, the low bits of IEC's SHL and SHR; `rol` and `ror`
-  rotate within the width, by the count modulo it. The count is an integer tag of any
+  `and` of an `sint` −1 and 16#0f is 15. `not` and the shifts and rotates work in their
+  source's type, IEC's typing, and the result is then widened into the destination by
+  value (decision 214): `not` of an `int` 0 is −1, `not at_speed slow_w` of a bool into a
+  `word` is 16#0000 or 16#0001, never 16#fffe, `rol` of a `byte` into a `word` rotates
+  within 8 bits, and `not` of a `usint` 5 into an `int` is 250; for `and`, `or` and `xor`
+  the two typings give the same bits. A `bool` is one bit to them, as IEC's ANY_BIT holds
+  BOOL (decision 206): `and left right both` of three bools is the AND of two switches and
+  `not at_speed slow` the inverse of a bit, a bool source widens into a bit string, `or
+  ready status out` setting bit 0 of a `word`, and a bool with an integer is refused, as
+  `move` refuses it. A shift or rotate takes a bool as a one-bit pattern, so a shift by 1
+  or more writes 0 and a rotate writes it back. `shl` and `shr` fill with 0, never
+  extending a sign, so `shr` of an `int` −2 by 1 is 32767, and a shift of the source's
+  width or more writes 0, the low bits of IEC's SHL and SHR; `rol` and `ror` rotate within
+  the source's width, by the count modulo it. The count is an integer tag of any
   width or a literal: a negative literal is refused, and a tag that holds a negative
   count when the rung runs writes the source unshifted and passes no power, with no fault
   (decision 165). Every other bitwise instruction always passes power.
@@ -1183,7 +1190,7 @@ xio faults.[sel] ote checked
 
 `selected.exs` scans it with the selector at 4, 15 and 16, then runs it in a plant on the
 manual clock, the drive's fault word and the selector its points, and moves the selector
-to 16 there; then it compiles three bits that cannot work and a literal written in
+to 16 there; then it compiles four bits that cannot work and runs a literal written in
 brackets:
 
 ```elixir
@@ -1242,14 +1249,17 @@ Logex.Runner.stop(runner)
 {:error, diagnostics} =
   Logex.compile(
     "var status word\nvar code word\nvar on bool\nvar n int\n" <>
-      "xic status.[code] ote on\nxic on.[n] ote on\nxic on ons status.[n]",
+      "xic status.[code] ote on\nxic on.[n] ote on\nxic on ons status.[n]\nxic status.[16] ote on",
     name: "wrong"
   )
 
 for diagnostic <- diagnostics, do: IO.puts(Logex.Diagnostic.format(diagnostic))
 
-{:error, [diagnostic]} = Logex.compile("var status word\nvar on bool\nxic status.[4] ote on", name: "literal")
-IO.puts(Logex.Diagnostic.format(diagnostic))
+{:ok, literal} =
+  Logex.compile("var_input status word\nvar_output on bool\nxic status.[16#4] ote on", name: "literal")
+
+state = Logex.Runtime.put_inputs(literal, Logex.Runtime.instance(literal), %{"status" => 0x0010})
+IO.puts("status.[16#4] of 16#0010: #{inspect(elem(Logex.Runtime.scan(literal, state), 0))}")
 ```
 
 ```
@@ -1265,7 +1275,8 @@ bit 16: the lamp %{[0] => 0}, :tripped
 line 5: `status.[code]` takes its bit number from `code`, a word (declared on line 2), which is no integer: a bit number is held in a tag of an integer type, so convert it first, with `word_to_uint`
 line 6: `on.[n]` names a bit of `on`, a bool, which has no bits
 line 7: `ons` keeps its storage bit in `status.[n]`, whose number `n` holds: a one-shot's storage bit is a bool or a bit with a literal number, as in `status.0`, so that it is one bit whatever the program does
-line 3, column 5: "status.[4]" is no name: a bit number in brackets is a tag's, `status.[n]`, and a literal one is written with none, `status.3`
+line 8: `status.[16]` names bit 16 of `status`, a word (declared on line 1), which has bits 0 to 15
+status.[16#4] of 16#0010: %{"on" => 1}
 ```
 
 - `faults.[sel]` is the bit of `faults` whose number `sel` holds when the instruction runs,
@@ -1274,7 +1285,10 @@ line 3, column 5: "status.[4]" is no name: a bit number in brackets is a tag's, 
   a bit string, or a member of one, `t1.acc.[n]`; the number is a tag of any integer
   width, never an expression, which logex has no syntax for, and never a bit string,
   which is told the conversion that makes it a number, `word_to_uint`. A literal number
-  is written with no brackets, `faults.4`. A one-shot's storage bit and a pulse coil's
+  is written `faults.4` or, as Logix writes it too (1756-RM018A p.885), in brackets,
+  `faults.[4]` or `faults.[16#4]`, the very bit `faults.4`, quoted as written and one bit
+  however it is spelt, a number past the width refused when the program compiles
+  (decision 213). A one-shot's storage bit and a pulse coil's
   pulse bit take a literal number only, so that each is one bit, which an online edit can
   block (decision 154).
 - A number outside the word's bits when the instruction runs, 16 or −1 in a `word`, is a

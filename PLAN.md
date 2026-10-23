@@ -126,7 +126,12 @@ written by a coil, its number out of the word's bits the first major fault, the
 instruction doing nothing and the scan running on, on which `Logex.Runner` trips at the
 end of the step that met it, before the round's write, with four questions put to the
 maintainer, and its review the same day, a warning grown, a bracket's lex error named
-whole and five tests that were missing, with a fifth (§3, M5-9).
+whole and five tests that were missing, with a fifth (§3, M5-9); and the maintainer's
+answers to its five questions (decisions 210 to 214, §3, M5-9) the same day, three
+confirming what was built and two changes: a literal in brackets, `status.[4]`, is the
+very bit `status.4`, so that text pasted from Logix compiles, and `not` and the shifts
+follow IEC's typing, computing in their source's type, so `not left mask` of a bool into
+a `word` is 16#0000 or 16#0001.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -6192,7 +6197,8 @@ the walks' cross-type reach and the documents.
   `s.[ n ]` as brackets no one name fills and closes, and `s. [n]` and `s .[n]` as a
   bracket held apart from its name's `.`.
 
-  **Questions for the maintainer** (M5-9):
+  **Questions for the maintainer** (M5-9), answered on 2026-10-23 (decisions 210 to 214,
+  below):
   1. *What a block call does when its bit number is out of range.* A conveyor's lamp
      block is called `cal lamp1 drive_faults.[sel] lamp`, and `sel` reaches 16. As built,
      the call does nothing on that scan: the block's body does not run, so its timers do not
@@ -6248,6 +6254,74 @@ the walks' cross-type reach and the documents.
      `left` is open. IEC's Table 31 overloads NOT on ANY_BIT, its result the input's type
      (Ed 3 p.89); Logix's NOT takes no BOOL (1756-RM018A pp.494–496). The decision's
      record now says it departs from IEC there; nothing changed.
+
+  **The maintainer's answers**, 2026-10-23 (decisions 210 to 214). (1) *Confirmed*: a
+  `cal` whose bit number is out of range runs no body that scan, as Logix's faulted JSR
+  and Add-On Instruction do not run (decision 210). (2) *Confirmed*: a step that both
+  faults and overruns its watchdog trips naming the fault (decision 211). (3)
+  *Confirmed*: coils on bits a tag numbers warn, beside each other and beside a whole
+  write of the word (decision 212). (4) *Changed*: `status.[4]`, a literal in brackets,
+  is accepted as the very bit `status.4`, so that text pasted from Logix compiles
+  (1756-RM018A pp.884–885; decision 213), superseding provisional reading (5): the
+  brackets hold any one number the lexer reads, `status.[16#4]`, `status.[1_0]` and
+  `status.[04]` among them, a negative one, `status.[-1]`, lexing and refused when the
+  program compiles as outside the word's bits, as `status.16` is (provisional; whether
+  Logix takes a based or a negative literal there is unverified); brackets that begin as a
+  number and hold no one number, `status.[8#3]` or `status.[3x]`, a lex error naming the
+  run whole; the bit quoted as written and keyed by its number, so an edit that only
+  respells `status.4` as `status.[4]` changes no rung. (5) *Changed*: `not` and the
+  shifts follow IEC's typing, computing in their source's type and widening the result
+  into the destination by value (decision 214), so `not left mask` of a bool into a
+  `word` gives 16#0000 for a made `left` and 16#0001 for an open one, superseding decision
+  206's 16#fffe; `rol` of a byte into a word rotates within 8 bits; `not` of a `usint` 5
+  into an `int` is 250 and `shr` of an `sint` −2 by 1 into an `int` 127, IEC's implicit
+  conversion between integers being by value, where Logix's logical instructions widen by
+  zero fill (1756-RM018A p.871), its NOT of a SINT −1 into a DINT 16#ffffff00; `and`, `or`
+  and `xor` keep computing in the destination, the two readings agreeing bit for bit,
+  since widening by value is a zero or a sign extension, each commuting with them, and for
+  mixed source widths IEC's widest common type gives the same bits again; a literal
+  source computes in the destination's type, as its slot judges it (provisional).
+
+  In two gated commits and one of documents. `0779f5d` records 20 curated sources in the
+  front end's golden record, each a lex error before decision 213. `d9317d5` lands both
+  changes with decisions 210 to 214: the lexer reads a literal in brackets as the name's
+  last part, one token kept as written, through `in_brackets/3`, its `{:bracketed, run}`
+  now brackets that begin as a number and hold no one number; `printer_test.exs`'s
+  generator draws `status.[4]`, `w.[16#a]`, `t1.acc.[03]` and `s.[-1]`, a new shape,
+  `:literal_bit_name`, in `@required_shapes`; the golden record regenerated, its diff
+  read, 11 sources changed, the nine new ones that lex and M5-9's `xic s.[3]` and `xic
+  s.[-1]`, every other unchanged; `Logex.Compiler` reads the literal's value through the
+  lexer (`literal_number/1`) and resolves and lowers the bit as `status.4`, a negative
+  number refused at its line; the runtime's `not` and shifts look their source's type up
+  (`source_bits/3`) and widen the result (`widened/3`). Tests: `tag_bit_test.exs`'s
+  decision 213, every type's bits in four spellings read and written, a member's and a
+  one-shot's, the refusals quoted as written, the warning keyed by number and an edit
+  that only respells; `bit_string_test.exs`'s decision 214, the lamp, IEC's own cases,
+  every pair Figure 11 widens over `not` and each shift and rotate at counts about the
+  source's width, `and`, `or` and `xor` of mixed widths against both typings, a literal
+  source with a rotate that only the destination's width gives, a bit and members, and
+  the cost; `frontend_test.exs`'s tokens and round trip; and `api_contract_test.exs`'s
+  host walk, its oracle restating `not bb bv` in the bool's bit and drawing `not` and a
+  shift of the drawn type into a wider one, its reach each type with a wider one. Cost
+  against `a281a15`: a `not` or a shift costs 4 reductions more, its source's type looked
+  up, a narrower source 3 more again; a program of neither scans in exactly what it did; a
+  program of no bit in brackets lexes and compiles in exactly what it did, 200 `add`s,
+  contacts, members and literal bits measured, and one of 200 tag bits compiles in 0.8%
+  more. README's `status.exs` and `selected.exs` re-run, the first showing a bool's
+  inverse in a `word` and the second a literal in brackets read and one past the bits
+  refused. The mutation table, each judged by the full suite's exit code
+  (`a8/mut/run.log`): I1 (`not` computed in the destination's type), I2 (a shift in the destination's width),
+  I3 and I4 (a bit, `s.3` or `s.[n]`, computed in the destination's type), I5 (a member
+  so), I6 (the result widened without being read as the source's type, a signed one
+  zero-extended), I7 (a bool so), I8 (a literal computed in the widest type, red on a
+  literal rotate added for it), I9 (the signed integers in the destination's type); L1
+  (a literal in brackets still refused), L2 (any byte taken for its `]`), L3 (any
+  number taken, `s.[8#3]`), L4 (nothing glued after the `]` looked at), L5 (a negative
+  literal refused); C1 (the literal read as a tag's name), C2 and C3 (a negative number
+  taken, a tag's and a member's), C4 (no member's literal bit), C5 (lowered as the next
+  bit), C6 (a bool's literal bit told it has no members) and C7 (a negative number
+  lowered as a bit), all 21 red, I4 and I8 on tests added after they survived; and
+  C1's first spelling did not compile and was replaced. 1872 tests (10 doctests), up from 1859.
 
 - **M5-10 · Reals.** A spike first, on Elixir 1.20.4 and OTP 28, throwaway: the cost of a
   destination lookup and a single-rounding write, and the shortest spelling of a single

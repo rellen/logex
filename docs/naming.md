@@ -1668,6 +1668,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 
 *(Amended 2026-10-23, `docs/organisation.md` decision 206: a `bool` is an operand too, as IEC's ANY_BIT holds BOOL, so `not at_speed slow` of two bools writes the inverse, 1 for 0 and 0 for 1, and `not ready mask` of a bool into a `word` 16#fffe for 1, the bool widened by Figure 11 and then inverted; a bool beside an integer stays refused.)*
 
+*(Amended 2026-10-23, `docs/organisation.md` decision 214, the maintainer's answer to M5-9's fifth question: `not` computes in its source's type, IEC's NOT, whose OUT is its IN's type (Ed 3 Table 31, p.89), and the result is widened into `dst` by Figure 11, by value, so `not left mask` of a bool into a `word` writes 16#0000 for 1 and 16#0001 for 0, superseding decision 206's 16#fffe, and `not` of a `usint` 5 into an `int` 250; a signed source gives what `dst`'s width would, sign extension commuting with inversion. Logix's NOT widens a source by zero fill, *"Logical instructions use zero fill"* (1756-RM018A p.871), so its NOT of a SINT −1 into a DINT is 16#ffffff00, where logex's is 0.)*
+
 ### `shl` — shift a value left by a count, into a tag
 
 | Dialect | Name there | Notes |
@@ -1684,6 +1686,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Checked:** 2026-10-23. IEC 61131-3:2013 §6.6.2.5.9 and Table 30 (pp.88–89), read directly in the copy `docs/instruction-sets.md` §9 lists; the conventional reference, Sept 2025, its table of contents and p.622. The other rows are the table's.
 
 *(Amended 2026-10-23, `docs/organisation.md` decision 206: IEC's IN is ANY_BIT, which holds BOOL, so the source and destination may be bools, a one-bit pattern under decision 165's rules (provisional): a shift by 0 writes the source, by 1 or more 0, a rotate by any count of 0 or more the source, and a negative tag count the source with no power. The count stays an integer, a bool count refused.)*
+
+*(Amended 2026-10-23, `docs/organisation.md` decision 214: the shift is within the source's width, IEC's OUT of IN's type (Table 30), and the result is widened into `dst` by value, so `shl` of a `byte` 16#81 by 4 into a `word` writes 16#0010, the high bits shifted out of the byte, and a count of 8 or more writes 0; a literal source computes in `dst`'s type, as its slot judges it (provisional).)*
 
 ### `shr` — shift a value right by a count, into a tag
 
@@ -1702,6 +1706,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 
 *(Amended 2026-10-23, `docs/organisation.md` decision 206: IEC's IN is ANY_BIT, which holds BOOL, so the source and destination may be bools, a one-bit pattern under decision 165's rules (provisional): a shift by 0 writes the source, by 1 or more 0, a rotate by any count of 0 or more the source, and a negative tag count the source with no power. The count stays an integer, a bool count refused.)*
 
+*(Amended 2026-10-23, `docs/organisation.md` decision 214: within the source's width, as `shl`'s amendment says, so `shr` of an `sint` −2 by 1 into an `int` writes 127, the sint's pattern 16#fe shifted to 16#7f.)*
+
 ### `rol` — rotate a value left by a count, into a tag
 
 | Dialect | Name there | Notes |
@@ -1719,6 +1725,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 
 *(Amended 2026-10-23, `docs/organisation.md` decision 206: IEC's IN is ANY_BIT, which holds BOOL, so the source and destination may be bools, a one-bit pattern under decision 165's rules (provisional): a shift by 0 writes the source, by 1 or more 0, a rotate by any count of 0 or more the source, and a negative tag count the source with no power. The count stays an integer, a bool count refused.)*
 
+*(Amended 2026-10-23, `docs/organisation.md` decision 214: the rotation is circular within the source's width, IEC's OUT of IN's type (Table 30), the result widened into `dst` by value, so `rol` of a `byte` 16#81 by 1 into a `word` writes 16#0003, a count taken modulo 8.)*
+
 ### `ror` — rotate a value right by a count, into a tag
 
 | Dialect | Name there | Notes |
@@ -1735,6 +1743,8 @@ to `dint`, are the words of `PLAN.md` M1-3's declaration lines, surveyed before 
 **Checked:** 2026-10-23. IEC 61131-3:2013 Table 30 (p.89). The other rows are the table's.
 
 *(Amended 2026-10-23, `docs/organisation.md` decision 206: IEC's IN is ANY_BIT, which holds BOOL, so the source and destination may be bools, a one-bit pattern under decision 165's rules (provisional): a shift by 0 writes the source, by 1 or more 0, a rotate by any count of 0 or more the source, and a negative tag count the source with no power. The count stays an integer, a bool count refused.)*
+
+*(Amended 2026-10-23, `docs/organisation.md` decision 214: within the source's width, as `rol`'s amendment says.)*
 
 ### `byte_to_word` — convert a bit string into another bit string type: the family of the 12 bit-string conversions
 
