@@ -800,7 +800,7 @@ defmodule Logex.ArithmeticTest do
         {_low, high} = bounds(type)
         {out, state} = scan(program, %{"go" => 1, "a" => high, "b" => 0})
         assert {out["r"], out["ok"]} == {0, 0}
-        assert [%Logex.Fault{kind: :divide_by_zero, line: 6}] = state.faults
+        assert [%Logex.Fault{severity: :minor, kind: :divide_by_zero, line: 6}] = state.faults
 
         assert [%Logex.Diagnostic{message: "`" <> _}] =
                  diagnostics("var r #{type}\n#{op} r 0 r")

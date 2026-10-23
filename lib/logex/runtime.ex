@@ -749,7 +749,16 @@ defmodule Logex.Runtime do
   # no fault: no env a host hands in holds the key (state!/2), and no body runs over a map
   # that does (members_of/1).
   defp placed({symbol, line}, path, file) when is_atom(symbol) and is_integer(line),
-    do: [%Fault{kind: :divide_by_zero, instruction: symbol, path: path, file: file, line: line}]
+    do: [
+      %Fault{
+        severity: :minor,
+        kind: :divide_by_zero,
+        instruction: symbol,
+        path: path,
+        file: file,
+        line: line
+      }
+    ]
 
   defp placed(%Fault{} = fault, nil, _file), do: [fault]
 

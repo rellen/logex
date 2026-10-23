@@ -413,7 +413,7 @@ defmodule Logex.JumpTest do
       assert {state.faults, state.env["q"]} == {[], 5}
 
       {_out, state} = Runtime.call(p, state, %{"skip" => 0}, %Scan{now: 10, first: false})
-      assert [%Logex.Fault{kind: :divide_by_zero, line: 5}] = state.faults
+      assert [%Logex.Fault{severity: :minor, kind: :divide_by_zero, line: 5}] = state.faults
     end
   end
 

@@ -7323,7 +7323,14 @@ defmodule Logex.ApiContractTest do
   end
 
   defp ar_fault({op, line, path}, file),
-    do: %Logex.Fault{kind: :divide_by_zero, instruction: op, path: path, file: file, line: line}
+    do: %Logex.Fault{
+      severity: :minor,
+      kind: :divide_by_zero,
+      instruction: op,
+      path: path,
+      file: file,
+      line: line
+    }
 
   defp ar_outputs(env), do: Map.take(env, ~w(y0 y1 yb ok0 ok1 ok2 okb))
 

@@ -3727,7 +3727,14 @@ defmodule Logex.EndToEndTest do
           ~w(per_minute rate_ok valve total)
         )
 
-      fault = %Fault{kind: :divide_by_zero, instruction: :div, path: nil, file: file, line: 7}
+      fault = %Fault{
+        severity: :minor,
+        kind: :divide_by_zero,
+        instruction: :div,
+        path: nil,
+        file: file,
+        line: 7
+      }
 
       for {now, events, g} <- trace, rem(now, 100) == 0 do
         if now < 200 do

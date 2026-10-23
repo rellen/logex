@@ -513,6 +513,7 @@ defmodule LogexTest do
             do: [
               {:fault, "slow", "filler",
                %Logex.Fault{
+                 severity: :minor,
                  kind: :divide_by_zero,
                  instruction: :div,
                  path: nil,

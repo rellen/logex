@@ -2078,7 +2078,8 @@ defmodule Logex.RunnerTest do
       assert_received {Runner, ^runner, {:overlap, "fast", 1}}
 
       assert_received {Runner, ^runner,
-                       {:fault, "fast", "z", %Logex.Fault{kind: :divide_by_zero}}}
+                       {:fault, "fast", "z",
+                        %Logex.Fault{severity: :minor, kind: :divide_by_zero}}}
 
       refute_received {Runner, ^runner, {:ran, _, _, _}}
 

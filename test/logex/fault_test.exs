@@ -1,7 +1,7 @@
 defmodule Logex.FaultTest do
   @moduledoc """
   M3-3: the minor fault a zero divisor raises, reported to the host (docs/organisation.md
-  decisions 78 and 99): in a lone instance's `state.faults` after `Logex.Runtime.call/4`,
+  decisions 78 and 99), `severity: :minor` since M5-9 (decisions 153 and 160): in a lone instance's `state.faults` after `Logex.Runtime.call/4`,
   `scan/2` and `scan/3`, and in a resource's events, `{:fault, task, instance, fault}`, each
   just after its scan's `{:ran, ...}`. Each rule pinned from source, a test that fails when
   the rule alone is reverted; the rest of a `div` or a `mod` is `arithmetic_test.exs`'s.
@@ -36,6 +36,7 @@ defmodule Logex.FaultTest do
 
   defp fault(instruction, line, path \\ nil, file \\ nil),
     do: %Fault{
+      severity: :minor,
       kind: :divide_by_zero,
       instruction: instruction,
       path: path,
@@ -61,6 +62,14 @@ defmodule Logex.FaultTest do
                {%{"per_minute" => 60, "rate_ok" => 1}, []},
                {%{"per_minute" => 0, "rate_ok" => 0}, [fault(:div, 5)]}
              ]
+    end
+
+    # M5-9 (decisions 153 and 160): a zero divisor is a minor fault, which reads nothing out
+    # of range, and the plant runs on through it.
+    test "a zero divisor's fault is minor, and reads nothing" do
+      p = c!(@rate)
+      assert {[{_, [fault]}], _} = scans(p, [%{"boxes" => 120, "minutes" => 0}])
+      assert %Fault{severity: :minor, kind: :divide_by_zero, read: nil} = fault
     end
 
     test "a new instance has none, and a scan with no zero divisor gives none" do

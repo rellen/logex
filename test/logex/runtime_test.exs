@@ -2312,9 +2312,10 @@ defmodule Logex.RuntimeTest do
       assert Enum.sort(Map.keys(Instance.__struct__())) ==
                [:__struct__, :env, :faults, :first, :now, :ons_blocked, :switched, :type]
 
-      # M3-3: a minor fault, as a scan's state and a cycle's events give it, plain data.
+      # M3-3: a minor fault, as a scan's state and a cycle's events give it, plain data;
+      # since M5-9 its severity, and what the scan read out of range (decisions 153 and 160).
       assert Enum.sort(Map.keys(Logex.Fault.__struct__())) ==
-               [:__struct__, :file, :instruction, :kind, :line, :path]
+               [:__struct__, :file, :instruction, :kind, :line, :path, :read, :severity]
 
       assert Logex.Fault.__info__(:functions) == [__struct__: 0, __struct__: 1]
 
