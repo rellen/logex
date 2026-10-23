@@ -1143,9 +1143,9 @@ defmodule Logex.ConfigurationTest do
       # M3-3 (decision 97): a negative initial value is one a line can say, so a dint's
       # is taken, `d`'s -1, and a bool's or a located global's told what is wrong with it.
       assert refused(Keyword.put(base(seal), :globals, base(seal)[:globals] ++ globals)) == [
-               "global `a` has type :real: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint or :ulint",
+               "global `a` has type :real: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword",
                "the initial value of global `e` must be an integer, found 1.0",
-               "global `n` has type nil: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint or :ulint",
+               "global `n` has type nil: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword",
                "`b` is a bool: its initial value must be 0 or 1, found `2`",
                "`c` is a dint: `2147483648` is outside -2147483648 to 2147483647",
                "`f` is an input point: its value comes from the input image, so it takes no " <>
@@ -4776,8 +4776,8 @@ defmodule Logex.ConfigurationTest do
         )
 
       assert refused(fields) == [
-               "global `pb` has type {:t}: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint or :ulint",
-               "global `k` has type %{}: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint or :ulint",
+               "global `pb` has type {:t}: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword",
+               "global `k` has type %{}: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword",
                "{:x} cannot name a program instance: a name is a letter or `_`, then letters, " <>
                  "digits or `_`",
                "`y.z` cannot name an instance: `.` is kept for a path, as in `m1.start`, and a " <>
@@ -4792,7 +4792,7 @@ defmodule Logex.ConfigurationTest do
                 "%Logex.Configuration.Instance{} or %Logex.Configuration.Connection{}, with " <>
                 "its struct's keys",
               "a line is a positive integer, or nil for an entry built in Elixir",
-              "a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint or :ulint",
+              "a global's type is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword",
               "a task's name is not `continuous`, `interval`, `priority`, `single` or " <>
                 "`watchdog`, in any case: a line reads that word as its keyword",
               "a task's single is not `continuous`, `interval`, `priority`, `single` or " <>
@@ -5334,7 +5334,7 @@ defmodule Logex.ConfigurationTest do
                ],
                connections: gone(["w"])
              ) == [
-               "global `alarm` has type :real: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint or :ulint",
+               "global `alarm` has type :real: a global is :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword or :lword",
                "`reader` declares `var_external estop bool` on its line 1, but `estop` is an " <>
                  "instance, not a global"
              ]
@@ -5348,13 +5348,13 @@ defmodule Logex.ConfigurationTest do
       instance = "\nprogram r reader\nvar_global lamp bool\nr.lamp lamp"
 
       assert errors("var_global estop boo" <> instance, reader) == [
-               "line 1, column 18: unknown type `boo`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint` or `ulint` — " <>
+               "line 1, column 18: unknown type `boo`: a global's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `byte`, `word`, `dword` or `lword` — " <>
                  "did you mean `bool`?"
              ]
 
       assert errors("var_global estop ton" <> instance, reader) == [
                "line 1, column 18: `estop` cannot be a `ton`: a global's type is `bool`, " <>
-                 "`sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint` or `ulint`, and a ton " <>
+                 "`sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `byte`, `word`, `dword` or `lword`, and a ton " <>
                  "is declared inside a program, as in `var estop ton`"
              ]
 

@@ -324,6 +324,17 @@ defmodule Logex.Runtime do
                    into: %{},
                    do: {String.to_atom(word), to}
 
+  # M5-8 (decisions 148 and 155): each conversion with a bit string at either end, to its
+  # `from` type's width and its `to` type, a binary transfer (Ed 3 Tables 24 and 25).
+  @bit_strings Declarations.bit_strings()
+
+  @transfers for from <- Declarations.convertible(),
+                 to <- Declarations.convertible(),
+                 from in @bit_strings or to in @bit_strings,
+                 word = Declarations.conversion(from, to),
+                 into: %{},
+                 do: {String.to_atom(word), {Declarations.width(from), to}}
+
   # The resource (M2-1): the configuration it runs; `now`, its clock; `globals`, one value
   # for each global, the input points' among them; `instances`, each program instance's
   # state by name; `tasks`, each task's next due time and overlap count by name; and
@@ -1193,10 +1204,11 @@ defmodule Logex.Runtime do
   # the kind, from the one table of types).
   defp fit(%Tag{type: type} = tag, value), do: fit(Declarations.kind(type), tag, value)
 
-  defp fit(kind, tag, value) when kind in [:signed, :unsigned] and not is_integer(value),
-    do:
-      "input `#{tag.name}` is #{Declarations.a_type(tag.type)}: its value must be an integer, " <>
-        "found #{inspect(value)}"
+  defp fit(kind, tag, value)
+       when kind in [:signed, :unsigned, :bit_string] and not is_integer(value),
+       do:
+         "input `#{tag.name}` is #{Declarations.a_type(tag.type)}: its value must be an integer, " <>
+           "found #{inspect(value)}"
 
   defp fit(_kind, %Tag{type: type} = tag, value),
     do: fits(Declarations.fits?(type, value), tag, value)
@@ -1994,6 +2006,26 @@ defmodule Logex.Runtime do
     {false, env}
   end
 
+  # M5-8: the 76 bit-string conversions, `byte_to_word`, `word_to_int`, `int_to_word` and
+  # the rest (docs/naming.md's two family stanzas; IEC's Tables 24 and 25; decision 148),
+  # each a binary transfer, never a sign extension: energised, the source's bits in its
+  # `from` type's width, its two's-complement pattern for an integer, are stored into the
+  # rightmost bits of the destination, 0 filling on the left where it is wider and the
+  # rightmost bits kept where it is narrower, a signed destination reading its top bit as
+  # the sign: `int_to_dword` of -1 is 16#0000ffff and `word_to_int` of 16#ffff -1. A binary
+  # transfer is defined for every value, so its power out is its power in (provisional).
+  # De-energised, nothing is written and no power passes, as `move`.
+  defp evaluate({op, _, [source, destination]}, {true, env}, _scan)
+       when is_map_key(@transfers, op) do
+    {from, to} = :erlang.map_get(op, @transfers)
+    pattern = low(:unsigned, from, integer(read(env, source)))
+    {true, write(env, destination, transfer(to, pattern))}
+  end
+
+  defp evaluate({op, _, _}, {false, env}, _scan) when is_map_key(@transfers, op) do
+    {false, env}
+  end
+
   # The on-delay timer (docs/naming.md, `ton`; docs/organisation.md §4.6). Rung power is
   # its IN. `last` is the time this `ton` last ran, energised or not (decision 5), and
   # energised, `.acc` gains `now - last`, unless `.en` shows it was not already enabled:
@@ -2498,6 +2530,15 @@ defmodule Logex.Runtime do
       do: {true, value}
 
     defp wrapped(unquote(type), value), do: {false, low(unquote(kind), unquote(width), value)}
+  end
+
+  # M5-8: a bit pattern into a type of the table, its low bits kept, read in two's
+  # complement for a signed type and as unsigned for an unsigned type and a bit string (a
+  # binary transfer, Ed 3 Tables 24 and 25).
+  for %{type: type, kind: kind, width: width} <- Declarations.table(),
+      kind in [:signed, :unsigned, :bit_string] do
+    defp transfer(unquote(type), pattern),
+      do: low(unquote(Map.get(%{signed: :signed}, kind, :unsigned)), unquote(width), pattern)
   end
 
   defp low(:signed, width, value) do

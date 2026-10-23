@@ -23,6 +23,7 @@ defmodule Logex.ValidationTest do
   # M3-2: logex's own type words, as an unknown type's message lists them: the elementary
   # types, then every built-in function block type, each set in order.
   @has "logex has `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, " <>
+         "`byte`, `word`, `dword`, `lword`, " <>
          "`ctd`, `ctd_dint`, `ctd_int`, `ctd_lint`, `ctd_udint`, `ctd_ulint`, " <>
          "`ctu`, `ctu_dint`, `ctu_int`, `ctu_lint`, `ctu_udint`, `ctu_ulint`, " <>
          "`ctud`, `ctud_dint`, `ctud_int`, `ctud_lint`, `ctud_udint`, `ctud_ulint`, " <>
@@ -31,7 +32,7 @@ defmodule Logex.ValidationTest do
   # The same from Elixir, each named as the value that declares it.
   # M5-5: an alias of a counter is named once, as the value its plain word gives (decision
   # 163).
-  @has_elixir "logex has :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, " <>
+  @has_elixir "logex has :bool, :sint, :int, :dint, :lint, :usint, :uint, :udint, :ulint, :byte, :word, :dword, :lword, " <>
                 "Logex.FbType.ctd(), Logex.FbType.ctd_int(), Logex.FbType.ctd_lint(), " <>
                 "Logex.FbType.ctd_udint(), Logex.FbType.ctd_ulint(), " <>
                 "Logex.FbType.ctu(), Logex.FbType.ctu_int(), Logex.FbType.ctu_lint(), " <>
@@ -1662,16 +1663,16 @@ defmodule Logex.ValidationTest do
                  "gt 18446744073709551616 5 ote b\nlt -9223372036854775809 0 ote b\n" <>
                  "gt 18446744073709551615 -9223372036854775808 ote b"
              ) == [
-               "line 5: `eq` reads a number, but `b` is a bool (declared on line 1)",
+               "line 5: `eq` reads a number or a bit string, but `b` is a bool (declared on line 1)",
                "line 6: `gt` compares `3000000000` with `d`, a dint (declared on line 2), " <>
                  "which never holds it: `3000000000` is outside -2147483648 to 2147483647",
                "line 7: `ge` expects 2 operands (a value, then a value), found 1 " <>
                  "before the instruction `ote`",
                "line 9: `lt` compares `-2147483649` with `d`, a dint (declared on line 2), " <>
                  "which never holds it: `-2147483649` is outside -2147483648 to 2147483647",
-               "line 10: `gt` reads a number: `18446744073709551616` is outside " <>
+               "line 10: `gt` reads a number or a bit string: `18446744073709551616` is outside " <>
                  "-9223372036854775808 to 18446744073709551615, every integer type's values",
-               "line 11: `lt` reads a number: `-9223372036854775809` is outside " <>
+               "line 11: `lt` reads a number or a bit string: `-9223372036854775809` is outside " <>
                  "-9223372036854775808 to 18446744073709551615, every integer type's values"
              ]
     end
@@ -2834,7 +2835,7 @@ xic a ton t1 7") == [
                "line 5: `move` writes `t1.dn`, a bool, into `d`, a dint: a bool does not widen " <>
                  "into a dint, and logex has no conversion between them",
                "line 6: `move` writes `2147483648` into `t1.pre`, a dint: it is outside -2147483648 to 2147483647",
-               "line 7: `lt` reads a number, but `t1.tt` is a bool"
+               "line 7: `lt` reads a number or a bit string, but `t1.tt` is a bool"
              ]
     end
 
@@ -2953,7 +2954,7 @@ xic a ton t1 7") == [
                "line 6: `move` writes a value, but `t1` is a ton (declared on line 1): " <>
                  "name one of its members, as in `t1.pre`",
                "line 7: `ote` writes a bool, but `t1` is a ton (declared on line 1)",
-               "line 8: `eq` reads a number, but `t1` is a ton (declared on line 1): " <>
+               "line 8: `eq` reads a number or a bit string, but `t1` is a ton (declared on line 1): " <>
                  "name one of its members, as in `t1.acc`",
                # One diagnostic: an instance named whole is not also unified with `a`.
                "line 9: `move` reads a value, but `t1` is a ton (declared on line 1): " <>

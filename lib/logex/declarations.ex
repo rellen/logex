@@ -8,6 +8,7 @@ defmodule Logex.Declarations do
                                                        | var_external
                                               type:    bool | sint | int | dint | lint
                                                        | usint | uint | udint | ulint
+                                                       | byte | word | dword | lword
                                                        | a word of
                                                        Logex.FbType.builtins/0, ton
                                                        among them | a block's name
@@ -16,7 +17,9 @@ defmodule Logex.Declarations do
   elementary types, `table/0` (`docs/organisation.md` §4.12, "The types", decisions 144 and
   145): each type's word, kind, width, range, zero and article, which every range message,
   article, guard (`is_elementary/1`) and `fits?/2` in `lib/` reads, and the configuration
-  file's type words and did-you-mean (`Logex.Configuration.Text`). A function block type's
+  file's type words and did-you-mean (`Logex.Configuration.Text`). Since M5-8 the table
+  holds IEC's four bit strings too, `byte word dword lword` (decision 155), each a row of N
+  bits whose values are 0 to 2^N - 1, of the kind `:bit_string`, with no arithmetic. A function block type's
   word is `Logex.FbType.builtins/0`'s: a new section or type is a row there and a stanza
   in `docs/naming.md`, not a second declaration parser. An instance of a function
   block, `var t1 ton` (M1-6) or `var s1 seal` (M2-5), is declared with `var` and takes no
@@ -53,10 +56,14 @@ defmodule Logex.Declarations do
   # unsigned one 0..2^N - 1 (footnote d). M5-3 adds IEC's seven other integer widths, and
   # since it each row's `widens`, the types Ed 3 Figure 11 (p.67) converts it into
   # implicitly, its "i" cells among the types the table holds (decision 147): never signed
-  # into unsigned, nor unsigned into a signed type of its own width, nor narrowing.
+  # into unsigned, nor unsigned into a signed type of its own width, nor narrowing. M5-8
+  # adds IEC's four bit strings (Table 10 features 18 to 21, decision 155), each a row of N
+  # bits, 0..2^N - 1, the unsigned integer IEC compares it as (§6.6.2.5.10), with no
+  # arithmetic, and Figure 11's cells for them: a bool widens into each, and each into the
+  # wider ones, never into an integer nor an integer into one.
   @table Enum.map(
            [
-             {"bool", :boolean, 1, 0..1, "a", []},
+             {"bool", :boolean, 1, 0..1, "a", [:byte, :word, :dword, :lword]},
              {"sint", :signed, 8, -128..127, "an", [:int, :dint, :lint]},
              {"int", :signed, 16, -32_768..32_767, "an", [:dint, :lint]},
              {"dint", :signed, 32, -2_147_483_648..2_147_483_647, "a", [:lint]},
@@ -65,7 +72,11 @@ defmodule Logex.Declarations do
              {"usint", :unsigned, 8, 0..255, "a", [:uint, :udint, :ulint, :int, :dint, :lint]},
              {"uint", :unsigned, 16, 0..65_535, "a", [:udint, :ulint, :dint, :lint]},
              {"udint", :unsigned, 32, 0..4_294_967_295, "a", [:ulint, :lint]},
-             {"ulint", :unsigned, 64, 0..18_446_744_073_709_551_615, "a", []}
+             {"ulint", :unsigned, 64, 0..18_446_744_073_709_551_615, "a", []},
+             {"byte", :bit_string, 8, 0..255, "a", [:word, :dword, :lword]},
+             {"word", :bit_string, 16, 0..65_535, "a", [:dword, :lword]},
+             {"dword", :bit_string, 32, 0..4_294_967_295, "a", [:lword]},
+             {"lword", :bit_string, 64, 0..18_446_744_073_709_551_615, "an", []}
            ],
            fn {word, kind, width, range, article, widens} ->
              %{
@@ -84,6 +95,10 @@ defmodule Logex.Declarations do
   @types Map.new(@table, &{&1.word, &1.type})
   @rows Map.new(@table, &{&1.type, &1})
   @integers for %{kind: kind, type: type} <- @table, kind in [:signed, :unsigned], do: type
+  @bit_strings for %{kind: :bit_string, type: type} <- @table, do: type
+  # M5-8 (decision 148): the types a conversion runs between, the integers and the bit
+  # strings, in the table's order.
+  @convertible @integers ++ @bit_strings
 
   @section_atoms Map.values(@sections)
   @type_atoms Enum.map(@table, & &1.type)
@@ -92,10 +107,19 @@ defmodule Logex.Declarations do
   # the kinds of the table's rows it holds and the words a message names it with (Ed 3
   # Figure 5): ANY_INT, the integers, and ANY_NUM, the integers and the reals, which hold
   # no row until M5-10. IEC's ANY_MAGNITUDE, which ADD's inputs are, adds TIME, which logex
-  # defers (§4.12), so logex's arithmetic takes ANY_NUM.
+  # defers (§4.12), so logex's arithmetic takes ANY_NUM. M5-8 adds two (decisions 147 and
+  # 155): the bitwise instructions' slots, IEC's ANY_BIT less its BOOL, with the integers
+  # the maintainer's "Logix-friendly" follow-up added, `:any_bitwise`; and the comparisons',
+  # IEC's ANY_ELEMENTARY less its BOOL (Ed 3 Table 33), the numbers and the bit strings,
+  # `:any_elementary`, a bit string compared as the unsigned integer IEC reads it as.
   @classes %{
     any_int: %{kinds: [:signed, :unsigned], word: "an integer"},
-    any_num: %{kinds: [:signed, :unsigned, :real], word: "a number"}
+    any_num: %{kinds: [:signed, :unsigned, :real], word: "a number"},
+    any_bitwise: %{kinds: [:signed, :unsigned, :bit_string], word: "a bit string or an integer"},
+    any_elementary: %{
+      kinds: [:signed, :unsigned, :real, :bit_string],
+      word: "a number or a bit string"
+    }
   }
   @class_atoms Map.keys(@classes)
 
@@ -266,6 +290,9 @@ defmodule Logex.Declarations do
   @doc "The integer types, signed and unsigned, in the table's order (M5-3)."
   def integers, do: @integers
 
+  @doc "The bit-string types, `byte word dword lword`, in the table's order (M5-8)."
+  def bit_strings, do: @bit_strings
+
   @typedoc "An elementary type, a row of `table/0`."
   @type elementary ::
           unquote(
@@ -296,7 +323,7 @@ defmodule Logex.Declarations do
   @doc "An elementary type's word, `dint` for `:dint`."
   def word(type) when type in @type_atoms, do: Map.fetch!(@rows, type).word
 
-  @doc "An elementary type's kind: `:boolean`, `:signed` or `:unsigned`."
+  @doc "An elementary type's kind: `:boolean`, `:signed`, `:unsigned` or, since M5-8, `:bit_string`."
   def kind(type) when type in @type_atoms, do: Map.fetch!(@rows, type).kind
 
   @doc "An elementary type's range of values."
@@ -342,6 +369,7 @@ defmodule Logex.Declarations do
   The values of the generic type `class`'s integer types together, from the least of
   their ranges' firsts to the greatest of their lasts (M5-4): -2^63 to 2^64 - 1, what an
   integer literal must fit where no type is known for it, a comparison's of two literals.
+  A class's bit strings hold no value its unsigned integers do not, so they add nothing.
   """
   def class_range(class) when class in @class_atoms do
     ranges = for type <- @integers, in_class?(type, class), do: range(type)
@@ -352,12 +380,35 @@ defmodule Logex.Declarations do
   The conversion that takes a value of `from` into `to`, its mnemonic, `dint_to_int`, or
   nil where logex has none (M5-3, decision 148): one for each ordered pair of two integer
   types, and none with a bool, whose conversions IEC's Tables 24 and 25 give and logex
-  defers, a contact and a coil doing the work.
+  defers, a contact and a coil doing the work. Since M5-8 one for each ordered pair of two
+  bit strings, and of a bit string and an integer type either way, `word_to_int` and
+  `int_to_word`, the binary transfers of IEC's Tables 24 and 25.
   """
-  def conversion(from, to) when from in @integers and to in @integers and from != to,
+  def conversion(from, to) when from in @convertible and to in @convertible and from != to,
     do: "#{word(from)}_to_#{word(to)}"
 
   def conversion(_from, _to), do: nil
+
+  @doc "The types a conversion runs between, the integers and then the bit strings (M5-8)."
+  def convertible, do: @convertible
+
+  # M5-8: each bit string's unsigned integer of its own width, the integer IEC compares it
+  # as (Ed 3 §6.6.2.5.10), from the table: a byte's a usint.
+  @unsigned_of for bits <- @bit_strings,
+                   into: %{},
+                   do:
+                     {bits,
+                      Enum.find(@integers, fn type ->
+                        Map.fetch!(@rows, type).kind == :unsigned and
+                          Map.fetch!(@rows, type).width == Map.fetch!(@rows, bits).width
+                      end)}
+
+  @doc """
+  A bit string's unsigned integer type of its own width, `:uint` for a `:word` (M5-8): the
+  integer a refusal names the conversion to, `word_to_uint`, where a bit string meets an
+  instruction that takes no bit string, `add` among them.
+  """
+  def unsigned_of(bits) when bits in @bit_strings, do: Map.fetch!(@unsigned_of, bits)
 
   @doc "Whether an integer fits a type."
   for %{type: type, range: range} <- @table do

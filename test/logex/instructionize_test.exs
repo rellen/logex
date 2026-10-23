@@ -109,8 +109,9 @@ defmodule Logex.InstructionizeTest do
       lbl past xic a ote c
       """
 
-      # M5-3: each of the 56 integer conversions, a tag of each integer type into another.
-      integers = ~w(sint int dint lint usint uint udint ulint)
+      # M5-3: each of the 56 integer conversions, a tag of each integer type into another;
+      # M5-8: and the 76 with a bit string at either end, 132 in all, every ordered pair.
+      integers = ~w(sint int dint lint usint uint udint ulint byte word dword lword)
 
       source =
         Enum.map_join(integers, &"var v_#{&1} #{&1}\n") <>

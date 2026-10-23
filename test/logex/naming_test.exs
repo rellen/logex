@@ -117,7 +117,7 @@ defmodule Logex.NamingTest do
     # M1-3: the sections and `bool` and `dint`; M1-6: `ton`; M2-4: `var_external`; M3-1:
     # the counters; M3-2: the other timers; M5-3: the seven other integer types; M5-5:
     # the twelve typed counters and the three dint aliases (decisions 158 and 163); M5-6:
-    # the four long timers (decision 158).
+    # the four long timers (decision 158); M5-8: the four bit strings (decision 155).
     counters =
       for kind <- ~w(ctu ctd ctud), count <- ~w(int dint lint udint ulint), do: "#{kind}_#{count}"
 
@@ -125,6 +125,7 @@ defmodule Logex.NamingTest do
              Enum.sort(
                ~w(var var_input var_output var_external) ++
                  ~w(bool sint int dint lint usint uint udint ulint) ++
+                 ~w(byte word dword lword) ++
                  ~w(ton tof tp rto ctu ctd ctud) ++
                  counters ++
                  ~w(ton_ltime tof_ltime tp_ltime rto_ltime)
@@ -175,16 +176,20 @@ defmodule Logex.NamingTest do
     # M2-3: `task <name> interval <ms> priority <p>` and `program <instance> <type> with
     # <task>`; M2-6: `task <name> single <global> [interval <ms>] priority <p>`; M4-2:
     # `task <name> continuous [watchdog <ms>]` and `... priority <p> watchdog <ms>`; M5-3:
-    # the seven other integer type words of `var_global <name> <type>`.
+    # the seven other integer type words of `var_global <name> <type>`; M5-8: the four
+    # bit strings' (decision 156).
     assert Enum.sort(Logex.Configuration.Text.keywords()) ==
              [
                "at",
                "bool",
+               "byte",
                "continuous",
                "dint",
+               "dword",
                "int",
                "interval",
                "lint",
+               "lword",
                "priority",
                "program",
                "single",
@@ -196,7 +201,8 @@ defmodule Logex.NamingTest do
                "usint",
                "var_global",
                "watchdog",
-               "with"
+               "with",
+               "word"
              ]
   end
 

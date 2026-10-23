@@ -276,10 +276,10 @@ defmodule Logex.Warnings do
   # Decision 178: a conversion of a literal compiles, as `neg 5 x` does, and is told so in
   # the same words: `dint_to_sint 129 trim` always writes -127 with no power. Its symbols
   # are the type table's, as `Logex.Compiler` generates them, every ordered pair of two
-  # integer types.
+  # integer types, and since M5-8 of the bit strings too (decision 148).
   @conversions for(
-                 from <- Declarations.integers(),
-                 to <- Declarations.integers(),
+                 from <- Declarations.convertible(),
+                 to <- Declarations.convertible(),
                  word = Declarations.conversion(from, to),
                  do: String.to_atom(word)
                )

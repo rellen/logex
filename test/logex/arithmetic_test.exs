@@ -1085,10 +1085,10 @@ defmodule Logex.ArithmeticTest do
 
       # A literal beside a tag outside the class, a bool, told so by its slot, is held to
       # every integer type's values, on either side.
-      bool = "`lt` reads a number, but `b` is a bool (declared on line 1)"
+      bool = "`lt` reads a number or a bit string, but `b` is a bool (declared on line 1)"
 
       past =
-        "`lt` reads a number: `18446744073709551616` is outside -9223372036854775808 to " <>
+        "`lt` reads a number or a bit string: `18446744073709551616` is outside -9223372036854775808 to " <>
           "18446744073709551615, every integer type's values"
 
       assert messages(
@@ -1097,7 +1097,7 @@ defmodule Logex.ArithmeticTest do
              ) == [bool, past, bool, past, bool]
 
       assert messages("var b bool\nlt 18446744073709551616 0 ote b") == [
-               "`lt` reads a number: `18446744073709551616` is outside -9223372036854775808 " <>
+               "`lt` reads a number or a bit string: `18446744073709551616` is outside -9223372036854775808 " <>
                  "to 18446744073709551615, every integer type's values"
              ]
 

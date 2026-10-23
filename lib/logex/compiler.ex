@@ -64,12 +64,16 @@ defmodule Logex.Compiler do
     # falling, and passing that power on (decision 100).
     "osr" => {:osr, [{:write, :bool}, {:write, :bool}]},
     "osf" => {:osf, [{:write, :bool}, {:write, :bool}]},
-    "eq" => {:eq, [{:value, :any_num}, {:value, :any_num}]},
-    "ne" => {:ne, [{:value, :any_num}, {:value, :any_num}]},
-    "lt" => {:lt, [{:value, :any_num}, {:value, :any_num}]},
-    "gt" => {:gt, [{:value, :any_num}, {:value, :any_num}]},
-    "le" => {:le, [{:value, :any_num}, {:value, :any_num}]},
-    "ge" => {:ge, [{:value, :any_num}, {:value, :any_num}]},
+    # Since M5-8 a comparison's slots take IEC's ANY_ELEMENTARY less its BOOL (Ed 3 Table
+    # 33), the numbers and the bit strings, a bit string compared with a bit string as the
+    # unsigned integer IEC reads it as (§6.6.2.5.10) and with an integer only through a
+    # conversion (decision 147's note).
+    "eq" => {:eq, [{:value, :any_elementary}, {:value, :any_elementary}]},
+    "ne" => {:ne, [{:value, :any_elementary}, {:value, :any_elementary}]},
+    "lt" => {:lt, [{:value, :any_elementary}, {:value, :any_elementary}]},
+    "gt" => {:gt, [{:value, :any_elementary}, {:value, :any_elementary}]},
+    "le" => {:le, [{:value, :any_elementary}, {:value, :any_elementary}]},
+    "ge" => {:ge, [{:value, :any_elementary}, {:value, :any_elementary}]},
     # M5-6 (decision 158): each timer's slot names its kind, so the one `ton` runs a `ton`
     # and a `ton_ltime`, its preset in its instance's unit, ms or ns.
     "ton" => {:ton, [{:instance, ["ton"]}, {:preset, :dint}]},
@@ -125,8 +129,10 @@ defmodule Logex.Compiler do
   # literal, then the destination of the `to` type it writes, `dint_to_int day_total
   # small_count`. Rung power is IEC's EN and the power out its ENO, false on the scan its
   # value did not fit and wrapped (decision 146), so what it passes on is settled.
-  @conversions for from <- Declarations.integers(),
-                   to <- Declarations.integers(),
+  # M5-8 (decisions 148 and 155): so the 76 bit-string conversions, `byte_to_word` and
+  # `word_to_int`, each a binary transfer whose power out is its power in, settled too.
+  @conversions for from <- Declarations.convertible(),
+                   to <- Declarations.convertible(),
                    word = Declarations.conversion(from, to),
                    into: %{},
                    do: {word, {String.to_atom(word), [{:value, from}, {:write, to}]}}
@@ -2489,8 +2495,29 @@ defmodule Logex.Compiler do
   # every other slot that takes an integer takes a generic type, which classed/3 holds to
   # the instruction's other operands, so a fixed slot given another type, a bool's given an
   # integer, has no conversion to name.
+  # M5-8 (decision 155): a bit string where a class that holds none is wanted, `add`'s
+  # number, is told the conversion through its own width's unsigned integer, the integer
+  # IEC compares it as, `word_to_uint` before a read and `uint_to_word` after a write
+  # (provisional); any other type outside the class, a bool, has none to name.
+  defp converted(_word, access, found, class) when is_class(class) and is_elementary(found),
+    do: classless(Declarations.kind(found), access, found, class)
+
+  defp converted(_word, _access, _found, class) when is_class(class), do: ""
+
   defp converted(word, access, found, type),
     do: converting(Map.get(@conversions, String.downcase(word)), access, found, type)
+
+  defp classless(:bit_string, :write, found, class),
+    do:
+      ": #{a_type(found)} is a bit string, not #{a_type(class)}: compute in an integer and " <>
+        "convert the result, with `#{Declarations.conversion(Declarations.unsigned_of(found), found)}`"
+
+  defp classless(:bit_string, _read, found, class),
+    do:
+      ": #{a_type(found)} is a bit string, not #{a_type(class)}: convert it first, with " <>
+        "`#{Declarations.conversion(found, Declarations.unsigned_of(found))}`"
+
+  defp classless(_kind, _access, _found, _class), do: ""
 
   defp converting({_symbol, [{:value, from}, {:write, to}]}, access, found, _type),
     do: instead(conversion_of(access, found, {from, to}))
@@ -2610,12 +2637,48 @@ defmodule Logex.Compiler do
        ),
        do: against(lit, tag, class, at, d)
 
+  # M5-8 (decision 147's note, §4.12's ninth question): a bit string compares with a bit
+  # string, and with an integer tag only through a conversion, the refusal naming both ways,
+  # into the bit string's type and out of it, `int_to_word` and `word_to_int`.
+  defp compared(
+         [],
+         [{:value, _, %Tag{type: a} = one}, {:value, _, %Tag{type: b} = other}],
+         _class,
+         at,
+         d
+       )
+       when is_elementary(a) and is_elementary(b),
+       do:
+         kinds_met(compared_kinds(Declarations.kind(a), Declarations.kind(b)), one, other, at, d)
+
   defp compared(writes, reads, class, {_line, word} = at, diagnostics) do
     {diagnostics, computed} =
       negated(symbol_of(word), computed_in(writes, class), reads, at, diagnostics)
 
     Enum.reduce(reads, diagnostics, &source(&1, computed, at, &2))
   end
+
+  defp compared_kinds(:bit_string, kind) when kind in [:signed, :unsigned], do: :mixed
+  defp compared_kinds(kind, :bit_string) when kind in [:signed, :unsigned], do: :mixed
+  defp compared_kinds(_one, _other), do: :met
+
+  defp kinds_met(:met, _one, _other, _at, diagnostics), do: diagnostics
+
+  defp kinds_met(:mixed, one, other, {line, word}, diagnostics) do
+    {bits, integer} = bits_first(Declarations.kind(one.type), one, other)
+
+    message =
+      "`#{word}` compares `#{one.name}`, #{a_type(one.type)}#{declared(one)}, with " <>
+        "`#{other.name}`, #{a_type(other.type)}#{declared(other)}: a bit string compares " <>
+        "only with a bit string, so convert one of them first, with " <>
+        "`#{Declarations.conversion(integer.type, bits.type)}` or " <>
+        "`#{Declarations.conversion(bits.type, integer.type)}`"
+
+    [diagnostic(line, message) | diagnostics]
+  end
+
+  defp bits_first(:bit_string, bits, integer), do: {bits, integer}
+  defp bits_first(_integer, integer, bits), do: {bits, integer}
 
   defp against(literal, %Tag{type: type} = tag, class, at, diagnostics)
        when is_elementary(type),
