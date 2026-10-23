@@ -338,6 +338,8 @@ defmodule Logex.Runtime do
   # M5-8 (decisions 148 and 155): each conversion with a bit string at either end, to its
   # `from` type's width and its `to` type, a binary transfer (Ed 3 Tables 24 and 25).
   @bit_strings Declarations.bit_strings()
+  # Decision 214: the types a bitwise instruction's source computes in, its own.
+  @bitwise_types [:bool | @integers ++ @bit_strings]
 
   @transfers for from <- Declarations.convertible(),
                  to <- Declarations.convertible(),
@@ -2142,11 +2144,16 @@ defmodule Logex.Runtime do
     {false, env}
   end
 
-  # M5-8: `not` (IEC's NOT): each bit of the source in the destination's width inverted,
-  # so `not` of a byte 2#0000_1111 is 2#1111_0000 and of an int 0 is -1.
+  # M5-8: `not` (IEC's NOT): each bit of the source inverted, so `not` of a byte
+  # 2#0000_1111 is 2#1111_0000 and of an int 0 is -1. Since decision 214 it computes in its
+  # source's type, IEC's typing of NOT, whose result is its input's type, and the result is
+  # then widened into the destination by Figure 11, by value: `not` of a bool 1 into a
+  # `word` is 16#0000, of a byte 16#0f into a word 16#00f0, and of a usint 5 into an int
+  # 250; a signed source, sign-extended, gives what the destination's width would.
   defp evaluate({:not, line, [source, destination]}, {true, env}, scan) do
+    type = bits_at({:not, line}, destination, scan)
     value = Bitwise.bnot(integer(read(env, source)))
-    {true, write(env, destination, transfer(bits_at({:not, line}, destination, scan), value))}
+    {true, write(env, destination, widened(source_bits(source, type, scan), type, value))}
   end
 
   defp evaluate({:not, _, _}, {false, env}, _scan) do
@@ -2154,19 +2161,24 @@ defmodule Logex.Runtime do
   end
 
   # M5-8: `shl`, `shr`, `rol` and `ror` (IEC's Table 30; decision 165). Energised, the
-  # source's bits in the destination's width, its two's-complement pattern for an integer,
+  # source's bits in its own type's width, its two's-complement pattern for an integer,
   # are shifted by the count, 0 filling the end left empty, so `shr` of an int -2 by 1
   # gives 32767, or rotated, circular within the width, the count taken modulo the width;
-  # a shift of the width or more gives 0. Each passes its power in, but for a count that is
-  # negative when the rung runs, which writes the source unshifted and passes no power,
-  # with no fault. De-energised, nothing is written and no power passes.
+  # a shift of the width or more gives 0. Since decision 214 the width is the source's,
+  # IEC's typing, whose OUT is IN's type, and the result is then widened into the
+  # destination by value, so `rol` of a byte into a word rotates within 8 bits; a literal
+  # source, judged by its slot, shifts in the destination's width. Each passes its power
+  # in, but for a count that is negative when the rung runs, which writes the source
+  # unshifted and passes no power, with no fault. De-energised, nothing is written and no
+  # power passes.
   defp evaluate({op, line, [source, count, destination]}, {true, env}, scan)
        when op in @shifts do
     type = bits_at({op, line}, destination, scan)
-    width = Declarations.width(type)
+    from = source_bits(source, type, scan)
+    width = Declarations.width(from)
     pattern = low(:unsigned, width, integer(read(env, source)))
     {power, value} = shifted(op, pattern, integer(read(env, count)), width)
-    {power, write(env, destination, transfer(type, value))}
+    {power, write(env, destination, widened(from, type, value))}
   end
 
   defp evaluate({op, _, _}, {false, env}, _scan) when op in @shifts do
@@ -2700,6 +2712,35 @@ defmodule Logex.Runtime do
 
   defp bits_refused({at, destination, tags}),
     do: computes_in(Program.destination(destination, tags, :bitwise), at, destination)
+
+  # Decision 214: the type a `not` or a shift computes in, its source's, IEC's typing: a
+  # tag's in the routine's table, read by one guard, a bit's a
+  # bool's, and a member's by the one rule, `Logex.Program.destination/3`; a literal, which
+  # its slot judges, computes in the destination's type, `type`, as does a source the rule
+  # finds no type for, which only a program edited by hand after its check holds.
+  defp source_bits({:name, _, name}, type, %Scan{tags: tags}),
+    do: own_bits(:maps.get(name, tags, nil), type)
+
+  defp source_bits({:bit, _, _, _, _, _}, _type, _scan), do: :bool
+  defp source_bits({:bit_at, _, _, _, _, _}, _type, _scan), do: :bool
+
+  defp source_bits({:member, _, _} = source, type, %Scan{tags: tags}),
+    do: found_bits(Program.destination(source, tags, :bitwise), type)
+
+  defp source_bits(_literal, type, _scan), do: type
+
+  defp own_bits(%Tag{type: from}, _type) when from in @bitwise_types, do: from
+  defp own_bits(_neither, type), do: type
+
+  defp found_bits({:ok, from}, _type), do: from
+  defp found_bits({:error, _what}, type), do: type
+
+  # The result, a pattern of the source's type, kept to its width and read as its type,
+  # into the destination's, which Figure 11 widens it into, keeping its value: read once in
+  # the destination's type where the two are one, and otherwise read in the source's and
+  # then brought into the destination, which leaves a value that fits as it is.
+  defp widened(type, type, pattern), do: transfer(type, pattern)
+  defp widened(from, type, pattern), do: transfer(type, transfer(from, pattern))
 
   defp tag_type(%Tag{type: type}, _met) when type in @integers, do: type
   defp tag_type(_no_integer, met), do: refused_at(met)

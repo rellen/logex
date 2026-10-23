@@ -3635,6 +3635,16 @@ in the word (provisional), and since M5-9's review a coil on it beside any write
 word whole, `move panel lamps` beside `ote lamps.[sel]`, is the second-`ote` warning in
 either order, as decision 207 has it for a coil on `lamps.3` (provisional). A number outside the width when its
 instruction reads or writes the bit is the major fault below.)*
+*(The maintainer's answers to M5-9's questions, 2026-10-23, decisions 210 to 214: a
+`cal` whose bit number is out of range runs no body (210); a step that faults and
+overruns trips naming the fault (211); coils on bits a tag numbers warn (212); a literal
+in brackets, `status.[4]`, is taken as the very bit `status.4`, in any spelling of a
+number, a negative one refused as outside the bits, so that text pasted from Logix
+compiles (213, superseding the lex error above); and `not` and the shifts compute in
+their source's type, IEC's typing, the result widened into the destination by value,
+`not left mask` of a bool into a `word` 16#0000 or 16#0001 and `rol` of a byte into a
+word within 8 bits, `and`, `or` and `xor` unchanged, their two readings agreeing (214,
+amending "Each computes in its destination's type" above for those five).)*
 
 **Arrays** (decisions 151 to 154). `var temps real[8]`, `var grid int[4,8]`, `var cube
 int[2,3,4]`: Logix's form (PM004L pp.34–36), a count for each dimension, one to three
@@ -7300,6 +7310,10 @@ the decisions the rest settle.
      bitwise instruction computes in its destination's type, `and drive_status 16#00ff
      speed` with an int `speed` told `word_to_int`; `move` widens a bool and a narrower bit
      string into a bit string by Figure 11.)*
+     *(Since decision 214, 2026-10-23: `not`, `shl`, `shr`, `rol` and `ror` compute in
+     their source's type, IEC's typing, and widen the result into the destination by
+     value; `and`, `or` and `xor` still compute in the destination's, which gives the same
+     bits.)*
 
 148. **Converting a real to an integer, and what the conversions are called (Milestone
      5).** The fan's speed is worked out as a `real` percentage and written to the drive
@@ -7638,6 +7652,8 @@ the decisions the rest settle.
      coil on the word whole, for the warnings; and a literal in the brackets, `w.[3]`, is
      refused, told `w.3`. The run lamp follows `drive_faults.[sel]` in §4.4's plant and
      `sel` at 16 trips it.)*
+     *(The maintainer's answers, 2026-10-23: the first three readings confirmed, decisions
+     210 to 212, and the fourth changed, decision 213: `w.[3]` is the very bit `w.3`.)*
 
 **The answers to Milestone 5's questions put back, 2026-10-21** (§4.12, "Put to the
 maintainer"). Decisions 161–163 are the three of §4.12's ten questions the maintainer
@@ -7773,6 +7789,8 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      of a byte by 9 gives what a rotate by 1 gives, and a negative literal count is refused,
      "`shl` shifts by the literal `-1`: a count is never negative, so a negative literal one
      is refused" (provisional words); a count far past the width shifts nothing by itself.)*
+     *(Since decision 214, 2026-10-23, the width is the source's, IEC's typing: a shift of a
+     `byte` into a `word` by 8 or more writes 0, and a rotate of one is taken modulo 8.)*
 166. **An integer at a real I/O point (Milestone 5),** left open by §4.12. The analog
      card's driver gives a zone temperature as the integer 16,777,217 to a `real` point,
      or a host forces 10^40 onto it.
@@ -8620,6 +8638,10 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      16#0000 for a made `left`, where logex computes in the destination's type by decision
      147 and writes 16#fffe; `NOT(BOOL_TO_WORD(left))` is the IEC text that gives logex's
      result. Put to the maintainer as M5-9's fifth question; nothing changed.)*
+     *(Superseded for `not` and the shifts by decision 214, 2026-10-23: they compute in
+     their source's type, so `not left mask` into a `word` writes 16#0000 for a made
+     `left` and 16#0001 for an open one, and a shift of a bool into a bit string shifts
+     its one bit.)*
 
      Logix's AND, OR, XOR and NOT take SINT to LREAL, never a BOOL (1756-RM018A pp.494–496,
      the AND's Source A SINT, INT, DINT, LINT, USINT, UINT, UDINT, ULINT, REAL and LREAL),
@@ -8643,6 +8665,107 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      2026-10-23): every warning and refusal that names a bit quotes it as its rung spells
      it, `conveyor.03` where it was typed so, its number keyed by its value, so bit 3 is one
      bit however it is written. No code changed; `bit_string_test.exs` pins it.
+
+**The answers to M5-9's questions, 2026-10-23** (`PLAN.md` §3, M5-9 and its review).
+Decisions 210 to 212 confirm the readings built; 213 and 214 change two.
+
+210. **What a block call does when its bit number is out of range (Milestone 5),** M5-9's
+     first question, following decision 160. **Taken: confirmed as built** (the
+     maintainer, 2026-10-23): `cal lamp1 drive_faults.[sel] lamp` with `sel` at 16 runs no
+     body that scan, its timers frozen and its outputs held, whether its copy-in or its
+     copy-out met the number, a body's minor faults dropped with its run, as Logix's JSR
+     whose parameter is out of bounds and its faulted Add-On Instruction do not run
+     (1756-PM014O pp.9–10). No code changed; `tag_bit_test.exs` pins it.
+211. **Which reason a trip names when one step both faults and runs too long (Milestone
+     5),** M5-9's second question, following decisions 113 and 153. **Taken: confirmed as
+     built** (the maintainer, 2026-10-23): the trip names the major fault, "bit 16 of
+     `drive_faults` on line 5 of `selected.ld`", the cause the engineer fixes, not the
+     watchdog. No code changed; `trip_test.exs` pins it.
+212. **Whether coils on bits a tag numbers warn (Milestone 5),** M5-9's third question,
+     following decision 207. **Taken: confirmed as built** (the maintainer, 2026-10-23):
+     `ote lamps.[a]` beside `ote lamps.[b]`, and `ote lamps.[sel]` beside a whole write of
+     `lamps`, `move panel lamps`, in either order, are the second-`ote` warning, either
+     coil able to write the bit the other does. No code changed; `tag_bit_test.exs` pins it.
+213. **A literal in a bit's brackets (Milestone 5),** M5-9's fourth question, changing
+     provisional reading 5. Logix writes a bit both ways, `variable1.2` and
+     `variable3.[4]` (1756-RM018A pp.884–885), and an export pasted into logex should
+     compile; M5-9 refused `status.[4]`, told to write `status.4`.
+
+     **Taken: `status.[4]` is accepted, the very bit `status.4`, so text pasted from Logix
+     compiles** (the maintainer, 2026-10-23). *The reading (the record's, provisional
+     where marked):*
+     - The brackets hold any literal the lexer reads as one number, decision 149's forms
+       among them, `status.[16#4]`, `status.[2#100]`, `status.[1_0]` and `status.[04]`, so
+       that one rule says what a number is; and a negative one, `status.[-1]`, lexes and is
+       refused when the program compiles, "`status.[-1]` names bit -1 of `status`, a word
+       (declared on line 1), which has bits 0 to 15", as `status.16` is (provisional).
+       Logix's brackets hold an expression (RM018A p.885) and its immediate values may be
+       based, `16#ffff` (p.870); whether Logix takes `x.[16#3]` or a negative literal there
+       is **unverified**. IEC writes only `status.%X4` or `status.4` (Ed 3 Table 17).
+     - Brackets that begin as a number and hold no one number closed by its `]`,
+       `status.[3x]`, `status.[8#3]` or `status.[3`, are a lex error naming the run whole,
+       "`status.[8#3]` is no name: a bit number in brackets is a tag's name, `status.[n]`,
+       or one number closed by its `]`, `status.[4]` or `status.[16#4]`" (provisional
+       words).
+     - The bit is quoted as written in every message, decision 209's rule, `status.[04]`,
+       and keyed by its number: `ote status.[4]` beside `ote status.4` is the second-`ote`
+       warning, an edit that only respells `status.4` as `status.[4]` changes no rung, and
+       a one-shot's storage bit or a pulse coil's bit may be written so, its number a
+       literal (decision 154).
+     - The lexer keeps the name as one token in its own spelling, `Logex.Parser.well_formed!/1`
+       takes it as any name that lexes as one name token, the printer prints it as written,
+       and `printer_test.exs`'s generator and `@required_shapes` hold it,
+       `:literal_bit_name`; the golden record's twenty sources recorded before it, with
+       `xic s.[3]` and `xic s.[-1]`, change on landing, 11 of them now parsing.
+214. **The type `not` and the shifts compute in (Milestone 5),** M5-9's fifth question,
+     changing decision 206's `not` of a bool and, with it, decision 147's rule for `not`,
+     `shl`, `shr`, `rol` and `ror`. A lamp panel's `word` is set from one switch with `not
+     left mask`; logex computed in the destination's type, so `mask` was 16#fffe while
+     `left` was made, where IEC's typing of `mask := NOT(left)` gives 16#0000.
+
+     **Taken: IEC's typing: the operation computes in its sources' type, and the result
+     is then widened into the destination** (the maintainer, 2026-10-23). `not left mask`
+     with `left` at 1 gives 16#0000, and at 0 16#0001. *The reading (the record's,
+     provisional where marked):*
+     - `not` and each shift and rotate compute in their source's type, IEC's OUT of IN's
+       type (Ed 3 Table 31, NOT's ANY_BIT in and out, p.89; Table 30, SHL, SHR, ROL and
+       ROR, OUT of IN's ANY_BIT, p.89), and the result is widened into the destination by
+       Figure 11, by value (p.67): `rol` of a byte into a word rotates within 8 bits, so
+       `rol b 1 r` of 16#81 writes 16#0003, `shl b 4 l` of 16#81 writes 16#0010, the high
+       bits shifted out of the byte, and a count is judged against the source's width, a
+       shift of 8 or more of a byte writing 0 and a rotate taken modulo 8.
+     - On integers the same rule, IEC's implicit conversion, which between integers is by
+       value: `not` of a `usint` 5 into an `int` is 250, where the destination's width gave
+       −6; `not` of an `sint` 5 into a `dint` is −6 either way, since a signed value widened
+       by value is sign-extended and sign extension commutes with inversion; a shift of a
+       signed source is not so, `shr` of an `sint` −2 by 1 into an `int` giving 127, the
+       sint's pattern 16#fe shifted to 16#7f, where the int's width gave 32767. Logix
+       differs here: its logical instructions widen a source by zero fill, *"Logical
+       instructions use zero fill. All other instructions use sign-extension"* (1756-RM018A
+       p.871), so its NOT of a SINT −1 into a DINT is 16#ffffff00, where IEC's and logex's
+       is 0.
+     - `and`, `or` and `xor` keep decision 147's reading, computing in the destination's
+       type, since the two readings agree: widening by value is a zero extension of a bit
+       string, a bool or an unsigned value and a sign extension of a signed one, each of
+       which commutes with AND, OR and XOR bit by bit, so the bits of the result widened
+       are the bits of the sources widened. For mixed source widths, `and a b d` of a
+       `byte` and a `word` into a `dword`, IEC widens every input to the inputs' widest
+       common type, the narrowest type Figure 11 widens each into (a `word` here, an `int`
+       for a `usint` beside an `sint`), and computes there; the result then widens into the
+       destination, which the agreement makes the destination's computation bit for bit,
+       so that is the rule recorded and nothing in logex reads the common type.
+       `bit_string_test.exs` checks the agreement over every pair Figure 11 widens.
+     - A literal source, judged by its slot as every literal is, computes in the
+       destination's type, `shl 16#81 4 a` into a `word` giving 16#0810 (provisional); a
+       bit and a bool member are bools, an integer member of its schema's type.
+     - *Cost:* a `not` or a shift looks its source's type up, 4 reductions more an
+       instruction than at `a281a15`, a narrower source 3 more again; a program of neither
+       scans in exactly what it did.
+
+     This supersedes decision 206's "`not left mask` into a `word` writes 16#fffe for 1"
+     and its review's note, and the M5-8 annotation of decision 147 for `not` and the
+     shifts; a program that counted on the destination's width, `not` of a narrower
+     unsigned tag or a shift of a narrower tag, writes another value.
 
 ---
 

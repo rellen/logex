@@ -1874,12 +1874,22 @@ defmodule Logex.Compiler do
   # name's last byte, which the clause's guard reads, so a member costs what it did.
   defp as_bit(:error, path, {_line, name} = at, scope)
        when binary_part(name, byte_size(name) - 1, 1) == "]" do
-    {container, ["[" <> bracketed]} = Enum.split(path, -1)
-    type = container_type(lookup(Enum.join(container, "."), scope))
-    tag_bit_ir(bits(type), {type, container, numbered_by(bracketed)}, path, at)
+    {container, [part]} = Enum.split(path, -1)
+    bracketed_bit(part, container, path, at, scope)
   end
 
   defp as_bit(_no_number, path, {line, _name}, _scope), do: {:member, line, path}
+
+  # Decision 213: a literal in the brackets, `status.[4]`, lowers as `status.4` does, its
+  # name as written.
+  defp bracketed_bit(<<?[, d, _::binary>> = part, _container, path, at, scope)
+       when d in ?0..?9 or d == ?-,
+       do: as_bit({literal_number(part), ""}, path, at, scope)
+
+  defp bracketed_bit("[" <> bracketed, container, path, at, scope) do
+    type = container_type(lookup(Enum.join(container, "."), scope))
+    tag_bit_ir(bits(type), {type, container, numbered_by(bracketed)}, path, at)
+  end
 
   defp tag_bit_ir(nil, _bit, path, {line, _name}), do: {:member, line, path}
 
@@ -1895,6 +1905,9 @@ defmodule Logex.Compiler do
   # A bit carries its name as written, `status.03`, which a message quotes (decision 202's
   # rule for a literal, provisional for a bit's number); its number is its value.
   defp bit_ir_of(nil, _n, path, {line, _name}), do: {:member, line, path}
+  # A negative number, `status.[-1]`, which is refused, lowers as nothing a scan runs.
+  defp bit_ir_of(_width, {n, _type, _container}, path, {line, _name}) when n < 0,
+    do: {:member, line, path}
 
   defp bit_ir_of(width, {n, type, container}, _path, {line, name}),
     do: {:bit, line, container, n, mask(Declarations.kind(type), n, width), name}
@@ -2347,6 +2360,12 @@ defmodule Logex.Compiler do
   # integer or a bit string, and its number is an integer tag, looked up beside it, whose
   # value a scan reads (a number past the width a major fault then). A bit of a bool or of
   # an instance has none.
+  # Decision 213: a literal in the brackets, `status.[4]`, is the very bit `status.4`, its
+  # number the literal's value and its name as written.
+  defp owned({:ok, %Tag{} = tag}, _head, [<<?[, d, _::binary>> = part], _scope)
+       when d in ?0..?9 or d == ?-,
+       do: bit_of({literal_number(part), ""}, bits(tag.type), tag, part)
+
   defp owned({:ok, %Tag{} = tag}, _head, ["[" <> bracketed], {tags, _members}),
     do: tag_bit(bits(tag.type), tag, numbered_by(bracketed), tags)
 
@@ -2366,6 +2385,19 @@ defmodule Logex.Compiler do
 
   # The tag a bit number in brackets names, `n` of `status.[n]`.
   defp numbered_by(bracketed), do: binary_part(bracketed, 0, byte_size(bracketed) - 1)
+
+  # A part's bit number, a literal one in brackets among them (decision 213).
+  defp bit_number(<<?[, d, _::binary>> = part) when d in ?0..?9 or d == ?-,
+    do: {literal_number(part), ""}
+
+  defp bit_number(part), do: Integer.parse(part)
+
+  # Decision 213: the value of a literal in brackets, `16#4` of `status.[16#4]`, read by the
+  # lexer, which took the name only where its brackets hold one number.
+  defp literal_number(part) do
+    {:ok, [literal], _line} = Logex.Lexer.tokenize(binary_part(part, 1, byte_size(part) - 2))
+    elem(literal, 2)
+  end
 
   defp tag_bit(nil, tag, _index, _tags), do: {:no_bits, tag.name, tag.type, tag}
 
@@ -2395,6 +2427,11 @@ defmodule Logex.Compiler do
 
   # M5-9: `t1.acc.[n]`, a member's bit whose number a tag holds, as `t1.acc.3` is a member's
   # bit, logic writing it where it may write the member.
+  defp in_type({:ok, member}, tag, _part, ["[" <> <<d, _::binary>> = bracketed], _scope)
+       when d in ?0..?9 or d == ?-,
+       do:
+         past({literal_number(bracketed), ""}, bits(member.type), {tag, member}, "[" <> bracketed)
+
   defp in_type({:ok, member}, tag, _part, ["[" <> bracketed], {tags, _members}),
     do: member_tag_bit(bits(member.type), {tag, member}, numbered_by(bracketed), tags)
 
@@ -2414,7 +2451,7 @@ defmodule Logex.Compiler do
   # `t1.acc.3` is bit access of a member, as `d.3` is of a tag, since M5-8 a bool member of
   # that name, logic writing it where it may write the member; `t1.acc.3.x` goes too deep.
   defp past({n, ""}, width, {tag, member}, part) when is_integer(width),
-    do: member_in_width(n < width, {tag, member}, {n, width}, part)
+    do: member_in_width(n >= 0 and n < width, {tag, member}, {n, width}, part)
 
   defp past({_bit, ""}, nil, {tag, member}, _part), do: {:member_bit, tag, member}
   defp past(_not_a_bit, _width, {tag, member}, _part), do: {:too_deep, tag, member}
@@ -2426,7 +2463,7 @@ defmodule Logex.Compiler do
     do: {:past_width, "#{tag.name}.#{member.name}", member.type, {n, width, nil}}
 
   defp bit_of({n, ""}, width, tag, part) when is_integer(width),
-    do: in_width(n < width, tag, {n, width}, part)
+    do: in_width(n >= 0 and n < width, tag, {n, width}, part)
 
   defp bit_of(_no_bit, _width, tag, part), do: {:no_members, tag, part}
 
@@ -2530,7 +2567,7 @@ defmodule Logex.Compiler do
   end
 
   defp resolve(nil, {:no_members, tag, part}, _slot, {:name, line, name}, _at, diagnostics),
-    do: [diagnostic(line, no_members(Integer.parse(part), name, tag)) | diagnostics]
+    do: [diagnostic(line, no_members(bit_number(part), name, tag)) | diagnostics]
 
   # M5-9 (decision 160): a bit whose number a tag holds is checked as the bool it reads and
   # writes, and its number's tag as an integer that a scan reads.

@@ -612,6 +612,115 @@ defmodule Logex.TagBitTest do
     end
   end
 
+  # Decision 213: Logix writes a literal bit both ways, `variable1.2` and `variable3.[4]`
+  # (1756-RM018A pp.884–885), and so does logex, the second the very bit the first is, its
+  # number the literal's value in any spelling, quoted as written.
+  describe "a literal in the brackets (decision 213)" do
+    defp spellings(n),
+      do:
+        Enum.uniq([
+          "#{n}",
+          "0#{n}",
+          "16##{Integer.to_string(n, 16)}",
+          "2##{Integer.to_string(n, 2)}"
+        ])
+
+    test "is the bit its literal numbers, read and written, of every type, in every spelling" do
+      for {type, _} <- @widths,
+          n <- Enum.uniq([0, 1, div(width(type), 2), width(type) - 1]),
+          spelt <- spellings(n) do
+        p =
+          program(
+            "var_input s #{type}\nvar_input k bool\nvar_output q bool\nvar_output w #{type}\n" <>
+              "xic s.[#{spelt}] ote q\nmove s w\nxic k ote w.[#{spelt}]"
+          )
+
+        for v <- samples(type), k <- [0, 1] do
+          assert scan(p, %{"s" => v, "k" => k}) ==
+                   {%{"q" => bit_of(type, v, n), "w" => with_bit(type, v, n, k)}, []},
+                 "#{type} s.[#{spelt}] of #{v}"
+        end
+      end
+    end
+
+    test "a member's bit too, and a one-shot's storage bit, as `status.3` is" do
+      p =
+        program(
+          "var_input k bool\nvar c ctu\nvar_output v dint\nxic k ote c.pv.[03]\nmove c.pv v\n" <>
+            "ctu c 100"
+        )
+
+      assert scan(p, %{"k" => 1}) == {%{"v" => 108}, []}
+
+      p = program("var_input go bool\nvar s word\nvar_output q bool\nxic go ons s.[3] ote q")
+
+      pulses =
+        Enum.map_reduce([0, 1, 1, 0, 1], Runtime.instance(p), fn go, state ->
+          {out, state} = Runtime.scan(p, Runtime.put_inputs(p, state, %{"go" => go}))
+          {{out["q"], state.env["s"]}, state}
+        end)
+
+      assert elem(pulses, 0) == [{0, 0}, {1, 8}, {0, 8}, {0, 0}, {1, 8}]
+
+      assert {:ok, _} =
+               Logex.compile("var_input go bool\nvar s word\nvar p bool\nxic go osr s.[2] p",
+                 name: "p"
+               )
+    end
+
+    test "a literal outside the word's bits is refused at its line, quoted as written" do
+      assert messages("var s word\nvar q bool\nxic s.[16] ote q") == [
+               {3,
+                "`s.[16]` names bit 16 of `s`, a word (declared on line 1), which has bits 0 to 15"}
+             ]
+
+      assert messages("var s word\nvar q bool\nxic s.[16#10] ote q") == [
+               {3,
+                "`s.[16#10]` names bit 16 of `s`, a word (declared on line 1), which has bits 0 to 15"}
+             ]
+
+      assert messages("var s sint\nvar q bool\nxic q\nxic s.[-1] ote q") == [
+               {4,
+                "`s.[-1]` names bit -1 of `s`, an sint (declared on line 1), which has bits 0 to 7"}
+             ]
+
+      assert messages("var c ctu\nvar q bool\nxic c.pv.[-2] ote q\nctu c 5") == [
+               {3, "`c.pv.[-2]` names bit -2 of `c.pv`, a dint, which has bits 0 to 31"}
+             ]
+
+      assert messages("var b bool\nvar q bool\nxic b.[0] ote q") == [
+               {3, "`b.[0]` names a bit of `b`, a bool, which has no bits"}
+             ]
+    end
+
+    test "a warning keys the bit by its number and quotes it as written" do
+      assert warnings(
+               "var_input k bool\nvar s word\nvar_output q bool\nxic k ote s.[1_0]\n" <>
+                 "xic k ote s.10\nxic s.[16#a] ote q"
+             ) == [
+               {5, "`s.10` already has an `ote` on line 4: the last one in the scan decides it"}
+             ]
+    end
+
+    test "an edit compares the bit by its number, so a respelling changes no rung" do
+      head = "var_input go bool\nvar s word\nvar x bool\nvar_output p bool\n"
+      v1 = program(head <> "xic go xic s.3 ons x ote p")
+      {_out, ran} = Runtime.scan(v1, Runtime.instance(v1))
+
+      for same <- ~w(s.[3] s.[03] s.[16#3] s.[2#11] s.03) do
+        {:ok, _edit, forecast} =
+          Edit.accept(v1, program(head <> "xic go xic #{same} ons x ote p"), ran)
+
+        refute Enum.any?(forecast, &match?({:ons_blocked, _, _}, &1)), same
+      end
+
+      {:ok, _edit, forecast} =
+        Edit.accept(v1, program(head <> "xic go xic s.[4] ons x ote p"), ran)
+
+      assert Enum.any?(forecast, &match?({:ons_blocked, "x", _}, &1))
+    end
+  end
+
   describe "an online edit" do
     test "a one-shot's rung is changed by its bit's tag, and blocked where its word is written through one" do
       head =

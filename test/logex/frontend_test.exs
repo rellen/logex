@@ -213,7 +213,7 @@ defmodule Logex.FrontendTest do
       assert {:error, {{1, 6}, Logex.Lexer, {:illegal, "["}}, 1} = Compiler.tokenize("xic s[n]")
     end
 
-    test "anything glued after the `]`, and a literal in the brackets, is named whole" do
+    test "anything glued after the `]`, and brackets holding no one number, are named whole" do
       for {source, column, reason} <- [
             {"xic s.[n]x", 5, {:after_bracket, "s.[n]x"}},
             {"xic s.[n]3", 5, {:after_bracket, "s.[n]3"}},
@@ -222,12 +222,17 @@ defmodule Logex.FrontendTest do
             {"xic s.[n][m]", 5, {:after_bracket, "s.[n][m]"}},
             {"xic s.[n].[m]", 5, {:after_bracket, "s.[n].[m]"}},
             {"xic s.[n]]", 5, {:after_bracket, "s.[n]]"}},
-            {"xic s.[3]", 5, {:bracketed, "s.[3]"}},
-            {"xic s.[03]x", 5, {:bracketed, "s.[03]x"}},
-            {"xic s.[16#3]", 5, {:bracketed, "s.[16#3]"}},
-            {"xic s.[1_0] ote q", 5, {:bracketed, "s.[1_0]"}},
-            {"xic s.[-1]", 5, {:bracketed, "s.[-1]"}},
-            {"xic a\n  xic t1.acc.[1]", 7, {:bracketed, "t1.acc.[1]"}},
+            {"xic s.[03]x", 5, {:after_bracket, "s.[03]x"}},
+            {"xic s.[3x]", 5, {:bracketed, "s.[3x]"}},
+            {"xic s.[3 ote q", 5, {:bracketed, "s.[3"}},
+            {"xic s.[3 ]", 5, {:bracketed, "s.[3 ]"}},
+            {"xic s.[8#3]", 5, {:bracketed, "s.[8#3]"}},
+            {"xic s.[16#3#]", 5, {:bracketed, "s.[16#3#]"}},
+            {"xic s.[-16#3]", 5, {:bracketed, "s.[-16#3]"}},
+            {"xic s.[1__0] ote q", 5, {:bracketed, "s.[1__0]"}},
+            {"xic s.[-]", 5, {:bracketed, "s.[-]"}},
+            {"xic s.[--1]", 5, {:bracketed, "s.[--1]"}},
+            {"xic a\n  xic t1.acc.[1x]", 7, {:bracketed, "t1.acc.[1x]"}},
             {"xic s.[n]-5", 5, {:signed_inside, "s.[n]-5"}}
           ] do
         assert {:error, {{line, ^column}, Logex.Lexer, ^reason}, line} =
@@ -239,20 +244,36 @@ defmodule Logex.FrontendTest do
                ~s("s.[n]x" is no name: a bit number in brackets, `status.[n]`, ends its name, ) <>
                  "and nothing may follow its `]` but a space"
 
-      assert Logex.Lexer.format_error({:bracketed, "s.[3]"}) ==
-               ~s("s.[3]" is no name: a bit number in brackets is a tag's, `status.[n]`, and ) <>
-                 "a literal one is written with none, `status.3`"
+      assert Logex.Lexer.format_error({:bracketed, "s.[8#3]"}) ==
+               ~s("s.[8#3]" is no name: a bit number in brackets is a tag's name, ) <>
+                 "`status.[n]`, or one number closed by its `]`, `status.[4]` or `status.[16#4]`"
 
       assert {:error, [%Logex.Diagnostic{stage: :lex, line: 1, column: 5} = d]} =
-               Logex.compile("xic s.[3] ote q", name: "m")
+               Logex.compile("xic s.[3x] ote q", name: "m")
 
-      assert Logex.Diagnostic.format(d) =~ ~s(line 1, column 5: "s.[3]" is no name)
+      assert Logex.Diagnostic.format(d) =~ ~s(line 1, column 5: "s.[3x]" is no name)
+    end
+
+    # Decision 213: a literal in the brackets, Logix's `variable3.[4]` (1756-RM018A p.885),
+    # is one name token kept as written, any number the lexer reads, a negative one among
+    # them, which the compiler refuses as outside the word's bits.
+    test "a literal in the brackets is one name token, kept as written" do
+      for name <- ~w(s.[3] s.[03] s.[16#3] s.[16#F] s.[2#11] s.[1_0] s.[-1] s.[-0] t1.acc.[1]) do
+        assert {:ok, [{:name, {1, 1}, "xic"}, {:name, {1, 5}, ^name}, {:name, {1, _}, "ote"}, _],
+                1} = Compiler.tokenize("xic #{name} ote q"),
+               name
+      end
     end
 
     test "a tag bit number prints as written" do
       {:ok, tokens, _} = Compiler.tokenize("xic   drive.[sel]  ote t1.acc.[n]")
       {:ok, ast} = Compiler.parse(tokens)
       assert Logex.Printer.print(ast) == "xic drive.[sel] ote t1.acc.[n]"
+
+      # Decision 213: and so does a literal one, in its own spelling.
+      {:ok, tokens, _} = Compiler.tokenize("xic   drive.[16#0f]  ote t1.acc.[-1]")
+      {:ok, ast} = Compiler.parse(tokens)
+      assert Logex.Printer.print(ast) == "xic drive.[16#0f] ote t1.acc.[-1]"
     end
   end
 

@@ -10,7 +10,8 @@ defmodule Logex.Lexer do
 
   A name may have `.` parts, `t1.dn` or `word.3`, and is still one `name` token, and since
   M5-9 (decision 160) a last part that is a tag's name in brackets, `status.[n]`, a bit
-  whose number the tag holds. An
+  whose number the tag holds, and since decision 213 a literal in brackets, `status.[4]`,
+  Logix's spelling of `status.4`, kept as written. An
   integer may have a sign, `-5`, glued to its digits (M3-3): one `int_lit` token, located
   at the `-`. Since M5-7 (decision 149) it may be based, `16#ff`, `16#FF` or `2#1010`,
   with no sign, and any number may hold a single `_` between two digits, `1_000_000` or
@@ -87,8 +88,8 @@ defmodule Logex.Lexer do
 
   def format_error({:bracketed, text}),
     do:
-      "#{inspect(text)} is no name: a bit number in brackets is a tag's, `status.[n]`, and " <>
-        "a literal one is written with none, `status.3`"
+      "#{inspect(text)} is no name: a bit number in brackets is a tag's name, `status.[n]`, " <>
+        "or one number closed by its `]`, `status.[4]` or `status.[16#4]`"
 
   def format_error({:bracket, text}),
     do:
@@ -364,11 +365,23 @@ defmodule Logex.Lexer do
   # mistyped lexeme, `s.[n]x`, named whole.
   defp dot(<<?., ?[, h, rest::binary>>, n) when is_name_start(h), do: bracket(rest, n + 3)
 
-  # A literal in the brackets, `s.[3]`, `s.[16#3]` or `s.[-1]`, is Logix's spelling of a
-  # literal bit, which logex writes `s.3`, IEC's (Ed 3 Table 17): the run named whole,
-  # through its `]`, with that spelling.
-  defp dot(<<?., ?[, d, _::binary>> = rest, n) when d in ?0..?9 or d == ?-,
-    do: {:bracketed, closing(rest, n)}
+  # Decision 213: a literal in the brackets, `s.[4]`, Logix's spelling of a literal bit
+  # (RM018A p.885, `variable3.[4]`), is the name's last part too, one token kept as written,
+  # which the compiler reads as the bit the literal's value numbers, `s.4`: any literal the
+  # lexer reads as one number, `s.[16#4]`, `s.[1_0]` or `s.[-1]`, the last refused there as
+  # outside the word's bits. Brackets that begin as a number and hold no one number closed
+  # by its `]`, `s.[3x]`, `s.[8#3]` or `s.[3`, are named whole through their `]`.
+  defp dot(<<?., ?[, ?-, d, _::binary>> = rest, n) when d in ?0..?9 do
+    <<_::binary-size(3), unsigned::binary>> = rest
+    in_brackets(rest, numeral(unsigned, 1), n)
+  end
+
+  defp dot(<<?., ?[, d, _::binary>> = rest, n) when d in ?0..?9 do
+    <<_::binary-size(2), digits::binary>> = rest
+    in_brackets(rest, numeral(digits, 0), n)
+  end
+
+  defp dot(<<?., ?[, ?-, _::binary>> = rest, n), do: {:bracketed, closing(rest, n)}
 
   # Since M5-9's review, brackets that no one name fills and closes, `s.[]`, `s.[n`,
   # `s.[n.m]` or `s.[ n ]`, are named whole through their `]`, and so is a bracket held
@@ -378,6 +391,21 @@ defmodule Logex.Lexer do
 
   defp dot(<<?., ws, _::binary>> = rest, n) when ws in [?\s, ?\t], do: spaced(rest, n)
   defp dot(_rest, n), do: {:ok, n}
+
+  # A number in brackets: its lexeme `m` long after the `.[`, read as a number is, and
+  # then its `]`, after which the name ends as one whose bracket holds a tag's name does.
+  defp in_brackets(rest, {kind, m}, n) when kind in [:decimal, :separated, :based] do
+    <<_::binary-size(2), text::binary-size(^m), tail::binary>> = rest
+    numbered_bit(number?(kind, text), tail, {rest, n}, n + 2 + m)
+  end
+
+  defp in_brackets(rest, _mistyped, n), do: {:bracketed, closing(rest, n)}
+
+  defp number?(:decimal, _text), do: true
+  defp number?(kind, text), do: match?({:ok, _}, value(kind, text))
+
+  defp numbered_bit(true, <<?], tail::binary>>, _at, m), do: closed(tail, m + 1)
+  defp numbered_bit(_not_one, _tail, {rest, n}, _m), do: {:bracketed, closing(rest, n)}
 
   defp bracket(<<ch, rest::binary>>, n) when is_name_char(ch), do: bracket(rest, n + 1)
 

@@ -957,18 +957,20 @@ defmodule Logex.BitStringTest do
              ]
     end
 
+    # Since decision 214 `not` and a shift compute in the bool, IEC's typing, the result
+    # widened into the bit string: `not a n` is 0 for a made `a` and 1 for an open one, and
+    # `shl a 3 s` shifts the one bit out, where `or a w o` widens `a` first, the two
+    # readings agreeing for `or`.
     test "a bool widens into each bit string, and into no integer" do
       for type <- @strings do
-        {_low, high} = limits(type)
-
         p =
           program(
             "var_input a bool\nvar_input w #{type}\nvar_output o #{type}\n" <>
               "var_output n #{type}\nvar_output s #{type}\nor a w o\nnot a n\nshl a 3 s"
           )
 
-        assert scan(p, %{"a" => 1, "w" => 0x10}) == %{"o" => 0x11, "n" => high - 1, "s" => 8}
-        assert scan(p, %{"a" => 0, "w" => 0x10}) == %{"o" => 0x10, "n" => high, "s" => 0}
+        assert scan(p, %{"a" => 1, "w" => 0x10}) == %{"o" => 0x11, "n" => 0, "s" => 0}
+        assert scan(p, %{"a" => 0, "w" => 0x10}) == %{"o" => 0x10, "n" => 1, "s" => 0}
       end
 
       for {type, _} <- @integers do
@@ -1812,6 +1814,176 @@ defmodule Logex.BitStringTest do
                "`ons` keeps its storage bit in a bool or a bit of a tag of its own, not " <>
                  "in `c.pv.03`, a bit of a member of `c`, which its instance reads"
              ]
+    end
+  end
+
+  # Decision 214, the maintainer's answer to M5-9's fifth question: `not` and the shifts
+  # compute in their source's type, IEC's typing (Ed 3 Tables 30 and 31, OUT of IN's type),
+  # and the result is then widened into the destination by Figure 11, by value; `and`, `or`
+  # and `xor` give the same either way. Every rule restated here, never read from logex.
+  describe "IEC's typing of `not` and the shifts (decision 214)" do
+    # Ed 3 Figure 11's "i" cells between the integers, restated: a signed type into a wider
+    # signed one, an unsigned into a wider unsigned or signed one.
+    defp into_integer?(from, to) do
+      {fk, fw} = Keyword.fetch!(@integers, from)
+      {tk, tw} = Keyword.fetch!(@integers, to)
+      (fk == tk and tw > fw) or (fk == :unsigned and tk == :signed and tw > fw)
+    end
+
+    defp wider_pairs do
+      strings = for from <- [:bool | @strings], to <- Map.fetch!(@figure_11, from), do: {from, to}
+
+      integers =
+        for {from, _} <- @integers, {to, _} <- @integers, into_integer?(from, to), do: {from, to}
+
+      strings ++ integers
+    end
+
+    defp values(:bool), do: [0, 1]
+
+    defp values(type) do
+      {low, high} = limits(type)
+      Enum.uniq([low, low + 1, max(-1, low), 0, 1, 5, min(0x81, high), div(high, 3), high])
+    end
+
+    # The operation in the source's own N bits, its result read as the source's type
+    # (inverted/2, moved/4 and combined/4 above), which a value of the destination's type
+    # holds unchanged: widening by value.
+    defp shift_of(op, type, v, count), do: moved(String.to_atom(op), type, v, count)
+
+    test "the maintainer's lamp: `not left mask` into a word is the bool's inverse, widened" do
+      p = program("var_input left bool\nvar_output mask word\nnot left mask")
+      assert scan(p, %{"left" => 1}) == %{"mask" => 0x0000}
+      assert scan(p, %{"left" => 0}) == %{"mask" => 0x0001}
+    end
+
+    test "IEC's own cases: a byte rotated into a word, a usint and an sint inverted wider" do
+      p =
+        program(
+          "var_input b byte\nvar_input u usint\nvar_input s sint\nvar_output r word\n" <>
+            "var_output l word\nvar_output nu int\nvar_output ns dint\n" <>
+            "rol b 1 r\nshl b 4 l\nnot u nu\nnot s ns"
+        )
+
+      # Within 8 bits: 2#1000_0001 rotated left by 1 is 2#0000_0011, and shifted left by 4
+      # 2#0001_0000, the high bits shifted out of the byte, never into the word's.
+      assert scan(p, %{"b" => 0x81, "u" => 5, "s" => 5}) ==
+               %{"r" => 0x0003, "l" => 0x0010, "nu" => 250, "ns" => -6}
+    end
+
+    test "every pair Figure 11 widens: `not` and each shift in the source's width, by value" do
+      for {from, to} <- wider_pairs() do
+        p =
+          program(
+            "var_input a #{from}\nvar_input n int\nvar_output d #{to}\n" <>
+              "var_output sl #{to}\nvar_output sr #{to}\nvar_output rl #{to}\nvar_output rr #{to}\n" <>
+              "var_output ok_l bool\nvar_output ok_r bool\nvar_output ok_rl bool\nvar_output ok_rr bool\n" <>
+              "not a d\nshl a n sl ote ok_l\nshr a n sr ote ok_r\nrol a n rl ote ok_rl\nror a n rr ote ok_rr"
+          )
+
+        for v <- values(from),
+            count <- Enum.uniq([-1, 0, 1, 3, width(from) - 1, width(from), width(to)]) do
+          {sl, ok_l} = shift_of("shl", from, v, count)
+          {sr, ok_r} = shift_of("shr", from, v, count)
+          {rl, ok_rl} = shift_of("rol", from, v, count)
+          {rr, ok_rr} = shift_of("ror", from, v, count)
+
+          assert scan(p, %{"a" => v, "n" => count}) == %{
+                   "d" => inverted(from, v),
+                   "sl" => sl,
+                   "sr" => sr,
+                   "rl" => rl,
+                   "rr" => rr,
+                   "ok_l" => ok_l,
+                   "ok_r" => ok_r,
+                   "ok_rl" => ok_rl,
+                   "ok_rr" => ok_rr
+                 },
+                 "#{from} into #{to}, #{v} by #{count}"
+        end
+      end
+    end
+
+    # The two readings agree for `and`, `or` and `xor`: widening by value is a sign or zero
+    # extension, which commutes with each, so the sources' widest common type and the
+    # destination give the same bits.
+    test "`and`, `or` and `xor` of mixed widths are the same computed in the sources' type" do
+      for {from, to} <- wider_pairs(), op <- ~w(and or xor) do
+        p =
+          program(
+            "var_input a #{from}\nvar_input b #{to}\nvar_input c #{from}\nvar_output d #{to}\nvar_output e #{to}\n#{op} a b d\n#{op} a c e"
+          )
+
+        for x <- values(from), y <- values(to), z <- Enum.take(values(from), 3) do
+          widest = combined(String.to_atom(op), to, x, y)
+          narrow = combined(String.to_atom(op), from, x, z)
+
+          assert scan(p, %{"a" => x, "b" => y, "c" => z}) == %{"d" => widest, "e" => narrow},
+                 "#{op} of #{from} #{x} with #{to} #{y} and #{from} #{z}"
+        end
+      end
+    end
+
+    test "a literal source, which its slot judges, shifts in the destination's width" do
+      p =
+        program(
+          "var_output a word\nvar_output b word\nvar_output c word\nvar_output e word\n" <>
+            "shl 16#81 4 a\nnot 5 b\nrol 16#8001 1 c\nror 1 1 e"
+        )
+
+      # A rotate is circular within the word: computed any wider, the bit rotated out of
+      # the top would not come in at the bottom.
+      assert scan(p, %{}) == %{"a" => 0x0810, "b" => 0xFFFA, "c" => 0x0003, "e" => 0x8000}
+    end
+
+    test "a bit, a bool member and an integer member compute in their own types" do
+      p =
+        program(
+          "var_input s word\nvar_input k bool\nvar_input n int\nvar c ctu_int\n" <>
+            "var_output a word\nvar_output t word\nvar_output b word\nvar_output r dint\n" <>
+            "xic k ote c.r\nctu c 5\nnot s.3 a\nnot s.[n] t\nshl c.r 1 b\nrol c.cv 1 r"
+        )
+
+      assert scan(p, %{"s" => 8, "k" => 1, "n" => 3}) ==
+               %{"a" => 0, "t" => 0, "b" => 0, "r" => 0}
+
+      assert scan(p, %{"s" => 0, "k" => 0, "n" => 3}) ==
+               %{"a" => 1, "t" => 1, "b" => 0, "r" => 0}
+    end
+
+    # One lookup of the source's type more than before decision 214: a `not` or a shift of
+    # a tag costs 4 reductions more than at `a281a15`, 15 and 27 more than a `move` where
+    # it took 11 and 23, and a narrower source, which a second read brings into the
+    # destination, 3 more again.
+    test "a `not` or a shift costs a bounded few reductions more than a `move`" do
+      cost = fn line, from ->
+        {:ok, p} =
+          Logex.compile(
+            "var_input v #{from}\nvar d word\n" <> String.duplicate(line <> "\n", 400),
+            name: "p"
+          )
+
+        state = Runtime.put_inputs(p, Runtime.instance(p), %{"v" => 1})
+
+        Enum.min(
+          for _ <- 1..5 do
+            {:reductions, before} = Process.info(self(), :reductions)
+            Runtime.scan(p, state)
+            {:reductions, later} = Process.info(self(), :reductions)
+            later - before
+          end
+        )
+      end
+
+      move = cost.("move v d", :word)
+      widening = cost.("move v d", :byte)
+
+      for {line, bound} <- [{"not v d", 16}, {"shl v 1 d", 28}] do
+        same = (cost.(line, :word) - move) / 400
+        narrow = (cost.(line, :byte) - widening) / 400
+        assert same <= bound, "`#{line}` took #{same} reductions more than a `move`"
+        assert narrow <= same + 3, "`#{line}` of a byte took #{narrow} against #{same}"
+      end
     end
   end
 

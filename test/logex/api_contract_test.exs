@@ -527,7 +527,7 @@ defmodule Logex.ApiContractTest do
        "var_output bok bool",
        "var_output bb bool",
        "var_output bset #{type}"
-     ] ++ inverted_declared(type),
+     ] ++ inverted_declared(type) ++ widened_declared(type),
      [
        "#{pick(~w(and or xor))} bw #{pick(Enum.uniq([0, 1, high, max(low, -1), div(high, 3)]))} bm",
        "#{shift} bw bn bs ote bok",
@@ -535,8 +535,37 @@ defmodule Logex.ApiContractTest do
        "xic #{read} ote bb",
        "move bw bset",
        "xic bb otu #{cleared}"
-     ] ++ inverted_rung(type)}
+     ] ++ inverted_rung(type) ++ widened_rungs(type)}
   end
+
+  # Decision 214: `not` and a shift of the drawn type into a type Ed 3 Figure 11 widens it
+  # into, restated here, computed in the source's bits and widened by value.
+  @wider %{
+    bool: [:byte, :word, :dword, :lword],
+    byte: [:word, :dword, :lword],
+    word: [:dword, :lword],
+    dword: [:lword],
+    sint: [:int, :dint, :lint],
+    int: [:dint, :lint],
+    dint: [:lint],
+    usint: [:uint, :udint, :ulint, :int, :dint, :lint],
+    uint: [:udint, :ulint, :dint, :lint],
+    udint: [:ulint, :lint]
+  }
+
+  defp widened_declared(type) when is_map_key(@wider, type),
+    do: [
+      "var_output bnw #{pick(@wider[type])}",
+      "var_output bsw #{pick(@wider[type])}",
+      "var_output bokw bool"
+    ]
+
+  defp widened_declared(_widest), do: []
+
+  defp widened_rungs(type) when is_map_key(@wider, type),
+    do: ["not bw bnw", "#{pick(~w(shl shr rol ror))} bw bn bsw ote bokw"]
+
+  defp widened_rungs(_widest), do: []
 
   # A bool has no bits: it is read and cleared whole, its one bit bit 0.
   defp bits_named(:bool, _n), do: {"bw", "bset"}
@@ -706,11 +735,13 @@ defmodule Logex.ApiContractTest do
     # M5-8: every bit string's two limits, each bitwise instruction, each shift or rotate
     # by a negative count, one past the width and one inside it, and a bit set and clear;
     # since decision 206 a bool's two values, and a bool's bit inverted into a bool and
-    # into each bit string.
+    # into each bit string; and since decision 214 each type Figure 11 widens into a wider
+    # one inverted and shifted there in its own width.
     bits =
       for(type <- @bit_types, limit <- [:low, :high, :inside], do: {type, limit}) ++
         [{:bool, :low}, {:bool, :high}] ++
         for(type <- [:bool | @bit_types], do: {:inverted, type}) ++
+        for(type <- Map.keys(@wider), do: {:widened, type}) ++
         for(op <- ~w(and or xor)a, do: {:bitwise, op}) ++
         for(op <- ~w(shl shr rol ror)a, count <- [:negative, :past, :inside], do: {op, count}) ++
         [{:bit, 0}, {:bit, 1}]
@@ -918,6 +949,7 @@ defmodule Logex.ApiContractTest do
     assert outputs["bb"] == b
     assert outputs["bset"] == cleared_of(b, type, w, cleared)
     inverted_of(type, b, outputs)
+    widened_of(Regex.run(~r/^(shl|shr|rol|ror) bw bn bsw ote bokw$/m, source), type, env, outputs)
 
     first..last//1 = width_range_of({bits_kind(type), n})
     bits_reached({:bitwise, String.to_atom(op)})
@@ -932,14 +964,27 @@ defmodule Logex.ApiContractTest do
   defp bit_drawn([_, bit]), do: String.to_integer(bit)
   defp bit_drawn([_]), do: 0
 
-  # `not bb bv`: the bool's pattern, bb widened into bv's type by Figure 11, every bit of
-  # bv's width inverted, so 1 - bb in a bool and 2^N - 1 - bb in a bit string.
+  # `not bb bv`: since decision 214 the bool's one bit inverted in the bool, IEC's typing of
+  # NOT, and then widened into bv's type by Figure 11, by value, so 1 - bb in a bool and in
+  # each bit string alike.
   defp inverted_of(type, b, %{"bv" => bv}) do
-    assert bv == from_bits(Enum.map(bits_list(b, bits_n(type)), &(1 - &1)))
+    assert bv == from_bits(Enum.map(bits_list(b, 1), &(1 - &1)))
     bits_reached({:inverted, type})
   end
 
   defp inverted_of(_integer, _b, _outputs), do: :ok
+
+  # Decision 214: the source's every bit inverted, and shifted or rotated, within its own
+  # N bits, each read as the source's type, a value the wider destination holds unchanged.
+  defp widened_of([_, op], type, %{"bw" => w, "bn" => n}, outputs) do
+    n_bits = bits_n(type)
+    inverted = from_bits(Enum.map(bits_list(pattern_of(type, w), n_bits), &(1 - &1)))
+    assert outputs["bnw"] == valued_of(type, inverted)
+    assert {outputs["bsw"], outputs["bokw"]} == shift_of(op, type, w, n)
+    bits_reached({:widened, type})
+  end
+
+  defp widened_of(nil, _type, _env, _outputs), do: :ok
 
   defp bits_kind_reached(type, limit) when is_map_key(@bit_widths, type) or type == :bool,
     do: bits_reached({type, limit})
