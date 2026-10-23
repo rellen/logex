@@ -141,7 +141,7 @@ defmodule FrontendGolden do
       "ote aa\r\n\r\n( xic bb",
       deep,
       many
-    ] ++ signed() ++ based() ++ tag_bits() ++ literal_bits() ++ reals()
+    ] ++ signed() ++ based() ++ tag_bits() ++ literal_bits() ++ reals() ++ tiny_reals()
   end
 
   # M3-3 (decision 97): negative literals, a sign glued to its digits. Added after the rest,
@@ -322,6 +322,27 @@ defmodule FrontendGolden do
       "move a-1.5 aa",
       "xic fan_speed.3 ote aa",
       "xic fan_speed.[3] ote aa"
+    ]
+  end
+
+  # M5-10's second question: a real literal nearer 0.0 than an lreal's smallest normal
+  # value, and one no float holds, `1.0e-400`, beside a zero written with an exponent and
+  # an lreal's smallest normal, the edge. Added after the rest, and recorded first by the
+  # front end before the question's answer, so that the diff of the commit that lands it
+  # is these entries alone.
+  defp tiny_reals do
+    [
+      "move 1.0e-40 aa",
+      "move 1.0e-310 aa",
+      "move -1.0e-320 aa",
+      "move 4.9e-324 aa",
+      "move 2.225073858507201e-308 aa",
+      "move 2.2250738585072014e-308 aa",
+      "move 1.0e-400 aa",
+      "move 1_0.0e-4_00 aa",
+      "move 0.0e-400 aa",
+      "move -0.0e-999 aa",
+      "gt aa 1.0e-310 ote bb"
     ]
   end
 
