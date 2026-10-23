@@ -6,14 +6,17 @@ defmodule Logex.Lexer do
   column counted in characters, not bytes:
 
       {:bst, loc}  {:nxb, loc}  {:bnd, loc}  {:rnd, loc}
-      {:name, loc, binary}  {:int_lit, loc, integer}
+      {:name, loc, binary}  {:int_lit, loc, integer}  {:int_lit, loc, integer, spelling}
 
   A name may have `.` parts, `t1.dn` or `word.3`, and is still one `name` token. An
   integer may have a sign, `-5`, glued to its digits (M3-3): one `int_lit` token, located
   at the `-`. Since M5-7 (decision 149) it may be based, `16#ff`, `16#FF` or `2#1010`,
   with no sign, and any number may hold a single `_` between two digits, `1_000_000` or
   `2#1010_0000`; the token holds the value it spells, `16#ffff` 65,535, which its slot
-  judges as it judges any literal. Octal and every other base, a signed based number, a
+  judges as it judges any literal. Since decision 202 a literal's token also holds its
+  spelling, the text as written, wherever that is not the plain decimal of its value,
+  `Integer.to_string/1`'s: `{:int_lit, loc, 255, "16#ff"}`, `{:int_lit, loc, 7, "007"}`
+  and `{:int_lit, loc, 0, "-0"}`, where `255` and `-5` keep the three-element token. Octal and every other base, a signed based number, a
   `_` anywhere but between two digits, a based number with a digit outside its base and
   one with a second `#`, `16#ff#`, are each a located error naming the number whole, and Logix's suffixes, `5U` and `5L`,
   B2's mistyped lexeme.
@@ -184,6 +187,17 @@ defmodule Logex.Lexer do
 
   defp based_run(_rest, n), do: n
 
+  # Decision 202: a token keeps a literal's spelling wherever it is not the plain decimal of
+  # its value, `Integer.to_string/1`'s, as a fourth element: a decimal with a leading zero,
+  # `007`, or `-0`, which is 0, and every number with a `_` or a base. A plain decimal, the
+  # commonest by far, keeps the three-element token, told apart by its first two bytes in
+  # the clause head, so it costs what it did.
+  defp number(<<?0, d, _::binary>> = src, {:decimal, n}, l, c, acc) when d in ?0..?9,
+    do: spelled(src, n, l, c, acc)
+
+  defp number(<<?-, ?0, _::binary>> = src, {:decimal, n}, l, c, acc),
+    do: spelled(src, n, l, c, acc)
+
   defp number(src, {:decimal, n}, l, c, acc) do
     <<text::binary-size(^n), rest::binary>> = src
     lexeme(rest, text, {:int_lit, {l, c}, String.to_integer(text)}, {l, c}, acc)
@@ -194,8 +208,13 @@ defmodule Logex.Lexer do
     literal(value(kind, text), text, rest, l, c, acc)
   end
 
+  defp spelled(src, n, l, c, acc) do
+    <<text::binary-size(^n), rest::binary>> = src
+    literal({:ok, String.to_integer(text)}, text, rest, l, c, acc)
+  end
+
   defp literal({:ok, value}, text, rest, l, c, acc),
-    do: lexeme(rest, text, {:int_lit, {l, c}, value}, {l, c}, acc)
+    do: lexeme(rest, text, {:int_lit, {l, c}, value, text}, {l, c}, acc)
 
   defp literal({:error, reason}, _text, _rest, l, c, _acc),
     do: {:error, {{l, c}, __MODULE__, reason}, l}

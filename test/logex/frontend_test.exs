@@ -4,14 +4,17 @@ defmodule Logex.FrontendTest do
   line and keeps the AST rather than the tokens, so it cannot see columns, messages, or
   the token stream itself. The deliberate departures from the leex/yecc front end are
   pinned here too: columns, invalid UTF-8, B2 and B8. So are `//` comments, names with
-  `.` parts, negative literals and, since M5-7, based literals and `_` separators
-  (decision 149), which leex's lexer never had. All but one of these tests fail against
+  `.` parts, negative literals, since M5-7 based literals and `_` separators (decision
+  149), and since decision 202 a literal's spelling in its token, which leex's lexer never
+  had. All but one of these tests fail against
   that front end; "the AST keeps only the line" is a parity pin and passes on both. The
   last test checks that a checkout upgraded from it has been cleaned.
   """
   use ExUnit.Case, async: true
 
   alias Logex.Compiler
+
+  doctest Logex.Parser
 
   describe "every token and every error has a column" do
     test "tokens carry {line, column}, counted from 1" do
@@ -255,8 +258,8 @@ defmodule Logex.FrontendTest do
                {:int_lit, {1, 6}, -5},
                {:name, {1, 9}, "x"},
                {:name, {1, 11}, "eq"},
-               {:int_lit, {1, 14}, 0},
-               {:int_lit, {1, 17}, -7},
+               {:int_lit, {1, 14}, 0, "-0"},
+               {:int_lit, {1, 17}, -7, "-007"},
                {:bst, {1, 22}},
                {:int_lit, {1, 24}, -2_147_483_648},
                {:nxb, {1, 36}},
@@ -339,25 +342,25 @@ defmodule Logex.FrontendTest do
 
       assert tokens == [
                {:name, {1, 1}, "move"},
-               {:int_lit, {1, 6}, 255},
+               {:int_lit, {1, 6}, 255, "16#ff"},
                {:name, {1, 12}, "x"},
                {:name, {1, 14}, "eq"},
-               {:int_lit, {1, 17}, 65_535},
-               {:int_lit, {1, 25}, 160},
+               {:int_lit, {1, 17}, 65_535, "16#FFFF"},
+               {:int_lit, {1, 25}, 160, "2#1010_0000"},
                {:bst, {1, 37}},
-               {:int_lit, {1, 39}, 255},
+               {:int_lit, {1, 39}, 255, "16#Ff"},
                {:nxb, {1, 45}},
-               {:int_lit, {1, 46}, 0},
+               {:int_lit, {1, 46}, 0, "2#0"},
                {:bnd, {1, 49}}
              ]
 
       # Any number of digits, as for a decimal one: the slot judges what fits (decision 149).
-      assert {:ok, [{:int_lit, {1, 1}, n}], 1} =
+      assert {:ok, [{:int_lit, {1, 1}, n, _spelling}], 1} =
                Compiler.tokenize("16#" <> String.duplicate("f", 40))
 
       assert n == 16 ** 40 - 1
 
-      assert {:ok, [{:int_lit, _, 0xFFFF_FFFF_FFFF_FFFF}], 1} =
+      assert {:ok, [{:int_lit, _, 0xFFFF_FFFF_FFFF_FFFF, _spelling}], 1} =
                Compiler.tokenize("16#ffff_ffff_ffff_ffff")
     end
 
@@ -370,10 +373,11 @@ defmodule Logex.FrontendTest do
             {"16#f_f", 255},
             {"2#1_0", 2}
           ] do
-        assert {:ok, [{:int_lit, {1, 1}, ^value}], 1} = Compiler.tokenize(source), source
+        assert {:ok, [{:int_lit, {1, 1}, ^value, ^source}], 1} = Compiler.tokenize(source),
+               source
       end
 
-      assert {:ok, [_, {:int_lit, {1, 6}, -1000}, {:name, {1, 13}, "x"}], 1} =
+      assert {:ok, [_, {:int_lit, {1, 6}, -1000, "-1_000"}, {:name, {1, 13}, "x"}], 1} =
                Compiler.tokenize("move -1_000 x")
     end
 
@@ -497,6 +501,64 @@ defmodule Logex.FrontendTest do
       # read digit by digit with an integer grown at each was 3.5 times the cost at twice
       # the digits.
       assert digits.(2000) <= 2.2 * digits.(1000)
+    end
+  end
+
+  describe "a literal keeps its spelling (decision 202)" do
+    # A literal written as the plain decimal of its value is the three-element token it
+    # always was; one written any other way keeps its text as a fourth element.
+    test "a token keeps the spelling wherever it is not the value's plain decimal" do
+      for {source, token} <- [
+            {"255", {:int_lit, {1, 1}, 255}},
+            {"-5", {:int_lit, {1, 1}, -5}},
+            {"0", {:int_lit, {1, 1}, 0}},
+            {"-1", {:int_lit, {1, 1}, -1}},
+            {"10", {:int_lit, {1, 1}, 10}},
+            {"16#ff", {:int_lit, {1, 1}, 255, "16#ff"}},
+            {"16#00FF", {:int_lit, {1, 1}, 255, "16#00FF"}},
+            {"2#1010_0000", {:int_lit, {1, 1}, 160, "2#1010_0000"}},
+            {"1_000", {:int_lit, {1, 1}, 1000, "1_000"}},
+            {"-1_000", {:int_lit, {1, 1}, -1000, "-1_000"}},
+            {"007", {:int_lit, {1, 1}, 7, "007"}},
+            {"00", {:int_lit, {1, 1}, 0, "00"}},
+            {"-0", {:int_lit, {1, 1}, 0, "-0"}},
+            {"-007", {:int_lit, {1, 1}, -7, "-007"}},
+            {"-0_7", {:int_lit, {1, 1}, -7, "-0_7"}}
+          ] do
+        assert Compiler.tokenize(source) == {:ok, [token], 1}, source
+      end
+    end
+
+    test "parse/1 keeps the spelling in the tree's leaf, and a plain literal's leaf as it was" do
+      assert {:ok,
+              {:routine,
+               {:rungs,
+                [
+                  rung: [
+                    {:name, 1, "and"},
+                    {:name, 1, "status"},
+                    {:int_lit, 1, 255, "16#00ff"},
+                    {:name, 1, "speed"}
+                  ],
+                  rung: [{:name, 2, "move"}, {:int_lit, 2, 1000}, {:name, 2, "x"}],
+                  rung: [
+                    {:branches, [[{:name, 3, "move"}, {:int_lit, 3, 0, "-0"}, {:name, 3, "y"}]]}
+                  ]
+                ]}}} = parse("and status 16#00ff speed\nmove 1000 x\n( move -0 y )")
+    end
+
+    # The decimal fast path: a plain decimal is told from a spelled one by its first two
+    # bytes in a clause head, so it lexes in the reductions it did, and a spelled decimal,
+    # `007`, at the one call more that cuts and reads it.
+    test "growth: a plain decimal lexes at what it did, a padded one linearly" do
+      line = fn word, n -> lexed(String.duplicate("mov #{word} hh\n", n)) end
+      per = fn word -> (line.(word, 200) - line.(word, 100)) / 100 end
+
+      assert per.("1234") == per.("abcd") + 2
+      assert per.("-1234") == per.("abcd") + 2
+      assert per.("0") == per.("a") + 2
+      assert per.("0123") <= per.("1234") + 2
+      assert line.("0123", 400) <= 2 * line.("0123", 200) + 20
     end
   end
 

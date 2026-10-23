@@ -34,15 +34,17 @@ defmodule Logex.PrinterTest do
                      # a literal below 0, its sign glued to its digits (M3-3, decision 97):
                      # a lexer rule too, but printed
                      :negative_int_lit,
-                     # M5-7 (decision 149): the spellings of a literal, lexer rules that the
-                     # AST keeps no trace of, so reached by the spelled corpus below, each
-                     # read back as the value it spells and printed in decimal
+                     # M5-7 (decision 149): the spellings of a literal, lexer rules, reached
+                     # by the spelled corpus below; since decision 202 each is kept in the
+                     # AST, `{:int_lit, line, n, spelling}`, and printed as written
                      # `_` between decimal digits, `1_000`, signed too, `-1_000`
                      :separated_int_lit,
                      # `16#ff`, `16#FF`, `16#f_f`
                      :hex_int_lit,
                      # `2#1010_0000`
-                     :binary_int_lit
+                     :binary_int_lit,
+                     # decision 202: a decimal with a leading zero, `007`, `-007`, `-0`
+                     :padded_int_lit
                    ])
 
   describe "round trip" do
@@ -50,29 +52,33 @@ defmodule Logex.PrinterTest do
       spellings = for {_ast, _source, spelt} <- spelled_corpus(), shape <- spelt, do: shape
 
       assert @required_shapes ==
-               corpus()
+               (corpus() ++ spelled_trees())
                |> Enum.map(&shapes/1)
                |> Enum.reduce(MapSet.new(spellings), &MapSet.union/2)
     end
 
     # M5-7 (decision 149): a literal may be written in decimal, with `_` between its digits,
-    # or, at 0 or more, in base 16 or 2, and every spelling is the number it spells, so the
-    # AST is the one its decimal spelling gives, and the printer gives that spelling back.
-    test "every spelling of a literal reads back as the AST, and prints in decimal" do
+    # with a leading zero, or, at 0 or more, in base 16 or 2, and every spelling is the
+    # number it spells. Since decision 202 the AST keeps the spelling wherever it is not
+    # the plain decimal, so a source reads back as its spelled tree, whose values are the
+    # decimal tree's, and prints back exactly as written.
+    test "every spelling of a literal reads back as the spelled AST, and prints as written" do
       for {ast, source, _spelt} <- spelled_corpus() do
-        assert strip_lines(parse!(source)) == strip_lines(ast), source
-        assert Printer.print(parse!(source)) == Printer.print(ast)
+        spelled = parse!(source)
+        assert strip_lines(spelled) == strip_lines(ast), source
+        assert Printer.print(spelled) == source
+        assert strip_lines(values(spelled)) == strip_lines(parse!(Printer.print(values(ast))))
       end
     end
 
     test "parse . print restores the AST, modulo line numbers" do
-      for ast <- corpus() do
+      for ast <- corpus() ++ spelled_trees() do
         assert strip_lines(parse!(Printer.print(ast))) == strip_lines(ast)
       end
     end
 
     test "print . parse reaches a fixed point" do
-      for ast <- corpus() do
+      for ast <- corpus() ++ spelled_trees() do
         once = Printer.print(ast)
         assert Printer.print(parse!(once)) == once
       end
@@ -108,20 +114,24 @@ defmodule Logex.PrinterTest do
       assert Printer.print(parse!("  xic   aa \t   ote   bb   ")) == "xic aa ote bb"
     end
 
-    test "integer literals print in their shortest form" do
-      assert Printer.print(parse!("mov 007 hh")) == "mov 7 hh"
+    # Decision 202: a literal prints exactly as it was written, where until then each
+    # printed as its value's shortest decimal, `007` as `7`.
+    test "an integer literal prints as written, a leading zero kept" do
+      assert Printer.print(parse!("mov 007 hh")) == "mov 007 hh"
+      assert Printer.print(parse!("mov 7 hh")) == "mov 7 hh"
     end
 
-    # M5-7 (decision 149): the AST keeps a literal's value, not its spelling, so a based
-    # literal or one with `_` prints as its decimal value.
-    test "a based literal or one with `_` separators prints as its decimal value" do
-      assert Printer.print(parse!("move 16#00FF hh\nand 2#1010_0000 x\nmove -1_000_000 y")) ==
-               "move 255 hh\nand 160 x\nmove -1000000 y"
+    # Decision 202: the AST keeps a literal's spelling, so a based literal or one with `_`
+    # prints as written, where M5-7 printed each as its decimal value.
+    test "a based literal or one with `_` separators prints as written" do
+      source = "and status 16#00ff speed\nmove 16#00FF hh\nand 2#1010_0000 x\nmove -1_000_000 y"
+      assert Printer.print(parse!(source)) == source
     end
 
-    # M3-3 (decision 97): a sign is glued to its digits, and `-0` is 0.
-    test "a negative literal prints with its sign glued on, and `-0` as 0" do
-      assert Printer.print(parse!("move -007 hh\neq -0 x")) == "move -7 hh\neq 0 x"
+    # M3-3 (decision 97): a sign is glued to its digits; since decision 202 `-0` and `-007`
+    # print as written.
+    test "a negative literal prints with its sign glued on, as written" do
+      assert Printer.print(parse!("move -007 hh\neq -0 x")) == "move -007 hh\neq -0 x"
       assert Printer.print(parse!("( move -5 a | ) ote b")) == "( move -5 a | ) ote b"
     end
 
@@ -190,12 +200,21 @@ defmodule Logex.PrinterTest do
     @breaks %{
       name: [:junk, :line_zero, :two_words, :not_a_word],
       int_lit: [:not_an_integer, :line_nil],
+      spelled: [:plain_spelling, :other_value, :spelling_not_a_binary],
       branches: [:no_legs, :leg_not_a_list, :improper]
     }
 
+    test "takes every spelled tree, as parse/1 could produce each" do
+      for ast <- spelled_trees() do
+        assert Logex.Parser.well_formed!(ast) == ast
+      end
+    end
+
     test "refuses a generated tree broken at any one node, with nothing but ArgumentError" do
       broken =
-        for ast <- corpus(), {kind, count} <- counts(ast), how <- @breaks[kind] do
+        for ast <- corpus() ++ spelled_trees(),
+            {kind, count} <- counts(ast),
+            how <- @breaks[kind] do
           tree = break_nth(ast, kind, :rand.uniform(count), how)
 
           assert_raise ArgumentError, ~r/^not a tree Logex.Parser.parse\/1 can produce: /, fn ->
@@ -244,6 +263,7 @@ defmodule Logex.PrinterTest do
   defp strip_lines({:rung, elements}), do: {:rung, strip_lines(elements)}
   defp strip_lines({:branches, legs}), do: {:branches, Enum.map(legs, &strip_lines/1)}
   defp strip_lines({kind, _line, value}), do: {kind, 0, value}
+  defp strip_lines({:int_lit, _line, value, spelling}), do: {:int_lit, 0, value, spelling}
   defp strip_lines(elements) when is_list(elements), do: Enum.map(elements, &strip_lines/1)
 
   # A seeded generator rather than a dependency: the repository has none and takes
@@ -291,6 +311,7 @@ defmodule Logex.PrinterTest do
   defp kinds(elements) when is_list(elements), do: Enum.flat_map(elements, &kinds/1)
   defp kinds({:branches, legs}), do: [:branches | kinds(Enum.concat(legs))]
   defp kinds({kind, _line, _value}), do: [kind]
+  defp kinds({:int_lit, _line, _value, _spelling}), do: [:spelled]
 
   # The tree with the nth node of a kind, counted as counts/1 counts, broken `how`.
   defp break_nth({:routine, {:rungs, rungs}}, kind, n, how) do
@@ -315,6 +336,8 @@ defmodule Logex.PrinterTest do
 
   defp broken({kind, _, _} = node, kind, 1, how), do: {break(how, node), 0}
   defp broken({node_kind, _, _} = node, kind, n, _how), do: {node, n - here(node_kind, kind)}
+  defp broken({:int_lit, _, _, _} = node, :spelled, 1, how), do: {break(how, node), 0}
+  defp broken({:int_lit, _, _, _} = node, kind, n, _how), do: {node, n - here(:spelled, kind)}
 
   defp here(kind, kind), do: 1
   defp here(_node_kind, _kind), do: 0
@@ -329,54 +352,100 @@ defmodule Logex.PrinterTest do
   defp break(:leg_not_a_list, {:branches, [_ | legs]}), do: {:branches, [:leg | legs]}
   defp break(:improper, {:branches, legs}), do: {:branches, legs ++ [[] | :x]}
 
+  defp break(:plain_spelling, {:int_lit, line, n, _}),
+    do: {:int_lit, line, n, Integer.to_string(n)}
+
+  defp break(:other_value, {:int_lit, line, n, spelling}), do: {:int_lit, line, n + 1, spelling}
+
+  defp break(:spelling_not_a_binary, {:int_lit, line, n, spelling}),
+    do: {:int_lit, line, n, String.to_charlist(spelling)}
+
   # The corpus again, each tree written as source with every literal spelled in a way drawn
-  # for it, and the spellings it took. The draws come after the corpus's own, so the corpus
-  # is the one the other properties run on.
+  # for it, the spelled tree, which keeps each spelling that is not the plain decimal of
+  # its value (decision 202), and the spellings it took. The draws come after the corpus's
+  # own, so the corpus is the one the other properties run on.
   defp spelled_corpus do
     trees = corpus()
 
     for ast <- trees do
-      {source, spelt} = spell(ast)
-      {ast, source, spelt}
+      {spelled, {source, spelt}} = spell(ast)
+      {spelled, source, spelt}
     end
   end
 
+  defp spelled_trees, do: for({ast, _source, _spelt} <- spelled_corpus(), do: ast)
+
+  # A spelled tree with every spelling dropped: the tree of the values it spells.
+  defp values({:routine, {:rungs, rungs}}), do: {:routine, {:rungs, Enum.map(rungs, &values/1)}}
+  defp values({:rung, elements}), do: {:rung, values(elements)}
+  defp values({:branches, legs}), do: {:branches, Enum.map(legs, &values/1)}
+  defp values({:int_lit, line, n, _spelling}), do: {:int_lit, line, n}
+  defp values(elements) when is_list(elements), do: Enum.map(elements, &values/1)
+  defp values(leaf), do: leaf
+
   defp spell({:routine, {:rungs, rungs}}) do
-    {lines, spelt} = Enum.map_reduce(rungs, [], &spell/2)
-    {Enum.join(lines, "\n"), spelt}
+    {rungs, {lines, spelt}} =
+      Enum.map_reduce(rungs, {[], []}, fn rung, {lines, spelt} ->
+        {rung, line, spelt} = spell(rung, spelt)
+        {rung, {[line | lines], spelt}}
+      end)
+
+    {{:routine, {:rungs, rungs}}, {Enum.join(Enum.reverse(lines), "\n"), spelt}}
   end
 
   defp spell({:rung, elements}, spelt) do
-    {words, spelt} = spell_all(elements, spelt)
-    {Enum.join(words, " "), spelt}
+    {elements, words, spelt} = spell_all(elements, spelt)
+    {{:rung, elements}, Enum.join(words, " "), spelt}
   end
 
   defp spell_all(elements, spelt) do
-    {words, spelt} = Enum.map_reduce(elements, spelt, &spell_one/2)
-    {Enum.concat(words), spelt}
+    {pairs, spelt} =
+      Enum.map_reduce(elements, spelt, fn element, spelt ->
+        {element, words, spelt} = spell_one(element, spelt)
+        {{element, words}, spelt}
+      end)
+
+    {Enum.map(pairs, &elem(&1, 0)), Enum.flat_map(pairs, &elem(&1, 1)), spelt}
   end
 
-  defp spell_one({:name, _, name}, spelt), do: {[name], spelt}
+  defp spell_one({:name, _, name} = leaf, spelt), do: {leaf, [name], spelt}
 
-  defp spell_one({:int_lit, _, n}, spelt) do
-    word = spelling(n, :rand.uniform(4))
-    {[word], [spelt(word) | spelt]}
+  defp spell_one({:int_lit, line, n}, spelt) do
+    word = spelling(n, :rand.uniform(5))
+    {leaf(line, n, word), [word], [spelt(word) | spelt]}
   end
 
   defp spell_one({:branches, legs}, spelt) do
-    {legs, spelt} = Enum.map_reduce(legs, spelt, &spell_all/2)
-    {["("] ++ Enum.concat(Enum.intersperse(legs, ["|"])) ++ [")"], spelt}
+    {legs, spelt} =
+      Enum.map_reduce(legs, spelt, fn leg, spelt ->
+        {leg, words, spelt} = spell_all(leg, spelt)
+        {{leg, words}, spelt}
+      end)
+
+    words = Enum.concat(Enum.intersperse(Enum.map(legs, &elem(&1, 1)), ["|"]))
+    {{:branches, Enum.map(legs, &elem(&1, 0))}, ["("] ++ words ++ [")"], spelt}
   end
+
+  # Decision 202's rule restated: a spelling is kept where it is not the plain decimal.
+  defp leaf(line, n, word), do: plain_leaf(word == Integer.to_string(n), line, n, word)
+  defp plain_leaf(true, line, n, _word), do: {:int_lit, line, n}
+  defp plain_leaf(false, line, n, word), do: {:int_lit, line, n, word}
 
   defp spelling(n, 1), do: Integer.to_string(n)
   defp spelling(n, 2), do: separated(Integer.to_string(n))
   defp spelling(n, 3) when n >= 0, do: "16#" <> separated(cased(Integer.to_string(n, 16)))
   defp spelling(n, 4) when n >= 0, do: "2#" <> separated(Integer.to_string(n, 2))
+  defp spelling(n, 5) when n < 0, do: "-" <> padded(Integer.to_string(-n))
+  defp spelling(n, 5), do: padded(Integer.to_string(n))
   defp spelling(n, _), do: spelling(n, 1)
+
+  defp padded(digits), do: String.duplicate("0", :rand.uniform(2)) <> digits
 
   # The shape a spelling reaches, read from the word itself.
   defp spelt("16#" <> _), do: :hex_int_lit
   defp spelt("2#" <> _), do: :binary_int_lit
+  defp spelt("0" <> <<_, _::binary>>), do: :padded_int_lit
+  defp spelt("-0" <> _), do: :padded_int_lit
   defp spelt(word), do: separated_shape(String.contains?(word, "_"))
 
   defp separated_shape(true), do: :separated_int_lit
@@ -407,6 +476,9 @@ defmodule Logex.PrinterTest do
     do: MapSet.new([:name | dotted_shape(String.contains?(name, "."))])
 
   defp shapes({:int_lit, _, n}, _depth), do: MapSet.new([:int_lit | negative_shape(n < 0)])
+
+  defp shapes({:int_lit, _, n, spelling}, _depth),
+    do: MapSet.new([:int_lit, spelt(spelling) | negative_shape(n < 0)])
 
   defp shapes({:branches, legs}, depth) do
     flags =

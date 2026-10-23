@@ -351,12 +351,13 @@ defmodule Logex.IntegerWidthTest do
       assert Runtime.instance(program("var u uint 16#ffff\nvar f bool\nxio f move u u")).env["u"] ==
                65_535
 
+      # Since decision 202 each is quoted as written.
       assert messages("var i int\nvar f bool\nxio f move 16#ffff i") == [
-               "`move` writes `65535` into `i`, an int: #{misfit(:int, "it")}"
+               "`move` writes `16#ffff` into `i`, an int: #{misfit(:int, "it")}"
              ]
 
       assert messages("var i int 16#ffff\nvar f bool\nxic f ote f") == [
-               "`i` is an int: #{misfit(:int, "`65535`")}"
+               "`i` is an int: #{misfit(:int, "`16#ffff`")}"
              ]
     end
 
@@ -384,9 +385,228 @@ defmodule Logex.IntegerWidthTest do
 
       a = program(spelled)
       b = program(decimal)
-      assert {a.rungs, a.tags, a.warnings} == {b.rungs, b.tags, b.warnings}
+      # Since decision 202 the rungs keep each spelling, and hold the decimal program's
+      # values: with the spellings dropped they are its rungs.
+      assert {values(a.rungs), a.tags, a.warnings} == {b.rungs, b.tags, b.warnings}
+      refute a.rungs == b.rungs
+
+      for go <- [0, 1] do
+        assert scan(a, %{"go" => go}) == scan(b, %{"go" => go})
+      end
     end
   end
+
+  # Decision 202: a rung keeps a literal's spelling, so every message that quotes a literal
+  # quotes it as written, and the value is still what every rule judges.
+  describe "a literal's spelling (decision 202)" do
+    test "every diagnostic that quotes a literal quotes it as written" do
+      for {source, message} <- [
+            {"var i int\nvar f bool\nxio f move 16#ffff i",
+             "`move` writes `16#ffff` into `i`, an int: it is outside -32768 to 32767"},
+            {"var i int 16#ffff\nvar f bool\nxic f ote f",
+             "`i` is an int: `16#ffff` is outside -32768 to 32767"},
+            {"var x bool 0_2\nvar f bool\nxic f ote f",
+             "`x` is a bool: its initial value must be 0 or 1, found `0_2`"},
+            {"var s sint\nvar f bool\nxic f lt s 16#ff ote f",
+             "`lt` compares `16#ff` with `s`, an sint (declared on line 1), which never holds " <>
+               "it: `16#ff` is outside -128 to 127"},
+            {"var s sint\nvar f bool\nxic f add s 2#1000_0000 s",
+             "`add` computes in `s`'s type, an sint: `2#1000_0000` is outside -128 to 127"},
+            {"var d dint\nvar f bool\nxic f add 16#1_0000_0000_0000_0000 d d",
+             "`add` computes in `d`'s type, a dint: `16#1_0000_0000_0000_0000` is outside " <>
+               "-2147483648 to 2147483647"},
+            {"var t ton\nvar f bool\nxic f ton t -0_1",
+             "`ton` takes a preset of 0 to 2147483647 ms, found `-0_1`"},
+            {"var f bool\nxic 16#1 ote f", "`xic` expects a tag, found `16#1`"},
+            {"var f bool\n16#ff f", "expected an instruction, found `16#ff`"},
+            {"var d dint\nvar f bool\nxic f div d 00 d",
+             "`div` divides by the literal `00`: a zero divisor gives 0 and passes no power on " <>
+               "every scan, so a literal one is refused"},
+            {"var s sint\nvar f bool\nxic f dint_to_sint 16#1_0000_0000 s",
+             "`dint_to_sint` reads a dint: `16#1_0000_0000` is outside -2147483648 to 2147483647"},
+            {"var 16#1 bool", "expected a tag name after `var`, found `16#1`"},
+            {"var x 16#1", "`x` needs a type before its initial value `16#1`"},
+            {"var x bool 1 16#2", "unexpected `16#2` after the declaration of `x`"}
+          ] do
+        assert messages(source) == [message], source
+      end
+
+      # A number the message computes is a value: the negation `neg` would write.
+      assert messages("var u usint\nvar f bool\nxic f neg 2#1000_0000 u") == [
+               "`neg` writes `u`, a usint (declared on line 1), which holds no negative " <>
+                 "value: `neg` writes a signed type, so declare `u` an int"
+             ]
+
+      assert messages("var u usint\nvar f bool\nxic f neg -9_223_372_036_854_775_808 u") == [
+               "`neg` writes `u`, a usint (declared on line 1), which holds no negative " <>
+                 "value: `neg` writes a signed type, and none holds `9223372036854775808`, " <>
+                 "its negation"
+             ]
+
+      assert messages("var u usint\nvar f bool\nxic f neg 16#1_0000_0000_0000_0000 u") ==
+               [
+                 "`neg` writes `u`, a usint (declared on line 1), which holds no negative " <>
+                   "value: `neg` writes a signed type, and none holds " <>
+                   "`16#1_0000_0000_0000_0000`",
+                 "`neg` reads a number: `16#1_0000_0000_0000_0000` is outside " <>
+                   "-9223372036854775808 to 18446744073709551615, every integer type's values"
+               ]
+    end
+
+    test "every warning that quotes a literal quotes it as written, a quantity as a value" do
+      for {source, message} <- [
+            {"var f bool\nxic f eq 16#ff 2#1 ote f",
+             "`eq` compares two literals, `16#ff` and `2#1`: its result never changes"},
+            {"var d dint\nvar f bool\nxic f add 16#ff 1_0 d",
+             "`add` reads two literals, `16#ff` and `1_0`: its result never changes"},
+            {"var d dint\nvar f bool\nxic f neg 0_5 d",
+             "`neg` reads a literal, `0_5`: its result never changes"},
+            {"var d sint\nvar f bool\nxic f dint_to_sint 16#81 d",
+             "`dint_to_sint` reads a literal, `16#81`: its result never changes"},
+            {"var u usint\nvar f bool\nxic f ge u 16#0 ote f",
+             "`ge` compares `u` with `16#0`, and a usint holds nothing below `16#0`: its " <>
+               "result never changes"},
+            {"var u usint\nvar f bool\nxic f lt 2#1111_1111 u ote f",
+             "`lt` compares `2#1111_1111` with `u`, and a usint holds nothing above " <>
+               "`2#1111_1111`: its result never changes"},
+            {"var cure ton_ltime\nvar f bool\nxic f ton cure 1_500_000",
+             "`ton` gives `cure` a preset of 1500000 ns, which is no whole number of " <>
+               "milliseconds: a ton_ltime counts whole milliseconds, so it times as the next " <>
+               "whole millisecond, 2 ms"},
+            {"var cure ton_ltime\nvar f bool\nxic f ton cure 2_000_000\n" <>
+               "xic f ge cure.acc 3_000 ote f",
+             "`ge` compares `cure.acc` with `3_000`, where `cure.acc` is a ton_ltime's time in " <>
+               "nanoseconds: 3000 ns is no whole number of milliseconds, and a ton_ltime counts " <>
+               "whole milliseconds"}
+          ] do
+        assert for(w <- program(source).warnings, do: w.message) == [message], source
+      end
+    end
+
+    test "a configuration file's reader quotes a number as written, and keeps its value" do
+      for {text, message} <- [
+            {"task 16#1 interval 10", "expected a task's name after `task`, found `16#1`"},
+            {"var_global 2#1 bool", "expected a global's name after `var_global`, found `2#1`"},
+            {"program 0_1 motor", "expected an instance name after `program`, found `0_1`"},
+            {"program m1 16#1", "expected a program type after `program m1`, found `16#1`"},
+            {"var_global x 007", "`x` needs a type before its initial value `007`"}
+          ] do
+        assert {:error, [%Logex.Diagnostic{message: ^message}], _} =
+                 Logex.Configuration.Text.read(text),
+               text
+      end
+
+      assert {:error, [%Logex.Diagnostic{message: "unknown configuration line `16#ff`" <> _}], _} =
+               Logex.Configuration.Text.read("16#ff")
+
+      assert {:ok,
+              [
+                %Logex.Configuration.Task{interval: 10, priority: 1},
+                %Logex.Configuration.Global{initial: 255},
+                %Logex.Configuration.Connection{to: 16}
+              ]} =
+               Logex.Configuration.Text.read(
+                 "task t interval 1_0 priority 16#1\nvar_global g uint 16#ff\nm1.x 2#1_0000"
+               )
+    end
+
+    # The value decides, as presets are compared: a literal respelled leaves its rung the
+    # same rung, so an edit reports nothing, and a one-shot on the rung is not blocked.
+    test "an edit that only respells a literal changes no rung" do
+      was =
+        program(
+          "var_input go bool\nvar_output q bool\nvar n uint 255\nvar s bool\nvar t ton\n" <>
+            "xic go eq n 255 ons s ote q\nxic go ton t 1000"
+        )
+
+      now =
+        program(
+          "var_input go bool\nvar_output q bool\nvar n uint 16#ff\nvar s bool\nvar t ton\n" <>
+            "xic go eq n 16#00ff ons s ote q\nxic go ton t 1_000"
+        )
+
+      state = Runtime.instance(was)
+      assert {:ok, edit, []} = Edit.accept(was, now, state)
+      assert {_edit, tested, []} = Edit.test(edit, state)
+      assert tested.ons_blocked == []
+
+      # The one-shot fires on the first rising scan after the switch, never blocked.
+      {%{"q" => 0}, state} = Runtime.scan(now, Runtime.put_inputs(now, tested, %{"go" => 0}))
+
+      assert {%{"q" => 1}, _state} =
+               Runtime.scan(now, Runtime.put_inputs(now, state, %{"go" => 1}))
+    end
+
+    # Decision 202 where a literal is no slot's own: an instruction a message shows whole,
+    # the operands passed over after an unknown word, and a preset the walk reads.
+    test "an instruction shown whole, an unknown word's operands and a walked preset keep the spelling" do
+      assert messages("var t1 ton\nvar d dint\nvar a bool\nxic a ton t1 5 move 16#ff d") == [
+               "`move 16#ff d` follows `ton t1` on its path: what passes on after a `ton` is " <>
+                 "not settled, so a `ton` ends its path; read the timer with `xic t1.dn` on a " <>
+                 "rung below"
+             ]
+
+      assert messages("var a bool\nfoo 16#ff 1_0 ote a") == ["unknown instruction `foo`"]
+
+      p = program("var t1 ton\nvar a bool\nxic a ton t1 1_000")
+      assert Logex.Walk.timers(p) == %{"t1" => {3, 1000}}
+      assert Logex.Walk.presets(p) == %{"t1" => {3, 1000}}
+    end
+  end
+
+  describe "growth: a literal's spelling (decision 202)" do
+    # A plain decimal compiles at the cost it did, its leaf the three-element one; a spelled
+    # literal costs its spelling's one lex more, in Logex.Parser.well_formed!/1, linear in
+    # the literals. Counted where the collector never runs, after a warm-up compile, so each
+    # count is the same on every run.
+    test "a spelled literal costs a bounded amount more than a plain one, linearly" do
+      program = fn word, n ->
+        "var hh dint\nvar aa dint\nvar bb bool\n" <>
+          String.duplicate("xic bb add aa #{word} hh\nxic bb move #{word} aa\n", n)
+      end
+
+      cost = fn word, n -> compiled(program.(word, n)) end
+      cost.("16#04d2", 10)
+
+      for word <- ["1234", "16#04d2", "1_234", "01234"] do
+        assert cost.(word, 400) <= 2 * cost.(word, 200) + 200, word
+      end
+
+      for word <- ["16#04d2", "1_234", "01234"] do
+        assert (cost.(word, 200) - cost.("1234", 200)) / 400 <= 80, word
+      end
+    end
+  end
+
+  defp compiled(source) do
+    parent = self()
+
+    {_pid, ref} =
+      :erlang.spawn_opt(
+        fn ->
+          {:reductions, before} = Process.info(self(), :reductions)
+          {:ok, _} = Logex.compile(source, name: "p")
+          {:reductions, later} = Process.info(self(), :reductions)
+          send(parent, {:reductions, later - before})
+        end,
+        [:monitor, min_heap_size: 8_000_000]
+      )
+
+    assert_receive {:reductions, n}, 10_000
+    assert_receive {:DOWN, ^ref, :process, _, :normal}, 10_000
+    n
+  end
+
+  # A spelled tree with every spelling dropped: the tree of the values it spells.
+  defp values(rungs) when is_list(rungs), do: Enum.map(rungs, &values/1)
+  defp values({:rung, elements}), do: {:rung, values(elements)}
+  defp values({:branches, legs}), do: {:branches, Enum.map(legs, &values/1)}
+  defp values({:int_lit, line, n, _spelling}), do: {:int_lit, line, n}
+
+  defp values({symbol, line, operands}) when is_list(operands),
+    do: {symbol, line, values(operands)}
+
+  defp values(leaf), do: leaf
 
   describe "the 56 integer conversions (decision 148)" do
     # Each pair, over its source's limits, 0, 1, -1 where it fits, and its target's limits

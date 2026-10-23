@@ -451,6 +451,9 @@ defmodule Logex.Edit.Plan do
   defp formals(_not_a_block), do: nil
 
   defp operand({kind, _line, value}), do: {kind, value}
+  # Decision 202: a literal is compared by its value, as a preset is, so an edit that only
+  # respells one, `16#ff` for `255`, leaves its rung the same rung.
+  defp operand({:int_lit, _line, value, _spelling}), do: {:int_lit, value}
 
   # ---- M2-5: the state inside a user block's instances, across a switch -----------------
 

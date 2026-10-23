@@ -23,15 +23,15 @@ defmodule Logex.Printer do
   @doc """
   Renders a parse AST as source text.
 
-  The result is **canonical**, not a copy of whatever was parsed: one rung per line,
-  single spaces between elements, and integers in their shortest decimal form. So
-  `"  xic   aa  "` prints as `"xic aa"` and `"mov 007 hh"` as `"mov 7 hh"`, and, since
-  the AST keeps a literal's value and not its spelling (decision 149), `"move 16#00ff
-  hh"` as `"move 255 hh"` and `"move 1_000 hh"` as `"move 1000 hh"`. That is a
-  decision, not an accident — `print/1` emits the one spelling logex considers
-  correct, and `test/logex/printer_test.exs` pins each loss so that none can change
-  silently. Mnemonic case is the exception: it carries no meaning since M1-2, but the
-  parse AST does not know which names are mnemonics, so `XIC` prints as written.
+  The result is **canonical** in its layout, not a copy of whatever was parsed: one rung
+  per line and single spaces between elements, so `"  xic   aa  "` prints as `"xic aa"`.
+  That is a decision, not an accident, and `test/logex/printer_test.exs` pins each loss
+  so that none can change silently. A literal prints exactly as it was written, since
+  decision 202 keeps its spelling in the AST wherever it is not the plain decimal of its
+  value: `"move 16#00ff hh"` prints as written, and so do `"move 1_000 hh"`, `"mov 007
+  hh"` and `"eq -0 x"`, where until then each printed as its value's decimal, `255`,
+  `1000`, `7` and `0`. Mnemonic case is kept too: it carries no meaning since M1-2, but
+  the parse AST does not know which names are mnemonics, so `XIC` prints as written.
   Anything that must survive a round trip unchanged has to reach the AST as structure.
   `//` comments do not: `Logex.Lexer` skips them, so printing drops them, until
   `PLAN.md` §5's comment above a rung gives one somewhere to live.
@@ -62,6 +62,7 @@ defmodule Logex.Printer do
   defp tokens({:name, _, name}), do: [name]
 
   defp tokens({:int_lit, _, value}), do: [Integer.to_string(value)]
+  defp tokens({:int_lit, _, _value, spelling}), do: [spelling]
 
   defp tokens({:branches, []}) do
     raise ArgumentError,

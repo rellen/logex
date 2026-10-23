@@ -34,7 +34,8 @@ defmodule Logex.Declarations do
   0, which its host cannot set (`Logex.Runtime`).
   """
 
-  alias Logex.{Diagnostic, FbType, Tag}
+  alias Logex.{Diagnostic, FbType, Parser, Tag}
+  import Logex.Parser, only: [is_int_lit: 1]
   alias Logex.Configuration.Text
 
   @sections %{
@@ -502,6 +503,7 @@ defmodule Logex.Declarations do
 
   defp line_in([{:branches, legs} | rest]), do: Enum.find_value(legs, &line_in/1) || line_in(rest)
   defp line_in([{_, line, _} | _]), do: line
+  defp line_in([{:int_lit, line, _value, _spelling} | _]), do: line
   defp line_in([]), do: nil
 
   defp declare({:late, rung, late}, diagnostics, types),
@@ -514,9 +516,11 @@ defmodule Logex.Declarations do
 
   # A block's type came from `types`, which `Logex.compile/2` checked on entry, so it is
   # known by being the one given under its name, not checked again for every instance.
-  defp declared({:ok, name, type, initial}, section, line, diagnostics, types) do
+  # Decision 202: an initial value written other than as its plain decimal is quoted as
+  # written, `16#ffff`, which the tag, a value, does not keep.
+  defp declared({:ok, name, type, initial, shown}, section, line, diagnostics, types) do
     tag = %Tag{name: name, type: type, section: section, initial: initial, line: line}
-    {messages, _checked} = check(tag, types, %{})
+    {messages, _checked} = check(tag, types, %{}, shown)
     checked(messages, tag, line, diagnostics)
   end
 
@@ -556,13 +560,13 @@ defmodule Logex.Declarations do
   defp shape([{:branches, _} | _], _kw, _types),
     do: {:error, "a declaration cannot hold a branch group"}
 
-  defp shape([{:int_lit, _, v} | _], kw, _types),
-    do: {:error, "expected a tag name after `#{kw}`, found `#{v}`"}
+  defp shape([literal | _], kw, _types) when is_int_lit(literal),
+    do: {:error, "expected a tag name after `#{kw}`, found `#{Parser.spelling(literal)}`"}
 
   defp shape([{:name, _, name}], kw, types), do: {:error, short(one(name, types), name, nil, kw)}
 
-  defp shape([{:name, _, name}, {:int_lit, _, v} | _], kw, types),
-    do: {:error, short(one(name, types), name, v, kw)}
+  defp shape([{:name, _, name}, literal | _], kw, types) when is_int_lit(literal),
+    do: {:error, short(one(name, types), name, Parser.spelling(literal), kw)}
 
   defp shape([{:name, _, _}, {:branches, _} | _], _kw, _types),
     do: {:error, "a declaration cannot hold a branch group"}
@@ -587,16 +591,19 @@ defmodule Logex.Declarations do
   defp typed({:recursive, chain}, name, _word, _tail, _kw),
     do: {:untyped, name, recursive(chain)}
 
-  defp typed(type, name, _word, [], _kw), do: {:ok, name, type, nil}
-  defp typed(type, name, _word, [{:int_lit, _, v}], _kw), do: {:ok, name, type, v}
+  defp typed(type, name, _word, [], _kw), do: {:ok, name, type, nil, nil}
+  defp typed(type, name, _word, [{:int_lit, _, v}], _kw), do: {:ok, name, type, v, nil}
+
+  defp typed(type, name, _word, [{:int_lit, _, v, spelling}], _kw),
+    do: {:ok, name, type, v, spelling}
 
   defp typed(_type, _name, _word, [{:branches, _} | _], _kw),
     do: {:error, "a declaration cannot hold a branch group"}
 
-  defp typed(_type, _name, _word, [{:int_lit, _, _}, {:branches, _} | _], _kw),
+  defp typed(_type, _name, _word, [literal, {:branches, _} | _], _kw) when is_int_lit(literal),
     do: {:error, "a declaration cannot hold a branch group"}
 
-  defp typed(_type, name, _word, [{:int_lit, _, _}, extra | _], _kw),
+  defp typed(_type, name, _word, [literal, extra | _], _kw) when is_int_lit(literal),
     do: {:error, "unexpected #{describe(extra)} after the declaration of `#{name}`"}
 
   defp typed(_type, name, _word, [extra | _], _kw),
@@ -701,7 +708,7 @@ defmodule Logex.Declarations do
   defp example(_elementary), do: "fault"
 
   defp describe({:name, _, word}), do: "`#{word}`"
-  defp describe({:int_lit, _, v}), do: "`#{v}`"
+  defp describe(literal) when is_int_lit(literal), do: "`#{Parser.spelling(literal)}`"
 
   @doc """
   The rules a tag must meet however it is declared, as messages: the one validator for a
@@ -720,15 +727,19 @@ defmodule Logex.Declarations do
     messages
   end
 
-  defp check(%Tag{type: %FbType{} = type} = tag, types, checked) do
+  # `shown` is the initial value as its declaration line wrote it, where that is not its
+  # plain decimal (decision 202), and nil otherwise, and from Elixir.
+  defp check(tag, types, checked, shown \\ nil)
+
+  defp check(%Tag{type: %FbType{} = type} = tag, types, checked, _shown) do
     {known, checked} = fb_type(type, types, checked)
     {name(tag.name) ++ known ++ section(tag.section) ++ looked_into(known, tag), checked}
   end
 
-  defp check(%Tag{} = tag, _types, checked),
+  defp check(%Tag{} = tag, _types, checked, shown),
     do:
       {name(tag.name) ++
-         type(tag.type) ++ section(tag.section) ++ initial(tag) ++ external(tag), checked}
+         type(tag.type) ++ section(tag.section) ++ initial(tag, shown) ++ external(tag), checked}
 
   defp name(name) when is_binary(name), do: name(reserved(name), name, Logex.Lexer.tokenize(name))
   defp name(name), do: ["#{inspect(name)} is not a tag name"]
@@ -857,28 +868,31 @@ defmodule Logex.Declarations do
 
   # Messages name the tag with label/1, because from Elixir the name itself may be the
   # thing that is wrong.
-  defp initial(%Tag{initial: nil}), do: []
+  defp initial(%Tag{initial: nil}, _shown), do: []
 
-  defp initial(%Tag{section: :var_input, name: name}),
+  defp initial(%Tag{section: :var_input, name: name}, _shown),
     do: [
       "#{label(name)} is a var_input: its value comes from outside, so it takes no initial value"
     ]
 
   # M2-4: Ed 2 §2.4.3.2, p.43: "Initial values cannot be given in VAR_EXTERNAL
   # declarations." Its value is its global's, `Logex.Configuration.initial/1`'s at a start.
-  defp initial(%Tag{section: :var_external, name: name}),
+  defp initial(%Tag{section: :var_external, name: name}, _shown),
     do: [
       "#{label(name)} is a var_external: its value is the configuration's global of that " <>
         "name, so it takes no initial value"
     ]
 
-  defp initial(%Tag{name: name, initial: v}) when not is_integer(v),
+  defp initial(%Tag{name: name, initial: v}, _shown) when not is_integer(v),
     do: ["the initial value of #{label(name)} must be an integer, found #{inspect(v)}"]
 
-  defp initial(%Tag{type: type, name: name, initial: v}) when type in @type_atoms,
-    do: fit(fits?(type, v), type, name, v)
+  defp initial(%Tag{type: type, name: name, initial: v}, shown) when type in @type_atoms,
+    do: fit(fits?(type, v), type, name, quoted(shown, v))
 
-  defp initial(_tag), do: []
+  defp initial(_tag, _shown), do: []
+
+  defp quoted(nil, v), do: "`#{v}`"
+  defp quoted(spelling, _v), do: "`#{spelling}`"
 
   # M2-4: a var_external's name is a global's too, declared with `var_global` in a
   # configuration file, so a word that file reserves names none, in any case
@@ -898,8 +912,8 @@ defmodule Logex.Declarations do
 
   defp fit(true, _type, _name, _v), do: []
 
-  defp fit(false, type, name, v),
-    do: ["#{label(name)} is #{a_type(type)}: #{initial_misfit(type, "`#{v}`")}"]
+  defp fit(false, type, name, shown),
+    do: ["#{label(name)} is #{a_type(type)}: #{initial_misfit(type, shown)}"]
 
   defp label(name) when is_binary(name), do: "`#{name}`"
   defp label(name), do: inspect(name)

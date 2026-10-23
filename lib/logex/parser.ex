@@ -35,7 +35,10 @@ defmodule Logex.Parser do
       rung     = {:rung, [element, ...]}               one element or more
       element  = {:name, line, word}                   word lexes as one name token
                | {:int_lit, line, n}                   n an integer, negative too,
-                                                       whatever its spelling
+                                                       written as its plain decimal
+               | {:int_lit, line, n, spelling}         spelling lexes as one literal
+                                                       token of n, and is not n's
+                                                       plain decimal
                | {:branches, [leg, ...]}               one leg or more
       leg      = [element, ...]                        possibly empty: a jumper
 
@@ -45,8 +48,11 @@ defmodule Logex.Parser do
   own, so the next rung's line is past that one too. It widened when `PLAN.md` §5's
   negative literals landed (M3-3, decision 97), as `-5` lexes, and widens when its line
   continuations land, and not before. Decision 149's based literals and `_` separators
-  (M5-7) did not widen it: a literal's leaf holds the value it spells, `16#ff` 255, which
-  a decimal could spell already. Until then what the compiler does with one, an
+  (M5-7) did not widen it, a literal's leaf holding the value it spells; decision 202 did,
+  a rung keeping a literal's spelling: a literal written other than as the plain decimal
+  of its value, `16#ff`, `1_000`, `007` or `-0`, is the four-element leaf, its spelling
+  last, and one written so, `255` or `-5`, the three-element leaf it always was, so a
+  spelling is held exactly where the text differs from what the value prints as. Until then what the compiler does with one, an
   element cited at a line of its own, is kept for it, but nothing reaches it.
   """
 
@@ -71,6 +77,48 @@ defmodule Logex.Parser do
   end
 
   def well_formed!(tree), do: refuse!("a tree is {:routine, {:rungs, rungs}}", tree)
+
+  @doc """
+  Whether a term is an integer literal, a lexer token, a parse tree's leaf or an IR
+  operand, plain, `{:int_lit, _, value}`, or spelled, `{:int_lit, _, value, spelling}`
+  (decision 202). A guard.
+  """
+  defguard is_int_lit(term)
+           when is_tuple(term) and tuple_size(term) in 3..4 and elem(term, 0) == :int_lit
+
+  @doc """
+  An integer literal's value, whichever its shape: `255` for `16#ff`.
+  """
+  def value({:int_lit, _at, value}), do: value
+  def value({:int_lit, _at, value, _spelling}), do: value
+
+  @doc """
+  An integer literal as it was written, whichever its shape (decision 202): its spelling,
+  `16#ff`, `1_000` or `007`, or for a plain literal the decimal of its value, so that every
+  message that quotes a literal quotes it as written.
+
+      iex> Logex.Parser.spelling({:int_lit, 3, 255, "16#ff"})
+      "16#ff"
+      iex> Logex.Parser.spelling({:int_lit, 3, -5})
+      "-5"
+  """
+  def spelling({:int_lit, _at, value}), do: Integer.to_string(value)
+  def spelling({:int_lit, _at, _value, spelling}), do: spelling
+
+  @doc """
+  Whether `spelling` is a spelling a literal of value `n` keeps (decision 202): a text the
+  lexer reads as one literal token of `n` that holds it, so one other than `n`'s plain
+  decimal. The one rule for a spelled leaf, of a parse tree (`well_formed!/1`) and of a
+  compiled body (`Logex.Compiler.lowered?/1`).
+  """
+  def spelled?(n, spelling) when is_integer(n) and is_binary(spelling),
+    do:
+      match?(
+        {:ok, [{:int_lit, _location, ^n, ^spelling}], _end_line},
+        Logex.Lexer.tokenize(spelling)
+      )
+
+  def spelled?(_n, _spelling), do: false
 
   def format_error({:unexpected, text, expected}),
     do: "expected #{Enum.join(expected, " or ")}, found #{text}"
@@ -100,6 +148,9 @@ defmodule Logex.Parser do
 
   defp branch([{:int_lit, {line, _}, value} | rest], acc),
     do: branch(rest, [{:int_lit, line, value} | acc])
+
+  defp branch([{:int_lit, {line, _}, value, spelling} | rest], acc),
+    do: branch(rest, [{:int_lit, line, value, spelling} | acc])
 
   defp branch([{:bst, open} | rest], acc) do
     case legs(rest, open, []) do
@@ -152,6 +203,17 @@ defmodule Logex.Parser do
   defp element!({:int_lit, _line, _n} = literal, _at),
     do: refuse!("a literal is an integer", literal)
 
+  # Decision 202: a spelled literal, its spelling the one text that lexes as it, so a tree
+  # holds a spelling only where `parse/1` would: never the plain decimal of its value,
+  # which the three-element leaf says, and never one of another value.
+  defp element!({:int_lit, line, n, spelling} = literal, at) when is_integer(n) do
+    one_literal!(spelling, n, literal)
+    line!(line, literal, at)
+  end
+
+  defp element!({:int_lit, _line, _n, _spelling} = literal, _at),
+    do: refuse!("a literal is an integer", literal)
+
   defp element!({:branches, [_ | _] = legs}, at), do: legs!(legs, at)
 
   defp element!({:branches, _legs} = group, _at),
@@ -164,7 +226,8 @@ defmodule Logex.Parser do
   defp element!(element, _at),
     do:
       refuse!(
-        "an element is {:name, line, word}, {:int_lit, line, n} or {:branches, legs}",
+        "an element is {:name, line, word}, {:int_lit, line, n}, " <>
+          "{:int_lit, line, n, spelling} or {:branches, legs}",
         element
       )
 
@@ -184,6 +247,14 @@ defmodule Logex.Parser do
 
   defp one_name!({:ok, [{:name, _location, word}], _end_line}, word, _name), do: :ok
   defp one_name!(_lexed, _word, name), do: refuse!(@one_name, name)
+
+  @one_literal "a literal's spelling lexes as one literal token of its value, " <>
+                 "other than the value's plain decimal"
+
+  defp one_literal!(spelling, n, literal), do: one_literal!(spelled?(n, spelling), literal)
+
+  defp one_literal!(true, _literal), do: :ok
+  defp one_literal!(false, literal), do: refuse!(@one_literal, literal)
 
   defp line!(line, node, _at) when not is_integer(line) or line < 1,
     do: refuse!("a line is a positive integer", node)

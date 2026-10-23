@@ -35,7 +35,8 @@ defmodule Logex.Warnings do
   A tag declared from Elixir (`Logex.Tag.new!/4`) has no line and is never warned about.
   """
 
-  alias Logex.{Declarations, Diagnostic, FbType, Tag, Walk}
+  alias Logex.{Declarations, Diagnostic, FbType, Parser, Tag, Walk}
+  import Logex.Parser, only: [is_int_lit: 1]
 
   @doc """
   The warnings for lowered `rungs` checked against the tag table `tags`, each instance's
@@ -75,9 +76,9 @@ defmodule Logex.Warnings do
   # the instance here is one the instruction runs.
   @runners FbType.runners()
 
-  defp between_milliseconds({symbol, line, [{:name, _, name}, {:int_lit, _, preset}]}, tags)
-       when symbol in @runners,
-       do: between(per_ms(Map.get(tags, name)), {symbol, line, name, preset})
+  defp between_milliseconds({symbol, line, [{:name, _, name}, preset]}, tags)
+       when symbol in @runners and is_int_lit(preset),
+       do: between(per_ms(Map.get(tags, name)), {symbol, line, name, Parser.value(preset)})
 
   defp between_milliseconds(_instruction, _tags), do: []
 
@@ -247,12 +248,14 @@ defmodule Logex.Warnings do
   # never changes.
   @comparisons [:eq, :ne, :lt, :gt, :le, :ge]
 
-  defp constant({symbol, line, [{:int_lit, _, a}, {:int_lit, _, b}]})
-       when symbol in @comparisons,
+  # Each literal is quoted as written (decision 202).
+  defp constant({symbol, line, [a, b]})
+       when symbol in @comparisons and is_int_lit(a) and is_int_lit(b),
        do: [
          warning(
            line,
-           "`#{symbol}` compares two literals, `#{a}` and `#{b}`: its result never changes"
+           "`#{symbol}` compares two literals, #{shown(a)} and #{shown(b)}: its result never " <>
+             "changes"
          )
        ]
 
@@ -260,12 +263,13 @@ defmodule Logex.Warnings do
   # ADD(2, 3) does, but its result never changes.
   @arithmetic [:add, :sub, :mul, :div, :mod]
 
-  defp constant({symbol, line, [{:int_lit, _, a}, {:int_lit, _, b}, _destination]})
-       when symbol in @arithmetic,
+  defp constant({symbol, line, [a, b, _destination]})
+       when symbol in @arithmetic and is_int_lit(a) and is_int_lit(b),
        do: [
          warning(
            line,
-           "`#{symbol}` reads two literals, `#{a}` and `#{b}`: its result never changes"
+           "`#{symbol}` reads two literals, #{shown(a)} and #{shown(b)}: its result never " <>
+             "changes"
          )
        ]
 
@@ -282,8 +286,8 @@ defmodule Logex.Warnings do
 
   @one_source [:neg, :abs] ++ @conversions
 
-  defp constant({symbol, line, [{:int_lit, _, a}, _destination]}) when symbol in @one_source,
-    do: [warning(line, "`#{symbol}` reads a literal, `#{a}`: its result never changes")]
+  defp constant({symbol, line, [a, _destination]}) when symbol in @one_source and is_int_lit(a),
+    do: [warning(line, "`#{symbol}` reads a literal, #{shown(a)}: its result never changes")]
 
   defp constant(_instruction), do: []
 
@@ -294,19 +298,19 @@ defmodule Logex.Warnings do
   # on the left the mirror, `le lo x` and `ge hi x` always, `gt lo x` and `lt hi x` never.
   # `eq` and `ne` at a limit, and every comparison inside the range, can go either way, and
   # a literal outside the range is decision 183's refusal.
-  defp at_limit({symbol, line, [operand, {:int_lit, _, value}]}, tags)
-       when symbol in @comparisons,
-       do: limited(integer_type(operand, tags), {symbol, :right}, {operand, value}, line)
+  defp at_limit({symbol, line, [operand, literal]}, tags)
+       when symbol in @comparisons and is_int_lit(literal),
+       do: limited(integer_type(operand, tags), {symbol, :right}, {operand, literal}, line)
 
-  defp at_limit({symbol, line, [{:int_lit, _, value}, operand]}, tags)
-       when symbol in @comparisons,
-       do: limited(integer_type(operand, tags), {symbol, :left}, {operand, value}, line)
+  defp at_limit({symbol, line, [literal, operand]}, tags)
+       when symbol in @comparisons and is_int_lit(literal),
+       do: limited(integer_type(operand, tags), {symbol, :left}, {operand, literal}, line)
 
   defp at_limit(_instruction, _tags), do: []
 
-  defp limited({:ok, type}, at, {operand, value}, line) do
+  defp limited({:ok, type}, at, {operand, literal}, line) do
     lo..hi//_ = Declarations.range(type)
-    fixed(fixed?(at, limit(value, lo, hi)), at, {operand, value, type}, line)
+    fixed(fixed?(at, limit(Parser.value(literal), lo, hi)), at, {operand, literal, type}, line)
   end
 
   defp limited(:error, _at, _compared, _line), do: []
@@ -322,13 +326,13 @@ defmodule Logex.Warnings do
   defp fixed?({symbol, :left}, :highest) when symbol in [:ge, :lt], do: {true, "above"}
   defp fixed?(_at, _limit), do: false
 
-  defp fixed({true, side}, {symbol, order}, {operand, value, type}, line),
+  defp fixed({true, side}, {symbol, order}, {operand, literal, type}, line),
     do: [
       warning(
         line,
-        "`#{symbol}` compares #{in_order(order, shown(operand), "`#{value}`")}, and " <>
-          "#{Declarations.a_type(type)} holds nothing #{side} `#{value}`: its result never " <>
-          "changes"
+        "`#{symbol}` compares #{in_order(order, shown(operand), shown(literal))}, and " <>
+          "#{Declarations.a_type(type)} holds nothing #{side} #{shown(literal)}: its result " <>
+          "never changes"
       )
     ]
 
@@ -339,7 +343,7 @@ defmodule Logex.Warnings do
 
   defp shown({:name, _, name}), do: "`#{name}`"
   defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
-  defp shown({:int_lit, _, value}), do: "`#{value}`"
+  defp shown(literal) when is_int_lit(literal), do: "`#{Parser.spelling(literal)}`"
 
   # An operand's integer type, a tag's or a member's of the built-in instance that holds
   # it; anything else, a bool or a member of a user block's instance, which no comparison
@@ -397,7 +401,9 @@ defmodule Logex.Warnings do
   defp timed({member, type, per_ms}, {symbol, line, operands}),
     do:
       for(
-        {:int_lit, _, value} <- operands,
+        literal <- operands,
+        is_int_lit(literal),
+        value = Parser.value(literal),
         rem(value, per_ms) != 0,
         do:
           warning(

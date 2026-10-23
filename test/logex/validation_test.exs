@@ -256,9 +256,58 @@ defmodule Logex.ValidationTest do
       for element <- [{:xic, 2, [{:name, 2, "aa"}]}, {:name, 2}, {:name, 2, "a", 2}, "xic", nil] do
         refused(
           rungs([@good, {:rung, [{:name, 2, "xic"}, element]}]),
-          "an element is {:name, line, word}, {:int_lit, line, n} or {:branches, legs}, " <>
-            "got: #{inspect(element)}"
+          "an element is {:name, line, word}, {:int_lit, line, n}, " <>
+            "{:int_lit, line, n, spelling} or {:branches, legs}, got: #{inspect(element)}"
         )
+      end
+    end
+
+    # Decision 202: a spelled literal's spelling is the one text that lexes as it, so a
+    # tree holds one exactly where parse/1 would: never the plain decimal of its value,
+    # never one of another value, two tokens, a name, or anything but a binary.
+    test "a spelled literal whose spelling is not one literal token of its value, spelled" do
+      for literal <- [
+            {:int_lit, 2, 255, "255"},
+            {:int_lit, 2, -5, "-5"},
+            {:int_lit, 2, 255, "16#fe"},
+            {:int_lit, 2, 7, "7 7"},
+            {:int_lit, 2, 7, "a"},
+            {:int_lit, 2, 7, "8#7"},
+            {:int_lit, 2, 7, ~c"007"},
+            {:int_lit, 2, 7, nil},
+            {:int_lit, 2, 0, "-0 "}
+          ] do
+        refused(
+          rungs([@good, {:rung, [{:name, 2, "move"}, literal, {:name, 2, "aa"}]}]),
+          "a literal's spelling lexes as one literal token of its value, other than the " <>
+            "value's plain decimal, got: #{inspect(literal)}"
+        )
+      end
+
+      for literal <- [{:int_lit, 2, 7.0, "007"}, {:int_lit, 2, "7", "007"}] do
+        refused(
+          rungs([@good, {:rung, [{:name, 2, "move"}, literal, {:name, 2, "aa"}]}]),
+          "a literal is an integer, got: #{inspect(literal)}"
+        )
+      end
+
+      refused(
+        rungs([@good, {:rung, [{:name, 2, "move"}, {:int_lit, 0, 255, "16#ff"}]}]),
+        "a line is a positive integer, got: {:int_lit, 0, 255, \"16#ff\"}"
+      )
+
+      refused(
+        rungs([@good, {:rung, [{:name, 2, "move"}, {:int_lit, 3, 255, "16#ff"}]}]),
+        "a rung is one line, and this one began on line 2, got: {:int_lit, 3, 255, \"16#ff\"}"
+      )
+
+      # Each spelling parse/1 keeps is taken, and compiles to the program its value gives.
+      for {spelling, value} <- [{"16#ff", 255}, {"007", 7}, {"-0", 0}, {"1_000", 1000}] do
+        tree =
+          rungs([{:rung, [{:name, 1, "move"}, {:int_lit, 1, value, spelling}, {:name, 1, "d"}]}])
+
+        assert Logex.Parser.well_formed!(tree) == tree
+        assert {:ok, _} = Compiler.instructionize(tree, [Logex.Tag.new!("d", :dint)])
       end
     end
 
@@ -1728,17 +1777,23 @@ defmodule Logex.ValidationTest do
     end
 
     # Decision 78: a literal zero divisor, `-0` among them, could never divide. A divisor
-    # that is a tag, or a zero dividend, compiles.
+    # that is a tag, or a zero dividend, compiles. Since decision 202 each is quoted as
+    # written, `-0`, `16#0` and `0_0` among them.
     test "a literal zero divisor is refused, at its line" do
       assert source_errors(
-               "var d dint\ndiv d 0 d\nmod 7 -0 d\n( div d 1 d | mod d 0 d )\ndiv 0 d d"
+               "var d dint\ndiv d 0 d\nmod 7 -0 d\n( div d 1 d | mod d 0 d )\ndiv 0 d d\n" <>
+                 "div d 16#0 d\nmod d 0_0 d"
              ) == [
                "line 2: `div` divides by the literal `0`: a zero divisor gives 0 and passes no " <>
                  "power on every scan, so a literal one is refused",
-               "line 3: `mod` divides by the literal `0`: a zero divisor gives 0 and passes no " <>
+               "line 3: `mod` divides by the literal `-0`: a zero divisor gives 0 and passes no " <>
                  "power on every scan, so a literal one is refused",
                "line 4: `mod` divides by the literal `0`: a zero divisor gives 0 and passes no " <>
-                 "power on every scan, so a literal one is refused"
+                 "power on every scan, so a literal one is refused",
+               "line 6: `div` divides by the literal `16#0`: a zero divisor gives 0 and passes " <>
+                 "no power on every scan, so a literal one is refused",
+               "line 7: `mod` divides by the literal `0_0`: a zero divisor gives 0 and passes " <>
+                 "no power on every scan, so a literal one is refused"
              ]
 
       assert source_warnings("var d dint\ndiv 0 d d\nmod d d d\nadd 0 d d\nsub d 0 d") == []

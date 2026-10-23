@@ -75,6 +75,7 @@ defmodule Logex.Walk do
   defp tag_of({:name, _, name}), do: name
   defp tag_of({:member, _, [instance | _]}), do: instance
   defp tag_of({:int_lit, _, _}), do: nil
+  defp tag_of({:int_lit, _, _, _spelling}), do: nil
   # M3-5: a label is a name of the routine's own, never a tag (decision 105).
   defp tag_of({:label, _, _}), do: nil
 
@@ -286,5 +287,6 @@ defmodule Logex.Walk do
   defp run(_instruction, runs), do: runs
 
   defp preset_of([{:int_lit, _, preset}]), do: preset
+  defp preset_of([{:int_lit, _, preset, _spelling}]), do: preset
   defp preset_of(_no_literal), do: nil
 end

@@ -3516,7 +3516,10 @@ number. A new leaf, `{:real_lit, line, float}`, goes into the parser,
 `@required_shapes`, and curated golden sources, before it lands (CLAUDE.md).
 *(The based integers and `_` landed with M5-7, 2026-10-22, as decision 149's note says,
 their spellings in `printer_test.exs`'s generator and `@required_shapes` and 38 curated
-golden sources; reals wait for M5-10.)*
+golden sources; reals wait for M5-10. Since decision 202, 2026-10-23, a rung keeps a
+literal's spelling: a literal written other than as the plain decimal of its value is
+the leaf `{:int_lit, line, value, spelling}`, printed back as typed and quoted as written
+in every message, its value what every stage computes with.)*
 
 **Reals** (decision 150). No infinity and no NaN ever reaches a state, an output, a
 `get/2` answer or the forces file. A zero divisor gives 0.0, no power and the minor fault
@@ -7276,7 +7279,10 @@ the decisions the rest settle.
      what it took and the printer writes `16#ff` as `255`, and a message cites `65535`
      for `16#ffff`, provisional (`PLAN.md` M5-7's question). A configuration file's
      numbers are the lexer's, so they take each form too. Reals wait for M5-10, so `1.5_`
-     is still an illegal `.`.)*
+     is still an illegal `.`.)* *(Changed by decision 202, 2026-10-23: a rung keeps a
+     literal's spelling, `{:int_lit, line, 255, "16#ff"}` wherever it is not the plain
+     decimal of its value, so the printer writes `16#ff` back as typed and a message
+     quotes `16#ffff` as written; and decision 203 confirms the second `#`'s refusal.)*
 150. **What a real does with a zero divisor, an overflow, NaN and −0.0 (Milestone 5).**
      The fan's speed per box is `div fan_speed boxes_per_min rate`, and just after
      start-up `boxes_per_min` is 0.0; elsewhere `mul big big product` passes 3.4E38 in a
@@ -8357,6 +8363,74 @@ are notes on the decisions they settle: 146 (the eighth question), 147 (the nint
      ctud, …, but `a` is a bool", a literal, "`ctu` expects a ctu, ctud, …, found `5`", and
      a missing operand, "(a ctu, ctud, …, then a preset)". No code changed;
      `validation_test.exs` and `typed_counter_test.exs` pin it.
+202. **Whether a rung keeps a literal's spelling (Milestone 5),** following decision 149
+     with the printer. An engineer types `and status 16#00ff speed` for a mask on the fan's
+     status word; until now logex kept the value alone, so the rung printed back, as an
+     editing box shows it, read `and status 255 speed`, and a refusal said "`move` writes
+     `65535` into `i`" where `move 16#ffff i` was written.
+
+     **Taken: a rung keeps a literal's spelling** (the maintainer, 2026-10-23), changing
+     M5-7's provisional reading: a literal typed `16#00ff`, `2#1010_0000` or `1_000` prints
+     back exactly as typed, and every diagnostic and warning that quotes a literal quotes
+     it as written, "`move` writes `16#ffff` into `i`, an int: it is outside -32768 to
+     32767". The value is still what every stage computes with: a slot judges it, a scan
+     reads it, and a preset is it.
+
+     *The representation (the record's, as the maintainer asked).* A literal written as
+     the plain decimal of its value, `Integer.to_string/1`'s, `255` or `-5`, stays the
+     three-element leaf it always was, `{:int_lit, line, 255}`; one written any other way
+     is a four-element leaf with its spelling last, `{:int_lit, line, 255, "16#ff"}`. The
+     lexer's token is the same, `{:int_lit, {line, column}, 255, "16#ff"}`, the parser
+     keeps it, and `Logex.Parser.well_formed!/1` states it exactly: the spelling lexes as
+     one literal token of the value that holds it, so a tree holds a spelling where, and
+     only where, `parse/1` would, never the plain decimal, `{:int_lit, 1, 255, "255"}`
+     refused, and never one of another value, `{:int_lit, 1, 255, "16#fe"}` refused
+     (`Logex.Parser.spelled?/2`, the one rule). Chosen over a value wrapped with its
+     spelling, `{:int_lit, line, {255, "16#ff"}}`, because a wrapped value breaks every
+     reader that takes the third element as an integer, every `is_integer` guard, every
+     piece of arithmetic and every `"#{value}"` in a message, where the fourth element
+     leaves each of them as it was for every literal written plainly: existing trees,
+     tests and walks are untouched, and a spelled literal is the one new shape each
+     reader must meet, which an arity tells apart in a clause head. `Logex.Parser`
+     gives three helpers for it, the guard `is_int_lit/1`, `value/1` and `spelling/1`.
+     *The IR keeps it*, since the warnings, which quote literals, read the IR after
+     lowering: `Logex.Compiler.lowered?/1` takes the four-element operand by the same
+     rule, and the runtime's `read/2` reads its value in a clause after the plain ones,
+     so a plain literal's read is the clause it was. A configuration file's numbers come
+     from the same lexer, so its reader's messages quote a number as written too, while
+     its entries hold the value, being the data a configuration built from Elixir holds.
+     *Which messages quote it:* each that quotes a literal in backticks, the compiler's,
+     the warnings', a declaration's (`var i int 16#ffff`: "`i` is an int: `16#ffff` is
+     outside -32768 to 32767"), a `cal` formal's and the configuration reader's; a
+     number the message computes or gives as a quantity, a negation, "none holds `128`,
+     its negation", a range, or a preset in ns, "a preset of 1500000 ns", is a value and
+     written in decimal (the record's reading, provisional).
+     *What a spelling is:* any text but the plain decimal, so a leading zero, `007`, and
+     `-0`, which is 0, keep theirs too, and print back as typed where each printed as
+     `7` and `0` before, the one reading of "exactly as typed".
+     *An edit:* the value decides, as presets are compared, so `16#ff` in place of `255`
+     leaves its rung the same rung: no one-shot on it is blocked and no report is given
+     (`Logex.Edit.Plan` compares a literal by its value). *Cost:* a plain decimal is told
+     from a spelled one by its first two bytes in the lexer's clause head, and a plain
+     leaf meets the clauses it met, so measured in reductions against `f546772` it costs
+     exactly what it did: 200 lines of `mov 1234 hh` lex in 6,624 before and after, 2 a
+     literal more than a name of its length, a program of 400 instructions with a plain
+     literal each compiles in 417,811 before and after, and its scan in 4,367. A spelled
+     literal costs its spelling's one lex more, in `well_formed!/1`, about 58 reductions a
+     literal where it was 18, linear in the literals (`integer_width_test.exs`).
+
+     The golden record was regenerated on purpose: 251 entries changed, each a literal
+     tree gaining its spelling and nothing else, the 13 based or separated sources of
+     M5-7, `"mov 007 aa"`, `"move -0 aa"`, `"move -007 aa"`, and 235 generated sources
+     whose `042` keeps its leading zero. Logix gives a tag a display style, Decimal or
+     Hexadecimal (1756-RM018A p.268–269, the fault record's Style column); how it shows
+     an immediate typed `16#00FF` back in a rung is `unverified`.
+203. **What a based number with a second `#` is told (Milestone 5),** following M5-7's
+     review. **Taken: confirmed as built** (the maintainer, 2026-10-23): `move 16#FF#
+     fan_mask` is one lex error at the number's start, naming it whole, "`"16#FF#"` is no
+     number: a based number holds one `#`, between its base and its digits, `16#ff`", so
+     the engineer sees the whole number marked and the spelling to use. No code changed;
+     `frontend_test.exs` pins it.
 
 ---
 

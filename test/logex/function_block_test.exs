@@ -1441,6 +1441,17 @@ defmodule Logex.FunctionBlockTest do
                "line 7: operand 3 of `cal s1` is `run` (var_output bool), which it writes: found `1`"
              ]
 
+      # Decision 202: a literal is quoted as written.
+      assert errors(@decl <> "cal s1 a 2#111 q\nxic a ton t1 5", [seal]) == [
+               "line 7: operand 2 of `cal s1` is `stop` (var_input bool): only 0 or 1 fit, " <>
+                 "found `2#111`"
+             ]
+
+      assert errors(@decl <> "cal s1 a b 0_1\nxic a ton t1 5", [seal]) == [
+               "line 7: operand 3 of `cal s1` is `run` (var_output bool), which it writes: " <>
+                 "found `0_1`"
+             ]
+
       assert errors(@decl <> "cal s1 a b b\nxic a ton t1 5", [seal]) == [
                "line 7: operand 3 of `cal s1` is `run` (var_output bool), which it writes: `b` " <>
                  "is a var_input (declared on line 2), and logic must not write an input"
@@ -1490,6 +1501,10 @@ defmodule Logex.FunctionBlockTest do
 
       assert errors(@decl <> "cal 5 a b q\nxic a ton t1 5", [seal]) == [
                "line 7: `cal` expects an instance of a function block, found `5`"
+             ]
+
+      assert errors(@decl <> "cal 16#5 a b q\nxic a ton t1 5", [seal]) == [
+               "line 7: `cal` expects an instance of a function block, found `16#5`"
              ]
 
       assert errors(@decl <> "cal\nxic a ton t1 5", [seal]) == [
@@ -2011,6 +2026,46 @@ defmodule Logex.FunctionBlockTest do
 
     @two "function_block two\nvar_input go bool\nvar_output q bool\nvar_output r bool\n" <>
            "xic go ote q\nxio go ote r"
+
+    # Decision 202: a body's literal keeps its spelling, by the parse tree's rule, and a
+    # block that holds one is a type a compile gives, runs it by its value, and is refused
+    # with its spelling edited away or made another value's.
+    test "a body's spelled literal is held by the parse tree's rule" do
+      source = "function_block mask\nvar_input go bool\nvar_output o uint\nxic go move 16#00ff o"
+      mask = block!(source)
+
+      assert [rung: [_, {:move, 4, [{:int_lit, 4, 255, "16#00ff"}, {:name, 4, "o"}]}]] =
+               mask.body.rungs
+
+      assert Logex.Compiler.lowered?(mask.body)
+      assert FbType.user?(mask)
+
+      {:ok, holder} =
+        Logex.compile("var_input go bool\nvar_output out uint\nvar m mask\ncal m go out",
+          name: "p",
+          types: [mask]
+        )
+
+      state = Runtime.put_inputs(holder, Runtime.instance(holder), %{"go" => 1})
+      assert {%{"out" => 255}, _state} = Runtime.scan(holder, state)
+
+      for literal <- [
+            {:int_lit, 4, 255, "255"},
+            {:int_lit, 4, 254, "16#00ff"},
+            {:int_lit, 4, 255, nil}
+          ] do
+        rungs = [rung: [{:xic, 4, [{:name, 4, "go"}]}, {:move, 4, [literal, {:name, 4, "o"}]}]]
+        refute Logex.Compiler.lowered?(relined(mask.body, rungs)), inspect(literal)
+      end
+
+      # Its spelling dropped, the text left as it was: the body its text compiles to no more.
+      plain = [
+        rung: [{:xic, 4, [{:name, 4, "go"}]}, {:move, 4, [{:int_lit, 4, 255}, {:name, 4, "o"}]}]
+      ]
+
+      assert Logex.Compiler.lowered?(relined(mask.body, plain))
+      refute FbType.user?(%{mask | body: relined(mask.body, plain)})
+    end
 
     test "a compiled body is one, and anything else is not" do
       assert Logex.Compiler.lowered?(body(@two))

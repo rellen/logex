@@ -2378,8 +2378,12 @@ defmodule Logex.RuntimeTest do
              ]
 
       # OE-1: the definition of a well-formed tree, which instructionize/2 checks on entry.
+      # Decision 202: a literal's value and spelling whichever its shape, the one rule for a
+      # spelling, and the guard, the one macro.
       assert Enum.sort(Logex.Parser.__info__(:functions)) ==
-               [format_error: 1, parse: 1, well_formed!: 1]
+               [format_error: 1, parse: 1, spelled?: 2, spelling: 1, value: 1, well_formed!: 1]
+
+      assert Logex.Parser.__info__(:macros) == [is_int_lit: 1]
 
       # M2-5: same?/2, the one definition of one version of a block, which a compile's
       # one-version check uses. Decision 53: held/1 and within/2, a type as the one table

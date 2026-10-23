@@ -92,9 +92,10 @@ defmodule Logex.Configuration.Text do
   configuration file's keyword names nothing in one.
   """
 
-  alias Logex.{Declarations, Diagnostic, FbType}
+  alias Logex.{Declarations, Diagnostic, FbType, Parser}
   alias Logex.Configuration.{Connection, Global, Instance}
   import Logex.Declarations, only: [is_elementary: 1]
+  import Logex.Parser, only: [is_int_lit: 1]
 
   # Each word of a configuration file's lines, and the place a line reads it: `:line`
   # starts one, `:task` goes on a `task` line, `:program` on a `program` line, and
@@ -218,8 +219,8 @@ defmodule Logex.Configuration.Text do
   defp line([{:name, _, word} = first | rest]),
     do: keyed(Map.get(@keywords, String.downcase(word)), String.downcase(word), first, rest)
 
-  defp line([{:int_lit, _, value} = first | _rest]),
-    do: {:error, fail(first, unknown("#{value}")), []}
+  defp line([first | _rest]) when is_int_lit(first),
+    do: {:error, fail(first, unknown(plain(first))), []}
 
   defp keyed(:line, "task", first, rest), do: task(rest, first, line_of(first))
   defp keyed(:line, "var_global", first, rest), do: global(rest, first, line_of(first))
@@ -258,8 +259,8 @@ defmodule Logex.Configuration.Text do
   defp task([], first, _line),
     do: {:error, fail(first, "`task` needs a name, as in `task fast interval 10 priority 1`"), []}
 
-  defp task([{:int_lit, _, value} = token | _rest], _first, _line),
-    do: {:error, fail(token, "expected a task's name after `task`, found `#{value}`"), []}
+  defp task([token | _rest], _first, _line) when is_int_lit(token),
+    do: {:error, fail(token, "expected a task's name after `task`, found #{describe(token)}"), []}
 
   defp task([{:name, _, word} = token | rest], _first, line),
     do: named_task(String.downcase(word), word, token, {rest, line})
@@ -338,8 +339,9 @@ defmodule Logex.Configuration.Text do
         {field, task}
       )
 
-  defp value([{:int_lit, _, number} | rest], key, field, _token, task) when key != "single",
-    do: inputs(rest, Map.put(task, field, number))
+  defp value([number | rest], key, field, _token, task)
+       when key != "single" and is_int_lit(number),
+       do: inputs(rest, Map.put(task, field, Parser.value(number)))
 
   defp value(rest, key, _field, token, task), do: refused_value(rest, key, token, task)
 
@@ -368,8 +370,10 @@ defmodule Logex.Configuration.Text do
       {:error, fail(first, "`var_global` needs a name and a type, as in `var_global estop bool`"),
        []}
 
-  defp global([{:int_lit, _, value} = token | _rest], _first, _line),
-    do: {:error, fail(token, "expected a global's name after `var_global`, found `#{value}`"), []}
+  defp global([token | _rest], _first, _line) when is_int_lit(token),
+    do:
+      {:error,
+       fail(token, "expected a global's name after `var_global`, found #{describe(token)}"), []}
 
   defp global([{:name, _, word} = token | rest], first, line),
     do: named_global(String.downcase(word), word, token, {rest, first, line})
@@ -393,9 +397,10 @@ defmodule Logex.Configuration.Text do
            "`var_global #{global.name} dint`"
        ), declared(global)}
 
-  defp typed([{:int_lit, _, value} = token | _rest], global, _first),
+  defp typed([token | _rest], global, _first) when is_int_lit(token),
     do:
-      {:error, fail(token, "`#{global.name}` needs a type before its initial value `#{value}`"),
+      {:error,
+       fail(token, "`#{global.name}` needs a type before its initial value #{describe(token)}"),
        declared(global)}
 
   defp typed([{:name, _, word} = token | rest], global, _first),
@@ -433,8 +438,8 @@ defmodule Logex.Configuration.Text do
   # `sint`, … or `ulint` (M5-3).
   defp a_global, do: Declarations.either(&"`#{Declarations.word(&1)}`")
 
-  defp initial([{:int_lit, _, value} | rest], global),
-    do: located(rest, %{global | initial: value})
+  defp initial([value | rest], global) when is_int_lit(value),
+    do: located(rest, %{global | initial: Parser.value(value)})
 
   defp initial(rest, global), do: located(rest, global)
 
@@ -471,8 +476,10 @@ defmodule Logex.Configuration.Text do
          "`program` needs an instance name and a program type, as in `program m1 motor`"
        ), []}
 
-  defp program([{:int_lit, _, value} = token | _rest], _first, _line),
-    do: {:error, fail(token, "expected an instance name after `program`, found `#{value}`"), []}
+  defp program([token | _rest], _first, _line) when is_int_lit(token),
+    do:
+      {:error, fail(token, "expected an instance name after `program`, found #{describe(token)}"),
+       []}
 
   defp program([{:name, _, name} | rest], first, line),
     do: typed_program(rest, %Instance{name: name, type: nil, line: line}, first)
@@ -486,11 +493,13 @@ defmodule Logex.Configuration.Text do
            "`program #{instance.name} motor`"
        ), declared(instance)}
 
-  defp typed_program([{:int_lit, _, value} = token | _rest], instance, _first),
+  defp typed_program([token | _rest], instance, _first) when is_int_lit(token),
     do:
       {:error,
-       fail(token, "expected a program type after `program #{instance.name}`, found `#{value}`"),
-       declared(instance)}
+       fail(
+         token,
+         "expected a program type after `program #{instance.name}`, found #{describe(token)}"
+       ), declared(instance)}
 
   defp typed_program([{:name, _, type} = token | rest], instance, _first),
     do: program_type(String.downcase(type), type, token, {rest, instance})
@@ -547,7 +556,9 @@ defmodule Logex.Configuration.Text do
   end
 
   defp wire([{:name, _, global}], connection, _first), do: {:ok, %{connection | to: global}}
-  defp wire([{:int_lit, _, value}], connection, _first), do: {:ok, %{connection | to: value}}
+
+  defp wire([value], connection, _first) when is_int_lit(value),
+    do: {:ok, %{connection | to: Parser.value(value)}}
 
   defp wire([], connection, first),
     do:
@@ -587,10 +598,10 @@ defmodule Logex.Configuration.Text do
   defp found([token | _rest]), do: ", found #{describe(token)}"
 
   defp describe({:name, _, word}), do: "`#{word}`"
-  defp describe({:int_lit, _, value}), do: "`#{value}`"
+  defp describe(literal) when is_int_lit(literal), do: "`#{Parser.spelling(literal)}`"
 
   defp plain({:name, _, word}), do: word
-  defp plain({:int_lit, _, value}), do: "#{value}"
+  defp plain(literal) when is_int_lit(literal), do: Parser.spelling(literal)
 
   defp symbol({:bst, _}), do: "("
   defp symbol({:nxb, _}), do: "|"
@@ -599,6 +610,10 @@ defmodule Logex.Configuration.Text do
   defp line_of({:name, {line, _column}, _word}), do: line
 
   defp fail({_kind, location, _value}, message), do: problem(:configure, location, message)
+
+  defp fail({:int_lit, location, _value, _spelling}, message),
+    do: problem(:configure, location, message)
+
   defp fail({_kind, location}, message), do: problem(:configure, location, message)
 
   defp problem(stage, {line, column}, message),

@@ -15,7 +15,10 @@ defmodule Logex.FrontendGoldenTest do
   before them, every one a lex error but `"move _1 aa"`, a name, so that the commit that
   lands them changes those entries alone: it changed 13, each a lex error that became the
   tree of the value it spells, `"move 16#ff aa"` and `"move 1_000 aa"` among them, and the
-  other 25, the refusals, stayed lex errors on their lines. It exercises the front end far more widely than
+  other 25, the refusals, stayed lex errors on their lines. Decision 202, a rung keeping a
+  literal's spelling, changed 251, each a literal's leaf gaining its spelling and nothing
+  else: those 13, `"mov 007 aa"`, `"move -0 aa"` and `"move -007 aa"`, and 235 generated
+  sources whose `042` keeps its leading zero. It exercises the front end far more widely than
   the rest of the suite — CRLF, lone CRs, blank and whitespace-only lines, token
   boundaries, every unbalanced delimiter.
 
@@ -67,6 +70,7 @@ defmodule Logex.FrontendGoldenTest do
                :many_rungs,
                :later_line,
                :int_lit,
+               :spelled,
                :negative,
                :dotted,
                :nested,
@@ -118,6 +122,10 @@ defmodule Logex.FrontendGoldenTest do
 
   defp element_reach({:int_lit, line, n}, _depth),
     do: [:leaf, :int_lit | later(line)] ++ negative(n < 0)
+
+  # Decision 202: a literal written other than as its plain decimal keeps its spelling.
+  defp element_reach({:int_lit, line, n, _spelling}, _depth),
+    do: [:leaf, :int_lit, :spelled | later(line)] ++ negative(n < 0)
 
   defp nested(0), do: []
   defp nested(_depth), do: [:nested]

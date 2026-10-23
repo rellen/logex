@@ -1807,8 +1807,9 @@ defmodule Logex.Runtime do
 
   # One instruction: `(instruction, {power_flow, env}, %Scan{})` to `{power_flow, env}`, a
   # clause for an energised rung and one for a de-energised one (CLAUDE.md). An operand is
-  # `{:name, _, tag}`, `{:int_lit, _, value}` or, since M1-6, `{:member, _, path}`; read/2
-  # and write/3 take all three, so no instruction clause cares which it got.
+  # `{:name, _, tag}`, `{:int_lit, _, value}` or, since M1-6, `{:member, _, path}`, and since
+  # decision 202 a literal with its spelling, `{:int_lit, _, value, spelling}`; read/2 takes
+  # each and write/3 every tag, so no instruction clause cares which it got.
   defp evaluate({:xic, _, [operand]}, {true, env}, _scan) do
     {closed?(read(env, operand)), env}
   end
@@ -2738,6 +2739,9 @@ defmodule Logex.Runtime do
   defp read(_env, {:int_lit, _, value}), do: value
   defp read(env, {:name, _, name}), do: Map.get(env, name, 0)
   defp read(env, {:member, _, path}), do: walk(env, path)
+  # Decision 202: a literal written other than as its plain decimal keeps its spelling,
+  # which no scan reads.
+  defp read(_env, {:int_lit, _, value, _spelling}), do: value
 
   defp walk(value, []), do: value
   defp walk(%{} = map, [key | path]), do: walk(Map.get(map, key, 0), path)
