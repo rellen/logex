@@ -8534,8 +8534,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     `{:watchdog, {:task, ...}}` after it, the round longer than the continuous task's
     `{:watchdog, {:round, ...}}` with each step's time, a slow request `{:watchdog, {:idle,
     ms}}`, a runner stuck past its devices' deadlines `{:watchdog, {:device, "drive", idle
-    + poll}}` (decision 137), and each device fault `{:io, device, cause}` in its words, as
-    restated from the record; a fault that does not trip trips nothing; and a runner
+    + poll}}` (decision 137), each device fault `{:io, device, cause}` in its words, and
+    since M5-9 a step whose run met a major fault, a bit whose number the panel's dint
+    gives out of range, `{:fault, task, instance, fault}` at the step's end, no later step
+    of its round run (decisions 153 and 160), as restated from the record; a fault that
+    does not trip trips nothing; and a runner
     stopped or crashed writes every output 0 once where it ran, and nothing where it had
     tripped.
 
@@ -8691,7 +8694,11 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   @programs %{
     "relay" => "var_input in bool\nvar_output out bool\nxic in ote out",
     "count" => "var_output n dint\nadd n 1 n",
-    "ratio" => "var_input d dint\nvar_output q dint\ndiv 1000 d q"
+    "ratio" => "var_input d dint\nvar_output q dint\ndiv 1000 d q",
+    # M5-9: a bit whose number the panel's dint gives, read while the panel's `pb` is
+    # pressed: its -4 is out of range, a major fault (decisions 153 and 160).
+    "bit" =>
+      "var_input n dint\nvar_input on bool\nvar w dint 5\nvar q bool\nxic on xic w.[n] ote q"
   }
 
   defp programs,
@@ -8747,6 +8754,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     {:trip, :unknown_address},
     {:trip, :timeout},
     {:trip, :down},
+    {:trip, :bit_out_of_range},
     :round_first,
     :round_scheduled,
     :round_trigger,
@@ -8846,7 +8854,8 @@ defmodule Logex.ApiContractTest.RunnerWalk do
       [
         "program r1 relay with fast\n  r1.in pa\n  r1.out qa",
         "program c1 count with fast\n  c1.n qn",
-        "program d1 ratio with #{ratio_task(d.slow)}\n  d1.d pd\n  d1.q qc"
+        "program d1 ratio with #{ratio_task(d.slow)}\n  d1.d pd\n  d1.q qc",
+        "program b1 bit with fast\n  b1.n pd\n  b1.on pb"
       ] ++
         optional(d.event, fn _ -> "program r2 relay with e\n  r2.in da\n  r2.out qb" end) ++
         optional(d.logic, fn _ -> "program rg relay with fast\n  rg.in pb\n  rg.out g" end) ++
@@ -9755,7 +9764,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
     assert round.trip == nil, "a step ran after #{inspect(round.trip)}"
     {rt, events} = Runtime.cycle_step(round.rt, step)
     limit = watchdog(task, w.config)
-    trip = task_trip(kind == :timed and ms > limit, task, ms, limit)
+    trip = major(events) || task_trip(kind == :timed and ms > limit, task, ms, limit)
 
     %{
       w
@@ -9770,6 +9779,15 @@ defmodule Logex.ApiContractTest.RunnerWalk do
             trip: trip
         }
     }
+  end
+
+  # M5-9, restated (decisions 153 and 160): a step whose run met a major fault trips at its
+  # end, for the first, before any later step of its round and before a watchdog.
+  defp major(events) do
+    Enum.find(events, fn
+      {:fault, _task, _instance, %Logex.Fault{severity: :major}} -> true
+      _event -> false
+    end)
   end
 
   defp task_trip(true, task, ms, limit), do: {:watchdog, {:task, task, ms, limit}}
@@ -9861,6 +9879,7 @@ defmodule Logex.ApiContractTest.RunnerWalk do
   defp zeroed_unless_down(false, name, _w),
     do: Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
 
+  defp trip_kind({:fault, _task, _instance, %Logex.Fault{kind: kind}}), do: {:trip, kind}
   defp trip_kind({:watchdog, {kind, _, _, _, _}}), do: {:trip, kind}
   defp trip_kind({:watchdog, {kind, _, _, _}}), do: {:trip, kind}
   defp trip_kind({:watchdog, {kind, _, _}}), do: {:trip, kind}

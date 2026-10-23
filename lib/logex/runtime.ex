@@ -68,7 +68,10 @@ defmodule Logex.Runtime do
   fault the scan met, just after its scan's `{:ran, ...}`, in the order they happened
   (decision 99): a minor one, a zero divisor, which the plant runs on through, and since
   M5-9 a major one, a bit whose number a tag holds out of its word's bits (decisions 153
-  and 160), whose instruction did nothing, the scan and the cycle running on. They are an open set: a host tolerates a
+  and 160), whose instruction did nothing, the scan and the cycle running on: a cycle runs
+  every due step whatever its events, so a host driving the resource itself sees the
+  event and decides, where `Logex.Runner` trips at the end of the step that met the
+  round's first. They are an open set: a host tolerates a
   kind it does not know; an event task's run is its `{:ran, ...}` events, with no kind of
   its own. `next_due_in/1` is when a
   periodic due time next comes, which a runner sleeps on: it counts periodic due times

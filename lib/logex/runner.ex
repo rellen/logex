@@ -269,6 +269,14 @@ defmodule Logex.Runner do
     reason}`. A device whose own read, report or write again fails tells the runner and
     latches, its 0 written where its adapter still takes it (decision 135);
     a round's write that fails trips at once, the devices after it not written;
+  - `{:fault, task, instance, fault}`: since M5-9 (decisions 153 and 160), a major fault,
+    a `%Logex.Fault{severity: :major}`, a bit whose number a tag holds outside its word's
+    bits, `kind: :bit_out_of_range`, with its instance, file, line and the number read:
+    the round's first, at the end of the step whose run met it, one task's run or the
+    untimed programs', that run having scanned every instance it holds, and before the
+    round's write; no later step of the round runs, so `get/2` reads each later task's
+    instances as the round before left them. The fault's own event, `{:fault, ...}`, is
+    published with the round's, then the trip. A minor fault, a zero divisor, trips nothing;
   - `{:internal, message}`: an exception out of the core, which the host contract says
     cannot happen; tripping rather than crashing keeps the state for diagnosis. No host
     can cause it: a test reaches it through one hidden option of `start_link/1`, which
@@ -306,7 +314,7 @@ defmodule Logex.Runner do
 
   use GenServer, restart: :temporary
 
-  alias Logex.{Configuration, Declarations, Runtime}
+  alias Logex.{Configuration, Declarations, Fault, Runtime}
   alias Logex.Configuration.Edit
   alias Logex.IO.Point
   alias Logex.Runner.{Clock, Device}
@@ -1404,7 +1412,11 @@ defmodule Logex.Runner do
 
   # A step that ran, timed and checked: a timed task's run that outlasts its watchdog trips
   # before the round's write, naming it (decision 110); the continuous task's programs are
-  # its round's, checked as the round ends (decision 111).
+  # its round's, checked as the round ends (decision 111). Since M5-9 a step whose run met a
+  # major fault trips at its end, before the round's write and before any later step of
+  # the round, naming the first, `{:fault, task, instance, fault}` (decisions 153 and 160),
+  # the step's own run having scanned every instance it holds; a step that met one and
+  # outlasted its watchdog too is tripped for the fault, which came first (provisional).
   defp stepped({:ok, {runtime, ran}}, kind, task, begun, {state, timed, events, times}) do
     took = now(state) - begun
     state = ran(%{state | runtime: runtime}, task, took)
@@ -1412,11 +1424,20 @@ defmodule Logex.Runner do
     limit = watchdog(task, state)
 
     checked(
+      major(ran),
       kind == :timed and took > limit,
       {:watchdog, {:task, task, took, limit}},
       {:ok, state, timed + timed(kind, took), events, [{task, took} | times]}
     )
   end
+
+  defp checked(nil, over, reason, acc), do: checked(over, reason, acc)
+  defp checked(fault, _over, _reason, acc), do: checked(true, fault, acc)
+
+  # The first major fault among a step's events, as the trip's reason, or nil.
+  defp major([]), do: nil
+  defp major([{:fault, _task, _instance, %Fault{severity: :major}} = fault | _events]), do: fault
+  defp major([_event | events]), do: major(events)
 
   defp checked(false, _reason, acc), do: {:cont, acc}
 

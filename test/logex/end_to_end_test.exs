@@ -5421,6 +5421,125 @@ defmodule Logex.EndToEndTest do
     defp bad_reading(:read, drive, value), do: Sim.fail(drive, :read, {:value, [4], value})
   end
 
+  # PLAN M5-9's Done-when: §4.4's plant shows on its run lamp the bit of the drive's fault
+  # word that the panel's selector names, `xic drive_faults.[sel] ote lamp` (decision 160),
+  # from files on disk through `Logex.Runner` on the manual clock, against an oracle that
+  # knows nothing of logex; `sel` at 16 in a `word` trips the runner at the end of the fast
+  # task's step, before the round's write, every output 0 once and nothing after, the trip
+  # naming the instance, the file, the line and the number (decisions 153 and 160), the slow
+  # task's step of that round never run.
+  describe "a bit number held in a tag in the plant (M5-9)" do
+    @describetag :tmp_dir
+
+    alias Logex.IO.Sim
+    alias Logex.Runner
+    alias Logex.Runner.Clock.Manual
+
+    @selected_ld """
+    var_input  faults word
+    var_input  sel    int
+    var_output lamp   bool
+    // the fault the operator selects
+    xic faults.[sel] ote lamp
+    """
+
+    @selected_lines """
+
+    var_global drive_faults word at drive.i.4
+    var_global sel          int  at panel.i.8
+    var_global run_lamp     bool at panel.q.6
+
+    program lamp1 selected with fast
+      lamp1.faults drive_faults
+      lamp1.sel    sel
+      lamp1.lamp   run_lamp
+    """
+
+    # The oracle: bit n of a 16-bit register, by division.
+    defp selected(faults, n), do: rem(div(faults, Integer.pow(2, n)), 2)
+
+    test "M5-9's Done-when: the run lamp follows `drive_faults.[sel]`, and `sel` at 16 trips the plant",
+         %{tmp_dir: dir} do
+      files = [
+        {"seal.ld", cut("**A function block type** is")},
+        {"motor.ld", cut("**The motor, rewritten to use it**")},
+        {"snapshot.ld", @snapshot_ld},
+        {"selected.ld", @selected_ld},
+        {"plant.logex", whole_plant() <> @selected_lines}
+      ]
+
+      for {name, text} <- files, do: File.write!(Path.join(dir, name), text)
+      {:ok, plant} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      assert plant.warnings == []
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+      {:ok, drive} = Sim.start_link(clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: plant,
+          io: %{"panel" => {Sim, sim: panel}, "drive" => {Sim, sim: drive}},
+          clock: {Manual, clock}
+        )
+
+      :rand.seed(:exsss, {5, 9, 160})
+
+      for _ <- 1..60 do
+        faults = :rand.uniform(65_536) - 1
+        n = :rand.uniform(16) - 1
+        Sim.set(drive, [4], faults)
+        Sim.set(panel, [8], n)
+        Manual.advance(clock, 10)
+        assert Runner.get!(runner, "run_lamp") == selected(faults, n), inspect({faults, n})
+        assert Sim.outputs(panel)[[6]] == selected(faults, n)
+      end
+
+      # Every output lit that can be, the lamp among them, then `sel` at 16 as the slow
+      # task falls due: the fast task's step trips, the slow task's never runs.
+      Sim.set(drive, [4], 0xFFFF)
+      Sim.set(panel, %{[0] => 1, [3] => 1, [8] => 15})
+      Manual.advance(clock, 10)
+      assert Sim.outputs(panel)[[6]] == 1
+      assert Sim.outputs(panel)[[0]] == 1
+
+      %{now: now} = Runner.status(runner)
+      at = now + 50 - rem(now, 50)
+      Manual.advance(clock, at - now - 1)
+      Runner.subscribe(runner, [:ran, :fault, :trip, :round])
+      Sim.set(panel, [8], 16)
+      Manual.advance(clock, 1)
+
+      fault = %Logex.Fault{
+        severity: :major,
+        kind: :bit_out_of_range,
+        instruction: :xic,
+        path: nil,
+        file: Path.join(dir, "selected.ld"),
+        line: 5,
+        read: 16
+      }
+
+      assert Runner.status(runner).trip == {:fault, "fast", "lamp1", fault}
+      assert_receive {Runner, ^runner, {:ran, "fast", "lamp1", ^at}}
+      assert_receive {Runner, ^runner, {:fault, "fast", "lamp1", ^fault}}
+      assert_receive {Runner, ^runner, {:trip, {:fault, "fast", "lamp1", ^fault}}}
+      refute_received {Runner, ^runner, {:ran, "slow", "m2", ^at}}
+      refute_received {Runner, ^runner, {:round, ^at, _}}
+
+      # Every output 0 once, through each device, and nothing after.
+      panel_writes = Sim.writes(panel)
+      drive_writes = Sim.writes(drive)
+      assert List.last(panel_writes) == Map.new([0, 1, 2, 3, 6], &{[&1], 0})
+      assert List.last(drive_writes) == %{[0] => 0, [1] => 0}
+      Manual.advance(clock, 1000)
+      Sim.set(panel, [8], 3)
+      Manual.advance(clock, 1000)
+      assert {Sim.writes(panel), Sim.writes(drive)} == {panel_writes, drive_writes}
+      Runner.stop(runner)
+    end
+  end
+
   # PLAN M5-5's Done-when: IEC's typed counters in a plant, from files on disk through
   # Logex.Configuration.compile_file/1 and Logex.Runtime.cycle/3: a stock counted as an
   # int stopping at 32767 with `ov` on, a hopper of udints stopping at 0 with `un` on, and

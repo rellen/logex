@@ -570,6 +570,207 @@ defmodule Logex.TripTest do
 
   defp seen(runner), do: :ets.lookup_element(__MODULE__, {runner, :seen}, 2)
 
+  describe "the major fault (decisions 153 and 160, M5-9)" do
+    # The lamp shows the bit of the panel's `faults` word that its `sel` names; a counter of
+    # its own runs beside it; and a second counter on a slower task.
+    @lamp "var_input faults word\nvar_input sel int\nvar_output lamp bool\n" <>
+            "xic faults.[sel] ote lamp"
+
+    @lamped """
+    task fast interval 10 priority 1
+    task slow interval 10 priority 2
+
+    var_global faults word at panel.i.0
+    var_global sel    int  at panel.i.1
+    var_global lamp   bool at panel.q.0
+    var_global y      bool at panel.q.1
+    var_global a      dint
+    var_global b      dint
+
+    program l lamp with fast
+      l.faults faults
+      l.sel    sel
+      l.lamp   lamp
+    program c count with fast
+      c.n a
+    program d count with slow
+      d.n b
+    program r relay with slow
+      r.in  lamp
+      r.out y
+    """
+
+    defp lamped(text \\ @lamped) do
+      {:ok, config} =
+        Configuration.compile("plant", text, %{
+          "lamp" => program(@lamp, "lamp"),
+          "relay" => program(@relay, "relay"),
+          "count" => program(@count, "count")
+        })
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          poll: 1_000_000
+        )
+
+      %{runner: runner, clock: clock, panel: panel}
+    end
+
+    defp out_of_range(task, instance, line, read),
+      do:
+        {:fault, task, instance,
+         %Logex.Fault{
+           severity: :major,
+           kind: :bit_out_of_range,
+           instruction: :xic,
+           path: nil,
+           file: nil,
+           line: line,
+           read: read
+         }}
+
+    test "a bit number out of range trips at the end of its step, before the round's " <>
+           "write, every output 0 once and nothing after, the trip naming it" do
+      %{runner: runner, clock: clock, panel: panel} = lamped()
+      Runner.subscribe(runner, [:ran, :fault, :trip, :round])
+      Sim.set(panel, %{[0] => 0x8000, [1] => 15})
+      Manual.advance(clock, 10)
+      assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      assert {Runner.get!(runner, "a"), Runner.get!(runner, "b")} == {2, 2}
+
+      # At 16 in a word: the lamp's run, and the counter's after it in the same task, then
+      # the trip; the slow task's step never runs.
+      Sim.set(panel, [1], 16)
+      Manual.advance(clock, 10)
+      fault = out_of_range("fast", "l", 4, 16)
+      assert_receive {Runner, ^runner, {:ran, "fast", "l", 20}}
+      assert_receive {Runner, ^runner, ^fault}
+      assert_receive {Runner, ^runner, {:ran, "fast", "c", 20}}
+      assert_receive {Runner, ^runner, {:trip, ^fault}}
+      refute_received {Runner, ^runner, {:ran, "slow", _, 20}}
+      refute_received {Runner, ^runner, {:round, 20, _}}
+      assert %{status: :tripped, trip: ^fault} = Runner.status(runner)
+
+      written = Sim.writes(panel)
+      assert List.last(written) == %{[0] => 0, [1] => 0}
+      Manual.advance(clock, 1000)
+      Sim.set(panel, [1], 3)
+      Manual.advance(clock, 1000)
+      assert Sim.writes(panel) == written
+
+      # The faulting step's instances as its run left them, the later step's as the round
+      # before: `a` counted, `b` not, and `r` never saw the lamp go off.
+      assert {Runner.get!(runner, "a"), Runner.get!(runner, "b")} == {3, 2}
+      assert Runner.get!(runner, "l.lamp") == 0
+      assert Runner.get!(runner, "r.in") == 1
+    end
+
+    test "a host driving the resource through cycle/3 runs every due step and sees the event" do
+      {:ok, config} =
+        Configuration.compile("plant", @lamped, %{
+          "lamp" => program(@lamp, "lamp"),
+          "relay" => program(@relay, "relay"),
+          "count" => program(@count, "count")
+        })
+
+      {runtime, _outputs, _events} = Runtime.cycle(Runtime.start(config), 0, %{"sel" => 1})
+      {runtime, outputs, events} = Runtime.cycle(runtime, 10, %{"sel" => 16})
+      assert out_of_range("fast", "l", 4, 16) in events
+      assert {:ran, "slow", "d", 10} in events
+      assert Runtime.get!(runtime, "b") == 2
+      assert outputs == %{"lamp" => 0, "y" => 0}
+    end
+
+    test "the untimed programs' step trips as a timed task's does, under the continuous task" do
+      text =
+        "task main continuous\nvar_global faults word at panel.i.0\n" <>
+          "var_global sel int at panel.i.1\nvar_global lamp bool at panel.q.0\n" <>
+          "program l lamp\n  l.faults faults\n  l.sel sel\n  l.lamp lamp\n"
+
+      %{runner: runner, clock: clock, panel: panel} = lamped(text)
+      Sim.set(panel, [1], -1)
+      Manual.advance(clock, 1)
+      assert Runner.status(runner).trip == out_of_range("main", "l", 4, -1)
+      assert List.last(Sim.writes(panel)) == %{[0] => 0}
+    end
+
+    test "a minor fault trips nothing" do
+      text =
+        "task fast interval 10 priority 1\nvar_global z dint at panel.i.0\n" <>
+          "var_global q dint at panel.q.0\nprogram v divide with fast\n  v.z z\n  v.q q\n"
+
+      {:ok, config} =
+        Configuration.compile("plant", text, %{
+          "divide" => program("var_input z dint\nvar_output q dint\ndiv 10 z q", "divide")
+        })
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          poll: 1_000_000
+        )
+
+      Manual.advance(clock, 30)
+      assert %{status: :running, rounds: 4} = Runner.status(runner)
+    end
+
+    test "a restart, cold or warm, runs again once the number is back in range" do
+      for mode <- [:cold, :warm] do
+        %{runner: runner, clock: clock, panel: panel} = lamped()
+        Sim.set(panel, %{[0] => 0x8000, [1] => 16})
+        Manual.advance(clock, 10)
+        assert Runner.status(runner).trip == out_of_range("fast", "l", 4, 16)
+
+        Sim.set(panel, [1], 15)
+        assert :ok = Runner.restart(runner, mode)
+        assert %{status: :running} = Runner.status(runner)
+        Manual.advance(clock, 10)
+        assert Sim.outputs(panel) == %{[0] => 1, [1] => 1}
+      end
+    end
+
+    # A step that met a major fault and outlasted its watchdog is tripped for the fault,
+    # which came first (provisional).
+    test "a fault and a watchdog on one step trip for the fault" do
+      text =
+        "task fast interval 10 priority 1 watchdog 50\nvar_global faults word at panel.i.0\n" <>
+          "var_global sel int at panel.i.1\nvar_global fast_ms dint at panel.i.2\n" <>
+          "var_global lamp bool at panel.q.0\n" <>
+          "program l lamp with fast\n  l.faults faults\n  l.sel sel\n  l.lamp lamp\n"
+
+      {:ok, config} =
+        Configuration.compile("plant", text, %{"lamp" => program(@lamp, "lamp")})
+
+      {:ok, clock} = Manual.start_link()
+      {:ok, panel} = Sim.start_link(reports: true, clock: clock)
+
+      {:ok, runner} =
+        Runner.start_link(
+          configuration: config,
+          io: %{"panel" => {Sim, sim: panel}},
+          clock: {Manual, clock},
+          poll: 1_000_000,
+          steps: Slow
+        )
+
+      :ets.insert(__MODULE__, {runner, clock})
+      Sim.set(panel, %{[1] => 16, [2] => 51})
+      Manual.advance(clock, 10)
+      assert Runner.status(runner).trip == out_of_range("fast", "l", 4, 16)
+    end
+  end
+
   describe "the watchdogs (decisions 110, 111, 126 and 128)" do
     test "a timed task's run that outlasts its watchdog trips before its round's write, " <>
            "naming it; one that takes exactly its watchdog does not" do
