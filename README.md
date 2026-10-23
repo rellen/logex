@@ -74,14 +74,17 @@ Source syntax today:
   −32768 to 32767 for a `ctu_int` and 0 to 4294967295 for a `ctu_udint`
 - a based integer, `16#ff`, `16#FF` or `2#1010_0000`, in base 16 or 2 and with no sign, is
   the number it spells, judged by its slot as any literal is: `move 16#ffff hz` puts
-  65535 in a `uint`, and `move 16#ffff i` into an `int` is refused, `65535` outside
+  65535 in a `uint`, and `move 16#ffff i` into an `int` is refused, `16#ffff` outside
   −32768 to 32767, where Logix would store −1. Any number may hold a single `_` between
   two digits, `1_000_000`, `-1_000` or `2#1010_0000`. Each is an error naming the number
   whole otherwise: `8#17` and `-8#17`, octal and every other base; `16#-1`, a sign;
   `16#ff#`, a second `#`; `16#_ff`, `1__0` and `1_`, a `_` not between two digits;
   `2#102`, a digit outside its base; and Logix's
-  `5U` and `5L` as `1bst` is. `_1` is a name. A rung printed back writes each in
-  decimal, `16#ff` as `255`. A configuration file's numbers take the same forms
+  `5U` and `5L` as `1bst` is. `_1` is a name. A rung keeps each literal as it was typed:
+  printed back, `move 16#00ff mask` reads as written, `007` and `-0` too, and every
+  message quotes a literal so, "`move` writes `16#ffff` into `i`", while its value is
+  what every rule judges, so an edit that only respells one changes nothing. A
+  configuration file's numbers take the same forms, its reader quoting each as written
 - no operand parentheses, no terminator
 - `//` starts a comment, which runs to the end of its line
 - a name may have `.` parts: `t1.dn` is the member `dn` of the timer `t1`. A timer's

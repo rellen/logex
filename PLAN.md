@@ -104,7 +104,11 @@ M5-7, the same day: based literals, `16#ff` and `2#1010_0000`, and `_` between d
 `1_000`, each the number it spells, judged by its slot, so that `16#ffff` fits a `uint`
 and is refused for an `int`, with one question put to the maintainer (§3, M5-7); and
 M5-7's review's five findings fixed the same day, two rules of decisions 196 and 200
-pinned and a based number with a second `#` named whole.
+pinned and a based number with a second `#` named whole; and the maintainer's answers to
+M5-7's two questions (decisions 202 and 203, §3, M5-7) on 2026-10-23: a rung keeps a
+literal's spelling, so `16#00ff` prints back as typed and every message quotes a literal
+as written, its value still what every stage computes with, and a second `#` refused as
+built, with two more questions.
 
 Every claim below was reproduced by executing code against a scratch copy of the
 repository (Erlang/OTP 25, Elixir 1.14). Where a fix is proposed it was applied to that
@@ -5638,14 +5642,15 @@ the walks' cross-type reach and the documents.
 
   *Provisional readings*: the parse tree keeps a literal's value, not its spelling, so
   `well_formed!/1` takes what it took, the printer writes `16#ff` as `255`, and a
-  message cites `65535` for `16#ffff` (the question below); a base is `16#` or `2#`
+  message cites `65535` for `16#ffff` (the question below, changed by decision 202); a
+  base is `16#` or `2#`
   exactly, so `016#ff` and `1_6#ff` are refused as another base; a digit outside the
   base, `2#102` or `16#fg`, is that refusal and not B2's mistyped lexeme, and so is `16#`
   with no digit; `7_`, a `_` with no digit after it, is the separator refusal where B2
   named it before; and a based number of any length is read, a slot judging what fits.
 
-  **Question for the maintainer** (taken provisionally as written, the closest reading to
-  the record):
+  **Questions for the maintainer**, both answered on 2026-10-23 (decisions 202 and 203,
+  below):
   1. *Whether a rung keeps a literal's spelling* (decision 149 with the printer). A
      literal's spelling is how it was typed, `16#00ff` or `2#1010_0000`; its value is the
      number, 255 or 160. logex keeps the value alone, so a rung printed back, as an
@@ -5665,6 +5670,66 @@ the walks' cross-type reach and the documents.
      sees the whole number marked and the spelling to use. The other options: tell it as a
      digit outside base 16, the message `16#fg` gets; or take `16#FF#` as 255, which IEC
      does not define. Logix's reading of a closing `#` is `unverified`.
+
+  **The maintainer's answers**, 2026-10-23 (decisions 202 and 203). (1) *Changed*: a rung
+  keeps a literal's spelling (decision 202). A literal written as the plain decimal of its
+  value, `Integer.to_string/1`'s, stays the three-element leaf, `{:int_lit, line, 255}`;
+  one written any other way, `16#00ff`, `2#1010_0000`, `1_000`, `007` or `-0`, is the
+  four-element leaf `{:int_lit, line, 255, "16#00ff"}`, in the lexer's token, the parse
+  tree and the IR alike. Chosen over a value wrapped with its spelling because a fourth
+  element leaves every reader of the third, its guards, its arithmetic and its messages,
+  as it was for every plain literal, so existing trees, tests and walks are untouched;
+  `well_formed!/1` states it exactly, the spelling the one text that lexes as one literal
+  token of its value that holds it (`Logex.Parser.spelled?/2`), and `Logex.Parser` gives
+  the guard `is_int_lit/1`, `value/1` and `spelling/1`. The printer writes each literal as
+  typed; every message that quotes a literal quotes it as written, the compiler's, the
+  warnings', a declaration's, a `cal` formal's and a configuration file's reader's,
+  "`move` writes `16#ffff` into `i`, an int: it is outside -32768 to 32767"; the runtime
+  reads its value; an edit compares a literal by its value, as presets are compared, so
+  `16#ff` for `255` leaves its rung the same rung, blocking no one-shot and reporting
+  nothing. The golden record was regenerated on purpose and its diff read: 251 entries,
+  each a literal's leaf gaining its spelling and nothing else, M5-7's 13 based or
+  separated sources, `"mov 007 aa"`, `"move -0 aa"`, `"move -007 aa"` and 235 generated
+  sources whose `042` keeps its leading zero. The decimal fast path's cost, in reductions
+  against `f546772`: 200 lines of `mov 1234 hh` lex in 6,624 before and after; a program
+  of 400 instructions with a plain literal each compiles in 417,811 before and after and
+  scans in 4,367; a spelled literal costs its one lex more in `well_formed!/1`, about 58
+  reductions where it was 18, linear (`integer_width_test.exs`, `frontend_test.exs`).
+  (2) *Confirmed as built*: `16#FF#` is one lex error naming the number whole and the
+  spelling to use (decision 203); no code changed.
+
+  The commit (`a71bd7e`) holds the code, its tests and decisions 202 and 203.
+  `printer_test.exs`'s generator draws a leading zero too, its spelled trees in every
+  round-trip property and its `@required_shapes` gaining `:padded_int_lit`, each spelled
+  tree printing back exactly as written; `well_formed!/1` refuses a spelled leaf broken
+  three ways, its spelling the plain decimal, another value's or no binary. The mutation
+  table, each judged by the full suite's exit code: 49 mutants, S1 to S48 and S7b, across the lexer, the parser, the printer, the compiler, the warnings, the declarations, the configuration text, the walk, the runtime and the edit plan, each taking a spelling away or quoting a value where the spelling is due, every one red; three survived the first run and are red since a test of their own in `integer_width_test.exs`, an instruction a message shows whole quoting its literal's value (S11), an unknown word's spelled operand not passed over (S29) and the walk reading a spelled preset as none (S32). 1753 tests (10 doctests), up from 1740.
+
+  *Provisional readings* (the record's, questions below): a number a message computes or
+  gives as a quantity is a value, written in decimal, a negation, "none holds `128`, its
+  negation", or a preset in ns, "a preset of 1500000 ns", where every literal the message
+  quotes in backticks is as written; and a configuration file's entries hold the value
+  alone, being the data a configuration built from Elixir holds, so its reader's messages
+  quote a number as written but `Logex.Configuration.Text.print/1` writes it in decimal.
+
+  **Questions for the maintainer** (taken provisionally as written, the closest reading to
+  the record):
+  1. *Whether a quantity a message gives keeps the spelling too* (decision 202). The oven's
+     cure timer is `ton cure 1_500_000` on a `ton_ltime`; the warning reads "`ton` gives
+     `cure` a preset of 1500000 ns, which is no whole number of milliseconds: … it times
+     as the next whole millisecond, 2 ms". The literal is not quoted there but named as a
+     quantity, beside the 2 ms logex computed, so it is written in decimal. The other
+     reading writes it as typed, "a preset of 1_500_000 ns", and `16#16e360` would read
+     "a preset of 16#16e360 ns". IEC says nothing of messages; how Logix words its
+     verification errors for an immediate is `unverified`.
+  2. *Whether a configuration file keeps a number's spelling* (decision 202). A plant's
+     configuration file says `var_global speed_limit uint 16#ffff`; its reader quotes
+     `16#ffff` in a refusal, but its entries hold 65535, so a configuration printed back
+     by `Logex.Configuration.Text.print/1` reads `var_global speed_limit uint 65535`. The
+     other reading gives each entry's number a spelling too, which a configuration built
+     from Elixir would leave nil, so an operator's file printed back would read as typed.
+     A configuration file is logex's own (decision 35); Logix keeps its configuration in
+     its project, not in text, so there is nothing to compare.
 - **M5-8 · Bit strings, the bitwise instructions and literal bit access.** The stanzas
   first: `byte word dword lword`, `and or xor not shl shr rol ror`, and the bit-string
   conversions' family stanzas, `docs/naming.md`'s `wand` rows amended (decision 155). The
@@ -5733,7 +5798,8 @@ the walks' cross-type reach and the documents.
   that reads back to it, written and tested. Then the stanzas `real` and `lreal`, the 34
   real conversions, the 16 truncations `real_trunc_<integer>` and
   `lreal_trunc_<integer>` (decision 162) and `sqrt` (decisions 148 and 79); the literal
-  (decision 149) through the lexer, the parser, `well_formed!/1`, the printer, the
+  (decision 149, its spelling kept by decision 202's rule wherever it is not the plain
+  text of its value) through the lexer, the parser, `well_formed!/1`, the printer, the
   generator, `@required_shapes` and curated golden sources; arithmetic, comparisons and
   `move` (decision 147); decision 150's zero divisor, saturation, −0.0, subnormals and
   single rounding; a real's zero, 0.0; host, device and force values, the forces file's
