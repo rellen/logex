@@ -73,6 +73,10 @@ defmodule Logex.PrinterTest do
                      # literal one or one a tag numbers, `faults[2].3` or `grid[1,2].[n]`,
                      # a lexer rule, printed as written
                      :element_bit_name,
+                     # M5-14 (decision 154): a member of an element of an array of
+                     # instances, `lane_t[2].dn` or `lane_t[slot].dn`, a lexer rule, printed as
+                     # written
+                     :element_member_name,
                      # decision 228: a real literal whose double is subnormal, `1.0e-310`,
                      # which the lexer reads as that double and a slot refuses
                      :subnormal_real_lit,
@@ -326,7 +330,8 @@ defmodule Logex.PrinterTest do
 
   @names ~w(aa bb start motor stop overtemp fault x1 speed_sp t1.dn word.3 status.[n] t1.acc.[sel]
            status.[4] w.[16#a] t1.acc.[03] s.[-1] temps[3] grid[1,7] cube[0,1,2] w[16#a]
-           flags[slot] int[8] m1.temps[3] faults[2].3 grid[1,2].[n])
+           flags[slot] int[8] m1.temps[3] faults[2].3 grid[1,2].[n] lane_t[2].dn
+           lane_t[slot].dn)
 
   # Each rung on a line of its own, the next below it, as parse/1 gives them, so every
   # tree is one Logex.Parser.well_formed!/1 takes. The lines draw nothing from :rand, so
@@ -644,7 +649,8 @@ defmodule Logex.PrinterTest do
         [:name | dotted_shape(String.contains?(name, "."))] ++
           tag_bit_shape(String.contains?(name, ".["), String.match?(name, ~r/\.\[[-0-9]/)) ++
           element_shape(String.match?(name, ~r/[A-Za-z0-9_]\[/), String.contains?(name, ",")) ++
-          if_shape(String.contains?(name, "]."), :element_bit_name)
+          if_shape(String.match?(name, ~r/\]\.[0-9\[]/), :element_bit_name) ++
+          if_shape(String.match?(name, ~r/\]\.[A-Za-z_]/), :element_member_name)
       )
 
   defp shapes({:int_lit, _, n}, _depth), do: MapSet.new([:int_lit | negative_shape(n < 0)])

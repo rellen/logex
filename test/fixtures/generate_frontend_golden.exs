@@ -149,7 +149,8 @@ defmodule FrontendGolden do
       reals() ++
       tiny_reals() ++
       arrays() ++
-      element_bits()
+      element_bits() ++
+      instance_arrays()
   end
 
   # M3-3 (decision 97): negative literals, a sign glued to its digits. Added after the rest,
@@ -428,6 +429,30 @@ defmodule FrontendGolden do
       "xic faults[2]. [n]",
       "xic faults[2] .3",
       "xic faults[2].[3x]"
+    ]
+  end
+
+  # M5-14 (decision 154): arrays of instances, a declaration's sized type word of a
+  # function block type, an element run by literal subscripts, and a member of an element
+  # read and written by literal subscripts or through a tag subscript, a bit of one among
+  # them, and the shapes that stay refused. Added after the rest, and recorded first by the
+  # front end before M5-14, which reads them all already, so that the diff of the commit
+  # that lands it is these entries alone.
+  defp instance_arrays do
+    [
+      "var lane_t ton[4]\nxic go ton lane_t[2] 500",
+      "var lanes seal[2,3]\ncal lanes[1,2] go q",
+      "xic lane_t[slot].dn ote lamp",
+      "move 0 lane_c[i].pv",
+      "add lane_c[1].cv 1 lane_c[16#1].pv",
+      "xic lane_c[1].cv.3 ote q",
+      "xic lane_c[i].cv.[n] ote q",
+      "xic grid_t[1,j].tt ote q",
+      "xic lane_t[2].dn.x",
+      "xic lane_t[2]..dn",
+      "xic lane_t[2].dn[1]",
+      "xic lane_t[2] .dn",
+      "xic lane_t[2]. dn"
     ]
   end
 
