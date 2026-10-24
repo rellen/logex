@@ -42,7 +42,7 @@ defmodule Logex.Compiler do
   alias Logex.FbType.Member
   import Logex.Declarations, only: [is_elementary: 1, is_class: 1]
   import Logex.Array, only: [is_array: 1]
-  import Logex.Parser, only: [is_int_lit: 1, is_literal: 1, is_real_lit: 1]
+  import Logex.Parser, only: [is_int_lit: 1, is_literal: 1, is_real_lit: 1, is_zero_real: 1]
 
   # M5-10: a real literal whose value is 0.0, `0.0` or `-0.0`, which lexes as 0.0.
   defguardp is_real_zero(term)
@@ -1960,6 +1960,20 @@ defmodule Logex.Compiler do
         {scope, diagnostics}
       )
 
+  # Decision 231: a literal that underflowed, `1.0e-400`, read as 0.0, is held by no real
+  # slot, told it is too near 0.0, as a subnormal one is (decision 228); every literal rule
+  # below has this clause first, which a literal of any other shape passes over in its head.
+  defp cal_literal({{:value, type}, _} = formal, literal, at, diagnostics)
+       when is_zero_real(literal),
+       do:
+         fits_formal(
+           Declarations.holds?(type, 0.0) and not Parser.underflowed?(literal),
+           formal,
+           literal,
+           at,
+           diagnostics
+         )
+
   defp cal_literal({{:value, type}, _} = formal, literal, at, diagnostics),
     do:
       fits_formal(
@@ -2703,6 +2717,16 @@ defmodule Logex.Compiler do
   defp check_tag({{:value, type}, {:real_lit, line, value} = lit}, {_, word}, _scope, d)
        when is_elementary(type),
        do: literal(Declarations.holds?(type, value), {type, lit}, {line, word}, d)
+
+  defp check_tag({{:value, type}, {:real_lit, line, value, _} = lit}, {_, word}, _scope, d)
+       when is_elementary(type) and is_zero_real(lit),
+       do:
+         literal(
+           Declarations.holds?(type, value) and not Parser.underflowed?(lit),
+           {type, lit},
+           {line, word},
+           d
+         )
 
   defp check_tag({{:value, type}, {:real_lit, line, value, _} = lit}, {_, word}, _scope, d)
        when is_elementary(type),
@@ -3706,6 +3730,17 @@ defmodule Logex.Compiler do
        when is_elementary(from) and is_elementary(to),
        do: widens(Declarations.widens?(from, to), source, destination, at, diagnostics)
 
+  defp unify([{:literal, value, literal}, %Tag{type: type} = tag], at, diagnostics)
+       when is_zero_real(literal),
+       do:
+         fits(
+           Declarations.holds?(type, value) and not Parser.underflowed?(literal),
+           literal,
+           tag,
+           at,
+           diagnostics
+         )
+
   defp unify([{:literal, value, literal}, %Tag{type: type} = tag], at, diagnostics),
     do: fits(Declarations.holds?(type, value), literal, tag, at, diagnostics)
 
@@ -3890,6 +3925,17 @@ defmodule Logex.Compiler do
 
   # A tag outside the class, a bool, was reported by its slot; its literal is held to the
   # class alone.
+  defp held(true, {:literal, value, leaf} = literal, %Tag{type: type} = tag, _class, at, d)
+       when is_zero_real(leaf),
+       do:
+         holds(
+           Declarations.holds?(type, value) and not Parser.underflowed?(leaf),
+           literal,
+           tag,
+           at,
+           d
+         )
+
   defp held(true, {:literal, value, _} = literal, %Tag{type: type} = tag, _class, at, d),
     do: holds(Declarations.holds?(type, value), literal, tag, at, d)
 
@@ -3928,6 +3974,22 @@ defmodule Logex.Compiler do
          computes(
            Declarations.in_class?(from, class) and not Declarations.widens?(from, to),
            tag,
+           destination,
+           at,
+           diagnostics
+         )
+
+  defp source(
+         {:value, _class, {:literal, value, literal}},
+         %Tag{type: type} = destination,
+         at,
+         diagnostics
+       )
+       when is_zero_real(literal),
+       do:
+         literal_in(
+           Declarations.holds?(type, value) and not Parser.underflowed?(literal),
+           literal,
            destination,
            at,
            diagnostics

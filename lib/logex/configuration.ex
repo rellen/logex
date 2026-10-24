@@ -3120,7 +3120,7 @@ defmodule Logex.Configuration do
 
     (Enum.flat_map(tasks, &idle(MapSet.member?(running, &1.name), &1)) ++
        Enum.flat_map(globals, &doubt(MapSet.member?(used, &1.name), &1, {wiring, externals})) ++
-       writers(externals.writers, wiring.driven))
+       writers(externals.writers, wiring.driven, arrays(globals)))
     |> Enum.sort_by(&line_order/1)
   end
 
@@ -3138,9 +3138,7 @@ defmodule Logex.Configuration do
   # order whose storage bit it is. M5-11: an array global is written by element, each
   # element its own, so two instances that write different elements of one are told
   # nothing (`written_of/2`).
-  defp writers(writers, driven) do
-    writers = in_wholes(writers)
-
+  defp writers(writers, driven, arrays) do
     bits =
       Enum.reduce(writers, %{}, fn
         {written, _global, _instance, symbol}, bits when symbol != nil ->
@@ -3150,12 +3148,10 @@ defmodule Logex.Configuration do
           bits
       end)
 
-    by_written = Enum.group_by(writers, &elem(&1, 0), &elem(&1, 2))
-
     twice =
-      for {written, [first | later]} <- by_written,
-          instance <- later,
-          do: twice(written, instance, first, Map.get(bits, written))
+      for {target, [first | later]} <- shared(writers, arrays),
+          {instance, may} <- later,
+          do: twice(target, {instance, may}, first, Map.get(bits, target))
 
     connected =
       for {written, global, instance, _bit} <- writers,
@@ -3165,21 +3161,74 @@ defmodule Logex.Configuration do
     twice ++ connected
   end
 
-  # M5-12: where one instance writes a global array whole, through a tag subscript, every
-  # writer of the array writes it whole, each once, since any of its elements may be the
-  # one the other writes.
-  defp in_wholes(writers) do
-    wholes = for {global, global, _instance, _bit} <- writers, into: MapSet.new(), do: global
+  defp arrays(globals),
+    do:
+      for(
+        %Global{name: name, type: type} <- globals,
+        is_array(type),
+        into: MapSet.new(),
+        do: name
+      )
 
-    writers
-    |> Enum.map(fn {written, global, instance, bit} ->
-      {whole_of(MapSet.member?(wholes, global), written, global), global, instance, bit}
-    end)
-    |> Enum.uniq_by(fn {written, _global, instance, _bit} -> {written, instance.name} end)
+  # Each thing two instances or more write through their var_externals, with its writers in
+  # line order, each with whether it may write it, through a tag subscript, rather than
+  # does: a global that is no array, every instance that writes it; and since decision 236
+  # an element of an array global, `speeds[1]`, every instance that writes it and every
+  # one that writes the array whole, through a tag subscript (M5-12), which may; and the
+  # array itself, `speeds`, the instances that write it whole, of which only the later of
+  # two writing it whole is told, at the array, and not again at its elements.
+  defp shared(writers, arrays) do
+    by_global = Enum.group_by(writers, &elem(&1, 1))
+
+    by_global
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.flat_map(fn {global, of} -> sharing(MapSet.member?(arrays, global), global, of) end)
   end
 
-  defp whole_of(true, _written, global), do: global
-  defp whole_of(false, written, _global), do: written
+  defp sharing(false, global, writers),
+    do: [{global, for({_written, _global, instance, _bit} <- writers, do: {instance, false})}]
+
+  defp sharing(true, global, writers) do
+    wholes = for {^global, _global, instance, _bit} <- writers, do: instance
+
+    elements =
+      for {written, _global, _i, _bit} <- writers, written != global, uniq: true, do: written
+
+    by_element =
+      for element <- Enum.sort(elements),
+          do:
+            told(
+              element,
+              for(
+                {written, _global, instance, _bit} <- writers,
+                written in [element, global],
+                do: {instance, written == global}
+              )
+            )
+
+    [{global, Enum.map(wholes, &{&1, true})} | by_element]
+  end
+
+  # Where the first writer of an element writes its array whole, a later one that does so
+  # too was told at the array.
+  defp told(element, [{_, true} = first | later]),
+    do: {element, [first | Enum.reject(later, &elem(&1, 1))]}
+
+  defp told(element, writers), do: {element, writers}
+
+  defp twice(global, {instance, may}, {first, first_may}, bit),
+    do:
+      warning(
+        instance.line,
+        "`#{instance.name}` #{writes(may)} `#{global}` through its var_external, as " <>
+          "`#{first.name}` #{does(first_may)}#{where(first)}: " <> stands(bit, global)
+      )
+
+  defp writes(false), do: "writes"
+  defp writes(true), do: "may write"
+
+  defp does(false), do: "does"
+  defp does(true), do: "may"
 
   # Decision 223: an element a var_external writes is driven where a connection drives it or
   # its array whole; and since M5-12 an array written whole where a connection drives it or
@@ -3204,14 +3253,6 @@ defmodule Logex.Configuration do
 
   defp first_connection([]), do: :error
   defp first_connection([connection | _]), do: {:ok, connection}
-
-  defp twice(global, instance, first, bit),
-    do:
-      warning(
-        instance.line,
-        "`#{instance.name}` writes `#{global}` through its var_external, as " <>
-          "`#{first.name}` does#{where(first)}: " <> stands(bit, global)
-      )
 
   defp connected(global, instance, %Connection{instance: name} = connection, bit),
     do:

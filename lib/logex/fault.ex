@@ -29,9 +29,11 @@ defmodule Logex.Fault do
   - `line` is the instruction's line in that file.
   - `read` is what the scan read that was out of range: the bit number, 16 for
     `drive_faults.[sel]` with `sel` at 16 in a `word`; every subscript of the element, one
-    a dimension, literal ones among them, `[8]` for `weights[slot]` with `slot` at 8 in an
-    `int[8]`, `[1, 9]` for `grid[1,c]` with `c` at 9; the source of a negative root,
-    −0.25 for `sqrt fan_var fan_dev` with `fan_var` at −0.25; nil for a zero divisor.
+    a dimension, literal ones among them, in a tuple since decision 233, `{8}` for
+    `weights[slot]` with `slot` at 8 in an `int[8]`, `{1, 9}` for `grid[1,c]` with `c` at
+    9, which no `inspect/1` shows as a charlist, as it showed the list `[9]` as `~c"\\t"`;
+    the source of a negative root, −0.25 for `sqrt fan_var fan_dev` with `fan_var` at
+    −0.25; nil for a zero divisor.
 
   A host sees a lone instance's in `state.faults`, every fault of the scan that returned
   the state, in the order they happened, `[]` for none (`Logex.Instance`), after
@@ -51,6 +53,6 @@ defmodule Logex.Fault do
           path: String.t() | nil,
           file: String.t() | nil,
           line: pos_integer,
-          read: number | [integer] | nil
+          read: number | tuple | nil
         }
 end

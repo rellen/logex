@@ -9731,7 +9731,7 @@ defmodule Logex.ApiContractTest do
       path: nil,
       file: nil,
       line: line,
-      read: read
+      read: List.to_tuple(read)
     }
 
   # A rung: its contact, then its instruction, each a fault recorded where its element's
@@ -11293,6 +11293,14 @@ defmodule Logex.ApiContractTest.RunnerWalk do
 
   defp zeroed_unless_down(false, name, _w),
     do: Map.new(Map.fetch!(@outputs, name), fn {address, _} -> {address, 0} end)
+
+  # Decision 233, restated: an index fault reads every subscript in a tuple, here the one
+  # subscript of the panel's dint into a `dint[4]`, outside 0 to 3.
+  defp trip_kind({:fault, _task, _instance, %Logex.Fault{kind: :index_out_of_range} = fault}) do
+    assert {i} = fault.read
+    assert i not in 0..3
+    {:trip, :index_out_of_range}
+  end
 
   defp trip_kind({:fault, _task, _instance, %Logex.Fault{kind: kind}}), do: {:trip, kind}
   defp trip_kind({:watchdog, {kind, _, _, _, _}}), do: {:trip, kind}

@@ -155,7 +155,7 @@ defmodule Logex.Configuration.Text do
   could be, among them a placeholder for each broken line's name. A lex error stops the
   read and is the only diagnostic, at stage `:lex`.
   """
-  def read(source) when is_binary(source), do: lexed(Logex.Lexer.tokenize(source))
+  def read(source) when is_binary(source), do: lexed(underflowed(Logex.Lexer.tokenize(source)))
 
   def read(source),
     do:
@@ -175,7 +175,22 @@ defmodule Logex.Configuration.Text do
   # real 16777217.0`, as `{line, spelling, type, held}`, `held` the shortest text of the
   # value it is held as (`Logex.Real.held_as/3`), an array's initial list element by element:
   # the line's text keeps a value's spelling, which a global, a value, does not.
-  def read_rounded(source) when is_binary(source), do: lexed_rounded(Logex.Lexer.tokenize(source))
+  def read_rounded(source) when is_binary(source),
+    do: lexed_rounded(underflowed(Logex.Lexer.tokenize(source)))
+
+  # Decision 231: a real literal no double holds but 0.0, `1.0e-400`, lexes as 0.0 with its
+  # spelling, which a program's slot refuses naming the instruction and the tag; a
+  # configuration file has no instruction, and its reader refuses it as the lexer did until
+  # then, a lex error at its column, the only diagnostic (provisional).
+  defp underflowed({:ok, tokens, end_line} = lexed),
+    do: underflow(Enum.find(tokens, &Parser.underflowed?/1), lexed, end_line)
+
+  defp underflowed(error), do: error
+
+  defp underflow(nil, lexed, _end_line), do: lexed
+
+  defp underflow({:real_lit, {line, _} = location, _zero, spelling}, _lexed, _end_line),
+    do: {:error, {location, Logex.Lexer, {:real_small, spelling}}, line}
 
   defp lexed_rounded({:ok, tokens, _end_line}) do
     split = split(tokens, [], [])

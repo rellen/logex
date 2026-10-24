@@ -277,7 +277,7 @@ defmodule Logex.Runner do
     a `%Logex.Fault{severity: :major}`, a bit whose number a tag holds outside its word's
     bits, `kind: :bit_out_of_range`, with its instance, file, line and the number read,
     or since M5-12 an element whose subscript a tag holds outside its dimension, `kind:
-    :index_out_of_range`, with the subscripts read:
+    :index_out_of_range`, with the subscripts read, a tuple, `{8}` (decision 233):
     the round's first, at the end of the step whose run met it, one task's run or the
     untimed programs', that run having scanned every instance it holds, and before the
     round's write; no later step of the round runs, so `get/2` reads each later task's
@@ -324,6 +324,7 @@ defmodule Logex.Runner do
   alias Logex.Configuration.Edit
   alias Logex.IO.Point
   alias Logex.Runner.{Clock, Device}
+  import Logex.Parser, only: [is_zero_real: 1]
 
   # `steps:` is hidden (M4-4): a module of a test's standing in for Logex.Runtime's
   # steps, the one seam through which a test reaches a fault no host can cause, an
@@ -955,13 +956,21 @@ defmodule Logex.Runner do
        when kind in [:int_lit, :real_lit],
        do: {:ok, name, number}
 
+  # Since decision 228 a subnormal double, `1.0e-310`, lexes as itself, and is held as 0.0
+  # (forced/2); one no float holds, `1.0e-400`, which since decision 231 lexes as 0.0 with
+  # its spelling, is still no force (provisional), as when the lexer refused it.
+  defp valued(true, {:ok, [{:real_lit, _at, _zero, _spelling} = token], _end_line}, name)
+       when is_zero_real(token),
+       do: zero_force(Logex.Parser.underflowed?(token), name)
+
   defp valued(true, {:ok, [{kind, _at, number, _spelling}], _end_line}, name)
        when kind in [:int_lit, :real_lit],
        do: {:ok, name, number}
 
-  # Since decision 228 a subnormal double, `1.0e-310`, lexes as itself, and is held as 0.0
-  # (forced/2); one no float holds, `1.0e-400`, which the lexer refuses, is no force.
   defp valued(true, _other, _name), do: :error
+
+  defp zero_force(false, name), do: {:ok, name, 0.0}
+  defp zero_force(true, _name), do: :error
 
   defp no_force,
     do: "is no force: a line holds an input point's name and its value, as `eye_1 1`"

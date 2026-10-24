@@ -3773,7 +3773,7 @@ V21 *Addressing ARRAY components*); CODESYS checks only with `CheckBounds`; no v
 clamps or wraps an index.
 *(Landed with M5-9, 2026-10-23, for its bit kind, `:bit_out_of_range`; the index kind
 waits for M5-12, and landed with it on 2026-10-24, `:index_out_of_range`, `read` the
-subscripts. `%Logex.Fault{}` holds `severity` and `read`, the number read, nil for a
+subscripts, since decision 233 a tuple, `{8}`. `%Logex.Fault{}` holds `severity` and `read`, the number read, nil for a
 zero divisor (provisional, the field's name); the instruction that reads or writes the
 bit does nothing, a contact, a coil, `move`, a bitwise instruction or a shift, passing no
 power, and a `cal` whose operand is out of range runs nothing, its body's run dropped
@@ -7624,7 +7624,8 @@ the decisions the rest settle.
      step that raised the round's first major fault.)* *(Landed with M5-9, 2026-10-23,
      for a tag bit number, `:bit_out_of_range`; an index out of range waits for M5-12.)*
      *(Landed with M5-12, 2026-10-24, for an index, `:index_out_of_range`, on M5-9's path,
-     `read` every subscript read, one a dimension, `[8]` or `[1, 9]` (provisional): a false
+     `read` every subscript read, one a dimension, `[8]` or `[1, 9]` (provisional; a tuple,
+     `{8}` or `{1, 9}`, since decision 233): a false
      `otl weights_bits[slot]`, a skipped rung and a frozen block with `slot` at 8 raise
      nothing, a `cal` whose operand meets it runs no body (decision 210's rule), and an
      element's index is checked before a bit's number in it. Logix: "Instructions that
@@ -9195,7 +9196,8 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      - A multi-dimensional array takes one subscript a dimension, `"grid[1,2]"`; a key
        with another count, `"grid[1]"`, is refused, "input `grid[1]` names an element of
        `grid`, an array of 2 by 3 reals (declared on line 2), by 1 subscript, where it
-       takes 2, one a dimension, as in `grid[0,0]`" (provisional: a row is no element).
+       takes 2, one a dimension, as in `grid[0,0]`" (provisional: a row is no element;
+       confirmed by decision 230).
      - A subscript outside its dimension is a pinned `ArgumentError`, in the compiler's
        words, "input `steps[10]`'s subscript 10 is outside the elements of `steps`, 0 to
        9: `steps` is an array of 10 ints (declared on line 1)", and so is one negative; a
@@ -9207,7 +9209,8 @@ built; 221, 222, 223, 226, 227 and 228 change six.
        and `steps[3]` each set `steps`, an array of 10 ints (declared on line 1): a call
        sets an array whole or by its elements, not both", and `"steps[3]"` beside
        `"steps[03]"`, "… each set `steps[3]` … a call sets each element once", rather than
-       let one of two values win by an order the host cannot see.
+       let one of two values win by an order the host cannot see (confirmed by decision
+       229).
      - *Cost:* the keys are looked at for an element only for a program that holds an
        array, so any other call costs exactly what it did (`array_test.exs` pins
        `put_inputs/3` of a bool at 76 reductions, as at `e60cc0a`), and a program of arrays
@@ -9252,7 +9255,9 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      - An element at a far end is a use of its array, so the array is not "a global
        nothing uses"; and an online edit that leaves an element no connection drives any
        more reports it held by its name and value, `{:held, "speeds[1]", 3}`
-       (decisions 20 and 58, provisional: an array driven whole held whole).
+       (decisions 20 and 58, provisional: an array driven whole held whole; since
+       decision 232 an array driven whole and then at some elements holds each element
+       no longer driven, by name).
 
      IEC connects a program's variable to a global, or an element of one, by an access
      path (Ed 3 §6.5.2.2, **unverified** here); Logix lets a tag alias an element of an
@@ -9346,7 +9351,8 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      - A literal no double holds but 0.0, its digits not all 0, `1.0e-400`, stays a lex
        error at its column, "`1.0e-400` is no number logex holds: an lreal's smallest
        above 0.0 is 2.2250738585072014e-308", since there is no value a slot could be
-       told it would be written as (provisional); 0.0 written any way, `0.0e-400`, is
+       told it would be written as (provisional; changed by decision 231, which reads it
+       as 0.0 spelled and refuses it in its slot); 0.0 written any way, `0.0e-400`, is
        0.0, as before.
      - Two literals compared, `lt 1.0e-310 0.0`, are the doubles they lex as, decision
        216's rule, and warned only as a comparison of two literals is.
@@ -9360,6 +9366,166 @@ built; 221, 222, 223, 226, 227 and 228 change six.
      its editor does with such a constant is **unverified**. This supersedes decision
      216's "a literal nearer 0.0 than [an lreal's smallest normal] is a value no real logex
      holds, in any slot, so the lexer refuses it" for a literal a double holds.
+
+229. **A whole array and one of its elements in one call (Milestone 5),** the answers'
+     first question after decision 222. **Taken: confirmed as built** (the maintainer,
+     2026-10-24): a call that sets an array whole and one of its elements, `%{"steps" =>
+     [...], "steps[3]" => 5}`, or one element twice, `"steps[3]"` beside `"steps[03]"`, is
+     refused, a pinned `ArgumentError`, "inputs `steps` and `steps[3]` each set `steps`,
+     an array of 10 ints (declared on line 1): a call sets an array whole or by its
+     elements, not both", and the state kept, since a map has no order a host can see. No
+     code changed; `array_test.exs` pins it. Logix has no host contract of this kind
+     (**unverified** for an HMI's writes). Decision 222's provisional bullet stands as
+     confirmed.
+230. **A row of a grid from a host (Milestone 5),** the answers' second question after
+     decision 222. **Taken: confirmed as built** (the maintainer, 2026-10-24): a host's key
+     names one element, one subscript a dimension, `"grid[1,2]"`, or the array whole,
+     `"grid"`; a key with fewer subscripts, `"grid[1]"`, is no row and is refused, told an
+     element takes one subscript a dimension. No code changed; `array_test.exs` pins it.
+     Logix names a row of a multi-dimensional array in some instructions' operands, not as
+     one tag (**unverified** here).
+231. **A literal no double holds (Milestone 5),** the answers' third question after
+     decision 228, changing its second bullet. `move 1.0e-400 big` into an `lreal` was
+     refused by the lexer, "`1.0e-400` is no number logex holds", where `move 1.0e-310
+     big` was refused by its slot naming the instruction and the tag.
+
+     **Taken: a literal no double holds but 0.0 is refused by its slot, in the words of
+     decision 228, naming the instruction and the tag** (the maintainer, 2026-10-24):
+     "`move` writes `1.0e-400` into `big`, an lreal: it is too near 0.0 for an lreal, whose
+     smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0". *The
+     reading (the record's, provisional where marked):*
+     - *Its form, the least invasive:* the lexer reads it as 0.0 with its spelling kept,
+       the token and leaf `{:real_lit, line, 0.0, "1.0e-400"}`, the ordinary spelled leaf
+       of decision 202, so no new shape: `Logex.Parser.well_formed!/1` already states it,
+       its spelling lexing as one real token of 0.0 that holds it (`spelled?/2`), and the
+       printer gives it back as written. The spelling is the flag: a leaf of 0.0 whose
+       digits before the exponent are not all 0 underflowed, `Logex.Parser.underflowed?/1`,
+       the one rule, where a zero written any way, `0.0e-400`, `-0.0` or `0_0.0`, is 0.0
+       as before. `Logex.Parser.is_zero_real/1`, a guard, a spelled 0.0, lets each rule
+       that judges a literal give it a clause of its own, which a literal of any other
+       shape passes over in the clause's head, so a program of none compiles in what it
+       did.
+     - Every slot the literal rules judge refuses it as `Logex.Declarations.holds?/2`
+       refuses a subnormal one (decision 228): `move`'s, the arithmetic's and `sqrt`'s
+       source, a comparison's literal beside a real tag, a conversion's source, a block's
+       formal and a declaration's initial value, an array's initial list element by
+       element; into a `real` it is told the real's smallest, and into an integer type it
+       is a real, as any real literal is.
+     - Two literals compared, `lt 1.0e-400 0.0`, are the doubles they lex as, 0.0 and
+       0.0, decision 216's rule, warned only as a comparison of two literals is
+       (provisional).
+     - A configuration file and a forces file have no instruction: the configuration's
+       reader refuses it as the lexer did, a lex error at its column, the only
+       diagnostic, "`1.0e-400` is no number logex holds: an lreal's smallest above 0.0 is
+       2.2250738585072014e-308", and a forces file's `hz 1.0e-400` is still no force
+       (provisional, as decision 228 had them).
+     - The front end's golden record is regenerated on purpose, its diff read: the two
+       sources that were `{:real_small, run}` for such a literal, `move 1.0e-400 aa` and
+       `move 1_0.0e-4_00 aa`, now parse, each a spelled leaf of 0.0, and nothing else
+       changed; `printer_test.exs`'s generator draws one, `:underflowed_real_lit`.
+
+     IEC and Logix say nothing found of such a literal (Logix states the LREAL range as
+     its normal values and 0.0, 1756-RM018A p.874). This supersedes decision 228's "a
+     literal no double holds but 0.0 … stays a lex error at its column".
+232. **An edit that replaces an array's whole driver by element drivers (Milestone 5),**
+     the answers' fourth question after decision 223, changing its last bullet's "an array
+     driven whole held whole". `m1.o speeds` drives a global array whole, and an edit
+     replaces it by `m2.s speeds[1]`; the edit reported `speeds` held whole, though one
+     element is driven again.
+
+     **Taken: each element no connection drives any more is reported held by its name**
+     (the maintainer, 2026-10-24): the edit reports `{:held, "speeds[0]", v}`,
+     `{:held, "speeds[2]", v}` and `{:held, "speeds[3]", v}`, each with its value, in the
+     elements' order, and not `speeds`. *The reading (the record's, provisional where
+     marked):*
+     - An array the stopped configuration drives whole and the started one drives none
+       of is still held whole, `{:held, "speeds", value}`, as decisions 20 and 58 have it.
+     - An element of an array var_output at a connection's near end, `m2.o[1]
+       speeds[2]`, drives where its program writes that element, or its array through a
+       tag subscript (`Logex.Walk.element_writes/1`), where until then no element at a
+       near end counted as a driver, so its element was reported held after an edit that
+       kept it driven, and not held after one that took it away; one whose program never
+       writes it copies out a frozen value, and its element is held, as decision 20 holds
+       a var_output no rung writes.
+     - Both are read from the two configurations once at accept, as before.
+
+     Logix reports no such hold (decisions 20 and 58 are logex's own).
+233. **What an index fault reports as read (Milestone 5),** M5-12's first question,
+     changing its provisional reading 1. A fault's `read` was a list of every subscript,
+     `[8]` or `[1, 9]`, which plain `inspect/1` shows as a charlist, `~c"\b"`.
+
+     **Taken: a tuple of every subscript, `{1, 9}` or `{8}`** (the maintainer,
+     2026-10-24), so it never prints as a charlist: `%Logex.Fault{kind:
+     :index_out_of_range, read: {8}}` for `weights[slot]` with `slot` at 8, every
+     subscript in order, literal ones among them, one a dimension. A bit's `read` stays
+     one integer, 16 for `drive_faults.[sel]`. *Where:* the runtime throws the subscripts
+     read as a tuple where one is out of range (`in_bounds/3`), so a scan that meets no
+     fault pays nothing; `Logex.Fault`'s type and doc, `Logex.Runner`'s doc, the tests,
+     the runner walk's model, which restates it, and README's run of `scales.exs` follow.
+     Logix's fault 4/20 names no subscript at all (1756-RM018A p.884; **unverified** what
+     its fault log shows).
+234. **Two lamps, one through a subscript (Milestone 5),** M5-12's second question.
+     **Taken: confirmed as built** (the maintainer, 2026-10-24): `ote lamps[slot]` beside
+     `ote lamps[2]`, in either order, is the second-`ote` warning, "`lamps[2]` is in
+     `lamps`, which the `ote` on line 5 may write through a tag subscript: the last one in
+     the scan decides it". No code changed; `tag_subscript_test.exs` pins it. No such
+     warning was found in IEC or in the Logix extracts read (**unverified**).
+235. **A write through a subscript beside a coil on a bool array's element (Milestone
+     5),** M5-12's third question, changing its provisional reading 3. `move 0
+     lamps[slot]` beside `ote lamps[2]` was warned of nothing, as `move x b` beside `ote
+     b` is not, while the same lamps as bits of a word array, `move 0 faults[slot]` beside
+     `ote faults[2].1`, were warned (M5-12's review, decision 207).
+
+     **Taken: the second-`ote` warning, in either order, as for a word array** (the
+     maintainer, 2026-10-24): "`lamps[2]` is in `lamps`, which the `move` on line 4 may
+     write through a tag subscript: the last one in the scan decides it", and after the
+     coil "`lamps[slot]` is in `lamps`, as `lamps[2]` is, which already has an `ote` on
+     line 4: …". *The reading (the record's, provisional where marked):*
+     - *Which writes count:* any instruction that writes the element through a write slot
+       but a coil, `move`, a latch, `otl` or `otu`, a conversion, a bitwise instruction,
+       a `cal`'s var_output, the coils `ote`, `osr` and `osf` having the coil rule
+       already; a one-shot's storage bit keeps its own warning.
+     - Where a tag subscript stands on either side: a write through one beside a coil on
+       a literal element, and a write of a literal element beside a coil through one,
+       `move 0 lamps[2]` beside `ote lamps[slot]`, "`lamps[slot]` is in `lamps`, as
+       `lamps[2]` is, which the `move` on line 4 writes: …", as the word array's `move x
+       w[2]` beside `ote w[i].1` is warned (provisional for this mirror case, which the
+       question did not ask).
+     - A write of a literal element beside a coil on that very element, `move 0 lamps[2]`
+       beside `ote lamps[2]`, and a latch beside it, are still warned of nothing, as `move
+       x b` beside `ote b` is not.
+     - *Cost:* a program with a coil on an element of an array now looks for writes
+       through a tag subscript, as one with a coil on a bit does; a program of none looks
+       for nothing more.
+
+     No such warning was found in IEC or in the Logix extracts read; Logix's editor's
+     duplicate destructive bit check is **unverified** here. This supersedes M5-12's
+     provisional reading 3.
+236. **Two feeders writing one array (Milestone 5),** M5-12's fourth question, changing
+     its provisional reading 4. `f1` writes `speeds[slot]` and `f2` writes `speeds[1]`
+     through their `var_external`s; `f2` was told "`f2` writes `speeds` through its
+     var_external, as `f1` does", the array named whole.
+
+     **Taken: the warning names the element they may share, the writer through a tag
+     subscript one that "may"** (the maintainer, 2026-10-24): "`f2` writes `speeds[1]`
+     through its var_external, as `f1` may (line 4): each scan reads what the other last
+     wrote, and the later write in a cycle stands". *The reading (the record's,
+     provisional where marked):*
+     - The other way round, `f1` writing `speeds[1]` and `f2` `speeds[slot]`: "`f2` may
+       write `speeds[1]` through its var_external, as `f1` does (line 4): …".
+     - Two writers through a tag subscript are told at the array, both "may": "`f2` may
+       write `speeds` through its var_external, as `f1` may (line 4): …"; a third that
+       writes `speeds[1]` is told at its element, citing the first, "as `f1` may", and the
+       second is not told again at that element.
+     - An instance that writes several elements beside a writer through a tag subscript
+       is told at each, `speeds[1]` and `speeds[2]`, each a line (provisional).
+     - Each writer of an element is no longer counted a writer of the array whole: a
+       connection that drives `speeds[2]` is told to `f1`, which may write it, and not to
+       `f2`, which writes only `speeds[1]`, so M5-12's "every other writer of the array
+       then counted whole" is withdrawn.
+
+     Logix has no such configuration check (decision 48 is logex's own). This supersedes
+     M5-12's provisional reading 4.
 
 ---
 

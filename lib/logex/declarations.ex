@@ -1301,6 +1301,18 @@ defmodule Logex.Declarations do
        when type not in @reals and not is_integer(v),
        do: ["the initial value of #{label(name)} must be an integer, found #{inspect(v)}"]
 
+  # Decision 231: an initial value that underflowed, `var big lreal 1.0e-400`, its value
+  # 0.0 and its spelling no zero's, is refused as too near 0.0, as a subnormal one is.
+  defp initial(%Tag{type: type, name: name, initial: v}, shown)
+       when type in @reals and v == 0.0 and is_binary(shown),
+       do:
+         fit(
+           not Parser.underflowed?({:real_lit, nil, v, shown}),
+           type,
+           name,
+           {quoted(shown, v), v}
+         )
+
   defp initial(%Tag{type: type, name: name, initial: v}, shown) when type in @type_atoms,
     do: fit(holds?(type, v), type, name, {quoted(shown, v), v})
 

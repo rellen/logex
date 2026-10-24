@@ -42,6 +42,8 @@ defmodule Logex.TagSubscriptTest do
     {outputs, state.faults}
   end
 
+  # `read` is given as the subscripts' list, and the fault holds it as a tuple, `{8}`
+  # (decision 233).
   defp fault(instruction, line, read, path \\ nil, file \\ nil),
     do: %Fault{
       severity: :major,
@@ -50,7 +52,7 @@ defmodule Logex.TagSubscriptTest do
       path: path,
       file: file,
       line: line,
-      read: read
+      read: List.to_tuple(read)
     }
 
   # Restated: every index of an array of `dims`, the rightmost subscript fastest.
@@ -798,27 +800,56 @@ defmodule Logex.TagSubscriptTest do
              ]
     end
 
-    # Provisional reading 3: a write through a tag subscript other than a coil's, beside a
-    # coil on a literal element, is warned of nothing, as `move a b` beside `ote b` is not.
-    test "a `move` through a tag subscript beside a coil on an element is warned of nothing" do
-      assert warnings(
-               "var_input a bool\nvar_input i int\nvar l bool[4]\nvar_output o bool\n" <>
-                 "xic a ote l[2]\nmove a l[i]\nxic l[0] ote o"
-             ) == []
+    # Decision 235: a write through a tag subscript other than a coil's, any instruction's
+    # through its write slot, beside a coil on an element of a bool array, in either order,
+    # is the second-`ote` warning, as it is for a word array's bit (M5-12's review), and so
+    # is a write of an element beside a coil through a tag subscript; a write of the
+    # element itself beside its coil is still none, as `move a b` beside `ote b` is not.
+    test "a write through a tag subscript beside a coil on an element of a bool array is warned" do
+      head = "var_input a bool\nvar_input i int\nvar l bool[4]\nvar_output o bool\n"
 
-      # Nor a coil through one beside a write of an element of a bool array, in either
-      # order, nor beside a write through one.
-      for rungs <- [
-            "xic a ote l[i]\nmove a l[2]",
-            "move a l[2]\nxic a ote l[i]",
-            "xic a ote l[i]\nmove a l[i]",
-            "move a l[i]\nxic a ote l[i]"
+      later = fn shown, first ->
+        {6,
+         "`#{shown}` is in `l`, which the `#{first}` on line 5 may write through a tag " <>
+           "subscript: #{@later}"}
+      end
+
+      as = fn shown, other, what ->
+        {6, "`#{shown}` is in `l`, as `#{other}` is, which #{what}: #{@later}"}
+      end
+
+      for {rungs, warning} <- [
+            {"xic a ote l[2]\nmove a l[i]",
+             as.("l[i]", "l[2]", "already has an `ote` on line 5")},
+            {"move a l[i]\nxic a ote l[2]", later.("l[2]", "move")},
+            {"xic a otl l[i]\nxic a ote l[2]", later.("l[2]", "otl")},
+            {"xic a otu l[i]\nxic a ote l[2]", later.("l[2]", "otu")},
+            {"and a a l[i]\nxic a ote l[2]", later.("l[2]", "and")},
+            {"xic a ote l[2]\nnot a l[i]", as.("l[i]", "l[2]", "already has an `ote` on line 5")},
+            {"xic a ote l[i]\nmove a l[2]", later.("l[2]", "ote")},
+            {"move a l[2]\nxic a ote l[i]", as.("l[i]", "l[2]", "the `move` on line 5 writes")},
+            {"xic a ote l[i]\nmove a l[i]", later.("l[i]", "ote")},
+            {"move a l[i]\nxic a ote l[i]", later.("l[i]", "move")},
+            {"xic a osf o l[2]\nmove a l[i]",
+             as.("l[i]", "l[2]", "is already the pulse bit of the `osf` on line 5")}
           ] do
         assert {rungs,
-                warnings(
-                  "var_input a bool\nvar_input i int\nvar l bool[4]\nvar_output o bool\n" <>
-                    rungs <> "\nxic l[0] ote o"
-                )} == {rungs, []}
+                Enum.filter(
+                  warnings(head <> rungs <> "\nxic l[0] ote o"),
+                  &(elem(&1, 1) =~ "is in `l`")
+                )} ==
+                 {rungs, [warning]}
+      end
+
+      # The element itself, and another element, beside a coil on it: none.
+      for rungs <- [
+            "xic a ote l[2]\nmove a l[2]",
+            "move a l[2]\nxic a ote l[2]",
+            "xic a ote l[2]\nmove a l[3]",
+            "xic a otl l[2]\nxic a ote l[2]"
+          ] do
+        assert {rungs, warnings(head <> rungs <> "\nxic l[0] ote o")} ==
+                 {rungs, [{2, "`i` is declared but no rung uses it"}]}
       end
     end
 
@@ -930,15 +961,51 @@ defmodule Logex.TagSubscriptTest do
       assert config.warnings == []
     end
 
+    @stands "each scan reads what the other last wrote, and the later write in a cycle stands"
+
     # §4.12's routine choice: a write through a tag subscript may write any element, so it
-    # is a write of the array whole, beside another instance's write of one element.
-    test "a write through a tag subscript is a writer of the whole array, beside any other" do
+    # is a write of the array whole, beside another instance's write of one element; since
+    # decision 236 the warning names the element they may share, `speeds[1]`, the writer
+    # through a tag subscript one that "may", either way round, and two such writers the
+    # array, both "may".
+    test "a write through a tag subscript beside a write of one element names the element" do
       assert {:ok, config} =
                configured(@globals <> "program f1 feeder\nf1.s s\nprogram f2 fixed\nf2.s s")
 
       assert Enum.map(config.warnings, & &1.message) == [
-               "`f2` writes `speeds` through its var_external, as `f1` does (line 4): each " <>
-                 "scan reads what the other last wrote, and the later write in a cycle stands"
+               "`f2` writes `speeds[1]` through its var_external, as `f1` may (line 4): #{@stands}"
+             ]
+
+      assert {:ok, config} =
+               configured(@globals <> "program f1 fixed\nf1.s s\nprogram f2 feeder\nf2.s s")
+
+      assert Enum.map(config.warnings, & &1.message) == [
+               "`f2` may write `speeds[1]` through its var_external, as `f1` does (line 4): " <>
+                 @stands
+             ]
+
+      assert {:ok, config} =
+               configured(@globals <> "program f1 feeder\nf1.s s\nprogram f2 feeder\nf2.s s")
+
+      assert Enum.map(config.warnings, & &1.message) == [
+               "`f2` may write `speeds` through its var_external, as `f1` may (line 4): #{@stands}"
+             ]
+
+      # Two writers through a tag subscript and one of an element: the second is told at the
+      # array, and the third at its element, once each, citing the first.
+      assert {:ok, config} =
+               configured(
+                 @globals <>
+                   "program f1 feeder\nf1.s s\nprogram f2 feeder\nf2.s s\nprogram f3 fixed\nf3.s s"
+               )
+
+      assert Enum.map(config.warnings, &{&1.line, &1.message}) == [
+               {6,
+                "`f2` may write `speeds` through its var_external, as `f1` may (line 4): " <>
+                  @stands},
+               {8,
+                "`f3` writes `speeds[1]` through its var_external, as `f1` may (line 4): " <>
+                  @stands}
              ]
 
       assert {:ok, config} =
@@ -953,7 +1020,7 @@ defmodule Logex.TagSubscriptTest do
              ]
     end
 
-    test "an instance writing two elements beside a write through a tag subscript is told once" do
+    test "an instance writing two elements beside a write through a tag subscript is told each" do
       {:ok, two} =
         Logex.compile(
           "var_external speeds int[4]\nvar_input s int\nmove s speeds[1]\nmove s speeds[2]",
@@ -968,8 +1035,8 @@ defmodule Logex.TagSubscriptTest do
         )
 
       assert Enum.map(config.warnings, & &1.message) == [
-               "`t1` writes `speeds` through its var_external, as `f1` does (line 4): each " <>
-                 "scan reads what the other last wrote, and the later write in a cycle stands"
+               "`t1` writes `speeds[1]` through its var_external, as `f1` may (line 4): #{@stands}",
+               "`t1` writes `speeds[2]` through its var_external, as `f1` may (line 4): #{@stands}"
              ]
     end
 
@@ -990,6 +1057,23 @@ defmodule Logex.TagSubscriptTest do
                "`f1` writes `speeds` through its var_external, and `c1.o` drives `speeds[2]` " <>
                  "(line 7): each scan reads what the other last wrote, and the later write in a " <>
                  "cycle stands"
+
+      # Decision 236: an instance that writes another element, beside the writer through a
+      # tag subscript, is told of that writer at its element, and not of the connection,
+      # which drives an element it does not write.
+      {:ok, config} =
+        Logex.Configuration.compile(
+          "plant",
+          @globals <>
+            "program f1 feeder\nf1.s s\nprogram c1 source\nc1.o speeds[2]\nprogram f2 fixed\nf2.s s",
+          %{"feeder" => feeder(), "source" => source, "fixed" => fixed_feeder()}
+        )
+
+      assert Enum.map(config.warnings, & &1.message) == [
+               "`f1` writes `speeds` through its var_external, and `c1.o` drives `speeds[2]` " <>
+                 "(line 7): #{@stands}",
+               "`f2` writes `speeds[1]` through its var_external, as `f1` may (line 4): #{@stands}"
+             ]
     end
 
     # M5-12's review: a member or bit of an element at a far end is told the element is a
@@ -1137,6 +1221,33 @@ defmodule Logex.TagSubscriptTest do
       end
 
       assert_in_delta per_rung(cals, &"cal s#{&1} a q"), 178.01, 0.001
+    end
+
+    # Decision 235: a coil on an element of a bool array makes the warnings look for writes
+    # through a tag subscript, one look an instruction, so the compile stays linear in the
+    # coils and the writes, each warned.
+    test "the warnings of coils on elements beside writes through a subscript cost linear reductions" do
+      source = fn n ->
+        "var_input a bool\nvar_input i int\nvar l bool[8]\nvar_output q bool\n" <>
+          Enum.map_join(1..n, "\n", fn _ -> "xic a ote l[2]\nmove a l[i]\nxic l[1] ote q" end)
+      end
+
+      compile = fn n ->
+        text = source.(n)
+        {:reductions, before} = Process.info(self(), :reductions)
+        {:ok, p} = Logex.compile(text, name: "p")
+        {:reductions, later} = Process.info(self(), :reductions)
+        {later - before, p}
+      end
+
+      _warm = compile.(10)
+      {small, _} = compile.(200)
+      {large, p} = compile.(400)
+      assert large / small < 2.4
+      # Each write told once, after the first coil, and each later coil the plain second
+      # `ote`, on `l[2]` and on `q`.
+      assert Enum.count(p.warnings, &(&1.message =~ "is in `l`")) == 400
+      assert length(p.warnings) == 400 + 399 + 399
     end
 
     test "a program's tag subscripts cost linear reductions to compile and to scan" do

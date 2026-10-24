@@ -2390,12 +2390,14 @@ defmodule Logex.RuntimeTest do
       # spelling, and the guard, the one macro.
       # M5-10: plain_real?/1, the rule for a real literal written as its float's plain text,
       # and the guards of a real literal and of a literal of either kind.
+      # Decision 231: underflowed?/1, the one rule for a literal no double holds but 0.0, and
+      # its guard, a spelled zero.
       assert Enum.sort(Logex.Parser.__info__(:functions)) ==
                [format_error: 1, parse: 1, plain_real?: 1, spelled?: 2, spelling: 1] ++
-                 [value: 1, well_formed!: 1]
+                 [underflowed?: 1, value: 1, well_formed!: 1]
 
       assert Enum.sort(Logex.Parser.__info__(:macros)) ==
-               [is_int_lit: 1, is_literal: 1, is_real_lit: 1]
+               [is_int_lit: 1, is_literal: 1, is_real_lit: 1, is_zero_real: 1]
 
       # M2-5: same?/2, the one definition of one version of a block, which a compile's
       # one-version check uses. Decision 53: held/1 and within/2, a type as the one table

@@ -624,6 +624,7 @@ defmodule Logex.ArrayConfigurationTest do
               "move speed out\nmove speed r",
           "wide" => "var_input speed dint\nvar_output out dint\nmove speed out",
           "w" => "var_output o int[2]\nvar_output s int\nmove 1 o[0]\nmove 2 s",
+          "w4" => "var_output o int[4]\nmove 1 o[0]\nmove 3 o[3]",
           "ext" => "var_external g int[2]\nvar_input go bool\nxic go move 5 g[1]",
           "e" => "var_input e int[2]\nvar_output o int\nadd e[0] e[1] o",
           "iw" => "var_output o int\nmove 7 o"
@@ -792,6 +793,42 @@ defmodule Logex.ArrayConfigurationTest do
       {runtime, _outputs, _events} = Runtime.cycle(Runtime.start(spelt), 0, %{})
       {:ok, _edit, forecast} = Configuration.Edit.accept(runtime, later)
       assert {:held, "g[1]", 2} in forecast
+    end
+
+    # Decision 232: an edit that replaces the connection driving an array whole by ones
+    # driving some of its elements holds each element no connection drives any more, by its
+    # name, and not the array; one that drives none of it holds the array whole.
+    test "an array driven whole and then by an element holds each undriven element, by name" do
+      {:ok, before} = configured("var_global g int[4]\nprogram a w4\na.o g\n")
+
+      {:ok, later} =
+        configured("var_global g int[4]\nprogram a w4\nprogram b w\nb.s g[1]\nb.o[0] g[2]\n")
+
+      {runtime, _outputs, _events} = Runtime.cycle(Runtime.start(before), 0, %{})
+      {:ok, edit, forecast} = Configuration.Edit.accept(runtime, later)
+      held = for {:held, name, value} <- forecast, do: {name, value}
+      assert held == [{"g[0]", 1}, {"g[3]", 3}]
+      {_edit, _runtime, report} = Configuration.Edit.test(edit, runtime)
+      assert for({:held, name, value} <- report, do: {name, value}) == held
+
+      # An element of a var_output at the near end drives only where its program writes it,
+      # `o[1]` never, so `g[2]` is held too.
+      {:ok, frozen} =
+        configured("var_global g int[4]\nprogram a w4\nprogram b w\nb.s g[1]\nb.o[1] g[2]\n")
+
+      {:ok, _edit, forecast} = Configuration.Edit.accept(runtime, frozen)
+
+      assert for({:held, name, value} <- forecast, do: {name, value}) ==
+               [{"g[0]", 1}, {"g[2]", 0}, {"g[3]", 3}]
+
+      # Driven by no connection at all, the array is held whole, as before.
+      {:ok, none} = configured("var_global g int[4]\nprogram a w4\n")
+      {:ok, _edit, forecast} = Configuration.Edit.accept(runtime, none)
+
+      assert for({:held, name, value} <- forecast, do: {name, value}) == [
+               {"g",
+                Runtime.get!(runtime, "g") |> then(&Logex.Array.from_list(&1, [4], fn v -> v end))}
+             ]
     end
   end
 

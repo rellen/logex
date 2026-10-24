@@ -391,9 +391,18 @@ defmodule Logex.Lexer do
 
   # A real's value: each of its digit runs held to the `_` rule an integer's is, then read
   # with its `_`s left out, and −0.0 kept as 0.0. One past an lreal's largest value,
-  # `1.0e400`, which no float holds, is named whole, and so, since decision 228, is one no
-  # float holds but 0.0, `1.0e-400`, a subnormal double, `1.0e-310`, read as itself, and the
-  # zero itself, `0.0e-400` among its spellings, taken.
+  # `1.0e400`, which no float holds, is named whole. Since decision 228 a subnormal double,
+  # `1.0e-310`, is read as itself, which its slot refuses when the program compiles, told
+  # it is too near 0.0 for its real (decision 216's rule, through
+  # `Logex.Real.flushed?/2`); and since decision 231 one no double holds but 0.0,
+  # `1.0e-400`, its digits not all 0, is read as 0.0 with its spelling kept, the token
+  # `{:real_lit, loc, 0.0, "1.0e-400"}`, which `Logex.Parser.underflowed?/1` tells from a
+  # zero, `0.0e-400`, and its slot refuses in the same words, where until then the lexer
+  # refused it as `{:real_small, run}`, which a configuration file's reader and a forces
+  # file's still give it (provisional).
+  defp held(value) when value == 0.0, do: {:ok, 0.0}
+  defp held(value), do: {:ok, value}
+
   defp real_value(text) do
     {unsigned, _negative} = unsigned(text)
     [whole, rest] = :binary.split(unsigned, ".")
@@ -415,28 +424,10 @@ defmodule Logex.Lexer do
 
   defp real_read(true, text) do
     float = IO.iodata_to_binary(:binary.split(text, "_", [:global]))
-    held(:erlang.binary_to_float(float), text)
+    held(:erlang.binary_to_float(float))
   rescue
     ArgumentError -> {:error, {:real_range, text}}
   end
-
-  # Decision 228: a literal whose double is subnormal, nearer 0.0 than an lreal's smallest
-  # normal value, `1.0e-310`, is read as that double, which its slot refuses when the
-  # program compiles, told it is too near 0.0 for its real (decision 216's rule, through
-  # `Logex.Real.flushed?/2`); one no double holds but 0.0, `1.0e-400`, its digits not all
-  # 0, is still no number logex holds (provisional), and 0.0 written any way is 0.0.
-  defp held(value, text) when value == 0.0, do: zero(written_zero?(text), text)
-
-  defp held(value, _text), do: {:ok, value}
-
-  defp zero(true, _text), do: {:ok, 0.0}
-  defp zero(false, text), do: {:error, {:real_small, text}}
-
-  # Whether a real's digits before its exponent are all 0, `-0.0e-400` and `0_0.0`.
-  defp written_zero?(<<ch, rest::binary>>) when ch in [?0, ?., ?_, ?-], do: written_zero?(rest)
-  defp written_zero?(<<e, _::binary>>) when e in [?e, ?E], do: true
-  defp written_zero?(<<>>), do: true
-  defp written_zero?(_nonzero), do: false
 
   # Decision 149: a number is decimal, or based in 16 or 2 (IEC Ed 3 Table 5 features 4 and
   # 6), with no sign, which IEC gives a based number none of; octal, `8#`, which Ed 3

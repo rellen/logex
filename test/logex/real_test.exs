@@ -1444,9 +1444,10 @@ defmodule Logex.RealTest do
     end
 
     # Since decision 228 a literal whose double is subnormal is that double, refused by its
-    # slot (below); one no double holds but 0.0 is still no number logex holds, refused by
-    # the lexer as one past an lreal's largest is; 1.0e-40 is an lreal's.
-    test "below every double but 0.0, it is no number logex holds" do
+    # slot (below); and since decision 231 one no double holds but 0.0 is 0.0 spelled,
+    # refused by its slot in the same words, where until then the lexer refused it as no
+    # number logex holds; 1.0e-40 is an lreal's.
+    test "below every double but 0.0, it is 0.0 spelled, refused by its slot" do
       for source <- [
             "move 1.0e-400 x",
             "move 1_0.0e-4_00 x",
@@ -1454,14 +1455,15 @@ defmodule Logex.RealTest do
           ] do
         [_move, run, _x] = String.split(source, " ")
 
-        assert {:error, {{1, 6}, Logex.Lexer, {:real_small, ^run}}, 1} = lexed(source), source
+        assert {:ok, [_, {:real_lit, {1, 6}, zero, ^run}, _], 1} = lexed(source), source
+        assert zero === 0.0
 
-        assert {:error, [%Logex.Diagnostic{stage: :lex, line: 2, column: 6, message: message}]} =
-                 Logex.compile("var x lreal\n" <> source, name: "p")
-
-        assert message ==
-                 "#{inspect(run)} is no number logex holds: an lreal's smallest above 0.0 is " <>
-                   "2.2250738585072014e-308"
+        assert messages("var x lreal\n" <> source) == [
+                 {2,
+                  "`move` writes `#{run}` into `x`, an lreal: it is too near 0.0 for an lreal, " <>
+                    "whose smallest above 0.0 is 2.2250738585072014e-308: it would be written as 0.0"}
+               ],
+               source
       end
 
       assert {:ok, _, 1} = lexed("move 2.2250738585072014e-308 x")
@@ -1961,6 +1963,110 @@ defmodule Logex.RealTest do
              ]
 
       assert outputs("var_output q bool\ngt 1.0e-310 0.0 ote q") == %{"q" => 1}
+    end
+  end
+
+  # Decision 231: a literal no double holds but 0.0, `1.0e-400`, is the spelled leaf of 0.0,
+  # `{:real_lit, line, 0.0, "1.0e-400"}`, which every slot that judges a literal refuses,
+  # naming the instruction and the tag, in decision 228's words; a zero written any way is
+  # 0.0; and a configuration file and a forces file, which have no instruction, refuse it
+  # as the lexer did until then (provisional).
+  describe "a literal no double holds but 0.0 (decision 231)" do
+    @too_near "is too near 0.0 for an lreal, whose smallest above 0.0 is " <>
+                "2.2250738585072014e-308: it would be written as 0.0"
+
+    test "is 0.0 spelled, a well-formed leaf the printer gives back" do
+      assert {:ok, [_, {:real_lit, {1, 6}, zero, "1.0e-400"}, _], 1} = lexed("move 1.0e-400 l")
+      assert zero === 0.0
+      assert Logex.Parser.underflowed?({:real_lit, 1, 0.0, "1.0e-400"})
+      assert Logex.Parser.underflowed?({:real_lit, 1, 0.0, "-9.9e-999"})
+
+      for zero <- ["0.0e-400", "-0.0", "0_0.0", "00.000E-9", "0.0"] do
+        refute Logex.Parser.underflowed?({:real_lit, 1, 0.0, zero}), zero
+      end
+
+      refute Logex.Parser.underflowed?({:real_lit, 1, 1.0e-310, "1.0e-310"})
+      refute Logex.Parser.underflowed?({:real_lit, 1, 0.0})
+
+      {:ok, tree} = Logex.Compiler.parse(elem(lexed("move 1.0e-400 l"), 1))
+      assert Logex.Parser.well_formed!(tree) == tree
+      assert Logex.Printer.print(tree) == "move 1.0e-400 l"
+    end
+
+    test "is refused in every slot that judges a literal, naming the instruction and the tag" do
+      head = "var_input a lreal\nvar_output l lreal\nvar_output r real\nvar_output q bool\n"
+
+      for {rung, message} <- [
+            {"move 1.0e-400 l", "`move` writes `1.0e-400` into `l`, an lreal: it #{@too_near}"},
+            {"move -1.0e-400 r",
+             "`move` writes `-1.0e-400` into `r`, a real: it is too near 0.0 for a real, whose " <>
+               "smallest above 0.0 is 1.1754943508222875e-38: it would be written as 0.0"},
+            {"add a 1.0e-400 l",
+             "`add` computes in `l`'s type, an lreal: `1.0e-400` #{@too_near}"},
+            {"sqrt 1.0e-400 l",
+             "`sqrt` computes in `l`'s type, an lreal: `1.0e-400` #{@too_near}"},
+            {"gt a 1.0e-400 ote q",
+             "`gt` compares `1.0e-400` with `a`, an lreal (declared on line 1), which never " <>
+               "holds it: `1.0e-400` #{@too_near}"},
+            {"lreal_to_real 1.0e-400 r",
+             "`lreal_to_real` reads an lreal: `1.0e-400` #{@too_near}"}
+          ] do
+        assert messages(head <> rung) == [{5, message}], rung
+      end
+
+      assert messages("var l lreal 1.0e-400\nxic l") |> hd() ==
+               {1, "`l` is an lreal: `1.0e-400` #{@too_near}"}
+
+      assert messages("var l lreal[2] 1.0 1.0e-400\nxic l[0]") |> hd() ==
+               {1, "`l[1]` is an lreal: `1.0e-400` #{@too_near}"}
+
+      {:ok, keep} =
+        Logex.compile("function_block keep\nvar_input a lreal\nvar_output b lreal\nmove a b",
+          name: "keep"
+        )
+
+      assert {:error, [%Logex.Diagnostic{line: 3, message: message}]} =
+               Logex.compile("var k keep\nvar_output r lreal\ncal k 1.0e-400 r",
+                 name: "p",
+                 types: [keep]
+               )
+
+      assert message == "operand 1 of `cal k` is `a` (var_input lreal): `1.0e-400` #{@too_near}"
+
+      # Into an integer, it is a real, as any real literal is.
+      assert messages("var_output n dint\nmove 1.0e-400 n") == [
+               {2,
+                "`move` writes `1.0e-400` into `n`, a dint: it is a real, and a dint holds only integers"}
+             ]
+    end
+
+    test "a zero written any way is 0.0, and two literals compared are the doubles" do
+      for zero <- ["0.0e-400", "-0.0e-400", "0_0.0E-999"] do
+        assert outputs("var_output l lreal 1.0\nmove #{zero} l") === %{"l" => 0.0}, zero
+      end
+
+      assert warnings("var_output q bool\nlt 1.0e-400 0.0 ote q") == [
+               {2, "`lt` compares two literals, `1.0e-400` and `0.0`: its result never changes"}
+             ]
+
+      assert outputs("var_output q bool\neq 1.0e-400 0.0 ote q") == %{"q" => 1}
+    end
+
+    test "a configuration file refuses it as no number logex holds, at its column" do
+      for {text, line, column} <- [
+            {"var_global sp lreal 1.0e-400\n", 1, 21},
+            {"var_global sp lreal\nprogram m1 m\nm1.x -1.0e-400\n", 3, 6}
+          ] do
+        run = text |> String.split([" ", "\n"], trim: true) |> List.last()
+
+        assert {:error, [%Logex.Diagnostic{stage: :lex, line: ^line, column: ^column} = d]} =
+                 Configuration.compile("c", text, %{}),
+               text
+
+        assert d.message ==
+                 "#{inspect(run)} is no number logex holds: an lreal's smallest above 0.0 is " <>
+                   "2.2250738585072014e-308"
+      end
     end
   end
 end

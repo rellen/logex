@@ -644,47 +644,75 @@ defmodule Logex.Configuration.Edit do
   # started, which declares them, does not: each holds its value, and every step of that
   # direction reports it, beside each kept instance's own var_outputs by path (decision 58).
   # Read from the two configurations alone, once at accept, as a plan is.
+  #
+  # Since decision 232 an array the stopped configuration drives whole, where the started
+  # one drives some of its elements, holds each element it no longer drives, each by its
+  # name, `speeds[3]`, in the elements' order; one it drives none of holds whole, as
+  # before.
   defp held(from, to) do
     driven = drives(to)
     keep = by_name(to.globals)
 
-    Enum.sort(
-      for name <- Map.keys(drives(from)),
-          [array | _] = :binary.split(name, "["),
-          is_map_key(keep, array),
-          not is_map_key(driven, name),
-          not is_map_key(driven, array),
-          do: name
-    )
+    for name <- Enum.sort(Map.keys(drives(from))),
+        [array | _] = :binary.split(name, "["),
+        is_map_key(keep, array),
+        not is_map_key(driven, name),
+        not is_map_key(driven, array),
+        held <- undriven(Map.fetch!(keep, array), name, driven),
+        do: held
   end
+
+  defp undriven(%Configuration.Global{name: name, type: {:array, _type, dims}}, name, driven) do
+    elements = for index <- Logex.Array.indexes(dims), do: Logex.Array.name(name, index)
+    some_driven(Enum.split_with(elements, &is_map_key(driven, &1)), name)
+  end
+
+  defp undriven(_global, name, _driven), do: [name]
+
+  defp some_driven({[], _held}, name), do: [name]
+  defp some_driven({_driven, held}, _name), do: held
 
   # A global is driven where a connection copies out a var_output its program writes
   # (Logex.Walk.writes/1), or a program writes it through a var_external. A connection whose
   # var_output the program no longer writes copies out a frozen value: the point holds. A
   # connection names a var_input or a var_output (Logex.Configuration.check/1), and no
   # logic writes a var_input (Logex.Compiler), so a member written is a var_output. Each
-  # program type's writes are read once.
+  # program type's writes are read once. Since decision 232 an element of an array
+  # var_output at a connection's near end, `b.o[1]`, drives where its program writes that
+  # element, or its array through a tag subscript (`Logex.Walk.element_writes/1`), where
+  # until then no element member drove anything.
   defp drives(%Configuration{programs: programs, instances: instances, connections: connections}) do
     types = Map.new(instances, &{&1.name, &1.type})
 
     writes =
-      Map.new(Enum.uniq(Map.values(types)), &{&1, Map.new(Walk.writes(Map.fetch!(programs, &1)))})
+      Map.new(Enum.uniq(Map.values(types)), &{&1, type_writes(Map.fetch!(programs, &1))})
 
     copied =
       for %Configuration.Connection{instance: instance, member: member, to: global} <-
             connections,
           is_binary(global),
-          is_map_key(Map.fetch!(writes, Map.fetch!(types, instance)), member),
+          member_written?(Map.fetch!(writes, Map.fetch!(types, instance)), member),
           do: driven_name(global)
 
     through =
-      for {type, written} <- writes,
+      for {type, {written, _elements}} <- writes,
           {name, %Tag{section: :var_external}} <- Map.fetch!(programs, type).tags,
           is_map_key(written, name),
           do: name
 
     Map.new(copied ++ through, &{&1, true})
   end
+
+  defp type_writes(program),
+    do: {Map.new(Walk.writes(program)), Map.new(Walk.element_writes(program))}
+
+  defp member_written?({writes, elements}, member),
+    do: written_member(Logex.Array.split(member), member, {writes, elements})
+
+  defp written_member(nil, member, {writes, _elements}), do: is_map_key(writes, member)
+
+  defp written_member({array, _subscripts}, member, {_writes, elements}),
+    do: is_map_key(elements, driven_name(member)) or is_map_key(elements, array)
 
   # Decision 223: a connection may drive an element of a global array, `speeds[1]`, named by
   # its subscripts' values, held and reported as that element.

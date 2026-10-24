@@ -100,10 +100,10 @@ defmodule Logex.FaultTest do
                  severity: :major,
                  kind: :index_out_of_range,
                  instruction: :move,
-                 read: [8],
+                 read: {8},
                  line: 6
                },
-               %Fault{severity: :major, kind: :index_out_of_range, read: [1, -1], line: 7}
+               %Fault{severity: :major, kind: :index_out_of_range, read: {1, -1}, line: 7}
              ] = faults
 
       config =
@@ -123,8 +123,31 @@ defmodule Logex.FaultTest do
 
       assert [
                {:ran, "fast", "w1", 0},
-               {:fault, "fast", "w1", %Fault{kind: :index_out_of_range, read: [9], line: 6}}
+               {:fault, "fast", "w1", %Fault{kind: :index_out_of_range, read: {9}, line: 6}}
              ] = events
+    end
+
+    # Decision 233: an index fault's `read` is a tuple of every subscript, which plain
+    # `inspect/1` never shows as a charlist, as it showed the list `[9]` as `~c"\\t"`; a
+    # bit's stays one integer.
+    test "an index fault reads a tuple, which inspect shows as numbers, and a bit fault one number" do
+      p =
+        c!(
+          "var_input slot int\nvar_input c int\nvar_input n int\nvar weights int[8]\n" <>
+            "var grid int[2,10]\nvar w word\nvar_output q int\nvar_output b bool\n" <>
+            "move weights[slot] q\nmove grid[1,c] q\nxic w.[n] ote b"
+        )
+
+      assert {[{_, [weights, grid, bit]}], _} =
+               scans(p, [%{"slot" => 9, "c" => 10, "n" => 16}])
+
+      assert weights.read === {9}
+      assert grid.read === {1, 10}
+      assert bit.read === 16
+      assert inspect(weights) =~ "read: {9}"
+      assert inspect(grid) =~ "read: {1, 10}"
+      refute inspect(weights) =~ "~c"
+      refute inspect(grid) =~ "~c"
     end
 
     # M5-10 (decision 164): a negative square root is a minor fault, the third kind, which

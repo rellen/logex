@@ -75,7 +75,10 @@ defmodule Logex.PrinterTest do
                      :element_bit_name,
                      # decision 228: a real literal whose double is subnormal, `1.0e-310`,
                      # which the lexer reads as that double and a slot refuses
-                     :subnormal_real_lit
+                     :subnormal_real_lit,
+                     # decision 231: one no double holds but 0.0, `1.0e-400`, which the
+                     # lexer reads as 0.0 spelled and a slot refuses
+                     :underflowed_real_lit
                    ])
 
   describe "round trip" do
@@ -479,10 +482,17 @@ defmodule Logex.PrinterTest do
     {{:branches, Enum.map(pairs, &elem(&1, 0))}, ["("] ++ words ++ [")"]}
   end
 
-  defp real_leaf(line, n), do: real_leaf(line, n + :rand.uniform(8) / 8, :rand.uniform(7))
+  defp real_leaf(line, n), do: real_leaf(line, n + :rand.uniform(8) / 8, :rand.uniform(8))
 
-  # Decision 228: one draw in seven a subnormal double, its plain text.
+  # Decision 228: one draw in eight a subnormal double, its plain text; and decision 231
+  # one a number no double holds but 0.0, `3.125e-400`, the spelled leaf of 0.0.
   defp real_leaf(line, x, 7), do: real_word(line, x * 1.0e-310, &Float.to_string/1)
+
+  defp real_leaf(line, x, 8) do
+    word = Float.to_string(x) <> "e-400"
+    {{:real_lit, line, 0.0, word}, [word]}
+  end
+
   defp real_leaf(line, x, draw), do: real_word(line, x, &real_spelling(&1, draw))
 
   defp real_word(line, x, spelt) do
@@ -646,7 +656,12 @@ defmodule Logex.PrinterTest do
     do: MapSet.new([:real_lit | real_shapes(x, Float.to_string(x))])
 
   defp shapes({:real_lit, _, x, spelling}, _depth),
-    do: MapSet.new([:real_lit, :spelled_real_lit | real_shapes(x, spelling)])
+    do:
+      MapSet.new(
+        [:real_lit, :spelled_real_lit] ++
+          if_shape(Logex.Parser.underflowed?({:real_lit, 1, x, spelling}), :underflowed_real_lit) ++
+          real_shapes(x, spelling)
+      )
 
   defp shapes({:branches, legs}, depth) do
     flags =

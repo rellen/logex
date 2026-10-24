@@ -4287,7 +4287,8 @@ defmodule Logex.Runtime do
 
   # M5-12: each subscript's value, a literal's own or its tag's as an integer, and the whole
   # index checked against the array's dimensions: one outside its dimension is thrown with
-  # every subscript read.
+  # every subscript read, since decision 233 as a tuple, `{1, 9}` or `{8}`, which no
+  # `inspect/1` shows as a charlist.
   defp subscripts(env, index, dims), do: in_dimensions(read_subscripts(env, index), dims)
 
   defp one_subscript(i, count) when is_integer(i) and i >= 0 and i < count, do: i
@@ -4307,7 +4308,8 @@ defmodule Logex.Runtime do
   defp in_bounds([i | index], [count | dims], read) when i >= 0 and i < count,
     do: in_bounds(index, dims, read)
 
-  defp in_bounds(_index, _dims, read), do: throw({@out_of_range, :index_out_of_range, read})
+  defp in_bounds(_index, _dims, read),
+    do: throw({@out_of_range, :index_out_of_range, List.to_tuple(read)})
 
   defp bit_set(value, mask) when is_integer(value), do: one(Bitwise.band(value, mask) != 0)
   defp bit_set(_not_an_integer, _mask), do: 0

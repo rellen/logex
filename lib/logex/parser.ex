@@ -112,6 +112,39 @@ defmodule Logex.Parser do
   defguard is_literal(term) when is_int_lit(term) or is_real_lit(term)
 
   @doc """
+  Whether a term is a spelled real literal of 0.0, `{:real_lit, _, 0.0, spelling}`, which
+  `underflowed?/1` then reads (decision 231). A guard, so that a clause for it costs a
+  literal of any other shape nothing.
+  """
+  defguard is_zero_real(term)
+           when is_tuple(term) and tuple_size(term) == 4 and elem(term, 0) == :real_lit and
+                  elem(term, 2) == 0.0
+
+  @doc """
+  Whether a real literal underflowed (decision 231): its value 0.0 and its spelling not a
+  zero, `1.0e-400`, a number nearer 0.0 than any double holds but 0.0 itself, which every
+  slot the literal rules judge refuses as too near 0.0 for its real. Its leaf is the
+  ordinary spelled leaf of 0.0, `{:real_lit, line, 0.0, "1.0e-400"}`, so `well_formed!/1`
+  states it as it states every spelled literal, and the spelling is the flag: a zero is
+  written with its digits before the exponent all 0, `0.0e-400`, `-0.0` or `0_0.0`.
+
+      iex> Logex.Parser.underflowed?({:real_lit, 1, 0.0, "1.0e-400"})
+      true
+      iex> Logex.Parser.underflowed?({:real_lit, 1, 0.0, "0.0e-400"})
+      false
+  """
+  def underflowed?({:real_lit, _at, value, spelling}) when value == 0.0,
+    do: not zero_spelled?(spelling)
+
+  def underflowed?(_literal), do: false
+
+  # Whether a real's digits before its exponent are all 0, `-0.0e-400` and `0_0.0`.
+  defp zero_spelled?(<<ch, rest::binary>>) when ch in [?0, ?., ?_, ?-], do: zero_spelled?(rest)
+  defp zero_spelled?(<<e, _::binary>>) when e in [?e, ?E], do: true
+  defp zero_spelled?(<<>>), do: true
+  defp zero_spelled?(_nonzero), do: false
+
+  @doc """
   A literal's value, whichever its shape: `255` for `16#ff`, and since M5-10 a real's
   float, `1500.0` for `1.5e3`.
   """

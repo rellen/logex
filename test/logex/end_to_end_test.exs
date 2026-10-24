@@ -6194,7 +6194,7 @@ defmodule Logex.EndToEndTest do
         path: nil,
         file: Path.join(dir, "scales.ld"),
         line: 12,
-        read: [8]
+        read: {8}
       }
 
       assert Runner.status(runner).trip == {:fault, "fast", "scales", fault}
