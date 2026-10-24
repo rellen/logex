@@ -82,7 +82,7 @@ defmodule Logex.Warnings do
     tags
     |> Map.values()
     |> Enum.filter(& &1.line)
-    |> Enum.flat_map(&about(&1, Map.get(accesses, &1.name, [])))
+    |> Enum.flat_map(&about(&1, Map.get(accesses, &1.name, []), instructions))
     |> Kernel.++(second_otes(instructions, tags, owners))
     |> Kernel.++(storage_writes(instructions, tags, owners))
     |> Kernel.++(Enum.flat_map(instructions, &constant/1))
@@ -210,7 +210,19 @@ defmodule Logex.Warnings do
        when symbol in @runners and is_int_lit(preset),
        do: between(per_ms(Map.get(tags, name)), {symbol, line, name, Parser.value(preset)})
 
+  # M5-14: an element of an array of long timers so, by its path.
+  defp between_milliseconds({symbol, line, [{:element, _, array, _, name}, preset]}, tags)
+       when symbol in @runners and is_int_lit(preset),
+       do:
+         between(
+           per_ms(of_elements(Map.get(tags, array))),
+           {symbol, line, name, Parser.value(preset)}
+         )
+
   defp between_milliseconds(_instruction, _tags), do: []
+
+  defp of_elements(%Tag{type: {:array, type, _dims}} = tag), do: %{tag | type: type}
+  defp of_elements(_no_array), do: nil
 
   defp per_ms(%Tag{type: %FbType{body: nil} = type}), do: {FbType.rules(type).per_ms, type}
   defp per_ms(_no_built_in), do: {nil, nil}
@@ -239,17 +251,83 @@ defmodule Logex.Warnings do
         do: warning(line, "`#{name}` labels this rung, but no `jmp` names it: nothing jumps here")
   end
 
-  defp about(%Tag{} = tag, []),
+  defp about(%Tag{} = tag, [], _instructions),
     do: [warning(tag.line, "`#{tag.name}` is declared but no rung uses it")]
 
-  defp about(%Tag{section: :var_output} = tag, accesses), do: unwritten(:write in accesses, tag)
+  defp about(%Tag{section: :var_output} = tag, accesses, _instructions),
+    do: unwritten(:write in accesses, tag)
 
-  defp about(%Tag{type: %FbType{body: nil}} = tag, accesses),
+  defp about(%Tag{type: %FbType{body: nil}} = tag, accesses, _instructions),
     do: unrun(:instance in accesses, tag)
 
-  defp about(%Tag{type: %FbType{}} = tag, accesses), do: uncalled(:instance in accesses, tag)
+  defp about(%Tag{type: %FbType{}} = tag, accesses, _instructions),
+    do: uncalled(:instance in accesses, tag)
 
-  defp about(_tag, _accesses), do: []
+  # M5-14 (decision 154): an array of instances, each element an instance of its own, is
+  # told the elements no instruction runs, in the elements' order, the first ten and then a
+  # count, in one warning at its line.
+  defp about(%Tag{type: {:array, %FbType{}, _dims}} = tag, _accesses, instructions),
+    do: elements_unrun(unrun_elements(tag, instructions), tag)
+
+  defp about(_tag, _accesses, _instructions), do: []
+
+  defp unrun_elements(%Tag{name: array, type: {:array, _type, dims}}, instructions) do
+    run =
+      for {_symbol, _, [{:element, _, ^array, _, name} | _]} <- instructions,
+          into: %{},
+          do: {name, true}
+
+    for index <- Logex.Array.indexes(dims),
+        name = Logex.Array.name(array, index),
+        not is_map_key(run, name),
+        do: name
+  end
+
+  defp elements_unrun([], _tag), do: []
+
+  defp elements_unrun(names, %Tag{type: {:array, type, dims} = array} = tag) do
+    shown =
+      names
+      |> Enum.map(&"`#{&1}`")
+      |> Logex.Array.capped(&"#{&1} more")
+      |> listed_or()
+
+    {who, what} = element_runs(type, length(names))
+
+    [
+      warning(
+        tag.line,
+        "`#{tag.name}` is #{Logex.Array.a_type(array)}, but no #{who} runs " <>
+          "#{every(length(names), Logex.Array.size(dims), shown)}: #{what}"
+      )
+    ]
+  end
+
+  defp every(count, count, _shown), do: "any of its elements"
+  defp every(_some, _all, shown), do: shown
+
+  defp listed_or([one]), do: one
+  defp listed_or(items), do: Enum.join(Enum.drop(items, -1), ", ") <> " or " <> List.last(items)
+
+  defp element_runs(%FbType{body: nil} = type, count) do
+    %{kind: kind, runs: runs} = FbType.rules(type)
+    {runners(Map.keys(runs)), "#{it(count)} never #{do_s(count, does(kind))}"}
+  end
+
+  defp element_runs(_block, count),
+    do:
+      {"`cal`",
+       "#{it(count)} never #{do_s(count, "runs")}, and #{its(count)} members stay at their " <>
+         "initial values"}
+
+  defp it(1), do: "it"
+  defp it(_many), do: "they"
+
+  defp its(1), do: "its"
+  defp its(_many), do: "their"
+
+  defp do_s(1, verb), do: verb
+  defp do_s(_many, verb), do: String.trim_trailing(verb, "s")
 
   defp unrun(true, _tag), do: []
 
@@ -743,6 +821,10 @@ defmodule Logex.Warnings do
   defp whole({:name, _, name}), do: [{name, name}]
   defp whole({:member, _, [instance | _] = path}), do: [{Enum.join(path, "."), instance}]
 
+  # M5-14: a member of an element by its path, `lane_c[1].pv`, its tag its array.
+  defp whole({:member, _, {:element, _, array, index, _element}, members}),
+    do: [{Enum.join([Logex.Array.name(array, index) | members], "."), array}]
+
   # M5-9 (decision 160, provisional): a write of a bit whose number a tag holds may reach
   # any bit of its word, so it is a write of the word whole, as a write through a tag
   # subscript is of its array (§4.12's routine choice).
@@ -823,6 +905,24 @@ defmodule Logex.Warnings do
          symbol
        ),
        do: [{:coil_at, {:array, array}, array, {line, symbol}, shown, same(element)}]
+
+  # M5-14 (decision 154): a coil on a member of an element, `ote lane_c[1].r`, decides that
+  # member, keyed by its path, its tag its array; one through a tag subscript, `ote
+  # lane_c[slot].r`, decides that member of whichever element the subscript names, keyed by
+  # the array, its subscripts' tags and the member, so that two such through the same tags
+  # are the second-`ote` warning (provisional: a literal element's member beside one
+  # through a tag subscript is not compared).
+  defp target({:member, _, {:element, _, array, index, element}, members}, line, symbol),
+    do: [
+      {:coil, Enum.join([Logex.Array.name(array, index) | members], "."), nil, array,
+       {line, symbol}, Enum.join([element | members], ".")}
+    ]
+
+  defp target({:member, _, {:element_at, _, array, _, _, element} = at, members}, line, symbol),
+    do: [
+      {:coil, {:member_at, same(at), members}, nil, array, {line, symbol},
+       Enum.join([element | members], ".")}
+    ]
 
   defp target(_literal, _line, _symbol), do: []
 
@@ -1093,6 +1193,10 @@ defmodule Logex.Warnings do
 
   defp shown({:name, _, name}), do: "`#{name}`"
   defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
+
+  defp shown({:member, _, element, members}),
+    do: "`#{Enum.join([elem(element, tuple_size(element) - 1) | members], ".")}`"
+
   defp shown({:element, _, _array, _index, name}), do: "`#{name}`"
   defp shown({:element_at, _, _array, _index, _dims, name}), do: "`#{name}`"
   defp shown(literal) when is_literal(literal), do: "`#{Parser.spelling(literal)}`"
@@ -1114,6 +1218,10 @@ defmodule Logex.Warnings do
 
   defp integer_type({:element_at, _, array, _index, _dims, _name}, tags),
     do: element_integer(Map.get(tags, array))
+
+  # M5-14: a member of an element of an array of built-in instances, its member's type.
+  defp integer_type({:member, _, element, [member]}, tags),
+    do: member_integer(of_elements(Map.get(tags, elem(element, 2))), member)
 
   defp integer_type(_other, _tags), do: :error
 
@@ -1151,6 +1259,11 @@ defmodule Logex.Warnings do
   defp long_member({:member, _, [instance, member]} = operand, tags)
        when member in ["pre", "acc"],
        do: long(per_ms(Map.get(tags, instance)), operand)
+
+  # M5-14: a member of an element of an array of long timers, `cure[1].acc`.
+  defp long_member({:member, _, element, [member]} = operand, tags)
+       when member in ["pre", "acc"],
+       do: long(per_ms(of_elements(Map.get(tags, elem(element, 2)))), operand)
 
   defp long_member(_operand, _tags), do: nil
 

@@ -228,11 +228,14 @@ defmodule Logex.ArrayConfigurationTest do
                "`w[2]` cannot name a global: brackets are kept for an element's subscripts, as in `m1.temps[3]`"
              ]
 
-      for word <- ["ton[2]", "int[n]"] do
-        assert refused("var_global w #{word}\n" <> tail) == [
-                 "unknown type `#{word}`: a global array's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword` or `lword` with its sizes, literal numbers, as in `var_global w int[8]`"
-               ]
-      end
+      assert refused("var_global w int[n]\n" <> tail) == [
+               "unknown type `int[n]`: a global array's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword` or `lword` with its sizes, literal numbers, as in `var_global w int[8]`"
+             ]
+
+      # M5-14 (decision 154): an array of instances is a program's own, never a global.
+      assert refused("var_global w ton[2]\n" <> tail) == [
+               "`w` cannot be an array of tons, `ton[2]`: a global array's type is `bool`, `sint`, `int`, `dint`, `lint`, `usint`, `uint`, `udint`, `ulint`, `real`, `lreal`, `byte`, `word`, `dword` or `lword` with its sizes, and an array of tons is declared inside a program, as in `var w ton[2]`"
+             ]
     end
 
     test "from Elixir, its type and initial list are the host's to give in shape, a line each" do

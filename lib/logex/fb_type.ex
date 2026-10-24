@@ -443,6 +443,14 @@ defmodule Logex.FbType do
   defp start(%Member{type: {:block, _name}, initial: overrides} = member, owner),
     do: initial(type_of(owner, member), overrides)
 
+  # M5-14 (decision 154): a member that is an array of instances, a block's own `var`,
+  # each element at its type's start, read inside the owner's table.
+  defp start(%Member{type: {:array, %__MODULE__{}, _} = type, initial: initial}, _owner),
+    do: started(type, initial)
+
+  defp start(%Member{type: {:array, {:block, _}, _}, initial: initial} = member, owner),
+    do: started(type_of(owner, member), initial)
+
   # M5-11 (decision 151): a member that is an array, a block's own `var`, starts as an
   # array tag does.
   defp start(%Member{type: {:array, _, _} = type, initial: initial}, _owner),
@@ -462,7 +470,27 @@ defmodule Logex.FbType do
   def type_of(%__MODULE__{body: %Program{blocks: blocks}}, %Member{type: {:block, name}}),
     do: within(Map.fetch!(blocks, name), blocks)
 
+  # M5-14: an array of instances of a user block so, its elements' type found in turn.
+  def type_of(%__MODULE__{body: %Program{blocks: blocks}}, %Member{
+        type: {:array, {:block, name}, dims}
+      }),
+      do: {:array, within(Map.fetch!(blocks, name), blocks), dims}
+
   def type_of(_type, %Member{type: type}), do: type
+
+  @doc """
+  M5-14 (decision 154): an array of instances' first value, the one rule for it, a tuple
+  of tuples in the elements' order as any array's (`Logex.Array`), each element a new
+  instance of `type` (`initial/2`), its members named in `presets` by its index, a list of
+  subscripts, at the values given there: the preset the compiler gives the element from
+  the instruction that runs it.
+  """
+  def started({:array, %__MODULE__{} = type, dims}, presets),
+    do:
+      dims
+      |> Logex.Array.indexes()
+      |> Enum.map(&initial(type, Map.get(presets || %{}, &1, %{})))
+      |> Logex.Array.from_flat(dims)
 
   @doc """
   A type as a table holds it (decision 53): its body with no table of its own, `blocks`
@@ -691,8 +719,21 @@ defmodule Logex.FbType do
   defp exact(_reached, _blocks), do: :error
 
   # The names of the user block types a body's instances are of, as its tags name them.
+  # Since M5-14 an array of instances of a user block names its type too, told in the
+  # comprehension's own body, so a body of none is read in what it was.
   defp named(%__MODULE__{body: %Program{tags: tags}}),
-    do: for({_, %Tag{type: {:block, held}}} <- tags, do: held)
+    do:
+      for(
+        {_, %Tag{type: type}} <- tags,
+        held =
+          case type do
+            {:block, held} -> held
+            {:array, {:block, held}, _dims} -> held
+            _other -> nil
+          end,
+        held != nil,
+        do: held
+      )
 
   defp reach(_names, _path, _blocks, :error), do: :error
   defp reach([], _path, _blocks, ok), do: ok

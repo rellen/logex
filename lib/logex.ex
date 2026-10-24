@@ -290,16 +290,21 @@ defmodule Logex do
   # the file's own name, which the compiler refuses as recursion: each once, at its first
   # line, in line order. A word no block can be named, a dotted one among them, is no
   # file's, and the compiler reports it where it is written.
+  # Since M5-14 an array of a block's instances names the block by its type word's base,
+  # `gate` of `gate[4]` (decision 154).
   defp needed({:routine, {:rungs, rungs}}, own) do
     words =
-      for {:rung, [{:name, _, section}, {:name, _, _tag}, {:name, line, word} | _]} <- rungs,
+      for {:rung, [{:name, _, section}, {:name, _, _tag}, {:name, line, typed} | _]} <- rungs,
           Declarations.reserved(section) == :section,
+          word = unsized(typed),
           Declarations.block_name?(word),
           word != own,
           do: {word, line}
 
     Enum.uniq_by(words, &elem(&1, 0))
   end
+
+  defp unsized(word), do: hd(:binary.split(word, "["))
 
   defp dependency({word, line}, acc, {path, held}) do
     file = Path.join(Path.dirname(path), word <> ".ld")

@@ -9,7 +9,12 @@ defmodule Logex.Edit.Plan do
   alias Logex.{Declarations, Diagnostic, FbType, Instance, Program, Tag, Walk}
   alias Logex.FbType.Member
   import Logex.Declarations, only: [is_elementary: 1]
-  import Logex.Array, only: [is_array: 1]
+  import Logex.Array, only: [is_array: 1, is_instances: 1]
+
+  # M5-14: a key that names an element, `lane_t[2]`, by its last byte.
+  defguardp is_element_key(key)
+            when is_binary(key) and byte_size(key) > 0 and
+                   binary_part(key, byte_size(key) - 1, 1) == "]"
 
   # The edit's record of one instance (F5): `shown`, the value each held output's point
   # holds, as the edit has learnt it (F4); `pre`, for each timer, the `.pre` the last
@@ -71,12 +76,49 @@ defmodule Logex.Edit.Plan do
         do: change
   end
 
+  # M5-14 (decision 154): an array of instances of a user block keeps its type where its
+  # sizes stay and its block keeps its name and every member's kind, each element's
+  # change cited once, by its first element's path, `lanes[0].count` (provisional).
+  defp changes(
+         {:array, %FbType{name: name, body: %Program{}} = was, dims},
+         {:array, %FbType{name: name, body: %Program{}} = type, dims},
+         path
+       ),
+       do: changes(was, type, Logex.Array.name(path, Enum.map(dims, fn _ -> 0 end)))
+
   defp changes(was, type, path), do: [{path, was, type}]
 
   # A version's members by name, built once per type compared, so that matching the
   # members of two versions is linear in them, not quadratic.
   defp by_name(nil), do: %{}
   defp by_name(%FbType{members: members}), do: Map.new(members, &{&1.name, &1})
+  defp by_name(members) when is_list(members), do: Map.new(members, &{&1.name, &1})
+
+  # M5-14 (decision 154): a block's members with each array of instances it holds, a
+  # block's own `var`, given as its elements, each a member of its own by its path,
+  # `t[1]`, of its array's elements' type and with its own preset, so that every rule of a
+  # member holding an instance is an element's; any other member as it is.
+  defp expanded(nil), do: nil
+
+  defp expanded(%FbType{members: members} = type),
+    do: Enum.flat_map(members, &element_members(&1, FbType.type_of(type, &1)))
+
+  defp element_members(
+         %Member{name: name, initial: initial} = member,
+         {:array, %FbType{} = type, dims}
+       ),
+       do:
+         for(
+           index <- Logex.Array.indexes(dims),
+           do: %{
+             member
+             | name: Logex.Array.name(name, index),
+               type: type,
+               initial: Map.get(initial || %{}, index, %{})
+           }
+         )
+
+  defp element_members(member, _type), do: [member]
 
   defp retyped(path, {file, line}, was, type),
     do: %Diagnostic{
@@ -152,21 +194,33 @@ defmodule Logex.Edit.Plan do
       # built-in's, and the forecast and the resume its type's.
       timers:
         for(
-          {name, %Tag{type: %FbType{body: nil} = type}} <- tags,
+          {name, %Tag{type: type}} <- tags,
+          {key, %FbType{body: nil} = type} <- instances_of(name, type),
           into: %{},
-          do: {name, {preset(Map.get(presets, name)), FbType.rules(type)}}
+          do: {key, {preset(Map.get(presets, key)), FbType.rules(type)}}
         ),
       # M2-5: each instance of a user block, with its type and whether a `cal` runs it; and
       # where each block type's body has its one-shots and what it runs, by the type's name.
       blocks:
         for(
-          {name, %Tag{type: %FbType{body: %Program{}} = type}} <- tags,
+          {name, %Tag{type: type}} <- tags,
+          {key, %FbType{body: %Program{}} = type} <- instances_of(name, type),
           into: %{},
-          do: {name, {type, is_map_key(called, name)}}
+          do: {key, {type, is_map_key(called, key)}}
         ),
       bodies: bodies
     }
   end
+
+  # M5-14 (decision 154): the instances a tag holds, each by its path: an instance's own
+  # name, and each element of an array of instances by its, `lane_t[2]`, in the elements'
+  # order, so that every rule of an instance is an element's.
+  defp instances_of(name, %FbType{} = type), do: [{name, type}]
+
+  defp instances_of(name, {:array, %FbType{} = type, dims}),
+    do: for(index <- Logex.Array.indexes(dims), do: {Logex.Array.name(name, index), type})
+
+  defp instances_of(_name, _type), do: []
 
   defp section(tags, wanted),
     do: for({name, %Tag{section: ^wanted}} <- tags, into: %{}, do: {name, true})
@@ -255,6 +309,9 @@ defmodule Logex.Edit.Plan do
             do: path
       )
 
+  defp input?([name | members], tags) when is_element_key(name),
+    do: input_in(of_elements(Map.get(tags, elem(element_key(name), 0))), members)
+
   defp input?([name | members], tags), do: input_in(Map.get(tags, name), members)
 
   defp input_in(%Tag{type: %FbType{} = type}, members), do: input_of(type, members)
@@ -287,7 +344,7 @@ defmodule Logex.Edit.Plan do
     do:
       for(
         {name, %Tag{type: type}} <- to.tags,
-        is_elementary(type) or is_array(type),
+        is_elementary(type) or (is_array(type) and not is_instances(type)),
         not is_map_key(to.inputs, name),
         not is_map_key(to.shared, name) and not is_map_key(from.shared, name),
         {:ok, %Tag{type: ^type}} <- [Map.fetch(from.tags, name)],
@@ -323,6 +380,10 @@ defmodule Logex.Edit.Plan do
 
   defp fit(%Tag{type: %FbType{} = type}),
     do: {:members, Enum.sort(Map.keys(FbType.initial(type)))}
+
+  # M5-14: an array of instances fits by its shape, each element as an instance does.
+  defp fit(%Tag{type: {:array, %FbType{} = type, dims}} = tag),
+    do: {:instances, dims, fit(%{tag | type: type})}
 
   defp fit(%Tag{type: type}), do: type
 
@@ -379,7 +440,15 @@ defmodule Logex.Edit.Plan do
 
   # The types of a table's instances of user blocks, as it gives them.
   defp instances(tags),
-    do: for({_, %Tag{type: %FbType{body: %Program{}} = type}} <- tags, do: type)
+    do:
+      for(
+        {_, %Tag{type: type}} <- tags,
+        %FbType{body: %Program{}} = type <- [element_type(type)],
+        do: type
+      )
+
+  defp element_type({:array, type, _dims}), do: type
+  defp element_type(type), do: type
 
   defp body(%Program{rungs: rungs}, tags) do
     {held, called} =
@@ -445,7 +514,15 @@ defmodule Logex.Edit.Plan do
   defp edges({symbol, _line, [{:name, _, instance} | _]}, tags, bits),
     do: edge(Map.get(tags, instance), symbol, instance, bits)
 
+  # M5-14: an element of an array of counters or pulse timers, its memory by its path,
+  # `lane_c[1].cu`.
+  defp edges({symbol, _line, [{:element, _, array, _index, instance} | _]}, tags, bits),
+    do: edge(of_elements(Map.get(tags, array)), symbol, instance, bits)
+
   defp edges(_instruction, _tags, bits), do: bits
+
+  defp of_elements(%Tag{type: {:array, type, _dims}} = tag), do: %{tag | type: type}
+  defp of_elements(_no_array), do: nil
 
   defp edge(%Tag{type: %FbType{body: nil} = type}, symbol, instance, bits),
     do: edge_of(Map.get(FbType.rules(type).runs, symbol), instance, bits)
@@ -472,6 +549,10 @@ defmodule Logex.Edit.Plan do
   defp calling({:cal, _line, [{:name, _, instance} | _]}, tags, cals),
     do: block_call(Map.get(tags, instance), instance, cals)
 
+  # M5-14: a `cal` of an element of an array of user blocks runs it, by its path.
+  defp calling({:cal, _line, [{:element, _, array, _index, instance} | _]}, tags, cals),
+    do: block_call(of_elements(Map.get(tags, array)), instance, cals)
+
   defp calling(_instruction, _tags, cals), do: cals
 
   defp block_call(%Tag{type: %FbType{body: %Program{}} = type}, instance, cals),
@@ -492,6 +573,9 @@ defmodule Logex.Edit.Plan do
   defp bare({:cal, _line, [{:name, _, instance} | _] = operands}, tags),
     do: {:cal, Enum.map(operands, &operand/1), formals(Map.get(tags, instance))}
 
+  defp bare({:cal, _line, [{:element, _, array, _index, _name} | _] = operands}, tags),
+    do: {:cal, Enum.map(operands, &operand/1), formals(of_elements(Map.get(tags, array)))}
+
   # M3-1 (decision 87): an instruction that runs a built-in instance is stripped of its
   # preset, which no power on the rung reads, so a preset changed alone is the same rung.
   defp bare({symbol, _line, [instance, _preset]}, _tags) when symbol in @runners,
@@ -505,6 +589,16 @@ defmodule Logex.Edit.Plan do
   defp formals(_not_a_block), do: nil
 
   defp operand({kind, _line, value}), do: {kind, value}
+
+  # M5-14: a member of an element by its element and its members, and a bit of one by it.
+  defp operand({:member, _line, element, members}), do: {:member, operand(element), members}
+
+  defp operand({:bit, _line, {:member, _, _, _} = member, n, _mask, _name}),
+    do: {:bit, operand(member), n}
+
+  defp operand({:bit_at, _line, {:member, _, _, _} = member, index, _width, _name}),
+    do: {:bit_at, operand(member), operand(index)}
+
   # M5-8: a bit by its path and number; its mask follows from its word's type, which an
   # edit changes only with a restart.
   # Decision 221: a bit of an element by its element, as an element is compared.
@@ -586,11 +680,11 @@ defmodule Logex.Edit.Plan do
   defp planned({:ok, plan}, _key, _types, memo), do: {plan, memo}
 
   defp planned(:error, key, {was, type, runs, bodies}, memo) do
-    before = {was, by_name(was)}
+    before = {was, by_name(expanded(was))}
 
     {members, memo} =
       Enum.map_reduce(
-        type.members,
+        expanded(type),
         memo,
         &member(%{&1 | type: FbType.type_of(type, &1)}, before, {type, runs, bodies}, &2)
       )
@@ -611,6 +705,7 @@ defmodule Logex.Edit.Plan do
     do:
       members
       |> Enum.reject(&is_map_key(names, &1.name))
+      |> Enum.flat_map(&element_members(&1, FbType.type_of(type, &1)))
       |> Enum.flat_map_reduce(memo, &gone_member(&1, FbType.type_of(type, &1), &2))
 
   defp gone_member(%Member{name: name}, %FbType{body: nil} = type, memo),
@@ -829,6 +924,10 @@ defmodule Logex.Edit.Plan do
   defp path_at(%{} = map, [key]) when binary_part(key, byte_size(key) - 1, 1) == "]",
     do: element_at(Logex.Array.split(key), map)
 
+  # M5-14: an element of an array of instances on the way, `lane_c[1]` of `lane_c[1].r`.
+  defp path_at(%{} = map, [key | path]) when is_element_key(key),
+    do: path_at(element_at(Logex.Array.split(key), map), path)
+
   defp path_at(%{} = map, [key | path]), do: path_at(Map.get(map, key, 0), path)
   # M5-8: a storage bit that is a bit of a word, `status.3`, is that bit's value.
   defp path_at(word, [part]) when is_integer(word), do: bit_value(Integer.parse(part), word)
@@ -857,8 +956,8 @@ defmodule Logex.Edit.Plan do
   # until assemble or cancel prunes it. Each is reported by its path, `s1.count`.
   defp migrate({name, plan}, fresh, rules, {env, reports, pre}) do
     migrate_in(
-      Map.get(env, name),
-      is_map_key(fresh, name),
+      key_get(env, name),
+      is_map_key(fresh, held_under(name)),
       {name, plan},
       rules,
       {env, reports, pre}
@@ -867,7 +966,7 @@ defmodule Logex.Edit.Plan do
 
   defp migrate_in(%{} = map, false, {name, plan}, rules, {env, reports, pre}) do
     {map, reports, pre} = members(plan, map, name, rules, {reports, pre})
-    {Map.put(env, name, map), reports, pre}
+    {key_put(env, name, map), reports, pre}
   end
 
   defp migrate_in(_started_or_not_a_map, _fresh?, _plan, _rules, acc), do: acc
@@ -878,7 +977,7 @@ defmodule Logex.Edit.Plan do
   defp moved_member({:leaf, name, type, initial, old, kept?}, prefix, {first?, _, _, _}, acc) do
     path = prefix <> "." <> name
 
-    starts?(Map.fetch(elem(acc, 0), name), not kept?, type, first?)
+    starts?(key_fetch(elem(acc, 0), name), not kept?, type, first?)
     |> started(name, path, start_of(type, initial), acc)
     |> initials_changed(type, {kept?, old, initial}, path)
   end
@@ -889,7 +988,7 @@ defmodule Logex.Edit.Plan do
     path = prefix <> "." <> name
 
     timer_moved(
-      starts?(Map.fetch(map, name), not kept?, {:members, keys}, first?),
+      starts?(key_fetch(map, name), not kept?, {:members, keys}, first?),
       {name, path, initial, from, to, type},
       {undo, clock},
       {map, reports, pre}
@@ -901,7 +1000,7 @@ defmodule Logex.Edit.Plan do
     path = prefix <> "." <> name
 
     block_moved(
-      starts?(Map.fetch(map, name), not kept?, :block, first?),
+      starts?(key_fetch(map, name), not kept?, :block, first?),
       {name, path, initial, plan},
       rules,
       {map, reports, pre}
@@ -916,7 +1015,7 @@ defmodule Logex.Edit.Plan do
   defp moved_member({:block_gone, name, plan}, prefix, rules, {map, reports, pre}),
     do:
       block_kept(
-        Map.get(map, name),
+        key_get(map, name),
         {name, prefix <> "." <> name, plan},
         rules,
         {map, reports, pre}
@@ -929,7 +1028,7 @@ defmodule Logex.Edit.Plan do
   defp start_of(_type, initial), do: initial
 
   defp started(true, name, path, initial, {map, reports, pre}),
-    do: {:started, {Map.put(map, name, initial), [{:added, path, initial} | reports], pre}}
+    do: {:started, {key_put(map, name, initial), [{:added, path, initial} | reports], pre}}
 
   defp started(false, _name, _path, _initial, acc), do: {:kept, acc}
 
@@ -967,7 +1066,7 @@ defmodule Logex.Edit.Plan do
 
   defp timer_moved(true, {name, path, initial, _from, _to, _type}, _clocks, acc) do
     {map, reports, pre} = acc
-    {Map.put(map, name, initial), [{:added, path, initial} | reports], pre}
+    {key_put(map, name, initial), [{:added, path, initial} | reports], pre}
   end
 
   defp timer_moved(false, {name, path, _initial, from, to, type}, {undo, clock}, acc),
@@ -981,15 +1080,15 @@ defmodule Logex.Edit.Plan do
   defp block_moved(true, {name, path, {type, overrides}, _plan}, rules, {map, reports, pre}) do
     {_first?, _undo, _clock, table} = rules
     initial = FbType.initial(FbType.within(type, table), overrides)
-    {Map.put(map, name, initial), [{:added, path, initial} | reports], pre}
+    {key_put(map, name, initial), [{:added, path, initial} | reports], pre}
   end
 
   defp block_moved(false, {name, path, _initial, plan}, rules, {map, reports, pre}),
-    do: block_kept(Map.get(map, name), {name, path, plan}, rules, {map, reports, pre})
+    do: block_kept(key_get(map, name), {name, path, plan}, rules, {map, reports, pre})
 
   defp block_kept(%{} = inner, {name, path, plan}, rules, {map, reports, pre}) do
     {inner, reports, pre} = members(plan, inner, path, rules, {reports, pre})
-    {Map.put(map, name, inner), reports, pre}
+    {key_put(map, name, inner), reports, pre}
   end
 
   defp block_kept(_not_a_map, _plan, _rules, acc), do: acc
@@ -1038,6 +1137,10 @@ defmodule Logex.Edit.Plan do
   # that is no map under an instance's tag is refused before any step since decision 184,
   # so the clauses for one are totality only.
   defp fits?(:block, value), do: is_map(value)
+
+  defp fits?({:instances, dims, fit}, value),
+    do: Logex.Array.held?(value, dims, &fits?(fit, &1))
+
   defp fits?({:members, keys}, %{} = timer), do: Enum.sort(Map.keys(timer)) == keys
   defp fits?({:members, _keys}, _not_a_timer), do: false
   # M5-11: an array fits where it is held whole, each element of its elements' type.
@@ -1063,7 +1166,7 @@ defmodule Logex.Edit.Plan do
   # M3-1: `.pre` is the type's preset member, `pre` for a timer (Logex.FbType.rules/1).
   defp timed({key, name, _from, _to, %{preset: member}} = timer, undo, clock, {env, _, _} = acc),
     do:
-      timer(Map.fetch(as_map(Map.get(env, key)), member), timer, Map.get(undo, name), clock, acc)
+      timer(Map.fetch(as_map(key_get(env, key)), member), timer, Map.get(undo, name), clock, acc)
 
   defp timer(
          {:ok, pre},
@@ -1072,13 +1175,13 @@ defmodule Logex.Edit.Plan do
          {{now, at}, switched, stopped_last?},
          {env, report, left}
        ) do
-    {value, undone} = undone(Map.fetch!(env, key), undo, switched, now, name)
+    {value, undone} = undone(key_get(env, key), undo, switched, now, name)
     target = target(undo, pre, from, to)
 
     {value, resumed, found} =
       resumed({from, to, stopped_last?}, Map.put(value, member, target), name, {at, rules})
 
-    {Map.put(env, key, value),
+    {key_put(env, key, value),
      moved(name, {pre, target, to}, value, rules) ++ undone ++ resumed ++ report,
      Map.put(left, name, {target, pre, found})}
   end
@@ -1092,6 +1195,44 @@ defmodule Logex.Edit.Plan do
 
   defp as_map(%{} = map), do: map
   defp as_map(_not_a_map), do: %{}
+
+  # M5-14 (decision 154): an element of an array of instances is moved by its path, as an
+  # instance is by its name: a value in an env or an instance's map by its key, a tag's or
+  # a member's name, or an element's, `lane_t[2]`, read from its array and written into it,
+  # every other element kept. Told by the key's last byte, which each clause's guard reads.
+  defp key_fetch(map, key) when is_element_key(key) do
+    {array, index} = element_key(key)
+    element_fetch(Map.fetch(map, array), index)
+  end
+
+  defp key_fetch(map, key), do: Map.fetch(map, key)
+
+  defp key_get(map, key) when is_element_key(key), do: unfetched(key_fetch(map, key))
+  defp key_get(map, key), do: Map.get(map, key)
+
+  defp key_put(map, key, value) when is_element_key(key) do
+    {array, index} = element_key(key)
+    Map.put(map, array, Logex.Array.put(Map.fetch!(map, array), index, value))
+  end
+
+  defp key_put(map, key, value), do: Map.put(map, key, value)
+
+  defp element_key(key) do
+    {array, subscripts} = Logex.Array.split(key)
+    {array, Enum.map(subscripts, &elem(Logex.Array.subscript(&1), 1))}
+  end
+
+  defp element_fetch({:ok, value}, index) when is_tuple(value),
+    do: {:ok, Logex.Array.fetch(value, index)}
+
+  defp element_fetch(_none, _index), do: :error
+
+  defp unfetched({:ok, value}), do: value
+  defp unfetched(:error), do: nil
+
+  # The tag or member a key's value is held under, an element's its array's.
+  defp held_under(key) when is_element_key(key), do: elem(element_key(key), 0)
+  defp held_under(key), do: key
 
   # Where `.pre` goes. F1 first: still what this edit's last switch left, it goes back to
   # what that switch found. Otherwise, decision 23: a timer the program started runs no
@@ -1264,11 +1405,11 @@ defmodule Logex.Edit.Plan do
   # M2-5: inside each instance of a user block the program kept declares, the members its
   # version of the block does not declare, at any depth, each reported by its path.
   defp prune_in({name, plan}, {env, reports}),
-    do: pruned_in(Map.get(env, name), {name, plan}, {env, reports})
+    do: pruned_in(key_get(env, name), {name, plan}, {env, reports})
 
   defp pruned_in(%{} = map, {name, plan}, {env, reports}) do
     {map, reports} = prune_members(plan, map, name, reports)
-    {Map.put(env, name, map), reports}
+    {key_put(env, name, map), reports}
   end
 
   defp pruned_in(_not_a_map, _plan, acc), do: acc
@@ -1283,7 +1424,7 @@ defmodule Logex.Edit.Plan do
 
     Enum.reduce(plan.members, {kept, reports}, fn
       {:block, name, _initial, _kept?, inner}, {kept, reports} ->
-        nested_prune(Map.get(kept, name), {name, prefix <> "." <> name, inner}, {kept, reports})
+        nested_prune(key_get(kept, name), {name, prefix <> "." <> name, inner}, {kept, reports})
 
       _member, acc ->
         acc
@@ -1292,7 +1433,7 @@ defmodule Logex.Edit.Plan do
 
   defp nested_prune(%{} = inner, {name, path, plan}, {map, reports}) do
     {inner, reports} = prune_members(plan, inner, path, reports)
-    {Map.put(map, name, inner), reports}
+    {key_put(map, name, inner), reports}
   end
 
   defp nested_prune(_not_a_map, _plan, acc), do: acc

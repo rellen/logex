@@ -198,10 +198,12 @@ defmodule Logex.ArrayTest do
                  "numbers, as in `int[8]`, fixed when the program compiles"
              ]
 
-      assert messages("var lane_t ton[4]\nvar a bool\nxic a ton lane_t[2] 500") == [
-               "line 1: `lane_t` is declared `ton[4]`, an array of tons: an array holds " <>
-                 "elements of an elementary type, a bool, an integer, a real or a bit string, " <>
-                 "and an array of timers, counters or function blocks is not supported yet"
+      # Since M5-14 an array of instances is declared (instance_array_test.exs), with no
+      # initial list.
+      assert messages("var lane_t ton[4] 1 2 3 4\nvar a bool\nxic a ton lane_t[2] 500") == [
+               "line 1: `lane_t` is an array of 4 tons, which takes no initial values: each " <>
+                 "element's preset is the number on its `ton` instruction, as in " <>
+                 "`ton lane_t[0] 5000`"
              ]
 
       assert [

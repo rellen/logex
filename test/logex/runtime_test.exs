@@ -2442,6 +2442,7 @@ defmodule Logex.RuntimeTest do
                runs?: 2,
                same?: 2,
                signature: 1,
+               started: 2,
                tof: 0,
                tof_ltime: 0,
                ton: 0,

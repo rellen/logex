@@ -128,6 +128,20 @@ defmodule Logex.Walk do
   defp tag_of({:bit, _, {:element_at, _, array, index, _, _}, _n, _mask, _name}),
     do: {:subscripted, array, subscript_tags(index)}
 
+  # M5-14 (decision 154): a member of an element of an array of instances is a use of the
+  # array, `lane_t[2].dn` of `lane_t`, with its slot's access, as an element is, and one a
+  # tag subscripts of each subscript's tag read too; a bit of one is a use of its member's,
+  # and of its number's tag where a tag holds it.
+  defp tag_of({:member, _, {:element, _, array, _index, _name}, _members}), do: array
+
+  defp tag_of({:member, _, {:element_at, _, array, index, _dims, _name}, _members}),
+    do: {:subscripted, array, subscript_tags(index)}
+
+  defp tag_of({:bit, _, {:member, _, _, _} = member, _n, _mask, _name}), do: tag_of(member)
+
+  defp tag_of({:bit_at, _, {:member, _, _, _} = member, {:name, _, index}, _width, _name}),
+    do: numbered_in(tag_of(member), index)
+
   defp tag_of({:int_lit, _, _}), do: nil
   defp tag_of({:int_lit, _, _, _spelling}), do: nil
   # M5-10: a real literal, plain or spelled, is no tag either.
@@ -137,6 +151,11 @@ defmodule Logex.Walk do
   defp tag_of({:label, _, _}), do: nil
 
   defp subscript_tags(index), do: for({:name, _, name} <- index, do: name)
+
+  defp numbered_in({:subscripted, array, reads}, index),
+    do: {:subscripted, array, reads ++ [index]}
+
+  defp numbered_in(array, index), do: {:numbered, array, index}
 
   @doc """
   The instructions that keep an edge in a storage bit, a bool of the routine they stand in,
@@ -306,10 +325,19 @@ defmodule Logex.Walk do
   defp calling({:cal, _line, [{:name, _, instance} | _]}, tags),
     do: block(Map.get(tags, instance), instance)
 
+  # M5-14 (decision 154): a `cal` of an element of an array of instances runs that element,
+  # by its path, `lanes[2]`.
+  defp calling({:cal, _line, [{:element, _, array, _index, name} | _]}, tags),
+    do: block(element_tag(Map.get(tags, array)), name)
+
   defp calling(_instruction, _tags), do: []
 
   defp block(%Tag{type: %FbType{body: %Program{}} = type}, instance), do: [{instance, type}]
   defp block(_not_a_block, _instance), do: []
+
+  # An element of an array of instances as a tag of its elements' type, or nil.
+  defp element_tag(%Tag{type: {:array, %FbType{} = type, _dims}} = tag), do: %{tag | type: type}
+  defp element_tag(_no_array), do: nil
 
   defp descend(%FbType{name: name} = type, path, own, {facts, memo}) do
     {{inner, cals}, memo} = own_facts(Map.fetch(memo, name), type, own, memo)
@@ -379,6 +407,10 @@ defmodule Logex.Walk do
     |> Map.new(fn {path, lines} -> {path, Enum.reverse(lines)} end)
   end
 
+  # M5-14: a write of a member of an element is a write of the element.
+  defp element_of({:member, _, element, _members}), do: element
+  defp element_of({:bit, _, {:member, _, element, _}, _, _, _}), do: element
+  defp element_of({:bit_at, _, {:member, _, element, _}, _, _, _}), do: element
   defp element_of({:element, _, _, _, _} = element), do: element
   defp element_of({:bit, _, {:element, _, _, _, _} = element, _, _, _}), do: element
   defp element_of({:bit_at, _, {:element, _, _, _, _} = element, _, _, _}), do: element
@@ -403,9 +435,31 @@ defmodule Logex.Walk do
     do:
       for(
         {{:write, _type}, operand} <- Enum.zip(Compiler.signature(instruction, tags), operands),
-        path = member_path(operand),
+        path <- member_paths(operand),
         do: {path, line}
       )
+
+  # M5-14 (decision 154): a member of an element of an array of instances by the element's
+  # path, `lane_c[1].pv`, and one a tag subscripts, which may write that member of any
+  # element, as that member of each element, `lane_c[0].pv` to `lane_c[3].pv`
+  # (provisional); a bit of one is a write of its member.
+  defp member_paths({:member, _, {:element, _, array, index, _name}, members}),
+    do: [Enum.join([Logex.Array.name(array, index) | members], ".")]
+
+  defp member_paths({:member, _, {:element_at, _, array, _index, dims, _name}, members}),
+    do:
+      for(
+        index <- Logex.Array.indexes(dims),
+        do: Enum.join([Logex.Array.name(array, index) | members], ".")
+      )
+
+  defp member_paths({:bit, _, {:member, _, _, _} = member, _n, _mask, _name}),
+    do: member_paths(member)
+
+  defp member_paths({:bit_at, _, {:member, _, _, _} = member, _index, _width, _name}),
+    do: member_paths(member)
+
+  defp member_paths(operand), do: List.wrap(member_path(operand))
 
   # A member's path, `lube.r`, and since M5-8 a bit of one, a write of its member, `t1.pre`
   # for `t1.pre.3`; a tag or a tag's bit is none.
@@ -433,7 +487,14 @@ defmodule Logex.Walk do
     do:
       instructions
       |> preset_runs(tags)
-      |> Map.filter(fn {name, _run} -> kind(Map.get(tags, name)) == wanted end)
+      |> Map.filter(fn {name, _run} -> kind(instance(tags, name)) == wanted end)
+
+  # An instance's tag by the name it is run by, a tag's or since M5-14 an element's,
+  # `lane_t[2]`, its array's elements' type.
+  defp instance(tags, name) when binary_part(name, byte_size(name) - 1, 1) == "]",
+    do: element_tag(Map.get(tags, elem(Logex.Array.split(name), 0)))
+
+  defp instance(tags, name), do: Map.get(tags, name)
 
   defp kind(%Tag{type: %FbType{} = type}), do: kind_of(FbType.rules(type))
   defp kind(_not_a_builtin), do: nil
@@ -447,6 +508,11 @@ defmodule Logex.Walk do
 
   defp run({symbol, line, [{:name, _, instance} | preset]}, runs) when symbol in @runners,
     do: Map.put_new(runs, instance, {line, preset_of(preset)})
+
+  # M5-14 (decision 154): an element of an array of instances, run by its path, `lane_t[2]`.
+  defp run({symbol, line, [{:element, _, _array, _index, instance} | preset]}, runs)
+       when symbol in @runners,
+       do: Map.put_new(runs, instance, {line, preset_of(preset)})
 
   defp run(_instruction, runs), do: runs
 

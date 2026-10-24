@@ -564,12 +564,22 @@ defmodule Logex.Configuration.Text do
 
   defp array_word(:error, word, token, {_rest, global}),
     do:
-      {:error,
-       fail(
-         token,
-         "unknown type `#{word}`: a global array's type is #{a_global()} with its sizes, " <>
-           "literal numbers, as in `var_global #{global.name} int[8]`"
-       ), declared(global)}
+      {:error, fail(token, unknown_array(FbType.builtin(base_word(word)), word, global.name)),
+       declared(global)}
+
+  defp base_word(word), do: hd(:binary.split(word, "["))
+
+  # M5-14 (decision 154): an array of instances is a program's own, as an instance is.
+  defp unknown_array(%FbType{name: type}, word, name),
+    do:
+      "`#{name}` cannot be an array of #{type}s, `#{word}`: a global array's type is " <>
+        "#{a_global()} with its sizes, and an array of #{type}s is declared inside a " <>
+        "program, as in `var #{name} #{word}`"
+
+  defp unknown_array(nil, word, name),
+    do:
+      "unknown type `#{word}`: a global array's type is #{a_global()} with its sizes, " <>
+        "literal numbers, as in `var_global #{name} int[8]`"
 
   defp listed([value | rest], global, type, values) when is_literal(value),
     do: listed(rest, global, type, [held(type, Parser.value(value)) | values])

@@ -3527,9 +3527,19 @@ defmodule Logex.Configuration do
 
   defp word(_built_in, _preset, name, holder, tables) do
     {typed, tables} = typed_tags(Map.fetch(tables, key(holder)), holder, tables)
-    %Tag{type: %FbType{name: word}} = Map.fetch!(typed, name)
+    %Tag{type: %FbType{name: word}} = instance_tag(typed, name)
     {word, tables}
   end
+
+  # An instance's tag by its name in a routine's typed tags, and since M5-14 an element's of
+  # an array of instances, `lane_t[2]`, as a tag of its array's elements' type.
+  defp instance_tag(typed, name) when binary_part(name, byte_size(name) - 1, 1) == "]" do
+    {array, _subscripts} = Logex.Array.split(name)
+    %Tag{type: {:array, type, _dims}} = tag = Map.fetch!(typed, array)
+    %{tag | type: type}
+  end
+
+  defp instance_tag(typed, name), do: Map.fetch!(typed, name)
 
   # M3-2: in the words of the timer's own type.
   defp timer_warning({:timer, path, cited, word}, instance, program),
@@ -3619,7 +3629,7 @@ defmodule Logex.Configuration do
 
   defp holder([instance | rest], routine, tables) do
     {typed, tables} = typed_tags(Map.fetch(tables, key(routine)), routine, tables)
-    %Tag{type: %FbType{body: body}} = Map.fetch!(typed, instance)
+    %Tag{type: %FbType{body: body}} = instance_tag(typed, instance)
     holder(rest, {:block, body}, tables)
   end
 

@@ -38,13 +38,35 @@ defmodule Logex.Array do
            when is_tuple(type) and tuple_size(type) == 3 and elem(type, 0) == :array
 
   @doc false
+  # M5-14 (decision 154): an array of instances, of a function block type, built-in or a
+  # user block's, as a compile's table holds it, `{:block, name}`, or as it reads with
+  # each type itself (`Logex.Program.typed_tags/1`): a guard.
+  defguard is_instances(type)
+           when is_array(type) and
+                  (is_struct(elem(type, 1), Logex.FbType) or
+                     (is_tuple(elem(type, 1)) and tuple_size(elem(type, 1)) == 2 and
+                        elem(elem(type, 1), 0) == :block))
+
+  @doc false
   # The number of elements of an array of `dims`.
   def size(dims), do: Enum.reduce(dims, 1, &(&1 * &2))
 
   @doc false
   # An array's type as a message names it: `an array of 8 ints`, `an array of 4 by 8 reals`.
+  # M5-14 (decision 154): an array of instances by its sizes and its type's word, `an array
+  # of 4 tons`, a user block's `an array of 4 instances of `seal``, as `instance_of/1`
+  # names one, a compiled table's `{:block, name}` among them.
+  def a_type({:array, %Logex.FbType{name: name, body: nil}, dims}),
+    do: "an array of #{Enum.join(dims, " by ")} #{name}#{plural(size(dims))}"
+
+  def a_type({:array, %Logex.FbType{name: name}, dims}), do: of_blocks(name, dims)
+  def a_type({:array, {:block, name}, dims}), do: of_blocks(name, dims)
+
   def a_type({:array, type, dims}),
     do: "an array of #{Enum.join(dims, " by ")} #{Declarations.word(type)}#{plural(size(dims))}"
+
+  defp of_blocks(name, dims),
+    do: "an array of #{Enum.join(dims, " by ")} instance#{plural(size(dims))} of `#{name}`"
 
   # An array of one element holds one, `an array of 1 int` (M5-11's review).
   defp plural(1), do: ""

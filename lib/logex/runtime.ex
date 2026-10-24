@@ -2760,7 +2760,38 @@ defmodule Logex.Runtime do
   defp tag_at({array, subscripts}, program, {head, tag, [], _path}, runtime),
     do: element_tag(tag_of(program, array), {array, subscripts}, {head, tag}, {program, runtime})
 
-  defp tag_at(_split, _program, {head, tag, _members, path}, _runtime),
+  # M5-14 (decision 154): a member of an element of an array of instances, `m1.lane_t[2].acc`,
+  # as a member of an instance is named, by its public members, and nothing below the rest.
+  defp tag_at({array, subscripts}, program, {head, tag, members, path}, runtime),
+    do:
+      element_members(
+        tag_of(program, array),
+        {array, subscripts},
+        {head, tag, members, path},
+        {program, runtime}
+      )
+
+  defp element_members(
+         {:ok, %Tag{type: {:array, %FbType{} = type, _dims}} = found},
+         {_array, subscripts},
+         {head, tag, members, path},
+         {_program, runtime}
+       ),
+       do:
+         in_block(
+           type,
+           "#{head}.#{tag}",
+           members,
+           {[], path},
+           element_at(
+             found.type,
+             subscripts,
+             {"#{head}.#{tag}", "#{head}.#{found.name}", shown_type(found.type)},
+             element_source(found, head, runtime)
+           )
+         )
+
+  defp element_members(_found, _array, {head, tag, _members, path}, _at),
     do:
       raise(
         ArgumentError,
@@ -2769,6 +2800,23 @@ defmodule Logex.Runtime do
 
   defp element_tag(:error, {array, _subscripts}, {head, _tag}, {program, _runtime}),
     do: in_program(:error, {head, array, [], nil}, program, %{})
+
+  # M5-14: an element of an array of instances is named by a member, as an instance is.
+  defp element_tag(
+         {:ok, %Tag{type: {:array, %FbType{} = type, _dims}} = found},
+         {_array, subscripts},
+         {head, tag},
+         {_program, runtime}
+       ) do
+    element_at(
+      found.type,
+      subscripts,
+      {"#{head}.#{tag}", "#{head}.#{found.name}", shown_type(found.type)},
+      element_source(found, head, runtime)
+    )
+
+    in_block(type, "#{head}.#{tag}", [], {[], nil}, nil)
+  end
 
   defp element_tag({:ok, %Tag{} = found}, {array, subscripts}, {head, tag}, {_program, runtime}),
     do:
@@ -2815,6 +2863,25 @@ defmodule Logex.Runtime do
   defp in_program({:ok, %Tag{type: %FbType{} = type}}, {head, tag, members, path}, _program, env),
     do: in_block(type, "#{head}.#{tag}", members, {[tag], path}, env)
 
+  # M5-14 (decision 154): an array of instances is named by a member of one of its
+  # elements, never whole.
+  defp in_program(
+         {:ok, %Tag{type: {:array, %FbType{} = type, dims} = array}},
+         {head, tag, _members, _path},
+         _program,
+         _env
+       ),
+       do:
+         raise(
+           ArgumentError,
+           "`#{head}.#{tag}` is #{Declarations.a_type(array)}: an access path names a member " <>
+             "of one of its elements" <>
+             example(
+               "#{head}.#{Logex.Array.name(tag, Enum.map(dims, fn _ -> 0 end))}",
+               FbType.public(type)
+             )
+         )
+
   defp in_program({:ok, %Tag{type: type}}, {_head, tag, [], _path}, _program, env),
     do: given(array_of(type), walk(env, [tag]))
 
@@ -2845,7 +2912,7 @@ defmodule Logex.Runtime do
 
     raise(
       ArgumentError,
-      no_member(Enum.find(type.members, &(&1.name == member)), type, {at, member}, names)
+      no_member(Enum.find(type.members, &(&1.name == base_of(member))), type, {at, member}, names)
     )
   end
 
@@ -2871,13 +2938,17 @@ defmodule Logex.Runtime do
         "`#{path}` goes too deep: `#{at}.#{member}` is #{Declarations.a_type(found.type)}, which has no members"
       )
 
+  # A member's name without an element's subscripts, `lane_t` of `lane_t[2]`, as a block's
+  # own `var` holding an array is named (M5-14).
+  defp base_of(member), do: hd(:binary.split(member, "["))
+
   # A name the type gives a member but FbType.member/2 does not is a hidden one's, and the
   # path is told which: a built-in block's internal member, or a user block's own `var`,
   # hidden outside it (decision 33). Any other is no member at all.
   defp no_member(%FbType.Member{role: :internal}, _type, {at, member}, names),
     do: "`#{at}.#{member}` is internal to `#{at}`: " <> public_only(names)
 
-  defp no_member(%FbType.Member{role: :local}, type, {at, member}, names),
+  defp no_member(%FbType.Member{role: :local, name: member}, type, {at, _named}, names),
     do:
       "`#{at}.#{member}` is a `var` of `#{type.name}`, hidden outside it: " <> public_only(names)
 
@@ -2966,6 +3037,11 @@ defmodule Logex.Runtime do
 
   defp hold({symbol, _, [{:name, _, name} | _]}, env) when is_map_key(@memories, symbol),
     do: mark(env, [name, Map.fetch!(@memories, symbol)])
+
+  # M5-14 (decision 154): an element of an array of counters under its own name, `lane_c[1]`.
+  defp hold({symbol, _, [{:element, _, _, _, name} | _]}, env)
+       when is_map_key(@memories, symbol),
+       do: mark(env, [name, Map.fetch!(@memories, symbol)])
 
   defp hold(_instruction, env), do: env
 
@@ -3061,6 +3137,71 @@ defmodule Logex.Runtime do
 
   defp element(
          {_, _, [_, _, {:bit, _, {:element_at, _, _, _, _, _}, _, _, _} | _]} = instruction,
+         acc,
+         scan
+       ) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
+  end
+
+  # M5-14 (decision 154): so for a member of an element a tag subscripts, `lane_t[slot].dn`,
+  # and a bit of one, told by their clauses' heads.
+  defp element(
+         {_, _, [{:member, _, {:element_at, _, _, _, _, _}, _} | _]} = instruction,
+         acc,
+         scan
+       ) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
+  end
+
+  defp element(
+         {_, _, [_, {:member, _, {:element_at, _, _, _, _, _}, _} | _]} = instruction,
+         acc,
+         scan
+       ) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
+  end
+
+  defp element(
+         {_, _, [_, _, {:member, _, {:element_at, _, _, _, _, _}, _} | _]} = instruction,
+         acc,
+         scan
+       ) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
+  end
+
+  defp element(
+         {_, _, [{:bit, _, {:member, _, {:element_at, _, _, _, _, _}, _}, _, _, _} | _]} =
+           instruction,
+         acc,
+         scan
+       ) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
+  end
+
+  defp element(
+         {_, _, [_, {:bit, _, {:member, _, {:element_at, _, _, _, _, _}, _}, _, _, _} | _]} =
+           instruction,
+         acc,
+         scan
+       ) do
+    evaluate(instruction, acc, scan)
+  catch
+    :throw, {@out_of_range, kind, read} -> out_of_range(instruction, acc, {kind, read})
+  end
+
+  defp element(
+         {_, _, [_, _, {:bit, _, {:member, _, {:element_at, _, _, _, _, _}, _}, _, _, _} | _]} =
+           instruction,
          acc,
          scan
        ) do
@@ -3618,6 +3759,25 @@ defmodule Logex.Runtime do
        ),
        do: {true, called(typed(Map.get(tags, instance), blocks), instance, operands, env, scan)}
 
+  # M5-14 (decision 154): a `cal` of an element of an array of user blocks runs that element
+  # alone, by its name, `lanes[2]`, as an instance of its array's elements' type: its body's
+  # blocked one-shots are those under its name, its run is recorded under it and its faults
+  # are placed at it.
+  defp evaluate(
+         {:cal, _, [{:element, _, array, _index, name} = element | operands]},
+         {true, env},
+         %Scan{tags: tags, blocks: blocks} = scan
+       ),
+       do:
+         {true,
+          called(
+            typed(elements_of(Map.get(tags, array)), blocks),
+            {name, element},
+            operands,
+            env,
+            scan
+          )}
+
   defp evaluate({:cal, _, _}, {false, env}, _scan) do
     {false, env}
   end
@@ -3666,11 +3826,45 @@ defmodule Logex.Runtime do
   defp typed(%Tag{type: {:block, name}} = tag, %{} = blocks),
     do: %{tag | type: Map.get(blocks, name)}
 
+  # M5-14: an array of instances of a user block so, `{:array, {:block, name}, dims}`.
+  defp typed(%Tag{type: {:array, {:block, name}, dims}} = tag, %{} = blocks),
+    do: %{tag | type: {:array, Map.get(blocks, name), dims}}
+
   defp typed(tag, _blocks), do: tag
+
+  # M5-14: an element of an array of instances as a tag of its elements' type, `{:block,
+  # name}` among them, or nil where its array is none.
+  defp elements_of(%Tag{type: {:array, type, _dims}} = tag), do: %{tag | type: type}
+  defp elements_of(_no_array), do: nil
 
   # A `cal` of an instance its routine's table holds as a user block's. A program built by
   # hand may name one its table lacks, or one of another type: nothing runs, as nothing runs
   # for a hand-built env a `ton` finds no timer in.
+  # M5-14 (decision 154): an element of an array of user blocks, `{name, element}`, its
+  # state read from its array and written back into it, every other element kept, as a
+  # `cal` of an instance reads and writes its tag.
+  defp called(
+         %Tag{
+           type:
+             %FbType{
+               body: %Program{rungs: rungs, tags: own, file: file, units: units, reals: own_reals}
+             } = type
+         },
+         {instance, element},
+         operands,
+         env,
+         %Scan{ons_blocked: blocked} = scan
+       ) do
+    [_instance | formals] = FbType.signature(type)
+    slots = Enum.zip(formals, operands)
+    state = Enum.reduce(slots, members_of(read(env, element)), &copy_in(&1, &2, env))
+    inner = as_map(Map.get(blocked, instance))
+    body = %{scan | tags: own, ons_blocked: inner, units: units, reals: own_reals}
+    {state, env} = ran(instance, rungs(rungs, state, body), env)
+    {state, env} = raised(Map.pop(state, @faults, []), instance, file, env)
+    Enum.reduce(slots, write(env, element, state), &copy_out(&1, &2, state, scan.reals))
+  end
+
   defp called(
          %Tag{
            type:
@@ -3748,6 +3942,20 @@ defmodule Logex.Runtime do
   # keeps no block of a memory whose instruction ran (decision 87).
   defp counted(env, {:name, _, name} = counter, {side, power}, %Scan{} = scan) do
     kind = counter_of(Map.get(scan.tags, name), side)
+    memory = memory(side)
+    tree = as_map(Map.get(scan.ons_blocked, name))
+    blocked = scan.first or Map.get(tree, memory) == true
+    state = as_map(read(env, counter))
+    edge = power and not blocked and not closed?(Map.get(state, memory))
+    env = write(env, counter, count(kind, side, state, {power, edge}))
+    unblocked(map_size(tree) > 0, env, name)
+  end
+
+  # M5-14 (decision 154): an element of an array of counters, `lane_c[1]`, counts as an
+  # instance of its array's elements' type, its edge memory blocked by its path,
+  # `lane_c[1].cu`, under its name in the tree, and its run recorded under its name.
+  defp counted(env, {:element, _, array, _index, name} = counter, {side, power}, %Scan{} = scan) do
+    kind = counter_of(elements_of(Map.get(scan.tags, array)), side)
     memory = memory(side)
     tree = as_map(Map.get(scan.ons_blocked, name))
     blocked = scan.first or Map.get(tree, memory) == true
@@ -4054,6 +4262,10 @@ defmodule Logex.Runtime do
   defp source_bits({:member, _, _} = source, type, %Scan{tags: tags}),
     do: found_bits(Program.destination(source, tags, :bitwise), type)
 
+  # M5-14: a member of an element of an array of built-in instances, by the one rule.
+  defp source_bits({:member, _, _, _} = source, type, %Scan{tags: tags}),
+    do: found_bits(Program.destination(source, tags, :bitwise), type)
+
   defp source_bits(_literal, type, _scan), do: type
 
   defp own_bits(%Tag{type: from}, _type) when from in @bitwise_types, do: from
@@ -4192,6 +4404,12 @@ defmodule Logex.Runtime do
   defp unit({:name, _, name} = timer, %Scan{units: units}, at) when is_map_key(units, name),
     do: unit_of(:erlang.map_get(name, units), {at, timer})
 
+  # M5-14 (decision 154): an element of an array of timers times in its array's unit, under
+  # its array's name.
+  defp unit({:element, _, array, _index, _name} = timer, %Scan{units: units}, at)
+       when is_map_key(units, array),
+       do: unit_of(:erlang.map_get(array, units), {at, timer})
+
   defp unit(_member, %Scan{units: units}, _at) when is_map(units), do: 1
 
   defp unit(timer, %Scan{units: units}, {op, line}),
@@ -4213,6 +4431,7 @@ defmodule Logex.Runtime do
       )
 
   defp shown_timer({:name, _, name}), do: "`#{name}`"
+  defp shown_timer({:element, _, _array, _index, name}), do: "`#{name}`"
 
   defp by_hand, do: "the program was edited by hand after it was handed in and checked"
 
@@ -4320,7 +4539,21 @@ defmodule Logex.Runtime do
     }
 
   # M3-2: one run of a `tp`. The compiler names a timer only whole, `{:name, _, timer}`.
+  # M5-14 (decision 154): an element of an array of pulse timers, its `.en` blocked by its
+  # path, `horns[1].en`, under its name in the tree, as a `tp` instance's is.
+  defp pulsed(env, {:element, _, _, _, name} = timer, at, scan, per_ms),
+    do: pulsed_as(env, {name, timer}, at, {scan, per_ms})
+
   defp pulsed(env, {:name, _, name} = timer, {power, _now} = at, scan, per_ms) do
+    tree = as_map(Map.get(scan.ons_blocked, name))
+    blocked = scan.first or Map.get(tree, "en") == true
+    state = as_map(read(env, timer))
+    edge = power and not blocked and not closed?(Map.get(state, "en"))
+    env = write(env, timer, pulse(closed?(Map.get(state, "tt")), edge, state, at, per_ms))
+    unblocked(map_size(tree) > 0, env, name)
+  end
+
+  defp pulsed_as(env, {name, timer}, {power, _now} = at, {scan, per_ms}) do
     tree = as_map(Map.get(scan.ons_blocked, name))
     blocked = scan.first or Map.get(tree, "en") == true
     state = as_map(read(env, timer))
@@ -4433,6 +4666,13 @@ defmodule Logex.Runtime do
   defp read(env, {:bit, _, {:element_at, _, _, _, _, _} = element, _n, mask, _name}),
     do: bit_set(read(env, element), mask)
 
+  # M5-14: a bit of a member of an element, its member read first.
+  defp read(env, {:bit, _, {:member, _, _, _} = member, _n, mask, _name}),
+    do: bit_set(read(env, member), mask)
+
+  defp read(env, {:bit_at, _, {:member, _, _, _} = member, index, {width, top}, _name}),
+    do: bit_set(read(env, member), bit_mask(integer(read(env, index)), width, top))
+
   defp read(env, {:bit, _, path, _n, mask, _name}), do: bit_set(walk(env, path), mask)
   # M5-9 (decision 160): a bit whose number a tag holds, the number read first, as an
   # integer, and its mask computed from the width and top bit the compiler gave: one past
@@ -4476,6 +4716,11 @@ defmodule Logex.Runtime do
   defp read(env, {:element_at, _, array, index, dims, _name}),
     do: Logex.Array.fetch(:erlang.map_get(array, env), subscripts(env, index, dims))
 
+  # M5-14 (decision 154): a member of an element of an array of instances, its element read
+  # first, as an element is read, then its member, and a bit of one, its member first; an
+  # element a tag subscripts is checked as it is read, one outside its dimension thrown.
+  defp read(env, {:member, _, element, path}), do: walk(read(env, element), path)
+
   defp walk(value, []), do: value
   defp walk(%{} = map, [key | path]), do: walk(Map.get(map, key, 0), path)
   defp walk(_not_a_map, _path), do: 0
@@ -4484,6 +4729,36 @@ defmodule Logex.Runtime do
   # what is not a map on the way becomes one.
   defp write(env, {:name, _, name}, value), do: Map.put(env, name, value)
   defp write(env, {:member, _, path}, value), do: put_path(env, path, value)
+
+  # M5-14 (decision 154): a member of an element is written into the element, the rest of
+  # its instance kept, and the element into its array; a bit of one into its member, the
+  # rest of its word kept. Its subscripts and bit number are read before anything is
+  # written, so one out of range writes nothing.
+  # One a tag subscripts has its subscripts read and checked once, for the read of its
+  # element and the write back alike.
+  defp write(
+         env,
+         {:member, _, {:element_at, _, array, [{:name, _, name}], [count], _}, path},
+         value
+       ) do
+    i = one_subscript(Map.get(env, name, 0), count)
+    tuple = :erlang.map_get(array, env)
+    %{env | array => put_elem(tuple, i, put_path(as_map(elem(tuple, i)), path, value))}
+  end
+
+  defp write(env, {:member, _, {:element_at, _, array, index, dims, _}, path}, value) do
+    at = subscripts(env, index, dims)
+    tuple = :erlang.map_get(array, env)
+
+    %{
+      env
+      | array =>
+          Logex.Array.put(tuple, at, put_path(as_map(Logex.Array.fetch(tuple, at)), path, value))
+    }
+  end
+
+  defp write(env, {:member, _, element, path}, value),
+    do: write(env, element, put_path(as_map(read(env, element)), path, value))
 
   # M5-11: an element is written into its array, the tuple of each dimension it passes
   # through copied, every other element kept.
@@ -4526,6 +4801,16 @@ defmodule Logex.Runtime do
   # M5-12: a bit of an element a tag subscripts.
   defp write(env, {:bit, _, {:element_at, _, _, _, _, _} = element, _n, mask, _name}, value),
     do: write(env, element, with_bit(integer(read(env, element)), mask, value))
+
+  # M5-14: a bit of a member of an element, into its member.
+  defp write(env, {:bit, _, {:member, _, _, _} = member, _n, mask, _name}, value),
+    do: write(env, member, with_bit(integer(read(env, member)), mask, value))
+
+  defp write(env, {:bit_at, _, {:member, _, _, _} = member, index, {width, top}, _}, value) do
+    word = integer(read(env, member))
+    mask = bit_mask(integer(read(env, index)), width, top)
+    write(env, member, with_bit(word, mask, value))
+  end
 
   defp write(env, {:bit, _, path, _n, mask, _name}, value),
     do: put_path(env, path, with_bit(integer(walk(env, path)), mask, value))

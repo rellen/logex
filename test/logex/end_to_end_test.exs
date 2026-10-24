@@ -6399,4 +6399,177 @@ defmodule Logex.EndToEndTest do
       Runner.stop(runner)
     end
   end
+
+  # PLAN M5-14's Done-when in a plant, from files on disk through
+  # `Logex.Configuration.compile_file/1` and `Logex.Runtime.cycle/3`: a sorter of four reject
+  # lanes keeps a reject timer for each lane in `lane_t ton[4]`, a gate for each in
+  # `gates gate[4]`, an array of a user block loaded from `gate.ld` beside it whose one-shot
+  # pulses as its lane's timer is done, and a kick counter for each in `lane_c ctu_int[4]`,
+  # each element run by literal subscripts (decision 154); the panel's selector reads the
+  # lane it names through a tag subscript, `lane_t[sel].dn` and `lane_c[sel].cv`, and a
+  # selector outside the lanes is M5-12's index fault, an event of the cycle. Over seeded
+  # eyes and selectors against an oracle that knows nothing of logex: four on-delay timers
+  # and four counts of their done edges, restated.
+  describe "arrays of instances in the plant (M5-14)" do
+    @describetag :tmp_dir
+
+    @gate_ld """
+    function_block gate
+    var_input  s bool
+    var_output q bool
+    var e bool
+    xic s ons e ote q
+    """
+
+    @sorter_ld """
+    var_input  eye0 bool
+    var_input  eye1 bool
+    var_input  eye2 bool
+    var_input  eye3 bool
+    var_input  sel  dint
+    var_output kick0 bool
+    var_output kick1 bool
+    var_output kick2 bool
+    var_output kick3 bool
+    var_output lamp  bool
+    var_output count int
+    var lane_t ton[4]
+    var lane_c ctu_int[4]
+    var gates  gate[4]
+    var p      bool[4]
+    xic eye0 ton lane_t[0] 30
+    xic eye1 ton lane_t[1] 40
+    xic eye2 ton lane_t[2] 50
+    xic eye3 ton lane_t[3] 60
+    xic lane_t[0].dn ote kick0
+    xic lane_t[1].dn ote kick1
+    xic lane_t[2].dn ote kick2
+    xic lane_t[3].dn ote kick3
+    cal gates[0] lane_t[0].dn p[0]
+    cal gates[1] lane_t[1].dn p[1]
+    cal gates[2] lane_t[2].dn p[2]
+    cal gates[3] lane_t[3].dn p[3]
+    xic p[0] ctu lane_c[0] 5
+    xic p[1] ctu lane_c[1] 5
+    xic p[2] ctu lane_c[2] 5
+    xic p[3] ctu lane_c[3] 5
+    xic lane_t[sel].dn ote lamp
+    move lane_c[sel].cv count
+    """
+
+    @sorter_logex """
+    task fast interval 10 priority 1
+    var_global eye0  bool at panel.i.0
+    var_global eye1  bool at panel.i.1
+    var_global eye2  bool at panel.i.2
+    var_global eye3  bool at panel.i.3
+    var_global sel   dint at panel.i.4
+    var_global kick0 bool at panel.q.0
+    var_global kick1 bool at panel.q.1
+    var_global kick2 bool at panel.q.2
+    var_global kick3 bool at panel.q.3
+    var_global lamp  bool at panel.q.4
+    var_global count int  at panel.q.5
+    program line sorter with fast
+    line.eye0  eye0
+    line.eye1  eye1
+    line.eye2  eye2
+    line.eye3  eye3
+    line.sel   sel
+    line.kick0 kick0
+    line.kick1 kick1
+    line.kick2 kick2
+    line.kick3 kick3
+    line.lamp  lamp
+    line.count count
+    """
+
+    test "M5-14's Done-when: four lanes, each element its own timer, gate and counter, against an oracle",
+         %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "gate.ld"), @gate_ld)
+      File.write!(Path.join(dir, "sorter.ld"), @sorter_ld)
+      File.write!(Path.join(dir, "plant.logex"), @sorter_logex)
+      {:ok, config} = Logex.Configuration.compile_file(Path.join(dir, "plant.logex"))
+      assert config.warnings == []
+      runtime = Logex.Runtime.start(config)
+      :rand.seed(:exsss, {2026, 10, 154})
+      presets = [30, 40, 50, 60]
+
+      # The oracle: for each lane, an on-delay timer over its eye, `acc` counting the time
+      # since the eye rose and done at its preset, and a count of the done's rising edges;
+      # the selector's lane read where it names one, and a fault where it names none.
+      lanes = for pre <- presets, do: %{pre: pre, acc: 0, timing: false, done: false, count: 0}
+      model = %{lanes: lanes, count: 0, faults: 0, kicks: 0, lit: MapSet.new()}
+
+      {_runtime, model} =
+        Enum.reduce(1..600, {runtime, model}, fn _step, {runtime, model} ->
+          eyes = for _ <- 1..4, do: Enum.random([0, 1, 1, 1])
+          sel = Enum.random([0, 1, 2, 3, 0, 1, 2, 3, 4, -1])
+          inputs = Map.new(Enum.with_index(eyes), fn {e, i} -> {"eye#{i}", e} end)
+
+          {runtime, outputs, events} =
+            Logex.Runtime.cycle(runtime, 10, Map.put(inputs, "sel", sel))
+
+          lanes =
+            for {lane, eye} <- Enum.zip(model.lanes, eyes) do
+              acc =
+                case {eye, lane.timing} do
+                  {1, true} -> min(lane.acc + 10, lane.pre)
+                  {1, false} -> 0
+                  {0, _} -> 0
+                end
+
+              done = eye == 1 and acc == lane.pre
+              rose = done and not lane.done
+
+              %{
+                lane
+                | acc: acc,
+                  timing: eye == 1,
+                  done: done,
+                  count: lane.count + if(rose, do: 1, else: 0)
+              }
+            end
+
+          inside = sel in 0..3
+          picked = if inside, do: Enum.at(lanes, sel)
+          lamp = if inside and picked.done, do: 1, else: 0
+          count = if inside, do: picked.count, else: model.count
+
+          assert outputs ==
+                   Map.merge(
+                     Map.new(Enum.with_index(lanes), fn {l, i} ->
+                       {"kick#{i}", if(l.done, do: 1, else: 0)}
+                     end),
+                     %{"lamp" => lamp, "count" => count}
+                   )
+
+          faults =
+            for {:fault, "fast", "line", fault} <- events, do: {fault.instruction, fault.read}
+
+          assert faults == if(inside, do: [], else: [{:xic, {sel}}, {:move, {sel}}])
+
+          for {lane, i} <- Enum.with_index(lanes) do
+            assert Logex.Runtime.get!(runtime, "line.lane_t[#{i}].acc") == lane.acc
+            assert Logex.Runtime.get!(runtime, "line.lane_c[#{i}].cv") == lane.count
+          end
+
+          {runtime,
+           %{
+             model
+             | lanes: lanes,
+               count: count,
+               faults: model.faults + length(faults),
+               kicks: model.kicks + Enum.count(lanes, & &1.done),
+               lit: MapSet.put(model.lit, lamp)
+           }}
+        end)
+
+      # The walk counted every lane's kicks, lit the lamp and left it dark, and met the
+      # index fault.
+      assert Enum.all?(model.lanes, &(&1.count > 5))
+      assert model.lit == MapSet.new([0, 1])
+      assert model.faults > 50
+    end
+  end
 end

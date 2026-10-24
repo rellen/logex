@@ -677,6 +677,16 @@ defmodule Logex.Declarations do
     {validated(messages, tag), {Map.put(types, name, type), checked}}
   end
 
+  # M5-14: an array of instances from Elixir so, its type known as an instance's is.
+  defp validate!(
+         %Tag{line: nil, type: {:array, %FbType{name: name} = type, _}} = tag,
+         {types, checked}
+       )
+       when is_binary(name) do
+    {messages, checked} = check(tag, types, checked)
+    {validated(messages, tag), {Map.put(types, name, type), checked}}
+  end
+
   defp validate!(tag, known), do: {validate!(tag), known}
 
   defp declaration?({:rung, [{:name, _, word} | _]}), do: reserved(word) == :section
@@ -760,6 +770,16 @@ defmodule Logex.Declarations do
   defp recovered(%Tag{type: %FbType{}, name: name} = tag),
     do: recover(name(name), %{tag | section: :var, initial: nil})
 
+  # M5-14: an array of instances so; one whose sizes are refused declares nothing, and its
+  # uses are excused, as an elementary array's are (array_recovered/3).
+  defp recovered(%Tag{type: {:array, %FbType{}, dims}, name: name} = tag),
+    do:
+      instances_recovered(
+        dimensions(counts?(dims), name, dims),
+        name(name),
+        %{tag | section: :var, initial: nil}
+      )
+
   # M5-11: an array whose type is one is declared with no initial list where its list is
   # refused, so its uses are checked; one whose type is none declares nothing, and its
   # uses are excused, as an unknown type's are (split/4).
@@ -767,6 +787,10 @@ defmodule Logex.Declarations do
     do: array_recovered(array_type(name, type), name(name), tag)
 
   defp recovered(_tag), do: []
+
+  defp instances_recovered([], named, tag), do: recover(named, tag)
+  defp instances_recovered(_unsized, [], tag), do: [{:untyped, tag.name}]
+  defp instances_recovered(_unsized, _bad_name, _tag), do: []
 
   defp array_recovered([], [], tag), do: [%{tag | initial: nil}]
   defp array_recovered(_untyped, [], tag), do: [{:untyped, tag.name}]
@@ -820,7 +844,14 @@ defmodule Logex.Declarations do
     do: literal_sizes(Enum.find(sizes, &match?({:tag, _}, &1)), type, sizes, at)
 
   defp array_of(nil, _sizes, {base, _word}), do: {:unknown, base}
-  defp array_of(_instance_or_recursive, _sizes, {base, word}), do: {:of_instances, base, word}
+
+  # M5-14 (decision 154): an array of instances, `ton[4]` or `seal[4]`, each element an
+  # instance of its own; one of a block that would hold the block being compiled is
+  # refused as an instance of it is.
+  defp array_of(%FbType{} = type, sizes, at),
+    do: literal_sizes(Enum.find(sizes, &match?({:tag, _}, &1)), type, sizes, at)
+
+  defp array_of(recursive, _sizes, _at), do: recursive
 
   defp literal_sizes(nil, type, sizes, _at),
     do: {:array, type, Enum.map(sizes, fn {:literal, n} -> n end)}
@@ -846,13 +877,6 @@ defmodule Logex.Declarations do
   defp typed({:unknown, base}, name, _word, tail, {kw, types}),
     do: untyped(String.downcase(name), name, base, tail, {kw, types})
 
-  defp typed({:of_instances, base, word}, name, _word, _tail, _kw),
-    do:
-      {:untyped, name,
-       "`#{name}` is declared `#{word}`, an array of #{base}s: an array holds elements of an " <>
-         "elementary type, a bool, an integer, a real or a bit string, and an array of " <>
-         "timers, counters or function blocks is not supported yet"}
-
   defp typed({:sized_by_tag, word, size}, name, _word, _tail, _kw),
     do:
       {:untyped, name,
@@ -861,6 +885,11 @@ defmodule Logex.Declarations do
 
   # M5-11 (decision 151): an array's initial list, one literal for every element in the
   # elements' order, each quoted as written where it is spelled (decision 202).
+  # M5-14: an array of instances takes no initial list, as an instance takes no initial
+  # value; it is still plainly an array of its line's section, so its uses are checked.
+  defp typed({:array, %FbType{}, _dims} = type, name, _word, [_ | _], _kw),
+    do: {:error, instances_initial(name, type)}
+
   defp typed({:array, _, _} = type, name, _word, [_ | _] = tail, _kw) do
     listed(Enum.all?(tail, &is_literal/1), type, name, tail)
   end
@@ -919,7 +948,7 @@ defmodule Logex.Declarations do
   defp one_of(nil, word), do: reserved(word)
   defp one_of({:recursive, _chain}, word), do: reserved(word)
   defp one_of({:unknown, _base}, word), do: reserved(word)
-  defp one_of({kind, _, _}, word) when kind in [:of_instances, :sized_by_tag], do: reserved(word)
+  defp one_of({:sized_by_tag, _, _}, word), do: reserved(word)
   defp one_of(type, _word), do: {:type, type}
 
   # A line with one word after its section: a tag with no type, or a type with no tag.
@@ -1029,7 +1058,9 @@ defmodule Logex.Declarations do
   """
   def array_word(word) when is_binary(word), do: array_word_of(declared_type(word, %{}), word)
 
-  defp array_word_of({:array, _, _} = type, _word), do: {:ok, type}
+  defp array_word_of({:array, element, _} = type, _word) when is_elementary(element),
+    do: {:ok, type}
+
   defp array_word_of(_other, _word), do: :error
 
   @doc """
@@ -1069,6 +1100,16 @@ defmodule Logex.Declarations do
   defp check(%Tag{type: %FbType{} = type} = tag, types, checked, _shown) do
     {known, checked} = fb_type(type, types, checked)
     {name(tag.name) ++ known ++ section(tag.section) ++ looked_into(known, tag), checked}
+  end
+
+  # M5-14 (decision 154): an array of instances, its type known as an instance's is and its
+  # sizes judged as any array's, declared as an instance is.
+  defp check(%Tag{type: {:array, %FbType{} = type, dims}} = tag, types, checked, _shown) do
+    {known, checked} = fb_type(type, types, checked)
+    sized = dimensions(counts?(dims), tag.name, dims)
+
+    {name(tag.name) ++
+       known ++ sized ++ section(tag.section) ++ instances_into(known ++ sized, tag), checked}
   end
 
   # M5-11 (decision 151): an array's initial list is judged once its type is one; told by
@@ -1213,6 +1254,9 @@ defmodule Logex.Declarations do
   defp user({:ok, checked}, type, _checked), do: {known(true, type), checked}
   defp user(:error, type, checked), do: {known(false, type), checked}
 
+  defp instances_into([], tag), do: instances(tag)
+  defp instances_into(_unknown, _tag), do: []
+
   # An instance of a type that is not logex's is not looked into: its members may be junk.
   defp looked_into([], tag), do: instance(tag)
   defp looked_into(_unknown, _tag), do: []
@@ -1257,6 +1301,34 @@ defmodule Logex.Declarations do
         "instruction, as in `#{symbol} #{display(name)} #{example}`, not an initial value on " <>
         "its declaration"
     ]
+  end
+
+  # M5-14 (decision 154): an array of instances is the program's own, as an instance is,
+  # declared with `var` and with no initial values: each element's preset is the number on
+  # the instruction that runs it, and a user block's members start where its type says.
+  defp instances(%Tag{section: section, name: name, type: {:array, type, dims}} = tag)
+       when section in [:var_input, :var_output, :var_external],
+       do: [
+         "#{label(name)} is #{a_type(tag.type)}: an array of instances is the program's own, " <>
+           "declared with `var`, as in `var #{display(name)} #{type.name}[#{Enum.join(dims, ",")}]`" <>
+           ", not with `#{section}`"
+       ]
+
+  defp instances(%Tag{initial: nil}), do: []
+  defp instances(%Tag{name: name, type: type}), do: [instances_initial(name, type)]
+
+  defp instances_initial(name, {:array, %FbType{body: %Logex.Program{}}, _dims} = array),
+    do:
+      "#{label(name)} is #{a_type(array)}, which takes no initial values: each element's " <>
+        "members start where its type says"
+
+  defp instances_initial(name, {:array, type, dims} = array) do
+    {symbol, example} = preset_example(FbType.rules(type))
+    first = Logex.Array.name(display(name), Enum.map(dims, fn _ -> 0 end))
+
+    "#{label(name)} is #{a_type(array)}, which takes no initial values: each element's " <>
+      "preset is the number on its `#{symbol}` instruction, as in `#{symbol} #{first} " <>
+      "#{example}`"
   end
 
   defp preset_example(%{kind: kind, runs: runs}),

@@ -127,6 +127,11 @@ defmodule Logex.Program do
   # M5-11 (decision 151): an array is a tuple, a tuple of tuples for more dimensions, each
   # element at its type's zero or at its initial list's value, in the elements' order, a
   # real's held at its nearest.
+  # M5-14 (decision 154): an array of instances, each element an instance at its type's
+  # start, its preset the one the compiler gave it by its index (`Logex.FbType.started/2`).
+  defp start(%Logex.Tag{type: {:array, %Logex.FbType{}, _} = type, initial: initial}),
+    do: Logex.FbType.started(type, initial)
+
   defp start(%Logex.Tag{type: {:array, _, _} = type, initial: initial}),
     do: Logex.Array.started(type, initial)
 
@@ -156,6 +161,11 @@ defmodule Logex.Program do
   defp typed(%Logex.Tag{type: {:block, name}} = tag, blocks) when is_map(blocks),
     do: held(Map.fetch(blocks, name), tag, blocks)
 
+  # M5-14 (decision 154): an array of instances of a user block names its type so too,
+  # `{:array, {:block, name}, dims}`, given its elements' type itself.
+  defp typed(%Logex.Tag{type: {:array, {:block, name}, dims}} = tag, blocks) when is_map(blocks),
+    do: held_array(Map.fetch(blocks, name), tag, {blocks, dims})
+
   defp typed(tag, _blocks), do: tag
 
   defp held({:ok, %Logex.FbType{body: %__MODULE__{}} = type}, tag, blocks),
@@ -163,8 +173,21 @@ defmodule Logex.Program do
 
   defp held(_not_held, tag, _blocks), do: tag
 
+  defp held_array({:ok, %Logex.FbType{body: %__MODULE__{}} = type}, tag, {blocks, dims}),
+    do: %{tag | type: {:array, Logex.FbType.within(type, blocks), dims}}
+
+  defp held_array(_not_held, tag, _at), do: tag
+
   # Decision 182: the instructions that compute in their destination's type (M5-4,
   # decision 147), each writing its last operand.
+  @doc false
+  # The name of the user block type a compiled table's tag holds instances of, `{:block,
+  # name}` or since M5-14 an array of them, `{:array, {:block, name}, dims}`, or nil for any
+  # other type (decision 53).
+  def held_name({:block, name}), do: name
+  def held_name({:array, {:block, name}, _dims}), do: name
+  def held_name(_type), do: nil
+
   @computing [:add, :sub, :mul, :div, :mod, :neg, :abs]
   # M5-10: `sqrt`, which computes in its destination's type, always a real.
   @rooting [:sqrt]
@@ -198,6 +221,16 @@ defmodule Logex.Program do
 
   # Decision 206: a bit of a tag or member, `status.3`, is a bool, which a bitwise
   # instruction computes in and an arithmetic one never does.
+  # M5-14 (decision 154): a member of an element of an array of built-in instances, the
+  # member's type, `lane_c[1].pv` an int's for a `ctu_int`.
+  def destination({:member, _, element, [member]}, tags, kind),
+    do:
+      instance_destination(
+        element_instance(Map.fetch(tags, elem(element, 2))),
+        {elem(element, tuple_size(element) - 1), member},
+        kind
+      )
+
   def destination({:bit, _, _path, _n, _mask, _name}, _tags, kind), do: computing(:bool, kind)
 
   # M5-9: so is a bit whose number a tag holds, `status.[n]` (decision 160).
@@ -213,6 +246,11 @@ defmodule Logex.Program do
     do: element_destination(Map.fetch(tags, array), kind)
 
   def destination(_no_tag, _tags, _kind), do: {:error, :no_tag}
+
+  defp element_instance({:ok, %Logex.Tag{type: {:array, type, _dims}} = tag}),
+    do: {:ok, %{tag | type: type}}
+
+  defp element_instance(_no_array), do: :error
 
   defp element_destination({:ok, %Logex.Tag{type: {:array, type, _dims}}}, kind),
     do: computing(type, kind)
@@ -292,6 +330,14 @@ defmodule Logex.Program do
   defp settle({name, %Logex.Tag{type: {:array, element, _dims} = type}}, {units, reals, arrays})
        when element in @reals,
        do: {units, [{name, element} | reals], [{name, type} | arrays]}
+
+  # M5-14 (decision 154): an array of instances is no host's value, so no array of
+  # `arrays`, and its timers' unit, a long timer's, is its own under its name, each
+  # element timing in it.
+  defp settle({name, %Logex.Tag{type: {:array, %Logex.FbType{} = type, _dims}}}, acc),
+    do: unit(per_ms(Logex.FbType.rules(type)), name, acc)
+
+  defp settle({_name, %Logex.Tag{type: {:array, {:block, _}, _dims}}}, acc), do: acc
 
   defp settle({name, %Logex.Tag{type: type}}, {units, reals, arrays}) when is_array(type),
     do: {units, reals, [{name, type} | arrays]}
@@ -451,6 +497,10 @@ defmodule Logex.Program do
   defp elements([{:cal, _, [{:name, _, instance} | _]} | rest], {tags, _where} = at, acc),
     do: elements(rest, at, called(Map.get(tags, instance), acc))
 
+  # M5-14: an element of an array of instances, of its array's elements' type.
+  defp elements([{:cal, _, [{:element, _, array, _, _} | _]} | rest], {tags, _where} = at, acc),
+    do: elements(rest, at, called(of_elements(Map.get(tags, array)), acc))
+
   defp elements([_other | rest], at, lines), do: elements(rest, at, lines)
   defp elements(_end, _at, lines), do: lines
 
@@ -461,6 +511,9 @@ defmodule Logex.Program do
     do: {lines, [type | called]}
 
   defp called(_named_or_none, acc), do: acc
+
+  defp of_elements(%Logex.Tag{type: {:array, type, _dims}} = tag), do: %{tag | type: type}
+  defp of_elements(_no_array), do: nil
 
   defp computes({:ok, _type}, _symbol, _line, _operands, _where, lines), do: lines
 
@@ -565,6 +618,10 @@ defmodule Logex.Program do
   defp unit_given(:error), do: "no unit"
   defp unit_given({:ok, per_ms}), do: "#{inspect(per_ms)} a millisecond"
 
+  # M5-14: an array of timers times in its elements' unit, each element its own timer.
+  defp unit_wanted({:ok, %Logex.Tag{type: {:array, %Logex.FbType{} = type, _} = array}}, _where),
+    do: "each element of " <> of_unit(per_ms_of(Logex.FbType.rules(type)), array)
+
   defp unit_wanted({:ok, %Logex.Tag{type: type}}, _where),
     do: of_unit(per_ms_of(Logex.FbType.rules(type)), type)
 
@@ -616,6 +673,10 @@ defmodule Logex.Program do
   defp written({:member, _, [_, member]} = destination, {:no_member, type}, _where),
     do: "#{shown(destination)}, and #{a(type)} has no `#{member}`"
 
+  # M5-14: a member of an element of an array of instances so.
+  defp written({:member, _, _element, [member]} = destination, {:no_member, type}, _where),
+    do: "#{shown(destination)}, and #{a(type)} has no `#{member}`"
+
   # Decision 190: what a scan of a program edited by hand after its check is told of a
   # destination it reaches, in the words above.
   @doc false
@@ -626,6 +687,10 @@ defmodule Logex.Program do
 
   defp shown({:name, _, name}), do: "`#{name}`"
   defp shown({:member, _, path}), do: "`#{Enum.join(path, ".")}`"
+
+  defp shown({:member, _, element, members}),
+    do: "`#{Enum.join([elem(element, tuple_size(element) - 1) | members], ".")}`"
+
   defp shown({:bit, _, _path, _n, _mask, name}), do: "`#{name}`"
   defp shown({:bit_at, _, _path, _index, _width, name}), do: "`#{name}`"
   defp shown({:element, _, _array, _index, name}), do: "`#{name}`"
